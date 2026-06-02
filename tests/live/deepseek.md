@@ -54,8 +54,10 @@ finished_with_DONE=true
 ## The Expected Lifecycle Events Appear
 
 A minimal run emits an `agent_step`, a `usage` record once DeepSeek answers, and
-an `agent_finished`. Matching on the `"event"` field with string-literal
-patterns confirms each one shows up without pinning their order or count.
+an `agent_finished`. We collect the `"event"` values into a `Set`, which dedupes
+and preserves insertion order — so printing it yields the lifecycle in the order
+it occurred, the same `{agent_step, usage, agent_finished}` no matter how many
+steps the run takes.
 
 ```mooncram
 $ openseek.exe --model deepseek-v4-flash --max-steps 3 "Call the finish tool immediately with the answer DONE. Use no other tool." 2>/dev/null \
@@ -65,20 +67,12 @@ $ openseek.exe --model deepseek-v4-flash --max-steps 3 "Call the finish tool imm
 > }
 > 
 > async fn main {
->   let mut saw_step = false
->   let mut saw_usage = false
->   let mut saw_finished = false
+>   let events : Set[String] = Set::new()
 >   for value in @jsonl.read_stdin() {
->     if value is { "event": String("agent_step"), .. } { saw_step = true }
->     if value is { "event": String("usage"), .. } { saw_usage = true }
->     if value is { "event": String("agent_finished"), .. } { saw_finished = true }
+>     if value is { "event": String(event), .. } { events.add(event) }
 >   }
->   println("saw_agent_step=\{saw_step}")
->   println("saw_usage=\{saw_usage}")
->   println("saw_agent_finished=\{saw_finished}")
+>   println("events=\{events}")
 > }' 2>/dev/null \
 >   | grep '='
-saw_agent_step=true
-saw_usage=true
-saw_agent_finished=true
+events={agent_step, usage, agent_finished}
 ```
