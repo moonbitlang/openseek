@@ -23,10 +23,12 @@ The package depends on:
 - `default_system_prompt()`: return the base built-in prompt.
 - `default_system_prompt_for_model(model)`: return the model-specific built-in
   prompt from the prompt package.
-- `run(api_key, model, task, max_steps?, system_prompt_text?)`: run the agent
-  loop for one natural-language task. `system_prompt_text` defaults to the
-  model-specific built-in prompt so callers can run prompt experiments without
-  rebuilding the package.
+- `run(api_key, model, task, max_steps?, system_prompt_text?, on_event?)`: run
+  the agent loop for one natural-language task. `system_prompt_text` defaults to
+  the model-specific built-in prompt so callers can run prompt experiments
+  without rebuilding the package. `on_event` defaults to printing progress to
+  stdout; hosts such as a TUI pass their own handler to receive structured
+  `AgentEvent`s.
 
 `run` creates a DeepSeek client, starts a conversation with a system prompt and
 user task, sends native function tool definitions on each turn, executes any

@@ -10,11 +10,36 @@ pub fn default_system_prompt() -> String
 
 pub fn default_system_prompt_for_model(@deepseek.Model) -> String
 
-pub async fn run(String, @deepseek.Model, String, max_steps? : Int, system_prompt_text? : String) -> Unit
+pub async fn run(String, @deepseek.Model, String, max_steps? : Int, system_prompt_text? : String, on_event? : async (AgentEvent) -> Unit) -> Unit
 
 // Errors
 
 // Types and methods
+pub(all) enum AgentEvent {
+  StepStarted(Int)
+  AssistantMessage(String)
+  ReasoningMessage(String)
+  Usage(@deepseek.Usage)
+  ToolCallStarted(ToolCallEvent)
+  ToolCallFinished(ToolResultEvent)
+  Finished(String)
+  Aborted(String)
+  MaxStepsExhausted
+  AgentError(String)
+}
+
+pub struct ToolCallEvent {
+  id : String
+  name : String
+  arguments : String
+}
+
+pub struct ToolResultEvent {
+  id : String
+  name : String
+  content : String
+  is_error : Bool
+}
 
 // Type aliases
 

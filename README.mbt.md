@@ -14,7 +14,9 @@ entry point so request encoding can be tested without network access.
 | `bobzhang/openseek/logger` | Native-only async logger with severity-filtered `<+` sinks. | `logger/README.mbt.md` |
 | `bobzhang/openseek/agent_tool` | Tool registry, executor, output, and control-action types. | `agent_tool/README.mbt.md` |
 | `bobzhang/openseek/agent` | Native-only OpenSeek agent loop and local tool dispatch. | `agent/README.mbt.md` |
+| `bobzhang/openseek/tui` | Native terminal UI primitives for transcript, composer, status, and activity rendering. | `tui/README.md` |
 | `bobzhang/openseek/cmd/main` | Native-only command-line entry point. | `cmd/main/README.md` |
+| `bobzhang/openseek/cmd/tui` | Native-only terminal UI entry point. | `tui/README.md` |
 | `bobzhang/openseek/testkit/filesystem` | JSON-backed virtual filesystem for tests and eval fixtures. | `testkit/filesystem/README.mbt.md` |
 | `bobzhang/openseek/eval/report` | Shared Markdown/JSON report primitive for deterministic and model evals. | `eval/report/README.mbt.md` |
 | `bobzhang/openseek/eval/tool_harness` | Deterministic host-side harness that dispatches every built-in tool. | `eval/tool_harness/README.mbt.md` |
@@ -48,6 +50,9 @@ The `agent` subpackage contains the OpenSeek agent loop, native DeepSeek
 tool-call handling, and local tool dispatch. It depends on `deepseek/client`,
 filesystem, and process APIs.
 
+The `tui` package contains reusable terminal UI primitives. The `cmd/tui`
+package wires those primitives to the event-driven agent runner.
+
 ## Agent CLI
 
 The `cmd/main` package is the CLI entry point. It parses arguments and runs the
@@ -58,6 +63,13 @@ and `finish`.
 ```bash
 export DEEPSEEK=sk-...
 moon run cmd/main -- "inspect this project and finish with a short summary"
+```
+
+The TUI entry point accepts the same DeepSeek options and can start with an
+optional initial task:
+
+```bash
+moon run cmd/tui -- "inspect this project"
 ```
 
 `DEEPSEEK_MODEL` is optional and defaults to `deepseek-v4-pro`.

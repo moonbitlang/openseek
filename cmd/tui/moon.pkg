@@ -1,0 +1,18 @@
+import {
+  "bobzhang/openseek/agent",
+  "bobzhang/openseek/deepseek",
+  "bobzhang/openseek/tui" @ui,
+  "bobzhang/openseek/tui/doc",
+  "moonbitlang/async",
+  "moonbitlang/core/argparse",
+  "moonbitlang/core/env",
+  "moonbitlang/core/string",
+}
+
+warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"
+
+options(
+  "is-main": true,
+)
