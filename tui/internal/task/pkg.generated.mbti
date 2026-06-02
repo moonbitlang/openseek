@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/tui/internal/task"
+
+import {
+  "moonbitlang/async/aqueue",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct Queue {
+  // private fields
+}
+pub fn Queue::Queue(kind~ : @aqueue.Kind) -> Self
+pub async fn Queue::run(Self) -> Unit
+pub async fn[T] Queue::wait(Self, async () -> T) -> T
+
+// Type aliases
+
+// Traits

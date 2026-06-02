@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/tui/internal/text"
+
+// Values
+pub fn display_width(String) -> Int
+
+pub fn grapheme_count(String) -> Int
+
+pub fn grapheme_slice(String, Int, Int) -> String
+
+pub fn line_at(Array[String], Int) -> String
+
+pub fn split_lines(String) -> Array[String]
+
+pub fn truncate_line(String, Int) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

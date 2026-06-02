@@ -1,0 +1,47 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/tui/doc"
+
+import {
+  "bobzhang/openseek/tui/internal/surface",
+}
+
+// Values
+pub fn dim_text(String) -> Text
+
+// Errors
+
+// Types and methods
+pub struct Doc {
+  // private fields
+}
+pub fn Doc::Doc(Array[Text]) -> Self
+pub fn Doc::layout(Self, width~ : Int) -> Array[@surface.Line]
+
+pub struct Span {
+  // private fields
+}
+pub fn Span::Span(String, style? : Style) -> Self
+pub fn Span::plain(String) -> Self
+
+type Style derive(Eq)
+pub fn Style::default() -> Self
+pub fn Style::dim() -> Self
+pub fn Style::error() -> Self
+pub fn Style::prompt() -> Self
+pub fn Style::to_surface(Self) -> @surface.Style
+
+pub struct Text {
+  // private fields
+}
+pub fn Text::Text(Array[Span]) -> Self
+pub fn Text::first_line(Self, width~ : Int) -> @surface.Line
+pub fn Text::plain(String) -> Self
+pub fn Text::prepend_span(Self, Span) -> Self
+pub fn Text::split_lines(Self) -> Array[Self]
+
+// Type aliases
+
+// Traits
+pub(open) trait ToDoc {
+  fn to_doc(Self) -> Doc
+}

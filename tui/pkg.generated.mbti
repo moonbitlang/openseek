@@ -1,0 +1,34 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/tui"
+
+import {
+  "bobzhang/openseek/tui/core",
+  "bobzhang/openseek/tui/doc",
+}
+
+// Values
+pub async fn[T] with_ui(config? : Config, async (Ui) -> T) -> T
+
+// Errors
+
+// Types and methods
+type Config
+pub fn Config::new(esc_timeout_ms? : Int, composer_max_rows? : Int) -> Self
+
+type Ui
+pub async fn Ui::append_item(Self, @core.TranscriptItem) -> Unit
+pub async fn Ui::read_event(Self) -> @core.Event
+pub async fn Ui::set_activity(Self, @doc.Text?) -> Unit
+pub async fn Ui::set_queued_inputs(Self, Array[@core.Input]) -> Unit
+pub async fn Ui::set_status(Self, @doc.Text) -> Unit
+
+// Type aliases
+pub using @core {type Event}
+
+pub using @core {type Input}
+
+pub using @core {type ToolStatus}
+
+pub using @core {type TranscriptItem}
+
+// Traits

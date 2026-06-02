@@ -1,0 +1,43 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/tui/internal/surface"
+
+import {
+  "moonbit-community/tty/color",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type Cursor
+pub fn Cursor::col(Self) -> Int
+pub fn Cursor::new(row~ : Int, col~ : Int) -> Self
+pub fn Cursor::row(Self) -> Int
+
+type Line derive(Eq)
+pub fn Line::new(Array[Span]) -> Self
+pub fn Line::spans(Self) -> Array[Span]
+pub fn Line::text(Self) -> String
+
+type Span derive(Eq)
+pub fn Span::new(String, style? : Style) -> Self
+pub fn Span::style(Self) -> Style
+pub fn Span::text(Self) -> String
+
+type Style derive(Eq)
+pub fn Style::background(Self) -> @color.Color
+pub fn Style::foreground(Self) -> @color.Color
+pub fn Style::new(foreground? : @color.Color, background? : @color.Color, underline? : Bool) -> Self
+pub fn Style::underline(Self) -> Bool
+
+type Surface
+pub fn Surface::cursor(Self) -> Cursor
+pub fn Surface::height(Self) -> Int
+pub fn Surface::line_at(Self, Int) -> Line
+pub fn Surface::new(width~ : Int, rows~ : Array[Line], cursor~ : Cursor) -> Self
+pub fn Surface::with_max_rows(Self, Int) -> Self
+
+// Type aliases
+
+// Traits

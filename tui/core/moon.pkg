@@ -1,0 +1,8 @@
+import {
+  "bobzhang/openseek/tui/doc",
+  "bobzhang/openseek/tui/internal/text",
+}
+
+supported_targets = "native"
+
+warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

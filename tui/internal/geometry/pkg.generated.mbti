@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/tui/internal/geometry"
+
+import {
+  "bobzhang/openseek/tui/internal/terminal_size",
+}
+
+// Values
+pub fn calculate_max_top(@terminal_size.TerminalSize, Int) -> Int
+
+pub fn clamp_height(@terminal_size.TerminalSize, height~ : Int) -> Int
+
+pub fn clamp_top(@terminal_size.TerminalSize, height~ : Int, top~ : Int) -> Int
+
+// Errors
+
+// Types and methods
+type Geometry
+pub fn Geometry::bottom(Self) -> Int
+pub fn Geometry::height(Self) -> Int
+pub fn Geometry::new(top~ : Int, height~ : Int) -> Self
+pub fn Geometry::top(Self) -> Int
+
+// Type aliases
+
+// Traits

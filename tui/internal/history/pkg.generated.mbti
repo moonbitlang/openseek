@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/tui/internal/history"
+
+import {
+  "bobzhang/openseek/tui/internal/composer",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type Entry
+pub fn Entry::mode(Self) -> @composer.Mode
+pub fn Entry::new(String, @composer.Mode) -> Self
+pub fn Entry::text(Self) -> String
+
+type History
+pub fn History::new() -> Self
+pub fn History::next(Self) -> Entry?
+pub fn History::previous(Self, Entry) -> Entry?
+pub fn History::push(Self, Entry) -> Unit
+pub fn History::reset_navigation(Self) -> Unit
+
+// Type aliases
+
+// Traits

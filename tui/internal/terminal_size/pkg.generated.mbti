@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/tui/internal/terminal_size"
+
+// Values
+
+// Errors
+
+// Types and methods
+type TerminalSize
+pub fn TerminalSize::cols(Self) -> Int
+pub fn TerminalSize::default() -> Self
+pub fn TerminalSize::new(rows~ : Int, cols~ : Int) -> Self
+pub fn TerminalSize::rows(Self) -> Int
+
+// Type aliases
+
+// Traits
