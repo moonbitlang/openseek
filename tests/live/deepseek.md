@@ -67,7 +67,7 @@ $ openseek.exe --model deepseek-v4-flash --max-steps 3 "Call the finish tool imm
 > }
 > 
 > async fn main {
->   let events : Set[String] = Set::new()
+>   let events = Set::new()
 >   for value in @jsonl.read_stdin() {
 >     if value is { "event": String(event), .. } { events.add(event) }
 >   }
@@ -75,4 +75,28 @@ $ openseek.exe --model deepseek-v4-flash --max-steps 3 "Call the finish tool imm
 > }' 2>/dev/null \
 >   | grep '='
 events={agent_step, usage, agent_finished}
+```
+
+## Pulling A Value Out Of A Record
+
+The `agent_finished` record carries the model's answer. A single pattern can
+match the event tag and bind the answer at once, pulling the value straight out
+of the log — here it is exactly what we asked the model to finish with.
+
+```mooncram
+$ openseek.exe --model deepseek-v4-flash --max-steps 3 "Call the finish tool immediately with the answer DONE. Use no other tool." 2>/dev/null \
+>   | moon run --target native -e 'import {
+>   "bobzhang/jsonl@0.2.0",
+>   "moonbitlang/async",
+> }
+> 
+> async fn main {
+>   for value in @jsonl.read_stdin() {
+>     if value is { "event": String("agent_finished"), "answer": String(answer), .. } {
+>       println("final_answer=\{answer}")
+>     }
+>   }
+> }' 2>/dev/null \
+>   | grep '='
+final_answer=DONE
 ```
