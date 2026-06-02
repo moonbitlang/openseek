@@ -56,66 +56,64 @@ pub fn Logger::enabled(self : Logger, level : Level) -> Bool {
 }
 
 ///|
-pub fn Logger::at(self : Logger, level : Level) -> LogSink {
-  { output: self.output, enabled: self.enabled(level) }
+pub fn Logger::at(self : Logger, level : Level) -> LogSink? {
+  if self.enabled(level) {
+    Some({ output: self.output })
+  } else {
+    None
+  }
 }
 
 ///|
-pub fn Logger::trace(self : Logger) -> LogSink {
+pub fn Logger::trace(self : Logger) -> LogSink? {
   self.at(TRACE)
 }
 
 ///|
-pub fn Logger::debug(self : Logger) -> LogSink {
+pub fn Logger::debug(self : Logger) -> LogSink? {
   self.at(DEBUG)
 }
 
 ///|
-pub fn Logger::info(self : Logger) -> LogSink {
+pub fn Logger::info(self : Logger) -> LogSink? {
   self.at(INFO)
 }
 
 ///|
-pub fn Logger::warn(self : Logger) -> LogSink {
+pub fn Logger::warn(self : Logger) -> LogSink? {
   self.at(WARN)
 }
 
 ///|
-pub fn Logger::error(self : Logger) -> LogSink {
+pub fn Logger::error(self : Logger) -> LogSink? {
   self.at(ERROR)
-}
-
-///|
-pub async fn Logger::write_string(self : Logger, text : String) -> Unit {
-  self.info().write_string(text)
-}
-
-///|
-pub async fn[A : Show] Logger::write(self : Logger, value : A) -> Unit {
-  self.info().write(value)
 }
 
 ///|
 pub struct LogSink {
   priv output : @stdio.Output
-  priv enabled : Bool
-}
-
-///|
-pub fn LogSink::enabled(self : LogSink) -> Bool {
-  self.enabled
 }
 
 ///|
 pub async fn LogSink::write_string(self : LogSink, text : String) -> Unit {
-  if self.enabled {
-    self.output.write(text)
-  }
+  self.output.write(text)
 }
 
 ///|
 pub async fn[A : Show] LogSink::write(self : LogSink, value : A) -> Unit {
   self.write_string(value.to_string())
+}
+
+///|
+pub async fn LogSink::write_object(
+  self : LogSink,
+  fields : Map[String, String],
+) -> Unit {
+  let object : Map[String, Json] = Map([])
+  for key, value in fields {
+    object.set(key, Json::string(value))
+  }
+  self.write_string(Json::object(object).stringify() + "\n")
 }
 
 ///|
@@ -143,6 +141,13 @@ test "logger filters below the minimum level" {
   assert_false(logger.enabled(INFO))
   assert_true(logger.enabled(WARN))
   assert_true(logger.enabled(ERROR))
-  assert_false(logger.info().enabled())
-  assert_true(logger.error().enabled())
+  assert_true(logger.info() is None)
+  assert_true(logger.error() is Some(_))
+}
+
+///|
+test "logger level helpers return optional sinks" {
+  let logger = Logger(@stdio.stdout, min_level=INFO)
+  assert_true(logger.debug() is None)
+  assert_true(logger.info() is Some(_))
 }

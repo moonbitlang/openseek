@@ -11,7 +11,7 @@ entry point so request encoding can be tested without network access.
 | `bobzhang/openseek` | Root package and module overview. | `README.mbt.md` |
 | `bobzhang/openseek/deepseek` | Pure DeepSeek chat data, JSON encoding, and response decoding. | `deepseek/README.mbt.md` |
 | `bobzhang/openseek/deepseek/client` | Native-only HTTP transport for DeepSeek chat completions. | `deepseek/client/README.mbt.md` |
-| `bobzhang/openseek/logger` | Native-only async logger with severity-filtered `<+` sinks. | `logger/README.mbt.md` |
+| `bobzhang/openseek/logger` | Native-only async logger with severity-filtered optional `<+` sinks. | `logger/README.mbt.md` |
 | `bobzhang/openseek/agent_tool` | Tool registry, executor, output, and control-action types. | `agent_tool/README.mbt.md` |
 | `bobzhang/openseek/agent` | Native-only OpenSeek agent loop and local tool dispatch. | `agent/README.mbt.md` |
 | `bobzhang/openseek/cmd/main` | Native-only command-line entry point. | `cmd/main/README.md` |

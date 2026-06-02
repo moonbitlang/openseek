@@ -1,5 +1,6 @@
 import {
   "moonbitlang/async/stdio",
+  "moonbitlang/core/json",
 }
 
 warnings = "+unnecessary_annotation"

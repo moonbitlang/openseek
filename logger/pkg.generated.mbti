@@ -24,23 +24,21 @@ pub fn Level::rank(Self) -> Int
 pub struct LogSink {
   // private fields
 }
-pub fn LogSink::enabled(Self) -> Bool
 pub async fn[A : Show] LogSink::write(Self, A) -> Unit
+pub async fn LogSink::write_object(Self, Map[String, String]) -> Unit
 pub async fn LogSink::write_string(Self, String) -> Unit
 
 pub struct Logger {
   // private fields
 }
 pub fn Logger::Logger(@stdio.Output, min_level? : Level) -> Self
-pub fn Logger::at(Self, Level) -> LogSink
-pub fn Logger::debug(Self) -> LogSink
+pub fn Logger::at(Self, Level) -> LogSink?
+pub fn Logger::debug(Self) -> LogSink?
 pub fn Logger::enabled(Self, Level) -> Bool
-pub fn Logger::error(Self) -> LogSink
-pub fn Logger::info(Self) -> LogSink
-pub fn Logger::trace(Self) -> LogSink
-pub fn Logger::warn(Self) -> LogSink
-pub async fn[A : Show] Logger::write(Self, A) -> Unit
-pub async fn Logger::write_string(Self, String) -> Unit
+pub fn Logger::error(Self) -> LogSink?
+pub fn Logger::info(Self) -> LogSink?
+pub fn Logger::trace(Self) -> LogSink?
+pub fn Logger::warn(Self) -> LogSink?
 
 // Type aliases
 

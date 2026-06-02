@@ -30,8 +30,9 @@ pub async fn run(
   )
   let tools = tool_definitions() catch {
     error => {
-      let error_log = log.error()
-      error_log <+ "agent setup failed: \{error}\n"
+      if log.error() is Some(error_log) {
+        error_log <+ "agent setup failed: \{error}\n"
+      }
       return
     }
   }
@@ -40,15 +41,21 @@ pub async fn run(
     ChatMessage(User, content=task),
   ]
   for step in 0..<max_steps {
-    log <+ "--- step \{step + 1} ---\n"
+    if log.info() is Some(info_log) {
+      info_log <+ "--- step \{step + 1} ---\n"
+    }
     let response = client.chat(messages, tools=tools.function_tools())
     if response.content != "" {
-      log <+ "agent: \{response.content}\n"
+      if log.info() is Some(info_log) {
+        info_log <+ "agent: \{response.content}\n"
+      }
     }
     print_usage(response.usage)
     if response.tool_calls.length() == 0 {
-      log <+ "=== finished ===\n"
-      log <+ "\{response.content}\n"
+      if log.info() is Some(info_log) {
+        info_log <+ "=== finished ===\n"
+        info_log <+ "\{response.content}\n"
+      }
       return
     }
     let reasoning_content = match response.reasoning_content {
@@ -65,8 +72,9 @@ pub async fn run(
     for native_call in response.tool_calls {
       let tool_call = @agent_tool.AgentToolCall(native_call) catch {
         error => {
-          let error_log = log.error()
-          error_log <+ "tool: error: \{error}\n"
+          if log.error() is Some(error_log) {
+            error_log <+ "tool: error: \{error}\n"
+          }
           messages.push(
             ChatMessage(Tool(native_call.id), content="error: \{error}"),
           )
@@ -76,25 +84,31 @@ pub async fn run(
       let result = @agent_tool.execute_tool_call(tool_call, tools)
       let output = match result {
         Control(Finish(answer)) => {
-          log <+ "=== finished ===\n"
-          log <+ "\{answer}\n"
+          if log.info() is Some(info_log) {
+            info_log <+ "=== finished ===\n"
+            info_log <+ "\{answer}\n"
+          }
           return
         }
         Control(Abort(reason)) => {
-          let warn_log = log.warn()
-          warn_log <+ "=== aborted ===\n"
-          warn_log <+ "\{reason}\n"
+          if log.warn() is Some(warn_log) {
+            warn_log <+ "=== aborted ===\n"
+            warn_log <+ "\{reason}\n"
+          }
           return
         }
         Respond(output) => output
       }
       let label = if output.is_error { "tool error" } else { "tool" }
-      log <+ "\{label}: \{output.content}\n"
+      if log.info() is Some(info_log) {
+        info_log <+ "\{label}: \{output.content}\n"
+      }
       messages.push(ChatMessage(Tool(native_call.id), content=output.content))
     }
   }
-  let warn_log = log.warn()
-  warn_log <+ "=== max steps exhausted ===\n"
+  if log.warn() is Some(warn_log) {
+    warn_log <+ "=== max steps exhausted ===\n"
+  }
 }
 
 ///|
@@ -102,6 +116,8 @@ let log : @logger.Logger = @logger.stdout(min_level=INFO)
 
 ///|
 async fn print_usage(usage : @deepseek.Usage) -> Unit {
-  log <+
-    "usage: prompt=\{usage.prompt_tokens} completion=\{usage.completion_tokens} cache_hit=\{usage.prompt_cache_hit_tokens} cache_miss=\{usage.prompt_cache_miss_tokens}\n"
+  if log.info() is Some(info_log) {
+    info_log <+
+      "usage: prompt=\{usage.prompt_tokens} completion=\{usage.completion_tokens} cache_hit=\{usage.prompt_cache_hit_tokens} cache_miss=\{usage.prompt_cache_miss_tokens}\n"
+  }
 }
