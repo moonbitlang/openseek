@@ -23,5 +23,5 @@ preferred_target = "native"
 
 rule(
   name: "md_to_mbt_string",
-  command: "node scripts/md_to_mbt_string.mjs \"$input\" \"$output\"",
+  command: "moon run --quiet --target native scripts/md_to_mbt_string -- \"$input\" \"$output\"",
 )

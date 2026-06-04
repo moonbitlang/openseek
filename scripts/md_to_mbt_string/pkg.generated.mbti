@@ -1,0 +1,13 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek-scripts/md_to_mbt_string"
+
+// Values
+
+// Errors
+
+// Types and methods
+type ProgramArgs
+
+// Type aliases
+
+// Traits

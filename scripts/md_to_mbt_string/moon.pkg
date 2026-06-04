@@ -1,0 +1,14 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/argparse",
+  "moonbitlang/x/path",
+}
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+native"
+
+options(
+  "is-main": true,
+)
