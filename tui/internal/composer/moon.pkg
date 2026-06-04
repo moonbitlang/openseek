@@ -1,9 +1,7 @@
 import {
-  "kawaz/grapheme",
-  "rami3l/unicodewidth",
-  "moonbitlang/core/cmp",
-  "moonbitlang/core/int",
   "bobzhang/openseek/tui/internal/text",
+  "bobzhang/openseek/tui/core",
+  "moonbit-community/displaytext",
 }
 
 supported_targets = "native"

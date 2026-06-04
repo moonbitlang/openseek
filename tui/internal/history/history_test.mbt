@@ -1,12 +1,12 @@
 ///|
 fn prompt_entry(text : String) -> @history.Entry {
-  let composer = @composer.Model::new()
+  let composer = @composer.Model::new("")
   @history.Entry::new(text, composer.mode())
 }
 
 ///|
 fn shell_entry(text : String) -> @history.Entry {
-  let composer = @composer.Model::new()
+  let composer = @composer.Model::new("")
   composer.insert_user_text("!" + text)
   @history.Entry::new(composer.text(), composer.mode())
 }

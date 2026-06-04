@@ -1,6 +1,6 @@
 import {
   "bobzhang/openseek/tui/doc",
-  "bobzhang/openseek/tui/internal/text",
+  "moonbit-community/displaytext",
 }
 
 supported_targets = "native"

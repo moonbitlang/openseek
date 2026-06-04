@@ -1,7 +1,29 @@
 ///|
+fn display_width(text : String) -> Int {
+  @displaytext.DisplayText(text).width()
+}
+
+///|
+fn display_prefix(text : String, units : Int) -> String {
+  let line = @displaytext.DisplayText(text)
+  let mut end = line.start()
+  let mut remaining = units.max(0)
+  while remaining > 0 {
+    match line.next(end) {
+      Some(next) => {
+        end = next
+        remaining = remaining - 1
+      }
+      None => remaining = 0
+    }
+  }
+  line.view(line.start(), end).to_owned()
+}
+
+///|
 test "composer surface renders viewport rows and cursor" {
   let surface = @render.composer_surface(
-    @composer.Model::new(),
+    @composer.Model::new(""),
     activity=None,
     queued_inputs=[],
     status=@doc.Text::plain("ready"),
@@ -27,7 +49,7 @@ test "composer surface renders viewport rows and cursor" {
       #|────────────
     ),
   )
-  inspect(@text.display_width(surface.line_at(1).text()), content="12")
+  inspect(display_width(surface.line_at(1).text()), content="12")
   inspect(
     surface.line_at(2).text(),
     content=(
@@ -45,7 +67,7 @@ test "composer surface renders viewport rows and cursor" {
 
 ///|
 test "composer surface grows with multiline input up to max rows" {
-  let two_lines = @composer.Model::new()
+  let two_lines = @composer.Model::new("")
   two_lines.insert("a\nb")
   let two_line_surface = @render.composer_surface(
     two_lines,
@@ -68,9 +90,9 @@ test "composer surface grows with multiline input up to max rows" {
       #|────────────
     ),
   )
-  inspect(@text.display_width(two_line_surface.line_at(1).text()), content="12")
+  inspect(display_width(two_line_surface.line_at(1).text()), content="12")
   inspect(
-    @text.grapheme_slice(two_line_surface.line_at(2).text(), 0, 2),
+    display_prefix(two_line_surface.line_at(2).text(), 2),
     content=(
       #|❯ 
     ),
@@ -81,8 +103,8 @@ test "composer surface grows with multiline input up to max rows" {
       #|❯ a
     ),
   )
-  inspect(@text.display_width(two_line_surface.line_at(2).text()), content="12")
-  let five_lines = @composer.Model::new()
+  inspect(display_width(two_line_surface.line_at(2).text()), content="12")
+  let five_lines = @composer.Model::new("")
   five_lines.insert("a\nb\nc\nd\ne")
   let capped_surface = @render.composer_surface(
     five_lines,
@@ -100,7 +122,7 @@ test "composer surface grows with multiline input up to max rows" {
     ),
   )
   inspect(
-    @text.grapheme_slice(capped_surface.line_at(1).text(), 0, 2),
+    display_prefix(capped_surface.line_at(1).text(), 2),
     content=(
       #|──
     ),
@@ -111,24 +133,21 @@ test "composer surface grows with multiline input up to max rows" {
       #|────────────
     ),
   )
-  inspect(@text.display_width(capped_surface.line_at(1).text()), content="12")
-  inspect(
-    @text.grapheme_slice(capped_surface.line_at(4).text(), 0, 2),
-    content="  ",
-  )
+  inspect(display_width(capped_surface.line_at(1).text()), content="12")
+  inspect(display_prefix(capped_surface.line_at(4).text(), 2), content="  ")
   inspect(
     capped_surface.line_at(4).text().trim(),
     content=(
       #|d
     ),
   )
-  inspect(@text.display_width(capped_surface.line_at(4).text()), content="12")
+  inspect(display_width(capped_surface.line_at(4).text()), content="12")
 }
 
 ///|
 test "composer surface renders queued inputs above composer" {
   let surface = @render.composer_surface(
-    @composer.Model::new(),
+    @composer.Model::new(""),
     activity=None,
     queued_inputs=[Prompt("first"), Command("pwd")],
     status=@doc.Text::plain("ready"),
@@ -161,7 +180,7 @@ test "composer surface renders queued inputs above composer" {
     ),
   )
   inspect(
-    @text.display_width(surface.line_at(3).text()),
+    display_width(surface.line_at(3).text()),
     content=(
       #|10
     ),
@@ -178,7 +197,7 @@ test "composer surface renders queued inputs above composer" {
 ///|
 test "composer surface renders the input viewport" {
   let surface = @render.composer_surface(
-    @composer.Model::new(),
+    @composer.Model::new(""),
     activity=None,
     queued_inputs=[],
     status=@doc.Text::plain("ready"),
@@ -204,7 +223,7 @@ test "composer surface renders the input viewport" {
       #|────────────────────────────────────────
     ),
   )
-  inspect(@text.display_width(surface.line_at(1).text()), content="40")
+  inspect(display_width(surface.line_at(1).text()), content="40")
   inspect(
     surface.line_at(2).text(),
     content=(
@@ -223,7 +242,7 @@ test "composer surface renders the input viewport" {
 ///|
 test "composer surface renders activity above separator" {
   let surface = @render.composer_surface(
-    @composer.Model::new(),
+    @composer.Model::new(""),
     activity=Some(@doc.Text::plain("Working (0s • esc to interrupt)")),
     queued_inputs=[],
     status=@doc.Text::plain("gpt-5 · ~/repo · Context 100% left"),
@@ -251,7 +270,7 @@ test "composer surface renders activity above separator" {
     ),
   )
   inspect(
-    @text.display_width(surface.line_at(2).text()),
+    display_width(surface.line_at(2).text()),
     content=(
       #|0
     ),
@@ -267,7 +286,7 @@ test "composer surface renders activity above separator" {
 ///|
 test "composer surface puts activity above queued inputs" {
   let surface = @render.composer_surface(
-    @composer.Model::new(),
+    @composer.Model::new(""),
     activity=Some(@doc.Text::plain("Working (3s)")),
     queued_inputs=[Prompt("next")],
     status=@doc.Text::plain("ready"),
@@ -301,7 +320,7 @@ test "composer surface puts activity above queued inputs" {
 ///|
 test "composer surface shows a notice when the terminal is below the minimum" {
   let surface = @render.composer_surface(
-    @composer.Model::new(),
+    @composer.Model::new(""),
     activity=Some(@doc.Text::plain("Working")),
     queued_inputs=[Prompt("a")],
     status=@doc.Text::plain("ready"),
@@ -319,7 +338,7 @@ test "composer surface shows a notice when the terminal is below the minimum" {
 ///|
 test "composer surface drops activity and queue when the terminal is too short" {
   let surface = @render.composer_surface(
-    @composer.Model::new(),
+    @composer.Model::new(""),
     activity=Some(@doc.Text::plain("Working (3s)")),
     queued_inputs=[Prompt("a"), Prompt("b")],
     status=@doc.Text::plain("ready"),
@@ -330,14 +349,14 @@ test "composer surface drops activity and queue when the terminal is too short" 
   // Only the composer + chrome remain (spacer, separators, prompt, status); the
   // activity line and queue are dropped so the prompt is never clipped.
   inspect(surface.height(), content="5")
-  inspect(@text.grapheme_slice(surface.line_at(2).text(), 0, 1), content="❯")
+  inspect(display_prefix(surface.line_at(2).text(), 1), content="❯")
   inspect(surface.cursor().row(), content="2")
 }
 
 ///|
 test "composer surface bounds queued previews so the composer stays visible" {
   let surface = @render.composer_surface(
-    @composer.Model::new(),
+    @composer.Model::new(""),
     activity=Some(@doc.Text::plain("Working")),
     queued_inputs=[
       Prompt("a"),
@@ -361,14 +380,14 @@ test "composer surface bounds queued previews so the composer stays visible" {
     ),
   )
   // The composer prompt survives and the cursor stays on it, not on a queue row.
-  inspect(@text.grapheme_slice(surface.line_at(7).text(), 0, 1), content="❯")
+  inspect(display_prefix(surface.line_at(7).text(), 1), content="❯")
   inspect(surface.cursor().row(), content="7")
 }
 
 ///|
 test "composer surface notice overrides persistent status" {
   let surface = @render.composer_surface(
-    @composer.Model::new(),
+    @composer.Model::new(""),
     activity=None,
     queued_inputs=[],
     status=@doc.Text::plain("gpt-5 · ~/repo"),

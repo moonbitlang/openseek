@@ -3,10 +3,12 @@ package "bobzhang/openseek/tui/core"
 
 import {
   "bobzhang/openseek/tui/doc",
+  "moonbit-community/displaytext",
   "moonbitlang/core/debug",
 }
 
 // Values
+pub let prompt_prefix : @displaytext.DisplayText
 
 // Errors
 
@@ -22,7 +24,7 @@ pub(all) enum Input {
   Prompt(String)
   Command(String)
 } derive(Eq, @debug.Debug)
-pub fn Input::prefix(Self) -> String
+pub fn Input::prefix(Self) -> @displaytext.DisplayText
 pub fn Input::text(Self) -> String
 
 pub struct ToolCall {

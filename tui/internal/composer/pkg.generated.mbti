@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "bobzhang/openseek/tui/internal/composer"
 
+import {
+  "moonbit-community/displaytext",
+}
+
 // Values
 pub const DefaultMaxTextRows : Int = 4
 
@@ -18,7 +22,7 @@ pub fn Model::cursor_offset(Self) -> Int
 pub fn Model::cursor_row(Self) -> Int
 pub fn Model::delete_after(Self) -> Unit
 pub fn Model::delete_before(Self) -> Unit
-pub fn Model::input_prefix(Self, Int) -> String
+pub fn Model::input_prefix(Self, Int) -> @displaytext.DisplayText
 pub fn Model::insert(Self, String) -> Unit
 pub fn Model::insert_user_text(Self, String) -> Unit
 pub fn Model::kill_after(Self) -> Unit
@@ -31,16 +35,14 @@ pub fn Model::move_right(Self) -> Unit
 pub fn Model::move_vertical(Self, Int) -> Unit
 pub fn Model::move_word_left(Self) -> Unit
 pub fn Model::move_word_right(Self) -> Unit
-pub fn Model::new(max_text_rows? : Int) -> Self
-pub fn Model::prompt_width(Self) -> Int
+pub fn Model::new(String, max_text_rows? : Int) -> Self
 pub fn Model::replace(Self, String, mode~ : Mode) -> Unit
 pub fn Model::reset(Self) -> Unit
 pub fn Model::resize(Self, cols~ : Int, max_rows? : Int) -> Unit
 pub fn Model::text(Self) -> String
-pub fn Model::visible_line(Self, Int) -> String
+pub fn Model::visible_line(Self, Int) -> @displaytext.DisplayText?
 pub fn Model::visible_text_rows(Self) -> Int
 
 // Type aliases
 
 // Traits
-

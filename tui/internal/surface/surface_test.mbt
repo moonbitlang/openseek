@@ -13,9 +13,9 @@ test "surface cursor is normalized when stored" {
 ///|
 test "with_max_rows keeps the leading rows" {
   let rows = [
-    @surface.Line::new([@surface.Span::new("a")]),
-    @surface.Line::new([@surface.Span::new("b")]),
-    @surface.Line::new([@surface.Span::new("c")]),
+    @surface.Line::new([Span(DisplayText("a"))]),
+    @surface.Line::new([Span(DisplayText("b"))]),
+    @surface.Line::new([Span(DisplayText("c"))]),
   ]
   let surface = @surface.Surface::new(
     width=10,
@@ -34,10 +34,10 @@ test "with_max_rows keeps the leading rows" {
 test "line equality includes span text and style" {
   let green = @surface.Style::new(foreground=Basic(BrightGreen))
   let red = @surface.Style::new(foreground=Basic(BrightRed))
-  let left = @surface.Line::new([@surface.Span::new("x", style=green)])
-  let same = @surface.Line::new([@surface.Span::new("x", style=green)])
-  let different_text = @surface.Line::new([@surface.Span::new("y", style=green)])
-  let different_style = @surface.Line::new([@surface.Span::new("x", style=red)])
+  let left = @surface.Line::new([Span(DisplayText("x"), style=green)])
+  let same = @surface.Line::new([Span(DisplayText("x"), style=green)])
+  let different_text = @surface.Line::new([Span(DisplayText("y"), style=green)])
+  let different_style = @surface.Line::new([Span(DisplayText("x"), style=red)])
   assert_true(left == same)
   assert_false(left == different_text)
   assert_false(left == different_style)

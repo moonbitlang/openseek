@@ -1,20 +1,20 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "bobzhang/openseek/tui/internal/text"
 
+import {
+  "moonbit-community/displaytext",
+}
+
 // Values
-pub fn display_width(String) -> Int
+pub const TabWidth : Int = 8
 
-pub fn grapheme_count(String) -> Int
-
-pub fn grapheme_slice(String, Int, Int) -> String
-
-pub fn line_at(Array[String], Int) -> String
+pub fn is_control_unit(StringView) -> Bool
 
 pub fn sanitize(String) -> String
 
-pub fn split_lines(String) -> Array[String]
+pub fn sanitize_lines(String) -> Array[@displaytext.DisplayText]
 
-pub fn truncate_line(String, Int) -> String
+pub fn unit_width(@displaytext.DisplayText, start~ : @displaytext.TextualPosition, end~ : @displaytext.TextualPosition) -> Int
 
 // Errors
 
@@ -23,4 +23,3 @@ pub fn truncate_line(String, Int) -> String
 // Type aliases
 
 // Traits
-

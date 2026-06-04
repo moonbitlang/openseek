@@ -16,7 +16,7 @@ struct Style {
 ///|
 /// A string fragment with an associated style.
 struct Span {
-  text : String
+  text : @displaytext.DisplayText
   style : Style
 } derive(Eq)
 
@@ -85,14 +85,17 @@ pub fn Style::underline(self : Style) -> Bool {
 
 ///|
 /// Build a span from text and an optional style (default: unstyled).
-pub fn Span::new(text : String, style? : Style = Style::new()) -> Span {
+pub fn Span::Span(
+  text : @displaytext.DisplayText,
+  style? : Style = Style::new(),
+) -> Span {
   { text, style }
 }
 
 ///|
 /// Text of the span.
 pub fn Span::text(self : Span) -> String {
-  self.text
+  self.text.text()
 }
 
 ///|
@@ -118,7 +121,7 @@ pub fn Line::spans(self : Line) -> Array[Span] {
 pub fn Line::text(self : Line) -> String {
   let builder = StringBuilder()
   for span in self.spans {
-    builder.write_string(span.text)
+    builder.write_string(span.text.text())
   }
   builder.to_string()
 }

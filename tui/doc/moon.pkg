@@ -1,7 +1,7 @@
 import {
+  "bobzhang/openseek/tui/internal/text",
   "bobzhang/openseek/tui/internal/surface",
-  "kawaz/grapheme",
-  "rami3l/unicodewidth",
+  "moonbit-community/displaytext",
   "moonbit-community/tty/color" @tty/color,
 }
 

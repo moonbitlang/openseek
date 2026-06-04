@@ -1,6 +1,5 @@
 import {
-  "kawaz/grapheme",
-  "rami3l/unicodewidth",
+  "moonbit-community/displaytext",
 }
 
 supported_targets = "native"

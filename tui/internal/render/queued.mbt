@@ -3,14 +3,17 @@
 // so it lives here rather than as a `@core` projection.
 
 ///|
-fn input_preview_text(input : @core.Input) -> String {
+fn input_preview_line(input : @core.Input) -> @displaytext.DisplayText {
   // Defense-in-depth: queued previews are written straight to the terminal, so
   // strip any control bytes the input may carry (composer input is already
   // sanitized, but other sources — e.g. an initial CLI task — are not).
-  let lines = @text.split_lines(@text.sanitize(input.text()))
-  let first = @text.line_at(lines, 0)
+  let lines = @text.sanitize_lines(input.text())
+  let first = lines[0]
   if lines.length() > 1 {
-    first + " …"
+    let builder = StringBuilder()
+    builder.write_string(first.text())
+    builder.write_string(" …")
+    DisplayText(builder.to_string())
   } else {
     first
   }
@@ -23,15 +26,18 @@ fn queued_input_line(
   cols~ : Int,
   indent~ : Int,
 ) -> @surface.Line {
-  let marker = String::make(indent, ' ') + "\{index + 1}. "
+  let marker = @displaytext.DisplayText(
+    String::make(indent, ' ') + "\{index + 1}. ",
+  )
   let prefix = input.prefix()
+  let marker_width = marker.width()
+  let prefix_width = prefix.width()
   @surface.Line::new([
-    @surface.Span::new(marker, style=@doc.Style::dim().to_surface()),
-    @surface.Span::new(prefix, style=@doc.Style::prompt().to_surface()),
-    @surface.Span::new(
-      @text.truncate_line(
-        input_preview_text(input),
-        cols - @text.display_width(marker) - @text.display_width(prefix),
+    Span(marker, style=@doc.Style::dim().to_surface()),
+    Span(prefix, style=@doc.Style::prompt().to_surface()),
+    Span(
+      DisplayText(
+        input_preview_line(input).truncate(cols - marker_width - prefix_width),
       ),
       style=@doc.Style::dim().to_surface(),
     ),
@@ -40,13 +46,13 @@ fn queued_input_line(
 
 ///|
 fn indented_dim_line(
-  text : String,
+  line : @displaytext.DisplayText,
   cols~ : Int,
   indent~ : Int,
 ) -> @surface.Line {
   @surface.Line::new([
-    @surface.Span::new(
-      String::make(indent, ' ') + @text.truncate_line(text, cols - indent),
+    Span(
+      DisplayText(String::make(indent, ' ') + line.truncate(cols - indent)),
       style=@doc.Style::dim().to_surface(),
     ),
   ])
@@ -70,7 +76,9 @@ fn queued_input_rows(
   if count == 0 || max_rows < 2 {
     return rows
   }
-  rows.push(indented_dim_line("Queued follow-up inputs:", cols~, indent~))
+  rows.push(
+    indented_dim_line(DisplayText("Queued follow-up inputs:"), cols~, indent~),
+  )
   let item_budget = max_rows - 1
   if count <= item_budget {
     for index in 0..<count {
@@ -82,7 +90,13 @@ fn queued_input_rows(
     for index in 0..<shown {
       rows.push(queued_input_line(inputs[index], index~, cols~, indent~))
     }
-    rows.push(indented_dim_line("… \{count - shown} more", cols~, indent~))
+    rows.push(
+      indented_dim_line(
+        DisplayText("… \{count - shown} more"),
+        cols~,
+        indent~,
+      ),
+    )
   }
   rows
 }

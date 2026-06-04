@@ -12,8 +12,8 @@
 ///|
 fn separator_line(cols~ : Int) -> @surface.Line {
   @surface.Line::new([
-    @surface.Span::new(
-      String::make(cols, '─'),
+    Span(
+      DisplayText(String::make(cols, '─')),
       style=@doc.Style::dim().to_surface(),
     ),
   ])
@@ -30,15 +30,20 @@ fn prompt_style() -> @surface.Style {
 }
 
 ///|
-fn prompt_line(prefix~ : String, line~ : String, cols~ : Int) -> @surface.Line {
-  let prefix_width = @text.display_width(prefix)
-  let content = @text.truncate_line(line, cols - prefix_width)
-  let used = prefix_width + @text.display_width(content)
+fn prompt_line(
+  prefix~ : @displaytext.DisplayText,
+  line~ : @displaytext.DisplayText,
+  cols~ : Int,
+) -> @surface.Line {
+  let prefix_width = prefix.width()
+  let content = @displaytext.DisplayText(line.truncate(cols - prefix_width))
+  let used = prefix_width + content.width()
   let fill_cols = if used < cols { cols - used } else { 0 }
+  let fill_cols = @displaytext.DisplayText(String::make(fill_cols, ' '))
   @surface.Line::new([
-    @surface.Span::new(prefix, style=prompt_style()),
-    @surface.Span::new(content, style=input_style()),
-    @surface.Span::new(String::make(fill_cols, ' '), style=input_style()),
+    Span(prefix, style=prompt_style()),
+    Span(content, style=input_style()),
+    Span(fill_cols, style=input_style()),
   ])
 }
 
@@ -58,9 +63,8 @@ fn indent_line(line : @surface.Line, indent~ : Int) -> @surface.Line {
   if indent <= 0 {
     return line
   }
-  let spans : Array[@surface.Span] = [
-    @surface.Span::new(String::make(indent, ' '), style=input_style()),
-  ]
+  let indent = @displaytext.DisplayText(String::make(indent, ' '))
+  let spans : Array[@surface.Span] = [Span(indent, style=input_style())]
   for span in line.spans() {
     spans.push(span)
   }
@@ -80,10 +84,11 @@ fn too_small_surface(cols~ : Int) -> @surface.Surface {
     width=cols,
     rows=[
       @surface.Line::new([
-        @surface.Span::new(
-          @text.truncate_line(
-            "Terminal too small — resize to at least \{MinLiveRows} rows",
-            cols,
+        Span(
+          DisplayText(
+            @displaytext.DisplayText(
+              "Terminal too small — resize to at least \{MinLiveRows} rows",
+            ).truncate(cols),
           ),
           style=@doc.Style::error().to_surface(),
         ),
@@ -123,7 +128,7 @@ pub fn composer_surface(
   }
   // Status and activity rows have no prompt prefix, so indent them to the
   // composer's text column (after `❯ `) instead of the screen's left edge.
-  let indent = composer.prompt_width()
+  let indent = composer.input_prefix(0).width()
   // Lay the composer out first, capped to the rows left after its mandatory
   // chrome (spacer + two separators + status), so a tall multiline draft scrolls
   // to the cursor instead of overflowing the budget. Its height then bounds the
@@ -169,13 +174,9 @@ pub fn composer_surface(
   let composer_top = rows.length()
   rows.push(separator_line(cols~))
   for row in 0..<composer.visible_text_rows() {
-    rows.push(
-      prompt_line(
-        prefix=composer.input_prefix(row),
-        line=composer.visible_line(row),
-        cols~,
-      ),
-    )
+    if composer.visible_line(row) is Some(line) {
+      rows.push(prompt_line(prefix=composer.input_prefix(row), line~, cols~))
+    }
   }
   rows.push(separator_line(cols~))
   rows.push(

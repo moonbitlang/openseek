@@ -52,8 +52,8 @@ pub(all) enum TranscriptItem {
 /// `style`, producing one `@doc.Text` block per line.
 fn bulleted_lines(
   text : @doc.Text,
-  first~ : String,
-  rest~ : String,
+  first~ : @displaytext.DisplayText,
+  rest~ : @displaytext.DisplayText,
   style~ : @doc.Style,
 ) -> Array[@doc.Text] {
   let texts : Array[@doc.Text] = []
@@ -64,6 +64,15 @@ fn bulleted_lines(
   }
   texts
 }
+
+///|
+let bullet : @displaytext.DisplayText = DisplayText("⏺ ")
+
+///|
+let continuation : @displaytext.DisplayText = DisplayText("  ")
+
+///|
+let square : @displaytext.DisplayText = DisplayText("■ ")
 
 ///|
 /// Project a transcript item into a renderable `@doc.Doc`: inputs use their own
@@ -77,8 +86,8 @@ pub impl @doc.ToDoc for TranscriptItem with fn to_doc(self) {
       Doc(
         bulleted_lines(
           @doc.Text::plain(content),
-          first="⏺ ",
-          rest="  ",
+          first=bullet,
+          rest=continuation,
           style=@doc.Style::dim(),
         ),
       )
@@ -87,12 +96,13 @@ pub impl @doc.ToDoc for TranscriptItem with fn to_doc(self) {
         .map(status => status.style())
         .unwrap_or(@doc.Style::dim())
       let texts : Array[@doc.Text] = [
-        call.title.prepend_span(Span("⏺ ", style=bullet_style)),
+        call.title.prepend_span(Span(bullet, style=bullet_style)),
       ]
       let mut has_detail_line = false
       for detail in call.details {
         for line in detail.split_lines() {
           let marker = if has_detail_line { "    " } else { "  └ " }
+          let marker = @displaytext.DisplayText(marker)
           texts.push(line.prepend_span(Span(marker, style=@doc.Style::dim())))
           has_detail_line = true
         }
@@ -103,9 +113,9 @@ pub impl @doc.ToDoc for TranscriptItem with fn to_doc(self) {
       let error_style = @doc.Style::error()
       Doc(
         bulleted_lines(
-          Text([Span(message, style=error_style)]),
-          first="■ ",
-          rest="  ",
+          Text([Span(DisplayText(message), style=error_style)]),
+          first=square,
+          rest=continuation,
           style=error_style,
         ),
       )

@@ -56,31 +56,22 @@ pub fn Text::prepend_span(self : Text, span : Span) -> Text {
 /// Split this block at line breaks into one block per source line, preserving
 /// each span's style. The returned blocks contain no line-ending characters.
 ///
-/// Every line-ending form splits a row: `\r\n` is a single grapheme cluster and
-/// a lone `\r` is its own, so iterating graphemes handles CRLF/CR/LF alike and
-/// never leaves a stray `\r` for `wrap` to turn into an extra blank row.
+/// Every line-ending form splits a row: CRLF, CR, and LF are handled by
+/// `displaytext.split_lines`, so no stray `\r` is left for `wrap` to turn into
+/// an extra blank row.
 pub fn Text::split_lines(self : Text) -> Array[Text] {
   let lines : Array[Text] = []
   let mut spans : Array[Span] = []
   for span in self.spans {
-    let mut current = StringBuilder()
-    for grapheme in @grapheme.grapheme_iter(span.text) {
-      let g = grapheme.to_owned()
-      if g == "\n" || g == "\r\n" || g == "\r" {
-        let part = current.to_string()
-        if part.length() > 0 {
-          spans.push(Span(part, style=span.style))
-        }
+    let display_lines = @displaytext.split_lines(span.display.text())
+    for index, display_line in display_lines {
+      if display_line.start() != display_line.end() {
+        spans.push(Span(display_line, style=span.style))
+      }
+      if index + 1 < display_lines.length() {
         lines.push(Text(spans))
         spans = []
-        current = StringBuilder()
-      } else {
-        current.write_string(g)
       }
-    }
-    let part = current.to_string()
-    if part.length() > 0 {
-      spans.push(Span(part, style=span.style))
     }
   }
   lines.push(Text(spans))
@@ -90,7 +81,7 @@ pub fn Text::split_lines(self : Text) -> Array[Text] {
 ///|
 /// A string fragment with an associated terminal style.
 struct Span {
-  text : String
+  display : @displaytext.DisplayText
   style : Style
 }
 
@@ -98,14 +89,17 @@ struct Span {
 /// Build a styled span.
 ///
 /// If `style` is omitted, the span uses `Style::default`.
-pub fn Span::Span(text : String, style? : Style = Style::default()) -> Span {
-  { text, style }
+pub fn Span::Span(
+  text : @displaytext.DisplayText,
+  style? : Style = Style::default(),
+) -> Span {
+  { display: text, style }
 }
 
 ///|
 /// Build an unstyled span.
 pub fn Span::plain(text : String) -> Span {
-  Span(text)
+  Span(DisplayText(text))
 }
 
 ///|
@@ -176,65 +170,51 @@ pub fn Style::to_surface(self : Style) -> @surface.Style {
 }
 
 ///|
-/// Terminal tab stop width. Tabs in transcript content are expanded to spaces
-/// up to the next multiple of this, matching the conventional terminal default.
-const TabWidth : Int = 8
-
-///|
-/// Whether a grapheme is a C0 control character or DEL. `\n` and `\t` are
-/// handled separately by the wrapper, so this only matches the remaining
-/// controls (`\r`, etc.) that must not reach the terminal verbatim.
-fn is_control_grapheme(grapheme : String) -> Bool {
-  match grapheme.get_char(0) {
-    Some(c) => {
-      let code = c.to_int()
-      code < 0x20 || code == 0x7f
-    }
-    None => false
-  }
-}
-
-///|
 /// Lay this block out into physical rows for `width` columns, wrapping by
 /// display width, expanding tabs to the next stop, and dropping stray controls.
 fn Text::wrap(self : Text, width~ : Int) -> Array[@surface.Line] {
   let rows : Array[@surface.Line] = []
   let mut spans : Array[@surface.Span] = []
   let mut used = 0
-  let width = if width < 1 { 1 } else { width }
+  let width = width.max(1)
   for span in self.spans {
     let style = span.style.to_surface()
-    for grapheme in @grapheme.grapheme_iter(span.text) {
-      let text = grapheme.to_owned()
-      // `\r\n` is a single grapheme cluster (Unicode CR×LF) and a lone `\r` is
-      // its own; treat all line-ending forms as a row break so CRLF content
-      // (e.g. tool output) keeps its lines instead of being dropped as a control.
-      if text == "\n" || text == "\r\n" || text == "\r" {
+    let display_lines = @displaytext.split_lines(span.display.text())
+    for line_index, display_line in display_lines {
+      if line_index > 0 {
         rows.push(@surface.Line::new(spans))
         spans = []
         used = 0
-      } else {
+      }
+      let mut start = display_line.start()
+      while display_line.next(start) is Some(end) {
+        let unit = display_line.view(start, end)
         // Normalize control characters so the columns we count match what the
-        // terminal draws. A raw `\t` jumps to the terminal's tab stop, which is
-        // not modeled by `used`, so it would shove following text into the wrong
-        // column; every other control is dropped.
-        let pieces : Array[String] = if text == "\t" {
-          Array::make(TabWidth - used % TabWidth, " ")
-        } else if is_control_grapheme(text) {
-          []
-        } else {
-          [text]
-        }
-        for piece in pieces {
-          let next = @unicodewidth.str_width(piece)
+        // terminal draws. A raw `\t` jumps to the terminal's tab stop, which
+        // is not modeled by `used`, so it would shove following text into the
+        // wrong column; every other control is dropped.
+        if unit == "\t" {
+          let spaces = @text.TabWidth - used % @text.TabWidth
+          for _ in 0..<spaces {
+            if used > 0 && used + 1 > width {
+              rows.push(@surface.Line::new(spans))
+              spans = []
+              used = 0
+            }
+            spans.push(Span(DisplayText(" "), style~))
+            used += 1
+          }
+        } else if !@text.is_control_unit(unit) {
+          let next = @text.unit_width(display_line, start~, end~)
           if used > 0 && used + next > width {
             rows.push(@surface.Line::new(spans))
             spans = []
             used = 0
           }
-          spans.push(@surface.Span::new(piece, style~))
+          spans.push(Span(DisplayText(unit.to_owned()), style~))
           used += next
         }
+        start = end
       }
     }
   }
@@ -266,5 +246,5 @@ pub fn Doc::layout(self : Doc, width~ : Int) -> Array[@surface.Line] {
 ///|
 /// A one-block text in the subdued `Style::dim` style.
 pub fn dim_text(text : String) -> Text {
-  Text([Span(text, style=Style::dim())])
+  Text([Span(DisplayText(text), style=Style::dim())])
 }

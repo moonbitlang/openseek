@@ -22,10 +22,8 @@ test "sanitize expands tabs to the next 8-column stop" {
 }
 
 ///|
-test "split_lines splits every line-ending form" {
-  // CRLF, lone CR, and LF all split; no stray `\r` is left on a line.
-  inspect(@text.split_lines("a\r\nb\rc\nd").join("|"), content="a|b|c|d")
-  // Empty input is a single empty line; interior blank lines are preserved.
-  inspect(@text.split_lines("").join("|"), content="")
-  inspect(@text.split_lines("a\n\nb").join("|"), content="a||b")
+test "sanitize preserves empty hard lines" {
+  inspect(@text.sanitize("a\r\nb\rc\nd"), content="a\nb\nc\nd")
+  inspect(@text.sanitize(""), content="")
+  inspect(@text.sanitize("a\n\nb"), content="a\n\nb")
 }

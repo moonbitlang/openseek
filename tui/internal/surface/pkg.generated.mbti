@@ -2,6 +2,7 @@
 package "bobzhang/openseek/tui/internal/surface"
 
 import {
+  "moonbit-community/displaytext",
   "moonbit-community/tty/color",
 }
 
@@ -20,8 +21,10 @@ pub fn Line::new(Array[Span]) -> Self
 pub fn Line::spans(Self) -> Array[Span]
 pub fn Line::text(Self) -> String
 
-type Span derive(Eq)
-pub fn Span::new(String, style? : Style) -> Self
+pub struct Span {
+  // private fields
+} derive(Eq)
+pub fn Span::Span(@displaytext.DisplayText, style? : Style) -> Self
 pub fn Span::style(Self) -> Style
 pub fn Span::text(Self) -> String
 

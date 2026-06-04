@@ -4,6 +4,7 @@ import {
   "bobzhang/openseek/tui/internal/composer",
   "bobzhang/openseek/tui/internal/surface",
   "bobzhang/openseek/tui/internal/text",
+  "moonbit-community/displaytext",
 }
 
 supported_targets = "native"

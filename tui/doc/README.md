@@ -17,7 +17,10 @@ Build a styled block and lay it out:
 
 ```mbt
 let doc = Doc::Doc([
-  Text::Text([Span::Span("error: ", style=Style::error()), Span::plain("oops")]),
+  Text::Text([
+    Span(@displaytext.DisplayText("error: "), style=Style::error()),
+    Span::plain("oops"),
+  ]),
   Text::plain("see the log for details"),
 ])
 let lines = doc.layout(width=40) // wraps and tab-expands to 40 cols

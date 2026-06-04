@@ -7,39 +7,6 @@ const MinTextRows : Int = 1
 pub const DefaultMaxTextRows : Int = 4
 
 ///|
-fn line_count(text : String) -> Int {
-  @text.split_lines(text).length()
-}
-
-///|
-fn normalize_max_text_rows(max_text_rows : Int) -> Int {
-  @cmp.maximum(max_text_rows, MinTextRows)
-}
-
-///|
-fn is_newline_grapheme(grapheme : StringView) -> Bool {
-  grapheme.to_owned() == "\n"
-}
-
-///|
-/// Whether a grapheme counts as part of a word for word-wise cursor motion.
-///
-/// Classification looks at the grapheme's leading scalar: ASCII letters and
-/// digits, and any non-ASCII scalar (CJK, accented letters, emoji), are word
-/// characters; ASCII spaces and punctuation are delimiters.
-fn is_word_grapheme(grapheme : StringView) -> Bool {
-  match grapheme {
-    [c, ..] => c.is_ascii_alphabetic() || c.is_ascii_digit() || !c.is_ascii()
-    [] => false
-  }
-}
-
-///|
-fn line_display_width(lines : Array[String], line : Int) -> Int {
-  @text.display_width(@text.line_at(lines, line))
-}
-
-///|
 /// Display width of the prompt prefix (`> `, `! `, or the `  ` continuation),
 /// which is always two columns. Every wrapped composer row reserves this much.
 const PromptWidth : Int = 2
@@ -47,8 +14,9 @@ const PromptWidth : Int = 2
 ///|
 /// Editable content width for a composer rendered at `cols` terminal columns,
 /// i.e. the room left once the two-column prompt prefix is reserved.
-fn content_width_for(cols~ : Int) -> Int {
-  @cmp.maximum(cols - PromptWidth, 1)
+fn compute_content_width(cols~ : Int) -> Int {
+  let width = cols - PromptWidth
+  width.max(1)
 }
 
 ///|
@@ -60,132 +28,15 @@ const DefaultContentWidth : Int = 78
 ///|
 /// Number of editable rows to render for `total` wrapped rows, clamped between
 /// one and `max_text_rows`.
-fn visible_count(total : Int, max_text_rows : Int) -> Int {
-  total.clamp(min=MinTextRows, max=normalize_max_text_rows(max_text_rows))
-}
-
-///|
-/// A single on-screen composer row produced by soft-wrapping a logical input
-/// line to the editable content width. `start_column` is the grapheme offset
-/// within the logical line where this segment begins, used to map the cursor
-/// onto the correct wrapped row.
-priv struct VisualRow {
-  logical_line : Int
-  start_column : Int
-  text : String
-}
-
-///|
-/// Soft-wrap every logical line of `text` to `content_width` display columns.
-///
-/// Each logical line yields at least one row (an empty line yields one empty
-/// row) so the cursor always has a row to sit on. Wrapping is by grapheme and
-/// display width, matching how each row is later measured on screen.
-fn visual_rows_for(text : String, content_width : Int) -> Array[VisualRow] {
-  let width = @cmp.maximum(content_width, 1)
-  let rows : Array[VisualRow] = []
-  let lines = @text.split_lines(text)
-  for line_index in 0..<lines.length() {
-    let line = lines[line_index]
-    let mut column = 0
-    let mut segment_start = 0
-    let mut segment = StringBuilder()
-    let mut segment_width = 0
-    let mut segment_filled = false
-    for grapheme in @grapheme.grapheme_iter(line) {
-      let grapheme_width = @unicodewidth.str_width(grapheme)
-      if segment_filled && segment_width + grapheme_width > width {
-        rows.push({
-          logical_line: line_index,
-          start_column: segment_start,
-          text: segment.to_string(),
-        })
-        segment = StringBuilder()
-        segment_width = 0
-        segment_filled = false
-        segment_start = column
-      }
-      segment.write_stringview(grapheme)
-      segment_width = segment_width + grapheme_width
-      segment_filled = true
-      column = column + 1
-    }
-    rows.push({
-      logical_line: line_index,
-      start_column: segment_start,
-      text: segment.to_string(),
-    })
-  }
-  rows
-}
-
-///|
-/// Index of the wrapped row that should hold the cursor at `point`.
-///
-/// Within the cursor's logical line this picks the last segment whose
-/// `start_column` is at or before the cursor, so a cursor resting exactly on a
-/// wrap boundary appears at the start of the following row.
-fn cursor_visual_row(rows : Array[VisualRow], point : CursorPoint) -> Int {
-  let mut result = 0
-  for index in 0..<rows.length() {
-    let row = rows[index]
-    if row.logical_line > point.line {
-      break
-    }
-    if row.logical_line == point.line &&
-      row.start_column <= point.grapheme_column {
-      result = index
-    }
-  }
-  result
-}
-
-///|
-/// Grapheme offset within `segment` whose left edge is nearest to but not past
-/// `target` display columns. Used to preserve a preferred column when moving the
-/// cursor vertically between wrapped rows of differing content.
-fn place_display_column(segment : String, target : Int) -> Int {
-  let mut offset = 0
-  let mut width = 0
-  for grapheme in @grapheme.grapheme_iter(segment) {
-    let grapheme_width = @unicodewidth.str_width(grapheme)
-    if width + grapheme_width > target {
-      break
-    }
-    width = width + grapheme_width
-    offset = offset + 1
-  }
-  offset
-}
-
-///|
-/// Resolve the cursor to a wrapped row index and the grapheme offset within that
-/// row's segment.
-///
-/// A cursor sitting exactly on a soft-wrap boundary is ambiguous: the same text
-/// position is both the end of one row and the start of the next. `at_wrap_end`
-/// is the affinity bit set by vertical movement — when true the cursor renders at
-/// the end of the earlier row instead of the start of the following one.
-fn resolve_cursor(
-  rows : Array[VisualRow],
-  point : CursorPoint,
-  at_wrap_end : Bool,
-) -> (Int, Int) {
-  let index = cursor_visual_row(rows, point)
-  if at_wrap_end &&
-    rows[index].start_column == point.grapheme_column &&
-    rows[index].start_column > 0 {
-    let previous = index - 1
-    (previous, point.grapheme_column - rows[previous].start_column)
+fn compute_visible_count(total~ : Int, max_text_rows~ : Int) -> Int {
+  let max_text_rows = max_text_rows.max(MinTextRows)
+  if total < MinTextRows {
+    MinTextRows
+  } else if total > max_text_rows {
+    max_text_rows
   } else {
-    (index, point.grapheme_column - rows[index].start_column)
+    total
   }
-}
-
-///|
-priv struct CursorPoint {
-  line : Int
-  grapheme_column : Int
 }
 
 ///|
@@ -199,19 +50,14 @@ enum Mode {
 } derive(Eq)
 
 ///|
-fn Mode::prompt_prefix(self : Mode) -> String {
-  match self {
-    Input => "❯ "
-    Shell => "! "
-  }
-}
+let exclaimation_prefix : @displaytext.DisplayText = DisplayText("! ")
 
 ///|
-/// Display width of the prompt prefix — the column where the composer's editable
-/// text begins. Used to indent sibling rows (status, activity) so they line up
-/// with the text, not the prompt glyph.
-pub fn Model::prompt_width(self : Model) -> Int {
-  @text.display_width(self.mode.prompt_prefix())
+fn Mode::prompt_prefix(self : Mode) -> @displaytext.DisplayText {
+  match self {
+    Input => @core.prompt_prefix
+    Shell => exclaimation_prefix
+  }
 }
 
 ///|
@@ -228,70 +74,6 @@ pub fn Mode::is_shell(self : Mode) -> Bool {
 }
 
 ///|
-fn cursor_point_for(text : String, cursor : Int) -> CursorPoint {
-  let target = cursor.clamp(min=0, max=@text.grapheme_count(text))
-  let mut index = 0
-  let mut line = 0
-  let mut grapheme_column = 0
-  for grapheme in @grapheme.grapheme_iter(text) {
-    if index >= target {
-      break
-    }
-    if is_newline_grapheme(grapheme) {
-      line = line + 1
-      grapheme_column = 0
-    } else {
-      grapheme_column = grapheme_column + 1
-    }
-    index = index + 1
-  }
-  { line, grapheme_column }
-}
-
-///|
-fn line_start_cursor(text : String, line : Int) -> Int {
-  let line = line.clamp(min=0, max=line_count(text) - 1)
-  if line == 0 {
-    0
-  } else {
-    let mut index = 0
-    let mut current_line = 0
-    for grapheme in @grapheme.grapheme_iter(text) {
-      index = index + 1
-      if is_newline_grapheme(grapheme) {
-        current_line = current_line + 1
-        if current_line == line {
-          break
-        }
-      }
-    }
-    index
-  }
-}
-
-///|
-fn cursor_for_line_display_column(
-  text : String,
-  line : Int,
-  display_column : Int,
-) -> Int {
-  let lines = @text.split_lines(text)
-  let line = line.clamp(min=0, max=lines.length() - 1)
-  let target = display_column.clamp(min=0, max=line_display_width(lines, line))
-  let mut grapheme_column = 0
-  let mut width = 0
-  for grapheme in @grapheme.grapheme_iter(@text.line_at(lines, line)) {
-    let next_width = @unicodewidth.str_width(grapheme)
-    if width + next_width > target {
-      break
-    }
-    width = width + next_width
-    grapheme_column = grapheme_column + 1
-  }
-  line_start_cursor(text, line) + grapheme_column
-}
-
-///|
 /// Mutable state model for the multiline composer.
 ///
 /// `Model` owns the user-editable text, cursor position, semantic mode, the
@@ -301,7 +83,11 @@ fn cursor_for_line_display_column(
 /// emit terminal sequences; terminal anchoring and rendering belong to `Ui`.
 struct Model {
   mut text : String
-  mut cursor : Int
+  // Cached layout state. Edits replace the arrays as a unit; wrapping then
+  // refreshes each logical line's row_start/row_end metadata for cursor lookup.
+  mut logical_lines : Array[LogicLine]
+  mut visual_rows : Array[VisualRow]
+  mut cursor : TextCursor
   mut preferred_column : Int?
   mut view_start : Int
   // Affinity for a cursor that lands on a soft-wrap boundary: when true the
@@ -309,7 +95,6 @@ struct Model {
   // next one. Set by vertical movement, reset by every other edit.
   mut at_wrap_end : Bool
   mut content_width : Int
-  // The configured ceiling on visible rows.
   max_text_rows : Int
   // The live cap on visible rows, narrowed by `resize` to the terminal's budget
   // so the composer fits alongside its chrome on a short terminal. Always
@@ -319,32 +104,29 @@ struct Model {
 }
 
 ///|
-fn make_model(
+/// Create an `Input` mode composer initialized with `text` whose editable area
+/// grows to at most `max_text_rows` wrapped rows.
+pub fn Model::new(
   text : String,
-  cursor : Int,
-  preferred_column : Int?,
-  view_start : Int,
   max_text_rows? : Int = DefaultMaxTextRows,
-  mode? : Mode = Input,
-  content_width? : Int = DefaultContentWidth,
 ) -> Model {
-  let max_text_rows = normalize_max_text_rows(max_text_rows)
-  let cursor = cursor.clamp(min=0, max=@text.grapheme_count(text))
-  let content_width = @cmp.maximum(content_width, 1)
+  let max_text_rows = max_text_rows.max(MinTextRows)
+  let content_width = DefaultContentWidth
+  let logical_lines = split_logical_lines(text)
+  let visual_rows = wrap_visual_rows(logical_lines, content_width~)
+  let cursor = TextCursor::text_end(logical_lines)
   let model = {
     text,
+    logical_lines,
+    visual_rows,
     cursor,
-    preferred_column,
-    view_start: if view_start < 0 {
-      0
-    } else {
-      view_start
-    },
+    preferred_column: None,
+    view_start: 0,
     at_wrap_end: false,
     content_width,
     max_text_rows,
     visible_cap: max_text_rows,
-    mode,
+    mode: Input,
   }
   // The scroll offset depends on how the text wraps, so resolve it once now and
   // keep it current after every edit and resize.
@@ -353,37 +135,23 @@ fn make_model(
 }
 
 ///|
-/// Create an empty composer in `Input` mode whose editable area grows to at
-/// most `max_text_rows` wrapped rows.
-pub fn Model::new(max_text_rows? : Int = DefaultMaxTextRows) -> Model {
-  Model::from_text("", max_text_rows~)
-}
-
-///|
-fn Model::from_text(
-  text : String,
-  max_text_rows? : Int = DefaultMaxTextRows,
-) -> Model {
-  make_model(text, @text.grapheme_count(text), None, 0, max_text_rows~)
-}
-
-///|
 /// Clear the composer back to empty `Input` mode, resetting the cursor and
 /// scroll window.
 pub fn Model::reset(self : Model) -> Unit {
-  self.set_state("", 0, None, 0, mode=Input)
+  self.replace("", mode=Input)
 }
 
 ///|
 /// Replace the entire buffer with `text` in `mode`, placing the cursor at the
 /// end and scrolling the view back to the top. Used to load history entries.
 pub fn Model::replace(self : Model, text : String, mode~ : Mode) -> Unit {
-  self.set_state(text, @text.grapheme_count(text), None, 0, mode~)
-}
-
-///|
-fn Model::cursor_point(self : Model) -> CursorPoint {
-  cursor_point_for(self.text, self.cursor)
+  let logical_lines = split_logical_lines(text)
+  self.set_logical_lines(
+    logical_lines~,
+    cursor=TextCursor::text_end(logical_lines),
+    view_start=0,
+    mode~,
+  )
 }
 
 ///|
@@ -411,25 +179,25 @@ pub fn Model::mode(self : Model) -> Mode {
 /// to more rows than this value, `view_start` scrolls the visible window instead
 /// of growing further.
 pub fn Model::visible_text_rows(self : Model) -> Int {
-  visible_count(
-    visual_rows_for(self.text, self.content_width).length(),
-    self.visible_cap,
+  compute_visible_count(
+    total=self.visual_rows.length(),
+    max_text_rows=self.visible_cap,
   )
 }
 
 ///|
 /// Return the wrapped input segment displayed at a composer row.
 ///
-/// `row` is relative to the visible composer text area, not the terminal. A
-/// missing row returns an empty string so renderers can draw a fixed surface for
-/// the current frame without special-casing short buffers.
-pub fn Model::visible_line(self : Model, row : Int) -> String {
-  let rows = visual_rows_for(self.text, self.content_width)
+/// `row` is relative to the visible composer text area, not the terminal.
+pub fn Model::visible_line(
+  self : Model,
+  row : Int,
+) -> @displaytext.DisplayText? {
   let index = self.view_start + row
-  if index < 0 || index >= rows.length() {
-    ""
+  if index < 0 || index >= self.visual_rows.length() {
+    None
   } else {
-    rows[index].text
+    Some(self.visual_rows[index].display)
   }
 }
 
@@ -439,16 +207,16 @@ pub fn Model::visible_line(self : Model, row : Int) -> String {
 /// Only the very first wrapped row of the first logical input line gets `❯ ` or
 /// `! `. Every other row — later logical lines and soft-wrapped continuations
 /// alike — uses two spaces so wrapped content lines up with the editable text.
-pub fn Model::input_prefix(self : Model, row : Int) -> String {
-  let rows = visual_rows_for(self.text, self.content_width)
+pub fn Model::input_prefix(self : Model, row : Int) -> @displaytext.DisplayText {
   let index = self.view_start + row
   if index >= 0 &&
-    index < rows.length() &&
-    rows[index].logical_line == 0 &&
-    rows[index].start_column == 0 {
+    index < self.visual_rows.length() &&
+    index >= self.logical_lines[0].row_start &&
+    index < self.logical_lines[0].row_end &&
+    self.visual_rows[index].logic_start == self.logical_lines[0].display.start() {
     self.mode.prompt_prefix()
   } else {
-    "  "
+    DisplayText("  ")
   }
 }
 
@@ -459,11 +227,24 @@ pub fn Model::input_prefix(self : Model, row : Int) -> String {
 /// count, so terminal renderers can move relative to the current composer
 /// surface even when the underlying cursor is temporarily outside the window.
 pub fn Model::cursor_row(self : Model) -> Int {
-  let rows = visual_rows_for(self.text, self.content_width)
-  let visible = visible_count(rows.length(), self.visible_cap)
-  let (index, _) = resolve_cursor(rows, self.cursor_point(), self.at_wrap_end)
+  let visible = compute_visible_count(
+    total=self.visual_rows.length(),
+    max_text_rows=self.visible_cap,
+  )
+  let index = resolve_cursor(
+    self.logical_lines,
+    rows=self.visual_rows,
+    cursor=self.cursor,
+    at_wrap_end=self.at_wrap_end,
+  )
   let row = index - self.view_start
-  row.clamp(min=0, max=visible - 1)
+  if row < 0 {
+    0
+  } else if row >= visible {
+    visible - 1
+  } else {
+    row
+  }
 }
 
 ///|
@@ -472,17 +253,25 @@ pub fn Model::cursor_row(self : Model) -> Int {
 /// Vertical-up at this row hands off to history recall rather than moving within
 /// the buffer, so wrapped continuation rows count as interior rows here.
 pub fn Model::cursor_at_first_visual_row(self : Model) -> Bool {
-  let rows = visual_rows_for(self.text, self.content_width)
-  let (index, _) = resolve_cursor(rows, self.cursor_point(), self.at_wrap_end)
+  let index = resolve_cursor(
+    self.logical_lines,
+    rows=self.visual_rows,
+    cursor=self.cursor,
+    at_wrap_end=self.at_wrap_end,
+  )
   index == 0
 }
 
 ///|
 /// Whether the cursor is on the last wrapped row of the composer.
 pub fn Model::cursor_at_last_visual_row(self : Model) -> Bool {
-  let rows = visual_rows_for(self.text, self.content_width)
-  let (index, _) = resolve_cursor(rows, self.cursor_point(), self.at_wrap_end)
-  index == rows.length() - 1
+  let index = resolve_cursor(
+    self.logical_lines,
+    rows=self.visual_rows,
+    cursor=self.cursor,
+    at_wrap_end=self.at_wrap_end,
+  )
+  index == self.visual_rows.length() - 1
 }
 
 ///|
@@ -490,31 +279,49 @@ pub fn Model::cursor_at_last_visual_row(self : Model) -> Bool {
 ///
 /// The result is a display-cell offset from column 1, including the prompt
 /// prefix width, and is measured within the cursor's wrapped segment so it stays
-/// correct when a long line soft-wraps. It is based on grapheme/display-width
+/// correct when a long line soft-wraps. It is based on `DisplayText` column
 /// measurement, not byte length.
 pub fn Model::cursor_offset(self : Model) -> Int {
-  let rows = visual_rows_for(self.text, self.content_width)
-  let (index, offset) = resolve_cursor(
-    rows,
-    self.cursor_point(),
-    self.at_wrap_end,
+  let index = resolve_cursor(
+    self.logical_lines,
+    rows=self.visual_rows,
+    cursor=self.cursor,
+    at_wrap_end=self.at_wrap_end,
   )
-  let before_cursor = @text.grapheme_slice(rows[index].text, 0, offset)
-  PromptWidth + @text.display_width(before_cursor)
+  let row = self.visual_rows[index]
+  let line = self.logical_lines[self.cursor.line]
+  PromptWidth +
+  line.display_column(position=self.cursor.position) -
+  line.display_column(position=row.logic_start)
 }
 
 ///|
-fn Model::set_state(
+fn Model::set_logical_lines(
   self : Model,
-  text : String,
-  cursor : Int,
-  preferred_column : Int?,
-  view_start : Int,
+  logical_lines~ : Array[LogicLine],
+  cursor~ : TextCursor,
+  view_start~ : Int,
+  preferred_column? : Int,
   mode? : Mode = Input,
   at_wrap_end? : Bool = false,
 ) -> Unit {
-  let cursor = cursor.clamp(min=0, max=@text.grapheme_count(text))
-  self.text = text
+  let logical_lines = if logical_lines is [] {
+    split_logical_lines("")
+  } else {
+    logical_lines
+  }
+  let visual_rows = wrap_visual_rows(
+    logical_lines,
+    content_width=self.content_width,
+  )
+  let cursor = TextCursor::new(
+    logical_lines,
+    line=cursor.line,
+    position=cursor.position,
+  )
+  self.text = join_logical_lines(logical_lines)
+  self.logical_lines = logical_lines
+  self.visual_rows = visual_rows
   self.cursor = cursor
   self.preferred_column = preferred_column
   self.view_start = if view_start < 0 { 0 } else { view_start }
@@ -526,23 +333,40 @@ fn Model::set_state(
 }
 
 ///|
+fn Model::set_cursor(
+  self : Model,
+  cursor~ : TextCursor,
+  preferred_column? : Int,
+  at_wrap_end? : Bool = false,
+) -> Unit {
+  self.cursor = TextCursor::new(
+    self.logical_lines,
+    line=cursor.line,
+    position=cursor.position,
+  )
+  self.preferred_column = preferred_column
+  self.at_wrap_end = at_wrap_end
+  self.reclamp_view()
+}
+
+///|
 /// Re-clamp `view_start` so the cursor's wrapped row stays visible at the
 /// current content width. Called after every edit, move, and resize.
 fn Model::reclamp_view(self : Model) -> Unit {
-  let rows = visual_rows_for(self.text, self.content_width)
-  let total = rows.length()
-  let visible = visible_count(total, self.visible_cap)
+  let total = self.visual_rows.length()
+  let visible = compute_visible_count(total~, max_text_rows=self.visible_cap)
   let max_start = if total - visible > 0 { total - visible } else { 0 }
-  let (cursor_index, _) = resolve_cursor(
-    rows,
-    self.cursor_point(),
-    self.at_wrap_end,
+  let cursor_row_index = resolve_cursor(
+    self.logical_lines,
+    rows=self.visual_rows,
+    cursor=self.cursor,
+    at_wrap_end=self.at_wrap_end,
   )
   let mut start = self.view_start.clamp(min=0, max=max_start)
-  if cursor_index < start {
-    start = cursor_index
-  } else if cursor_index >= start + visible {
-    start = cursor_index - visible + 1
+  if cursor_row_index < start {
+    start = cursor_row_index
+  } else if cursor_row_index >= start + visible {
+    start = cursor_row_index - visible + 1
   }
   self.view_start = start.clamp(min=0, max=max_start)
 }
@@ -550,60 +374,189 @@ fn Model::reclamp_view(self : Model) -> Unit {
 ///|
 /// Lay the composer out for a terminal `cols` columns wide. The renderer calls
 /// this each frame so soft-wrapping and vertical movement track the live width.
-/// Re-lay the composer for `cols` columns, capping its visible rows to
-/// `max_rows`. The cap narrows the configured ceiling so the composer fits its
-/// terminal budget; it is floored at one row and never raises the ceiling.
-/// Omitting `max_rows` leaves the configured ceiling in place.
-pub fn Model::resize(
-  self : Model,
-  cols~ : Int,
-  max_rows? : Int = @int.MAX_VALUE,
-) -> Unit {
-  self.content_width = content_width_for(cols~)
-  self.visible_cap = max_rows.clamp(min=MinTextRows, max=self.max_text_rows)
+///
+/// `max_rows` is the live row budget available to the composer. The cap narrows
+/// the configured ceiling so the composer fits its surrounding chrome on a
+/// short terminal. Omitting it restores the configured ceiling.
+pub fn Model::resize(self : Model, cols~ : Int, max_rows? : Int) -> Unit {
+  self.visible_cap = match max_rows {
+    Some(max_rows) => max_rows.clamp(min=MinTextRows, max=self.max_text_rows)
+    None => self.max_text_rows
+  }
+  self.content_width = compute_content_width(cols~)
+  self.visual_rows = wrap_visual_rows(
+    self.logical_lines,
+    content_width=self.content_width,
+  )
   self.reclamp_view()
 }
 
 ///|
-fn Model::move_to_cursor(
+fn Model::replace_line_range(
   self : Model,
-  cursor : Int,
-  preferred_column : Int?,
+  line_index~ : Int,
+  start~ : @displaytext.TextualPosition,
+  end~ : @displaytext.TextualPosition,
+  replacement~ : String,
 ) -> Unit {
-  self.set_state(
-    self.text,
-    cursor,
-    preferred_column,
-    self.view_start,
+  let line = self.logical_lines[line_index]
+  let prefix = line.display.view(line.display.start(), start)
+  let suffix = line.display.view(end, line.display.end())
+  let cursor_builder = StringBuilder()
+  cursor_builder.write_stringview(prefix)
+  cursor_builder.write_string(replacement)
+  let cursor_text = cursor_builder.to_string()
+  let line_builder = StringBuilder()
+  line_builder.write_string(cursor_text)
+  line_builder.write_stringview(suffix)
+  let new_line = LogicLine::new(DisplayText(line_builder.to_string()))
+  let replacement_lines = [new_line]
+  let logical_lines = splice_logical_lines(
+    self.logical_lines,
+    start=line_index,
+    delete_count=1,
+    inserted=replacement_lines,
+  )
+  self.set_logical_lines(
+    logical_lines~,
+    cursor=TextCursor::new(
+      logical_lines,
+      line=line_index,
+      position=new_line.display.textual_position_at_char(
+        offset=cursor_text.length(),
+      ),
+    ),
+    view_start=self.view_start,
     mode=self.mode,
   )
 }
 
 ///|
-fn Model::delete_range(self : Model, start : Int, end : Int) -> Unit {
-  let length = @text.grapheme_count(self.text)
-  let start = start.clamp(min=0, max=length)
-  let end = end.clamp(min=start, max=length)
-  let prefix = @text.grapheme_slice(self.text, 0, start)
-  let suffix = @text.grapheme_slice(self.text, end, length)
-  self.set_state(prefix + suffix, start, None, self.view_start, mode=self.mode)
+fn Model::join_with_next_line(self : Model, line_index~ : Int) -> Unit {
+  if line_index < 0 || line_index + 1 >= self.logical_lines.length() {
+    self.set_cursor(cursor=self.cursor)
+  } else {
+    let left = self.logical_lines[line_index].text()
+    let right = self.logical_lines[line_index + 1].text()
+    let builder = StringBuilder()
+    builder.write_string(left)
+    builder.write_string(right)
+    let joined = LogicLine::new(DisplayText(builder.to_string()))
+    let replacement_lines = [joined]
+    let logical_lines = splice_logical_lines(
+      self.logical_lines,
+      start=line_index,
+      delete_count=2,
+      inserted=replacement_lines,
+    )
+    self.set_logical_lines(
+      logical_lines~,
+      cursor=TextCursor::new(
+        logical_lines,
+        line=line_index,
+        position=joined.display.textual_position_at_char(offset=left.length()),
+      ),
+      view_start=self.view_start,
+      mode=self.mode,
+    )
+  }
 }
 
 ///|
-/// Insert `text` at the cursor and advance the cursor past it. Inserted text is
-/// counted by graphemes, so multi-byte characters move the cursor one step each.
+fn Model::remove_current_empty_line(self : Model) -> Unit {
+  if self.cursor.line <= 0 || !self.logical_lines[self.cursor.line].is_empty() {
+    self.set_cursor(cursor=self.cursor)
+  } else {
+    let logical_lines = splice_logical_lines(
+      self.logical_lines,
+      start=self.cursor.line,
+      delete_count=1,
+      inserted=[],
+    )
+    self.set_logical_lines(
+      logical_lines~,
+      cursor=TextCursor::line_end(logical_lines, line=self.cursor.line - 1),
+      view_start=self.view_start,
+      mode=self.mode,
+    )
+  }
+}
+
+///|
+/// Insert `text` at the cursor and advance the cursor to the nearest legal
+/// display boundary after the inserted text.
 pub fn Model::insert(self : Model, text : String) -> Unit {
-  let prefix = @text.grapheme_slice(self.text, 0, self.cursor)
-  let suffix = @text.grapheme_slice(
-    self.text,
-    self.cursor,
-    @text.grapheme_count(self.text),
+  // Splice only the current logical line. The cursor splits that line into:
+  //
+  //   before cursor | after cursor
+  //        ab       |      cd
+  //
+  // Inserting "x\ny" turns it into replacement logical lines:
+  //
+  //   abx
+  //   ycd
+  //
+  // Single-line inserts are the same splice with one replacement line.
+  let line = self.logical_lines[self.cursor.line]
+  let prefix = line.display.view(line.display.start(), self.cursor.position)
+  let suffix = line.display.view(self.cursor.position, line.display.end())
+  let inserted = @displaytext.split_lines(text)
+  let last = inserted.length() - 1
+  let replacement_lines : Array[LogicLine] = []
+  for index, inserted_line in inserted {
+    let inserted_text = inserted_line.view(
+      inserted_line.start(),
+      inserted_line.end(),
+    )
+    let replacement_line = if inserted.length() == 1 {
+      let builder = StringBuilder()
+      builder.write_stringview(prefix)
+      builder.write_stringview(inserted_text)
+      builder.write_stringview(suffix)
+      LogicLine::new(DisplayText(builder.to_string()))
+    } else if index == 0 {
+      let builder = StringBuilder()
+      builder.write_stringview(prefix)
+      builder.write_stringview(inserted_text)
+      LogicLine::new(DisplayText(builder.to_string()))
+    } else if index == last {
+      let builder = StringBuilder()
+      builder.write_stringview(inserted_text)
+      builder.write_stringview(suffix)
+      LogicLine::new(DisplayText(builder.to_string()))
+    } else {
+      LogicLine::new(inserted_line)
+    }
+    replacement_lines.push(replacement_line)
+  }
+  let cursor_line = self.cursor.line + last
+  // Char (code-unit) count of the portion before the cursor in the last
+  // replacement line. Using char count rather than display columns avoids the
+  // non-additivity trap: if the tail of the inserted text combines with the
+  // first char of the suffix (e.g. Arabic lam-alef), a column-based lookup
+  // would overshoot into the suffix. `textual_position_at_char` snaps back to
+  // the start of any display unit that spans the insertion boundary.
+  let cursor_chars = if inserted.length() == 1 {
+    prefix.length() + inserted[0].text().length()
+  } else {
+    inserted[last].text().length()
+  }
+  let logical_lines = splice_logical_lines(
+    self.logical_lines,
+    start=self.cursor.line,
+    delete_count=1,
+    inserted=replacement_lines,
   )
-  self.set_state(
-    prefix + text + suffix,
-    self.cursor + @text.grapheme_count(text),
-    None,
-    self.view_start,
+  self.set_logical_lines(
+    logical_lines~,
+    cursor=TextCursor::new(
+      logical_lines,
+      line=cursor_line,
+      position=replacement_lines[last].display.textual_position_at_char(
+        offset=cursor_chars,
+      ),
+    ),
+    view_start=self.view_start,
     mode=self.mode,
   )
 }
@@ -616,153 +569,130 @@ pub fn Model::insert(self : Model, text : String) -> Unit {
 /// dropped from the editable text (only the text after it is inserted).
 /// Otherwise this behaves like `insert`.
 pub fn Model::insert_user_text(self : Model, text : String) -> Unit {
-  // Drop terminal-control bytes (pasted ANSI escapes, stray `\r`) before they
-  // reach the model, so the live echo can never mutate the terminal and the
-  // cursor math stays consistent with what is drawn.
+  // Drop terminal-control bytes (pasted ANSI escapes, stray `\r`, tabs) before
+  // they reach the model, so the live echo can never mutate the terminal and
+  // the cursor math stays consistent with what is drawn.
   let text = @text.sanitize(text)
-  if self.mode.is_input() && self.text.length() == 0 && self.cursor == 0 {
-    match text {
-      [.. "!", .. rest] => {
-        let rest_text = rest.to_owned()
-        self.set_state(
-          rest_text,
-          @text.grapheme_count(rest_text),
-          None,
-          self.view_start,
-          mode=Shell,
-        )
-      }
-      _ => self.insert(text)
-    }
+  if self.mode.is_input() &&
+    self.text.length() == 0 &&
+    self.cursor.line == 0 &&
+    self.cursor.is_line_start(self.logical_lines) &&
+    text is ['!', .. rest] {
+    let logical_lines = split_logical_lines(rest)
+    self.set_logical_lines(
+      logical_lines~,
+      cursor=TextCursor::text_end(logical_lines),
+      view_start=self.view_start,
+      mode=Shell,
+    )
   } else {
     self.insert(text)
   }
 }
 
 ///|
-/// Delete the one grapheme before the cursor (Backspace). At the start of the
+/// Delete the display unit before the cursor (Backspace). At the start of the
 /// buffer this is a no-op that also normalizes the mode back to `Input`.
 pub fn Model::delete_before(self : Model) -> Unit {
-  if self.cursor <= 0 {
-    self.set_state(self.text, 0, None, self.view_start, mode=Input)
+  if self.cursor.line == 0 && self.cursor.is_line_start(self.logical_lines) {
+    self.mode = Input
+    self.set_cursor(cursor=TextCursor::line_start(self.logical_lines, line=0))
+  } else if self.cursor.is_line_start(self.logical_lines) {
+    self.join_with_next_line(line_index=self.cursor.line - 1)
   } else {
-    let prefix = @text.grapheme_slice(self.text, 0, self.cursor - 1)
-    let suffix = @text.grapheme_slice(
-      self.text,
-      self.cursor,
-      @text.grapheme_count(self.text),
-    )
-    self.set_state(
-      prefix + suffix,
-      self.cursor - 1,
-      None,
-      self.view_start,
-      mode=self.mode,
+    let previous = move_cursor_left(self.logical_lines, self.cursor)
+    self.replace_line_range(
+      line_index=self.cursor.line,
+      start=previous.position,
+      end=self.cursor.position,
+      replacement="",
     )
   }
 }
 
 ///|
-/// Delete the one grapheme at the cursor (Delete / Ctrl-D). At the end of the
+/// Delete the display unit at the cursor (Delete / Ctrl-D). At the end of the
 /// buffer this is a no-op.
 pub fn Model::delete_after(self : Model) -> Unit {
-  let length = @text.grapheme_count(self.text)
-  if self.cursor >= length {
-    self.set_state(
-      self.text,
-      self.cursor,
-      None,
-      self.view_start,
-      mode=self.mode,
-    )
+  if self.cursor.is_line_end(self.logical_lines) {
+    if self.cursor.line + 1 < self.logical_lines.length() {
+      self.join_with_next_line(line_index=self.cursor.line)
+    } else {
+      self.set_cursor(cursor=self.cursor)
+    }
   } else {
-    let prefix = @text.grapheme_slice(self.text, 0, self.cursor)
-    let suffix = @text.grapheme_slice(self.text, self.cursor + 1, length)
-    self.set_state(
-      prefix + suffix,
-      self.cursor,
-      None,
-      self.view_start,
-      mode=self.mode,
+    let next = move_cursor_right(self.logical_lines, self.cursor)
+    self.replace_line_range(
+      line_index=self.cursor.line,
+      start=self.cursor.position,
+      end=next.position,
+      replacement="",
     )
   }
 }
 
 ///|
-/// Move the cursor one grapheme left, crossing line breaks. Clamped at the
+/// Move the cursor one display unit left, crossing line breaks. Clamped at the
 /// start of the buffer.
 pub fn Model::move_left(self : Model) -> Unit {
-  self.move_to_cursor(self.cursor - 1, None)
+  self.set_cursor(cursor=move_cursor_left(self.logical_lines, self.cursor))
 }
 
 ///|
-/// Move the cursor one grapheme right, crossing line breaks. Clamped at the end
-/// of the buffer.
+/// Move the cursor one display unit right, crossing line breaks. Clamped at the
+/// end of the buffer.
 pub fn Model::move_right(self : Model) -> Unit {
-  self.move_to_cursor(self.cursor + 1, None)
+  self.set_cursor(cursor=move_cursor_right(self.logical_lines, self.cursor))
 }
 
 ///|
 /// Move the cursor to the end of the next word: skip any leading delimiters,
-/// then the run of word graphemes. Matches readline's `forward-word` (Alt-F).
+/// then the run of word units. Matches readline's `forward-word` (Alt-F).
 pub fn Model::move_word_right(self : Model) -> Unit {
-  let graphemes = @grapheme.graphemes(self.text)
-  let length = graphemes.length()
-  let mut cursor = self.cursor
-  while cursor < length && !is_word_grapheme(graphemes[cursor]) {
-    cursor = cursor + 1
-  }
-  while cursor < length && is_word_grapheme(graphemes[cursor]) {
-    cursor = cursor + 1
-  }
-  self.move_to_cursor(cursor, None)
+  self.set_cursor(
+    cursor=move_cursor_word_right(self.logical_lines, self.cursor),
+  )
 }
 
 ///|
 /// Move the cursor to the start of the previous word: skip any trailing
-/// delimiters, then the run of word graphemes. Matches readline's `backward-word`
+/// delimiters, then the run of word units. Matches readline's `backward-word`
 /// (Alt-B).
 pub fn Model::move_word_left(self : Model) -> Unit {
-  let graphemes = @grapheme.graphemes(self.text)
-  let mut cursor = self.cursor
-  while cursor > 0 && !is_word_grapheme(graphemes[cursor - 1]) {
-    cursor = cursor - 1
-  }
-  while cursor > 0 && is_word_grapheme(graphemes[cursor - 1]) {
-    cursor = cursor - 1
-  }
-  self.move_to_cursor(cursor, None)
+  self.set_cursor(cursor=move_cursor_word_left(self.logical_lines, self.cursor))
 }
 
 ///|
 /// Move the cursor to the start of its current logical line (Home / Ctrl-A),
 /// not the start of the wrapped row.
 pub fn Model::move_home(self : Model) -> Unit {
-  let point = self.cursor_point()
-  self.move_to_cursor(line_start_cursor(self.text, point.line), None)
+  self.set_cursor(
+    cursor=TextCursor::line_start(self.logical_lines, line=self.cursor.line),
+  )
 }
 
 ///|
 /// Move the cursor to the end of its current logical line (End / Ctrl-E), past
 /// any soft-wrapped rows of that line.
 pub fn Model::move_end(self : Model) -> Unit {
-  let point = self.cursor_point()
-  let lines = @text.split_lines(self.text)
-  self.move_to_cursor(
-    cursor_for_line_display_column(
-      self.text,
-      point.line,
-      line_display_width(lines, point.line),
-    ),
-    None,
+  self.set_cursor(
+    cursor=TextCursor::line_end(self.logical_lines, line=self.cursor.line),
   )
 }
 
 ///|
 /// Delete from the start of the current logical line up to the cursor (Ctrl-U).
 pub fn Model::kill_before(self : Model) -> Unit {
-  let point = self.cursor_point()
-  self.delete_range(line_start_cursor(self.text, point.line), self.cursor)
+  if self.cursor.is_line_start(self.logical_lines) {
+    self.set_cursor(cursor=self.cursor)
+  } else {
+    self.replace_line_range(
+      line_index=self.cursor.line,
+      start=self.logical_lines[self.cursor.line].display.start(),
+      end=self.cursor.position,
+      replacement="",
+    )
+  }
 }
 
 ///|
@@ -773,25 +703,23 @@ pub fn Model::kill_before(self : Model) -> Unit {
 /// remove the line itself by deleting the preceding break. On a fully empty
 /// buffer this is a no-op.
 pub fn Model::kill_after(self : Model) -> Unit {
-  let point = self.cursor_point()
-  let lines = @text.split_lines(self.text)
-  let line_end = cursor_for_line_display_column(
-    self.text,
-    point.line,
-    line_display_width(lines, point.line),
-  )
-  if self.cursor < line_end {
+  if !self.cursor.is_line_end(self.logical_lines) {
     // Kill to the end of the current line's content.
-    self.delete_range(self.cursor, line_end)
-  } else if self.cursor < @text.grapheme_count(self.text) {
+    self.replace_line_range(
+      line_index=self.cursor.line,
+      start=self.cursor.position,
+      end=self.logical_lines[self.cursor.line].display.end(),
+      replacement="",
+    )
+  } else if self.cursor.line + 1 < self.logical_lines.length() {
     // Already at the end of the line (an empty line is its own end): kill the
     // line break so the next line joins up, matching readline/emacs kill-line.
-    self.delete_range(self.cursor, self.cursor + 1)
-  } else if self.cursor > 0 &&
-    line_start_cursor(self.text, point.line) == self.cursor {
+    self.join_with_next_line(line_index=self.cursor.line)
+  } else if self.cursor.line > 0 &&
+    self.logical_lines[self.cursor.line].is_empty() {
     // A trailing empty line has no forward content to kill; remove the line
     // itself by deleting the line break that precedes it.
-    self.delete_range(self.cursor - 1, self.cursor)
+    self.remove_current_empty_line()
   }
 }
 
@@ -800,34 +728,61 @@ pub fn Model::kill_after(self : Model) -> Unit {
 /// column. Unlike logical-line movement this steps between the soft-wrapped rows
 /// of a single long line, matching how the composer is drawn.
 pub fn Model::move_vertical(self : Model, delta : Int) -> Unit {
-  let rows = visual_rows_for(self.text, self.content_width)
-  let (index, offset) = resolve_cursor(
-    rows,
-    self.cursor_point(),
-    self.at_wrap_end,
+  // Visual rows are slices of logical lines:
+  //
+  //   logical:  abcdefghij
+  //             0    5    10 display columns
+  //   rows:     abcde | fghij
+  //
+  // Moving vertically keeps the column within the wrapped slice, then converts
+  // that display column back to a textual position on the target logical line.
+  // If the position is exactly the right edge of a non-final slice, remember
+  // `at_wrap_end` so the cursor renders on the upper row instead of the next
+  // row's left edge; both are the same textual boundary.
+  let index = resolve_cursor(
+    self.logical_lines,
+    rows=self.visual_rows,
+    cursor=self.cursor,
+    at_wrap_end=self.at_wrap_end,
   )
-  let current_column = @text.display_width(
-    @text.grapheme_slice(rows[index].text, 0, offset),
-  )
+  let row = self.visual_rows[index]
+  let line = self.logical_lines[self.cursor.line]
+  let current_column = line.display_column(position=self.cursor.position) -
+    line.display_column(position=row.logic_start)
   let preferred = self.preferred_column.unwrap_or(current_column)
-  let target_index = (index + delta).clamp(min=0, max=rows.length() - 1)
-  let target = rows[target_index]
-  let target_offset = place_display_column(target.text, preferred)
-  let cursor = line_start_cursor(self.text, target.logical_line) +
-    target.start_column +
-    target_offset
+  let target_index = (index + delta).clamp(
+    min=0,
+    max=self.visual_rows.length() - 1,
+  )
+  let target = self.visual_rows[target_index]
+  let target_line_index = logic_line_at_row(
+    self.logical_lines,
+    row_index=target_index,
+  )
+  let target_line = self.logical_lines[target_line_index]
+  let target_display_column = (target_line.display_column(
+    position=target.logic_start,
+  ) +
+  preferred).clamp(
+    min=target_line.display_column(position=target.logic_start),
+    max=target_line.display_column(position=target.logic_end),
+  )
+  let target_position = target_line.position_at_display_column(
+    column=target_display_column,
+  )
+  let target_cursor = TextCursor::new(
+    self.logical_lines,
+    line=target_line_index,
+    position=target_position,
+  )
   // Landing at the far edge of a non-final wrapped row sits on a boundary that
   // textually equals the next row's start; remember the affinity so it renders
   // at the end of this row instead of jumping down.
-  let lands_on_wrap_boundary = target_index + 1 < rows.length() &&
-    rows[target_index + 1].logical_line == target.logical_line &&
-    target_offset == @text.grapheme_count(target.text)
-  self.set_state(
-    self.text,
-    cursor,
-    Some(preferred),
-    self.view_start,
-    mode=self.mode,
+  let lands_on_wrap_boundary = target_index + 1 < target_line.row_end &&
+    target_position == target.logic_end
+  self.set_cursor(
+    cursor=target_cursor,
+    preferred_column=preferred,
     at_wrap_end=lands_on_wrap_boundary,
   )
 }

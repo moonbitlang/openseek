@@ -1,5 +1,6 @@
 import {
   "moonbit-community/tty/color",
+  "moonbit-community/displaytext",
 }
 
 supported_targets = "native"
