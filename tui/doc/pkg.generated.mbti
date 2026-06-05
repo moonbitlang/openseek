@@ -3,8 +3,8 @@ package "bobzhang/openseek/tui/doc"
 
 import {
   "bobzhang/openseek/tui/internal/surface",
+  "bobzhang/openseek/tui/style",
   "moonbit-community/displaytext",
-  "moonbit-community/tty/color",
 }
 
 // Values
@@ -22,17 +22,8 @@ pub fn Doc::layout(Self, width~ : Int) -> Array[@surface.Line]
 pub struct Span {
   // private fields
 }
-pub fn Span::Span(@displaytext.DisplayText, style? : Style) -> Self
+pub fn Span::Span(@displaytext.DisplayText, style? : @style.Style) -> Self
 pub fn Span::plain(String) -> Self
-
-type Style derive(Eq)
-pub fn Style::default() -> Self
-pub fn Style::dim() -> Self
-pub fn Style::error() -> Self
-pub fn Style::new(foreground? : @color.Color, background? : @color.Color, underline? : Bool) -> Self
-pub fn Style::prompt() -> Self
-pub fn Style::success() -> Self
-pub fn Style::to_surface(Self) -> @surface.Style
 
 pub struct Text {
   // private fields
@@ -49,4 +40,3 @@ pub fn Text::split_lines(Self) -> Array[Self]
 pub(open) trait ToDoc {
   fn to_doc(Self) -> Doc
 }
-

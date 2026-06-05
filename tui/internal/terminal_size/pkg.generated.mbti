@@ -2,14 +2,16 @@
 package "bobzhang/openseek/tui/internal/terminal_size"
 
 // Values
+pub let default : TerminalSize
 
 // Errors
 
 // Types and methods
-type TerminalSize
+pub struct TerminalSize {
+  // private fields
+}
+pub fn TerminalSize::TerminalSize(rows~ : Int, cols~ : Int) -> Self
 pub fn TerminalSize::cols(Self) -> Int
-pub fn TerminalSize::default() -> Self
-pub fn TerminalSize::new(rows~ : Int, cols~ : Int) -> Self
 pub fn TerminalSize::rows(Self) -> Int
 
 // Type aliases

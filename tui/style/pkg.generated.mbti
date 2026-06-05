@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/tui/style"
+
+import {
+  "moonbit-community/tty/color",
+}
+
+// Values
+pub let default : Style
+
+pub let dim : Style
+
+pub let error : Style
+
+pub let ok : Style
+
+// Errors
+
+// Types and methods
+pub struct Style {
+  foreground : @color.Color
+  background : @color.Color
+  underline : Bool
+} derive(Eq)
+pub fn Style::Style(foreground? : @color.Color, background? : @color.Color, underline? : Bool) -> Self
+
+// Type aliases
+
+// Traits

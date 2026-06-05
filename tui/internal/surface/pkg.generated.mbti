@@ -2,8 +2,8 @@
 package "bobzhang/openseek/tui/internal/surface"
 
 import {
+  "bobzhang/openseek/tui/style",
   "moonbit-community/displaytext",
-  "moonbit-community/tty/color",
 }
 
 // Values
@@ -24,15 +24,9 @@ pub fn Line::text(Self) -> String
 pub struct Span {
   // private fields
 } derive(Eq)
-pub fn Span::Span(@displaytext.DisplayText, style? : Style) -> Self
-pub fn Span::style(Self) -> Style
+pub fn Span::Span(@displaytext.DisplayText, style? : @style.Style) -> Self
+pub fn Span::style(Self) -> @style.Style
 pub fn Span::text(Self) -> String
-
-type Style derive(Eq)
-pub fn Style::background(Self) -> @color.Color
-pub fn Style::foreground(Self) -> @color.Color
-pub fn Style::new(foreground? : @color.Color, background? : @color.Color, underline? : Bool) -> Self
-pub fn Style::underline(Self) -> Bool
 
 type Surface
 pub fn Surface::cursor(Self) -> Cursor
