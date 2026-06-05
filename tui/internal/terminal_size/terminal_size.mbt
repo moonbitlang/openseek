@@ -19,7 +19,7 @@ struct TerminalSize {
 
 ///|
 /// Build a terminal size, replacing any non-positive dimension with its default.
-pub fn TerminalSize::new(rows~ : Int, cols~ : Int) -> TerminalSize {
+pub fn TerminalSize::TerminalSize(rows~ : Int, cols~ : Int) -> TerminalSize {
   {
     rows: if rows < 1 {
       DefaultTerminalRows
@@ -36,8 +36,9 @@ pub fn TerminalSize::new(rows~ : Int, cols~ : Int) -> TerminalSize {
 
 ///|
 /// The fallback size used before a real terminal size is known.
-pub fn TerminalSize::default() -> TerminalSize {
-  { rows: DefaultTerminalRows, cols: DefaultTerminalCols }
+pub let default : TerminalSize = {
+  rows: DefaultTerminalRows,
+  cols: DefaultTerminalCols,
 }
 
 ///|

@@ -14,12 +14,12 @@ value type with no `@tty` dependency.
 ## Usage
 
 ```mbt
-let size = @terminal_size.TerminalSize::new(rows=24, cols=80)
+let size = @terminal_size.TerminalSize(rows=24, cols=80)
 size.rows() // >= 1
 size.cols() // >= 1
 
-@terminal_size.TerminalSize::new(rows=0, cols=120) // rows=0 → default → 24
-@terminal_size.TerminalSize::default()             // the 24×80 fallback
+@terminal_size.TerminalSize(rows=0, cols=120) // rows=0 → default → 24
+@terminal_size.default                        // the 24×80 fallback
 ```
 
 Internal to `tui/` — only importable within the module.

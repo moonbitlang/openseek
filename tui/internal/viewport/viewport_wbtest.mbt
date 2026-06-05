@@ -1,7 +1,7 @@
 ///|
 test "viewport remembers stale frame footprint after resize invalidates frame" {
   let viewport = Viewport::{
-    size: @terminal_size.TerminalSize::new(rows=10, cols=80),
+    size: TerminalSize(rows=10, cols=80),
     geometry: @geometry.Geometry::new(top=6, height=4),
     cache: Drawn(
       @surface.Surface::new(
@@ -17,7 +17,7 @@ test "viewport remembers stale frame footprint after resize invalidates frame" {
       ),
     ),
   }
-  viewport.set_size(@terminal_size.TerminalSize::new(rows=8, cols=40))
+  viewport.set_size(TerminalSize(rows=8, cols=40))
   let (stale_top, stale_height) = match viewport.cache {
     Stale(top~, height~) => (top, height)
     _ => (-1, -1)

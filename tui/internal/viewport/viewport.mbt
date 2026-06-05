@@ -89,9 +89,9 @@ fn Viewport::set_geometry(self : Viewport, top~ : Int, height~ : Int) -> Unit {
 /// stays free of terminal IO.
 pub fn read_terminal_size(tty : @tty.Tty) -> @terminal_size.TerminalSize {
   try tty.window_size() catch {
-    _ => @terminal_size.TerminalSize::default()
+    _ => @terminal_size.default
   } noraise {
-    size => @terminal_size.TerminalSize::new(rows=size.rows, cols=size.cols)
+    size => TerminalSize(rows=size.rows, cols=size.cols)
   }
 }
 
