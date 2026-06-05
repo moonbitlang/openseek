@@ -52,7 +52,7 @@ impl @doc.ToDoc for Input with fn to_doc(self) {
           } else {
             DisplayText("  ")
           },
-          style=@doc.Style::prompt(),
+          style=@style.dim,
         ),
         @doc.Span::plain(line.text()),
       ]),

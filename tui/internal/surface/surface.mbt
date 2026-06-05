@@ -6,18 +6,10 @@
 // engine consumes them to paint a real terminal. Nothing here performs IO.
 
 ///|
-/// Terminal styling applied while a span is written.
-struct Style {
-  foreground : @color.Color
-  background : @color.Color
-  underline : Bool
-} derive(Eq)
-
-///|
 /// A string fragment with an associated style.
 struct Span {
   text : @displaytext.DisplayText
-  style : Style
+  style : @style.Style
 } derive(Eq)
 
 ///|
@@ -55,39 +47,10 @@ struct Surface {
 }
 
 ///|
-/// Build a style. With no arguments, the unstyled default (terminal default
-/// colors, no underline).
-pub fn Style::new(
-  foreground? : @color.Color = Default,
-  background? : @color.Color = Default,
-  underline? : Bool = false,
-) -> Style {
-  { foreground, background, underline }
-}
-
-///|
-/// Foreground color of the style.
-pub fn Style::foreground(self : Style) -> @color.Color {
-  self.foreground
-}
-
-///|
-/// Background color of the style.
-pub fn Style::background(self : Style) -> @color.Color {
-  self.background
-}
-
-///|
-/// Whether the style underlines its text.
-pub fn Style::underline(self : Style) -> Bool {
-  self.underline
-}
-
-///|
 /// Build a span from text and an optional style (default: unstyled).
 pub fn Span::Span(
   text : @displaytext.DisplayText,
-  style? : Style = Style::new(),
+  style? : @style.Style = @style.default,
 ) -> Span {
   { text, style }
 }
@@ -100,7 +63,7 @@ pub fn Span::text(self : Span) -> String {
 
 ///|
 /// Style of the span.
-pub fn Span::style(self : Span) -> Style {
+pub fn Span::style(self : Span) -> @style.Style {
   self.style
 }
 

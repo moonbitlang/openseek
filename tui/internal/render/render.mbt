@@ -12,21 +12,8 @@
 ///|
 fn separator_line(cols~ : Int) -> @surface.Line {
   @surface.Line::new([
-    Span(
-      DisplayText(String::make(cols, '─')),
-      style=@doc.Style::dim().to_surface(),
-    ),
+    Span(DisplayText(String::make(cols, '─')), style=@style.dim),
   ])
-}
-
-///|
-fn input_style() -> @surface.Style {
-  @doc.Style::default().to_surface()
-}
-
-///|
-fn prompt_style() -> @surface.Style {
-  @doc.Style::prompt().to_surface()
 }
 
 ///|
@@ -41,9 +28,9 @@ fn prompt_line(
   let fill_cols = if used < cols { cols - used } else { 0 }
   let fill_cols = @displaytext.DisplayText(String::make(fill_cols, ' '))
   @surface.Line::new([
-    Span(prefix, style=prompt_style()),
-    Span(content, style=input_style()),
-    Span(fill_cols, style=input_style()),
+    Span(prefix, style=@style.dim),
+    Span(content, style=@style.default),
+    Span(fill_cols, style=@style.default),
   ])
 }
 
@@ -64,7 +51,7 @@ fn indent_line(line : @surface.Line, indent~ : Int) -> @surface.Line {
     return line
   }
   let indent = @displaytext.DisplayText(String::make(indent, ' '))
-  let spans : Array[@surface.Span] = [Span(indent, style=input_style())]
+  let spans : Array[@surface.Span] = [Span(indent, style=@style.default)]
   for span in line.spans() {
     spans.push(span)
   }
@@ -90,7 +77,7 @@ fn too_small_surface(cols~ : Int) -> @surface.Surface {
               "Terminal too small — resize to at least \{MinLiveRows} rows",
             ).truncate(cols),
           ),
-          style=@doc.Style::error().to_surface(),
+          style=@style.error,
         ),
       ]),
     ],

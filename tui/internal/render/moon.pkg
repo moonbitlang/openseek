@@ -4,6 +4,7 @@ import {
   "bobzhang/openseek/tui/internal/composer",
   "bobzhang/openseek/tui/internal/surface",
   "bobzhang/openseek/tui/internal/text",
+  "bobzhang/openseek/tui/style",
   "moonbit-community/displaytext",
 }
 

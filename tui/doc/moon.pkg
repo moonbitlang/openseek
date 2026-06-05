@@ -2,7 +2,7 @@ import {
   "bobzhang/openseek/tui/internal/text",
   "bobzhang/openseek/tui/internal/surface",
   "moonbit-community/displaytext",
-  "moonbit-community/tty/color" @tty/color,
+  "bobzhang/openseek/tui/style",
 }
 
 supported_targets = "native"

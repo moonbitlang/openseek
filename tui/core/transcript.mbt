@@ -9,10 +9,10 @@ pub(all) enum ToolStatus {
 } derive(Eq, Debug)
 
 ///|
-fn ToolStatus::style(self : ToolStatus) -> @doc.Style {
+fn ToolStatus::style(self : ToolStatus) -> @style.Style {
   match self {
-    Completed => @doc.Style::success()
-    Failed => @doc.Style::error()
+    Completed => @style.ok
+    Failed => @style.error
   }
 }
 
@@ -54,13 +54,13 @@ fn bulleted_lines(
   text : @doc.Text,
   first~ : @displaytext.DisplayText,
   rest~ : @displaytext.DisplayText,
-  style~ : @doc.Style,
+  style~ : @style.Style,
 ) -> Array[@doc.Text] {
   let texts : Array[@doc.Text] = []
   let lines = text.split_lines()
-  for index in 0..<lines.length() {
+  for index, line in lines {
     let marker = if index == 0 { first } else { rest }
-    texts.push(lines[index].prepend_span(Span(marker, style~)))
+    texts.push(line.prepend_span(Span(marker, style~)))
   }
   texts
 }
@@ -88,13 +88,13 @@ pub impl @doc.ToDoc for TranscriptItem with fn to_doc(self) {
           @doc.Text::plain(content),
           first=bullet,
           rest=continuation,
-          style=@doc.Style::dim(),
+          style=@style.dim,
         ),
       )
     ToolCall(call) => {
       let bullet_style = call.status
         .map(status => status.style())
-        .unwrap_or(@doc.Style::dim())
+        .unwrap_or(@style.dim)
       let texts : Array[@doc.Text] = [
         call.title.prepend_span(Span(bullet, style=bullet_style)),
       ]
@@ -103,14 +103,14 @@ pub impl @doc.ToDoc for TranscriptItem with fn to_doc(self) {
         for line in detail.split_lines() {
           let marker = if has_detail_line { "    " } else { "  └ " }
           let marker = @displaytext.DisplayText(marker)
-          texts.push(line.prepend_span(Span(marker, style=@doc.Style::dim())))
+          texts.push(line.prepend_span(Span(marker, style=@style.dim)))
           has_detail_line = true
         }
       }
       Doc(texts)
     }
     Error(message) => {
-      let error_style = @doc.Style::error()
+      let error_style = @style.error
       Doc(
         bulleted_lines(
           Text([Span(DisplayText(message), style=error_style)]),

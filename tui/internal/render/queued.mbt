@@ -33,13 +33,13 @@ fn queued_input_line(
   let marker_width = marker.width()
   let prefix_width = prefix.width()
   @surface.Line::new([
-    Span(marker, style=@doc.Style::dim().to_surface()),
-    Span(prefix, style=@doc.Style::prompt().to_surface()),
+    Span(marker, style=@style.dim),
+    Span(prefix, style=@style.dim),
     Span(
       DisplayText(
         input_preview_line(input).truncate(cols - marker_width - prefix_width),
       ),
-      style=@doc.Style::dim().to_surface(),
+      style=@style.dim,
     ),
   ])
 }
@@ -53,7 +53,7 @@ fn indented_dim_line(
   @surface.Line::new([
     Span(
       DisplayText(String::make(indent, ' ') + line.truncate(cols - indent)),
-      style=@doc.Style::dim().to_surface(),
+      style=@style.dim,
     ),
   ])
 }

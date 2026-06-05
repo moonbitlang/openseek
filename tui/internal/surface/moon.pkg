@@ -1,6 +1,6 @@
 import {
-  "moonbit-community/tty/color",
   "moonbit-community/displaytext",
+  "bobzhang/openseek/tui/style",
 }
 
 supported_targets = "native"

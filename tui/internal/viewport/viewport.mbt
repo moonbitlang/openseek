@@ -128,14 +128,14 @@ async fn erase_cursor_row(tty : @tty.Tty) -> Unit {
 }
 
 ///|
-async fn apply_style(tty : @tty.Tty, style : @surface.Style) -> Unit {
-  if style.foreground() != Default {
-    tty.set_foreground(style.foreground())
+async fn apply_style(tty : @tty.Tty, style : @style.Style) -> Unit {
+  if style.foreground != Default {
+    tty.set_foreground(style.foreground)
   }
-  if style.background() != Default {
-    tty.set_background(style.background())
+  if style.background != Default {
+    tty.set_background(style.background)
   }
-  if style.underline() {
+  if style.underline {
     tty.underline()
   }
 }

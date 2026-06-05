@@ -32,8 +32,8 @@ test "with_max_rows keeps the leading rows" {
 
 ///|
 test "line equality includes span text and style" {
-  let green = @surface.Style::new(foreground=Basic(BrightGreen))
-  let red = @surface.Style::new(foreground=Basic(BrightRed))
+  let green = @style.Style(foreground=Basic(BrightGreen))
+  let red = @style.Style(foreground=Basic(BrightRed))
   let left = @surface.Line::new([Span(DisplayText("x"), style=green)])
   let same = @surface.Line::new([Span(DisplayText("x"), style=green)])
   let different_text = @surface.Line::new([Span(DisplayText("y"), style=green)])
