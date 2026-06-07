@@ -1,6 +1,6 @@
 name = "bobzhang/openseek"
 
-version = "0.1.4"
+version = "0.1.5"
 
 import {
   "moonbit-community/tty@0.2.4",

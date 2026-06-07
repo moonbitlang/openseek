@@ -82,10 +82,23 @@ priv struct MoonCheckRecord {
 }
 
 ///|
+/// Per-agent-loop state shared between the main chat loop and the
+/// side-effectful tools it invokes. Constructed once inside
+/// `@async.with_task_group` and threaded into every tool definition.
 pub struct AgentRuntime[X] {
+  /// Task group the agent runs under; tools spawn background watchers as
+  /// children of this group so their lifetime is bounded by the agent's.
   priv group : @async.TaskGroup[X]
+  /// Bounded event bus (`DiscardOldest`, see `default_agent_event_capacity`)
+  /// that background tools post updates to; the main loop drains it between
+  /// steps to surface fresh tool output into the conversation.
   priv events : @aqueue.Queue[AgentEvent]
+  /// Registry of currently-running `moon check` watchers keyed by their
+  /// assigned id. Each record carries the process handle, latest stdout
+  /// buffer, exit code, and restart bookkeeping.
   priv moon_checks : Map[String, MoonCheckRecord]
+  /// Monotonic counter used by `next_moon_check_id` to mint unique watcher
+  /// ids; only increases for the lifetime of this runtime.
   priv mut next_moon_check_index : Int
 }
 
