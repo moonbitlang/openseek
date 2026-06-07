@@ -7,7 +7,7 @@ pub async fn run_harness() -> @report.Report {
 
 ///|
 async fn run_harness_with_runtime(
-  runtime : @agent_tool.AgentRuntime[@report.Report],
+  runtime : @agent_runtime.AgentRuntime[@report.Report],
 ) -> @report.Report {
   let tools = tool_definitions(runtime) catch {
     error =>
@@ -35,7 +35,7 @@ async fn run_harness_with_runtime(
 
 ///|
 fn tool_definitions(
-  runtime : @agent_tool.AgentRuntime[@report.Report],
+  runtime : @agent_runtime.AgentRuntime[@report.Report],
 ) -> @agent_tool.Tools raise {
   Tools([
     @read.definition(),

@@ -36,7 +36,7 @@ pub async fn run(
 
 ///|
 async fn run_with_runtime(
-  runtime : @agent_tool.AgentRuntime[Unit],
+  runtime : @agent_runtime.AgentRuntime[Unit],
   api_key : String,
   model : @deepseek.Model,
   task : String,
@@ -129,24 +129,23 @@ async fn run_with_runtime(
 }
 
 ///|
-fn runtime_update_message(events : Array[@agent_tool.AgentEvent]) -> String? {
-  let latest_moon_checks : Map[String, @agent_tool.MoonCheckSnapshot] = {}
+fn runtime_update_message(events : Array[@agent_runtime.AgentEvent]) -> String? {
+  let latest_moon_checks : Map[String, @moon_check.MoonCheckSnapshot] = {}
   let mut moon_check_count = 0
   for event in events {
     match event {
-      MoonCheckUpdate(update) => {
+      @moon_check.MoonCheckUpdate(update) => {
         latest_moon_checks[update.key] = update
         moon_check_count += 1
       }
+      _ => ()
     }
   }
   if moon_check_count == 0 {
     None
   } else {
     let parts = [
-      for update in latest_moon_checks.values() => {
-        moon_check_update_text(update)
-      }
+      for update in latest_moon_checks.values() => update.update_text()
     ]
     Some(
       "[moon_check update]\nevents=\{moon_check_count}\n" + parts.join("\n\n"),
@@ -155,45 +154,9 @@ fn runtime_update_message(events : Array[@agent_tool.AgentEvent]) -> String? {
 }
 
 ///|
-fn moon_check_update_text(update : @agent_tool.MoonCheckSnapshot) -> String {
-  let cwd = match update.cwd {
-    Some(cwd) => cwd
-    None => "."
-  }
-  let exit = match update.exit_code {
-    Some(code) => "\nexit=\{code}"
-    None => ""
-  }
-  let truncated = if update.output_truncated { "\ntruncated=true" } else { "" }
-  let restart = if update.restart_count > 0 || update.restart_reason is Some(_) {
-    let reason = match update.restart_reason {
-      Some(reason) => "\nrestart_reason=\{reason}"
-      None => ""
-    }
-    "\nrestart_count=\{update.restart_count}\nrestart_limit=\{update.restart_limit}\{reason}"
-  } else {
-    ""
-  }
-  let output = if update.output == "" {
-    "\n(no output yet)"
-  } else {
-    "\n" + update.output
-  }
-  "id=\{update.id}\ncwd=\{cwd}\ncommand=\{update.command}\nstatus=\{watcher_status_label(update.status)}\nseq=\{update.seq}\{exit}\{truncated}\{restart}\{output}"
-}
-
-///|
-fn watcher_status_label(status : @agent_tool.WatcherStatus) -> String {
-  match status {
-    Running => "running"
-    Stopped => "stopped"
-  }
-}
-
-///|
 test "moon_check update message coalesces by watcher key" {
   let message = runtime_update_message([
-    MoonCheckUpdate(
+    @moon_check.MoonCheckUpdate(
       MoonCheckSnapshot(
         id="moon-check-1",
         key="cwd=.",
@@ -210,7 +173,7 @@ test "moon_check update message coalesces by watcher key" {
         restart_reason=None,
       ),
     ),
-    MoonCheckUpdate(
+    @moon_check.MoonCheckUpdate(
       MoonCheckSnapshot(
         id="moon-check-1",
         key="cwd=.",

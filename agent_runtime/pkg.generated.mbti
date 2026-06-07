@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/agent_runtime"
+
+import {
+  "moonbitlang/async",
+}
+
+// Values
+pub let default_agent_event_capacity : Int
+
+// Errors
+
+// Types and methods
+pub(all) extenum AgentEvent {
+}
+
+pub struct AgentRuntime[X] {
+  // private fields
+}
+pub fn[X] AgentRuntime::AgentRuntime(@async.TaskGroup[X]) -> Self[X]
+pub fn[X] AgentRuntime::drain_events(Self[X]) -> Array[AgentEvent]
+pub fn[X] AgentRuntime::emit_event(Self[X], AgentEvent) -> Unit
+pub fn[X] AgentRuntime::group(Self[X]) -> @async.TaskGroup[X]
+
+// Type aliases
+
+// Traits
+

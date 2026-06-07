@@ -3,13 +3,9 @@ package "bobzhang/openseek/agent_tool"
 
 import {
   "bobzhang/openseek/deepseek",
-  "moonbitlang/async",
-  "moonbitlang/async/process",
 }
 
 // Values
-pub let default_agent_event_capacity : Int
-
 pub async fn execute_tool_call(AgentToolCall, Tools) -> ToolAction
 
 // Errors
@@ -19,25 +15,6 @@ pub(all) enum AgentControl {
   Finish(String)
   Abort(String)
 }
-
-pub(all) enum AgentEvent {
-  MoonCheckUpdate(MoonCheckSnapshot)
-}
-
-pub struct AgentRuntime[X] {
-  // private fields
-}
-pub fn[X] AgentRuntime::AgentRuntime(@async.TaskGroup[X]) -> Self[X]
-pub fn[X] AgentRuntime::drain_events(Self[X]) -> Array[AgentEvent]
-pub fn[X] AgentRuntime::emit_moon_check(Self[X], MoonCheckSnapshot) -> Unit
-pub fn[X] AgentRuntime::group(Self[X]) -> @async.TaskGroup[X]
-pub fn[X] AgentRuntime::mark_moon_check_stopped(Self[X], String, String, Int?) -> MoonCheckSnapshot?
-pub fn[X] AgentRuntime::moon_check_snapshot(Self[X], String) -> MoonCheckSnapshot?
-pub fn[X] AgentRuntime::next_moon_check_id(Self[X]) -> String
-pub fn[X] AgentRuntime::record_moon_check_output(Self[X], String, String, String) -> MoonCheckSnapshot?
-pub fn[X] AgentRuntime::register_moon_check(Self[X], key~ : String, id~ : String, command~ : String, cwd~ : String?, process~ : @process.Process, max_output_chars~ : Int, restart_count~ : Int, restart_limit~ : Int, restart_reason~ : String?) -> MoonCheckSnapshot
-pub fn[X] AgentRuntime::replace_moon_check_output(Self[X], String, String, String) -> MoonCheckSnapshot?
-pub fn[X] AgentRuntime::stop_moon_check(Self[X], String) -> MoonCheckSnapshot?
 
 pub struct AgentToolCall {
   name : String
@@ -54,23 +31,6 @@ pub struct AgentToolDefinition {
 pub fn AgentToolDefinition::AgentToolDefinition(name~ : String, description~ : String, schema~ : JsonSchema, execute~ : ToolExecutor) -> Self
 
 pub(all) struct JsonSchema(Json)
-
-pub struct MoonCheckSnapshot {
-  id : String
-  key : String
-  command : String
-  cwd : String?
-  status : WatcherStatus
-  seq : Int
-  output : String
-  output_truncated : Bool
-  max_output_chars : Int
-  exit_code : Int?
-  restart_count : Int
-  restart_limit : Int
-  restart_reason : String?
-}
-pub fn MoonCheckSnapshot::MoonCheckSnapshot(id~ : String, key~ : String, command~ : String, cwd~ : String?, status~ : WatcherStatus, seq~ : Int, output~ : String, output_truncated~ : Bool, max_output_chars~ : Int, exit_code~ : Int?, restart_count~ : Int, restart_limit~ : Int, restart_reason~ : String?) -> Self
 
 pub(all) enum ToolAction {
   Respond(ToolOutput)
@@ -97,11 +57,6 @@ pub struct Tools {
 pub fn Tools::Tools(Array[AgentToolDefinition]) -> Self raise
 pub fn Tools::find(Self, String) -> AgentToolDefinition?
 pub fn Tools::function_tools(Self) -> Array[@deepseek.ToolDefinition]
-
-pub(all) enum WatcherStatus {
-  Running
-  Stopped
-}
 
 // Type aliases
 

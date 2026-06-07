@@ -1,4 +1,5 @@
 import {
+  "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/agent_tool/internal/error" @tool_error,
   "bobzhang/openseek/agent_tool/moon_check/internal/decode",

@@ -46,23 +46,23 @@ the error and recover in the next step. `finish` returns `Control(Finish(...))`
 so ending the run is a host-loop decision rather than another message the model
 has to interpret.
 
-`moon_check` is the stateful watcher tool shape: it captures the session
-runtime, starts or reuses a `moon check --watch --diagnostic-limit 10` process,
-and posts later compiler output into the agent event queue. Its direct tool
-results still follow the normal
-`Respond(ToolOutput(...))` contract; later updates are injected by the agent
-loop as synthetic user messages.
+Stateful tools use `agent_runtime` directly when they need loop-scoped
+background work or event updates. For example, `moon_check` owns its watcher
+state in its own package and extends the runtime event type with
+`MoonCheckUpdate`; its direct tool results still follow the normal
+`Respond(ToolOutput(...))` contract.
 
 ```mermaid
 flowchart LR
   Model[DeepSeek tool call] --> Agent[agent loop]
   Agent --> Tools[Tools registry]
   Tools --> MoonCheck[moon_check executor]
-  Agent --> Runtime[AgentRuntime]
+  Agent --> Runtime[agent_runtime]
   MoonCheck --> Runtime
   MoonCheck --> Watcher[moon check --watch]
   Watcher --> Monitor[reader task]
-  Monitor --> Runtime
+  Monitor --> MoonCheck
+  MoonCheck --> Runtime
   Runtime --> Queue[MoonCheckUpdate queue]
   Agent --> Queue
   Queue --> Message["[moon_check update] user message"]

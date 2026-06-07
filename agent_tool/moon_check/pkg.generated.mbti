@@ -2,15 +2,43 @@
 package "bobzhang/openseek/agent_tool/moon_check"
 
 import {
+  "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_tool",
 }
 
 // Values
-pub fn[X] definition(@agent_tool.AgentRuntime[X]) -> @agent_tool.AgentToolDefinition
+pub fn[X] definition(@agent_runtime.AgentRuntime[X]) -> @agent_tool.AgentToolDefinition
 
 // Errors
 
 // Types and methods
+pub struct MoonCheckSnapshot {
+  id : String
+  key : String
+  command : String
+  cwd : String?
+  status : WatcherStatus
+  seq : Int
+  output : String
+  output_truncated : Bool
+  max_output_chars : Int
+  exit_code : Int?
+  restart_count : Int
+  restart_limit : Int
+  restart_reason : String?
+}
+pub fn MoonCheckSnapshot::MoonCheckSnapshot(id~ : String, key~ : String, command~ : String, cwd~ : String?, status~ : WatcherStatus, seq~ : Int, output~ : String, output_truncated~ : Bool, max_output_chars~ : Int, exit_code~ : Int?, restart_count~ : Int, restart_limit~ : Int, restart_reason~ : String?) -> Self
+pub fn MoonCheckSnapshot::update_text(Self) -> String
+
+pub(all) enum WatcherStatus {
+  Running
+  Stopped
+}
+
+// Extensible enum extensions
+pub(all) extenum @agent_runtime.AgentEvent += {
+  MoonCheckUpdate(MoonCheckSnapshot)
+}
 
 // Type aliases
 

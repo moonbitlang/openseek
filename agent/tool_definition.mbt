@@ -4,7 +4,7 @@
 /// them into the `Tools` value the loop dispatches against. Raises if two
 /// definitions share a name.
 fn tool_definitions(
-  runtime : @agent_tool.AgentRuntime[Unit],
+  runtime : @agent_runtime.AgentRuntime[Unit],
 ) -> @agent_tool.Tools raise {
   Tools([
     @shell.definition(),

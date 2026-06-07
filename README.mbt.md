@@ -12,6 +12,7 @@ entry point so request encoding can be tested without network access.
 | `bobzhang/openseek/deepseek` | Pure DeepSeek chat data, JSON encoding, and response decoding. | `deepseek/README.mbt.md` |
 | `bobzhang/openseek/deepseek/client` | Native-only HTTP transport for DeepSeek chat completions. | `deepseek/client/README.mbt.md` |
 | `bobzhang/openseek/logger` | Native-only async JSONL logger with severity-filtered optional sinks. | `logger/README.mbt.md` |
+| `bobzhang/openseek/agent_runtime` | Native-only agent task-group and extensible runtime event queue. | `agent_runtime/README.mbt.md` |
 | `bobzhang/openseek/agent_tool` | Tool registry, executor, output, and control-action types. | `agent_tool/README.mbt.md` |
 | `bobzhang/openseek/agent` | Native-only OpenSeek agent loop and local tool dispatch. | `agent/README.mbt.md` |
 | `bobzhang/openseek/cmd/openseek` | Native-only command-line entry point. | `cmd/openseek/README.md` |
@@ -43,6 +44,9 @@ The `agent_tool` package exposes the local tool registry and typed executor
 boundary. Tool executors return `ToolAction`: normal tools use
 `Respond(ToolOutput(...))`, while control tools such as `finish` use
 `Control(Finish(...))`.
+
+The `agent_runtime` package owns loop-scoped task-group access and an extensible
+event queue used by stateful tools such as `moon_check`.
 
 The `agent` subpackage contains the OpenSeek agent loop, native DeepSeek
 tool-call handling, and local tool dispatch. It depends on `deepseek/client`,

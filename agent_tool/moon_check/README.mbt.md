@@ -31,29 +31,31 @@ separate from tests, CLI runs, formatting, and interface generation.
 sequenceDiagram
   participant Agent
   participant Tool as moon_check
-  participant Runtime as AgentRuntime
+  participant State as MoonCheckRuntime
+  participant Runtime as agent_runtime
   participant Watcher as moon check --watch
   participant Queue as Update queue
 
   Agent->>Tool: call with cwd/options
-  Tool->>Runtime: lookup watcher key
+  Tool->>State: lookup watcher key
   alt running watcher exists
-    Runtime-->>Tool: latest snapshot
+    State-->>Tool: latest snapshot
     Tool-->>Agent: watcher=reused
   else no running watcher
     Tool->>Watcher: spawn --watch --diagnostic-limit 10
-    Tool->>Runtime: register snapshot
+    Tool->>State: register snapshot
     Tool-->>Agent: watcher=started
   end
   Watcher-->>Tool: stdout/stderr chunks
-  Tool->>Runtime: record latest compact output
+  Tool->>State: record latest compact output
+  State->>Runtime: emit MoonCheckUpdate
   Runtime->>Queue: MoonCheckUpdate
   Agent->>Queue: drain before next model turn
   Queue-->>Agent: coalesced [moon_check update]
   alt watcher exits unexpectedly
-    Tool->>Runtime: compact crash output
+    Tool->>State: compact crash output
     Tool->>Watcher: restart within budget
-    Tool->>Runtime: register replacement
+    Tool->>State: register replacement
   end
 ```
 

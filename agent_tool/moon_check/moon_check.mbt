@@ -1,4 +1,312 @@
 ///|
+pub(all) enum WatcherStatus {
+  Running
+  Stopped
+}
+
+///|
+pub struct MoonCheckSnapshot {
+  id : String
+  key : String
+  command : String
+  cwd : String?
+  status : WatcherStatus
+  seq : Int
+  output : String
+  output_truncated : Bool
+  max_output_chars : Int
+  exit_code : Int?
+  restart_count : Int
+  restart_limit : Int
+  restart_reason : String?
+}
+
+///|
+pub fn MoonCheckSnapshot::MoonCheckSnapshot(
+  id~ : String,
+  key~ : String,
+  command~ : String,
+  cwd~ : String?,
+  status~ : WatcherStatus,
+  seq~ : Int,
+  output~ : String,
+  output_truncated~ : Bool,
+  max_output_chars~ : Int,
+  exit_code~ : Int?,
+  restart_count~ : Int,
+  restart_limit~ : Int,
+  restart_reason~ : String?,
+) -> MoonCheckSnapshot {
+  {
+    id,
+    key,
+    command,
+    cwd,
+    status,
+    seq,
+    output,
+    output_truncated,
+    max_output_chars,
+    exit_code,
+    restart_count,
+    restart_limit,
+    restart_reason,
+  }
+}
+
+///|
+pub(all) extenum @agent_runtime.AgentEvent += {
+  MoonCheckUpdate(MoonCheckSnapshot)
+}
+
+///|
+priv struct MoonCheckRecord {
+  id : String
+  key : String
+  command : String
+  cwd : String?
+  process : @process.Process
+  max_output_chars : Int
+  mut status : WatcherStatus
+  mut seq : Int
+  mut output : String
+  mut output_truncated : Bool
+  mut exit_code : Int?
+  mut run_complete : Bool
+  restart_count : Int
+  restart_limit : Int
+  restart_reason : String?
+}
+
+///|
+priv struct MoonCheckRuntime[X] {
+  runtime : @agent_runtime.AgentRuntime[X]
+  moon_checks : Map[String, MoonCheckRecord]
+  mut next_moon_check_index : Int
+}
+
+///|
+fn[X] MoonCheckRuntime::MoonCheckRuntime(
+  runtime : @agent_runtime.AgentRuntime[X],
+) -> MoonCheckRuntime[X] {
+  { runtime, moon_checks: {}, next_moon_check_index: 1 }
+}
+
+///|
+fn[X] MoonCheckRuntime::group(
+  self : MoonCheckRuntime[X],
+) -> @async.TaskGroup[X] {
+  self.runtime.group()
+}
+
+///|
+fn[X] MoonCheckRuntime::next_moon_check_id(
+  self : MoonCheckRuntime[X],
+) -> String {
+  let id = "moon-check-\{self.next_moon_check_index}"
+  self.next_moon_check_index += 1
+  id
+}
+
+///|
+fn[X] MoonCheckRuntime::register_moon_check(
+  self : MoonCheckRuntime[X],
+  key~ : String,
+  id~ : String,
+  command~ : String,
+  cwd~ : String?,
+  process~ : @process.Process,
+  max_output_chars~ : Int,
+  restart_count~ : Int,
+  restart_limit~ : Int,
+  restart_reason~ : String?,
+) -> MoonCheckSnapshot {
+  let record = {
+    id,
+    key,
+    command,
+    cwd,
+    process,
+    max_output_chars,
+    status: Running,
+    seq: 0,
+    output: "",
+    output_truncated: false,
+    exit_code: None,
+    run_complete: false,
+    restart_count,
+    restart_limit,
+    restart_reason,
+  }
+  self.moon_checks[record.key] = record
+  record.to_snapshot()
+}
+
+///|
+fn[X] MoonCheckRuntime::moon_check_snapshot(
+  self : MoonCheckRuntime[X],
+  key : String,
+) -> MoonCheckSnapshot? {
+  match self.moon_checks.get(key) {
+    Some(record) => Some(record.to_snapshot())
+    None => None
+  }
+}
+
+///|
+fn[X] MoonCheckRuntime::record_moon_check_output(
+  self : MoonCheckRuntime[X],
+  key : String,
+  id : String,
+  chunk : String,
+) -> MoonCheckSnapshot? {
+  match self.moon_checks.get(key) {
+    None => None
+    Some(record) if record.id != id => None
+    Some(record) => {
+      let segment = if record.run_complete {
+        latest_run_segment(chunk)
+      } else {
+        latest_run_segment(record.output + chunk)
+      }
+      record.output = retain_output_tail(segment, record.max_output_chars)
+      record.output_truncated = segment.char_length() > record.max_output_chars
+      record.run_complete = moon_check_run_complete(record.output)
+      record.seq += 1
+      let snapshot = record.to_snapshot()
+      self.emit_moon_check(snapshot)
+      Some(snapshot)
+    }
+  }
+}
+
+///|
+fn[X] MoonCheckRuntime::replace_moon_check_output(
+  self : MoonCheckRuntime[X],
+  key : String,
+  id : String,
+  output : String,
+) -> MoonCheckSnapshot? {
+  match self.moon_checks.get(key) {
+    None => None
+    Some(record) if record.id != id => None
+    Some(record) => {
+      record.output = retain_output_tail(output, record.max_output_chars)
+      record.output_truncated = output.char_length() > record.max_output_chars
+      record.run_complete = moon_check_run_complete(record.output)
+      record.seq += 1
+      let snapshot = record.to_snapshot()
+      self.emit_moon_check(snapshot)
+      Some(snapshot)
+    }
+  }
+}
+
+///|
+fn[X] MoonCheckRuntime::mark_moon_check_stopped(
+  self : MoonCheckRuntime[X],
+  key : String,
+  id : String,
+  exit_code : Int?,
+) -> MoonCheckSnapshot? {
+  match self.moon_checks.get(key) {
+    None => None
+    Some(record) if record.id != id => None
+    Some(record) => {
+      record.status = Stopped
+      record.exit_code = exit_code
+      record.seq += 1
+      let snapshot = record.to_snapshot()
+      self.emit_moon_check(snapshot)
+      Some(snapshot)
+    }
+  }
+}
+
+///|
+fn[X] MoonCheckRuntime::stop_moon_check(
+  self : MoonCheckRuntime[X],
+  key : String,
+) -> MoonCheckSnapshot? {
+  match self.moon_checks.get(key) {
+    None => None
+    Some(record) =>
+      if record.status is Running {
+        record.process.cancel()
+        self.mark_moon_check_stopped(key, record.id, None)
+      } else {
+        Some(record.to_snapshot())
+      }
+  }
+}
+
+///|
+fn[X] MoonCheckRuntime::emit_moon_check(
+  self : MoonCheckRuntime[X],
+  snapshot : MoonCheckSnapshot,
+) -> Unit {
+  self.runtime.emit_event(MoonCheckUpdate(snapshot))
+}
+
+///|
+fn MoonCheckRecord::to_snapshot(self : MoonCheckRecord) -> MoonCheckSnapshot {
+  {
+    id: self.id,
+    key: self.key,
+    command: self.command,
+    cwd: self.cwd,
+    status: self.status,
+    seq: self.seq,
+    output: self.output,
+    output_truncated: self.output_truncated,
+    max_output_chars: self.max_output_chars,
+    exit_code: self.exit_code,
+    restart_count: self.restart_count,
+    restart_limit: self.restart_limit,
+    restart_reason: self.restart_reason,
+  }
+}
+
+///|
+fn retain_output_tail(content : String, max_chars : Int) -> String {
+  if content.char_length() <= max_chars {
+    content
+  } else {
+    let keep_from = content.char_length() - max_chars
+    match content.offset_of_nth_char(keep_from) {
+      Some(offset) => content[offset:].to_owned()
+      None => content
+    }
+  }
+}
+
+///|
+fn latest_run_segment(content : String) -> String {
+  let success = "Success, waiting for filesystem changes..."
+  let errors = "Had errors, waiting for filesystem changes..."
+  let mut start = 0
+  let mut offset = 0
+  for line in content.split("\n") {
+    offset += line.length() + 1
+    if line.contains(success) || line.contains(errors) {
+      start = offset
+    }
+  }
+  let segment = content[start:]
+  if segment == "" {
+    content
+  } else {
+    segment.to_owned()
+  }
+}
+
+///|
+fn moon_check_run_complete(content : String) -> Bool {
+  content.contains("Success, waiting for filesystem changes...") ||
+  content.contains("Had errors, waiting for filesystem changes...")
+}
+
+///|
 /// Tool definition for `moon_check`: starts or reuses a session-scoped
 /// `moon check --watch --diagnostic-limit 10` watcher for the given workspace
 /// and check options. Repeated calls with the same arguments return the
@@ -23,8 +331,9 @@
 /// - `Respond(ToolOutput("error: moon_check requires ...", is_error=true))`
 ///   for invalid arguments.
 pub fn[X] definition(
-  runtime : @agent_tool.AgentRuntime[X],
+  runtime : @agent_runtime.AgentRuntime[X],
 ) -> @agent_tool.AgentToolDefinition {
+  let moon_runtime = MoonCheckRuntime(runtime)
   AgentToolDefinition(
     name="moon_check",
     description="Start or inspect a persistent `moon check --watch --diagnostic-limit 10` watcher for the given cwd/options. The first call starts the watcher; later calls with the same arguments return the latest snapshot without starting another watcher.",
@@ -42,13 +351,13 @@ pub fn[X] definition(
         "explain": { "type": "boolean" },
       },
     }),
-    execute=Async(arguments => execute(runtime, arguments)),
+    execute=Async(arguments => execute(moon_runtime, arguments)),
   )
 }
 
 ///|
 async fn[X] execute(
-  runtime : @agent_tool.AgentRuntime[X],
+  runtime : MoonCheckRuntime[X],
   arguments : Json,
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
@@ -118,7 +427,7 @@ fn command_args(input : @decode.MoonCheckInput, watch~ : Bool) -> Array[String] 
 
 ///|
 async fn[X] moon_check(
-  runtime : @agent_tool.AgentRuntime[X],
+  runtime : MoonCheckRuntime[X],
   input : @decode.MoonCheckInput,
 ) -> @agent_tool.ToolAction {
   let key = moon_check_key(input)
@@ -151,7 +460,7 @@ async fn[X] moon_check(
 
 ///|
 async fn[X] start_moon_check(
-  runtime : @agent_tool.AgentRuntime[X],
+  runtime : MoonCheckRuntime[X],
   input : @decode.MoonCheckInput,
   key : String,
   action~ : String,
@@ -183,7 +492,7 @@ async fn[X] start_moon_check(
 
 ///|
 async fn[X] spawn_moon_check_watch(
-  runtime : @agent_tool.AgentRuntime[X],
+  runtime : MoonCheckRuntime[X],
   input : @decode.MoonCheckInput,
   key : String,
   restart_count~ : Int,
@@ -227,7 +536,7 @@ async fn[X] spawn_moon_check_watch(
 
 ///|
 async fn[X] wait_for_initial_snapshot(
-  runtime : @agent_tool.AgentRuntime[X],
+  runtime : MoonCheckRuntime[X],
   key : String,
 ) -> Unit {
   let ticks = default_initial_wait_ms / 50
@@ -242,7 +551,7 @@ async fn[X] wait_for_initial_snapshot(
 
 ///|
 async fn[X] monitor_moon_check(
-  runtime : @agent_tool.AgentRuntime[X],
+  runtime : MoonCheckRuntime[X],
   input : @decode.MoonCheckInput,
   key : String,
   id : String,
@@ -281,7 +590,7 @@ async fn[X] monitor_moon_check(
 
 ///|
 async fn[X] handle_moon_check_exit(
-  runtime : @agent_tool.AgentRuntime[X],
+  runtime : MoonCheckRuntime[X],
   input : @decode.MoonCheckInput,
   key : String,
   id : String,
@@ -326,7 +635,7 @@ async fn[X] handle_moon_check_exit(
 
 ///|
 fn should_auto_restart_moon_check(
-  snapshot : @agent_tool.MoonCheckSnapshot,
+  snapshot : MoonCheckSnapshot,
   exit_code : Int,
   moon_crashed~ : Bool,
 ) -> Bool {
@@ -392,7 +701,7 @@ fn first_line_containing(content : String, needle : String) -> String? {
 ///|
 fn moon_check_response(
   watcher : String,
-  snapshot : @agent_tool.MoonCheckSnapshot,
+  snapshot : MoonCheckSnapshot,
 ) -> String {
   let cwd_text = match snapshot.cwd {
     Some(cwd) => cwd
@@ -426,7 +735,7 @@ fn moon_check_response(
 }
 
 ///|
-fn moon_check_status_label(status : @agent_tool.WatcherStatus) -> String {
+fn moon_check_status_label(status : WatcherStatus) -> String {
   match status {
     Running => "running"
     Stopped => "stopped"
@@ -434,9 +743,35 @@ fn moon_check_status_label(status : @agent_tool.WatcherStatus) -> String {
 }
 
 ///|
-fn moon_check_snapshot_is_error(
-  snapshot : @agent_tool.MoonCheckSnapshot,
-) -> Bool {
+pub fn MoonCheckSnapshot::update_text(update : MoonCheckSnapshot) -> String {
+  let cwd = match update.cwd {
+    Some(cwd) => cwd
+    None => "."
+  }
+  let exit = match update.exit_code {
+    Some(code) => "\nexit=\{code}"
+    None => ""
+  }
+  let truncated = if update.output_truncated { "\ntruncated=true" } else { "" }
+  let restart = if update.restart_count > 0 || update.restart_reason is Some(_) {
+    let reason = match update.restart_reason {
+      Some(reason) => "\nrestart_reason=\{reason}"
+      None => ""
+    }
+    "\nrestart_count=\{update.restart_count}\nrestart_limit=\{update.restart_limit}\{reason}"
+  } else {
+    ""
+  }
+  let output = if update.output == "" {
+    "\n(no output yet)"
+  } else {
+    "\n" + update.output
+  }
+  "id=\{update.id}\ncwd=\{cwd}\ncommand=\{update.command}\nstatus=\{moon_check_status_label(update.status)}\nseq=\{update.seq}\{exit}\{truncated}\{restart}\{output}"
+}
+
+///|
+fn moon_check_snapshot_is_error(snapshot : MoonCheckSnapshot) -> Bool {
   match snapshot.exit_code {
     Some(code) if code != 0 => true
     _ =>
@@ -472,7 +807,7 @@ fn moon_check_key(input : @decode.MoonCheckInput) -> String {
 fn test_snapshot(
   restart_count~ : Int,
   restart_limit~ : Int,
-) -> @agent_tool.MoonCheckSnapshot {
+) -> MoonCheckSnapshot {
   MoonCheckSnapshot(
     id="moon-check-test",
     key="cwd=.",
@@ -589,7 +924,7 @@ test "moon_check auto restart respects exit code and budget" {
 ///|
 async test "moon_check runtime ignores stale watcher id updates" {
   @async.with_task_group() <| group => {
-    let runtime = @agent_tool.AgentRuntime(group)
+    let runtime = MoonCheckRuntime(AgentRuntime(group))
     let key = "cwd=/tmp"
     let (reader1, writer1) = @process.read_from_process()
     let process1 = @process.spawn(
@@ -657,7 +992,7 @@ async test "moon_check runtime ignores stale watcher id updates" {
 ///|
 async test "moon_check keeps crash summary in replacement output" {
   @async.with_task_group() <| group => {
-    let runtime = @agent_tool.AgentRuntime(group)
+    let runtime = MoonCheckRuntime(AgentRuntime(group))
     let key = "cwd=/tmp"
     let (reader, writer) = @process.read_from_process()
     let process = @process.spawn(
@@ -710,7 +1045,7 @@ async test "moon_check keeps crash summary in replacement output" {
 ///|
 async test "moon_check rejects non-object arguments" {
   @async.with_task_group() <| group => {
-    let result = execute(AgentRuntime(group), Json::null())
+    let result = execute(MoonCheckRuntime(AgentRuntime(group)), Json::null())
     guard result is Respond(output) else { fail("expected Respond") }
     assert_eq(output.content, "error: moon_check requires object arguments")
     assert_true(output.is_error)
@@ -722,7 +1057,7 @@ async test "moon_check validates a real fixture project" {
   let project = copy_fixture_project("valid_project")
   let canonical = @fs.realpath(project)
   @async.with_task_group() <| group => {
-    let runtime = @agent_tool.AgentRuntime(group)
+    let runtime = MoonCheckRuntime(AgentRuntime(group))
     let result = execute(runtime, { "cwd": project })
     ignore(
       runtime.stop_moon_check(
@@ -752,7 +1087,7 @@ async test "moon_check validates a real fixture project" {
 async test "moon_check reuses a running watcher for the same arguments" {
   let project = copy_fixture_project("valid_project")
   @async.with_task_group() <| group => {
-    let runtime = @agent_tool.AgentRuntime(group)
+    let runtime = MoonCheckRuntime(AgentRuntime(group))
     let args : Json = { "cwd": project }
     let first = execute(runtime, args)
     let second = execute(runtime, args)
@@ -774,7 +1109,7 @@ async test "moon_check reuses a running watcher for the same arguments" {
 async test "moon_check restarts a stopped watcher on explicit next call" {
   let project = copy_fixture_project("valid_project")
   @async.with_task_group() <| group => {
-    let runtime = @agent_tool.AgentRuntime(group)
+    let runtime = MoonCheckRuntime(AgentRuntime(group))
     let args : Json = { "cwd": project }
     let key = moon_check_key(@decode.decode(args))
     let first = execute(runtime, args)
@@ -801,7 +1136,7 @@ async test "moon_check reports diagnostics from a broken fixture project" {
   let project = copy_fixture_project("invalid_project")
   let canonical = @fs.realpath(project)
   @async.with_task_group() <| group => {
-    let runtime = @agent_tool.AgentRuntime(group)
+    let runtime = MoonCheckRuntime(AgentRuntime(group))
     let result = execute(runtime, { "cwd": project })
     ignore(
       runtime.stop_moon_check(
@@ -864,7 +1199,7 @@ async test "moon_check validates a virtual filesystem workspace" {
   }).write_to(project)
   let canonical = @fs.realpath(project)
   @async.with_task_group() <| group => {
-    let runtime = @agent_tool.AgentRuntime(group)
+    let runtime = MoonCheckRuntime(AgentRuntime(group))
     let args : Json = { "cwd": project, "target": "native" }
     let result = execute(runtime, args)
     ignore(runtime.stop_moon_check(moon_check_key(@decode.decode(args))))

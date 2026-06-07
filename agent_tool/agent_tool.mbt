@@ -349,38 +349,6 @@ async test "execute_tool_call dispatches to async executor" {
 }
 
 ///|
-async test "runtime drains queued moon_check events" {
-  @async.with_task_group() <| group => {
-    let runtime = AgentRuntime(group)
-    runtime.emit_moon_check(
-      MoonCheckSnapshot(
-        id="moon-check-1",
-        key="cwd=.",
-        command="moon check --watch",
-        cwd=None,
-        status=Running,
-        seq=1,
-        output="ok",
-        output_truncated=false,
-        max_output_chars=12000,
-        exit_code=None,
-        restart_count=0,
-        restart_limit=3,
-        restart_reason=None,
-      ),
-    )
-    let events = runtime.drain_events()
-    assert_eq(events.length(), 1)
-    guard events[0] is MoonCheckUpdate(update) else {
-      fail("expected MoonCheckUpdate")
-    }
-    assert_eq(update.id, "moon-check-1")
-    assert_eq(update.output, "ok")
-    assert_eq(runtime.drain_events().length(), 0)
-  }
-}
-
-///|
 test "Tools::function_tools preserves description and schema" {
   let tools = Tools([
     {
