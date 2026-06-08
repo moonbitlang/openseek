@@ -1,15 +1,18 @@
 # Agent Runtime
 
-`agent_runtime` owns the generic per-agent-loop runtime: the structured
-concurrency task group and a bounded event queue for background tool updates.
-It deliberately does not know about concrete tools.
+`agent_runtime` owns per-agent-loop infrastructure without knowing about
+concrete tools. `AgentRuntime` carries the bounded event queue for background
+tool updates, while `AgentTaskScope[X]` carries the structured-concurrency task
+group for tools that need bounded background work.
 
 ## API Shape
 
-- `AgentRuntime(group)`: create loop-scoped runtime state inside
-  `@async.with_task_group`.
-- `AgentRuntime::group`: expose the task group to stateful tools that need
-  bounded background tasks.
+- `AgentRuntime()`: create loop-scoped event state.
+- `AgentTaskScope(group)`: wrap a `@async.TaskGroup[X]` inside
+  `@async.with_task_group` for stateful tools that need bounded background
+  tasks.
+- `AgentTaskScope::group`: expose the task group to task-spawning tool
+  implementations.
 - `AgentRuntime::emit_event`: enqueue a typed runtime event.
 - `AgentRuntime::drain_events`: drain pending events for the agent loop.
 - `AgentEvent`: open `extenum` extended by concrete tool packages.

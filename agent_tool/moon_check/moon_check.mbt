@@ -80,23 +80,25 @@ priv struct MoonCheckRecord {
 
 ///|
 priv struct MoonCheckRuntime[X] {
-  runtime : @agent_runtime.AgentRuntime[X]
+  runtime : @agent_runtime.AgentRuntime
+  scope : @agent_runtime.AgentTaskScope[X]
   moon_checks : Map[String, MoonCheckRecord]
   mut next_moon_check_index : Int
 }
 
 ///|
 fn[X] MoonCheckRuntime::MoonCheckRuntime(
-  runtime : @agent_runtime.AgentRuntime[X],
+  runtime : @agent_runtime.AgentRuntime,
+  scope : @agent_runtime.AgentTaskScope[X],
 ) -> MoonCheckRuntime[X] {
-  { runtime, moon_checks: {}, next_moon_check_index: 1 }
+  { runtime, scope, moon_checks: {}, next_moon_check_index: 1 }
 }
 
 ///|
 fn[X] MoonCheckRuntime::group(
   self : MoonCheckRuntime[X],
 ) -> @async.TaskGroup[X] {
-  self.runtime.group()
+  self.scope.group()
 }
 
 ///|
@@ -331,9 +333,10 @@ fn moon_check_run_complete(content : String) -> Bool {
 /// - `Respond(ToolOutput("error: moon_check requires ...", is_error=true))`
 ///   for invalid arguments.
 pub fn[X] definition(
-  runtime : @agent_runtime.AgentRuntime[X],
+  runtime : @agent_runtime.AgentRuntime,
+  scope : @agent_runtime.AgentTaskScope[X],
 ) -> @agent_tool.AgentToolDefinition {
-  let moon_runtime = MoonCheckRuntime(runtime)
+  let moon_runtime = MoonCheckRuntime(runtime, scope)
   AgentToolDefinition(
     name="moon_check",
     description="Start or inspect a persistent `moon check --watch --diagnostic-limit 10` watcher for the given cwd/options. The first call starts the watcher; later calls with the same arguments return the latest snapshot without starting another watcher.",
@@ -828,7 +831,7 @@ fn test_snapshot(
 ///|
 async test "moon_check advertises expected schema" {
   @async.with_task_group() <| group => {
-    let tool = definition(AgentRuntime(group))
+    let tool = definition(AgentRuntime(), AgentTaskScope(group))
     assert_eq(tool.name, "moon_check")
     let JsonSchema(schema) = tool.schema
     let text = schema.stringify()
@@ -924,7 +927,7 @@ test "moon_check auto restart respects exit code and budget" {
 ///|
 async test "moon_check runtime ignores stale watcher id updates" {
   @async.with_task_group() <| group => {
-    let runtime = MoonCheckRuntime(AgentRuntime(group))
+    let runtime = MoonCheckRuntime(AgentRuntime(), AgentTaskScope(group))
     let key = "cwd=/tmp"
     let (reader1, writer1) = @process.read_from_process()
     let process1 = @process.spawn(
@@ -992,7 +995,7 @@ async test "moon_check runtime ignores stale watcher id updates" {
 ///|
 async test "moon_check keeps crash summary in replacement output" {
   @async.with_task_group() <| group => {
-    let runtime = MoonCheckRuntime(AgentRuntime(group))
+    let runtime = MoonCheckRuntime(AgentRuntime(), AgentTaskScope(group))
     let key = "cwd=/tmp"
     let (reader, writer) = @process.read_from_process()
     let process = @process.spawn(
@@ -1045,7 +1048,10 @@ async test "moon_check keeps crash summary in replacement output" {
 ///|
 async test "moon_check rejects non-object arguments" {
   @async.with_task_group() <| group => {
-    let result = execute(MoonCheckRuntime(AgentRuntime(group)), Json::null())
+    let result = execute(
+      MoonCheckRuntime(AgentRuntime(), AgentTaskScope(group)),
+      Json::null(),
+    )
     guard result is Respond(output) else { fail("expected Respond") }
     assert_eq(output.content, "error: moon_check requires object arguments")
     assert_true(output.is_error)
@@ -1057,7 +1063,7 @@ async test "moon_check validates a real fixture project" {
   let project = copy_fixture_project("valid_project")
   let canonical = @fs.realpath(project)
   @async.with_task_group() <| group => {
-    let runtime = MoonCheckRuntime(AgentRuntime(group))
+    let runtime = MoonCheckRuntime(AgentRuntime(), AgentTaskScope(group))
     let result = execute(runtime, { "cwd": project })
     ignore(
       runtime.stop_moon_check(
@@ -1086,7 +1092,7 @@ async test "moon_check validates a real fixture project" {
 async test "moon_check reuses a running watcher for the same arguments" {
   let project = copy_fixture_project("valid_project")
   @async.with_task_group() <| group => {
-    let runtime = MoonCheckRuntime(AgentRuntime(group))
+    let runtime = MoonCheckRuntime(AgentRuntime(), AgentTaskScope(group))
     let args : Json = { "cwd": project }
     let first = execute(runtime, args)
     let second = execute(runtime, args)
@@ -1108,7 +1114,7 @@ async test "moon_check reuses a running watcher for the same arguments" {
 async test "moon_check restarts a stopped watcher on explicit next call" {
   let project = copy_fixture_project("valid_project")
   @async.with_task_group() <| group => {
-    let runtime = MoonCheckRuntime(AgentRuntime(group))
+    let runtime = MoonCheckRuntime(AgentRuntime(), AgentTaskScope(group))
     let args : Json = { "cwd": project }
     let key = moon_check_key(@decode.decode(args))
     let first = execute(runtime, args)
@@ -1135,7 +1141,7 @@ async test "moon_check reports diagnostics from a broken fixture project" {
   let project = copy_fixture_project("invalid_project")
   let canonical = @fs.realpath(project)
   @async.with_task_group() <| group => {
-    let runtime = MoonCheckRuntime(AgentRuntime(group))
+    let runtime = MoonCheckRuntime(AgentRuntime(), AgentTaskScope(group))
     let result = execute(runtime, { "cwd": project })
     ignore(
       runtime.stop_moon_check(
@@ -1198,7 +1204,7 @@ async test "moon_check validates a virtual filesystem workspace" {
   }).write_to(project)
   let canonical = @fs.realpath(project)
   @async.with_task_group() <| group => {
-    let runtime = MoonCheckRuntime(AgentRuntime(group))
+    let runtime = MoonCheckRuntime(AgentRuntime(), AgentTaskScope(group))
     let args : Json = { "cwd": project, "target": "native" }
     let result = execute(runtime, args)
     ignore(runtime.stop_moon_check(moon_check_key(@decode.decode(args))))

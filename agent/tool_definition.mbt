@@ -4,14 +4,15 @@
 /// them into the `Tools` value the loop dispatches against. Raises if two
 /// definitions share a name.
 fn tool_definitions(
-  runtime : @agent_runtime.AgentRuntime[Unit],
+  runtime : @agent_runtime.AgentRuntime,
+  scope : @agent_runtime.AgentTaskScope[Unit],
 ) -> @agent_tool.Tools raise {
   Tools([
     @shell.definition(),
     @read.definition(),
     @edit.definition(),
     @write.definition(),
-    @moon_check.definition(runtime),
+    @moon_check.definition(runtime, scope),
     @finish.definition(),
   ])
 }
@@ -19,7 +20,7 @@ fn tool_definitions(
 ///|
 async test "agent registers the expected tool names" {
   @async.with_task_group() <| group => {
-    let tools = tool_definitions(AgentRuntime(group))
+    let tools = tool_definitions(AgentRuntime(), AgentTaskScope(group))
     let function_tools = tools.function_tools()
     assert_eq(function_tools.length(), 6)
     let names = [ for t in function_tools => t.name ]

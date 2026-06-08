@@ -109,7 +109,7 @@ when the process cannot be launched. The string body has one of these shapes:
 ///|
 async test "moon_check tool advertises the expected schema" {
   @async.with_task_group() <| group => {
-    let tool = @moon_check.definition(AgentRuntime(group))
+    let tool = @moon_check.definition(AgentRuntime(), AgentTaskScope(group))
     assert_eq(tool.name, "moon_check")
     let JsonSchema(schema) = tool.schema
     let text = schema.stringify()

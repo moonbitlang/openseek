@@ -14,13 +14,18 @@ pub let default_agent_event_capacity : Int
 pub(all) extenum AgentEvent {
 }
 
-pub struct AgentRuntime[X] {
+pub struct AgentRuntime {
   // private fields
 }
-pub fn[X] AgentRuntime::AgentRuntime(@async.TaskGroup[X]) -> Self[X]
-pub fn[X] AgentRuntime::drain_events(Self[X]) -> Array[AgentEvent]
-pub fn[X] AgentRuntime::emit_event(Self[X], AgentEvent) -> Unit
-pub fn[X] AgentRuntime::group(Self[X]) -> @async.TaskGroup[X]
+pub fn AgentRuntime::AgentRuntime() -> Self
+pub fn AgentRuntime::drain_events(Self) -> Array[AgentEvent]
+pub fn AgentRuntime::emit_event(Self, AgentEvent) -> Unit
+
+pub struct AgentTaskScope[X] {
+  // private fields
+}
+pub fn[X] AgentTaskScope::AgentTaskScope(@async.TaskGroup[X]) -> Self[X]
+pub fn[X] AgentTaskScope::group(Self[X]) -> @async.TaskGroup[X]
 
 // Type aliases
 

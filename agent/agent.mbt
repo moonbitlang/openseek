@@ -24,7 +24,8 @@ pub async fn run(
 ) -> Unit {
   @async.with_task_group() <| group => {
     run_with_runtime(
-      AgentRuntime(group),
+      AgentRuntime(),
+      AgentTaskScope(group),
       api_key,
       model,
       task,
@@ -36,7 +37,8 @@ pub async fn run(
 
 ///|
 async fn run_with_runtime(
-  runtime : @agent_runtime.AgentRuntime[Unit],
+  runtime : @agent_runtime.AgentRuntime,
+  scope : @agent_runtime.AgentTaskScope[Unit],
   api_key : String,
   model : @deepseek.Model,
   task : String,
@@ -49,7 +51,7 @@ async fn run_with_runtime(
     thinking=Some(Enabled),
     reasoning_effort=Some(Max),
   )
-  let tools = tool_definitions(runtime) catch {
+  let tools = tool_definitions(runtime, scope) catch {
     error => {
       log.at(ERROR) <? { "event": "agent_setup_failed", "error": "\{error}" }
       return

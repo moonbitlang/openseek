@@ -1,15 +1,16 @@
 ///|
 pub async fn run_harness() -> @report.Report {
   @async.with_task_group() <| group => {
-    run_harness_with_runtime(AgentRuntime(group))
+    run_harness_with_runtime(AgentRuntime(), AgentTaskScope(group))
   }
 }
 
 ///|
 async fn run_harness_with_runtime(
-  runtime : @agent_runtime.AgentRuntime[@report.Report],
+  runtime : @agent_runtime.AgentRuntime,
+  scope : @agent_runtime.AgentTaskScope[@report.Report],
 ) -> @report.Report {
-  let tools = tool_definitions(runtime) catch {
+  let tools = tool_definitions(runtime, scope) catch {
     error =>
       return build_report([
         row(
@@ -35,14 +36,15 @@ async fn run_harness_with_runtime(
 
 ///|
 fn tool_definitions(
-  runtime : @agent_runtime.AgentRuntime[@report.Report],
+  runtime : @agent_runtime.AgentRuntime,
+  scope : @agent_runtime.AgentTaskScope[@report.Report],
 ) -> @agent_tool.Tools raise {
   Tools([
     @read.definition(),
     @write.definition(),
     @edit.definition(),
     @shell.definition(),
-    @moon_check.definition(runtime),
+    @moon_check.definition(runtime, scope),
     @moon_cmd.definition(),
     @moon_ide.definition(),
     @finish.definition(),

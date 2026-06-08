@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn[X] definition(@agent_runtime.AgentRuntime[X]) -> @agent_tool.AgentToolDefinition
+pub fn[X] definition(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope[X]) -> @agent_tool.AgentToolDefinition
 
 // Errors
 
