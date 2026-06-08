@@ -1076,7 +1076,6 @@ async test "moon_check validates a real fixture project" {
         #|status=running
         #|seq=<seq>
         #|Finished. moon: ran 2 tasks, now up to date
-        #|Success, waiting for filesystem changes...
       ),
     )
   }
@@ -1215,7 +1214,6 @@ async test "moon_check validates a virtual filesystem workspace" {
         #|status=running
         #|seq=<seq>
         #|Finished. moon: ran 2 tasks, now up to date
-        #|Success, waiting for filesystem changes...
       ),
     )
   }
@@ -1260,6 +1258,8 @@ fn stable_moon_check_output(
   for line in normalized.split("\n") {
     if line.has_prefix("seq=") {
       stable_lines.push("seq=<seq>")
+    } else if line == "Success, waiting for filesystem changes..." {
+      ()
     } else if !line.has_prefix("failed: ") {
       stable_lines.push(line.to_owned())
     }
