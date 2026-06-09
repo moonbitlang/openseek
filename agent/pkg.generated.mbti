@@ -2,6 +2,7 @@
 package "bobzhang/openseek/agent"
 
 import {
+  "bobzhang/openseek/agent_session",
   "bobzhang/openseek/deepseek",
 }
 
@@ -11,6 +12,10 @@ pub fn default_system_prompt() -> String
 pub fn default_system_prompt_for_model(@deepseek.Model) -> String
 
 pub async fn run(String, @deepseek.Model, String, max_steps? : Int, system_prompt_text? : String) -> Unit
+
+pub async fn run_turn(String, @deepseek.Model, @agent_session.Session, String, max_steps? : Int) -> @agent_session.Session
+
+pub async fn run_turn_with_append(String, @deepseek.Model, @agent_session.Session, String, append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, max_steps? : Int) -> @agent_session.Session
 
 // Errors
 

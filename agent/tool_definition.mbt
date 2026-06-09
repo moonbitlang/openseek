@@ -3,9 +3,9 @@
 /// `agent_tool` and exposes a `definition()` constructor; this function bundles
 /// them into the `Tools` value the loop dispatches against. Raises if two
 /// definitions share a name.
-fn tool_definitions(
+fn[X] tool_definitions(
   runtime : @agent_runtime.AgentRuntime,
-  scope : @agent_runtime.AgentTaskScope[Unit],
+  scope : @agent_runtime.AgentTaskScope[X],
 ) -> @agent_tool.Tools raise {
   Tools([
     @shell.definition(),

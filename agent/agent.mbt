@@ -22,112 +22,272 @@ pub async fn run(
   max_steps? : Int = default_max_steps,
   system_prompt_text? : String = default_system_prompt_for_model(model),
 ) -> Unit {
+  let session = @agent_session.Session(
+    SessionId("one-shot"),
+    system_prompt=system_prompt_text,
+  )
+  ignore(run_turn(api_key, model, session, task, max_steps~))
+}
+
+///|
+/// Runs one user turn against an in-memory session and returns the updated
+/// session. Callers that need durable persistence should use
+/// `run_turn_with_append`.
+pub async fn run_turn(
+  api_key : String,
+  model : @deepseek.Model,
+  session : @agent_session.Session,
+  task : String,
+  max_steps? : Int = default_max_steps,
+) -> @agent_session.Session {
+  run_turn_with_append(
+    api_key,
+    model,
+    session,
+    task,
+    append_item=(session, item) => session.append(item),
+    max_steps~,
+  )
+}
+
+///|
+/// Runs one user turn and calls `append_item` for every session event as soon as
+/// it is committed. This lets a filesystem-backed caller preserve progress even
+/// if the engine process exits later in the turn.
+pub async fn run_turn_with_append(
+  api_key : String,
+  model : @deepseek.Model,
+  session : @agent_session.Session,
+  task : String,
+  append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
+  max_steps? : Int = default_max_steps,
+) -> @agent_session.Session {
   @async.with_task_group() <| group => {
     run_with_runtime(
       AgentRuntime(),
       AgentTaskScope(group),
       api_key,
       model,
+      session,
       task,
+      append_item~,
       max_steps~,
-      system_prompt_text~,
     )
   }
 }
 
 ///|
+async test "run_turn_with_append closes failed persisted turns" {
+  let initial = @agent_session.Session(SessionId("s1"), system_prompt="system")
+  let mut calls = 0
+  let mut persisted = initial
+  let _ = run_turn_with_append(
+    "unused",
+    V4Pro,
+    initial,
+    "hello",
+    append_item=(session, item) => {
+      calls = calls + 1
+      if calls == 2 {
+        fail("persist terminal failed")
+      }
+      let next = session.append(item)
+      persisted = next
+      next
+    },
+    max_steps=0,
+  ) catch {
+    error => {
+      assert_true("\{error}".contains("persist terminal failed"))
+      assert_eq(calls, 3)
+      let events = persisted.events()
+      assert_eq(events.length(), 2)
+      assert_true(events[0].item() is User(_))
+      guard events[1].item() is Terminal(Failed(message)) else {
+        fail("expected failed terminal")
+      }
+      assert_true(message.contains("persist terminal failed"))
+      return
+    }
+  }
+  fail("expected failed append to be re-raised")
+}
+
+///|
 async fn run_with_runtime(
   runtime : @agent_runtime.AgentRuntime,
-  scope : @agent_runtime.AgentTaskScope[Unit],
+  scope : @agent_runtime.AgentTaskScope[@agent_session.Session],
   api_key : String,
   model : @deepseek.Model,
+  session : @agent_session.Session,
   task : String,
+  append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   max_steps~ : Int,
-  system_prompt_text~ : String,
-) -> Unit {
+) -> @agent_session.Session {
   let client = @client.Client(
     api_key~,
     model~,
     thinking=Some(Enabled),
     reasoning_effort=Some(Max),
   )
-  let tools = tool_definitions(runtime, scope) catch {
+  let mut session = append_item(session, User(UserMessage(task)))
+  try {
+    let tools = tool_definitions(runtime, scope) catch {
+      error => {
+        let next = append_item(
+          session,
+          Terminal(Failed("agent setup failed: \{error}")),
+        )
+        @xlog.error() <? { "event": "agent_setup_failed", "error": "\{error}" }
+        return next
+      }
+    }
+    let messages = session.chat_messages()
+    for step in 0..<max_steps {
+      if runtime_update_message(runtime.drain_events()) is Some(update) {
+        @xlog.info() <? { "event": "runtime_update", "content": update }
+        session = append_item(session, Runtime(RuntimeNotice(update)))
+        messages.push(ChatMessage(User, content=update))
+      }
+      @xlog.info() <? { "event": "agent_step", "step": step + 1 }
+      let response = client.chat(messages, tools=tools.function_tools())
+      if response.content != "" {
+        @xlog.info() <?
+          { "event": "assistant_message", "content": response.content }
+      }
+      print_usage(response.usage)
+      if response.tool_calls.length() == 0 {
+        let next = append_item(session, Terminal(Finished(response.content)))
+        @xlog.info() <?
+          { "event": "agent_finished", "answer": response.content }
+        return next
+      }
+      let reasoning_content = match response.reasoning_content {
+        "" => None
+        content => Some(content)
+      }
+      let assistant_message : @deepseek.ChatMessage = ChatMessage(
+        Assistant,
+        content=response.content,
+        tool_calls=response.tool_calls,
+        reasoning_content?,
+      )
+      messages.push(assistant_message)
+      session = append_item(
+        session,
+        Assistant(
+          AssistantMessage(
+            response.content,
+            tool_calls=response.tool_calls,
+            reasoning_content?,
+          ),
+        ),
+      )
+      for native_call in response.tool_calls {
+        let tool_call = @agent_tool.AgentToolCall(native_call) catch {
+          error => {
+            @xlog.error() <?
+              {
+                "event": "tool_call_decode_error",
+                "tool_call_id": native_call.id,
+                "tool_name": native_call.name,
+                "error": "\{error}",
+              }
+            messages.push(
+              ChatMessage(Tool(native_call.id), content="error: \{error}"),
+            )
+            session = append_item(
+              session,
+              Tool(
+                ToolResult(
+                  tool_call_id=native_call.id,
+                  tool_name=native_call.name,
+                  content="error: \{error}",
+                  is_error=true,
+                ),
+              ),
+            )
+            continue
+          }
+        }
+        let result = @agent_tool.execute_tool_call(tool_call, tools)
+        let output = match result {
+          Control(Finish(answer)) => {
+            session = append_item(
+              session,
+              Tool(
+                ToolResult(
+                  tool_call_id=native_call.id,
+                  tool_name=tool_call.name,
+                  content="finished: \{answer}",
+                ),
+              ),
+            )
+            let next = append_item(session, Terminal(Finished(answer)))
+            @xlog.info() <? { "event": "agent_finished", "answer": answer }
+            return next
+          }
+          Control(Abort(reason)) => {
+            session = append_item(
+              session,
+              Tool(
+                ToolResult(
+                  tool_call_id=native_call.id,
+                  tool_name=tool_call.name,
+                  content="aborted: \{reason}",
+                  is_error=true,
+                ),
+              ),
+            )
+            let next = append_item(session, Terminal(Aborted(reason)))
+            @xlog.warn() <? { "event": "agent_aborted", "reason": reason }
+            return next
+          }
+          Respond(output) => output
+        }
+        @xlog.info() <?
+          {
+            "event": "tool_result",
+            "tool_call_id": native_call.id,
+            "tool_name": tool_call.name,
+            "is_error": output.is_error,
+            "content": output.content,
+          }
+        messages.push(ChatMessage(Tool(native_call.id), content=output.content))
+        session = append_item(
+          session,
+          Tool(
+            ToolResult(
+              tool_call_id=native_call.id,
+              tool_name=tool_call.name,
+              content=output.content,
+              is_error=output.is_error,
+            ),
+          ),
+        )
+      }
+    }
+    let next = append_item(session, Terminal(Failed("max steps exhausted")))
+    @xlog.warn() <? { "event": "max_steps_exhausted" }
+    next
+  } catch {
+    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) => {
+      ignore(
+        append_item(session, Terminal(Interrupted("cancelled"))) catch {
+          _ => session
+        },
+      )
+      raise error
+    }
     error => {
-      @xlog.error() <? { "event": "agent_setup_failed", "error": "\{error}" }
-      return
+      ignore(
+        append_item(session, Terminal(Failed("agent failed: \{error}"))) catch {
+          _ => session
+        },
+      )
+      raise error
     }
   }
-  let messages : Array[@deepseek.ChatMessage] = [
-    ChatMessage(System, content=system_prompt_text),
-    ChatMessage(User, content=task),
-  ]
-  for step in 0..<max_steps {
-    if runtime_update_message(runtime.drain_events()) is Some(update) {
-      @xlog.info() <? { "event": "runtime_update", "content": update }
-      messages.push(ChatMessage(User, content=update))
-    }
-    @xlog.info() <? { "event": "agent_step", "step": step + 1 }
-    let response = client.chat(messages, tools=tools.function_tools())
-    if response.content != "" {
-      @xlog.info() <?
-        { "event": "assistant_message", "content": response.content }
-    }
-    print_usage(response.usage)
-    if response.tool_calls.length() == 0 {
-      @xlog.info() <? { "event": "agent_finished", "answer": response.content }
-      return
-    }
-    let reasoning_content = match response.reasoning_content {
-      "" => None
-      content => Some(content)
-    }
-    let assistant_message : @deepseek.ChatMessage = ChatMessage(
-      Assistant,
-      content=response.content,
-      tool_calls=response.tool_calls,
-      reasoning_content?,
-    )
-    messages.push(assistant_message)
-    for native_call in response.tool_calls {
-      let tool_call = @agent_tool.AgentToolCall(native_call) catch {
-        error => {
-          @xlog.error() <?
-            {
-              "event": "tool_call_decode_error",
-              "tool_call_id": native_call.id,
-              "tool_name": native_call.name,
-              "error": "\{error}",
-            }
-          messages.push(
-            ChatMessage(Tool(native_call.id), content="error: \{error}"),
-          )
-          continue
-        }
-      }
-      let result = @agent_tool.execute_tool_call(tool_call, tools)
-      let output = match result {
-        Control(Finish(answer)) => {
-          @xlog.info() <? { "event": "agent_finished", "answer": answer }
-          return
-        }
-        Control(Abort(reason)) => {
-          @xlog.warn() <? { "event": "agent_aborted", "reason": reason }
-          return
-        }
-        Respond(output) => output
-      }
-      @xlog.info() <?
-        {
-          "event": "tool_result",
-          "tool_call_id": native_call.id,
-          "tool_name": tool_call.name,
-          "is_error": output.is_error,
-          "content": output.content,
-        }
-      messages.push(ChatMessage(Tool(native_call.id), content=output.content))
-    }
-  }
-  @xlog.warn() <? { "event": "max_steps_exhausted" }
 }
 
 ///|
