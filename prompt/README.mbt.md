@@ -7,7 +7,7 @@ functions through the module-level `md_to_mbt_string` dev-build rule.
 ## Prompt Sources
 
 - `base_prompt.mbt.md`: the default built-in prompt used by DeepSeek V4 Pro.
-- `flash_prompt.md`: the built-in prompt tuned for DeepSeek V4 Flash.
+- `flash_prompt.mbt.md`: the built-in prompt tuned for DeepSeek V4 Flash.
 
 ## API Shape
 

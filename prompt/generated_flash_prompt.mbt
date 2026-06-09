@@ -1,4 +1,4 @@
-// Generated from flash_prompt.md by moon dev_build. DO NOT EDIT.
+// Generated from flash_prompt.mbt.md by moon dev_build. DO NOT EDIT.
 ///|
 fn flash_prompt() -> String {
   (

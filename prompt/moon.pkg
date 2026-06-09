@@ -14,7 +14,7 @@ dev_build(
 
 dev_build(
   rule: "md_to_mbt_string",
-  input: "flash_prompt.md",
+  input: "flash_prompt.mbt.md",
   output: "generated_flash_prompt.mbt",
 )
 
