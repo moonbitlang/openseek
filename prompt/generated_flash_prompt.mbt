@@ -147,7 +147,7 @@ fn flash_prompt() -> String {
     #|- Empty no-op expression is `()`. Do not write `{ }`; that is an empty map.
     #|- Match arms are separated by newlines or semicolons, not `|`:
     #|
-    #|```mbt
+    #|```mbt nocheck
     #|///|
     #|test {
     #|  let n : Int = @string.from_str("123")
@@ -226,7 +226,7 @@ fn flash_prompt() -> String {
     #|
     #|Checked-error pattern:
     #|
-    #|```mbt
+    #|```mbt nocheck
     #|///|
     #|suberror ParseError {
     #|  InvalidInput(String)
@@ -261,7 +261,7 @@ fn flash_prompt() -> String {
     #|- Multi-line raw strings use `#|`. Multi-line interpolated strings use `$|` and
     #|  interpolation as `\{...}`:
     #|
-    #|```mbt
+    #|```mbt nocheck
     #|///|
     #|fn message(name : String, line : Int) -> String {
     #|  (
@@ -308,7 +308,7 @@ fn flash_prompt() -> String {
     #|
     #|Pattern:
     #|
-    #|```mbt
+    #|```mbt nocheck
     #|///|
     #|struct Config {
     #|  input : String
@@ -318,25 +318,18 @@ fn flash_prompt() -> String {
     #|///|
     #|async fn main {
     #|  let config = @argparse.parse(
-    #|    Command(
-    #|      "count-input",
-    #|      about="Print the length of a file or stdin.",
-    #|      flags=[
-    #|        FlagArg(
-    #|          "stdin",
-    #|          long="stdin",
-    #|          about="Read stdin instead of a file.",
-    #|        ),
-    #|      ],
-    #|      positionals=[
-    #|        PositionArg(
-    #|          "input",
-    #|          default_values=["-"],
-    #|          about="Input file path.",
-    #|        ),
-    #|      ],
-    #|    ),
-    #|  ) |> config_from_matches
+    #|      Command(
+    #|        "count-input",
+    #|        about="Print the length of a file or stdin.",
+    #|        flags=[
+    #|          FlagArg("stdin", long="stdin", about="Read stdin instead of a file."),
+    #|        ],
+    #|        positionals=[
+    #|          PositionArg("input", default_values=["-"], about="Input file path."),
+    #|        ],
+    #|      ),
+    #|    )
+    #|    |> config_from_matches
     #|  let input = if config.stdin {
     #|    @stdio.stdin.read_all().text()
     #|  } else {
@@ -349,14 +342,14 @@ fn flash_prompt() -> String {
     #|fn config_from_matches(matches : @argparse.Matches) -> Config raise {
     #|  match matches {
     #|    {
-    #|      values: { "input"?: Some([input, ..]), .. },
-    #|      flags: { "stdin"?: Some(stdin), .. },
-    #|      ..
+    #|      values: { "input"? : Some([input, ..]), .. },
+    #|      flags: { "stdin"? : Some(stdin), .. },
+    #|      ..,
     #|    } => { input, stdin }
     #|    {
-    #|      values: { "input"?: Some([input, ..]), .. },
-    #|      flags: { "stdin"?: None, .. },
-    #|      ..
+    #|      values: { "input"? : Some([input, ..]), .. },
+    #|      flags: { "stdin"? : None, .. },
+    #|      ..,
     #|    } => {
     #|      let stdin = false
     #|      { input, stdin }
