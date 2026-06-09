@@ -771,7 +771,7 @@ fn base_prompt() -> String {
     #|fn parse_int(s : String, position~ : Position) -> Int raise ParseError {
     #|  // 'raise' throws an error
     #|  if s is "" {
-    #|    raise ParseError::InvalidEof(pos=position)
+    #|    raise InvalidEof(pos=position)
     #|  }
     #|  ... // parsing logic
     #|}
@@ -788,7 +788,7 @@ fn base_prompt() -> String {
     #|///|
     #|test "catch raise function" {
     #|  try ignore(div(1, 0)) catch {
-    #|    Failure(s) => assert_true(s =~ re"Division by zero")
+    #|    Failure::Failure(s) => assert_true(s =~ re"Division by zero")
     #|    _ => fail("Unexpected error type")
     #|  } noraise {
     #|    _ => fail("Expected error")
@@ -812,7 +812,7 @@ fn base_prompt() -> String {
     #|/// Handle with try-catch
     #|fn handle_parse(s : String, position~ : Position) -> Int {
     #|  parse_int(s, position~) catch {
-    #|    ParseError::InvalidEof(pos=_) => {
+    #|    InvalidEof(pos=_) => {
     #|      println("Parse failed: InvalidEof")
     #|      -1 // Default value
     #|    }

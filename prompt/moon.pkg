@@ -18,6 +18,6 @@ dev_build(
   output: "generated_flash_prompt.mbt",
 )
 
-warnings = "+unnecessary_annotation"
+warnings = "+unnecessary_annotation-1-2-3-6-7-28-68"
 
 supported_targets = "+native"

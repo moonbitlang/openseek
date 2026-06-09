@@ -767,7 +767,7 @@ pub(all) suberror ParseError {
 fn parse_int(s : String, position~ : Position) -> Int raise ParseError {
   // 'raise' throws an error
   if s is "" {
-    raise ParseError::InvalidEof(pos=position)
+    raise InvalidEof(pos=position)
   }
   ... // parsing logic
 }
@@ -784,7 +784,7 @@ fn div(x : Int, y : Int) -> Int raise {
 ///|
 test "catch raise function" {
   try ignore(div(1, 0)) catch {
-    Failure(s) => assert_true(s =~ re"Division by zero")
+    Failure::Failure(s) => assert_true(s =~ re"Division by zero")
     _ => fail("Unexpected error type")
   } noraise {
     _ => fail("Expected error")
@@ -808,7 +808,7 @@ fn use_parse(s : String, position~ : Position) -> Int raise ParseError {
 /// Handle with try-catch
 fn handle_parse(s : String, position~ : Position) -> Int {
   parse_int(s, position~) catch {
-    ParseError::InvalidEof(pos=_) => {
+    InvalidEof(pos=_) => {
       println("Parse failed: InvalidEof")
       -1 // Default value
     }
