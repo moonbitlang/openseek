@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/agent_session/store"
+
+import {
+  "bobzhang/openseek/agent_session",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct SessionStore {
+  // private fields
+} derive(@debug.Debug)
+pub fn SessionStore::SessionStore(String) -> Self
+pub async fn SessionStore::append(Self, @agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
+pub async fn SessionStore::compact(Self, @agent_session.Session, content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> @agent_session.Session
+pub async fn SessionStore::create(Self, @agent_session.Session) -> Unit
+pub async fn SessionStore::exists(Self, @agent_session.SessionId) -> Bool
+pub async fn SessionStore::list(Self) -> Array[@agent_session.SessionId]
+pub async fn SessionStore::load(Self, @agent_session.SessionId) -> @agent_session.Session
+pub fn SessionStore::root(Self) -> String
+
+// Type aliases
+
+// Traits
+

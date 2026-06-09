@@ -1,0 +1,121 @@
+///|
+async fn new_store() -> @store.SessionStore {
+  let root = @fs.tmpdir(prefix="openseek-session-store-")
+  SessionStore(root)
+}
+
+///|
+async test "store creates and loads a session from header and event log" {
+  let store = new_store()
+  let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
+    .append(User(UserMessage("hello")))
+    .append(Terminal(Finished("done")))
+  store.create(session)
+  assert_true(store.exists(SessionId("s1")))
+  let loaded = store.load(SessionId("s1"))
+  assert_eq(loaded.id().value(), "s1")
+  assert_eq(loaded.system_prompt(), "system")
+  assert_eq(loaded.events().length(), 2)
+  assert_eq(loaded.last_sequence(), 2)
+  @fs.rmdir(store.root(), recursive=true)
+}
+
+///|
+async test "store lists known sessions" {
+  let store = new_store()
+  assert_eq(store.list().length(), 0)
+  store.create(Session(SessionId("b"), system_prompt="system"))
+  store.create(Session(SessionId("a"), system_prompt="system"))
+  let ids = [ for id in store.list() => id.value() ]
+  assert_eq(ids.length(), 2)
+  assert_eq(ids[0], "a")
+  assert_eq(ids[1], "b")
+  @fs.rmdir(store.root(), recursive=true)
+}
+
+///|
+async test "store appends one event without rewriting the in-memory caller value" {
+  let store = new_store()
+  let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
+  store.create(session)
+  let next = store.append(session, User(UserMessage("first")))
+  assert_eq(session.events().length(), 0)
+  assert_eq(next.events().length(), 1)
+  let after = store.append(next, Runtime(RuntimeNotice("update")))
+  let loaded = store.load(SessionId("s1"))
+  assert_eq(after.events().length(), 2)
+  assert_eq(loaded.events().length(), 2)
+  guard loaded.events()[1].item() is Runtime(notice) else {
+    fail("expected runtime notice")
+  }
+  assert_eq(notice.content(), "update")
+  @fs.rmdir(store.root(), recursive=true)
+}
+
+///|
+async test "store loads an empty session when the event log is missing" {
+  let store = new_store()
+  store.create(Session(SessionId("s1"), system_prompt="system"))
+  @fs.remove(store.root() + "/sessions/s1/events.jsonl")
+  let loaded = store.load(SessionId("s1"))
+  assert_eq(loaded.events().length(), 0)
+  @fs.rmdir(store.root(), recursive=true)
+}
+
+///|
+async test "store propagates unreadable event logs instead of dropping history" {
+  let store = new_store()
+  let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
+    User(UserMessage("hello")),
+  )
+  store.create(session)
+  let event_log = store.root() + "/sessions/s1/events.jsonl"
+  @fs.remove(event_log)
+  @fs.mkdir(event_log)
+  let _ = store.load(SessionId("s1")) catch {
+    error => {
+      assert_true("\{error}" != "")
+      @fs.rmdir(store.root(), recursive=true)
+      return
+    }
+  }
+  @fs.rmdir(store.root(), recursive=true)
+  fail("unreadable event log was silently accepted")
+}
+
+///|
+async test "store rejects path-like session ids" {
+  let store = new_store()
+  let _ = store.exists(SessionId("../bad")) catch {
+    error => {
+      assert_true("\{error}".contains("path separators"))
+      @fs.rmdir(store.root(), recursive=true)
+      return
+    }
+  }
+  fail("invalid session id accepted")
+}
+
+///|
+async test "store compacts by appending a durable summary" {
+  let store = new_store()
+  let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
+    .append(User(UserMessage("first")))
+    .append(Assistant(AssistantMessage("second")))
+  store.create(session)
+  let compacted = store.compact(
+    session,
+    content="first two events",
+    from_sequence=1,
+    to_sequence=2,
+  )
+  assert_eq(compacted.events().length(), 3)
+  let loaded = store.load(SessionId("s1"))
+  assert_eq(loaded.events().length(), 3)
+  guard loaded.events()[2].item() is Summary(summary) else {
+    fail("expected summary")
+  }
+  assert_eq(summary.content(), "first two events")
+  assert_eq(loaded.chat_messages().length(), 2)
+  @fs.rmdir(store.root(), recursive=true)
+}
