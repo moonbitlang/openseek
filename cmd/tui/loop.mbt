@@ -97,6 +97,37 @@ fn is_terminal_event(event : @event.AgentEvent) -> Bool {
 }
 
 ///|
+fn engine_args(task : String) -> Array[String] {
+  ["--", task]
+}
+
+///|
+fn engine_extra_env(config : AppConfig) -> Map[String, String] {
+  let env = {
+    "DEEPSEEK": config.api_key,
+    "DEEPSEEK_MODEL": config.model.to_string(),
+    "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
+  }
+  if config.session_id is Some(session_id) {
+    env["OPENSEEK_SESSION"] = session_id.value()
+    env["OPENSEEK_SESSION_ROOT"] = config.session_root
+  }
+  env
+}
+
+///|
+fn engine_env(
+  config : AppConfig,
+  inherited : Map[String, String],
+) -> Map[String, String] {
+  let env = inherited.copy()
+  env.remove("OPENSEEK_SESSION")
+  env.remove("OPENSEEK_SESSION_ROOT")
+  env.merge_in_place(engine_extra_env(config))
+  env
+}
+
+///|
 /// Spawn the agent engine for one input and stream its JSONL stdout into the
 /// message loop.
 ///
@@ -116,6 +147,7 @@ async fn run_agent_task(
   @async.with_task_group(group => {
     let (reader, child_stdout) = @process.read_from_process()
     let (stderr_reader, child_stderr) = @process.read_from_process()
+    let child_env = engine_env(config, @env.get_env_vars())
     let proc = @process.spawn(
       group,
       config.engine,
@@ -123,14 +155,13 @@ async fn run_agent_task(
       // can start with `-`/`--` (e.g. the literal text `--help`). Forward it
       // after a `--` delimiter so the engine's argparse treats it as the task
       // positional rather than parsing it as one of its own options (which would
-      // exit/print help and never emit a terminal JSONL event).
-      ["--", task],
-      inherit_env=true,
-      extra_env={
-        "DEEPSEEK": config.api_key,
-        "DEEPSEEK_MODEL": config.model.to_string(),
-        "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
-      },
+      // exit/print help and never emit a terminal JSONL event). Session settings
+      // go through a fully materialized environment so custom replay engines do
+      // not need to accept OpenSeek-specific flags, and inherited session vars
+      // cannot shadow explicit TUI config.
+      engine_args(task),
+      inherit_env=false,
+      extra_env=child_env,
       stdout=child_stdout,
       stderr=child_stderr,
     )

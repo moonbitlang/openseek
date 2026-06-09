@@ -24,11 +24,13 @@ Arguments:
   task...  Optional initial task description.
 
 Options:
-  -h, --help               Show help information.
-  --api-key <api-key>      DeepSeek API key. [env: DEEPSEEK]
-  --model <model>          DeepSeek model: deepseek-v4-flash or deepseek-v4-pro. [env: DEEPSEEK_MODEL] [default: deepseek-v4-pro]
-  --max-steps <max-steps>  Maximum number of agent loop steps before stopping. [env: OPENSEEK_MAX_STEPS] [default: 1000]
-  --engine <engine>        Agent engine binary to spawn; reads its JSONL event stream from stdout. [env: OPENSEEK_ENGINE] [default: openseek]
+  -h, --help                     Show help information.
+  --api-key <api-key>            DeepSeek API key. [env: DEEPSEEK]
+  --model <model>                DeepSeek model: deepseek-v4-flash or deepseek-v4-pro. [env: DEEPSEEK_MODEL] [default: deepseek-v4-pro]
+  --max-steps <max-steps>        Maximum number of agent loop steps before stopping. [env: OPENSEEK_MAX_STEPS] [default: 1000]
+  --engine <engine>              Agent engine binary to spawn; reads its JSONL event stream from stdout. [env: OPENSEEK_ENGINE] [default: openseek]
+  --session <session>            Create or resume this durable session id. [env: OPENSEEK_SESSION]
+  --session-root <session-root>  Directory containing durable OpenSeek sessions. [env: OPENSEEK_SESSION_ROOT] [default: .openseek]
 ```
 
 ## A DeepSeek API Key Is Required
@@ -49,11 +51,13 @@ Arguments:
   task...  Optional initial task description.
 
 Options:
-  -h, --help               Show help information.
-  --api-key <api-key>      DeepSeek API key. [env: DEEPSEEK]
-  --model <model>          DeepSeek model: deepseek-v4-flash or deepseek-v4-pro. [env: DEEPSEEK_MODEL] [default: deepseek-v4-pro]
-  --max-steps <max-steps>  Maximum number of agent loop steps before stopping. [env: OPENSEEK_MAX_STEPS] [default: 1000]
-  --engine <engine>        Agent engine binary to spawn; reads its JSONL event stream from stdout. [env: OPENSEEK_ENGINE] [default: openseek]
+  -h, --help                     Show help information.
+  --api-key <api-key>            DeepSeek API key. [env: DEEPSEEK]
+  --model <model>                DeepSeek model: deepseek-v4-flash or deepseek-v4-pro. [env: DEEPSEEK_MODEL] [default: deepseek-v4-pro]
+  --max-steps <max-steps>        Maximum number of agent loop steps before stopping. [env: OPENSEEK_MAX_STEPS] [default: 1000]
+  --engine <engine>              Agent engine binary to spawn; reads its JSONL event stream from stdout. [env: OPENSEEK_ENGINE] [default: openseek]
+  --session <session>            Create or resume this durable session id. [env: OPENSEEK_SESSION]
+  --session-root <session-root>  Directory containing durable OpenSeek sessions. [env: OPENSEEK_SESSION_ROOT] [default: .openseek]
 
 [1]
 ```
