@@ -16,7 +16,7 @@ variables and defaults behind each one, then exits successfully.
 
 ```mooncram
 $ openseek.exe --help
-Usage: openseek --api-key <api-key> [options] <task...>
+Usage: openseek [options] [task...]
 
 DeepSeek-backed MoonBit coding agent.
 
@@ -25,39 +25,64 @@ Arguments:
 
 Options:
   -h, --help                                                   Show help information.
-  --api-key <api-key>                                          DeepSeek API key. [env: DEEPSEEK]
+  --session-list                                               List durable session ids and exit.
+  --session-show                                               Print the durable session JSON for --session and exit.
+  --api-key <api-key>                                          DeepSeek API key. [env: DEEPSEEK] [default: ]
   --model <model>                                              DeepSeek model: deepseek-v4-flash or deepseek-v4-pro. [env: DEEPSEEK_MODEL] [default: deepseek-v4-pro]
   --max-steps <max-steps>                                      Maximum number of agent loop steps before stopping. [env: OPENSEEK_MAX_STEPS] [default: 1000]
   --system-prompt-file <system-prompt-file>                    Read the complete system prompt from this file instead of the built-in prompt. [env: OPENSEEK_SYSTEM_PROMPT_FILE] [default: ]
   --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the selected system prompt for prompt experiments. [env: OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE] [default: ]
+  --session <session>                                          Create or resume this durable session id. [env: OPENSEEK_SESSION] [default: ]
+  --session-root <session-root>                                Directory containing durable OpenSeek sessions. [env: OPENSEEK_SESSION_ROOT] [default: .openseek]
+  --session-compact-file <session-compact-file>                Read summary text from this file, append it to --session, and exit. [default: ]
+  --session-compact-from <session-compact-from>                First event sequence covered by --session-compact-file. [default: ]
+  --session-compact-to <session-compact-to>                    Last event sequence covered by --session-compact-file. [default: ]
 ```
 
-## A DeepSeek API Key Is Required
+## A DeepSeek API Key Is Required For Agent Runs
 
-With no `--api-key` flag and no `DEEPSEEK` in the environment, the CLI reports
-the missing required argument, prints the usage to help the caller, and exits
-non-zero.
+With no `--api-key` flag and no `DEEPSEEK` in the environment, an agent run
+reports the missing key and exits non-zero.
 
 ```mooncram
-$ env -u DEEPSEEK openseek.exe "summarize this project"
-error: the following required argument was not provided: 'api-key'
+$ sh <<'EOF'
+> stdout=$(mktemp)
+> stderr=$(mktemp)
+> if env -u DEEPSEEK openseek.exe "summarize this project" > "$stdout" 2> "$stderr"; then echo exit-zero; else echo exit-non-zero; fi
+> cat "$stderr"
+> if test -s "$stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
+> rm -f "$stdout" "$stderr"
+> EOF
+exit-non-zero
+error: --api-key or DEEPSEEK is required for agent runs
+stdout-empty
+```
 
-Usage: openseek --api-key <api-key> [options] <task...>
+## Session Management Is Offline
 
-DeepSeek-backed MoonBit coding agent.
+Session inspection and compaction operate on typed session files and do not
+require a DeepSeek API key.
 
-Arguments:
-  task...  Task description.
-
-Options:
-  -h, --help                                                   Show help information.
-  --api-key <api-key>                                          DeepSeek API key. [env: DEEPSEEK]
-  --model <model>                                              DeepSeek model: deepseek-v4-flash or deepseek-v4-pro. [env: DEEPSEEK_MODEL] [default: deepseek-v4-pro]
-  --max-steps <max-steps>                                      Maximum number of agent loop steps before stopping. [env: OPENSEEK_MAX_STEPS] [default: 1000]
-  --system-prompt-file <system-prompt-file>                    Read the complete system prompt from this file instead of the built-in prompt. [env: OPENSEEK_SYSTEM_PROMPT_FILE] [default: ]
-  --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the selected system prompt for prompt experiments. [env: OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE] [default: ]
-
-[1]
+```mooncram
+$ sh <<'EOF'
+> tmp=$(mktemp -d)
+> mkdir -p "$tmp/sessions/demo"
+> printf '{"version":1,"id":"demo","system_prompt":"system","last_sequence":2}' > "$tmp/sessions/demo/session.json"
+> cat > "$tmp/sessions/demo/events.jsonl" <<'JSONL'
+> {"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}}
+> {"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}
+> JSONL
+> printf 'hello and answer' > "$tmp/summary.txt"
+> env -u DEEPSEEK openseek.exe --session-list --session-root "$tmp"
+> env -u DEEPSEEK openseek.exe --session-show --session demo --session-root "$tmp"
+> env -u DEEPSEEK openseek.exe --session demo --session-root "$tmp" --session-compact-file "$tmp/summary.txt" --session-compact-from 1 --session-compact-to 2
+> env -u DEEPSEEK openseek.exe --session-show --session demo --session-root "$tmp"
+> rm -rf "$tmp"
+> EOF
+demo
+{"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}]}
+compacted session demo events 1..2; last_sequence=3
+{"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}},{"sequence":3,"item":{"kind":"summary","payload":{"content":"hello and answer","from_sequence":1,"to_sequence":2}}}]}
 ```
 
 ## MoonBit CLI Argument Parsing Pattern

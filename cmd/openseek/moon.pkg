@@ -1,12 +1,18 @@
 import {
   "bobzhang/openseek/agent",
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_session/store",
   "bobzhang/openseek/deepseek",
   "bobzhang/openseek/prompt",
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/async/io",
+  "moonbitlang/async/os_error",
+  "moonbitlang/async/stdio",
   "moonbitlang/core/argparse",
   "moonbitlang/core/env",
   "moonbitlang/core/string",
+  "moonbitlang/x/sys",
   "tonyfettes/xlog",
 }
 
