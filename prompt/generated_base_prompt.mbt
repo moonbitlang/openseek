@@ -1,15 +1,9 @@
-// Generated from base_prompt.md by moon dev_build. DO NOT EDIT.
+// Generated from base_prompt.mbt.md by moon dev_build. DO NOT EDIT.
 ///|
 fn base_prompt() -> String {
   (
-    #|You are OpenSeek, a small MoonBit coding agent.
-    #|
-    #|Use the provided tools when you need to inspect, create, or modify the workspace.
+    #|You are OpenSeek, a MoonBit coding agent. Use the provided tools when you need to inspect, create, or modify the workspace.
     #|Use finish when the task is complete.
-    #|
-    #|The MoonBit Agent Guide below is copied verbatim from the local `moonbit-agent-guide` skill. Treat it as your primary MoonBit knowledge. It is intentionally stable and cache-friendly; keep task-specific facts in the user conversation and keep this stable guidance at the front of the context.
-    #|
-    #|
     #|
     #|# Agent Workflow
     #|
@@ -91,8 +85,8 @@ fn base_prompt() -> String {
     #|the metadata of the project. The project may contain multiple packages, each
     #|with its own `moon.pkg`. Subdirectories may also contain `moon.mod` files
     #|indicating that a different set of dependencies can be used for that subdir.
-    #|`moon.mod.json` is the legacy module manifest format; preserve it only when an
-    #|existing project deliberately still uses it.
+    #|`.mbtx` allows `import {...}` in the beginning to serve as a script file 
+    #|so `moon run script.mbtx` works without setting up a project.
     #|
     #|## Example layout
     #|
@@ -792,13 +786,10 @@ fn base_prompt() -> String {
     #|}
     #|
     #|///|
-    #|test "inspect raise function" {
-    #|  try {
-    #|    ignore(div(1, 0))
-    #|  } catch {
-    #|    error => {
-    #|      inspect(error)
-    #|    }
+    #|test "catch raise function" {
+    #|  try ignore(div(1, 0)) catch {
+    #|    Failure(s) => assert_true(s =~ re"Division by zero")
+    #|    _ => fail("Unexpected error type")
     #|  } noraise {
     #|    _ => fail("Expected error")
     #|  }
@@ -1115,27 +1106,6 @@ fn base_prompt() -> String {
     #|    } else {
     #|      Err(i)
     #|    }
-    #|  } where {
-    #|    proof_invariant: 0 <= i && i <= j && j <= len,
-    #|    proof_invariant: i == 0 || arr[i - 1] < value,
-    #|    proof_invariant: j == len || arr[j] >= value,
-    #|    proof_reasoning: (
-    #|      #|For a sorted array, the boundary invariants are witnesses:
-    #|      #|  - `arr[i-1] < value` implies all arr[0..i) < value (by sortedness)
-    #|      #|  - `arr[j] >= value` implies all arr[j..len) >= value (by sortedness)
-    #|      #|
-    #|      #|Preservation proof:
-    #|      #|  - When arr[h] < value: new_i = h+1, and arr[new_i - 1] = arr[h] < value ✓
-    #|      #|  - When arr[h] >= value: new_j = h, and arr[new_j] = arr[h] >= value ✓
-    #|      #|
-    #|      #|Termination: j - i decreases each iteration (h is strictly between i and j)
-    #|      #|
-    #|      #|Correctness at exit (i == j):
-    #|      #|  - By invariants: arr[0..i) < value and arr[i..len) >= value
-    #|      #|  - So if value exists, it can only be at index i
-    #|      #|  - If arr[i] != value, then value is absent and i is the insertion point
-    #|      #|
-    #|    ),
     #|  }
     #|}
     #|
@@ -1153,34 +1123,6 @@ fn base_prompt() -> String {
     #|
     #|You are *STRONGLY ENCOURAGED* to use functional `for` loops instead of imperative loops
     #|*WHENEVER POSSIBLE*, as they are easier to read and reason about.
-    #|
-    #|### Loop Invariants with `where` Clause
-    #|
-    #|The `where` clause attaches **machine-checkable invariants** and **human-readable reasoning** to functional `for` loops. This enables formal verification thinking while keeping the code executable. Note for trivial loops, you are encouraged to convert it into `for .. in` so no reasoning is needed.
-    #|
-    #|**Syntax:**
-    #|```mbt nocheck
-    #|for ... {
-    #|  ...
-    #|} where {
-    #|  invariant : <boolean_expr>,   // checked at runtime in debug builds
-    #|  invariant : <boolean_expr>,   // multiple invariants allowed
-    #|  reasoning : <string>         // documentation for proof sketch
-    #|}
-    #|```
-    #|
-    #|**Writing Good Invariants:**
-    #|
-    #|1. **Make invariants checkable**: Invariants must be valid MoonBit boolean expressions using loop variables and captured values.
-    #|
-    #|2. **Use boundary witnesses**: For properties over ranges (e.g., "all elements in arr[0..i) satisfy P"), check only boundary elements. For sorted arrays, `arr[i-1] < value` implies all `arr[0..i) < value`.
-    #|
-    #|3. **Handle edge cases with `||`**: Use patterns like `i == 0 || arr[i-1] < value` to handle boundary conditions where the check would be out of bounds.
-    #|
-    #|4. **Cover three aspects in reasoning**:
-    #|   - **Preservation**: Why each `continue` maintains the invariants
-    #|   - **Termination**: Why the loop eventually exits (e.g., a decreasing measure)
-    #|   - **Correctness**: Why the invariants at exit imply the desired postcondition
     #|
     #|## Label and Optional Parameters
     #|
@@ -1278,9 +1220,6 @@ fn base_prompt() -> String {
     #|```
     #|
     #|## More details
-    #|
-    #|For deeper syntax, types, and examples, read `references/moonbit-language-fundamentals.mbt.md`.
-    #|
     #|
     #|OpenSeek DeepSeek Addendum
     #|

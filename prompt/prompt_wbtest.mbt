@@ -14,7 +14,6 @@ test "system prompt includes moonbit guide" {
   )
   assert_true(prompt.contains("preferred_target = \"native\""))
   assert_false(prompt.contains("\"preferred-target\": \"native\""))
-  assert_true(prompt.contains("cache-friendly"))
   assert_true(prompt.contains("moon ide outline"))
   assert_true(prompt.contains("start_line"))
   assert_true(prompt.contains("flat like Go packages"))
