@@ -1,0 +1,18 @@
+///|
+import {
+  "moonbitlang/x/fs",
+}
+
+///|
+const FrontendBundle : String =
+  "_build/js/release/build/openseek_desktop/frontend/frontend.js"
+
+///|
+const OutputPath : String = "frontend.js"
+
+///|
+fn main raise {
+  let script = @fs.read_file_to_string(FrontendBundle)
+  @fs.write_string_to_file(OutputPath, script)
+  println("generated \{OutputPath} from \{FrontendBundle}")
+}

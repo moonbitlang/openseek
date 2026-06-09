@@ -1,0 +1,14 @@
+members = [
+  ".",
+  "./lepus",
+  "./lepus/manifest",
+  "./lepus/ipc",
+  "./lepus/core",
+  "./lepus/app",
+  "./lepus/bootstrap",
+  "./lepus/catalog",
+  "./lepus/cli",
+  "./lepus/extensions",
+  "./lepus/runtime",
+  "./lepus/cef",
+]

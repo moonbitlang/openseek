@@ -1,0 +1,206 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/io",
+  "moonbitlang/async/process",
+  "moonbitlang/core/string",
+  "moonbitlang/x/fs",
+}
+
+///|
+const FrontendPackage : String = "frontend"
+
+///|
+const NativePackage : String = "."
+
+///|
+const NativeBinary : String =
+  "_build/native/release/build/openseek_desktop/openseek_desktop.exe"
+
+///|
+/// Path to the lepus codegen CLI, staged inside the submodule. The clipboard
+/// extension's pre-build step shells out to it, so a fresh checkout must build
+/// it before the native target can link.
+const CodegenTool : String = "lepus/target/lepus-tools/lepus_cli"
+
+///|
+const AppPath : String = "dist/OpenSeek Desktop.app"
+
+///|
+const ZipPath : String = "dist/OpenSeek Desktop-macos-arm64.zip"
+
+///|
+const ContentsPath : String = AppPath + "/Contents"
+
+///|
+const MacOSPath : String = ContentsPath + "/MacOS"
+
+///|
+const ResourcesPath : String = ContentsPath + "/Resources"
+
+///|
+const TargetPath : String = MacOSPath + "/target"
+
+///|
+const AppAssetDir : String = MacOSPath + "/assets"
+
+///|
+suberror PackageError {
+  PackageError(String)
+}
+
+///|
+async fn run_checked(command : String, args : Array[String]) -> Unit raise {
+  let joined_args = args.join(" ")
+  println("$ \{command} \{joined_args}")
+  let code = @process.run(command, args, inherit_env=true)
+  if code != 0 {
+    raise PackageError("command failed with exit code \{code}: \{command}")
+  }
+}
+
+///|
+async fn collect_stdout_checked(
+  command : String,
+  args : Array[String],
+) -> String raise {
+  let (code, output) = @process.collect_stdout(
+    command,
+    args,
+    inherit_env=true,
+  )
+  if code != 0 {
+    raise PackageError("command failed with exit code \{code}: \{command}")
+  }
+  output.text().trim().to_owned()
+}
+
+///|
+async fn find_openseek() -> String raise {
+  let path = collect_stdout_checked("sh", ["-c", "command -v openseek"])
+  if path.is_empty() {
+    raise PackageError("openseek not found in PATH")
+  }
+  path
+}
+
+///|
+/// Build the lepus codegen CLI into the submodule if it is not already staged.
+async fn ensure_codegen_tool() -> Unit raise {
+  if @fs.path_exists(CodegenTool) {
+    return
+  }
+  run_checked("sh", [
+    "-c",
+    "cd lepus && moon install ./cli --bin target/lepus-tools",
+  ])
+}
+
+///|
+async fn build_outputs() -> Unit raise {
+  ensure_codegen_tool()
+  run_checked("moon", [
+    "build", FrontendPackage, "--target", "js", "--release",
+  ])
+  run_checked("moon", ["run", "--target", "native", "build_frontend.mbtx"])
+  run_checked("moon", [
+    "build", NativePackage, "--target", "native", "--release",
+  ])
+}
+
+///|
+async fn reset_bundle_dirs() -> Unit raise {
+  run_checked("rm", ["-rf", AppPath, ZipPath])
+  run_checked("mkdir", ["-p", MacOSPath, ResourcesPath, TargetPath, AppAssetDir])
+}
+
+///|
+async fn copy_bundle_files(openseek_path : String) -> Unit raise {
+  if !@fs.path_exists(NativeBinary) {
+    raise PackageError("native binary not found: \{NativeBinary}")
+  }
+  run_checked("cp", [NativeBinary, MacOSPath + "/openseek-desktop-bin"])
+  run_checked("cp", [openseek_path, MacOSPath + "/openseek"])
+  run_checked("cp", [
+    "index.html",
+    AppAssetDir + "/index.html",
+  ])
+  run_checked("cp", [
+    "frontend.js",
+    AppAssetDir + "/frontend.js",
+  ])
+}
+
+///|
+fn launcher_source() -> String {
+  let source = #|#!/bin/sh
+  #|set -eu
+  #|
+  #|APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+  #|export PATH="$APP_DIR:$PATH"
+  #|cd "$APP_DIR"
+  #|exec "$APP_DIR/openseek-desktop-bin"
+  #|
+  source
+}
+
+///|
+fn info_plist_source() -> String {
+  let source = #|<?xml version="1.0" encoding="UTF-8"?>
+  #|<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  #|<plist version="1.0">
+  #|<dict>
+  #|  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  #|  <key>CFBundleDisplayName</key><string>OpenSeek Desktop</string>
+  #|  <key>CFBundleExecutable</key><string>openseek-desktop</string>
+  #|  <key>CFBundleIdentifier</key><string>community.moonbit.lepus.openseek-desktop</string>
+  #|  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  #|  <key>CFBundleName</key><string>OpenSeek Desktop</string>
+  #|  <key>CFBundlePackageType</key><string>APPL</string>
+  #|  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  #|  <key>CFBundleVersion</key><string>0.1.0</string>
+  #|  <key>LSMinimumSystemVersion</key><string>12.0</string>
+  #|  <key>NSHighResolutionCapable</key><true/>
+  #|</dict>
+  #|</plist>
+  #|
+  source
+}
+
+///|
+async fn write_bundle_metadata() -> Unit raise {
+  @fs.write_string_to_file(MacOSPath + "/openseek-desktop", launcher_source())
+  @fs.write_string_to_file(ContentsPath + "/Info.plist", info_plist_source())
+  run_checked("chmod", [
+    "+x",
+    MacOSPath + "/openseek-desktop",
+    MacOSPath + "/openseek-desktop-bin",
+    MacOSPath + "/openseek",
+  ])
+}
+
+///|
+async fn sign_and_zip() -> Unit raise {
+  run_checked("codesign", ["--force", "--deep", "--sign", "-", AppPath])
+  run_checked("ditto", [
+    "-c",
+    "-k",
+    "--sequesterRsrc",
+    "--keepParent",
+    AppPath,
+    ZipPath,
+  ])
+}
+
+///|
+async fn main raise {
+  let openseek_path = find_openseek()
+  println("using openseek: \{openseek_path}")
+  build_outputs()
+  reset_bundle_dirs()
+  copy_bundle_files(openseek_path)
+  write_bundle_metadata()
+  sign_and_zip()
+  println("generated \{AppPath}")
+  println("generated \{ZipPath}")
+}
