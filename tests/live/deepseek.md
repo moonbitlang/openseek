@@ -21,6 +21,11 @@ drops `moon`'s own dependency-resolution chatter, not any log content.
 Every example gives the cheap Flash model a trivial, self-contained task and a
 tiny step budget.
 
+When the model emits assistant text, the stream may include one or more
+`assistant_delta` events before the final `assistant_message`. Tool-only
+responses, such as the forced `finish` examples below, may skip both content
+events and go straight to tool execution.
+
 ## A Real Round Trip That Finishes
 
 This proves two things from the real log: that the request reached DeepSeek and

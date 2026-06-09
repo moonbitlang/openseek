@@ -11,6 +11,7 @@
 pub fn decode_event(object : Json) -> AgentEvent? {
   match @jsonx.string(object, "event") {
     "agent_step" => Some(AgentStep)
+    "assistant_delta" => Some(AssistantDelta(@jsonx.string(object, "content")))
     "assistant_message" =>
       Some(AssistantMessage(@jsonx.string(object, "content")))
     "runtime_update" => Some(RuntimeUpdate(@jsonx.string(object, "content")))

@@ -91,6 +91,14 @@ fn format_activity_text(state : State) -> @doc.Text? {
     Running(started_ms) => started_ms
     Interrupting(started_ms) => started_ms
   }
+  if state.streaming_response is Some(response) && !response.trim().is_empty() {
+    return Some(
+      Text([
+        Span(DisplayText("Streaming "), style=@style.dim),
+        @doc.Span::plain(response),
+      ]),
+    )
+  }
   let elapsed = format_elapsed_compact(
     elapsed_seconds(started_ms, @async.now()),
   )

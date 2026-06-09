@@ -10,6 +10,12 @@ test "decode maps each engine event kind" {
   )
   assert_true(
     @event.decode_event(
+      Json::object({ "event": "assistant_delta", "content": "tok" }),
+    )
+    is Some(AssistantDelta("tok")),
+  )
+  assert_true(
+    @event.decode_event(
       Json::object({ "event": "agent_finished", "answer": "done" }),
     )
     is Some(AgentFinished("done")),

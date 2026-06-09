@@ -244,6 +244,93 @@ test "parse_runtime_update aggregates status across watcher sections" {
 }
 
 ///|
+test "assistant_delta accumulates live text and commits only the final message" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let items : Array[@ui.TranscriptItem] = []
+  append_items(
+    state,
+    Json::object({ "event": "assistant_delta", "content": "Hel" }),
+    items,
+  )
+  append_items(
+    state,
+    Json::object({ "event": "assistant_delta", "content": "lo" }),
+    items,
+  )
+  assert_eq(items.length(), 0)
+  assert_true(state.streaming_response is Some("Hello"))
+  assert_true(state.step_response is None)
+  append_items(
+    state,
+    Json::object({ "event": "assistant_message", "content": "Hello" }),
+    items,
+  )
+  assert_true(state.streaming_response is None)
+  assert_true(state.step_response is Some("Hello"))
+  append_items(
+    state,
+    Json::object({ "event": "agent_finished", "answer": "Hello" }),
+    items,
+  )
+  debug_inspect(items, content="[Response(\"Hello\")]")
+}
+
+///|
+test "assistant_message clears live streaming text while tools continue" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let items : Array[@ui.TranscriptItem] = []
+  append_items(
+    state,
+    Json::object({ "event": "assistant_delta", "content": "Need tool" }),
+    items,
+  )
+  assert_true(state.streaming_response is Some("Need tool"))
+  append_items(
+    state,
+    Json::object({ "event": "assistant_message", "content": "Need tool" }),
+    items,
+  )
+  assert_true(state.run is Running(_))
+  assert_true(state.streaming_response is None)
+  assert_true(state.step_response is Some("Need tool"))
+  assert_eq(items.length(), 1)
+}
+
+///|
+test "assistant_delta live preview is capped" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let items : Array[@ui.TranscriptItem] = []
+  append_items(
+    state,
+    Json::object({
+      "event": "assistant_delta",
+      "content": String::make(StreamingPreviewMaxColumns * 4, 'x'),
+    }),
+    items,
+  )
+  guard state.streaming_response is Some(first) else {
+    fail("expected streaming preview")
+  }
+  assert_true(
+    @displaytext.DisplayText(first).width() <= StreamingPreviewMaxColumns,
+  )
+  assert_true(first.has_suffix("..."))
+  append_items(
+    state,
+    Json::object({ "event": "assistant_delta", "content": "more" }),
+    items,
+  )
+  guard state.streaming_response is Some(second) else {
+    fail("expected streaming preview")
+  }
+  assert_eq(second, first)
+  assert_eq(items.length(), 0)
+}
+
+///|
 test "replaying a recorded engine session renders the transcript" {
   let state = drain_test_state()
   // Submit a task so the agent is running before progress arrives.

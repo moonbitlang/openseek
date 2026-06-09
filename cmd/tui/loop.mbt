@@ -251,6 +251,29 @@ async fn run_shell_command(
 }
 
 ///|
+// The live streaming line is only a transient status preview. The final
+// assistant text is committed later by `assistant_message`, so keep this bounded
+// to avoid quadratic copies during long code-generation streams.
+const StreamingPreviewMaxColumns : Int = 240
+
+///|
+fn capped_streaming_preview(text : String) -> String {
+  @displaytext.DisplayText(text).truncate(
+    StreamingPreviewMaxColumns,
+    suffix="...",
+  )
+}
+
+///|
+fn append_streaming_preview(current : String?, delta : String) -> String {
+  let delta = capped_streaming_preview(delta)
+  match current {
+    Some(response) => capped_streaming_preview(response + delta)
+    None => delta
+  }
+}
+
+///|
 /// Apply one agent progress event to `state`, queueing any transcript updates in
 /// `cmds`. Terminal events call `finish_run`, leaving the agent idle so the
 /// queue drain at the end of `update` can start the next input.
@@ -260,9 +283,19 @@ fn handle_agent_event(
   cmds : Array[Cmd],
 ) -> Unit {
   match event {
-    AgentStep => state.step_response = None
+    AgentStep => {
+      state.step_response = None
+      state.streaming_response = None
+    }
+    AssistantDelta(text) =>
+      if text != "" {
+        state.streaming_response = Some(
+          append_streaming_preview(state.streaming_response, text),
+        )
+      }
     AssistantMessage(text) => {
       state.step_response = Some(text)
+      state.streaming_response = None
       if !text.trim().is_empty() {
         cmds.push(AppendItem(Response(text)))
       }

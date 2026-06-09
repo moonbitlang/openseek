@@ -74,14 +74,20 @@ pub fn encode_chat_request(
   tools? : Array[ToolDefinition] = [],
   thinking? : ThinkingMode,
   reasoning_effort? : ReasoningEffort,
+  stream? : Bool = false,
 ) -> Json {
   Json::object(
     Map(
       [
         ("model", Json::string(model.to_string())),
         ("messages", ([ for message in messages => message ] : Json)),
-        ("stream", Json::boolean(false)),
+        ("stream", Json::boolean(stream)),
         ("response_format", { "type": "json_object" }),
+        ..if stream {
+          [("stream_options", ({ "include_usage": true } : Json))]
+        } else {
+          []
+        },
         ..if tools.length() > 0 {
           [("tools", ([ for tool in tools => tool ] : Json))]
         } else {

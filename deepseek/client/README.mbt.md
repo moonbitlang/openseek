@@ -14,6 +14,9 @@ The package depends on `moonbitlang/async/http` and is native-only.
   thinking controls.
 - `Client::chat(messages, tools?)`: send typed chat messages in JSON response
   mode, optionally with native DeepSeek function tools, and decode the response.
+- `Client::chat_stream(messages, on_content_delta~, tools?)`: send the same
+  request in SSE streaming mode, emit assistant content fragments through the
+  callback, and return the fully accumulated response.
 
 `Client` implements `Debug` with the API key redacted.
 
@@ -21,7 +24,13 @@ The package depends on `moonbitlang/async/http` and is native-only.
 
 `Client::chat` builds a private request envelope with the client's configured
 model, thinking mode, and reasoning effort, then sends it to `api_url` as JSON.
-It always sends `stream=false` and `response_format={"type":"json_object"}`.
+It sends `stream=false` and `response_format={"type":"json_object"}`.
+
+`Client::chat_stream` sends `stream=true` plus
+`stream_options={"include_usage":true}`. It parses DeepSeek's SSE `data:` events,
+calls `on_content_delta` for each non-empty `delta.content`, accumulates
+reasoning and tool-call fragments, and returns a normal
+`@deepseek.ChatResponse` with final usage when the API supplies it.
 
 Use `tools=[...]` when the model should call native DeepSeek function tools.
 Tool call results should be appended as `@deepseek.ChatMessage(Tool(call.id),

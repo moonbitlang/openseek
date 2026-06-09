@@ -29,7 +29,12 @@ priv struct State {
   // them; a message whose id is not the active run's is stale (it came from a
   // task that has since been superseded) and is dropped. See `State::owns_run`.
   mut run_id : Int
+  // Final assistant text for the current step, used to avoid appending the same
+  // answer again when `AgentFinished` follows `AssistantMessage`.
   mut step_response : String?
+  // Incremental assistant text currently arriving from `assistant_delta`
+  // events. Cleared once the final assistant message is committed.
+  mut streaming_response : String?
   mut usage : @event.UsageInfo?
   // Latest background `moon_check` watcher status ("running"/"stopped"), lifted
   // from the most recent `runtime_update` for the status bar. Empty until the
@@ -45,6 +50,7 @@ fn State::new(config : AppConfig) -> State {
     run: Idle,
     run_id: 0,
     step_response: None,
+    streaming_response: None,
     usage: None,
     watcher_status: "",
   }
@@ -58,6 +64,7 @@ fn State::start_run(self : State, started_ms : Int64) -> Int {
   self.run_id = self.run_id + 1
   self.run = Running(started_ms)
   self.step_response = None
+  self.streaming_response = None
   self.run_id
 }
 
@@ -71,14 +78,15 @@ fn State::owns_run(self : State, id : Int) -> Bool {
 
 ///|
 /// Reset run tracking after the agent stops (finished, aborted, cancelled, or
-/// failed): no task running, no pending step response. Also clear the watcher
-/// status: `run_agent_task` spawns a fresh engine per prompt and any
+/// failed): no task running, no pending final or streaming response. Also clear
+/// the watcher status: `run_agent_task` spawns a fresh engine per prompt and any
 /// `moon_check --watch` process belongs to that engine's runtime, so it is gone
 /// once the engine exits — leaving `watcher_status` set would keep a stale
 /// `moon_check running` segment in the status bar while the TUI sits idle.
 fn State::finish_run(self : State) -> Unit {
   self.run = Idle
   self.step_response = None
+  self.streaming_response = None
   self.watcher_status = ""
 }
 

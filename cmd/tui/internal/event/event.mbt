@@ -34,6 +34,7 @@ pub(all) struct ToolResultEvent {
 /// queued input.
 pub(all) enum AgentEvent {
   AgentStep
+  AssistantDelta(String)
   AssistantMessage(String)
   RuntimeUpdate(String)
   Usage(UsageInfo)

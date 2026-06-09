@@ -17,10 +17,11 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
 - `ChatMessage(role, content=..., tool_calls?, reasoning_content?)`: one typed
   chat message constructor. Use `Assistant` with `tool_calls` for the assistant
   message that must be sent back after DeepSeek requests native tool calls.
-- `encode_chat_request(model, messages, tools?, thinking?, reasoning_effort?)`:
-  builds the full DeepSeek chat completions request body. The per-value
-  encoders for messages, tool definitions, and tool calls are package-private
-  implementation details.
+- `encode_chat_request(model, messages, tools?, thinking?, reasoning_effort?,
+  stream?)`: builds the full DeepSeek chat completions request body. Streaming
+  requests include usage-bearing stream options. The per-value encoders for
+  messages, tool definitions, and tool calls are package-private implementation
+  details.
 - `ToolDefinition(name, description, parameters, strict?)`: a native DeepSeek
   function tool definition with a JSON Schema parameters object.
 - `ToolCall(id~, name~, arguments~)`: a decoded function call request from the
