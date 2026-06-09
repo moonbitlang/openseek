@@ -5,6 +5,34 @@ async fn new_store() -> @store.SessionStore {
 }
 
 ///|
+fn session_events_jsonl(session : @agent_session.Session) -> String {
+  let builder = StringBuilder::new()
+  for event in session.events() {
+    builder.write_string(event.to_json().stringify())
+    builder.write_string("\n")
+  }
+  builder.to_string()
+}
+
+///|
+fn session_header_jsonl(
+  session : @agent_session.Session,
+  allow_event_log_ahead? : Bool = true,
+) -> String {
+  let events_text = session_events_jsonl(session)
+  let header : Json = {
+    "version": 1,
+    "id": session.id(),
+    "system_prompt": session.system_prompt(),
+    "last_sequence": session.last_sequence(),
+    "event_log_length": events_text.length(),
+    "event_log_hash": Hash::hash(events_text[:]),
+    "allow_event_log_ahead": allow_event_log_ahead,
+  }
+  header.stringify()
+}
+
+///|
 async test "store creates and loads a session from header and event log" {
   let store = new_store()
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
@@ -34,6 +62,25 @@ async test "store lists known sessions" {
 }
 
 ///|
+async test "store propagates non-missing list errors" {
+  let store = new_store()
+  @fs.write_file(
+    store.root() + "/sessions",
+    "not a directory",
+    create_mode=CreateOrTruncate,
+  )
+  let _ = store.list() catch {
+    error => {
+      assert_true("\{error}" != "")
+      @fs.rmdir(store.root(), recursive=true)
+      return
+    }
+  }
+  @fs.rmdir(store.root(), recursive=true)
+  fail("list error was silently treated as empty")
+}
+
+///|
 async test "store appends one event without rewriting the in-memory caller value" {
   let store = new_store()
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
@@ -53,6 +100,192 @@ async test "store appends one event without rewriting the in-memory caller value
 }
 
 ///|
+async test "store rejects stale snapshots before appending" {
+  let store = new_store()
+  let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
+  store.create(session)
+  ignore(store.append(session, User(UserMessage("first"))))
+  let _ = store.append(session, Runtime(RuntimeNotice("stale"))) catch {
+    error => {
+      assert_true("\{error}".contains("stale session snapshot"))
+      let loaded = store.load(SessionId("s1"))
+      assert_eq(loaded.events().length(), 1)
+      @fs.rmdir(store.root(), recursive=true)
+      return
+    }
+  }
+  @fs.rmdir(store.root(), recursive=true)
+  fail("stale append was accepted")
+}
+
+///|
+async test "store rejects divergent snapshots with the same sequence" {
+  let store = new_store()
+  let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
+    User(UserMessage("first")),
+  )
+  let divergent = @agent_session.Session(
+    SessionId("s1"),
+    system_prompt="changed system",
+    events=session.events(),
+  )
+  store.create(session)
+  let _ = store.append(divergent, Runtime(RuntimeNotice("stale"))) catch {
+    error => {
+      assert_true("\{error}".contains("stale session snapshot"))
+      let loaded = store.load(SessionId("s1"))
+      assert_eq(loaded.system_prompt(), "system")
+      assert_eq(loaded.events().length(), 1)
+      @fs.rmdir(store.root(), recursive=true)
+      return
+    }
+  }
+  @fs.rmdir(store.root(), recursive=true)
+  fail("divergent same-sequence append was accepted")
+}
+
+///|
+async test "store rejects mixed header and event log from interrupted rewrites" {
+  let store = new_store()
+  let original = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
+    User(UserMessage("old")),
+  )
+  let rewrite = @agent_session.Session(
+    SessionId("s1"),
+    system_prompt="rewritten system",
+  ).append(User(UserMessage("new")))
+  store.create(original)
+  @fs.write_file(
+    store.root() + "/sessions/s1/session.json",
+    session_header_jsonl(rewrite),
+    create_mode=CreateOrTruncate,
+  )
+  let _ = store.load(SessionId("s1")) catch {
+    error => {
+      assert_true("\{error}".contains("fingerprint mismatch"))
+      @fs.rmdir(store.root(), recursive=true)
+      return
+    }
+  }
+  @fs.rmdir(store.root(), recursive=true)
+  fail("mixed rewrite header and event log was accepted")
+}
+
+///|
+async test "store rejects stale tails after interrupted prefix rewrites" {
+  let store = new_store()
+  let original = @agent_session.Session(SessionId("s1"), system_prompt="system")
+    .append(User(UserMessage("first")))
+    .append(Runtime(RuntimeNotice("stale tail")))
+  let rewrite = @agent_session.Session(SessionId("s1"), system_prompt="system")
+  store.create(original)
+  @fs.write_file(
+    store.root() + "/sessions/s1/session.json",
+    session_header_jsonl(rewrite, allow_event_log_ahead=false),
+    create_mode=CreateOrTruncate,
+  )
+  let _ = store.load(SessionId("s1")) catch {
+    error => {
+      assert_true("\{error}".contains("stale tail after replacement"))
+      @fs.rmdir(store.root(), recursive=true)
+      return
+    }
+  }
+  @fs.rmdir(store.root(), recursive=true)
+  fail("stale tail from interrupted prefix rewrite was accepted")
+}
+
+///|
+async test "store serializes concurrent appends from the same snapshot" {
+  let store = new_store()
+  let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
+  let results : Array[String] = []
+  store.create(session)
+  @async.with_task_group() <| group => {
+    group.spawn_bg() <| () => {
+      try store.append(session, User(UserMessage("first"))) catch {
+        error => {
+          assert_true("\{error}".contains("stale session snapshot"))
+          results.push("stale")
+        }
+      } noraise {
+        _ => results.push("ok")
+      }
+    }
+    group.spawn_bg() <| () => {
+      try store.append(session, Runtime(RuntimeNotice("second"))) catch {
+        error => {
+          assert_true("\{error}".contains("stale session snapshot"))
+          results.push("stale")
+        }
+      } noraise {
+        _ => results.push("ok")
+      }
+    }
+  }
+  let mut ok = 0
+  let mut stale = 0
+  for result in results {
+    if result == "ok" {
+      ok += 1
+    } else if result == "stale" {
+      stale += 1
+    }
+  }
+  let loaded = store.load(SessionId("s1"))
+  assert_eq(ok, 1)
+  assert_eq(stale, 1)
+  assert_eq(loaded.events().length(), 1)
+  assert_eq(loaded.last_sequence(), 1)
+  @fs.rmdir(store.root(), recursive=true)
+}
+
+///|
+async test "store rejects stale snapshots before compacting" {
+  let store = new_store()
+  let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
+    .append(User(UserMessage("first")))
+    .append(Assistant(AssistantMessage("second")))
+  store.create(session)
+  ignore(store.append(session, Runtime(RuntimeNotice("new durable tail"))))
+  let _ = store.compact(
+    session,
+    content="first two events",
+    from_sequence=1,
+    to_sequence=2,
+  ) catch {
+    error => {
+      assert_true("\{error}".contains("stale session snapshot"))
+      let loaded = store.load(SessionId("s1"))
+      assert_eq(loaded.events().length(), 3)
+      @fs.rmdir(store.root(), recursive=true)
+      return
+    }
+  }
+  @fs.rmdir(store.root(), recursive=true)
+  fail("stale compact was accepted")
+}
+
+///|
+async test "store loads when the append-only log is ahead of the header" {
+  let store = new_store()
+  let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
+  let (_, event) = session.append_event(User(UserMessage("first")))
+  store.create(session)
+  @fs.write_file(
+    store.root() + "/sessions/s1/events.jsonl",
+    event.to_json().stringify() + "\n",
+    create_mode=OpenOrCreate,
+    append=true,
+  )
+  let loaded = store.load(SessionId("s1"))
+  assert_eq(loaded.system_prompt(), "system")
+  assert_eq(loaded.events().length(), 1)
+  assert_eq(loaded.last_sequence(), 1)
+  @fs.rmdir(store.root(), recursive=true)
+}
+
+///|
 async test "store loads an empty session when the event log is missing" {
   let store = new_store()
   store.create(Session(SessionId("s1"), system_prompt="system"))
@@ -60,6 +293,25 @@ async test "store loads an empty session when the event log is missing" {
   let loaded = store.load(SessionId("s1"))
   assert_eq(loaded.events().length(), 0)
   @fs.rmdir(store.root(), recursive=true)
+}
+
+///|
+async test "store rejects missing event logs for non-empty sessions" {
+  let store = new_store()
+  let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
+    User(UserMessage("hello")),
+  )
+  store.create(session)
+  @fs.remove(store.root() + "/sessions/s1/events.jsonl")
+  let _ = store.load(SessionId("s1")) catch {
+    error => {
+      assert_true("\{error}".contains("fingerprint mismatch"))
+      @fs.rmdir(store.root(), recursive=true)
+      return
+    }
+  }
+  @fs.rmdir(store.root(), recursive=true)
+  fail("missing non-empty event log was accepted")
 }
 
 ///|

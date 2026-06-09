@@ -11,10 +11,16 @@ let header_file_name : String = "session.json"
 let event_log_file_name : String = "events.jsonl"
 
 ///|
+let lock_file_name : String = "session.lock"
+
+///|
 priv struct SessionHeader {
   id : @agent_session.SessionId
   system_prompt : String
   last_sequence : Int
+  event_log_length : Int?
+  event_log_hash : Int?
+  allow_event_log_ahead : Bool?
 }
 
 ///|
@@ -79,12 +85,32 @@ fn SessionStore::event_log_path(
 }
 
 ///|
-fn session_header_json(session : @agent_session.Session) -> Json {
+fn SessionStore::lock_path(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String raise {
+  self.session_dir(id) + "/" + lock_file_name
+}
+
+///|
+fn event_log_hash(text : StringView) -> Int {
+  Hash::hash(text)
+}
+
+///|
+fn session_header_json(
+  session : @agent_session.Session,
+  events_text : String,
+  allow_event_log_ahead : Bool,
+) -> Json {
   {
     "version": session_header_version,
     "id": session.id(),
     "system_prompt": session.system_prompt(),
     "last_sequence": session.last_sequence(),
+    "event_log_length": events_text.length(),
+    "event_log_hash": event_log_hash(events_text),
+    "allow_event_log_ahead": allow_event_log_ahead,
   }
 }
 
@@ -123,6 +149,33 @@ fn header_int_field(
 }
 
 ///|
+fn header_optional_int_field(
+  fields : Map[String, Json],
+  path : @json.JsonPath,
+  key : String,
+) -> Int? raise @json.JsonDecodeError {
+  match fields.get(key) {
+    Some(Number(value, ..)) => Some(value.to_int())
+    Some(_) => json_decode_error(path.add_key(key), "expected int")
+    None => None
+  }
+}
+
+///|
+fn header_optional_bool_field(
+  fields : Map[String, Json],
+  path : @json.JsonPath,
+  key : String,
+) -> Bool? raise @json.JsonDecodeError {
+  match fields.get(key) {
+    Some(True) => Some(true)
+    Some(False) => Some(false)
+    Some(_) => json_decode_error(path.add_key(key), "expected bool")
+    None => None
+  }
+}
+
+///|
 fn decode_session_header(
   json : Json,
   path : @json.JsonPath,
@@ -147,6 +200,13 @@ fn decode_session_header(
     id,
     system_prompt: header_string_field(fields, path, "system_prompt"),
     last_sequence: header_int_field(fields, path, "last_sequence"),
+    event_log_length: header_optional_int_field(
+      fields, path, "event_log_length",
+    ),
+    event_log_hash: header_optional_int_field(fields, path, "event_log_hash"),
+    allow_event_log_ahead: header_optional_bool_field(
+      fields, path, "allow_event_log_ahead",
+    ),
   }
 }
 
@@ -184,14 +244,153 @@ fn parse_events_jsonl(
 }
 
 ///|
-async fn write_header(
+fn checked_last_sequence_in_events(
+  events : @vector.Vector[@agent_session.SessionEvent],
+) -> Int raise {
+  let mut expected = 1
+  for event in events {
+    if event.sequence() != expected {
+      fail(
+        "session event log sequence mismatch: expected \{expected}, found \{event.sequence()}",
+      )
+    }
+    expected += 1
+  }
+  expected - 1
+}
+
+///|
+async fn durable_last_sequence(
+  store : SessionStore,
+  id : @agent_session.SessionId,
+) -> Int {
+  let events_text = read_event_log_text(store.event_log_path(id))
+  checked_last_sequence_in_events(parse_events_jsonl(events_text))
+}
+
+///|
+async fn read_session_header(
+  store : SessionStore,
+  id : @agent_session.SessionId,
+) -> SessionHeader {
+  @json.from_json(@json.parse(@fs.read_file(store.header_path(id)).text()))
+}
+
+///|
+fn validate_loaded_header(
+  header : SessionHeader,
+  requested_id : @agent_session.SessionId,
+) -> Unit raise {
+  if header.id.value() != requested_id.value() {
+    fail(
+      "session header id mismatch: requested \{requested_id.value()}, found \{header.id.value()}",
+    )
+  }
+}
+
+///|
+fn validate_event_log_fingerprint(
+  header : SessionHeader,
+  events_text : String,
+) -> Unit raise {
+  match (header.event_log_length, header.event_log_hash) {
+    (Some(length), Some(hash)) => {
+      if events_text.length() < length ||
+        event_log_hash(events_text[:length]) != hash {
+        fail("session event log fingerprint mismatch for \{header.id.value()}")
+      }
+      if header.allow_event_log_ahead == Some(false) &&
+        events_text.length() != length {
+        fail(
+          "session event log stale tail after replacement for \{header.id.value()}",
+        )
+      }
+      let prefix_last_sequence = checked_last_sequence_in_events(
+        parse_events_jsonl(events_text[:length].to_owned()),
+      )
+      if prefix_last_sequence != header.last_sequence {
+        fail(
+          "session header fingerprint tail mismatch: header last sequence \{header.last_sequence}, fingerprint last sequence \{prefix_last_sequence}",
+        )
+      }
+    }
+    (None, None) => ()
+    _ => fail("session header event log fingerprint is incomplete")
+  }
+}
+
+///|
+fn session_from_replayed_events(
+  header : SessionHeader,
+  events_text : String,
+  events : @vector.Vector[@agent_session.SessionEvent],
+) -> @agent_session.Session raise {
+  validate_event_log_fingerprint(header, events_text)
+  let replayed_last_sequence = checked_last_sequence_in_events(events)
+  if replayed_last_sequence < header.last_sequence {
+    fail(
+      "session event log tail mismatch: header last sequence \{header.last_sequence}, replayed last sequence \{replayed_last_sequence}",
+    )
+  }
+  Session(header.id, system_prompt=header.system_prompt, events~)
+}
+
+///|
+async fn load_persisted_session(
+  store : SessionStore,
+  id : @agent_session.SessionId,
+) -> @agent_session.Session {
+  let header = read_session_header(store, id)
+  validate_loaded_header(header, id)
+  let events_text = read_event_log_text(store.event_log_path(id))
+  session_from_replayed_events(
+    header,
+    events_text,
+    parse_events_jsonl(events_text),
+  )
+}
+
+///|
+async fn ensure_empty_missing_session(
   store : SessionStore,
   session : @agent_session.Session,
 ) -> Unit {
-  @fs.write_file(
+  let durable_last = durable_last_sequence(store, session.id())
+  if durable_last != 0 || session.last_sequence() != 0 {
+    fail(
+      "stale session snapshot for \{session.id().value()}: no persisted header, in-memory last sequence \{session.last_sequence()}, durable last sequence \{durable_last}",
+    )
+  }
+}
+
+///|
+async fn ensure_session_is_current(
+  store : SessionStore,
+  session : @agent_session.Session,
+) -> Unit {
+  let persisted = load_persisted_session(store, session.id()) catch {
+    @os_error.OSError(_) as error if error.is_ENOENT() => {
+      ensure_empty_missing_session(store, session)
+      return
+    }
+    error => raise error
+  }
+  if persisted.system_prompt() != session.system_prompt() ||
+    events_jsonl(persisted.events()) != events_jsonl(session.events()) {
+    fail("stale session snapshot for \{session.id().value()}")
+  }
+}
+
+///|
+async fn write_header(
+  store : SessionStore,
+  session : @agent_session.Session,
+  allow_event_log_ahead : Bool,
+) -> Unit {
+  let events_text = events_jsonl(session.events())
+  write_text_atomic(
     store.header_path(session.id()),
-    session_header_json(session).stringify(),
-    create_mode=CreateOrTruncate,
+    session_header_json(session, events_text, allow_event_log_ahead).stringify(),
   )
 }
 
@@ -200,10 +399,9 @@ async fn write_event_log(
   store : SessionStore,
   session : @agent_session.Session,
 ) -> Unit {
-  @fs.write_file(
+  write_text_atomic(
     store.event_log_path(session.id()),
     events_jsonl(session.events()),
-    create_mode=CreateOrTruncate,
   )
 }
 
@@ -230,6 +428,13 @@ async fn read_event_log_text(path : String) -> String {
 }
 
 ///|
+async fn write_text_atomic(path : String, text : String) -> Unit {
+  let tmp_path = path + ".tmp"
+  @fs.write_file(tmp_path, text, create_mode=CreateOrTruncate)
+  @fs.rename(tmp_path, path, replace=true)
+}
+
+///|
 async fn ensure_session_dir(
   store : SessionStore,
   id : @agent_session.SessionId,
@@ -241,6 +446,38 @@ async fn ensure_session_dir(
   @fs.mkdir(dir, recursive=true) catch {
     error => if @fs.exists(dir) { () } else { raise error }
   }
+}
+
+///|
+async fn[T] with_session_lock(
+  store : SessionStore,
+  id : @agent_session.SessionId,
+  kind : @fs.Lock,
+  body : async () -> T,
+) -> T {
+  let file = @fs.open(
+    store.lock_path(id),
+    mode=ReadWrite,
+    create_mode=OpenOrCreate,
+  )
+  defer file.close()
+  file.lock(kind)
+  defer file.unlock()
+  body()
+}
+
+///|
+async fn[T] with_existing_session_lock(
+  store : SessionStore,
+  id : @agent_session.SessionId,
+  kind : @fs.Lock,
+  body : async () -> T,
+) -> T {
+  let dir = store.session_dir(id)
+  if !@fs.exists(dir) {
+    return body()
+  }
+  with_session_lock(store, id, kind, body)
 }
 
 ///|
@@ -258,7 +495,10 @@ pub async fn SessionStore::exists(
 pub async fn SessionStore::list(
   self : SessionStore,
 ) -> Array[@agent_session.SessionId] {
-  let names = @fs.readdir(self.sessions_dir(), sort=true) catch { _ => [] }
+  let names = @fs.readdir(self.sessions_dir(), sort=true) catch {
+    @os_error.OSError(_) as error if error.is_ENOENT() => []
+    error => raise error
+  }
   [
     for name in names if name != "." && name != ".." => SessionId(name)
   ]
@@ -273,8 +513,12 @@ pub async fn SessionStore::create(
   session : @agent_session.Session,
 ) -> Unit {
   ensure_session_dir(self, session.id())
-  write_header(self, session)
-  write_event_log(self, session)
+  with_session_lock(self, session.id(), Exclusive, () => {
+    // Exact header-first rewrites fail closed on stale old-log tails.
+    write_header(self, session, false)
+    write_event_log(self, session)
+    write_header(self, session, true)
+  })
 }
 
 ///|
@@ -283,21 +527,9 @@ pub async fn SessionStore::load(
   self : SessionStore,
   id : @agent_session.SessionId,
 ) -> @agent_session.Session {
-  let header : SessionHeader = @json.from_json(
-    @json.parse(@fs.read_file(self.header_path(id)).text()),
-  )
-  if header.id.value() != id.value() {
-    fail(
-      "session header id mismatch: requested \{id.value()}, found \{header.id.value()}",
-    )
-  }
-  ignore(header.last_sequence)
-  let events_text = read_event_log_text(self.event_log_path(id))
-  Session(
-    header.id,
-    system_prompt=header.system_prompt,
-    events=parse_events_jsonl(events_text),
-  )
+  with_existing_session_lock(self, id, Shared, () => {
+    load_persisted_session(self, id)
+  })
 }
 
 ///|
@@ -308,11 +540,14 @@ pub async fn SessionStore::append(
   session : @agent_session.Session,
   item : @agent_session.SessionItem,
 ) -> @agent_session.Session {
-  let (next, event) = session.append_event(item)
-  ensure_session_dir(self, next.id())
-  append_event(self, next, event)
-  write_header(self, next)
-  next
+  ensure_session_dir(self, session.id())
+  with_session_lock(self, session.id(), Exclusive, () => {
+    ensure_session_is_current(self, session)
+    let (next, event) = session.append_event(item)
+    append_event(self, next, event)
+    write_header(self, next, true)
+    next
+  })
 }
 
 ///|
@@ -325,13 +560,16 @@ pub async fn SessionStore::compact(
   from_sequence~ : Int,
   to_sequence~ : Int,
 ) -> @agent_session.Session {
-  let next = session.compact(content~, from_sequence~, to_sequence~)
-  let event = match next.events().peek() {
-    Some(event) => event
-    None => fail("compacted session did not append a summary event")
-  }
-  ensure_session_dir(self, next.id())
-  append_event(self, next, event)
-  write_header(self, next)
-  next
+  ensure_session_dir(self, session.id())
+  with_session_lock(self, session.id(), Exclusive, () => {
+    ensure_session_is_current(self, session)
+    let next = session.compact(content~, from_sequence~, to_sequence~)
+    let event = match next.events().peek() {
+      Some(event) => event
+      None => fail("compacted session did not append a summary event")
+    }
+    append_event(self, next, event)
+    write_header(self, next, true)
+    next
+  })
 }
