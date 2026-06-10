@@ -75,7 +75,7 @@ $ sh <<'EOF'
 > {"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}
 > JSONL
 > printf 'hello and answer' > "$tmp/summary.txt"
-> env -u DEEPSEEK openseek.exe --session-list --session-root "$tmp"
+> env -u DEEPSEEK openseek.exe --session-list --session-root "$tmp" | cut -f1
 > env -u DEEPSEEK openseek.exe --session-show --session demo --session-root "$tmp"
 > env -u DEEPSEEK openseek.exe --session demo --session-root "$tmp" --session-compact-file "$tmp/summary.txt" --session-compact-from 1 --session-compact-to 2
 > env -u DEEPSEEK openseek.exe --session-show --session demo --session-root "$tmp"

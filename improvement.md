@@ -54,8 +54,11 @@ bottom of the matching section.
   `--session-compact-*` flow. Long-lived sessions (now the TUI default)
   grow without bound; trigger summarization when the projected context
   passes a threshold.
-- [ ] **Richer `--session-list`.** Bare ids are hard to recognize; include
-  last-activity time and the first user prompt as a label.
+- [x] **Richer `--session-list`.** Bare ids are hard to recognize; include
+  last-activity time and the first user prompt as a label. *(Done:
+  `SessionStore::listings` returns id + last-activity + first prompt, newest
+  first with unreadable sessions kept visible for cleanup; the CLI prints
+  tab-separated rows, so `| cut -f1` recovers the old bare-id output.)*
 - [ ] **Stale `session.lock` recovery.** Verify what happens when an engine
   crashes while holding the lock, and document (or implement) the recovery
   path.

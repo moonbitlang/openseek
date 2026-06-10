@@ -263,6 +263,71 @@ fn session_root(matches : @argparse.Matches) -> String raise {
 }
 
 ///|
+/// Longest first-prompt label a `--session-list` row carries; enough to
+/// recognize a conversation without wrapping a normal terminal row.
+const PromptLabelMaxChars : Int = 60
+
+///|
+/// Collapse a prompt to a single-line label: whitespace runs become one
+/// space, and anything beyond `PromptLabelMaxChars` is elided with `…`. A
+/// session without a recorded prompt shows `-` so the column never vanishes.
+fn compact_prompt_label(prompt : String) -> String {
+  let out = StringBuilder::new()
+  let mut last_was_space = false
+  let mut count = 0
+  for ch in prompt.trim() {
+    if count >= PromptLabelMaxChars {
+      out.write_char('…')
+      break
+    }
+    if ch is (' ' | '\t' | '\n' | '\r') {
+      if !last_was_space {
+        out.write_char(' ')
+        count += 1
+      }
+      last_was_space = true
+    } else {
+      out.write_char(ch)
+      count += 1
+      last_was_space = false
+    }
+  }
+  let label = out.to_string()
+  if label.is_empty() {
+    "-"
+  } else {
+    label
+  }
+}
+
+///|
+fn format_utc_minute(seconds : Int64) -> String {
+  fn pad2(value : Int) -> String {
+    if value < 10 {
+      "0\{value}"
+    } else {
+      "\{value}"
+    }
+  }
+
+  let time = @time.unix(seconds) catch { _ => return "-" }
+  "\{time.year()}-\{pad2(time.month())}-\{pad2(time.day())} \{pad2(time.hour())}:\{pad2(time.minute())}"
+}
+
+///|
+/// One `--session-list` row: tab-separated id, last-activity stamp (UTC,
+/// minute precision; `-` for an unreadable session), and the first user
+/// prompt as a one-line label. Tab separation keeps the listing scriptable —
+/// `--session-list | cut -f1` recovers the bare ids the old format printed.
+fn format_session_listing(listing : @store.SessionListing) -> String {
+  let when = match listing.last_active_unix_seconds() {
+    Some(seconds) => format_utc_minute(seconds)
+    None => "-"
+  }
+  "\{listing.id().value()}\t\{when}\t\{compact_prompt_label(listing.first_prompt())}"
+}
+
+///|
 async fn handle_session_command(matches : @argparse.Matches) -> Bool {
   let list_sessions = flag(matches, "session-list")
   let show_session = flag(matches, "session-show")
@@ -285,8 +350,8 @@ async fn handle_session_command(matches : @argparse.Matches) -> Bool {
   }
   let store = @store.SessionStore(session_root(matches))
   if list_sessions {
-    for id in store.list() {
-      println(id.value())
+    for listing in store.listings() {
+      println(format_session_listing(listing))
     }
     return true
   }
@@ -385,6 +450,20 @@ fn required_positive_int(input : String, label : String) -> Int raise {
     fail("\{label} is required")
   }
   parse_positive_int(trimmed, label)
+}
+
+///|
+test "session listing rows are tab-separated and survive odd prompts" {
+  assert_eq(
+    compact_prompt_label("  fix the \n\t streaming   bug  "),
+    "fix the streaming bug",
+  )
+  assert_eq(compact_prompt_label(""), "-")
+  let long = String::make(100, 'x')
+  let label = compact_prompt_label(long)
+  assert_true(label.has_suffix("…"))
+  // 2026-06-10T03:14:07Z renders at minute precision.
+  assert_eq(format_utc_minute(1_781_061_247), "2026-06-10 03:14")
 }
 
 ///|

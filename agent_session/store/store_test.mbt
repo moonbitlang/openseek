@@ -81,6 +81,33 @@ async test "store picks the most recently active session as latest" {
 }
 
 ///|
+async test "listings order by recency and keep unreadable sessions visible" {
+  let store = new_store()
+  let older : @agent_session.Session = Session(
+    SessionId("older"),
+    system_prompt="system",
+  )
+  store.create(older.append(User(UserMessage("  first\n prompt  here "))))
+  @async.sleep(50)
+  store.create(Session(SessionId("newer"), system_prompt="system"))
+  @async.sleep(50)
+  store.create(Session(SessionId("torn"), system_prompt="system"))
+  @fs.remove(store.root() + "/sessions/torn/session.json")
+  let listings = store.listings()
+  assert_eq(listings.length(), 3)
+  // Readable sessions newest-first; the unreadable one is listed last with
+  // no timestamp so it stays discoverable for cleanup.
+  assert_eq(listings[0].id().value(), "newer")
+  assert_true(listings[0].last_active_unix_seconds() is Some(_))
+  assert_eq(listings[0].first_prompt(), "")
+  assert_eq(listings[1].id().value(), "older")
+  assert_eq(listings[1].first_prompt(), "  first\n prompt  here ")
+  assert_eq(listings[2].id().value(), "torn")
+  assert_true(listings[2].last_active_unix_seconds() is None)
+  @fs.rmdir(store.root(), recursive=true)
+}
+
+///|
 async test "latest skips a torn newest session in favor of a loadable one" {
   let store = new_store()
   store.create(Session(SessionId("valid"), system_prompt="system"))

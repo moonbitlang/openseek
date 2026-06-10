@@ -509,6 +509,90 @@ pub async fn SessionStore::list(
 }
 
 ///|
+/// One row of a store listing: a session id plus the metadata a picker or
+/// `--session-list` shows beside it.
+pub struct SessionListing {
+  priv id : @agent_session.SessionId
+  priv last_active_unix_seconds : Int64?
+  priv first_prompt : String
+} derive(Debug)
+
+///|
+/// The listed session's id.
+pub fn SessionListing::id(self : SessionListing) -> @agent_session.SessionId {
+  self.id
+}
+
+///|
+/// When the session last saw activity (event-log mtime, unix seconds), or
+/// `None` for a directory whose session could not be loaded.
+pub fn SessionListing::last_active_unix_seconds(
+  self : SessionListing,
+) -> Int64? {
+  self.last_active_unix_seconds
+}
+
+///|
+/// The session's first user prompt — the line that identifies a conversation
+/// to a human — or `""` for a session with no user event (or one that could
+/// not be loaded).
+pub fn SessionListing::first_prompt(self : SessionListing) -> String {
+  self.first_prompt
+}
+
+///|
+/// List sessions with the metadata a picker shows, most recently active
+/// first. Sessions that cannot be loaded still appear — with no timestamp
+/// and an empty prompt, ordered after the readable ones — because a listing
+/// is where a user finds the broken directory they may want to clean up.
+pub async fn SessionStore::listings(
+  self : SessionStore,
+) -> Array[SessionListing] {
+  let stamped : Array[(SessionListing, Int64, Int)] = []
+  let unreadable : Array[SessionListing] = []
+  for id in self.list() {
+    let session = self.load(id) catch {
+      _ => {
+        unreadable.push({ id, last_active_unix_seconds: None, first_prompt: "" })
+        continue
+      }
+    }
+    let (seconds, nanoseconds) = @fs.mtime(self.event_log_path(id)) catch {
+      _ => @fs.mtime(self.header_path(id)) catch { _ => (0, 0) }
+    }
+    let mut first_prompt = ""
+    for event in session.events() {
+      if event.item() is User(message) {
+        first_prompt = message.content()
+        break
+      }
+    }
+    stamped.push(
+      (
+        { id, last_active_unix_seconds: Some(seconds), first_prompt },
+        seconds,
+        nanoseconds,
+      ),
+    )
+  }
+  // Most recently active first.
+  stamped.sort_by((a, b) => {
+    let (_, a_seconds, a_nanoseconds) = a
+    let (_, b_seconds, b_nanoseconds) = b
+    if b_seconds != a_seconds {
+      b_seconds.compare(a_seconds)
+    } else {
+      b_nanoseconds.compare(a_nanoseconds)
+    }
+  })
+  let listings = [ for entry in stamped => entry.0 ]
+  for listing in unreadable {
+    listings.push(listing)
+  }
+  listings
+}
+
+///|
 /// The most recently active session id that can actually be resumed, or
 /// `None` for an empty store.
 ///
