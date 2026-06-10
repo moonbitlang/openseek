@@ -1,0 +1,35 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/event"
+
+// Values
+pub fn decode_event(Json) -> AgentEvent?
+
+// Errors
+
+// Types and methods
+pub(all) enum AgentEvent {
+  AgentStep
+  AssistantMessage(String)
+  RuntimeUpdate(String)
+  Usage(UsageInfo)
+  ToolResult(ToolResultEvent)
+  AgentFinished(String)
+  AgentAborted(String)
+  MaxStepsExhausted
+  AgentError(String)
+}
+
+pub(all) struct ToolResultEvent {
+  name : String
+  content : String
+  is_error : Bool
+}
+
+pub(all) struct UsageInfo {
+  total_tokens : Int
+}
+
+// Type aliases
+
+// Traits
+

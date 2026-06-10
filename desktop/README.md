@@ -57,6 +57,18 @@ git clone --recurse-submodules <this-repo>
 git submodule update --init --recursive
 ```
 
+Why the bootstrap is a little involved:
+
+- `lepus/` is a git submodule, so a plain clone does not contain the framework
+  sources until submodules are initialized.
+- The clipboard extension uses Lepus build-time codegen. A fresh checkout must
+  build and stage the Lepus CLI before the native app can compile.
+- Windows native builds include WebView2 COM headers. The headers are not kept
+  in the repository, so they must be installed from the Microsoft WebView2 NuGet
+  package once per checkout.
+- The desktop host expects `assets/index.html`, `assets/frontend.js`, and an
+  `openseek` engine executable beside it when packaged.
+
 ## Build
 
 The clipboard extension is generated at build time by a Lepus codegen CLI, so a
@@ -76,6 +88,91 @@ moon build . --target native --release         # build the native binary
 
 The native binary is written to
 `_build/native/release/build/openseek_desktop/openseek_desktop.exe`.
+
+## Bootstrap Lepus on Windows
+
+The scripted Windows path is:
+
+```powershell
+moon run --target native .\desktop\package_windows.mbtx
+```
+
+It builds the Lepus codegen tool if needed, installs WebView2 SDK headers if
+needed, builds the frontend and native host, builds the `openseek` engine from
+the monorepo root, writes `dist/windows-x64/OpenSeek Desktop/`, and creates
+`dist/OpenSeek Desktop-windows-x64.zip`.
+
+The manual steps below are useful when debugging the package script.
+
+From the repository root, initialize the Lepus submodule. If Git for Windows
+cannot run `git submodule` from PowerShell because Unix helper tools are missing
+from `PATH`, run the command from Git Bash instead.
+
+```powershell
+git submodule update --init --recursive desktop/lepus
+```
+
+Install the Lepus codegen CLI:
+
+```powershell
+cd desktop\lepus
+moon install ./cli --bin target/lepus-tools
+```
+
+Install WebView2 SDK headers used by Lepus native Windows sources:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_webview2_headers.ps1
+cd ..
+```
+
+Build the frontend bundle, copy it to `frontend.js`, and build the native host:
+
+```powershell
+moon build frontend --target js --release
+moon run --target native build_frontend.mbtx
+moon build . --target native --release
+```
+
+On Windows, `native_link_config.mjs` passes GUI subsystem linker flags to the
+host executable so double-clicking `openseek-desktop.exe` does not open an extra
+terminal window. It detects common compiler driver styles:
+
+- `clang`/`clang++`: `-Wl,/SUBSYSTEM:WINDOWS -Wl,/ENTRY:mainCRTStartup`
+- `clang-cl`/`cl`: `/link /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup`
+- MinGW/GCC: `-mwindows`
+
+Set `OPENSEEK_DESKTOP_LINK_STYLE=clang`, `msvc`, or `mingw` to override the
+auto-detection.
+
+Build the `openseek` engine from the monorepo root:
+
+```powershell
+cd ..
+moon build cmd/openseek --target native --release
+cd desktop
+```
+
+For a runnable development bundle, place these files together:
+
+```text
+dist/windows-x64/OpenSeek Desktop/
+  openseek-desktop.exe
+  openseek.exe
+  assets/index.html
+  assets/frontend.js
+```
+
+The files come from:
+
+```text
+openseek-desktop.exe <- desktop/_build/native/release/build/openseek_desktop/openseek_desktop.exe
+openseek.exe         <- _build/native/release/build/cmd/openseek/openseek.exe
+assets/index.html    <- desktop/index.html
+assets/frontend.js   <- desktop/frontend.js
+```
+
+The target machine also needs Microsoft WebView2 Runtime installed.
 
 ## Package (macOS)
 

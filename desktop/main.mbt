@@ -473,6 +473,38 @@ fn engine_command(framework_command : String) -> String {
 }
 
 ///|
+fn launch_log_path(framework_command : String) -> String {
+  let command_path : @mbpath.Path = framework_command
+  command_path
+  .dirname()
+  .resolve()
+  .join("openseek-desktop.log")
+  .normalize()
+  .to_string()
+}
+
+///|
+fn append_launch_log(framework_command : String, message : String) -> Unit {
+  let path = launch_log_path(framework_command)
+  let previous = if @mbfs.path_exists(path) {
+    @mbfs.read_file_to_string(path) catch {
+      _ => ""
+    }
+  } else {
+    ""
+  }
+  let line = @env.now().to_string() + " " + message + "\n"
+  ignore(@mbfs.write_string_to_file(path, previous + line) catch { _ => () })
+}
+
+///|
+async fn prepare_engine_stdin(engine : String) -> &@process.ProcessInput {
+  let path = engine + ".stdin"
+  @mbfs.write_string_to_file(path, "")
+  @process.redirect_from_file(path)
+}
+
+///|
 /// Every outbound event the runner can send to the frontend. `emit` is the
 /// single place that maps a variant to its wire name and payload, so the
 /// name/payload pairing can never drift out of sync.
@@ -981,30 +1013,41 @@ fn openseek_extension(
 
 ///|
 fn main {
-  if @app.is_framework_process() {
-    match @app.run_framework_process_from_cli() {
-      Ok(_) => ()
-      Err(error) => abort(error)
-    }
-    return
-  }
   let framework_command = match @app.current_executable_command() {
     Ok(command) => command
     Err(error) => abort(error)
   }
+  append_launch_log(framework_command, "start")
+  if @app.is_framework_process() {
+    append_launch_log(framework_command, "framework process start")
+    match @app.run_framework_process_from_cli() {
+      Ok(_) => append_launch_log(framework_command, "framework process exit ok")
+      Err(error) => {
+        append_launch_log(
+          framework_command,
+          "framework process error: " + error,
+        )
+        abort(error)
+      }
+    }
+    return
+  }
+  let frontend_entry = frontend_entry_path(framework_command)
+  let engine = engine_command(framework_command)
+  append_launch_log(framework_command, "host process start")
+  append_launch_log(framework_command, "frontend entry: " + frontend_entry)
+  append_launch_log(framework_command, "engine: " + engine)
   let extensions : Map[String, @manifest.ExtensionSetting] = {}
   extensions[ExtensionId] = @manifest.ExtensionSetting::enabled()
   extensions["justjavac/lepus-clipboard"] = @manifest.ExtensionSetting::enabled()
   let manifest = @manifest.AppManifest::new(
     @manifest.WindowManifest::new("OpenSeek Desktop", 1120, 760, size_hint=None),
-    File(frontend_entry_path(framework_command)),
+    File(frontend_entry),
     debug=1,
     extensions~,
   )
   let registry = @app.AppCommandExtensionRegistry::new()
-  let _ = registry.register(
-    openseek_extension(new_engine_manager(), engine_command(framework_command)),
-  )
+  let _ = registry.register(openseek_extension(new_engine_manager(), engine))
   let _ = registry.register(@clipboard.generated_app_command_extension())
   // Keep all runtime state out of the bundle: the framework IPC config is
   // written to the per-user runtime dir, and the framework child runs there
@@ -1027,7 +1070,10 @@ fn main {
       framework_cwd=runtime_dir,
       framework_config_path~,
     ) {
-    Ok(_) => ()
-    Err(error) => abort(error)
+    Ok(_) => append_launch_log(framework_command, "host process exit ok")
+    Err(error) => {
+      append_launch_log(framework_command, "host process error: " + error)
+      abort(error)
+    }
   }
 }

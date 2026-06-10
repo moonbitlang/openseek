@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop"
+
+import {
+  "moonbitlang/core/json",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type CancelPayload derive(@json.FromJson)
+
+type CancelReply derive(ToJson)
+
+type ErrorPayload derive(ToJson)
+
+type EventPayload derive(ToJson)
+
+type FinishedPayload derive(ToJson)
+
+type StartPayload derive(@json.FromJson)
+
+type StartReply derive(ToJson)
+
+type StartedPayload derive(ToJson)
+
+// Type aliases
+
+// Traits
+

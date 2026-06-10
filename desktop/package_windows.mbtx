@@ -1,0 +1,229 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/x/fs",
+}
+
+///|
+const FrontendPackage : String = "frontend"
+
+///|
+const NativePackage : String = "."
+
+///|
+const NativeBinary : String =
+  "_build/native/release/build/openseek_desktop/openseek_desktop.exe"
+
+///|
+/// The openseek engine package, built from the monorepo root so the bundled
+/// engine always matches the checkout instead of whatever happens to be on PATH.
+const EnginePackage : String = "cmd/openseek"
+
+///|
+/// Path to the freshly built engine binary, relative to the repository root.
+const EngineBinary : String =
+  "_build/native/release/build/cmd/openseek/openseek.exe"
+
+///|
+/// Path to the Lepus codegen CLI staged inside the submodule on Windows,
+/// relative to the desktop workspace.
+const CodegenTool : String = "lepus/target/lepus-tools/lepus_cli.exe"
+
+///|
+const WebView2Header : String =
+  "lepus/build/_deps/microsoft_web_webview2-src/build/native/include/WebView2.h"
+
+///|
+const BundleDir : String = "dist/windows-x64/OpenSeek Desktop"
+
+///|
+const ZipPath : String = "dist/OpenSeek Desktop-windows-x64.zip"
+
+///|
+const AppAssetDir : String = BundleDir + "/assets"
+
+///|
+suberror PackageError {
+  PackageError(String)
+}
+
+///|
+fn is_repo_root() -> Bool {
+  @fs.path_exists("desktop/moon.mod")
+}
+
+///|
+fn desktop_path(path : String) -> String {
+  if is_repo_root() {
+    "desktop/" + path
+  } else {
+    path
+  }
+}
+
+///|
+fn repo_path(path : String) -> String {
+  if is_repo_root() {
+    path
+  } else {
+    "../" + path
+  }
+}
+
+///|
+async fn run_checked(command : String, args : Array[String]) -> Unit raise {
+  let joined_args = args.join(" ")
+  println("$ \{command} \{joined_args}")
+  let code = @process.run(command, args, inherit_env=true)
+  if code != 0 {
+    raise PackageError("command failed with exit code \{code}: \{command}")
+  }
+}
+
+///|
+async fn run_powershell(script : String) -> Unit raise {
+  run_checked("powershell", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    script,
+  ])
+}
+
+///|
+async fn run_desktop_moon(args : Array[String]) -> Unit raise {
+  if is_repo_root() {
+    run_checked("moon", ["-C", "desktop"] + args)
+  } else {
+    run_checked("moon", args)
+  }
+}
+
+///|
+async fn run_desktop_helper_moon(args : Array[String]) -> Unit raise {
+  let target_dir = "_build/package_windows_helper"
+  if is_repo_root() {
+    run_checked("moon", ["-C", "desktop", "--target-dir", target_dir] + args)
+  } else {
+    run_checked("moon", ["--target-dir", target_dir] + args)
+  }
+}
+
+///|
+/// Build the openseek engine from the monorepo source. Runs from the repo root
+/// since the engine lives in a separate moon module from this desktop workspace.
+async fn build_engine() -> Unit raise {
+  if is_repo_root() {
+    run_checked("moon", [
+      "build", EnginePackage, "--target", "native", "--release",
+    ])
+  } else {
+    run_powershell(
+      "Set-Location -LiteralPath '..'; moon build \{EnginePackage} --target native --release",
+    )
+  }
+  if !@fs.path_exists(repo_path(EngineBinary)) {
+    raise PackageError(
+      "openseek engine binary not found: \{repo_path(EngineBinary)}",
+    )
+  }
+}
+
+///|
+/// Build the Lepus codegen CLI into the submodule if it is not already staged.
+async fn ensure_codegen_tool() -> Unit raise {
+  if @fs.path_exists(desktop_path(CodegenTool)) {
+    return
+  }
+  run_powershell(
+    "Set-Location -LiteralPath '\{desktop_path("lepus")}'; moon install ./cli --bin target/lepus-tools",
+  )
+}
+
+///|
+/// Install WebView2 SDK headers used by Lepus native Windows sources.
+async fn ensure_webview2_headers() -> Unit raise {
+  if @fs.path_exists(desktop_path(WebView2Header)) {
+    return
+  }
+  run_powershell(
+    "Set-Location -LiteralPath '\{desktop_path("lepus")}'; & .\\scripts\\install_webview2_headers.ps1",
+  )
+}
+
+///|
+async fn build_outputs() -> Unit raise {
+  ensure_codegen_tool()
+  ensure_webview2_headers()
+  run_desktop_moon([
+    "build", FrontendPackage, "--target", "js", "--release",
+  ])
+  run_desktop_helper_moon([
+    "run", "--target", "native", "build_frontend.mbtx",
+  ])
+  run_desktop_moon([
+    "build", NativePackage, "--target", "native", "--release",
+  ])
+  build_engine()
+}
+
+///|
+async fn reset_bundle_dirs() -> Unit raise {
+  let bundle_dir = desktop_path(BundleDir)
+  let zip_path = desktop_path(ZipPath)
+  let asset_dir = desktop_path(AppAssetDir)
+  run_powershell(
+    "if (Test-Path -LiteralPath '\{bundle_dir}') { Remove-Item -LiteralPath '\{bundle_dir}' -Recurse -Force }; if (Test-Path -LiteralPath '\{zip_path}') { Remove-Item -LiteralPath '\{zip_path}' -Force }; New-Item -ItemType Directory -Force -Path '\{asset_dir}' | Out-Null",
+  )
+}
+
+///|
+async fn copy_file(source : String, destination : String) -> Unit raise {
+  run_powershell(
+    "Copy-Item -LiteralPath '\{source}' -Destination '\{destination}' -Force",
+  )
+}
+
+///|
+async fn copy_bundle_files() -> Unit raise {
+  let native_binary = desktop_path(NativeBinary)
+  let engine_binary = repo_path(EngineBinary)
+  if !@fs.path_exists(native_binary) {
+    raise PackageError("native binary not found: \{native_binary}")
+  }
+  if !@fs.path_exists(engine_binary) {
+    raise PackageError("openseek engine binary not found: \{engine_binary}")
+  }
+  if !@fs.path_exists(desktop_path("frontend.js")) {
+    raise PackageError(
+      "frontend bundle not found: \{desktop_path("frontend.js")}",
+    )
+  }
+  copy_file(native_binary, desktop_path(BundleDir + "/openseek-desktop.exe"))
+  copy_file(engine_binary, desktop_path(BundleDir + "/openseek.exe"))
+  copy_file(desktop_path("index.html"), desktop_path(AppAssetDir + "/index.html"))
+  copy_file(
+    desktop_path("frontend.js"),
+    desktop_path(AppAssetDir + "/frontend.js"),
+  )
+}
+
+///|
+async fn zip_bundle() -> Unit raise {
+  run_powershell(
+    "Compress-Archive -LiteralPath '\{desktop_path(BundleDir)}' -DestinationPath '\{desktop_path(ZipPath)}' -Force",
+  )
+}
+
+///|
+async fn main raise {
+  build_outputs()
+  println("built openseek engine: \{repo_path(EngineBinary)}")
+  reset_bundle_dirs()
+  copy_bundle_files()
+  zip_bundle()
+  println("generated \{desktop_path(BundleDir)}")
+  println("generated \{desktop_path(ZipPath)}")
+}
