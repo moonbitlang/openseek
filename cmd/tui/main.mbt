@@ -47,6 +47,13 @@ fn cli_command() -> @argparse.Command {
         about="Agent engine binary to spawn; reads its JSONL event stream from stdout.",
       ),
       OptionArg(
+        "engine-mode",
+        long="engine-mode",
+        env="OPENSEEK_ENGINE_MODE",
+        default_values=["serve"],
+        about="Engine protocol: serve (one persistent, steerable process) or oneshot (spawn per prompt, for replay engines).",
+      ),
+      OptionArg(
         "session",
         long="session",
         env="OPENSEEK_SESSION",
@@ -236,6 +243,7 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
     },
     session_root: session_root_value,
     engine: value(matches, "engine"),
+    engine_mode: EngineMode::parse(value(matches, "engine-mode")),
   }
 }
 

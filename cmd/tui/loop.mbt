@@ -133,6 +133,107 @@ fn engine_env(
 }
 
 ///|
+fn engine_args(task : String) -> Array[String] {
+  ["--", task]
+}
+
+///|
+/// Spawn the agent engine for one input and stream its JSONL stdout into the
+/// message loop.
+///
+/// The engine is a separate process (`config.engine`, default `openseek`): it
+/// runs the task and writes one JSON event per line to stdout. `@jsonl.each`
+/// reads those lines, skips blanks, and parses each as JSON; we map the value to
+/// an `AgentEvent` and forward it as `AgentProgress`. If the engine closes its
+/// stream without a terminal event (it crashed, or exited before answering), we
+/// synthesize an `AgentError` so the loop never hangs waiting for a result that
+/// will not come.
+async fn run_agent_task(
+  config : AppConfig,
+  run_id : Int,
+  task : String,
+  messages : @async.Queue[Msg],
+) -> Unit {
+  @async.with_task_group(group => {
+    let (reader, child_stdout) = @process.read_from_process()
+    let (stderr_reader, child_stderr) = @process.read_from_process()
+    let child_env = engine_env(config, @env.get_env_vars())
+    let proc = @process.spawn(
+      group,
+      config.engine,
+      // The TUI accepts hyphen-valued tasks (`allow_hyphen_values`), so a task
+      // can start with `-`/`--` (e.g. the literal text `--help`). Forward it
+      // after a `--` delimiter so the engine's argparse treats it as the task
+      // positional rather than parsing it as one of its own options (which would
+      // exit/print help and never emit a terminal JSONL event). Session settings
+      // go through a fully materialized environment so custom replay engines do
+      // not need to accept OpenSeek-specific flags, and inherited session vars
+      // cannot shadow explicit TUI config.
+      engine_args(task),
+      inherit_env=false,
+      extra_env=child_env,
+      stdout=child_stdout,
+      stderr=child_stderr,
+    )
+    // Drain the engine's stderr concurrently with stdout. Capturing it (rather
+    // than letting it inherit the terminal) keeps diagnostics from corrupting
+    // the screen `@ui.with_ui` is drawing, and lets us surface them if the
+    // engine dies without a terminal event. The drain is bounded: a misbehaving
+    // engine (crash loop, verbose build log) could write unbounded stderr, so we
+    // keep only a capped prefix in memory while still reading to EOF.
+    // `drain_stderr_capped` folds any read error into its returned text and only
+    // raises on cancellation, which should tear the whole group down — so there
+    // is nothing to swallow here.
+    let stderr_task = group.spawn(no_wait=true) <| () => {
+      drain_stderr_capped(stderr_reader)
+    }
+    let mut saw_terminal = false
+    // A malformed (non-JSON) line raises out of `each`. The only such output is
+    // a runtime crash dump, so rather than surface a parse error we stop reading
+    // and let the exit code below explain the failure. Cancellation is re-raised
+    // to the outer handler so a Ctrl-C still reports `AgentCancelled`.
+    // `each`'s callback is synchronous, so enqueue with `try_put` (the queue
+    // is unbounded, so it never rejects) rather than the async `put`.
+    @jsonl.each(reader, json => {
+      if @event.decode_event(json) is Some(event) {
+        if is_terminal_event(event) {
+          saw_terminal = true
+        }
+        messages.try_put(AgentProgress(run_id~, event)) |> ignore
+      }
+    }) catch {
+      error if @async.is_being_cancelled() ||
+        @async.is_cancellation_error(error) => raise error
+      // Protocol violation: stop reading and kill the child instead of waiting
+      // for it. If the engine keeps writing past the bad line, nobody is
+      // draining its stdout, so a plain `proc.wait()` could deadlock on a full
+      // pipe. `cancel()` sends SIGTERM (then SIGKILL) so `wait()` returns.
+      _ => proc.cancel()
+    }
+    // We are done reading; close the read end so the child sees EOF/EPIPE
+    // rather than blocking on a pipe we no longer drain.
+    reader.close()
+    let code = proc.wait()
+    if !saw_terminal {
+      // The engine produced no terminal event. Its stderr is the only clue to
+      // why (a crash, a network/API error), so fold it into the reported error.
+      let diagnostics = stderr_task.wait().trim()
+      let detail = if diagnostics.is_empty() { "" } else { ":\n\{diagnostics}" }
+      messages.put(
+        AgentProgress(
+          run_id~,
+          AgentError("engine exited (code \{code}) without a result\{detail}"),
+        ),
+      )
+    }
+  }) catch {
+    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
+      messages.put(AgentCancelled(run_id~))
+    error => messages.put(AgentFailed(run_id~, error))
+  }
+}
+
+///|
 /// Run a `!` shell command locally and post its result to the message loop.
 ///
 /// Unlike a prompt, a shell command is the TUI's own responsibility: it runs it
@@ -349,6 +450,16 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
                 ),
               ),
             )
+          } else if state.config.engine_mode is OneShot {
+            // One-shot engines have no command channel into a running
+            // process — the original pre-serve limitation.
+            cmds.push(
+              AppendItem(
+                Error(
+                  "Steering is not supported by a oneshot engine. Press Tab to queue this input.",
+                ),
+              ),
+            )
           } else {
             match input {
               Prompt(text) => cmds.push(SteerAgent(text))
@@ -449,15 +560,26 @@ async fn[G] run_message_loop(
     for cmd in update(state, message) {
       match cmd {
         AppendItem(item) => ui.append_item(item)
-        StartAgent(run_id~, task) => {
-          // An engine turn has no local task. A queued prompt can start in
-          // the same update that finished a `!` command (state never passes
-          // through Idle, so the cleanup below never runs); clear the stale
-          // handle here or the next Ctrl-C would cancel a dead command task
-          // instead of the engine turn.
-          running_task = None
-          engine.prompt(group, run_id, task)
-        }
+        StartAgent(run_id~, task) =>
+          match state.config.engine_mode {
+            Serve => {
+              // An engine turn has no local task. A queued prompt can start
+              // in the same update that finished a `!` command (state never
+              // passes through Idle, so the cleanup below never runs); clear
+              // the stale handle here or the next Ctrl-C would cancel a dead
+              // command task instead of the engine turn.
+              running_task = None
+              engine.prompt(group, run_id, task)
+            }
+            // The escape hatch for engines that only speak the original
+            // protocol: one process per prompt, cancelled like a local task.
+            OneShot =>
+              running_task = Some(
+                group.spawn(no_wait=true) <| () => {
+                  run_agent_task(state.config, run_id, task, messages)
+                },
+              )
+          }
         RunCommand(run_id~, command) =>
           running_task = Some(
             group.spawn(no_wait=true) <| () => {
@@ -467,11 +589,18 @@ async fn[G] run_message_loop(
         SteerAgent(text) => engine.steer(text)
         CancelAgent =>
           match running_task {
-            // A local shell command in flight: cancel its task directly.
+            // A local shell command (or a one-shot engine run) in flight:
+            // cancel its task directly.
             Some(task) => task.cancel()
             None => engine.cancel_turn()
           }
-        KillEngine => engine.kill()
+        KillEngine =>
+          match running_task {
+            // One-shot runs and local commands have no separate process to
+            // escalate to beyond cancelling the task again.
+            Some(task) => task.cancel()
+            None => engine.kill()
+          }
         Quit => {
           // Closing the engine's stdin is the serve protocol's shutdown
           // signal; any straggler is reaped by task-group teardown.

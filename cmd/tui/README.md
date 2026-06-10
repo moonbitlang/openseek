@@ -3,12 +3,19 @@
 The OpenSeek terminal UI: a scrolling transcript with a live composer, built
 on the reusable [`tui`](../../tui/README.md) controller package.
 
-The TUI runs no agent code itself. For every submitted prompt it spawns the
-engine binary (`openseek` from `PATH`; override with `--engine` or
-`OPENSEEK_ENGINE`) and renders the engine's JSONL event stream: streamed
-thinking and answer text move live on the activity line, each turn's reasoning
-is kept as a dim `✻` transcript aside above its answer, and tool results land
-as `⏺` blocks.
+The TUI runs no agent code itself. It spawns the engine binary (`openseek`
+from `PATH`; override with `--engine` or `OPENSEEK_ENGINE`) **once per
+session** in `--serve` mode and drives it over stdin commands, rendering the
+engine's JSONL event stream: streamed thinking and answer text move live on
+the activity line, each turn's reasoning is kept as a dim `✻` transcript
+aside above its answer, and tool results land as `⏺` blocks. Pressing Enter
+while a task runs steers it mid-turn; Ctrl-C cancels the turn (a second
+Ctrl-C kills the engine, and the next prompt respawns it on the same
+session).
+
+A custom or recorded-stream engine that only speaks the original
+one-process-per-prompt protocol still works with `--engine-mode oneshot`
+(env `OPENSEEK_ENGINE_MODE`); steering is unavailable there.
 
 ## Sessions
 

@@ -32,6 +32,7 @@ Options:
   --thinking <thinking>                  DeepSeek thinking mode: enabled or disabled. [env: OPENSEEK_THINKING] [default: enabled]
   --reasoning-effort <reasoning-effort>  DeepSeek reasoning effort in thinking mode: high or max. [env: OPENSEEK_REASONING_EFFORT] [default: max]
   --engine <engine>                      Agent engine binary to spawn; reads its JSONL event stream from stdout. [env: OPENSEEK_ENGINE] [default: openseek]
+  --engine-mode <engine-mode>            Engine protocol: serve (one persistent, steerable process) or oneshot (spawn per prompt, for replay engines). [env: OPENSEEK_ENGINE_MODE] [default: serve]
   --session <session>                    Create or resume this durable session id. [env: OPENSEEK_SESSION]
   --session-root <session-root>          Directory containing durable OpenSeek sessions. [env: OPENSEEK_SESSION_ROOT] [default: .openseek]
 ```
@@ -62,6 +63,7 @@ Options:
   --thinking <thinking>                  DeepSeek thinking mode: enabled or disabled. [env: OPENSEEK_THINKING] [default: enabled]
   --reasoning-effort <reasoning-effort>  DeepSeek reasoning effort in thinking mode: high or max. [env: OPENSEEK_REASONING_EFFORT] [default: max]
   --engine <engine>                      Agent engine binary to spawn; reads its JSONL event stream from stdout. [env: OPENSEEK_ENGINE] [default: openseek]
+  --engine-mode <engine-mode>            Engine protocol: serve (one persistent, steerable process) or oneshot (spawn per prompt, for replay engines). [env: OPENSEEK_ENGINE_MODE] [default: serve]
   --session <session>                    Create or resume this durable session id. [env: OPENSEEK_SESSION]
   --session-root <session-root>          Directory containing durable OpenSeek sessions. [env: OPENSEEK_SESSION_ROOT] [default: .openseek]
 

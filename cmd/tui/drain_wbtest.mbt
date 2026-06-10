@@ -10,6 +10,7 @@ fn drain_test_state() -> State {
     session_id: SessionId("test"),
     session_root: ".openseek",
     engine: "openseek",
+    engine_mode: Serve,
   })
 }
 
@@ -228,6 +229,29 @@ test "steering a running agent sends a steer command" {
   let cmds = update(state, UiInput(Queue(Prompt("c"))))
   assert_eq(state.queued.length(), 1)
   assert_eq(error_item_count(cmds), 0)
+}
+
+///|
+test "oneshot engines reject steering with the legacy notice" {
+  let state = State::new({
+    api_key: "k",
+    model: V4Pro,
+    cwd: ".",
+    max_steps: 10,
+    thinking: Enabled,
+    reasoning_effort: Max,
+    session_id: SessionId("test"),
+    session_root: ".openseek",
+    engine: "./replayer",
+    engine_mode: OneShot,
+  })
+  let _ = update(state, UiInput(Steer(Prompt("a"))))
+  assert_true(state.run is Running(_))
+  // No command channel into a one-shot process: steering errors instead of
+  // emitting a steer command.
+  let cmds = update(state, UiInput(Steer(Prompt("b"))))
+  assert_eq(error_item_count(cmds), 1)
+  assert_true(cmds.iter().all(cmd => !(cmd is SteerAgent(_))))
 }
 
 ///|

@@ -17,6 +17,27 @@ priv struct AppConfig {
   // the `openseek` binary on `PATH`; override (e.g. to a recorded-stream
   // replayer) with `--engine` or `OPENSEEK_ENGINE`.
   engine : String
+  engine_mode : EngineMode
+}
+
+///|
+/// How the TUI talks to its engine. `Serve` (the default) keeps one
+/// persistent `--serve` process per session — warm watchers, steering,
+/// polite cancel. `OneShot` spawns the engine once per prompt with the task
+/// as an argument: the escape hatch for replay or custom engines that only
+/// speak the original protocol; steering is unavailable there.
+priv enum EngineMode {
+  Serve
+  OneShot
+}
+
+///|
+fn EngineMode::parse(input : String) -> EngineMode raise {
+  match input {
+    "serve" => Serve
+    "oneshot" => OneShot
+    other => fail("unknown engine mode: \{other} (use serve or oneshot)")
+  }
 }
 
 ///|
