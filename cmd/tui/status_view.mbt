@@ -85,17 +85,35 @@ fn elapsed_seconds(started_ms : Int64, now_ms : Int64) -> Int64 {
 }
 
 ///|
-/// Columns of the activity row not available to the streaming preview: the
-/// composer indent the renderer prepends (2), the widest label ("Streaming ",
-/// 10), and one column of slack. The preview is tail-clipped to what remains so
-/// its newest characters are never cut by the renderer's own width clip, which
-/// keeps the line's *front* — the oldest text — on overflow.
-const ActivityPreviewReservedColumns : Int = 13
+/// Columns of the activity row not available to the label or preview: the
+/// composer indent the renderer prepends (2) and one column of slack so the
+/// preview's newest characters are never cut by the renderer's own width
+/// clip, which keeps the line's *front* — the oldest text — on overflow.
+const ActivityChromeColumns : Int = 3
 
 ///|
-fn activity_preview(text : String, cols~ : Int) -> String {
-  let budget = cols - ActivityPreviewReservedColumns
-  tail_columns(text, if budget < 16 { 16 } else { budget })
+/// A streaming activity line: the dim `label` followed by the tail of `text`
+/// clipped to the columns the label leaves free, so the newest characters
+/// always fit the row. The preview dims with `dim_preview` (reasoning reads
+/// as an aside; content reads at full strength).
+fn streaming_activity_line(
+  label : String,
+  text : String,
+  cols~ : Int,
+  dim_preview~ : Bool,
+) -> @doc.Text {
+  let budget = cols -
+    ActivityChromeColumns -
+    @displaytext.DisplayText(label).width()
+  let preview = tail_columns(text, if budget < 16 { 16 } else { budget })
+  Text([
+    Span(DisplayText(label), style=@style.dim),
+    if dim_preview {
+      Span(DisplayText(preview), style=@style.dim)
+    } else {
+      @doc.Span::plain(preview)
+    },
+  ])
 }
 
 ///|
@@ -107,10 +125,7 @@ fn format_activity_text(state : State, cols~ : Int) -> @doc.Text? {
   }
   if state.streaming_response is Some(response) && !response.trim().is_empty() {
     return Some(
-      Text([
-        Span(DisplayText("Streaming "), style=@style.dim),
-        @doc.Span::plain(activity_preview(response, cols~)),
-      ]),
+      streaming_activity_line("Streaming ", response, cols~, dim_preview=false),
     )
   }
   // Thinking-mode runs spend their first (often long) stretch emitting only
@@ -119,10 +134,7 @@ fn format_activity_text(state : State, cols~ : Int) -> @doc.Text? {
   if state.streaming_reasoning is Some(reasoning) &&
     !reasoning.trim().is_empty() {
     return Some(
-      Text([
-        Span(DisplayText("Thinking "), style=@style.dim),
-        Span(DisplayText(activity_preview(reasoning, cols~)), style=@style.dim),
-      ]),
+      streaming_activity_line("Thinking ", reasoning, cols~, dim_preview=true),
     )
   }
   let elapsed = format_elapsed_compact(

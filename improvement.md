@@ -20,10 +20,11 @@ bottom of the matching section.
   `reasoning_message` after streaming; the TUI commits a `✻` thought aside
   above the answer. Resume does not replay thoughts — sessions do not store
   reasoning for no-tool turns; see the auto-compaction/session items.)*
-- [ ] **Measure the activity label instead of reserving 13 columns.**
+- [x] **Measure the activity label instead of reserving 13 columns.**
   `ActivityPreviewReservedColumns` hardcodes indent + widest label + slack;
   computing it from the actual label keeps the preview honest if labels
-  change.
+  change. *(Done: `streaming_activity_line` measures the label's display
+  width; only the renderer indent + slack remain a constant.)*
 - [ ] **Session management inside the TUI.** A `--continue` flag for the most
   recent session, and a way to list/switch sessions without restarting.
   Generated ids (`tui-YYYYMMDD-HHMMSS-mmm`) are only discoverable via the
