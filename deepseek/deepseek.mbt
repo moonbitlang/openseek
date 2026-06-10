@@ -57,6 +57,26 @@ pub impl Show for ReasoningEffort with fn to_string(self : ReasoningEffort) -> S
 }
 
 ///|
+/// DeepSeek response format toggle.
+///
+/// `JsonObject` puts the model into JSON mode, where the assistant `content`
+/// must be a valid JSON object. `Text` (the default) requests ordinary
+/// natural-language replies.
+pub(all) enum ResponseFormat {
+  Text
+  JsonObject
+} derive(Eq, Debug)
+
+///|
+/// Returns the DeepSeek wire name for a response format.
+pub impl Show for ResponseFormat with fn to_string(self : ResponseFormat) -> String {
+  match self {
+    Text => "text"
+    JsonObject => "json_object"
+  }
+}
+
+///|
 /// DeepSeek chat message roles.
 ///
 /// `Tool(tool_call_id)` represents a tool response message and carries the

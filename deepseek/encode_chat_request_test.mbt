@@ -1,13 +1,39 @@
 ///|
-test "encode_chat_request always asks for json output" {
+test "encode_chat_request requests text output by default" {
   let body = @deepseek.encode_chat_request(V4Flash, [
-    ChatMessage(System, content="json only"),
+    ChatMessage(System, content="reply in prose"),
     ChatMessage(User, content="ping"),
   ])
   let text = body.stringify()
   assert_true(text.contains("\"stream\":false"))
-  assert_true(text.contains("\"response_format\""))
+  guard body is { "response_format": { "type": String("text"), .. }, .. } else {
+    fail("wrong response_format")
+  }
+}
+
+///|
+test "encode_chat_request requests json output when asked" {
+  let body = @deepseek.encode_chat_request(
+    V4Flash,
+    [
+      ChatMessage(System, content="json only"),
+      ChatMessage(User, content="ping"),
+    ],
+    response_format=JsonObject,
+  )
   guard body is { "response_format": { "type": String("json_object"), .. }, .. } else {
+    fail("wrong response_format")
+  }
+}
+
+///|
+test "encode_chat_request requests text output when asked" {
+  let body = @deepseek.encode_chat_request(
+    V4Flash,
+    [ChatMessage(User, content="ping")],
+    response_format=Text,
+  )
+  guard body is { "response_format": { "type": String("text"), .. }, .. } else {
     fail("wrong response_format")
   }
 }

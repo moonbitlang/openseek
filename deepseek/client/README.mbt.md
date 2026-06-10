@@ -20,8 +20,10 @@ The package depends on `moonbitlang/async/http` and is native-only.
 ## Request Behavior
 
 `Client::chat` builds a private request envelope with the client's configured
-model, thinking mode, and reasoning effort, then sends it to `api_url` as JSON.
-It always sends `stream=false` and `response_format={"type":"json_object"}`.
+model, response format, thinking mode, and reasoning effort, then sends it to
+`api_url` as JSON. It always sends `stream=false`. `response_format` defaults to
+`Text`, so the model replies with ordinary text; set
+`response_format=JsonObject` only when structured JSON output is wanted.
 
 Use `tools=[...]` when the model should call native DeepSeek function tools.
 Tool call results should be appended as `@deepseek.ChatMessage(Tool(call.id),

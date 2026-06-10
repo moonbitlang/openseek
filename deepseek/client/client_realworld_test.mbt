@@ -10,6 +10,7 @@ async test "realworld DeepSeek API smoke test" {
   let client = @client.Client(
     api_key~,
     model=V4Pro,
+    response_format=JsonObject,
     thinking=Some(Enabled),
     reasoning_effort=Some(High),
   )

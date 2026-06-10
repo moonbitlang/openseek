@@ -66,12 +66,14 @@ impl ToJson for ToolCall with fn to_json(call : ToolCall) -> Json {
 ///|
 /// Encodes a DeepSeek chat completions request body.
 ///
-/// The request always asks for a JSON object response. `tools`, `thinking`,
-/// and `reasoning_effort` are omitted when empty / `None`.
+/// `response_format` defaults to `Text`, so the model replies with ordinary
+/// text; pass `JsonObject` only when structured JSON output is wanted. `tools`,
+/// `thinking`, and `reasoning_effort` are omitted when empty / `None`.
 pub fn encode_chat_request(
   model : Model,
   messages : Array[ChatMessage],
   tools? : Array[ToolDefinition] = [],
+  response_format? : ResponseFormat = Text,
   thinking? : ThinkingMode,
   reasoning_effort? : ReasoningEffort,
 ) -> Json {
@@ -81,7 +83,7 @@ pub fn encode_chat_request(
         ("model", Json::string(model.to_string())),
         ("messages", ([ for message in messages => message ] : Json)),
         ("stream", Json::boolean(false)),
-        ("response_format", { "type": "json_object" }),
+        ("response_format", ({ "type": response_format.to_string() } : Json)),
         ..if tools.length() > 0 {
           [("tools", ([ for tool in tools => tool ] : Json))]
         } else {

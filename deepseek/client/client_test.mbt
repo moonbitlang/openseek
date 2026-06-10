@@ -19,6 +19,7 @@ test "client debug redacts api key" {
       #|  api_key: ...,
       #|  model: V4Pro,
       #|  api_url: "https://api.deepseek.com/chat/completions",
+      #|  response_format: Text,
       #|  thinking: Some(Enabled),
       #|  reasoning_effort: Some(Max),
       #|}
