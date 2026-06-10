@@ -118,17 +118,21 @@ fn State::owns_run(self : State, id : Int) -> Bool {
 
 ///|
 /// Reset run tracking after the agent stops (finished, aborted, cancelled, or
-/// failed): no task running, no pending final or streaming response. The
-/// watcher status survives a turn ending: the persistent engine keeps its
-/// `moon_check --watch` processes alive between prompts, so the segment only
-/// clears when the engine itself exits (`EngineExited`) or a runtime update
-/// reports the watcher stopped.
+/// failed): no task running, no pending final or streaming response. In serve
+/// mode the watcher status survives a turn ending — the persistent engine
+/// keeps its `moon_check --watch` processes alive between prompts, so the
+/// segment only clears when the engine itself exits (`EngineExited`) or a
+/// runtime update reports the watcher stopped. A oneshot engine dies with its
+/// turn, and its watchers with it, so there the status clears here as before.
 fn State::finish_run(self : State) -> Unit {
   self.run = Idle
   self.run_is_command = false
   self.step_response = None
   self.streaming_response = None
   self.streaming_reasoning = None
+  if self.config.engine_mode is OneShot {
+    self.watcher_status = ""
+  }
 }
 
 ///|
