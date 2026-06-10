@@ -509,34 +509,46 @@ pub async fn SessionStore::list(
 }
 
 ///|
-/// The most recently active session id, or `None` for an empty store.
+/// The most recently active session id that can actually be resumed, or
+/// `None` for an empty store.
 ///
 /// Recency is the event log's modification time: the header is written once
 /// at creation while the log is touched on every append, so its mtime tracks
 /// the last turn of actual conversation. A session directory whose log is
-/// missing falls back to its header's mtime (created but never appended to),
-/// and one whose files cannot be inspected at all is skipped — one broken
-/// directory should not make every other session unresumable.
+/// missing falls back to its header's mtime (created but never appended to).
+///
+/// Candidates are probed newest-first with a real `load`: a directory can
+/// stat fine yet hold a torn session (a crash between log append and header
+/// write), and resuming demands a loadable conversation — one broken
+/// directory must not make every older, valid session unresumable. In the
+/// common case the newest candidate loads and the probe costs one load.
 pub async fn SessionStore::latest(
   self : SessionStore,
 ) -> @agent_session.SessionId? {
-  let mut best : (@agent_session.SessionId, Int64, Int)? = None
+  let stamped : Array[(@agent_session.SessionId, Int64, Int)] = []
   for id in self.list() {
     let stamp = @fs.mtime(self.event_log_path(id)) catch {
       _ => @fs.mtime(self.header_path(id)) catch { _ => continue }
     }
     let (seconds, nanoseconds) = stamp
-    let newer = match best {
-      None => true
-      Some((_, best_seconds, best_nanoseconds)) =>
-        seconds > best_seconds ||
-        (seconds == best_seconds && nanoseconds > best_nanoseconds)
-    }
-    if newer {
-      best = Some((id, seconds, nanoseconds))
-    }
+    stamped.push((id, seconds, nanoseconds))
   }
-  best.map(entry => entry.0)
+  // Newest first.
+  stamped.sort_by((a, b) => {
+    let (_, a_seconds, a_nanoseconds) = a
+    let (_, b_seconds, b_nanoseconds) = b
+    if b_seconds != a_seconds {
+      b_seconds.compare(a_seconds)
+    } else {
+      b_nanoseconds.compare(a_nanoseconds)
+    }
+  })
+  for entry in stamped {
+    let (id, _, _) = entry
+    let _ = self.load(id) catch { _ => continue }
+    return Some(id)
+  }
+  None
 }
 
 ///|

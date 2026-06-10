@@ -81,6 +81,20 @@ async test "store picks the most recently active session as latest" {
 }
 
 ///|
+async test "latest skips a torn newest session in favor of a loadable one" {
+  let store = new_store()
+  store.create(Session(SessionId("valid"), system_prompt="system"))
+  @async.sleep(50)
+  store.create(Session(SessionId("torn"), system_prompt="system"))
+  // Simulate a crash between the event-log write and the header write: the
+  // newest directory stats fine but cannot be loaded.
+  @fs.remove(store.root() + "/sessions/torn/session.json")
+  guard store.latest() is Some(id) else { fail("expected a latest session") }
+  assert_eq(id.value(), "valid")
+  @fs.rmdir(store.root(), recursive=true)
+}
+
+///|
 async test "store propagates non-missing list errors" {
   let store = new_store()
   @fs.write_file(
