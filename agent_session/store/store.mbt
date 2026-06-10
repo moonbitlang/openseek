@@ -509,6 +509,37 @@ pub async fn SessionStore::list(
 }
 
 ///|
+/// The most recently active session id, or `None` for an empty store.
+///
+/// Recency is the event log's modification time: the header is written once
+/// at creation while the log is touched on every append, so its mtime tracks
+/// the last turn of actual conversation. A session directory whose log is
+/// missing falls back to its header's mtime (created but never appended to),
+/// and one whose files cannot be inspected at all is skipped — one broken
+/// directory should not make every other session unresumable.
+pub async fn SessionStore::latest(
+  self : SessionStore,
+) -> @agent_session.SessionId? {
+  let mut best : (@agent_session.SessionId, Int64, Int)? = None
+  for id in self.list() {
+    let stamp = @fs.mtime(self.event_log_path(id)) catch {
+      _ => @fs.mtime(self.header_path(id)) catch { _ => continue }
+    }
+    let (seconds, nanoseconds) = stamp
+    let newer = match best {
+      None => true
+      Some((_, best_seconds, best_nanoseconds)) =>
+        seconds > best_seconds ||
+        (seconds == best_seconds && nanoseconds > best_nanoseconds)
+    }
+    if newer {
+      best = Some((id, seconds, nanoseconds))
+    }
+  }
+  best.map(entry => entry.0)
+}
+
+///|
 /// Persist a complete session, replacing any previous header and event log for
 /// the same id. Use this for new sessions or deliberate rewrites; ordinary
 /// agent progress should use `append`.

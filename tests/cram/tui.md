@@ -25,6 +25,7 @@ Arguments:
 
 Options:
   -h, --help                     Show help information.
+  --continue                     Resume the most recently active session in --session-root.
   --api-key <api-key>            DeepSeek API key. [env: DEEPSEEK]
   --model <model>                DeepSeek model: deepseek-v4-flash or deepseek-v4-pro. [env: DEEPSEEK_MODEL] [default: deepseek-v4-pro]
   --max-steps <max-steps>        Maximum number of agent loop steps before stopping. [env: OPENSEEK_MAX_STEPS] [default: 1000]
@@ -52,6 +53,7 @@ Arguments:
 
 Options:
   -h, --help                     Show help information.
+  --continue                     Resume the most recently active session in --session-root.
   --api-key <api-key>            DeepSeek API key. [env: DEEPSEEK]
   --model <model>                DeepSeek model: deepseek-v4-flash or deepseek-v4-pro. [env: DEEPSEEK_MODEL] [default: deepseek-v4-pro]
   --max-steps <max-steps>        Maximum number of agent loop steps before stopping. [env: OPENSEEK_MAX_STEPS] [default: 1000]

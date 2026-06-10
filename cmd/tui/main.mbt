@@ -46,6 +46,13 @@ fn cli_command() -> @argparse.Command {
         about="Directory containing durable OpenSeek sessions.",
       ),
     ],
+    flags=[
+      FlagArg(
+        "continue",
+        long="continue",
+        about="Resume the most recently active session in --session-root.",
+      ),
+    ],
     positionals=[
       PositionArg(
         "task",
@@ -55,6 +62,40 @@ fn cli_command() -> @argparse.Command {
       ),
     ],
   )
+}
+
+///|
+fn flag(matches : @argparse.Matches, name : String) -> Bool {
+  match matches.flags.get(name) {
+    Some(value) => value
+    None => false
+  }
+}
+
+///|
+/// Whether `--continue` asked to resume the latest session. Rejects the
+/// combination with an explicit `--session`: the flags give two different
+/// answers to "which conversation", and silently preferring either would
+/// surprise whoever typed the other.
+fn continue_requested(matches : @argparse.Matches) -> Bool raise {
+  let continue_flag = flag(matches, "continue")
+  if continue_flag && session_id(matches) is Some(_) {
+    fail(
+      "--continue resumes the latest session; it cannot be combined with --session",
+    )
+  }
+  continue_flag
+}
+
+///|
+/// Swap in the most recently active durable session for `--continue`. With an
+/// empty store the generated fresh session stands: there is nothing to
+/// continue, and starting a new conversation beats refusing to launch.
+async fn with_latest_session(config : AppConfig) -> AppConfig {
+  match @store.SessionStore(config.session_root).latest() {
+    Some(id) => { ..config, session_id: id }
+    None => config
+  }
 }
 
 ///|
@@ -246,7 +287,10 @@ async fn engine_launchable(engine : String) -> Bool {
 ///|
 async fn main {
   let matches = cli_command().parse(env=@env.get_env_vars())
-  let config = parse_config(matches)
+  let mut config = parse_config(matches)
+  if continue_requested(matches) {
+    config = with_latest_session(config)
+  }
   // Fail before the terminal UI takes over the screen if the engine is unusable,
   // rather than dropping the user into a UI that dies on the first task.
   if !engine_launchable(config.engine) {
@@ -320,6 +364,25 @@ test "cli rejects empty session root when session is active" {
     }
   }
   fail("empty session root accepted")
+}
+
+///|
+test "cli accepts --continue and rejects combining it with --session" {
+  let parsed = cli_command().parse(argv=["--continue"], env={
+    "DEEPSEEK": "test-key",
+  })
+  assert_true(continue_requested(parsed))
+  let conflicted = cli_command().parse(
+    argv=["--continue", "--session", "demo"],
+    env={ "DEEPSEEK": "test-key" },
+  )
+  let _ = continue_requested(conflicted) catch {
+    error => {
+      assert_true("\{error}".contains("cannot be combined with --session"))
+      return
+    }
+  }
+  fail("--continue with --session accepted")
 }
 
 ///|

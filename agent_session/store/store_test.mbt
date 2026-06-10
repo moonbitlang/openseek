@@ -62,6 +62,25 @@ async test "store lists known sessions" {
 }
 
 ///|
+async test "store picks the most recently active session as latest" {
+  let store = new_store()
+  assert_true(store.latest() is None)
+  store.create(Session(SessionId("first"), system_prompt="system"))
+  // Filesystem mtimes need a beat between writes to order reliably.
+  @async.sleep(50)
+  store.create(Session(SessionId("second"), system_prompt="system"))
+  guard store.latest() is Some(id) else { fail("expected a latest session") }
+  assert_eq(id.value(), "second")
+  // Appending to the older session makes it the most recently active again.
+  @async.sleep(50)
+  let first = store.load(SessionId("first"))
+  let _ = store.append(first, User(UserMessage("more")))
+  guard store.latest() is Some(id) else { fail("expected a latest session") }
+  assert_eq(id.value(), "first")
+  @fs.rmdir(store.root(), recursive=true)
+}
+
+///|
 async test "store propagates non-missing list errors" {
   let store = new_store()
   @fs.write_file(

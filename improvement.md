@@ -25,10 +25,13 @@ bottom of the matching section.
   computing it from the actual label keeps the preview honest if labels
   change. *(Done: `streaming_activity_line` measures the label's display
   width; only the renderer indent + slack remain a constant.)*
-- [ ] **Session management inside the TUI.** A `--continue` flag for the most
-  recent session, and a way to list/switch sessions without restarting.
-  Generated ids (`tui-YYYYMMDD-HHMMSS-mmm`) are only discoverable via the
-  startup banner or `openseek --session-list` today.
+- [x] **`--continue` resumes the most recent session.** *(Done:
+  `SessionStore::latest` picks the most recently active session by event-log
+  mtime; `openseek-tui --continue` resumes it, errors when combined with
+  `--session`, and starts fresh on an empty store.)*
+- [ ] **Session switching inside the TUI.** A way to list and switch sessions
+  without restarting. Generated ids (`tui-YYYYMMDD-HHMMSS-mmm`) are only
+  discoverable via the startup banner or `openseek --session-list` today.
 - [ ] **Steering a running task.** `Steer` while running is rejected ("press
   Tab to queue") because the engine cannot accept mid-turn input. Needs an
   engine-side protocol (e.g. a control channel on stdin) before the TUI can
