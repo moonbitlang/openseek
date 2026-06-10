@@ -356,6 +356,38 @@ test "streamed newlines collapse so the preview stays one line" {
 }
 
 ///|
+test "reasoning_message commits a thought item and clears the preview" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let items : Array[@ui.TranscriptItem] = []
+  append_items(
+    state,
+    Json::object({ "event": "reasoning_delta", "content": "Let me think" }),
+    items,
+  )
+  assert_true(state.streaming_reasoning is Some("Let me think"))
+  // The full reasoning lands as one `✻` thought item, and the live preview
+  // is finished with.
+  append_items(
+    state,
+    Json::object({
+      "event": "reasoning_message",
+      "content": "Let me think about names.\nThe user said Hongbo.",
+    }),
+    items,
+  )
+  assert_true(state.streaming_reasoning is None)
+  guard items is [Thought(_)] else { fail("expected a single Thought item") }
+  // Blank reasoning never appends an empty aside.
+  append_items(
+    state,
+    Json::object({ "event": "reasoning_message", "content": "  " }),
+    items,
+  )
+  assert_eq(items.length(), 1)
+}
+
+///|
 test "reasoning_delta drives the thinking preview until content arrives" {
   let state = drain_test_state()
   let _ = update(state, UiInput(Steer(Prompt("do it"))))

@@ -164,6 +164,15 @@ async fn run_with_runtime(
           }
         },
       )
+      // Reasoning first, so a consumer appending events in order shows the
+      // thinking above the answer it led to.
+      if response.reasoning_content != "" {
+        @xlog.info() <?
+          {
+            "event": "reasoning_message",
+            "content": response.reasoning_content,
+          }
+      }
       if response.content != "" {
         @xlog.info() <?
           { "event": "assistant_message", "content": response.content }

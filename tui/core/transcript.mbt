@@ -41,12 +41,15 @@ pub fn ToolCall::ToolCall(
 /// One committed entry in the transcript: a submitted `Input`, an agent
 /// `Response`, a `ToolCall`, an out-of-band runtime `Notice` (e.g. background
 /// `moon check --watch` diagnostics the agent was fed — a titled, detail-bearing
-/// block like a tool call but flagged with a `↻` marker), or an `Error`.
+/// block like a tool call but flagged with a `↻` marker), a `Thought` (the
+/// model's completed thinking for a turn, same titled block under a `✻`
+/// marker), or an `Error`.
 pub(all) enum TranscriptItem {
   Input(Input)
   Response(String)
   ToolCall(ToolCall)
   Notice(ToolCall)
+  Thought(ToolCall)
   Error(String)
 } derive(Debug)
 
@@ -83,6 +86,11 @@ let square : @displaytext.DisplayText = DisplayText("■ ")
 let notice : @displaytext.DisplayText = DisplayText("↻ ")
 
 ///|
+/// Marker for a completed thinking block (`Thought`): a `✻` so the model's
+/// own reasoning reads as an aside, distinct from tool output and answers.
+let thought : @displaytext.DisplayText = DisplayText("✻ ")
+
+///|
 /// Render a `ToolCall` as a `marker`-bulleted title followed by its detail lines,
 /// each `└`/space-indented and dimmed. Shared by the `⏺` tool-call projection and
 /// the `↻` runtime-notice projection so both lay details out identically.
@@ -111,8 +119,8 @@ fn tool_call_doc(
 /// Project a transcript item into a renderable `@doc.Doc`: inputs use their own
 /// prefixed projection, responses become dim `⏺`-bulleted blocks, tool calls
 /// render a status-styled `⏺` bullet with `└`-indented detail lines, runtime
-/// notices use the same detail layout under a dim `↻` marker, and errors become
-/// an error-styled `■`-bulleted block.
+/// notices and thoughts use the same detail layout under dim `↻` and `✻`
+/// markers, and errors become an error-styled `■`-bulleted block.
 pub impl @doc.ToDoc for TranscriptItem with fn to_doc(self) {
   match self {
     Input(input) => input.to_doc()
@@ -132,6 +140,8 @@ pub impl @doc.ToDoc for TranscriptItem with fn to_doc(self) {
       tool_call_doc(call, marker=bullet, marker_style=bullet_style)
     }
     Notice(call) => tool_call_doc(call, marker=notice, marker_style=@style.dim)
+    Thought(call) =>
+      tool_call_doc(call, marker=thought, marker_style=@style.dim)
     Error(message) => {
       let error_style = @style.error
       Doc(

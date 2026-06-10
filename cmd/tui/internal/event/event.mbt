@@ -36,6 +36,7 @@ pub(all) enum AgentEvent {
   AgentStep
   AssistantDelta(String)
   ReasoningDelta(String)
+  ReasoningMessage(String)
   AssistantMessage(String)
   RuntimeUpdate(String)
   Usage(UsageInfo)

@@ -340,6 +340,14 @@ fn handle_agent_event(
           append_streaming_preview(state.streaming_reasoning, text),
         )
       }
+    // The turn's full reasoning, emitted once streaming ends and before the
+    // assistant message commits — so the transcript reads thought → answer.
+    ReasoningMessage(text) => {
+      state.streaming_reasoning = None
+      if !text.trim().is_empty() {
+        cmds.push(AppendItem(reasoning_item(text)))
+      }
+    }
     AssistantMessage(text) => {
       state.step_response = Some(text)
       state.streaming_response = None

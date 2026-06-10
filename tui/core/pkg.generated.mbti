@@ -42,6 +42,7 @@ pub(all) enum TranscriptItem {
   Response(String)
   ToolCall(ToolCall)
   Notice(ToolCall)
+  Thought(ToolCall)
   Error(String)
 } derive(@debug.Debug)
 pub impl @doc.ToDoc for TranscriptItem

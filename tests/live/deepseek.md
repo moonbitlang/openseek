@@ -63,9 +63,11 @@ A minimal run emits an `agent_step`, a `usage` record once DeepSeek answers, and
 an `agent_finished`. We collect the `"event"` values into a `Set`, which dedupes
 and preserves insertion order — so printing it yields the lifecycle in the order
 it occurred, the same `{agent_step, usage, agent_finished}` no matter how many
-steps the run takes. Streaming `assistant_delta`/`reasoning_delta` events are
-filtered out: whether and how often they appear varies per run (thinking mode
-streams its reasoning live), while the lifecycle events are stable.
+steps the run takes. The filter is a whitelist of exactly those lifecycle
+events: the stream also carries content/reasoning payload events
+(`assistant_delta`, `reasoning_message`, …) whose presence and count vary per
+run, and asserting the full set would break every time the engine grows a new
+event kind.
 
 ```mooncram
 $ openseek.exe --model deepseek-v4-flash --max-steps 3 "Call the finish tool immediately with the answer DONE. Use no other tool." 2>/dev/null \
@@ -75,9 +77,10 @@ $ openseek.exe --model deepseek-v4-flash --max-steps 3 "Call the finish tool imm
 > }
 > 
 > async fn main {
+>   let lifecycle = ["agent_step", "usage", "agent_finished"]
 >   let events = Set::new()
 >   for value in @jsonl.read_stdin() {
->     if value is { "event": String(event), .. } && !event.has_suffix("_delta") {
+>     if value is { "event": String(event), .. } && lifecycle.contains(event) {
 >       events.add(event)
 >     }
 >   }

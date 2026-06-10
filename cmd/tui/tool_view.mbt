@@ -65,6 +65,21 @@ fn tool_item(result : @event.ToolResultEvent) -> @ui.TranscriptItem {
 }
 
 ///|
+/// Render a turn's completed thinking as a `✻` transcript aside: a dim
+/// "thought" title over the reasoning's first and last lines. The full text
+/// already streamed through the activity line; the transcript keeps a
+/// compact trace the user can scroll back to, so the *why* of an answer
+/// survives the moment it was streamed.
+fn reasoning_item(text : String) -> @ui.TranscriptItem {
+  Thought(
+    ToolCall(
+      @doc.dim_text("thought"),
+      details=detail_texts(compact_lines(text, ToolOutputLineLimit)),
+    ),
+  )
+}
+
+///|
 /// Render the result of a `!` shell command the TUI ran locally: the command
 /// line as the title (with a non-zero/cancelled marker), and its full captured
 /// output as dimmed detail lines. The output is already character-capped by

@@ -13,10 +13,13 @@ bottom of the matching section.
   During delta bursts this triples render work. Add a single
   "set view state + one redraw" command on `Ui`. *(Done: `Ui::set_live_view`
   replaces the three setters; one command, one redraw per loop turn.)*
-- [ ] **Keep reasoning visible after the turn.** Thinking-mode reasoning only
+- [x] **Keep reasoning visible after the turn.** Thinking-mode reasoning only
   ever exists as the transient `Thinking …` tail and is discarded once
   content starts. Surface it as a dimmed/collapsible transcript item so a
-  user can review *why* the model did something.
+  user can review *why* the model did something. *(Done: the engine emits
+  `reasoning_message` after streaming; the TUI commits a `✻` thought aside
+  above the answer. Resume does not replay thoughts — sessions do not store
+  reasoning for no-tool turns; see the auto-compaction/session items.)*
 - [ ] **Measure the activity label instead of reserving 13 columns.**
   `ActivityPreviewReservedColumns` hardcodes indent + widest label + slack;
   computing it from the actual label keeps the preview honest if labels
@@ -71,10 +74,11 @@ bottom of the matching section.
 - [ ] **More CI platforms.** CI is a single `check (nightly)` job; the TUI's
   pty handling and the engine's stdio behavior are platform-sensitive
   (macOS pty quirks surfaced during verification). Add macOS, then Windows.
-- [ ] **Make the live cram lifecycle test extension-proof.** It asserts an
+- [x] **Make the live cram lifecycle test extension-proof.** It asserts an
   exact event-name set and broke when `*_delta` events were added (now
   filtered). Assert the stable lifecycle subset is *present* instead of
-  asserting the full set.
+  asserting the full set. *(Done: the example whitelists the lifecycle
+  events, so new payload event kinds cannot break it.)*
 - [ ] **Checked-in TUI integration harness.** The pty driver used to verify
   streaming and session memory lives outside the repo. Pair a small pty
   driver with a recorded-stream replay engine (the TUI already accepts

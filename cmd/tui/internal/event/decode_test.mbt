@@ -22,6 +22,12 @@ test "decode maps each engine event kind" {
   )
   assert_true(
     @event.decode_event(
+      Json::object({ "event": "reasoning_message", "content": "full thought" }),
+    )
+    is Some(ReasoningMessage("full thought")),
+  )
+  assert_true(
+    @event.decode_event(
       Json::object({ "event": "agent_finished", "answer": "done" }),
     )
     is Some(AgentFinished("done")),
