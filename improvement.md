@@ -103,6 +103,9 @@ bottom of the matching section.
   prompt out of `missing_doc` because its example code blocks are
   model-facing text. Consider documenting those examples *as a prompt
   change* (with an eval run) so the model also learns the doc convention.
-- [ ] **Document the TUI session default.** The root README does not yet
+- [x] **Document the TUI session default.** The root README does not yet
   mention that every TUI launch converses in a durable session and how to
-  resume one (`--session <id>` from the startup banner).
+  resume one (`--session <id>` from the startup banner). *(Done: the README
+  gains a Terminal UI section covering default sessions, `--continue`,
+  `--session`, and the enriched `--session-list`, plus a `cmd/tui` row in
+  the packages table.)*

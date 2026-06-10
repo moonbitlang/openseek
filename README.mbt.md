@@ -17,6 +17,7 @@ entry point so request encoding can be tested without network access.
 | `bobzhang/openseek/agent_tool` | Tool registry, executor, output, and control-action types. | `agent_tool/README.mbt.md` |
 | `bobzhang/openseek/agent` | Native-only OpenSeek agent loop and local tool dispatch. | `agent/README.mbt.md` |
 | `bobzhang/openseek/cmd/openseek` | Native-only command-line entry point. | `cmd/openseek/README.md` |
+| `bobzhang/openseek/cmd/tui` | Native-only terminal UI that drives the engine per prompt. | `tui/README.md` |
 | `bobzhang/openseek/testkit/filesystem` | JSON-backed virtual filesystem for tests and eval fixtures. | `testkit/filesystem/README.mbt.md` |
 | `bobzhang/openseek/eval/report` | Shared Markdown/JSON report primitive for deterministic and model evals. | `eval/report/README.mbt.md` |
 | `bobzhang/openseek/eval/tool_harness` | Deterministic host-side harness that dispatches every built-in tool. | `eval/tool_harness/README.mbt.md` |
@@ -73,7 +74,34 @@ moon run cmd/openseek -- "inspect this project and finish with a short summary"
 
 `DEEPSEEK_MODEL` is optional and defaults to `deepseek-v4-pro`.
 `OPENSEEK_MAX_STEPS` is optional and defaults to `1000`; pass `--max-steps` on
-the CLI to override it for one run.
+the CLI to override it for one run. `--thinking enabled|disabled` and
+`--reasoning-effort high|max` control DeepSeek thinking mode (defaults:
+enabled, max).
+
+## Terminal UI
+
+The `cmd/tui` package is the interactive interface: a scrolling transcript with
+a live composer. It spawns the `openseek` engine binary fresh for every prompt
+and renders its JSONL event stream — streamed thinking and answer text appear
+live on the activity line, and each turn's reasoning is kept as a dim `✻`
+transcript aside above its answer.
+
+```bash
+export DEEPSEEK=sk-...
+moon run cmd/tui
+```
+
+**Every launch converses in a durable session.** The engine only carries
+context between prompts through the session store, so the TUI generates a
+session id per launch (`tui-YYYYMMDD-HHMMSS-mmm`, named in the startup banner)
+and stores the conversation under `--session-root` (default `.openseek/`).
+Follow-up prompts remember earlier ones, and a conversation outlives the
+process:
+
+- `openseek-tui --continue` resumes the most recently active session.
+- `openseek-tui --session <id>` resumes (or creates) a specific one.
+- `openseek --session-list` shows what is resumable — tab-separated id,
+  last-activity time, and the session's first prompt, newest first.
 
 See each package README for API boundaries, examples, and package-specific test
 notes.
