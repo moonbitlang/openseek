@@ -41,6 +41,17 @@ pub impl Show for ThinkingMode with fn to_string(self : ThinkingMode) -> String 
 }
 
 ///|
+/// Parses a thinking mode from its wire name (`enabled`/`disabled`), raising
+/// on anything else — the inverse of `Show`, for CLI flags and config.
+pub fn ThinkingMode::parse(input : String) -> ThinkingMode raise {
+  match input {
+    "enabled" => Enabled
+    "disabled" => Disabled
+    other => fail("unknown thinking mode: \{other} (use enabled or disabled)")
+  }
+}
+
+///|
 /// DeepSeek reasoning effort for thinking mode.
 pub(all) enum ReasoningEffort {
   High
@@ -53,6 +64,17 @@ pub impl Show for ReasoningEffort with fn to_string(self : ReasoningEffort) -> S
   match self {
     High => "high"
     Max => "max"
+  }
+}
+
+///|
+/// Parses a reasoning effort from its wire name (`high`/`max`), raising on
+/// anything else — the inverse of `Show`, for CLI flags and config.
+pub fn ReasoningEffort::parse(input : String) -> ReasoningEffort raise {
+  match input {
+    "high" => High
+    "max" => Max
+    other => fail("unknown reasoning effort: \{other} (use high or max)")
   }
 }
 

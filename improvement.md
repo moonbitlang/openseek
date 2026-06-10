@@ -44,9 +44,12 @@ bottom of the matching section.
 
 ## Engine / agent
 
-- [ ] **Expose thinking controls.** `run_with_runtime` hardcodes
+- [x] **Expose thinking controls.** `run_with_runtime` hardcodes
   `thinking=Enabled, reasoning_effort=Max`; make them engine flags
-  (`--thinking`, `--reasoning-effort`) and TUI pass-throughs.
+  (`--thinking`, `--reasoning-effort`) and TUI pass-throughs. *(Done:
+  `OPENSEEK_THINKING` / `OPENSEEK_REASONING_EFFORT` env-backed flags on both
+  binaries, threaded through `@agent.run*` as optional params with the old
+  hardcoded values as defaults.)*
 - [ ] **Auto-compaction.** Compaction exists only as the manual
   `--session-compact-*` flow. Long-lived sessions (now the TUI default)
   grow without bound; trigger summarization when the projected context

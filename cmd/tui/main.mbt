@@ -26,6 +26,20 @@ fn cli_command() -> @argparse.Command {
         about="Maximum number of agent loop steps before stopping.",
       ),
       OptionArg(
+        "thinking",
+        long="thinking",
+        env="OPENSEEK_THINKING",
+        default_values=["enabled"],
+        about="DeepSeek thinking mode: enabled or disabled.",
+      ),
+      OptionArg(
+        "reasoning-effort",
+        long="reasoning-effort",
+        env="OPENSEEK_REASONING_EFFORT",
+        default_values=["max"],
+        about="DeepSeek reasoning effort in thinking mode: high or max.",
+      ),
+      OptionArg(
         "engine",
         long="engine",
         env="OPENSEEK_ENGINE",
@@ -210,6 +224,12 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
     model: @deepseek.Model::parse(value(matches, "model")),
     cwd,
     max_steps: parse_positive_int(value(matches, "max-steps"), "--max-steps"),
+    // Parsed eagerly so a typo fails at launch with a CLI error instead of
+    // inside the first turn's engine run.
+    thinking: @deepseek.ThinkingMode::parse(value(matches, "thinking")),
+    reasoning_effort: @deepseek.ReasoningEffort::parse(
+      value(matches, "reasoning-effort"),
+    ),
     session_id: match explicit_session {
       Some(id) => id
       None => generated_session_id(@env.now().reinterpret_as_int64())
@@ -328,6 +348,27 @@ test "generated session ids are timestamped and directory-safe" {
     generated_session_id(1_781_061_247_089).value(),
     "tui-20260610-031407-089",
   )
+}
+
+///|
+test "cli parses and validates thinking controls" {
+  let parsed = cli_command().parse(
+    argv=["--thinking", "disabled", "--reasoning-effort", "high"],
+    env={ "DEEPSEEK": "test-key" },
+  )
+  let config = parse_config(parsed)
+  assert_true(config.thinking is Disabled)
+  assert_true(config.reasoning_effort is High)
+  let bad = cli_command().parse(argv=["--thinking", "sometimes"], env={
+    "DEEPSEEK": "test-key",
+  })
+  let _ = parse_config(bad) catch {
+    error => {
+      assert_true("\{error}".contains("unknown thinking mode"))
+      return
+    }
+  }
+  fail("invalid thinking mode accepted")
 }
 
 ///|

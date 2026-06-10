@@ -5,6 +5,8 @@ fn drain_test_state() -> State {
     model: V4Pro,
     cwd: ".",
     max_steps: 10,
+    thinking: Enabled,
+    reasoning_effort: Max,
     session_id: SessionId("test"),
     session_root: ".openseek",
     engine: "openseek",
@@ -60,6 +62,8 @@ test "agent engine argv stays replay-compatible while session config uses env" {
   }
   assert_eq(session_id, "test")
   assert_eq(session_root, ".openseek")
+  assert_true(env.get("OPENSEEK_THINKING") == Some("enabled"))
+  assert_true(env.get("OPENSEEK_REASONING_EFFORT") == Some("max"))
 }
 
 ///|

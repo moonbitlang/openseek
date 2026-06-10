@@ -28,11 +28,23 @@ async fn run_cli() -> Unit {
     let api_key = api_key(matches)
     let model = @deepseek.Model::parse(value(matches, "model"))
     let max_steps = max_steps(matches)
+    let thinking = @deepseek.ThinkingMode::parse(value(matches, "thinking"))
+    let reasoning_effort = @deepseek.ReasoningEffort::parse(
+      value(matches, "reasoning-effort"),
+    )
     let task = task_text(matches)
     match session_id(matches) {
       None => {
         let system_prompt_text = configured_system_prompt(matches, model)
-        @agent.run(api_key, model, task, max_steps~, system_prompt_text~)
+        @agent.run(
+          api_key,
+          model,
+          task,
+          max_steps~,
+          system_prompt_text~,
+          thinking~,
+          reasoning_effort~,
+        )
       }
       Some(id) => {
         let store = @store.SessionStore(session_root(matches))
@@ -45,6 +57,8 @@ async fn run_cli() -> Unit {
             task,
             append_item=(session, item) => store.append(session, item),
             max_steps~,
+            thinking~,
+            reasoning_effort~,
           ),
         )
       }
@@ -96,6 +110,20 @@ fn cli_command() -> @argparse.Command {
         env="OPENSEEK_MAX_STEPS",
         default_values=["1000"],
         about="Maximum number of agent loop steps before stopping.",
+      ),
+      OptionArg(
+        "thinking",
+        long="thinking",
+        env="OPENSEEK_THINKING",
+        default_values=["enabled"],
+        about="DeepSeek thinking mode: enabled or disabled.",
+      ),
+      OptionArg(
+        "reasoning-effort",
+        long="reasoning-effort",
+        env="OPENSEEK_REASONING_EFFORT",
+        default_values=["max"],
+        about="DeepSeek reasoning effort in thinking mode: high or max.",
       ),
       OptionArg(
         "system-prompt-file",

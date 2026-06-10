@@ -4,6 +4,8 @@ priv struct AppConfig {
   model : @deepseek.Model
   cwd : String
   max_steps : Int
+  thinking : @deepseek.ThinkingMode
+  reasoning_effort : @deepseek.ReasoningEffort
   // The durable session every prompt of this TUI run converses in. The engine
   // is spawned fresh per prompt, so context only carries between prompts
   // through the session store: without one, each prompt would be an amnesiac

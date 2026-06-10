@@ -30,6 +30,8 @@ Options:
   --api-key <api-key>                                          DeepSeek API key. [env: DEEPSEEK] [default: ]
   --model <model>                                              DeepSeek model: deepseek-v4-flash or deepseek-v4-pro. [env: DEEPSEEK_MODEL] [default: deepseek-v4-pro]
   --max-steps <max-steps>                                      Maximum number of agent loop steps before stopping. [env: OPENSEEK_MAX_STEPS] [default: 1000]
+  --thinking <thinking>                                        DeepSeek thinking mode: enabled or disabled. [env: OPENSEEK_THINKING] [default: enabled]
+  --reasoning-effort <reasoning-effort>                        DeepSeek reasoning effort in thinking mode: high or max. [env: OPENSEEK_REASONING_EFFORT] [default: max]
   --system-prompt-file <system-prompt-file>                    Read the complete system prompt from this file instead of the built-in prompt. [env: OPENSEEK_SYSTEM_PROMPT_FILE] [default: ]
   --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the selected system prompt for prompt experiments. [env: OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE] [default: ]
   --session <session>                                          Create or resume this durable session id. [env: OPENSEEK_SESSION] [default: ]

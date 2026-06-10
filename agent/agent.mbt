@@ -21,12 +21,24 @@ pub async fn run(
   task : String,
   max_steps? : Int = default_max_steps,
   system_prompt_text? : String = default_system_prompt_for_model(model),
+  thinking? : @deepseek.ThinkingMode = Enabled,
+  reasoning_effort? : @deepseek.ReasoningEffort = Max,
 ) -> Unit {
   let session = @agent_session.Session(
     SessionId("one-shot"),
     system_prompt=system_prompt_text,
   )
-  ignore(run_turn(api_key, model, session, task, max_steps~))
+  ignore(
+    run_turn(
+      api_key,
+      model,
+      session,
+      task,
+      max_steps~,
+      thinking~,
+      reasoning_effort~,
+    ),
+  )
 }
 
 ///|
@@ -39,6 +51,8 @@ pub async fn run_turn(
   session : @agent_session.Session,
   task : String,
   max_steps? : Int = default_max_steps,
+  thinking? : @deepseek.ThinkingMode = Enabled,
+  reasoning_effort? : @deepseek.ReasoningEffort = Max,
 ) -> @agent_session.Session {
   run_turn_with_append(
     api_key,
@@ -47,6 +61,8 @@ pub async fn run_turn(
     task,
     append_item=(session, item) => session.append(item),
     max_steps~,
+    thinking~,
+    reasoning_effort~,
   )
 }
 
@@ -61,6 +77,8 @@ pub async fn run_turn_with_append(
   task : String,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   max_steps? : Int = default_max_steps,
+  thinking? : @deepseek.ThinkingMode = Enabled,
+  reasoning_effort? : @deepseek.ReasoningEffort = Max,
 ) -> @agent_session.Session {
   @async.with_task_group() <| group => {
     run_with_runtime(
@@ -72,6 +90,8 @@ pub async fn run_turn_with_append(
       task,
       append_item~,
       max_steps~,
+      thinking~,
+      reasoning_effort~,
     )
   }
 }
@@ -123,12 +143,20 @@ async fn run_with_runtime(
   task : String,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   max_steps~ : Int,
+  thinking~ : @deepseek.ThinkingMode,
+  reasoning_effort~ : @deepseek.ReasoningEffort,
 ) -> @agent_session.Session {
   let client = @client.Client(
     api_key~,
     model~,
-    thinking=Some(Enabled),
-    reasoning_effort=Some(Max),
+    thinking=Some(thinking),
+    // The API rejects a request that sets reasoning_effort while thinking is
+    // disabled — effort only means something during thinking — so the effort
+    // rides along only when thinking is on.
+    reasoning_effort=match thinking {
+      Enabled => Some(reasoning_effort)
+      Disabled => None
+    },
   )
   let mut session = append_item(session, User(UserMessage(task)))
   try {
