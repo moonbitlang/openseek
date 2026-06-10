@@ -8,6 +8,17 @@ priv enum ServeCommand {
 }
 
 ///|
+/// One unit of work for the serve loop's single consumer: a wire command in
+/// arrival order, the completion of the active turn, or the stdin-EOF
+/// shutdown marker. Funneling all three through one queue is what makes
+/// command handling race-free against turn lifecycle.
+priv enum ServeStep {
+  Wire(ServeCommand)
+  TurnDone
+  Shutdown
+}
+
+///|
 /// Decode one JSONL command line from the controller.
 ///
 /// `prompt` starts a turn, `steer` injects input into the running one,
@@ -100,24 +111,17 @@ async fn run_serve(matches : @argparse.Matches) -> Unit {
     // rebuilding it per turn would orphan running watchers (see
     // @agent.build_tools).
     let tools = @agent.build_tools(runtime, scope)
-    let prompts : @async.Queue[String] = Queue(kind=Unbounded)
-    let turn_done : @async.Queue[Unit] = Queue(kind=Unbounded)
-    let mut active_turn : @async.Task[Unit]? = None
-    // Command reader: steer and cancel act immediately — that is the whole
-    // point of a persistent process — while prompts queue for the serve
-    // loop below. Runs concurrently with turns; `no_wait` because it ends
-    // only at stdin EOF.
+    // All scheduling flows through one ordered queue with one consumer:
+    // wire commands from the reader, plus the internal turn-completion and
+    // shutdown markers. A second scheduler (e.g. acting on commands inside
+    // the reader) would race the consumer's view of the active turn — a
+    // controller writing `prompt\nsteer\n` in one buffer must have its
+    // steer land in that prompt's turn, exactly as the wire order says.
+    let steps : @async.Queue[ServeStep] = Queue(kind=Unbounded)
     group.spawn_bg(no_wait=true) <| () => {
       @jsonl.each(@stdio.stdin, json => {
         match decode_serve_command(json) {
-          Ok(Prompt(text)) => prompts.try_put(text) |> ignore
-          Ok(Steer(text)) =>
-            match active_turn {
-              Some(_) => @agent.steer(runtime, text)
-              // Steering an idle engine means "this is my next message".
-              None => prompts.try_put(text) |> ignore
-            }
-          Ok(Cancel) => if active_turn is Some(task) { task.cancel() }
+          Ok(command) => steps.try_put(Wire(command)) |> ignore
           Err(message) =>
             @xlog.error() <? { "event": "command_error", "error": message }
         }
@@ -130,16 +134,13 @@ async fn run_serve(matches : @argparse.Matches) -> Unit {
           @xlog.error() <?
             { "event": "command_error", "error": "command stream: \{error}" }
       }
-      prompts.close()
+      steps.try_put(Shutdown) |> ignore
     }
-    for ;; {
-      let task_text = prompts.get() catch {
-        error if @async.is_being_cancelled() ||
-          @async.is_cancellation_error(error) => raise error
-        // Closed and drained: stdin ended, every queued prompt ran.
-        _ => break
-      }
-      let turn = group.spawn(no_wait=true) <| () => {
+    let pending : Array[String] = []
+    let mut active_turn : @async.Task[Unit]? = None
+    let mut shutting_down = false
+    fn start_turn(task_text : String) -> @async.Task[Unit] {
+      group.spawn() <| () => {
         let _ = @agent.run_turn_in_scope(
           runtime,
           scope,
@@ -172,15 +173,62 @@ async fn run_serve(matches : @argparse.Matches) -> Unit {
             } else {
               @xlog.error() <? { "event": "turn_failed", "error": "\{error}" }
             }
-            ignore(turn_done.try_put(()) catch { _ => false })
+            ignore(steps.try_put(TurnDone) catch { _ => false })
             return
           }
         }
-        ignore(turn_done.try_put(()) catch { _ => false })
+        ignore(steps.try_put(TurnDone) catch { _ => false })
       }
-      active_turn = Some(turn)
-      turn_done.get()
-      active_turn = None
+    }
+
+    serve~: for ;; {
+      let step = steps.get() catch {
+        error if @async.is_being_cancelled() ||
+          @async.is_cancellation_error(error) => raise error
+        _ => break serve~
+      }
+      match step {
+        Wire(Prompt(text)) =>
+          match active_turn {
+            // One turn at a time: extra prompts wait their wire-order turn.
+            Some(_) => pending.push(text)
+            None => active_turn = Some(start_turn(text))
+          }
+        Wire(Steer(text)) =>
+          if active_turn is Some(_) || pending.length() > 0 {
+            // A turn is running or already submitted ahead of this steer:
+            // the lossless steering queue delivers it at that turn's next
+            // step boundary (or its first, if it has not started yet).
+            @agent.steer(runtime, text)
+          } else {
+            // Steering an idle engine means "this is my next message".
+            active_turn = Some(start_turn(text))
+          }
+        Wire(Cancel) =>
+          match active_turn {
+            Some(task) => task.cancel()
+            None =>
+              // No active turn: in wire order the cancel targets the next
+              // submitted prompt, so withdraw it before it starts.
+              if pending.length() > 0 {
+                let _ = pending.remove(0)
+              }
+          }
+        TurnDone => {
+          active_turn = None
+          if pending.length() > 0 {
+            active_turn = Some(start_turn(pending.remove(0)))
+          } else if shutting_down {
+            break serve~
+          }
+        }
+        Shutdown => {
+          shutting_down = true
+          if active_turn is None && pending.length() == 0 {
+            break serve~
+          }
+        }
+      }
     }
   })
 }
