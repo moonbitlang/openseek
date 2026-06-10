@@ -91,3 +91,26 @@ moon run --target native ./desktop/package_macos.mbtx
 
 The bundled engine is built from the same checkout, so the desktop app and its
 engine never drift out of version with each other.
+
+## Package (Linux)
+
+`package_linux.mbtx` runs the same build steps (including the codegen
+bootstrap), builds the `openseek` engine from the monorepo's `cmd/openseek`
+source, and produces `dist/OpenSeek-Desktop-linux-x86_64.AppImage`:
+
+```sh
+moon run --target native package_linux.mbtx
+# or, from the monorepo root:
+moon run --target native ./desktop/package_linux.mbtx
+```
+
+Build requirements: `pkg-config` plus the GTK3 and WebKitGTK dev packages
+(`libgtk-3-dev` and `libwebkit2gtk-4.1-dev` on Debian/Ubuntu; `gtk3` and
+`webkit2gtk-4.1` on Arch), and `curl` (used to fetch `appimagetool` on first
+run if it is not already on `PATH`).
+
+The AppImage bundles the desktop host, the engine, and the frontend assets,
+but links against the system WebKitGTK: running it requires GTK3 and
+`libwebkit2gtk-4.1` installed on the host system, which is the standard
+arrangement for webview-based AppImages. If your system lacks FUSE2, run it
+with `APPIMAGE_EXTRACT_AND_RUN=1`.
