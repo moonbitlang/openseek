@@ -97,11 +97,6 @@ fn is_terminal_event(event : @event.AgentEvent) -> Bool {
 }
 
 ///|
-fn engine_args(task : String) -> Array[String] {
-  ["--", task]
-}
-
-///|
 fn engine_extra_env(config : AppConfig) -> Map[String, String] {
   {
     "DEEPSEEK": config.api_key,
@@ -124,102 +119,6 @@ fn engine_env(
   let env = inherited.copy()
   env.merge_in_place(engine_extra_env(config))
   env
-}
-
-///|
-/// Spawn the agent engine for one input and stream its JSONL stdout into the
-/// message loop.
-///
-/// The engine is a separate process (`config.engine`, default `openseek`): it
-/// runs the task and writes one JSON event per line to stdout. `@jsonl.each`
-/// reads those lines, skips blanks, and parses each as JSON; we map the value to
-/// an `AgentEvent` and forward it as `AgentProgress`. If the engine closes its
-/// stream without a terminal event (it crashed, or exited before answering), we
-/// synthesize an `AgentError` so the loop never hangs waiting for a result that
-/// will not come.
-async fn run_agent_task(
-  config : AppConfig,
-  run_id : Int,
-  task : String,
-  messages : @async.Queue[Msg],
-) -> Unit {
-  @async.with_task_group(group => {
-    let (reader, child_stdout) = @process.read_from_process()
-    let (stderr_reader, child_stderr) = @process.read_from_process()
-    let child_env = engine_env(config, @env.get_env_vars())
-    let proc = @process.spawn(
-      group,
-      config.engine,
-      // The TUI accepts hyphen-valued tasks (`allow_hyphen_values`), so a task
-      // can start with `-`/`--` (e.g. the literal text `--help`). Forward it
-      // after a `--` delimiter so the engine's argparse treats it as the task
-      // positional rather than parsing it as one of its own options (which would
-      // exit/print help and never emit a terminal JSONL event). Session settings
-      // go through a fully materialized environment so custom replay engines do
-      // not need to accept OpenSeek-specific flags, and inherited session vars
-      // cannot shadow explicit TUI config.
-      engine_args(task),
-      inherit_env=false,
-      extra_env=child_env,
-      stdout=child_stdout,
-      stderr=child_stderr,
-    )
-    // Drain the engine's stderr concurrently with stdout. Capturing it (rather
-    // than letting it inherit the terminal) keeps diagnostics from corrupting
-    // the screen `@ui.with_ui` is drawing, and lets us surface them if the
-    // engine dies without a terminal event. The drain is bounded: a misbehaving
-    // engine (crash loop, verbose build log) could write unbounded stderr, so we
-    // keep only a capped prefix in memory while still reading to EOF.
-    // `drain_stderr_capped` folds any read error into its returned text and only
-    // raises on cancellation, which should tear the whole group down — so there
-    // is nothing to swallow here.
-    let stderr_task = group.spawn(no_wait=true) <| () => {
-      drain_stderr_capped(stderr_reader)
-    }
-    let mut saw_terminal = false
-    // A malformed (non-JSON) line raises out of `each`. The only such output is
-    // a runtime crash dump, so rather than surface a parse error we stop reading
-    // and let the exit code below explain the failure. Cancellation is re-raised
-    // to the outer handler so a Ctrl-C still reports `AgentCancelled`.
-    // `each`'s callback is synchronous, so enqueue with `try_put` (the queue
-    // is unbounded, so it never rejects) rather than the async `put`.
-    @jsonl.each(reader, json => {
-      if @event.decode_event(json) is Some(event) {
-        if is_terminal_event(event) {
-          saw_terminal = true
-        }
-        messages.try_put(AgentProgress(run_id~, event)) |> ignore
-      }
-    }) catch {
-      error if @async.is_being_cancelled() ||
-        @async.is_cancellation_error(error) => raise error
-      // Protocol violation: stop reading and kill the child instead of waiting
-      // for it. If the engine keeps writing past the bad line, nobody is
-      // draining its stdout, so a plain `proc.wait()` could deadlock on a full
-      // pipe. `cancel()` sends SIGTERM (then SIGKILL) so `wait()` returns.
-      _ => proc.cancel()
-    }
-    // We are done reading; close the read end so the child sees EOF/EPIPE
-    // rather than blocking on a pipe we no longer drain.
-    reader.close()
-    let code = proc.wait()
-    if !saw_terminal {
-      // The engine produced no terminal event. Its stderr is the only clue to
-      // why (a crash, a network/API error), so fold it into the reported error.
-      let diagnostics = stderr_task.wait().trim()
-      let detail = if diagnostics.is_empty() { "" } else { ":\n\{diagnostics}" }
-      messages.put(
-        AgentProgress(
-          run_id~,
-          AgentError("engine exited (code \{code}) without a result\{detail}"),
-        ),
-      )
-    }
-  }) catch {
-    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
-      messages.put(AgentCancelled(run_id~))
-    error => messages.put(AgentFailed(run_id~, error))
-  }
 }
 
 ///|
@@ -350,6 +249,10 @@ fn handle_agent_event(
         cmds.push(AppendItem(reasoning_item(text)))
       }
     }
+    // A steer took effect at the engine's step boundary: echo the input into
+    // the transcript at its true conversational position, the way the model
+    // actually saw it.
+    SteerApplied(text) => cmds.push(AppendItem(Input(Prompt(text))))
     AssistantMessage(text) => {
       state.step_response = Some(text)
       state.streaming_response = None
@@ -413,25 +316,31 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
   match message {
     UiInput(event) =>
       match event {
-        // Steering (redirecting a task mid-run) is not implementable with the
-        // current agent API. Steer only submits when idle; while a task runs it
-        // reports an error instead of silently queuing. Queue always queues.
+        // Enter while idle submits; Enter while a task runs steers it — the
+        // text is folded into the running turn at its next step boundary.
+        // Shell commands cannot steer a model turn, so they still queue.
         Steer(input) =>
           if state.run is Idle {
             state.queued.push(input)
           } else {
-            cmds.push(
-              AppendItem(
-                Error(
-                  "Steering is not supported while a task is running. Press Tab to queue this input.",
-                ),
-              ),
-            )
+            match input {
+              Prompt(text) => cmds.push(SteerAgent(text))
+              Command(_) =>
+                cmds.push(
+                  AppendItem(
+                    Error(
+                      "A shell command cannot steer the running task. Press Tab to queue it.",
+                    ),
+                  ),
+                )
+            }
           }
         Queue(input) => state.queued.push(input)
         // Ctrl+C interrupts the running task; when nothing is running it quits
         // the TUI (the common "press Ctrl+C to get out" expectation), rather than
-        // printing a dead-end "nothing to interrupt" notice.
+        // printing a dead-end "nothing to interrupt" notice. A second Ctrl+C
+        // while already interrupting escalates from the polite cancel command
+        // to killing the engine process.
         Interrupt =>
           match state.run {
             Idle => cmds.push(Quit)
@@ -439,7 +348,7 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
               state.run = Interrupting(started_ms)
               cmds.push(CancelAgent)
             }
-            Interrupting(_) => cmds.push(CancelAgent)
+            Interrupting(_) => cmds.push(KillEngine)
           }
         Quit => cmds.push(Quit)
       }
@@ -484,36 +393,44 @@ async fn[G] run_message_loop(
   group : @async.TaskGroup[G],
   messages : @async.Queue[Msg],
 ) -> Unit {
-  // The task handle for the run currently in flight, used to cancel it on
-  // interrupt. It is set when a run is dispatched and cleared once `state` goes
-  // back to `Idle` below, so it always tracks the active run and a stale event
-  // (dropped by `update`, leaving `state.run` untouched) can never null it out.
+  // The persistent serve-mode engine connection: one process serves every
+  // prompt of this TUI session. Prompts, steers, and cancels are commands on
+  // its stdin; a `!` shell command remains a local task, tracked by
+  // `running_task` so an interrupt can cancel it directly.
+  let engine = EngineClient(state.config, messages)
   let mut running_task : @async.Task[Unit]? = None
   outer~: for ;; {
     let message = messages.get()
     for cmd in update(state, message) {
       match cmd {
         AppendItem(item) => ui.append_item(item)
-        StartAgent(run_id~, task) =>
-          running_task = Some(
-            group.spawn(no_wait=true) <| () => {
-              run_agent_task(state.config, run_id, task, messages)
-            },
-          )
+        StartAgent(run_id~, task) => engine.prompt(group, run_id, task)
         RunCommand(run_id~, command) =>
           running_task = Some(
             group.spawn(no_wait=true) <| () => {
               run_shell_command(run_id, command, messages)
             },
           )
-        CancelAgent => if running_task is Some(task) { task.cancel() }
-        Quit => break outer~
+        SteerAgent(text) => engine.steer(group, text)
+        CancelAgent =>
+          match running_task {
+            // A local shell command in flight: cancel its task directly.
+            Some(task) => task.cancel()
+            None => engine.cancel_turn(group)
+          }
+        KillEngine => engine.kill()
+        Quit => {
+          // Closing the engine's stdin is the serve protocol's shutdown
+          // signal; any straggler is reaped by task-group teardown.
+          engine.shutdown()
+          break outer~
+        }
       }
     }
-    // A terminal event for the active run leaves `state` idle (unless the queue
-    // drain in `update` immediately started the next run, which re-sets the
-    // handle above); drop the stale handle so an interrupt cannot cancel a task
-    // that has already finished.
+    // A terminal event for the active run leaves `state` idle (unless the
+    // queue drain in `update` immediately started the next run); drop the
+    // stale local task handle so an interrupt cannot cancel a command that
+    // already finished.
     if state.run is Idle {
       running_task = None
     }

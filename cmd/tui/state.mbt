@@ -142,6 +142,12 @@ priv enum Cmd {
   // task's messages with.
   StartAgent(run_id~ : Int, String)
   RunCommand(run_id~ : Int, String)
+  // Redirect the running turn: the text rides the engine's steer command and
+  // lands at the turn's next step boundary.
+  SteerAgent(String)
   CancelAgent
+  // Second Ctrl-C while already interrupting: the cancel command was not
+  // enough, so kill the engine process outright.
+  KillEngine
   Quit
 }

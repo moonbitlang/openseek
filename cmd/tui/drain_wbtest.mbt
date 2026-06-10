@@ -47,12 +47,8 @@ fn run_command_count(cmds : Array[Cmd]) -> Int {
 }
 
 ///|
-test "agent engine argv stays replay-compatible while session config uses env" {
+test "engine configuration travels through the environment" {
   let config = drain_test_state().config
-  let args = engine_args("--literal task")
-  assert_eq(args.length(), 2)
-  assert_eq(args[0], "--")
-  assert_eq(args[1], "--literal task")
   let env = engine_extra_env(config)
   guard env.get("OPENSEEK_SESSION") is Some(session_id) else {
     fail("missing session id env")
@@ -187,6 +183,12 @@ test "Ctrl+C quits when idle and interrupts when a task is running" {
   assert_eq(quit_count(cmds), 0)
   assert_true(cmds.iter().any(cmd => cmd is CancelAgent))
   assert_true(state.run is Interrupting(_))
+
+  // A second interrupt escalates from the polite cancel command to killing
+  // the engine process.
+  let cmds = update(state, UiInput(Interrupt))
+  assert_true(cmds.iter().any(cmd => cmd is KillEngine))
+  assert_eq(quit_count(cmds), 0)
 }
 
 ///|
@@ -198,7 +200,7 @@ test "a tick while idle never starts an agent" {
 }
 
 ///|
-test "steering a running agent reports an error and does not queue" {
+test "steering a running agent sends a steer command" {
   let state = drain_test_state()
 
   // Idle Steer submits and starts a task.
@@ -206,16 +208,42 @@ test "steering a running agent reports an error and does not queue" {
   assert_true(state.run is Running(_))
   assert_eq(state.queued.length(), 0)
 
-  // Steer while running: error, nothing queued, nothing started.
+  // Steer while running: a steer command for the engine — no queueing, no
+  // new run, no error. The transcript echo comes later, from the engine's
+  // steer_applied event at the boundary where the model actually saw it.
   let cmds = update(state, UiInput(Steer(Prompt("b"))))
   assert_eq(state.queued.length(), 0)
   assert_eq(start_agent_count(cmds), 0)
+  assert_eq(error_item_count(cmds), 0)
+  guard cmds is [SteerAgent(text)] else { fail("expected a steer command") }
+  assert_eq(text, "b")
+  assert_true(state.run is Running(_))
+
+  // A shell command cannot steer a model turn: error, nothing sent.
+  let cmds = update(state, UiInput(Steer(Command("ls"))))
   assert_eq(error_item_count(cmds), 1)
+  assert_true(cmds.iter().all(cmd => !(cmd is SteerAgent(_))))
 
   // Queue while running still queues without error.
   let cmds = update(state, UiInput(Queue(Prompt("c"))))
   assert_eq(state.queued.length(), 1)
   assert_eq(error_item_count(cmds), 0)
+}
+
+///|
+test "a steer_applied event echoes the input into the transcript" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let cmds = update(
+    state,
+    AgentProgress(run_id=state.run_id, SteerApplied("make it rhyme")),
+  )
+  guard cmds is [AppendItem(Input(Prompt(text)))] else {
+    fail("expected the steered input echoed as a transcript item")
+  }
+  assert_eq(text, "make it rhyme")
+  // The run keeps going: a steer is not a terminal event.
+  assert_true(state.run is Running(_))
 }
 
 ///|

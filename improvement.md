@@ -32,15 +32,21 @@ bottom of the matching section.
 - [ ] **Session switching inside the TUI.** A way to list and switch sessions
   without restarting. Generated ids (`tui-YYYYMMDD-HHMMSS-mmm`) are only
   discoverable via the startup banner or `openseek --session-list` today.
-- [ ] **Steering a running task.** `Steer` while running is rejected ("press
+- [x] **Steering a running task.** `Steer` while running is rejected ("press
   Tab to queue") because the engine cannot accept mid-turn input. Needs an
   engine-side protocol (e.g. a control channel on stdin) before the TUI can
-  offer it.
-- [ ] **Persistent engine per session.** The TUI spawns a fresh engine per
+  offer it. *(Done: Enter while running steers — the text rides the serve
+  protocol's lossless channel, lands at the turn's next step boundary, wins
+  over model-initiated completion, and is echoed into the transcript at the
+  position the model actually saw it.)*
+- [x] **Persistent engine per session.** The TUI spawns a fresh engine per
   prompt, so `moon_check --watch` restarts (and re-warms) every turn and its
   watcher state is lost between prompts. A long-lived engine process per
   session — with prompts delivered over a channel — would keep watchers warm
-  and is also the prerequisite for steering.
+  and is also the prerequisite for steering. *(Done: one `--serve` engine per
+  TUI session — JSONL commands on stdin, shared runtime and tool registry
+  across turns, Ctrl-C cancel → kill escalation, respawn on death from the
+  durable session.)*
 
 ## Engine / agent
 

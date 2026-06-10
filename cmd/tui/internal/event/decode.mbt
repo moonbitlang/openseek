@@ -15,6 +15,7 @@ pub fn decode_event(object : Json) -> AgentEvent? {
     "reasoning_delta" => Some(ReasoningDelta(@jsonx.string(object, "content")))
     "reasoning_message" =>
       Some(ReasoningMessage(@jsonx.string(object, "content")))
+    "steer_applied" => Some(SteerApplied(@jsonx.string(object, "content")))
     "assistant_message" =>
       Some(AssistantMessage(@jsonx.string(object, "content")))
     "runtime_update" => Some(RuntimeUpdate(@jsonx.string(object, "content")))
