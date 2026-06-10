@@ -437,7 +437,15 @@ async fn[G] run_message_loop(
     for cmd in update(state, message) {
       match cmd {
         AppendItem(item) => ui.append_item(item)
-        StartAgent(run_id~, task) => engine.prompt(group, run_id, task)
+        StartAgent(run_id~, task) => {
+          // An engine turn has no local task. A queued prompt can start in
+          // the same update that finished a `!` command (state never passes
+          // through Idle, so the cleanup below never runs); clear the stale
+          // handle here or the next Ctrl-C would cancel a dead command task
+          // instead of the engine turn.
+          running_task = None
+          engine.prompt(group, run_id, task)
+        }
         RunCommand(run_id~, command) =>
           running_task = Some(
             group.spawn(no_wait=true) <| () => {
