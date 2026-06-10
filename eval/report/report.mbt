@@ -1,15 +1,23 @@
 ///|
+/// One named measurement, already rendered to display text — the shared cell
+/// format for report summaries and per-row metric columns.
 pub struct Metric {
   name : String
   value : String
 }
 
 ///|
+/// Build a metric. `value` is display text: format numbers before
+/// constructing so the report layer never guesses precision.
 pub fn Metric::Metric(name~ : String, value~ : String) -> Metric {
   { name, value }
 }
 
 ///|
+/// One trial's row in an eval report: which case (`name`) and repetition
+/// (`index`), whether it passed, the failure `reason` ("ok" when it passed),
+/// non-fatal `warnings`, its `metrics` cells, and the path of its full
+/// transcript log when one was kept.
 pub struct ReportRow {
   index : Int
   name : String
@@ -21,6 +29,8 @@ pub struct ReportRow {
 }
 
 ///|
+/// Build a report row; everything beyond identity and the verdict is
+/// optional. `reason` defaults to "ok" so passing rows read uniformly.
 pub fn ReportRow::ReportRow(
   index~ : Int,
   name~ : String,
@@ -34,6 +44,9 @@ pub fn ReportRow::ReportRow(
 }
 
 ///|
+/// A complete eval run's results: a `title`, run-level `summary` metrics, the
+/// ordered `metric_columns` every row renders under, and one `ReportRow` per
+/// trial. Renders to markdown for humans and JSON for tooling.
 pub struct Report {
   title : String
   summary : Array[Metric]
@@ -42,6 +55,8 @@ pub struct Report {
 }
 
 ///|
+/// Build a report. `metric_columns` names and orders the per-row metric
+/// cells; rows supply values for those names via their `metrics`.
 pub fn Report::Report(
   title~ : String,
   summary? : Array[Metric] = [],
@@ -52,6 +67,7 @@ pub fn Report::Report(
 }
 
 ///|
+/// How many rows passed.
 pub fn Report::successes(self : Report) -> Int {
   let mut count = 0
   for row in self.rows {
@@ -63,11 +79,15 @@ pub fn Report::successes(self : Report) -> Int {
 }
 
 ///|
+/// Whether every row passed — the run's exit-status verdict. Vacuously true
+/// for a report with no rows.
 pub fn Report::all_passed(self : Report) -> Bool {
   self.successes() == self.rows.length()
 }
 
 ///|
+/// Render the report as a human-facing markdown document: title, summary
+/// bullets, the trial table, and a log-paths section when any row kept one.
 pub fn Report::markdown(self : Report) -> String {
   let lines : Array[String] = ["# \{self.title}", ""]
   for metric in self.summary {
@@ -94,6 +114,8 @@ pub fn Report::markdown(self : Report) -> String {
 }
 
 ///|
+/// Render the report as JSON for tooling (diffing runs, dashboards), with
+/// the success count precomputed alongside the raw rows.
 pub fn Report::to_json(self : Report) -> Json {
   {
     "title": self.title,
@@ -105,11 +127,16 @@ pub fn Report::to_json(self : Report) -> Json {
 }
 
 ///|
+/// Write both renderings of this report under `out_dir` — the standard
+/// artifact layout eval runners leave behind.
 pub async fn Report::write_files(self : Report, out_dir : String) -> Unit {
   write_files(out_dir, self.markdown(), self.to_json())
 }
 
 ///|
+/// Write already-rendered report artifacts as `report.md` and `report.json`
+/// under `out_dir`, creating it as needed — for runners that build their
+/// renderings separately.
 pub async fn write_files(
   out_dir : String,
   markdown : String,
@@ -208,6 +235,9 @@ fn log_section_lines(rows : Array[ReportRow]) -> Array[String] {
 }
 
 ///|
+/// Make free text safe inside a markdown table cell: escape `|` and flatten
+/// newlines to spaces. Failure reasons quote arbitrary model and tool
+/// output, which would otherwise break the table layout.
 pub fn escape_table_cell(text : String) -> String {
   text
   |> String::replace_all(old="|", new="\\|")

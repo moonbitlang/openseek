@@ -1,4 +1,11 @@
 ///|
+/// Everything recorded about one file-edit trial: identity (`index`, the
+/// eval `case_id`, `prompt_label`), the verdict (`success`/`reason`), where
+/// it ran (`workspace`, `log_path`, `exit_code`), agent-loop measurements
+/// (`steps`, `tool_errors`), per-tool usage counters (how the agent split
+/// its work across shell, moon_cmd, edit, write, …), and the case's two
+/// gates — the workspace matched the expected files (`validation_passed`)
+/// and the required marker text was produced (`marker_present`).
 pub struct TrialResult {
   index : Int
   case_id : String
@@ -26,6 +33,9 @@ pub struct TrialResult {
 }
 
 ///|
+/// One file-edit eval run's outcome: the configuration that defined it, the
+/// success tally against `min_successes`, where artifacts were written, and
+/// every trial's result.
 pub struct EvalReport {
   model : String
   prompt_label : String
@@ -45,6 +55,11 @@ priv struct AgentLogSummary {
 }
 
 ///|
+/// Run the whole file-edit eval: `config.runs` agent trials cycling through
+/// the eval cases, `config.concurrency` at a time, each in a fresh staged
+/// workspace checked against the case's expected files. Returns the
+/// aggregated report; rendering and exit-status decisions stay with the
+/// caller.
 pub async fn run_suite(config : Config) -> EvalReport {
   prepare_output_dir(config.out_dir)
   let results = run_indexed_with_concurrency(config.runs, config.concurrency, index => {

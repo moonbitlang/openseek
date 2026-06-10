@@ -31,11 +31,15 @@ pub struct SessionStore {
 } derive(Debug)
 
 ///|
+/// Open a store rooted at `root`. Nothing is touched on disk until the first
+/// session is created or appended to, so constructing a store is free and
+/// never fails.
 pub fn SessionStore::SessionStore(root : String) -> SessionStore {
   { root, }
 }
 
 ///|
+/// The root directory this store keeps its `sessions/` tree under.
 pub fn SessionStore::root(self : SessionStore) -> String {
   self.root
 }

@@ -1,4 +1,6 @@
 ///|
+/// One file of a `FileSystem`: its slash-separated relative `path` and full
+/// text `content`.
 pub struct FileEntry {
   path : String
   content : String
@@ -12,6 +14,9 @@ pub struct FileEntry {
 pub(all) struct FileSystem(Json)
 
 ///|
+/// Wrap an already-encoded JSON filesystem, validating the convention up
+/// front (object shape, relative string paths, string contents) so later
+/// reads cannot fail on malformed fixture data.
 pub fn FileSystem::from_json(json : Json) -> FileSystem raise {
   let filesystem = FileSystem(json)
   filesystem.validate()
@@ -19,6 +24,8 @@ pub fn FileSystem::from_json(json : Json) -> FileSystem raise {
 }
 
 ///|
+/// Build a filesystem from `(path, content)` pairs — the convenient form for
+/// literal fixtures in test code. Rejects invalid paths and duplicates.
 pub fn FileSystem::from_pairs(
   files : Array[(String, String)],
 ) -> FileSystem raise {
@@ -35,17 +42,23 @@ pub fn FileSystem::from_pairs(
 }
 
 ///|
+/// The underlying JSON object, e.g. for embedding the fixture in a larger
+/// eval-case document.
 pub fn FileSystem::to_json(self : FileSystem) -> Json {
   let FileSystem(json) = self
   json
 }
 
 ///|
+/// Check the whole filesystem against the convention, raising on the first
+/// violation. Equivalent to `entries()` with the result discarded.
 pub fn FileSystem::validate(self : FileSystem) -> Unit raise {
   let _ = self.entries()
 }
 
 ///|
+/// Every file as a `FileEntry`, sorted by path for deterministic iteration.
+/// Raises when the JSON violates the filesystem convention.
 pub fn FileSystem::entries(self : FileSystem) -> Array[FileEntry] raise {
   let FileSystem(json) = self
   guard json is Object(fields) else {
@@ -65,6 +78,7 @@ pub fn FileSystem::entries(self : FileSystem) -> Array[FileEntry] raise {
 }
 
 ///|
+/// Every file path, sorted — the entries without their contents.
 pub fn FileSystem::paths(self : FileSystem) -> Array[String] raise {
   [
     for entry in self.entries() => entry.path
@@ -72,6 +86,9 @@ pub fn FileSystem::paths(self : FileSystem) -> Array[String] raise {
 }
 
 ///|
+/// Content of the file at `path`, or `None` when absent. Raises on an
+/// invalid `path` or malformed stored content rather than hiding either as
+/// "absent".
 pub fn FileSystem::get(self : FileSystem, path : String) -> String? raise {
   validate_relative_path(path)
   let FileSystem(json) = self
@@ -86,6 +103,8 @@ pub fn FileSystem::get(self : FileSystem, path : String) -> String? raise {
 }
 
 ///|
+/// Materialize every file under the `root` directory, creating parent
+/// directories as needed — how an eval trial stages its starting workspace.
 pub async fn FileSystem::write_to(self : FileSystem, root : String) -> Unit {
   for entry in self.entries() {
     write_text(root, entry.path, entry.content)
@@ -93,6 +112,10 @@ pub async fn FileSystem::write_to(self : FileSystem, root : String) -> Unit {
 }
 
 ///|
+/// Compare this filesystem against the files under `root` and describe the
+/// first difference — a missing file or a content mismatch — or return `""`
+/// when everything matches. A description rather than a `Bool` so an eval
+/// report can say what went wrong, not just that something did.
 pub async fn FileSystem::mismatch_on_disk(
   self : FileSystem,
   root : String,
@@ -113,6 +136,8 @@ pub async fn FileSystem::mismatch_on_disk(
 }
 
 ///|
+/// Write one text file at `root`/`path` (relative, validated), creating
+/// parent directories and truncating any existing file.
 pub async fn write_text(root : String, path : String, content : String) -> Unit {
   validate_relative_path(path)
   ensure_parent_dir(root, path)

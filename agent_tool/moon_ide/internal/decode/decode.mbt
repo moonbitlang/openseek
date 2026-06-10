@@ -1,10 +1,18 @@
 ///|
+/// Characters of IDE query output one `moon_ide` call returns when the model
+/// does not pick a `max_output_chars` budget itself.
 pub let default_max_output_chars : Int = 12000
 
 ///|
+/// Ceiling a caller-supplied `max_output_chars` is clamped to, so a single
+/// IDE query can never flood the conversation.
 pub let hard_max_output_chars : Int = 50000
 
 ///|
+/// Decoded arguments of the `moon_ide` tool: which IDE `action` to run
+/// (symbol search, goto-definition, hover, …) and its inputs — the free-text
+/// `query`, the `path`/`loc` position, the backend `target` — plus `no_check`
+/// to skip the pre-query type check and the output budget.
 pub struct MoonIdeInput {
   action : String
   cwd : String?
@@ -17,6 +25,15 @@ pub struct MoonIdeInput {
 } derive(Debug)
 
 ///|
+/// Decode `moon_ide` tool-call arguments.
+///
+/// `action` is required and validated against the supported set; which other
+/// fields are required depends on the action and is checked by the tool
+/// itself, so this stays a pure shape decode. A present `target` must be one
+/// of moon's backends. `max_output_chars` defaults to
+/// `default_max_output_chars`, clamped to `hard_max_output_chars`. Failures
+/// name the offending field so the error fed back to the model says exactly
+/// which argument to fix.
 pub fn decode(arguments : Json) -> MoonIdeInput raise {
   match arguments {
     Object(fields) => parse_fields(fields)

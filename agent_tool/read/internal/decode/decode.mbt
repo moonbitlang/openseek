@@ -1,10 +1,17 @@
 ///|
+/// Characters of file content one `read` call returns when the model does not
+/// pick a `max_output_chars` budget itself.
 pub let default_max_output_chars : Int = 12000
 
 ///|
+/// Ceiling a caller-supplied `max_output_chars` is clamped to, so a single
+/// tool call can never flood the conversation with an arbitrarily large file.
 pub let hard_max_output_chars : Int = 50000
 
 ///|
+/// Decoded arguments of the `read` tool: the file at `path`, starting from
+/// the 1-based `start_line`, at most `max_lines` lines (unbounded when
+/// `None`), truncated to `max_output_chars` characters.
 pub struct ReadInput {
   path : String
   start_line : Int
@@ -13,6 +20,13 @@ pub struct ReadInput {
 } derive(Debug)
 
 ///|
+/// Decode `read` tool-call arguments.
+///
+/// Only `path` is required; the numeric fields must be positive when present
+/// and otherwise default (`start_line` 1, `max_lines` unbounded,
+/// `max_output_chars` `default_max_output_chars` clamped to
+/// `hard_max_output_chars`). Failures name the offending field so the error
+/// fed back to the model says exactly which argument to fix.
 pub fn decode(arguments : Json) -> ReadInput raise {
   match arguments {
     Object(fields) => parse_fields(fields)

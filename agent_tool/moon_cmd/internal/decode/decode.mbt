@@ -1,10 +1,19 @@
 ///|
+/// Characters of captured `moon` output one `moon_cmd` call returns when the
+/// model does not pick a `max_output_chars` budget itself.
 pub let default_max_output_chars : Int = 12000
 
 ///|
+/// Ceiling a caller-supplied `max_output_chars` is clamped to, so a single
+/// `moon` invocation's output can never flood the conversation.
 pub let hard_max_output_chars : Int = 50000
 
 ///|
+/// Decoded arguments of the `moon_cmd` tool: the `moon` subcommand to run
+/// (`command`), where (`cwd`) and for which backend (`target`), its
+/// flag-style `args`, positional `paths`, post-`--` `program_args`, optional
+/// `stdin` text, the snapshot-update audit fields (`test_update_kind`,
+/// `test_update_reason`), and the output budget.
 pub struct MoonCommandInput {
   command : String
   cwd : String?
@@ -19,6 +28,13 @@ pub struct MoonCommandInput {
 } derive(Debug)
 
 ///|
+/// Decode `moon_cmd` tool-call arguments.
+///
+/// `command` is required and validated against the supported subcommand set;
+/// `target` is only accepted for subcommands that take one. The array fields
+/// default to empty, `max_output_chars` to `default_max_output_chars` clamped
+/// to `hard_max_output_chars`. Failures name the offending field so the error
+/// fed back to the model says exactly which argument to fix.
 pub fn decode(arguments : Json) -> MoonCommandInput raise {
   match arguments {
     Object(fields) => parse_fields(fields)

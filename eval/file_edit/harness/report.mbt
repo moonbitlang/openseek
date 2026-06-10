@@ -48,16 +48,22 @@ fn TrialResult::to_json(self : TrialResult) -> Json {
 }
 
 ///|
+/// Whether the run met its success threshold. Thresholded rather than
+/// all-or-nothing because agent trials are stochastic: the tooling is judged
+/// on its success rate, not on a single unlucky trial.
 pub fn EvalReport::passed(self : EvalReport) -> Bool {
   self.successes >= self.min_successes
 }
 
 ///|
+/// The one-line failure summary a runner prints (and exits non-zero with)
+/// when the threshold was missed, stating tally and threshold.
 pub fn EvalReport::failure_message(self : EvalReport) -> String {
   "file edit eval failed: \{self.successes}/\{self.runs} below threshold \{self.min_successes}/\{self.runs}"
 }
 
 ///|
+/// Render this run as the standard markdown report document.
 pub fn EvalReport::markdown(self : EvalReport) -> String {
   self.as_report().markdown()
 }

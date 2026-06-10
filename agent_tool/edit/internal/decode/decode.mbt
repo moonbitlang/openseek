@@ -1,4 +1,7 @@
 ///|
+/// Decoded arguments of the `edit` tool: replace `old_string` with
+/// `new_string` in the file at `path` — every occurrence when `replace_all`,
+/// otherwise exactly one.
 pub struct EditInput {
   path : String
   old_string : String
@@ -7,6 +10,12 @@ pub struct EditInput {
 } derive(Debug)
 
 ///|
+/// Decode `edit` tool-call arguments.
+///
+/// `path`, `old_string`, and `new_string` are required strings;
+/// `replace_all` is an optional boolean defaulting to `false`. Failures name
+/// the first offending field (e.g. `arguments.old_string`) so the error fed
+/// back to the model says exactly which argument to fix.
 pub fn decode(arguments : Json) -> EditInput raise {
   match arguments {
     {

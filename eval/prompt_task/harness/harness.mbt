@@ -1,10 +1,16 @@
 ///|
+/// Verdict of one behavioral probe run against a trial's workspace, with the
+/// `reason` it failed ("ok" when it passed).
 pub struct ProbeResult {
   passed : Bool
   reason : String
 }
 
 ///|
+/// Validation verdict for one trial's finished workspace: the overall
+/// `passed`/`reason` plus each individual gate — the project must type-check
+/// (`moon_check`), pass its tests (`moon_test`), and behave correctly on the
+/// file, stdin, and duplicate-handling probes.
 pub struct ValidationResult {
   passed : Bool
   reason : String
@@ -16,6 +22,12 @@ pub struct ValidationResult {
 }
 
 ///|
+/// Everything recorded about one trial: identity (`index`, `prompt_label`),
+/// the verdict (`success`/`reason`), where it ran (`workspace`, `log_path`,
+/// `exit_code`), agent-loop measurements (`steps`, `tool_errors`,
+/// `finished`), the workspace `validation`, and the `*_mentions`/`*_uses`
+/// counters that track how often the transcript touches APIs and idioms the
+/// prompt under test tries to encourage or ban.
 pub struct TrialResult {
   index : Int
   prompt_label : String
@@ -45,6 +57,9 @@ pub struct TrialResult {
 }
 
 ///|
+/// One prompt-eval run's outcome: the configuration that defined it (model,
+/// prompt label, task file, trial counts), the success tally against
+/// `min_successes`, where artifacts were written, and every trial's result.
 pub struct EvalReport {
   model : String
   prompt_label : String
@@ -66,6 +81,10 @@ priv struct AgentLogSummary {
 }
 
 ///|
+/// Run the whole prompt eval: `config.runs` agent trials of the task file,
+/// `config.concurrency` at a time, each in a fresh workspace and validated
+/// end-to-end. Returns the aggregated report; rendering and exit-status
+/// decisions stay with the caller.
 pub async fn run_suite(config : Config) -> EvalReport {
   prepare_output_dir(config.out_dir)
   let task_template = @fs.read_file(config.task_file).text()

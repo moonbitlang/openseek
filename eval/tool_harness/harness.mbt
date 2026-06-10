@@ -1,4 +1,9 @@
 ///|
+/// Exercise every agent tool once through the real registry — decode,
+/// dispatch, execute, and check each tool's happy path plus a
+/// representative failure — and return the per-case report. This is the
+/// offline tool smoke test: no model involved, so a failure localizes to
+/// the tool layer itself.
 pub async fn run_harness() -> @report.Report {
   @async.with_task_group() <| group => {
     run_harness_with_runtime(AgentRuntime(), AgentTaskScope(group))

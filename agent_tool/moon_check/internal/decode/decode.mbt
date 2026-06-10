@@ -1,4 +1,8 @@
 ///|
+/// Decoded arguments of the `moon_check` tool: where to run the persistent
+/// `moon check` watcher (`cwd`), which backend to check (`target`), and the
+/// pass-through diagnostics switches (`warn_list`, `deny_warn`, `fmt`,
+/// `explain`).
 pub struct MoonCheckInput {
   cwd : String?
   target : String?
@@ -9,6 +13,12 @@ pub struct MoonCheckInput {
 } derive(Debug)
 
 ///|
+/// Decode `moon_check` tool-call arguments.
+///
+/// Every field is optional: strings default to absent, booleans to `false`.
+/// A present `target` must be one of moon's backends (`wasm`, `wasm-gc`,
+/// `js`, `native`, `llvm`, `all`). Failures name the offending field so the
+/// error fed back to the model says exactly which argument to fix.
 pub fn decode(arguments : Json) -> MoonCheckInput raise {
   match arguments {
     Object(fields) => parse_fields(fields)

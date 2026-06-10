@@ -1,4 +1,13 @@
 ///|
+/// Policy gate for agent shell commands: returns the error to feed back to
+/// the model when `cmd` must not run, or `None` when it may.
+///
+/// The blocked commands are not dangerous — they are redirections. `moon
+/// check` (bare, behind `cd`, or embedded in a compound command) is pushed to
+/// the `moon_check` tool so the agent gets persistent watcher feedback
+/// instead of a one-shot run, and the tool name `moon_cmd` typed as a shell
+/// command is pointed back at the real tools. Each error's wording tells the
+/// model what to do instead, because the model is the caller who reads it.
 pub fn moonbit_command_policy_error(cmd : String) -> String? {
   let words = shell_words(cmd)
   let command_index = first_command_word_index(words)

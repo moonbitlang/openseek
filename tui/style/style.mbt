@@ -10,9 +10,12 @@ pub struct Style {
 } derive(Eq, Debug)
 
 ///|
+/// The terminal's own colors, no underline — text with no styling applied.
 pub let default : Style = Style()
 
 ///|
+/// Build a style; omitted fields keep the terminal default. Pass only what
+/// the span should change, e.g. `Style(foreground=Basic(Yellow))`.
 pub fn Style::Style(
   foreground? : @tty/color.Color = Default,
   background? : @tty/color.Color = Default,
@@ -22,10 +25,13 @@ pub fn Style::Style(
 }
 
 ///|
+/// De-emphasized text (bright black): labels, separators, secondary detail.
 pub let dim : Style = Style(foreground=Basic(BrightBlack))
 
 ///|
+/// Success accent (green): completed statuses and confirmations.
 pub let ok : Style = Style(foreground=Basic(Green))
 
 ///|
+/// Failure accent (red): error items and failed statuses.
 pub let error : Style = Style(foreground=Basic(Red))

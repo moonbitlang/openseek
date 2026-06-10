@@ -23,6 +23,8 @@ description = "DeepSeek-backed MoonBit coding agent"
 
 preferred_target = "native"
 
+warnings = "+missing_doc"
+
 rule(
   name: "md_to_mbt_string",
   command: "moon run --quiet --target native scripts/md_to_mbt_string -- \"$input\" \"$output\"",

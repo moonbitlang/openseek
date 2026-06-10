@@ -1,4 +1,8 @@
 ///|
+/// One file-editing scenario: the `instructions` given to the agent, the
+/// `initial` workspace to stage, the `expected` workspace afterwards, the
+/// `unchanged_files` that must survive byte-for-byte, and extra `validation`
+/// marker strings the agent must produce. `id` names the case in reports.
 pub struct EvalCase {
   id : String
   instructions : String
@@ -9,6 +13,9 @@ pub struct EvalCase {
 }
 
 ///|
+/// The fixed case suite, ordered: exact replace, ambiguous replace,
+/// multiline replace, file creation, and a compile fix — one case per
+/// editing skill the `edit`/`write` tools must get right.
 pub fn eval_cases() -> Array[EvalCase] {
   [
     exact_replace_case(),
@@ -20,12 +27,17 @@ pub fn eval_cases() -> Array[EvalCase] {
 }
 
 ///|
+/// The case trial `index` runs, cycling through `eval_cases()` so any trial
+/// count covers the suite evenly.
 pub fn case_for_trial(index : Int) -> EvalCase {
   let cases = eval_cases()
   cases[index % cases.length()]
 }
 
 ///|
+/// Render the full task prompt for a trial running in `workspace`: the
+/// shared editing rules (absolute paths, no shell-based file mutation,
+/// preserve unrelated files) followed by this case's instructions.
 pub fn EvalCase::task(self : EvalCase, workspace : String) -> String {
   (
     $|You are running a file-editing eval.

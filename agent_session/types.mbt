@@ -5,11 +5,14 @@ pub struct SessionId {
 } derive(Debug)
 
 ///|
+/// Wrap a raw id string. The id doubles as the session's directory name in a
+/// `SessionStore`, so it should be filesystem-safe on every platform.
 pub fn SessionId::SessionId(value : String) -> SessionId {
   { value, }
 }
 
 ///|
+/// The raw id string, e.g. for display or for building a store path.
 pub fn SessionId::value(self : SessionId) -> String {
   self.value
 }
@@ -38,11 +41,13 @@ fn SessionToolCall::to_deepseek(self : SessionToolCall) -> @deepseek.ToolCall {
 }
 
 ///|
+/// Wrap one user prompt as it was submitted, verbatim.
 pub fn UserMessage::UserMessage(content : String) -> UserMessage {
   { content, }
 }
 
 ///|
+/// The prompt text exactly as the user submitted it.
 pub fn UserMessage::content(self : UserMessage) -> String {
   self.content
 }
@@ -58,6 +63,11 @@ pub struct AssistantMessage {
 } derive(Debug, ToJson, FromJson)
 
 ///|
+/// Build an assistant message from the model's response parts: the visible
+/// `content`, any native `tool_calls` it requested, and the thinking-mode
+/// `reasoning_content` when the API returned one. Tool calls are converted to
+/// the session's own storage form so the event log has no wire-type
+/// dependency.
 pub fn AssistantMessage::AssistantMessage(
   content : String,
   tool_calls? : Array[@deepseek.ToolCall] = [],
@@ -73,6 +83,8 @@ pub fn AssistantMessage::AssistantMessage(
 }
 
 ///|
+/// The assistant's visible text — empty for turns that only requested tool
+/// calls.
 pub fn AssistantMessage::content(self : AssistantMessage) -> String {
   self.content
 }
@@ -101,6 +113,10 @@ pub struct ToolResult {
 } derive(Debug, ToJson, FromJson)
 
 ///|
+/// Record the outcome of one tool execution: which assistant call it answers
+/// (`tool_call_id`), which tool ran (`tool_name`), what it returned
+/// (`content`), and whether that content is an error report rather than a
+/// normal result.
 pub fn ToolResult::ToolResult(
   tool_call_id~ : String,
   tool_name~ : String,
@@ -116,16 +132,21 @@ fn ToolResult::tool_call_id(self : ToolResult) -> String {
 }
 
 ///|
+/// Name of the tool that produced this result (e.g. `shell`, `edit`).
 pub fn ToolResult::tool_name(self : ToolResult) -> String {
   self.tool_name
 }
 
 ///|
+/// The tool's output as it was fed back to the model — an error description
+/// when `is_error` is true.
 pub fn ToolResult::content(self : ToolResult) -> String {
   self.content
 }
 
 ///|
+/// Whether `content` reports a failure (bad arguments, command error) rather
+/// than a normal result.
 pub fn ToolResult::is_error(self : ToolResult) -> Bool {
   self.is_error
 }
@@ -138,11 +159,13 @@ pub struct RuntimeNotice {
 } derive(Debug, ToJson, FromJson)
 
 ///|
+/// Wrap one runtime update exactly as it was injected into the conversation.
 pub fn RuntimeNotice::RuntimeNotice(content : String) -> RuntimeNotice {
   { content, }
 }
 
 ///|
+/// The update text the model saw, including any watcher metadata preamble.
 pub fn RuntimeNotice::content(self : RuntimeNotice) -> String {
   self.content
 }
@@ -158,6 +181,9 @@ pub struct SessionSummary {
 } derive(Debug, ToJson, FromJson)
 
 ///|
+/// Build a summary of the events `from_sequence..to_sequence` (inclusive).
+/// Prefer `Session::compact`, which validates the range against the session
+/// before appending.
 pub fn SessionSummary::SessionSummary(
   content~ : String,
   from_sequence~ : Int,
@@ -167,21 +193,30 @@ pub fn SessionSummary::SessionSummary(
 }
 
 ///|
+/// The summary text that stands in for the compacted events in the
+/// model-facing projection.
 pub fn SessionSummary::content(self : SessionSummary) -> String {
   self.content
 }
 
 ///|
+/// First event sequence (inclusive) this summary covers.
 pub fn SessionSummary::from_sequence(self : SessionSummary) -> Int {
   self.from_sequence
 }
 
 ///|
+/// Last event sequence (inclusive) this summary covers.
 pub fn SessionSummary::to_sequence(self : SessionSummary) -> Int {
   self.to_sequence
 }
 
 ///|
+/// How a turn ended, with the payload a consumer shows for it: the final
+/// answer for `Finished`, the reason for `Aborted` (the agent's own abort
+/// tool) and `Interrupted` (cancelled from outside), or the failure message
+/// for `Failed`. Every turn closes with exactly one of these, so a session
+/// whose last event is not a `Terminal` was cut off mid-turn.
 pub(all) enum TurnTerminal {
   Finished(String)
   Aborted(String)
@@ -190,6 +225,10 @@ pub(all) enum TurnTerminal {
 } derive(Debug)
 
 ///|
+/// One kind of session event payload — the conversation's vocabulary: the
+/// user spoke (`User`), the model answered (`Assistant`), a tool returned
+/// (`Tool`), the runtime injected diagnostics (`Runtime`), older events were
+/// compacted (`Summary`), or the turn ended (`Terminal`).
 pub(all) enum SessionItem {
   User(UserMessage)
   Assistant(AssistantMessage)
@@ -216,11 +255,13 @@ fn SessionEvent::SessionEvent(
 }
 
 ///|
+/// This event's position in the session's append-only log (one-based).
 pub fn SessionEvent::sequence(self : SessionEvent) -> Int {
   self.sequence
 }
 
 ///|
+/// The event's payload.
 pub fn SessionEvent::item(self : SessionEvent) -> SessionItem {
   self.item
 }
@@ -237,6 +278,9 @@ pub struct Session {
 } derive(Debug)
 
 ///|
+/// Build a session from its identity, system prompt, and (when loading from
+/// storage) its existing event log. `last_sequence` is recovered from the
+/// highest sequence present, so appending continues where the log left off.
 pub fn Session::Session(
   id : SessionId,
   system_prompt~ : String,
@@ -252,21 +296,25 @@ pub fn Session::Session(
 }
 
 ///|
+/// The session's stable identifier.
 pub fn Session::id(self : Session) -> SessionId {
   self.id
 }
 
 ///|
+/// The system prompt this conversation runs under, fixed at creation.
 pub fn Session::system_prompt(self : Session) -> String {
   self.system_prompt
 }
 
 ///|
+/// The full append-only event log, oldest first.
 pub fn Session::events(self : Session) -> @vector.Vector[SessionEvent] {
   self.events
 }
 
 ///|
+/// Sequence of the newest event, or `0` for a session with no events yet.
 pub fn Session::last_sequence(self : Session) -> Int {
   self.last_sequence
 }
@@ -277,6 +325,9 @@ fn Session::next_sequence(self : Session) -> Int {
 }
 
 ///|
+/// Append one item as the next event and return the new session value; the
+/// receiver is unchanged. Callers that also need the assigned event (e.g. to
+/// persist it) should use `append_event`.
 pub fn Session::append(self : Session, item : SessionItem) -> Session {
   let (next, _) = self.append_event(item)
   next
