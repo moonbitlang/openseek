@@ -1,11 +1,13 @@
 import {
   "bobzhang/openseek/deepseek",
   "moonbitlang/async/http",
+  "moonbitlang/async/io",
   "moonbitlang/core/json",
 }
 
 import {
   "moonbitlang/async",
+  "moonbitlang/async/socket",
   "moonbitlang/core/env",
 } for "test"
 

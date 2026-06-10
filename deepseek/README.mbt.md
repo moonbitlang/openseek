@@ -21,9 +21,10 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
   normal text; pass `JsonObject` only when the assistant content must be a JSON
   object.
 - `encode_chat_request(model, messages, tools?, thinking?, reasoning_effort?,
-  response_format?)`: builds the full DeepSeek chat completions request body.
-  The per-value encoders for messages, tool definitions, and tool calls are
-  package-private implementation details.
+  stream?, response_format?)`: builds the full DeepSeek chat completions request
+  body. Streaming requests include usage-bearing stream options. The per-value
+  encoders for messages, tool definitions, and tool calls are package-private
+  implementation details.
 - `ToolDefinition(name, description, parameters, strict?)`: a native DeepSeek
   function tool definition with a JSON Schema parameters object.
 - `ToolCall(id~, name~, arguments~)`: a decoded function call request from the

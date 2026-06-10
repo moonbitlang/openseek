@@ -46,6 +46,21 @@ test "encode_chat_request includes tools when present" {
 }
 
 ///|
+test "encode_chat_request enables usage-bearing stream mode" {
+  let body = @deepseek.encode_chat_request(
+    V4Flash,
+    [ChatMessage(User, content="stream this")],
+    stream=true,
+  )
+  let text = body.stringify()
+  assert_true(text.contains("\"stream\":true"))
+  guard body
+    is { "stream": True, "stream_options": { "include_usage": True, .. }, .. } else {
+    fail("wrong stream options")
+  }
+}
+
+///|
 test "encode_chat_request encodes thinking controls" {
   let body = @deepseek.encode_chat_request(
     V4Pro,
