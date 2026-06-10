@@ -1,10 +1,10 @@
 ///|
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/io",
-  "moonbitlang/async/process",
+  "moonbitlang/async@0.19.1",
+  "moonbitlang/async@0.19.1/fs",
+  "moonbitlang/async@0.19.1/io",
+  "moonbitlang/async@0.19.1/process",
   "moonbitlang/core/string",
-  "moonbitlang/x/fs",
 }
 
 ///|
@@ -50,9 +50,6 @@ const MacOSPath : String = ContentsPath + "/MacOS"
 const ResourcesPath : String = ContentsPath + "/Resources"
 
 ///|
-const TargetPath : String = MacOSPath + "/target"
-
-///|
 const AppAssetDir : String = MacOSPath + "/assets"
 
 ///|
@@ -61,10 +58,47 @@ suberror PackageError {
 }
 
 ///|
-async fn run_checked(command : String, args : Array[String]) -> Unit raise {
+/// The desktop workspace this script packages. Every command runs with the
+/// workspace as its working directory and every path is joined onto it, so the
+/// script works both from inside the workspace (`moon run package_macos.mbtx`)
+/// and from the monorepo root (`moon run desktop/package_macos.mbtx`).
+priv struct Workspace {
+  dir : String
+}
+
+///|
+async fn locate_workspace() -> Workspace raise {
+  for candidate in [".", "desktop"] {
+    if @fs.exists(candidate + "/package_macos.mbtx") &&
+      @fs.exists(candidate + "/lepus") {
+      return { dir: candidate }
+    }
+  }
+  raise PackageError(
+    "cannot locate the desktop workspace; run from the desktop directory or the monorepo root",
+  )
+}
+
+///|
+fn Workspace::at(self : Workspace, relative : String) -> String {
+  self.dir + "/" + relative
+}
+
+///|
+/// The monorepo root, one level up from the desktop workspace.
+fn Workspace::repo(self : Workspace) -> String {
+  self.dir + "/.."
+}
+
+///|
+async fn run_checked(
+  command : String,
+  args : Array[String],
+  dir~ : String,
+) -> Unit raise {
   let joined_args = args.join(" ")
-  println("$ \{command} \{joined_args}")
-  let code = @process.run(command, args, inherit_env=true)
+  println("$ [\{dir}] \{command} \{joined_args}")
+  let code = @process.run(command, args, inherit_env=true, cwd=dir.view())
   if code != 0 {
     raise PackageError("command failed with exit code \{code}: \{command}")
   }
@@ -72,74 +106,89 @@ async fn run_checked(command : String, args : Array[String]) -> Unit raise {
 
 ///|
 /// Build the openseek engine from the monorepo source. Runs from the repo root
-/// (`..`) since the engine lives in a separate moon module from this desktop
+/// since the engine lives in a separate moon module from this desktop
 /// workspace.
-async fn build_engine() -> Unit raise {
-  run_checked("sh", [
-    "-c",
-    "cd .. && moon build \{EnginePackage} --target native --release",
-  ])
-  if !@fs.path_exists(EngineBinary) {
-    raise PackageError("openseek engine binary not found: \{EngineBinary}")
+async fn build_engine(ws : Workspace) -> Unit raise {
+  run_checked(
+    "moon",
+    ["build", EnginePackage, "--target", "native", "--release"],
+    dir=ws.repo(),
+  )
+  if !@fs.exists(ws.at(EngineBinary)) {
+    raise PackageError(
+      "openseek engine binary not found: \{ws.at(EngineBinary)}",
+    )
   }
 }
 
 ///|
 /// Build the lepus codegen CLI into the submodule if it is not already staged.
-async fn ensure_codegen_tool() -> Unit raise {
-  if @fs.path_exists(CodegenTool) {
+async fn ensure_codegen_tool(ws : Workspace) -> Unit raise {
+  if @fs.exists(ws.at(CodegenTool)) {
     return
   }
-  run_checked("sh", [
-    "-c",
-    "cd lepus && moon install ./cli --bin target/lepus-tools",
-  ])
+  run_checked(
+    "moon",
+    ["install", "./cli", "--bin", "target/lepus-tools"],
+    dir=ws.at("lepus"),
+  )
 }
 
 ///|
-async fn build_outputs() -> Unit raise {
-  ensure_codegen_tool()
-  run_checked("moon", [
-    "build", FrontendPackage, "--target", "js", "--release",
-  ])
-  run_checked("moon", ["run", "--target", "native", "build_frontend.mbtx"])
-  run_checked("moon", [
-    "build", NativePackage, "--target", "native", "--release",
-  ])
-  build_engine()
+async fn build_outputs(ws : Workspace) -> Unit raise {
+  ensure_codegen_tool(ws)
+  run_checked(
+    "moon",
+    ["build", FrontendPackage, "--target", "js", "--release"],
+    dir=ws.dir,
+  )
+  run_checked(
+    "moon",
+    ["run", "--target", "native", "build_frontend.mbtx"],
+    dir=ws.dir,
+  )
+  run_checked(
+    "moon",
+    ["build", NativePackage, "--target", "native", "--release"],
+    dir=ws.dir,
+  )
+  build_engine(ws)
 }
 
 ///|
-async fn reset_bundle_dirs() -> Unit raise {
-  run_checked("rm", ["-rf", AppPath, ZipPath])
-  run_checked("mkdir", ["-p", MacOSPath, ResourcesPath, TargetPath, AppAssetDir])
+async fn reset_bundle_dirs(ws : Workspace) -> Unit raise {
+  run_checked("rm", ["-rf", AppPath, ZipPath], dir=ws.dir)
+  run_checked(
+    "mkdir",
+    ["-p", MacOSPath, ResourcesPath, AppAssetDir],
+    dir=ws.dir,
+  )
 }
 
 ///|
-async fn copy_bundle_files() -> Unit raise {
-  if !@fs.path_exists(NativeBinary) {
-    raise PackageError("native binary not found: \{NativeBinary}")
+async fn copy_bundle_files(ws : Workspace) -> Unit raise {
+  if !@fs.exists(ws.at(NativeBinary)) {
+    raise PackageError("native binary not found: \{ws.at(NativeBinary)}")
   }
-  run_checked("cp", [NativeBinary, MacOSPath + "/openseek-desktop-bin"])
-  run_checked("cp", [EngineBinary, MacOSPath + "/openseek"])
-  run_checked("cp", [
-    "index.html",
-    AppAssetDir + "/index.html",
-  ])
-  run_checked("cp", [
-    "frontend.js",
-    AppAssetDir + "/frontend.js",
-  ])
+  run_checked("cp", [NativeBinary, MacOSPath + "/openseek-desktop-bin"], dir=ws.dir)
+  run_checked("cp", [EngineBinary, MacOSPath + "/openseek"], dir=ws.dir)
+  run_checked("cp", ["index.html", AppAssetDir + "/index.html"], dir=ws.dir)
+  run_checked("cp", ["frontend.js", AppAssetDir + "/frontend.js"], dir=ws.dir)
 }
 
 ///|
+/// The launcher resolves its own absolute directory and execs the host binary
+/// with that absolute argv[0]; every resource lookup in the host derives from
+/// it. It deliberately does NOT `cd` into the bundle: the bundle is sealed by
+/// code signing and the host keeps its runtime state in the per-user runtime
+/// directory, so the working directory it inherits (Finder launches with `/`)
+/// is irrelevant.
 fn launcher_source() -> String {
   let source = #|#!/bin/sh
   #|set -eu
   #|
   #|APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
   #|export PATH="$APP_DIR:$PATH"
-  #|cd "$APP_DIR"
   #|exec "$APP_DIR/openseek-desktop-bin"
   #|
   source
@@ -169,38 +218,52 @@ fn info_plist_source() -> String {
 }
 
 ///|
-async fn write_bundle_metadata() -> Unit raise {
-  @fs.write_string_to_file(MacOSPath + "/openseek-desktop", launcher_source())
-  @fs.write_string_to_file(ContentsPath + "/Info.plist", info_plist_source())
-  run_checked("chmod", [
-    "+x",
-    MacOSPath + "/openseek-desktop",
-    MacOSPath + "/openseek-desktop-bin",
-    MacOSPath + "/openseek",
-  ])
+async fn write_bundle_metadata(ws : Workspace) -> Unit raise {
+  @fs.write_file(
+    ws.at(MacOSPath) + "/openseek-desktop",
+    launcher_source(),
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_file(
+    ws.at(ContentsPath) + "/Info.plist",
+    info_plist_source(),
+    create_mode=CreateOrTruncate,
+  )
+  run_checked(
+    "chmod",
+    [
+      "+x",
+      MacOSPath + "/openseek-desktop",
+      MacOSPath + "/openseek-desktop-bin",
+      MacOSPath + "/openseek",
+    ],
+    dir=ws.dir,
+  )
 }
 
 ///|
-async fn sign_and_zip() -> Unit raise {
-  run_checked("codesign", ["--force", "--deep", "--sign", "-", AppPath])
-  run_checked("ditto", [
-    "-c",
-    "-k",
-    "--sequesterRsrc",
-    "--keepParent",
-    AppPath,
-    ZipPath,
-  ])
+async fn sign_and_zip(ws : Workspace) -> Unit raise {
+  run_checked(
+    "codesign",
+    ["--force", "--deep", "--sign", "-", AppPath],
+    dir=ws.dir,
+  )
+  run_checked(
+    "ditto",
+    ["-c", "-k", "--sequesterRsrc", "--keepParent", AppPath, ZipPath],
+    dir=ws.dir,
+  )
 }
 
 ///|
 async fn main raise {
-  build_outputs()
-  println("built openseek engine: \{EngineBinary}")
-  reset_bundle_dirs()
-  copy_bundle_files()
-  write_bundle_metadata()
-  sign_and_zip()
-  println("generated \{AppPath}")
-  println("generated \{ZipPath}")
+  let ws = locate_workspace()
+  build_outputs(ws)
+  println("built openseek engine: \{ws.at(EngineBinary)}")
+  reset_bundle_dirs(ws)
+  copy_bundle_files(ws)
+  write_bundle_metadata(ws)
+  sign_and_zip(ws)
+  println("generated \{ws.at(AppPath)}")
+  println("generated \{ws.at(ZipPath)}")
 }

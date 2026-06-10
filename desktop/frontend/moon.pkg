@@ -1,4 +1,5 @@
 import {
+  "moonbit-community/cmark/cmark",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",

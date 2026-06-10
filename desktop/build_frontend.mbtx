@@ -1,6 +1,7 @@
 ///|
 import {
-  "moonbitlang/x/fs",
+  "moonbitlang/async@0.19.1",
+  "moonbitlang/async@0.19.1/fs",
 }
 
 ///|
@@ -11,8 +12,8 @@ const FrontendBundle : String =
 const OutputPath : String = "frontend.js"
 
 ///|
-fn main raise {
-  let script = @fs.read_file_to_string(FrontendBundle)
-  @fs.write_string_to_file(OutputPath, script)
+async fn main raise {
+  let script = @fs.read_file(FrontendBundle).text()
+  @fs.write_file(OutputPath, script, create_mode=CreateOrTruncate)
   println("generated \{OutputPath} from \{FrontendBundle}")
 }

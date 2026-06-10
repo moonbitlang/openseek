@@ -4,6 +4,9 @@
 /// carries only the fields that event actually uses and the match is exhaustive.
 priv enum EngineEvent {
   AgentStep(String)
+  AssistantDelta(String)
+  ReasoningDelta(String)
+  ReasoningMessage(String)
   AssistantMessage(String)
   RuntimeUpdate(String)
   Usage(prompt_tokens~ : Int, completion_tokens~ : Int)
@@ -31,6 +34,9 @@ fn decode_engine_event(
 ) -> EngineEvent? {
   match event_name {
     "agent_step" => Some(AgentStep(content))
+    "assistant_delta" => Some(AssistantDelta(content))
+    "reasoning_delta" => Some(ReasoningDelta(content))
+    "reasoning_message" => Some(ReasoningMessage(content))
     "assistant_message" => Some(AssistantMessage(content))
     "runtime_update" => Some(RuntimeUpdate(content))
     "usage" => Some(Usage(prompt_tokens~, completion_tokens~))

@@ -483,6 +483,140 @@
         padding: 8px 12px;
       }
 
+      .msg-content.reasoning {
+        border-left: 2px solid var(--line-2);
+        padding-left: 10px;
+        color: var(--ink-3);
+        font-size: 12.5px;
+      }
+
+      /* markdown-rendered assistant content: block elements own the spacing,
+         so the pre-wrap used for plain text would double every newline */
+      .msg-content.markdown {
+        white-space: normal;
+      }
+      .msg-content.markdown > :first-child {
+        margin-top: 0;
+      }
+      .msg-content.markdown > :last-child {
+        margin-bottom: 0;
+      }
+      .msg-content.markdown p {
+        margin: 0.55em 0;
+      }
+      .msg-content.markdown h1,
+      .msg-content.markdown h2,
+      .msg-content.markdown h3,
+      .msg-content.markdown h4,
+      .msg-content.markdown h5,
+      .msg-content.markdown h6 {
+        margin: 0.95em 0 0.45em;
+        line-height: 1.35;
+        font-weight: 600;
+      }
+      .msg-content.markdown h1 {
+        font-size: 1.3em;
+      }
+      .msg-content.markdown h2 {
+        font-size: 1.18em;
+      }
+      .msg-content.markdown h3 {
+        font-size: 1.08em;
+      }
+      .msg-content.markdown h4,
+      .msg-content.markdown h5,
+      .msg-content.markdown h6 {
+        font-size: 1em;
+      }
+      .msg-content.markdown ul,
+      .msg-content.markdown ol {
+        margin: 0.45em 0;
+        padding-left: 1.5em;
+      }
+      .msg-content.markdown li {
+        margin: 0.2em 0;
+      }
+      .msg-content.markdown ul.tight p,
+      .msg-content.markdown ol.tight p {
+        margin: 0;
+      }
+      .msg-content.markdown pre {
+        margin: 0.55em 0;
+        padding: 10px 13px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        color: var(--code);
+        font-size: 12px;
+        line-height: 1.55;
+        white-space: pre;
+      }
+      .msg-content.markdown pre code {
+        padding: 0;
+        border: none;
+        background: none;
+        font-size: inherit;
+      }
+      .msg-content.markdown pre.raw-html {
+        color: var(--ink-3);
+        white-space: pre-wrap;
+      }
+      .msg-content.markdown blockquote {
+        margin: 0.55em 0;
+        padding: 2px 12px;
+        border-left: 3px solid var(--line-2);
+        color: var(--ink-2);
+      }
+      .msg-content.markdown table {
+        margin: 0.55em 0;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      .msg-content.markdown th,
+      .msg-content.markdown td {
+        padding: 4px 10px;
+        border: 1px solid var(--line);
+      }
+      .msg-content.markdown th {
+        background: var(--surface-2);
+        font-weight: 600;
+      }
+      .msg-content.markdown hr {
+        margin: 0.9em 0;
+        border: none;
+        border-top: 1px solid var(--line);
+      }
+      .msg-content.markdown a {
+        color: var(--accent);
+      }
+      .msg-content.markdown img {
+        max-width: 100%;
+      }
+      .msg-content.markdown .footnote {
+        margin: 0.45em 0;
+        color: var(--ink-3);
+        font-size: 12px;
+      }
+      .msg-content.markdown .footnote-label {
+        margin-right: 6px;
+        color: var(--ink-2);
+      }
+
+      /* live streaming bubble: a blinking caret after the latest text */
+      .msg.streaming .msg-content::after {
+        content: "▍";
+        margin-left: 2px;
+        color: var(--accent);
+        animation: caretBlink 1s steps(1) infinite;
+      }
+
+      @keyframes caretBlink {
+        50% {
+          opacity: 0;
+        }
+      }
+
       .inline-code {
         border-radius: 4px;
         background: var(--surface-2);

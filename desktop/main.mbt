@@ -23,6 +23,8 @@ struct StartPayload {
   model : String?
   max_steps : Int?
   cwd : String?
+  session : String?
+  session_root : String?
 } derive(FromJson)
 
 ///|
@@ -38,6 +40,8 @@ struct StartedPayload {
   model : String
   max_steps : Int
   cwd : String?
+  session : String?
+  session_root : String?
 } derive(ToJson)
 
 ///|
@@ -105,6 +109,8 @@ priv struct RunConfig {
   max_steps : Int
   engine : String
   cwd : String?
+  session : String?
+  session_root : String?
 }
 
 ///|
@@ -267,14 +273,149 @@ fn run_config(
     Ok(value) => value
     Err(error) => return Err(error)
   }
+  let session = non_empty(payload.session)
+  let cwd = match resolved_run_cwd(payload.cwd) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
   Ok({
     task,
     api_key,
     model: option_or_env(payload.model, "DEEPSEEK_MODEL", DefaultModel),
     max_steps,
     engine,
-    cwd: non_empty(payload.cwd),
+    cwd,
+    session,
+    session_root: match session {
+      Some(_) => resolved_session_root(payload.session_root)
+      None => None
+    },
   })
+}
+
+///|
+/// Engine working directory for a run. An explicit payload value must be an
+/// existing directory — a typo fails the run with a clear message instead of a
+/// cryptic engine error. When unset, fall back to the user's home directory:
+/// inheriting the host's own cwd would hand the agent whatever directory the
+/// app happened to be launched from (`/` under Finder), which is never a
+/// sensible place to work in.
+fn resolved_run_cwd(payload_cwd : String?) -> Result[String?, String] {
+  match non_empty(payload_cwd) {
+    Some(cwd) => {
+      let cwd = expand_home(cwd)
+      let is_directory = @mbfs.is_dir(cwd) catch { _ => false }
+      if is_directory {
+        Ok(Some(cwd))
+      } else {
+        Err("working directory does not exist: " + cwd)
+      }
+    }
+    None => Ok(home_dir())
+  }
+}
+
+///|
+fn expand_home(cwd : String) -> String {
+  match home_dir() {
+    Some(home) =>
+      if cwd == "~" {
+        home
+      } else if cwd.has_prefix("~/") {
+        home + cwd[1:].to_owned()
+      } else {
+        cwd
+      }
+    None => cwd
+  }
+}
+
+///|
+fn home_dir() -> String? {
+  match non_empty(@env.get_env_var("HOME")) {
+    Some(home) => Some(home)
+    None => non_empty(@env.get_env_var("USERPROFILE"))
+  }
+}
+
+///|
+/// Per-user runtime directory for the host's own state. The lepus framework
+/// IPC config lives here instead of inside the .app bundle: a signed bundle
+/// is read-only by convention (and may be mounted read-only under app
+/// translocation), and writing next to the binary also breaks when a
+/// repackage replaces the bundle under a running instance. Uses
+/// `~/Library/Application Support/OpenSeek Desktop` where that layout exists
+/// (macOS) and `~/.openseek-desktop` elsewhere.
+fn app_runtime_dir() -> String? {
+  guard home_dir() is Some(home) else { return None }
+  let home_path : @mbpath.Path = home
+  let app_support = home_path.join("Library").join("Application Support")
+  let app_support_exists = @mbfs.is_dir(app_support.to_string()) catch {
+    _ => false
+  }
+  let dir = if app_support_exists {
+    app_support.join("OpenSeek Desktop")
+  } else {
+    home_path.join(".openseek-desktop")
+  }
+  Some(dir.normalize().to_string())
+}
+
+///|
+/// The runtime directory, created on demand. `None` when it cannot be
+/// determined or created; callers then fall back to lepus defaults.
+fn prepared_runtime_dir() -> String? {
+  guard app_runtime_dir() is Some(dir) else { return None }
+  let exists = @mbfs.is_dir(dir) catch { _ => false }
+  if !exists {
+    @mbfs.create_dir(dir) catch {
+      _ => return None
+    }
+  }
+  Some(dir)
+}
+
+///|
+/// Drop framework configs left behind by earlier launches. Each launch writes
+/// a fresh timestamped file (so two concurrent instances never clobber each
+/// other); without this sweep they would accumulate forever.
+fn remove_stale_framework_configs(dir : String) -> Unit {
+  let entries = @mbfs.read_dir(dir) catch { _ => return }
+  for entry in entries {
+    if entry.has_prefix("lepus-framework-") && entry.has_suffix(".json") {
+      @mbfs.remove_file(dir + "/" + entry) catch {
+        _ => ()
+      }
+    }
+  }
+}
+
+///|
+/// Where durable sessions live when a run names a session: the payload's
+/// explicit root, then the OPENSEEK_SESSION_ROOT environment, then a stable
+/// absolute default under the user's home directory. The absolute fallback
+/// matters because a packaged app can run with `/` as its working directory,
+/// where the engine's relative `.openseek` default could never be created.
+fn resolved_session_root(payload_root : String?) -> String? {
+  match non_empty(payload_root) {
+    Some(root) => Some(root)
+    None =>
+      match non_empty(@env.get_env_var("OPENSEEK_SESSION_ROOT")) {
+        Some(root) => Some(root)
+        None => home_session_root()
+      }
+  }
+}
+
+///|
+fn home_session_root() -> String? {
+  match home_dir() {
+    Some(home) => {
+      let home_path : @mbpath.Path = home
+      Some(home_path.join(".openseek").normalize().to_string())
+    }
+    None => None
+  }
 }
 
 ///|
@@ -361,10 +502,7 @@ async fn emit_finished(
   answer? : String,
   exit_code? : Int,
 ) -> Unit {
-  emit(
-    context,
-    Finished({ run_id, status: status.wire(), answer, exit_code }),
-  )
+  emit(context, Finished({ run_id, status: status.wire(), answer, exit_code }))
 }
 
 ///|
@@ -430,6 +568,14 @@ async fn run_engine(
       "DEEPSEEK": config.api_key,
       "DEEPSEEK_MODEL": config.model,
       "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
+    }
+    // A named session puts the engine in durable-session mode, so consecutive
+    // runs from the same conversation share context through the session store.
+    if config.session is Some(session) {
+      env["OPENSEEK_SESSION"] = session
+      if config.session_root is Some(root) {
+        env["OPENSEEK_SESSION_ROOT"] = root
+      }
     }
     let process = @process.spawn(
       group,
@@ -545,6 +691,8 @@ async fn start_run(
       model: config.model,
       max_steps: config.max_steps,
       cwd: config.cwd,
+      session: config.session,
+      session_root: config.session_root,
     }),
   )
   let reply = run_engine(context, active, config) catch {
@@ -607,12 +755,26 @@ fn main {
     openseek_extension(new_runner_state(), engine_command(framework_command)),
   )
   let _ = registry.register(@clipboard.generated_app_command_extension())
+  // Keep all runtime state out of the bundle: the framework IPC config is
+  // written to the per-user runtime dir, and the framework child runs there
+  // too, so neither process depends on the bundle directory being writable —
+  // or on it continuing to exist while the app runs.
+  let runtime_dir = prepared_runtime_dir()
+  let framework_config_path = match runtime_dir {
+    Some(dir) => {
+      remove_stale_framework_configs(dir)
+      Some("\{dir}/lepus-framework-\{@env.now()}.json")
+    }
+    None => None
+  }
   match
     @app.run_app_command_extensions_with_framework_process(
       manifest,
       framework_command,
       registry,
       framework_args=[@app.framework_process_arg()],
+      framework_cwd=runtime_dir,
+      framework_config_path~,
     ) {
     Ok(_) => ()
     Err(error) => abort(error)

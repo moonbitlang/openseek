@@ -70,6 +70,7 @@ fn update(
           install_bridge(dispatch),
           load_saved_api_key(dispatch),
           install_clipboard_paste_bridge(),
+          rotate_session(dispatch),
         ]),
         model,
       )
@@ -179,6 +180,7 @@ fn update(
               model.max_steps,
               model.cwd,
               model.api_key,
+              model.session_id,
             ),
             scroll_transcript_after_render(),
           ]),
@@ -192,6 +194,29 @@ fn update(
           (cancel_openseek(dispatch, run_id), { ..model, status: Cancelling })
         None => (@cmd.none, model)
       }
+    NewChat =>
+      // Rotating the session id starts a fresh engine conversation; the
+      // transcript and usage belong to the old one, so they reset with it.
+      if model.running {
+        (@cmd.none, model)
+      } else {
+        (
+          rotate_session(dispatch),
+          {
+            ..model.clear_streams(),
+            messages: [],
+            usage_tokens: 0,
+            watcher_status: "",
+            active_run_id: None,
+            status: if model.bridge_ready && !model.api_key.trim().is_empty() {
+              Ready
+            } else {
+              model.status
+            },
+          },
+        )
+      }
+    SessionRotated(session_id) => (@cmd.none, { ..model, session_id, })
     Started(run_id, _task, _engine, selected_model, max_steps, cwd) =>
       (
         @cmd.none,
@@ -210,8 +235,49 @@ fn update(
         (@cmd.none, model)
       } else {
         match event {
-          AgentStep(detail) => (@cmd.none, { ..model, status: Step(detail) })
+          AgentStep(detail) =>
+            (@cmd.none, { ..model.clear_streams(), status: Step(detail) })
+          AssistantDelta(content) =>
+            if content.is_empty() {
+              (@cmd.none, model)
+            } else {
+              (
+                scroll_transcript_after_render(),
+                {
+                  ..model,
+                  streaming_response: model.streaming_response + content,
+                },
+              )
+            }
+          ReasoningDelta(content) =>
+            if content.is_empty() {
+              (@cmd.none, model)
+            } else {
+              (
+                scroll_transcript_after_render(),
+                {
+                  ..model,
+                  streaming_reasoning: model.streaming_reasoning + content,
+                },
+              )
+            }
+          // The turn's full reasoning, emitted once its streaming ends and
+          // before the assistant message commits — so the transcript reads
+          // thought → answer.
+          ReasoningMessage(content) => {
+            let next = { ..model, streaming_reasoning: "" }
+            let content = content.trim().to_owned()
+            if content.is_empty() {
+              (@cmd.none, next)
+            } else {
+              (
+                scroll_transcript_after_render(),
+                next.append_item(Reasoning, content),
+              )
+            }
+          }
           AssistantMessage(content) => {
+            let model = model.clear_streams()
             let content = content.trim().to_owned()
             if content.is_empty() {
               (@cmd.none, model)
@@ -261,6 +327,7 @@ fn update(
             )
           }
           AgentFinished(answer) => {
+            let model = model.clear_streams()
             let answer = answer.trim().to_owned()
             if should_append_answer(model, answer) {
               (
@@ -279,13 +346,15 @@ fn update(
             }
             (
               scroll_transcript_after_render(),
-              model.append_item(Assistant(true), content),
+              model.clear_streams().append_item(Assistant(true), content),
             )
           }
           MaxStepsExhausted =>
             (
               scroll_transcript_after_render(),
-              model.append_item(Assistant(true), "max steps exhausted"),
+              model
+              .clear_streams()
+              .append_item(Assistant(true), "max steps exhausted"),
             )
           AgentSetupFailed(reason) => {
             let content = if reason.trim().is_empty() {
@@ -295,7 +364,7 @@ fn update(
             }
             (
               scroll_transcript_after_render(),
-              model.append_item(Assistant(true), content),
+              model.clear_streams().append_item(Assistant(true), content),
             )
           }
         }
@@ -304,7 +373,7 @@ fn update(
       (
         scroll_transcript_after_render(),
         {
-          ..model.append_item(Assistant(true), message),
+          ..model.clear_streams().append_item(Assistant(true), message),
           running: false,
           active_run_id: None,
           status: Failed,
@@ -329,7 +398,7 @@ fn update(
         (@cmd.none, model)
       } else {
         let base = {
-          ..model,
+          ..model.clear_streams(),
           running: false,
           active_run_id: None,
           status: Finished(status),

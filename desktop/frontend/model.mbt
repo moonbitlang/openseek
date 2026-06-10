@@ -20,6 +20,7 @@ let runtime_metadata_keys : Array[String] = [
 priv enum ItemKind {
   User
   Assistant(Bool)
+  Reasoning
   Tool(String, Bool)
 }
 
@@ -50,6 +51,14 @@ priv struct Model {
   setup_api_key : String
   setup_open : Bool
   watcher_status : String
+  // Durable engine session backing the current conversation; consecutive runs
+  // share it so the agent keeps context between prompts. "New chat" rotates it.
+  session_id : String
+  // Live text of the in-flight assistant turn, accumulated from
+  // `assistant_delta` / `reasoning_delta` events and cleared once the engine
+  // commits the full message (or the step/run ends). Empty means not streaming.
+  streaming_response : String
+  streaming_reasoning : String
   messages : Array[TranscriptItem]
 }
 
@@ -69,6 +78,8 @@ priv enum Msg {
   SaveApiKey
   Send
   Stop
+  NewChat
+  SessionRotated(String)
   Started(Int, String, String, String, Int, String)
   Engine(Int, EngineEvent)
   Failed(String)
@@ -92,8 +103,16 @@ fn initial_model() -> Model {
     setup_api_key: "",
     setup_open: true,
     watcher_status: "",
+    session_id: "",
+    streaming_response: "",
+    streaming_reasoning: "",
     messages: [],
   }
+}
+
+///|
+fn Model::clear_streams(self : Model) -> Model {
+  { ..self, streaming_response: "", streaming_reasoning: "" }
 }
 
 ///|

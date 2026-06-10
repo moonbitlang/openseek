@@ -90,25 +90,32 @@ fn sidebar_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
   @html.aside([
     @html.div(class="sidebar-main", [
       @html.div(class="sidebar-section", [
+        @html.button(
+          class="sidebar-button",
+          disabled=model.running,
+          on_click=dispatch(NewChat),
+          [
+            @html.span(class="sidebar-icon", "+"),
+            @html.span(class="sidebar-label", "New chat"),
+          ],
+        ),
+      ]),
+      @html.div(class="sidebar-section", [
         @html.div(class="sidebar-heading", "Project"),
         @html.div(class="project-row", [
           @html.span(class="sidebar-icon", "▣"),
           @html.span(class="sidebar-label", "openseek"),
         ]),
-        @html.div(class="conversation-row active", [
+        @html.div(class="conversation-row active", title=model.session_id, [
           @html.span(class="sidebar-label", conversation_title(model)),
         ]),
       ]),
     ]),
     @html.div(class="sidebar-footer", [
-      @html.button(
-        class="sidebar-button",
-        on_click=dispatch(OpenSetup),
-        [
-          @html.span(class="sidebar-icon", "⚙"),
-          @html.span(class="sidebar-label", "Settings"),
-        ],
-      ),
+      @html.button(class="sidebar-button", on_click=dispatch(OpenSetup), [
+        @html.span(class="sidebar-icon", "⚙"),
+        @html.span(class="sidebar-label", "Settings"),
+      ]),
     ]),
   ])
 }
@@ -167,19 +174,22 @@ fn transcript_item_view(item : TranscriptItem) -> @html.Html {
         ]),
       ])
     Assistant(is_danger) => {
-      let content_class = if is_danger {
-        "msg-content danger"
+      // Errors and abort notices are plain text; only real assistant replies
+      // are markdown.
+      let content = if is_danger {
+        @html.div(class="msg-content danger", inline_code_nodes(item.content))
       } else {
-        "msg-content"
+        @html.div(class="msg-content markdown", markdown_nodes(item.content))
       }
       @html.div(class="msg", [
         @html.div(class="avatar agent", "✦"),
         @html.div(class="msg-body", [
           @html.div(class="msg-role", "openseek"),
-          @html.div(class=content_class, inline_code_nodes(item.content)),
+          content,
         ]),
       ])
     }
+    Reasoning => reasoning_view(item.content, streaming=false)
     Tool(name, is_error) =>
       @html.div(class="tool-row", [
         @html.div(class=tool_class(is_error), [
@@ -188,6 +198,34 @@ fn transcript_item_view(item : TranscriptItem) -> @html.Html {
         ]),
       ])
   }
+}
+
+///|
+fn reasoning_view(content : String, streaming~ : Bool) -> @html.Html {
+  let msg_class = if streaming { "msg streaming" } else { "msg" }
+  @html.div(class=msg_class, [
+    @html.div(class="avatar agent", "✧"),
+    @html.div(class="msg-body", [
+      @html.div(class="msg-role", "Thinking"),
+      @html.div(class="msg-content markdown reasoning", markdown_nodes(content)),
+    ]),
+  ])
+}
+
+///|
+/// The in-flight assistant turn, rendered live from the engine's streamed
+/// deltas. The committed `assistant_message` replaces it in the transcript.
+/// The partial text is re-parsed as markdown on every delta; an unterminated
+/// construct (e.g. an open code fence) simply renders as plain text until its
+/// closing marker streams in.
+fn streaming_response_view(content : String) -> @html.Html {
+  @html.div(class="msg streaming", [
+    @html.div(class="avatar agent", "✦"),
+    @html.div(class="msg-body", [
+      @html.div(class="msg-role", "openseek"),
+      @html.div(class="msg-content markdown", markdown_nodes(content)),
+    ]),
+  ])
 }
 
 ///|
@@ -208,6 +246,12 @@ fn transcript_view(model : Model) -> @html.Html {
     for item in model.messages {
       items.push(transcript_item_view(item))
     }
+  }
+  if !model.streaming_reasoning.is_empty() {
+    items.push(reasoning_view(model.streaming_reasoning, streaming=true))
+  }
+  if !model.streaming_response.is_empty() {
+    items.push(streaming_response_view(model.streaming_response))
   }
   @html.section(id="transcript", class="transcript", [
     @html.div(id="stream", class="stream", items),
@@ -286,6 +330,9 @@ fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
     @html.span(class="pill", run_label(model)),
     @html.span(class="pill", token_label(model.usage_tokens)),
   ]
+  if !model.session_id.is_empty() {
+    runtime_items.push(@html.span(class="pill", "session \{model.session_id}"))
+  }
   if !model.watcher_status.is_empty() {
     runtime_items.push(
       @html.span(class="pill", "moon_check \{model.watcher_status}"),
@@ -326,7 +373,7 @@ fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
         setting_input(
           "Working directory",
           model.cwd,
-          "current process directory",
+          "~ (home directory)",
           @html.InputType::Text,
           dispatch.map(value => CwdChanged(value)),
         ),

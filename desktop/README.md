@@ -7,6 +7,23 @@ A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://moonca
 - `internal/event/` — engine event decoding.
 - `lepus/` — the Lepus framework, vendored as a git submodule.
 
+## Sessions and streaming
+
+Each conversation is backed by a durable engine session: the frontend generates
+a `desktop-YYYYMMDD-HHMMSS-mmm` session id at launch and sends it with every
+`start`, so consecutive prompts share context through the engine's session
+store instead of running amnesiac one-shots. The sidebar's **New chat** button
+rotates the id and clears the transcript. Sessions are stored under the first
+of: the `session_root` start-payload field, `OPENSEEK_SESSION_ROOT`, or
+`~/.openseek` (absolute, so a packaged app whose working directory is `/`
+still works). They are interoperable with the CLI/TUI stores: resume one with
+`openseek-tui --session-root ~/.openseek --session <id>`.
+
+While a turn runs, the UI renders the engine's `reasoning_delta` /
+`assistant_delta` events as live "Thinking" and answer bubbles with a
+streaming caret; the committed `reasoning_message` / `assistant_message`
+events then replace them with permanent transcript items.
+
 ## Prerequisites
 
 - The [`moon`](https://www.moonbitlang.com/download) toolchain.
@@ -48,6 +65,8 @@ produces a signed `dist/OpenSeek Desktop.app` plus a zip:
 
 ```sh
 moon run --target native package_macos.mbtx
+# or, from the monorepo root:
+moon run --target native ./desktop/package_macos.mbtx
 ```
 
 The bundled engine is built from the same checkout, so the desktop app and its
