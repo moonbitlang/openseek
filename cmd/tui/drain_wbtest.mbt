@@ -298,6 +298,44 @@ test "a running shell command is never steered and never kills the engine" {
 }
 
 ///|
+test "a sent steer is acknowledged until the engine settles it" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  assert_eq(state.pending_steers.length(), 0)
+
+  // Enter mid-run: acknowledged immediately, before any engine round trip —
+  // this is the only feedback between the keypress and the transcript echo.
+  let _ = update(state, UiInput(Steer(Prompt("make it rhyme"))))
+  assert_eq(state.pending_steers.length(), 1)
+  guard pending_steer_segment(state.pending_steers) is [_, _] else {
+    fail("expected an activity-line acknowledgment")
+  }
+
+  // The engine confirms: acknowledgment clears, transcript echo appends.
+  let _ = update(
+    state,
+    AgentProgress(run_id=state.run_id, SteerApplied("make it rhyme")),
+  )
+  assert_eq(state.pending_steers.length(), 0)
+  assert_eq(pending_steer_segment(state.pending_steers).length(), 0)
+
+  // A dropped steer also clears the acknowledgment (and shows its notice).
+  let _ = update(state, UiInput(Steer(Prompt("too late"))))
+  assert_eq(state.pending_steers.length(), 1)
+  let _ = update(state, SteerDropped("too late"))
+  assert_eq(state.pending_steers.length(), 0)
+
+  // A turn ending sweeps anything still unconfirmed.
+  let _ = update(state, UiInput(Steer(Prompt("orphaned"))))
+  assert_eq(state.pending_steers.length(), 1)
+  let _ = update(
+    state,
+    AgentProgress(run_id=state.run_id, AgentFinished("done")),
+  )
+  assert_eq(state.pending_steers.length(), 0)
+}
+
+///|
 test "a steer_applied event echoes the input into the transcript" {
   let state = drain_test_state()
   let _ = update(state, UiInput(Steer(Prompt("do it"))))

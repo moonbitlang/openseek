@@ -99,6 +99,16 @@ fn steer_dropped_item(text : String) -> @ui.TranscriptItem {
 }
 
 ///|
+/// One pending steer was settled (applied or dropped): stop acknowledging
+/// it on the activity line. Confirmations arrive in send order, so the
+/// oldest entry is the settled one.
+fn confirm_pending_steer(state : State) -> Unit {
+  if state.pending_steers.length() > 0 {
+    let _ = state.pending_steers.remove(0)
+  }
+}
+
+///|
 fn is_terminal_event(event : @event.AgentEvent) -> Bool {
   match event {
     AgentFinished(_) | AgentAborted(_) | MaxStepsExhausted | AgentError(_) =>
@@ -364,12 +374,18 @@ fn handle_agent_event(
     // A steer took effect at the engine's step boundary: echo the input into
     // the transcript at its true conversational position, the way the model
     // actually saw it.
-    SteerApplied(text) => cmds.push(AppendItem(Input(Prompt(text))))
+    SteerApplied(text) => {
+      confirm_pending_steer(state)
+      cmds.push(AppendItem(Input(Prompt(text))))
+    }
     // Normally unreachable from the wire: the engine client routes
     // steer_dropped events to the untagged message (they always trail the
     // racing turn's terminal, so a run-tagged copy would be stale-filtered).
     // Kept as defense in depth for any future in-run emitter.
-    SteerDropped(text) => cmds.push(AppendItem(steer_dropped_item(text)))
+    SteerDropped(text) => {
+      confirm_pending_steer(state)
+      cmds.push(AppendItem(steer_dropped_item(text)))
+    }
     AssistantMessage(text) => {
       state.step_response = Some(text)
       state.streaming_response = None
@@ -473,7 +489,12 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
             )
           } else {
             match input {
-              Prompt(text) => cmds.push(SteerAgent(text))
+              Prompt(text) => {
+                // Acknowledge immediately: the transcript echo only comes at
+                // the step boundary, but the user pressed Enter *now*.
+                state.pending_steers.push(text)
+                cmds.push(SteerAgent(text))
+              }
               Command(_) =>
                 cmds.push(
                   AppendItem(
@@ -525,7 +546,10 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
     // The steer never reached a turn; the text would otherwise vanish
     // silently. Run state is untouched — the run's own death report (or
     // terminal event) settles it.
-    SteerDropped(text) => cmds.push(AppendItem(steer_dropped_item(text)))
+    SteerDropped(text) => {
+      confirm_pending_steer(state)
+      cmds.push(AppendItem(steer_dropped_item(text)))
+    }
     // The engine process is gone, and its watchers with it: an old
     // `moon_check running` segment would be a lie on the status bar.
     EngineExited => state.watcher_status = ""

@@ -92,28 +92,60 @@ fn elapsed_seconds(started_ms : Int64, now_ms : Int64) -> Int64 {
 const ActivityChromeColumns : Int = 3
 
 ///|
+/// Most columns the pending-steer acknowledgment may take on the activity
+/// row, so it never starves the streaming preview it shares the line with.
+const SteerSegmentMaxColumns : Int = 44
+
+///|
+/// The acknowledgment that steering input was sent and awaits its step
+/// boundary: ` · steering: <tail of the latest text>` (with a count when
+/// several are in flight). This is the only feedback between pressing Enter
+/// and the transcript echo — which during a long tool call can be many
+/// seconds — so without it a steer reads as an eaten keystroke.
+fn pending_steer_segment(steers : Array[String]) -> Array[@doc.Span] {
+  guard steers.length() > 0 else { return [] }
+  let label = if steers.length() > 1 {
+    " · steering ×\{steers.length()}: "
+  } else {
+    " · steering: "
+  }
+  let latest = collapse_preview_whitespace(steers[steers.length() - 1])
+  let budget = SteerSegmentMaxColumns - @displaytext.DisplayText(label).width()
+  [
+    Span(DisplayText(label), style=@style.dim),
+    Span(
+      DisplayText(tail_columns(latest, if budget < 8 { 8 } else { budget })),
+      style=@style.dim,
+    ),
+  ]
+}
+
+///|
 /// A streaming activity line: the dim `label` followed by the tail of `text`
-/// clipped to the columns the label leaves free, so the newest characters
-/// always fit the row. The preview dims with `dim_preview` (reasoning reads
-/// as an aside; content reads at full strength).
-fn streaming_activity_line(
+/// clipped to the columns the label (and any pending-steer acknowledgment)
+/// leaves free, so the newest characters always fit the row. The preview
+/// dims with `dim_preview` (reasoning reads as an aside; content reads at
+/// full strength).
+fn streaming_activity_spans(
   label : String,
   text : String,
   cols~ : Int,
   dim_preview~ : Bool,
-) -> @doc.Text {
+  reserved~ : Int,
+) -> Array[@doc.Span] {
   let budget = cols -
     ActivityChromeColumns -
+    reserved -
     @displaytext.DisplayText(label).width()
   let preview = tail_columns(text, if budget < 16 { 16 } else { budget })
-  Text([
+  [
     Span(DisplayText(label), style=@style.dim),
     if dim_preview {
       Span(DisplayText(preview), style=@style.dim)
     } else {
       @doc.Span::plain(preview)
     },
-  ])
+  ]
 }
 
 ///|
@@ -123,29 +155,47 @@ fn format_activity_text(state : State, cols~ : Int) -> @doc.Text? {
     Running(started_ms) => started_ms
     Interrupting(started_ms) => started_ms
   }
+  let steer_segment = pending_steer_segment(state.pending_steers)
+  // The acknowledgment sits at the row's end, where the renderer clips on
+  // overflow — so the preview must cede exactly its width to keep it
+  // visible.
+  let reserved = if steer_segment.length() > 0 {
+    SteerSegmentMaxColumns
+  } else {
+    0
+  }
   if state.streaming_response is Some(response) && !response.trim().is_empty() {
-    return Some(
-      streaming_activity_line("Streaming ", response, cols~, dim_preview=false),
+    let spans = streaming_activity_spans(
+      "Streaming ",
+      response,
+      cols~,
+      dim_preview=false,
+      reserved~,
     )
+    return Some(Text(spans + steer_segment))
   }
   // Thinking-mode runs spend their first (often long) stretch emitting only
   // reasoning deltas; show their tail dimmed so the line moves from the first
   // token rather than sitting on "Working (Ns)" until content starts.
   if state.streaming_reasoning is Some(reasoning) &&
     !reasoning.trim().is_empty() {
-    return Some(
-      streaming_activity_line("Thinking ", reasoning, cols~, dim_preview=true),
+    let spans = streaming_activity_spans(
+      "Thinking ",
+      reasoning,
+      cols~,
+      dim_preview=true,
+      reserved~,
     )
+    return Some(Text(spans + steer_segment))
   }
   let elapsed = format_elapsed_compact(
     elapsed_seconds(started_ms, @async.now()),
   )
-  Some(
-    Text([
-      @doc.Span::plain("Working"),
-      Span(DisplayText(" (\{elapsed})"), style=@style.dim),
-    ]),
-  )
+  let spans : Array[@doc.Span] = [
+    @doc.Span::plain("Working"),
+    Span(DisplayText(" (\{elapsed})"), style=@style.dim),
+  ]
+  Some(Text(spans + steer_segment))
 }
 
 ///|

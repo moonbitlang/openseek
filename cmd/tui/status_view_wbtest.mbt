@@ -6,7 +6,15 @@ test "streaming activity line fits the label and preview to the row" {
   let long = String::make(300, 'x') + " tail-end"
   for label in ["Streaming ", "Thinking "] {
     let cols = 60
-    let line = streaming_activity_line(label, long, cols~, dim_preview=false)
+    let line : @doc.Text = Text(
+      streaming_activity_spans(
+        label,
+        long,
+        cols~,
+        dim_preview=false,
+        reserved=0,
+      ),
+    )
     let rendered = line.split_lines()
     assert_eq(rendered.length(), 1)
     // Reconstruct the row's display width from its spans: label + preview.

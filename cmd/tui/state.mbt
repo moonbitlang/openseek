@@ -72,6 +72,13 @@ priv struct State {
   // moves during the (often long) reasoning phase instead of sitting on
   // "Working (Ns)".
   mut streaming_reasoning : String?
+  // Steering input sent to the engine but not yet confirmed (no
+  // steer_applied/steer_dropped back). Shown on the activity line so the
+  // moment of pressing Enter is acknowledged immediately — the transcript
+  // echo only comes at the step boundary where the model actually sees it,
+  // which during a long tool call can be many seconds later, and a silent
+  // gap reads as "my keystroke was eaten".
+  pending_steers : Array[String]
   mut usage : @event.UsageInfo?
   // Latest background `moon_check` watcher status ("running"/"stopped"), lifted
   // from the most recent `runtime_update` for the status bar. Empty until the
@@ -87,6 +94,7 @@ fn State::new(config : AppConfig) -> State {
     run: Idle,
     run_id: 0,
     run_is_command: false,
+    pending_steers: [],
     step_response: None,
     streaming_response: None,
     streaming_reasoning: None,
@@ -127,6 +135,10 @@ fn State::owns_run(self : State, id : Int) -> Bool {
 fn State::finish_run(self : State) -> Unit {
   self.run = Idle
   self.run_is_command = false
+  // Anything still unconfirmed died with the turn; the engine sweeps its
+  // queue at turn end and reports each leftover as steer_dropped, which
+  // arrives untagged and renders its own resubmit notice.
+  self.pending_steers.clear()
   self.step_response = None
   self.streaming_response = None
   self.streaming_reasoning = None
