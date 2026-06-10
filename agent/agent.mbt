@@ -2,6 +2,27 @@
 let default_max_steps : Int = 1000
 
 ///|
+/// Mid-turn user input riding the shared runtime event bus. Queued by
+/// `steer` and folded into the conversation by the agent loop at its next
+/// step boundary.
+extenum @agent_runtime.AgentEvent += {
+  SteerInput(String)
+}
+
+///|
+/// Queue `text` as steering input for the turn running on `runtime`.
+///
+/// Steering lands at the next step boundary — after the in-flight model call
+/// and its tool batch complete, where the loop already folds in runtime
+/// updates — so completed work is never thrown away. The text is appended to
+/// the session as a user message and a `steer_applied` event is emitted when
+/// it takes effect. Steering an idle runtime is harmless: the input waits on
+/// the bus for the next turn.
+pub fn steer(runtime : @agent_runtime.AgentRuntime, text : String) -> Unit {
+  runtime.emit_event(SteerInput(text))
+}
+
+///|
 /// Returns the base built-in system prompt.
 pub fn default_system_prompt() -> String {
   @prompt.system_prompt_for_model(V4Pro)
@@ -23,6 +44,7 @@ pub async fn run(
   system_prompt_text? : String = default_system_prompt_for_model(model),
   thinking? : @deepseek.ThinkingMode = Enabled,
   reasoning_effort? : @deepseek.ReasoningEffort = Max,
+  api_url? : String,
 ) -> Unit {
   let session = @agent_session.Session(
     SessionId("one-shot"),
@@ -37,6 +59,7 @@ pub async fn run(
       max_steps~,
       thinking~,
       reasoning_effort~,
+      api_url?,
     ),
   )
 }
@@ -53,6 +76,7 @@ pub async fn run_turn(
   max_steps? : Int = default_max_steps,
   thinking? : @deepseek.ThinkingMode = Enabled,
   reasoning_effort? : @deepseek.ReasoningEffort = Max,
+  api_url? : String,
 ) -> @agent_session.Session {
   run_turn_with_append(
     api_key,
@@ -63,6 +87,7 @@ pub async fn run_turn(
     max_steps~,
     thinking~,
     reasoning_effort~,
+    api_url?,
   )
 }
 
@@ -79,9 +104,10 @@ pub async fn run_turn_with_append(
   max_steps? : Int = default_max_steps,
   thinking? : @deepseek.ThinkingMode = Enabled,
   reasoning_effort? : @deepseek.ReasoningEffort = Max,
+  api_url? : String,
 ) -> @agent_session.Session {
   @async.with_task_group() <| group => {
-    run_with_runtime(
+    run_turn_in_scope(
       AgentRuntime(),
       AgentTaskScope(group),
       api_key,
@@ -92,6 +118,7 @@ pub async fn run_turn_with_append(
       max_steps~,
       thinking~,
       reasoning_effort~,
+      api_url?,
     )
   }
 }
@@ -134,17 +161,27 @@ async test "run_turn_with_append closes failed persisted turns" {
 }
 
 ///|
-async fn run_with_runtime(
+/// Runs one user turn inside a caller-owned runtime and task scope.
+///
+/// This is the building block for callers that keep an engine alive across
+/// turns (serve mode): a shared `runtime` preserves stateful tools — a
+/// `moon_check` watcher started in one turn keeps reporting in the next —
+/// and is also the bus `steer` feeds mid-turn input through. `scope` bounds
+/// background work the turn's tools spawn, so it must outlive the turn.
+/// One-shot callers should prefer `run_turn`/`run_turn_with_append`, which
+/// own both for the duration of a single turn.
+pub async fn[X] run_turn_in_scope(
   runtime : @agent_runtime.AgentRuntime,
-  scope : @agent_runtime.AgentTaskScope[@agent_session.Session],
+  scope : @agent_runtime.AgentTaskScope[X],
   api_key : String,
   model : @deepseek.Model,
   session : @agent_session.Session,
   task : String,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
-  max_steps~ : Int,
-  thinking~ : @deepseek.ThinkingMode,
-  reasoning_effort~ : @deepseek.ReasoningEffort,
+  max_steps? : Int = default_max_steps,
+  thinking? : @deepseek.ThinkingMode = Enabled,
+  reasoning_effort? : @deepseek.ReasoningEffort = Max,
+  api_url? : String,
 ) -> @agent_session.Session {
   let client = @client.Client(
     api_key~,
@@ -157,6 +194,7 @@ async fn run_with_runtime(
       Enabled => Some(reasoning_effort)
       Disabled => None
     },
+    api_url?,
   )
   let mut session = append_item(session, User(UserMessage(task)))
   try {
@@ -172,7 +210,17 @@ async fn run_with_runtime(
     }
     let messages = session.chat_messages()
     for step in 0..<max_steps {
-      if runtime_update_message(runtime.drain_events()) is Some(update) {
+      let drained = runtime.drain_events()
+      // Steering first: a user's mid-turn redirection should precede the
+      // runtime chatter the model reads alongside it.
+      for event in drained {
+        if event is SteerInput(text) && !text.trim().is_empty() {
+          @xlog.info() <? { "event": "steer_applied", "content": text }
+          session = append_item(session, User(UserMessage(text)))
+          messages.push(ChatMessage(User, content=text))
+        }
+      }
+      if runtime_update_message(drained) is Some(update) {
         @xlog.info() <? { "event": "runtime_update", "content": update }
         session = append_item(session, Runtime(RuntimeNotice(update)))
         messages.push(ChatMessage(User, content=update))

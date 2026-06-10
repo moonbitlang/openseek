@@ -16,6 +16,14 @@ import {
   "tonyfettes/xlog",
 }
 
+import {
+  "bobzhang/openseek/agent_runtime",
+  "bobzhang/openseek/agent_session",
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+} for "test"
+
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+native"

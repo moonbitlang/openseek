@@ -2,6 +2,7 @@
 package "bobzhang/openseek/agent"
 
 import {
+  "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_session",
   "bobzhang/openseek/deepseek",
 }
@@ -11,11 +12,15 @@ pub fn default_system_prompt() -> String
 
 pub fn default_system_prompt_for_model(@deepseek.Model) -> String
 
-pub async fn run(String, @deepseek.Model, String, max_steps? : Int, system_prompt_text? : String, thinking? : @deepseek.ThinkingMode, reasoning_effort? : @deepseek.ReasoningEffort) -> Unit
+pub async fn run(String, @deepseek.Model, String, max_steps? : Int, system_prompt_text? : String, thinking? : @deepseek.ThinkingMode, reasoning_effort? : @deepseek.ReasoningEffort, api_url? : String) -> Unit
 
-pub async fn run_turn(String, @deepseek.Model, @agent_session.Session, String, max_steps? : Int, thinking? : @deepseek.ThinkingMode, reasoning_effort? : @deepseek.ReasoningEffort) -> @agent_session.Session
+pub async fn run_turn(String, @deepseek.Model, @agent_session.Session, String, max_steps? : Int, thinking? : @deepseek.ThinkingMode, reasoning_effort? : @deepseek.ReasoningEffort, api_url? : String) -> @agent_session.Session
 
-pub async fn run_turn_with_append(String, @deepseek.Model, @agent_session.Session, String, append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, max_steps? : Int, thinking? : @deepseek.ThinkingMode, reasoning_effort? : @deepseek.ReasoningEffort) -> @agent_session.Session
+pub async fn[X] run_turn_in_scope(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope[X], String, @deepseek.Model, @agent_session.Session, String, append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, max_steps? : Int, thinking? : @deepseek.ThinkingMode, reasoning_effort? : @deepseek.ReasoningEffort, api_url? : String) -> @agent_session.Session
+
+pub async fn run_turn_with_append(String, @deepseek.Model, @agent_session.Session, String, append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, max_steps? : Int, thinking? : @deepseek.ThinkingMode, reasoning_effort? : @deepseek.ReasoningEffort, api_url? : String) -> @agent_session.Session
+
+pub fn steer(@agent_runtime.AgentRuntime, String) -> Unit
 
 // Errors
 
