@@ -18,6 +18,17 @@ const NativeBinary : String =
   "_build/native/release/build/openseek_desktop/openseek_desktop.exe"
 
 ///|
+/// The openseek engine package, built from the monorepo root (one level up
+/// from this desktop workspace) so the bundled engine always matches the
+/// checkout instead of whatever happens to be on PATH.
+const EnginePackage : String = "cmd/openseek"
+
+///|
+/// Path to the freshly built engine binary, relative to the desktop workspace.
+const EngineBinary : String =
+  "../_build/native/release/build/cmd/openseek/openseek.exe"
+
+///|
 /// Path to the lepus codegen CLI, staged inside the submodule. The clipboard
 /// extension's pre-build step shells out to it, so a fresh checkout must build
 /// it before the native target can link.
@@ -60,28 +71,17 @@ async fn run_checked(command : String, args : Array[String]) -> Unit raise {
 }
 
 ///|
-async fn collect_stdout_checked(
-  command : String,
-  args : Array[String],
-) -> String raise {
-  let (code, output) = @process.collect_stdout(
-    command,
-    args,
-    inherit_env=true,
-  )
-  if code != 0 {
-    raise PackageError("command failed with exit code \{code}: \{command}")
+/// Build the openseek engine from the monorepo source. Runs from the repo root
+/// (`..`) since the engine lives in a separate moon module from this desktop
+/// workspace.
+async fn build_engine() -> Unit raise {
+  run_checked("sh", [
+    "-c",
+    "cd .. && moon build \{EnginePackage} --target native --release",
+  ])
+  if !@fs.path_exists(EngineBinary) {
+    raise PackageError("openseek engine binary not found: \{EngineBinary}")
   }
-  output.text().trim().to_owned()
-}
-
-///|
-async fn find_openseek() -> String raise {
-  let path = collect_stdout_checked("sh", ["-c", "command -v openseek"])
-  if path.is_empty() {
-    raise PackageError("openseek not found in PATH")
-  }
-  path
 }
 
 ///|
@@ -106,6 +106,7 @@ async fn build_outputs() -> Unit raise {
   run_checked("moon", [
     "build", NativePackage, "--target", "native", "--release",
   ])
+  build_engine()
 }
 
 ///|
@@ -115,12 +116,12 @@ async fn reset_bundle_dirs() -> Unit raise {
 }
 
 ///|
-async fn copy_bundle_files(openseek_path : String) -> Unit raise {
+async fn copy_bundle_files() -> Unit raise {
   if !@fs.path_exists(NativeBinary) {
     raise PackageError("native binary not found: \{NativeBinary}")
   }
   run_checked("cp", [NativeBinary, MacOSPath + "/openseek-desktop-bin"])
-  run_checked("cp", [openseek_path, MacOSPath + "/openseek"])
+  run_checked("cp", [EngineBinary, MacOSPath + "/openseek"])
   run_checked("cp", [
     "index.html",
     AppAssetDir + "/index.html",
@@ -194,11 +195,10 @@ async fn sign_and_zip() -> Unit raise {
 
 ///|
 async fn main raise {
-  let openseek_path = find_openseek()
-  println("using openseek: \{openseek_path}")
   build_outputs()
+  println("built openseek engine: \{EngineBinary}")
   reset_bundle_dirs()
-  copy_bundle_files(openseek_path)
+  copy_bundle_files()
   write_bundle_metadata()
   sign_and_zip()
   println("generated \{AppPath}")

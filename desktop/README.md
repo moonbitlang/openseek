@@ -10,7 +10,7 @@ A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://moonca
 ## Prerequisites
 
 - The [`moon`](https://www.moonbitlang.com/download) toolchain.
-- The `openseek` engine on your `PATH` (used at runtime, and bundled by the packaging script).
+- The `openseek` engine on your `PATH`, for running directly via `moon run` during development. (The packaging script no longer needs it — it builds the engine from the monorepo's `cmd/openseek` source.)
 
 ## Setup
 
@@ -42,9 +42,13 @@ The native binary is written to
 
 ## Package (macOS)
 
-`package_macos.mbtx` runs all of the above (including the codegen bootstrap) and
+`package_macos.mbtx` runs all of the above (including the codegen bootstrap),
+builds the `openseek` engine from the monorepo's `cmd/openseek` source, and
 produces a signed `dist/OpenSeek Desktop.app` plus a zip:
 
 ```sh
 moon run --target native package_macos.mbtx
 ```
+
+The bundled engine is built from the same checkout, so the desktop app and its
+engine never drift out of version with each other.
