@@ -103,6 +103,18 @@ $ printf '{"command":"reboot"}\n{"command":"cancel"}\n' | env DEEPSEEK=test-key 
 "event":"command_error"
 ```
 
+A steer with no turn to land in is rejected rather than converted into a
+prompt: it can only arrive idle by racing a turn's terminal event through
+the pipes, and an engine must never start a turn the controller did not ask
+for. The rejection carries a `steer_dropped` event so the controller can
+ask the user to resubmit — and, usefully for this offline test, no turn
+means no network.
+
+```mooncram
+$ printf '{"command":"steer","text":"too late"}\n' | env DEEPSEEK=test-key openseek.exe --serve 2>/dev/null | grep -o '"event":"steer_dropped"'
+"event":"steer_dropped"
+```
+
 A task positional contradicts serve mode and is rejected before anything
 runs.
 

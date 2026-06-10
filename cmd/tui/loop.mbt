@@ -88,6 +88,17 @@ async fn drain_stderr_capped(reader : @process.ReadFromProcess) -> String {
 }
 
 ///|
+/// The transcript item for steering input that never reached a turn —
+/// whether the client dropped it (no live engine) or the engine rejected it
+/// (the steer raced the terminal event through the pipes). Either way the
+/// text must not vanish silently.
+fn steer_dropped_item(text : String) -> @ui.TranscriptItem {
+  Error(
+    "Input was not delivered (the task ended as you sent it) — submit it again: \{text}",
+  )
+}
+
+///|
 fn is_terminal_event(event : @event.AgentEvent) -> Bool {
   match event {
     AgentFinished(_) | AgentAborted(_) | MaxStepsExhausted | AgentError(_) =>
@@ -253,6 +264,9 @@ fn handle_agent_event(
     // the transcript at its true conversational position, the way the model
     // actually saw it.
     SteerApplied(text) => cmds.push(AppendItem(Input(Prompt(text))))
+    // The engine rejected a steer that raced the turn's terminal event
+    // through the pipes — same surfacing as the client-side drop.
+    SteerDropped(text) => cmds.push(AppendItem(steer_dropped_item(text)))
     AssistantMessage(text) => {
       state.step_response = Some(text)
       state.streaming_response = None
@@ -387,14 +401,7 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
     // The steer never reached a turn; the text would otherwise vanish
     // silently. Run state is untouched — the run's own death report (or
     // terminal event) settles it.
-    SteerDropped(text) =>
-      cmds.push(
-        AppendItem(
-          Error(
-            "Input was not delivered (the task ended as you sent it) — submit it again: \{text}",
-          ),
-        ),
-      )
+    SteerDropped(text) => cmds.push(AppendItem(steer_dropped_item(text)))
     // No state change: Tick is a 1s heartbeat that just keeps the message loop
     // turning so the trailing refresh_ui re-runs and the elapsed-time activity
     // line ("Working (12s)") keeps advancing during quiet stretches.

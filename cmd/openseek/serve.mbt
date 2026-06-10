@@ -72,10 +72,13 @@ test "serve commands decode and reject with actionable errors" {
 /// The runtime and the tool registry are built once and shared by every
 /// turn, so stateful tools survive turn boundaries (a `moon_check` watcher
 /// started in turn 1 keeps reporting in turn 5). `steer` rides the
-/// runtime's lossless steering queue into the running turn; when no turn is
-/// running it simply becomes the next prompt. `cancel` interrupts the
-/// current turn but never the process. stdin EOF is the shutdown signal:
-/// the running turn finishes first, then the loop drains and exits.
+/// runtime's lossless steering queue into the running (or already
+/// submitted) turn; with no turn to land in it is rejected with a
+/// `steer_dropped` event — that only happens by racing the terminal event
+/// through the pipes, and an engine must never start a turn the controller
+/// did not ask for. `cancel` interrupts the current turn but never the
+/// process. stdin EOF is the shutdown signal: the running turn finishes
+/// first, then the loop drains and exits.
 async fn run_serve(matches : @argparse.Matches) -> Unit {
   let api_key = api_key(matches)
   let model = @deepseek.Model::parse(value(matches, "model"))
@@ -201,8 +204,12 @@ async fn run_serve(matches : @argparse.Matches) -> Unit {
             // step boundary (or its first, if it has not started yet).
             @agent.steer(runtime, text)
           } else {
-            // Steering an idle engine means "this is my next message".
-            active_turn = Some(start_turn(text))
+            // An idle engine never converts a steer into a prompt: the only
+            // way a steer arrives idle is racing the turn's terminal event
+            // through the pipes, and silently starting a turn the controller
+            // never asked for would mutate the session behind its back.
+            // Reject it on the wire so the controller can ask for a resubmit.
+            @xlog.warn() <? { "event": "steer_dropped", "content": text }
           }
         Wire(Cancel) =>
           match active_turn {

@@ -58,6 +58,22 @@ test "decode maps each engine event kind" {
 }
 
 ///|
+test "steer wire events decode to their applied and dropped forms" {
+  assert_true(
+    @event.decode_event(
+      Json::object({ "event": "steer_applied", "content": "go left" }),
+    )
+    is Some(SteerApplied("go left")),
+  )
+  assert_true(
+    @event.decode_event(
+      Json::object({ "event": "steer_dropped", "content": "too late" }),
+    )
+    is Some(SteerDropped("too late")),
+  )
+}
+
+///|
 test "a failed serve turn decodes to a terminal agent error" {
   assert_true(
     @event.decode_event(

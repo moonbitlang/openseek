@@ -38,6 +38,7 @@ pub(all) enum AgentEvent {
   ReasoningDelta(String)
   ReasoningMessage(String)
   SteerApplied(String)
+  SteerDropped(String)
   AssistantMessage(String)
   RuntimeUpdate(String)
   Usage(UsageInfo)
