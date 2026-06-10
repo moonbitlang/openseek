@@ -147,6 +147,36 @@ pub async fn Ui::set_live_view(
 }
 
 ///|
+/// Set or clear the transient activity label and redraw.
+#deprecated("use Ui::set_live_view — it sets the whole live view with a single redraw")
+pub async fn Ui::set_activity(self : Self, activity : @doc.Text?) -> Unit {
+  self.commands.wait(() => {
+    self.activity = activity
+    self.redraw()
+  })
+}
+
+///|
+/// Replace the queued-inputs preview (copied defensively) and redraw.
+#deprecated("use Ui::set_live_view — it sets the whole live view with a single redraw")
+pub async fn Ui::set_queued_inputs(self : Self, inputs : Array[Input]) -> Unit {
+  self.commands.wait(() => {
+    self.queued_inputs = inputs.copy()
+    self.redraw()
+  })
+}
+
+///|
+/// Set the persistent status line and redraw.
+#deprecated("use Ui::set_live_view — it sets the whole live view with a single redraw")
+pub async fn Ui::set_status(self : Self, status : @doc.Text) -> Unit {
+  self.commands.wait(() => {
+    self.status = status
+    self.redraw()
+  })
+}
+
+///|
 async fn Ui::leave(self : Self) -> Unit {
   guard self.viewport is Some(viewport) else { return }
   self.viewport = None

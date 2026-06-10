@@ -19,7 +19,13 @@ type Ui
 pub async fn Ui::append_item(Self, @core.TranscriptItem) -> Unit
 pub fn Ui::columns(Self) -> Int
 pub async fn Ui::read_event(Self) -> @core.Event
+#deprecated
+pub async fn Ui::set_activity(Self, @doc.Text?) -> Unit
 pub async fn Ui::set_live_view(Self, status~ : @doc.Text, activity~ : @doc.Text?, queued_inputs~ : Array[@core.Input]) -> Unit
+#deprecated
+pub async fn Ui::set_queued_inputs(Self, Array[@core.Input]) -> Unit
+#deprecated
+pub async fn Ui::set_status(Self, @doc.Text) -> Unit
 
 // Type aliases
 pub using @core {type Event}
