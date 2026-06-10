@@ -1,13 +1,4 @@
 ///|
-fn run_label(model : Model) -> String {
-  match model.active_run_id {
-    Some(run_id) if model.running => "run \{run_id}"
-    _ if model.running => "starting"
-    _ => "idle"
-  }
-}
-
-///|
 fn can_stop(model : Model) -> Bool {
   match model.active_run_id {
     Some(_) => model.running
@@ -18,15 +9,6 @@ fn can_stop(model : Model) -> Bool {
 ///|
 fn token_label(tokens : Int) -> String {
   "\{tokens} tokens"
-}
-
-///|
-fn status_view(model : Model) -> @html.Html {
-  @html.div(
-    id="status",
-    class="status \{model.status.kind().css()}",
-    model.status.label(),
-  )
 }
 
 ///|
@@ -86,7 +68,66 @@ fn conversation_title(model : Model) -> String {
 }
 
 ///|
+/// Sidebar rows for the engine's durable sessions, newest first. The current
+/// conversation is highlighted; until its first turn reaches the store it is
+/// not in the engine's list yet, so it gets its own row at the top.
+fn session_rows(
+  dispatch : @cmd.Dispatch[Msg],
+  model : Model,
+) -> Array[@html.Html] {
+  let rows : Array[@html.Html] = []
+  let mut current_listed = false
+  for item in model.sessions {
+    if item.id == model.session_id {
+      current_listed = true
+    }
+  }
+  if !current_listed {
+    rows.push(
+      @html.div(class="conversation-row active", title=model.session_id, [
+        @html.span(class="sidebar-label", conversation_title(model)),
+      ]),
+    )
+  }
+  for item in model.sessions {
+    let active = item.id == model.session_id
+    let label = if active {
+      conversation_title(model)
+    } else {
+      non_empty_or(item.title, item.id)
+    }
+    rows.push(
+      @html.button(
+        class=if active {
+          "conversation-row active"
+        } else {
+          "conversation-row"
+        },
+        title=item.id,
+        disabled=model.running,
+        on_click=dispatch(OpenSession(item.id)),
+        [@html.span(class="sidebar-label", label)],
+      ),
+    )
+  }
+  if !model.sessions_error.is_empty() {
+    rows.push(
+      @html.div(class="conversation-row error", title=model.sessions_error, [
+        @html.span(class="sidebar-label", "sessions unavailable"),
+      ]),
+    )
+  }
+  rows
+}
+
+///|
 fn sidebar_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+  let sessions_section : Array[@html.Html] = [
+    @html.div(class="sidebar-heading", "Chats"),
+  ]
+  for row in session_rows(dispatch, model) {
+    sessions_section.push(row)
+  }
   @html.aside([
     @html.div(class="sidebar-main", [
       @html.div(class="sidebar-section", [
@@ -100,16 +141,7 @@ fn sidebar_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
           ],
         ),
       ]),
-      @html.div(class="sidebar-section", [
-        @html.div(class="sidebar-heading", "Project"),
-        @html.div(class="project-row", [
-          @html.span(class="sidebar-icon", "▣"),
-          @html.span(class="sidebar-label", "openseek"),
-        ]),
-        @html.div(class="conversation-row active", title=model.session_id, [
-          @html.span(class="sidebar-label", conversation_title(model)),
-        ]),
-      ]),
+      @html.div(class="sidebar-section sessions", sessions_section),
     ]),
     @html.div(class="sidebar-footer", [
       @html.button(class="sidebar-button", on_click=dispatch(OpenSetup), [
@@ -247,8 +279,16 @@ fn transcript_view(model : Model) -> @html.Html {
       items.push(transcript_item_view(item))
     }
   }
+  // Both buffers can be non-empty at once: the answer starts streaming
+  // before the engine commits the reasoning. Only the bubble that text is
+  // currently appearing in gets the caret.
   if !model.streaming_reasoning.is_empty() {
-    items.push(reasoning_view(model.streaming_reasoning, streaming=true))
+    items.push(
+      reasoning_view(
+        model.streaming_reasoning,
+        streaming=model.streaming_response.is_empty(),
+      ),
+    )
   }
   if !model.streaming_response.is_empty() {
     items.push(streaming_response_view(model.streaming_response))
@@ -326,18 +366,6 @@ fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
 ///|
 fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
   let has_key = !model.api_key.trim().is_empty()
-  let runtime_items : Array[@html.Html] = [
-    @html.span(class="pill", run_label(model)),
-    @html.span(class="pill", token_label(model.usage_tokens)),
-  ]
-  if !model.session_id.is_empty() {
-    runtime_items.push(@html.span(class="pill", "session \{model.session_id}"))
-  }
-  if !model.watcher_status.is_empty() {
-    runtime_items.push(
-      @html.span(class="pill", "moon_check \{model.watcher_status}"),
-    )
-  }
   @html.div(class="setup-backdrop", [
     @html.div(class="setup-popup", [
       @html.div(class="setup-header", [
@@ -359,8 +387,6 @@ fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
           "Close",
         ),
       ]),
-      @html.div(class="meta", runtime_items),
-      status_view(model),
       @html.div(class="settings", [
         model_select(dispatch, model.selected_model),
         setting_input(
@@ -369,13 +395,6 @@ fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
           "1000",
           @html.InputType::Number,
           dispatch.map(value => MaxStepsChanged(value)),
-        ),
-        setting_input(
-          "Working directory",
-          model.cwd,
-          "~ (home directory)",
-          @html.InputType::Text,
-          dispatch.map(value => CwdChanged(value)),
         ),
         setting_input(
           "DeepSeek API key",
@@ -412,13 +431,27 @@ fn run_indicator(model : Model) -> @html.Html {
 }
 
 ///|
+/// Top bar: conversation identity on the left (session id in the tooltip),
+/// live run state on the right — these are per-conversation runtime facts,
+/// not settings, so they live here rather than in the settings popup.
 fn topbar_view(model : Model) -> @html.Html {
-  @html.div(class="topbar", [
+  let items : Array[@html.Html] = [
     @html.span(class="topbar-icon", "✦"),
-    @html.span(class="topbar-title", conversation_title(model)),
+    @html.span(
+      class="topbar-title",
+      title="session \{model.session_id}",
+      conversation_title(model),
+    ),
     @html.span(class="topbar-branch", "main"),
     run_indicator(model),
-  ])
+  ]
+  if model.usage_tokens > 0 {
+    items.push(@html.span(class="pill", token_label(model.usage_tokens)))
+  }
+  if !model.watcher_status.is_empty() {
+    items.push(@html.span(class="pill", "moon_check \{model.watcher_status}"))
+  }
+  @html.div(class="topbar", items)
 }
 
 ///|

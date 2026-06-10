@@ -156,6 +156,96 @@ test "session rotation stores the generated id" {
 }
 
 ///|
+test "sessions loaded replaces the sidebar list and clears its error" {
+  let dispatch = test_dispatch()
+  let model = { ..test_model(), sessions_error: "boom" }
+  let items : Array[SessionListItem] = [
+    { id: "desktop-a", title: "first question" },
+  ]
+  let (_, once) = update(dispatch, SessionsLoaded(items), model)
+  let (_, twice) = update(dispatch, SessionsLoaded(items), model)
+  inspect(once.sessions.length(), content="1")
+  inspect(once.sessions[0].id, content="desktop-a")
+  inspect(once.sessions_error, content="")
+  inspect(twice.sessions.length(), content="1")
+}
+
+///|
+test "sessions failure is recorded without touching the transcript" {
+  let dispatch = test_dispatch()
+  let model = { ..test_model(), messages: [{ kind: User, content: "hi" }] }
+  let (_, next) = update(dispatch, SessionsFailed("engine exploded"), model)
+  inspect(next.sessions_error, content="engine exploded")
+  inspect(next.messages.length(), content="1")
+}
+
+///|
+test "open session is ignored while running or for the current session" {
+  let dispatch = test_dispatch()
+  let (_, while_running) = update(
+    dispatch,
+    OpenSession("desktop-other"),
+    running_model(),
+  )
+  inspect(while_running.running, content="true")
+  let (_, same_session) = update(
+    dispatch,
+    OpenSession("desktop-test"),
+    test_model(),
+  )
+  inspect(same_session.session_id, content="desktop-test")
+  inspect(same_session.messages.length(), content="0")
+}
+
+///|
+test "session loaded swaps the conversation onto the stored session" {
+  let dispatch = test_dispatch()
+  let model = {
+    ..test_model(),
+    usage_tokens: 42,
+    watcher_status: "running",
+    streaming_response: "leftover",
+    messages: [{ kind: User, content: "old chat" }],
+  }
+  let items : Array[TranscriptItem] = [
+    { kind: User, content: "stored question" },
+    { kind: Assistant(false), content: "stored answer" },
+  ]
+  let (_, once) = update(
+    dispatch,
+    SessionLoaded("desktop-stored", items),
+    model,
+  )
+  let (_, twice) = update(
+    dispatch,
+    SessionLoaded("desktop-stored", items),
+    model,
+  )
+  inspect(once.session_id, content="desktop-stored")
+  inspect(once.messages.length(), content="2")
+  inspect(once.messages[0].content, content="stored question")
+  inspect(once.streaming_response, content="")
+  inspect(once.usage_tokens, content="0")
+  inspect(once.watcher_status, content="")
+  assert_true(once.status is Ready)
+  inspect(twice.messages.length(), content="2")
+}
+
+///|
+test "session loaded is dropped while a run is active" {
+  let dispatch = test_dispatch()
+  let model = { ..running_model(), messages: [{ kind: User, content: "live" }] }
+  let items : Array[TranscriptItem] = [{ kind: User, content: "stored" }]
+  let (_, next) = update(
+    dispatch,
+    SessionLoaded("desktop-stored", items),
+    model,
+  )
+  inspect(next.messages[0].content, content="live")
+  inspect(next.session_id, content="desktop-test")
+}
+
+///|
 test "decode recognizes the streaming events" {
   guard decode_engine_event("assistant_delta", "abc", "", false, 0, 0, "", "")
     is Some(AssistantDelta("abc")) else {

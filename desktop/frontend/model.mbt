@@ -37,6 +37,15 @@ priv struct RuntimeUpdateView {
 }
 
 ///|
+/// One sidebar entry from the engine's durable session list: the session id
+/// and its display title (first user message, already truncated engine-side;
+/// empty for a session with no user message yet).
+priv struct SessionListItem {
+  id : String
+  title : String
+}
+
+///|
 priv struct Model {
   bridge_ready : Bool
   running : Bool
@@ -60,6 +69,13 @@ priv struct Model {
   streaming_response : String
   streaming_reasoning : String
   messages : Array[TranscriptItem]
+  // Durable sessions known to the engine's store, newest first, refreshed
+  // when the bridge connects and when a run reaches the store. The current
+  // session appears here once its first turn has been persisted.
+  sessions : Array[SessionListItem]
+  // Why the sidebar list could not be refreshed; empty when the last refresh
+  // succeeded.
+  sessions_error : String
 }
 
 ///|
@@ -71,7 +87,6 @@ priv enum Msg {
   TaskChanged(String)
   ModelChanged(String)
   MaxStepsChanged(String)
-  CwdChanged(String)
   SetupApiKeyChanged(String)
   OpenSetup
   CloseSetup
@@ -80,6 +95,10 @@ priv enum Msg {
   Stop
   NewChat
   SessionRotated(String)
+  SessionsLoaded(Array[SessionListItem])
+  SessionsFailed(String)
+  OpenSession(String)
+  SessionLoaded(String, Array[TranscriptItem])
   Started(Int, String, String, String, Int, String)
   Engine(Int, EngineEvent)
   Failed(String)
@@ -107,6 +126,8 @@ fn initial_model() -> Model {
     streaming_response: "",
     streaming_reasoning: "",
     messages: [],
+    sessions: [],
+    sessions_error: "",
   }
 }
 

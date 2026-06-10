@@ -1,5 +1,6 @@
 import {
   "moonbit-community/cmark/cmark",
+  "moonbitlang/core/json",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",

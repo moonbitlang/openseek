@@ -96,6 +96,27 @@ struct StartReply {
 } derive(ToJson)
 
 ///|
+struct LoadSessionPayload {
+  session : String
+} derive(FromJson)
+
+///|
+/// Reply to `list_sessions`: the engine's `--session-list-json` output
+/// (an array of `{id, title, updated_at_ms, last_sequence}`, newest first),
+/// passed through verbatim.
+struct SessionsReply {
+  sessions : Json
+  session_root : String
+} derive(ToJson)
+
+///|
+/// Reply to `load_session`: the engine's `--session-show` output (the durable
+/// session JSON with its full event log), passed through verbatim.
+struct LoadSessionReply {
+  session : Json
+} derive(ToJson)
+
+///|
 struct CancelReply {
   cancelled : Bool
   run_id : Int?
@@ -707,6 +728,76 @@ async fn start_run(
 }
 
 ///|
+/// Run the bundled engine with `args` and return its stdout. A non-zero exit
+/// is reported through stderr's content so the frontend sees the engine's own
+/// message rather than a bare exit code when one is available.
+async fn engine_stdout(
+  engine : String,
+  args : Array[String],
+) -> Result[String, String] {
+  let (code, stdout, stderr) = @process.collect_output(
+    engine,
+    args,
+    inherit_env=true,
+  ) catch {
+    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
+      raise error
+    error => return Err("failed to run engine: \{error}")
+  }
+  if code != 0 {
+    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
+    return Err(
+      if detail.is_empty() {
+        "engine exited with code \{code}"
+      } else {
+        detail
+      },
+    )
+  }
+  Ok(stdout.text() catch { _ => return Err("engine wrote malformed output") })
+}
+
+///|
+async fn list_sessions(engine : String) -> Result[SessionsReply, String] {
+  guard resolved_session_root(None) is Some(root) else {
+    return Err("cannot determine a session root; set OPENSEEK_SESSION_ROOT")
+  }
+  let output = match
+    engine_stdout(engine, ["--session-root", root, "--session-list-json"]) {
+    Ok(output) => output
+    Err(error) => return Err("session list failed: " + error)
+  }
+  let sessions = @json.parse(output) catch {
+    _ => return Err("engine returned a malformed session list")
+  }
+  Ok({ sessions, session_root: root })
+}
+
+///|
+async fn load_session(
+  engine : String,
+  payload : LoadSessionPayload,
+) -> Result[LoadSessionReply, String] {
+  guard non_empty(Some(payload.session)) is Some(session) else {
+    return Err("session id must not be empty")
+  }
+  guard resolved_session_root(None) is Some(root) else {
+    return Err("cannot determine a session root; set OPENSEEK_SESSION_ROOT")
+  }
+  let output = match
+    engine_stdout(engine, [
+      "--session-root", root, "--session-show", "--session", session,
+    ]) {
+    Ok(output) => output
+    Err(error) => return Err("session load failed: " + error)
+  }
+  let json = @json.parse(output) catch {
+    _ => return Err("engine returned a malformed session")
+  }
+  Ok({ session: json })
+}
+
+///|
 fn openseek_extension(
   state : RunnerState,
   engine : String,
@@ -717,12 +808,22 @@ fn openseek_extension(
     [
       @app.AppCommandApiDescriptor::new("start"),
       @app.AppCommandApiDescriptor::new("cancel"),
+      @app.AppCommandApiDescriptor::new("list_sessions"),
+      @app.AppCommandApiDescriptor::new("load_session"),
     ],
     fn(context) {
       context.op_async_result("start", async fn(payload : StartPayload) {
         start_run(context, state, engine, payload)
       })
       context.op("cancel", fn(payload : CancelPayload) { state.cancel(payload) })
+      context.op_async_result("list_sessions", async fn(_payload : Json) {
+        list_sessions(engine)
+      })
+      context.op_async_result("load_session", async fn(
+        payload : LoadSessionPayload,
+      ) {
+        load_session(engine, payload)
+      })
       Ok(())
     },
   )

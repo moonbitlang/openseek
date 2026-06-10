@@ -2,7 +2,7 @@
 
 A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://mooncakes.io/docs/moonbit-community/rabbita) desktop client for the OpenSeek agent, written in MoonBit.
 
-- `main.mbt` — native host: spawns the `openseek` engine, streams its JSONL events to the webview, exposes `start` / `cancel` commands.
+- `main.mbt` — native host: spawns the `openseek` engine, streams its JSONL events to the webview, exposes `start` / `cancel` / `list_sessions` / `load_session` commands.
 - `frontend/` — the JS (Rabbita) UI bundled to `frontend.js`.
 - `internal/event/` — engine event decoding.
 - `lepus/` — the Lepus framework, vendored as a git submodule.
@@ -18,6 +18,15 @@ of: the `session_root` start-payload field, `OPENSEEK_SESSION_ROOT`, or
 `~/.openseek` (absolute, so a packaged app whose working directory is `/`
 still works). They are interoperable with the CLI/TUI stores: resume one with
 `openseek-tui --session-root ~/.openseek --session <id>`.
+
+The sidebar lists every durable session in the store, newest first, titled by
+the first user message (the host shells out to the bundled engine's
+`--session-list-json`). Clicking one replays its event log into the
+transcript — reasoning, tool cards, runtime notices, and error bubbles for
+turns that were cancelled or failed — and points the conversation at that
+session id, so the next prompt continues it with full context. The list
+refreshes when the bridge connects and after each run; switching is disabled
+while a run is active.
 
 While a turn runs, the UI renders the engine's `reasoning_delta` /
 `assistant_delta` events as live "Thinking" and answer bubbles with a

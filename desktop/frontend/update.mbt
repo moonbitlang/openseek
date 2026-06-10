@@ -77,7 +77,7 @@ fn update(
     BridgeReady => {
       let has_key = !model.api_key.trim().is_empty()
       (
-        @cmd.none,
+        fetch_sessions(dispatch),
         {
           ..model,
           bridge_ready: true,
@@ -124,7 +124,6 @@ fn update(
     TaskChanged(value) => (@cmd.none, { ..model, task: value })
     ModelChanged(value) => (@cmd.none, { ..model, selected_model: value })
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value })
-    CwdChanged(value) => (@cmd.none, { ..model, cwd: value })
     SetupApiKeyChanged(value) => (@cmd.none, { ..model, setup_api_key: value })
     OpenSetup => (@cmd.none, { ..model, setup_open: true, setup_api_key: "" })
     CloseSetup =>
@@ -217,6 +216,42 @@ fn update(
         )
       }
     SessionRotated(session_id) => (@cmd.none, { ..model, session_id, })
+    SessionsLoaded(items) =>
+      (@cmd.none, { ..model, sessions: items, sessions_error: "" })
+    SessionsFailed(message) => (@cmd.none, { ..model, sessions_error: message })
+    OpenSession(session_id) =>
+      // Switching conversations mid-run would tear the transcript away from
+      // the engine output still streaming into it.
+      if model.running ||
+        session_id.is_empty() ||
+        session_id == model.session_id {
+        (@cmd.none, model)
+      } else {
+        (open_session(dispatch, session_id), model)
+      }
+    SessionLoaded(session_id, items) =>
+      // A run that started while the load was in flight wins; dropping the
+      // reply keeps the live conversation intact.
+      if model.running {
+        (@cmd.none, model)
+      } else {
+        (
+          scroll_transcript_after_render(),
+          {
+            ..model.clear_streams(),
+            session_id,
+            messages: items,
+            usage_tokens: 0,
+            watcher_status: "",
+            active_run_id: None,
+            status: if model.bridge_ready && !model.api_key.trim().is_empty() {
+              Ready
+            } else {
+              model.status
+            },
+          },
+        )
+      }
     Started(run_id, _task, _engine, selected_model, max_steps, cwd) =>
       (
         @cmd.none,
@@ -371,7 +406,7 @@ fn update(
       }
     Failed(message) =>
       (
-        scroll_transcript_after_render(),
+        @cmd.batch([scroll_transcript_after_render(), fetch_sessions(dispatch)]),
         {
           ..model.clear_streams().append_item(Assistant(true), message),
           running: false,
@@ -404,13 +439,18 @@ fn update(
           status: Finished(status),
         }
         let answer = answer.trim().to_owned()
+        // The finished run just appended to the durable store, so the
+        // sidebar list (and this conversation's title) may have changed.
         if should_append_answer(model, answer) {
           (
-            scroll_transcript_after_render(),
+            @cmd.batch([
+              scroll_transcript_after_render(),
+              fetch_sessions(dispatch),
+            ]),
             base.append_item(Assistant(false), answer),
           )
         } else {
-          (@cmd.none, base)
+          (fetch_sessions(dispatch), base)
         }
       }
   }

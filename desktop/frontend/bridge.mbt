@@ -60,6 +60,50 @@ fn start_openseek(
 }
 
 ///|
+/// Refresh the sidebar's session list from the engine's durable store.
+fn fetch_sessions(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    js_list_sessions(
+      fn(text) {
+        match decode_sessions_reply(text) {
+          Some(items) => scheduler.add(dispatch(SessionsLoaded(items)))
+          None =>
+            scheduler.add(dispatch(SessionsFailed("malformed session list")))
+        }
+      },
+      fn(message) { scheduler.add(dispatch(SessionsFailed(message))) },
+    )
+  })
+}
+
+///|
+/// Load a durable session's transcript so the conversation can be resumed.
+fn open_session(dispatch : @cmd.Dispatch[Msg], session_id : String) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    js_load_session(
+      session_id,
+      fn(text) {
+        match transcript_from_session_json(text) {
+          Some(items) =>
+            scheduler.add(dispatch(SessionLoaded(session_id, items)))
+          None =>
+            scheduler.add(
+              dispatch(
+                Failed("failed to load session \{session_id}: malformed data"),
+              ),
+            )
+        }
+      },
+      fn(message) {
+        scheduler.add(
+          dispatch(Failed("failed to load session \{session_id}: " + message)),
+        )
+      },
+    )
+  })
+}
+
+///|
 fn cancel_openseek(dispatch : @cmd.Dispatch[Msg], run_id : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     js_cancel_openseek(run_id, fn(message) {
@@ -188,6 +232,51 @@ extern "js" fn js_start_openseek(
   #|     if (result && typeof result.catch === "function") {
   #|       result.catch((error) => onError(String((error && error.message) || error)));
   #|     }
+  #|   } catch (error) {
+  #|     onError(String((error && error.message) || error));
+  #|   }
+  #| }
+
+///|
+extern "js" fn js_list_sessions(
+  on_loaded : (String) -> Unit,
+  on_error : (String) -> Unit,
+) =
+  #| (onLoaded, onError) => {
+  #|   const root = globalThis.__MoonBit__;
+  #|   const api = root && root.openseek;
+  #|   if (!api || !api.list_sessions) {
+  #|     onError("OpenSeek bridge unavailable");
+  #|     return;
+  #|   }
+  #|   try {
+  #|     Promise.resolve(api.list_sessions({})).then(
+  #|       (reply) => onLoaded(JSON.stringify(reply === undefined || reply === null ? {} : reply)),
+  #|       (error) => onError(String((error && error.message) || error)),
+  #|     );
+  #|   } catch (error) {
+  #|     onError(String((error && error.message) || error));
+  #|   }
+  #| }
+
+///|
+extern "js" fn js_load_session(
+  session : String,
+  on_loaded : (String) -> Unit,
+  on_error : (String) -> Unit,
+) =
+  #| (session, onLoaded, onError) => {
+  #|   const root = globalThis.__MoonBit__;
+  #|   const api = root && root.openseek;
+  #|   if (!api || !api.load_session) {
+  #|     onError("OpenSeek bridge unavailable");
+  #|     return;
+  #|   }
+  #|   try {
+  #|     Promise.resolve(api.load_session({ session })).then(
+  #|       (reply) => onLoaded(JSON.stringify(reply === undefined || reply === null ? {} : reply)),
+  #|       (error) => onError(String((error && error.message) || error)),
+  #|     );
   #|   } catch (error) {
   #|     onError(String((error && error.message) || error));
   #|   }

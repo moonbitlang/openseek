@@ -186,9 +186,18 @@
 
       .sidebar-main {
         display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
         align-content: start;
         gap: 18px;
         min-width: 0;
+        min-height: 0;
+      }
+
+      .sidebar-section.sessions {
+        overflow-y: auto;
+        overflow-x: hidden;
+        min-height: 0;
+        align-content: start;
       }
 
       .sidebar-section {
@@ -208,34 +217,47 @@
         line-height: 20px;
       }
 
-      .project-row,
       .conversation-row {
         display: grid;
-        grid-template-columns: 20px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr);
         align-items: center;
         gap: 8px;
         min-width: 0;
         min-height: 32px;
         padding: 0 8px;
         border-radius: var(--radius-sm);
-        color: var(--ink);
+        color: var(--ink-2);
         font-size: 12.5px;
       }
 
-      .project-row:hover,
       .conversation-row:hover {
         background: var(--surface-2);
-      }
-
-      .conversation-row {
-        grid-template-columns: minmax(0, 1fr);
-        margin-left: 28px;
-        color: var(--ink-2);
       }
 
       .conversation-row.active {
         background: var(--accent-soft);
         color: var(--accent-ink);
+      }
+
+      button.conversation-row {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      button.conversation-row:disabled {
+        cursor: default;
+      }
+
+      button.conversation-row.active {
+        background: var(--accent-soft);
+      }
+
+      .conversation-row.error {
+        color: var(--del);
       }
 
       .sidebar-icon {
@@ -873,15 +895,6 @@
         color: var(--ink-3);
         font-size: 12px;
       }
-      .status.ok {
-        color: var(--add);
-      }
-      .status.warn {
-        color: var(--warn);
-      }
-      .status.danger {
-        color: var(--del);
-      }
 
       .settings {
         display: grid;
@@ -920,21 +933,14 @@
         outline-offset: 1px;
       }
 
-      .meta {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        align-items: center;
-        color: var(--ink-3);
-        font-size: 11px;
-      }
-
       .pill {
         border: 1px solid var(--line);
         border-radius: 999px;
         padding: 3px 9px;
         background: var(--surface-2);
         color: var(--ink-2);
+        font-size: 11px;
+        white-space: nowrap;
       }
 
       .ok {
