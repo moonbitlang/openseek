@@ -58,6 +58,16 @@ test "decode maps each engine event kind" {
 }
 
 ///|
+test "a failed serve turn decodes to a terminal agent error" {
+  assert_true(
+    @event.decode_event(
+      Json::object({ "event": "turn_failed", "error": "DeepSeek API error" }),
+    )
+    is Some(AgentError("turn failed: DeepSeek API error")),
+  )
+}
+
+///|
 test "decode returns None for a non-object value or unknown event" {
   // `@jsonl` handles blank and malformed lines before decoding; the mapping only
   // has to tolerate a non-object value and a newer engine's unknown event kind.
