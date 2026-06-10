@@ -97,18 +97,17 @@ fn State::owns_run(self : State, id : Int) -> Bool {
 
 ///|
 /// Reset run tracking after the agent stops (finished, aborted, cancelled, or
-/// failed): no task running, no pending final or streaming response. Also clear
-/// the watcher status: `run_agent_task` spawns a fresh engine per prompt and any
-/// `moon_check --watch` process belongs to that engine's runtime, so it is gone
-/// once the engine exits — leaving `watcher_status` set would keep a stale
-/// `moon_check running` segment in the status bar while the TUI sits idle.
+/// failed): no task running, no pending final or streaming response. The
+/// watcher status survives a turn ending: the persistent engine keeps its
+/// `moon_check --watch` processes alive between prompts, so the segment only
+/// clears when the engine itself exits (`EngineExited`) or a runtime update
+/// reports the watcher stopped.
 fn State::finish_run(self : State) -> Unit {
   self.run = Idle
   self.run_is_command = false
   self.step_response = None
   self.streaming_response = None
   self.streaming_reasoning = None
-  self.watcher_status = ""
 }
 
 ///|
@@ -128,6 +127,9 @@ priv enum Msg {
   // A steer had no live turn to land in (the engine died an instant before
   // Enter): surface the lost text so the user can resubmit it.
   SteerDropped(String)
+  // The persistent engine process exited (for any reason): its background
+  // watchers died with it, so engine-scoped status must reset.
+  EngineExited
   Tick
 }
 
@@ -140,7 +142,7 @@ fn Msg::run_id(self : Msg) -> Int? {
     | AgentCancelled(run_id~)
     | AgentFailed(run_id~, _) => Some(run_id)
     CommandResult(run_id~, _) => Some(run_id)
-    UiInput(_) | SteerDropped(_) | Tick => None
+    UiInput(_) | SteerDropped(_) | EngineExited | Tick => None
   }
 }
 

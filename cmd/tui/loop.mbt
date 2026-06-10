@@ -402,6 +402,9 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
     // silently. Run state is untouched — the run's own death report (or
     // terminal event) settles it.
     SteerDropped(text) => cmds.push(AppendItem(steer_dropped_item(text)))
+    // The engine process is gone, and its watchers with it: an old
+    // `moon_check running` segment would be a lie on the status bar.
+    EngineExited => state.watcher_status = ""
     // No state change: Tick is a 1s heartbeat that just keeps the message loop
     // turning so the trailing refresh_ui re-runs and the elapsed-time activity
     // line ("Working (12s)") keeps advancing during quiet stretches.

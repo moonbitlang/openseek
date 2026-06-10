@@ -212,14 +212,16 @@ test "a runtime_update event surfaces as a ↻ tool-style notice" {
   assert_eq(state.watcher_status, "running")
   assert_true(state.run is Running(_))
 
-  // The watcher belongs to the engine process, which exits when the run ends, so
-  // a terminal event must clear the status: no stale `moon_check running` segment
-  // should linger in the status bar while the TUI is idle.
+  // The watcher belongs to the persistent engine, which outlives the turn:
+  // the status survives the terminal event and only clears when the engine
+  // process itself exits.
   let _ = update(
     state,
     AgentProgress(run_id=state.run_id, AgentFinished("done")),
   )
   assert_true(state.run is Idle)
+  assert_eq(state.watcher_status, "running")
+  let _ = update(state, EngineExited)
   assert_eq(state.watcher_status, "")
   assert_eq(watcher_segment_text(state.watcher_status), "")
 }
