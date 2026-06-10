@@ -150,7 +150,20 @@ async fn run_with_runtime(
         messages.push(ChatMessage(User, content=update))
       }
       @xlog.info() <? { "event": "agent_step", "step": step + 1 }
-      let response = client.chat(messages, tools=tools.function_tools())
+      let response = client.chat_stream(
+        messages,
+        tools=tools.function_tools(),
+        on_content_delta=delta => {
+          if delta != "" {
+            @xlog.info() <? { "event": "assistant_delta", "content": delta }
+          }
+        },
+        on_reasoning_delta=delta => {
+          if delta != "" {
+            @xlog.info() <? { "event": "reasoning_delta", "content": delta }
+          }
+        },
+      )
       if response.content != "" {
         @xlog.info() <?
           { "event": "assistant_message", "content": response.content }

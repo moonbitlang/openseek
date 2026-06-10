@@ -21,6 +21,12 @@ drops `moon`'s own dependency-resolution chatter, not any log content.
 Every example gives the cheap Flash model a trivial, self-contained task and a
 tiny step budget.
 
+When the model emits assistant text, the stream may include one or more
+`assistant_delta` events before the final `assistant_message`; thinking-mode
+runs may also interleave `reasoning_delta` events before the content starts.
+Tool-only responses, such as the forced `finish` examples below, may skip these
+content events and go straight to tool execution.
+
 ## A Real Round Trip That Finishes
 
 This proves two things from the real log: that the request reached DeepSeek and
@@ -57,7 +63,9 @@ A minimal run emits an `agent_step`, a `usage` record once DeepSeek answers, and
 an `agent_finished`. We collect the `"event"` values into a `Set`, which dedupes
 and preserves insertion order — so printing it yields the lifecycle in the order
 it occurred, the same `{agent_step, usage, agent_finished}` no matter how many
-steps the run takes.
+steps the run takes. Streaming `assistant_delta`/`reasoning_delta` events are
+filtered out: whether and how often they appear varies per run (thinking mode
+streams its reasoning live), while the lifecycle events are stable.
 
 ```mooncram
 $ openseek.exe --model deepseek-v4-flash --max-steps 3 "Call the finish tool immediately with the answer DONE. Use no other tool." 2>/dev/null \
@@ -69,7 +77,9 @@ $ openseek.exe --model deepseek-v4-flash --max-steps 3 "Call the finish tool imm
 > async fn main {
 >   let events = Set::new()
 >   for value in @jsonl.read_stdin() {
->     if value is { "event": String(event), .. } { events.add(event) }
+>     if value is { "event": String(event), .. } && !event.has_suffix("_delta") {
+>       events.add(event)
+>     }
 >   }
 >   println("events=\{events}")
 > }' 2>/dev/null \
