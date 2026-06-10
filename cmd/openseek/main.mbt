@@ -269,8 +269,10 @@ const PromptLabelMaxChars : Int = 60
 
 ///|
 /// Collapse a prompt to a single-line label: whitespace runs become one
-/// space, and anything beyond `PromptLabelMaxChars` is elided with `…`. A
-/// session without a recorded prompt shows `-` so the column never vanishes.
+/// space, remaining control characters are dropped — a stored prompt must
+/// not be able to inject terminal escape sequences into the listing — and
+/// anything beyond `PromptLabelMaxChars` is elided with `…`. A session
+/// without a recorded prompt shows `-` so the column never vanishes.
 fn compact_prompt_label(prompt : String) -> String {
   let out = StringBuilder::new()
   let mut last_was_space = false
@@ -286,6 +288,12 @@ fn compact_prompt_label(prompt : String) -> String {
         count += 1
       }
       last_was_space = true
+    } else if ch.to_int() < 0x20 ||
+      ch.to_int() == 0x7F ||
+      (ch.to_int() >= 0x80 && ch.to_int() <= 0x9F) {
+      // C0/C1 controls and DEL: ESC, CSI, OSC and friends render as terminal
+      // commands, not text.
+      continue
     } else {
       out.write_char(ch)
       count += 1
@@ -459,6 +467,12 @@ test "session listing rows are tab-separated and survive odd prompts" {
     "fix the streaming bug",
   )
   assert_eq(compact_prompt_label(""), "-")
+  // Control characters cannot smuggle escape sequences into the listing:
+  // ESC, BEL, and the C1 CSI all vanish while printable text survives.
+  assert_eq(
+    compact_prompt_label("\u{1b}[31mred\u{1b}]0;title\u{7}\u{9b}31m text"),
+    "[31mred]0;title31m text",
+  )
   let long = String::make(100, 'x')
   let label = compact_prompt_label(long)
   assert_true(label.has_suffix("…"))
