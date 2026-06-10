@@ -77,11 +77,24 @@ async fn[G] EngineClient::start(
     }
     @jsonl.each(reader, json => {
       if @event.decode_event(json) is Some(event) {
-        if is_terminal_event(event) {
-          engine.run_open = false
+        match event {
+          // A wire-level drop races the turn's terminal event by
+          // construction (the engine only rejects steers once idle), so a
+          // run-tagged message would arrive after finish_run and be eaten
+          // by the stale-run guard. Post it untagged so the resubmit notice
+          // always reaches the user.
+          SteerDropped(text) =>
+            self.messages.try_put(SteerDropped(text)) |> ignore
+          _ => {
+            if is_terminal_event(event) {
+              engine.run_open = false
+            }
+            self.messages.try_put(
+              AgentProgress(run_id=engine.latest_run, event),
+            )
+            |> ignore
+          }
         }
-        self.messages.try_put(AgentProgress(run_id=engine.latest_run, event))
-        |> ignore
       }
     }) catch {
       error if @async.is_being_cancelled() ||

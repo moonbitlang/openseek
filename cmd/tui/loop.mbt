@@ -264,8 +264,10 @@ fn handle_agent_event(
     // the transcript at its true conversational position, the way the model
     // actually saw it.
     SteerApplied(text) => cmds.push(AppendItem(Input(Prompt(text))))
-    // The engine rejected a steer that raced the turn's terminal event
-    // through the pipes — same surfacing as the client-side drop.
+    // Normally unreachable from the wire: the engine client routes
+    // steer_dropped events to the untagged message (they always trail the
+    // racing turn's terminal, so a run-tagged copy would be stale-filtered).
+    // Kept as defense in depth for any future in-run emitter.
     SteerDropped(text) => cmds.push(AppendItem(steer_dropped_item(text)))
     AssistantMessage(text) => {
       state.step_response = Some(text)
