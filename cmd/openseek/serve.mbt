@@ -222,6 +222,13 @@ async fn run_serve(matches : @argparse.Matches) -> Unit {
               }
           }
         TurnDone => {
+          // A steer that raced the turn's end (or was queued while it was
+          // dying) may still sit in the runtime's steering queue; the next
+          // turn must not inherit input the user aimed at this one. Reject
+          // leftovers on the wire like any other undeliverable steer.
+          for text in runtime.drain_steers() {
+            @xlog.warn() <? { "event": "steer_dropped", "content": text }
+          }
           active_turn = None
           if pending.length() > 0 {
             active_turn = Some(start_turn(pending.remove(0)))

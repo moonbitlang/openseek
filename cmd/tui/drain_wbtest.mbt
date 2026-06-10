@@ -190,6 +190,13 @@ test "Ctrl+C quits when idle and interrupts when a task is running" {
   let cmds = update(state, UiInput(Interrupt))
   assert_true(cmds.iter().any(cmd => cmd is KillEngine))
   assert_eq(quit_count(cmds), 0)
+
+  // Steering a turn that is being cancelled is refused: the text could
+  // outlive the dying turn in the engine's queue and contaminate a later
+  // prompt.
+  let cmds = update(state, UiInput(Steer(Prompt("late idea"))))
+  assert_eq(error_item_count(cmds), 1)
+  assert_true(cmds.iter().all(cmd => !(cmd is SteerAgent(_))))
 }
 
 ///|

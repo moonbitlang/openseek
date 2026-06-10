@@ -439,6 +439,17 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
         Steer(input) =>
           if state.run is Idle {
             state.queued.push(input)
+          } else if state.run is Interrupting(_) {
+            // The turn is being cancelled: a steer sent now could outlive
+            // the dying turn in the engine's queue and contaminate a later
+            // prompt. Refuse rather than race.
+            cmds.push(
+              AppendItem(
+                Error(
+                  "The task is being interrupted and cannot be steered. Press Tab to queue this input.",
+                ),
+              ),
+            )
           } else if state.run_is_command {
             // The active run is a local shell command: there is no engine
             // turn to steer, and steering the idle engine would start a
