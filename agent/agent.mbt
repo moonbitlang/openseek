@@ -2,24 +2,34 @@
 let default_max_steps : Int = 1000
 
 ///|
-/// Mid-turn user input riding the shared runtime event bus. Queued by
-/// `steer` and folded into the conversation by the agent loop at its next
-/// step boundary.
-extenum @agent_runtime.AgentEvent += {
-  SteerInput(String)
-}
-
-///|
 /// Queue `text` as steering input for the turn running on `runtime`.
 ///
 /// Steering lands at the next step boundary — after the in-flight model call
 /// and its tool batch complete, where the loop already folds in runtime
 /// updates — so completed work is never thrown away. The text is appended to
 /// the session as a user message and a `steer_applied` event is emitted when
-/// it takes effect. Steering an idle runtime is harmless: the input waits on
-/// the bus for the next turn.
+/// it takes effect. Steering an idle runtime is harmless: the input waits in
+/// the queue for the next turn. The channel is lossless (unlike the runtime
+/// event bus, which discards under flood), so a steer can never be pushed
+/// out by noisy watcher updates.
 pub fn steer(runtime : @agent_runtime.AgentRuntime, text : String) -> Unit {
-  runtime.emit_event(SteerInput(text))
+  runtime.queue_steer(text)
+}
+
+///|
+/// Build the agent's standard tool registry bound to `runtime` and `scope`.
+///
+/// Stateful tools live in the registry value itself: `moon_check` keeps its
+/// watcher records in the closure this builds, not in `AgentRuntime`. A
+/// serve-mode caller that wants watchers to survive from one turn to the
+/// next must therefore build the registry once and pass it to every
+/// `run_turn_in_scope` call — rebuilding it each turn would orphan the old
+/// watchers and start duplicates.
+pub fn[X] build_tools(
+  runtime : @agent_runtime.AgentRuntime,
+  scope : @agent_runtime.AgentTaskScope[X],
+) -> @agent_tool.Tools raise {
+  tool_definitions(runtime, scope)
 }
 
 ///|
@@ -164,12 +174,15 @@ async test "run_turn_with_append closes failed persisted turns" {
 /// Runs one user turn inside a caller-owned runtime and task scope.
 ///
 /// This is the building block for callers that keep an engine alive across
-/// turns (serve mode): a shared `runtime` preserves stateful tools — a
-/// `moon_check` watcher started in one turn keeps reporting in the next —
-/// and is also the bus `steer` feeds mid-turn input through. `scope` bounds
-/// background work the turn's tools spawn, so it must outlive the turn.
-/// One-shot callers should prefer `run_turn`/`run_turn_with_append`, which
-/// own both for the duration of a single turn.
+/// turns (serve mode): the shared `runtime` carries steering input and
+/// runtime updates across the turn boundary, and a `tools` registry built
+/// once with `build_tools` preserves stateful tools — a `moon_check` watcher
+/// started in one turn keeps reporting in the next. When `tools` is omitted
+/// a fresh registry is built for this turn only. `scope` bounds background
+/// work the turn's tools spawn, so it must outlive every turn that may have
+/// spawned some. One-shot callers should prefer
+/// `run_turn`/`run_turn_with_append`, which own everything for the duration
+/// of a single turn.
 pub async fn[X] run_turn_in_scope(
   runtime : @agent_runtime.AgentRuntime,
   scope : @agent_runtime.AgentTaskScope[X],
@@ -182,6 +195,7 @@ pub async fn[X] run_turn_in_scope(
   thinking? : @deepseek.ThinkingMode = Enabled,
   reasoning_effort? : @deepseek.ReasoningEffort = Max,
   api_url? : String,
+  tools? : @agent_tool.Tools,
 ) -> @agent_session.Session {
   let client = @client.Client(
     api_key~,
@@ -198,29 +212,33 @@ pub async fn[X] run_turn_in_scope(
   )
   let mut session = append_item(session, User(UserMessage(task)))
   try {
-    let tools = tool_definitions(runtime, scope) catch {
-      error => {
-        let next = append_item(
-          session,
-          Terminal(Failed("agent setup failed: \{error}")),
-        )
-        @xlog.error() <? { "event": "agent_setup_failed", "error": "\{error}" }
-        return next
-      }
+    let tools = match tools {
+      Some(tools) => tools
+      None =>
+        tool_definitions(runtime, scope) catch {
+          error => {
+            let next = append_item(
+              session,
+              Terminal(Failed("agent setup failed: \{error}")),
+            )
+            @xlog.error() <?
+              { "event": "agent_setup_failed", "error": "\{error}" }
+            return next
+          }
+        }
     }
     let messages = session.chat_messages()
     for step in 0..<max_steps {
-      let drained = runtime.drain_events()
       // Steering first: a user's mid-turn redirection should precede the
       // runtime chatter the model reads alongside it.
-      for event in drained {
-        if event is SteerInput(text) && !text.trim().is_empty() {
+      for text in runtime.drain_steers() {
+        if !text.trim().is_empty() {
           @xlog.info() <? { "event": "steer_applied", "content": text }
           session = append_item(session, User(UserMessage(text)))
           messages.push(ChatMessage(User, content=text))
         }
       }
-      if runtime_update_message(drained) is Some(update) {
+      if runtime_update_message(runtime.drain_events()) is Some(update) {
         @xlog.info() <? { "event": "runtime_update", "content": update }
         session = append_item(session, Runtime(RuntimeNotice(update)))
         messages.push(ChatMessage(User, content=update))

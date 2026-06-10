@@ -4,10 +4,13 @@ package "bobzhang/openseek/agent"
 import {
   "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/deepseek",
 }
 
 // Values
+pub fn[X] build_tools(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope[X]) -> @agent_tool.Tools raise
+
 pub fn default_system_prompt() -> String
 
 pub fn default_system_prompt_for_model(@deepseek.Model) -> String
@@ -16,7 +19,7 @@ pub async fn run(String, @deepseek.Model, String, max_steps? : Int, system_promp
 
 pub async fn run_turn(String, @deepseek.Model, @agent_session.Session, String, max_steps? : Int, thinking? : @deepseek.ThinkingMode, reasoning_effort? : @deepseek.ReasoningEffort, api_url? : String) -> @agent_session.Session
 
-pub async fn[X] run_turn_in_scope(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope[X], String, @deepseek.Model, @agent_session.Session, String, append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, max_steps? : Int, thinking? : @deepseek.ThinkingMode, reasoning_effort? : @deepseek.ReasoningEffort, api_url? : String) -> @agent_session.Session
+pub async fn[X] run_turn_in_scope(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope[X], String, @deepseek.Model, @agent_session.Session, String, append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, max_steps? : Int, thinking? : @deepseek.ThinkingMode, reasoning_effort? : @deepseek.ReasoningEffort, api_url? : String, tools? : @agent_tool.Tools) -> @agent_session.Session
 
 pub async fn run_turn_with_append(String, @deepseek.Model, @agent_session.Session, String, append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, max_steps? : Int, thinking? : @deepseek.ThinkingMode, reasoning_effort? : @deepseek.ReasoningEffort, api_url? : String) -> @agent_session.Session
 

@@ -19,7 +19,9 @@ pub struct AgentRuntime {
 }
 pub fn AgentRuntime::AgentRuntime() -> Self
 pub fn AgentRuntime::drain_events(Self) -> Array[AgentEvent]
+pub fn AgentRuntime::drain_steers(Self) -> Array[String]
 pub fn AgentRuntime::emit_event(Self, AgentEvent) -> Unit
+pub fn AgentRuntime::queue_steer(Self, String) -> Unit
 
 pub struct AgentTaskScope[X] {
   // private fields

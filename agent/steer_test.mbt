@@ -20,6 +20,9 @@ async fn steer_test_server(group : @async.TaskGroup[Unit]) -> String? {
         let request_body = body.read_all().text()
         assert_true(request_body.contains("do the task"))
         assert_true(request_body.contains("also rename the file"))
+        // The prebuilt registry reached the request: the standard tools ride
+        // along even though the caller, not the turn, constructed them.
+        assert_true(request_body.contains("\"name\":\"moon_check\""))
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
@@ -38,14 +41,17 @@ async test "queued steering is folded in at the next step boundary" {
     guard steer_test_server(group) is Some(url) else { return }
     let runtime = @agent_runtime.AgentRuntime()
     let scope = @agent_runtime.AgentTaskScope(group)
-    // Steer before the turn starts: the loop drains the bus at its first
-    // step boundary, so the steered text must reach the model alongside the
-    // task (the mock server asserts both are in the request body).
+    // Steer before the turn starts: the loop drains the steering queue at
+    // its first step boundary, so the steered text must reach the model
+    // alongside the task (the mock server asserts both are in the body).
     @agent.steer(runtime, "also rename the file")
     let session = @agent_session.Session(
       SessionId("steer-test"),
       system_prompt="system",
     )
+    // The registry is built once by the caller, the way a serve-mode engine
+    // shares it across turns.
+    let tools = @agent.build_tools(runtime, scope)
     let result = @agent.run_turn_in_scope(
       runtime,
       scope,
@@ -56,6 +62,7 @@ async test "queued steering is folded in at the next step boundary" {
       append_item=(session, item) => session.append(item),
       max_steps=2,
       api_url=url,
+      tools~,
     )
     // The steered text is durably part of the conversation: task, steer,
     // then the finished terminal.

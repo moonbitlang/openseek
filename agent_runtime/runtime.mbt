@@ -12,20 +12,28 @@ pub(all) extenum AgentEvent {}
 
 ///|
 /// Per-agent-loop state shared between the main chat loop and side-effectful
-/// tools. It owns runtime updates, while `AgentTaskScope` owns structured
-/// background task lifetime for tools that need it.
+/// tools. It owns runtime updates and queued steering input, while
+/// `AgentTaskScope` owns structured background task lifetime for tools that
+/// need it.
 pub struct AgentRuntime {
   /// Bounded event bus (`DiscardOldest`, see `default_agent_event_capacity`)
   /// that background tools post updates to; the main loop drains it between
   /// steps to surface fresh tool output into the conversation.
   priv events : @aqueue.Queue[AgentEvent]
+  /// Unbounded queue of mid-turn user input. Deliberately separate from the
+  /// lossy event bus: a noisy watcher may flood `events` and push old
+  /// updates out, but a user's steering text must never be the casualty.
+  priv steers : @aqueue.Queue[String]
 }
 
 ///|
 /// Create a runtime with an empty event bus of
-/// `default_agent_event_capacity`.
+/// `default_agent_event_capacity` and an empty steering queue.
 pub fn AgentRuntime::AgentRuntime() -> AgentRuntime {
-  { events: Queue(kind=DiscardOldest(default_agent_event_capacity)) }
+  {
+    events: Queue(kind=DiscardOldest(default_agent_event_capacity)),
+    steers: Queue(kind=Unbounded),
+  }
 }
 
 ///|
@@ -66,6 +74,27 @@ pub fn AgentRuntime::emit_event(
 }
 
 ///|
+/// Queue mid-turn user input for the loop's next step boundary. Lossless:
+/// the steering queue is unbounded and never closed, so unlike `emit_event`
+/// nothing can push a queued steer out.
+pub fn AgentRuntime::queue_steer(self : AgentRuntime, text : String) -> Unit {
+  ignore(self.steers.try_put(text) catch { _ => false })
+}
+
+///|
+/// Take every queued steering input, oldest first, leaving the queue empty.
+pub fn AgentRuntime::drain_steers(self : AgentRuntime) -> Array[String] {
+  let texts : Array[String] = []
+  for ;; {
+    let next = self.steers.try_get() catch { _ => None }
+    match next {
+      None => return texts
+      Some(text) => texts.push(text)
+    }
+  }
+}
+
+///|
 /// Take every queued runtime update, oldest first, leaving the bus empty.
 /// The agent loop calls this between steps to fold fresh background tool
 /// output into the conversation.
@@ -96,6 +125,21 @@ test "runtime drains queued events" {
   }
   assert_eq(value, "ok")
   assert_eq(runtime.drain_events().length(), 0)
+}
+
+///|
+test "steering input survives an event-bus flood" {
+  let runtime = AgentRuntime()
+  runtime.queue_steer("turn left")
+  // Flood the lossy event bus far past its capacity: updates may be
+  // discarded, but the steering queue is a separate lossless channel.
+  for index in 0..<(default_agent_event_capacity * 3) {
+    runtime.emit_event(RuntimeTestEvent("noise \{index}"))
+  }
+  runtime.queue_steer("turn right")
+  assert_eq(runtime.drain_steers().join("|"), "turn left|turn right")
+  assert_eq(runtime.drain_steers().length(), 0)
+  assert_eq(runtime.drain_events().length(), default_agent_event_capacity)
 }
 
 ///|
