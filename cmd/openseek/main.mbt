@@ -25,6 +25,13 @@ async fn run_cli() -> Unit {
     if handle_session_command(matches) {
       return
     }
+    if flag(matches, "serve") {
+      if values(matches, "task").length() > 0 {
+        fail("--serve reads commands from stdin; it does not take a task")
+      }
+      run_serve(matches)
+      return
+    }
     let api_key = api_key(matches)
     let model = @deepseek.Model::parse(value(matches, "model"))
     let max_steps = max_steps(matches)
@@ -173,6 +180,11 @@ fn cli_command() -> @argparse.Command {
       ),
     ],
     flags=[
+      FlagArg(
+        "serve",
+        long="serve",
+        about="Run as a session server: read JSONL commands (prompt/steer/cancel) from stdin.",
+      ),
       FlagArg(
         "session-list",
         long="session-list",

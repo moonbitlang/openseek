@@ -25,6 +25,7 @@ Arguments:
 
 Options:
   -h, --help                                                   Show help information.
+  --serve                                                      Run as a session server: read JSONL commands (prompt/steer/cancel) from stdin.
   --session-list                                               List durable session ids and exit.
   --session-show                                               Print the durable session JSON for --session and exit.
   --api-key <api-key>                                          DeepSeek API key. [env: DEEPSEEK] [default: ]
@@ -85,6 +86,30 @@ demo
 {"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}]}
 compacted session demo events 1..2; last_sequence=3
 {"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}},{"sequence":3,"item":{"kind":"summary","payload":{"content":"hello and answer","from_sequence":1,"to_sequence":2}}}]}
+```
+
+## Serve Mode Speaks JSONL Commands On Stdin
+
+`--serve` turns the engine into a long-lived session server: prompts, steers,
+and cancels arrive as JSONL commands on stdin, and the usual event stream
+leaves on stdout. The command surface is testable offline — a malformed
+command is reported as a `command_error` event rather than killing the
+server, an idle `cancel` is a no-op, and stdin EOF shuts the server down
+cleanly (exit 0) without ever touching the network. The `grep -o` keeps only
+the stable event tag, since event lines carry timestamps.
+
+```mooncram
+$ printf '{"command":"reboot"}\n{"command":"cancel"}\n' | env DEEPSEEK=test-key openseek.exe --serve 2>/dev/null | grep -o '"event":"command_error"'
+"event":"command_error"
+```
+
+A task positional contradicts serve mode and is rejected before anything
+runs.
+
+```mooncram
+$ env DEEPSEEK=test-key openseek.exe --serve "do something" 2>&1
+error: --serve reads commands from stdin; it does not take a task
+[1]
 ```
 
 ## MoonBit CLI Argument Parsing Pattern
