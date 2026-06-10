@@ -350,8 +350,11 @@ test "a trailing drop from a dead turn never steals a fresh acknowledgment" {
   let _ = update(state, UiInput(Steer(Prompt("task b"))))
   let _ = update(state, UiInput(Steer(Prompt("fresh steer"))))
   assert_eq(state.pending_steers.length(), 1)
-  // The old turn's drop settles nothing of B's — matched by text, no hit.
-  let _ = update(state, SteerDropped("old steer"))
+  // The old turn's wire drop settles nothing of B's — even with identical
+  // text, a wire drop's own entries are swept before it is processed.
+  let _ = update(state, EngineSteerDropped("old steer"))
+  assert_eq(state.pending_steers.length(), 1)
+  let _ = update(state, EngineSteerDropped("fresh steer"))
   assert_eq(state.pending_steers.length(), 1)
   assert_eq(state.pending_steers[0], "fresh steer")
 }

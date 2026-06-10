@@ -560,6 +560,10 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
       confirm_pending_steer(state, text)
       cmds.push(AppendItem(steer_dropped_item(text)))
     }
+    // Settles nothing by construction: the rejecting turn's terminal already
+    // swept its acknowledgments, and a text match here could only steal a
+    // fresh identical-text steer's entry from the next turn.
+    EngineSteerDropped(text) => cmds.push(AppendItem(steer_dropped_item(text)))
     // The engine process is gone, and its watchers with it: an old
     // `moon_check running` segment would be a lie on the status bar.
     EngineExited => state.watcher_status = ""

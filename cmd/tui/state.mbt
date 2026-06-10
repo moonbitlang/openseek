@@ -161,9 +161,16 @@ priv enum Msg {
   // transcript item to append. Commands run in the TUI and never reach the agent
   // engine.
   CommandResult(run_id~ : Int, @ui.TranscriptItem)
-  // A steer had no live turn to land in (the engine died an instant before
-  // Enter): surface the lost text so the user can resubmit it.
+  // A steer the client could not deliver (no live engine/turn): show the
+  // resubmit notice and settle its acknowledgment — the entry was created an
+  // instant ago and cannot have been swept.
   SteerDropped(String)
+  // A steer the engine rejected on the wire. Its turn's terminal event
+  // always precedes it in the stream, so by the time this is processed the
+  // acknowledgment it belonged to is already swept: notice only, settling
+  // nothing — a fresh identical-text steer of the next turn keeps its own
+  // acknowledgment.
+  EngineSteerDropped(String)
   // The persistent engine process exited (for any reason): its background
   // watchers died with it, so engine-scoped status must reset.
   EngineExited
@@ -179,7 +186,11 @@ fn Msg::run_id(self : Msg) -> Int? {
     | AgentCancelled(run_id~)
     | AgentFailed(run_id~, _) => Some(run_id)
     CommandResult(run_id~, _) => Some(run_id)
-    UiInput(_) | SteerDropped(_) | EngineExited | Tick => None
+    UiInput(_)
+    | SteerDropped(_)
+    | EngineSteerDropped(_)
+    | EngineExited
+    | Tick => None
   }
 }
 

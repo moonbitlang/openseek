@@ -84,7 +84,7 @@ async fn[G] EngineClient::start(
           // by the stale-run guard. Post it untagged so the resubmit notice
           // always reaches the user.
           SteerDropped(text) =>
-            self.messages.try_put(SteerDropped(text)) |> ignore
+            self.messages.try_put(EngineSteerDropped(text)) |> ignore
           _ => {
             if is_terminal_event(event) {
               engine.run_open = false
