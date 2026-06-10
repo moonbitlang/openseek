@@ -251,6 +251,69 @@ async fn run_shell_command(
 }
 
 ///|
+// The live streaming line is only a transient status preview: it keeps the
+// *tail* of the stream (the newest text) so the line visibly moves while the
+// model types. The final assistant text is committed later by
+// `assistant_message`, so the buffer only needs to cover the widest plausible
+// terminal row; the bound keeps per-delta work constant during long
+// code-generation streams.
+const StreamingPreviewMaxColumns : Int = 240
+
+///|
+/// Keep the last `max_cols` display columns of `text`, marking an elided front
+/// with a leading `…`. The inverse of `DisplayText::truncate`, which keeps the
+/// front — a streaming preview must keep the end, where the new text arrives.
+fn tail_columns(text : String, max_cols : Int) -> String {
+  let display = @displaytext.DisplayText(text)
+  if display.width() <= max_cols {
+    return text
+  }
+  // Reserve one column for the `…` marker; `at_or_after` lands past a wide
+  // char straddling the cut, so the kept tail never exceeds the budget.
+  let keep_from = display.textual_position_at_or_after(
+    @displaytext.DisplayPosition::new(column=display.width() - max_cols + 1),
+  )
+  "…" + display.view(keep_from, display.end()).to_owned()
+}
+
+///|
+/// Collapse whitespace runs (newline, CR, tab, space) to a single space so a
+/// streamed fragment stays renderable on the one-row activity line — streamed
+/// code is mostly newlines and indentation, which would otherwise hit the
+/// renderer as control characters.
+fn collapse_preview_whitespace(text : String) -> String {
+  let out = StringBuilder::new()
+  let mut last_was_space = false
+  for ch in text {
+    if ch is (' ' | '\t' | '\n' | '\r') {
+      if !last_was_space {
+        out.write_char(' ')
+      }
+      last_was_space = true
+    } else {
+      out.write_char(ch)
+      last_was_space = false
+    }
+  }
+  out.to_string()
+}
+
+///|
+fn append_streaming_preview(current : String?, delta : String) -> String {
+  let combined = match current {
+    Some(text) => text + delta
+    None => delta
+  }
+  // Re-collapsing the bounded buffer keeps a whitespace run that spans two
+  // deltas collapsed too; the buffer is at most a few hundred chars, so the
+  // rescan is constant work per delta.
+  tail_columns(
+    collapse_preview_whitespace(combined),
+    StreamingPreviewMaxColumns,
+  )
+}
+
+///|
 /// Apply one agent progress event to `state`, queueing any transcript updates in
 /// `cmds`. Terminal events call `finish_run`, leaving the agent idle so the
 /// queue drain at the end of `update` can start the next input.
@@ -260,9 +323,30 @@ fn handle_agent_event(
   cmds : Array[Cmd],
 ) -> Unit {
   match event {
-    AgentStep => state.step_response = None
+    AgentStep => {
+      state.step_response = None
+      state.streaming_response = None
+      state.streaming_reasoning = None
+    }
+    AssistantDelta(text) =>
+      if text != "" {
+        state.streaming_response = Some(
+          append_streaming_preview(state.streaming_response, text),
+        )
+        // Content starting means the thinking phase is over; the content
+        // preview replaces the reasoning one.
+        state.streaming_reasoning = None
+      }
+    ReasoningDelta(text) =>
+      if text != "" {
+        state.streaming_reasoning = Some(
+          append_streaming_preview(state.streaming_reasoning, text),
+        )
+      }
     AssistantMessage(text) => {
       state.step_response = Some(text)
+      state.streaming_response = None
+      state.streaming_reasoning = None
       if !text.trim().is_empty() {
         cmds.push(AppendItem(Response(text)))
       }

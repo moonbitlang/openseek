@@ -109,6 +109,18 @@ pub async fn Ui::append_item(self : Self, item : TranscriptItem) -> Unit {
 }
 
 ///|
+/// The terminal width in columns as of the last redraw, or a conservative 80
+/// before the UI has entered the live screen. Lets callers fit transient
+/// content (e.g. a streaming tail preview) to the row the renderer will clip
+/// it to.
+pub fn Ui::columns(self : Self) -> Int {
+  match self.viewport {
+    Some(viewport) => viewport.cols()
+    None => 80
+  }
+}
+
+///|
 /// Set or clear the transient activity label shown above the composer. `Some`
 /// shows a busy/progress line that never enters the transcript; `None` hides it.
 /// Redraws the live frame.

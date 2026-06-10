@@ -85,11 +85,45 @@ fn elapsed_seconds(started_ms : Int64, now_ms : Int64) -> Int64 {
 }
 
 ///|
-fn format_activity_text(state : State) -> @doc.Text? {
+/// Columns of the activity row not available to the streaming preview: the
+/// composer indent the renderer prepends (2), the widest label ("Streaming ",
+/// 10), and one column of slack. The preview is tail-clipped to what remains so
+/// its newest characters are never cut by the renderer's own width clip, which
+/// keeps the line's *front* — the oldest text — on overflow.
+const ActivityPreviewReservedColumns : Int = 13
+
+///|
+fn activity_preview(text : String, cols~ : Int) -> String {
+  let budget = cols - ActivityPreviewReservedColumns
+  tail_columns(text, if budget < 16 { 16 } else { budget })
+}
+
+///|
+fn format_activity_text(state : State, cols~ : Int) -> @doc.Text? {
   let started_ms = match state.run {
     Idle => return None
     Running(started_ms) => started_ms
     Interrupting(started_ms) => started_ms
+  }
+  if state.streaming_response is Some(response) && !response.trim().is_empty() {
+    return Some(
+      Text([
+        Span(DisplayText("Streaming "), style=@style.dim),
+        @doc.Span::plain(activity_preview(response, cols~)),
+      ]),
+    )
+  }
+  // Thinking-mode runs spend their first (often long) stretch emitting only
+  // reasoning deltas; show their tail dimmed so the line moves from the first
+  // token rather than sitting on "Working (Ns)" until content starts.
+  if state.streaming_reasoning is Some(reasoning) &&
+    !reasoning.trim().is_empty() {
+    return Some(
+      Text([
+        Span(DisplayText("Thinking "), style=@style.dim),
+        Span(DisplayText(activity_preview(reasoning, cols~)), style=@style.dim),
+      ]),
+    )
   }
   let elapsed = format_elapsed_compact(
     elapsed_seconds(started_ms, @async.now()),
@@ -105,6 +139,6 @@ fn format_activity_text(state : State) -> @doc.Text? {
 ///|
 async fn refresh_ui(ui : @ui.Ui, state : State) -> Unit {
   ui.set_status(format_status_bar_text(state))
-  ui.set_activity(format_activity_text(state))
+  ui.set_activity(format_activity_text(state, cols=ui.columns()))
   ui.set_queued_inputs(state.queued)
 }

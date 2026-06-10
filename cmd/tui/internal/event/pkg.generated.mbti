@@ -9,6 +9,8 @@ pub fn decode_event(Json) -> AgentEvent?
 // Types and methods
 pub(all) enum AgentEvent {
   AgentStep
+  AssistantDelta(String)
+  ReasoningDelta(String)
   AssistantMessage(String)
   RuntimeUpdate(String)
   Usage(UsageInfo)

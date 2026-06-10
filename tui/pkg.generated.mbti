@@ -17,6 +17,7 @@ pub fn Config::new(esc_timeout_ms? : Int, composer_max_rows? : Int) -> Self
 
 type Ui
 pub async fn Ui::append_item(Self, @core.TranscriptItem) -> Unit
+pub fn Ui::columns(Self) -> Int
 pub async fn Ui::read_event(Self) -> @core.Event
 pub async fn Ui::set_activity(Self, @doc.Text?) -> Unit
 pub async fn Ui::set_queued_inputs(Self, Array[@core.Input]) -> Unit
