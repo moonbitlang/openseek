@@ -1,12 +1,24 @@
 ///|
-test "encode_chat_request always asks for json output" {
+test "encode_chat_request omits response format by default" {
   let body = @deepseek.encode_chat_request(V4Flash, [
-    ChatMessage(System, content="json only"),
+    ChatMessage(System, content="plain text is fine"),
     ChatMessage(User, content="ping"),
   ])
   let text = body.stringify()
   assert_true(text.contains("\"stream\":false"))
-  assert_true(text.contains("\"response_format\""))
+  assert_false(text.contains("\"response_format\""))
+}
+
+///|
+test "encode_chat_request can ask for json output explicitly" {
+  let body = @deepseek.encode_chat_request(
+    V4Flash,
+    [
+      ChatMessage(System, content="json only"),
+      ChatMessage(User, content="ping"),
+    ],
+    response_format=JsonObject,
+  )
   guard body is { "response_format": { "type": String("json_object"), .. }, .. } else {
     fail("wrong response_format")
   }

@@ -19,7 +19,7 @@ pub struct Client {
   // private fields
 } derive(@debug.Debug)
 pub fn Client::Client(api_key~ : String, model? : @deepseek.Model, api_url? : String, thinking? : @deepseek.ThinkingMode?, reasoning_effort? : @deepseek.ReasoningEffort?) -> Self
-pub async fn Client::chat(Self, Array[@deepseek.ChatMessage], tools? : Array[@deepseek.ToolDefinition]) -> @deepseek.ChatResponse
+pub async fn Client::chat(Self, Array[@deepseek.ChatMessage], tools? : Array[@deepseek.ToolDefinition], response_format? : @deepseek.ResponseFormat) -> @deepseek.ChatResponse
 
 // Type aliases
 

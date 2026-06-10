@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn encode_chat_request(Model, Array[ChatMessage], tools? : Array[ToolDefinition], thinking? : ThinkingMode, reasoning_effort? : ReasoningEffort) -> Json
+pub fn encode_chat_request(Model, Array[ChatMessage], tools? : Array[ToolDefinition], thinking? : ThinkingMode, reasoning_effort? : ReasoningEffort, response_format? : ResponseFormat) -> Json
 
 // Errors
 
@@ -40,6 +40,11 @@ pub(all) enum ReasoningEffort {
   Max
 } derive(Eq, @debug.Debug)
 pub impl Show for ReasoningEffort
+
+pub(all) enum ResponseFormat {
+  JsonObject
+} derive(Eq, @debug.Debug)
+pub impl Show for ResponseFormat
 
 pub(all) enum Role {
   System

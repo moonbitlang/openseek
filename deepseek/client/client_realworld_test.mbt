@@ -13,15 +13,18 @@ async test "realworld DeepSeek API smoke test" {
     thinking=Some(Enabled),
     reasoning_effort=Some(High),
   )
-  let response = client.chat() <| [
-    ChatMessage(
-      System,
-      content=(
-        #|Reply with exactly this JSON object and no markdown: {"answer":"pong"}
+  let response = client.chat(
+    [
+      ChatMessage(
+        System,
+        content=(
+          #|Reply with exactly this JSON object and no markdown: {"answer":"pong"}
+        ),
       ),
-    ),
-    ChatMessage(User, content="ping"),
-  ]
+      ChatMessage(User, content="ping"),
+    ],
+    response_format=JsonObject,
+  )
   // It may fail in theory, but in practice it should always work.
   debug_inspect(
     response.content,

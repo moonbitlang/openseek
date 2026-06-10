@@ -57,6 +57,23 @@ pub impl Show for ReasoningEffort with fn to_string(self : ReasoningEffort) -> S
 }
 
 ///|
+/// Optional structured response format for DeepSeek chat completions.
+///
+/// Leave absent for normal assistant text. Use `JsonObject` only when a caller
+/// explicitly wants the model's assistant content constrained to a JSON object.
+pub(all) enum ResponseFormat {
+  JsonObject
+} derive(Eq, Debug)
+
+///|
+/// Returns the DeepSeek wire name for a response format.
+pub impl Show for ResponseFormat with fn to_string(self : ResponseFormat) -> String {
+  match self {
+    JsonObject => "json_object"
+  }
+}
+
+///|
 /// DeepSeek chat message roles.
 ///
 /// `Tool(tool_call_id)` represents a tool response message and carries the
