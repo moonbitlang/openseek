@@ -336,6 +336,38 @@ test "a sent steer is acknowledged until the engine settles it" {
 }
 
 ///|
+test "a trailing drop from a dead turn never steals a fresh acknowledgment" {
+  let state = drain_test_state()
+  // Turn A is steered, then ends (sweeping its pending entry).
+  let _ = update(state, UiInput(Steer(Prompt("task a"))))
+  let _ = update(state, UiInput(Steer(Prompt("old steer"))))
+  let _ = update(
+    state,
+    AgentProgress(run_id=state.run_id, AgentFinished("done-a")),
+  )
+  assert_eq(state.pending_steers.length(), 0)
+  // Turn B starts and is steered before A's untagged drop arrives.
+  let _ = update(state, UiInput(Steer(Prompt("task b"))))
+  let _ = update(state, UiInput(Steer(Prompt("fresh steer"))))
+  assert_eq(state.pending_steers.length(), 1)
+  // The old turn's drop settles nothing of B's — matched by text, no hit.
+  let _ = update(state, SteerDropped("old steer"))
+  assert_eq(state.pending_steers.length(), 1)
+  assert_eq(state.pending_steers[0], "fresh steer")
+}
+
+///|
+test "blank steers are neither sent nor acknowledged" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("task"))))
+  let cmds = update(state, UiInput(Steer(Prompt("   "))))
+  // The engine would filter it without any settling event, so the TUI must
+  // not create an acknowledgment that can never clear.
+  assert_eq(state.pending_steers.length(), 0)
+  assert_true(cmds.iter().all(cmd => !(cmd is SteerAgent(_))))
+}
+
+///|
 test "a steer_applied event echoes the input into the transcript" {
   let state = drain_test_state()
   let _ = update(state, UiInput(Steer(Prompt("do it"))))

@@ -100,11 +100,17 @@ fn steer_dropped_item(text : String) -> @ui.TranscriptItem {
 
 ///|
 /// One pending steer was settled (applied or dropped): stop acknowledging
-/// it on the activity line. Confirmations arrive in send order, so the
-/// oldest entry is the settled one.
-fn confirm_pending_steer(state : State) -> Unit {
-  if state.pending_steers.length() > 0 {
-    let _ = state.pending_steers.remove(0)
+/// it on the activity line. Settlement is matched by text, not position —
+/// an untagged drop from a finished turn can trail into the next turn's
+/// lifetime, and it must never consume an acknowledgment belonging to a
+/// fresh steer it has nothing to do with. No match (the old turn's list
+/// was already swept) is a no-op.
+fn confirm_pending_steer(state : State, text : String) -> Unit {
+  for index, pending in state.pending_steers {
+    if pending == text {
+      let _ = state.pending_steers.remove(index)
+      return
+    }
   }
 }
 
@@ -375,7 +381,7 @@ fn handle_agent_event(
     // the transcript at its true conversational position, the way the model
     // actually saw it.
     SteerApplied(text) => {
-      confirm_pending_steer(state)
+      confirm_pending_steer(state, text)
       cmds.push(AppendItem(Input(Prompt(text))))
     }
     // Normally unreachable from the wire: the engine client routes
@@ -383,7 +389,7 @@ fn handle_agent_event(
     // racing turn's terminal, so a run-tagged copy would be stale-filtered).
     // Kept as defense in depth for any future in-run emitter.
     SteerDropped(text) => {
-      confirm_pending_steer(state)
+      confirm_pending_steer(state, text)
       cmds.push(AppendItem(steer_dropped_item(text)))
     }
     AssistantMessage(text) => {
@@ -489,12 +495,16 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
             )
           } else {
             match input {
-              Prompt(text) => {
-                // Acknowledge immediately: the transcript echo only comes at
-                // the step boundary, but the user pressed Enter *now*.
-                state.pending_steers.push(text)
-                cmds.push(SteerAgent(text))
-              }
+              Prompt(text) =>
+                // A blank steer would be filtered engine-side without any
+                // settling event, leaving a phantom acknowledgment; there is
+                // nothing to say to the model anyway, so drop it here.
+                if !text.trim().is_empty() {
+                  // Acknowledge immediately: the transcript echo only comes
+                  // at the step boundary, but the user pressed Enter *now*.
+                  state.pending_steers.push(text)
+                  cmds.push(SteerAgent(text))
+                }
               Command(_) =>
                 cmds.push(
                   AppendItem(
@@ -547,7 +557,7 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
     // silently. Run state is untouched — the run's own death report (or
     // terminal event) settles it.
     SteerDropped(text) => {
-      confirm_pending_steer(state)
+      confirm_pending_steer(state, text)
       cmds.push(AppendItem(steer_dropped_item(text)))
     }
     // The engine process is gone, and its watchers with it: an old
