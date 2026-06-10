@@ -138,7 +138,9 @@ fn format_activity_text(state : State, cols~ : Int) -> @doc.Text? {
 
 ///|
 async fn refresh_ui(ui : @ui.Ui, state : State) -> Unit {
-  ui.set_status(format_status_bar_text(state))
-  ui.set_activity(format_activity_text(state, cols=ui.columns()))
-  ui.set_queued_inputs(state.queued)
+  ui.set_live_view(
+    status=format_status_bar_text(state),
+    activity=format_activity_text(state, cols=ui.columns()),
+    queued_inputs=state.queued,
+  )
 }

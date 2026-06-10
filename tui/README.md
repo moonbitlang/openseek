@@ -19,22 +19,29 @@ success and error paths.
 
 ```mbt
 @tui.with_ui(ui => {
+  // The live view is derived from your state and set as a whole, once per
+  // loop turn — one redraw per update, however many fields changed.
+  let queued : Array[@tui.Input] = []
   for ;; {
+    let mut status = "ready"
     match ui.read_event() {
       @tui.Steer(input) => {
         // The user submitted — echo it into the permanent transcript, then
         // pretend to do some work.
         ui.append_item(Input(input))
-        ui.set_activity(Some(@doc.Text::plain("thinking…")))
         ui.append_item(Response("you said: " + input.text()))
-        ui.set_activity(None)
       }
       @tui.Queue(input) =>
         // Tab queues a follow-up instead of submitting now.
-        ui.set_queued_inputs([input])
-      @tui.Interrupt => ui.set_status(@doc.Text::plain("interrupted"))
+        queued.push(input)
+      @tui.Interrupt => status = "interrupted"
       @tui.Quit => break
     }
+    ui.set_live_view(
+      status=@doc.Text::plain(status),
+      activity=None,
+      queued_inputs=queued,
+    )
   }
 })
 ```
@@ -46,10 +53,10 @@ What you can push onto the screen:
 
 - `ui.append_item(TranscriptItem)` — add a permanent line to the scrollback
   transcript above the live area.
-- `ui.set_activity(@doc.Text?)` — a transient busy line above the composer
-  (`None` clears it); never enters the transcript.
-- `ui.set_queued_inputs(Array[Input])` — render the pending input queue.
-- `ui.set_status(@doc.Text)` — the persistent status line below the composer.
+- `ui.set_live_view(status~, activity~, queued_inputs~)` — replace the whole
+  live view around the composer in one redraw: the persistent status line
+  below it, the transient activity line above it (`None` hides it; it never
+  enters the transcript), and the pending input queue.
 
 Tune the session with `with_ui(config=Config::new(esc_timeout_ms=…,
 composer_max_rows=…), …)`.

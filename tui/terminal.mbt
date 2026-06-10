@@ -121,32 +121,27 @@ pub fn Ui::columns(self : Self) -> Int {
 }
 
 ///|
-/// Set or clear the transient activity label shown above the composer. `Some`
-/// shows a busy/progress line that never enters the transcript; `None` hides it.
-/// Redraws the live frame.
-pub async fn Ui::set_activity(self : Self, activity : @doc.Text?) -> Unit {
-  self.commands.wait(() => {
-    self.activity = activity
-    self.redraw()
-  })
-}
-
-///|
-/// Replace the list of queued inputs shown in the live area (copied defensively)
-/// and redraw the frame.
-pub async fn Ui::set_queued_inputs(self : Self, inputs : Array[Input]) -> Unit {
-  self.commands.wait(() => {
-    self.queued_inputs = inputs.copy()
-    self.redraw()
-  })
-}
-
-///|
-/// Set the persistent status line below the composer and redraw. Transient input
-/// notices may temporarily override its display until the next input event.
-pub async fn Ui::set_status(self : Self, status : @doc.Text) -> Unit {
+/// Replace the live view around the composer — the persistent status line
+/// below it, the transient activity line above it (`None` hides it; it never
+/// enters the transcript), and the queued-inputs preview (copied defensively)
+/// — then redraw the frame once.
+///
+/// The whole view is set together because that is how an update loop works:
+/// it derives every live element from its state each turn. Per-field setters
+/// would queue one full-frame repaint each — three per loop turn — which
+/// during a streaming burst is the difference between a calm frame and a
+/// flickering one. Transient input notices may temporarily override the
+/// status display until the next input event.
+pub async fn Ui::set_live_view(
+  self : Self,
+  status~ : @doc.Text,
+  activity~ : @doc.Text?,
+  queued_inputs~ : Array[Input],
+) -> Unit {
   self.commands.wait(() => {
     self.status = status
+    self.activity = activity
+    self.queued_inputs = queued_inputs.copy()
     self.redraw()
   })
 }

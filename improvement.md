@@ -7,11 +7,12 @@ bottom of the matching section.
 
 ## TUI
 
-- [ ] **Collapse the triple redraw per message.** `refresh_ui` calls
+- [x] **Collapse the triple redraw per message.** `refresh_ui` calls
   `set_status`, `set_activity`, and `set_queued_inputs`, each of which queues
   its own full-frame redraw — three repaints per message-loop iteration.
   During delta bursts this triples render work. Add a single
-  "set view state + one redraw" command on `Ui`.
+  "set view state + one redraw" command on `Ui`. *(Done: `Ui::set_live_view`
+  replaces the three setters; one command, one redraw per loop turn.)*
 - [ ] **Keep reasoning visible after the turn.** Thinking-mode reasoning only
   ever exists as the transient `Thinking …` tail and is discarded once
   content starts. Surface it as a dimmed/collapsible transcript item so a
