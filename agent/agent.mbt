@@ -6,12 +6,17 @@ let default_max_steps : Int = 1000
 ///
 /// Steering lands at the next step boundary — after the in-flight model call
 /// and its tool batch complete, where the loop already folds in runtime
-/// updates — so completed work is never thrown away. The text is appended to
-/// the session as a user message and a `steer_applied` event is emitted when
-/// it takes effect. Steering an idle runtime is harmless: the input waits in
-/// the queue for the next turn. The channel is lossless (unlike the runtime
-/// event bus, which discards under flood), so a steer can never be pushed
-/// out by noisy watcher updates.
+/// updates — so completed work is never thrown away. User input also wins
+/// over model-initiated completion: a steer that arrives while the final
+/// call is in flight keeps the turn alive (the would-be answer becomes an
+/// ordinary assistant message, or the finish call's batch is closed out)
+/// and the conversation continues with the steer. Only error terminals
+/// (abort, failure, exhausted steps) still end the turn; a steer queued
+/// then applies to the next one. The text is appended to the session as a
+/// user message and a `steer_applied` event is emitted when it takes
+/// effect. The channel is lossless (unlike the runtime event bus, which
+/// discards under flood), so a steer can never be pushed out by noisy
+/// watcher updates.
 pub fn steer(runtime : @agent_runtime.AgentRuntime, text : String) -> Unit {
   runtime.queue_steer(text)
 }
@@ -228,16 +233,15 @@ pub async fn[X] run_turn_in_scope(
         }
     }
     let messages = session.chat_messages()
-    for step in 0..<max_steps {
+    steps~: for step in 0..<max_steps {
       // Steering first: a user's mid-turn redirection should precede the
       // runtime chatter the model reads alongside it.
-      for text in runtime.drain_steers() {
-        if !text.trim().is_empty() {
-          @xlog.info() <? { "event": "steer_applied", "content": text }
-          session = append_item(session, User(UserMessage(text)))
-          messages.push(ChatMessage(User, content=text))
-        }
-      }
+      session = apply_steer_texts(
+        pending_steers(runtime),
+        session,
+        messages,
+        append_item~,
+      )
       if runtime_update_message(runtime.drain_events()) is Some(update) {
         @xlog.info() <? { "event": "runtime_update", "content": update }
         session = append_item(session, Runtime(RuntimeNotice(update)))
@@ -272,15 +276,31 @@ pub async fn[X] run_turn_in_scope(
           { "event": "assistant_message", "content": response.content }
       }
       print_usage(response.usage)
-      if response.tool_calls.length() == 0 {
-        let next = append_item(session, Terminal(Finished(response.content)))
-        @xlog.info() <?
-          { "event": "agent_finished", "answer": response.content }
-        return next
-      }
       let reasoning_content = match response.reasoning_content {
         "" => None
         content => Some(content)
+      }
+      if response.tool_calls.length() == 0 {
+        let pending = pending_steers(runtime)
+        if pending.length() == 0 {
+          let next = append_item(session, Terminal(Finished(response.content)))
+          @xlog.info() <?
+            { "event": "agent_finished", "answer": response.content }
+          return next
+        }
+        // The model considers itself done, but the user redirected while the
+        // final call was in flight: user input wins over model-initiated
+        // completion. The would-be answer stays as an ordinary assistant
+        // message and the turn continues with the steers folded in.
+        messages.push(
+          ChatMessage(Assistant, content=response.content, reasoning_content?),
+        )
+        session = append_item(
+          session,
+          Assistant(AssistantMessage(response.content, reasoning_content?)),
+        )
+        session = apply_steer_texts(pending, session, messages, append_item~)
+        continue steps~
       }
       let assistant_message : @deepseek.ChatMessage = ChatMessage(
         Assistant,
@@ -299,7 +319,7 @@ pub async fn[X] run_turn_in_scope(
           ),
         ),
       )
-      for native_call in response.tool_calls {
+      for call_index, native_call in response.tool_calls {
         let tool_call = @agent_tool.AgentToolCall(native_call) catch {
           error => {
             @xlog.error() <?
@@ -339,9 +359,51 @@ pub async fn[X] run_turn_in_scope(
                 ),
               ),
             )
-            let next = append_item(session, Terminal(Finished(answer)))
-            @xlog.info() <? { "event": "agent_finished", "answer": answer }
-            return next
+            let pending = pending_steers(runtime)
+            if pending.length() == 0 {
+              let next = append_item(session, Terminal(Finished(answer)))
+              @xlog.info() <? { "event": "agent_finished", "answer": answer }
+              return next
+            }
+            // User input wins over the finish tool as well. Continuing the
+            // turn must keep the conversation API-valid: every call in the
+            // assistant's batch needs a result message, so the finish call's
+            // result and skipped notes for the unexecuted remainder are
+            // pushed before the steers.
+            messages.push(
+              ChatMessage(Tool(native_call.id), content="finished: \{answer}"),
+            )
+            for rest_index in (call_index + 1)..<response.tool_calls.length() {
+              let skipped = response.tool_calls[rest_index]
+              let note = "skipped: the user steered the turn before this call ran"
+              @xlog.info() <?
+                {
+                  "event": "tool_result",
+                  "tool_call_id": skipped.id,
+                  "tool_name": skipped.name,
+                  "is_error": true,
+                  "content": note,
+                }
+              messages.push(ChatMessage(Tool(skipped.id), content=note))
+              session = append_item(
+                session,
+                Tool(
+                  ToolResult(
+                    tool_call_id=skipped.id,
+                    tool_name=skipped.name,
+                    content=note,
+                    is_error=true,
+                  ),
+                ),
+              )
+            }
+            session = apply_steer_texts(
+              pending,
+              session,
+              messages,
+              append_item~,
+            )
+            continue steps~
           }
           Control(Abort(reason)) => {
             session = append_item(
@@ -409,6 +471,32 @@ pub async fn[X] run_turn_in_scope(
 ///|
 fn runtime_update_message(events : Array[@agent_runtime.AgentEvent]) -> String? {
   @moon_check.runtime_update_text(events)
+}
+
+///|
+/// Queued steering input worth applying: drained losslessly, blanks dropped.
+fn pending_steers(runtime : @agent_runtime.AgentRuntime) -> Array[String] {
+  [
+    for text in runtime.drain_steers() if !text.trim().is_empty() => text
+  ]
+}
+
+///|
+/// Fold steering texts into the conversation: each becomes a durable user
+/// message, a model-visible chat message, and a `steer_applied` event.
+async fn apply_steer_texts(
+  texts : Array[String],
+  session : @agent_session.Session,
+  messages : Array[@deepseek.ChatMessage],
+  append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
+) -> @agent_session.Session {
+  let mut current = session
+  for text in texts {
+    @xlog.info() <? { "event": "steer_applied", "content": text }
+    current = append_item(current, User(UserMessage(text)))
+    messages.push(ChatMessage(User, content=text))
+  }
+  current
 }
 
 ///|
