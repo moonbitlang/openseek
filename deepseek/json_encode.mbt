@@ -74,6 +74,7 @@ pub fn encode_chat_request(
   tools? : Array[ToolDefinition] = [],
   thinking? : ThinkingMode,
   reasoning_effort? : ReasoningEffort,
+  stream? : Bool = false,
   response_format? : ResponseFormat,
 ) -> Json {
   Json::object(
@@ -81,11 +82,16 @@ pub fn encode_chat_request(
       [
         ("model", Json::string(model.to_string())),
         ("messages", ([ for message in messages => message ] : Json)),
-        ("stream", Json::boolean(false)),
+        ("stream", Json::boolean(stream)),
         ..match response_format {
           Some(format) =>
             [("response_format", ({ "type": format.to_string() } : Json))]
           None => []
+        },
+        ..if stream {
+          [("stream_options", ({ "include_usage": true } : Json))]
+        } else {
+          []
         },
         ..if tools.length() > 0 {
           [("tools", ([ for tool in tools => tool ] : Json))]
