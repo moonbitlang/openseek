@@ -125,6 +125,9 @@ priv enum Msg {
   // transcript item to append. Commands run in the TUI and never reach the agent
   // engine.
   CommandResult(run_id~ : Int, @ui.TranscriptItem)
+  // A steer had no live turn to land in (the engine died an instant before
+  // Enter): surface the lost text so the user can resubmit it.
+  SteerDropped(String)
   Tick
 }
 
@@ -137,7 +140,7 @@ fn Msg::run_id(self : Msg) -> Int? {
     | AgentCancelled(run_id~)
     | AgentFailed(run_id~, _) => Some(run_id)
     CommandResult(run_id~, _) => Some(run_id)
-    UiInput(_) | Tick => None
+    UiInput(_) | SteerDropped(_) | Tick => None
   }
 }
 

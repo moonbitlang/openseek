@@ -117,23 +117,16 @@ async fn[G] EngineClient::start(
 }
 
 ///|
-/// Write one JSONL command line to the engine, starting it first when
-/// needed. A write failure means the engine just died: the client is marked
-/// dead for respawn and the error is reported against `run_id`.
-async fn[G] EngineClient::send(
+/// Write one JSONL command line to the live engine. Never spawns one:
+/// `prompt` owns engine startup, while mid-turn controls must not — a steer
+/// reaching a freshly spawned idle engine would become a phantom prompt. A
+/// write failure means the engine just died: the client is marked dead for
+/// respawn and the error is reported against `run_id`.
+async fn EngineClient::send(
   self : EngineClient,
-  group : @async.TaskGroup[G],
   run_id : Int,
   command : Json,
 ) -> Unit {
-  if self.live is None {
-    self.start(group) catch {
-      error => {
-        self.messages.put(AgentFailed(run_id~, error))
-        return
-      }
-    }
-  }
   guard self.live is Some(live) else {
     self.messages.put(
       AgentFailed(run_id~, Failure::Failure("engine is not running")),
@@ -171,32 +164,30 @@ async fn[G] EngineClient::prompt(
   }
   live.latest_run = run_id
   live.run_open = true
-  self.send(group, run_id, { "command": "prompt", "text": text })
+  self.send(run_id, { "command": "prompt", "text": text })
 }
 
 ///|
-async fn[G] EngineClient::steer(
-  self : EngineClient,
-  group : @async.TaskGroup[G],
-  text : String,
-) -> Unit {
-  let run_id = match self.live {
-    Some(live) => live.latest_run
-    None => 0
+/// Steer the running turn, or report the input as undeliverable when there
+/// is no live engine with an open run (e.g. the engine died an instant
+/// before the user pressed Enter). Steering must never spawn an engine: an
+/// idle serve process treats steer as a prompt, which would mutate the
+/// session behind the TUI's back under a run id nobody owns.
+async fn EngineClient::steer(self : EngineClient, text : String) -> Unit {
+  match self.live {
+    Some(live) if live.run_open =>
+      self.send(live.latest_run, { "command": "steer", "text": text })
+    _ => self.messages.put(SteerDropped(text))
   }
-  self.send(group, run_id, { "command": "steer", "text": text })
 }
 
 ///|
-async fn[G] EngineClient::cancel_turn(
-  self : EngineClient,
-  group : @async.TaskGroup[G],
-) -> Unit {
-  let run_id = match self.live {
-    Some(live) => live.latest_run
-    None => 0
+/// Cancel the running turn. With no live engine or open run this is a
+/// silent no-op — the turn the user wanted dead is already gone.
+async fn EngineClient::cancel_turn(self : EngineClient) -> Unit {
+  if self.live is Some(live) && live.run_open {
+    self.send(live.latest_run, { "command": "cancel" })
   }
-  self.send(group, run_id, { "command": "cancel" })
 }
 
 ///|

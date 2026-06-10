@@ -384,6 +384,17 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
       cmds.push(AppendItem(item))
       state.finish_run()
     }
+    // The steer never reached a turn; the text would otherwise vanish
+    // silently. Run state is untouched — the run's own death report (or
+    // terminal event) settles it.
+    SteerDropped(text) =>
+      cmds.push(
+        AppendItem(
+          Error(
+            "Input was not delivered (the task ended as you sent it) — submit it again: \{text}",
+          ),
+        ),
+      )
     // No state change: Tick is a 1s heartbeat that just keeps the message loop
     // turning so the trailing refresh_ui re-runs and the elapsed-time activity
     // line ("Working (12s)") keeps advancing during quiet stretches.
@@ -433,12 +444,12 @@ async fn[G] run_message_loop(
               run_shell_command(run_id, command, messages)
             },
           )
-        SteerAgent(text) => engine.steer(group, text)
+        SteerAgent(text) => engine.steer(text)
         CancelAgent =>
           match running_task {
             // A local shell command in flight: cancel its task directly.
             Some(task) => task.cancel()
-            None => engine.cancel_turn(group)
+            None => engine.cancel_turn()
           }
         KillEngine => engine.kill()
         Quit => {
