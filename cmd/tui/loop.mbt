@@ -322,6 +322,17 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
         Steer(input) =>
           if state.run is Idle {
             state.queued.push(input)
+          } else if state.run_is_command {
+            // The active run is a local shell command: there is no engine
+            // turn to steer, and steering the idle engine would start a
+            // phantom turn behind the command's back.
+            cmds.push(
+              AppendItem(
+                Error(
+                  "A local shell command is running and cannot be steered. Press Tab to queue this input.",
+                ),
+              ),
+            )
           } else {
             match input {
               Prompt(text) => cmds.push(SteerAgent(text))
@@ -348,7 +359,15 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
               state.run = Interrupting(started_ms)
               cmds.push(CancelAgent)
             }
-            Interrupting(_) => cmds.push(KillEngine)
+            Interrupting(_) =>
+              // Escalation only makes sense for an engine turn; a stuck
+              // local shell command has nothing harder than another cancel,
+              // and killing the engine would punish an innocent bystander.
+              if state.run_is_command {
+                cmds.push(CancelAgent)
+              } else {
+                cmds.push(KillEngine)
+              }
           }
         Quit => cmds.push(Quit)
       }
@@ -380,7 +399,10 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
     let run_id = state.start_run(@async.now())
     match input {
       Prompt(text) => cmds.push(StartAgent(run_id~, text))
-      Command(command) => cmds.push(RunCommand(run_id~, command))
+      Command(command) => {
+        state.run_is_command = true
+        cmds.push(RunCommand(run_id~, command))
+      }
     }
   }
   cmds

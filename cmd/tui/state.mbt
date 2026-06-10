@@ -36,6 +36,10 @@ priv struct State {
   // them; a message whose id is not the active run's is stale (it came from a
   // task that has since been superseded) and is dropped. See `State::owns_run`.
   mut run_id : Int
+  // Whether the active run is a local `!` shell command rather than an
+  // engine turn. Steering and interrupt escalation must not touch the
+  // persistent engine while the work in flight is a local task.
+  mut run_is_command : Bool
   // Final assistant text for the current step, used to avoid appending the same
   // answer again when `AgentFinished` follows `AssistantMessage`.
   mut step_response : String?
@@ -61,6 +65,7 @@ fn State::new(config : AppConfig) -> State {
     queued: [],
     run: Idle,
     run_id: 0,
+    run_is_command: false,
     step_response: None,
     streaming_response: None,
     streaming_reasoning: None,
@@ -99,6 +104,7 @@ fn State::owns_run(self : State, id : Int) -> Bool {
 /// `moon_check running` segment in the status bar while the TUI sits idle.
 fn State::finish_run(self : State) -> Unit {
   self.run = Idle
+  self.run_is_command = false
   self.step_response = None
   self.streaming_response = None
   self.streaming_reasoning = None

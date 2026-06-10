@@ -231,6 +231,34 @@ test "steering a running agent sends a steer command" {
 }
 
 ///|
+test "a running shell command is never steered and never kills the engine" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Command("sleep 5"))))
+  assert_true(state.run is Running(_))
+  assert_true(state.run_is_command)
+
+  // Steering a local command run errors instead of poking the idle engine.
+  let cmds = update(state, UiInput(Steer(Prompt("change of plan"))))
+  assert_eq(error_item_count(cmds), 1)
+  assert_true(cmds.iter().all(cmd => !(cmd is SteerAgent(_))))
+
+  // Interrupt escalation stays on the local task: a second Ctrl-C cancels
+  // again rather than killing the bystander engine process.
+  let _ = update(state, UiInput(Interrupt))
+  assert_true(state.run is Interrupting(_))
+  let cmds = update(state, UiInput(Interrupt))
+  assert_true(cmds.iter().any(cmd => cmd is CancelAgent))
+  assert_true(cmds.iter().all(cmd => !(cmd is KillEngine)))
+
+  // Finishing the command clears the flag.
+  let _ = update(
+    state,
+    CommandResult(run_id=state.run_id, Error("interrupted")),
+  )
+  assert_false(state.run_is_command)
+}
+
+///|
 test "a steer_applied event echoes the input into the transcript" {
   let state = drain_test_state()
   let _ = update(state, UiInput(Steer(Prompt("do it"))))

@@ -4,6 +4,11 @@
 priv struct EngineProcess {
   writer : @process.WriteToProcess
   proc : @process.Process
+  // Run bookkeeping is owned by the process whose stream produced it: a
+  // reader at EOF must report the run that was open on *its* engine, never
+  // one a respawned successor has since started.
+  mut latest_run : Int
+  mut run_open : Bool
 }
 
 ///|
@@ -27,11 +32,6 @@ priv struct EngineClient {
   config : AppConfig
   messages : @async.Queue[Msg]
   mut live : EngineProcess?
-  mut latest_run : Int
-  // Whether a prompt has been sent whose terminal event has not come back.
-  // Owned here rather than inferred from the stream so an engine that dies
-  // before emitting anything still gets its run reported as failed.
-  mut run_open : Bool
 }
 
 ///|
@@ -39,7 +39,7 @@ fn EngineClient::EngineClient(
   config : AppConfig,
   messages : @async.Queue[Msg],
 ) -> EngineClient {
-  { config, messages, live: None, latest_run: 0, run_open: false }
+  { config, messages, live: None }
 }
 
 ///|
@@ -69,7 +69,8 @@ async fn[G] EngineClient::start(
     stderr=child_stderr,
     no_wait=true,
   )
-  self.live = Some({ writer, proc })
+  let engine : EngineProcess = { writer, proc, latest_run: 0, run_open: false }
+  self.live = Some(engine)
   group.spawn_bg(no_wait=true) <| () => {
     let stderr_task = group.spawn(no_wait=true) <| () => {
       drain_stderr_capped(stderr_reader)
@@ -77,9 +78,9 @@ async fn[G] EngineClient::start(
     @jsonl.each(reader, json => {
       if @event.decode_event(json) is Some(event) {
         if is_terminal_event(event) {
-          self.run_open = false
+          engine.run_open = false
         }
-        self.messages.try_put(AgentProgress(run_id=self.latest_run, event))
+        self.messages.try_put(AgentProgress(run_id=engine.latest_run, event))
         |> ignore
       }
     }) catch {
@@ -90,18 +91,24 @@ async fn[G] EngineClient::start(
       _ => proc.cancel()
     }
     reader.close()
-    self.live = None
+    // A respawn may already have replaced this engine (e.g. after a failed
+    // write); only clear the slot if it is still ours.
+    if self.live is Some(current) && physical_equal(current, engine) {
+      self.live = None
+    }
     let code = proc.wait()
-    // EOF with a run still open means the engine died mid-turn: close that
+    // EOF with a run still open means this engine died mid-turn: close that
     // run with its only available diagnostics. A terminal event followed by
-    // a clean exit (TUI shutdown, graceful EOF) reports nothing.
-    if self.run_open {
+    // a clean exit (TUI shutdown, graceful EOF) reports nothing — and a
+    // successor's runs are out of reach by construction, since this reader
+    // only ever sees its own process's bookkeeping.
+    if engine.run_open {
       let diagnostics = stderr_task.wait().trim()
       let detail = if diagnostics.is_empty() { "" } else { ":\n\{diagnostics}" }
-      self.run_open = false
+      engine.run_open = false
       self.messages.put(
         AgentProgress(
-          run_id=self.latest_run,
+          run_id=engine.latest_run,
           AgentError("engine exited (code \{code}) without a result\{detail}"),
         ),
       )
@@ -148,8 +155,22 @@ async fn[G] EngineClient::prompt(
   run_id : Int,
   text : String,
 ) -> Unit {
-  self.latest_run = run_id
-  self.run_open = true
+  if self.live is None {
+    self.start(group) catch {
+      error => {
+        self.messages.put(AgentFailed(run_id~, error))
+        return
+      }
+    }
+  }
+  guard self.live is Some(live) else {
+    self.messages.put(
+      AgentFailed(run_id~, Failure::Failure("engine is not running")),
+    )
+    return
+  }
+  live.latest_run = run_id
+  live.run_open = true
   self.send(group, run_id, { "command": "prompt", "text": text })
 }
 
@@ -159,7 +180,11 @@ async fn[G] EngineClient::steer(
   group : @async.TaskGroup[G],
   text : String,
 ) -> Unit {
-  self.send(group, self.latest_run, { "command": "steer", "text": text })
+  let run_id = match self.live {
+    Some(live) => live.latest_run
+    None => 0
+  }
+  self.send(group, run_id, { "command": "steer", "text": text })
 }
 
 ///|
@@ -167,7 +192,11 @@ async fn[G] EngineClient::cancel_turn(
   self : EngineClient,
   group : @async.TaskGroup[G],
 ) -> Unit {
-  self.send(group, self.latest_run, { "command": "cancel" })
+  let run_id = match self.live {
+    Some(live) => live.latest_run
+    None => 0
+  }
+  self.send(group, run_id, { "command": "cancel" })
 }
 
 ///|
