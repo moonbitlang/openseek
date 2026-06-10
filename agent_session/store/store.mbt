@@ -541,35 +541,72 @@ pub fn SessionListing::first_prompt(self : SessionListing) -> String {
 }
 
 ///|
+/// Lines scanned from the front of an event log while looking for the first
+/// user prompt. The agent appends the user turn as a session's first event,
+/// so this is normally one line; the cap keeps a pathological log from
+/// turning a listing into a full read.
+let first_prompt_scan_limit : Int = 50
+
+///|
+/// The first user prompt recorded in the event log at `path`, or `""` when
+/// none is found within the scan limit (or the log cannot be read). Streams
+/// line by line instead of loading the session: a listing only needs a
+/// label, and long or compacted histories should not make `--session-list`
+/// deserialize every event ever appended.
+async fn first_prompt_in_log(path : String) -> String {
+  let file = @fs.open(path, mode=ReadOnly) catch { _ => return "" }
+  defer file.close()
+  for _ in 0..<first_prompt_scan_limit {
+    let next = file.read_until("\n") catch { _ => return "" }
+    guard next is Some(line) else { break }
+    if line.trim().is_empty() {
+      continue
+    }
+    let event : @agent_session.SessionEvent = @json.from_json(@json.parse(line)) catch {
+      _ => return ""
+    }
+    if event.item() is User(message) {
+      return message.content()
+    }
+  }
+  ""
+}
+
+///|
 /// List sessions with the metadata a picker shows, most recently active
-/// first. Sessions that cannot be loaded still appear — with no timestamp
-/// and an empty prompt, ordered after the readable ones — because a listing
-/// is where a user finds the broken directory they may want to clean up.
+/// first. Rows reflect what is on disk without validating whole histories
+/// (see `first_prompt_in_log`); a directory whose files cannot even be
+/// stat-ed still appears — with no timestamp, ordered last — because a
+/// listing is where a user finds the husk they may want to clean up.
+/// Loadability is `latest()`'s gate, not the listing's.
 pub async fn SessionStore::listings(
   self : SessionStore,
 ) -> Array[SessionListing] {
   let stamped : Array[(SessionListing, Int64, Int)] = []
   let unreadable : Array[SessionListing] = []
   for id in self.list() {
-    let session = self.load(id) catch {
-      _ => {
-        unreadable.push({ id, last_active_unix_seconds: None, first_prompt: "" })
-        continue
-      }
+    let log_path = self.event_log_path(id) catch { _ => continue }
+    let stamp = @fs.mtime(log_path) catch {
+      _ =>
+        @fs.mtime(self.header_path(id) catch { _ => continue }) catch {
+          _ => {
+            unreadable.push({
+              id,
+              last_active_unix_seconds: None,
+              first_prompt: "",
+            })
+            continue
+          }
+        }
     }
-    let (seconds, nanoseconds) = @fs.mtime(self.event_log_path(id)) catch {
-      _ => @fs.mtime(self.header_path(id)) catch { _ => (0, 0) }
-    }
-    let mut first_prompt = ""
-    for event in session.events() {
-      if event.item() is User(message) {
-        first_prompt = message.content()
-        break
-      }
-    }
+    let (seconds, nanoseconds) = stamp
     stamped.push(
       (
-        { id, last_active_unix_seconds: Some(seconds), first_prompt },
+        {
+          id,
+          last_active_unix_seconds: Some(seconds),
+          first_prompt: first_prompt_in_log(log_path),
+        },
         seconds,
         nanoseconds,
       ),

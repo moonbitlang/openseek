@@ -81,7 +81,7 @@ async test "store picks the most recently active session as latest" {
 }
 
 ///|
-async test "listings order by recency and keep unreadable sessions visible" {
+async test "listings order by recency and keep husk directories visible" {
   let store = new_store()
   let older : @agent_session.Session = Session(
     SessionId("older"),
@@ -90,20 +90,19 @@ async test "listings order by recency and keep unreadable sessions visible" {
   store.create(older.append(User(UserMessage("  first\n prompt  here "))))
   @async.sleep(50)
   store.create(Session(SessionId("newer"), system_prompt="system"))
-  @async.sleep(50)
-  store.create(Session(SessionId("torn"), system_prompt="system"))
-  @fs.remove(store.root() + "/sessions/torn/session.json")
+  // A directory with neither header nor event log — e.g. an interrupted
+  // creation — has no stamp to order by but must stay discoverable.
+  @fs.mkdir(store.root() + "/sessions/husk", recursive=true)
   let listings = store.listings()
   assert_eq(listings.length(), 3)
-  // Readable sessions newest-first; the unreadable one is listed last with
-  // no timestamp so it stays discoverable for cleanup.
   assert_eq(listings[0].id().value(), "newer")
   assert_true(listings[0].last_active_unix_seconds() is Some(_))
   assert_eq(listings[0].first_prompt(), "")
   assert_eq(listings[1].id().value(), "older")
   assert_eq(listings[1].first_prompt(), "  first\n prompt  here ")
-  assert_eq(listings[2].id().value(), "torn")
+  assert_eq(listings[2].id().value(), "husk")
   assert_true(listings[2].last_active_unix_seconds() is None)
+  assert_eq(listings[2].first_prompt(), "")
   @fs.rmdir(store.root(), recursive=true)
 }
 
