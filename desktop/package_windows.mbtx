@@ -187,9 +187,17 @@ async fn copy_file(source : String, destination : String) -> Unit raise {
 }
 
 ///|
+async fn set_windows_gui_subsystem(path : String) -> Unit raise {
+  run_powershell(
+    "$path = '\{path}'; $resolved = (Resolve-Path -LiteralPath $path).Path; $bytes = [System.IO.File]::ReadAllBytes($resolved); $pe = [BitConverter]::ToInt32($bytes, 0x3c); $offset = $pe + 4 + 20 + 68; $subsystem = [BitConverter]::GetBytes([UInt16]2); [Array]::Copy($subsystem, 0, $bytes, $offset, 2); [System.IO.File]::WriteAllBytes($resolved, $bytes)",
+  )
+}
+
+///|
 async fn copy_bundle_files() -> Unit raise {
   let native_binary = desktop_path(NativeBinary)
   let engine_binary = repo_path(EngineBinary)
+  let bundled_engine = desktop_path(BundleDir + "/openseek.exe")
   if !@fs.path_exists(native_binary) {
     raise PackageError("native binary not found: \{native_binary}")
   }
@@ -202,7 +210,8 @@ async fn copy_bundle_files() -> Unit raise {
     )
   }
   copy_file(native_binary, desktop_path(BundleDir + "/openseek-desktop.exe"))
-  copy_file(engine_binary, desktop_path(BundleDir + "/openseek.exe"))
+  copy_file(engine_binary, bundled_engine)
+  set_windows_gui_subsystem(bundled_engine)
   copy_file(desktop_path("index.html"), desktop_path(AppAssetDir + "/index.html"))
   copy_file(
     desktop_path("frontend.js"),
