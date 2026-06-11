@@ -74,6 +74,14 @@ struct ErrorPayload {
 } derive(ToJson)
 
 ///|
+/// A host-side failure with a user-facing message. Ops raise it; the IPC
+/// boundary (`to_op_result`) unwraps the message into the `Err` the webview
+/// displays.
+priv suberror HostError {
+  HostError(String)
+}
+
+///|
 /// Terminal state of a run. `wire()` is the string sent to the frontend; the
 /// values are part of the IPC contract and must not change casually.
 priv enum RunStatus {
@@ -187,8 +195,9 @@ priv struct ServeEngine {
 ///|
 priv enum PumpCommand {
   // Replace the conversation's engine (if any) with one spawned for this
-  // config; the queue carries the result back to the requesting `start` op.
-  SpawnEngine(RunConfig, @async.Queue[Result[Unit, String]])
+  // config; the queue carries the spawn failure — or None for success —
+  // back to the requesting `start` op.
+  SpawnEngine(RunConfig, @async.Queue[HostError?])
 }
 
 ///|
@@ -263,16 +272,12 @@ fn open_run_engine(manager : EngineManager, run_id? : Int) -> ServeEngine? {
 
 ///|
 fn non_empty(value : String?) -> String? {
-  match value {
-    Some(value) => {
-      let value = value.trim().to_owned()
-      if value.is_empty() {
-        None
-      } else {
-        Some(value)
-      }
-    }
-    None => None
+  guard value is Some(value) else { return None }
+  let value = value.trim().to_owned()
+  if value.is_empty() {
+    None
+  } else {
+    Some(value)
   }
 }
 
@@ -282,97 +287,80 @@ fn option_or_env(
   env_name : String,
   fallback : String,
 ) -> String {
-  match non_empty(value) {
-    Some(value) => value
-    None =>
-      match non_empty(@env.get_env_var(env_name)) {
-        Some(value) => value
-        None => fallback
-      }
+  if non_empty(value) is Some(value) {
+    return value
   }
+  if non_empty(@env.get_env_var(env_name)) is Some(value) {
+    return value
+  }
+  fallback
 }
 
 ///|
 fn required_secret(
   value : String?,
   env_name : String,
-) -> Result[String, String] {
-  match non_empty(value) {
-    Some(value) => Ok(value)
-    None =>
-      match non_empty(@env.get_env_var(env_name)) {
-        Some(value) => Ok(value)
-        None =>
-          Err("DeepSeek API key is required; pass api_key or set " + env_name)
-      }
+) -> String raise HostError {
+  if non_empty(value) is Some(value) {
+    return value
   }
+  if non_empty(@env.get_env_var(env_name)) is Some(value) {
+    return value
+  }
+  raise HostError(
+    "DeepSeek API key is required; pass api_key or set " + env_name,
+  )
 }
 
 ///|
-fn configured_max_steps(value : Int?) -> Result[Int, String] {
-  let parsed = match value {
-    Some(value) => value
-    None =>
-      match non_empty(@env.get_env_var("OPENSEEK_MAX_STEPS")) {
-        Some(text) =>
-          @string.parse_int(text) catch {
-            _ => return Err("OPENSEEK_MAX_STEPS must be a positive integer")
-          }
-        None => DefaultMaxSteps
-      }
-  }
-  if parsed > 0 {
-    Ok(parsed)
+fn configured_max_steps(value : Int?) -> Int raise HostError {
+  let parsed = if value is Some(value) {
+    value
+  } else if non_empty(@env.get_env_var("OPENSEEK_MAX_STEPS")) is Some(text) {
+    @string.parse_int(text) catch {
+      _ => raise HostError("OPENSEEK_MAX_STEPS must be a positive integer")
+    }
   } else {
-    Err("max_steps must be a positive integer")
+    DefaultMaxSteps
   }
+  guard parsed > 0 else {
+    raise HostError("max_steps must be a positive integer")
+  }
+  parsed
 }
 
 ///|
 fn run_config(
   payload : StartPayload,
   engine : String,
-) -> Result[RunConfig, String] {
+) -> RunConfig raise HostError {
   let task = payload.task.trim().to_owned()
-  guard !task.is_empty() else { return Err("task must not be empty") }
+  guard !task.is_empty() else { raise HostError("task must not be empty") }
   let api_url = match non_empty(payload.api_url) {
     Some(url) => Some(url)
     None => non_empty(@env.get_env_var("OPENSEEK_API_URL"))
   }
-  let api_key = match required_secret(payload.api_key, "DEEPSEEK") {
-    Ok(value) => value
-    // Only the official endpoint strictly needs a key; a custom endpoint
-    // decides for itself, so a missing key becomes a placeholder there.
-    Err(error) =>
-      if api_url is Some(_) {
-        PlaceholderApiKey
-      } else {
-        return Err(error)
-      }
-  }
-  let max_steps = match configured_max_steps(payload.max_steps) {
-    Ok(value) => value
-    Err(error) => return Err(error)
+  // Only the official endpoint strictly needs a key; a custom endpoint
+  // decides for itself, so a missing key becomes a placeholder there.
+  let api_key = required_secret(payload.api_key, "DEEPSEEK") catch {
+    error => if api_url is Some(_) { PlaceholderApiKey } else { raise error }
   }
   let session = non_empty(payload.session)
-  let cwd = match resolved_run_cwd(payload.cwd, session) {
-    Ok(value) => value
-    Err(error) => return Err(error)
-  }
-  Ok({
+  {
     task,
     api_key,
     api_url,
     model: option_or_env(payload.model, "DEEPSEEK_MODEL", DefaultModel),
-    max_steps,
+    max_steps: configured_max_steps(payload.max_steps),
     engine,
-    cwd,
+    cwd: resolved_run_cwd(payload.cwd, session),
     session,
-    session_root: match session {
-      Some(_) => resolved_session_root(payload.session_root)
-      None => None
+    session_root: if session is Some(_) {
+      resolved_session_root(payload.session_root)
+    } else {
+      None
     },
-  })
+  }
 }
 
 ///|
@@ -388,27 +376,19 @@ fn run_config(
 fn resolved_run_cwd(
   payload_cwd : String?,
   session : String?,
-) -> Result[String?, String] {
-  match non_empty(payload_cwd) {
-    Some(cwd) => {
-      let cwd = expand_home(cwd)
-      let is_directory = @mbfs.is_dir(cwd) catch { _ => false }
-      if is_directory {
-        Ok(Some(cwd))
-      } else {
-        Err("working directory does not exist: " + cwd)
-      }
+) -> String? raise HostError {
+  if non_empty(payload_cwd) is Some(cwd) {
+    let cwd = expand_home(cwd)
+    let is_directory = @mbfs.is_dir(cwd) catch { _ => false }
+    guard is_directory else {
+      raise HostError("working directory does not exist: " + cwd)
     }
-    None =>
-      match session {
-        Some(session) =>
-          match session_workspace_dir(session) {
-            Some(dir) => Ok(Some(dir))
-            None => Ok(home_dir())
-          }
-        None => Ok(home_dir())
-      }
+    return Some(cwd)
   }
+  if session is Some(session) && session_workspace_dir(session) is Some(dir) {
+    return Some(dir)
+  }
+  home_dir()
 }
 
 ///|
@@ -488,25 +468,22 @@ fn xdg_documents_dir(home : String) -> String? {
 
 ///|
 fn expand_home(cwd : String) -> String {
-  match home_dir() {
-    Some(home) =>
-      if cwd == "~" {
-        home
-      } else if cwd.has_prefix("~/") {
-        home + cwd[1:].to_owned()
-      } else {
-        cwd
-      }
-    None => cwd
+  guard home_dir() is Some(home) else { return cwd }
+  if cwd == "~" {
+    home
+  } else if cwd.has_prefix("~/") {
+    home + cwd[1:].to_owned()
+  } else {
+    cwd
   }
 }
 
 ///|
 fn home_dir() -> String? {
-  match non_empty(@env.get_env_var("HOME")) {
-    Some(home) => Some(home)
-    None => non_empty(@env.get_env_var("USERPROFILE"))
+  if non_empty(@env.get_env_var("HOME")) is Some(home) {
+    return Some(home)
   }
+  non_empty(@env.get_env_var("USERPROFILE"))
 }
 
 ///|
@@ -568,25 +545,19 @@ fn remove_stale_framework_configs(dir : String) -> Unit {
 /// matters because a packaged app can run with `/` as its working directory,
 /// where the engine's relative `.openseek` default could never be created.
 fn resolved_session_root(payload_root : String?) -> String? {
-  match non_empty(payload_root) {
-    Some(root) => Some(root)
-    None =>
-      match non_empty(@env.get_env_var("OPENSEEK_SESSION_ROOT")) {
-        Some(root) => Some(root)
-        None => home_session_root()
-      }
+  if non_empty(payload_root) is Some(root) {
+    return Some(root)
   }
+  if non_empty(@env.get_env_var("OPENSEEK_SESSION_ROOT")) is Some(root) {
+    return Some(root)
+  }
+  home_session_root()
 }
 
 ///|
 fn home_session_root() -> String? {
-  match home_dir() {
-    Some(home) => {
-      let home_path : @mbpath.Path = home
-      Some(home_path.join(".openseek").normalize().to_string())
-    }
-    None => None
-  }
+  guard home_dir() is Some(home) else { return None }
+  Some((home : @mbpath.Path).join(".openseek").normalize().to_string())
 }
 
 ///|
@@ -632,10 +603,10 @@ fn bundled_engine_path(framework_command : String) -> String? {
 
 ///|
 fn engine_command(framework_command : String) -> String {
-  match bundled_engine_path(framework_command) {
-    Some(path) => path
-    None => option_or_env(None, "OPENSEEK_ENGINE", DefaultEngine)
+  if bundled_engine_path(framework_command) is Some(path) {
+    return path
   }
+  non_empty(@env.get_env_var("OPENSEEK_ENGINE")).unwrap_or(DefaultEngine)
 }
 
 ///|
@@ -732,8 +703,7 @@ async fn read_engine_stdout(
   messages : @async.Queue[StreamMessage],
 ) -> Unit {
   @jsonl.each(reader, json => ignore(messages.try_put(StreamEvent(json)))) catch {
-    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
-      raise error
+    error if @async.is_being_cancelled() => raise error
     _ => {
       messages.put(StreamReaderFailed("engine wrote malformed JSONL"))
       process.cancel()
@@ -801,9 +771,9 @@ fn engine_fingerprint(config : RunConfig) -> String {
 async fn run_engine_pump(
   context : @app.AppCommandExtensionContext,
   manager : EngineManager,
-) -> Result[PumpReply, String] {
-  if manager.pump_running {
-    return Err("engine host is already connected")
+) -> PumpReply {
+  guard !manager.pump_running else {
+    raise HostError("engine host is already connected")
   }
   fn reset() -> Unit {
     manager.pump_running = false
@@ -825,19 +795,18 @@ async fn run_engine_pump(
             manager.engines.remove(session_key(config))
           }
           start_serve_engine(context, group, manager, config) catch {
-            error if @async.is_being_cancelled() ||
-              @async.is_cancellation_error(error) => raise error
+            error if @async.is_being_cancelled() => raise error
             error => {
-              ack.put(Err("failed to start engine: \{error}"))
+              ack.put(Some(HostError("failed to start engine: \{error}")))
               continue
             }
           }
-          ack.put(Ok(()))
+          ack.put(None)
         }
       }
     }
   })
-  Ok({ disconnected: true })
+  { disconnected: true }
 }
 
 ///|
@@ -895,6 +864,7 @@ async fn[G] start_serve_engine(
   let messages : @async.Queue[StreamMessage] = Queue(kind=Unbounded)
   let stderr_task = group.spawn(no_wait=true) <| () => {
     stderr_reader.read_all().text() catch {
+      error if @async.is_being_cancelled() => raise error
       _ => ""
     }
   }
@@ -991,22 +961,19 @@ async fn start_run(
   manager : EngineManager,
   engine : String,
   payload : StartPayload,
-) -> Result[StartReply, String] {
+) -> StartReply {
   guard manager.pump_running else {
-    return Err("engine host is not connected; reload the app")
+    raise HostError("engine host is not connected; reload the app")
   }
-  let config = match run_config(payload, engine) {
-    Ok(config) => config
-    Err(error) => return Err(error)
-  }
+  let config = run_config(payload, engine)
   let key = session_key(config)
   if manager.engines.get(key) is Some(live) && live.run_open {
-    return Err(
+    raise HostError(
       "OpenSeek run \{live.latest_run} is still active in this conversation",
     )
   }
   if manager.starts_in_flight.contains(key) {
-    return Err("an OpenSeek run is already starting for this conversation")
+    raise HostError("an OpenSeek run is already starting for this conversation")
   }
   fn clear_start_flag() -> Unit {
     manager.starts_in_flight.remove(key)
@@ -1016,9 +983,9 @@ async fn start_run(
   defer clear_start_flag()
   if config.cwd is Some(cwd) {
     ensure_run_cwd(cwd) catch {
-      error if @async.is_being_cancelled() ||
-        @async.is_cancellation_error(error) => raise error
-      error => return Err("failed to create working directory \{cwd}: \{error}")
+      error if @async.is_being_cancelled() => raise error
+      error =>
+        raise HostError("failed to create working directory \{cwd}: \{error}")
     }
   }
   let need_spawn = if manager.engines.get(key) is Some(live) {
@@ -1027,15 +994,14 @@ async fn start_run(
     true
   }
   if need_spawn {
-    let ack : @async.Queue[Result[Unit, String]] = Queue(kind=Unbounded)
+    let ack : @async.Queue[HostError?] = Queue(kind=Unbounded)
     manager.commands.put(SpawnEngine(config, ack))
-    match ack.get() {
-      Ok(_) => ()
-      Err(error) => return Err(error)
+    if ack.get() is Some(error) {
+      raise error
     }
   }
   guard manager.engines.get(key) is Some(live) else {
-    return Err("engine failed to start")
+    raise HostError("engine failed to start")
   }
   let run_id = manager.next_run_id
   manager.next_run_id = manager.next_run_id + 1
@@ -1057,8 +1023,7 @@ async fn start_run(
   )
   let command : Json = { "command": "prompt", "text": config.task }
   live.writer.write(command.stringify() + "\n") catch {
-    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
-      raise error
+    error if @async.is_being_cancelled() => raise error
     error => {
       // The engine died between turns: close the run and drop the handle so
       // the next prompt respawns on the same durable session.
@@ -1067,12 +1032,13 @@ async fn start_run(
         physical_equal(current, live) {
         manager.engines.remove(key)
       }
-      emit_error(context, "engine write failed: \{error}", run_id~)
+      let message = "engine write failed: \{error}"
+      emit_error(context, message, run_id~)
       emit_finished(context, run_id, Failed)
-      return Err("engine write failed: \{error}")
+      raise HostError(message)
     }
   }
-  Ok({ run_id, status: "accepted", exit_code: 0 })
+  { run_id, status: "accepted", exit_code: 0 }
 }
 
 ///|
@@ -1106,8 +1072,7 @@ async fn cancel_run(
   live.cancel_requested = true
   let command : Json = { "command": "cancel" }
   live.writer.write(command.stringify() + "\n") catch {
-    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
-      raise error
+    error if @async.is_being_cancelled() => raise error
     // The engine just died; its reader task closes the run.
     _ => ()
   }
@@ -1136,8 +1101,7 @@ async fn steer_run(
   }
   let command : Json = { "command": "steer", "text": payload.text }
   live.writer.write(command.stringify() + "\n") catch {
-    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
-      raise error
+    error if @async.is_being_cancelled() => raise error
     // The engine just died; its reader task closes the run. The steer
     // never reached it, so report that rather than pretend.
     _ => return { steered: false, run_id: Some(live.latest_run) }
@@ -1149,10 +1113,7 @@ async fn steer_run(
 /// Run the bundled engine with `args` and return its stdout. A non-zero exit
 /// is reported through stderr's content so the frontend sees the engine's own
 /// message rather than a bare exit code when one is available.
-async fn engine_stdout(
-  engine : String,
-  args : Array[String],
-) -> Result[String, String] {
+async fn engine_stdout(engine : String, args : Array[String]) -> String {
   let child_stdin = prepare_engine_stdin(engine)
   let (code, stdout, stderr) = @process.collect_output(
     engine,
@@ -1160,13 +1121,12 @@ async fn engine_stdout(
     inherit_env=true,
     stdin=child_stdin,
   ) catch {
-    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
-      raise error
-    error => return Err("failed to run engine: \{error}")
+    error if @async.is_being_cancelled() => raise error
+    error => raise HostError("failed to run engine: \{error}")
   }
   if code != 0 {
     let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
-    return Err(
+    raise HostError(
       if detail.is_empty() {
         "engine exited with code \{code}"
       } else {
@@ -1174,49 +1134,66 @@ async fn engine_stdout(
       },
     )
   }
-  Ok(stdout.text() catch { _ => return Err("engine wrote malformed output") })
+  stdout.text() catch {
+    _ => raise HostError("engine wrote malformed output")
+  }
 }
 
 ///|
-async fn list_sessions(engine : String) -> Result[SessionsReply, String] {
+async fn list_sessions(engine : String) -> SessionsReply {
   guard resolved_session_root(None) is Some(root) else {
-    return Err("cannot determine a session root; set OPENSEEK_SESSION_ROOT")
+    raise HostError(
+      "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
+    )
   }
-  let output = match
-    engine_stdout(engine, [
-      "--session-root", root, "--session-list", "--format", "json",
-    ]) {
-    Ok(output) => output
-    Err(error) => return Err("session list failed: " + error)
+  let output = engine_stdout(engine, [
+    "--session-root", root, "--session-list", "--format", "json",
+  ]) catch {
+    HostError(detail) => raise HostError("session list failed: " + detail)
+    error => raise error
   }
   let sessions = @json.parse(output) catch {
-    _ => return Err("engine returned a malformed session list")
+    _ => raise HostError("engine returned a malformed session list")
   }
-  Ok({ sessions, session_root: root })
+  { sessions, session_root: root }
 }
 
 ///|
 async fn load_session(
   engine : String,
   payload : LoadSessionPayload,
-) -> Result[LoadSessionReply, String] {
-  guard non_empty(Some(payload.session)) is Some(session) else {
-    return Err("session id must not be empty")
+) -> LoadSessionReply {
+  let session = payload.session.trim().to_owned()
+  guard !session.is_empty() else {
+    raise HostError("session id must not be empty")
   }
   guard resolved_session_root(None) is Some(root) else {
-    return Err("cannot determine a session root; set OPENSEEK_SESSION_ROOT")
+    raise HostError(
+      "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
+    )
   }
-  let output = match
-    engine_stdout(engine, [
-      "--session-root", root, "--session-show", "--session", session,
-    ]) {
-    Ok(output) => output
-    Err(error) => return Err("session load failed: " + error)
+  let output = engine_stdout(engine, [
+    "--session-root", root, "--session-show", "--session", session,
+  ]) catch {
+    HostError(detail) => raise HostError("session load failed: " + detail)
+    error => raise error
   }
   let json = @json.parse(output) catch {
-    _ => return Err("engine returned a malformed session")
+    _ => raise HostError("engine returned a malformed session")
   }
-  Ok({ session: json })
+  { session: json }
+}
+
+///|
+/// Adapt a raising op body to the `Result` the lepus IPC boundary expects: a
+/// `HostError` unwraps to the message the webview displays; any other error
+/// is rendered as-is, and cancellation keeps propagating.
+async fn[Reply] to_op_result(body : async () -> Reply) -> Result[Reply, String] {
+  Ok(body()) catch {
+    error if @async.is_being_cancelled() => raise error
+    HostError(message) => Err(message)
+    error => Err(error.to_string())
+  }
 }
 
 ///|
@@ -1237,10 +1214,10 @@ fn openseek_extension(
     ],
     fn(context) {
       context.op_async_result("connect", async fn(_payload : Json) {
-        run_engine_pump(context, manager)
+        to_op_result(async fn() { run_engine_pump(context, manager) })
       })
       context.op_async_result("start", async fn(payload : StartPayload) {
-        start_run(context, manager, engine, payload)
+        to_op_result(async fn() { start_run(context, manager, engine, payload) })
       })
       context.op_async("cancel", async fn(payload : CancelPayload) {
         cancel_run(manager, payload)
@@ -1249,12 +1226,12 @@ fn openseek_extension(
         steer_run(manager, payload)
       })
       context.op_async_result("list_sessions", async fn(_payload : Json) {
-        list_sessions(engine)
+        to_op_result(async fn() { list_sessions(engine) })
       })
       context.op_async_result("load_session", async fn(
         payload : LoadSessionPayload,
       ) {
-        load_session(engine, payload)
+        to_op_result(async fn() { load_session(engine, payload) })
       })
       Ok(())
     },
