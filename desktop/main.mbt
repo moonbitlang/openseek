@@ -338,58 +338,29 @@ fn resolved_run_cwd(
 const WorkspaceDirName = "OpenSeek"
 
 ///|
-/// Per-conversation workspace directory: the workspace root plus
-/// `session_workspace_components`. A pure function of the session id, so
-/// resuming a conversation — even from a fresh app launch — lands in the same
-/// directory without recording it anywhere. `None` when the id is unsafe as a
-/// path component or no home directory is known; the caller falls back to the
-/// home directory.
+/// Per-conversation workspace directory: `<workspace root>/<session id>`,
+/// flat — desktop ids embed their creation date, so a name-sorted listing is
+/// already chronological without a grouping level. A pure function of the
+/// session id, so resuming a conversation — even from a fresh app launch —
+/// lands in the same directory without recording it anywhere. `None` when the
+/// id is unsafe as a path component or no home directory is known; the caller
+/// falls back to the home directory.
 fn session_workspace_dir(session : String) -> String? {
-  guard session_workspace_components(session) is Some(components) else {
-    return None
-  }
+  guard safe_workspace_id(session) else { return None }
   guard workspace_root() is Some(root) else { return None }
-  let mut dir : @mbpath.Path = root
-  for component in components {
-    dir = dir.join(component)
-  }
-  Some(dir.normalize().to_string())
+  Some((root : @mbpath.Path).join(session).normalize().to_string())
 }
 
 ///|
-/// The path components a session's workspace occupies under the workspace
-/// root: `<date>/<id>` for desktop session ids (which embed their creation
-/// date), `<id>` alone for other stores' ids. `None` for ids that could
-/// escape the root (path separators, dot segments) — those conversations work
-/// in the home directory instead.
-fn session_workspace_components(session : String) -> Array[String]? {
-  guard !session.is_empty() &&
-    session != "." &&
-    session != ".." &&
-    !session.contains("/") &&
-    !session.contains("\\") else {
-    return None
-  }
-  match session_date(session) {
-    Some(date) => Some([date, session])
-    None => Some([session])
-  }
-}
-
-///|
-/// The `YYYY-MM-DD` date a desktop session id embeds
-/// (`desktop-YYYYMMDD-HHMMSS-mmm`); `None` for any other id shape.
-fn session_date(session : String) -> String? {
-  guard session.has_prefix("desktop-") else { return None }
-  match session.view(start_offset="desktop-".length()) {
-    [y1, y2, y3, y4, mo1, mo2, d1, d2, '-', ..] =>
-      if [y1, y2, y3, y4, mo1, mo2, d1, d2].iter().all(ch => ch is ('0'..='9')) {
-        Some("\{y1}\{y2}\{y3}\{y4}-\{mo1}\{mo2}-\{d1}\{d2}")
-      } else {
-        None
-      }
-    _ => None
-  }
+/// Whether a session id can serve as a single path component under the
+/// workspace root. Path separators and dot segments could escape the root —
+/// those conversations work in the home directory instead.
+fn safe_workspace_id(session : String) -> Bool {
+  !session.is_empty() &&
+  session != "." &&
+  session != ".." &&
+  !session.contains("/") &&
+  !session.contains("\\")
 }
 
 ///|

@@ -267,13 +267,13 @@ test "started records the host's workspace for display" {
   let (_, next) = update(
     dispatch,
     Started(
-      7, "task", "openseek", "deepseek-v4-pro", 1000, "/home/u/Documents/OpenSeek/2026-06-11/desktop-test",
+      7, "task", "openseek", "deepseek-v4-pro", 1000, "/home/u/Documents/OpenSeek/desktop-test",
     ),
     test_model(),
   )
   inspect(
     next.cwd,
-    content="/home/u/Documents/OpenSeek/2026-06-11/desktop-test",
+    content="/home/u/Documents/OpenSeek/desktop-test",
   )
 }
 
