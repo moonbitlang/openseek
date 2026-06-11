@@ -92,6 +92,23 @@ moon run --target native ./desktop/package_macos.mbtx
 The bundled engine is built from the same checkout, so the desktop app and its
 engine never drift out of version with each other.
 
+By default the bundle is ad-hoc signed: it runs on the build machine, but
+Gatekeeper quarantines it everywhere else. For distribution, sign with a
+Developer ID Application identity (hardened runtime and a secure timestamp
+are applied automatically) and optionally notarize:
+
+```sh
+# one-time: xcrun notarytool store-credentials openseek \
+#   --apple-id you@example.com --team-id TEAMID --password <app-specific-pw>
+MACOS_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+MACOS_NOTARY_PROFILE=openseek \
+moon run --target native package_macos.mbtx
+```
+
+`MACOS_NOTARY_PROFILE` submits the zip with `notarytool --wait`, staples the
+ticket to the app, and rebuilds the zip; without it the app is signed but
+unnotarized (Gatekeeper still warns on other machines).
+
 ## Package (Linux)
 
 `package_linux.mbtx` runs the same build steps (including the codegen

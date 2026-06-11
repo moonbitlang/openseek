@@ -4,6 +4,7 @@ import {
   "moonbitlang/async@0.19.1/fs",
   "moonbitlang/async@0.19.1/io",
   "moonbitlang/async@0.19.1/process",
+  "moonbitlang/core/env",
   "moonbitlang/core/string",
 }
 
@@ -50,7 +51,10 @@ const MacOSPath : String = ContentsPath + "/MacOS"
 const ResourcesPath : String = ContentsPath + "/Resources"
 
 ///|
-const AppAssetDir : String = MacOSPath + "/assets"
+/// Frontend assets live under Resources, not MacOS: codesign (without the
+/// deprecated `--deep`) treats everything in `Contents/MacOS/` as code and
+/// rejects plain data files there.
+const AppAssetDir : String = ResourcesPath + "/assets"
 
 ///|
 suberror PackageError {
@@ -91,14 +95,28 @@ fn Workspace::repo(self : Workspace) -> String {
 }
 
 ///|
+/// Minimum macOS the produced binaries run on. Without this, clang pins
+/// LC_BUILD_VERSION's minos to the build machine's OS version and dyld on
+/// any older system refuses to load the binary at all. Must match
+/// LSMinimumSystemVersion in the Info.plist.
+const MinMacOSVersion : String = "12.0"
+
+///|
 async fn run_checked(
   command : String,
   args : Array[String],
   dir~ : String,
+  extra_env? : Map[String, String] = {},
 ) -> Unit raise {
   let joined_args = args.join(" ")
   println("$ [\{dir}] \{command} \{joined_args}")
-  let code = @process.run(command, args, inherit_env=true, cwd=dir.view())
+  let code = @process.run(
+    command,
+    args,
+    inherit_env=true,
+    extra_env~,
+    cwd=dir.view(),
+  )
   if code != 0 {
     raise PackageError("command failed with exit code \{code}: \{command}")
   }
@@ -113,6 +131,7 @@ async fn build_engine(ws : Workspace) -> Unit raise {
     "moon",
     ["build", EnginePackage, "--target", "native", "--release"],
     dir=ws.repo(),
+    extra_env={ "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion },
   )
   if !@fs.exists(ws.at(EngineBinary)) {
     raise PackageError(
@@ -151,6 +170,7 @@ async fn build_outputs(ws : Workspace) -> Unit raise {
     "moon",
     ["build", NativePackage, "--target", "native", "--release"],
     dir=ws.dir,
+    extra_env={ "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion },
   )
   build_engine(ws)
 }
@@ -166,32 +186,20 @@ async fn reset_bundle_dirs(ws : Workspace) -> Unit raise {
 }
 
 ///|
+/// The host binary is the bundle's main executable directly — no shell
+/// launcher in between. Resource lookups derive from argv[0] (absolute under
+/// LaunchServices) and the bundled engine is resolved by absolute path, so
+/// nothing needs a `cd` or a PATH entry. A Mach-O main executable is also
+/// what hardened-runtime signing and notarization expect; script launchers
+/// are a recurring Gatekeeper headache.
 async fn copy_bundle_files(ws : Workspace) -> Unit raise {
   if !@fs.exists(ws.at(NativeBinary)) {
     raise PackageError("native binary not found: \{ws.at(NativeBinary)}")
   }
-  run_checked("cp", [NativeBinary, MacOSPath + "/openseek-desktop-bin"], dir=ws.dir)
+  run_checked("cp", [NativeBinary, MacOSPath + "/openseek-desktop"], dir=ws.dir)
   run_checked("cp", [EngineBinary, MacOSPath + "/openseek"], dir=ws.dir)
   run_checked("cp", ["index.html", AppAssetDir + "/index.html"], dir=ws.dir)
   run_checked("cp", ["frontend.js", AppAssetDir + "/frontend.js"], dir=ws.dir)
-}
-
-///|
-/// The launcher resolves its own absolute directory and execs the host binary
-/// with that absolute argv[0]; every resource lookup in the host derives from
-/// it. It deliberately does NOT `cd` into the bundle: the bundle is sealed by
-/// code signing and the host keeps its runtime state in the per-user runtime
-/// directory, so the working directory it inherits (Finder launches with `/`)
-/// is irrelevant.
-fn launcher_source() -> String {
-  let source = #|#!/bin/sh
-  #|set -eu
-  #|
-  #|APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-  #|export PATH="$APP_DIR:$PATH"
-  #|exec "$APP_DIR/openseek-desktop-bin"
-  #|
-  source
 }
 
 ///|
@@ -220,39 +228,105 @@ fn info_plist_source() -> String {
 ///|
 async fn write_bundle_metadata(ws : Workspace) -> Unit raise {
   @fs.write_file(
-    ws.at(MacOSPath) + "/openseek-desktop",
-    launcher_source(),
-    create_mode=CreateOrTruncate,
-  )
-  @fs.write_file(
     ws.at(ContentsPath) + "/Info.plist",
     info_plist_source(),
     create_mode=CreateOrTruncate,
   )
   run_checked(
     "chmod",
-    [
-      "+x",
-      MacOSPath + "/openseek-desktop",
-      MacOSPath + "/openseek-desktop-bin",
-      MacOSPath + "/openseek",
-    ],
+    ["+x", MacOSPath + "/openseek-desktop", MacOSPath + "/openseek"],
     dir=ws.dir,
   )
 }
 
 ///|
-async fn sign_and_zip(ws : Workspace) -> Unit raise {
+/// The signing identity: `MACOS_SIGN_IDENTITY` when set (a Developer ID
+/// Application identity for distribution), otherwise ad-hoc — which runs on
+/// the build machine but is quarantined by Gatekeeper everywhere else.
+fn sign_identity() -> String {
+  match @env.get_env_var("MACOS_SIGN_IDENTITY") {
+    Some(identity) if !identity.trim().is_empty() => identity.trim().to_owned()
+    _ => "-"
+  }
+}
+
+///|
+async fn sign_app(ws : Workspace) -> Unit raise {
+  let identity = sign_identity()
+  if identity == "-" {
+    run_checked(
+      "codesign",
+      ["--force", "--deep", "--sign", "-", AppPath],
+      dir=ws.dir,
+    )
+    return
+  }
+  // Real distribution signing: hardened runtime and a secure timestamp are
+  // notarization requirements. Sign inside-out — the nested engine binary
+  // first, then the bundle (which signs the main executable and seals the
+  // resources); `--deep` is deprecated for this and signs nested code with
+  // the wrong designated requirements.
   run_checked(
     "codesign",
-    ["--force", "--deep", "--sign", "-", AppPath],
+    [
+      "--force", "--options", "runtime", "--timestamp", "--sign", identity, MacOSPath +
+      "/openseek",
+    ],
     dir=ws.dir,
   )
+  run_checked(
+    "codesign",
+    ["--force", "--options", "runtime", "--timestamp", "--sign", identity, AppPath],
+    dir=ws.dir,
+  )
+  run_checked(
+    "codesign",
+    ["--verify", "--strict", "--verbose=2", AppPath],
+    dir=ws.dir,
+  )
+}
+
+///|
+async fn zip_app(ws : Workspace) -> Unit raise {
   run_checked(
     "ditto",
     ["-c", "-k", "--sequesterRsrc", "--keepParent", AppPath, ZipPath],
     dir=ws.dir,
   )
+}
+
+///|
+/// Notarize and staple when `MACOS_NOTARY_PROFILE` names a notarytool
+/// keychain profile (created once via
+/// `xcrun notarytool store-credentials <profile> --apple-id … --team-id …`).
+/// The zip is rebuilt afterwards so the distributed archive carries the
+/// stapled ticket.
+async fn notarize_if_configured(ws : Workspace) -> Unit raise {
+  guard @env.get_env_var("MACOS_NOTARY_PROFILE") is Some(profile) &&
+    !profile.trim().is_empty() else {
+    return
+  }
+  let profile = profile.trim().to_owned()
+  if sign_identity() == "-" {
+    raise PackageError(
+      "MACOS_NOTARY_PROFILE requires MACOS_SIGN_IDENTITY: ad-hoc signed apps cannot be notarized",
+    )
+  }
+  run_checked(
+    "xcrun",
+    ["notarytool", "submit", ZipPath, "--keychain-profile", profile, "--wait"],
+    dir=ws.dir,
+  )
+  run_checked("xcrun", ["stapler", "staple", AppPath], dir=ws.dir)
+  run_checked("rm", ["-f", ZipPath], dir=ws.dir)
+  zip_app(ws)
+}
+
+///|
+async fn sign_and_zip(ws : Workspace) -> Unit raise {
+  sign_app(ws)
+  zip_app(ws)
+  notarize_if_configured(ws)
 }
 
 ///|

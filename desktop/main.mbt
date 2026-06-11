@@ -424,19 +424,27 @@ fn home_session_root() -> String? {
 }
 
 ///|
+/// Locate the bundled frontend entry relative to the executable. On macOS
+/// the assets live in `Contents/Resources/` — `Contents/MacOS/` may only
+/// hold code, since non-`--deep` codesigning rejects data files there — so
+/// probe `../Resources/` first; the executable-adjacent layout serves the
+/// Linux AppImage and bare dev builds. Falls back to a cwd-relative path
+/// for `moon run` during development.
 fn frontend_entry_path(framework_command : String) -> String {
-  let command_path : @mbpath.Path = framework_command
-  let resource_path = command_path
+  let command_dir : @mbpath.Path = (framework_command : @mbpath.Path)
     .dirname()
     .resolve()
-    .join(FrontendEntryPath)
-    .normalize()
-    .to_string()
-  if @mbfs.path_exists(resource_path) {
-    resource_path
-  } else {
-    FrontendEntryPath
+  let candidates = [
+    command_dir.join("..").join("Resources").join(FrontendEntryPath),
+    command_dir.join(FrontendEntryPath),
+  ]
+  for candidate in candidates {
+    let path = candidate.normalize().to_string()
+    if @mbfs.path_exists(path) {
+      return path
+    }
   }
+  FrontendEntryPath
 }
 
 ///|
