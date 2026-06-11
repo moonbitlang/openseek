@@ -87,6 +87,20 @@ shows where steps and tokens went to waste):
   `@strconv`, and one `moon ide` OCaml assertion crash. Better query
   ergonomics (or a documented snippet-eval recipe) converts that tail of
   failures into one or two steps.
+- [ ] **Ground the model in its environment.** The system prompt never
+  states the working directory, so models guess on step 1: in a 5-run
+  batch, one agent passed `cwd="/workspace"` (rejected: does not exist),
+  then explored the *parent* directory, found a concurrent sibling run's
+  files, and adopted that workspace wholesale — two agents silently
+  co-editing one project. Another opened with `read /home/user`. Inject
+  the engine's cwd (and a "stay inside the workspace; siblings/parents
+  are other projects" line) into the prompt at run start.
+- [ ] **Trim watcher notice payloads.** With duplicate suppression in
+  place, busy runs still append 50–60 *distinct* notices (~1.2KB each,
+  50–70KB per run): every diagnostic change re-sends the full error block,
+  and line-number drift from unrelated edits makes near-identical errors
+  count as new. Consider capping per-notice output or diffing against the
+  previous state.
 - [ ] **Encourage batching independent tool calls.** 154 of 156 steps made
   exactly one tool call; the model proved it can batch (it opened with two
   parallel reads). A system-prompt nudge for batching independent
