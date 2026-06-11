@@ -50,6 +50,42 @@ bottom of the matching section.
 
 ## Engine / agent
 
+Findings from a real 156-step session log (seek-toml, 2026-06-11: "Write a
+toml parser in MoonBit with high quality tests" — succeeded, but the log
+shows where steps and tokens went to waste):
+
+- [ ] **One watcher per directory, not per option set.** The `moon_check`
+  registry keys watchers by the full option set, so toggling `deny_warn`
+  stacked three concurrent watchers on one cwd. They competed for moon's
+  build lock with each other and with the model's own `moon test` runs,
+  produced stale results, and the model ended up running `pkill -9 -f
+  "moon check"` mid-task to recover. Same cwd + new options should replace
+  (stop) the old watcher.
+- [ ] **Stop resending historical `reasoning_content`.** The request encoder
+  sends stored reasoning back on every historical assistant message — 11%
+  of a 141K-token final context was old reasoning the model never needs
+  again (DeepSeek's own docs say not to pass it back). Drop it when
+  projecting session history to API messages.
+- [ ] **Deduplicate watcher notices.** 61 `[moon_check update]` runtime
+  notices (11% of final context) were appended, mostly identical
+  re-reports from the duplicate watchers. Coalesce per watcher: a new
+  notice should supersede the previous one when nothing changed.
+- [ ] **First-class API-lookup tool (or document the probe recipe).** The
+  model spent ~25 steps probing stdlib APIs: repeated `moon ide doc`
+  queries that returned "No results found" (7KB of failed lookups in one
+  result), 8 consecutive failed one-liner compile experiments against
+  `@strconv`, and one `moon ide` OCaml assertion crash. Better query
+  ergonomics (or a documented snippet-eval recipe) converts that tail of
+  failures into one or two steps.
+- [ ] **Encourage batching independent tool calls.** 154 of 156 steps made
+  exactly one tool call; the model proved it can batch (it opened with two
+  parallel reads). A system-prompt nudge for batching independent
+  reads/checks would cut round trips — at ~7s a step, real minutes.
+- [ ] **Timestamps on session events.** `events.jsonl` lines carry no
+  timestamps, so per-step latency and where wall-clock went cannot be
+  reconstructed from the log (this analysis had to infer duration from
+  file mtimes). One `ts` field per event line fixes it and feeds the viz.
+
 - [x] **Expose thinking controls.** `run_with_runtime` hardcodes
   `thinking=Enabled, reasoning_effort=Max`; make them engine flags
   (`--thinking`, `--reasoning-effort`) and TUI pass-throughs. *(Done:
