@@ -181,3 +181,66 @@ jobs:
           name: OpenSeek-Desktop-macos-arm64
           path: desktop/dist/OpenSeek Desktop-macos-arm64.zip
           if-no-files-found: error
+
+  desktop-windows:
+    name: desktop app (windows)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # The lepus submodule is a private repo, so the default workflow token
+      # cannot clone it. LEPUS_READ_TOKEN is a fine-grained PAT with read-only
+      # access to moonbit-community/lepus. Note: this secret is unavailable to
+      # pull requests from forks, where this job will fail at this step.
+      - name: Check out the lepus submodule
+        shell: bash
+        env:
+          LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
+            "git@github.com:"
+          git submodule update --init --recursive
+
+      - name: Set up MoonBit (nightly)
+        shell: pwsh
+        run: |
+          $env:MOONBIT_INSTALL_VERSION = "nightly"
+          (Invoke-WebRequest -UseBasicParsing https://cli.moonbitlang.com/install/powershell.ps1).Content | Invoke-Expression
+          "$HOME\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Show MoonBit version
+        shell: pwsh
+        run: |
+          moon version --all
+
+      - name: Seed MoonBit registry index
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$HOME\.moon\registry" | Out-Null
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Remove-Item -Recurse -Force "$HOME\.moon\registry\index" -ErrorAction SilentlyContinue
+            git `
+              -c http.lowSpeedLimit=1000 `
+              -c http.lowSpeedTime=60 `
+              clone --depth 1 https://mooncakes.io/git/index "$HOME\.moon\registry\index"
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+            Start-Sleep -Seconds ($attempt * 10)
+          }
+          exit 1
+
+      - name: Build the Windows app bundle
+        shell: pwsh
+        run: moon run --target native .\desktop\package_windows.mbtx
+
+      - name: Upload Windows app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenSeek-Desktop-windows-x64
+          path: desktop/dist/OpenSeek Desktop-windows-x64.zip
+          if-no-files-found: error
