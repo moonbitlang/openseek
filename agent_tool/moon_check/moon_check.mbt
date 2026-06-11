@@ -101,7 +101,14 @@ async fn[X] moon_check(
           is_error=moon_check_snapshot_is_error(snapshot),
         )
       } else {
+        let exit_signal = runtime.moon_check_exit_signal(key)
         ignore(runtime.stop_moon_check(key))
+        // `Process.cancel()` is asynchronous: wait until the old watcher's
+        // monitor has reaped it before spawning the replacement, or the two
+        // would briefly contend for the same build lock.
+        if exit_signal is Some(signal) {
+          signal.get()
+        }
         start_moon_check(
           runtime,
           input,

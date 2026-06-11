@@ -120,6 +120,7 @@ async fn[X] spawn_moon_check_watch(
 ) -> String {
   let args = command_args(input, watch=true)
   let id = runtime.next_moon_check_id()
+  let exited : @async.Queue[Unit] = Queue(kind=Unbounded)
   let (reader, writer) = @process.read_from_process()
   let process = @process.spawn(
     runtime.group(),
@@ -142,12 +143,17 @@ async fn[X] spawn_moon_check_watch(
       restart_count~,
       restart_limit=default_restart_limit,
       restart_reason~,
+      exited~,
     ),
   )
   if initial_output != "" {
     ignore(runtime.replace_moon_check_output(key, id, initial_output))
   }
   runtime.group().spawn_bg(no_wait=true, allow_failure=true) <| () => {
+    // Every monitor exit path has reaped (or failed to read) the child by
+    // the time it returns; signal regardless of which path ran so a waiting
+    // replacement can never hang.
+    defer ignore(exited.try_put(()) catch { _ => false })
     monitor_moon_check(runtime, input, key, id, reader, process)
   }
   id

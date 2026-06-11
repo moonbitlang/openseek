@@ -87,6 +87,11 @@ priv struct MoonCheckRecord {
   restart_count : Int
   restart_limit : Int
   restart_reason : String?
+  // Signalled (once) when this spawn's monitor task has reaped the child
+  // process. `Process.cancel()` is asynchronous, so a replacement must wait
+  // on this before spawning, or old and new watchers would briefly contend
+  // for the same build lock — the exact failure replacement exists to fix.
+  exited : @async.Queue[Unit]
 }
 
 ///|
@@ -191,6 +196,7 @@ fn[X] MoonCheckRuntime::register_moon_check(
   restart_count~ : Int,
   restart_limit~ : Int,
   restart_reason~ : String?,
+  exited~ : @async.Queue[Unit],
 ) -> MoonCheckSnapshot {
   let record = {
     id,
@@ -208,6 +214,7 @@ fn[X] MoonCheckRuntime::register_moon_check(
     restart_count,
     restart_limit,
     restart_reason,
+    exited,
   }
   self.moon_checks[record.key] = record
   record.to_snapshot()
@@ -323,6 +330,19 @@ fn[X] MoonCheckRuntime::stop_moon_check(
 }
 
 ///|
+/// The current record's reaped-child signal (see `MoonCheckRecord::exited`),
+/// captured by the replace path before it stops the watcher.
+fn[X] MoonCheckRuntime::moon_check_exit_signal(
+  self : MoonCheckRuntime[X],
+  key : String,
+) -> @async.Queue[Unit]? {
+  match self.moon_checks.get(key) {
+    Some(record) => Some(record.exited)
+    None => None
+  }
+}
+
+///|
 fn[X] MoonCheckRuntime::emit_moon_check(
   self : MoonCheckRuntime[X],
   snapshot : MoonCheckSnapshot,
@@ -380,6 +400,7 @@ async test "moon_check runtime ignores stale watcher id updates" {
         restart_count=0,
         restart_limit=3,
         restart_reason=None,
+        exited=Queue(kind=Unbounded),
       ),
     )
     ignore(
@@ -393,6 +414,7 @@ async test "moon_check runtime ignores stale watcher id updates" {
         restart_count=0,
         restart_limit=3,
         restart_reason=None,
+        exited=Queue(kind=Unbounded),
       ),
     )
     assert_true(
@@ -439,6 +461,7 @@ async test "moon_check keeps crash summary in replacement output" {
         restart_count=1,
         restart_limit=3,
         restart_reason=Some("auto restart after exit 101"),
+        exited=Queue(kind=Unbounded),
       ),
     )
     let summary =
