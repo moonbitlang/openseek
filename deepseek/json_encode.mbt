@@ -3,6 +3,12 @@
 ///
 /// Assistant messages whose `content` is empty but carry tool calls are
 /// encoded with JSON `content: null`, as the API requires.
+///
+/// `reasoning_content` is deliberately never encoded: it is response-side
+/// data the model does not read back (DeepSeek's docs say not to return it),
+/// and resending it grows every request — a real 156-step run accumulated
+/// 64KB of dead reasoning, 11% of its final 141K-token context. Sessions
+/// still store it for the TUI transcript and the visualizer.
 impl ToJson for ChatMessage with fn to_json(message : ChatMessage) -> Json {
   let content = match message.role {
     Assistant if message.tool_calls.length() > 0 && message.content == "" =>
@@ -22,11 +28,6 @@ impl ToJson for ChatMessage with fn to_json(message : ChatMessage) -> Json {
           [("tool_calls", ([ for call in message.tool_calls => call ] : Json))]
         } else {
           []
-        },
-        ..match message.reasoning_content {
-          Some(reasoning_content) =>
-            [("reasoning_content", Json::string(reasoning_content))]
-          None => []
         },
       ],
     ),
@@ -151,7 +152,9 @@ test "tool definitions encode as native DeepSeek tools" {
 }
 
 ///|
-test "assistant tool call messages encode tool_calls" {
+test "assistant tool call messages encode tool_calls, never reasoning" {
+  // reasoning_content is response-side data: it must not reach the wire even
+  // when the in-memory message carries it (see the codec doc comment).
   let body = ChatMessage(
     Assistant,
     content="",
@@ -177,7 +180,6 @@ test "assistant tool call messages encode tool_calls" {
         },
       },
     ],
-    "reasoning_content": "checked available tools",
   })
 }
 

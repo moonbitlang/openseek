@@ -61,11 +61,15 @@ shows where steps and tokens went to waste):
   produced stale results, and the model ended up running `pkill -9 -f
   "moon check"` mid-task to recover. Same cwd + new options should replace
   (stop) the old watcher.
-- [ ] **Stop resending historical `reasoning_content`.** The request encoder
+- [x] **Stop resending historical `reasoning_content`.** The request encoder
   sends stored reasoning back on every historical assistant message — 11%
   of a 141K-token final context was old reasoning the model never needs
   again (DeepSeek's own docs say not to pass it back). Drop it when
-  projecting session history to API messages.
+  projecting session history to API messages. *(Done: the wire encoder
+  never emits `reasoning_content` — the right chokepoint, since the 11%
+  accrued within a single 156-step turn via the agent's incremental
+  pushes, not only across turns. Sessions still store reasoning for the
+  TUI transcript and the visualizer.)*
 - [ ] **Deduplicate watcher notices.** 61 `[moon_check update]` runtime
   notices (11% of final context) were appended, mostly identical
   re-reports from the duplicate watchers. Coalesce per watcher: a new
