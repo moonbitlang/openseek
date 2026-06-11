@@ -97,6 +97,15 @@ async fn[X] start_moon_check(
 }
 
 ///|
+/// The exact command line a `moon_check` input runs. Doubles as the option
+/// fingerprint: a running watcher whose command equals the incoming input's
+/// is reusable; any difference means the options changed and the watcher is
+/// replaced.
+fn moon_check_command_line(input : @decode.MoonCheckInput) -> String {
+  "moon \{command_args(input, watch=true).join(" ")}"
+}
+
+///|
 /// Spawn `moon check --watch ...` with combined stdout/stderr piped back to
 /// `monitor_moon_check`. Returns the freshly assigned watcher id. The caller
 /// can pre-populate the recorded output via `initial_output` — used when an
@@ -126,7 +135,7 @@ async fn[X] spawn_moon_check_watch(
     runtime.register_moon_check(
       key~,
       id~,
-      command="moon \{args.join(" ")}",
+      command=moon_check_command_line(input),
       cwd=input.cwd,
       process~,
       max_output_chars=default_max_output_chars,

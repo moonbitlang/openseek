@@ -54,13 +54,16 @@ Findings from a real 156-step session log (seek-toml, 2026-06-11: "Write a
 toml parser in MoonBit with high quality tests" — succeeded, but the log
 shows where steps and tokens went to waste):
 
-- [ ] **One watcher per directory, not per option set.** The `moon_check`
+- [x] **One watcher per directory, not per option set.** The `moon_check`
   registry keys watchers by the full option set, so toggling `deny_warn`
   stacked three concurrent watchers on one cwd. They competed for moon's
   build lock with each other and with the model's own `moon test` runs,
   produced stale results, and the model ended up running `pkill -9 -f
   "moon check"` mid-task to recover. Same cwd + new options should replace
-  (stop) the old watcher.
+  (stop) the old watcher. *(Done: the registry keys by cwd; a running
+  watcher is reused when the incoming command matches and stopped+replaced
+  (`watcher=replaced`) when the options changed, with the tool description
+  telling the model so.)*
 - [x] **Stop resending historical `reasoning_content`.** The request encoder
   sends stored reasoning back on every historical assistant message — 11%
   of a 141K-token final context was old reasoning the model never needs

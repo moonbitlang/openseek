@@ -132,14 +132,14 @@ priv struct MoonCheckRuntime[X] {
   /// session ends — there are no orphan `moon` processes after a session
   /// exit.
   scope : @agent_runtime.AgentTaskScope[X]
-  /// Watcher registry keyed by `moon_check_key(input)` — a stable
-  /// serialization of `cwd` + all check options. One entry per
-  /// `(cwd, options)` tuple is the core invariant: a `moon_check` call with
-  /// the same key as an existing **running** record reuses it; the same key
-  /// matching a **stopped** record triggers a manual restart that overwrites
-  /// the entry. Different options → different key → independent watcher.
-  /// Records are never removed, only superseded — a stopped record stays in
-  /// the map until either a restart replaces it or the agent session ends.
+  /// Watcher registry keyed by `moon_check_key(input)` — the watcher's
+  /// `cwd`. One entry per directory is the core invariant: a `moon_check`
+  /// call whose command matches an existing **running** record reuses it; a
+  /// running record with a *different* command (the options changed) is
+  /// stopped and replaced; a **stopped** record triggers a manual restart
+  /// that overwrites the entry. Records are never removed, only
+  /// superseded — a stopped record stays in the map until either a restart
+  /// replaces it or the agent session ends.
   moon_checks : Map[String, MoonCheckRecord]
   /// Monotonic counter for assigning watcher ids. Each
   /// `next_moon_check_id()` call produces `moon-check-<N>` and bumps the
@@ -331,23 +331,19 @@ fn[X] MoonCheckRuntime::emit_moon_check(
 }
 
 ///|
-/// Stable string used to deduplicate watchers per `(cwd, options)` tuple.
-/// Two calls with the same key reuse a live watcher; a stopped record under
-/// the same key is restarted on the next call.
+/// Stable string identifying a watcher by its directory — one watcher per
+/// cwd is the invariant. A call with the same cwd reuses the running
+/// watcher when its command matches and *replaces* it (stopping the old
+/// process) when the options changed. Keying on the full option set instead
+/// used to stack concurrent watchers on one directory; they competed for
+/// moon's build lock with each other and with the agent's own `moon test`
+/// runs, reported stale results, and a real session ended with the model
+/// running `pkill -9 -f "moon check"` to recover.
 fn moon_check_key(input : @decode.MoonCheckInput) -> String {
-  let cwd = match input.cwd {
-    Some(cwd) => cwd
-    None => "."
+  match input.cwd {
+    Some(cwd) => "cwd=\{cwd}"
+    None => "cwd=."
   }
-  let target = match input.target {
-    Some(target) => target
-    None => ""
-  }
-  let warn_list = match input.warn_list {
-    Some(warn_list) => warn_list
-    None => ""
-  }
-  "cwd=\{cwd}\ntarget=\{target}\nwarn_list=\{warn_list}\ndeny_warn=\{input.deny_warn}\nfmt=\{input.fmt}\nexplain=\{input.explain}"
 }
 
 ///|

@@ -29,7 +29,7 @@ pub fn[X] definition(
   let moon_runtime = MoonCheckRuntime(runtime, scope)
   AgentToolDefinition(
     name="moon_check",
-    description="Start or inspect a persistent `moon check --watch --diagnostic-limit 10` watcher for the given cwd/options. The first call starts the watcher; later calls with the same arguments return the latest snapshot without starting another watcher.",
+    description="Start or inspect a persistent `moon check --watch --diagnostic-limit 10` watcher for the given cwd. One watcher runs per directory: the first call starts it, later calls with the same arguments return the latest snapshot, and calling with different options replaces the watcher instead of stacking a second one.",
     schema=JsonSchema({
       "type": "object",
       "properties": {
@@ -78,10 +78,15 @@ async fn[X] execute(
 }
 
 ///|
-/// Dispatch by watcher key:
-/// - A running record for `key` → reuse (`watcher=reused`), no new process.
-/// - A stopped record for `key` → restart (`watcher=restarted`) carrying the
-///   prior `restart_count` forward.
+/// Dispatch by watcher key (one watcher per cwd):
+/// - A running record with the same command → reuse (`watcher=reused`), no
+///   new process.
+/// - A running record whose command differs (the options changed) → stop it
+///   and start fresh (`watcher=replaced`). Stacking a second watcher on the
+///   same directory would make the two compete for moon's build lock and
+///   report stale results.
+/// - A stopped record for `key` → restart (`watcher=restarted`) with the
+///   *new* options, carrying the prior `restart_count` forward.
 /// - No record for `key` → fresh start (`watcher=started`).
 async fn[X] moon_check(
   runtime : MoonCheckRuntime[X],
@@ -90,10 +95,22 @@ async fn[X] moon_check(
   let key = moon_check_key(input)
   match runtime.moon_check_snapshot(key) {
     Some(snapshot) if snapshot.status is Running =>
-      @agent_tool.ToolAction::respond(
-        moon_check_response("reused", snapshot),
-        is_error=moon_check_snapshot_is_error(snapshot),
-      )
+      if snapshot.command == moon_check_command_line(input) {
+        @agent_tool.ToolAction::respond(
+          moon_check_response("reused", snapshot),
+          is_error=moon_check_snapshot_is_error(snapshot),
+        )
+      } else {
+        ignore(runtime.stop_moon_check(key))
+        start_moon_check(
+          runtime,
+          input,
+          key,
+          action="replaced",
+          restart_count=snapshot.restart_count,
+          restart_reason=Some("options changed; replaced \{snapshot.command}"),
+        )
+      }
     Some(snapshot) =>
       start_moon_check(
         runtime,
@@ -200,6 +217,40 @@ async test "moon_check reuses a running watcher for the same arguments" {
     assert_true(second_output.content.contains("watcher=reused"))
     assert_true(second_output.content.contains("id=moon-check-1"))
     assert_false(second_output.content.contains("id=moon-check-2"))
+  }
+  @fs.rmdir(project, recursive=true)
+}
+
+///|
+async test "changed options replace the cwd's watcher instead of stacking" {
+  let project = valid_project()
+  @async.with_task_group() <| group => {
+    let runtime = MoonCheckRuntime(AgentRuntime(), AgentTaskScope(group))
+    let first = execute(runtime, { "cwd": project })
+    // Same cwd, different options: the running watcher is stopped and
+    // replaced — never a second concurrent watcher fighting it for moon's
+    // build lock.
+    let second = execute(runtime, { "cwd": project, "deny_warn": true })
+    let key = moon_check_key(@decode.decode({ "cwd": project }))
+    guard first is Respond(first_output) else { fail("expected Respond") }
+    guard second is Respond(second_output) else { fail("expected Respond") }
+    assert_true(first_output.content.contains("watcher=started"))
+    assert_true(first_output.content.contains("id=moon-check-1"))
+    assert_true(second_output.content.contains("watcher=replaced"))
+    assert_true(second_output.content.contains("id=moon-check-2"))
+    assert_true(second_output.content.contains("--deny-warn"))
+    // One record per cwd: the replacement owns the key, with the new
+    // command, and a same-options follow-up reuses it.
+    guard runtime.moon_check_snapshot(key) is Some(snapshot) else {
+      fail("expected a registry record")
+    }
+    assert_true(snapshot.status is Running)
+    assert_true(snapshot.command.contains("--deny-warn"))
+    let third = execute(runtime, { "cwd": project, "deny_warn": true })
+    guard third is Respond(third_output) else { fail("expected Respond") }
+    assert_true(third_output.content.contains("watcher=reused"))
+    assert_true(third_output.content.contains("id=moon-check-2"))
+    ignore(runtime.stop_moon_check(key))
   }
   @fs.rmdir(project, recursive=true)
 }
