@@ -164,7 +164,8 @@ async fn build_outputs() -> Unit raise {
     "run", "--target", "native", "build_frontend.mbtx",
   ])
   run_desktop_moon([
-    "build", NativePackage, "--target", "native", "--release",
+    "build", NativePackage, "--target", "native", "--release", "--warn-list",
+    "-20",
   ])
   build_engine()
 }
