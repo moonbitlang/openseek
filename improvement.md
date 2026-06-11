@@ -87,14 +87,19 @@ shows where steps and tokens went to waste):
   `@strconv`, and one `moon ide` OCaml assertion crash. Better query
   ergonomics (or a documented snippet-eval recipe) converts that tail of
   failures into one or two steps.
-- [ ] **Ground the model in its environment.** The system prompt never
+- [x] **Ground the model in its environment.** The system prompt never
   states the working directory, so models guess on step 1: in a 5-run
   batch, one agent passed `cwd="/workspace"` (rejected: does not exist),
   then explored the *parent* directory, found a concurrent sibling run's
   files, and adopted that workspace wholesale — two agents silently
   co-editing one project. Another opened with `read /home/user`. Inject
   the engine's cwd (and a "stay inside the workspace; siblings/parents
-  are other projects" line) into the prompt at run start.
+  are other projects" line) into the prompt at run start. *(Done: an
+  `## Environment` section names the realpath cwd on every prompt source;
+  judged by a concurrency-5 experiment — hallucinated step-1 paths 2/5 →
+  0/5, sibling-workspace hijack eliminated, 5/5 artifacts in their own
+  directories. Eval harnesses now run trial engines inside their staged
+  workspaces so grounding and isolation agree.)*
 - [ ] **Trim watcher notice payloads.** With duplicate suppression in
   place, busy runs still append 50–60 *distinct* notices (~1.2KB each,
   50–70KB per run): every diagnostic change re-sends the full error block,
