@@ -4,9 +4,9 @@ fn load_saved_settings(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
     scheduler.add(
       dispatch(
         SettingsLoaded(
-          js_load_setting(ApiProviderStorageKey),
-          js_load_setting(CustomApiUrlStorageKey),
-          js_load_setting(ApiKeyStorageKey),
+          provider=js_load_setting(ApiProviderStorageKey),
+          custom_url=js_load_setting(CustomApiUrlStorageKey),
+          api_key=js_load_setting(ApiKeyStorageKey),
         ),
       ),
     )

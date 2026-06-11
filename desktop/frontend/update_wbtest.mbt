@@ -1,10 +1,25 @@
 // Purity and state-transition tests for the update handlers that back the
-// streaming and session integration. Commands are opaque, so the tests assert
-// on the returned model only.
+// streaming, session, and multi-conversation integration. Commands are
+// opaque, so the tests assert on the returned model only.
 
 ///|
 fn test_dispatch() -> @cmd.Dispatch[Msg] {
   Dispatch(_ => @cmd.none)
+}
+
+///|
+fn test_conversation() -> Conversation {
+  empty_conversation("desktop-test")
+}
+
+///|
+fn running_conversation() -> Conversation {
+  {
+    ..test_conversation(),
+    running: true,
+    active_run_id: Some(7),
+    status: Running,
+  }
 }
 
 ///|
@@ -14,14 +29,14 @@ fn test_model() -> Model {
     bridge_ready: true,
     api_key: "sk-test",
     setup_open: false,
-    status: Ready,
-    session_id: "desktop-test",
+    active_session: "desktop-test",
+    conversations: [test_conversation()],
   }
 }
 
 ///|
 fn running_model() -> Model {
-  { ..test_model(), running: true, active_run_id: Some(7), status: Running }
+  test_model().replace_conversation(running_conversation())
 }
 
 ///|
@@ -37,122 +52,135 @@ test "assistant deltas accumulate into the streaming response" {
     Engine(7, AssistantDelta(", world")),
     first,
   )
-  inspect(second.streaming_response, content="Hello, world")
-  inspect(second.messages.length(), content="0")
+  inspect(second.active().streaming_response, content="Hello, world")
+  inspect(second.active().messages.length(), content="0")
 }
 
 ///|
 test "update is pure: replaying a delta on the same model is idempotent" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), streaming_response: "partial" }
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    streaming_response: "partial",
+  })
   let (_, once) = update(dispatch, Engine(7, AssistantDelta("!")), model)
   let (_, twice) = update(dispatch, Engine(7, AssistantDelta("!")), model)
-  inspect(once.streaming_response, content="partial!")
-  inspect(twice.streaming_response, content="partial!")
+  inspect(once.active().streaming_response, content="partial!")
+  inspect(twice.active().streaming_response, content="partial!")
 }
 
 ///|
-test "deltas from a stale run are dropped" {
+test "deltas from an unknown run are dropped" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
     Engine(99, AssistantDelta("stale")),
     running_model(),
   )
-  inspect(next.streaming_response, content="")
+  inspect(next.active().streaming_response, content="")
 }
 
 ///|
 test "reasoning message commits a thinking item and clears its stream" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), streaming_reasoning: "thinking…" }
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    streaming_reasoning: "thinking…",
+  })
   let (_, next) = update(
     dispatch,
     Engine(7, ReasoningMessage("full thought")),
     model,
   )
-  inspect(next.streaming_reasoning, content="")
-  inspect(next.messages.length(), content="1")
-  guard next.messages[0].kind is Reasoning else { fail("expected reasoning") }
-  inspect(next.messages[0].content, content="full thought")
+  inspect(next.active().streaming_reasoning, content="")
+  inspect(next.active().messages.length(), content="1")
+  guard next.active().messages[0].kind is Reasoning else {
+    fail("expected reasoning")
+  }
+  inspect(next.active().messages[0].content, content="full thought")
 }
 
 ///|
 test "assistant message replaces the live stream with a committed item" {
   let dispatch = test_dispatch()
-  let model = {
-    ..running_model(),
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
     streaming_response: "answ",
     streaming_reasoning: "thought",
-  }
+  })
   let (_, next) = update(dispatch, Engine(7, AssistantMessage("answer")), model)
-  inspect(next.streaming_response, content="")
-  inspect(next.streaming_reasoning, content="")
-  inspect(next.messages.length(), content="1")
-  inspect(next.messages[0].content, content="answer")
+  inspect(next.active().streaming_response, content="")
+  inspect(next.active().streaming_reasoning, content="")
+  inspect(next.active().messages.length(), content="1")
+  inspect(next.active().messages[0].content, content="answer")
 }
 
 ///|
 test "a new agent step clears both live streams" {
   let dispatch = test_dispatch()
-  let model = {
-    ..running_model(),
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
     streaming_response: "left",
     streaming_reasoning: "over",
-  }
+  })
   let (_, next) = update(dispatch, Engine(7, AgentStep("2")), model)
-  inspect(next.streaming_response, content="")
-  inspect(next.streaming_reasoning, content="")
+  inspect(next.active().streaming_response, content="")
+  inspect(next.active().streaming_reasoning, content="")
 }
 
 ///|
 test "finished run clears any leftover stream" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), streaming_response: "leftover" }
-  let (_, next) = update(dispatch, Finished(7, "finished", "done", 0), model)
-  inspect(next.streaming_response, content="")
-  inspect(next.running, content="false")
-}
-
-///|
-test "new chat resets the conversation but keeps settings" {
-  let dispatch = test_dispatch()
-  let model = {
-    ..test_model(),
-    usage_tokens: 42,
-    watcher_status: "running",
-    status: Finished("finished"),
-    messages: [
-      { kind: User, content: "hi" },
-      { kind: Assistant(false), content: "hello" },
-    ],
-  }
-  let (_, next) = update(dispatch, NewChat, model)
-  inspect(next.messages.length(), content="0")
-  inspect(next.usage_tokens, content="0")
-  inspect(next.watcher_status, content="")
-  inspect(next.api_key, content="sk-test")
-  assert_true(next.status is Ready)
-}
-
-///|
-test "new chat is ignored while a run is active" {
-  let dispatch = test_dispatch()
-  let model = { ..running_model(), messages: [{ kind: User, content: "hi" }] }
-  let (_, next) = update(dispatch, NewChat, model)
-  inspect(next.messages.length(), content="1")
-  inspect(next.running, content="true")
-}
-
-///|
-test "session rotation stores the generated id" {
-  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    streaming_response: "leftover",
+  })
   let (_, next) = update(
     dispatch,
-    SessionRotated("desktop-20260610-000000-000"),
-    test_model(),
+    Finished(run_id=7, status="finished", answer="done"),
+    model,
   )
-  inspect(next.session_id, content="desktop-20260610-000000-000")
+  inspect(next.active().streaming_response, content="")
+  inspect(next.active().running, content="false")
+}
+
+///|
+test "new chat keeps the model intact until the rotation lands" {
+  let dispatch = test_dispatch()
+  let model = running_model()
+  let (_, next) = update(dispatch, NewChat, model)
+  inspect(next.active().running, content="true")
+}
+
+///|
+test "session rotation activates a fresh conversation, keeping the old one" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..running_conversation(),
+    messages: [{ kind: User, content: "hi" }],
+  })
+  let (_, next) = update(dispatch, SessionRotated("desktop-fresh"), model)
+  inspect(next.active_session, content="desktop-fresh")
+  inspect(next.active().messages.length(), content="0")
+  inspect(next.active().usage_tokens, content="0")
+  inspect(next.api_key, content="sk-test")
+  assert_true(next.display_status() is Ready)
+  // The previous conversation keeps running in the background.
+  guard next.find_conversation("desktop-test") is Some(old) else {
+    fail("expected the old conversation to survive")
+  }
+  inspect(old.running, content="true")
+  inspect(old.messages.length(), content="1")
+}
+
+///|
+test "session rotation prunes abandoned empty conversations" {
+  let dispatch = test_dispatch()
+  let (_, first) = update(dispatch, SessionRotated("desktop-a"), test_model())
+  let (_, second) = update(dispatch, SessionRotated("desktop-b"), first)
+  // "desktop-test" and "desktop-a" had no transcript, no draft, no run.
+  inspect(second.conversations.length(), content="1")
+  inspect(second.active_session, content="desktop-b")
 }
 
 ///|
@@ -173,76 +201,108 @@ test "sessions loaded replaces the sidebar list and clears its error" {
 ///|
 test "sessions failure is recorded without touching the transcript" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), messages: [{ kind: User, content: "hi" }] }
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    messages: [{ kind: User, content: "hi" }],
+  })
   let (_, next) = update(dispatch, SessionsFailed("engine exploded"), model)
   inspect(next.sessions_error, content="engine exploded")
-  inspect(next.messages.length(), content="1")
+  inspect(next.active().messages.length(), content="1")
 }
 
 ///|
-test "open session is ignored while running or for the current session" {
+test "open session is a no-op for the current session" {
   let dispatch = test_dispatch()
-  let (_, while_running) = update(
-    dispatch,
-    OpenSession("desktop-other"),
-    running_model(),
-  )
-  inspect(while_running.running, content="true")
-  let (_, same_session) = update(
-    dispatch,
-    OpenSession("desktop-test"),
-    test_model(),
-  )
-  inspect(same_session.session_id, content="desktop-test")
-  inspect(same_session.messages.length(), content="0")
+  let (_, next) = update(dispatch, OpenSession("desktop-test"), test_model())
+  inspect(next.active_session, content="desktop-test")
+  inspect(next.conversations.length(), content="1")
 }
 
 ///|
-test "session loaded swaps the conversation onto the stored session" {
+test "open session switches to a live conversation without reloading it" {
   let dispatch = test_dispatch()
-  let model = {
-    ..test_model(),
+  let background = {
+    ..empty_conversation("desktop-bg"),
+    running: true,
+    active_run_id: Some(9),
+    status: Running,
+    streaming_response: "mid-stream",
+    messages: [{ kind: User, content: "background task" }],
+  }
+  let model = running_model().replace_conversation(background)
+  let (_, once) = update(dispatch, OpenSession("desktop-bg"), model)
+  let (_, twice) = update(dispatch, OpenSession("desktop-bg"), model)
+  inspect(once.active_session, content="desktop-bg")
+  // The live state survives the switch: no reload, nothing reset.
+  inspect(once.active().streaming_response, content="mid-stream")
+  inspect(once.active().running, content="true")
+  // The previous conversation is still running in the background.
+  guard once.find_conversation("desktop-test") is Some(old) else {
+    fail("expected the old conversation to survive")
+  }
+  inspect(old.running, content="true")
+  inspect(twice.active_session, content="desktop-bg")
+}
+
+///|
+test "session loaded swaps the active conversation onto the stored session" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
     usage_tokens: 42,
     watcher_status: "running",
     streaming_response: "leftover",
     messages: [{ kind: User, content: "old chat" }],
-  }
+  })
   let items : Array[TranscriptItem] = [
     { kind: User, content: "stored question" },
     { kind: Assistant(false), content: "stored answer" },
   ]
   let (_, once) = update(
     dispatch,
-    SessionLoaded("desktop-stored", items),
+    SessionLoaded(session="desktop-stored", items~),
     model,
   )
   let (_, twice) = update(
     dispatch,
-    SessionLoaded("desktop-stored", items),
+    SessionLoaded(session="desktop-stored", items~),
     model,
   )
-  inspect(once.session_id, content="desktop-stored")
-  inspect(once.messages.length(), content="2")
-  inspect(once.messages[0].content, content="stored question")
-  inspect(once.streaming_response, content="")
-  inspect(once.usage_tokens, content="0")
-  inspect(once.watcher_status, content="")
-  assert_true(once.status is Ready)
-  inspect(twice.messages.length(), content="2")
+  inspect(once.active_session, content="desktop-stored")
+  inspect(once.active().messages.length(), content="2")
+  inspect(once.active().messages[0].content, content="stored question")
+  inspect(once.active().streaming_response, content="")
+  inspect(once.active().usage_tokens, content="0")
+  inspect(once.active().watcher_status, content="")
+  inspect(once.active().cwd, content="")
+  assert_true(once.display_status() is Ready)
+  inspect(twice.active().messages.length(), content="2")
 }
 
 ///|
-test "session loaded is dropped while a run is active" {
+test "session loaded is dropped only when that conversation is running" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), messages: [{ kind: User, content: "live" }] }
+  let model = running_model()
   let items : Array[TranscriptItem] = [{ kind: User, content: "stored" }]
-  let (_, next) = update(
+  // The active conversation runs; loading some other stored session is fine.
+  let (_, other) = update(
     dispatch,
-    SessionLoaded("desktop-stored", items),
+    SessionLoaded(session="desktop-stored", items~),
     model,
   )
-  inspect(next.messages[0].content, content="live")
-  inspect(next.session_id, content="desktop-test")
+  inspect(other.active_session, content="desktop-stored")
+  guard other.find_conversation("desktop-test") is Some(live) else {
+    fail("expected the running conversation to survive")
+  }
+  inspect(live.running, content="true")
+  // A stale load reply for the running conversation itself is dropped.
+  let (_, same) = update(
+    dispatch,
+    SessionLoaded(session="desktop-test", items~),
+    model,
+  )
+  inspect(same.active().messages.length(), content="0")
+  inspect(same.active().running, content="true")
 }
 
 ///|
@@ -262,111 +322,221 @@ test "decode recognizes the streaming events" {
 }
 
 ///|
-test "started records the host's workspace for display" {
+test "started routes by session and records the host's workspace" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
     Started(
-      7, "task", "openseek", "deepseek-v4-pro", 1000, "/home/u/Documents/OpenSeek/desktop-test",
+      run_id=7,
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd="/home/u/Documents/OpenSeek/desktop-test",
     ),
     test_model(),
   )
-  inspect(next.cwd, content="/home/u/Documents/OpenSeek/desktop-test")
+  inspect(next.active().cwd, content="/home/u/Documents/OpenSeek/desktop-test")
+  inspect(next.active().running, content="true")
+  guard next.active().active_run_id is Some(7) else {
+    fail("expected the run id to be recorded")
+  }
 }
 
 ///|
-test "switching conversations clears the stale workspace" {
+test "started for an unknown session leaves the model alone" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), cwd: "/somewhere/old" }
-  let (_, fresh) = update(dispatch, NewChat, model)
-  inspect(fresh.cwd, content="")
-  let (_, resumed) = update(dispatch, SessionLoaded("desktop-other", []), model)
-  inspect(resumed.cwd, content="")
+  let (_, next) = update(
+    dispatch,
+    Started(
+      run_id=7,
+      session="desktop-ghost",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd="",
+    ),
+    test_model(),
+  )
+  inspect(next.active().running, content="false")
+  inspect(next.conversations.length(), content="1")
+}
+
+///|
+test "concurrent conversations keep their streams apart" {
+  let dispatch = test_dispatch()
+  let second = {
+    ..empty_conversation("desktop-second"),
+    running: true,
+    active_run_id: Some(8),
+    status: Running,
+  }
+  let model = running_model().replace_conversation(second)
+  let (_, next) = update(dispatch, Engine(8, AssistantDelta("for B")), model)
+  // Run 8 belongs to the background conversation; the active one is untouched.
+  inspect(next.active().streaming_response, content="")
+  guard next.find_conversation("desktop-second") is Some(bg) else {
+    fail("expected the background conversation")
+  }
+  inspect(bg.streaming_response, content="for B")
+}
+
+///|
+test "a background run finishes without disturbing the conversation on screen" {
+  let dispatch = test_dispatch()
+  let second = {
+    ..empty_conversation("desktop-second"),
+    running: true,
+    active_run_id: Some(8),
+    status: Running,
+    messages: [{ kind: User, content: "background ask" }],
+  }
+  let model = running_model().replace_conversation(second)
+  let (_, next) = update(
+    dispatch,
+    Finished(run_id=8, status="finished", answer="done"),
+    model,
+  )
+  guard next.find_conversation("desktop-second") is Some(bg) else {
+    fail("expected the background conversation")
+  }
+  inspect(bg.running, content="false")
+  assert_true(bg.status is Finished(_))
+  inspect(bg.messages[1].content, content="done")
+  // The conversation on screen is still running its own turn.
+  inspect(next.active().running, content="true")
+  assert_true(next.display_status() is Running)
 }
 
 ///|
 test "send while running queues a steer instead of a prompt" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), task: "focus on the tests" }
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    task: "focus on the tests",
+  })
   let (_, once) = update(dispatch, Send, model)
   let (_, twice) = update(dispatch, Send, model)
-  inspect(once.task, content="")
-  inspect(once.pending_steers.length(), content="1")
-  inspect(once.pending_steers[0], content="focus on the tests")
+  inspect(once.active().task, content="")
+  inspect(once.active().pending_steers.length(), content="1")
+  inspect(once.active().pending_steers[0], content="focus on the tests")
   // The steer is pending, not part of the transcript yet.
-  inspect(once.messages.length(), content="0")
-  inspect(once.running, content="true")
-  inspect(twice.pending_steers.length(), content="1")
-  inspect(twice.pending_steers[0], content="focus on the tests")
+  inspect(once.active().messages.length(), content="0")
+  inspect(once.active().running, content="true")
+  inspect(twice.active().pending_steers.length(), content="1")
+  inspect(twice.active().pending_steers[0], content="focus on the tests")
 }
 
 ///|
 test "a cancelling turn cannot be steered; the text stays in the composer" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), status: Cancelling, task: "too late" }
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    status: Cancelling,
+    task: "too late",
+  })
   let (_, next) = update(dispatch, Send, model)
-  inspect(next.task, content="too late")
-  inspect(next.pending_steers.length(), content="0")
+  inspect(next.active().task, content="too late")
+  inspect(next.active().pending_steers.length(), content="0")
+}
+
+///|
+test "the composer draft stays with its conversation across a switch" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..empty_conversation("desktop-second"),
+    messages: [{ kind: User, content: "earlier" }],
+  })
+  let (_, drafted) = update(dispatch, TaskChanged("half a thought"), model)
+  let (_, switched) = update(dispatch, OpenSession("desktop-second"), drafted)
+  // The other conversation starts with its own (empty) draft …
+  inspect(switched.active().task, content="")
+  let (_, back) = update(dispatch, OpenSession("desktop-test"), switched)
+  // … and the original draft is still waiting where it was typed.
+  inspect(back.active().task, content="half a thought")
 }
 
 ///|
 test "steer_applied commits the pending steer as a user message" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), pending_steers: ["go left"] }
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    pending_steers: ["go left"],
+  })
   let (_, next) = update(dispatch, Engine(7, SteerApplied("go left")), model)
-  inspect(next.pending_steers.length(), content="0")
-  inspect(next.messages.length(), content="1")
-  guard next.messages[0].kind is User else { fail("expected a user item") }
-  inspect(next.messages[0].content, content="go left")
+  inspect(next.active().pending_steers.length(), content="0")
+  inspect(next.active().messages.length(), content="1")
+  guard next.active().messages[0].kind is User else {
+    fail("expected a user item")
+  }
+  inspect(next.active().messages[0].content, content="go left")
 }
 
 ///|
 test "steer_dropped settles the pending steer with a visible notice" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), pending_steers: ["go left"] }
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    pending_steers: ["go left"],
+  })
   let (_, next) = update(dispatch, Engine(7, SteerDropped("go left")), model)
-  inspect(next.pending_steers.length(), content="0")
-  inspect(next.messages.length(), content="1")
-  guard next.messages[0].kind is Assistant(true) else {
+  inspect(next.active().pending_steers.length(), content="0")
+  inspect(next.active().messages.length(), content="1")
+  guard next.active().messages[0].kind is Assistant(true) else {
     fail("expected an error bubble")
   }
-  assert_true(next.messages[0].content.contains("go left"))
+  assert_true(next.active().messages[0].content.contains("go left"))
 }
 
 ///|
 test "an identical-text settle removes exactly one pending entry" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), pending_steers: ["again", "again"] }
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    pending_steers: ["again", "again"],
+  })
   let (_, next) = update(dispatch, Engine(7, SteerApplied("again")), model)
-  inspect(next.pending_steers.length(), content="1")
-  inspect(next.pending_steers[0], content="again")
-  inspect(next.messages.length(), content="1")
+  inspect(next.active().pending_steers.length(), content="1")
+  inspect(next.active().pending_steers[0], content="again")
+  inspect(next.active().messages.length(), content="1")
 }
 
 ///|
 test "an undelivered steer is reported instead of vanishing" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), pending_steers: ["lost"] }
-  let (_, next) = update(dispatch, SteerUndelivered("lost"), model)
-  inspect(next.pending_steers.length(), content="0")
-  inspect(next.messages.length(), content="1")
-  guard next.messages[0].kind is Assistant(true) else {
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    pending_steers: ["lost"],
+  })
+  let (_, next) = update(
+    dispatch,
+    SteerUndelivered(session="desktop-test", text="lost"),
+    model,
+  )
+  inspect(next.active().pending_steers.length(), content="0")
+  inspect(next.active().messages.length(), content="1")
+  guard next.active().messages[0].kind is Assistant(true) else {
     fail("expected an error bubble")
   }
-  assert_true(next.messages[0].content.contains("lost"))
+  assert_true(next.active().messages[0].content.contains("lost"))
 }
 
 ///|
 test "a run that ends with steers in flight sweeps them into notices" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), pending_steers: ["orphaned"] }
-  let (_, next) = update(dispatch, Finished(7, "finished", "", 0), model)
-  inspect(next.pending_steers.length(), content="0")
-  inspect(next.running, content="false")
-  guard next.messages[0].kind is Assistant(true) else {
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    pending_steers: ["orphaned"],
+  })
+  let (_, next) = update(
+    dispatch,
+    Finished(run_id=7, status="finished", answer=""),
+    model,
+  )
+  inspect(next.active().pending_steers.length(), content="0")
+  inspect(next.active().running, content="false")
+  guard next.active().messages[0].kind is Assistant(true) else {
     fail("expected an error bubble")
   }
-  assert_true(next.messages[0].content.contains("orphaned"))
+  assert_true(next.active().messages[0].content.contains("orphaned"))
 }
 
 ///|
@@ -401,10 +571,10 @@ test "the saved DeepSeek key is never sent to another endpoint" {
 test "the official endpoint requires a key, a custom endpoint a URL" {
   let official = { ..test_model(), api_provider: Deepseek, api_key: "" }
   assert_false(official.api_ready())
-  assert_true(official.settings_status() is ApiKeyRequired)
+  assert_true(official.display_status() is ApiKeyRequired)
   let custom = { ..test_model(), api_provider: Custom, custom_api_url: "" }
   assert_false(custom.api_ready())
-  assert_true(custom.settings_status() is SetupRequired)
+  assert_true(custom.display_status() is SetupRequired)
   let configured = {
     ..custom,
     custom_api_url: "https://proxy.example/chat/completions",
@@ -421,22 +591,22 @@ test "loaded settings open the popup only when incomplete" {
   let dispatch = test_dispatch()
   let (_, zero_config) = update(
     dispatch,
-    SettingsLoaded("", "", ""),
+    SettingsLoaded(provider="", custom_url="", api_key=""),
     test_model(),
   )
   inspect(zero_config.setup_open, content="false")
   assert_true(zero_config.api_provider is Openseek)
-  assert_true(zero_config.status is Ready)
+  assert_true(zero_config.display_status() is Ready)
   let (_, keyless) = update(
     dispatch,
-    SettingsLoaded("deepseek", "", ""),
+    SettingsLoaded(provider="deepseek", custom_url="", api_key=""),
     test_model(),
   )
   inspect(keyless.setup_open, content="true")
-  assert_true(keyless.status is ApiKeyRequired)
+  assert_true(keyless.display_status() is ApiKeyRequired)
   let (_, restored) = update(
     dispatch,
-    SettingsLoaded("deepseek", "", "sk-stored"),
+    SettingsLoaded(provider="deepseek", custom_url="", api_key="sk-stored"),
     test_model(),
   )
   inspect(restored.setup_open, content="false")
@@ -451,15 +621,15 @@ test "update is pure: a provider change is idempotent" {
   let (_, twice) = update(dispatch, ProviderChanged("deepseek"), model)
   assert_true(once.api_provider is Deepseek)
   assert_true(twice.api_provider is Deepseek)
-  assert_true(once.status is ApiKeyRequired)
-  assert_true(twice.status is ApiKeyRequired)
+  assert_true(once.display_status() is ApiKeyRequired)
+  assert_true(twice.display_status() is ApiKeyRequired)
 }
 
 ///|
 test "changing settings mid-run leaves the run status alone" {
   let dispatch = test_dispatch()
   let (_, next) = update(dispatch, ProviderChanged("deepseek"), running_model())
-  assert_true(next.status is Running)
+  assert_true(next.display_status() is Running)
   assert_true(next.api_provider is Deepseek)
 }
 

@@ -170,9 +170,11 @@ priv struct RunConfig {
 /// A live `--serve` engine process: one process serves every prompt of one
 /// conversation. Prompts and cancels are JSONL commands on its stdin; its
 /// stdout event stream is consumed for the engine's lifetime. Turns are
-/// strictly sequential on the wire, so events are stamped with the run id of
-/// the most recently submitted prompt.
+/// strictly sequential on the wire *per conversation*, so events are stamped
+/// with the run id of the prompt this engine saw most recently.
 priv struct ServeEngine {
+  // The conversation this process serves: its slot in the manager's map.
+  session_key : String
   // Fingerprint of the config this process was spawned with; a prompt whose
   // config differs cannot reuse it.
   spec_key : String
@@ -184,23 +186,29 @@ priv struct ServeEngine {
 
 ///|
 priv enum PumpCommand {
-  // Replace the live engine (if any) with one spawned for this config; the
-  // queue carries the result back to the requesting `start` op.
+  // Replace the conversation's engine (if any) with one spawned for this
+  // config; the queue carries the result back to the requesting `start` op.
   SpawnEngine(RunConfig, @async.Queue[Result[Unit, String]])
 }
 
 ///|
-/// Host-side state of the persistent-engine design: the live serve process
-/// (owned by the pump's task group) plus the command queue other ops use to
-/// ask the pump for lifecycle changes. stdin writes go directly from any op;
+/// Host-side state of the persistent-engine design: one serve process per
+/// conversation (all owned by the pump's task group, so different sessions
+/// can run turns concurrently) plus the command queue other ops use to ask
+/// the pump for lifecycle changes. stdin writes go directly from any op;
 /// only spawning needs the pump, because a process must be owned by a task
-/// group that outlives individual IPC requests.
+/// group that outlives individual IPC requests. Idle engines stay alive for
+/// the app's lifetime — the durable session makes killing them safe, but
+/// keeping them avoids a respawn-and-replay on every conversation switch.
 priv struct EngineManager {
   commands : @async.Queue[PumpCommand]
-  mut live : ServeEngine?
+  engines : Map[String, ServeEngine]
   mut next_run_id : Int
   mut pump_running : Bool
-  mut start_in_flight : Bool
+  // Conversations with a `start` op between config validation and the prompt
+  // hitting the wire; a second start for the same conversation in that window
+  // is refused instead of racing the spawn.
+  starts_in_flight : Set[String]
 }
 
 ///|
@@ -214,11 +222,43 @@ priv enum StreamMessage {
 fn new_engine_manager() -> EngineManager {
   {
     commands: Queue(kind=Unbounded),
-    live: None,
+    engines: {},
     next_run_id: 1,
     pump_running: false,
-    start_in_flight: false,
+    starts_in_flight: Set([]),
   }
+}
+
+///|
+/// The manager's map key for a run: its durable session id, or the one shared
+/// slot for session-less runs (the desktop client always names a session).
+fn session_key(config : RunConfig) -> String {
+  config.session.unwrap_or("")
+}
+
+///|
+/// The engine that owns the open run `run_id` — or, when no id is given, the
+/// only open run if exactly one exists (with several conversations running
+/// concurrently, an unaddressed cancel/steer would be a guess).
+fn open_run_engine(manager : EngineManager, run_id? : Int) -> ServeEngine? {
+  if run_id is Some(id) {
+    for _, engine in manager.engines {
+      if engine.run_open && engine.latest_run == id {
+        return Some(engine)
+      }
+    }
+    return None
+  }
+  let mut found : ServeEngine? = None
+  for _, engine in manager.engines {
+    if engine.run_open {
+      if found is Some(_) {
+        return None
+      }
+      found = Some(engine)
+    }
+  }
+  found
 }
 
 ///|
@@ -758,7 +798,7 @@ async fn run_engine_pump(
   }
   fn reset() -> Unit {
     manager.pump_running = false
-    manager.live = None
+    manager.engines.clear()
   }
 
   manager.pump_running = true
@@ -767,11 +807,13 @@ async fn run_engine_pump(
     for ;; {
       match manager.commands.get() {
         SpawnEngine(config, ack) => {
-          if manager.live is Some(old) {
+          // Only this conversation's previous process is replaced; engines
+          // serving other sessions keep running their own turns.
+          if manager.engines.get(session_key(config)) is Some(old) {
             // Closing stdin is the serve protocol's EOF signal; an idle
             // engine drains and exits, and its own reader task cleans up.
             old.writer.close()
-            manager.live = None
+            manager.engines.remove(session_key(config))
           }
           start_serve_engine(context, group, manager, config) catch {
             error if @async.is_being_cancelled() ||
@@ -833,13 +875,14 @@ async fn[G] start_serve_engine(
     no_wait=true,
   )
   let engine : ServeEngine = {
+    session_key: session_key(config),
     spec_key: engine_fingerprint(config),
     writer,
     latest_run: 0,
     run_open: false,
     cancel_requested: false,
   }
-  manager.live = Some(engine)
+  manager.engines.set(engine.session_key, engine)
   let messages : @async.Queue[StreamMessage] = Queue(kind=Unbounded)
   let stderr_task = group.spawn(no_wait=true) <| () => {
     stderr_reader.read_all().text() catch {
@@ -891,10 +934,11 @@ async fn serve_engine_consumer(
       StreamReaderFailed(message) =>
         emit_error(context, message, run_id=engine.latest_run)
       StreamExited(code) => {
-        // A respawn may already have replaced this engine; only clear the
-        // slot if it is still ours.
-        if manager.live is Some(current) && physical_equal(current, engine) {
-          manager.live = None
+        // A respawn may already have replaced this engine in its slot; only
+        // clear the slot if it is still ours.
+        if manager.engines.get(engine.session_key) is Some(current) &&
+          physical_equal(current, engine) {
+          manager.engines.remove(engine.session_key)
         }
         // EOF with a run still open means the engine died mid-turn: close
         // that run with its only available diagnostics. A clean exit after a
@@ -928,34 +972,39 @@ async fn serve_engine_consumer(
 
 ///|
 /// Submit one prompt to the conversation's serve engine, spawning or
-/// replacing the process first when the config demands it. Returns as soon
-/// as the prompt is on the wire; the engine's consumer task reports progress
-/// and completion through events, exactly as the frontend already expects.
+/// replacing the process first when the config demands it. Only this
+/// conversation must be idle — other sessions' engines run their own turns
+/// concurrently. Returns as soon as the prompt is on the wire; the engine's
+/// consumer task reports progress and completion through events, exactly as
+/// the frontend already expects.
 async fn start_run(
   context : @app.AppCommandExtensionContext,
   manager : EngineManager,
   engine : String,
   payload : StartPayload,
 ) -> Result[StartReply, String] {
-  if manager.live is Some(live) && live.run_open {
-    return Err("OpenSeek run \{live.latest_run} is still active")
-  }
-  if manager.start_in_flight {
-    return Err("an OpenSeek run is already starting")
-  }
   guard manager.pump_running else {
     return Err("engine host is not connected; reload the app")
   }
-  fn clear_start_flag() -> Unit {
-    manager.start_in_flight = false
-  }
-
-  manager.start_in_flight = true
-  defer clear_start_flag()
   let config = match run_config(payload, engine) {
     Ok(config) => config
     Err(error) => return Err(error)
   }
+  let key = session_key(config)
+  if manager.engines.get(key) is Some(live) && live.run_open {
+    return Err(
+      "OpenSeek run \{live.latest_run} is still active in this conversation",
+    )
+  }
+  if manager.starts_in_flight.contains(key) {
+    return Err("an OpenSeek run is already starting for this conversation")
+  }
+  fn clear_start_flag() -> Unit {
+    manager.starts_in_flight.remove(key)
+  }
+
+  manager.starts_in_flight.add(key)
+  defer clear_start_flag()
   if config.cwd is Some(cwd) {
     ensure_run_cwd(cwd) catch {
       error if @async.is_being_cancelled() ||
@@ -963,9 +1012,10 @@ async fn start_run(
       error => return Err("failed to create working directory \{cwd}: \{error}")
     }
   }
-  let need_spawn = match manager.live {
-    Some(live) => live.spec_key != engine_fingerprint(config)
-    None => true
+  let need_spawn = if manager.engines.get(key) is Some(live) {
+    live.spec_key != engine_fingerprint(config)
+  } else {
+    true
   }
   if need_spawn {
     let ack : @async.Queue[Result[Unit, String]] = Queue(kind=Unbounded)
@@ -975,7 +1025,9 @@ async fn start_run(
       Err(error) => return Err(error)
     }
   }
-  guard manager.live is Some(live) else { return Err("engine failed to start") }
+  guard manager.engines.get(key) is Some(live) else {
+    return Err("engine failed to start")
+  }
   let run_id = manager.next_run_id
   manager.next_run_id = manager.next_run_id + 1
   live.latest_run = run_id
@@ -1002,8 +1054,9 @@ async fn start_run(
       // The engine died between turns: close the run and drop the handle so
       // the next prompt respawns on the same durable session.
       live.run_open = false
-      if manager.live is Some(current) && physical_equal(current, live) {
-        manager.live = None
+      if manager.engines.get(key) is Some(current) &&
+        physical_equal(current, live) {
+        manager.engines.remove(key)
       }
       emit_error(context, "engine write failed: \{error}", run_id~)
       emit_finished(context, run_id, Failed)
@@ -1030,38 +1083,34 @@ async fn ensure_run_cwd(cwd : String) -> Unit {
 }
 
 ///|
-/// Cancel the open turn by asking the serve engine to interrupt it — the
-/// process itself stays alive for the next prompt. With no live engine or
-/// open run there is nothing to cancel.
+/// Cancel an open turn by asking its serve engine to interrupt it — the
+/// process itself stays alive for the next prompt. The run is addressed by
+/// id across all conversations; with no matching open run there is nothing
+/// to cancel.
 async fn cancel_run(
   manager : EngineManager,
   payload : CancelPayload,
 ) -> CancelReply {
-  match manager.live {
-    Some(live) if live.run_open => {
-      if payload.run_id is Some(requested) && requested != live.latest_run {
-        return { cancelled: false, run_id: Some(live.latest_run) }
-      }
-      live.cancel_requested = true
-      let command : Json = { "command": "cancel" }
-      live.writer.write(command.stringify() + "\n") catch {
-        error if @async.is_being_cancelled() ||
-          @async.is_cancellation_error(error) => raise error
-        // The engine just died; its reader task closes the run.
-        _ => ()
-      }
-      { cancelled: true, run_id: Some(live.latest_run) }
-    }
-    _ => { cancelled: false, run_id: None }
+  guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) else {
+    return { cancelled: false, run_id: None }
   }
+  live.cancel_requested = true
+  let command : Json = { "command": "cancel" }
+  live.writer.write(command.stringify() + "\n") catch {
+    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
+      raise error
+    // The engine just died; its reader task closes the run.
+    _ => ()
+  }
+  { cancelled: true, run_id: Some(live.latest_run) }
 }
 
 ///|
-/// Inject steering input into the open turn: the text rides the serve
-/// engine's lossless steering queue and is folded into the conversation at
-/// the turn's next step boundary, where the engine echoes it back as a
-/// `steer_applied` event (or `steer_dropped` if it raced the turn's end).
-/// Steering a turn that is being cancelled is refused — the steer could
+/// Inject steering input into an open turn, addressed by run id: the text
+/// rides that serve engine's lossless steering queue and is folded into the
+/// conversation at the turn's next step boundary, where the engine echoes it
+/// back as a `steer_applied` event (or `steer_dropped` if it raced the turn's
+/// end). Steering a turn that is being cancelled is refused — the steer could
 /// outlive the dying turn in the engine's queue and contaminate a later
 /// prompt. Blank text is refused too: the engine filters blanks without
 /// emitting any settling event, which would leave a phantom acknowledgment.
@@ -1072,23 +1121,19 @@ async fn steer_run(
   guard !payload.text.trim().is_empty() else {
     return { steered: false, run_id: None }
   }
-  match manager.live {
-    Some(live) if live.run_open && !live.cancel_requested => {
-      if payload.run_id is Some(requested) && requested != live.latest_run {
-        return { steered: false, run_id: Some(live.latest_run) }
-      }
-      let command : Json = { "command": "steer", "text": payload.text }
-      live.writer.write(command.stringify() + "\n") catch {
-        error if @async.is_being_cancelled() ||
-          @async.is_cancellation_error(error) => raise error
-        // The engine just died; its reader task closes the run. The steer
-        // never reached it, so report that rather than pretend.
-        _ => return { steered: false, run_id: Some(live.latest_run) }
-      }
-      { steered: true, run_id: Some(live.latest_run) }
-    }
-    _ => { steered: false, run_id: None }
+  guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
+    !live.cancel_requested else {
+    return { steered: false, run_id: None }
   }
+  let command : Json = { "command": "steer", "text": payload.text }
+  live.writer.write(command.stringify() + "\n") catch {
+    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
+      raise error
+    // The engine just died; its reader task closes the run. The steer
+    // never reached it, so report that rather than pretend.
+    _ => return { steered: false, run_id: Some(live.latest_run) }
+  }
+  { steered: true, run_id: Some(live.latest_run) }
 }
 
 ///|

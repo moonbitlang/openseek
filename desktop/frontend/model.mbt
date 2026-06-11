@@ -91,31 +91,28 @@ priv struct SessionListItem {
 }
 
 ///|
-priv struct Model {
-  bridge_ready : Bool
+/// One conversation's full client-side state. Each conversation maps to a
+/// durable engine session and, while running, to its own `--serve` engine
+/// process in the host — several conversations can run turns concurrently,
+/// so everything a run touches lives here rather than on the model.
+priv struct Conversation {
+  // Durable engine session backing this conversation; consecutive runs share
+  // it so the agent keeps context between prompts.
+  session_id : String
+  // Composer draft, kept per conversation so switching away (and back)
+  // neither loses the text nor sends it to the wrong session.
+  task : String
   running : Bool
   active_run_id : Int?
+  // Run-scoped status only (Idle/Starting/Running/…); bridge and settings
+  // states are derived at display time by `Model::display_status`.
   status : Status
   usage_tokens : Int
-  task : String
-  selected_model : String
-  max_steps : String
   // The conversation's workspace directory as reported by the host's
   // `started` event — display only (topbar tooltip); the host derives it
   // from the session id, so it is never sent back with a start request.
   cwd : String
-  api_key : String
-  setup_api_key : String
-  // Which endpoint the engine talks to; `custom_api_url` only matters when
-  // the provider is `Custom`. Both persist to localStorage as they change,
-  // unlike the key, which is staged in `setup_api_key` until saved.
-  api_provider : ApiProvider
-  custom_api_url : String
-  setup_open : Bool
   watcher_status : String
-  // Durable engine session backing the current conversation; consecutive runs
-  // share it so the agent keeps context between prompts. "New chat" rotates it.
-  session_id : String
   // Live text of the in-flight assistant turn, accumulated from
   // `assistant_delta` / `reasoning_delta` events and cleared once the engine
   // commits the full message (or the step/run ends). Empty means not streaming.
@@ -128,9 +125,33 @@ priv struct Model {
   // notices when the run ends, so the text never vanishes silently.
   pending_steers : Array[String]
   messages : Array[TranscriptItem]
+}
+
+///|
+priv struct Model {
+  bridge_ready : Bool
+  // Why the bridge is unavailable; empty while still waiting or once ready.
+  bridge_error : String
+  selected_model : String
+  max_steps : String
+  api_key : String
+  setup_api_key : String
+  // Which endpoint the engine talks to; `custom_api_url` only matters when
+  // the provider is `Custom`. Both persist to localStorage as they change,
+  // unlike the key, which is staged in `setup_api_key` until saved.
+  api_provider : ApiProvider
+  custom_api_url : String
+  setup_open : Bool
+  // The conversation on screen; always present in `conversations` once the
+  // startup session rotation lands.
+  active_session : String
+  // Every conversation with live client state this app run: the active one,
+  // those still running in the background, and those visited and kept for an
+  // instant switch back. Copy-on-write, like the transcript arrays.
+  conversations : Array[Conversation]
   // Durable sessions known to the engine's store, newest first, refreshed
-  // when the bridge connects and when a run reaches the store. The current
-  // session appears here once its first turn has been persisted.
+  // when the bridge connects and when a run reaches the store. A new
+  // conversation appears here once its first turn has been persisted.
   sessions : Array[SessionListItem]
   // Why the sidebar list could not be refreshed; empty when the last refresh
   // succeeded.
@@ -142,9 +163,9 @@ priv enum Msg {
   Init
   BridgeReady
   BridgeUnavailable(String)
-  // Persisted settings read back from localStorage at startup:
-  // provider wire name, custom endpoint URL, API key.
-  SettingsLoaded(String, String, String)
+  // Persisted settings read back from localStorage at startup. `provider`
+  // is the wire name (`ApiProvider::parse` handles unknown values).
+  SettingsLoaded(provider~ : String, custom_url~ : String, api_key~ : String)
   TaskChanged(String)
   ModelChanged(String)
   MaxStepsChanged(String)
@@ -157,45 +178,65 @@ priv enum Msg {
   Send
   // The host reported a steer that never reached the engine (turn already
   // closed, engine dead, or the bridge call itself failed): carries the
-  // original text so it can settle the pending acknowledgment.
-  SteerUndelivered(String)
+  // session and original text so the right conversation's pending
+  // acknowledgment can settle.
+  SteerUndelivered(session~ : String, text~ : String)
   Stop
   NewChat
   SessionRotated(String)
   SessionsLoaded(Array[SessionListItem])
   SessionsFailed(String)
   OpenSession(String)
-  SessionLoaded(String, Array[TranscriptItem])
-  Started(Int, String, String, String, Int, String)
+  SessionLoaded(session~ : String, items~ : Array[TranscriptItem])
+  // The host accepted a prompt: `session` routes the event to its
+  // conversation, and everything after a `started` routes by `run_id`.
+  Started(
+    run_id~ : Int,
+    session~ : String,
+    model~ : String,
+    max_steps~ : Int,
+    cwd~ : String
+  )
   Engine(Int, EngineEvent)
-  Failed(String)
-  Error(Int, String, Int, String)
-  Finished(Int, String, String, Int)
+  // The start request for that conversation never produced a run (the bridge
+  // call failed or the host refused it).
+  Failed(session~ : String, message~ : String)
+  Error(run_id~ : Int, message~ : String, diagnostics~ : String)
+  Finished(run_id~ : Int, status~ : String, answer~ : String)
+}
+
+///|
+fn empty_conversation(session_id : String) -> Conversation {
+  {
+    session_id,
+    task: "",
+    running: false,
+    active_run_id: None,
+    status: Idle,
+    usage_tokens: 0,
+    cwd: "",
+    watcher_status: "",
+    streaming_response: "",
+    streaming_reasoning: "",
+    pending_steers: [],
+    messages: [],
+  }
 }
 
 ///|
 fn initial_model() -> Model {
   {
     bridge_ready: false,
-    running: false,
-    active_run_id: None,
-    status: WaitingBridge,
-    usage_tokens: 0,
-    task: "",
+    bridge_error: "",
     selected_model: DefaultModel,
     max_steps: DefaultMaxSteps,
-    cwd: "",
     api_key: "",
     setup_api_key: "",
     api_provider: Openseek,
     custom_api_url: "",
     setup_open: false,
-    watcher_status: "",
-    session_id: "",
-    streaming_response: "",
-    streaming_reasoning: "",
-    pending_steers: [],
-    messages: [],
+    active_session: "",
+    conversations: [],
     sessions: [],
     sessions_error: "",
   }
@@ -236,14 +277,10 @@ fn Model::effective_api_key(self : Model) -> String {
 }
 
 ///|
-/// The status implied by the current settings. While a run is active (or the
-/// bridge is down) the current status stands — changing settings mid-run
-/// must not clobber Running/Step/… — otherwise it reports whether the
-/// configured endpoint is ready to accept a prompt.
+/// The status implied by the settings alone: whether the configured endpoint
+/// is ready to accept a prompt, and what is missing when it is not.
 fn Model::settings_status(self : Model) -> Status {
-  if !self.bridge_ready || self.running {
-    self.status
-  } else if self.api_ready() {
+  if self.api_ready() {
     Ready
   } else if self.api_provider is Deepseek {
     ApiKeyRequired
@@ -253,12 +290,108 @@ fn Model::settings_status(self : Model) -> Status {
 }
 
 ///|
-fn Model::clear_streams(self : Model) -> Model {
+/// The status the top bar shows: bridge problems first, then the active
+/// conversation's own run state, and — only when that conversation is idle —
+/// the settings-derived readiness. Purely derived, so update handlers never
+/// have to keep a stored status in sync with settings changes.
+fn Model::display_status(self : Model) -> Status {
+  if !self.bridge_ready {
+    if self.bridge_error.is_empty() {
+      WaitingBridge
+    } else {
+      Unavailable(self.bridge_error)
+    }
+  } else if self.active().status is Idle {
+    self.settings_status()
+  } else {
+    self.active().status
+  }
+}
+
+///|
+fn Model::find_conversation(self : Model, session_id : String) -> Conversation? {
+  for conv in self.conversations {
+    if conv.session_id == session_id {
+      return Some(conv)
+    }
+  }
+  None
+}
+
+///|
+/// The conversation on screen. Until the startup session rotation lands the
+/// model has no conversations yet; an empty placeholder keeps the view (and
+/// every handler reading the active conversation) total.
+fn Model::active(self : Model) -> Conversation {
+  if self.find_conversation(self.active_session) is Some(conv) {
+    conv
+  } else {
+    empty_conversation(self.active_session)
+  }
+}
+
+///|
+/// Replace (or add) the entry sharing `conv`'s session id, copy-on-write —
+/// prior model snapshots keep their own conversations array.
+fn Model::replace_conversation(self : Model, conv : Conversation) -> Model {
+  let conversations = self.conversations.copy()
+  for index, existing in conversations {
+    if existing.session_id == conv.session_id {
+      conversations[index] = conv
+      return { ..self, conversations, }
+    }
+  }
+  conversations.push(conv)
+  { ..self, conversations, }
+}
+
+///|
+/// The conversation that owns run `run_id`. Engine events route by run id,
+/// so a backgrounded conversation keeps receiving its own stream.
+fn Model::conversation_by_run(self : Model, run_id : Int) -> Conversation? {
+  for conv in self.conversations {
+    if conv.active_run_id is Some(active) && active == run_id {
+      return Some(conv)
+    }
+  }
+  None
+}
+
+///|
+/// Make `session_id` the on-screen conversation, creating its entry when it
+/// has none, and drop conversations with nothing worth keeping — not
+/// running, no transcript, no draft. Abandoned "New chat" husks die here
+/// instead of accumulating invisible entries.
+fn Model::activate(self : Model, session_id : String) -> Model {
+  let conversations : Array[Conversation] = []
+  let mut found = false
+  for conv in self.conversations {
+    if conv.session_id == session_id {
+      found = true
+      conversations.push(conv)
+    } else if conv.running ||
+      conv.messages.length() > 0 ||
+      !conv.task.trim().is_empty() {
+      conversations.push(conv)
+    }
+  }
+  if !found {
+    conversations.push(empty_conversation(session_id))
+  }
+  { ..self, active_session: session_id, conversations }
+}
+
+///|
+fn Conversation::clear_streams(self : Conversation) -> Conversation {
   { ..self, streaming_response: "", streaming_reasoning: "" }
 }
 
 ///|
-fn Model::append_item(self : Model, kind : ItemKind, content : String) -> Model {
+fn Conversation::append_item(
+  self : Conversation,
+  kind : ItemKind,
+  content : String,
+) -> Conversation {
   let messages = self.messages.copy()
   messages.push({ kind, content })
   { ..self, messages, }
@@ -278,7 +411,10 @@ fn steer_dropped_notice(text : String) -> String {
 /// in wire order, but an identical-text steer must not steal a later one's
 /// acknowledgment, so exactly one entry settles per event; no match (already
 /// swept at run end) is a no-op.
-fn Model::settle_pending_steer(self : Model, text : String) -> Model {
+fn Conversation::settle_pending_steer(
+  self : Conversation,
+  text : String,
+) -> Conversation {
   for index, pending in self.pending_steers {
     if pending == text {
       let pending_steers = self.pending_steers.copy()
@@ -294,41 +430,21 @@ fn Model::settle_pending_steer(self : Model, text : String) -> Model {
 /// In the normal path the engine settles each steer before the turn's
 /// terminal event, so this only fires when the run died with steers in
 /// flight — the text must not vanish with it.
-fn Model::sweep_pending_steers(self : Model) -> Model {
-  let mut model = self
+fn Conversation::sweep_pending_steers(self : Conversation) -> Conversation {
+  let mut conv = self
   for text in self.pending_steers {
-    model = model.append_item(Assistant(true), steer_dropped_notice(text))
+    conv = conv.append_item(Assistant(true), steer_dropped_notice(text))
   }
-  { ..model, pending_steers: [] }
+  { ..conv, pending_steers: [] }
 }
 
 ///|
-fn Model::matches_run(self : Model, run_id : Int) -> Bool {
-  match self.active_run_id {
-    Some(active) => active == run_id
-    None => false
-  }
-}
-
-///|
-fn Model::matches_error_run(self : Model, run_id : Int) -> Bool {
-  run_id == EmptyRunId || self.matches_run(run_id)
-}
-
-///|
-fn Model::last_assistant_content(self : Model) -> String? {
-  let length = self.messages.length()
-  if length == 0 {
-    None
+fn Conversation::last_assistant_content(self : Conversation) -> String? {
+  if self.messages.get(self.messages.length() - 1) is Some(item) &&
+    item.kind is Assistant(_) {
+    Some(item.content)
   } else {
-    match self.messages.get(length - 1) {
-      Some(item) =>
-        match item.kind {
-          Assistant(_) => Some(item.content)
-          _ => None
-        }
-      None => None
-    }
+    None
   }
 }
 
@@ -352,9 +468,13 @@ fn StatusKind::css(self : StatusKind) -> String {
 }
 
 ///|
-/// A single source of truth for the current run/setup state. The display label
-/// and its severity are both derived from the variant so they cannot drift.
+/// A single source of truth for run/setup state. The display label and its
+/// severity are both derived from the variant so they cannot drift. A
+/// conversation only ever stores the run-scoped variants (`Idle` through
+/// `Finished`); the bridge/settings variants exist for `display_status`,
+/// which substitutes them for `Idle` at render time.
 priv enum Status {
+  Idle
   WaitingBridge
   Ready
   SetupRequired
@@ -372,6 +492,9 @@ priv enum Status {
 ///|
 fn Status::label(self : Status) -> String {
   match self {
+    // Never rendered: `display_status` replaces an idle conversation's
+    // status with the settings-derived one.
+    Idle => "Idle"
     WaitingBridge => "Waiting for bridge"
     Ready => "Ready"
     SetupRequired => "Setup required"
@@ -400,7 +523,7 @@ fn Status::label(self : Status) -> String {
 ///|
 fn Status::kind(self : Status) -> StatusKind {
   match self {
-    WaitingBridge => Neutral
+    Idle | WaitingBridge => Neutral
     Ready => Ok
     SetupRequired
     | ApiKeyRequired

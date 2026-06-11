@@ -1,9 +1,6 @@
 ///|
-fn can_stop(model : Model) -> Bool {
-  match model.active_run_id {
-    Some(_) => model.running
-    None => false
-  }
+fn can_stop(conv : Conversation) -> Bool {
+  conv.running && conv.active_run_id is Some(_)
 }
 
 ///|
@@ -45,70 +42,84 @@ fn model_select(dispatch : @cmd.Dispatch[Msg], selected : String) -> @html.Html 
 }
 
 ///|
-fn conversation_title(model : Model) -> String {
-  let mut title = ""
-  for item in model.messages {
-    if title.is_empty() {
-      match item.kind {
-        User => title = item.content.trim().to_owned()
-        _ => ()
+fn conversation_title(conv : Conversation) -> String {
+  for item in conv.messages {
+    if item.kind is User {
+      let title = item.content.trim().to_owned()
+      if !title.is_empty() {
+        return title
       }
     }
   }
-  if title.is_empty() {
-    let task = model.task.trim().to_owned()
-    if task.is_empty() {
-      "OpenSeek Desktop"
-    } else {
-      task
-    }
-  } else {
-    title
-  }
+  non_empty_or(conv.task.trim().to_owned(), "OpenSeek Desktop")
 }
 
 ///|
-/// Sidebar rows for the engine's durable sessions, newest first. The current
-/// conversation is highlighted; until its first turn reaches the store it is
-/// not in the engine's list yet, so it gets its own row at the top.
+/// One sidebar row. A conversation with a turn in flight gets a pulsing dot,
+/// so background work stays visible while another conversation is on screen.
+fn session_row(
+  dispatch : @cmd.Dispatch[Msg],
+  model : Model,
+  session_id : String,
+  label : String,
+) -> @html.Html {
+  let active = session_id == model.active_session
+  let running = model.find_conversation(session_id) is Some(conv) &&
+    conv.running
+  let mut class = "conversation-row"
+  if active {
+    class = class + " active"
+  }
+  if running {
+    class = class + " running"
+  }
+  let children = [@html.span(class="sidebar-label", label)]
+  if running {
+    children.push(@html.span(class="run-dot accent pulse", ""))
+  }
+  @html.button(
+    class~,
+    title=session_id,
+    on_click=dispatch(OpenSession(session_id)),
+    children,
+  )
+}
+
+///|
+/// Sidebar rows: conversations that only exist in this app run (no turn has
+/// reached the store yet) first, then the engine's durable sessions, newest
+/// first. Rows stay clickable while runs are active — switching between
+/// conversations mid-run is the point of keeping them concurrent.
 fn session_rows(
   dispatch : @cmd.Dispatch[Msg],
   model : Model,
 ) -> Array[@html.Html] {
   let rows : Array[@html.Html] = []
-  let mut current_listed = false
-  for item in model.sessions {
-    if item.id == model.session_id {
-      current_listed = true
+  let listed = (id : String) => {
+    for item in model.sessions {
+      if item.id == id {
+        return true
+      }
+    }
+    false
+  }
+  // Newest rotation last in the array; show unlisted conversations newest
+  // first to match the store list's ordering.
+  for conv in model.conversations.rev_iter() {
+    if !listed(conv.session_id) {
+      rows.push(
+        session_row(dispatch, model, conv.session_id, conversation_title(conv)),
+      )
     }
   }
-  if !current_listed {
-    rows.push(
-      @html.div(class="conversation-row active", title=model.session_id, [
-        @html.span(class="sidebar-label", conversation_title(model)),
-      ]),
-    )
-  }
   for item in model.sessions {
-    let active = item.id == model.session_id
-    let label = if active {
-      conversation_title(model)
+    let label = if model.find_conversation(item.id) is Some(conv) &&
+      item.id == model.active_session {
+      conversation_title(conv)
     } else {
       non_empty_or(item.title, item.id)
     }
-    rows.push(
-      @html.button(
-        class=if active {
-          "conversation-row active"
-        } else {
-          "conversation-row"
-        },
-        title=item.id,
-        disabled=model.running,
-        on_click=dispatch(OpenSession(item.id)),
-        [@html.span(class="sidebar-label", label)],
-      ),
-    )
+    rows.push(session_row(dispatch, model, item.id, label))
   }
   if !model.sessions_error.is_empty() {
     rows.push(
@@ -131,15 +142,10 @@ fn sidebar_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
   @html.aside([
     @html.div(class="sidebar-main", [
       @html.div(class="sidebar-section", [
-        @html.button(
-          class="sidebar-button",
-          disabled=model.running,
-          on_click=dispatch(NewChat),
-          [
-            @html.span(class="sidebar-icon", "+"),
-            @html.span(class="sidebar-label", "New chat"),
-          ],
-        ),
+        @html.button(class="sidebar-button", on_click=dispatch(NewChat), [
+          @html.span(class="sidebar-icon", "+"),
+          @html.span(class="sidebar-label", "New chat"),
+        ]),
       ]),
       @html.div(class="sidebar-section sessions", sessions_section),
     ]),
@@ -261,9 +267,9 @@ fn streaming_response_view(content : String) -> @html.Html {
 }
 
 ///|
-fn transcript_view(model : Model) -> @html.Html {
+fn transcript_view(conv : Conversation) -> @html.Html {
   let items : Array[@html.Html] = []
-  if model.messages.is_empty() {
+  if conv.messages.is_empty() {
     items.push(
       @html.div(class="empty", [
         @html.div(class="empty-badge", "✦"),
@@ -275,23 +281,23 @@ fn transcript_view(model : Model) -> @html.Html {
       ]),
     )
   } else {
-    for item in model.messages {
+    for item in conv.messages {
       items.push(transcript_item_view(item))
     }
   }
   // Both buffers can be non-empty at once: the answer starts streaming
   // before the engine commits the reasoning. Only the bubble that text is
   // currently appearing in gets the caret.
-  if !model.streaming_reasoning.is_empty() {
+  if !conv.streaming_reasoning.is_empty() {
     items.push(
       reasoning_view(
-        model.streaming_reasoning,
-        streaming=model.streaming_response.is_empty(),
+        conv.streaming_reasoning,
+        streaming=conv.streaming_response.is_empty(),
       ),
     )
   }
-  if !model.streaming_response.is_empty() {
-    items.push(streaming_response_view(model.streaming_response))
+  if !conv.streaming_response.is_empty() {
+    items.push(streaming_response_view(conv.streaming_response))
   }
   @html.section(id="transcript", class="transcript", [
     @html.div(id="stream", class="stream", items),
@@ -303,9 +309,9 @@ fn transcript_view(model : Model) -> @html.Html {
 /// above the composer: the submission is acknowledged immediately, but it
 /// only joins the transcript when the engine folds it into the turn
 /// (`steer_applied` commits it as a real user message).
-fn pending_steers_panel(model : Model) -> @html.Html {
+fn pending_steers_panel(conv : Conversation) -> @html.Html {
   let rows : Array[@html.Html] = []
-  for text in model.pending_steers {
+  for text in conv.pending_steers {
     rows.push(
       @html.div(class="pending-steer-row", title=text, [
         @html.span(class="pending-steer-icon", "⤷"),
@@ -331,10 +337,11 @@ fn task_attrs(dispatch : @cmd.Dispatch[Msg]) -> @html.Attrs {
 
 ///|
 fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+  let conv = model.active()
   let has_input = model.bridge_ready &&
     model.api_ready() &&
-    !model.task.trim().is_empty()
-  let can_send = !model.running && has_input
+    !conv.task.trim().is_empty()
+  let can_send = !conv.running && has_input
   let controls : Array[@html.Html] = [
     @html.span(
       class="composer-model",
@@ -342,24 +349,24 @@ fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
       model.selected_model,
     ),
   ]
-  if model.running {
-    // One morphing button while a turn runs: typed text turns it into a
-    // steer submit, an empty composer leaves it as the interrupt. A turn
-    // being cancelled cannot be steered, so the button waits with the
-    // user's text in the composer.
-    if model.task.trim().is_empty() {
+  if conv.running {
+    // One morphing button while this conversation's turn runs: typed text
+    // turns it into a steer submit, an empty composer leaves it as the
+    // interrupt. A turn being cancelled cannot be steered, so the button
+    // waits with the user's text in the composer.
+    if conv.task.trim().is_empty() {
       controls.push(
         @html.button(
           id="stop",
           class="icon-button stop-button",
           title="Stop",
-          disabled=!can_stop(model),
+          disabled=!can_stop(conv),
           on_click=dispatch(Stop),
           "■",
         ),
       )
     } else {
-      let can_steer = has_input && !(model.status is Cancelling)
+      let can_steer = has_input && !(conv.status is Cancelling)
       controls.push(
         @html.button(
           id="send",
@@ -384,15 +391,15 @@ fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
     )
   }
   let children : Array[@html.Html] = []
-  if model.pending_steers.length() > 0 {
-    children.push(pending_steers_panel(model))
+  if conv.pending_steers.length() > 0 {
+    children.push(pending_steers_panel(conv))
   }
   children.push(
     @html.div(class="composer-inner", [
       @html.textarea(
         id="task",
-        value=model.task,
-        placeholder=if model.running {
+        value=conv.task,
+        placeholder=if conv.running {
           "Steer the running task — your message joins it at the next step."
         } else {
           "Ask OpenSeek to inspect, edit, or explain this workspace."
@@ -523,15 +530,16 @@ fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
 
 ///|
 fn run_indicator(model : Model) -> @html.Html {
-  let label = model.status.label()
-  if model.running {
+  let status = model.display_status()
+  let label = status.label()
+  if model.active().running {
     @html.div(class="run-status accent", [
       @html.span(class="run-dot accent pulse", ""),
       @html.span(class="run-text", label),
     ])
   } else {
     @html.div(class="run-status", [
-      @html.span(class="run-dot \{model.status.kind().css()}", ""),
+      @html.span(class="run-dot \{status.kind().css()}", ""),
       @html.span(class="run-text", label),
     ])
   }
@@ -540,11 +548,11 @@ fn run_indicator(model : Model) -> @html.Html {
 ///|
 /// The workspace line appears once the host has reported it via `started`;
 /// before the conversation's first run only the session id is known.
-fn session_tooltip(model : Model) -> String {
-  if model.cwd.is_empty() {
-    "session \{model.session_id}"
+fn session_tooltip(conv : Conversation) -> String {
+  if conv.cwd.is_empty() {
+    "session \{conv.session_id}"
   } else {
-    "session \{model.session_id}\nworkspace \{model.cwd}"
+    "session \{conv.session_id}\nworkspace \{conv.cwd}"
   }
 }
 
@@ -554,21 +562,22 @@ fn session_tooltip(model : Model) -> String {
 /// runtime facts, not settings, so they live here rather than in the
 /// settings popup.
 fn topbar_view(model : Model) -> @html.Html {
+  let conv = model.active()
   let items : Array[@html.Html] = [
     @html.span(class="topbar-icon", "✦"),
     @html.span(
       class="topbar-title",
-      title=session_tooltip(model),
-      conversation_title(model),
+      title=session_tooltip(conv),
+      conversation_title(conv),
     ),
     @html.span(class="topbar-branch", "main"),
     run_indicator(model),
   ]
-  if model.usage_tokens > 0 {
-    items.push(@html.span(class="pill", token_label(model.usage_tokens)))
+  if conv.usage_tokens > 0 {
+    items.push(@html.span(class="pill", token_label(conv.usage_tokens)))
   }
-  if !model.watcher_status.is_empty() {
-    items.push(@html.span(class="pill", "moon_check \{model.watcher_status}"))
+  if !conv.watcher_status.is_empty() {
+    items.push(@html.span(class="pill", "moon_check \{conv.watcher_status}"))
   }
   @html.div(class="topbar", items)
 }
@@ -579,7 +588,7 @@ fn view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
     sidebar_view(dispatch, model),
     @html.main_([
       topbar_view(model),
-      transcript_view(model),
+      transcript_view(model.active()),
       composer_view(dispatch, model),
     ]),
   ])

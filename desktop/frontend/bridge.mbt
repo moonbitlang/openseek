@@ -4,10 +4,10 @@ fn install_bridge(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
     js_install_openseek_bridge(
       fn() { scheduler.add(dispatch(BridgeReady)) },
       fn(message) { scheduler.add(dispatch(BridgeUnavailable(message))) },
-      fn(run_id, task, engine, selected_model, max_steps, cwd) {
+      fn(run_id, session, _task, _engine, selected_model, max_steps, cwd) {
         scheduler.add(
           dispatch(
-            Started(run_id, task, engine, selected_model, max_steps, cwd),
+            Started(run_id~, session~, model=selected_model, max_steps~, cwd~),
           ),
         )
       },
@@ -30,11 +30,11 @@ fn install_bridge(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
           scheduler.add(dispatch(Engine(run_id, event)))
         }
       },
-      fn(run_id, message, exit_code, diagnostics) {
-        scheduler.add(dispatch(Error(run_id, message, exit_code, diagnostics)))
+      fn(run_id, message, _exit_code, diagnostics) {
+        scheduler.add(dispatch(Error(run_id~, message~, diagnostics~)))
       },
-      fn(run_id, status, answer, exit_code) {
-        scheduler.add(dispatch(Finished(run_id, status, answer, exit_code)))
+      fn(run_id, status, answer, _exit_code) {
+        scheduler.add(dispatch(Finished(run_id~, status~, answer~)))
       },
     )
   })
@@ -58,7 +58,7 @@ fn start_openseek(
       api_key,
       api_url,
       session,
-      fn(message) { scheduler.add(dispatch(Failed(message))) },
+      fn(message) { scheduler.add(dispatch(Failed(session~, message~))) },
     )
   })
 }
@@ -89,18 +89,26 @@ fn open_session(dispatch : @cmd.Dispatch[Msg], session_id : String) -> @cmd.Cmd 
       fn(text) {
         match transcript_from_session_json(text) {
           Some(items) =>
-            scheduler.add(dispatch(SessionLoaded(session_id, items)))
+            scheduler.add(dispatch(SessionLoaded(session=session_id, items~)))
           None =>
             scheduler.add(
               dispatch(
-                Failed("failed to load session \{session_id}: malformed data"),
+                Failed(
+                  session=session_id,
+                  message="failed to load session \{session_id}: malformed data",
+                ),
               ),
             )
         }
       },
       fn(message) {
         scheduler.add(
-          dispatch(Failed("failed to load session \{session_id}: " + message)),
+          dispatch(
+            Failed(
+              session=session_id,
+              message="failed to load session \{session_id}: " + message,
+            ),
+          ),
         )
       },
     )
@@ -115,12 +123,13 @@ fn open_session(dispatch : @cmd.Dispatch[Msg], session_id : String) -> @cmd.Cmd 
 /// so the pending acknowledgment can settle either way.
 fn steer_openseek(
   dispatch : @cmd.Dispatch[Msg],
+  session : String,
   text : String,
   run_id : Int,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     js_steer_openseek(text, run_id, fn() {
-      scheduler.add(dispatch(SteerUndelivered(text)))
+      scheduler.add(dispatch(SteerUndelivered(session~, text~)))
     })
   })
 }
@@ -129,7 +138,7 @@ fn steer_openseek(
 fn cancel_openseek(dispatch : @cmd.Dispatch[Msg], run_id : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     js_cancel_openseek(run_id, fn(message) {
-      scheduler.add(dispatch(Error(run_id, message, EmptyRunId, "")))
+      scheduler.add(dispatch(Error(run_id~, message~, diagnostics="")))
     })
   })
 }
@@ -138,7 +147,7 @@ fn cancel_openseek(dispatch : @cmd.Dispatch[Msg], run_id : Int) -> @cmd.Cmd {
 extern "js" fn js_install_openseek_bridge(
   on_ready : () -> Unit,
   on_unavailable : (String) -> Unit,
-  on_started : (Int, String, String, String, Int, String) -> Unit,
+  on_started : (Int, String, String, String, String, Int, String) -> Unit,
   on_event : (Int, String, String, String, Bool, Int, Int, String, String) -> Unit,
   on_error : (Int, String, Int, String) -> Unit,
   on_finished : (Int, String, String, Int) -> Unit,
@@ -181,6 +190,7 @@ extern "js" fn js_install_openseek_bridge(
   #|         const payload = (event && event.payload) || {};
   #|         onStarted(
   #|           number(payload.run_id),
+  #|           text(payload.session),
   #|           text(payload.task),
   #|           text(payload.engine),
   #|           text(payload.model),

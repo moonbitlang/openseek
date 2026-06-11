@@ -15,16 +15,24 @@ to it over stdio (`{"command": "prompt"|"cancel", ...}` JSONL in, the usual
 event stream out). Because the process spans turns, stateful tools survive
 turn boundaries — a `moon_check` watcher started in turn 1 keeps reporting in
 turn 5 — and cancelling interrupts the turn without killing the engine.
-Switching conversations (or changing the model, API key, or endpoint)
-retires the old process gracefully and spawns a fresh one; an engine that
-dies mid-turn fails that run with its stderr as diagnostics, and the next
-prompt respawns on the same durable session.
+
+Conversations run concurrently: the host keeps an engine per session id, so
+starting a prompt in one conversation never waits on (or disturbs) another.
+The frontend keeps per-conversation state — transcript, streaming buffers,
+pending steers, composer draft — and routes every engine event by run id, so
+you can switch away mid-turn, work elsewhere, and switch back to find the
+stream where you left it. A running conversation shows a pulsing dot in the
+sidebar. Changing the model, API key, or endpoint retires that conversation's
+process on its next prompt; an engine that dies mid-turn fails that run with
+its stderr as diagnostics, and the next prompt respawns on the same durable
+session. Idle engines stay alive until the app exits.
 
 Each conversation is also backed by a durable engine session: the frontend
 generates a `desktop-YYYYMMDD-HHMMSS-mmm` session id at launch and sends it
 with every `start`, so the conversation survives the engine process and the
-app. The sidebar's **New chat** button rotates the id and clears the
-transcript. Sessions are stored under the first
+app. The sidebar's **New chat** button rotates to a fresh id — usable at any
+time; a conversation that is still running keeps going in the background.
+Sessions are stored under the first
 of: the `session_root` start-payload field, `OPENSEEK_SESSION_ROOT`, or
 `~/.openseek` (absolute, so a packaged app whose working directory is `/`
 still works). They are interoperable with the CLI/TUI stores: resume one with
@@ -46,8 +54,9 @@ the first user message (the host shells out to the bundled engine's
 transcript — reasoning, tool cards, runtime notices, and error bubbles for
 turns that were cancelled or failed — and points the conversation at that
 session id, so the next prompt continues it with full context. The list
-refreshes when the bridge connects and after each run; switching is disabled
-while a run is active.
+refreshes when the bridge connects and after each run. Switching while runs
+are active is fine — a conversation already open in this app run switches
+back instantly with its live state intact, without replaying the store.
 
 While a turn runs, the UI renders the engine's `reasoning_delta` /
 `assistant_delta` events as live "Thinking" and answer bubbles with a
@@ -78,7 +87,8 @@ the official endpoint is never sent to any other endpoint. The host passes
 the endpoint to the engine as `OPENSEEK_API_URL`, substituting a placeholder
 key when a custom endpoint is configured without one (the engine insists on
 a non-empty key; the OpenSeek service ignores it). Changing the endpoint
-mid-conversation retires the live engine process on the next prompt.
+mid-conversation retires that conversation's engine process on the next
+prompt.
 
 ## Prerequisites
 
