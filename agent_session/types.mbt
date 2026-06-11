@@ -367,7 +367,7 @@ pub struct SessionEvent {
   // string); milliseconds are exactly representable until year ~2255.
   priv ts : Double
   priv item : SessionItem
-} derive(Debug, ToJson, FromJson)
+} derive(Debug, ToJson)
 
 ///|
 fn SessionEvent::SessionEvent(
