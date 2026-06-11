@@ -7,11 +7,41 @@
 
 ///|
 /// Render a markdown string to a list of block-level Rabbita nodes.
+///
+/// The parse is guarded at the JS boundary: cmark can panic on some inputs
+/// (observed: "Index out of bounds" in `Parser::add_open_blocks` on
+/// streaming-truncated text). A panic escaping `view` would kill Rabbita's
+/// render loop — and since every delta re-renders the same accumulated text,
+/// the transcript would freeze on the last good frame forever. The fallback
+/// shows the raw text instead.
 fn markdown_nodes(source : String) -> Array[@html.Html] {
+  js_guarded_nodes(() => parsed_markdown_nodes(source), () => {
+    [@html.pre(class="markdown-fallback", source)]
+  })
+}
+
+///|
+fn parsed_markdown_nodes(source : String) -> Array[@html.Html] {
   let doc = @cmark.Doc::from_string(source, strict=false)
   let render = MarkdownRender::{ defs: doc.defs }
   render.block_nodes(doc.block)
 }
+
+///|
+/// Run `parse`, falling back to `fallback` if it throws. MoonBit panics on
+/// the js target surface as JS exceptions, so this is the one place a cmark
+/// crash can be contained.
+extern "js" fn js_guarded_nodes(
+  parse : () -> Array[@html.Html],
+  fallback : () -> Array[@html.Html],
+) -> Array[@html.Html] =
+  #| (parse, fallback) => {
+  #|   try {
+  #|     return parse();
+  #|   } catch (error) {
+  #|     return fallback();
+  #|   }
+  #| }
 
 ///|
 priv struct MarkdownRender {

@@ -580,6 +580,17 @@
         background: none;
         font-size: inherit;
       }
+      /* Plain-text fallback when the markdown parser rejects an input. */
+      .msg-content.markdown pre.markdown-fallback {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font: inherit;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
       .msg-content.markdown pre.raw-html {
         color: var(--ink-3);
         white-space: pre-wrap;
