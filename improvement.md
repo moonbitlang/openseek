@@ -124,10 +124,16 @@ shows where steps and tokens went to waste):
   `OPENSEEK_THINKING` / `OPENSEEK_REASONING_EFFORT` env-backed flags on both
   binaries, threaded through `@agent.run*` as optional params with the old
   hardcoded values as defaults.)*
-- [ ] **Auto-compaction.** Compaction exists only as the manual
-  `--session-compact-*` flow. Long-lived sessions (now the TUI default)
-  grow without bound; trigger summarization when the projected context
-  passes a threshold.
+- [ ] **Auto-compaction — deferred, reframed as a context-ceiling guard.**
+  Compaction exists only as the manual `--session-compact-*` flow.
+  Deliberately deferred (owner decision, 2026-06-12): compaction rewrites
+  the model-facing history prefix, so every request after it is a DeepSeek
+  prefix-cache miss until the new prefix re-warms — at cache-hit pricing a
+  long append-only history is cheaper than periodically re-paying full
+  price for a rewritten one, plus summary-generation cost and
+  information-loss risk. When implemented, trigger only as the projected
+  prompt approaches the model's context window (where the alternative is
+  failure), not as a cost optimization.
 - [x] **Richer `--session-list`.** Bare ids are hard to recognize; include
   last-activity time and the first user prompt as a label. *(Done:
   `SessionStore::listings` returns id + last-activity + first prompt, newest
