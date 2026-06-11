@@ -244,17 +244,22 @@ pub async fn[X] run_turn_in_scope(
         append_item~,
       )
       if runtime_update_message(runtime.drain_events()) is Some(update) {
-        // Watcher updates whose substance matches the previous notice are
-        // skipped: the model already has this state, and re-appending it
-        // only grows the context (volatile counters aside, most updates
-        // from a quiet watcher are identical).
+        // A watcher re-run that reproduces the previous notice byte-for-byte
+        // (volatile counters aside) is collapsed to a one-line marker: the
+        // model still learns its edit was processed with an unchanged
+        // result, without re-paying for the full block — the analyzed
+        // 156-step session appended 61 near-identical update notices, 11%
+        // of its final context.
         let fingerprint = @moon_check.update_fingerprint(update)
-        if fingerprint != last_runtime_fingerprint {
+        let notice = if fingerprint != last_runtime_fingerprint {
           last_runtime_fingerprint = fingerprint
-          @xlog.info() <? { "event": "runtime_update", "content": update }
-          session = append_item(session, Runtime(RuntimeNotice(update)))
-          messages.push(ChatMessage(User, content=update))
+          update
+        } else {
+          "[moon_check update]\nwatchers re-ran; results unchanged from the previous update"
         }
+        @xlog.info() <? { "event": "runtime_update", "content": notice }
+        session = append_item(session, Runtime(RuntimeNotice(notice)))
+        messages.push(ChatMessage(User, content=notice))
       }
       @xlog.info() <? { "event": "agent_step", "step": step + 1 }
       let response = client.chat_stream(

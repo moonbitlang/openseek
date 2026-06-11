@@ -212,6 +212,18 @@ test "a runtime_update event surfaces as a ↻ tool-style notice" {
   assert_eq(state.watcher_status, "running")
   assert_true(state.run is Running(_))
 
+  // A status-less update — the engine's compact "results unchanged"
+  // marker — must not blank the live watcher's segment.
+  let _ = update(
+    state,
+    AgentProgress(
+      run_id=state.run_id,
+      RuntimeUpdate(
+        "[moon_check update]\nwatchers re-ran; results unchanged from the previous update",
+      ),
+    ),
+  )
+  assert_eq(state.watcher_status, "running")
   // The watcher belongs to the persistent engine, which outlives the turn:
   // the status survives the terminal event and only clears when the engine
   // process itself exits.

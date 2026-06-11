@@ -406,7 +406,11 @@ fn handle_agent_event(
     // and append the stripped diagnostics as a `↻` tool-style notice.
     RuntimeUpdate(text) => {
       let update = parse_runtime_update(text)
-      state.watcher_status = update.status
+      // A status-less update (e.g. the engine's compact "results unchanged"
+      // marker) must not blank a live watcher's segment.
+      if update.status != "" {
+        state.watcher_status = update.status
+      }
       if update.status != "" || update.diagnostics.length() > 0 {
         cmds.push(AppendItem(runtime_item(update)))
       }
