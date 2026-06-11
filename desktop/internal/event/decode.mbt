@@ -37,6 +37,10 @@ pub fn decode_event(object : Json) -> AgentEvent? {
     "max_steps_exhausted" => Some(MaxStepsExhausted)
     "agent_setup_failed" =>
       Some(AgentError("agent setup failed: " + string_field(object, "error")))
+    // A serve-mode turn that died with a non-cancellation error. Terminal for
+    // the run even though the engine process lives on.
+    "turn_failed" =>
+      Some(AgentError("turn failed: " + string_field(object, "error")))
     _ => None
   }
 }

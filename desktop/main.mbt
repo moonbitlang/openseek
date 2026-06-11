@@ -123,6 +123,13 @@ struct CancelReply {
 } derive(ToJson)
 
 ///|
+/// Reply to `connect`, delivered only when the pump stops — in practice
+/// never, since the webview holds the call open for the app's lifetime.
+struct PumpReply {
+  disconnected : Bool
+} derive(ToJson)
+
+///|
 priv struct RunConfig {
   task : String
   api_key : String
@@ -135,17 +142,40 @@ priv struct RunConfig {
 }
 
 ///|
-priv struct ActiveRun {
-  run_id : Int
-  mut process : @process.Process?
-  mut messages : @async.Queue[StreamMessage]?
+/// A live `--serve` engine process: one process serves every prompt of one
+/// conversation. Prompts and cancels are JSONL commands on its stdin; its
+/// stdout event stream is consumed for the engine's lifetime. Turns are
+/// strictly sequential on the wire, so events are stamped with the run id of
+/// the most recently submitted prompt.
+priv struct ServeEngine {
+  // Fingerprint of the config this process was spawned with; a prompt whose
+  // config differs cannot reuse it.
+  spec_key : String
+  writer : @process.WriteToProcess
+  mut latest_run : Int
+  mut run_open : Bool
   mut cancel_requested : Bool
 }
 
 ///|
-priv struct RunnerState {
+priv enum PumpCommand {
+  // Replace the live engine (if any) with one spawned for this config; the
+  // queue carries the result back to the requesting `start` op.
+  SpawnEngine(RunConfig, @async.Queue[Result[Unit, String]])
+}
+
+///|
+/// Host-side state of the persistent-engine design: the live serve process
+/// (owned by the pump's task group) plus the command queue other ops use to
+/// ask the pump for lifecycle changes. stdin writes go directly from any op;
+/// only spawning needs the pump, because a process must be owned by a task
+/// group that outlives individual IPC requests.
+priv struct EngineManager {
+  commands : @async.Queue[PumpCommand]
+  mut live : ServeEngine?
   mut next_run_id : Int
-  mut current : ActiveRun?
+  mut pump_running : Bool
+  mut start_in_flight : Bool
 }
 
 ///|
@@ -153,62 +183,16 @@ priv enum StreamMessage {
   StreamEvent(Json)
   StreamReaderFailed(String)
   StreamExited(Int)
-  StreamCancelled
 }
 
 ///|
-fn new_runner_state() -> RunnerState {
-  { next_run_id: 1, current: None }
-}
-
-///|
-fn RunnerState::begin_run(self : RunnerState) -> Result[ActiveRun, String] {
-  match self.current {
-    Some(active) => Err("OpenSeek run \{active.run_id} is still active")
-    None => {
-      let active = ActiveRun::{
-        run_id: self.next_run_id,
-        process: None,
-        messages: None,
-        cancel_requested: false,
-      }
-      self.next_run_id = self.next_run_id + 1
-      self.current = Some(active)
-      Ok(active)
-    }
-  }
-}
-
-///|
-fn RunnerState::clear_run(self : RunnerState, run_id : Int) -> Unit {
-  if self.current is Some(active) && active.run_id == run_id {
-    self.current = None
-  }
-}
-
-///|
-fn RunnerState::cancel(
-  self : RunnerState,
-  payload : CancelPayload,
-) -> CancelReply {
-  match self.current {
-    None => { cancelled: false, run_id: None }
-    Some(active) =>
-      if payload.run_id is Some(requested) && requested != active.run_id {
-        { cancelled: false, run_id: Some(active.run_id) }
-      } else {
-        active.cancel_requested = true
-        if active.process is Some(process) {
-          process.cancel()
-        }
-        // Wake the run loop immediately instead of waiting for the engine's
-        // stdout to reach EOF: a killed engine may leave child processes that
-        // keep the stdout pipe open, so the EOF may never arrive.
-        if active.messages is Some(messages) {
-          ignore(messages.try_put(StreamCancelled) catch { _ => false })
-        }
-        { cancelled: true, run_id: Some(active.run_id) }
-      }
+fn new_engine_manager() -> EngineManager {
+  {
+    commands: Queue(kind=Unbounded),
+    live: None,
+    next_run_id: 1,
+    pump_running: false,
+    start_in_flight: false,
   }
 }
 
@@ -576,137 +560,254 @@ async fn handle_decoded_event(
 }
 
 ///|
-async fn run_engine(
+/// Everything that pins a serve process to a config: a prompt whose
+/// fingerprint differs (model change, new session, …) must replace the
+/// process. The task is deliberately excluded — prompts vary per turn.
+fn engine_fingerprint(config : RunConfig) -> String {
+  [
+    config.engine,
+    config.api_key,
+    config.model,
+    config.max_steps.to_string(),
+    config.cwd.unwrap_or(""),
+    config.session.unwrap_or(""),
+    config.session_root.unwrap_or(""),
+  ].join("\u{0}")
+}
+
+///|
+/// The `connect` op: the long-lived host half of the persistent-engine
+/// design. Lepus runs each IPC request as its own task, so this op's task
+/// group is the only context in which a serve process can outlive individual
+/// `start`/`cancel` calls — the frontend invokes it once at startup and the
+/// call stays open for the app's lifetime. When the webview connection drops
+/// the task group is torn down, taking the engine with it.
+async fn run_engine_pump(
   context : @app.AppCommandExtensionContext,
-  active : ActiveRun,
-  config : RunConfig,
-) -> StartReply {
+  manager : EngineManager,
+) -> Result[PumpReply, String] {
+  if manager.pump_running {
+    return Err("engine host is already connected")
+  }
+  fn reset() -> Unit {
+    manager.pump_running = false
+    manager.live = None
+  }
+
+  manager.pump_running = true
+  defer reset()
   @async.with_task_group(group => {
-    let (reader, child_stdout) = @process.read_from_process()
-    let (stderr_reader, child_stderr) = @process.read_from_process()
-    let args = [config.task]
-    let env = {
-      "DEEPSEEK": config.api_key,
-      "DEEPSEEK_MODEL": config.model,
-      "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
-    }
-    // A named session puts the engine in durable-session mode, so consecutive
-    // runs from the same conversation share context through the session store.
-    if config.session is Some(session) {
-      env["OPENSEEK_SESSION"] = session
-      if config.session_root is Some(root) {
-        env["OPENSEEK_SESSION_ROOT"] = root
-      }
-    }
-    let process = @process.spawn(
-      group,
-      config.engine,
-      args,
-      inherit_env=true,
-      extra_env=env,
-      stdout=child_stdout,
-      stderr=child_stderr,
-      cwd?=config.cwd.map(cwd => cwd.view()),
-      cancel_handler=@process.graceful_cancel(timeout=1000),
-      no_wait=true,
-    )
-    active.process = Some(process)
-    let messages = @async.Queue(kind=Unbounded)
-    active.messages = Some(messages)
-    let stderr_task = group.spawn(no_wait=true) <| () => {
-      stderr_reader.read_all().text() catch {
-        _ => ""
-      }
-    }
-    group.spawn_bg(no_wait=true, allow_failure=true, () => {
-      read_engine_stdout(reader, process, messages)
-    })
-    let mut saw_terminal = false
-    let mut exit_code = 0
-    let mut done = false
-    while !done {
-      match messages.get() {
-        StreamEvent(raw) => {
-          emit(context, Event({ run_id: active.run_id, event: raw }))
-          match @event.decode_event(raw) {
-            Some(decoded) =>
-              if handle_decoded_event(context, active.run_id, decoded) {
-                saw_terminal = true
-              }
-            None => ()
+    for ;; {
+      match manager.commands.get() {
+        SpawnEngine(config, ack) => {
+          if manager.live is Some(old) {
+            // Closing stdin is the serve protocol's EOF signal; an idle
+            // engine drains and exits, and its own reader task cleans up.
+            old.writer.close()
+            manager.live = None
           }
-        }
-        StreamReaderFailed(message) =>
-          emit_error(context, message, run_id=active.run_id)
-        StreamCancelled => {
-          // Cancel requested: report it now and let the task group tear down
-          // the engine process and the stdout reader on the way out.
-          emit_error(context, "cancelled", run_id=active.run_id)
-          emit_finished(context, active.run_id, Cancelled)
-          done = true
-        }
-        StreamExited(code) => {
-          exit_code = code
-          let diagnostics = stderr_task.wait().trim().to_owned()
-          if active.cancel_requested {
-            emit_error(context, "cancelled", run_id=active.run_id)
-            emit_finished(context, active.run_id, Cancelled, exit_code~)
-          } else if !saw_terminal {
-            let detail = if diagnostics.is_empty() {
-              "engine exited without a result"
-            } else {
-              "engine exited without a result:\n" + diagnostics
+          start_serve_engine(context, group, manager, config) catch {
+            error if @async.is_being_cancelled() ||
+              @async.is_cancellation_error(error) => raise error
+            error => {
+              ack.put(Err("failed to start engine: \{error}"))
+              continue
             }
-            if diagnostics.is_empty() {
-              emit_error(context, detail, run_id=active.run_id, exit_code~)
-            } else {
-              emit_error(
-                context,
-                detail,
-                run_id=active.run_id,
-                exit_code~,
-                diagnostics~,
-              )
-            }
-            emit_finished(context, active.run_id, Failed, exit_code~)
           }
-          done = true
+          ack.put(Ok(()))
         }
       }
     }
-    let status : RunStatus = if active.cancel_requested {
-      Cancelled
-    } else if saw_terminal {
-      Finished
-    } else {
-      Failed
+  })
+  Ok({ disconnected: true })
+}
+
+///|
+/// Spawn one `--serve` engine inside the pump's task group and wire up its
+/// stream tasks: the stdout reader feeding the queue, the stderr drain, and
+/// the consumer that forwards events to the webview for the engine's
+/// lifetime.
+async fn[G] start_serve_engine(
+  context : @app.AppCommandExtensionContext,
+  group : @async.TaskGroup[G],
+  manager : EngineManager,
+  config : RunConfig,
+) -> Unit {
+  let (child_stdin, writer) = @process.write_to_process()
+  let (reader, child_stdout) = @process.read_from_process()
+  let (stderr_reader, child_stderr) = @process.read_from_process()
+  let env = {
+    "DEEPSEEK": config.api_key,
+    "DEEPSEEK_MODEL": config.model,
+    "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
+  }
+  // A named session puts the engine in durable-session mode, so the
+  // conversation survives the process and is shared with the CLI/TUI.
+  if config.session is Some(session) {
+    env["OPENSEEK_SESSION"] = session
+    if config.session_root is Some(root) {
+      env["OPENSEEK_SESSION_ROOT"] = root
     }
-    { run_id: active.run_id, status: status.wire(), exit_code }
+  }
+  let process = @process.spawn(
+    group,
+    config.engine,
+    ["--serve"],
+    inherit_env=true,
+    extra_env=env,
+    stdin=child_stdin,
+    stdout=child_stdout,
+    stderr=child_stderr,
+    cwd?=config.cwd.map(cwd => cwd.view()),
+    cancel_handler=@process.graceful_cancel(timeout=1000),
+    no_wait=true,
+  )
+  let engine : ServeEngine = {
+    spec_key: engine_fingerprint(config),
+    writer,
+    latest_run: 0,
+    run_open: false,
+    cancel_requested: false,
+  }
+  manager.live = Some(engine)
+  let messages : @async.Queue[StreamMessage] = Queue(kind=Unbounded)
+  let stderr_task = group.spawn(no_wait=true) <| () => {
+    stderr_reader.read_all().text() catch {
+      _ => ""
+    }
+  }
+  group.spawn_bg(no_wait=true, allow_failure=true, () => {
+    read_engine_stdout(reader, process, messages)
+  })
+  group.spawn_bg(no_wait=true, allow_failure=true, () => {
+    serve_engine_consumer(context, manager, engine, messages, stderr_task)
   })
 }
 
 ///|
+/// Consume one engine's event stream for its whole lifetime: forward every
+/// raw event to the webview stamped with the engine's current run, close
+/// runs on terminal events, and report a mid-turn death as that run's
+/// failure. Runs until the engine's stdout reader sees EOF.
+async fn serve_engine_consumer(
+  context : @app.AppCommandExtensionContext,
+  manager : EngineManager,
+  engine : ServeEngine,
+  messages : @async.Queue[StreamMessage],
+  stderr_task : @async.Task[String],
+) -> Unit {
+  for ;; {
+    match messages.get() {
+      StreamEvent(raw) => {
+        let run_id = engine.latest_run
+        emit(context, Event({ run_id, event: raw }))
+        match @event.decode_event(raw) {
+          // The abort the user asked for: report it as a cancellation, the
+          // same wire status the pre-serve host used.
+          Some(AgentAborted(_)) if engine.cancel_requested => {
+            emit_error(context, "cancelled", run_id~)
+            emit_finished(context, run_id, Cancelled)
+            engine.run_open = false
+            engine.cancel_requested = false
+          }
+          Some(decoded) =>
+            if handle_decoded_event(context, run_id, decoded) {
+              engine.run_open = false
+              engine.cancel_requested = false
+            }
+          None => ()
+        }
+      }
+      StreamReaderFailed(message) =>
+        emit_error(context, message, run_id=engine.latest_run)
+      StreamExited(code) => {
+        // A respawn may already have replaced this engine; only clear the
+        // slot if it is still ours.
+        if manager.live is Some(current) && physical_equal(current, engine) {
+          manager.live = None
+        }
+        // EOF with a run still open means the engine died mid-turn: close
+        // that run with its only available diagnostics. A clean exit after a
+        // terminal event (session switch, app shutdown) reports nothing.
+        if engine.run_open {
+          engine.run_open = false
+          let diagnostics = stderr_task.wait().trim().to_owned()
+          if diagnostics.is_empty() {
+            emit_error(
+              context,
+              "engine exited without a result",
+              run_id=engine.latest_run,
+              exit_code=code,
+            )
+          } else {
+            emit_error(
+              context,
+              "engine exited without a result:\n" + diagnostics,
+              run_id=engine.latest_run,
+              exit_code=code,
+              diagnostics~,
+            )
+          }
+          emit_finished(context, engine.latest_run, Failed, exit_code=code)
+        }
+        break
+      }
+    }
+  }
+}
+
+///|
+/// Submit one prompt to the conversation's serve engine, spawning or
+/// replacing the process first when the config demands it. Returns as soon
+/// as the prompt is on the wire; the engine's consumer task reports progress
+/// and completion through events, exactly as the frontend already expects.
 async fn start_run(
   context : @app.AppCommandExtensionContext,
-  state : RunnerState,
+  manager : EngineManager,
   engine : String,
   payload : StartPayload,
 ) -> Result[StartReply, String] {
-  let active = match state.begin_run() {
-    Ok(active) => active
-    Err(error) => return Err(error)
+  if manager.live is Some(live) && live.run_open {
+    return Err("OpenSeek run \{live.latest_run} is still active")
   }
+  if manager.start_in_flight {
+    return Err("an OpenSeek run is already starting")
+  }
+  guard manager.pump_running else {
+    return Err("engine host is not connected; reload the app")
+  }
+  fn clear_start_flag() -> Unit {
+    manager.start_in_flight = false
+  }
+
+  manager.start_in_flight = true
+  defer clear_start_flag()
   let config = match run_config(payload, engine) {
     Ok(config) => config
-    Err(error) => {
-      state.clear_run(active.run_id)
-      return Err(error)
+    Err(error) => return Err(error)
+  }
+  let need_spawn = match manager.live {
+    Some(live) => live.spec_key != engine_fingerprint(config)
+    None => true
+  }
+  if need_spawn {
+    let ack : @async.Queue[Result[Unit, String]] = Queue(kind=Unbounded)
+    manager.commands.put(SpawnEngine(config, ack))
+    match ack.get() {
+      Ok(_) => ()
+      Err(error) => return Err(error)
     }
   }
+  guard manager.live is Some(live) else { return Err("engine failed to start") }
+  let run_id = manager.next_run_id
+  manager.next_run_id = manager.next_run_id + 1
+  live.latest_run = run_id
+  live.run_open = true
+  live.cancel_requested = false
   emit(
     context,
     Started({
-      run_id: active.run_id,
+      run_id,
       task: config.task,
       engine: config.engine,
       model: config.model,
@@ -716,15 +817,50 @@ async fn start_run(
       session_root: config.session_root,
     }),
   )
-  let reply = run_engine(context, active, config) catch {
+  let command : Json = { "command": "prompt", "text": config.task }
+  live.writer.write(command.stringify() + "\n") catch {
+    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
+      raise error
     error => {
-      emit_error(context, error.to_string(), run_id=active.run_id)
-      state.clear_run(active.run_id)
-      return Err(error.to_string())
+      // The engine died between turns: close the run and drop the handle so
+      // the next prompt respawns on the same durable session.
+      live.run_open = false
+      if manager.live is Some(current) && physical_equal(current, live) {
+        manager.live = None
+      }
+      emit_error(context, "engine write failed: \{error}", run_id~)
+      emit_finished(context, run_id, Failed)
+      return Err("engine write failed: \{error}")
     }
   }
-  state.clear_run(active.run_id)
-  Ok(reply)
+  Ok({ run_id, status: "accepted", exit_code: 0 })
+}
+
+///|
+/// Cancel the open turn by asking the serve engine to interrupt it — the
+/// process itself stays alive for the next prompt. With no live engine or
+/// open run there is nothing to cancel.
+async fn cancel_run(
+  manager : EngineManager,
+  payload : CancelPayload,
+) -> CancelReply {
+  match manager.live {
+    Some(live) if live.run_open => {
+      if payload.run_id is Some(requested) && requested != live.latest_run {
+        return { cancelled: false, run_id: Some(live.latest_run) }
+      }
+      live.cancel_requested = true
+      let command : Json = { "command": "cancel" }
+      live.writer.write(command.stringify() + "\n") catch {
+        error if @async.is_being_cancelled() ||
+          @async.is_cancellation_error(error) => raise error
+        // The engine just died; its reader task closes the run.
+        _ => ()
+      }
+      { cancelled: true, run_id: Some(live.latest_run) }
+    }
+    _ => { cancelled: false, run_id: None }
+  }
 }
 
 ///|
@@ -799,23 +935,29 @@ async fn load_session(
 
 ///|
 fn openseek_extension(
-  state : RunnerState,
+  manager : EngineManager,
   engine : String,
 ) -> @app.AppCommandExtensionSpec {
   @app.AppCommandExtensionSpec::new(
     ExtensionId,
     ExtensionNamespace,
     [
+      @app.AppCommandApiDescriptor::new("connect"),
       @app.AppCommandApiDescriptor::new("start"),
       @app.AppCommandApiDescriptor::new("cancel"),
       @app.AppCommandApiDescriptor::new("list_sessions"),
       @app.AppCommandApiDescriptor::new("load_session"),
     ],
     fn(context) {
-      context.op_async_result("start", async fn(payload : StartPayload) {
-        start_run(context, state, engine, payload)
+      context.op_async_result("connect", async fn(_payload : Json) {
+        run_engine_pump(context, manager)
       })
-      context.op("cancel", fn(payload : CancelPayload) { state.cancel(payload) })
+      context.op_async_result("start", async fn(payload : StartPayload) {
+        start_run(context, manager, engine, payload)
+      })
+      context.op_async("cancel", async fn(payload : CancelPayload) {
+        cancel_run(manager, payload)
+      })
       context.op_async_result("list_sessions", async fn(_payload : Json) {
         list_sessions(engine)
       })
@@ -853,7 +995,7 @@ fn main {
   )
   let registry = @app.AppCommandExtensionRegistry::new()
   let _ = registry.register(
-    openseek_extension(new_runner_state(), engine_command(framework_command)),
+    openseek_extension(new_engine_manager(), engine_command(framework_command)),
   )
   let _ = registry.register(@clipboard.generated_app_command_extension())
   // Keep all runtime state out of the bundle: the framework IPC config is

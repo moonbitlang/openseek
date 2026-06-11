@@ -54,3 +54,11 @@ test "unknown events are ignored" {
   )
   assert_true(@event.decode_event(Json::array([])) is None)
 }
+
+///|
+test "turn_failed is terminal for the run" {
+  match @event.decode_event({ "event": "turn_failed", "error": "boom" }) {
+    Some(AgentError(message)) => assert_eq(message, "turn failed: boom")
+    _ => fail("expected agent error")
+  }
+}

@@ -147,6 +147,14 @@ extern "js" fn js_install_openseek_bridge(
   #|     }
   #|     if (!globalThis.__openseekDesktopRabbitaBridgeInstalled) {
   #|       globalThis.__openseekDesktopRabbitaBridgeInstalled = true;
+  #|       // Open the engine host: a single long-lived call whose task group
+  #|       // owns the persistent --serve engine process. The promise only
+  #|       // settles if the host stops; starts then fail with a clear error.
+  #|       if (api.connect) {
+  #|         try {
+  #|           Promise.resolve(api.connect({})).catch(() => {});
+  #|         } catch (ignored) {}
+  #|       }
   #|       events.on("openseek.started", (event) => {
   #|         const payload = (event && event.payload) || {};
   #|         onStarted(

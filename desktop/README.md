@@ -2,18 +2,29 @@
 
 A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://mooncakes.io/docs/moonbit-community/rabbita) desktop client for the OpenSeek agent, written in MoonBit.
 
-- `main.mbt` — native host: spawns the `openseek` engine, streams its JSONL events to the webview, exposes `start` / `cancel` / `list_sessions` / `load_session` commands.
+- `main.mbt` — native host: keeps one persistent `openseek --serve` engine per conversation, streams its JSONL events to the webview, exposes `connect` / `start` / `cancel` / `list_sessions` / `load_session` commands.
 - `frontend/` — the JS (Rabbita) UI bundled to `frontend.js`.
 - `internal/event/` — engine event decoding.
 - `lepus/` — the Lepus framework, vendored as a git submodule.
 
 ## Sessions and streaming
 
-Each conversation is backed by a durable engine session: the frontend generates
-a `desktop-YYYYMMDD-HHMMSS-mmm` session id at launch and sends it with every
-`start`, so consecutive prompts share context through the engine's session
-store instead of running amnesiac one-shots. The sidebar's **New chat** button
-rotates the id and clears the transcript. Sessions are stored under the first
+Each conversation is served by one persistent `openseek --serve` engine
+process: the host spawns it on the conversation's first prompt and then talks
+to it over stdio (`{"command": "prompt"|"cancel", ...}` JSONL in, the usual
+event stream out). Because the process spans turns, stateful tools survive
+turn boundaries — a `moon_check` watcher started in turn 1 keeps reporting in
+turn 5 — and cancelling interrupts the turn without killing the engine.
+Switching conversations (or changing the model/API key) retires the old
+process gracefully and spawns a fresh one; an engine that dies mid-turn fails
+that run with its stderr as diagnostics, and the next prompt respawns on the
+same durable session.
+
+Each conversation is also backed by a durable engine session: the frontend
+generates a `desktop-YYYYMMDD-HHMMSS-mmm` session id at launch and sends it
+with every `start`, so the conversation survives the engine process and the
+app. The sidebar's **New chat** button rotates the id and clears the
+transcript. Sessions are stored under the first
 of: the `session_root` start-payload field, `OPENSEEK_SESSION_ROOT`, or
 `~/.openseek` (absolute, so a packaged app whose working directory is `/`
 still works). They are interoperable with the CLI/TUI stores: resume one with
