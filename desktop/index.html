@@ -650,11 +650,6 @@
         }
       }
 
-      /* steering input not yet folded into the running turn: dimmed until
-         the engine confirms it with a steer_applied event */
-      .msg.pending-steer {
-        opacity: 0.6;
-      }
 
       .inline-code {
         border-radius: 4px;
@@ -729,6 +724,47 @@
         background: var(--surface);
         padding: 8px 10px;
         box-shadow: var(--shadow);
+      }
+
+      /* steering input not yet folded into the running turn: a panel docked
+         above the composer until the engine settles it */
+      .pending-steers {
+        max-width: 820px;
+        margin: 0 auto 8px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface-2);
+        padding: 4px 10px;
+      }
+      .pending-steer-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        padding: 4px 0;
+        color: var(--ink-2);
+        font-size: 12.5px;
+        line-height: 1.5;
+      }
+      .pending-steer-row + .pending-steer-row {
+        border-top: 1px solid var(--line-2);
+      }
+      .pending-steer-icon {
+        color: var(--accent);
+        flex: none;
+      }
+      .pending-steer-text {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pending-steer-state {
+        flex: none;
+        color: var(--ink-3);
+        font-size: 11px;
+        animation: caretBlink 1.4s steps(1) infinite;
       }
 
       .composer textarea {

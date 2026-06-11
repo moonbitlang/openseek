@@ -56,12 +56,14 @@ events then replace them with permanent transcript items.
 
 Submitting while a turn runs steers it instead of starting a new prompt: the
 text rides the serve engine's lossless steering queue and is folded into the
-running turn at its next step boundary. It shows as a dimmed pending bubble
-until the engine settles it — `steer_applied` commits it as a real user
-message, while `steer_dropped` (the steer raced the turn's end through the
-pipes) surfaces a notice asking to resubmit, so the text never vanishes
-silently. A turn that is being cancelled cannot be steered; the text stays in
-the composer.
+running turn at its next step boundary. The composer's button morphs while a
+turn runs — an empty composer shows the interrupt (■), typed text turns it
+into the steer submit (↑). Each steer waits in a panel docked above the
+composer until the engine settles it — `steer_applied` commits it into the
+transcript as a real user message, while `steer_dropped` (the steer raced
+the turn's end through the pipes) surfaces a notice asking to resubmit, so
+the text never vanishes silently. A turn that is being cancelled cannot be
+steered; the text stays in the composer.
 
 ## Prerequisites
 

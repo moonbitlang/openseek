@@ -261,20 +261,6 @@ fn streaming_response_view(content : String) -> @html.Html {
 }
 
 ///|
-/// A steer the engine has not settled yet — visually a user message, but
-/// dimmed: it joins the conversation at the turn's next step boundary, and
-/// may yet be dropped if it races the turn's end.
-fn pending_steer_view(text : String) -> @html.Html {
-  @html.div(class="msg pending-steer", [
-    @html.div(class="avatar user", "›"),
-    @html.div(class="msg-body", [
-      @html.div(class="msg-role", "You (steering…)"),
-      @html.div(class="msg-content", inline_code_nodes(text)),
-    ]),
-  ])
-}
-
-///|
 fn transcript_view(model : Model) -> @html.Html {
   let items : Array[@html.Html] = []
   if model.messages.is_empty() {
@@ -307,15 +293,28 @@ fn transcript_view(model : Model) -> @html.Html {
   if !model.streaming_response.is_empty() {
     items.push(streaming_response_view(model.streaming_response))
   }
-  // Steering input the engine has not settled yet: shown immediately so the
-  // submission is acknowledged, but dimmed until the engine folds it into
-  // the turn (`steer_applied` commits it as a real user message).
-  for text in model.pending_steers {
-    items.push(pending_steer_view(text))
-  }
   @html.section(id="transcript", class="transcript", [
     @html.div(id="stream", class="stream", items),
   ])
+}
+
+///|
+/// Steering input the engine has not settled yet, shown as a panel docked
+/// above the composer: the submission is acknowledged immediately, but it
+/// only joins the transcript when the engine folds it into the turn
+/// (`steer_applied` commits it as a real user message).
+fn pending_steers_panel(model : Model) -> @html.Html {
+  let rows : Array[@html.Html] = []
+  for text in model.pending_steers {
+    rows.push(
+      @html.div(class="pending-steer-row", title=text, [
+        @html.span(class="pending-steer-icon", "⤷"),
+        @html.span(class="pending-steer-text", text),
+        @html.span(class="pending-steer-state", "steering…"),
+      ]),
+    )
+  }
+  @html.div(class="pending-steers", rows)
 }
 
 ///|
@@ -344,29 +343,34 @@ fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
     ),
   ]
   if model.running {
-    // Sending while a turn runs steers it; a turn being cancelled cannot be
-    // steered, so the button waits with the user's text in the composer.
-    let can_steer = has_input && !(model.status is Cancelling)
-    controls.push(
-      @html.button(
-        id="send",
-        class="icon-button send-button",
-        title="Steer the running task",
-        disabled=!can_steer,
-        on_click=dispatch(Send),
-        "↑",
-      ),
-    )
-    controls.push(
-      @html.button(
-        id="stop",
-        class="icon-button stop-button",
-        title="Stop",
-        disabled=!can_stop(model),
-        on_click=dispatch(Stop),
-        "■",
-      ),
-    )
+    // One morphing button while a turn runs: typed text turns it into a
+    // steer submit, an empty composer leaves it as the interrupt. A turn
+    // being cancelled cannot be steered, so the button waits with the
+    // user's text in the composer.
+    if model.task.trim().is_empty() {
+      controls.push(
+        @html.button(
+          id="stop",
+          class="icon-button stop-button",
+          title="Stop",
+          disabled=!can_stop(model),
+          on_click=dispatch(Stop),
+          "■",
+        ),
+      )
+    } else {
+      let can_steer = has_input && !(model.status is Cancelling)
+      controls.push(
+        @html.button(
+          id="send",
+          class="icon-button send-button",
+          title="Steer the running task",
+          disabled=!can_steer,
+          on_click=dispatch(Send),
+          "↑",
+        ),
+      )
+    }
   } else {
     controls.push(
       @html.button(
@@ -379,7 +383,11 @@ fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
       ),
     )
   }
-  @html.section(class="composer", [
+  let children : Array[@html.Html] = []
+  if model.pending_steers.length() > 0 {
+    children.push(pending_steers_panel(model))
+  }
+  children.push(
     @html.div(class="composer-inner", [
       @html.textarea(
         id="task",
@@ -397,7 +405,8 @@ fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
         @html.div(class="composer-controls", controls),
       ]),
     ]),
-  ])
+  )
+  @html.section(class="composer", children)
 }
 
 ///|

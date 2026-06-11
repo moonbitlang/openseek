@@ -170,10 +170,7 @@ fn update(
             let pending_steers = model.pending_steers.copy()
             pending_steers.push(task)
             (
-              @cmd.batch([
-                steer_openseek(dispatch, task, run_id),
-                scroll_transcript_after_render(),
-              ]),
+              steer_openseek(dispatch, task, run_id),
               { ..model, pending_steers, task: "" },
             )
           }
