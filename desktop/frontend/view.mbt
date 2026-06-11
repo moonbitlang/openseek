@@ -261,6 +261,20 @@ fn streaming_response_view(content : String) -> @html.Html {
 }
 
 ///|
+/// A steer the engine has not settled yet — visually a user message, but
+/// dimmed: it joins the conversation at the turn's next step boundary, and
+/// may yet be dropped if it races the turn's end.
+fn pending_steer_view(text : String) -> @html.Html {
+  @html.div(class="msg pending-steer", [
+    @html.div(class="avatar user", "›"),
+    @html.div(class="msg-body", [
+      @html.div(class="msg-role", "You (steering…)"),
+      @html.div(class="msg-content", inline_code_nodes(text)),
+    ]),
+  ])
+}
+
+///|
 fn transcript_view(model : Model) -> @html.Html {
   let items : Array[@html.Html] = []
   if model.messages.is_empty() {
@@ -293,6 +307,12 @@ fn transcript_view(model : Model) -> @html.Html {
   if !model.streaming_response.is_empty() {
     items.push(streaming_response_view(model.streaming_response))
   }
+  // Steering input the engine has not settled yet: shown immediately so the
+  // submission is acknowledged, but dimmed until the engine folds it into
+  // the turn (`steer_applied` commits it as a real user message).
+  for text in model.pending_steers {
+    items.push(pending_steer_view(text))
+  }
   @html.section(id="transcript", class="transcript", [
     @html.div(id="stream", class="stream", items),
   ])
@@ -312,10 +332,10 @@ fn task_attrs(dispatch : @cmd.Dispatch[Msg]) -> @html.Attrs {
 
 ///|
 fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
-  let can_send = !model.running &&
-    model.bridge_ready &&
+  let has_input = model.bridge_ready &&
     !model.api_key.trim().is_empty() &&
     !model.task.trim().is_empty()
+  let can_send = !model.running && has_input
   let controls : Array[@html.Html] = [
     @html.span(
       class="composer-model",
@@ -324,6 +344,19 @@ fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
     ),
   ]
   if model.running {
+    // Sending while a turn runs steers it; a turn being cancelled cannot be
+    // steered, so the button waits with the user's text in the composer.
+    let can_steer = has_input && !(model.status is Cancelling)
+    controls.push(
+      @html.button(
+        id="send",
+        class="icon-button send-button",
+        title="Steer the running task",
+        disabled=!can_steer,
+        on_click=dispatch(Send),
+        "↑",
+      ),
+    )
     controls.push(
       @html.button(
         id="stop",
@@ -351,7 +384,11 @@ fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
       @html.textarea(
         id="task",
         value=model.task,
-        placeholder="Ask OpenSeek to inspect, edit, or explain this workspace.",
+        placeholder=if model.running {
+          "Steer the running task — your message joins it at the next step."
+        } else {
+          "Ask OpenSeek to inspect, edit, or explain this workspace."
+        },
         on_input=dispatch.map(value => TaskChanged(value)),
         attrs=task_attrs(dispatch),
         "",

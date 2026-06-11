@@ -71,6 +71,12 @@ priv struct Model {
   // commits the full message (or the step/run ends). Empty means not streaming.
   streaming_response : String
   streaming_reasoning : String
+  // Steering input sent to the running turn but not yet settled by the
+  // engine: it echoes each steer back as `steer_applied` (folded into the
+  // turn at a step boundary) or `steer_dropped` (raced the turn's end).
+  // Shown as pending bubbles until then; leftovers are swept into dropped
+  // notices when the run ends, so the text never vanishes silently.
+  pending_steers : Array[String]
   messages : Array[TranscriptItem]
   // Durable sessions known to the engine's store, newest first, refreshed
   // when the bridge connects and when a run reaches the store. The current
@@ -95,6 +101,10 @@ priv enum Msg {
   CloseSetup
   SaveApiKey
   Send
+  // The host reported a steer that never reached the engine (turn already
+  // closed, engine dead, or the bridge call itself failed): carries the
+  // original text so it can settle the pending acknowledgment.
+  SteerUndelivered(String)
   Stop
   NewChat
   SessionRotated(String)
@@ -128,6 +138,7 @@ fn initial_model() -> Model {
     session_id: "",
     streaming_response: "",
     streaming_reasoning: "",
+    pending_steers: [],
     messages: [],
     sessions: [],
     sessions_error: "",
@@ -144,6 +155,44 @@ fn Model::append_item(self : Model, kind : ItemKind, content : String) -> Model 
   let messages = self.messages.copy()
   messages.push({ kind, content })
   { ..self, messages, }
+}
+
+///|
+/// The transcript notice for steering input that never reached the turn —
+/// whether the engine rejected it (it raced the turn's end through the
+/// pipes) or the run died with it unsettled. Either way the text must not
+/// vanish silently.
+fn steer_dropped_notice(text : String) -> String {
+  "Input was not delivered (the task ended as you sent it) — submit it again: \{text}"
+}
+
+///|
+/// Remove the first pending steer matching `text`. The engine settles steers
+/// in wire order, but an identical-text steer must not steal a later one's
+/// acknowledgment, so exactly one entry settles per event; no match (already
+/// swept at run end) is a no-op.
+fn Model::settle_pending_steer(self : Model, text : String) -> Model {
+  for index, pending in self.pending_steers {
+    if pending == text {
+      let pending_steers = self.pending_steers.copy()
+      let _ = pending_steers.remove(index)
+      return { ..self, pending_steers, }
+    }
+  }
+  self
+}
+
+///|
+/// Surface every still-pending steer as a dropped notice and clear the list.
+/// In the normal path the engine settles each steer before the turn's
+/// terminal event, so this only fires when the run died with steers in
+/// flight — the text must not vanish with it.
+fn Model::sweep_pending_steers(self : Model) -> Model {
+  let mut model = self
+  for text in self.pending_steers {
+    model = model.append_item(Assistant(true), steer_dropped_notice(text))
+  }
+  { ..model, pending_steers: [] }
 }
 
 ///|

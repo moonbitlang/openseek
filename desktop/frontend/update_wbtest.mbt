@@ -271,10 +271,7 @@ test "started records the host's workspace for display" {
     ),
     test_model(),
   )
-  inspect(
-    next.cwd,
-    content="/home/u/Documents/OpenSeek/desktop-test",
-  )
+  inspect(next.cwd, content="/home/u/Documents/OpenSeek/desktop-test")
 }
 
 ///|
@@ -285,4 +282,101 @@ test "switching conversations clears the stale workspace" {
   inspect(fresh.cwd, content="")
   let (_, resumed) = update(dispatch, SessionLoaded("desktop-other", []), model)
   inspect(resumed.cwd, content="")
+}
+
+///|
+test "send while running queues a steer instead of a prompt" {
+  let dispatch = test_dispatch()
+  let model = { ..running_model(), task: "focus on the tests" }
+  let (_, once) = update(dispatch, Send, model)
+  let (_, twice) = update(dispatch, Send, model)
+  inspect(once.task, content="")
+  inspect(once.pending_steers.length(), content="1")
+  inspect(once.pending_steers[0], content="focus on the tests")
+  // The steer is pending, not part of the transcript yet.
+  inspect(once.messages.length(), content="0")
+  inspect(once.running, content="true")
+  inspect(twice.pending_steers.length(), content="1")
+  inspect(twice.pending_steers[0], content="focus on the tests")
+}
+
+///|
+test "a cancelling turn cannot be steered; the text stays in the composer" {
+  let dispatch = test_dispatch()
+  let model = { ..running_model(), status: Cancelling, task: "too late" }
+  let (_, next) = update(dispatch, Send, model)
+  inspect(next.task, content="too late")
+  inspect(next.pending_steers.length(), content="0")
+}
+
+///|
+test "steer_applied commits the pending steer as a user message" {
+  let dispatch = test_dispatch()
+  let model = { ..running_model(), pending_steers: ["go left"] }
+  let (_, next) = update(dispatch, Engine(7, SteerApplied("go left")), model)
+  inspect(next.pending_steers.length(), content="0")
+  inspect(next.messages.length(), content="1")
+  guard next.messages[0].kind is User else { fail("expected a user item") }
+  inspect(next.messages[0].content, content="go left")
+}
+
+///|
+test "steer_dropped settles the pending steer with a visible notice" {
+  let dispatch = test_dispatch()
+  let model = { ..running_model(), pending_steers: ["go left"] }
+  let (_, next) = update(dispatch, Engine(7, SteerDropped("go left")), model)
+  inspect(next.pending_steers.length(), content="0")
+  inspect(next.messages.length(), content="1")
+  guard next.messages[0].kind is Assistant(true) else {
+    fail("expected an error bubble")
+  }
+  assert_true(next.messages[0].content.contains("go left"))
+}
+
+///|
+test "an identical-text settle removes exactly one pending entry" {
+  let dispatch = test_dispatch()
+  let model = { ..running_model(), pending_steers: ["again", "again"] }
+  let (_, next) = update(dispatch, Engine(7, SteerApplied("again")), model)
+  inspect(next.pending_steers.length(), content="1")
+  inspect(next.pending_steers[0], content="again")
+  inspect(next.messages.length(), content="1")
+}
+
+///|
+test "an undelivered steer is reported instead of vanishing" {
+  let dispatch = test_dispatch()
+  let model = { ..running_model(), pending_steers: ["lost"] }
+  let (_, next) = update(dispatch, SteerUndelivered("lost"), model)
+  inspect(next.pending_steers.length(), content="0")
+  inspect(next.messages.length(), content="1")
+  guard next.messages[0].kind is Assistant(true) else {
+    fail("expected an error bubble")
+  }
+  assert_true(next.messages[0].content.contains("lost"))
+}
+
+///|
+test "a run that ends with steers in flight sweeps them into notices" {
+  let dispatch = test_dispatch()
+  let model = { ..running_model(), pending_steers: ["orphaned"] }
+  let (_, next) = update(dispatch, Finished(7, "finished", "", 0), model)
+  inspect(next.pending_steers.length(), content="0")
+  inspect(next.running, content="false")
+  guard next.messages[0].kind is Assistant(true) else {
+    fail("expected an error bubble")
+  }
+  assert_true(next.messages[0].content.contains("orphaned"))
+}
+
+///|
+test "decode recognizes the steer events" {
+  guard decode_engine_event("steer_applied", "left", "", false, 0, 0, "", "")
+    is Some(SteerApplied("left")) else {
+    fail("steer_applied not decoded")
+  }
+  guard decode_engine_event("steer_dropped", "left", "", false, 0, 0, "", "")
+    is Some(SteerDropped("left")) else {
+    fail("steer_dropped not decoded")
+  }
 }

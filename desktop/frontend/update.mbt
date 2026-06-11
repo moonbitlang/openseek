@@ -156,10 +156,29 @@ fn update(
     Send => {
       let task = model.task.trim().to_owned()
       if task.is_empty() ||
-        model.running ||
         !model.bridge_ready ||
         model.api_key.trim().is_empty() {
         (@cmd.none, model)
+      } else if model.running {
+        // Submitting while a turn runs steers it: the text is folded into
+        // the running turn at its next step boundary and echoed back as a
+        // `steer_applied` event. A turn being cancelled cannot be steered —
+        // the steer could outlive the dying turn in the engine's queue and
+        // contaminate a later prompt — so the text stays in the composer.
+        match model.active_run_id {
+          Some(run_id) if !(model.status is Cancelling) => {
+            let pending_steers = model.pending_steers.copy()
+            pending_steers.push(task)
+            (
+              @cmd.batch([
+                steer_openseek(dispatch, task, run_id),
+                scroll_transcript_after_render(),
+              ]),
+              { ..model, pending_steers, task: "" },
+            )
+          }
+          _ => (@cmd.none, model)
+        }
       } else {
         let next = model.append_item(User, task)
         let next = {
@@ -186,6 +205,15 @@ fn update(
         )
       }
     }
+    SteerUndelivered(text) =>
+      // The steer never reached the engine, so no `steer_applied` /
+      // `steer_dropped` event will settle it — report the loss here instead.
+      (
+        scroll_transcript_after_render(),
+        model
+        .settle_pending_steer(text)
+        .append_item(Assistant(true), steer_dropped_notice(text)),
+      )
     Stop =>
       match model.active_run_id {
         Some(run_id) =>
@@ -203,6 +231,7 @@ fn update(
           {
             ..model.clear_streams(),
             messages: [],
+            pending_steers: [],
             usage_tokens: 0,
             watcher_status: "",
             cwd: "",
@@ -241,6 +270,7 @@ fn update(
             ..model.clear_streams(),
             session_id,
             messages: items,
+            pending_steers: [],
             usage_tokens: 0,
             watcher_status: "",
             cwd: "",
@@ -403,13 +433,32 @@ fn update(
               model.clear_streams().append_item(Assistant(true), content),
             )
           }
+          // The steer took effect at a step boundary: it is part of the
+          // conversation now, so echo it as a user message.
+          SteerApplied(content) =>
+            (
+              scroll_transcript_after_render(),
+              model.settle_pending_steer(content).append_item(User, content),
+            )
+          // The steer raced the turn's end through the pipes and was
+          // rejected; the text must not vanish silently.
+          SteerDropped(content) =>
+            (
+              scroll_transcript_after_render(),
+              model
+              .settle_pending_steer(content)
+              .append_item(Assistant(true), steer_dropped_notice(content)),
+            )
         }
       }
     Failed(message) =>
       (
         @cmd.batch([scroll_transcript_after_render(), fetch_sessions(dispatch)]),
         {
-          ..model.clear_streams().append_item(Assistant(true), message),
+          ..model
+          .clear_streams()
+          .sweep_pending_steers()
+          .append_item(Assistant(true), message),
           running: false,
           active_run_id: None,
           status: Failed,
@@ -433,8 +482,11 @@ fn update(
       if !model.matches_run(run_id) {
         (@cmd.none, model)
       } else {
+        // In the normal path the engine settled every steer before this
+        // terminal event; sweeping here only matters when the run died with
+        // steers still in flight.
         let base = {
-          ..model.clear_streams(),
+          ..model.clear_streams().sweep_pending_steers(),
           running: false,
           active_run_id: None,
           status: Finished(status),

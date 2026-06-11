@@ -103,6 +103,24 @@ fn open_session(dispatch : @cmd.Dispatch[Msg], session_id : String) -> @cmd.Cmd 
 }
 
 ///|
+/// Inject steering input into the running turn. Delivery is acknowledged by
+/// the engine's own `steer_applied`/`steer_dropped` events; this command only
+/// reports the cases where no such event will ever come — the host refused
+/// the steer (turn already closed, engine dead) or the bridge call failed —
+/// so the pending acknowledgment can settle either way.
+fn steer_openseek(
+  dispatch : @cmd.Dispatch[Msg],
+  text : String,
+  run_id : Int,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    js_steer_openseek(text, run_id, fn() {
+      scheduler.add(dispatch(SteerUndelivered(text)))
+    })
+  })
+}
+
+///|
 fn cancel_openseek(dispatch : @cmd.Dispatch[Msg], run_id : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     js_cancel_openseek(run_id, fn(message) {
@@ -287,6 +305,34 @@ extern "js" fn js_load_session(
   #|     );
   #|   } catch (error) {
   #|     onError(String((error && error.message) || error));
+  #|   }
+  #| }
+
+///|
+/// `on_undelivered` fires whenever the engine will not settle this steer
+/// itself: the host replied `steered: false`, the call rejected, or the
+/// bridge is gone.
+extern "js" fn js_steer_openseek(
+  text : String,
+  run_id : Int,
+  on_undelivered : () -> Unit,
+) =
+  #| (text, runId, onUndelivered) => {
+  #|   const root = globalThis.__MoonBit__;
+  #|   const api = root && root.openseek;
+  #|   if (!api || !api.steer) {
+  #|     onUndelivered();
+  #|     return;
+  #|   }
+  #|   try {
+  #|     Promise.resolve(api.steer({ text, run_id: runId })).then(
+  #|       (reply) => {
+  #|         if (!reply || reply.steered !== true) onUndelivered();
+  #|       },
+  #|       () => onUndelivered(),
+  #|     );
+  #|   } catch (error) {
+  #|     onUndelivered();
   #|   }
   #| }
 

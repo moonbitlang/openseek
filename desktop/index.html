@@ -650,6 +650,12 @@
         }
       }
 
+      /* steering input not yet folded into the running turn: dimmed until
+         the engine confirms it with a steer_applied event */
+      .msg.pending-steer {
+        opacity: 0.6;
+      }
+
       .inline-code {
         border-radius: 4px;
         background: var(--surface-2);

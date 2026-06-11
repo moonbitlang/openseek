@@ -16,6 +16,10 @@ priv enum EngineEvent {
   AgentAborted(String)
   MaxStepsExhausted
   AgentSetupFailed(String)
+  // Steering input settled by the engine: applied at a step boundary, or
+  // dropped because it raced the turn's end. Both echo the original text.
+  SteerApplied(String)
+  SteerDropped(String)
 }
 
 ///|
@@ -46,6 +50,8 @@ fn decode_engine_event(
     "agent_aborted" => Some(AgentAborted(reason))
     "max_steps_exhausted" => Some(MaxStepsExhausted)
     "agent_setup_failed" => Some(AgentSetupFailed(reason))
+    "steer_applied" => Some(SteerApplied(content))
+    "steer_dropped" => Some(SteerDropped(content))
     _ => None
   }
 }

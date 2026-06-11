@@ -123,6 +123,21 @@ struct CancelReply {
 } derive(ToJson)
 
 ///|
+struct SteerPayload {
+  text : String
+  run_id : Int?
+} derive(FromJson)
+
+///|
+/// Reply to `steer`. `steered: false` means the text never reached the
+/// engine — no `steer_applied`/`steer_dropped` event will follow, so the
+/// frontend must settle its acknowledgment from this reply alone.
+struct SteerReply {
+  steered : Bool
+  run_id : Int?
+} derive(ToJson)
+
+///|
 /// Reply to `connect`, delivered only when the pump stops — in practice
 /// never, since the webview holds the call open for the app's lifetime.
 struct PumpReply {
@@ -1016,6 +1031,41 @@ async fn cancel_run(
 }
 
 ///|
+/// Inject steering input into the open turn: the text rides the serve
+/// engine's lossless steering queue and is folded into the conversation at
+/// the turn's next step boundary, where the engine echoes it back as a
+/// `steer_applied` event (or `steer_dropped` if it raced the turn's end).
+/// Steering a turn that is being cancelled is refused — the steer could
+/// outlive the dying turn in the engine's queue and contaminate a later
+/// prompt. Blank text is refused too: the engine filters blanks without
+/// emitting any settling event, which would leave a phantom acknowledgment.
+async fn steer_run(
+  manager : EngineManager,
+  payload : SteerPayload,
+) -> SteerReply {
+  guard !payload.text.trim().is_empty() else {
+    return { steered: false, run_id: None }
+  }
+  match manager.live {
+    Some(live) if live.run_open && !live.cancel_requested => {
+      if payload.run_id is Some(requested) && requested != live.latest_run {
+        return { steered: false, run_id: Some(live.latest_run) }
+      }
+      let command : Json = { "command": "steer", "text": payload.text }
+      live.writer.write(command.stringify() + "\n") catch {
+        error if @async.is_being_cancelled() ||
+          @async.is_cancellation_error(error) => raise error
+        // The engine just died; its reader task closes the run. The steer
+        // never reached it, so report that rather than pretend.
+        _ => return { steered: false, run_id: Some(live.latest_run) }
+      }
+      { steered: true, run_id: Some(live.latest_run) }
+    }
+    _ => { steered: false, run_id: None }
+  }
+}
+
+///|
 /// Run the bundled engine with `args` and return its stdout. A non-zero exit
 /// is reported through stderr's content so the frontend sees the engine's own
 /// message rather than a bare exit code when one is available.
@@ -1101,6 +1151,7 @@ fn openseek_extension(
       @app.AppCommandApiDescriptor::new("connect"),
       @app.AppCommandApiDescriptor::new("start"),
       @app.AppCommandApiDescriptor::new("cancel"),
+      @app.AppCommandApiDescriptor::new("steer"),
       @app.AppCommandApiDescriptor::new("list_sessions"),
       @app.AppCommandApiDescriptor::new("load_session"),
     ],
@@ -1113,6 +1164,9 @@ fn openseek_extension(
       })
       context.op_async("cancel", async fn(payload : CancelPayload) {
         cancel_run(manager, payload)
+      })
+      context.op_async("steer", async fn(payload : SteerPayload) {
+        steer_run(manager, payload)
       })
       context.op_async_result("list_sessions", async fn(_payload : Json) {
         list_sessions(engine)

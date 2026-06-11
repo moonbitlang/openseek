@@ -2,7 +2,7 @@
 
 A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://mooncakes.io/docs/moonbit-community/rabbita) desktop client for the OpenSeek agent, written in MoonBit.
 
-- `main.mbt` — native host: keeps one persistent `openseek --serve` engine per conversation, streams its JSONL events to the webview, exposes `connect` / `start` / `cancel` / `list_sessions` / `load_session` commands.
+- `main.mbt` — native host: keeps one persistent `openseek --serve` engine per conversation, streams its JSONL events to the webview, exposes `connect` / `start` / `steer` / `cancel` / `list_sessions` / `load_session` commands.
 - `frontend/` — the JS (Rabbita) UI bundled to `frontend.js`.
 - `internal/event/` — engine event decoding.
 - `lepus/` — the Lepus framework, vendored as a git submodule.
@@ -53,6 +53,15 @@ While a turn runs, the UI renders the engine's `reasoning_delta` /
 `assistant_delta` events as live "Thinking" and answer bubbles with a
 streaming caret; the committed `reasoning_message` / `assistant_message`
 events then replace them with permanent transcript items.
+
+Submitting while a turn runs steers it instead of starting a new prompt: the
+text rides the serve engine's lossless steering queue and is folded into the
+running turn at its next step boundary. It shows as a dimmed pending bubble
+until the engine settles it — `steer_applied` commits it as a real user
+message, while `steer_dropped` (the steer raced the turn's end through the
+pipes) surfaces a notice asking to resubmit, so the text never vanishes
+silently. A turn that is being cancelled cannot be steered; the text stays in
+the composer.
 
 ## Prerequisites
 

@@ -34,6 +34,10 @@ type StartReply derive(ToJson)
 
 type StartedPayload derive(ToJson)
 
+type SteerPayload derive(@json.FromJson)
+
+type SteerReply derive(ToJson)
+
 // Type aliases
 
 // Traits
