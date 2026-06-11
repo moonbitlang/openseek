@@ -207,10 +207,15 @@ jobs:
 
       - name: Set up MoonBit (nightly)
         shell: pwsh
+        env:
+          MOONBIT_INSTALL_VERSION: nightly
         run: |
-          $env:MOONBIT_INSTALL_VERSION = "nightly"
-          (Invoke-WebRequest -UseBasicParsing https://cli.moonbitlang.com/install/powershell.ps1).Content | Invoke-Expression
-          "$HOME\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          "$env:USERPROFILE\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Show MoonBit version
         shell: pwsh
