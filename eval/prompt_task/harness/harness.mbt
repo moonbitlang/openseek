@@ -145,9 +145,13 @@ async fn run_trial(
   @fs.mkdir(workspace, recursive=true)
   let real_workspace = @fs.realpath(workspace)
   let task = task_template.replace_all(old="{{WORKSPACE}}", new=real_workspace)
+  // The engine runs *in* the trial workspace (moon resolves the module from
+  // the absolute package path), so the prompt's environment grounding names
+  // the workspace rather than the OpenSeek checkout — and relative paths in
+  // the model's tool calls land in the right tree.
   let args = [
     "run",
-    "cmd/openseek",
+    config.repo_root + "/cmd/openseek",
     "--",
     "--max-steps",
     config.max_steps.to_string(),
@@ -172,7 +176,7 @@ async fn run_trial(
       "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
     },
     inherit_env=true,
-    cwd=config.repo_root,
+    cwd=real_workspace,
   )
   let log_text = output.text()
   let log_path = config.out_dir + "/logs/" + padded_index(index + 1) + ".log"

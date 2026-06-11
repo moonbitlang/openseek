@@ -118,10 +118,15 @@ async fn run_trial(config : Config, index : Int) -> TrialResult {
     case.id
   @fs.mkdir(workspace, recursive=true)
   write_fixture(workspace, case)
-  let task = case.task(@fs.realpath(workspace))
+  let real_workspace = @fs.realpath(workspace)
+  let task = case.task(real_workspace)
+  // Run the engine in the trial workspace so environment grounding names it
+  // (see the prompt_task harness for the same pattern).
   let args = [
     "run",
-    "cmd/main",
+    // cmd/openseek is the engine package (the pre-rename cmd/main no longer
+    // exists, so the old invocation could not have launched at all).
+    config.repo_root + "/cmd/openseek",
     "--",
     "--max-steps",
     config.max_steps.to_string(),
@@ -146,7 +151,7 @@ async fn run_trial(config : Config, index : Int) -> TrialResult {
       "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
     },
     inherit_env=true,
-    cwd=config.repo_root,
+    cwd=real_workspace,
   )
   let log_text = output.text()
   let log_path = config.out_dir +
