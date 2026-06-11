@@ -222,40 +222,41 @@ pub fn runtime_update_text(
 }
 
 ///|
-/// Per-watcher substance of a `[moon_check update]` block: one
-/// `(key, fingerprint)` pair per watcher section, keyed by the section's
-/// `cwd=` line and with the volatile counters (`events=` batch totals,
-/// per-watcher `seq=` chunk counts) stripped from the fingerprint. The agent
-/// loop tracks the last fingerprint per watcher across steps and collapses a
-/// batch in which nothing changed to a one-line marker — fingerprinting the
-/// whole block instead would thrash whenever two watchers alternate
-/// batches, re-injecting diagnostics for state the model already has (a
-/// real 156-step session accumulated 61 near-identical notices, 11% of its
-/// final context).
-pub fn update_section_fingerprints(update : String) -> Array[(String, String)] {
-  let pairs : Array[(String, String)] = []
-  for section in update.split("\n\n") {
-    let mut key = ""
-    let kept : Array[String] = []
-    for line in section.split("\n") {
-      if line.has_prefix("cwd=") {
-        key = line.to_owned()
-      }
-      if line.has_prefix("events=") ||
-        line.has_prefix("seq=") ||
-        line == "[moon_check update]" {
-        continue
-      }
-      kept.push(line.to_owned())
+/// A snapshot's substance: its update text minus the volatile `seq=` chunk
+/// counter, which advances even when the diagnostics are unchanged. Derived
+/// from `update_text` (rather than rebuilt from fields) so it can never
+/// drift from what the model actually reads.
+fn MoonCheckSnapshot::fingerprint(self : MoonCheckSnapshot) -> String {
+  [
+    for line in self.update_text().split("\n") if !line.has_prefix("seq=") => {
+      line.to_owned()
     }
-    // A section with no cwd= line (unexpected) keys on its own text, which
-    // degrades to always-fresh rather than wrongly suppressing it.
-    if key == "" {
-      key = section.to_owned()
+  ].join("\n")
+}
+
+///|
+/// Per-watcher fingerprints for a drained event batch: one
+/// `(registry key, fingerprint)` pair per watcher, coalesced to the latest
+/// snapshot exactly like `runtime_update_text`. Computed from the snapshots
+/// themselves — never by re-parsing the rendered block, whose watcher
+/// output can legally contain blank lines that would defeat any text-level
+/// sectioning. The agent loop tracks the last fingerprint per watcher
+/// across steps and collapses a batch in which nothing changed to a
+/// one-line marker (a real 156-step session accumulated 61 near-identical
+/// notices, 11% of its final context).
+pub fn update_fingerprints(
+  events : Array[@agent_runtime.AgentEvent],
+) -> Array[(String, String)] {
+  let latest : Map[String, MoonCheckSnapshot] = {}
+  for event in events {
+    match event {
+      MoonCheckUpdate(update) => latest[update.key] = update
+      _ => ()
     }
-    pairs.push((key, kept.join("\n")))
   }
-  pairs
+  [
+    for key, snapshot in latest => (key, snapshot.fingerprint())
+  ]
 }
 
 ///|
@@ -280,55 +281,68 @@ fn moon_check_snapshot_is_error(snapshot : MoonCheckSnapshot) -> Bool {
 }
 
 ///|
-test "section fingerprints ignore counters and key per watcher" {
-  let first =
-    #|[moon_check update]
-    #|events=32
-    #|id=moon-check-1
-    #|cwd=alpha
-    #|command=moon check --watch --diagnostic-limit 10
-    #|status=running
-    #|seq=54
-    #|Success, waiting for filesystem changes...
-  let requeued =
-    #|[moon_check update]
-    #|events=2
-    #|id=moon-check-1
-    #|cwd=alpha
-    #|command=moon check --watch --diagnostic-limit 10
-    #|status=running
-    #|seq=92
-    #|Success, waiting for filesystem changes...
-  // Only events= and seq= moved: same key, same fingerprint.
-  guard update_section_fingerprints(first) is [(key_a, fp_a)] else {
-    fail("expected one section")
+test "fingerprints ignore seq churn, key per watcher, survive blank lines" {
+  fn snapshot(
+    id : String,
+    key : String,
+    cwd : String,
+    seq : Int,
+    output : String,
+  ) -> MoonCheckSnapshot {
+    MoonCheckSnapshot(
+      id~,
+      key~,
+      command="moon check --watch --diagnostic-limit 10",
+      cwd=Some(cwd),
+      status=Running,
+      seq~,
+      output~,
+      output_truncated=false,
+      max_output_chars=12000,
+      exit_code=None,
+      restart_count=0,
+      restart_limit=3,
+      restart_reason=None,
+    )
   }
-  guard update_section_fingerprints(requeued) is [(key_b, fp_b)] else {
-    fail("expected one section")
+  // Only seq moved: same key, same fingerprint.
+  let first = update_fingerprints([
+    MoonCheckUpdate(snapshot("moon-check-1", "cwd=alpha", "alpha", 54, "ok")),
+  ])
+  let requeued = update_fingerprints([
+    MoonCheckUpdate(snapshot("moon-check-1", "cwd=alpha", "alpha", 92, "ok")),
+  ])
+  guard first is [(key_a, fp_a)] && requeued is [(key_b, fp_b)] else {
+    fail("expected one pair each")
   }
   assert_eq(key_a, key_b)
   assert_eq(fp_a, fp_b)
 
-  // A two-watcher block yields one pair per section, keyed by cwd, so an
-  // unchanged watcher stays recognizable when batches alternate.
-  let both = first +
-    "\n\nid=moon-check-2\ncwd=beta\ncommand=moon check --watch\nstatus=running\nseq=3\nError: [4014] type mismatch"
-  guard update_section_fingerprints(both) is [(k1, f1), (k2, _)] else {
-    fail("expected two sections")
-  }
-  assert_eq(k1, "cwd=alpha")
-  assert_eq(k2, "cwd=beta")
-  assert_eq(f1, fp_a)
+  // Output with blank-line paragraphs stays one watcher, one pair — a
+  // text-level "\n\n" split would have minted phantom sections here, and a
+  // later batch dropping a paragraph must register as a change.
+  let blanky = update_fingerprints([
+    MoonCheckUpdate(
+      snapshot(
+        "moon-check-1", "cwd=alpha", "alpha", 3, "Error: one\n\nError: two",
+      ),
+    ),
+  ])
+  guard blanky is [(_, fp_two_errors)] else { fail("expected one pair") }
+  let shrunk = update_fingerprints([
+    MoonCheckUpdate(
+      snapshot("moon-check-1", "cwd=alpha", "alpha", 4, "Error: one"),
+    ),
+  ])
+  guard shrunk is [(_, fp_one_error)] else { fail("expected one pair") }
+  assert_true(fp_two_errors != fp_one_error)
 
-  // Changed diagnostics change the fingerprint.
-  let changed = requeued.replace(
-    old="Success, waiting for filesystem changes...",
-    new="Error: [4014] type mismatch",
-  )
-  guard update_section_fingerprints(changed) is [(_, fp_c)] else {
-    fail("expected one section")
-  }
-  assert_true(fp_c != fp_a)
+  // Two watchers in one batch: one pair per registry key.
+  let both = update_fingerprints([
+    MoonCheckUpdate(snapshot("moon-check-1", "cwd=alpha", "alpha", 5, "ok")),
+    MoonCheckUpdate(snapshot("moon-check-2", "cwd=beta", "beta", 1, "bad")),
+  ])
+  assert_eq(both.length(), 2)
 }
 
 ///|

@@ -243,7 +243,8 @@ pub async fn[X] run_turn_in_scope(
         messages,
         append_item~,
       )
-      if runtime_update_message(runtime.drain_events()) is Some(update) {
+      let runtime_events = runtime.drain_events()
+      if runtime_update_message(runtime_events) is Some(update) {
         // A batch in which every watcher reproduces its previous notice
         // (volatile counters aside) is collapsed to a one-line marker: the
         // model still learns its edit was processed with an unchanged
@@ -251,7 +252,7 @@ pub async fn[X] run_turn_in_scope(
         // 156-step session appended 61 near-identical update notices, 11%
         // of its final context. Fingerprints are tracked per watcher so
         // alternating multi-cwd batches cannot thrash the comparison.
-        let sections = @moon_check.update_section_fingerprints(update)
+        let sections = @moon_check.update_fingerprints(runtime_events)
         let mut fresh = sections.is_empty()
         for pair in sections {
           let (key, fingerprint) = pair
