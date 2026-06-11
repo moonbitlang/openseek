@@ -484,3 +484,44 @@ async test "store compacts by appending a durable summary" {
   assert_eq(loaded.chat_messages().length(), 2)
   @fs.rmdir(store.root(), recursive=true)
 }
+
+///|
+async test "append fingerprints the stored bytes, not a re-serialization" {
+  let store = new_store()
+  let dir = store.root() + "/sessions/spaced"
+  @fs.mkdir(dir, recursive=true)
+  // A valid log whose formatting differs from what the encoder would emit
+  // (spaces after separators): decode-then-re-serialize yields different
+  // bytes, so a header fingerprinted over a re-serialization would never
+  // match this file again. The fingerprint must cover the stored text.
+  let stored_line =
+    #|{ "sequence": 1, "ts": 5, "item": { "kind": "user", "payload": { "content": "hello" } } }
+  let stored = stored_line + "\n"
+  @fs.write_file(dir + "/events.jsonl", stored, create_mode=CreateOrTruncate)
+  let header : Json = {
+    "version": 1,
+    "id": "spaced",
+    "system_prompt": "system",
+    "last_sequence": 1,
+    "event_log_length": stored.length(),
+    "event_log_hash": Hash::hash(stored[:]),
+    "allow_event_log_ahead": true,
+  }
+  @fs.write_file(
+    dir + "/session.json",
+    header.stringify(),
+    create_mode=CreateOrTruncate,
+  )
+  let session = store.load(SessionId("spaced"))
+  let next = store.append(session, Terminal(Finished("done")))
+  assert_eq(next.last_sequence(), 2)
+  // The rewritten header still matches the stored bytes, so the session
+  // keeps loading after the append.
+  let reloaded = store.load(SessionId("spaced"))
+  assert_eq(reloaded.last_sequence(), 2)
+  guard reloaded.events()[0].item() is User(message) else {
+    fail("expected the user item")
+  }
+  assert_eq(message.content(), "hello")
+  @fs.rmdir(store.root(), recursive=true)
+}
