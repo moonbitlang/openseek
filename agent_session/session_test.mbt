@@ -257,3 +257,17 @@ test "generated session ids stamp the launcher prefix and UTC wall clock" {
     "cli-20260611-081500-042-1a2b3c4d",
   )
 }
+
+///|
+test "event logs written before timestamps existed still decode" {
+  // Pre-stamp engines (and every released desktop build) wrote events
+  // without `ts`; they decode as the 0 sentinel, same as appends without a
+  // clock.
+  let line =
+    #|{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}}
+  let decoded : @agent_session.SessionEvent = @json.from_json(@json.parse(line))
+  assert_eq(decoded.unix_ms(), 0L)
+  assert_eq(decoded.sequence(), 1)
+  guard decoded.item() is User(message) else { fail("expected a user item") }
+  assert_eq(message.content(), "hello")
+}

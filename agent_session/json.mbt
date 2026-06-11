@@ -176,6 +176,35 @@ pub impl FromJson for SessionItem with fn from_json(
 }
 
 ///|
+/// Manual rather than derived so a missing `ts` decodes as the 0 sentinel
+/// ("appended without a clock"): event logs written before events were
+/// stamped — including every session a released desktop build created —
+/// must keep loading.
+///
+/// The codec evolution rule this relies on: decoders may be tolerant, but
+/// encoders must stay deterministic, and the store's durability markers
+/// must cover the stored bytes verbatim — never a re-serialization, which
+/// drifts for tolerantly-decoded logs (re-encoding injects `"ts":0` into
+/// lines that never had it). store.mbt enforces the last clause on both
+/// its write and read paths.
+pub impl FromJson for SessionEvent with fn from_json(
+  json : Json,
+  path : @json.JsonPath,
+) -> SessionEvent {
+  let fields = expect_object(json, path)
+  let ts : Double = match fields.get("ts") {
+    Some(Number(value, ..)) => value
+    Some(_) => json_decode_error(path.add_key("ts"), "expected number")
+    None => 0
+  }
+  let item : SessionItem = match fields.get("item") {
+    Some(item) => @json.from_json(item, path=path.add_key("item"))
+    None => json_decode_error(path.add_key("item"), "expected item")
+  }
+  { sequence: int_field(fields, path, "sequence"), ts, item }
+}
+
+///|
 /// Encode a complete `Session` snapshot.
 ///
 /// The JSON shape is versioned and contains `id`, `system_prompt`, and the

@@ -44,10 +44,11 @@ pub impl @json.FromJson for Session
 
 pub struct SessionEvent {
   // private fields
-} derive(ToJson, @debug.Debug, @json.FromJson)
+} derive(ToJson, @debug.Debug)
 pub fn SessionEvent::item(Self) -> SessionItem
 pub fn SessionEvent::sequence(Self) -> Int
 pub fn SessionEvent::unix_ms(Self) -> Int64
+pub impl @json.FromJson for SessionEvent
 
 pub struct SessionId {
   // private fields
