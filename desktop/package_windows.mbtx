@@ -3,6 +3,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/process",
   "moonbitlang/x/fs",
+  "moonbitlang/x/sys",
 }
 
 ///|
@@ -41,11 +42,101 @@ const BundleDir : String = "dist/windows-x64/OpenSeek Desktop"
 const ZipPath : String = "dist/OpenSeek Desktop-windows-x64.zip"
 
 ///|
+const InstallerScript : String = "installer/openseek-desktop.nsi"
+
+///|
+const InstallerPath : String = "dist/OpenSeek-Desktop-Setup.exe"
+
+///|
+const LocalMakensis : String = "dist/tools/nsis-3.12/makensis.exe"
+
+///|
+const ProgramFilesX86Makensis : String =
+  "C:/Program Files (x86)/NSIS/makensis.exe"
+
+///|
+const ProgramFilesMakensis : String = "C:/Program Files/NSIS/makensis.exe"
+
+///|
 const AppAssetDir : String = BundleDir + "/assets"
 
 ///|
 suberror PackageError {
   PackageError(String)
+}
+
+///|
+priv enum PackageMode {
+  ZipOnly
+  InstallerOnly
+  AllOutputs
+}
+
+///|
+fn print_usage() -> Unit {
+  let usage =
+    #|Usage:
+    #|  moon run --target native .\desktop\package_windows.mbtx
+    #|  moon run --target native .\desktop\package_windows.mbtx -- --zip
+    #|  moon run --target native .\desktop\package_windows.mbtx -- --installer
+    #|  moon run --target native .\desktop\package_windows.mbtx -- --all
+    #|
+    #|Modes:
+    #|  --zip        Build the app bundle and portable zip. This is the default.
+    #|  --installer  Build the app bundle and NSIS setup executable.
+    #|  --all        Build both the portable zip and setup executable.
+    #|
+  println(usage)
+}
+
+///|
+fn script_args() -> Array[String] {
+  let argv = @sys.get_cli_args()
+  if argv.length() > 0 { argv[1:].to_owned() } else { [] }
+}
+
+///|
+fn is_help_arg(arg : String) -> Bool {
+  arg == "-h" || arg == "--help"
+}
+
+///|
+fn parse_mode(args : Array[String]) -> PackageMode raise {
+  if args.length() == 0 {
+    return PackageMode::ZipOnly
+  }
+  if args.length() != 1 {
+    raise PackageError("expected at most one package mode")
+  }
+  let mode = args[0]
+  if mode == "--zip" || mode == "zip" {
+    return PackageMode::ZipOnly
+  }
+  if mode == "--installer" || mode == "installer" {
+    return PackageMode::InstallerOnly
+  }
+  if mode == "--all" || mode == "all" {
+    return PackageMode::AllOutputs
+  }
+  raise PackageError("unknown package mode: \{mode}")
+}
+
+///|
+fn should_build_zip(mode : PackageMode) -> Bool {
+  match mode {
+    PackageMode::ZipOnly => true
+    PackageMode::InstallerOnly => false
+    PackageMode::AllOutputs => true
+  }
+}
+
+///|
+fn should_build_installer(mode : PackageMode) -> Bool {
+  match mode {
+    PackageMode::ZipOnly => false
+    PackageMode::InstallerOnly => true
+    PackageMode::AllOutputs => true
+  }
 }
 
 ///|
@@ -88,7 +179,7 @@ async fn run_powershell(script : String) -> Unit raise {
     "-ExecutionPolicy",
     "Bypass",
     "-Command",
-    script,
+    "$ErrorActionPreference = 'Stop'; " + script,
   ])
 }
 
@@ -174,9 +265,10 @@ async fn build_outputs() -> Unit raise {
 async fn reset_bundle_dirs() -> Unit raise {
   let bundle_dir = desktop_path(BundleDir)
   let zip_path = desktop_path(ZipPath)
+  let installer_path = desktop_path(InstallerPath)
   let asset_dir = desktop_path(AppAssetDir)
   run_powershell(
-    "if (Test-Path -LiteralPath '\{bundle_dir}') { Remove-Item -LiteralPath '\{bundle_dir}' -Recurse -Force }; if (Test-Path -LiteralPath '\{zip_path}') { Remove-Item -LiteralPath '\{zip_path}' -Force }; New-Item -ItemType Directory -Force -Path '\{asset_dir}' | Out-Null",
+    "if (Test-Path -LiteralPath '\{bundle_dir}') { Remove-Item -LiteralPath '\{bundle_dir}' -Recurse -Force }; if (Test-Path -LiteralPath '\{zip_path}') { Remove-Item -LiteralPath '\{zip_path}' -Force }; if (Test-Path -LiteralPath '\{installer_path}') { Remove-Item -LiteralPath '\{installer_path}' -Force }; New-Item -ItemType Directory -Force -Path '\{asset_dir}' | Out-Null",
   )
 }
 
@@ -228,12 +320,86 @@ async fn zip_bundle() -> Unit raise {
 }
 
 ///|
+async fn ensure_makensis() -> Unit raise {
+  if @fs.path_exists(desktop_path(LocalMakensis)) {
+    return
+  }
+  if @fs.path_exists(ProgramFilesX86Makensis) {
+    return
+  }
+  if @fs.path_exists(ProgramFilesMakensis) {
+    return
+  }
+  let code = @process.run("powershell", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    "if (Get-Command makensis.exe -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }",
+  ], inherit_env=true)
+  if code != 0 {
+    let message =
+      "makensis.exe not found. Install NSIS on PATH or extract portable NSIS to \{desktop_path(LocalMakensis)}."
+    println(message)
+    raise PackageError(message)
+  }
+}
+
+///|
+fn makensis_command() -> String {
+  if @fs.path_exists(desktop_path(LocalMakensis)) {
+    desktop_path(LocalMakensis)
+  } else if @fs.path_exists(ProgramFilesX86Makensis) {
+    ProgramFilesX86Makensis
+  } else if @fs.path_exists(ProgramFilesMakensis) {
+    ProgramFilesMakensis
+  } else {
+    "makensis.exe"
+  }
+}
+
+///|
+async fn build_installer() -> Unit raise {
+  if !@fs.path_exists(desktop_path(BundleDir + "/openseek-desktop.exe")) {
+    raise PackageError(
+      "Windows app bundle not found: \{desktop_path(BundleDir)}",
+    )
+  }
+  run_powershell(
+    "$source = (Resolve-Path -LiteralPath '\{desktop_path(BundleDir)}').Path; " +
+    "$output = (Resolve-Path -LiteralPath '\{desktop_path("dist")}').Path; " +
+    "$script = (Resolve-Path -LiteralPath '\{desktop_path(InstallerScript)}').Path; " +
+    "& '\{makensis_command()}' \"/DSOURCE_DIR=$source\" \"/DOUTPUT_DIR=$output\" \"$script\"",
+  )
+}
+
+///|
 async fn main raise {
+  let args = script_args()
+  if args.length() == 1 && is_help_arg(args[0]) {
+    print_usage()
+    return
+  }
+  let mode = parse_mode(args) catch {
+    err => {
+      print_usage()
+      raise err
+    }
+  }
+  if should_build_installer(mode) {
+    ensure_makensis()
+  }
   build_outputs()
   println("built openseek engine: \{repo_path(EngineBinary)}")
   reset_bundle_dirs()
   copy_bundle_files()
-  zip_bundle()
+  if should_build_zip(mode) {
+    zip_bundle()
+    println("generated \{desktop_path(ZipPath)}")
+  }
+  if should_build_installer(mode) {
+    build_installer()
+    println("generated \{desktop_path(InstallerPath)}")
+  }
   println("generated \{desktop_path(BundleDir)}")
-  println("generated \{desktop_path(ZipPath)}")
 }

@@ -148,6 +148,28 @@ needed, builds the frontend and native host, builds the `openseek` engine from
 the monorepo root, writes `dist/windows-x64/OpenSeek Desktop/`, and creates
 `dist/OpenSeek Desktop-windows-x64.zip`.
 
+Use one optional mode argument to choose the Windows distribution output:
+
+```powershell
+moon run --target native .\desktop\package_windows.mbtx -- --zip
+moon run --target native .\desktop\package_windows.mbtx -- --installer
+moon run --target native .\desktop\package_windows.mbtx -- --all
+```
+
+`--zip` is the default. `--installer` writes only
+`dist/OpenSeek-Desktop-Setup.exe` as the distribution artifact, while keeping
+`dist/windows-x64/OpenSeek Desktop/` as an intermediate bundle directory.
+`--all` writes both the zip and installer.
+
+To build the per-user NSIS installer, install NSIS so `makensis.exe` is on
+`PATH`, or extract portable NSIS to
+`desktop/dist/tools/nsis-3.12/makensis.exe`.
+
+The installer installs under
+`%LOCALAPPDATA%\Programs\OpenSeek Desktop`, creates Start Menu shortcuts, and
+registers an HKCU uninstall entry, so it does not require administrator
+privileges.
+
 The manual steps below are useful when debugging the package script.
 
 From the repository root, initialize the Lepus submodule. If Git for Windows
