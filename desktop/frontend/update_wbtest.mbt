@@ -650,3 +650,77 @@ test "the popup cannot close while the endpoint is unusable" {
   })
   inspect(closed.setup_open, content="false")
 }
+
+///|
+test "the scroll watcher's report lands on the model" {
+  let dispatch = test_dispatch()
+  let (_, away) = update(dispatch, TranscriptPinned(false), test_model())
+  inspect(away.transcript_pinned, content="false")
+  let (_, back) = update(dispatch, TranscriptPinned(true), away)
+  inspect(back.transcript_pinned, content="true")
+}
+
+///|
+test "update is pure: a pinned-state change is idempotent" {
+  let dispatch = test_dispatch()
+  let (_, first) = update(dispatch, TranscriptPinned(false), test_model())
+  let (_, second) = update(dispatch, TranscriptPinned(false), test_model())
+  inspect(first.transcript_pinned, content="false")
+  inspect(second.transcript_pinned, content="false")
+}
+
+///|
+test "an unpinned transcript stays unpinned while a stream grows" {
+  // The pinned flag is the scroll gate; a delta to the active conversation
+  // must not flip it back, or the next render would yank the reader down.
+  let dispatch = test_dispatch()
+  let model = { ..running_model(), transcript_pinned: false }
+  let (_, next) = update(dispatch, Engine(7, AssistantDelta("more")), model)
+  inspect(next.transcript_pinned, content="false")
+  inspect(next.active().streaming_response, content="more")
+}
+
+///|
+test "explicit user actions re-pin the transcript" {
+  let dispatch = test_dispatch()
+
+  // Sending a prompt jumps to the tail.
+  let unpinned = {
+    ..test_model().replace_conversation({ ..test_conversation(), task: "do it" }),
+    transcript_pinned: false,
+  }
+  let (_, sent) = update(dispatch, Send, unpinned)
+  inspect(sent.transcript_pinned, content="true")
+
+  // Steering a running turn does too.
+  let steering = {
+    ..running_model().replace_conversation({
+      ..running_conversation(),
+      task: "and this",
+    }),
+    transcript_pinned: false,
+  }
+  let (_, steered) = update(dispatch, Send, steering)
+  inspect(steered.transcript_pinned, content="true")
+
+  // Switching to a conversation that has live state lands at its tail.
+  let two = {
+    ..test_model().replace_conversation(empty_conversation("desktop-other")),
+    transcript_pinned: false,
+  }
+  let (_, switched) = update(dispatch, OpenSession("desktop-other"), two)
+  inspect(switched.transcript_pinned, content="true")
+
+  // So does loading a stored session or rotating to a fresh one.
+  let (_, loaded) = update(
+    dispatch,
+    SessionLoaded(session="desktop-old", items=[]),
+    { ..test_model(), transcript_pinned: false },
+  )
+  inspect(loaded.transcript_pinned, content="true")
+  let (_, rotated) = update(dispatch, SessionRotated("desktop-fresh"), {
+    ..test_model(),
+    transcript_pinned: false,
+  })
+  inspect(rotated.transcript_pinned, content="true")
+}

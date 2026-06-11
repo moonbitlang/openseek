@@ -156,6 +156,11 @@ priv struct Model {
   // Why the sidebar list could not be refreshed; empty when the last refresh
   // succeeded.
   sessions_error : String
+  // Whether the transcript is scrolled to its bottom. Streaming output only
+  // auto-follows while this holds — scrolling up to read history must not be
+  // yanked back down by the next delta. Maintained by a DOM scroll watcher;
+  // explicit user actions (sending, switching conversations) re-pin it.
+  transcript_pinned : Bool
 }
 
 ///|
@@ -188,6 +193,9 @@ priv enum Msg {
   SessionsFailed(String)
   OpenSession(String)
   SessionLoaded(session~ : String, items~ : Array[TranscriptItem])
+  // The transcript's at-bottom state changed (the user scrolled away from,
+  // or back to, the tail). Reported by the DOM scroll watcher.
+  TranscriptPinned(Bool)
   // The host accepted a prompt: `session` routes the event to its
   // conversation, and everything after a `started` routes by `run_id`.
   Started(
@@ -239,6 +247,7 @@ fn initial_model() -> Model {
     conversations: [],
     sessions: [],
     sessions_error: "",
+    transcript_pinned: true,
   }
 }
 

@@ -16,3 +16,37 @@ fn scroll_transcript() -> Unit {
     None => ()
   }
 }
+
+///|
+/// Track whether the transcript is scrolled to its bottom, feeding changes
+/// back as `TranscriptPinned` so update can decide when streaming output may
+/// auto-scroll.
+fn watch_transcript_scroll(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    js_watch_transcript_scroll(pinned => {
+      scheduler.add(dispatch(TranscriptPinned(pinned)))
+    })
+  })
+}
+
+///|
+/// Scroll events do not bubble, but they do run the capture phase, so one
+/// document-level listener keeps working even if the transcript element is
+/// replaced by a render. The callback fires only when the at-bottom state
+/// changes; the slack absorbs fractional scroll positions.
+extern "js" fn js_watch_transcript_scroll(on_change : (Bool) -> Unit) =
+  #| (onChange) => {
+  #|   if (globalThis.__openseekDesktopTranscriptScrollWatchInstalled) return;
+  #|   globalThis.__openseekDesktopTranscriptScrollWatchInstalled = true;
+  #|   let pinned = true;
+  #|   document.addEventListener("scroll", (event) => {
+  #|     const target = event.target;
+  #|     if (!target || target.id !== "transcript") return;
+  #|     const atBottom =
+  #|       target.scrollHeight - target.scrollTop - target.clientHeight <= 4;
+  #|     if (atBottom !== pinned) {
+  #|       pinned = atBottom;
+  #|       onChange(atBottom);
+  #|     }
+  #|   }, true);
+  #| }

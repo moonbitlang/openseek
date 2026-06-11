@@ -59,9 +59,10 @@ fn should_append_answer(conv : Conversation, answer : String) -> Bool {
 ///|
 /// Scroll the transcript only when `session_id` is the conversation on
 /// screen — a background conversation's stream must not yank the visible
-/// scroll position around.
+/// scroll position around — and only while the user is at the bottom:
+/// someone who scrolled up to read history stays where they are.
 fn scroll_if_active(model : Model, session_id : String) -> @cmd.Cmd {
-  if session_id == model.active_session {
+  if session_id == model.active_session && model.transcript_pinned {
     scroll_transcript_after_render()
   } else {
     @cmd.none
@@ -210,6 +211,7 @@ fn update(
           install_bridge(dispatch),
           load_saved_settings(dispatch),
           install_clipboard_paste_bridge(),
+          watch_transcript_scroll(dispatch),
           rotate_session(dispatch),
         ]),
         model,
@@ -286,8 +288,14 @@ fn update(
           let pending_steers = conv.pending_steers.copy()
           pending_steers.push(task)
           (
-            steer_openseek(dispatch, conv.session_id, task, run_id),
-            model.replace_conversation({ ..conv, pending_steers, task: "" }),
+            @cmd.batch([
+              steer_openseek(dispatch, conv.session_id, task, run_id),
+              scroll_transcript_after_render(),
+            ]),
+            {
+              ..model.replace_conversation({ ..conv, pending_steers, task: "" }),
+              transcript_pinned: true,
+            },
           )
         } else {
           (@cmd.none, model)
@@ -315,7 +323,9 @@ fn update(
             ),
             scroll_transcript_after_render(),
           ]),
-          model.replace_conversation(next),
+          // Submitting is an explicit jump to the conversation's tail, so it
+          // re-pins a transcript the user had scrolled away from.
+          { ..model.replace_conversation(next), transcript_pinned: true },
         )
       }
     }
@@ -349,7 +359,8 @@ fn update(
       // A fresh conversation can start at any time: the current one keeps
       // running in the background and stays one sidebar click away.
       (rotate_session(dispatch), model)
-    SessionRotated(session_id) => (@cmd.none, model.activate(session_id))
+    SessionRotated(session_id) =>
+      (@cmd.none, { ..model.activate(session_id), transcript_pinned: true })
     SessionsLoaded(items) =>
       (@cmd.none, { ..model, sessions: items, sessions_error: "" })
     SessionsFailed(message) => (@cmd.none, { ..model, sessions_error: message })
@@ -358,8 +369,12 @@ fn update(
         (@cmd.none, model)
       } else if model.find_conversation(session_id) is Some(_) {
         // The conversation already has live client state — it may well still
-        // be running — so switching is just a change of focus.
-        (scroll_transcript_after_render(), model.activate(session_id))
+        // be running — so switching is just a change of focus. A switch lands
+        // at the new conversation's tail, so the transcript re-pins.
+        (
+          scroll_transcript_after_render(),
+          { ..model.activate(session_id), transcript_pinned: true },
+        )
       } else {
         (open_session(dispatch, session_id), model)
       }
@@ -371,14 +386,19 @@ fn update(
       } else {
         (
           scroll_transcript_after_render(),
-          model
-          .replace_conversation({
-            ..empty_conversation(session_id),
-            messages: items,
-          })
-          .activate(session_id),
+          {
+            ..model
+            .replace_conversation({
+              ..empty_conversation(session_id),
+              messages: items,
+            })
+            .activate(session_id),
+            transcript_pinned: true,
+          },
         )
       }
+    TranscriptPinned(pinned) =>
+      (@cmd.none, { ..model, transcript_pinned: pinned })
     Started(run_id~, session~, model=selected_model, max_steps~, cwd~) =>
       if model.find_conversation(session) is Some(conv) {
         (
