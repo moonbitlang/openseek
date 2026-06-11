@@ -19,14 +19,20 @@ async fn main {
   }
   let web_dir = value(matches, "web-dir")
   let bundle = value(matches, "bundle")
+  let module_root = match @env.args() {
+    [exe, ..] => module_root_from_exe(exe)
+    [] => None
+  }
+  let shell = shell_candidates(web_dir, module_root)
+  let bundle_paths = bundle_candidates(bundle, web_dir, module_root)
   let store = @store.SessionStore(session_root)
   let addr = @socket.Addr::parse("127.0.0.1:\{port}")
   println("openseek viz: serving sessions under '\{session_root}'")
-  println("openseek viz: shell from '\{web_dir}/index.html'")
+  println("openseek viz: shell from '\{shell[0]}'")
   println("openseek viz: open http://127.0.0.1:\{port}")
   let server = @http.Server(addr)
   server.run_forever((request, _body, conn) => {
-    handle(request, conn, store, web_dir, bundle)
+    handle(request, conn, store, shell, bundle_paths)
   })
 }
 
@@ -50,10 +56,10 @@ async fn handle(
   request : @http.Request,
   conn : @http.ServerConnection,
   store : @store.SessionStore,
-  web_dir : String,
-  bundle : String,
+  shell : Array[String],
+  bundle : Array[String],
 ) -> Unit {
-  let reply = build_reply(request, store, web_dir, bundle) catch {
+  let reply = build_reply(request, store, shell, bundle) catch {
     error => text_reply(500, "Internal Server Error", "error: \{error}")
   }
   send_reply(conn, reply) catch {
@@ -76,8 +82,8 @@ async fn send_reply(conn : @http.ServerConnection, reply : Reply) -> Unit {
 async fn build_reply(
   request : @http.Request,
   store : @store.SessionStore,
-  web_dir : String,
-  bundle : String,
+  shell : Array[String],
+  bundle : Array[String],
 ) -> Reply {
   guard request.meth is Get else {
     return text_reply(405, "Method Not Allowed", "only GET is supported")
@@ -85,8 +91,13 @@ async fn build_reply(
   let path = strip_query(request.path)
   match path {
     "/" | "/index.html" =>
-      asset_reply(web_dir + "/index.html", "text/html; charset=utf-8")
-    "/viz_app.js" => bundle_reply(web_dir, bundle)
+      search_reply(
+        shell, "text/html; charset=utf-8", "index.html not found; pass --web-dir or run from the openseek checkout",
+      )
+    "/viz_app.js" =>
+      search_reply(
+        bundle, "text/javascript; charset=utf-8", "viz_app.js not found; build it with: moon build cmd/viz_app --target js",
+      )
     "/api/sessions" => session_list_reply(store)
     _ =>
       if path.has_prefix("/api/sessions/") {
@@ -200,25 +211,76 @@ async fn session_list_reply(store : @store.SessionStore) -> Reply {
 }
 
 ///|
-/// Locate the compiled frontend bundle. Searches, in order: an explicit
-/// `--bundle` path, `<web-dir>/viz_app.js`, then moon's release and debug build
-/// outputs. This lets `moon build cmd/viz_app --target js` followed by
-/// `moon run cmd/viz_server` work with no copy step.
-async fn bundle_reply(web_dir : String, bundle : String) -> Reply {
+/// The OpenSeek checkout root derived from this executable's own path, or
+/// `None` for a binary living outside a moon build tree.
+///
+/// `moon run` keeps the invoking shell's working directory — which is how a
+/// user serving another project's sessions (`moon run ../openseek/cmd/...`)
+/// ends up with CWD-relative asset defaults pointing at the wrong tree. But
+/// the binary itself always sits at
+/// `<root>/_build/<target>/<profile>/build/cmd/viz_server/...`, so everything
+/// before the `_build` component locates the checkout and its assets,
+/// wherever the server was started from.
+fn module_root_from_exe(exe : String) -> String? {
+  match exe.find("/_build/") {
+    Some(index) => Some(slice(exe, 0, index))
+    None => if exe.has_prefix("_build/") { Some(".") } else { None }
+  }
+}
+
+///|
+/// Where to look for the viewer shell, in order: the configured `--web-dir`
+/// (CWD-relative by default, preserving in-checkout behavior), then the
+/// checkout's own `web/` derived from the executable path, so running from
+/// another project's directory needs no flags.
+fn shell_candidates(web_dir : String, module_root : String?) -> Array[String] {
+  let candidates = [web_dir + "/index.html"]
+  if module_root is Some(root) {
+    candidates.push(root + "/web/index.html")
+  }
+  candidates
+}
+
+///|
+/// Where to look for the compiled frontend bundle, in order: an explicit
+/// `--bundle` path, `<web-dir>/viz_app.js`, moon's release and debug build
+/// outputs relative to the working directory, then the same paths under the
+/// executable-derived checkout root. This lets
+/// `moon build cmd/viz_app --target js` followed by
+/// `moon run cmd/viz_server` work with no copy step — from any directory.
+fn bundle_candidates(
+  bundle : String,
+  web_dir : String,
+  module_root : String?,
+) -> Array[String] {
   let candidates = [
     bundle,
     web_dir + "/viz_app.js",
     "_build/js/release/build/cmd/viz_app/viz_app.js",
     "_build/js/debug/build/cmd/viz_app/viz_app.js",
   ]
+  if module_root is Some(root) {
+    candidates.push(root + "/web/viz_app.js")
+    candidates.push(root + "/_build/js/release/build/cmd/viz_app/viz_app.js")
+    candidates.push(root + "/_build/js/debug/build/cmd/viz_app/viz_app.js")
+  }
+  candidates
+}
+
+///|
+/// Serve the first existing candidate file, or a 404 carrying `missing` so
+/// the error names the fix rather than just the failure.
+async fn search_reply(
+  candidates : Array[String],
+  content_type : String,
+  missing : String,
+) -> Reply {
   for candidate in candidates {
     if candidate != "" && @fs.exists(candidate) {
-      return asset_reply(candidate, "text/javascript; charset=utf-8")
+      return asset_reply(candidate, content_type)
     }
   }
-  text_reply(
-    404, "Not Found", "viz_app.js not found; build it with: moon build cmd/viz_app --target js",
-  )
+  text_reply(404, "Not Found", missing)
 }
 
 ///|
