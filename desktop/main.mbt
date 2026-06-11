@@ -101,9 +101,9 @@ struct LoadSessionPayload {
 } derive(FromJson)
 
 ///|
-/// Reply to `list_sessions`: the engine's `--session-list-json` output
-/// (an array of `{id, title, updated_at_ms, last_sequence}`, newest first),
-/// passed through verbatim.
+/// Reply to `list_sessions`: the engine's `--session-list --format=json`
+/// output (an array of `{id, title, updated_at_ms}`, newest first), passed
+/// through verbatim.
 struct SessionsReply {
   sessions : Json
   session_root : String
@@ -941,7 +941,9 @@ async fn list_sessions(engine : String) -> Result[SessionsReply, String] {
     return Err("cannot determine a session root; set OPENSEEK_SESSION_ROOT")
   }
   let output = match
-    engine_stdout(engine, ["--session-root", root, "--session-list-json"]) {
+    engine_stdout(engine, [
+      "--session-root", root, "--session-list", "--format", "json",
+    ]) {
     Ok(output) => output
     Err(error) => return Err("session list failed: " + error)
   }
