@@ -440,16 +440,48 @@ async fn configured_system_prompt(
   } else {
     @fs.read_file(base_path).text()
   }
+  let grounded =
+    $|\{base}
+    $|
+    $|\{environment_prompt_section()}
   if addendum_path == "" {
-    base
+    grounded
   } else {
     let addendum = @fs.read_file(addendum_path).text()
     (
-      $|\{base}
+      $|\{grounded}
       $|
       $|\{addendum}
     )
   }
+}
+
+///|
+/// The runtime environment block appended to every system prompt — including
+/// a `--system-prompt-file` override, since grounding describes the process,
+/// not the prompt content. Without it the model has no idea where it is and
+/// guesses: in a five-run benchmark batch one agent passed
+/// `cwd="/workspace"` on its very first call, then explored the parent
+/// directory, found a concurrent sibling run's files, and adopted that
+/// workspace wholesale. A durable session stores the prompt at creation, so
+/// the recorded directory is where the session was started — resume it from
+/// the same project root.
+async fn environment_prompt_section() -> String {
+  let cwd = @fs.realpath(".") catch { _ => "." }
+  (
+    $|## Environment
+    $|
+    $|Working directory: \{cwd}
+    $|Relative paths resolve against it; treat it as the workspace root and stay inside it. Parent and sibling directories belong to other projects. Never pass a cwd you have not verified exists.
+  )
+}
+
+///|
+async test "environment section names the real working directory" {
+  let section = environment_prompt_section()
+  let cwd = @fs.realpath(".")
+  assert_true(section.contains("Working directory: \{cwd}"))
+  assert_true(section.contains("stay inside it"))
 }
 
 ///|
@@ -598,7 +630,7 @@ async test "configured system prompt can replace and append files" {
   )
   assert_eq(
     configured_system_prompt(parsed, V4Flash),
-    "base prompt\n\n\naddendum\n",
+    "base prompt\n\n\n\{environment_prompt_section()}\n\naddendum\n",
   )
   @fs.rmdir(dir, recursive=true)
 }
@@ -631,14 +663,15 @@ async test "load_or_new_session defers first durable write until append" {
     env={ "DEEPSEEK": "test-key" },
   )
   let created = load_or_new_session(store, id, parsed, V4Pro)
-  assert_eq(created.system_prompt(), "system")
+  let grounded_prompt = "system\n\n\{environment_prompt_section()}"
+  assert_eq(created.system_prompt(), grounded_prompt)
   assert_eq(created.events().length(), 0)
   assert_false(store.exists(id))
   let with_event = store.append(created, User(UserMessage("hello")))
   assert_eq(with_event.events().length(), 1)
   @fs.remove(prompt_path)
   let loaded = load_or_new_session(store, id, parsed, V4Pro)
-  assert_eq(loaded.system_prompt(), "system")
+  assert_eq(loaded.system_prompt(), grounded_prompt)
   assert_eq(loaded.events().length(), 1)
   @fs.rmdir(root, recursive=true)
 }
@@ -665,7 +698,10 @@ async test "load_or_new_session recovers empty interrupted session directory" {
   )
   let store = @store.SessionStore(root)
   let session = load_or_new_session(store, id, parsed, V4Pro)
-  assert_eq(session.system_prompt(), "system")
+  assert_eq(
+    session.system_prompt(),
+    "system\n\n\{environment_prompt_section()}",
+  )
   assert_eq(session.events().length(), 0)
   let with_event = store.append(session, User(UserMessage("hello")))
   assert_eq(with_event.events().length(), 1)
