@@ -74,6 +74,16 @@ function linkStyleFromCompiler(command) {
   return "";
 }
 
+function hasMsvcEnvironment(env) {
+  return [
+    "VCINSTALLDIR",
+    "VCToolsInstallDir",
+    "VisualStudioVersion",
+    "INCLUDE",
+    "LIB",
+  ].some((name) => envValue(env, name).trim().length > 0);
+}
+
 function detectedLinkStyle(env) {
   const explicit = envValue(env, "OPENSEEK_DESKTOP_LINK_STYLE").trim().toLowerCase();
   switch (explicit) {
@@ -96,6 +106,10 @@ function detectedLinkStyle(env) {
   const compilerStyle = linkStyleFromCompiler(compiler);
   if (compilerStyle.length > 0) {
     return compilerStyle;
+  }
+  const isWindows = process.platform === "win32" || env.OS === "Windows_NT";
+  if (isWindows && hasMsvcEnvironment(env)) {
+    return "msvc-driver";
   }
   if (commandExists(env, "clang")) {
     return "clang-driver";
