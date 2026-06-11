@@ -460,20 +460,27 @@ async fn configured_system_prompt(
   } else {
     @fs.read_file(base_path).text()
   }
-  let grounded =
-    $|\{base}
-    $|
-    $|\{environment_prompt_section()}
-  if addendum_path == "" {
-    grounded
+  // The environment section goes LAST: DeepSeek's context cache matches on
+  // request prefixes, and the cwd is the only per-project variable in the
+  // prompt. Base and addendum are byte-identical across projects (and across
+  // an eval harness's N concurrent trial workspaces testing one addendum),
+  // so ordering them first keeps the whole shared text cache-hittable; the
+  // end position also gives the grounding instruction recency weight.
+  let with_addendum = if addendum_path == "" {
+    base
   } else {
     let addendum = @fs.read_file(addendum_path).text()
     (
-      $|\{grounded}
+      $|\{base}
       $|
       $|\{addendum}
     )
   }
+  (
+    $|\{with_addendum}
+    $|
+    $|\{environment_prompt_section()}
+  )
 }
 
 ///|
@@ -652,9 +659,11 @@ async test "configured system prompt can replace and append files" {
     ],
     env={ "DEEPSEEK": "test-key" },
   )
+  // Environment last: base and addendum form the cache-shared prefix; the
+  // per-project cwd is the only divergence point.
   assert_eq(
     configured_system_prompt(parsed, V4Flash),
-    "base prompt\n\n\n\{environment_prompt_section()}\n\naddendum\n",
+    "base prompt\n\n\naddendum\n\n\n\{environment_prompt_section()}",
   )
   @fs.rmdir(dir, recursive=true)
 }
