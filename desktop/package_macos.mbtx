@@ -59,7 +59,7 @@ const AppAssetDir : String = ResourcesPath + "/assets"
 ///|
 suberror PackageError {
   PackageError(String)
-}
+} derive(Show)
 
 ///|
 /// The desktop workspace this script packages. Every command runs with the
@@ -240,20 +240,53 @@ async fn write_bundle_metadata(ws : Workspace) -> Unit raise {
 }
 
 ///|
-/// The signing identity: `MACOS_SIGN_IDENTITY` when set (a Developer ID
-/// Application identity for distribution), otherwise ad-hoc — which runs on
-/// the build machine but is quarantined by Gatekeeper everywhere else.
-fn sign_identity() -> String {
-  match @env.get_env_var("MACOS_SIGN_IDENTITY") {
-    Some(identity) if !identity.trim().is_empty() => identity.trim().to_owned()
-    _ => "-"
-  }
+/// Signing configuration from the script's arguments (everything after `--`
+/// on the `moon run` command line): `--sign <identity>` names a Developer ID
+/// Application identity for distribution, `--notarize <profile>` a notarytool
+/// keychain profile (created once via
+/// `xcrun notarytool store-credentials <profile> --apple-id … --team-id …`).
+/// Without `--sign` the bundle is ad-hoc signed — it runs on the build
+/// machine but is quarantined by Gatekeeper everywhere else.
+priv struct SignConfig {
+  identity : String?
+  notary_profile : String?
 }
 
 ///|
-async fn sign_app(ws : Workspace) -> Unit raise {
-  let identity = sign_identity()
-  if identity == "-" {
+fn parse_sign_config() -> SignConfig raise {
+  let usage = "usage: package_macos.mbtx [--sign <identity>] [--notarize <keychain-profile>]"
+  let args = @env.args()
+  let mut identity : String? = None
+  let mut notary_profile : String? = None
+  // args[0] is the program itself; the script's own arguments follow.
+  let mut index = 1
+  while index < args.length() {
+    let arg = args[index]
+    guard arg is ("--sign" | "--notarize") else {
+      raise PackageError("unknown argument: \{arg}\n\{usage}")
+    }
+    guard args.get(index + 1) is Some(value) && !value.trim().is_empty() else {
+      raise PackageError("\{arg} needs a value\n\{usage}")
+    }
+    let value = value.trim().to_owned()
+    if arg == "--sign" {
+      identity = Some(value)
+    } else {
+      notary_profile = Some(value)
+    }
+    index += 2
+  }
+  if notary_profile is Some(_) && identity is None {
+    raise PackageError(
+      "--notarize requires --sign: ad-hoc signed apps cannot be notarized",
+    )
+  }
+  { identity, notary_profile }
+}
+
+///|
+async fn sign_app(ws : Workspace, sign : SignConfig) -> Unit raise {
+  guard sign.identity is Some(identity) else {
     run_checked(
       "codesign",
       ["--force", "--deep", "--sign", "-", AppPath],
@@ -296,22 +329,10 @@ async fn zip_app(ws : Workspace) -> Unit raise {
 }
 
 ///|
-/// Notarize and staple when `MACOS_NOTARY_PROFILE` names a notarytool
-/// keychain profile (created once via
-/// `xcrun notarytool store-credentials <profile> --apple-id … --team-id …`).
-/// The zip is rebuilt afterwards so the distributed archive carries the
-/// stapled ticket.
-async fn notarize_if_configured(ws : Workspace) -> Unit raise {
-  guard @env.get_env_var("MACOS_NOTARY_PROFILE") is Some(profile) &&
-    !profile.trim().is_empty() else {
-    return
-  }
-  let profile = profile.trim().to_owned()
-  if sign_identity() == "-" {
-    raise PackageError(
-      "MACOS_NOTARY_PROFILE requires MACOS_SIGN_IDENTITY: ad-hoc signed apps cannot be notarized",
-    )
-  }
+/// Notarize and staple when `--notarize` named a keychain profile. The zip is
+/// rebuilt afterwards so the distributed archive carries the stapled ticket.
+async fn notarize_if_configured(ws : Workspace, sign : SignConfig) -> Unit raise {
+  guard sign.notary_profile is Some(profile) else { return }
   run_checked(
     "xcrun",
     ["notarytool", "submit", ZipPath, "--keychain-profile", profile, "--wait"],
@@ -323,21 +344,23 @@ async fn notarize_if_configured(ws : Workspace) -> Unit raise {
 }
 
 ///|
-async fn sign_and_zip(ws : Workspace) -> Unit raise {
-  sign_app(ws)
+async fn sign_and_zip(ws : Workspace, sign : SignConfig) -> Unit raise {
+  sign_app(ws, sign)
   zip_app(ws)
-  notarize_if_configured(ws)
+  notarize_if_configured(ws, sign)
 }
 
 ///|
 async fn main raise {
+  // Parse first: a mistyped flag must fail before the build, not after it.
+  let sign = parse_sign_config()
   let ws = locate_workspace()
   build_outputs(ws)
   println("built openseek engine: \{ws.at(EngineBinary)}")
   reset_bundle_dirs(ws)
   copy_bundle_files(ws)
   write_bundle_metadata(ws)
-  sign_and_zip(ws)
+  sign_and_zip(ws, sign)
   println("generated \{ws.at(AppPath)}")
   println("generated \{ws.at(ZipPath)}")
 }

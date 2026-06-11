@@ -168,9 +168,9 @@ jobs:
           done
           exit 1
 
-      # No MACOS_SIGN_IDENTITY in the environment, so the bundle is ad-hoc
-      # signed: fine for debugging, but downloads are quarantined by
-      # Gatekeeper on other machines — clear it before launching:
+      # No --sign argument, so the bundle is ad-hoc signed: fine for
+      # debugging, but downloads are quarantined by Gatekeeper on other
+      # machines — clear it before launching:
       #   xattr -dr com.apple.quarantine "OpenSeek Desktop.app"
       - name: Build the app bundle
         run: moon run --target native ./desktop/package_macos.mbtx

@@ -243,14 +243,14 @@ are applied automatically) and optionally notarize:
 ```sh
 # one-time: xcrun notarytool store-credentials openseek \
 #   --apple-id you@example.com --team-id TEAMID --password <app-specific-pw>
-MACOS_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-MACOS_NOTARY_PROFILE=openseek \
-moon run --target native package_macos.mbtx
+moon run --target native package_macos.mbtx -- \
+  --sign "Developer ID Application: Your Name (TEAMID)" \
+  --notarize openseek
 ```
 
-`MACOS_NOTARY_PROFILE` submits the zip with `notarytool --wait`, staples the
-ticket to the app, and rebuilds the zip; without it the app is signed but
-unnotarized (Gatekeeper still warns on other machines).
+`--notarize` submits the zip with `notarytool --wait`, staples the ticket to
+the app, and rebuilds the zip; without it the app is signed but unnotarized
+(Gatekeeper still warns on other machines).
 
 ## Package (Linux)
 
