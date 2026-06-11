@@ -122,11 +122,14 @@ async fn run_trial(config : Config, index : Int) -> TrialResult {
   let task = case.task(real_workspace)
   // Run the engine in the trial workspace so environment grounding names it
   // (see the prompt_task harness for the same pattern).
+  // Canonicalize launcher-relative paths (the default --repo-root ".",
+  // prompt files) before the child cwd changes their meaning.
+  let repo_root = @fs.realpath(config.repo_root)
   let args = [
     "run",
     // cmd/openseek is the engine package (the pre-rename cmd/main no longer
     // exists, so the old invocation could not have launched at all).
-    config.repo_root + "/cmd/openseek",
+    repo_root + "/cmd/openseek",
     "--",
     "--max-steps",
     config.max_steps.to_string(),
@@ -135,11 +138,11 @@ async fn run_trial(config : Config, index : Int) -> TrialResult {
   ]
   if config.system_prompt_file != "" {
     args.push("--system-prompt-file")
-    args.push(config.system_prompt_file)
+    args.push(@fs.realpath(config.system_prompt_file))
   }
   if config.system_prompt_addendum_file != "" {
     args.push("--system-prompt-addendum-file")
-    args.push(config.system_prompt_addendum_file)
+    args.push(@fs.realpath(config.system_prompt_addendum_file))
   }
   args.push(task)
   let (exit_code, output) = @process.collect_output_merged(
