@@ -222,6 +222,24 @@ pub fn runtime_update_text(
 }
 
 ///|
+/// The substance of a `[moon_check update]` block: the text minus its
+/// volatile counters (`events=` per-batch totals and per-watcher `seq=`
+/// chunk counts), which advance even when the diagnostics are unchanged.
+/// The agent loop compares fingerprints between steps and skips appending a
+/// notice that says nothing new — a real 156-step session accumulated 61
+/// near-identical update notices, 11% of its final context.
+pub fn update_fingerprint(update : String) -> String {
+  let kept : Array[String] = []
+  for line in update.split("\n") {
+    if line.has_prefix("events=") || line.has_prefix("seq=") {
+      continue
+    }
+    kept.push(line.to_owned())
+  }
+  kept.join("\n")
+}
+
+///|
 /// Heuristic for the `is_error` flag on the tool response. A snapshot is an
 /// error when the watcher exited non-zero, or when the latest output contains
 /// any of moon's error markers (`Had errors`, JSON `"level":"error"`,
@@ -240,6 +258,40 @@ fn moon_check_snapshot_is_error(snapshot : MoonCheckSnapshot) -> Bool {
       ) ||
       snapshot.output.contains("Error: failed when checking project")
   }
+}
+
+///|
+test "update fingerprints ignore volatile counters, track real change" {
+  let first =
+    #|[moon_check update]
+    #|events=32
+    #|id=moon-check-1
+    #|cwd=toml_parser
+    #|command=moon check --watch --diagnostic-limit 10
+    #|status=running
+    #|seq=54
+    #|Success, waiting for filesystem changes...
+  let requeued =
+    #|[moon_check update]
+    #|events=2
+    #|id=moon-check-1
+    #|cwd=toml_parser
+    #|command=moon check --watch --diagnostic-limit 10
+    #|status=running
+    #|seq=92
+    #|Success, waiting for filesystem changes...
+  // Only events= and seq= moved: same substance, same fingerprint.
+  assert_eq(update_fingerprint(first), update_fingerprint(requeued))
+  let changed =
+    #|[moon_check update]
+    #|events=2
+    #|id=moon-check-1
+    #|cwd=toml_parser
+    #|command=moon check --watch --diagnostic-limit 10
+    #|status=running
+    #|seq=93
+    #|Error: [4014] type mismatch
+  assert_true(update_fingerprint(first) != update_fingerprint(changed))
 }
 
 ///|

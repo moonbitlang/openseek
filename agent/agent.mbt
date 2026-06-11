@@ -233,6 +233,7 @@ pub async fn[X] run_turn_in_scope(
         }
     }
     let messages = session.chat_messages()
+    let mut last_runtime_fingerprint = ""
     steps~: for step in 0..<max_steps {
       // Steering first: a user's mid-turn redirection should precede the
       // runtime chatter the model reads alongside it.
@@ -243,9 +244,17 @@ pub async fn[X] run_turn_in_scope(
         append_item~,
       )
       if runtime_update_message(runtime.drain_events()) is Some(update) {
-        @xlog.info() <? { "event": "runtime_update", "content": update }
-        session = append_item(session, Runtime(RuntimeNotice(update)))
-        messages.push(ChatMessage(User, content=update))
+        // Watcher updates whose substance matches the previous notice are
+        // skipped: the model already has this state, and re-appending it
+        // only grows the context (volatile counters aside, most updates
+        // from a quiet watcher are identical).
+        let fingerprint = @moon_check.update_fingerprint(update)
+        if fingerprint != last_runtime_fingerprint {
+          last_runtime_fingerprint = fingerprint
+          @xlog.info() <? { "event": "runtime_update", "content": update }
+          session = append_item(session, Runtime(RuntimeNotice(update)))
+          messages.push(ChatMessage(User, content=update))
+        }
       }
       @xlog.info() <? { "event": "agent_step", "step": step + 1 }
       let response = client.chat_stream(

@@ -11,6 +11,8 @@ pub fn[X] definition(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope[
 
 pub fn runtime_update_text(Array[@agent_runtime.AgentEvent]) -> String?
 
+pub fn update_fingerprint(String) -> String
+
 // Errors
 
 // Types and methods

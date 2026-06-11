@@ -73,10 +73,13 @@ shows where steps and tokens went to waste):
   accrued within a single 156-step turn via the agent's incremental
   pushes, not only across turns. Sessions still store reasoning for the
   TUI transcript and the visualizer.)*
-- [ ] **Deduplicate watcher notices.** 61 `[moon_check update]` runtime
+- [x] **Deduplicate watcher notices.** 61 `[moon_check update]` runtime
   notices (11% of final context) were appended, mostly identical
   re-reports from the duplicate watchers. Coalesce per watcher: a new
-  notice should supersede the previous one when nothing changed.
+  notice should supersede the previous one when nothing changed. *(Done:
+  the agent loop fingerprints each coalesced update — volatile `events=`
+  and `seq=` counters stripped — and skips appending when the substance
+  matches the previous step's notice.)*
 - [ ] **First-class API-lookup tool (or document the probe recipe).** The
   model spent ~25 steps probing stdlib APIs: repeated `moon ide doc`
   queries that returned "No results found" (7KB of failed lookups in one
