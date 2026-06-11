@@ -911,10 +911,12 @@ async fn engine_stdout(
   engine : String,
   args : Array[String],
 ) -> Result[String, String] {
+  let child_stdin = prepare_engine_stdin(engine)
   let (code, stdout, stderr) = @process.collect_output(
     engine,
     args,
     inherit_env=true,
+    stdin=child_stdin,
   ) catch {
     error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
       raise error

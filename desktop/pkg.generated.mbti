@@ -20,6 +20,14 @@ type EventPayload derive(ToJson)
 
 type FinishedPayload derive(ToJson)
 
+type LoadSessionPayload derive(@json.FromJson)
+
+type LoadSessionReply derive(ToJson)
+
+type PumpReply derive(ToJson)
+
+type SessionsReply derive(ToJson)
+
 type StartPayload derive(@json.FromJson)
 
 type StartReply derive(ToJson)
