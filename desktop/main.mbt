@@ -664,8 +664,17 @@ fn append_launch_log(framework_command : String, message : String) -> Unit {
 }
 
 ///|
+/// An empty file redirected into one-shot engine runs as stdin. It lives in
+/// the per-user runtime dir, not beside the engine binary: the bundle a
+/// packaged engine sits in is read-only (App Translocation even enforces
+/// it), so writing next to the executable would fail every
+/// `--session-list` / `--session-show` in a packaged app.
 async fn prepare_engine_stdin(engine : String) -> &@process.ProcessInput {
-  let path = engine + ".stdin"
+  let path = if prepared_runtime_dir() is Some(dir) {
+    dir + "/engine.stdin"
+  } else {
+    engine + ".stdin"
+  }
   @mbfs.write_string_to_file(path, "")
   @process.redirect_from_file(path)
 }
