@@ -30,6 +30,16 @@ of: the `session_root` start-payload field, `OPENSEEK_SESSION_ROOT`, or
 still works). They are interoperable with the CLI/TUI stores: resume one with
 `openseek-tui --session-root ~/.openseek --session <id>`.
 
+Each conversation also gets its own workspace directory, used as the engine's
+working directory: `Documents/OpenSeek/<YYYY-MM-DD>/<session-id>` (the XDG
+documents folder on Linux; `~/OpenSeek/…` when no Documents folder exists).
+The path is derived from the session id alone — desktop ids embed their
+creation date — so resuming a conversation returns to the same directory
+without recording it anywhere. The directory is created on the conversation's
+first prompt, and the topbar tooltip shows it next to the session id. Session
+event logs are app data and stay under `~/.openseek`; the workspace holds only
+what the agent writes.
+
 The sidebar lists every durable session in the store, newest first, titled by
 the first user message (the host shells out to the bundled engine's
 `--session-list --format=json`). Clicking one replays its event log into the

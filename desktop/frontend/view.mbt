@@ -431,15 +431,27 @@ fn run_indicator(model : Model) -> @html.Html {
 }
 
 ///|
-/// Top bar: conversation identity on the left (session id in the tooltip),
-/// live run state on the right — these are per-conversation runtime facts,
-/// not settings, so they live here rather than in the settings popup.
+/// The workspace line appears once the host has reported it via `started`;
+/// before the conversation's first run only the session id is known.
+fn session_tooltip(model : Model) -> String {
+  if model.cwd.is_empty() {
+    "session \{model.session_id}"
+  } else {
+    "session \{model.session_id}\nworkspace \{model.cwd}"
+  }
+}
+
+///|
+/// Top bar: conversation identity on the left (session id and workspace in
+/// the tooltip), live run state on the right — these are per-conversation
+/// runtime facts, not settings, so they live here rather than in the
+/// settings popup.
 fn topbar_view(model : Model) -> @html.Html {
   let items : Array[@html.Html] = [
     @html.span(class="topbar-icon", "✦"),
     @html.span(
       class="topbar-title",
-      title="session \{model.session_id}",
+      title=session_tooltip(model),
       conversation_title(model),
     ),
     @html.span(class="topbar-branch", "main"),

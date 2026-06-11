@@ -177,7 +177,6 @@ fn update(
               task,
               model.selected_model,
               model.max_steps,
-              model.cwd,
               model.api_key,
               model.session_id,
             ),
@@ -206,6 +205,7 @@ fn update(
             messages: [],
             usage_tokens: 0,
             watcher_status: "",
+            cwd: "",
             active_run_id: None,
             status: if model.bridge_ready && !model.api_key.trim().is_empty() {
               Ready
@@ -243,6 +243,7 @@ fn update(
             messages: items,
             usage_tokens: 0,
             watcher_status: "",
+            cwd: "",
             active_run_id: None,
             status: if model.bridge_ready && !model.api_key.trim().is_empty() {
               Ready

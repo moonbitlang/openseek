@@ -55,6 +55,9 @@ priv struct Model {
   task : String
   selected_model : String
   max_steps : String
+  // The conversation's workspace directory as reported by the host's
+  // `started` event — display only (topbar tooltip); the host derives it
+  // from the session id, so it is never sent back with a start request.
   cwd : String
   api_key : String
   setup_api_key : String

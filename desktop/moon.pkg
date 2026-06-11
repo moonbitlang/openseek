@@ -5,6 +5,7 @@ import {
   "justjavac/lepus_manifest" @manifest,
   "openseek_desktop/internal/event",
   "moonbitlang/async",
+  "moonbitlang/async/fs",
   "moonbitlang/async/process",
   "moonbitlang/core/env",
   "moonbitlang/core/json",

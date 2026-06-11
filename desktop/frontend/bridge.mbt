@@ -46,12 +46,11 @@ fn start_openseek(
   task : String,
   selected_model : String,
   max_steps : String,
-  cwd : String,
   api_key : String,
   session : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    js_start_openseek(task, selected_model, max_steps, cwd, api_key, session, fn(
+    js_start_openseek(task, selected_model, max_steps, api_key, session, fn(
       message,
     ) {
       scheduler.add(dispatch(Failed(message)))
@@ -206,16 +205,18 @@ extern "js" fn js_install_openseek_bridge(
   #| }
 
 ///|
+/// The start payload carries no `cwd`: the host derives each conversation's
+/// workspace directory from its session id, so echoing a previous run's cwd
+/// back would pin a resumed conversation to the wrong workspace.
 extern "js" fn js_start_openseek(
   task : String,
   selected_model : String,
   max_steps : String,
-  cwd : String,
   api_key : String,
   session : String,
   on_error : (String) -> Unit,
 ) =
-  #| (task, selectedModel, maxSteps, cwd, apiKey, session, onError) => {
+  #| (task, selectedModel, maxSteps, apiKey, session, onError) => {
   #|   const root = globalThis.__MoonBit__;
   #|   const api = root && root.openseek;
   #|   if (!api || !api.start) {
@@ -228,7 +229,6 @@ extern "js" fn js_start_openseek(
   #|     if (text) payload[key] = text;
   #|   };
   #|   setText("model", selectedModel);
-  #|   setText("cwd", cwd);
   #|   setText("api_key", apiKey);
   #|   setText("session", session);
   #|   const parsedSteps = Number(maxSteps);

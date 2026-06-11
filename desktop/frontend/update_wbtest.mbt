@@ -260,3 +260,29 @@ test "decode recognizes the streaming events" {
     fail("reasoning_message not decoded")
   }
 }
+
+///|
+test "started records the host's workspace for display" {
+  let dispatch = test_dispatch()
+  let (_, next) = update(
+    dispatch,
+    Started(
+      7, "task", "openseek", "deepseek-v4-pro", 1000, "/home/u/Documents/OpenSeek/2026-06-11/desktop-test",
+    ),
+    test_model(),
+  )
+  inspect(
+    next.cwd,
+    content="/home/u/Documents/OpenSeek/2026-06-11/desktop-test",
+  )
+}
+
+///|
+test "switching conversations clears the stale workspace" {
+  let dispatch = test_dispatch()
+  let model = { ..test_model(), cwd: "/somewhere/old" }
+  let (_, fresh) = update(dispatch, NewChat, model)
+  inspect(fresh.cwd, content="")
+  let (_, resumed) = update(dispatch, SessionLoaded("desktop-other", []), model)
+  inspect(resumed.cwd, content="")
+}

@@ -279,7 +279,7 @@ fn run_config(
     Err(error) => return Err(error)
   }
   let session = non_empty(payload.session)
-  let cwd = match resolved_run_cwd(payload.cwd) {
+  let cwd = match resolved_run_cwd(payload.cwd, session) {
     Ok(value) => value
     Err(error) => return Err(error)
   }
@@ -301,11 +301,17 @@ fn run_config(
 ///|
 /// Engine working directory for a run. An explicit payload value must be an
 /// existing directory — a typo fails the run with a clear message instead of a
-/// cryptic engine error. When unset, fall back to the user's home directory:
-/// inheriting the host's own cwd would hand the agent whatever directory the
-/// app happened to be launched from (`/` under Finder), which is never a
-/// sensible place to work in.
-fn resolved_run_cwd(payload_cwd : String?) -> Result[String?, String] {
+/// cryptic engine error. When unset, the conversation gets its own workspace
+/// directory derived from its durable session id (created on demand by
+/// `start_run`), so the agent's files land somewhere the user can find and
+/// resuming the session returns to them. With no session either, fall back to
+/// the user's home directory: inheriting the host's own cwd would hand the
+/// agent whatever directory the app happened to be launched from (`/` under
+/// Finder), which is never a sensible place to work in.
+fn resolved_run_cwd(
+  payload_cwd : String?,
+  session : String?,
+) -> Result[String?, String] {
   match non_empty(payload_cwd) {
     Some(cwd) => {
       let cwd = expand_home(cwd)
@@ -316,8 +322,120 @@ fn resolved_run_cwd(payload_cwd : String?) -> Result[String?, String] {
         Err("working directory does not exist: " + cwd)
       }
     }
-    None => Ok(home_dir())
+    None =>
+      match session {
+        Some(session) =>
+          match session_workspace_dir(session) {
+            Some(dir) => Ok(Some(dir))
+            None => Ok(home_dir())
+          }
+        None => Ok(home_dir())
+      }
   }
+}
+
+///|
+const WorkspaceDirName = "OpenSeek"
+
+///|
+/// Per-conversation workspace directory: the workspace root plus
+/// `session_workspace_components`. A pure function of the session id, so
+/// resuming a conversation — even from a fresh app launch — lands in the same
+/// directory without recording it anywhere. `None` when the id is unsafe as a
+/// path component or no home directory is known; the caller falls back to the
+/// home directory.
+fn session_workspace_dir(session : String) -> String? {
+  guard session_workspace_components(session) is Some(components) else {
+    return None
+  }
+  guard workspace_root() is Some(root) else { return None }
+  let mut dir : @mbpath.Path = root
+  for component in components {
+    dir = dir.join(component)
+  }
+  Some(dir.normalize().to_string())
+}
+
+///|
+/// The path components a session's workspace occupies under the workspace
+/// root: `<date>/<id>` for desktop session ids (which embed their creation
+/// date), `<id>` alone for other stores' ids. `None` for ids that could
+/// escape the root (path separators, dot segments) — those conversations work
+/// in the home directory instead.
+fn session_workspace_components(session : String) -> Array[String]? {
+  guard !session.is_empty() &&
+    session != "." &&
+    session != ".." &&
+    !session.contains("/") &&
+    !session.contains("\\") else {
+    return None
+  }
+  match session_date(session) {
+    Some(date) => Some([date, session])
+    None => Some([session])
+  }
+}
+
+///|
+/// The `YYYY-MM-DD` date a desktop session id embeds
+/// (`desktop-YYYYMMDD-HHMMSS-mmm`); `None` for any other id shape.
+fn session_date(session : String) -> String? {
+  guard session.has_prefix("desktop-") else { return None }
+  match session.view(start_offset="desktop-".length()) {
+    [y1, y2, y3, y4, mo1, mo2, d1, d2, '-', ..] =>
+      if [y1, y2, y3, y4, mo1, mo2, d1, d2].iter().all(ch => ch is ('0'..='9')) {
+        Some("\{y1}\{y2}\{y3}\{y4}-\{mo1}\{mo2}-\{d1}\{d2}")
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+/// Root for per-conversation workspaces: an `OpenSeek` folder inside the
+/// user's Documents directory — the agent's output is user-facing work, not
+/// app data, so it belongs where the user already looks for files. Honours
+/// the XDG user-dirs override on Linux (localized or relocated Documents);
+/// when no Documents folder exists at all (headless machines, redirected
+/// Windows profiles), the folder lives directly under the home directory.
+fn workspace_root() -> String? {
+  guard home_dir() is Some(home) else { return None }
+  let home_path : @mbpath.Path = home
+  let documents : @mbpath.Path = match xdg_documents_dir(home) {
+    Some(dir) => dir
+    None => home_path.join("Documents")
+  }
+  let documents_exists = @mbfs.is_dir(documents.to_string()) catch {
+    _ => false
+  }
+  let parent = if documents_exists { documents } else { home_path }
+  Some(parent.join(WorkspaceDirName).normalize().to_string())
+}
+
+///|
+/// The XDG user-dirs override for the Documents folder, read from
+/// `${XDG_CONFIG_HOME:-~/.config}/user-dirs.dirs` (Linux desktops localize
+/// or move Documents there; the file does not exist on macOS or Windows).
+/// The spec marks a disabled folder by pointing it at `$HOME` itself, which
+/// `workspace_root` then resolves to `~/OpenSeek` naturally.
+fn xdg_documents_dir(home : String) -> String? {
+  let config_dir = match non_empty(@env.get_env_var("XDG_CONFIG_HOME")) {
+    Some(dir) => dir
+    None => (home : @mbpath.Path).join(".config").to_string()
+  }
+  let file = (config_dir : @mbpath.Path).join("user-dirs.dirs").to_string()
+  let content = @mbfs.read_file_to_string(file) catch { _ => return None }
+  for line in content.split("\n") {
+    let line = line.trim()
+    guard line.has_prefix("XDG_DOCUMENTS_DIR=") else { continue }
+    let value = line["XDG_DOCUMENTS_DIR=".length():].trim(chars="\"")
+    if value.has_prefix("$HOME") {
+      return Some(home + value["$HOME".length():].to_owned())
+    }
+    return Some(value.to_owned())
+  }
+  None
 }
 
 ///|
@@ -826,6 +944,13 @@ async fn start_run(
     Ok(config) => config
     Err(error) => return Err(error)
   }
+  if config.cwd is Some(cwd) {
+    ensure_run_cwd(cwd) catch {
+      error if @async.is_being_cancelled() ||
+        @async.is_cancellation_error(error) => raise error
+      error => return Err("failed to create working directory \{cwd}: \{error}")
+    }
+  }
   let need_spawn = match manager.live {
     Some(live) => live.spec_key != engine_fingerprint(config)
     None => true
@@ -874,6 +999,22 @@ async fn start_run(
     }
   }
   Ok({ run_id, status: "accepted", exit_code: 0 })
+}
+
+///|
+/// Create the run's working directory if it is missing — a conversation's
+/// derived workspace does not exist before its first prompt. `@fs.mkdir`
+/// raises EEXIST even with `recursive=true`, so probe first; losing a
+/// creation race to another process leaves the directory present, which is
+/// just as good.
+async fn ensure_run_cwd(cwd : String) -> Unit {
+  if @fs.exists(cwd) {
+    return
+  }
+  @fs.mkdir(cwd, recursive=true) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => if @fs.exists(cwd) { () } else { raise error }
+  }
 }
 
 ///|
