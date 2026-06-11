@@ -47,14 +47,19 @@ fn start_openseek(
   selected_model : String,
   max_steps : String,
   api_key : String,
+  api_url : String,
   session : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    js_start_openseek(task, selected_model, max_steps, api_key, session, fn(
-      message,
-    ) {
-      scheduler.add(dispatch(Failed(message)))
-    })
+    js_start_openseek(
+      task,
+      selected_model,
+      max_steps,
+      api_key,
+      api_url,
+      session,
+      fn(message) { scheduler.add(dispatch(Failed(message))) },
+    )
   })
 }
 
@@ -231,10 +236,11 @@ extern "js" fn js_start_openseek(
   selected_model : String,
   max_steps : String,
   api_key : String,
+  api_url : String,
   session : String,
   on_error : (String) -> Unit,
 ) =
-  #| (task, selectedModel, maxSteps, apiKey, session, onError) => {
+  #| (task, selectedModel, maxSteps, apiKey, apiUrl, session, onError) => {
   #|   const root = globalThis.__MoonBit__;
   #|   const api = root && root.openseek;
   #|   if (!api || !api.start) {
@@ -248,6 +254,7 @@ extern "js" fn js_start_openseek(
   #|   };
   #|   setText("model", selectedModel);
   #|   setText("api_key", apiKey);
+  #|   setText("api_url", apiUrl);
   #|   setText("session", session);
   #|   const parsedSteps = Number(maxSteps);
   #|   if (Number.isFinite(parsedSteps) && parsedSteps > 0) {

@@ -1,17 +1,35 @@
 ///|
-fn load_saved_api_key(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
+fn load_saved_settings(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    scheduler.add(dispatch(ApiKeyLoaded(js_load_api_key(ApiKeyStorageKey))))
+    scheduler.add(
+      dispatch(
+        SettingsLoaded(
+          js_load_setting(ApiProviderStorageKey),
+          js_load_setting(CustomApiUrlStorageKey),
+          js_load_setting(ApiKeyStorageKey),
+        ),
+      ),
+    )
   })
 }
 
 ///|
 fn save_api_key(api_key : String) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => js_save_api_key(ApiKeyStorageKey, api_key))
+  @cmd.custom_cmd(_ => js_save_setting(ApiKeyStorageKey, api_key))
 }
 
 ///|
-extern "js" fn js_load_api_key(storage_key : String) -> String =
+fn save_api_provider(provider : ApiProvider) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => js_save_setting(ApiProviderStorageKey, provider.wire()))
+}
+
+///|
+fn save_custom_api_url(url : String) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => js_save_setting(CustomApiUrlStorageKey, url))
+}
+
+///|
+extern "js" fn js_load_setting(storage_key : String) -> String =
   #| (storageKey) => {
   #|   try {
   #|     const storage = globalThis.localStorage;
@@ -22,10 +40,10 @@ extern "js" fn js_load_api_key(storage_key : String) -> String =
   #| }
 
 ///|
-extern "js" fn js_save_api_key(storage_key : String, api_key : String) =
-  #| (storageKey, apiKey) => {
+extern "js" fn js_save_setting(storage_key : String, value : String) =
+  #| (storageKey, value) => {
   #|   try {
   #|     const storage = globalThis.localStorage;
-  #|     if (storage) storage.setItem(storageKey, String(apiKey || ""));
+  #|     if (storage) storage.setItem(storageKey, String(value || ""));
   #|   } catch (_) {}
   #| }

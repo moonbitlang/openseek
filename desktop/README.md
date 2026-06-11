@@ -15,10 +15,10 @@ to it over stdio (`{"command": "prompt"|"cancel", ...}` JSONL in, the usual
 event stream out). Because the process spans turns, stateful tools survive
 turn boundaries — a `moon_check` watcher started in turn 1 keeps reporting in
 turn 5 — and cancelling interrupts the turn without killing the engine.
-Switching conversations (or changing the model/API key) retires the old
-process gracefully and spawns a fresh one; an engine that dies mid-turn fails
-that run with its stderr as diagnostics, and the next prompt respawns on the
-same durable session.
+Switching conversations (or changing the model, API key, or endpoint)
+retires the old process gracefully and spawns a fresh one; an engine that
+dies mid-turn fails that run with its stderr as diagnostics, and the next
+prompt respawns on the same durable session.
 
 Each conversation is also backed by a durable engine session: the frontend
 generates a `desktop-YYYYMMDD-HHMMSS-mmm` session id at launch and sends it
@@ -64,6 +64,21 @@ transcript as a real user message, while `steer_dropped` (the steer raced
 the turn's end through the pipes) surfaces a notice asking to resubmit, so
 the text never vanishes silently. A turn that is being cancelled cannot be
 steered; the text stays in the composer.
+
+## API endpoint
+
+The settings popup offers three endpoints. The default, **OpenSeek**, routes
+requests through `openseek-api.moonbitlang.cn` and needs no API key, so the
+app works out of the box. **DeepSeek official** sends requests straight to
+`api.deepseek.com` with your own key (BYOK). **Custom URL** accepts any
+DeepSeek-compatible chat-completions endpoint, with the key optional —
+whether one is needed is the endpoint's business. The choice, the custom
+URL, and the key persist in the webview's localStorage; the key entered for
+the official endpoint is never sent to any other endpoint. The host passes
+the endpoint to the engine as `OPENSEEK_API_URL`, substituting a placeholder
+key when a custom endpoint is configured without one (the engine insists on
+a non-empty key; the OpenSeek service ignores it). Changing the endpoint
+mid-conversation retires the live engine process on the next prompt.
 
 ## Prerequisites
 

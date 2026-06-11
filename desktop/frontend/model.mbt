@@ -11,10 +11,55 @@ const EmptyRunId : Int = -1
 const ApiKeyStorageKey : String = "openseek.deepseek_api_key"
 
 ///|
+const ApiProviderStorageKey : String = "openseek.api_provider"
+
+///|
+const CustomApiUrlStorageKey : String = "openseek.custom_api_url"
+
+///|
+/// The default OpenSeek endpoint: a DeepSeek-compatible proxy that does not
+/// require an API key, so the app works out of the box. The path mirrors the
+/// official API because the engine posts to this URL verbatim.
+const OpenseekApiUrl : String = "https://openseek-api.moonbitlang.cn/chat/completions"
+
+///|
 let runtime_metadata_keys : Array[String] = [
   "events", "id", "key", "cwd", "command", "status", "seq", "exit", "truncated",
   "max_output_chars", "restart_count", "restart_limit", "restart_reason",
 ]
+
+///|
+/// Which chat-completions endpoint the engine talks to. `Openseek` is the
+/// zero-config default — the proxy does not validate API keys. `Deepseek` is
+/// the official endpoint and needs the user's own key. `Custom` is any other
+/// DeepSeek-compatible endpoint; whether it needs a key is the endpoint's
+/// business, so the key is optional there.
+priv enum ApiProvider {
+  Openseek
+  Deepseek
+  Custom
+}
+
+///|
+fn ApiProvider::wire(self : ApiProvider) -> String {
+  match self {
+    Openseek => "openseek"
+    Deepseek => "deepseek"
+    Custom => "custom"
+  }
+}
+
+///|
+/// Unknown stored values fall back to the default provider, so a downgrade
+/// (or a corrupted store) degrades to the zero-config endpoint instead of
+/// wedging the app.
+fn ApiProvider::parse(value : String) -> ApiProvider {
+  match value.trim().to_owned() {
+    "deepseek" => Deepseek
+    "custom" => Custom
+    _ => Openseek
+  }
+}
 
 ///|
 priv enum ItemKind {
@@ -61,6 +106,11 @@ priv struct Model {
   cwd : String
   api_key : String
   setup_api_key : String
+  // Which endpoint the engine talks to; `custom_api_url` only matters when
+  // the provider is `Custom`. Both persist to localStorage as they change,
+  // unlike the key, which is staged in `setup_api_key` until saved.
+  api_provider : ApiProvider
+  custom_api_url : String
   setup_open : Bool
   watcher_status : String
   // Durable engine session backing the current conversation; consecutive runs
@@ -92,11 +142,15 @@ priv enum Msg {
   Init
   BridgeReady
   BridgeUnavailable(String)
-  ApiKeyLoaded(String)
+  // Persisted settings read back from localStorage at startup:
+  // provider wire name, custom endpoint URL, API key.
+  SettingsLoaded(String, String, String)
   TaskChanged(String)
   ModelChanged(String)
   MaxStepsChanged(String)
   SetupApiKeyChanged(String)
+  ProviderChanged(String)
+  CustomApiUrlChanged(String)
   OpenSetup
   CloseSetup
   SaveApiKey
@@ -133,7 +187,9 @@ fn initial_model() -> Model {
     cwd: "",
     api_key: "",
     setup_api_key: "",
-    setup_open: true,
+    api_provider: Openseek,
+    custom_api_url: "",
+    setup_open: false,
     watcher_status: "",
     session_id: "",
     streaming_response: "",
@@ -142,6 +198,57 @@ fn initial_model() -> Model {
     messages: [],
     sessions: [],
     sessions_error: "",
+  }
+}
+
+///|
+/// Whether the configured endpoint is usable as it stands: the default
+/// OpenSeek proxy always is, the official endpoint needs the user's key, and
+/// a custom endpoint needs at least a URL.
+fn Model::api_ready(self : Model) -> Bool {
+  match self.api_provider {
+    Openseek => true
+    Deepseek => !self.api_key.trim().is_empty()
+    Custom => !self.custom_api_url.trim().is_empty()
+  }
+}
+
+///|
+/// The endpoint sent with `start`; empty means the engine's built-in default
+/// (the official DeepSeek endpoint).
+fn Model::effective_api_url(self : Model) -> String {
+  match self.api_provider {
+    Openseek => OpenseekApiUrl
+    Deepseek => ""
+    Custom => self.custom_api_url.trim().to_owned()
+  }
+}
+
+///|
+/// The key sent with `start`. The OpenSeek proxy ignores keys, and the one
+/// stored here belongs to the official endpoint — never leak it to another
+/// host, so send nothing (the native host substitutes a placeholder).
+fn Model::effective_api_key(self : Model) -> String {
+  match self.api_provider {
+    Openseek => ""
+    Deepseek | Custom => self.api_key
+  }
+}
+
+///|
+/// The status implied by the current settings. While a run is active (or the
+/// bridge is down) the current status stands — changing settings mid-run
+/// must not clobber Running/Step/… — otherwise it reports whether the
+/// configured endpoint is ready to accept a prompt.
+fn Model::settings_status(self : Model) -> Status {
+  if !self.bridge_ready || self.running {
+    self.status
+  } else if self.api_ready() {
+    Ready
+  } else if self.api_provider is Deepseek {
+    ApiKeyRequired
+  } else {
+    SetupRequired
   }
 }
 

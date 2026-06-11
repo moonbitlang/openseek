@@ -68,29 +68,20 @@ fn update(
       (
         @cmd.batch([
           install_bridge(dispatch),
-          load_saved_api_key(dispatch),
+          load_saved_settings(dispatch),
           install_clipboard_paste_bridge(),
           rotate_session(dispatch),
         ]),
         model,
       )
     BridgeReady => {
-      let has_key = !model.api_key.trim().is_empty()
+      let next = { ..model, bridge_ready: true }
       (
         fetch_sessions(dispatch),
         {
-          ..model,
-          bridge_ready: true,
-          setup_open: if has_key {
-            model.setup_open
-          } else {
-            true
-          },
-          status: if has_key {
-            Ready
-          } else {
-            SetupRequired
-          },
+          ..next,
+          setup_open: next.setup_open || !next.api_ready(),
+          status: next.settings_status(),
         },
       )
     }
@@ -99,25 +90,23 @@ fn update(
         @cmd.none,
         { ..model, bridge_ready: false, status: Unavailable(message) },
       )
-    ApiKeyLoaded(value) => {
-      let api_key = value.trim().to_owned()
-      let has_key = !api_key.is_empty()
+    SettingsLoaded(provider, custom_url, api_key) => {
+      let next = {
+        ..model,
+        api_provider: ApiProvider::parse(provider),
+        custom_api_url: custom_url.trim().to_owned(),
+        api_key: api_key.trim().to_owned(),
+        setup_api_key: "",
+      }
       (
         @cmd.none,
+        // The default provider needs no setup, so the popup only opens when
+        // the stored settings are incomplete (official endpoint without a
+        // key, custom endpoint without a URL).
         {
-          ..model,
-          api_key,
-          setup_open: !has_key,
-          setup_api_key: "",
-          status: if model.bridge_ready {
-            if has_key {
-              Ready
-            } else {
-              SetupRequired
-            }
-          } else {
-            model.status
-          },
+          ..next,
+          setup_open: !next.api_ready(),
+          status: next.settings_status(),
         },
       )
     }
@@ -125,39 +114,42 @@ fn update(
     ModelChanged(value) => (@cmd.none, { ..model, selected_model: value })
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value })
     SetupApiKeyChanged(value) => (@cmd.none, { ..model, setup_api_key: value })
+    ProviderChanged(value) => {
+      let provider = ApiProvider::parse(value)
+      let next = { ..model, api_provider: provider }
+      (save_api_provider(provider), { ..next, status: next.settings_status() })
+    }
+    CustomApiUrlChanged(value) => {
+      let next = { ..model, custom_api_url: value }
+      (save_custom_api_url(value), { ..next, status: next.settings_status() })
+    }
     OpenSetup => (@cmd.none, { ..model, setup_open: true, setup_api_key: "" })
     CloseSetup =>
-      if model.api_key.trim().is_empty() {
-        (@cmd.none, { ..model, setup_open: true, status: ApiKeyRequired })
-      } else {
+      // The popup cannot be dismissed while the configured endpoint is
+      // unusable — there would be nothing the composer could do.
+      if model.api_ready() {
         (@cmd.none, { ..model, setup_open: false, setup_api_key: "" })
+      } else {
+        (
+          @cmd.none,
+          { ..model, setup_open: true, status: model.settings_status() },
+        )
       }
     SaveApiKey => {
       let api_key = model.setup_api_key.trim().to_owned()
       if api_key.is_empty() {
-        (@cmd.none, { ..model, status: ApiKeyRequired })
+        (@cmd.none, { ..model, status: model.settings_status() })
       } else {
+        let next = { ..model, api_key, setup_api_key: "" }
         (
           save_api_key(api_key),
-          {
-            ..model,
-            api_key,
-            setup_api_key: "",
-            setup_open: false,
-            status: if model.bridge_ready {
-              Ready
-            } else {
-              WaitingBridge
-            },
-          },
+          { ..next, setup_open: false, status: next.settings_status() },
         )
       }
     }
     Send => {
       let task = model.task.trim().to_owned()
-      if task.is_empty() ||
-        !model.bridge_ready ||
-        model.api_key.trim().is_empty() {
+      if task.is_empty() || !model.bridge_ready || !model.api_ready() {
         (@cmd.none, model)
       } else if model.running {
         // Submitting while a turn runs steers it: the text is folded into
@@ -193,7 +185,8 @@ fn update(
               task,
               model.selected_model,
               model.max_steps,
-              model.api_key,
+              model.effective_api_key(),
+              model.effective_api_url(),
               model.session_id,
             ),
             scroll_transcript_after_render(),
@@ -233,7 +226,7 @@ fn update(
             watcher_status: "",
             cwd: "",
             active_run_id: None,
-            status: if model.bridge_ready && !model.api_key.trim().is_empty() {
+            status: if model.bridge_ready && model.api_ready() {
               Ready
             } else {
               model.status
@@ -272,7 +265,7 @@ fn update(
             watcher_status: "",
             cwd: "",
             active_run_id: None,
-            status: if model.bridge_ready && !model.api_key.trim().is_empty() {
+            status: if model.bridge_ready && model.api_ready() {
               Ready
             } else {
               model.status

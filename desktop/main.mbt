@@ -14,12 +14,19 @@ const DefaultModel = "deepseek-v4-pro"
 const DefaultMaxSteps = 1000
 
 ///|
+/// Sent as the API key when a custom endpoint is configured without one: the
+/// engine refuses to start with an empty key, but an endpoint like the
+/// default OpenSeek proxy does not validate it.
+const PlaceholderApiKey = "unused"
+
+///|
 const FrontendEntryPath = "assets/index.html"
 
 ///|
 struct StartPayload {
   task : String
   api_key : String?
+  api_url : String?
   model : String?
   max_steps : Int?
   cwd : String?
@@ -148,6 +155,9 @@ struct PumpReply {
 priv struct RunConfig {
   task : String
   api_key : String
+  // Custom chat-completions endpoint; None means the engine's built-in
+  // default (the official DeepSeek endpoint).
+  api_url : String?
   model : String
   max_steps : Int
   engine : String
@@ -285,9 +295,20 @@ fn run_config(
 ) -> Result[RunConfig, String] {
   let task = payload.task.trim().to_owned()
   guard !task.is_empty() else { return Err("task must not be empty") }
+  let api_url = match non_empty(payload.api_url) {
+    Some(url) => Some(url)
+    None => non_empty(@env.get_env_var("OPENSEEK_API_URL"))
+  }
   let api_key = match required_secret(payload.api_key, "DEEPSEEK") {
     Ok(value) => value
-    Err(error) => return Err(error)
+    // Only the official endpoint strictly needs a key; a custom endpoint
+    // decides for itself, so a missing key becomes a placeholder there.
+    Err(error) =>
+      if api_url is Some(_) {
+        PlaceholderApiKey
+      } else {
+        return Err(error)
+      }
   }
   let max_steps = match configured_max_steps(payload.max_steps) {
     Ok(value) => value
@@ -301,6 +322,7 @@ fn run_config(
   Ok({
     task,
     api_key,
+    api_url,
     model: option_or_env(payload.model, "DEEPSEEK_MODEL", DefaultModel),
     max_steps,
     engine,
@@ -711,6 +733,7 @@ fn engine_fingerprint(config : RunConfig) -> String {
   [
     config.engine,
     config.api_key,
+    config.api_url.unwrap_or(""),
     config.model,
     config.max_steps.to_string(),
     config.cwd.unwrap_or(""),
@@ -784,6 +807,9 @@ async fn[G] start_serve_engine(
     "DEEPSEEK": config.api_key,
     "DEEPSEEK_MODEL": config.model,
     "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
+  }
+  if config.api_url is Some(url) {
+    env["OPENSEEK_API_URL"] = url
   }
   // A named session puts the engine in durable-session mode, so the
   // conversation survives the process and is shared with the CLI/TUI.

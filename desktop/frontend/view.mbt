@@ -332,7 +332,7 @@ fn task_attrs(dispatch : @cmd.Dispatch[Msg]) -> @html.Attrs {
 ///|
 fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
   let has_input = model.bridge_ready &&
-    !model.api_key.trim().is_empty() &&
+    model.api_ready() &&
     !model.task.trim().is_empty()
   let can_send = !model.running && has_input
   let controls : Array[@html.Html] = [
@@ -410,8 +410,89 @@ fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
 }
 
 ///|
+fn provider_select(
+  dispatch : @cmd.Dispatch[Msg],
+  selected : ApiProvider,
+) -> @html.Html {
+  @html.label([
+    @html.text("API endpoint"),
+    @html.select(on_change=dispatch.map(value => ProviderChanged(value)), [
+      @html.option(
+        value="openseek",
+        selected=selected is Openseek,
+        "OpenSeek (default, no API key)",
+      ),
+      @html.option(
+        value="deepseek",
+        selected=selected is Deepseek,
+        "DeepSeek official (your API key)",
+      ),
+      @html.option(value="custom", selected=selected is Custom, "Custom URL"),
+    ]),
+  ])
+}
+
+///|
+fn provider_hint(provider : ApiProvider) -> String {
+  match provider {
+    Openseek => "Requests go through the OpenSeek service; no key needed."
+    Deepseek => "Requests go straight to api.deepseek.com with your key."
+    Custom => "Any DeepSeek-compatible chat-completions URL; key optional."
+  }
+}
+
+///|
 fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
-  let has_key = !model.api_key.trim().is_empty()
+  let ready = model.api_ready()
+  let settings : Array[@html.Html] = [
+    model_select(dispatch, model.selected_model),
+    setting_input(
+      "Max steps",
+      model.max_steps,
+      "1000",
+      @html.InputType::Number,
+      dispatch.map(value => MaxStepsChanged(value)),
+    ),
+    provider_select(dispatch, model.api_provider),
+    @html.div(class="setting-hint", provider_hint(model.api_provider)),
+  ]
+  if model.api_provider is Custom {
+    settings.push(
+      setting_input(
+        "Endpoint URL",
+        model.custom_api_url,
+        "https://host/chat/completions",
+        @html.InputType::Text,
+        dispatch.map(value => CustomApiUrlChanged(value)),
+      ),
+    )
+  }
+  // The OpenSeek proxy ignores keys, so the key field only appears for the
+  // endpoints that can use one. The saved key is never echoed back into the
+  // field; saving a new one overwrites it.
+  if !(model.api_provider is Openseek) {
+    settings.push(
+      setting_input(
+        "DeepSeek API key",
+        model.setup_api_key,
+        if model.api_key.trim().is_empty() {
+          "sk-..."
+        } else {
+          "saved — enter to replace"
+        },
+        @html.InputType::Password,
+        dispatch.map(value => SetupApiKeyChanged(value)),
+      ),
+    )
+    settings.push(
+      @html.button(
+        id="saveApiKey",
+        disabled=model.setup_api_key.trim().is_empty(),
+        on_click=dispatch(SaveApiKey),
+        "Save API key",
+      ),
+    )
+  }
   @html.div(class="setup-backdrop", [
     @html.div(class="setup-popup", [
       @html.div(class="setup-header", [
@@ -419,8 +500,10 @@ fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
           @html.h2("Settings"),
           @html.div(
             class="status",
-            if has_key {
+            if ready {
               "Update OpenSeek runtime settings."
+            } else if model.api_provider is Custom {
+              "Enter a chat-completions endpoint URL to start."
             } else {
               "Enter a DeepSeek API key to start."
             },
@@ -428,34 +511,12 @@ fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
         ]),
         @html.button(
           class="secondary close-button",
-          disabled=!has_key,
+          disabled=!ready,
           on_click=dispatch(CloseSetup),
           "Close",
         ),
       ]),
-      @html.div(class="settings", [
-        model_select(dispatch, model.selected_model),
-        setting_input(
-          "Max steps",
-          model.max_steps,
-          "1000",
-          @html.InputType::Number,
-          dispatch.map(value => MaxStepsChanged(value)),
-        ),
-        setting_input(
-          "DeepSeek API key",
-          model.setup_api_key,
-          "sk-...",
-          @html.InputType::Password,
-          dispatch.map(value => SetupApiKeyChanged(value)),
-        ),
-        @html.button(
-          id="saveApiKey",
-          disabled=model.setup_api_key.trim().is_empty(),
-          on_click=dispatch(SaveApiKey),
-          "Save API key",
-        ),
-      ]),
+      @html.div(class="settings", settings),
     ]),
   ])
 }

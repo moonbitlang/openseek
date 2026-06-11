@@ -380,3 +380,103 @@ test "decode recognizes the steer events" {
     fail("steer_dropped not decoded")
   }
 }
+
+///|
+test "the default provider needs no API key to be ready" {
+  let model = { ..test_model(), api_key: "" }
+  assert_true(model.api_ready())
+  inspect(model.effective_api_url(), content=OpenseekApiUrl)
+  inspect(model.effective_api_key(), content="")
+}
+
+///|
+test "the saved DeepSeek key is never sent to another endpoint" {
+  let openseek = { ..test_model(), api_provider: Openseek }
+  inspect(openseek.effective_api_key(), content="")
+  let official = { ..test_model(), api_provider: Deepseek }
+  inspect(official.effective_api_key(), content="sk-test")
+}
+
+///|
+test "the official endpoint requires a key, a custom endpoint a URL" {
+  let official = { ..test_model(), api_provider: Deepseek, api_key: "" }
+  assert_false(official.api_ready())
+  assert_true(official.settings_status() is ApiKeyRequired)
+  let custom = { ..test_model(), api_provider: Custom, custom_api_url: "" }
+  assert_false(custom.api_ready())
+  assert_true(custom.settings_status() is SetupRequired)
+  let configured = {
+    ..custom,
+    custom_api_url: "https://proxy.example/chat/completions",
+  }
+  assert_true(configured.api_ready())
+  inspect(
+    configured.effective_api_url(),
+    content="https://proxy.example/chat/completions",
+  )
+}
+
+///|
+test "loaded settings open the popup only when incomplete" {
+  let dispatch = test_dispatch()
+  let (_, zero_config) = update(
+    dispatch,
+    SettingsLoaded("", "", ""),
+    test_model(),
+  )
+  inspect(zero_config.setup_open, content="false")
+  assert_true(zero_config.api_provider is Openseek)
+  assert_true(zero_config.status is Ready)
+  let (_, keyless) = update(
+    dispatch,
+    SettingsLoaded("deepseek", "", ""),
+    test_model(),
+  )
+  inspect(keyless.setup_open, content="true")
+  assert_true(keyless.status is ApiKeyRequired)
+  let (_, restored) = update(
+    dispatch,
+    SettingsLoaded("deepseek", "", "sk-stored"),
+    test_model(),
+  )
+  inspect(restored.setup_open, content="false")
+  inspect(restored.api_key, content="sk-stored")
+}
+
+///|
+test "update is pure: a provider change is idempotent" {
+  let dispatch = test_dispatch()
+  let model = { ..test_model(), api_key: "" }
+  let (_, once) = update(dispatch, ProviderChanged("deepseek"), model)
+  let (_, twice) = update(dispatch, ProviderChanged("deepseek"), model)
+  assert_true(once.api_provider is Deepseek)
+  assert_true(twice.api_provider is Deepseek)
+  assert_true(once.status is ApiKeyRequired)
+  assert_true(twice.status is ApiKeyRequired)
+}
+
+///|
+test "changing settings mid-run leaves the run status alone" {
+  let dispatch = test_dispatch()
+  let (_, next) = update(dispatch, ProviderChanged("deepseek"), running_model())
+  assert_true(next.status is Running)
+  assert_true(next.api_provider is Deepseek)
+}
+
+///|
+test "the popup cannot close while the endpoint is unusable" {
+  let dispatch = test_dispatch()
+  let model = {
+    ..test_model(),
+    api_provider: Deepseek,
+    api_key: "",
+    setup_open: true,
+  }
+  let (_, stuck) = update(dispatch, CloseSetup, model)
+  inspect(stuck.setup_open, content="true")
+  let (_, closed) = update(dispatch, CloseSetup, {
+    ..model,
+    api_provider: Openseek,
+  })
+  inspect(closed.setup_open, content="false")
+}
