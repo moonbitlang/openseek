@@ -233,7 +233,7 @@ pub async fn[X] run_turn_in_scope(
         }
     }
     let messages = session.chat_messages()
-    let mut last_runtime_fingerprint = ""
+    let watcher_fingerprints : Map[String, String] = {}
     steps~: for step in 0..<max_steps {
       // Steering first: a user's mid-turn redirection should precede the
       // runtime chatter the model reads alongside it.
@@ -244,15 +244,23 @@ pub async fn[X] run_turn_in_scope(
         append_item~,
       )
       if runtime_update_message(runtime.drain_events()) is Some(update) {
-        // A watcher re-run that reproduces the previous notice byte-for-byte
+        // A batch in which every watcher reproduces its previous notice
         // (volatile counters aside) is collapsed to a one-line marker: the
         // model still learns its edit was processed with an unchanged
         // result, without re-paying for the full block — the analyzed
         // 156-step session appended 61 near-identical update notices, 11%
-        // of its final context.
-        let fingerprint = @moon_check.update_fingerprint(update)
-        let notice = if fingerprint != last_runtime_fingerprint {
-          last_runtime_fingerprint = fingerprint
+        // of its final context. Fingerprints are tracked per watcher so
+        // alternating multi-cwd batches cannot thrash the comparison.
+        let sections = @moon_check.update_section_fingerprints(update)
+        let mut fresh = sections.is_empty()
+        for pair in sections {
+          let (key, fingerprint) = pair
+          if watcher_fingerprints.get(key) != Some(fingerprint) {
+            fresh = true
+          }
+          watcher_fingerprints[key] = fingerprint
+        }
+        let notice = if fresh {
           update
         } else {
           "[moon_check update]\nwatchers re-ran; results unchanged from the previous update"

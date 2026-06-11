@@ -222,21 +222,40 @@ pub fn runtime_update_text(
 }
 
 ///|
-/// The substance of a `[moon_check update]` block: the text minus its
-/// volatile counters (`events=` per-batch totals and per-watcher `seq=`
-/// chunk counts), which advance even when the diagnostics are unchanged.
-/// The agent loop compares fingerprints between steps and skips appending a
-/// notice that says nothing new — a real 156-step session accumulated 61
-/// near-identical update notices, 11% of its final context.
-pub fn update_fingerprint(update : String) -> String {
-  let kept : Array[String] = []
-  for line in update.split("\n") {
-    if line.has_prefix("events=") || line.has_prefix("seq=") {
-      continue
+/// Per-watcher substance of a `[moon_check update]` block: one
+/// `(key, fingerprint)` pair per watcher section, keyed by the section's
+/// `cwd=` line and with the volatile counters (`events=` batch totals,
+/// per-watcher `seq=` chunk counts) stripped from the fingerprint. The agent
+/// loop tracks the last fingerprint per watcher across steps and collapses a
+/// batch in which nothing changed to a one-line marker — fingerprinting the
+/// whole block instead would thrash whenever two watchers alternate
+/// batches, re-injecting diagnostics for state the model already has (a
+/// real 156-step session accumulated 61 near-identical notices, 11% of its
+/// final context).
+pub fn update_section_fingerprints(update : String) -> Array[(String, String)] {
+  let pairs : Array[(String, String)] = []
+  for section in update.split("\n\n") {
+    let mut key = ""
+    let kept : Array[String] = []
+    for line in section.split("\n") {
+      if line.has_prefix("cwd=") {
+        key = line.to_owned()
+      }
+      if line.has_prefix("events=") ||
+        line.has_prefix("seq=") ||
+        line == "[moon_check update]" {
+        continue
+      }
+      kept.push(line.to_owned())
     }
-    kept.push(line.to_owned())
+    // A section with no cwd= line (unexpected) keys on its own text, which
+    // degrades to always-fresh rather than wrongly suppressing it.
+    if key == "" {
+      key = section.to_owned()
+    }
+    pairs.push((key, kept.join("\n")))
   }
-  kept.join("\n")
+  pairs
 }
 
 ///|
@@ -261,12 +280,12 @@ fn moon_check_snapshot_is_error(snapshot : MoonCheckSnapshot) -> Bool {
 }
 
 ///|
-test "update fingerprints ignore volatile counters, track real change" {
+test "section fingerprints ignore counters and key per watcher" {
   let first =
     #|[moon_check update]
     #|events=32
     #|id=moon-check-1
-    #|cwd=toml_parser
+    #|cwd=alpha
     #|command=moon check --watch --diagnostic-limit 10
     #|status=running
     #|seq=54
@@ -275,23 +294,41 @@ test "update fingerprints ignore volatile counters, track real change" {
     #|[moon_check update]
     #|events=2
     #|id=moon-check-1
-    #|cwd=toml_parser
+    #|cwd=alpha
     #|command=moon check --watch --diagnostic-limit 10
     #|status=running
     #|seq=92
     #|Success, waiting for filesystem changes...
-  // Only events= and seq= moved: same substance, same fingerprint.
-  assert_eq(update_fingerprint(first), update_fingerprint(requeued))
-  let changed =
-    #|[moon_check update]
-    #|events=2
-    #|id=moon-check-1
-    #|cwd=toml_parser
-    #|command=moon check --watch --diagnostic-limit 10
-    #|status=running
-    #|seq=93
-    #|Error: [4014] type mismatch
-  assert_true(update_fingerprint(first) != update_fingerprint(changed))
+  // Only events= and seq= moved: same key, same fingerprint.
+  guard update_section_fingerprints(first) is [(key_a, fp_a)] else {
+    fail("expected one section")
+  }
+  guard update_section_fingerprints(requeued) is [(key_b, fp_b)] else {
+    fail("expected one section")
+  }
+  assert_eq(key_a, key_b)
+  assert_eq(fp_a, fp_b)
+
+  // A two-watcher block yields one pair per section, keyed by cwd, so an
+  // unchanged watcher stays recognizable when batches alternate.
+  let both = first +
+    "\n\nid=moon-check-2\ncwd=beta\ncommand=moon check --watch\nstatus=running\nseq=3\nError: [4014] type mismatch"
+  guard update_section_fingerprints(both) is [(k1, f1), (k2, _)] else {
+    fail("expected two sections")
+  }
+  assert_eq(k1, "cwd=alpha")
+  assert_eq(k2, "cwd=beta")
+  assert_eq(f1, fp_a)
+
+  // Changed diagnostics change the fingerprint.
+  let changed = requeued.replace(
+    old="Success, waiting for filesystem changes...",
+    new="Error: [4014] type mismatch",
+  )
+  guard update_section_fingerprints(changed) is [(_, fp_c)] else {
+    fail("expected one section")
+  }
+  assert_true(fp_c != fp_a)
 }
 
 ///|
