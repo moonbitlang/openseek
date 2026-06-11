@@ -121,3 +121,63 @@ jobs:
           name: OpenSeek-Desktop-linux-x86_64
           path: desktop/dist/OpenSeek-Desktop-linux-x86_64.AppImage
           if-no-files-found: error
+
+  desktop-macos:
+    name: desktop app (macos, unsigned)
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # The lepus submodule is a private repo, so the default workflow token
+      # cannot clone it. LEPUS_READ_TOKEN is a fine-grained PAT with read-only
+      # access to moonbit-community/lepus. Note: this secret is unavailable to
+      # pull requests from forks, where this job will fail at this step.
+      - name: Check out the lepus submodule
+        env:
+          LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
+            "git@github.com:"
+          git submodule update --init --recursive
+
+      - name: Set up MoonBit (nightly)
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- nightly
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: Show MoonBit version
+        run: |
+          moon version --all
+
+      - name: Seed MoonBit registry index
+        run: |
+          mkdir -p "$HOME/.moon/registry"
+          for attempt in 1 2 3; do
+            rm -rf "$HOME/.moon/registry/index"
+            if git \
+              -c http.lowSpeedLimit=1000 \
+              -c http.lowSpeedTime=60 \
+              clone --depth 1 https://mooncakes.io/git/index "$HOME/.moon/registry/index"; then
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      # No MACOS_SIGN_IDENTITY in the environment, so the bundle is ad-hoc
+      # signed: fine for debugging, but downloads are quarantined by
+      # Gatekeeper on other machines — clear it before launching:
+      #   xattr -dr com.apple.quarantine "OpenSeek Desktop.app"
+      - name: Build the app bundle
+        run: moon run --target native ./desktop/package_macos.mbtx
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenSeek-Desktop-macos-arm64
+          path: desktop/dist/OpenSeek Desktop-macos-arm64.zip
+          if-no-files-found: error
