@@ -98,12 +98,73 @@ fn turn_block(
   number : Int,
   turn : Array[@agent_session.SessionEvent],
 ) -> @html.Html {
-  let cards : Array[@html.Html] = [ for event in turn => event_card(event) ]
-  let label = "Turn \{number} · \{turn_preview(turn)}"
+  // Offsets are relative to the turn's first stamped event: for reading a
+  // log, "how far into the turn" answers latency questions directly, where
+  // absolute wall clock would force mental subtraction (and a timezone).
+  let base = turn_base_ms(turn)
+  let cards : Array[@html.Html] = [
+    for event in turn => event_card(event, time=offset_label(base, event))
+  ]
+  let label = match turn_duration_label(turn) {
+    Some(duration) => "Turn \{number} · \{turn_preview(turn)} · \{duration}"
+    None => "Turn \{number} · \{turn_preview(turn)}"
+  }
   @html.details(open=true, class="turn", [
     @html.summary(class="turn-summary", label),
     @html.div(class="turn-body", cards),
   ])
+}
+
+///|
+/// The turn's first wall-clock stamp (unix ms), or 0 when no event carries
+/// one (events appended without a clock keep the 0 sentinel).
+fn turn_base_ms(turn : Array[@agent_session.SessionEvent]) -> Int64 {
+  for event in turn {
+    if event.unix_ms() > 0 {
+      return event.unix_ms()
+    }
+  }
+  0
+}
+
+///|
+fn offset_label(base : Int64, event : @agent_session.SessionEvent) -> String {
+  if base == 0 || event.unix_ms() == 0 {
+    return ""
+  }
+  "+" + format_span_seconds(event.unix_ms() - base)
+}
+
+///|
+fn turn_duration_label(turn : Array[@agent_session.SessionEvent]) -> String? {
+  let base = turn_base_ms(turn)
+  guard base > 0 else { return None }
+  let mut last = base
+  for event in turn {
+    if event.unix_ms() > 0 {
+      last = event.unix_ms()
+    }
+  }
+  if last > base {
+    Some(format_span_seconds(last - base))
+  } else {
+    None
+  }
+}
+
+///|
+/// A millisecond span as a compact human duration: `3.4s`, `2m 05.1s`.
+fn format_span_seconds(span_ms : Int64) -> String {
+  let tenths = span_ms / 100
+  if tenths < 600 {
+    "\{tenths / 10}.\{tenths % 10}s"
+  } else {
+    let minutes = tenths / 600
+    let rest = tenths % 600
+    let seconds = rest / 10
+    let pad = if seconds < 10 { "0" } else { "" }
+    "\{minutes}m \{pad}\{seconds}.\{rest % 10}s"
+  }
 }
 
 ///|
@@ -117,22 +178,29 @@ fn turn_preview(turn : Array[@agent_session.SessionEvent]) -> String {
 }
 
 ///|
-fn event_card(event : @agent_session.SessionEvent) -> @html.Html {
+fn event_card(
+  event : @agent_session.SessionEvent,
+  time~ : String,
+) -> @html.Html {
   let seq = event.sequence()
   match event.item() {
-    User(message) => card("user", "User", seq, [text_block(message.content())])
-    Assistant(message) => assistant_card(seq, message)
-    Tool(result) => tool_card(seq, result)
+    User(message) =>
+      card("user", "User", seq, time~, [text_block(message.content())])
+    Assistant(message) => assistant_card(seq, time, message)
+    Tool(result) => tool_card(seq, time, result)
     Runtime(notice) =>
-      card("runtime", "Runtime notice", seq, [text_block(notice.content())])
-    Summary(summary) => summary_card(seq, summary)
-    Terminal(terminal) => terminal_card(seq, terminal)
+      card("runtime", "Runtime notice", seq, time~, [
+        text_block(notice.content()),
+      ])
+    Summary(summary) => summary_card(seq, time, summary)
+    Terminal(terminal) => terminal_card(seq, time, terminal)
   }
 }
 
 ///|
 fn assistant_card(
   seq : Int,
+  time : String,
   message : @agent_session.AssistantMessage,
 ) -> @html.Html {
   let body : Array[@html.Html] = []
@@ -155,7 +223,7 @@ fn assistant_card(
     ]
     body.push(@html.div(class="tool-calls", call_views))
   }
-  card("assistant", "Assistant", seq, body)
+  card("assistant", "Assistant", seq, time~, body)
 }
 
 ///|
@@ -170,28 +238,34 @@ fn tool_call_view(call : @deepseek.ToolCall) -> @html.Html {
 }
 
 ///|
-fn tool_card(seq : Int, result : @agent_session.ToolResult) -> @html.Html {
+fn tool_card(
+  seq : Int,
+  time : String,
+  result : @agent_session.ToolResult,
+) -> @html.Html {
   let kind = if result.is_error() { "tool error" } else { "tool" }
   let label = if result.is_error() {
     "Tool error · \{result.tool_name()}"
   } else {
     "Tool result · \{result.tool_name()}"
   }
-  card(kind, label, seq, [text_block(result.content())])
+  card(kind, label, seq, time~, [text_block(result.content())])
 }
 
 ///|
 fn summary_card(
   seq : Int,
+  time : String,
   summary : @agent_session.SessionSummary,
 ) -> @html.Html {
   let label = "Summary · covers events \{summary.from_sequence()}..\{summary.to_sequence()}"
-  card("summary", label, seq, [text_block(summary.content())])
+  card("summary", label, seq, time~, [text_block(summary.content())])
 }
 
 ///|
 fn terminal_card(
   seq : Int,
+  time : String,
   terminal : @agent_session.TurnTerminal,
 ) -> @html.Html {
   let (kind, message) = match terminal {
@@ -204,7 +278,7 @@ fn terminal_card(
   if !message.trim().is_empty() {
     body.push(text_block(message))
   }
-  card("terminal", "Turn ended", seq, body)
+  card("terminal", "Turn ended", seq, time~, body)
 }
 
 // ---- model projection view -------------------------------------------------
@@ -275,13 +349,18 @@ fn card(
   kind : String,
   label : String,
   seq : Int,
+  time~ : String,
   body : Array[@html.Html],
 ) -> @html.Html {
+  let head : Array[@html.Html] = [
+    @html.span(class="card-seq", "#\{seq}"),
+    @html.text(label),
+  ]
+  if !time.is_empty() {
+    head.push(@html.span(class="card-ts", time))
+  }
   @html.section(class="card \{kind}", [
-    @html.div(class="card-label", [
-      @html.span(class="card-seq", "#\{seq}"),
-      @html.text(label),
-    ]),
+    @html.div(class="card-label", head),
     @html.div(class="card-body", body),
   ])
 }

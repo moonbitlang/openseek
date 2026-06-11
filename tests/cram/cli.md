@@ -64,7 +64,9 @@ stdout-empty
 ## Session Management Is Offline
 
 Session inspection and compaction operate on typed session files and do not
-require a DeepSeek API key.
+require a DeepSeek API key. Hand-written log lines carry the 0 sentinel
+stamp; the summary event the compaction *appends* is stamped with the wall
+clock, so both `--session-show` calls strip `ts` to stay deterministic.
 
 ```mooncram
 $ sh <<'EOF'
@@ -72,14 +74,14 @@ $ sh <<'EOF'
 > mkdir -p "$tmp/sessions/demo"
 > printf '{"version":1,"id":"demo","system_prompt":"system","last_sequence":2}' > "$tmp/sessions/demo/session.json"
 > cat > "$tmp/sessions/demo/events.jsonl" <<'JSONL'
-> {"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}}
-> {"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}
+> {"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
+> {"sequence":2,"ts":0,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}
 > JSONL
 > printf 'hello and answer' > "$tmp/summary.txt"
 > env -u DEEPSEEK openseek.exe --session-list --session-root "$tmp" | cut -f1
-> env -u DEEPSEEK openseek.exe --session-show --session demo --session-root "$tmp"
+> env -u DEEPSEEK openseek.exe --session-show --session demo --session-root "$tmp" | sed -E 's/"ts":[0-9]+,//g'
 > env -u DEEPSEEK openseek.exe --session demo --session-root "$tmp" --session-compact-file "$tmp/summary.txt" --session-compact-from 1 --session-compact-to 2
-> env -u DEEPSEEK openseek.exe --session-show --session demo --session-root "$tmp"
+> env -u DEEPSEEK openseek.exe --session-show --session demo --session-root "$tmp" | sed -E 's/"ts":[0-9]+,//g'
 > rm -rf "$tmp"
 > EOF
 demo

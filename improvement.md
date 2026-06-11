@@ -81,10 +81,13 @@ shows where steps and tokens went to waste):
   exactly one tool call; the model proved it can batch (it opened with two
   parallel reads). A system-prompt nudge for batching independent
   reads/checks would cut round trips — at ~7s a step, real minutes.
-- [ ] **Timestamps on session events.** `events.jsonl` lines carry no
+- [x] **Timestamps on session events.** `events.jsonl` lines carry no
   timestamps, so per-step latency and where wall-clock went cannot be
   reconstructed from the log (this analysis had to infer duration from
   file mtimes). One `ts` field per event line fixes it and feeds the viz.
+  *(Done: the store stamps every appended event with `ts` (unix ms,
+  required field — no external users, so old logs are simply re-created;
+  in-memory appends without a clock carry the 0 sentinel).)*
 
 - [x] **Expose thinking controls.** `run_with_runtime` hardcodes
   `thinking=Enabled, reasoning_effort=Max`; make them engine flags

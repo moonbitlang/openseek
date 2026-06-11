@@ -2,6 +2,7 @@ import {
   "bobzhang/openseek/agent_session",
   "moonbitlang/async/fs",
   "moonbitlang/async/os_error",
+  "moonbitlang/core/env",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
 }

@@ -247,6 +247,12 @@ pub(all) enum SessionItem {
 /// within a session.
 pub struct SessionEvent {
   priv sequence : Int
+  // Wall-clock stamp (unix milliseconds) of when the event was appended; 0
+  // for purely in-memory sessions appended without a clock (the durable
+  // store always stamps). The field is named for its wire key, and typed
+  // Double so it serializes as a JSON number (core encodes Int64 as a
+  // string); milliseconds are exactly representable until year ~2255.
+  priv ts : Double
   priv item : SessionItem
 } derive(Debug, ToJson, FromJson)
 
@@ -254,8 +260,9 @@ pub struct SessionEvent {
 fn SessionEvent::SessionEvent(
   sequence~ : Int,
   item~ : SessionItem,
+  unix_ms? : Int64 = 0,
 ) -> SessionEvent {
-  { sequence, item }
+  { sequence, ts: unix_ms.to_double(), item }
 }
 
 ///|
@@ -268,6 +275,14 @@ pub fn SessionEvent::sequence(self : SessionEvent) -> Int {
 /// The event's payload.
 pub fn SessionEvent::item(self : SessionEvent) -> SessionItem {
   self.item
+}
+
+///|
+/// When the event was appended (unix milliseconds), or 0 when it was created
+/// without a clock (purely in-memory sessions; the durable store always
+/// stamps).
+pub fn SessionEvent::unix_ms(self : SessionEvent) -> Int64 {
+  self.ts.to_int64()
 }
 
 ///|
@@ -332,8 +347,12 @@ fn Session::next_sequence(self : Session) -> Int {
 /// Append one item as the next event and return the new session value; the
 /// receiver is unchanged. Callers that also need the assigned event (e.g. to
 /// persist it) should use `append_event`.
-pub fn Session::append(self : Session, item : SessionItem) -> Session {
-  let (next, _) = self.append_event(item)
+pub fn Session::append(
+  self : Session,
+  item : SessionItem,
+  unix_ms? : Int64 = 0,
+) -> Session {
+  let (next, _) = self.append_event(item, unix_ms~)
   next
 }
 
@@ -344,8 +363,9 @@ pub fn Session::append(self : Session, item : SessionItem) -> Session {
 pub fn Session::append_event(
   self : Session,
   item : SessionItem,
+  unix_ms? : Int64 = 0,
 ) -> (Session, SessionEvent) {
-  let event = SessionEvent(sequence=self.next_sequence(), item~)
+  let event = SessionEvent(sequence=self.next_sequence(), item~, unix_ms~)
   (
     {
       id: self.id,
@@ -366,6 +386,7 @@ pub fn Session::compact(
   content~ : String,
   from_sequence~ : Int,
   to_sequence~ : Int,
+  unix_ms? : Int64 = 0,
 ) -> Session raise {
   if content.trim().is_empty() {
     fail("summary content must not be empty")
@@ -382,5 +403,8 @@ pub fn Session::compact(
       "summary range \{from_sequence}..\{to_sequence} exceeds last sequence \{last}",
     )
   }
-  self.append(Summary(SessionSummary(content~, from_sequence~, to_sequence~)))
+  self.append(
+    Summary(SessionSummary(content~, from_sequence~, to_sequence~)),
+    unix_ms~,
+  )
 }

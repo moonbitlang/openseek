@@ -59,7 +59,7 @@ test "parse round-trips every event kind" {
 
 ///|
 test "parse tolerates a truncated final line" {
-  let text = "{\"sequence\":1,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\n{\"sequence\":2,\"item\":{\"kind\":\"assi"
+  let text = "{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\n{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi"
   let parsed = @viz.parse_events(text)
   inspect(parsed.events.length(), content="1")
   inspect(parsed.errors.length(), content="0")
@@ -68,7 +68,7 @@ test "parse tolerates a truncated final line" {
 
 ///|
 test "parse records a bad interior line without aborting" {
-  let text = "{\"sequence\":1,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\nnot json at all\n{\"sequence\":2,\"item\":{\"kind\":\"terminal\",\"payload\":{\"kind\":\"finished\",\"message\":\"done\"}}}\n"
+  let text = "{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\nnot json at all\n{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"terminal\",\"payload\":{\"kind\":\"finished\",\"message\":\"done\"}}}\n"
   let parsed = @viz.parse_events(text)
   inspect(parsed.events.length(), content="2")
   inspect(parsed.errors.length(), content="1")
@@ -129,4 +129,24 @@ test "notices surface partial tails and bad lines" {
   let html = render(@viz.render_notices(parsed))
   assert_true(html.contains("could not be decoded"))
   assert_true(html.contains("trailing partial line"))
+}
+
+///|
+/// Stamped events render relative offsets and a turn duration; unstamped
+/// events (the 0 sentinel) render no time chips at all.
+test "raw view shows per-event offsets and turn duration from ts" {
+  let stamped = @agent_session.Session(SessionId("t"), system_prompt="")
+    .append(User(UserMessage("go")), unix_ms=1781151318110L)
+    .append(Runtime(RuntimeNotice("working")), unix_ms=1781151319242L)
+    .append(Terminal(Finished("done")), unix_ms=1781151443650L)
+  let html = render(@viz.render_session(stamped, RawLog))
+  assert_true(html.contains("+0.0s"))
+  assert_true(html.contains("+1.1s"))
+  assert_true(html.contains("+2m 05.5s"))
+  assert_true(html.contains("· 2m 05.5s"))
+  let unstamped = @agent_session.Session(SessionId("u"), system_prompt="")
+    .append(User(UserMessage("go")))
+    .append(Terminal(Finished("done")))
+  let plain = render(@viz.render_session(unstamped, RawLog))
+  assert_false(plain.contains("card-ts"))
 }

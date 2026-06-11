@@ -155,6 +155,9 @@ async test "store appends one event without rewriting the in-memory caller value
     fail("expected runtime notice")
   }
   assert_eq(notice.content(), "update")
+  // The store stamps each appended event with the wall clock, and the stamp
+  // survives a reload.
+  assert_true(loaded.events()[0].unix_ms() > 0)
   @fs.rmdir(store.root(), recursive=true)
 }
 

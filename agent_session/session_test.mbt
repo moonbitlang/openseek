@@ -27,6 +27,31 @@ test "session append_event returns the durable event" {
 }
 
 ///|
+test "event timestamps round trip through JSON" {
+  // Key order is pinned because the store's event_log_length/hash markers
+  // cover the exact serialized text.
+  let stamped = @agent_session.Session(SessionId("s1"), system_prompt="p").append(
+    User(UserMessage("hello")),
+    unix_ms=1781144351123L,
+  )
+  let line = stamped.events()[0].to_json().stringify()
+  assert_eq(
+    line,
+    (
+      #|{"sequence":1,"ts":1781144351123,"item":{"kind":"user","payload":{"content":"hello"}}}
+    ),
+  )
+  let decoded : @agent_session.SessionEvent = @json.from_json(@json.parse(line))
+  assert_eq(decoded.unix_ms(), 1781144351123L)
+
+  // Without a clock (purely in-memory appends), the stamp is the 0 sentinel.
+  let unstamped = @agent_session.Session(SessionId("s2"), system_prompt="p").append(
+    User(UserMessage("hi")),
+  )
+  assert_eq(unstamped.events()[0].unix_ms(), 0L)
+}
+
+///|
 test "session projects to DeepSeek chat messages" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
     .append(User(UserMessage("inspect")))

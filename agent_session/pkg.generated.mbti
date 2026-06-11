@@ -31,10 +31,10 @@ pub struct Session {
   // private fields
 } derive(@debug.Debug)
 pub fn Session::Session(SessionId, system_prompt~ : String, events? : @vector.Vector[SessionEvent]) -> Self
-pub fn Session::append(Self, SessionItem) -> Self
-pub fn Session::append_event(Self, SessionItem) -> (Self, SessionEvent)
+pub fn Session::append(Self, SessionItem, unix_ms? : Int64) -> Self
+pub fn Session::append_event(Self, SessionItem, unix_ms? : Int64) -> (Self, SessionEvent)
 pub fn Session::chat_messages(Self) -> Array[@deepseek.ChatMessage]
-pub fn Session::compact(Self, content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> Self raise
+pub fn Session::compact(Self, content~ : String, from_sequence~ : Int, to_sequence~ : Int, unix_ms? : Int64) -> Self raise
 pub fn Session::events(Self) -> @vector.Vector[SessionEvent]
 pub fn Session::id(Self) -> SessionId
 pub fn Session::last_sequence(Self) -> Int
@@ -47,6 +47,7 @@ pub struct SessionEvent {
 } derive(ToJson, @debug.Debug, @json.FromJson)
 pub fn SessionEvent::item(Self) -> SessionItem
 pub fn SessionEvent::sequence(Self) -> Int
+pub fn SessionEvent::unix_ms(Self) -> Int64
 
 pub struct SessionId {
   // private fields

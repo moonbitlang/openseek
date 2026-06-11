@@ -1,7 +1,7 @@
 ///|
 test "parse_load reads a found envelope with header" {
   let text =
-    #|{"found":true,"events":"{\"sequence\":1,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\n","header":{"version":1,"system_prompt":"SYS"}}
+    #|{"found":true,"events":"{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\n","header":{"version":1,"system_prompt":"SYS"}}
   match parse_load(text) {
     Loaded(parsed, system_prompt, header_present) => {
       inspect(parsed.events.length(), content="1")

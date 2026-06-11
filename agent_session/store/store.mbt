@@ -733,7 +733,10 @@ pub async fn SessionStore::append(
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {
     ensure_session_is_current(self, session)
-    let (next, event) = session.append_event(item)
+    let (next, event) = session.append_event(
+      item,
+      unix_ms=@env.now().reinterpret_as_int64(),
+    )
     append_event(self, next, event)
     write_header(self, next, true)
     next
@@ -753,7 +756,12 @@ pub async fn SessionStore::compact(
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {
     ensure_session_is_current(self, session)
-    let next = session.compact(content~, from_sequence~, to_sequence~)
+    let next = session.compact(
+      content~,
+      from_sequence~,
+      to_sequence~,
+      unix_ms=@env.now().reinterpret_as_int64(),
+    )
     let event = match next.events().peek() {
       Some(event) => event
       None => fail("compacted session did not append a summary event")
