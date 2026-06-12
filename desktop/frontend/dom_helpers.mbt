@@ -34,7 +34,7 @@ fn watch_transcript_scroll(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
     guard !transcript_scroll_watched.val else { return }
     transcript_scroll_watched.val = true
     let mut pinned = true
-    add_capture_listener(@js.Cast::from(@dom.document()), "scroll", event => {
+    @interop.add_capture_listener(@js.Cast::from(@dom.document()), "scroll", event => {
       guard event.target().to_element() is Some(element) else { return }
       guard element.get_property("id").to_option() is Some("transcript") else {
         return

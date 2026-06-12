@@ -12,8 +12,8 @@ priv suberror BridgeError {
 ///|
 /// `globalThis.__MoonBit__.openseek`, once the lepus bridge is injected.
 fn openseek_api() -> @js.Value? {
-  guard moonbit_bridge_root() is Some(root) else { return None }
-  js_prop(root, "openseek")
+  guard @interop.moonbit_bridge_root() is Some(root) else { return None }
+  @interop.js_prop(root, "openseek")
 }
 
 ///|
@@ -21,11 +21,11 @@ fn openseek_api() -> @js.Value? {
 /// on is fully injected.
 fn bridge_handles() -> (@js.Value, @js.Value)? {
   guard openseek_api() is Some(api) &&
-    moonbit_bridge_root() is Some(root) &&
-    js_prop(root, "events") is Some(events) &&
-    js_prop(api, "start") is Some(_) &&
-    js_prop(api, "cancel") is Some(_) &&
-    js_prop(events, "on") is Some(_) else {
+    @interop.moonbit_bridge_root() is Some(root) &&
+    @interop.js_prop(root, "events") is Some(events) &&
+    @interop.js_prop(api, "start") is Some(_) &&
+    @interop.js_prop(api, "cancel") is Some(_) &&
+    @interop.js_prop(events, "on") is Some(_) else {
     return None
   }
   Some((api, events))
@@ -74,9 +74,9 @@ fn install_bridge_attempt(
 /// host stops; starts then fail with a clear error, so the rejection itself
 /// carries no extra signal.
 fn open_engine_host(api : @js.Value) -> Unit {
-  guard js_prop(api, "connect") is Some(_) else { return }
+  guard @interop.js_prop(api, "connect") is Some(_) else { return }
   @js.async_run(() => {
-    let _ : @js.Value = js_method_promise(
+    let _ : @js.Value = @interop.js_method_promise(
       api,
       "connect",
       @js.Object::new().to_value(),
@@ -115,7 +115,7 @@ fn wire_engine_events(
 /// structured clones of the host's JSON, so the round trip back through
 /// JSON is lossless; an event without a decodable payload is dropped.
 fn event_payload(event : @js.Value) -> Map[String, Json]? {
-  guard js_prop(event, "payload") is Some(payload) else { return None }
+  guard @interop.js_prop(event, "payload") is Some(payload) else { return None }
   let json = payload.to_json() catch { _ => return None }
   guard json is Object(fields) else { return None }
   Some(fields)
@@ -125,11 +125,11 @@ fn event_payload(event : @js.Value) -> Map[String, Json]? {
 fn started_msg(payload : Map[String, Json]) -> Msg? {
   Some(
     Started(
-      run_id=json_int(payload, "run_id", 0),
-      session=json_text(payload, "session"),
-      model=json_text(payload, "model"),
-      max_steps=json_int(payload, "max_steps", 0),
-      cwd=json_text(payload, "cwd"),
+      run_id=@transcript.json_int(payload, "run_id", 0),
+      session=@transcript.json_text(payload, "session"),
+      model=@transcript.json_text(payload, "model"),
+      max_steps=@transcript.json_int(payload, "max_steps", 0),
+      cwd=@transcript.json_text(payload, "cwd"),
     ),
   )
 }
@@ -137,8 +137,8 @@ fn started_msg(payload : Map[String, Json]) -> Msg? {
 ///|
 fn engine_msg(payload : Map[String, Json]) -> Msg? {
   guard payload.get("event") is Some(Object(raw)) else { return None }
-  guard decode_engine_event(raw) is Some(event) else { return None }
-  Some(Engine(json_int(payload, "run_id", 0), event))
+  guard @transcript.decode_engine_event(raw) is Some(event) else { return None }
+  Some(Engine(@transcript.json_int(payload, "run_id", 0), event))
 }
 
 ///|
@@ -147,9 +147,12 @@ fn engine_msg(payload : Map[String, Json]) -> Msg? {
 fn error_msg(payload : Map[String, Json]) -> Msg? {
   Some(
     Error(
-      run_id=json_int(payload, "run_id", EmptyRunId),
-      message=non_empty_or(json_text(payload, "message"), "error"),
-      diagnostics=json_text(payload, "diagnostics"),
+      run_id=@transcript.json_int(payload, "run_id", EmptyRunId),
+      message=@transcript.non_empty_or(
+        @transcript.json_text(payload, "message"),
+        "error",
+      ),
+      diagnostics=@transcript.json_text(payload, "diagnostics"),
     ),
   )
 }
@@ -158,9 +161,9 @@ fn error_msg(payload : Map[String, Json]) -> Msg? {
 fn finished_msg(payload : Map[String, Json]) -> Msg? {
   Some(
     Finished(
-      run_id=json_int(payload, "run_id", 0),
-      status=json_text(payload, "status"),
-      answer=json_text(payload, "answer"),
+      run_id=@transcript.json_int(payload, "run_id", 0),
+      status=@transcript.json_text(payload, "status"),
+      answer=@transcript.json_text(payload, "answer"),
     ),
   )
 }
@@ -169,10 +172,10 @@ fn finished_msg(payload : Map[String, Json]) -> Msg? {
 /// Call one engine-host op and wait for its reply. Raises when the bridge
 /// is missing, the call throws, or the op rejects.
 async fn bridge_request(op : String, payload : @js.Value) -> @js.Value {
-  guard openseek_api() is Some(api) && js_prop(api, op) is Some(_) else {
+  guard openseek_api() is Some(api) && @interop.js_prop(api, op) is Some(_) else {
     raise BridgeError("OpenSeek bridge unavailable")
   }
-  js_method_promise(api, op, payload).wait()
+  @interop.js_method_promise(api, op, payload).wait()
 }
 
 ///|
@@ -182,7 +185,7 @@ fn bridge_error_text(error : Error) -> String {
   match error {
     BridgeError(message) => message
     @js.Error_(value) =>
-      if js_prop(value, "message") is Some(message) &&
+      if @interop.js_prop(value, "message") is Some(message) &&
         (@js.Cast::into(message) : String?) is Some(text) &&
         !text.is_empty() {
         text
@@ -291,7 +294,7 @@ fn fetch_sessions(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
           return
         }
       }
-      match decode_sessions_reply(reply_json_text(reply)) {
+      match @transcript.decode_sessions_reply(reply_json_text(reply)) {
         Some(items) => scheduler.add(dispatch(SessionsLoaded(items)))
         None =>
           scheduler.add(dispatch(SessionsFailed("malformed session list")))
@@ -321,7 +324,7 @@ fn open_session(dispatch : @cmd.Dispatch[Msg], session_id : String) -> @cmd.Cmd 
           return
         }
       }
-      match transcript_from_session_json(reply_json_text(reply)) {
+      match @transcript.transcript_from_session_json(reply_json_text(reply)) {
         Some(items) =>
           scheduler.add(dispatch(SessionLoaded(session=session_id, items~)))
         None =>
@@ -366,7 +369,7 @@ async fn steer_delivered(text : String, run_id : Int) -> Bool {
   payload["text"] = text
   payload["run_id"] = run_id
   let reply = bridge_request("steer", payload.to_value())
-  js_prop(reply, "steered") is Some(flag) &&
+  @interop.js_prop(reply, "steered") is Some(flag) &&
   (@js.Cast::into(flag) : Bool?) is Some(true)
 }
 

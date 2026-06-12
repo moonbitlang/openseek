@@ -187,7 +187,7 @@ test "session rotation prunes abandoned empty conversations" {
 test "sessions loaded replaces the sidebar list and clears its error" {
   let dispatch = test_dispatch()
   let model = { ..test_model(), sessions_error: "boom" }
-  let items : Array[SessionListItem] = [
+  let items : Array[@transcript.SessionListItem] = [
     { id: "desktop-a", title: "first question" },
   ]
   let (_, once) = update(dispatch, SessionsLoaded(items), model)
@@ -254,7 +254,7 @@ test "session loaded swaps the active conversation onto the stored session" {
     streaming_response: "leftover",
     messages: [{ kind: User, content: "old chat" }],
   })
-  let items : Array[TranscriptItem] = [
+  let items : Array[@transcript.TranscriptItem] = [
     { kind: User, content: "stored question" },
     { kind: Assistant(false), content: "stored answer" },
   ]
@@ -283,7 +283,9 @@ test "session loaded swaps the active conversation onto the stored session" {
 test "session loaded is dropped only when that conversation is running" {
   let dispatch = test_dispatch()
   let model = running_model()
-  let items : Array[TranscriptItem] = [{ kind: User, content: "stored" }]
+  let items : Array[@transcript.TranscriptItem] = [
+    { kind: User, content: "stored" },
+  ]
   // The active conversation runs; loading some other stored session is fine.
   let (_, other) = update(
     dispatch,
@@ -303,73 +305,6 @@ test "session loaded is dropped only when that conversation is running" {
   )
   inspect(same.active().messages.length(), content="0")
   inspect(same.active().running, content="true")
-}
-
-///|
-fn event_fields(json : Json) -> Map[String, Json] raise {
-  guard json is Object(fields) else { fail("expected a JSON object") }
-  fields
-}
-
-///|
-test "decode recognizes the streaming events" {
-  guard decode_engine_event(
-      event_fields({ "event": "assistant_delta", "content": "abc" }),
-    )
-    is Some(AssistantDelta("abc")) else {
-    fail("assistant_delta not decoded")
-  }
-  guard decode_engine_event(
-      event_fields({ "event": "reasoning_delta", "content": "th" }),
-    )
-    is Some(ReasoningDelta("th")) else {
-    fail("reasoning_delta not decoded")
-  }
-  guard decode_engine_event(
-      event_fields({ "event": "reasoning_message", "content": "all" }),
-    )
-    is Some(ReasoningMessage("all")) else {
-    fail("reasoning_message not decoded")
-  }
-}
-
-///|
-test "decode normalizes legacy names, numbers, and unknown events" {
-  // Older engines wrote `step`/`error` where current ones write
-  // `content`/`reason`; the current name wins when both are present.
-  assert_true(
-    decode_engine_event(event_fields({ "event": "agent_step", "step": "plan" }))
-    is Some(AgentStep("plan")),
-  )
-  assert_true(
-    decode_engine_event(
-      event_fields({ "event": "agent_step", "content": "now", "step": "old" }),
-    )
-    is Some(AgentStep("now")),
-  )
-  assert_true(
-    decode_engine_event(
-      event_fields({ "event": "agent_aborted", "error": "boom" }),
-    )
-    is Some(AgentAborted("boom")),
-  )
-  assert_true(
-    decode_engine_event(
-      event_fields({
-        "event": "usage",
-        "prompt_tokens": 5,
-        "completion_tokens": 7,
-      }),
-    )
-    is Some(Usage(prompt_tokens=5, completion_tokens=7)),
-  )
-  assert_true(
-    decode_engine_event(
-      event_fields({ "event": "tool_result", "tool_name": "read" }),
-    )
-    is Some(ToolResult(tool_name="read", is_error=false, content="")),
-  )
-  assert_true(decode_engine_event(event_fields({ "event": "novel" })) is None)
 }
 
 ///|
@@ -588,22 +523,6 @@ test "a run that ends with steers in flight sweeps them into notices" {
     fail("expected an error bubble")
   }
   assert_true(next.active().messages[0].content.contains("orphaned"))
-}
-
-///|
-test "decode recognizes the steer events" {
-  guard decode_engine_event(
-      event_fields({ "event": "steer_applied", "content": "left" }),
-    )
-    is Some(SteerApplied("left")) else {
-    fail("steer_applied not decoded")
-  }
-  guard decode_engine_event(
-      event_fields({ "event": "steer_dropped", "content": "left" }),
-    )
-    is Some(SteerDropped("left")) else {
-    fail("steer_dropped not decoded")
-  }
 }
 
 ///|

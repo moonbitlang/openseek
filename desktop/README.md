@@ -10,7 +10,10 @@ A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://moonca
 - `internal/home/` — the user's home directory and `~` expansion.
 - `internal/userdirs/` — the user's Documents folder, answered by each platform's authority: the Windows known folder, the XDG user-dirs override, or `~/Documents`.
 - `internal/event/` — engine event decoding.
-- `frontend/` — the JS (Rabbita) UI bundled to `frontend.js`.
+- `frontend/` — the JS (Rabbita) UI bundled to `frontend.js`: the Elm-style model/update/view plus the command files talking to the host bridge.
+- `frontend/transcript/` — pure decoders from the engine's wire data to display items: engine events, session-list and session-replay replies, runtime updates.
+- `frontend/markdown/` — markdown rendering for transcript content (cmark to Rabbita nodes, panic-guarded).
+- `frontend/interop/` — the typed `@js` helpers shared by the frontend; no frontend package embeds raw JavaScript.
 - `lepus/` — the Lepus framework, vendored as a git submodule.
 
 ## Sessions and streaming

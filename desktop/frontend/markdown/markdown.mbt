@@ -15,7 +15,7 @@
 /// freeze on the last good frame forever. MoonBit panics on the js target
 /// surface as JS exceptions, so `@js.Error_::wrap` is the one place a cmark
 /// crash can be contained; the fallback shows the raw text instead.
-fn markdown_nodes(source : String) -> Array[@html.Html] {
+pub fn markdown_nodes(source : String) -> Array[@html.Html] {
   @js.Error_::wrap(() => @js.Value::cast_from(parsed_markdown_nodes(source))) catch {
     _ => [@html.pre(class="markdown-fallback", source)]
   }

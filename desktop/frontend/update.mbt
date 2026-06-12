@@ -1,51 +1,4 @@
 ///|
-fn non_empty_or(value : String, fallback : String) -> String {
-  if value.trim().is_empty() {
-    fallback
-  } else {
-    value
-  }
-}
-
-///|
-fn parse_runtime_update(content : String) -> RuntimeUpdateView {
-  let mut status = ""
-  let diagnostics : Array[String] = []
-  for raw in content.split("\n") {
-    let line = raw.to_owned()
-    if line == "[moon_check update]" {
-      continue
-    }
-    let is_metadata = if line.split_once("=") is Some((key, value)) {
-      let key = key.to_owned()
-      if runtime_metadata_keys.contains(key) {
-        if key == "status" {
-          status = value.to_owned()
-        }
-        true
-      } else {
-        false
-      }
-    } else {
-      false
-    }
-    if !is_metadata {
-      diagnostics.push(line)
-    }
-  }
-  { status, diagnostics }
-}
-
-///|
-fn runtime_update_title(update : RuntimeUpdateView) -> String {
-  if update.status.is_empty() {
-    "moon_check"
-  } else {
-    "moon_check \{update.status}"
-  }
-}
-
-///|
 fn should_append_answer(conv : Conversation, answer : String) -> Bool {
   if answer.trim().is_empty() {
     false
@@ -75,7 +28,7 @@ fn scroll_if_active(model : Model, session_id : String) -> @cmd.Cmd {
 /// when this conversation is the one on screen) and the new conversation.
 fn apply_engine_event(
   conv : Conversation,
-  event : EngineEvent,
+  event : @transcript.EngineEvent,
 ) -> (Bool, Conversation) {
   match event {
     AgentStep(detail) =>
@@ -120,13 +73,13 @@ fn apply_engine_event(
       }
     }
     RuntimeUpdate(content) => {
-      let update = parse_runtime_update(content)
+      let update = @transcript.parse_runtime_update(content)
       let next = { ..conv, watcher_status: update.status }
       if !update.status.is_empty() || update.diagnostics.length() > 0 {
         (
           true,
           next.append_item(
-            Tool(runtime_update_title(update), false),
+            Tool(@transcript.runtime_update_title(update), false),
             update.diagnostics.join("\n"),
           ),
         )
@@ -140,7 +93,7 @@ fn apply_engine_event(
       (
         true,
         conv.append_item(
-          Tool(non_empty_or(tool_name, "tool"), is_error),
+          Tool(@transcript.non_empty_or(tool_name, "tool"), is_error),
           content,
         ),
       )
@@ -148,8 +101,8 @@ fn apply_engine_event(
       (
         true,
         conv.append_item(
-          Tool(non_empty_or(tool_name, "tool"), true),
-          non_empty_or(reason, "tool call decode error"),
+          Tool(@transcript.non_empty_or(tool_name, "tool"), true),
+          @transcript.non_empty_or(reason, "tool call decode error"),
         ),
       )
     AgentFinished(answer) => {

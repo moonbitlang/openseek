@@ -51,7 +51,7 @@ fn conversation_title(conv : Conversation) -> String {
       }
     }
   }
-  non_empty_or(conv.task.trim().to_owned(), "OpenSeek Desktop")
+  @transcript.non_empty_or(conv.task.trim().to_owned(), "OpenSeek Desktop")
 }
 
 ///|
@@ -117,7 +117,7 @@ fn session_rows(
       item.id == model.active_session {
       conversation_title(conv)
     } else {
-      non_empty_or(item.title, item.id)
+      @transcript.non_empty_or(item.title, item.id)
     }
     rows.push(session_row(dispatch, model, item.id, label))
   }
@@ -201,7 +201,7 @@ fn inline_code_nodes(content : String) -> Array[@html.Html] {
 }
 
 ///|
-fn transcript_item_view(item : TranscriptItem) -> @html.Html {
+fn transcript_item_view(item : @transcript.TranscriptItem) -> @html.Html {
   match item.kind {
     User =>
       @html.div(class="msg", [
@@ -217,7 +217,10 @@ fn transcript_item_view(item : TranscriptItem) -> @html.Html {
       let content = if is_danger {
         @html.div(class="msg-content danger", inline_code_nodes(item.content))
       } else {
-        @html.div(class="msg-content markdown", markdown_nodes(item.content))
+        @html.div(
+          class="msg-content markdown",
+          @markdown.markdown_nodes(item.content),
+        )
       }
       @html.div(class="msg", [
         @html.div(class="avatar agent", "✦"),
@@ -231,7 +234,7 @@ fn transcript_item_view(item : TranscriptItem) -> @html.Html {
     Tool(name, is_error) =>
       @html.div(class="tool-row", [
         @html.div(class=tool_class(is_error), [
-          @html.div(class="tool-head", non_empty_or(name, "tool")),
+          @html.div(class="tool-head", @transcript.non_empty_or(name, "tool")),
           @html.pre(item.content),
         ]),
       ])
@@ -245,7 +248,10 @@ fn reasoning_view(content : String, streaming~ : Bool) -> @html.Html {
     @html.div(class="avatar agent", "✧"),
     @html.div(class="msg-body", [
       @html.div(class="msg-role", "Thinking"),
-      @html.div(class="msg-content markdown reasoning", markdown_nodes(content)),
+      @html.div(
+        class="msg-content markdown reasoning",
+        @markdown.markdown_nodes(content),
+      ),
     ]),
   ])
 }
@@ -261,7 +267,7 @@ fn streaming_response_view(content : String) -> @html.Html {
     @html.div(class="avatar agent", "✦"),
     @html.div(class="msg-body", [
       @html.div(class="msg-role", "openseek"),
-      @html.div(class="msg-content markdown", markdown_nodes(content)),
+      @html.div(class="msg-content markdown", @markdown.markdown_nodes(content)),
     ]),
   ])
 }

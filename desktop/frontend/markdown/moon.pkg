@@ -1,0 +1,7 @@
+import {
+  "moonbit-community/cmark/cmark",
+  "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/js",
+}
+
+supported_targets = "js"

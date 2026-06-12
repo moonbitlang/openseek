@@ -23,12 +23,6 @@ const CustomApiUrlStorageKey : String = "openseek.custom_api_url"
 const OpenseekApiUrl : String = "https://openseek-api.moonbitlang.cn/chat/completions"
 
 ///|
-let runtime_metadata_keys : Array[String] = [
-  "events", "id", "key", "cwd", "command", "status", "seq", "exit", "truncated",
-  "max_output_chars", "restart_count", "restart_limit", "restart_reason",
-]
-
-///|
 /// Which chat-completions endpoint the engine talks to. `Openseek` is the
 /// zero-config default — the proxy does not validate API keys. `Deepseek` is
 /// the official endpoint and needs the user's own key. `Custom` is any other
@@ -59,35 +53,6 @@ fn ApiProvider::parse(value : String) -> ApiProvider {
     "custom" => Custom
     _ => Openseek
   }
-}
-
-///|
-priv enum ItemKind {
-  User
-  Assistant(Bool)
-  Reasoning
-  Tool(String, Bool)
-}
-
-///|
-priv struct TranscriptItem {
-  kind : ItemKind
-  content : String
-}
-
-///|
-priv struct RuntimeUpdateView {
-  status : String
-  diagnostics : Array[String]
-}
-
-///|
-/// One sidebar entry from the engine's durable session list: the session id
-/// and its display title (first user message, already truncated engine-side;
-/// empty for a session with no user message yet).
-priv struct SessionListItem {
-  id : String
-  title : String
 }
 
 ///|
@@ -124,7 +89,7 @@ priv struct Conversation {
   // Shown as pending bubbles until then; leftovers are swept into dropped
   // notices when the run ends, so the text never vanishes silently.
   pending_steers : Array[String]
-  messages : Array[TranscriptItem]
+  messages : Array[@transcript.TranscriptItem]
 }
 
 ///|
@@ -152,7 +117,7 @@ priv struct Model {
   // Durable sessions known to the engine's store, newest first, refreshed
   // when the bridge connects and when a run reaches the store. A new
   // conversation appears here once its first turn has been persisted.
-  sessions : Array[SessionListItem]
+  sessions : Array[@transcript.SessionListItem]
   // Why the sidebar list could not be refreshed; empty when the last refresh
   // succeeded.
   sessions_error : String
@@ -189,10 +154,10 @@ priv enum Msg {
   Stop
   NewChat
   SessionRotated(String)
-  SessionsLoaded(Array[SessionListItem])
+  SessionsLoaded(Array[@transcript.SessionListItem])
   SessionsFailed(String)
   OpenSession(String)
-  SessionLoaded(session~ : String, items~ : Array[TranscriptItem])
+  SessionLoaded(session~ : String, items~ : Array[@transcript.TranscriptItem])
   // The transcript's at-bottom state changed (the user scrolled away from,
   // or back to, the tail). Reported by the DOM scroll watcher.
   TranscriptPinned(Bool)
@@ -205,7 +170,7 @@ priv enum Msg {
     max_steps~ : Int,
     cwd~ : String
   )
-  Engine(Int, EngineEvent)
+  Engine(Int, @transcript.EngineEvent)
   // The start request for that conversation never produced a run (the bridge
   // call failed or the host refused it).
   Failed(session~ : String, message~ : String)
@@ -398,7 +363,7 @@ fn Conversation::clear_streams(self : Conversation) -> Conversation {
 ///|
 fn Conversation::append_item(
   self : Conversation,
-  kind : ItemKind,
+  kind : @transcript.ItemKind,
   content : String,
 ) -> Conversation {
   let messages = self.messages.copy()

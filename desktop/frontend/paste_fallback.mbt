@@ -11,7 +11,7 @@ fn install_clipboard_paste_bridge() -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     guard !clipboard_paste_installed.val else { return }
     clipboard_paste_installed.val = true
-    add_capture_listener(
+    @interop.add_capture_listener(
       @js.Cast::from(@dom.document()),
       "keydown",
       handle_paste_shortcut,
@@ -42,9 +42,11 @@ fn handle_paste_shortcut(event : @dom.Event) -> Unit {
 ///|
 /// The host's clipboard extension, when its text read is available.
 fn clipboard_read_api() -> @js.Value? {
-  guard moonbit_bridge_root() is Some(root) else { return None }
-  guard js_prop(root, "clipboard") is Some(clipboard) else { return None }
-  guard js_prop(clipboard, "readText") is Some(_) else { return None }
+  guard @interop.moonbit_bridge_root() is Some(root) else { return None }
+  guard @interop.js_prop(root, "clipboard") is Some(clipboard) else {
+    return None
+  }
+  guard @interop.js_prop(clipboard, "readText") is Some(_) else { return None }
   Some(clipboard)
 }
 
@@ -53,12 +55,12 @@ async fn paste_from_clipboard(
   clipboard : @js.Value,
   target : @js.Value,
 ) -> Unit {
-  let reply = js_method_promise(
+  let reply = @interop.js_method_promise(
     clipboard,
     "readText",
     @js.Object::new().to_value(),
   ).wait()
-  let text = match js_prop(reply, "text") {
+  let text = match @interop.js_prop(reply, "text") {
     Some(value) =>
       match (@js.Cast::into(value) : String?) {
         Some(text) => text
@@ -101,7 +103,7 @@ fn editable_paste_target(target : @dom.EventTarget) -> @js.Value? {
 
 ///|
 fn input_type(input : @js.Value) -> String {
-  match js_prop(input, "type") {
+  match @interop.js_prop(input, "type") {
     Some(value) =>
       match (@js.Cast::into(value) : String?) {
         Some(kind) => kind.to_lower()
@@ -155,7 +157,7 @@ fn insert_paste_text(
 /// `selectionStart`/`selectionEnd`, which are numbers on text controls but
 /// `null` on input types without selection support.
 fn selection_index(target : @js.Value, key : String, fallback : Int) -> Int {
-  guard js_prop(target, key) is Some(value) else { return fallback }
+  guard @interop.js_prop(target, key) is Some(value) else { return fallback }
   match (@js.Cast::into(value) : Int?) {
     Some(index) => index
     None => fallback

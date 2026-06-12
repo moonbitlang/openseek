@@ -1,10 +1,10 @@
 // Shared helpers for talking to the page's JavaScript through rabbita's
 // typed `@js` values. Together with `@dom` they are the frontend's whole
-// interop surface: no file in this package embeds raw JavaScript.
+// interop surface: no frontend package embeds raw JavaScript.
 
 ///|
 /// `value[key]`, with JS `undefined` and `null` both folded to `None`.
-fn js_prop(value : @js.Value, key : String) -> @js.Value? {
+pub fn js_prop(value : @js.Value, key : String) -> @js.Value? {
   let prop : @js.Value = value.get_with_string(key)
   if prop.is_undefined() || prop.is_null() {
     None
@@ -18,7 +18,7 @@ fn js_prop(value : @js.Value, key : String) -> @js.Value? {
 /// A capture-phase listener on the document sees events that do not bubble
 /// (like scroll) and keeps working when a render replaces the elements the
 /// events originate from.
-fn add_capture_listener(
+pub fn add_capture_listener(
   target : @js.Value,
   event_type : String,
   listener : (@dom.Event) -> Unit,
@@ -36,7 +36,7 @@ fn add_capture_listener(
 /// `Promise.resolve(target[method](payload))`: one settled promise whether
 /// the method returned a promise, returned a plain value, or threw
 /// synchronously — the throw surfaces here as the raised error.
-fn js_method_promise(
+pub fn js_method_promise(
   target : @js.Value,
   name : String,
   payload : @js.Value,
@@ -53,6 +53,6 @@ fn js_method_promise(
 
 ///|
 /// `globalThis.__MoonBit__` — the API object lepus injects into its webview.
-fn moonbit_bridge_root() -> @js.Value? {
+pub fn moonbit_bridge_root() -> @js.Value? {
   js_prop(@js.globalThis, "__MoonBit__")
 }

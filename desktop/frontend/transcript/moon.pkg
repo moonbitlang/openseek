@@ -1,0 +1,5 @@
+import {
+  "moonbitlang/core/json",
+}
+
+supported_targets = "js"

@@ -36,7 +36,7 @@ fn save_custom_api_url(url : String) -> @cmd.Cmd {
 fn load_setting(storage_key : String) -> String {
   @js.Error_::wrap(
     fn() {
-      guard js_prop(@js.globalThis, "localStorage") is Some(storage) else {
+      guard @interop.js_prop(@js.globalThis, "localStorage") is Some(storage) else {
         return @js.Value::cast_from("")
       }
       storage.apply_with_string("getItem", [@js.Value::cast_from(storage_key)])
@@ -52,7 +52,7 @@ fn load_setting(storage_key : String) -> String {
 fn save_setting(storage_key : String, value : String) -> Unit {
   @js.Error_::wrap(
     fn() {
-      guard js_prop(@js.globalThis, "localStorage") is Some(storage) else {
+      guard @interop.js_prop(@js.globalThis, "localStorage") is Some(storage) else {
         return @js.Value::cast_from(())
       }
       storage.apply_with_string("setItem", [

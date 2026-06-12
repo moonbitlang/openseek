@@ -9,7 +9,7 @@
 /// Parse a `list_sessions` reply into sidebar entries. `None` only for
 /// structurally unusable JSON; unrecognized entries are skipped so one odd
 /// session cannot blank the whole sidebar.
-fn decode_sessions_reply(text : String) -> Array[SessionListItem]? {
+pub fn decode_sessions_reply(text : String) -> Array[SessionListItem]? {
   let json = @json.parse(text) catch { _ => return None }
   guard json is Object(reply) else { return None }
   guard reply.get("sessions") is Some(Array(entries)) else { return None }
@@ -29,7 +29,7 @@ fn decode_sessions_reply(text : String) -> Array[SessionListItem]? {
 /// items, reconstructing what the live transcript showed while the
 /// conversation was running: reasoning before the answer, tool cards,
 /// runtime updates, and error bubbles for turns that did not finish.
-fn transcript_from_session_json(text : String) -> Array[TranscriptItem]? {
+pub fn transcript_from_session_json(text : String) -> Array[TranscriptItem]? {
   let json = @json.parse(text) catch { _ => return None }
   guard json is Object(reply) else { return None }
   guard reply.get("session") is Some(Object(session)) else { return None }
@@ -46,7 +46,7 @@ fn transcript_from_session_json(text : String) -> Array[TranscriptItem]? {
 }
 
 ///|
-fn json_text(fields : Map[String, Json], key : String) -> String {
+pub fn json_text(fields : Map[String, Json], key : String) -> String {
   match fields.get(key) {
     Some(String(value)) => value
     _ => ""
@@ -54,7 +54,11 @@ fn json_text(fields : Map[String, Json], key : String) -> String {
 }
 
 ///|
-fn json_int(fields : Map[String, Json], key : String, fallback : Int) -> Int {
+pub fn json_int(
+  fields : Map[String, Json],
+  key : String,
+  fallback : Int,
+) -> Int {
   match fields.get(key) {
     Some(Number(value, ..)) => value.to_int()
     _ => fallback

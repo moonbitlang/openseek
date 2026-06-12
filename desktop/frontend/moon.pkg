@@ -1,5 +1,4 @@
 import {
-  "moonbit-community/cmark/cmark",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "moonbit-community/rabbita",
@@ -7,6 +6,9 @@ import {
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/js",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/markdown",
+  "openseek_desktop/frontend/transcript",
 }
 
 supported_targets = "js"

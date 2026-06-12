@@ -3,7 +3,7 @@
 /// tagged by a `String`; this enum is the form `update()` matches on, so
 /// each case carries only the fields that event actually uses and the match
 /// is exhaustive.
-priv enum EngineEvent {
+pub(all) enum EngineEvent {
   AgentStep(String)
   AssistantDelta(String)
   ReasoningDelta(String)
@@ -27,7 +27,7 @@ priv enum EngineEvent {
 /// Normalize the raw engine-event JSON into a typed event. Unknown event
 /// names decode to `None` and are dropped at the bridge, so the
 /// stringly-typed tag never escapes into the update logic.
-fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
+pub fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
   // Older engine builds wrote `step` and `error` where current ones write
   // `content` and `reason`; the current name wins when both are present.
   let content = json_first_text(raw, "content", "step")
