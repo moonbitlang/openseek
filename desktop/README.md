@@ -7,6 +7,7 @@ A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://moonca
 - `internal/appdirs/` — the installed app's own footprint: bundled frontend and engine lookup, the per-user runtime directory.
 - `internal/sessiondirs/` — where conversations live on disk: per-session workspace directories and the durable session store root.
 - `internal/env/` — the blank-is-unset convention for reading optional configuration from the environment and payload fields.
+- `internal/xdg/` — the slice of the XDG conventions the app consults: the user-dirs Documents override.
 - `internal/event/` — engine event decoding.
 - `frontend/` — the JS (Rabbita) UI bundled to `frontend.js`.
 - `lepus/` — the Lepus framework, vendored as a git submodule.

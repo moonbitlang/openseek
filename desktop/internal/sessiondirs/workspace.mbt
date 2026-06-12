@@ -40,7 +40,7 @@ fn safe_workspace_id(session : String) -> Bool {
 async fn workspace_root() -> String? {
   guard @env.home_dir() is Some(home) else { return None }
   let home_path : @mbpath.Path = home
-  let documents : @mbpath.Path = match xdg_documents_dir(home) {
+  let documents : @mbpath.Path = match @xdg.documents_dir(home) {
     Some(dir) => dir
     None => home_path.join("Documents")
   }
@@ -56,32 +56,4 @@ async fn is_dir(path : String) -> Bool {
     _ => return false
   }
   kind is Directory
-}
-
-///|
-/// The XDG user-dirs override for the Documents folder, read from
-/// `${XDG_CONFIG_HOME:-~/.config}/user-dirs.dirs` (Linux desktops localize
-/// or move Documents there; the file does not exist on macOS or Windows).
-/// The spec marks a disabled folder by pointing it at `$HOME` itself, which
-/// `workspace_root` then resolves to `~/OpenSeek` naturally.
-async fn xdg_documents_dir(home : String) -> String? {
-  let config_dir = match @env.get("XDG_CONFIG_HOME") {
-    Some(dir) => dir
-    None => (home : @mbpath.Path).join(".config").to_string()
-  }
-  let file = (config_dir : @mbpath.Path).join("user-dirs.dirs").to_string()
-  let content = @fs.read_file(file).text() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return None
-  }
-  for line in content.split("\n") {
-    let line = line.trim()
-    guard line.has_prefix("XDG_DOCUMENTS_DIR=") else { continue }
-    let value = line["XDG_DOCUMENTS_DIR=".length():].trim(chars="\"")
-    if value.has_prefix("$HOME") {
-      return Some(home + value["$HOME".length():].to_owned())
-    }
-    return Some(value.to_owned())
-  }
-  None
 }
