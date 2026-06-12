@@ -6,6 +6,7 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/x/crypto",
   "openseek_desktop/internal/env",
+  "openseek_desktop/internal/home",
 }
 
 import {

@@ -207,7 +207,8 @@ To build the per-user NSIS installer, install NSIS so `makensis.exe` is on
 `desktop/dist/tools/nsis-3.12/makensis.exe`.
 
 The installer installs under
-`%LOCALAPPDATA%\Programs\OpenSeek Desktop`, creates Start Menu shortcuts, and
+`%LOCALAPPDATA%\Programs\OpenSeek Desktop`, creates Start Menu shortcuts,
+offers optional desktop-shortcut and launch-after-install checkboxes, and
 registers an HKCU uninstall entry, so it does not require administrator
 privileges.
 

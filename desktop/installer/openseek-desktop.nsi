@@ -37,8 +37,11 @@ VIAddVersionKey "ProductVersion" "${APP_VERSION}"
 VIAddVersionKey "LegalCopyright" "${APP_PUBLISHER}"
 
 !define MUI_ABORTWARNING
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch ${APP_NAME}"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 
@@ -50,6 +53,7 @@ VIAddVersionKey "LegalCopyright" "${APP_PUBLISHER}"
 Section "OpenSeek Desktop" SecInstall
   SetShellVarContext current
   SetOutPath "$INSTDIR"
+  SectionIn RO
 
   File /r "${SOURCE_DIR}\*"
 
@@ -69,9 +73,15 @@ Section "OpenSeek Desktop" SecInstall
   WriteRegDWORD HKCU "${APP_UNINSTALL_KEY}" "NoRepair" 1
 SectionEnd
 
+Section /o "Desktop Shortcut" SecDesktopShortcut
+  SetShellVarContext current
+  CreateShortcut "$DESKTOP\OpenSeek Desktop.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${APP_EXE}" 0
+SectionEnd
+
 Section "Uninstall"
   SetShellVarContext current
 
+  Delete "$DESKTOP\OpenSeek Desktop.lnk"
   Delete "$SMPROGRAMS\OpenSeek\OpenSeek Desktop.lnk"
   Delete "$SMPROGRAMS\OpenSeek\Uninstall OpenSeek Desktop.lnk"
   RMDir "$SMPROGRAMS\OpenSeek"

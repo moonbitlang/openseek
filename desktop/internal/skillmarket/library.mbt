@@ -25,10 +25,10 @@ pub struct InstalledSkill {
 } derive(ToJson)
 
 ///|
-/// Where the library lives: `OPENSEEK_GLOBAL_SKILLS_DIR`, else
-/// `$HOME/.openseek/skills`. Deliberately resolved exactly like the engine
-/// resolves it (HOME only, no USERPROFILE fallback) — installing somewhere
-/// the engine never reads would be a silent no-op.
+/// Where the library lives: `OPENSEEK_GLOBAL_SKILLS_DIR`, else the user's
+/// home directory (`HOME`, or `USERPROFILE` on Windows) plus
+/// `/.openseek/skills`. Deliberately resolved like the engine resolves it:
+/// installing somewhere the engine never reads would be a silent no-op.
 fn resolved_library_dir(overridden : String?) -> String raise SkillMarketError {
   if overridden is Some(dir) {
     return dir
@@ -37,7 +37,7 @@ fn resolved_library_dir(overridden : String?) -> String raise SkillMarketError {
     !dir.trim().is_empty() {
     return dir
   }
-  if @env.get("HOME") is Some(home) && !home.trim().is_empty() {
+  if @home.dir() is Some(home) && !home.trim().is_empty() {
     return home + "/.openseek/skills"
   }
   raise SkillMarketError(
