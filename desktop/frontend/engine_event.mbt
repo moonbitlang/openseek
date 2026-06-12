@@ -1,7 +1,8 @@
 ///|
-/// A normalized engine event. The raw bridge callback is positional and tagged
-/// by a `String`; this enum is the form `update()` matches on, so each case
-/// carries only the fields that event actually uses and the match is exhaustive.
+/// A normalized engine event. The bridge's `openseek.event` payload is
+/// tagged by a `String`; this enum is the form `update()` matches on, so
+/// each case carries only the fields that event actually uses and the match
+/// is exhaustive.
 priv enum EngineEvent {
   AgentStep(String)
   AssistantDelta(String)
@@ -23,30 +24,39 @@ priv enum EngineEvent {
 }
 
 ///|
-/// Normalize the positional bridge payload into a typed event. Unknown event
-/// names decode to `None` and are dropped at the bridge, so the stringly-typed
-/// tag never escapes into the update logic.
-fn decode_engine_event(
-  event_name : String,
-  content : String,
-  tool_name : String,
-  is_error : Bool,
-  prompt_tokens : Int,
-  completion_tokens : Int,
-  answer : String,
-  reason : String,
-) -> EngineEvent? {
-  match event_name {
+/// Normalize the raw engine-event JSON into a typed event. Unknown event
+/// names decode to `None` and are dropped at the bridge, so the
+/// stringly-typed tag never escapes into the update logic.
+fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
+  // Older engine builds wrote `step` and `error` where current ones write
+  // `content` and `reason`; the current name wins when both are present.
+  let content = json_first_text(raw, "content", "step")
+  let reason = json_first_text(raw, "reason", "error")
+  let tool_name = json_text(raw, "tool_name")
+  match json_text(raw, "event") {
     "agent_step" => Some(AgentStep(content))
     "assistant_delta" => Some(AssistantDelta(content))
     "reasoning_delta" => Some(ReasoningDelta(content))
     "reasoning_message" => Some(ReasoningMessage(content))
     "assistant_message" => Some(AssistantMessage(content))
     "runtime_update" => Some(RuntimeUpdate(content))
-    "usage" => Some(Usage(prompt_tokens~, completion_tokens~))
-    "tool_result" => Some(ToolResult(tool_name~, is_error~, content~))
+    "usage" =>
+      Some(
+        Usage(
+          prompt_tokens=json_int(raw, "prompt_tokens", 0),
+          completion_tokens=json_int(raw, "completion_tokens", 0),
+        ),
+      )
+    "tool_result" =>
+      Some(
+        ToolResult(
+          tool_name~,
+          is_error=raw.get("is_error") is Some(True),
+          content~,
+        ),
+      )
     "tool_call_decode_error" => Some(ToolCallDecodeError(tool_name~, reason~))
-    "agent_finished" => Some(AgentFinished(answer))
+    "agent_finished" => Some(AgentFinished(json_text(raw, "answer")))
     "agent_aborted" => Some(AgentAborted(reason))
     "max_steps_exhausted" => Some(MaxStepsExhausted)
     "agent_setup_failed" => Some(AgentSetupFailed(reason))

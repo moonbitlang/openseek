@@ -1,43 +1,209 @@
+// The engine-host bridge: typed access to the ops and events the desktop
+// host (`internal/host`) exposes through lepus's injected
+// `globalThis.__MoonBit__` object. Ops are promise-returning calls on
+// `__MoonBit__.openseek`; engine progress arrives as `openseek.*` events on
+// `__MoonBit__.events` and is decoded here into messages.
+
 ///|
+priv suberror BridgeError {
+  BridgeError(String)
+}
+
+///|
+/// `globalThis.__MoonBit__.openseek`, once the lepus bridge is injected.
+fn openseek_api() -> @js.Value? {
+  guard moonbit_bridge_root() is Some(root) else { return None }
+  js_prop(root, "openseek")
+}
+
+///|
+/// Both bridge handles, present only when the surface the frontend relies
+/// on is fully injected.
+fn bridge_handles() -> (@js.Value, @js.Value)? {
+  guard openseek_api() is Some(api) &&
+    moonbit_bridge_root() is Some(root) &&
+    js_prop(root, "events") is Some(events) &&
+    js_prop(api, "start") is Some(_) &&
+    js_prop(api, "cancel") is Some(_) &&
+    js_prop(events, "on") is Some(_) else {
+    return None
+  }
+  Some((api, events))
+}
+
+///|
+let bridge_events_wired : Ref[Bool] = Ref(false)
+
+///|
+/// Wait for lepus to inject the bridge (it loads alongside this bundle),
+/// wire the engine-host event stream into messages once, and report
+/// readiness. The 25ms retries add up to ~3 seconds before the bridge is
+/// declared unavailable.
 fn install_bridge(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
+  install_bridge_attempt(dispatch, 0)
+}
+
+///|
+fn install_bridge_attempt(
+  dispatch : @cmd.Dispatch[Msg],
+  attempt : Int,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    js_install_openseek_bridge(
-      fn() { scheduler.add(dispatch(BridgeReady)) },
-      fn(message) { scheduler.add(dispatch(BridgeUnavailable(message))) },
-      fn(run_id, session, _task, _engine, selected_model, max_steps, cwd) {
+    guard bridge_handles() is Some((api, events)) else {
+      if attempt > 120 {
+        scheduler.add(dispatch(BridgeUnavailable("Bridge unavailable")))
+      } else {
         scheduler.add(
-          dispatch(
-            Started(run_id~, session~, model=selected_model, max_steps~, cwd~),
-          ),
+          @cmd.delay(install_bridge_attempt(dispatch, attempt + 1), 25),
         )
-      },
-      fn(
-        run_id,
-        event_name,
-        content,
-        tool_name,
-        is_error,
-        prompt_tokens,
-        completion_tokens,
-        answer,
-        reason,
-      ) {
-        if decode_engine_event(
-            event_name, content, tool_name, is_error, prompt_tokens, completion_tokens,
-            answer, reason,
-          )
-          is Some(event) {
-          scheduler.add(dispatch(Engine(run_id, event)))
-        }
-      },
-      fn(run_id, message, _exit_code, diagnostics) {
-        scheduler.add(dispatch(Error(run_id~, message~, diagnostics~)))
-      },
-      fn(run_id, status, answer, _exit_code) {
-        scheduler.add(dispatch(Finished(run_id~, status~, answer~)))
-      },
-    )
+      }
+      return
+    }
+    if !bridge_events_wired.val {
+      bridge_events_wired.val = true
+      open_engine_host(api)
+      wire_engine_events(scheduler, dispatch, events)
+    }
+    scheduler.add(dispatch(BridgeReady))
   })
+}
+
+///|
+/// Open the engine host: a single long-lived call whose task group owns the
+/// persistent `--serve` engine process. The promise only settles if the
+/// host stops; starts then fail with a clear error, so the rejection itself
+/// carries no extra signal.
+fn open_engine_host(api : @js.Value) -> Unit {
+  guard js_prop(api, "connect") is Some(_) else { return }
+  @js.async_run(() => {
+    let _ : @js.Value = js_method_promise(
+      api,
+      "connect",
+      @js.Object::new().to_value(),
+    ).wait() catch {
+      _ => return
+    }
+  })
+}
+
+///|
+fn wire_engine_events(
+  scheduler : &@cmd.Scheduler,
+  dispatch : @cmd.Dispatch[Msg],
+  events : @js.Value,
+) -> Unit {
+  fn on(name : String, decode : (Map[String, Json]) -> Msg?) -> Unit {
+    let handler = (event : @js.Value) => {
+      guard event_payload(event) is Some(payload) else { return }
+      guard decode(payload) is Some(msg) else { return }
+      scheduler.add(dispatch(msg))
+    }
+    let _ : @js.Value = events.apply_with_string("on", [
+      @js.Value::cast_from(name),
+      @js.Value::cast_from(handler),
+    ])
+  }
+
+  on("openseek.started", started_msg)
+  on("openseek.event", engine_msg)
+  on("openseek.error", error_msg)
+  on("openseek.finished", finished_msg)
+}
+
+///|
+/// A lepus event's payload as JSON fields. Payloads cross the bridge as
+/// structured clones of the host's JSON, so the round trip back through
+/// JSON is lossless; an event without a decodable payload is dropped.
+fn event_payload(event : @js.Value) -> Map[String, Json]? {
+  guard js_prop(event, "payload") is Some(payload) else { return None }
+  let json = payload.to_json() catch { _ => return None }
+  guard json is Object(fields) else { return None }
+  Some(fields)
+}
+
+///|
+fn started_msg(payload : Map[String, Json]) -> Msg? {
+  Some(
+    Started(
+      run_id=json_int(payload, "run_id", 0),
+      session=json_text(payload, "session"),
+      model=json_text(payload, "model"),
+      max_steps=json_int(payload, "max_steps", 0),
+      cwd=json_text(payload, "cwd"),
+    ),
+  )
+}
+
+///|
+fn engine_msg(payload : Map[String, Json]) -> Msg? {
+  guard payload.get("event") is Some(Object(raw)) else { return None }
+  guard decode_engine_event(raw) is Some(event) else { return None }
+  Some(Engine(json_int(payload, "run_id", 0), event))
+}
+
+///|
+/// A host error without a run (`run_id` absent) belongs to whatever
+/// conversation the user is looking at; the empty sentinel routes it there.
+fn error_msg(payload : Map[String, Json]) -> Msg? {
+  Some(
+    Error(
+      run_id=json_int(payload, "run_id", EmptyRunId),
+      message=non_empty_or(json_text(payload, "message"), "error"),
+      diagnostics=json_text(payload, "diagnostics"),
+    ),
+  )
+}
+
+///|
+fn finished_msg(payload : Map[String, Json]) -> Msg? {
+  Some(
+    Finished(
+      run_id=json_int(payload, "run_id", 0),
+      status=json_text(payload, "status"),
+      answer=json_text(payload, "answer"),
+    ),
+  )
+}
+
+///|
+/// Call one engine-host op and wait for its reply. Raises when the bridge
+/// is missing, the call throws, or the op rejects.
+async fn bridge_request(op : String, payload : @js.Value) -> @js.Value {
+  guard openseek_api() is Some(api) && js_prop(api, op) is Some(_) else {
+    raise BridgeError("OpenSeek bridge unavailable")
+  }
+  js_method_promise(api, op, payload).wait()
+}
+
+///|
+/// A user-facing message for a failed bridge call, preferring the JS
+/// error's `message` over its stringified form.
+fn bridge_error_text(error : Error) -> String {
+  match error {
+    BridgeError(message) => message
+    @js.Error_(value) =>
+      if js_prop(value, "message") is Some(message) &&
+        (@js.Cast::into(message) : String?) is Some(text) &&
+        !text.is_empty() {
+        text
+      } else {
+        value.to_string()
+      }
+    _ => "\{error}"
+  }
+}
+
+///|
+/// The op reply as JSON text for the session decoders. A reply of
+/// `undefined`/`null` (an op that returned nothing) reads as the empty
+/// object; an unserializable reply reads as malformed input.
+fn reply_json_text(reply : @js.Value) -> String {
+  if reply.is_undefined() || reply.is_null() {
+    return "{}"
+  }
+  reply.to_json_string() catch {
+    _ => ""
+  }
 }
 
 ///|
@@ -50,33 +216,87 @@ fn start_openseek(
   api_url : String,
   session : String,
 ) -> @cmd.Cmd {
+  let payload = start_payload(
+    task, selected_model, max_steps, api_key, api_url, session,
+  )
   @cmd.custom_cmd(scheduler => {
-    js_start_openseek(
-      task,
-      selected_model,
-      max_steps,
-      api_key,
-      api_url,
-      session,
-      fn(message) { scheduler.add(dispatch(Failed(session~, message~))) },
-    )
+    @js.async_run(() => {
+      let _ : @js.Value = bridge_request("start", payload) catch {
+        error => {
+          scheduler.add(
+            dispatch(Failed(session~, message=bridge_error_text(error))),
+          )
+          return
+        }
+      }
+    })
   })
+}
+
+///|
+/// The start payload. Optional fields are trimmed and omitted when blank —
+/// the host documents that a present field always carries non-blank text —
+/// and it carries no `cwd`: the host derives each conversation's workspace
+/// directory from its session id, so echoing a previous run's cwd back
+/// would pin a resumed conversation to the wrong workspace.
+fn start_payload(
+  task : String,
+  selected_model : String,
+  max_steps : String,
+  api_key : String,
+  api_url : String,
+  session : String,
+) -> @js.Value {
+  let payload = @js.Object::new()
+  payload["task"] = task
+  set_trimmed(payload, "model", selected_model)
+  set_trimmed(payload, "api_key", api_key)
+  set_trimmed(payload, "api_url", api_url)
+  set_trimmed(payload, "session", session)
+  if parsed_max_steps(max_steps) is Some(steps) {
+    payload["max_steps"] = steps
+  }
+  payload.to_value()
+}
+
+///|
+fn set_trimmed(payload : @js.Object, key : String, value : String) -> Unit {
+  let text = value.trim().to_owned()
+  if !text.is_empty() {
+    payload[key] = text
+  }
+}
+
+///|
+/// The max-steps composer field as a positive step count. The field is
+/// free-form text; anything that does not read as a sensible positive
+/// number is omitted so the engine applies its default.
+fn parsed_max_steps(text : String) -> Int? {
+  let value = @string.parse_double(text.trim()) catch { _ => return None }
+  if value >= 1.0 && value <= 1_000_000_000.0 {
+    Some(value.to_int())
+  } else {
+    None
+  }
 }
 
 ///|
 /// Refresh the sidebar's session list from the engine's durable store.
 fn fetch_sessions(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    js_list_sessions(
-      fn(text) {
-        match decode_sessions_reply(text) {
-          Some(items) => scheduler.add(dispatch(SessionsLoaded(items)))
-          None =>
-            scheduler.add(dispatch(SessionsFailed("malformed session list")))
+    @js.async_run(() => {
+      let reply = bridge_request("list_sessions", @js.Object::new().to_value()) catch {
+        error => {
+          scheduler.add(dispatch(SessionsFailed(bridge_error_text(error))))
+          return
         }
-      },
-      fn(message) { scheduler.add(dispatch(SessionsFailed(message))) },
-    )
+      }
+      match decode_sessions_reply(reply_json_text(reply)) {
+        Some(items) => scheduler.add(dispatch(SessionsLoaded(items)))
+        None =>
+          scheduler.add(dispatch(SessionsFailed("malformed session list")))
+      }
+    })
   })
 }
 
@@ -84,34 +304,37 @@ fn fetch_sessions(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
 /// Load a durable session's transcript so the conversation can be resumed.
 fn open_session(dispatch : @cmd.Dispatch[Msg], session_id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    js_load_session(
-      session_id,
-      fn(text) {
-        match transcript_from_session_json(text) {
-          Some(items) =>
-            scheduler.add(dispatch(SessionLoaded(session=session_id, items~)))
-          None =>
-            scheduler.add(
-              dispatch(
-                Failed(
-                  session=session_id,
-                  message="failed to load session \{session_id}: malformed data",
-                ),
+    @js.async_run(() => {
+      let payload = @js.Object::new()
+      payload["session"] = session_id
+      let reply = bridge_request("load_session", payload.to_value()) catch {
+        error => {
+          scheduler.add(
+            dispatch(
+              Failed(
+                session=session_id,
+                message="failed to load session \{session_id}: " +
+                  bridge_error_text(error),
               ),
-            )
-        }
-      },
-      fn(message) {
-        scheduler.add(
-          dispatch(
-            Failed(
-              session=session_id,
-              message="failed to load session \{session_id}: " + message,
             ),
-          ),
-        )
-      },
-    )
+          )
+          return
+        }
+      }
+      match transcript_from_session_json(reply_json_text(reply)) {
+        Some(items) =>
+          scheduler.add(dispatch(SessionLoaded(session=session_id, items~)))
+        None =>
+          scheduler.add(
+            dispatch(
+              Failed(
+                session=session_id,
+                message="failed to load session \{session_id}: malformed data",
+              ),
+            ),
+          )
+      }
+    })
   })
 }
 
@@ -128,246 +351,41 @@ fn steer_openseek(
   run_id : Int,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    js_steer_openseek(text, run_id, fn() {
-      scheduler.add(dispatch(SteerUndelivered(session~, text~)))
+    @js.async_run(() => {
+      let delivered = steer_delivered(text, run_id) catch { _ => false }
+      if !delivered {
+        scheduler.add(dispatch(SteerUndelivered(session~, text~)))
+      }
     })
   })
+}
+
+///|
+async fn steer_delivered(text : String, run_id : Int) -> Bool {
+  let payload = @js.Object::new()
+  payload["text"] = text
+  payload["run_id"] = run_id
+  let reply = bridge_request("steer", payload.to_value())
+  js_prop(reply, "steered") is Some(flag) &&
+  (@js.Cast::into(flag) : Bool?) is Some(true)
 }
 
 ///|
 fn cancel_openseek(dispatch : @cmd.Dispatch[Msg], run_id : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    js_cancel_openseek(run_id, fn(message) {
-      scheduler.add(dispatch(Error(run_id~, message~, diagnostics="")))
+    @js.async_run(() => {
+      let payload = @js.Object::new()
+      payload["run_id"] = run_id
+      let _ : @js.Value = bridge_request("cancel", payload.to_value()) catch {
+        error => {
+          scheduler.add(
+            dispatch(
+              Error(run_id~, message=bridge_error_text(error), diagnostics=""),
+            ),
+          )
+          return
+        }
+      }
     })
   })
 }
-
-///|
-extern "js" fn js_install_openseek_bridge(
-  on_ready : () -> Unit,
-  on_unavailable : (String) -> Unit,
-  on_started : (Int, String, String, String, String, Int, String) -> Unit,
-  on_event : (Int, String, String, String, Bool, Int, Int, String, String) -> Unit,
-  on_error : (Int, String, Int, String) -> Unit,
-  on_finished : (Int, String, String, Int) -> Unit,
-) =
-  #| (onReady, onUnavailable, onStarted, onEvent, onError, onFinished) => {
-  #|   const text = (value) => value === undefined || value === null ? "" : String(value);
-  #|   const number = (value, fallback = 0) => {
-  #|     const parsed = Number(value);
-  #|     return Number.isFinite(parsed) ? parsed : fallback;
-  #|   };
-  #|   const firstText = (...values) => {
-  #|     for (const value of values) {
-  #|       if (value !== undefined && value !== null) return String(value);
-  #|     }
-  #|     return "";
-  #|   };
-  #|   const install = (attempt = 0) => {
-  #|     const root = globalThis.__MoonBit__;
-  #|     const api = root && root.openseek;
-  #|     const events = root && root.events;
-  #|     if (!api || !api.start || !api.cancel || !events || !events.on) {
-  #|       if (attempt > 120) {
-  #|         onUnavailable("Bridge unavailable");
-  #|       } else {
-  #|         setTimeout(() => install(attempt + 1), 25);
-  #|       }
-  #|       return;
-  #|     }
-  #|     if (!globalThis.__openseekDesktopRabbitaBridgeInstalled) {
-  #|       globalThis.__openseekDesktopRabbitaBridgeInstalled = true;
-  #|       // Open the engine host: a single long-lived call whose task group
-  #|       // owns the persistent --serve engine process. The promise only
-  #|       // settles if the host stops; starts then fail with a clear error.
-  #|       if (api.connect) {
-  #|         try {
-  #|           Promise.resolve(api.connect({})).catch(() => {});
-  #|         } catch (ignored) {}
-  #|       }
-  #|       events.on("openseek.started", (event) => {
-  #|         const payload = (event && event.payload) || {};
-  #|         onStarted(
-  #|           number(payload.run_id),
-  #|           text(payload.session),
-  #|           text(payload.task),
-  #|           text(payload.engine),
-  #|           text(payload.model),
-  #|           number(payload.max_steps),
-  #|           text(payload.cwd),
-  #|         );
-  #|       });
-  #|       events.on("openseek.event", (event) => {
-  #|         const payload = (event && event.payload) || {};
-  #|         const raw = payload.event || {};
-  #|         onEvent(
-  #|           number(payload.run_id),
-  #|           text(raw.event),
-  #|           firstText(raw.content, raw.step),
-  #|           text(raw.tool_name),
-  #|           !!raw.is_error,
-  #|           number(raw.prompt_tokens),
-  #|           number(raw.completion_tokens),
-  #|           text(raw.answer),
-  #|           firstText(raw.reason, raw.error),
-  #|         );
-  #|       });
-  #|       events.on("openseek.error", (event) => {
-  #|         const payload = (event && event.payload) || {};
-  #|         onError(
-  #|           payload.run_id === undefined || payload.run_id === null ? -1 : number(payload.run_id, -1),
-  #|           text(payload.message || "error"),
-  #|           payload.exit_code === undefined || payload.exit_code === null ? -1 : number(payload.exit_code, -1),
-  #|           text(payload.diagnostics),
-  #|         );
-  #|       });
-  #|       events.on("openseek.finished", (event) => {
-  #|         const payload = (event && event.payload) || {};
-  #|         onFinished(
-  #|           number(payload.run_id),
-  #|           text(payload.status),
-  #|           text(payload.answer),
-  #|           payload.exit_code === undefined || payload.exit_code === null ? -1 : number(payload.exit_code, -1),
-  #|         );
-  #|       });
-  #|     }
-  #|     onReady();
-  #|   };
-  #|   install();
-  #| }
-
-///|
-/// The start payload carries no `cwd`: the host derives each conversation's
-/// workspace directory from its session id, so echoing a previous run's cwd
-/// back would pin a resumed conversation to the wrong workspace.
-extern "js" fn js_start_openseek(
-  task : String,
-  selected_model : String,
-  max_steps : String,
-  api_key : String,
-  api_url : String,
-  session : String,
-  on_error : (String) -> Unit,
-) =
-  #| (task, selectedModel, maxSteps, apiKey, apiUrl, session, onError) => {
-  #|   const root = globalThis.__MoonBit__;
-  #|   const api = root && root.openseek;
-  #|   if (!api || !api.start) {
-  #|     onError("OpenSeek bridge unavailable");
-  #|     return;
-  #|   }
-  #|   const payload = { task };
-  #|   const setText = (key, value) => {
-  #|     const text = String(value || "").trim();
-  #|     if (text) payload[key] = text;
-  #|   };
-  #|   setText("model", selectedModel);
-  #|   setText("api_key", apiKey);
-  #|   setText("api_url", apiUrl);
-  #|   setText("session", session);
-  #|   const parsedSteps = Number(maxSteps);
-  #|   if (Number.isFinite(parsedSteps) && parsedSteps > 0) {
-  #|     payload.max_steps = Math.floor(parsedSteps);
-  #|   }
-  #|   try {
-  #|     const result = api.start(payload);
-  #|     if (result && typeof result.catch === "function") {
-  #|       result.catch((error) => onError(String((error && error.message) || error)));
-  #|     }
-  #|   } catch (error) {
-  #|     onError(String((error && error.message) || error));
-  #|   }
-  #| }
-
-///|
-extern "js" fn js_list_sessions(
-  on_loaded : (String) -> Unit,
-  on_error : (String) -> Unit,
-) =
-  #| (onLoaded, onError) => {
-  #|   const root = globalThis.__MoonBit__;
-  #|   const api = root && root.openseek;
-  #|   if (!api || !api.list_sessions) {
-  #|     onError("OpenSeek bridge unavailable");
-  #|     return;
-  #|   }
-  #|   try {
-  #|     Promise.resolve(api.list_sessions({})).then(
-  #|       (reply) => onLoaded(JSON.stringify(reply === undefined || reply === null ? {} : reply)),
-  #|       (error) => onError(String((error && error.message) || error)),
-  #|     );
-  #|   } catch (error) {
-  #|     onError(String((error && error.message) || error));
-  #|   }
-  #| }
-
-///|
-extern "js" fn js_load_session(
-  session : String,
-  on_loaded : (String) -> Unit,
-  on_error : (String) -> Unit,
-) =
-  #| (session, onLoaded, onError) => {
-  #|   const root = globalThis.__MoonBit__;
-  #|   const api = root && root.openseek;
-  #|   if (!api || !api.load_session) {
-  #|     onError("OpenSeek bridge unavailable");
-  #|     return;
-  #|   }
-  #|   try {
-  #|     Promise.resolve(api.load_session({ session })).then(
-  #|       (reply) => onLoaded(JSON.stringify(reply === undefined || reply === null ? {} : reply)),
-  #|       (error) => onError(String((error && error.message) || error)),
-  #|     );
-  #|   } catch (error) {
-  #|     onError(String((error && error.message) || error));
-  #|   }
-  #| }
-
-///|
-/// `on_undelivered` fires whenever the engine will not settle this steer
-/// itself: the host replied `steered: false`, the call rejected, or the
-/// bridge is gone.
-extern "js" fn js_steer_openseek(
-  text : String,
-  run_id : Int,
-  on_undelivered : () -> Unit,
-) =
-  #| (text, runId, onUndelivered) => {
-  #|   const root = globalThis.__MoonBit__;
-  #|   const api = root && root.openseek;
-  #|   if (!api || !api.steer) {
-  #|     onUndelivered();
-  #|     return;
-  #|   }
-  #|   try {
-  #|     Promise.resolve(api.steer({ text, run_id: runId })).then(
-  #|       (reply) => {
-  #|         if (!reply || reply.steered !== true) onUndelivered();
-  #|       },
-  #|       () => onUndelivered(),
-  #|     );
-  #|   } catch (error) {
-  #|     onUndelivered();
-  #|   }
-  #| }
-
-///|
-extern "js" fn js_cancel_openseek(run_id : Int, on_error : (String) -> Unit) =
-  #| (runId, onError) => {
-  #|   const root = globalThis.__MoonBit__;
-  #|   const api = root && root.openseek;
-  #|   if (!api || !api.cancel) {
-  #|     onError("OpenSeek bridge unavailable");
-  #|     return;
-  #|   }
-  #|   try {
-  #|     const result = api.cancel({ run_id: runId });
-  #|     if (result && typeof result.catch === "function") {
-  #|       result.catch((error) => onError(String((error && error.message) || error)));
-  #|     }
-  #|   } catch (error) {
-  #|     onError(String((error && error.message) || error));
-  #|   }
-  #| }

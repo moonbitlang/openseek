@@ -54,6 +54,28 @@ fn json_text(fields : Map[String, Json], key : String) -> String {
 }
 
 ///|
+fn json_int(fields : Map[String, Json], key : String, fallback : Int) -> Int {
+  match fields.get(key) {
+    Some(Number(value, ..)) => value.to_int()
+    _ => fallback
+  }
+}
+
+///|
+/// The field's text, falling back to a legacy field name when the current
+/// one is absent.
+fn json_first_text(
+  fields : Map[String, Json],
+  key : String,
+  legacy : String,
+) -> String {
+  match fields.get(key) {
+    Some(String(value)) => value
+    _ => json_text(fields, legacy)
+  }
+}
+
+///|
 fn append_session_item(
   items : Array[TranscriptItem],
   kind : String,

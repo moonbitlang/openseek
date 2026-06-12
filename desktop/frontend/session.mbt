@@ -4,7 +4,7 @@
 /// never reads the clock directly.
 fn rotate_session(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    scheduler.add(dispatch(SessionRotated(js_new_session_id())))
+    scheduler.add(dispatch(SessionRotated(generated_session_id())))
   })
 }
 
@@ -13,13 +13,27 @@ fn rotate_session(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
 /// `desktop-YYYYMMDD-HHMMSS-mmm`, mirroring the TUI's `tui-...` form — unique
 /// per conversation, chronologically ordered in the engine's `--session-list`,
 /// and a valid directory name on every platform.
-extern "js" fn js_new_session_id() -> String =
-  #| () => {
-  #|   const now = new Date();
-  #|   const pad = (value, width) => String(value).padStart(width, "0");
-  #|   return "desktop-" + now.getUTCFullYear()
-  #|     + pad(now.getUTCMonth() + 1, 2) + pad(now.getUTCDate(), 2)
-  #|     + "-" + pad(now.getUTCHours(), 2) + pad(now.getUTCMinutes(), 2)
-  #|     + pad(now.getUTCSeconds(), 2)
-  #|     + "-" + pad(now.getUTCMilliseconds(), 3);
-  #| }
+fn generated_session_id() -> String {
+  let date_constructor : @js.Value = @js.globalThis.get_with_string("Date")
+  let now : @js.Value = date_constructor.new(([] : Array[@js.Value]))
+  fn utc(name : String) -> Int {
+    now.apply_with_string(name, ([] : Array[@js.Value]))
+  }
+
+  let date = pad(utc("getUTCFullYear"), 4) +
+    pad(utc("getUTCMonth") + 1, 2) +
+    pad(utc("getUTCDate"), 2)
+  let time = pad(utc("getUTCHours"), 2) +
+    pad(utc("getUTCMinutes"), 2) +
+    pad(utc("getUTCSeconds"), 2)
+  "desktop-\{date}-\{time}-\{pad(utc("getUTCMilliseconds"), 3)}"
+}
+
+///|
+fn pad(value : Int, width : Int) -> String {
+  let mut text = value.to_string()
+  while text.length() < width {
+    text = "0" + text
+  }
+  text
+}
