@@ -148,12 +148,21 @@ Why the bootstrap is a little involved:
 
 ## Build
 
-The clipboard extension is generated at build time by a Lepus codegen CLI, so a
-fresh checkout must stage that tool once:
+Several Lepus extensions are generated at build time by a Lepus codegen CLI,
+so a fresh checkout must stage that tool once:
 
 ```sh
 ( cd lepus && moon install ./cli --bin target/lepus-tools )
 ```
+
+Re-run that command after every lepus submodule update (pull, rebase, branch
+switch) — the staged binary is a build product of the checkout it was built
+from, not of the current one. If the codegen itself changed, also run
+`moon clean`: moon caches pre-build outputs by their *input* hash, so a stale
+cache keeps replaying the old binary's output even after restaging. The
+symptom of either staleness is `extensions/*/extension.g.mbt` showing up as
+modified inside the submodule after a build; never commit that drift —
+restage, clean, and rebuild until the submodule tree stays clean.
 
 Then build the frontend bundle and the native binary:
 
