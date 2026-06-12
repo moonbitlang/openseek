@@ -62,10 +62,7 @@ fn configured_max_steps(value : Int?) -> Int raise HostError {
 }
 
 ///|
-fn run_config(
-  payload : StartPayload,
-  engine : String,
-) -> RunConfig raise HostError {
+async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
   let task = payload.task.trim().to_owned()
   guard !task.is_empty() else { raise HostError("task must not be empty") }
   let api_url = match @env.non_empty(payload.api_url) {
@@ -105,14 +102,10 @@ fn run_config(
 /// the user's home directory: inheriting the host's own cwd would hand the
 /// agent whatever directory the app happened to be launched from (`/` under
 /// Finder), which is never a sensible place to work in.
-fn resolved_run_cwd(
-  payload_cwd : String?,
-  session : String?,
-) -> String? raise HostError {
+async fn resolved_run_cwd(payload_cwd : String?, session : String?) -> String? {
   if @env.non_empty(payload_cwd) is Some(cwd) {
     let cwd = @env.expand_home(cwd)
-    let is_directory = @mbfs.is_dir(cwd) catch { _ => false }
-    guard is_directory else {
+    guard is_dir(cwd) else {
       raise HostError("working directory does not exist: " + cwd)
     }
     return Some(cwd)
@@ -122,6 +115,16 @@ fn resolved_run_cwd(
     return Some(dir)
   }
   @env.home_dir()
+}
+
+///|
+/// Whether `path` exists and is a directory; probe failures mean "no".
+async fn is_dir(path : String) -> Bool {
+  let kind = @fs.kind(path) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return false
+  }
+  kind is Directory
 }
 
 ///|

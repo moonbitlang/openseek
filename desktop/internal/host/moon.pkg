@@ -10,7 +10,6 @@ import {
   "moonbitlang/async/process",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
-  "moonbitlang/x/fs" @mbfs,
 }
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

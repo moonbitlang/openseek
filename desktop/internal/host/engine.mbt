@@ -103,7 +103,7 @@ async fn prepare_engine_stdin(engine : String) -> &@process.ProcessInput {
   } else {
     engine + ".stdin"
   }
-  @mbfs.write_string_to_file(path, "")
+  @fs.write_file(path, "", create_mode=CreateOrTruncate)
   @process.redirect_from_file(path)
 }
 

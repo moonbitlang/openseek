@@ -12,7 +12,7 @@ const WorkspaceDirName = "OpenSeek"
 /// lands in the same directory without recording it anywhere. `None` when the
 /// id is unsafe as a path component or no home directory is known; the caller
 /// falls back to the home directory.
-pub fn session_workspace_dir(session : String) -> String? {
+pub async fn session_workspace_dir(session : String) -> String? {
   guard safe_workspace_id(session) else { return None }
   guard workspace_root() is Some(root) else { return None }
   Some((root : @mbpath.Path).join(session).normalize().to_string())
@@ -37,18 +37,25 @@ fn safe_workspace_id(session : String) -> Bool {
 /// the XDG user-dirs override on Linux (localized or relocated Documents);
 /// when no Documents folder exists at all (headless machines, redirected
 /// Windows profiles), the folder lives directly under the home directory.
-fn workspace_root() -> String? {
+async fn workspace_root() -> String? {
   guard @env.home_dir() is Some(home) else { return None }
   let home_path : @mbpath.Path = home
   let documents : @mbpath.Path = match xdg_documents_dir(home) {
     Some(dir) => dir
     None => home_path.join("Documents")
   }
-  let documents_exists = @mbfs.is_dir(documents.to_string()) catch {
-    _ => false
-  }
-  let parent = if documents_exists { documents } else { home_path }
+  let parent = if is_dir(documents.to_string()) { documents } else { home_path }
   Some(parent.join(WorkspaceDirName).normalize().to_string())
+}
+
+///|
+/// Whether `path` exists and is a directory; probe failures mean "no".
+async fn is_dir(path : String) -> Bool {
+  let kind = @fs.kind(path) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return false
+  }
+  kind is Directory
 }
 
 ///|
@@ -57,13 +64,16 @@ fn workspace_root() -> String? {
 /// or move Documents there; the file does not exist on macOS or Windows).
 /// The spec marks a disabled folder by pointing it at `$HOME` itself, which
 /// `workspace_root` then resolves to `~/OpenSeek` naturally.
-fn xdg_documents_dir(home : String) -> String? {
+async fn xdg_documents_dir(home : String) -> String? {
   let config_dir = match @env.get("XDG_CONFIG_HOME") {
     Some(dir) => dir
     None => (home : @mbpath.Path).join(".config").to_string()
   }
   let file = (config_dir : @mbpath.Path).join("user-dirs.dirs").to_string()
-  let content = @mbfs.read_file_to_string(file) catch { _ => return None }
+  let content = @fs.read_file(file).text() catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return None
+  }
   for line in content.split("\n") {
     let line = line.trim()
     guard line.has_prefix("XDG_DOCUMENTS_DIR=") else { continue }
