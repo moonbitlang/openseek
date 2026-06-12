@@ -33,18 +33,18 @@ fn safe_workspace_id(session : String) -> Bool {
 ///|
 /// Root for per-conversation workspaces: an `OpenSeek` folder inside the
 /// user's Documents directory — the agent's output is user-facing work, not
-/// app data, so it belongs where the user already looks for files. Honours
-/// the XDG user-dirs override on Linux (localized or relocated Documents);
-/// when no Documents folder exists at all (headless machines, redirected
-/// Windows profiles), the folder lives directly under the home directory.
+/// app data, so it belongs where the user already looks for files. Where
+/// Documents is comes from the platform (`@userdirs.documents_dir`); when
+/// that folder does not exist (headless machines, say), the folder lives
+/// directly under the home directory.
 async fn workspace_root() -> String? {
   guard @home.dir() is Some(home) else { return None }
-  let home_path : @mbpath.Path = home
-  let documents : @mbpath.Path = match @xdg.documents_dir() {
-    Some(dir) => dir
-    None => home_path.join("Documents")
+  let parent : @mbpath.Path = if @userdirs.documents_dir() is Some(documents) &&
+    is_dir(documents) {
+    documents
+  } else {
+    home
   }
-  let parent = if is_dir(documents.to_string()) { documents } else { home_path }
   Some(parent.join(WorkspaceDirName).normalize().to_string())
 }
 

@@ -8,7 +8,7 @@ A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://moonca
 - `internal/sessiondirs/` — where conversations live on disk: per-session workspace directories and the durable session store root.
 - `internal/env/` — process-environment reads (blank means unset).
 - `internal/home/` — the user's home directory and `~` expansion.
-- `internal/xdg/` — the slice of the XDG conventions the app consults: the user-dirs Documents override.
+- `internal/userdirs/` — the user's Documents folder, answered by each platform's authority: the Windows known folder, the XDG user-dirs override, or `~/Documents`.
 - `internal/event/` — engine event decoding.
 - `frontend/` — the JS (Rabbita) UI bundled to `frontend.js`.
 - `lepus/` — the Lepus framework, vendored as a git submodule.
@@ -45,8 +45,10 @@ still works). They are interoperable with the CLI/TUI stores: resume one with
 `openseek-tui --session-root ~/.openseek --session <id>`.
 
 Each conversation also gets its own workspace directory, used as the engine's
-working directory: `Documents/OpenSeek/<session-id>` (the XDG documents
-folder on Linux; `~/OpenSeek/…` when no Documents folder exists). The path is
+working directory: `Documents/OpenSeek/<session-id>` (Documents as the
+platform defines it — the Windows known folder, which OneDrive may relocate,
+or the XDG documents folder on Linux; `~/OpenSeek/…` when no Documents folder
+exists). The path is
 derived from the session id alone — and desktop ids embed their creation
 date, so a name-sorted listing reads chronologically — so resuming a
 conversation returns to the same directory without recording it anywhere. The
