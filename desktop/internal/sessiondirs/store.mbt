@@ -8,7 +8,7 @@
 /// matters because a packaged app can run with `/` as its working directory,
 /// where the engine's relative `.openseek` default could never be created.
 pub fn resolved_session_root(payload_root : String?) -> String? {
-  if @env.non_empty(payload_root) is Some(root) {
+  if payload_root is Some(root) {
     return Some(root)
   }
   if @env.get("OPENSEEK_SESSION_ROOT") is Some(root) {

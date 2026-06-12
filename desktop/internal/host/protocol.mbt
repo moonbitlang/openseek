@@ -2,6 +2,9 @@
 // with each op, the replies it gets back, and the events the host pushes.
 
 ///|
+/// Optional fields are normalized by the frontend bridge — values arrive
+/// trimmed, and blank fields are omitted entirely — so `Some` here always
+/// carries a non-blank string and the host does not re-normalize.
 priv struct StartPayload {
   task : String
   api_key : String?

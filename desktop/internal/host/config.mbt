@@ -33,7 +33,7 @@ fn required_secret(
   value : String?,
   env_name : String,
 ) -> String raise HostError {
-  if @env.non_empty(value) is Some(value) {
+  if value is Some(value) {
     return value
   }
   if @env.get(env_name) is Some(value) {
@@ -65,7 +65,7 @@ fn configured_max_steps(value : Int?) -> Int raise HostError {
 async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
   let task = payload.task.trim().to_owned()
   guard !task.is_empty() else { raise HostError("task must not be empty") }
-  let api_url = match @env.non_empty(payload.api_url) {
+  let api_url = match payload.api_url {
     Some(url) => Some(url)
     None => @env.get("OPENSEEK_API_URL")
   }
@@ -74,12 +74,15 @@ async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
   let api_key = required_secret(payload.api_key, "DEEPSEEK") catch {
     error => if api_url is Some(_) { PlaceholderApiKey } else { raise error }
   }
-  let session = @env.non_empty(payload.session)
+  let session = payload.session
   {
     task,
     api_key,
     api_url,
-    model: @env.option_or_env(payload.model, "DEEPSEEK_MODEL", DefaultModel),
+    model: match payload.model {
+      Some(model) => model
+      None => @env.get("DEEPSEEK_MODEL").unwrap_or(DefaultModel)
+    },
     max_steps: configured_max_steps(payload.max_steps),
     engine,
     cwd: resolved_run_cwd(payload.cwd, session),
@@ -103,7 +106,7 @@ async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
 /// agent whatever directory the app happened to be launched from (`/` under
 /// Finder), which is never a sensible place to work in.
 async fn resolved_run_cwd(payload_cwd : String?, session : String?) -> String? {
-  if @env.non_empty(payload_cwd) is Some(cwd) {
+  if payload_cwd is Some(cwd) {
     let cwd = @env.expand_home(cwd)
     guard is_dir(cwd) else {
       raise HostError("working directory does not exist: " + cwd)
