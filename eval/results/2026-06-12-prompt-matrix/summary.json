@@ -1,0 +1,617 @@
+{
+  "flash-x-baseprompt": {
+    "successes": 0,
+    "trials": [
+      {
+        "trial": 1,
+        "session_id": "cli-20260612-032448-886-7770575a0b0ab",
+        "events": 164,
+        "duration_s": 423.0,
+        "assistant_turns": 79,
+        "tool_results": 79,
+        "tool_mix": {
+          "shell": 34,
+          "write": 8,
+          "read": 8,
+          "edit": 28,
+          "moon_check": 1
+        },
+        "doc_calls": 20,
+        "doc_misses": 1,
+        "multi_read_calls": 0,
+        "terminal": "missing",
+        "usage": {
+          "prompt_tokens": 3416542,
+          "completion_tokens": 40345,
+          "cache_hit_tokens": 3354112,
+          "cache_miss_tokens": 62430
+        },
+        "verdict": {}
+      },
+      {
+        "trial": 2,
+        "session_id": "cli-20260612-032448-886-7770675a0b0ab",
+        "events": 346,
+        "duration_s": 846.5,
+        "assistant_turns": 160,
+        "tool_results": 169,
+        "tool_mix": {
+          "shell": 87,
+          "write": 42,
+          "read": 13,
+          "moon_check": 6,
+          "edit": 21
+        },
+        "doc_calls": 30,
+        "doc_misses": 5,
+        "multi_read_calls": 0,
+        "terminal": "failed",
+        "usage": {
+          "prompt_tokens": 11548194,
+          "completion_tokens": 73790,
+          "cache_hit_tokens": 11430016,
+          "cache_miss_tokens": 118178
+        },
+        "verdict": {}
+      },
+      {
+        "trial": 3,
+        "session_id": "cli-20260612-032448-886-7770775a0b0ab",
+        "events": 206,
+        "duration_s": 442.5,
+        "assistant_turns": 96,
+        "tool_results": 96,
+        "tool_mix": {
+          "shell": 72,
+          "write": 16,
+          "moon_check": 5,
+          "read": 3
+        },
+        "doc_calls": 48,
+        "doc_misses": 10,
+        "multi_read_calls": 0,
+        "terminal": "missing",
+        "usage": {
+          "prompt_tokens": 5168906,
+          "completion_tokens": 36657,
+          "cache_hit_tokens": 5087744,
+          "cache_miss_tokens": 81162
+        },
+        "verdict": {}
+      },
+      {
+        "trial": 4,
+        "session_id": "cli-20260612-033214-408-81556f507d7e2",
+        "events": 9,
+        "duration_s": 10.4,
+        "assistant_turns": 4,
+        "tool_results": 4,
+        "tool_mix": {
+          "shell": 2,
+          "write": 2
+        },
+        "doc_calls": 0,
+        "doc_misses": 0,
+        "multi_read_calls": 0,
+        "terminal": "missing",
+        "usage": {
+          "prompt_tokens": 68853,
+          "completion_tokens": 654,
+          "cache_hit_tokens": 61312,
+          "cache_miss_tokens": 7541
+        },
+        "verdict": {}
+      },
+      {
+        "trial": 5,
+        "session_id": "cli-20260612-033216-048-81778f3de45de",
+        "events": 11,
+        "duration_s": 12.7,
+        "assistant_turns": 5,
+        "tool_results": 5,
+        "tool_mix": {
+          "shell": 5
+        },
+        "doc_calls": 1,
+        "doc_misses": 0,
+        "multi_read_calls": 0,
+        "terminal": "missing",
+        "usage": {
+          "prompt_tokens": 86287,
+          "completion_tokens": 865,
+          "cache_hit_tokens": 84352,
+          "cache_miss_tokens": 1935
+        },
+        "verdict": {}
+      }
+    ],
+    "mean_duration_s": 347.0,
+    "mean_turns": 68.8,
+    "total_doc_misses": 16,
+    "total_completion_tokens": 152311
+  },
+  "flash-x-flashprompt": {
+    "successes": 2,
+    "trials": [
+      {
+        "trial": 1,
+        "session_id": "cli-20260612-030601-103-61369d0dfb6d4",
+        "events": 154,
+        "duration_s": 433.3,
+        "assistant_turns": 73,
+        "tool_results": 74,
+        "tool_mix": {
+          "shell": 41,
+          "write": 19,
+          "moon_check": 1,
+          "read": 6,
+          "edit": 6,
+          "finish": 1
+        },
+        "doc_calls": 7,
+        "doc_misses": 0,
+        "multi_read_calls": 0,
+        "terminal": "finished",
+        "usage": {
+          "prompt_tokens": 3250404,
+          "completion_tokens": 36094,
+          "cache_hit_tokens": 3208960,
+          "cache_miss_tokens": 41444
+        },
+        "verdict": {
+          "success": true,
+          "reason": "ok",
+          "steps": 73
+        }
+      },
+      {
+        "trial": 2,
+        "session_id": "cli-20260612-030601-103-61368d0dfb6d4",
+        "events": 325,
+        "duration_s": 583.8,
+        "assistant_turns": 151,
+        "tool_results": 160,
+        "tool_mix": {
+          "shell": 113,
+          "read": 9,
+          "write": 15,
+          "moon_check": 6,
+          "edit": 17
+        },
+        "doc_calls": 15,
+        "doc_misses": 12,
+        "multi_read_calls": 0,
+        "terminal": "missing",
+        "usage": {
+          "prompt_tokens": 7417600,
+          "completion_tokens": 41724,
+          "cache_hit_tokens": 7326464,
+          "cache_miss_tokens": 91136
+        },
+        "verdict": {
+          "success": false,
+          "reason": "finish marker missing; moon check: exit 255: Error: [4015]     \u256d\u2500[ /private/tmp/prompt_matrix/runs_flash-x-flashprompt/workspaces/02/cmd/tomljson/main.mbt:45:41 ]     \u2502  45 \u2502       @stdio.stderr.write(\"error: \" + e.to_string() + \"\\n\")     \u2502                                         \u2500\u2500\u2500\u2500...; moon test: exit 1: Error: [4015]     \u256d\u2500[ /private/tmp/prompt_matrix/runs_flash-x-flashprompt/workspaces/02/cmd/tomljson/main.mbt:45:41 ]     \u2502  45 \u2502       @stdio.stderr.write(\"error: \" + e.to_string() + \"\\n\")     \u2502                                         \u2500\u2500\u2500\u2500...; file probe: stdout is not JSON: Unexpected end of file; stdout=; stdin probe: stdout is not JSON: Unexpected end of file; stdout=; duplicate probe: missing duplicate-key message, exit 0: Error: [4015]     \u256d\u2500[ /private/tmp/prompt_matrix/runs_flash-x-flashprompt/workspaces/02/cmd/tomljson/main.mbt:45:41 ]     \u2502  45 \u2502       @stdio.stderr.write(\"error: \" + e.to_string() + \"\\n\")     \u2502                                         \u2500\u2500\u2500\u2500...",
+          "steps": 152
+        }
+      },
+      {
+        "trial": 3,
+        "session_id": "cli-20260612-030601-103-61367d0dfb6d4",
+        "events": 236,
+        "duration_s": 431.8,
+        "assistant_turns": 113,
+        "tool_results": 116,
+        "tool_mix": {
+          "shell": 83,
+          "write": 11,
+          "moon_check": 2,
+          "read": 4,
+          "edit": 15,
+          "finish": 1
+        },
+        "doc_calls": 14,
+        "doc_misses": 1,
+        "multi_read_calls": 0,
+        "terminal": "finished",
+        "usage": {
+          "prompt_tokens": 4287321,
+          "completion_tokens": 32813,
+          "cache_hit_tokens": 4242944,
+          "cache_miss_tokens": 44377
+        },
+        "verdict": {
+          "success": true,
+          "reason": "ok",
+          "steps": 113
+        }
+      },
+      {
+        "trial": 4,
+        "session_id": "cli-20260612-031314-113-692983789636",
+        "events": 345,
+        "duration_s": 693.8,
+        "assistant_turns": 160,
+        "tool_results": 161,
+        "tool_mix": {
+          "shell": 114,
+          "write": 20,
+          "moon_check": 11,
+          "edit": 9,
+          "read": 7
+        },
+        "doc_calls": 33,
+        "doc_misses": 26,
+        "multi_read_calls": 0,
+        "terminal": "failed",
+        "usage": {
+          "prompt_tokens": 10296632,
+          "completion_tokens": 53982,
+          "cache_hit_tokens": 10144640,
+          "cache_miss_tokens": 151992
+        },
+        "verdict": {
+          "success": false,
+          "reason": "finish marker missing",
+          "steps": 160
+        }
+      },
+      {
+        "trial": 5,
+        "session_id": "cli-20260612-031315-046-69387a6932912",
+        "events": 71,
+        "duration_s": 151.9,
+        "assistant_turns": 31,
+        "tool_results": 35,
+        "tool_mix": {
+          "shell": 21,
+          "write": 8,
+          "read": 5,
+          "moon_check": 1
+        },
+        "doc_calls": 4,
+        "doc_misses": 1,
+        "multi_read_calls": 0,
+        "terminal": "missing",
+        "usage": {
+          "prompt_tokens": 385695,
+          "completion_tokens": 14490,
+          "cache_hit_tokens": 372352,
+          "cache_miss_tokens": 13343
+        },
+        "verdict": {
+          "success": false,
+          "reason": "finish marker missing; moon check: exit 255: Warning: [0020]    \u256d\u2500[ /private/tmp/prompt_matrix/runs_flash-x-flashprompt/workspaces/05/lib/toml_parser.mbt:6:36 ]    \u2502  6 \u2502   let result : Map[String, Json] = Map::new()    \u2502                                    \u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500      \u2502             ...; moon test: exit 1: Warning: [0020]    \u256d\u2500[ /private/tmp/prompt_matrix/runs_flash-x-flashprompt/workspaces/05/lib/toml_parser.mbt:6:36 ]    \u2502  6 \u2502   let result : Map[String, Json] = Map::new()    \u2502                                    \u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500      \u2502             ...; file probe: stdout is not JSON: Unexpected end of file; stdout=; stdin probe: stdout is not JSON: Unexpected end of file; stdout=",
+          "steps": 32
+        }
+      }
+    ],
+    "mean_duration_s": 458.9,
+    "mean_turns": 105.6,
+    "total_doc_misses": 40,
+    "total_completion_tokens": 179103
+  },
+  "pro-x-baseprompt": {
+    "successes": 3,
+    "trials": [
+      {
+        "trial": 1,
+        "session_id": "cli-20260612-033856-090-84018ae46c0cd",
+        "events": 331,
+        "duration_s": 777.4,
+        "assistant_turns": 114,
+        "tool_results": 114,
+        "tool_mix": {
+          "read": 31,
+          "shell": 41,
+          "edit": 18,
+          "write": 22,
+          "moon_check": 1,
+          "finish": 1
+        },
+        "doc_calls": 14,
+        "doc_misses": 1,
+        "multi_read_calls": 1,
+        "terminal": "finished",
+        "usage": {
+          "prompt_tokens": 8713484,
+          "completion_tokens": 49120,
+          "cache_hit_tokens": 8586752,
+          "cache_miss_tokens": 126732
+        },
+        "verdict": {
+          "success": true,
+          "reason": "ok",
+          "steps": 114
+        }
+      },
+      {
+        "trial": 2,
+        "session_id": "cli-20260612-033856-090-84017ae46c0cd",
+        "events": 285,
+        "duration_s": 891.2,
+        "assistant_turns": 130,
+        "tool_results": 130,
+        "tool_mix": {
+          "read": 17,
+          "shell": 48,
+          "write": 23,
+          "moon_check": 11,
+          "edit": 30,
+          "finish": 1
+        },
+        "doc_calls": 12,
+        "doc_misses": 13,
+        "multi_read_calls": 0,
+        "terminal": "finished",
+        "usage": {
+          "prompt_tokens": 9604229,
+          "completion_tokens": 55424,
+          "cache_hit_tokens": 9478016,
+          "cache_miss_tokens": 126213
+        },
+        "verdict": {
+          "success": true,
+          "reason": "ok",
+          "steps": 130
+        }
+      },
+      {
+        "trial": 3,
+        "session_id": "cli-20260612-033856-090-84019ae46c0cd",
+        "events": 255,
+        "duration_s": 753.6,
+        "assistant_turns": 109,
+        "tool_results": 109,
+        "tool_mix": {
+          "read": 18,
+          "shell": 50,
+          "write": 22,
+          "moon_check": 2,
+          "edit": 16,
+          "finish": 1
+        },
+        "doc_calls": 21,
+        "doc_misses": 7,
+        "multi_read_calls": 2,
+        "terminal": "finished",
+        "usage": {
+          "prompt_tokens": 5567000,
+          "completion_tokens": 46980,
+          "cache_hit_tokens": 5473152,
+          "cache_miss_tokens": 93848
+        },
+        "verdict": {
+          "success": false,
+          "reason": "moon check: exit 255: Error: not in a Moon project (no moon.mod, moon.mod.json, or moon.work found starting from /private/tmp/prompt_matrix/runs_pro-x-baseprompt/workspaces/03 or its ancestors); moon test: exit 255: Error: not in a Moon project (no moon.mod, moon.mod.json, or moon.work found starting from /private/tmp/prompt_matrix/runs_pro-x-baseprompt/workspaces/03 or its ancestors); file probe: exit 255: Error: failed to resolve path `cmd/tomljson`  Caused by:     No such file or directory (os error 2); stdin probe: exit 255: Error: failed to resolve path `cmd/tomljson`  Caused by:     No such file or directory (os error 2); duplicate probe: missing duplicate-key message, exit 255: Error: failed to resolve path `cmd/tomljson`  Caused by:     No such file or directory (os error 2)",
+          "steps": 109
+        }
+      },
+      {
+        "trial": 4,
+        "session_id": "cli-20260612-035130-251-89180be87f9ec",
+        "events": 298,
+        "duration_s": 777.4,
+        "assistant_turns": 123,
+        "tool_results": 132,
+        "tool_mix": {
+          "shell": 50,
+          "write": 37,
+          "edit": 11,
+          "moon_check": 21,
+          "read": 12,
+          "finish": 1
+        },
+        "doc_calls": 19,
+        "doc_misses": 2,
+        "multi_read_calls": 0,
+        "terminal": "finished",
+        "usage": {
+          "prompt_tokens": 8068444,
+          "completion_tokens": 50103,
+          "cache_hit_tokens": 7963776,
+          "cache_miss_tokens": 104668
+        },
+        "verdict": {
+          "success": false,
+          "reason": "duplicate probe: missing duplicate-key message, exit 0: Parse error",
+          "steps": 123
+        }
+      },
+      {
+        "trial": 5,
+        "session_id": "cli-20260612-035154-968-8955023ff5600",
+        "events": 261,
+        "duration_s": 686.7,
+        "assistant_turns": 127,
+        "tool_results": 127,
+        "tool_mix": {
+          "shell": 74,
+          "read": 10,
+          "write": 22,
+          "moon_check": 1,
+          "edit": 19,
+          "finish": 1
+        },
+        "doc_calls": 24,
+        "doc_misses": 1,
+        "multi_read_calls": 0,
+        "terminal": "finished",
+        "usage": {
+          "prompt_tokens": 6623223,
+          "completion_tokens": 43624,
+          "cache_hit_tokens": 6556416,
+          "cache_miss_tokens": 66807
+        },
+        "verdict": {
+          "success": true,
+          "reason": "ok",
+          "steps": 127
+        }
+      }
+    ],
+    "mean_duration_s": 777.3,
+    "mean_turns": 120.6,
+    "total_doc_misses": 24,
+    "total_completion_tokens": 245251
+  },
+  "pro-x-flashprompt": {
+    "successes": 4,
+    "trials": [
+      {
+        "trial": 1,
+        "session_id": "cli-20260612-040428-623-95263d0ed9f91",
+        "events": 352,
+        "duration_s": 724.1,
+        "assistant_turns": 118,
+        "tool_results": 124,
+        "tool_mix": {
+          "shell": 39,
+          "write": 14,
+          "moon_check": 4,
+          "edit": 39,
+          "read": 28
+        },
+        "doc_calls": 16,
+        "doc_misses": 8,
+        "multi_read_calls": 0,
+        "terminal": "finished",
+        "usage": {
+          "prompt_tokens": 7102984,
+          "completion_tokens": 53879,
+          "cache_hit_tokens": 6992384,
+          "cache_miss_tokens": 110600
+        },
+        "verdict": {
+          "success": false,
+          "reason": "duplicate probe: missing duplicate-key message, exit 0: Error: invalid TOML input",
+          "steps": 119
+        }
+      },
+      {
+        "trial": 2,
+        "session_id": "cli-20260612-040428-623-95264d0ed9f91",
+        "events": 278,
+        "duration_s": 694.4,
+        "assistant_turns": 133,
+        "tool_results": 138,
+        "tool_mix": {
+          "read": 2,
+          "shell": 79,
+          "write": 23,
+          "moon_check": 1,
+          "edit": 33
+        },
+        "doc_calls": 11,
+        "doc_misses": 7,
+        "multi_read_calls": 0,
+        "terminal": "finished",
+        "usage": {
+          "prompt_tokens": 5724495,
+          "completion_tokens": 48200,
+          "cache_hit_tokens": 5679488,
+          "cache_miss_tokens": 45007
+        },
+        "verdict": {
+          "success": true,
+          "reason": "ok",
+          "steps": 134
+        }
+      },
+      {
+        "trial": 3,
+        "session_id": "cli-20260612-040428-623-95265d0ed9f91",
+        "events": 324,
+        "duration_s": 832.7,
+        "assistant_turns": 144,
+        "tool_results": 144,
+        "tool_mix": {
+          "read": 7,
+          "shell": 84,
+          "write": 19,
+          "moon_check": 8,
+          "edit": 26
+        },
+        "doc_calls": 18,
+        "doc_misses": 10,
+        "multi_read_calls": 0,
+        "terminal": "finished",
+        "usage": {
+          "prompt_tokens": 9912709,
+          "completion_tokens": 64367,
+          "cache_hit_tokens": 9783040,
+          "cache_miss_tokens": 129669
+        },
+        "verdict": {
+          "success": true,
+          "reason": "ok",
+          "steps": 145
+        }
+      },
+      {
+        "trial": 4,
+        "session_id": "cli-20260612-041603-712-3133cc4ddae",
+        "events": 317,
+        "duration_s": 1046.5,
+        "assistant_turns": 110,
+        "tool_results": 127,
+        "tool_mix": {
+          "shell": 59,
+          "write": 39,
+          "moon_check": 5,
+          "read": 13,
+          "edit": 10,
+          "finish": 1
+        },
+        "doc_calls": 13,
+        "doc_misses": 6,
+        "multi_read_calls": 0,
+        "terminal": "finished",
+        "usage": {
+          "prompt_tokens": 6674289,
+          "completion_tokens": 84119,
+          "cache_hit_tokens": 6550272,
+          "cache_miss_tokens": 124017
+        },
+        "verdict": {
+          "success": true,
+          "reason": "ok",
+          "steps": 110
+        }
+      },
+      {
+        "trial": 5,
+        "session_id": "cli-20260612-041633-590-363350c09ff3",
+        "events": 281,
+        "duration_s": 712.6,
+        "assistant_turns": 99,
+        "tool_results": 104,
+        "tool_mix": {
+          "shell": 40,
+          "moon_check": 6,
+          "write": 17,
+          "read": 21,
+          "edit": 20
+        },
+        "doc_calls": 13,
+        "doc_misses": 11,
+        "multi_read_calls": 0,
+        "terminal": "finished",
+        "usage": {
+          "prompt_tokens": 4761685,
+          "completion_tokens": 52605,
+          "cache_hit_tokens": 4668160,
+          "cache_miss_tokens": 93525
+        },
+        "verdict": {
+          "success": true,
+          "reason": "ok",
+          "steps": 100
+        }
+      }
+    ],
+    "mean_duration_s": 802.1,
+    "mean_turns": 120.8,
+    "total_doc_misses": 42,
+    "total_completion_tokens": 303170
+  }
+}

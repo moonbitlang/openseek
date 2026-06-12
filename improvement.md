@@ -185,6 +185,18 @@ shows where steps and tokens went to waste):
   harnesses pin `OPENSEEK_GLOBAL_SKILLS_DIR` into the trial workspace so a
   developer's personal library never leaks into trials.)* Follow-ups: TUI
   surfacing of available skills, multi-skill libraries under noisier tasks.
+- [ ] **Two system prompts: the split is justified for flash, not for pro.**
+  *2×2 matrix (2026-06-12, 5 trials/arm, TOML task, concurrency 3, results
+  archived with all 20 sessions in `eval/results/2026-06-12-prompt-matrix/`):
+  flash collapses on the 16K base prompt (2/5 → 0/5, two trials never
+  engaged the workspace at all), while pro on the 4.7K condensed prompt was
+  no worse than on its own guide (4/5 vs 3/5) at ~98.7% prefix-cache hit
+  either way. The condensed prompt is the unification candidate; replicate
+  pro-x-flashprompt on a second task type before deleting the base prompt
+  as prompt text.* Also surfaced: the prompt_task runner aborts on a
+  below-`--min-successes` arm BEFORE writing report.md/report.json — the
+  failed arms are precisely the ones whose reports matter; write the report
+  first, then enforce the threshold.
 
 ## DeepSeek client
 

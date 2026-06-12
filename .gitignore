@@ -20,3 +20,5 @@ eval/*
 !eval/report/**
 !eval/tool_harness/
 !eval/tool_harness/**
+!eval/results/
+!eval/results/**
