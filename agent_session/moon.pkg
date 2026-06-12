@@ -2,6 +2,7 @@ import {
   "bobzhang/openseek/deepseek",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
+  "moonbitlang/x/time",
 }
 
 warnings = "+unnecessary_annotation"

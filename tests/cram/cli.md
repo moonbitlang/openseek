@@ -26,6 +26,7 @@ Arguments:
 Options:
   -h, --help                                                   Show help information.
   --serve                                                      Run as a session server: read JSONL commands (prompt/steer/cancel) from stdin.
+  --no-session                                                 Run ephemerally: do not record this run to a durable session.
   --session-list                                               List durable session ids and exit.
   --session-show                                               Print the durable session JSON for --session and exit.
   --api-key <api-key>                                          DeepSeek API key. [env: DEEPSEEK] [default: ]
@@ -90,6 +91,67 @@ demo
 {"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}]}
 compacted session demo events 1..2; last_sequence=3
 {"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}},{"sequence":3,"item":{"kind":"summary","payload":{"content":"hello and answer","from_sequence":1,"to_sequence":2}}}]}
+```
+
+## One-Shot Runs Record A Session By Default
+
+A bare `openseek "task"` records its conversation to a generated
+`cli-YYYYMMDD-HHMMSS-mmm` session under `--session-root` (default
+`.openseek`), exactly as if `--session` had been passed — "what did the agent
+do?" is usually asked after the run, when an unrecorded answer is gone for
+good. The run announces the recording with a `session_started` event on
+stdout, so the id is in the log stream (and any `OPENSEEK_LOG_FILE` mirror);
+afterwards the run is visible to `--session-list`, `--session-show`, the viz
+server, and `--session <id>` resumption.
+
+This example stays offline by pointing `--api-url` at a closed local port:
+the engine names its session, durably records the user prompt, and only then
+fails to reach the API. The generated id's timestamp is normalized for
+determinism.
+
+```mooncram
+$ sh <<'EOF'
+> tmp=$(mktemp -d)
+> cd "$tmp"
+> if env DEEPSEEK=test-key openseek.exe --api-url "http://127.0.0.1:9/chat/completions" "say hi" > out.jsonl 2>/dev/null; then echo exit-zero; else echo exit-non-zero; fi
+> grep -c '"event":"session_started"' out.jsonl
+> env -u DEEPSEEK openseek.exe --session-list | cut -f1 | sed -E 's/cli-[0-9]{8}-[0-9]{6}-[0-9]{3}(-[A-Za-z0-9]+)?/cli-<stamp>/'
+> rm -rf "$tmp"
+> EOF
+exit-non-zero
+1
+cli-<stamp>
+```
+
+`--no-session` turns recording off: the same failing run leaves no session
+root behind.
+
+```mooncram
+$ sh <<'EOF'
+> tmp=$(mktemp -d)
+> cd "$tmp"
+> env DEEPSEEK=test-key openseek.exe --no-session --api-url "http://127.0.0.1:9/chat/completions" "say hi" >/dev/null 2>&1
+> if test -d .openseek; then echo recorded; else echo ephemeral; fi
+> rm -rf "$tmp"
+> EOF
+ephemeral
+```
+
+Asking for both behaviors at once is rejected before any work happens.
+
+```mooncram
+$ env DEEPSEEK=test-key openseek.exe --session demo --no-session "say hi" 2>&1
+error: --no-session contradicts --session; pick one behavior
+[1]
+```
+
+The same contradiction is caught in every mode — including `--serve`, which
+loads its session store on its own code path.
+
+```mooncram
+$ printf '' | env DEEPSEEK=test-key openseek.exe --serve --session demo --no-session 2>&1
+error: --no-session contradicts --session; pick one behavior
+[1]
 ```
 
 ## Serve Mode Speaks JSONL Commands On Stdin

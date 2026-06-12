@@ -235,3 +235,25 @@ test "compact validates and appends summary event" {
   }
   fail("empty summary accepted")
 }
+
+///|
+test "generated session ids stamp the launcher prefix and UTC wall clock" {
+  assert_eq(
+    @agent_session.SessionId::generated(prefix="cli", now_ms=0).value(),
+    "cli-19700101-000000-000",
+  )
+  // 2026-06-11T08:15:00.042Z, cross-checked against python datetime
+  assert_eq(
+    @agent_session.SessionId::generated(prefix="tui", now_ms=1781165700042).value(),
+    "tui-20260611-081500-042",
+  )
+  // A salt keeps two same-millisecond launches apart.
+  assert_eq(
+    @agent_session.SessionId::generated(
+      prefix="cli",
+      now_ms=1781165700042,
+      salt="1a2b3c4d",
+    ).value(),
+    "cli-20260611-081500-042-1a2b3c4d",
+  )
+}

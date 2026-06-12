@@ -22,6 +22,13 @@ async fn run_cli() -> Unit {
     group.spawn_bg() <| () => { stdout_log.drain() }
     defer stdout_log.close()
     let matches = cli_command().parse(env=@env.get_env_vars())
+    // --no-session contradicts an explicit --session in every mode. Checked
+    // before the session-command and serve branches: serve loads its store
+    // on its own path, so a later check could not stop it from recording
+    // anyway (Codex review).
+    if flag(matches, "no-session") && session_id(matches) is Some(_) {
+      fail("--no-session contradicts --session; pick one behavior")
+    }
     if handle_session_command(matches) {
       return
     }
@@ -41,7 +48,7 @@ async fn run_cli() -> Unit {
       value(matches, "reasoning-effort"),
     )
     let task = task_text(matches)
-    match session_id(matches) {
+    match resolved_session_id(matches) {
       None => {
         let system_prompt_text = configured_system_prompt(matches, model)
         @agent.run(
@@ -56,6 +63,15 @@ async fn run_cli() -> Unit {
         )
       }
       Some(id) => {
+        // Name the recording up front so a user scanning the event stream —
+        // or its OPENSEEK_LOG_FILE mirror — knows where to find this run
+        // later (--session-show, the viz server, or resuming by id).
+        @xlog.info() <?
+          {
+            "event": "session_started",
+            "session": id.value(),
+            "session_root": session_root(matches),
+          }
         let store = @store.SessionStore(session_root(matches))
         let session = load_or_new_session(store, id, matches, model)
         ignore(
@@ -74,6 +90,71 @@ async fn run_cli() -> Unit {
       }
     }
   })
+}
+
+///|
+/// The session this run records to: the explicit `--session` id, a generated
+/// `cli-<stamp>-<salt>` id by default, or `None` under `--no-session`.
+///
+/// One-shot runs record by default because "what did the agent actually do?"
+/// is asked after the run, when an unrecorded answer is gone for good; the
+/// recording is a small JSONL directory under --session-root, and the
+/// deferred first write means a run that fails before its first event still
+/// leaves nothing behind. `--no-session` restores the ephemeral behavior for
+/// callers that must not write to the workspace; combining it with an
+/// explicit `--session` is a contradiction that `run_cli` rejects up front
+/// for every mode (this helper repeats the check as defense in depth).
+///
+/// The generated id carries a random salt: two timestamp-only ids collide
+/// when a parallel driver launches two bare CLI runs in the same
+/// millisecond under one session root, and the colliding runs would append
+/// to each other's conversation (Codex review).
+async fn resolved_session_id(
+  matches : @argparse.Matches,
+) -> @agent_session.SessionId? {
+  match (session_id(matches), flag(matches, "no-session")) {
+    (Some(_), true) =>
+      fail("--no-session contradicts --session; pick one behavior")
+    (Some(id), false) => Some(id)
+    (None, true) => None
+    (None, false) =>
+      Some(
+        @agent_session.SessionId::generated(
+          prefix="cli",
+          now_ms=@env.now().reinterpret_as_int64(),
+          salt=random_salt(),
+        ),
+      )
+  }
+}
+
+///|
+/// A short random token, or "" where none can be produced (the timestamp
+/// alone then still names the session, as before).
+///
+/// The entropy comes from `mkdtemp` via `@fs.tmpdir`: the kernel arbitrates
+/// the random suffix to be unique across concurrent processes — exactly the
+/// guarantee two same-millisecond launches need — and the async runtime
+/// cannot read `/dev/urandom` directly (character devices are not
+/// pollable). The probe directory is removed immediately, and the suffix is
+/// filtered to alphanumerics (platforms decorate it with pid and dots).
+async fn random_salt() -> String {
+  let prefix = "openseek-salt-"
+  let dir = @fs.tmpdir(prefix~) catch { _ => return "" }
+  @fs.rmdir(dir) catch {
+    _ => ()
+  }
+  // Locate the prefix instead of splitting on a path separator: Windows
+  // paths use backslashes, and a `/`-only basename split would drop the
+  // salt there entirely (Codex review).
+  guard dir.rev_find(prefix) is Some(index) else { return "" }
+  let salt = StringBuilder()
+  for ch in dir[index + prefix.length():] {
+    if ch is ('0'..='9' | 'a'..='z' | 'A'..='Z') {
+      salt.write_char(ch)
+    }
+  }
+  salt.to_string()
 }
 
 ///|
@@ -201,6 +282,11 @@ fn cli_command() -> @argparse.Command {
         "serve",
         long="serve",
         about="Run as a session server: read JSONL commands (prompt/steer/cancel) from stdin.",
+      ),
+      FlagArg(
+        "no-session",
+        long="no-session",
+        about="Run ephemerally: do not record this run to a durable session.",
       ),
       FlagArg(
         "session-list",
@@ -687,6 +773,56 @@ test "agent runs require task text" {
     }
   }
   fail("missing task accepted")
+}
+
+///|
+async test "one-shot runs record to a generated salted cli session by default" {
+  let parsed = cli_command().parse(argv=["write", "MoonBit"], env={
+    "DEEPSEEK": "test-key",
+  })
+  guard resolved_session_id(parsed) is Some(id) else {
+    fail("expected a generated session id")
+  }
+  assert_true(id.value().has_prefix("cli-"))
+  // cli- + YYYYMMDD-HHMMSS-mmm is 23 chars; anything beyond is the random
+  // salt that keeps two same-millisecond launches under one session root
+  // apart (mkdtemp-arbitrated, so its exact length is platform-defined).
+  assert_true(id.value().length() > 24)
+}
+
+///|
+async test "--no-session restores the ephemeral one-shot" {
+  let parsed = cli_command().parse(argv=["--no-session", "write", "MoonBit"], env={
+    "DEEPSEEK": "test-key",
+  })
+  assert_true(resolved_session_id(parsed) is None)
+}
+
+///|
+async test "an explicit --session id is used verbatim" {
+  let parsed = cli_command().parse(
+    argv=["--session", "demo", "write", "MoonBit"],
+    env={ "DEEPSEEK": "test-key" },
+  )
+  guard resolved_session_id(parsed) is Some(id) else {
+    fail("expected the explicit id")
+  }
+  assert_eq(id.value(), "demo")
+}
+
+///|
+async test "--session with --no-session is a contradiction" {
+  let parsed = cli_command().parse(
+    argv=["--session", "demo", "--no-session", "write", "MoonBit"],
+    env={ "DEEPSEEK": "test-key" },
+  )
+  let _ = resolved_session_id(parsed) catch {
+    error => {
+      assert_true("\{error}".contains("--no-session contradicts --session"))
+      return
+    }
+  }
+  fail("expected a contradiction failure")
 }
 
 ///|

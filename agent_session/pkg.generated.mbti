@@ -53,6 +53,7 @@ pub struct SessionId {
   // private fields
 } derive(@debug.Debug)
 pub fn SessionId::SessionId(String) -> Self
+pub fn SessionId::generated(prefix~ : String, now_ms~ : Int64, salt? : String) -> Self
 pub fn SessionId::value(Self) -> String
 pub impl ToJson for SessionId
 pub impl @json.FromJson for SessionId

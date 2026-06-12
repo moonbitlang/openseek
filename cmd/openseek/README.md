@@ -22,6 +22,13 @@ with `OPENSEEK_SYSTEM_PROMPT_FILE` and
 `OPENSEEK_SESSION`; when set, the CLI creates or resumes that session under
 `--session-root` / `OPENSEEK_SESSION_ROOT` (default `.openseek`).
 
+Every run records a durable session: without `--session`, a generated
+`cli-YYYYMMDD-HHMMSS-mmm` id is used and announced by a `session_started`
+event on stdout, so the conversation is reviewable afterwards with
+`--session-list` / `--session-show` (or the viz server) and resumable with
+`--session <id>`. Pass `--no-session` to run ephemerally; combining it with
+`--session` is rejected.
+
 Without an explicit prompt file, the CLI selects the built-in prompt by model:
 `deepseek-v4-flash` uses `prompt/flash_prompt.md`; `deepseek-v4-pro` uses
 `prompt/base_prompt.md`.

@@ -187,43 +187,16 @@ fn session_root(matches : @argparse.Matches) -> String raise {
 }
 
 ///|
-/// Session id for a TUI launch that did not pick one: a UTC wall-clock stamp,
-/// `tui-YYYYMMDD-HHMMSS-mmm`.
+/// Session id for a TUI launch that did not pick one.
 ///
 /// Conversation continuity is the TUI's default. The engine runs once per
 /// prompt, so context only carries between prompts through the durable session
 /// store — without a session, telling the assistant something and asking about
 /// it in the next prompt would hit a fresh one-shot that never saw the first
-/// message. The timestamp form keeps generated ids unique per launch, sorted
-/// chronologically in `--session-list`, and valid as a directory name on every
-/// platform.
+/// message. The stamp format lives in `SessionId::generated`, shared with the
+/// engine CLI's default recording.
 fn generated_session_id(now_ms : Int64) -> @agent_session.SessionId {
-  fn pad2(value : Int) -> String {
-    if value < 10 {
-      "0\{value}"
-    } else {
-      "\{value}"
-    }
-  }
-
-  fn pad3(value : Int) -> String {
-    if value < 10 {
-      "00\{value}"
-    } else if value < 100 {
-      "0\{value}"
-    } else {
-      "\{value}"
-    }
-  }
-
-  let time = @time.unix(now_ms / 1000) catch {
-    // A wall clock unrepresentable as a date (absurd system time): the raw
-    // millisecond count still yields a unique, valid directory name.
-    _ => return SessionId("tui-\{now_ms}")
-  }
-  SessionId(
-    "tui-\{time.year()}\{pad2(time.month())}\{pad2(time.day())}-\{pad2(time.hour())}\{pad2(time.minute())}\{pad2(time.second())}-\{pad3((now_ms % 1000).to_int())}",
-  )
+  @agent_session.SessionId::generated(prefix="tui", now_ms~)
 }
 
 ///|

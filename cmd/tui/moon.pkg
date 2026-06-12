@@ -17,7 +17,6 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/string",
   "moonbitlang/x/sys",
-  "moonbitlang/x/time",
 }
 
 import {
