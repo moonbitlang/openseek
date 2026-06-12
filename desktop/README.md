@@ -2,9 +2,11 @@
 
 A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://mooncakes.io/docs/moonbit-community/rabbita) desktop client for the OpenSeek agent, written in MoonBit.
 
-- `main.mbt` — native host: keeps one persistent `openseek --serve` engine per conversation, streams its JSONL events to the webview, exposes `connect` / `start` / `steer` / `cancel` / `list_sessions` / `load_session` commands.
-- `frontend/` — the JS (Rabbita) UI bundled to `frontend.js`.
+- `main.mbt` — entry point: wires the window manifest, the IPC extensions, and the per-user runtime directory.
+- `internal/host/` — the native host: keeps one persistent `openseek --serve` engine per conversation, streams its JSONL events to the webview, exposes `connect` / `start` / `steer` / `cancel` / `list_sessions` / `load_session` commands.
+- `internal/paths/` — host environment discovery: home/workspace/session directories, the runtime dir, bundled frontend and engine lookup, the launch log.
 - `internal/event/` — engine event decoding.
+- `frontend/` — the JS (Rabbita) UI bundled to `frontend.js`.
 - `lepus/` — the Lepus framework, vendored as a git submodule.
 
 ## Sessions and streaming

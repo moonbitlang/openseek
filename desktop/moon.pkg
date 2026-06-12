@@ -1,17 +1,10 @@
 import {
-  "bobzhang/jsonl",
   "extensions/clipboard",
   "justjavac/lepus_app" @app,
   "justjavac/lepus_manifest" @manifest,
-  "openseek_desktop/internal/event",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/process",
+  "openseek_desktop/internal/host",
+  "openseek_desktop/internal/paths",
   "moonbitlang/core/env",
-  "moonbitlang/core/json",
-  "moonbitlang/core/string",
-  "moonbitlang/x/fs" @mbfs,
-  "moonbitlang/x/path" @mbpath,
 }
 
 warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

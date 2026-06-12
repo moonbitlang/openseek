@@ -1,0 +1,150 @@
+// Turning a `start` payload into the validated configuration a serve engine
+// is spawned with.
+
+///|
+const DefaultModel = "deepseek-v4-pro"
+
+///|
+const DefaultMaxSteps = 1000
+
+///|
+/// Sent as the API key when a custom endpoint is configured without one: the
+/// engine refuses to start with an empty key, but an endpoint like the
+/// default OpenSeek proxy does not validate it.
+const PlaceholderApiKey = "unused"
+
+///|
+priv struct RunConfig {
+  task : String
+  api_key : String
+  // Custom chat-completions endpoint; None means the engine's built-in
+  // default (the official DeepSeek endpoint).
+  api_url : String?
+  model : String
+  max_steps : Int
+  engine : String
+  cwd : String?
+  session : String?
+  session_root : String?
+}
+
+///|
+fn required_secret(
+  value : String?,
+  env_name : String,
+) -> String raise HostError {
+  if @paths.non_empty(value) is Some(value) {
+    return value
+  }
+  if @paths.non_empty(@env.get_env_var(env_name)) is Some(value) {
+    return value
+  }
+  raise HostError(
+    "DeepSeek API key is required; pass api_key or set " + env_name,
+  )
+}
+
+///|
+fn configured_max_steps(value : Int?) -> Int raise HostError {
+  let parsed = if value is Some(value) {
+    value
+  } else if @paths.non_empty(@env.get_env_var("OPENSEEK_MAX_STEPS"))
+    is Some(text) {
+    @string.parse_int(text) catch {
+      _ => raise HostError("OPENSEEK_MAX_STEPS must be a positive integer")
+    }
+  } else {
+    DefaultMaxSteps
+  }
+  guard parsed > 0 else {
+    raise HostError("max_steps must be a positive integer")
+  }
+  parsed
+}
+
+///|
+fn run_config(
+  payload : StartPayload,
+  engine : String,
+) -> RunConfig raise HostError {
+  let task = payload.task.trim().to_owned()
+  guard !task.is_empty() else { raise HostError("task must not be empty") }
+  let api_url = match @paths.non_empty(payload.api_url) {
+    Some(url) => Some(url)
+    None => @paths.non_empty(@env.get_env_var("OPENSEEK_API_URL"))
+  }
+  // Only the official endpoint strictly needs a key; a custom endpoint
+  // decides for itself, so a missing key becomes a placeholder there.
+  let api_key = required_secret(payload.api_key, "DEEPSEEK") catch {
+    error => if api_url is Some(_) { PlaceholderApiKey } else { raise error }
+  }
+  let session = @paths.non_empty(payload.session)
+  {
+    task,
+    api_key,
+    api_url,
+    model: @paths.option_or_env(payload.model, "DEEPSEEK_MODEL", DefaultModel),
+    max_steps: configured_max_steps(payload.max_steps),
+    engine,
+    cwd: resolved_run_cwd(payload.cwd, session),
+    session,
+    session_root: if session is Some(_) {
+      @paths.resolved_session_root(payload.session_root)
+    } else {
+      None
+    },
+  }
+}
+
+///|
+/// Engine working directory for a run. An explicit payload value must be an
+/// existing directory — a typo fails the run with a clear message instead of a
+/// cryptic engine error. When unset, the conversation gets its own workspace
+/// directory derived from its durable session id (created on demand by
+/// `start_run`), so the agent's files land somewhere the user can find and
+/// resuming the session returns to them. With no session either, fall back to
+/// the user's home directory: inheriting the host's own cwd would hand the
+/// agent whatever directory the app happened to be launched from (`/` under
+/// Finder), which is never a sensible place to work in.
+fn resolved_run_cwd(
+  payload_cwd : String?,
+  session : String?,
+) -> String? raise HostError {
+  if @paths.non_empty(payload_cwd) is Some(cwd) {
+    let cwd = @paths.expand_home(cwd)
+    let is_directory = @mbfs.is_dir(cwd) catch { _ => false }
+    guard is_directory else {
+      raise HostError("working directory does not exist: " + cwd)
+    }
+    return Some(cwd)
+  }
+  if session is Some(session) &&
+    @paths.session_workspace_dir(session) is Some(dir) {
+    return Some(dir)
+  }
+  @paths.home_dir()
+}
+
+///|
+/// The manager's map key for a run: its durable session id, or the one shared
+/// slot for session-less runs (the desktop client always names a session).
+fn session_key(config : RunConfig) -> String {
+  config.session.unwrap_or("")
+}
+
+///|
+/// Everything that pins a serve process to a config: a prompt whose
+/// fingerprint differs (model change, new session, …) must replace the
+/// process. The task is deliberately excluded — prompts vary per turn.
+fn engine_fingerprint(config : RunConfig) -> String {
+  [
+    config.engine,
+    config.api_key,
+    config.api_url.unwrap_or(""),
+    config.model,
+    config.max_steps.to_string(),
+    config.cwd.unwrap_or(""),
+    config.session.unwrap_or(""),
+    config.session_root.unwrap_or(""),
+  ].join("\u{0}")
+}

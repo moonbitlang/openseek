@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/core/env",
+  "moonbitlang/x/fs" @mbfs,
+  "moonbitlang/x/path" @mbpath,
+}
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"
