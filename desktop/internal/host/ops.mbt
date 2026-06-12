@@ -193,7 +193,7 @@ async fn engine_stdout(engine : String, args : Array[String]) -> String {
 
 ///|
 async fn list_sessions(engine : String) -> SessionsReply {
-  guard @paths.resolved_session_root(None) is Some(root) else {
+  guard @sessiondirs.resolved_session_root(None) is Some(root) else {
     raise HostError(
       "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
     )
@@ -219,7 +219,7 @@ async fn load_session(
   guard !session.is_empty() else {
     raise HostError("session id must not be empty")
   }
-  guard @paths.resolved_session_root(None) is Some(root) else {
+  guard @sessiondirs.resolved_session_root(None) is Some(root) else {
     raise HostError(
       "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
     )

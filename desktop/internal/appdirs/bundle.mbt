@@ -32,7 +32,7 @@ pub fn frontend_entry_path(framework_command : String) -> String {
 fn bundled_engine_path(framework_command : String) -> String? {
   let command_path : @mbpath.Path = framework_command
   let command_dir = command_path.dirname().resolve()
-  let candidates = match @env.get_env_var("OS") {
+  let candidates = match @env.get("OS") {
     Some("Windows_NT") => ["openseek.exe", "openseek"]
     _ => ["openseek", "openseek.exe"]
   }
@@ -52,31 +52,5 @@ pub fn engine_command(framework_command : String) -> String {
   if bundled_engine_path(framework_command) is Some(path) {
     return path
   }
-  non_empty(@env.get_env_var("OPENSEEK_ENGINE")).unwrap_or(DefaultEngine)
-}
-
-///|
-fn launch_log_path(framework_command : String) -> String {
-  let command_path : @mbpath.Path = framework_command
-  command_path
-  .dirname()
-  .resolve()
-  .join("openseek-desktop.log")
-  .normalize()
-  .to_string()
-}
-
-///|
-/// Append a timestamped line to the launch log beside the executable.
-pub fn append_launch_log(framework_command : String, message : String) -> Unit {
-  let path = launch_log_path(framework_command)
-  let previous = if @mbfs.path_exists(path) {
-    @mbfs.read_file_to_string(path) catch {
-      _ => ""
-    }
-  } else {
-    ""
-  }
-  let line = @env.now().to_string() + " " + message + "\n"
-  ignore(@mbfs.write_string_to_file(path, previous + line) catch { _ => () })
+  @env.get("OPENSEEK_ENGINE").unwrap_or(DefaultEngine)
 }

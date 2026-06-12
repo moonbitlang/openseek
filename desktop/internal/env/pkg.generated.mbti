@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/env"
+
+// Values
+pub fn expand_home(String) -> String
+
+pub fn get(String) -> String?
+
+pub fn home_dir() -> String?
+
+pub fn non_empty(String?) -> String?
+
+pub fn option_or_env(String?, String, String) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

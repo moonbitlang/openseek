@@ -33,10 +33,10 @@ fn required_secret(
   value : String?,
   env_name : String,
 ) -> String raise HostError {
-  if @paths.non_empty(value) is Some(value) {
+  if @env.non_empty(value) is Some(value) {
     return value
   }
-  if @paths.non_empty(@env.get_env_var(env_name)) is Some(value) {
+  if @env.get(env_name) is Some(value) {
     return value
   }
   raise HostError(
@@ -48,8 +48,7 @@ fn required_secret(
 fn configured_max_steps(value : Int?) -> Int raise HostError {
   let parsed = if value is Some(value) {
     value
-  } else if @paths.non_empty(@env.get_env_var("OPENSEEK_MAX_STEPS"))
-    is Some(text) {
+  } else if @env.get("OPENSEEK_MAX_STEPS") is Some(text) {
     @string.parse_int(text) catch {
       _ => raise HostError("OPENSEEK_MAX_STEPS must be a positive integer")
     }
@@ -69,27 +68,27 @@ fn run_config(
 ) -> RunConfig raise HostError {
   let task = payload.task.trim().to_owned()
   guard !task.is_empty() else { raise HostError("task must not be empty") }
-  let api_url = match @paths.non_empty(payload.api_url) {
+  let api_url = match @env.non_empty(payload.api_url) {
     Some(url) => Some(url)
-    None => @paths.non_empty(@env.get_env_var("OPENSEEK_API_URL"))
+    None => @env.get("OPENSEEK_API_URL")
   }
   // Only the official endpoint strictly needs a key; a custom endpoint
   // decides for itself, so a missing key becomes a placeholder there.
   let api_key = required_secret(payload.api_key, "DEEPSEEK") catch {
     error => if api_url is Some(_) { PlaceholderApiKey } else { raise error }
   }
-  let session = @paths.non_empty(payload.session)
+  let session = @env.non_empty(payload.session)
   {
     task,
     api_key,
     api_url,
-    model: @paths.option_or_env(payload.model, "DEEPSEEK_MODEL", DefaultModel),
+    model: @env.option_or_env(payload.model, "DEEPSEEK_MODEL", DefaultModel),
     max_steps: configured_max_steps(payload.max_steps),
     engine,
     cwd: resolved_run_cwd(payload.cwd, session),
     session,
     session_root: if session is Some(_) {
-      @paths.resolved_session_root(payload.session_root)
+      @sessiondirs.resolved_session_root(payload.session_root)
     } else {
       None
     },
@@ -110,8 +109,8 @@ fn resolved_run_cwd(
   payload_cwd : String?,
   session : String?,
 ) -> String? raise HostError {
-  if @paths.non_empty(payload_cwd) is Some(cwd) {
-    let cwd = @paths.expand_home(cwd)
+  if @env.non_empty(payload_cwd) is Some(cwd) {
+    let cwd = @env.expand_home(cwd)
     let is_directory = @mbfs.is_dir(cwd) catch { _ => false }
     guard is_directory else {
       raise HostError("working directory does not exist: " + cwd)
@@ -119,10 +118,10 @@ fn resolved_run_cwd(
     return Some(cwd)
   }
   if session is Some(session) &&
-    @paths.session_workspace_dir(session) is Some(dir) {
+    @sessiondirs.session_workspace_dir(session) is Some(dir) {
     return Some(dir)
   }
-  @paths.home_dir()
+  @env.home_dir()
 }
 
 ///|

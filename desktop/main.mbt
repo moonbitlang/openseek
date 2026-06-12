@@ -4,14 +4,13 @@ fn main {
     Ok(command) => command
     Err(error) => abort(error)
   }
-  @paths.append_launch_log(framework_command, "start")
+  append_launch_log(framework_command, "start")
   if @app.is_framework_process() {
-    @paths.append_launch_log(framework_command, "framework process start")
+    append_launch_log(framework_command, "framework process start")
     match @app.run_framework_process_from_cli() {
-      Ok(_) =>
-        @paths.append_launch_log(framework_command, "framework process exit ok")
+      Ok(_) => append_launch_log(framework_command, "framework process exit ok")
       Err(error) => {
-        @paths.append_launch_log(
+        append_launch_log(
           framework_command,
           "framework process error: " + error,
         )
@@ -20,14 +19,11 @@ fn main {
     }
     return
   }
-  let frontend_entry = @paths.frontend_entry_path(framework_command)
-  let engine = @paths.engine_command(framework_command)
-  @paths.append_launch_log(framework_command, "host process start")
-  @paths.append_launch_log(
-    framework_command,
-    "frontend entry: " + frontend_entry,
-  )
-  @paths.append_launch_log(framework_command, "engine: " + engine)
+  let frontend_entry = @appdirs.frontend_entry_path(framework_command)
+  let engine = @appdirs.engine_command(framework_command)
+  append_launch_log(framework_command, "host process start")
+  append_launch_log(framework_command, "frontend entry: " + frontend_entry)
+  append_launch_log(framework_command, "engine: " + engine)
   let extensions : Map[String, @manifest.ExtensionSetting] = {}
   extensions[@host.ExtensionId] = @manifest.ExtensionSetting::enabled()
   extensions["justjavac/lepus-clipboard"] = @manifest.ExtensionSetting::enabled()
@@ -44,10 +40,10 @@ fn main {
   // written to the per-user runtime dir, and the framework child runs there
   // too, so neither process depends on the bundle directory being writable —
   // or on it continuing to exist while the app runs.
-  let runtime_dir = @paths.prepared_runtime_dir()
+  let runtime_dir = @appdirs.prepared_runtime_dir()
   let framework_config_path = match runtime_dir {
     Some(dir) => {
-      @paths.remove_stale_framework_configs(dir)
+      @appdirs.remove_stale_framework_configs(dir)
       Some("\{dir}/lepus-framework-\{@env.now()}.json")
     }
     None => None
@@ -61,12 +57,9 @@ fn main {
       framework_cwd=runtime_dir,
       framework_config_path~,
     ) {
-    Ok(_) => @paths.append_launch_log(framework_command, "host process exit ok")
+    Ok(_) => append_launch_log(framework_command, "host process exit ok")
     Err(error) => {
-      @paths.append_launch_log(
-        framework_command,
-        "host process error: " + error,
-      )
+      append_launch_log(framework_command, "host process error: " + error)
       abort(error)
     }
   }

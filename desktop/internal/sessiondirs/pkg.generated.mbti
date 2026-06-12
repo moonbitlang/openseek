@@ -1,0 +1,16 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/sessiondirs"
+
+// Values
+pub fn resolved_session_root(String?) -> String?
+
+pub fn session_workspace_dir(String) -> String?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

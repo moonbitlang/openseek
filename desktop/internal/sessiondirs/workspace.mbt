@@ -1,3 +1,6 @@
+// Where a conversation works: the per-session workspace directory the engine
+// runs in.
+
 ///|
 const WorkspaceDirName = "OpenSeek"
 
@@ -35,7 +38,7 @@ fn safe_workspace_id(session : String) -> Bool {
 /// when no Documents folder exists at all (headless machines, redirected
 /// Windows profiles), the folder lives directly under the home directory.
 fn workspace_root() -> String? {
-  guard home_dir() is Some(home) else { return None }
+  guard @env.home_dir() is Some(home) else { return None }
   let home_path : @mbpath.Path = home
   let documents : @mbpath.Path = match xdg_documents_dir(home) {
     Some(dir) => dir
@@ -55,7 +58,7 @@ fn workspace_root() -> String? {
 /// The spec marks a disabled folder by pointing it at `$HOME` itself, which
 /// `workspace_root` then resolves to `~/OpenSeek` naturally.
 fn xdg_documents_dir(home : String) -> String? {
-  let config_dir = match non_empty(@env.get_env_var("XDG_CONFIG_HOME")) {
+  let config_dir = match @env.get("XDG_CONFIG_HOME") {
     Some(dir) => dir
     None => (home : @mbpath.Path).join(".config").to_string()
   }

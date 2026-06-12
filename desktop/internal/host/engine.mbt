@@ -98,7 +98,7 @@ fn open_run_engine(manager : EngineManager, run_id? : Int) -> ServeEngine? {
 /// it), so writing next to the executable would fail every
 /// `--session-list` / `--session-show` in a packaged app.
 async fn prepare_engine_stdin(engine : String) -> &@process.ProcessInput {
-  let path = if @paths.prepared_runtime_dir() is Some(dir) {
+  let path = if @appdirs.prepared_runtime_dir() is Some(dir) {
     dir + "/engine.stdin"
   } else {
     engine + ".stdin"

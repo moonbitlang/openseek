@@ -7,7 +7,7 @@
 /// `~/Library/Application Support/OpenSeek Desktop` where that layout exists
 /// (macOS) and `~/.openseek-desktop` elsewhere.
 fn app_runtime_dir() -> String? {
-  guard home_dir() is Some(home) else { return None }
+  guard @env.home_dir() is Some(home) else { return None }
   let home_path : @mbpath.Path = home
   let app_support = home_path.join("Library").join("Application Support")
   let app_support_exists = @mbfs.is_dir(app_support.to_string()) catch {
@@ -48,26 +48,4 @@ pub fn remove_stale_framework_configs(dir : String) -> Unit {
       }
     }
   }
-}
-
-///|
-/// Where durable sessions live when a run names a session: the payload's
-/// explicit root, then the OPENSEEK_SESSION_ROOT environment, then a stable
-/// absolute default under the user's home directory. The absolute fallback
-/// matters because a packaged app can run with `/` as its working directory,
-/// where the engine's relative `.openseek` default could never be created.
-pub fn resolved_session_root(payload_root : String?) -> String? {
-  if non_empty(payload_root) is Some(root) {
-    return Some(root)
-  }
-  if non_empty(@env.get_env_var("OPENSEEK_SESSION_ROOT")) is Some(root) {
-    return Some(root)
-  }
-  home_session_root()
-}
-
-///|
-fn home_session_root() -> String? {
-  guard home_dir() is Some(home) else { return None }
-  Some((home : @mbpath.Path).join(".openseek").normalize().to_string())
 }

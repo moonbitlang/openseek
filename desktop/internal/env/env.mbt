@@ -1,3 +1,7 @@
+// The host's convention for reading optional configuration, whether from the
+// process environment or from IPC payload fields: a missing *or blank* string
+// means "unset", and values are used trimmed.
+
 ///|
 /// `value` trimmed, or `None` when it is absent or blank.
 pub fn non_empty(value : String?) -> String? {
@@ -11,6 +15,12 @@ pub fn non_empty(value : String?) -> String? {
 }
 
 ///|
+/// The `name` environment variable, trimmed; `None` when unset or blank.
+pub fn get(name : String) -> String? {
+  non_empty(@env.get_env_var(name))
+}
+
+///|
 /// The first non-blank of: the explicit `value`, the `env_name` environment
 /// variable, the `fallback`.
 pub fn option_or_env(
@@ -21,7 +31,7 @@ pub fn option_or_env(
   if non_empty(value) is Some(value) {
     return value
   }
-  if non_empty(@env.get_env_var(env_name)) is Some(value) {
+  if get(env_name) is Some(value) {
     return value
   }
   fallback
@@ -30,10 +40,10 @@ pub fn option_or_env(
 ///|
 /// The user's home directory: `HOME`, or `USERPROFILE` on Windows.
 pub fn home_dir() -> String? {
-  if non_empty(@env.get_env_var("HOME")) is Some(home) {
+  if get("HOME") is Some(home) {
     return Some(home)
   }
-  non_empty(@env.get_env_var("USERPROFILE"))
+  get("USERPROFILE")
 }
 
 ///|
