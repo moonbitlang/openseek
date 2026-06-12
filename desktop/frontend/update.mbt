@@ -225,6 +225,61 @@ fn update(
         )
       }
     }
+    OpenSkills => {
+      // The catalog is fetched once per app run (and again after a
+      // failure); the installed list is cheap and refreshes on every open.
+      let (catalog_cmd, skills_catalog) = match model.skills_catalog {
+        CatalogIdle | CatalogFailed(_) =>
+          (fetch_skills_catalog(dispatch), CatalogLoading)
+        current => (@cmd.none, current)
+      }
+      (
+        @cmd.batch([catalog_cmd, fetch_installed_skills(dispatch)]),
+        { ..model, screen: Skills, skills_catalog, skills_notice: "" },
+      )
+    }
+    SkillsQueryChanged(value) => (@cmd.none, { ..model, skills_query: value })
+    SkillsCatalogLoaded(items) =>
+      (@cmd.none, { ..model, skills_catalog: CatalogReady(items) })
+    SkillsCatalogFailed(message) =>
+      (@cmd.none, { ..model, skills_catalog: CatalogFailed(message) })
+    InstalledSkillsLoaded(items) =>
+      (@cmd.none, { ..model, installed_skills: items })
+    SkillsNotice(message) => (@cmd.none, { ..model, skills_notice: message })
+    InstallSkill(item) => {
+      let key = @transcript.market_source_label(item)
+      if model.skills_busy.contains(key) {
+        (@cmd.none, model)
+      } else {
+        let skills_busy = model.skills_busy.copy()
+        skills_busy.push(key)
+        (
+          install_skill(dispatch, item),
+          { ..model, skills_busy, skills_notice: "" },
+        )
+      }
+    }
+    UninstallSkill(id) =>
+      if model.skills_busy.contains(id) {
+        (@cmd.none, model)
+      } else {
+        let skills_busy = model.skills_busy.copy()
+        skills_busy.push(id)
+        (
+          uninstall_skill(dispatch, id),
+          { ..model, skills_busy, skills_notice: "" },
+        )
+      }
+    SkillActionDone(key~, error~) => {
+      let skills_busy = model.skills_busy.filter(entry => entry != key)
+      if error.is_empty() {
+        // The library changed; what the panel shows must come from disk,
+        // not from a client-side guess.
+        (fetch_installed_skills(dispatch), { ..model, skills_busy, })
+      } else {
+        (@cmd.none, { ..model, skills_busy, skills_notice: error })
+      }
+    }
     Send => {
       let conv = model.active()
       let task = conv.task.trim().to_owned()
@@ -313,23 +368,34 @@ fn update(
       // running in the background and stays one sidebar click away.
       (rotate_session(dispatch), model)
     SessionRotated(session_id) =>
-      (@cmd.none, { ..model.activate(session_id), transcript_pinned: true })
+      (
+        @cmd.none,
+        { ..model.activate(session_id), screen: Chat, transcript_pinned: true },
+      )
     SessionsLoaded(items) =>
       (@cmd.none, { ..model, sessions: items, sessions_error: "" })
     SessionsFailed(message) => (@cmd.none, { ..model, sessions_error: message })
     OpenSession(session_id) =>
-      if session_id.is_empty() || session_id == model.active_session {
+      // Selecting a conversation always returns to the chat — including
+      // re-selecting the active one from the Skills page.
+      if session_id.is_empty() {
         (@cmd.none, model)
+      } else if session_id == model.active_session {
+        (@cmd.none, { ..model, screen: Chat })
       } else if model.find_conversation(session_id) is Some(_) {
         // The conversation already has live client state — it may well still
         // be running — so switching is just a change of focus. A switch lands
         // at the new conversation's tail, so the transcript re-pins.
         (
           scroll_transcript_after_render(),
-          { ..model.activate(session_id), transcript_pinned: true },
+          {
+            ..model.activate(session_id),
+            screen: Chat,
+            transcript_pinned: true,
+          },
         )
       } else {
-        (open_session(dispatch, session_id), model)
+        (open_session(dispatch, session_id), { ..model, screen: Chat })
       }
     SessionLoaded(session=session_id, items~) =>
       // A run that started in this conversation while the load was in flight

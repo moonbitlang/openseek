@@ -150,6 +150,18 @@ fn sidebar_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
       @html.div(class="sidebar-section sessions", sessions_section),
     ]),
     @html.div(class="sidebar-footer", [
+      @html.button(
+        class=if model.screen is Skills {
+          "sidebar-button active"
+        } else {
+          "sidebar-button"
+        },
+        on_click=dispatch(OpenSkills),
+        [
+          @html.span(class="sidebar-icon", "⬡"),
+          @html.span(class="sidebar-label", "Skills"),
+        ],
+      ),
       @html.button(class="sidebar-button", on_click=dispatch(OpenSetup), [
         @html.span(class="sidebar-icon", "⚙"),
         @html.span(class="sidebar-label", "Settings"),
@@ -535,6 +547,202 @@ fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
 }
 
 ///|
+/// One local-library row: name, description, and — for registry installs
+/// only — the source tag and the uninstall button. Hand-written skills are
+/// listed so the user sees everything the engine advertises, but the app
+/// never offers to delete them.
+fn installed_skill_row(
+  dispatch : @cmd.Dispatch[Msg],
+  model : Model,
+  skill : @transcript.InstalledSkillItem,
+) -> @html.Html {
+  let info : Array[@html.Html] = [@html.div(class="skill-name", skill.name)]
+  if !skill.description.trim().is_empty() {
+    info.push(@html.div(class="skill-desc", skill.description))
+  }
+  info.push(
+    @html.div(
+      class="skill-meta",
+      if skill.source.is_empty() {
+        "hand-written"
+      } else {
+        skill.source
+      },
+    ),
+  )
+  let children : Array[@html.Html] = [
+    @html.div(class="skill-avatar", "⬡"),
+    @html.div(class="skill-info", info),
+  ]
+  if skill.source.is_empty() {
+    children.push(@html.span(class="skill-check ok", "✓"))
+  } else {
+    let busy = model.skills_busy.contains(skill.id)
+    children.push(
+      @html.button(
+        class="secondary skill-action",
+        disabled=busy,
+        on_click=dispatch(UninstallSkill(skill.id)),
+        if busy {
+          "Removing…"
+        } else {
+          "Uninstall"
+        },
+      ),
+    )
+  }
+  @html.div(class="skill-row", children)
+}
+
+///|
+/// One catalog row. The action button morphs: already installed at this
+/// exact version reads as a disabled "Installed" (an older install keeps
+/// the button alive as the upgrade path), an install in flight reads as
+/// "Installing…".
+fn market_skill_row(
+  dispatch : @cmd.Dispatch[Msg],
+  model : Model,
+  item : @transcript.MarketSkillItem,
+) -> @html.Html {
+  let source = @transcript.market_source_label(item)
+  let busy = model.skills_busy.contains(source)
+  let installed = model.skill_installed(source)
+  let info : Array[@html.Html] = [@html.div(class="skill-name", item.name)]
+  if !item.description.trim().is_empty() {
+    info.push(@html.div(class="skill-desc", item.description))
+  }
+  let meta = if item.author.is_empty() {
+    "v\{item.version}"
+  } else {
+    "v\{item.version} · \{item.author}"
+  }
+  info.push(@html.div(class="skill-meta", meta))
+  let action = if installed {
+    @html.span(class="skill-check ok", "✓ Installed")
+  } else {
+    @html.button(
+      class="secondary skill-action",
+      disabled=busy,
+      on_click=dispatch(InstallSkill(item)),
+      if busy {
+        "Installing…"
+      } else {
+        "Install"
+      },
+    )
+  }
+  @html.div(class="skill-row", title=item.repository, [
+    @html.div(class="skill-avatar", "⬡"),
+    @html.div(class="skill-info", info),
+    action,
+  ])
+}
+
+///|
+/// Whether a skill row survives the page's search filter: a blank query
+/// keeps everything, otherwise any listed field must contain it
+/// (case-insensitive).
+fn skill_matches(query : String, fields : Array[String]) -> Bool {
+  let query = query.trim().to_owned().to_lower()
+  if query.is_empty() {
+    return true
+  }
+  for field in fields {
+    if field.to_lower().contains(query) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// The Skills page, shown in the main area in place of the conversation:
+/// header, search, the local library, then the mooncakes.io catalog.
+fn skills_page(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+  let sections : Array[@html.Html] = [
+    @html.div(class="skills-header", [
+      @html.h1("Skills"),
+      @html.div(
+        class="skills-subtitle",
+        "Playbooks the agent reads when a task matches. Skills apply to new chats.",
+      ),
+    ]),
+    @html.input(
+      input_type=@html.InputType::Search,
+      value=model.skills_query,
+      placeholder="Search skills",
+      on_input=dispatch.map(value => SkillsQueryChanged(value)),
+      attrs=@html.Attrs::build().class("skills-search"),
+      @html.nothing,
+    ),
+  ]
+  if !model.skills_notice.is_empty() {
+    sections.push(@html.div(class="skills-notice danger", model.skills_notice))
+  }
+  sections.push(@html.div(class="skills-heading", "Installed"))
+  let mut listed = 0
+  for skill in model.installed_skills {
+    if skill_matches(model.skills_query, [
+        skill.name,
+        skill.description,
+        skill.source,
+      ]) {
+      sections.push(installed_skill_row(dispatch, model, skill))
+      listed = listed + 1
+    }
+  }
+  if listed == 0 {
+    sections.push(
+      @html.div(
+        class="skills-empty",
+        if model.installed_skills.is_empty() {
+          "No skills installed yet."
+        } else {
+          "No installed skill matches the search."
+        },
+      ),
+    )
+  }
+  sections.push(@html.div(class="skills-heading", "Mooncakes registry"))
+  match model.skills_catalog {
+    CatalogIdle | CatalogLoading =>
+      sections.push(
+        @html.div(class="skills-empty", "Loading the skill catalog…"),
+      )
+    CatalogFailed(message) =>
+      sections.push(@html.div(class="skills-empty danger", message))
+    CatalogReady(items) => {
+      let mut shown = 0
+      for item in items {
+        if skill_matches(model.skills_query, [
+            item.name,
+            item.description,
+            item.author,
+          ]) {
+          sections.push(market_skill_row(dispatch, model, item))
+          shown = shown + 1
+        }
+      }
+      if shown == 0 {
+        sections.push(
+          @html.div(
+            class="skills-empty",
+            if items.is_empty() {
+              "The registry lists no installable skills yet."
+            } else {
+              "No registry skill matches the search."
+            },
+          ),
+        )
+      }
+    }
+  }
+  @html.section(class="skills-page", [
+    @html.div(class="skills-page-inner", sections),
+  ])
+}
+
+///|
 fn run_indicator(model : Model) -> @html.Html {
   let status = model.display_status()
   let label = status.label()
@@ -590,13 +798,18 @@ fn topbar_view(model : Model) -> @html.Html {
 
 ///|
 fn view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+  let content = match model.screen {
+    Chat =>
+      [
+        topbar_view(model),
+        transcript_view(model.active()),
+        composer_view(dispatch, model),
+      ]
+    Skills => [skills_page(dispatch, model)]
+  }
   let app = @html.div(class="app", [
     sidebar_view(dispatch, model),
-    @html.main_([
-      topbar_view(model),
-      transcript_view(model.active()),
-      composer_view(dispatch, model),
-    ]),
+    @html.main_(content),
   ])
   if model.setup_open {
     @html.fragment([app, setup_popup(dispatch, model)])

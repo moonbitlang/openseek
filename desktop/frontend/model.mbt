@@ -93,6 +93,25 @@ priv struct Conversation {
 }
 
 ///|
+/// What the main area shows: the active conversation, or the Skills page.
+/// Selecting a conversation (or rotating to a new one) always returns to
+/// the chat.
+priv enum Screen {
+  Chat
+  Skills
+}
+
+///|
+/// The mooncakes.io skill catalog as the Skills page sees it. One enum, so
+/// "loading", "loaded empty" and "failed" cannot be conflated.
+priv enum SkillsCatalog {
+  CatalogIdle
+  CatalogLoading
+  CatalogReady(Array[@transcript.MarketSkillItem])
+  CatalogFailed(String)
+}
+
+///|
 priv struct Model {
   bridge_ready : Bool
   // Why the bridge is unavailable; empty while still waiting or once ready.
@@ -126,6 +145,18 @@ priv struct Model {
   // yanked back down by the next delta. Maintained by a DOM scroll watcher;
   // explicit user actions (sending, switching conversations) re-pin it.
   transcript_pinned : Bool
+  // The Skills page: the registry catalog, the local library's contents,
+  // the search filter, entries with an install/uninstall in flight (keyed
+  // by the catalog entry's source label or the installed entry's id), and
+  // the last failure to show. The catalog is fetched when the page opens
+  // and kept for the app run; the installed list refreshes on open and
+  // after every successful action.
+  screen : Screen
+  skills_catalog : SkillsCatalog
+  installed_skills : Array[@transcript.InstalledSkillItem]
+  skills_query : String
+  skills_busy : Array[String]
+  skills_notice : String
 }
 
 ///|
@@ -145,6 +176,20 @@ priv enum Msg {
   OpenSetup
   CloseSetup
   SaveApiKey
+  OpenSkills
+  SkillsQueryChanged(String)
+  SkillsCatalogLoaded(Array[@transcript.MarketSkillItem])
+  SkillsCatalogFailed(String)
+  InstalledSkillsLoaded(Array[@transcript.InstalledSkillItem])
+  // A failure outside install/uninstall (the installed-list refresh).
+  SkillsNotice(String)
+  InstallSkill(@transcript.MarketSkillItem)
+  // Uninstall by library entry id; only registry installs get the button.
+  UninstallSkill(String)
+  // An install/uninstall settled: `key` is the busy entry to release, and a
+  // non-empty `error` becomes the panel's notice (success refreshes the
+  // installed list instead).
+  SkillActionDone(key~ : String, error~ : String)
   Send
   // The host reported a steer that never reached the engine (turn already
   // closed, engine dead, or the bridge call itself failed): carries the
@@ -213,7 +258,26 @@ fn initial_model() -> Model {
     sessions: [],
     sessions_error: "",
     transcript_pinned: true,
+    screen: Chat,
+    skills_catalog: CatalogIdle,
+    installed_skills: [],
+    skills_query: "",
+    skills_busy: [],
+    skills_notice: "",
   }
+}
+
+///|
+/// Whether a catalog entry (identified by its source label) is already in
+/// the local library — at that exact version; an older install keeps the
+/// Install button alive as the upgrade path.
+fn Model::skill_installed(self : Model, source : String) -> Bool {
+  for skill in self.installed_skills {
+    if skill.source == source {
+      return true
+    }
+  }
+  false
 }
 
 ///|

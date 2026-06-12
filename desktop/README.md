@@ -3,7 +3,8 @@
 A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://mooncakes.io/docs/moonbit-community/rabbita) desktop client for the OpenSeek agent, written in MoonBit.
 
 - `main.mbt` — entry point: wires the window manifest, the IPC extensions, the per-user runtime directory, and the launch log.
-- `internal/host/` — the native host: keeps one persistent `openseek --serve` engine per conversation, streams its JSONL events to the webview, exposes `connect` / `start` / `steer` / `cancel` / `list_sessions` / `load_session` commands.
+- `internal/host/` — the native host: keeps one persistent `openseek --serve` engine per conversation, streams its JSONL events to the webview, exposes `connect` / `start` / `steer` / `cancel` / `list_sessions` / `load_session` commands plus the `skills_*` / `skill_*` ops backing the Skills panel.
+- `internal/skillmarket/` — the mooncakes.io skill registry client and the local skills-library manager: catalog browsing, digest-verified installs into the engine's global skills directory, and uninstall of what the app itself installed.
 - `internal/appdirs/` — the installed app's own footprint: bundled frontend and engine lookup, the per-user runtime directory.
 - `internal/sessiondirs/` — where conversations live on disk: per-session workspace directories and the durable session store root.
 - `internal/env/` — process-environment reads (blank means unset).
@@ -84,6 +85,25 @@ transcript as a real user message, while `steer_dropped` (the steer raced
 the turn's end through the pipes) surfaces a notice asking to resubmit, so
 the text never vanishes silently. A turn that is being cancelled cannot be
 steered; the text stays in the composer.
+
+## Skills
+
+The sidebar's **Skills** button opens a browser over the
+[mooncakes.io](https://mooncakes.io) skill registry — published MoonBit
+packages that ship a `SKILL.md` playbook next to a runnable wasm entry point.
+Installing one downloads just the `SKILL.md` (the wasm is fetched by `moon
+runwasm` when the agent follows the playbook), verifies it against the
+registry's sha256 digest, and writes it to the engine's global skills library
+(`OPENSEEK_GLOBAL_SKILLS_DIR`, defaulting to `~/.openseek/skills`) as
+`<slug>/SKILL.md` with a `.mooncakes.json` provenance marker. The engine
+advertises the library in the system prompt of every **new** session — so
+installed skills apply to new chats, and to the CLI/TUI as well, since the
+library is shared.
+
+The panel also lists what is already in the library. Hand-written skills are
+shown but never touched: installs refuse to overwrite a same-named entry that
+has no provenance marker, and only entries the app itself installed get an
+Uninstall button.
 
 ## API endpoint
 
