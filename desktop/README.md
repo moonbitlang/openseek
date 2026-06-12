@@ -11,6 +11,7 @@ A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://moonca
 - `internal/home/` — the user's home directory and `~` expansion.
 - `internal/userdirs/` — the user's Documents folder, answered by each platform's authority: the Windows known folder, the XDG user-dirs override, or `~/Documents`.
 - `internal/event/` — engine event decoding.
+- `internal/menu/` — the macOS main menu (App/Edit/Window): macOS dispatches ⌘ key equivalents through the main menu and the webview library never creates one, so without it the editing shortcuts (⌘A/⌘C/⌘V, undo, quit) are silently dropped. No-op on other platforms.
 - `frontend/` — the JS (Rabbita) UI bundled to `frontend.js`: the Elm-style model/update/view plus the command files talking to the host bridge.
 - `frontend/transcript/` — pure decoders from the engine's wire data to display items: engine events, session-list and session-replay replies, runtime updates.
 - `frontend/markdown/` — markdown rendering for transcript content (cmark to Rabbita nodes, panic-guarded).

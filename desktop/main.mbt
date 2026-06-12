@@ -8,6 +8,7 @@ fn main raise {
   log.info() <? { "message": "start" }
   if @app.is_framework_process() {
     log.info() <? { "message": "framework process start" }
+    @menu.install_main_menu()
     match @app.run_framework_process_from_cli() {
       Ok(_) => log.info() <? { "message": "framework process exit ok" }
       Err(error) => {

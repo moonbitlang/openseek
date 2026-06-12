@@ -163,7 +163,6 @@ fn update(
         @cmd.batch([
           install_bridge(dispatch),
           load_saved_settings(dispatch),
-          install_clipboard_paste_bridge(),
           watch_transcript_scroll(dispatch),
           rotate_session(dispatch),
         ]),

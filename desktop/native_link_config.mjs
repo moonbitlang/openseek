@@ -167,6 +167,19 @@ function main() {
   patchAsyncWindowsStub(env);
   const isWindows = process.platform === "win32" || env.OS === "Windows_NT";
   if (!isWindows) {
+    if (process.platform === "darwin") {
+      // The main-menu stub (internal/menu) calls the Objective-C runtime
+      // and AppKit.
+      process.stdout.write(JSON.stringify({
+        link_configs: [
+          {
+            package: "openseek_desktop/internal/menu",
+            link_flags: "-lobjc -framework AppKit",
+          },
+        ],
+      }));
+      return;
+    }
     process.stdout.write(JSON.stringify({ link_configs: [] }));
     return;
   }

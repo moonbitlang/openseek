@@ -4,6 +4,7 @@ import {
   "justjavac/lepus_manifest" @manifest,
   "openseek_desktop/internal/appdirs",
   "openseek_desktop/internal/host",
+  "openseek_desktop/internal/menu",
   "moonbitlang/core/env",
   "tonyfettes/xlog",
 }
