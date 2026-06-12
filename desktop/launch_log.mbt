@@ -1,29 +1,15 @@
 // Launch diagnostics for the packaged app: a double-clicked bundle has no
-// terminal, so startup problems would otherwise vanish. Every process
-// start/exit appends a timestamped line to `openseek-desktop.log` beside the
-// executable.
+// terminal, so startup problems would otherwise vanish. Both processes log to
+// `openseek-desktop.log` in the per-user runtime dir — the bundle directory
+// is read-only on end-user installs (App Translocation mounts it so), which
+// is exactly when launch diagnostics matter, so the log lives with the rest
+// of the runtime state. xlog's file handler opens in append mode, so the
+// host and the framework child can share the file safely.
 
 ///|
-fn launch_log_path(framework_command : String) -> String {
-  let command_path : @mbpath.Path = framework_command
-  command_path
-  .dirname()
-  .resolve()
-  .join("openseek-desktop.log")
-  .normalize()
-  .to_string()
-}
-
-///|
-fn append_launch_log(framework_command : String, message : String) -> Unit {
-  let path = launch_log_path(framework_command)
-  let previous = if @mbfs.path_exists(path) {
-    @mbfs.read_file_to_string(path) catch {
-      _ => ""
-    }
-  } else {
-    ""
+fn launch_logger() -> @xlog.Logger raise {
+  guard @appdirs.prepared_runtime_dir() is Some(dir) else {
+    fail("cannot determine the per-user runtime directory")
   }
-  let line = @env.now().to_string() + " " + message + "\n"
-  ignore(@mbfs.write_string_to_file(path, previous + line) catch { _ => () })
+  Logger(@xlog.File(dir + "/openseek-desktop.log"))
 }

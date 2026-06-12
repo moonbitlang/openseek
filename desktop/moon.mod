@@ -11,6 +11,7 @@ import {
   "justjavac/lepus_app@0.1.0",
   "justjavac/lepus_manifest@0.1.0",
   "extensions@0.1.0",
+  "tonyfettes/xlog@0.4.0",
 }
 
 readme = "README.md"

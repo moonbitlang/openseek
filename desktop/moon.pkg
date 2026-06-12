@@ -5,8 +5,7 @@ import {
   "openseek_desktop/internal/appdirs",
   "openseek_desktop/internal/host",
   "moonbitlang/core/env",
-  "moonbitlang/x/fs" @mbfs,
-  "moonbitlang/x/path" @mbpath,
+  "tonyfettes/xlog",
 }
 
 warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

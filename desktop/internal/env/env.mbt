@@ -17,7 +17,7 @@ pub fn non_empty(value : String?) -> String? {
 ///|
 /// The `name` environment variable, trimmed; `None` when unset or blank.
 pub fn get(name : String) -> String? {
-  non_empty(@env.get_env_var(name))
+  non_empty(@sys.get_env_var(name))
 }
 
 ///|

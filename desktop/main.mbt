@@ -1,19 +1,17 @@
 ///|
-fn main {
+fn main raise {
   let framework_command = match @app.current_executable_command() {
     Ok(command) => command
     Err(error) => abort(error)
   }
-  append_launch_log(framework_command, "start")
+  let log = launch_logger()
+  log.info() <? { "message": "start" }
   if @app.is_framework_process() {
-    append_launch_log(framework_command, "framework process start")
+    log.info() <? { "message": "framework process start" }
     match @app.run_framework_process_from_cli() {
-      Ok(_) => append_launch_log(framework_command, "framework process exit ok")
+      Ok(_) => log.info() <? { "message": "framework process exit ok" }
       Err(error) => {
-        append_launch_log(
-          framework_command,
-          "framework process error: " + error,
-        )
+        log.error() <? { "message": "framework process error", "error": error }
         abort(error)
       }
     }
@@ -21,9 +19,9 @@ fn main {
   }
   let frontend_entry = @appdirs.frontend_entry_path(framework_command)
   let engine = @appdirs.engine_command(framework_command)
-  append_launch_log(framework_command, "host process start")
-  append_launch_log(framework_command, "frontend entry: " + frontend_entry)
-  append_launch_log(framework_command, "engine: " + engine)
+  log.info() <? { "message": "host process start" }
+  log.info() <? { "message": "frontend entry", "path": frontend_entry }
+  log.info() <? { "message": "engine", "path": engine }
   let extensions : Map[String, @manifest.ExtensionSetting] = {}
   extensions[@host.ExtensionId] = @manifest.ExtensionSetting::enabled()
   extensions["justjavac/lepus-clipboard"] = @manifest.ExtensionSetting::enabled()
@@ -57,9 +55,9 @@ fn main {
       framework_cwd=runtime_dir,
       framework_config_path~,
     ) {
-    Ok(_) => append_launch_log(framework_command, "host process exit ok")
+    Ok(_) => log.info() <? { "message": "host process exit ok" }
     Err(error) => {
-      append_launch_log(framework_command, "host process error: " + error)
+      log.error() <? { "message": "host process error", "error": error }
       abort(error)
     }
   }
