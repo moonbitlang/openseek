@@ -6,7 +6,8 @@ A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://moonca
 - `internal/host/` — the native host: keeps one persistent `openseek --serve` engine per conversation, streams its JSONL events to the webview, exposes `connect` / `start` / `steer` / `cancel` / `list_sessions` / `load_session` commands.
 - `internal/appdirs/` — the installed app's own footprint: bundled frontend and engine lookup, the per-user runtime directory.
 - `internal/sessiondirs/` — where conversations live on disk: per-session workspace directories and the durable session store root.
-- `internal/env/` — process-environment reads (blank means unset), the home directory, `~` expansion.
+- `internal/env/` — process-environment reads (blank means unset).
+- `internal/home/` — the user's home directory and `~` expansion.
 - `internal/xdg/` — the slice of the XDG conventions the app consults: the user-dirs Documents override.
 - `internal/event/` — engine event decoding.
 - `frontend/` — the JS (Rabbita) UI bundled to `frontend.js`.

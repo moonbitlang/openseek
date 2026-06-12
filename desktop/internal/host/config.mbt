@@ -107,7 +107,7 @@ async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
 /// Finder), which is never a sensible place to work in.
 async fn resolved_run_cwd(payload_cwd : String?, session : String?) -> String? {
   if payload_cwd is Some(cwd) {
-    let cwd = @env.expand_home(cwd)
+    let cwd = @home.expand(cwd)
     guard is_dir(cwd) else {
       raise HostError("working directory does not exist: " + cwd)
     }
@@ -117,7 +117,7 @@ async fn resolved_run_cwd(payload_cwd : String?, session : String?) -> String? {
     @sessiondirs.session_workspace_dir(session) is Some(dir) {
     return Some(dir)
   }
-  @env.home_dir()
+  @home.dir()
 }
 
 ///|

@@ -2,11 +2,7 @@
 package "openseek_desktop/internal/env"
 
 // Values
-pub fn expand_home(String) -> String
-
 pub fn get(String) -> String?
-
-pub fn home_dir() -> String?
 
 // Errors
 

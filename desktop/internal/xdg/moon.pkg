@@ -1,5 +1,6 @@
 import {
   "openseek_desktop/internal/env",
+  "openseek_desktop/internal/home",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/x/path" @mbpath,

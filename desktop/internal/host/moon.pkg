@@ -3,6 +3,7 @@ import {
   "justjavac/lepus_app" @app,
   "openseek_desktop/internal/appdirs",
   "openseek_desktop/internal/env",
+  "openseek_desktop/internal/home",
   "openseek_desktop/internal/event",
   "openseek_desktop/internal/sessiondirs",
   "moonbitlang/async",

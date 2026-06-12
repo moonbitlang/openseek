@@ -8,7 +8,8 @@
 /// `None` when there is no override. The spec marks a disabled folder by
 /// pointing it at `$HOME` itself, which callers should treat as their
 /// home-directory fallback.
-pub async fn documents_dir(home : String) -> String? {
+pub async fn documents_dir() -> String? {
+  guard @home.dir() is Some(home) else { return None }
   let config_dir = match @env.get("XDG_CONFIG_HOME") {
     Some(dir) => dir
     None => (home : @mbpath.Path).join(".config").to_string()

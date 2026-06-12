@@ -7,7 +7,7 @@
 /// `~/Library/Application Support/OpenSeek Desktop` where that layout exists
 /// (macOS) and `~/.openseek-desktop` elsewhere.
 fn app_runtime_dir() -> String? {
-  guard @env.home_dir() is Some(home) else { return None }
+  guard @home.dir() is Some(home) else { return None }
   let home_path : @mbpath.Path = home
   let app_support = home_path.join("Library").join("Application Support")
   let app_support_exists = @mbfs.is_dir(app_support.to_string()) catch {

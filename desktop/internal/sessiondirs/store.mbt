@@ -19,6 +19,6 @@ pub fn resolved_session_root(payload_root : String?) -> String? {
 
 ///|
 fn home_session_root() -> String? {
-  guard @env.home_dir() is Some(home) else { return None }
+  guard @home.dir() is Some(home) else { return None }
   Some((home : @mbpath.Path).join(".openseek").normalize().to_string())
 }

@@ -38,9 +38,9 @@ fn safe_workspace_id(session : String) -> Bool {
 /// when no Documents folder exists at all (headless machines, redirected
 /// Windows profiles), the folder lives directly under the home directory.
 async fn workspace_root() -> String? {
-  guard @env.home_dir() is Some(home) else { return None }
+  guard @home.dir() is Some(home) else { return None }
   let home_path : @mbpath.Path = home
-  let documents : @mbpath.Path = match @xdg.documents_dir(home) {
+  let documents : @mbpath.Path = match @xdg.documents_dir() {
     Some(dir) => dir
     None => home_path.join("Documents")
   }
