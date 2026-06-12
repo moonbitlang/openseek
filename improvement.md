@@ -185,6 +185,17 @@ shows where steps and tokens went to waste):
   harnesses pin `OPENSEEK_GLOBAL_SKILLS_DIR` into the trial workspace so a
   developer's personal library never leaks into trials.)* Follow-ups: TUI
   surfacing of available skills, multi-skill libraries under noisier tasks.
+- [ ] **Examples-over-guidelines: pilot negative, demos do not beat rules.**
+  *Pilot (2026-06-12, flash, 5 TOML trials/arm, pre-registered metrics,
+  Codex-reviewed plan, archive in `eval/results/2026-06-12-examples-pilot/`):
+  replacing guideline bullets with four compiler-verified worked examples
+  (token-neutral) left targeted error classes flat per compile invocation
+  (+1.6% vs the >=40% drop required) and regressed finish rate 5/5 -> 3/5;
+  the additive variant was worse still (2/5). Raw error counts fell but only
+  because demo arms compiled less, in less decisive sessions. Per protocol no
+  prompt change ships. Durable side-find: StringView::to_string() is
+  deprecated for .to_owned() — caught because demo verification runs
+  moon check --deny-warn; keep verifying anything destined for a prompt.*
 - [ ] **Two system prompts: the split is justified for flash, not for pro.**
   *2×2 matrix (2026-06-12, 5 trials/arm, TOML task, concurrency 3, results
   archived with all 20 sessions in `eval/results/2026-06-12-prompt-matrix/`):

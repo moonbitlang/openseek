@@ -1,0 +1,197 @@
+{
+  "flash-demos": {
+    "passes": 3,
+    "finished": 3,
+    "targeted_total": 237,
+    "untargeted_total": 177,
+    "mean_targeted_per_invocation": 1.85,
+    "mean_unique_targeted": 8,
+    "trials": [
+      {
+        "trial": 1,
+        "session_id": "cli-20260612-055048-181-29018f5c3b84c",
+        "targeted": 70,
+        "untargeted": 75,
+        "compile_invocations": 56,
+        "targeted_per_invocation": 1.25,
+        "unique_targeted": 12,
+        "terminal": "finished",
+        "pass": true
+      },
+      {
+        "trial": 2,
+        "session_id": "cli-20260612-055048-181-29019f5c3b84c",
+        "targeted": 8,
+        "untargeted": 19,
+        "compile_invocations": 6,
+        "targeted_per_invocation": 1.33,
+        "unique_targeted": 4,
+        "terminal": "missing",
+        "pass": false
+      },
+      {
+        "trial": 3,
+        "session_id": "cli-20260612-055048-181-29020f5c3b84c",
+        "targeted": 22,
+        "untargeted": 13,
+        "compile_invocations": 8,
+        "targeted_per_invocation": 2.75,
+        "unique_targeted": 7,
+        "terminal": "missing",
+        "pass": false
+      },
+      {
+        "trial": 4,
+        "session_id": "cli-20260612-055431-045-304463e55a2a8",
+        "targeted": 90,
+        "untargeted": 31,
+        "compile_invocations": 43,
+        "targeted_per_invocation": 2.09,
+        "unique_targeted": 8,
+        "terminal": "finished",
+        "pass": true
+      },
+      {
+        "trial": 5,
+        "session_id": "cli-20260612-055431-312-30459855c6b8e",
+        "targeted": 47,
+        "untargeted": 39,
+        "compile_invocations": 26,
+        "targeted_per_invocation": 1.81,
+        "unique_targeted": 9,
+        "terminal": "finished",
+        "pass": true
+      }
+    ]
+  },
+  "flash-demos-plus": {
+    "passes": 2,
+    "finished": 2,
+    "targeted_total": 389,
+    "untargeted_total": 290,
+    "mean_targeted_per_invocation": 1.73,
+    "mean_unique_targeted": 9.4,
+    "trials": [
+      {
+        "trial": 1,
+        "session_id": "cli-20260612-060537-144-38906dc7154a3",
+        "targeted": 134,
+        "untargeted": 65,
+        "compile_invocations": 47,
+        "targeted_per_invocation": 2.85,
+        "unique_targeted": 12,
+        "terminal": "failed",
+        "pass": false
+      },
+      {
+        "trial": 2,
+        "session_id": "cli-20260612-060537-144-38908dc7154a3",
+        "targeted": 50,
+        "untargeted": 45,
+        "compile_invocations": 30,
+        "targeted_per_invocation": 1.67,
+        "unique_targeted": 8,
+        "terminal": "finished",
+        "pass": true
+      },
+      {
+        "trial": 3,
+        "session_id": "cli-20260612-060537-144-38909dc7154a3",
+        "targeted": 75,
+        "untargeted": 99,
+        "compile_invocations": 60,
+        "targeted_per_invocation": 1.25,
+        "unique_targeted": 10,
+        "terminal": "failed",
+        "pass": false
+      },
+      {
+        "trial": 4,
+        "session_id": "cli-20260612-061444-602-4625193f90fb2",
+        "targeted": 39,
+        "untargeted": 37,
+        "compile_invocations": 36,
+        "targeted_per_invocation": 1.08,
+        "unique_targeted": 6,
+        "terminal": "finished",
+        "pass": true
+      },
+      {
+        "trial": 5,
+        "session_id": "cli-20260612-061931-934-49897882e0e1c",
+        "targeted": 91,
+        "untargeted": 44,
+        "compile_invocations": 51,
+        "targeted_per_invocation": 1.78,
+        "unique_targeted": 11,
+        "terminal": "failed",
+        "pass": false
+      }
+    ]
+  },
+  "flash-guidelines": {
+    "passes": 3,
+    "finished": 5,
+    "targeted_total": 329,
+    "untargeted_total": 442,
+    "mean_targeted_per_invocation": 1.82,
+    "mean_unique_targeted": 9.8,
+    "trials": [
+      {
+        "trial": 1,
+        "session_id": "cli-20260612-052851-115-168566ae380c7",
+        "targeted": 20,
+        "untargeted": 34,
+        "compile_invocations": 28,
+        "targeted_per_invocation": 0.71,
+        "unique_targeted": 6,
+        "terminal": "finished",
+        "pass": false
+      },
+      {
+        "trial": 2,
+        "session_id": "cli-20260612-052851-115-168556ae380c7",
+        "targeted": 30,
+        "untargeted": 13,
+        "compile_invocations": 29,
+        "targeted_per_invocation": 1.03,
+        "unique_targeted": 5,
+        "terminal": "finished",
+        "pass": false
+      },
+      {
+        "trial": 3,
+        "session_id": "cli-20260612-052851-115-168546ae380c7",
+        "targeted": 90,
+        "untargeted": 97,
+        "compile_invocations": 30,
+        "targeted_per_invocation": 3.0,
+        "unique_targeted": 16,
+        "terminal": "finished",
+        "pass": true
+      },
+      {
+        "trial": 4,
+        "session_id": "cli-20260612-053505-571-201632660f016",
+        "targeted": 72,
+        "untargeted": 94,
+        "compile_invocations": 31,
+        "targeted_per_invocation": 2.32,
+        "unique_targeted": 13,
+        "terminal": "finished",
+        "pass": true
+      },
+      {
+        "trial": 5,
+        "session_id": "cli-20260612-053703-746-220079f717b71",
+        "targeted": 117,
+        "untargeted": 204,
+        "compile_invocations": 58,
+        "targeted_per_invocation": 2.02,
+        "unique_targeted": 9,
+        "terminal": "finished",
+        "pass": true
+      }
+    ]
+  }
+}
