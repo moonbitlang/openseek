@@ -6,6 +6,7 @@ import {
   "openseek_desktop/internal/home",
   "openseek_desktop/internal/event",
   "openseek_desktop/internal/sessiondirs",
+  "openseek_desktop/internal/skillmarket",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",

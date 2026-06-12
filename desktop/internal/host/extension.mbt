@@ -43,6 +43,10 @@ pub fn openseek_extension(engine : String) -> @app.AppCommandExtensionSpec {
       @app.AppCommandApiDescriptor::new("steer"),
       @app.AppCommandApiDescriptor::new("list_sessions"),
       @app.AppCommandApiDescriptor::new("load_session"),
+      @app.AppCommandApiDescriptor::new("skills_catalog"),
+      @app.AppCommandApiDescriptor::new("skill_install"),
+      @app.AppCommandApiDescriptor::new("skills_installed"),
+      @app.AppCommandApiDescriptor::new("skill_uninstall"),
     ],
     fn(context) {
       context.op_async_result("connect", async fn(_payload : Json) {
@@ -64,6 +68,22 @@ pub fn openseek_extension(engine : String) -> @app.AppCommandExtensionSpec {
         payload : LoadSessionPayload,
       ) {
         to_op_result(async fn() { load_session(engine, payload) })
+      })
+      context.op_async_result("skills_catalog", async fn(_payload : Json) {
+        to_op_result(async fn() { skills_catalog_op() })
+      })
+      context.op_async_result("skill_install", async fn(
+        payload : InstallSkillPayload,
+      ) {
+        to_op_result(async fn() { install_skill_op(payload) })
+      })
+      context.op_async_result("skills_installed", async fn(_payload : Json) {
+        to_op_result(async fn() { installed_skills_op() })
+      })
+      context.op_async_result("skill_uninstall", async fn(
+        payload : UninstallSkillPayload,
+      ) {
+        to_op_result(async fn() { uninstall_skill_op(payload) })
       })
       Ok(())
     },

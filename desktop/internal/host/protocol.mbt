@@ -134,6 +134,41 @@ priv struct PumpReply {
 } derive(ToJson)
 
 ///|
+priv struct InstallSkillPayload {
+  module_name : String
+  version : String
+  package_path : String?
+} derive(FromJson)
+
+///|
+priv struct UninstallSkillPayload {
+  id : String
+} derive(FromJson)
+
+///|
+/// Reply to `skills_catalog`: the registry's installable skills.
+priv struct SkillsCatalogReply {
+  skills : Array[@skillmarket.MarketSkill]
+} derive(ToJson)
+
+///|
+/// Reply to `skills_installed`: the global skills library's contents,
+/// registry installs and hand-written skills alike.
+priv struct InstalledSkillsReply {
+  skills : Array[@skillmarket.InstalledSkill]
+} derive(ToJson)
+
+///|
+priv struct InstallSkillReply {
+  installed : @skillmarket.InstalledSkill
+} derive(ToJson)
+
+///|
+priv struct UninstallSkillReply {
+  removed : Bool
+} derive(ToJson)
+
+///|
 /// Every outbound event the runner can send to the frontend. `emit` is the
 /// single place that maps a variant to its wire name and payload, so the
 /// name/payload pairing can never drift out of sync.
