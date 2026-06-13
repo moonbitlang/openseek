@@ -175,12 +175,16 @@ fn select_lines(
 ) -> ReadSelection {
   let lines = [ for line in content.split("\n") => line.to_owned() ]
   let total_lines = lines.length()
-  // Clamp both bounds into [0, total_lines]: start_line and max_lines are
-  // validated positive upstream, so the slice below is always ascending and
-  // in range — a start past the last line simply selects nothing.
-  let start_index = (start_line - 1).min(total_lines)
+  // Clamp both bounds into [0, total_lines] so the slice below is always
+  // ascending and in range — a start past the last line selects nothing.
+  let start_index = (start_line - 1).clamp(min=0, max=total_lines)
   let end_exclusive = match max_lines {
-    Some(count) => (start_index + count).min(total_lines)
+    // Clamp the count BEFORE adding: a huge max_lines (e.g. Int max) must
+    // not overflow past start_index (Codex review). Such a request now
+    // returns the remaining lines, where the old post-add clamp overflowed
+    // negative and accidentally selected nothing.
+    Some(count) =>
+      start_index + count.clamp(min=0, max=total_lines - start_index)
     None => total_lines
   }
   let selected = lines[start_index:end_exclusive].to_owned()
@@ -471,4 +475,19 @@ async test "read rejects non-object arguments" {
   guard result is Respond(output) else { fail("expected Respond") }
   assert_eq(output.content, "error: read requires object arguments")
   assert_true(output.is_error)
+}
+
+///|
+async test "a huge max_lines returns the remaining lines without overflow" {
+  let path = "/tmp/openseek-read-huge-max.txt"
+  @fs.write_file(path, "a\nb\nc", create_mode=CreateOrTruncate)
+  let result = execute({
+    "path": path,
+    "start_line": 2,
+    "max_lines": 2147483647,
+  })
+  guard result is Respond(output) else { fail("expected Respond") }
+  assert_false(output.is_error)
+  assert_true(output.content.contains("b\nc"))
+  assert_true(output.content.contains("shown_lines=2"))
 }
