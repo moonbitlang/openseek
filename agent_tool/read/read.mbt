@@ -173,23 +173,17 @@ fn select_lines(
   start_line : Int,
   max_lines : Int?,
 ) -> ReadSelection {
-  let lines : Array[String] = content
-    .split("\n")
-    .map(line => line.to_owned())
-    .collect()
+  let lines = [ for line in content.split("\n") => line.to_owned() ]
   let total_lines = lines.length()
-  let start_index = start_line - 1
-  let requested_lines = match max_lines {
-    Some(count) => count
-    None => total_lines - start_index
+  // Clamp both bounds into [0, total_lines]: start_line and max_lines are
+  // validated positive upstream, so the slice below is always ascending and
+  // in range — a start past the last line simply selects nothing.
+  let start_index = (start_line - 1).min(total_lines)
+  let end_exclusive = match max_lines {
+    Some(count) => (start_index + count).min(total_lines)
+    None => total_lines
   }
-  let end_exclusive = clamp_end(start_index + requested_lines, total_lines)
-  let selected : Array[String] = []
-  if start_index < total_lines {
-    for i in start_index..<end_exclusive {
-      selected.push(lines[i])
-    }
-  }
+  let selected = lines[start_index:end_exclusive].to_owned()
   let shown_lines = selected.length()
   let end_line = if shown_lines == 0 {
     start_line - 1
@@ -207,17 +201,6 @@ fn select_lines(
     total_lines,
     shown_lines,
     line_limited,
-  }
-}
-
-///|
-fn clamp_end(value : Int, total : Int) -> Int {
-  if value < 0 {
-    0
-  } else if value > total {
-    total
-  } else {
-    value
   }
 }
 
