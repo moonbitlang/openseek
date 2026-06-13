@@ -7,7 +7,7 @@ async test "realworld DeepSeek API smoke test" {
     return
   }
 
-  let client = @client.Client(api_key~, model=V4Pro, thinking=Some(High))
+  let client = @client.Client(api_key~, model=V4Pro, thinking=High)
   let response = client.chat(
     [
       ChatMessage(

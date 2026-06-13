@@ -27,8 +27,7 @@ The package depends on `moonbitlang/async/http` and is native-only.
 ## Configuration
 
 The default endpoint is `https://api.deepseek.com/chat/completions`, the default
-model is `deepseek-v4-pro`, and no thinking mode is sent unless `thinking` is
-provided. Pass `thinking=Some(Max)` for explicit max-effort thinking-mode
+model is `deepseek-v4-pro`, and `thinking=No` is sent unless a different mode is provided. Pass `thinking=Max` for explicit max-effort thinking-mode
 requests.
 
 Retries cover transient failures: transport errors, HTTP 429, and HTTP 5xx.
@@ -42,7 +41,7 @@ test "construct DeepSeek client configuration" {
   let client = @client.Client(
     api_key="test-key",
     model=V4Flash,
-    thinking=Some(Max),
+    thinking=Max,
     retry_attempts=5,
     retry_backoff_ms=200,
   )
@@ -53,7 +52,7 @@ test "construct DeepSeek client configuration" {
       #|  api_key: ...,
       #|  model: V4Flash,
       #|  api_url: "https://api.deepseek.com/chat/completions",
-      #|  thinking: Some(Max),
+      #|  thinking: Max,
       #|  retry_attempts: 5,
       #|  retry_backoff_ms: 200,
       #|}
@@ -76,7 +75,7 @@ At runtime:
 
 ```moonbit nocheck
 ///|
-let client = @client.Client(api_key~, thinking=Some(Max))
+let client = @client.Client(api_key~, thinking=Max)
 
 ///|
 let response = client.chat(
@@ -90,11 +89,7 @@ The request body has this shape:
 ```moonbit check
 ///|
 test "Client::chat request body shape" {
-  let client = @client.Client(
-    api_key="test-key",
-    model=V4Flash,
-    thinking=Some(Max),
-  )
+  let client = @client.Client(api_key="test-key", model=V4Flash, thinking=Max)
   let tool = @deepseek.ToolDefinition("read", "Read a file.", {
     "type": "object",
     "properties": { "path": { "type": "string" } },
@@ -102,7 +97,7 @@ test "Client::chat request body shape" {
   })
   let body = @deepseek.encode_chat_request(
     model=client.model,
-    thinking?=client.thinking,
+    thinking=client.thinking,
     tools=[tool],
     response_format=JsonObject,
   ) <| [
@@ -173,7 +168,7 @@ test "Client::chat_stream request body shape" {
   let client = @client.Client(api_key="test-key")
   let body = @deepseek.encode_chat_request(
     model=client.model,
-    thinking?=client.thinking,
+    thinking=client.thinking,
     stream=true,
   ) <| [
     ChatMessage(User, content="stream this"),
@@ -183,6 +178,7 @@ test "Client::chat_stream request body shape" {
     "messages": [{ "role": "user", "content": "stream this" }],
     "stream": true,
     "stream_options": { "include_usage": true },
+    "thinking": { "type": "disabled" },
   })
 }
 ```

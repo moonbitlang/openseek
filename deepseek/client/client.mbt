@@ -13,7 +13,7 @@ pub struct Client {
   priv api_key : API_KEY
   model : @deepseek.Model
   api_url : String
-  thinking : @deepseek.ThinkingMode?
+  thinking : @deepseek.ThinkingMode
   retry_attempts : Int
   retry_backoff_ms : Int
 } derive(Debug(ignore=API_KEY))
@@ -22,8 +22,8 @@ pub struct Client {
 /// Constructs a DeepSeek HTTP client.
 ///
 /// `model` defaults to `deepseek-v4-pro`; `api_url` defaults to the DeepSeek
-/// chat completions endpoint. Pass `thinking` to control DeepSeek V4 thinking
-/// mode explicitly.
+/// chat completions endpoint. `thinking` defaults to `No`; pass `High` or
+/// `Max` to enable DeepSeek V4 thinking mode explicitly.
 ///
 /// Transient failures — transport errors, HTTP 429, and 5xx — are retried up
 /// to `retry_attempts` total tries with exponential backoff starting at
@@ -34,7 +34,7 @@ pub fn Client::Client(
   api_key~ : String,
   model? : @deepseek.Model = default_model,
   api_url? : String = default_api_url,
-  thinking? : @deepseek.ThinkingMode? = None,
+  thinking? : @deepseek.ThinkingMode = No,
   retry_attempts? : Int = 3,
   retry_backoff_ms? : Int = 500,
 ) -> Client {
@@ -122,7 +122,7 @@ pub async fn Client::chat(
   let body = @deepseek.encode_chat_request(
     model=self.model,
     tools~,
-    thinking?=self.thinking,
+    thinking=self.thinking,
     response_format?,
   ) <| messages
   self.with_retries(() => self.chat_attempt(body), () => false)
@@ -176,7 +176,7 @@ pub async fn Client::chat_stream(
   let body = @deepseek.encode_chat_request(
     model=self.model,
     tools~,
-    thinking?=self.thinking,
+    thinking=self.thinking,
     stream=true,
     response_format?,
   ) <| messages

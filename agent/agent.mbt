@@ -187,12 +187,7 @@ pub async fn[X] run_turn_in_scope(
   api_url? : String,
   tools? : @agent_tool.Tools,
 ) -> @agent_session.Session {
-  let client = @client.Client(
-    api_key~,
-    model~,
-    thinking=Some(thinking),
-    api_url?,
-  )
+  let client = @client.Client(api_key~, model~, thinking~, api_url?)
   let mut session = append_item(session, User(UserMessage(task)))
   try {
     let tools = match tools {

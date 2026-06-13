@@ -14,12 +14,12 @@ import {
 pub struct Client {
   model : @deepseek.Model
   api_url : String
-  thinking : @deepseek.ThinkingMode?
+  thinking : @deepseek.ThinkingMode
   retry_attempts : Int
   retry_backoff_ms : Int
   // private fields
 } derive(@debug.Debug)
-pub fn Client::Client(api_key~ : String, model? : @deepseek.Model, api_url? : String, thinking? : @deepseek.ThinkingMode?, retry_attempts? : Int, retry_backoff_ms? : Int) -> Self
+pub fn Client::Client(api_key~ : String, model? : @deepseek.Model, api_url? : String, thinking? : @deepseek.ThinkingMode, retry_attempts? : Int, retry_backoff_ms? : Int) -> Self
 pub async fn Client::chat(Self, Array[@deepseek.ChatMessage], tools? : Array[@deepseek.ToolDefinition], response_format? : @deepseek.ResponseFormat) -> @deepseek.ChatResponse
 pub async fn Client::chat_stream(Self, Array[@deepseek.ChatMessage], on_content_delta~ : async (String) -> Unit, on_reasoning_delta? : async (String) -> Unit, tools? : Array[@deepseek.ToolDefinition], response_format? : @deepseek.ResponseFormat) -> @deepseek.ChatResponse
 
