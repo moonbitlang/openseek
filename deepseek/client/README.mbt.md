@@ -1,90 +1,199 @@
 # DeepSeek Client
 
-This package contains the effectful DeepSeek HTTP transport. It depends on the
-pure `bobzhang/openseek/deepseek` package for models, roles, messages, JSON
-encoding, and response decoding.
+This package is the effectful HTTP transport for DeepSeek chat completions. It
+uses `bobzhang/openseek/deepseek` for typed models, messages, tool definitions,
+request JSON encoding, and response JSON decoding.
 
-Use this package when you need to send chat requests to the real DeepSeek API.
+Use this package when code needs to call the real DeepSeek API. Keep pure
+request/response tests in `bobzhang/openseek/deepseek`; use this package for
+transport behavior such as retries, HTTP errors, and streaming.
+
 The package depends on `moonbitlang/async/http` and is native-only.
 
 ## API Shape
 
-- `Client(api_key~, model?, api_url?, thinking?)`: configure the API key, typed
-  model, optional endpoint override, and optional DeepSeek V4 thinking control.
-- `Client::chat(messages, tools?, response_format?)`: send typed chat messages,
-  optionally with native DeepSeek function tools, and decode the response.
+- `Client(api_key~, model?, api_url?, thinking?, retry_attempts?,
+  retry_backoff_ms?)`: configure the API key, endpoint, model, thinking mode,
+  and retry budget.
+- `Client::chat(messages, tools?, response_format?)`: send a non-streaming
+  request and decode the response as `@deepseek.ChatResponse`.
 - `Client::chat_stream(messages, on_content_delta~, on_reasoning_delta?,
-  tools?, response_format?)`: send the same request in SSE streaming mode, emit
-  assistant content (and, when thinking is on, reasoning) fragments through the
-  callbacks, and return the fully accumulated response.
+  tools?, response_format?)`: send the same request in SSE streaming mode,
+  deliver non-empty content/reasoning deltas through callbacks, and return the
+  fully accumulated `@deepseek.ChatResponse`.
 
 `Client` implements `Debug` with the API key redacted.
 
-## Request Behavior
-
-`Client::chat` builds a private request envelope with the client's configured
-model and thinking mode, then sends it to `api_url` as JSON.
-It sends `stream=false` and leaves assistant content unconstrained by default.
-Pass `response_format=JsonObject` only for callers that explicitly want the
-assistant content constrained to a JSON object.
-
-`Client::chat_stream` sends `stream=true` plus
-`stream_options={"include_usage":true}`. It parses DeepSeek's SSE `data:` events,
-calls `on_content_delta` for each non-empty `delta.content` (and
-`on_reasoning_delta` for each non-empty `delta.reasoning_content`), accumulates
-reasoning and tool-call fragments, and returns a normal
-`@deepseek.ChatResponse` with final usage when the API supplies it. The request
-pins `Accept-Encoding: identity` so no gzip-compressing intermediary can buffer
-and re-batch the delta stream.
-
-Use `tools=[...]` when the model should call native DeepSeek function tools.
-Tool call results should be appended as `@deepseek.ChatMessage(Tool(call.id),
-content=text)` before sending the next request.
-
-HTTP status codes outside `200..<300` raise with the status code and response
-body. Successful responses are parsed and decoded as `@deepseek.ChatResponse`.
-
 ## Configuration
 
-The default endpoint is `https://api.deepseek.com/chat/completions`, and the
-default model is `deepseek-v4-pro`. Tests and examples use placeholder API
-keys unless explicitly marked as real API smoke tests. Pass
-`thinking=Some(Max)` for explicit max-effort thinking-mode agent requests.
+The default endpoint is `https://api.deepseek.com/chat/completions`, the default
+model is `deepseek-v4-pro`, and no thinking mode is sent unless `thinking` is
+provided. Pass `thinking=Some(Max)` for explicit max-effort thinking-mode
+requests.
+
+Retries cover transient failures: transport errors, HTTP 429, and HTTP 5xx.
+Other HTTP 4xx responses fail immediately. `retry_attempts` counts total tries;
+`retry_backoff_ms` is the first exponential-backoff delay, capped internally at
+60 seconds.
 
 ```moonbit check
 ///|
-test "construct DeepSeek client" {
+test "construct DeepSeek client configuration" {
   let client = @client.Client(
     api_key="test-key",
-    model=V4Pro,
+    model=V4Flash,
     thinking=Some(Max),
+    retry_attempts=5,
+    retry_backoff_ms=200,
   )
-  inspect(client.model, content="deepseek-v4-pro")
-  assert_eq(client.api_url, "https://api.deepseek.com/chat/completions")
-  debug_inspect(client.thinking, content="Some(Max)")
-
-  let message = @deepseek.ChatMessage(User, content="ping")
-  inspect(message.role, content="user")
-  assert_eq(message.content, "ping")
+  debug_inspect(
+    client,
+    content=(
+      #|{
+      #|  api_key: ...,
+      #|  model: V4Flash,
+      #|  api_url: "https://api.deepseek.com/chat/completions",
+      #|  thinking: Some(Max),
+      #|  retry_attempts: 5,
+      #|  retry_backoff_ms: 200,
+      #|}
+    ),
+  )
 }
 ```
 
+## Non-Streaming Chat
+
+`Client::chat` builds the same JSON body as `@deepseek.encode_chat_request`,
+using the client's `model` and `thinking` configuration, then posts it to
+`api_url` with `Content-Type: application/json` and bearer authorization.
+
+Use `tools=[...]` when the model may request native DeepSeek function calls.
+Use `response_format=JsonObject` only when the assistant content itself must be
+a JSON object.
+
+At runtime:
+
+```moonbit nocheck
+///|
+let client = @client.Client(api_key~, thinking=Some(Max))
+
+///|
+let response = client.chat(
+  [@deepseek.ChatMessage(User, content="Return {\"ok\":true}.")],
+  response_format=JsonObject,
+)
+```
+
+The request body has this shape:
+
 ```moonbit check
 ///|
-test "prepare tool-enabled client request values" {
+test "Client::chat request body shape" {
+  let client = @client.Client(
+    api_key="test-key",
+    model=V4Flash,
+    thinking=Some(Max),
+  )
   let tool = @deepseek.ToolDefinition("read", "Read a file.", {
     "type": "object",
     "properties": { "path": { "type": "string" } },
     "required": ["path"],
   })
-  let messages = [@deepseek.ChatMessage(User, content="read README.mbt.md")]
-  let body = @deepseek.encode_chat_request(model=V4Flash, tools=[tool]) <| messages
-  let text = body.stringify()
-  assert_eq(messages.length(), 1)
-  assert_true(text.contains("\"type\":\"function\""))
-  assert_true(text.contains("\"name\":\"read\""))
+  let body = @deepseek.encode_chat_request(
+    model=client.model,
+    thinking?=client.thinking,
+    tools=[tool],
+    response_format=JsonObject,
+  ) <| [
+    ChatMessage(User, content="read README.mbt.md"),
+  ]
+  json_inspect(body, content={
+    "model": "deepseek-v4-flash",
+    "messages": [{ "role": "user", "content": "read README.mbt.md" }],
+    "stream": false,
+    "response_format": { "type": "json_object" },
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "read",
+          "description": "Read a file.",
+          "parameters": {
+            "type": "object",
+            "properties": { "path": { "type": "string" } },
+            "required": ["path"],
+          },
+        },
+      },
+    ],
+    "thinking": { "type": "enabled" },
+    "reasoning_effort": "max",
+  })
 }
 ```
+
+If a response contains tool calls, append the assistant tool-call echo first,
+then append one `Tool(call.id)` result message per call before the next request.
+
+## Streaming Chat
+
+`Client::chat_stream` sends `stream=true` plus
+`stream_options={"include_usage":true}`. The transport pins
+`Accept-Encoding: identity` so a gzip-compressing intermediary cannot buffer and
+re-batch SSE deltas.
+
+The stream reader:
+
+- calls `on_content_delta` for each non-empty `delta.content`
+- calls `on_reasoning_delta` for each non-empty `delta.reasoning_content`
+- accumulates content, reasoning, tool-call fragments, and final usage
+- returns the accumulated value as a normal `@deepseek.ChatResponse`
+
+Streaming calls retry only until the first SSE event is produced. After any
+event - text, reasoning, tool-call, or usage - retrying could duplicate or
+change the completion, so later failures surface directly.
+
+At runtime:
+
+```moonbit nocheck
+///|
+let response = client.chat_stream(
+  [@deepseek.ChatMessage(User, content="Explain this briefly.")],
+  on_content_delta=delta => print(delta),
+  on_reasoning_delta=reasoning => log_reasoning(reasoning),
+)
+```
+
+The request body has this shape:
+
+```moonbit check
+///|
+test "Client::chat_stream request body shape" {
+  let client = @client.Client(api_key="test-key")
+  let body = @deepseek.encode_chat_request(
+    model=client.model,
+    thinking?=client.thinking,
+    stream=true,
+  ) <| [
+    ChatMessage(User, content="stream this"),
+  ]
+  json_inspect(body, content={
+    "model": "deepseek-v4-pro",
+    "messages": [{ "role": "user", "content": "stream this" }],
+    "stream": true,
+    "stream_options": { "include_usage": true },
+  })
+}
+```
+
+## Errors
+
+HTTP statuses outside `200..<300` fail with
+`DeepSeek API error <status>: <body>`. A successful HTTP response that is not
+valid JSON fails with `DeepSeek response is not JSON`; a valid JSON response
+that does not match the expected DeepSeek envelope fails with
+`DeepSeek response decode error`.
 
 ## Tests
 
