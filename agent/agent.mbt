@@ -263,30 +263,33 @@ pub async fn[X] run_turn_in_scope(
           }
         },
       )
+      let response_content = response.content()
+      let response_reasoning_content = response.reasoning_content()
+      let response_tool_calls = response.tool_calls()
       // Reasoning first, so a consumer appending events in order shows the
       // thinking above the answer it led to.
-      if response.reasoning_content != "" {
+      if response_reasoning_content != "" {
         @xlog.info() <?
           {
             "event": "reasoning_message",
-            "content": response.reasoning_content,
+            "content": response_reasoning_content,
           }
       }
-      if response.content != "" {
+      if response_content != "" {
         @xlog.info() <?
-          { "event": "assistant_message", "content": response.content }
+          { "event": "assistant_message", "content": response_content }
       }
-      print_usage(response.usage)
-      let reasoning_content = match response.reasoning_content {
+      print_usage(response.usage())
+      let reasoning_content = match response_reasoning_content {
         "" => None
         content => Some(content)
       }
-      if response.tool_calls.length() == 0 {
+      if response_tool_calls.length() == 0 {
         let pending = pending_steers(runtime)
         if pending.length() == 0 {
-          let next = append_item(session, Terminal(Finished(response.content)))
+          let next = append_item(session, Terminal(Finished(response_content)))
           @xlog.info() <?
-            { "event": "agent_finished", "answer": response.content }
+            { "event": "agent_finished", "answer": response_content }
           return next
         }
         // The model considers itself done, but the user redirected while the
@@ -294,19 +297,19 @@ pub async fn[X] run_turn_in_scope(
         // completion. The would-be answer stays as an ordinary assistant
         // message and the turn continues with the steers folded in.
         messages.push(
-          ChatMessage(Assistant, content=response.content, reasoning_content?),
+          ChatMessage(Assistant, content=response_content, reasoning_content?),
         )
         session = append_item(
           session,
-          Assistant(AssistantMessage(response.content, reasoning_content?)),
+          Assistant(AssistantMessage(response_content, reasoning_content?)),
         )
         session = apply_steer_texts(pending, session, messages, append_item~)
         continue steps~
       }
       let assistant_message : @deepseek.ChatMessage = ChatMessage(
         Assistant,
-        content=response.content,
-        tool_calls=response.tool_calls,
+        content=response_content,
+        tool_calls=response_tool_calls,
         reasoning_content?,
       )
       messages.push(assistant_message)
@@ -314,31 +317,33 @@ pub async fn[X] run_turn_in_scope(
         session,
         Assistant(
           AssistantMessage(
-            response.content,
-            tool_calls=response.tool_calls,
+            response_content,
+            tool_calls=response_tool_calls,
             reasoning_content?,
           ),
         ),
       )
-      for call_index, native_call in response.tool_calls {
+      for call_index, native_call in response_tool_calls {
+        let native_call_id = native_call.id()
+        let native_call_name = native_call.name()
         let tool_call = @agent_tool.AgentToolCall(native_call) catch {
           error => {
             @xlog.error() <?
               {
                 "event": "tool_call_decode_error",
-                "tool_call_id": native_call.id,
-                "tool_name": native_call.name,
+                "tool_call_id": native_call_id,
+                "tool_name": native_call_name,
                 "error": "\{error}",
               }
             messages.push(
-              ChatMessage(Tool(native_call.id), content="error: \{error}"),
+              ChatMessage(Tool(native_call_id), content="error: \{error}"),
             )
             session = append_item(
               session,
               Tool(
                 ToolResult(
-                  tool_call_id=native_call.id,
-                  tool_name=native_call.name,
+                  tool_call_id=native_call_id,
+                  tool_name=native_call_name,
                   content="error: \{error}",
                   is_error=true,
                 ),
@@ -354,7 +359,7 @@ pub async fn[X] run_turn_in_scope(
               session,
               Tool(
                 ToolResult(
-                  tool_call_id=native_call.id,
+                  tool_call_id=native_call_id,
                   tool_name=tool_call.name,
                   content="finished: \{answer}",
                 ),
@@ -372,26 +377,28 @@ pub async fn[X] run_turn_in_scope(
             // result and skipped notes for the unexecuted remainder are
             // pushed before the steers.
             messages.push(
-              ChatMessage(Tool(native_call.id), content="finished: \{answer}"),
+              ChatMessage(Tool(native_call_id), content="finished: \{answer}"),
             )
-            for rest_index in (call_index + 1)..<response.tool_calls.length() {
-              let skipped = response.tool_calls[rest_index]
+            for rest_index in (call_index + 1)..<response_tool_calls.length() {
+              let skipped = response_tool_calls[rest_index]
+              let skipped_id = skipped.id()
+              let skipped_name = skipped.name()
               let note = "skipped: the user steered the turn before this call ran"
               @xlog.info() <?
                 {
                   "event": "tool_result",
-                  "tool_call_id": skipped.id,
-                  "tool_name": skipped.name,
+                  "tool_call_id": skipped_id,
+                  "tool_name": skipped_name,
                   "is_error": true,
                   "content": note,
                 }
-              messages.push(ChatMessage(Tool(skipped.id), content=note))
+              messages.push(ChatMessage(Tool(skipped_id), content=note))
               session = append_item(
                 session,
                 Tool(
                   ToolResult(
-                    tool_call_id=skipped.id,
-                    tool_name=skipped.name,
+                    tool_call_id=skipped_id,
+                    tool_name=skipped_name,
                     content=note,
                     is_error=true,
                   ),
@@ -411,7 +418,7 @@ pub async fn[X] run_turn_in_scope(
               session,
               Tool(
                 ToolResult(
-                  tool_call_id=native_call.id,
+                  tool_call_id=native_call_id,
                   tool_name=tool_call.name,
                   content="aborted: \{reason}",
                   is_error=true,
@@ -427,17 +434,17 @@ pub async fn[X] run_turn_in_scope(
         @xlog.info() <?
           {
             "event": "tool_result",
-            "tool_call_id": native_call.id,
+            "tool_call_id": native_call_id,
             "tool_name": tool_call.name,
             "is_error": output.is_error,
             "content": output.content,
           }
-        messages.push(ChatMessage(Tool(native_call.id), content=output.content))
+        messages.push(ChatMessage(Tool(native_call_id), content=output.content))
         session = append_item(
           session,
           Tool(
             ToolResult(
-              tool_call_id=native_call.id,
+              tool_call_id=native_call_id,
               tool_name=tool_call.name,
               content=output.content,
               is_error=output.is_error,
@@ -505,9 +512,9 @@ fn print_usage(usage : @deepseek.Usage) -> Unit {
   @xlog.info() <?
     {
       "event": "usage",
-      "prompt_tokens": usage.prompt_tokens,
-      "completion_tokens": usage.completion_tokens,
-      "cache_hit_tokens": usage.prompt_cache_hit_tokens,
-      "cache_miss_tokens": usage.prompt_cache_miss_tokens,
+      "prompt_tokens": usage.prompt_tokens(),
+      "completion_tokens": usage.completion_tokens(),
+      "cache_hit_tokens": usage.prompt_cache_hit_tokens(),
+      "cache_miss_tokens": usage.prompt_cache_miss_tokens(),
     }
 }

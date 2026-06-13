@@ -37,9 +37,9 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
 
 DeepSeek tool calling uses the same flow described in the
 [official API docs](https://api-docs.deepseek.com/guides/tool_calls): send
-`tools` with a chat request, read `response.tool_calls`, append the assistant
+`tools` with a chat request, read `response.tool_calls()`, append the assistant
 tool-call message, execute each local function, then append
-`ChatMessage(Tool(call.id), content=result)` before the next request.
+`ChatMessage(Tool(call.id()), content=result)` before the next request.
 
 ### `ToolDefinition` vs `ToolCall`
 
@@ -48,18 +48,18 @@ tool-call message, execute each local function, then append
 | Type | Direction | Meaning |
 | --- | --- | --- |
 | `ToolDefinition` | Your code sends it to DeepSeek through `Client::chat(..., tools=[...])`. | A tool definition: name, description, and JSON Schema for arguments. It advertises a function the model may request later. |
-| `ToolCall` | DeepSeek returns it in `ChatResponse.tool_calls`. | A concrete tool invocation request: generated call id, function name, and raw JSON argument string. |
+| `ToolCall` | DeepSeek returns it from `ChatResponse::tool_calls()`. | A concrete tool invocation request: generated call id, function name, and raw JSON argument string. |
 
 The usual sequence is:
 
 1. Define available tools with `ToolDefinition(...)`.
 2. Send them with `Client::chat(..., tools=[...])`.
 3. Decode DeepSeek's response into `ToolCall` values.
-4. Append `ChatMessage(Assistant, content=response.content,
-   tool_calls=response.tool_calls)` so the conversation records the model's
+4. Append `ChatMessage(Assistant, content=response.content(),
+   tool_calls=response.tool_calls())` so the conversation records the model's
    requested calls.
-5. Execute each local function after parsing `ToolCall.arguments`.
-6. Append each result as `ChatMessage(Tool(call.id), content=result)`.
+5. Execute each local function after parsing `ToolCall::arguments()`.
+6. Append each result as `ChatMessage(Tool(call.id()), content=result)`.
 
 ```moonbit check
 ///|
@@ -67,8 +67,8 @@ test "encode chat request values" {
   let message = @deepseek.ChatMessage(User, content="write a MoonBit test")
   let model : @deepseek.Model = V4Flash
   inspect(model, content="deepseek-v4-flash")
-  inspect(message.role, content="user")
-  assert_eq(message.content, "write a MoonBit test")
+  inspect(message.role(), content="user")
+  assert_eq(message.content(), "write a MoonBit test")
   let body = @deepseek.encode_chat_request(model, [message]).stringify()
   assert_true(body.contains("\"role\":\"user\""))
   assert_true(body.contains("\"model\":\"deepseek-v4-flash\""))
@@ -125,8 +125,8 @@ test "decode chat response values" {
       ),
     ),
   )
-  assert_eq(response.content, "ok")
-  assert_eq(response.usage.total_tokens, 0)
+  assert_eq(response.content(), "ok")
+  assert_eq(response.usage().total_tokens(), 0)
 }
 ```
 
@@ -140,8 +140,8 @@ test "decode native tool call values" {
       ),
     ),
   )
-  assert_eq(response.tool_calls.length(), 1)
-  assert_eq(response.tool_calls[0].id, "call_1")
-  assert_eq(response.tool_calls[0].name, "read")
+  assert_eq(response.tool_calls().length(), 1)
+  assert_eq(response.tool_calls()[0].id(), "call_1")
+  assert_eq(response.tool_calls()[0].name(), "read")
 }
 ```

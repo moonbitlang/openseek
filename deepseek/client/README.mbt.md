@@ -38,7 +38,7 @@ pins `Accept-Encoding: identity` so no gzip-compressing intermediary can buffer
 and re-batch the delta stream.
 
 Use `tools=[...]` when the model should call native DeepSeek function tools.
-Tool call results should be appended as `@deepseek.ChatMessage(Tool(call.id),
+Tool call results should be appended as `@deepseek.ChatMessage(Tool(call.id()),
 content=text)` before sending the next request.
 
 HTTP status codes outside `200..<300` raise with the status code and response
@@ -64,8 +64,8 @@ test "construct DeepSeek client" {
   debug_inspect(client.thinking, content="Some(Max)")
 
   let message = @deepseek.ChatMessage(User, content="ping")
-  inspect(message.role, content="user")
-  assert_eq(message.content, "ping")
+  inspect(message.role(), content="user")
+  assert_eq(message.content(), "ping")
 }
 ```
 

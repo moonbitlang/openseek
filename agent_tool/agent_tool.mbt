@@ -22,10 +22,11 @@ pub struct AgentToolCall {
 pub fn AgentToolCall::AgentToolCall(
   call : @deepseek.ToolCall,
 ) -> AgentToolCall raise {
-  let arguments = @json.parse(call.arguments) catch {
-    _ => fail("\{call.name} arguments are not valid JSON")
+  let name = call.name()
+  let arguments = @json.parse(call.arguments()) catch {
+    _ => fail("\{name} arguments are not valid JSON")
   }
-  { name: call.name, arguments }
+  { name, arguments }
 }
 
 ///|
@@ -243,7 +244,7 @@ test "Tools::function_tools converts the registry to deepseek tool definitions" 
   ])
   let function_tools = tools.function_tools()
   assert_eq(function_tools.length(), 1)
-  assert_eq(function_tools[0].name, "echo")
+  assert_eq(function_tools[0].name(), "echo")
 }
 
 ///|
@@ -359,9 +360,9 @@ test "Tools::function_tools preserves description and schema" {
     },
   ])
   let function_tools = tools.function_tools()
-  assert_eq(function_tools[0].name, "echo")
-  assert_eq(function_tools[0].description, "Echo what comes in.")
-  let text = function_tools[0].parameters.stringify()
+  assert_eq(function_tools[0].name(), "echo")
+  assert_eq(function_tools[0].description(), "Echo what comes in.")
+  let text = function_tools[0].parameters().stringify()
   assert_true(text.contains("\"type\":\"object\""))
   assert_true(text.contains("\"properties\""))
 }
@@ -397,7 +398,7 @@ test "Tools::function_tools yields one entry per definition" {
   ])
   let function_tools = tools.function_tools()
   assert_eq(function_tools.length(), 3)
-  let names = [ for t in function_tools => t.name ]
+  let names = [ for t in function_tools => t.name() ]
   assert_true(names.contains("first"))
   assert_true(names.contains("second"))
   assert_true(names.contains("third"))

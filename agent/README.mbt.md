@@ -31,7 +31,7 @@ The package depends on:
 `run` creates a DeepSeek client, starts a conversation with a system prompt and
 user task, sends native function tool definitions on each turn, executes any
 returned tool calls, and sends `Respond(ToolOutput(...)).content` back with
-`Tool(call.id)` messages. The loop stops when the model answers directly, a
+`Tool(call.id())` messages. The loop stops when the model answers directly, a
 tool returns `Control(Finish(...))` / `Control(Abort(...))`, or the step limit
 is reached.
 

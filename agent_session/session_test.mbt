@@ -72,21 +72,21 @@ test "session projects to DeepSeek chat messages" {
     .append(Terminal(Finished("done")))
   let messages = session.chat_messages()
   assert_eq(messages.length(), 5)
-  assert_true(messages[0].role is System)
-  assert_eq(messages[0].content, "system")
-  assert_true(messages[1].role is User)
-  assert_eq(messages[1].content, "inspect")
-  assert_true(messages[2].role is Assistant)
-  assert_eq(messages[2].content, "")
-  assert_true(messages[2].reasoning_content is Some("need file"))
-  assert_eq(messages[2].tool_calls.length(), 1)
-  assert_eq(messages[2].tool_calls[0].id, "call_1")
-  assert_eq(messages[2].tool_calls[0].name, "read")
-  assert_eq(messages[2].tool_calls[0].arguments, "{\"path\":\"README.md\"}")
-  assert_true(messages[3].role is Tool("call_1"))
-  assert_eq(messages[3].content, "README")
-  assert_true(messages[4].role is Assistant)
-  assert_eq(messages[4].content, "done")
+  assert_true(messages[0].role() is System)
+  assert_eq(messages[0].content(), "system")
+  assert_true(messages[1].role() is User)
+  assert_eq(messages[1].content(), "inspect")
+  assert_true(messages[2].role() is Assistant)
+  assert_eq(messages[2].content(), "")
+  assert_true(messages[2].reasoning_content() is Some("need file"))
+  assert_eq(messages[2].tool_calls().length(), 1)
+  assert_eq(messages[2].tool_calls()[0].id(), "call_1")
+  assert_eq(messages[2].tool_calls()[0].name(), "read")
+  assert_eq(messages[2].tool_calls()[0].arguments(), "{\"path\":\"README.md\"}")
+  assert_true(messages[3].role() is Tool("call_1"))
+  assert_eq(messages[3].content(), "README")
+  assert_true(messages[4].role() is Assistant)
+  assert_eq(messages[4].content(), "done")
 }
 
 ///|
@@ -125,12 +125,12 @@ test "projection closes unresolved historical tool calls" {
     .append(User(UserMessage("continue")))
   let messages = session.chat_messages()
   assert_eq(messages.length(), 4)
-  assert_true(messages[1].role is Assistant)
-  assert_eq(messages[1].tool_calls.length(), 1)
-  assert_true(messages[2].role is Tool("call_1"))
-  assert_true(messages[2].content.contains("previous agent process exited"))
-  assert_true(messages[3].role is User)
-  assert_eq(messages[3].content, "continue")
+  assert_true(messages[1].role() is Assistant)
+  assert_eq(messages[1].tool_calls().length(), 1)
+  assert_true(messages[2].role() is Tool("call_1"))
+  assert_true(messages[2].content().contains("previous agent process exited"))
+  assert_true(messages[3].role() is User)
+  assert_eq(messages[3].content(), "continue")
 }
 
 ///|
@@ -154,10 +154,10 @@ test "projection skips compacted assistant tool results" {
     )
   let messages = session.chat_messages()
   assert_eq(messages.length(), 3)
-  assert_true(messages[1].role is User)
-  assert_eq(messages[1].content, "inspect")
-  assert_true(messages[2].role is User)
-  assert_true(messages[2].content.contains("assistant inspected README"))
+  assert_true(messages[1].role() is User)
+  assert_eq(messages[1].content(), "inspect")
+  assert_true(messages[2].role() is User)
+  assert_true(messages[2].content().contains("assistant inspected README"))
 }
 
 ///|
@@ -178,12 +178,12 @@ test "summary events compact covered model context" {
   assert_eq(session.events().length(), 4)
   let messages = session.chat_messages()
   assert_eq(messages.length(), 3)
-  assert_true(messages[1].role is User)
-  assert_eq(messages[1].content, "recent user")
-  assert_true(messages[2].role is User)
-  assert_true(messages[2].content.contains("[conversation summary]"))
-  assert_false(messages[2].content.contains("old user\n"))
-  assert_true(messages[2].content.contains("old user and assistant"))
+  assert_true(messages[1].role() is User)
+  assert_eq(messages[1].content(), "recent user")
+  assert_true(messages[2].role() is User)
+  assert_true(messages[2].content().contains("[conversation summary]"))
+  assert_false(messages[2].content().contains("old user\n"))
+  assert_true(messages[2].content().contains("old user and assistant"))
 }
 
 ///|
@@ -206,8 +206,8 @@ test "later summary supersedes earlier summary in model context" {
     )
   let messages = session.chat_messages()
   assert_eq(messages.length(), 2)
-  assert_true(messages[1].content.contains("superseding summary"))
-  assert_false(messages[1].content.contains("first summary"))
+  assert_true(messages[1].content().contains("superseding summary"))
+  assert_false(messages[1].content().contains("first summary"))
 }
 
 ///|

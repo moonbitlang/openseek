@@ -13,19 +13,21 @@ pub fn encode_chat_request(Model, Array[ChatMessage], tools? : Array[ToolDefinit
 
 // Types and methods
 pub struct ChatMessage {
-  role : Role
-  content : String
-  tool_calls : Array[ToolCall]
-  reasoning_content : String?
+  // private fields
 } derive(@debug.Debug)
 pub fn ChatMessage::ChatMessage(Role, content~ : String, tool_calls? : Array[ToolCall], reasoning_content? : String) -> Self
+pub fn ChatMessage::content(Self) -> String
+pub fn ChatMessage::reasoning_content(Self) -> String?
+pub fn ChatMessage::role(Self) -> Role
+pub fn ChatMessage::tool_calls(Self) -> Array[ToolCall]
 
 pub struct ChatResponse {
-  content : String
-  reasoning_content : String
-  tool_calls : Array[ToolCall]
-  usage : Usage
+  // private fields
 } derive(@debug.Debug)
+pub fn ChatResponse::content(Self) -> String
+pub fn ChatResponse::reasoning_content(Self) -> String
+pub fn ChatResponse::tool_calls(Self) -> Array[ToolCall]
+pub fn ChatResponse::usage(Self) -> Usage
 pub impl @json.FromJson for ChatResponse
 
 pub(all) enum Model {
@@ -57,27 +59,30 @@ pub fn ThinkingMode::parse(String) -> Self raise
 pub impl Show for ThinkingMode
 
 pub struct ToolCall {
-  id : String
-  name : String
-  arguments : String
+  // private fields
 } derive(@debug.Debug)
 pub fn ToolCall::ToolCall(id~ : String, name~ : String, arguments~ : String) -> Self
+pub fn ToolCall::arguments(Self) -> String
+pub fn ToolCall::id(Self) -> String
+pub fn ToolCall::name(Self) -> String
 
 pub struct ToolDefinition {
-  name : String
-  description : String
-  parameters : Json
-  strict : Bool
+  // private fields
 } derive(@debug.Debug)
 pub fn ToolDefinition::ToolDefinition(String, String, Json, strict? : Bool) -> Self
+pub fn ToolDefinition::description(Self) -> String
+pub fn ToolDefinition::name(Self) -> String
+pub fn ToolDefinition::parameters(Self) -> Json
+pub fn ToolDefinition::strict(Self) -> Bool
 
 pub struct Usage {
-  prompt_tokens : Int
-  completion_tokens : Int
-  total_tokens : Int
-  prompt_cache_hit_tokens : Int
-  prompt_cache_miss_tokens : Int
+  // private fields
 } derive(@debug.Debug)
+pub fn Usage::completion_tokens(Self) -> Int
+pub fn Usage::prompt_cache_hit_tokens(Self) -> Int
+pub fn Usage::prompt_cache_miss_tokens(Self) -> Int
+pub fn Usage::prompt_tokens(Self) -> Int
+pub fn Usage::total_tokens(Self) -> Int
 
 // Type aliases
 

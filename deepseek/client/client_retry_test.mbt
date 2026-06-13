@@ -65,7 +65,7 @@ async test "chat retries transient 5xx and succeeds" {
       retry_backoff_ms=1,
     )
     let response = client.chat([ChatMessage(User, content="hello")])
-    assert_eq(response.content, "ok")
+    assert_eq(response.content(), "ok")
     assert_eq(hits.val, 3)
   }
 }
@@ -133,7 +133,7 @@ async test "chat_stream retries a pre-stream 429 and then streams" {
     let response = client.chat_stream([ChatMessage(User, content="hello")], on_content_delta=delta => {
       deltas.push(delta)
     })
-    assert_eq(response.content, "ok")
+    assert_eq(response.content(), "ok")
     assert_eq(deltas.join("|"), "ok")
     assert_eq(hits.val, 2)
   }
@@ -184,7 +184,7 @@ async test "chat_stream retries a pre-delta stream drop" {
     let response = client.chat_stream([ChatMessage(User, content="hello")], on_content_delta=_ => {
       ()
     })
-    assert_eq(response.content, "ok")
+    assert_eq(response.content(), "ok")
     assert_eq(hits.val, 2)
   }
 }

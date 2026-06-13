@@ -61,7 +61,7 @@ fn remove_pending_tool_call(
   tool_call_id : String,
 ) -> Bool {
   for index in 0..<pending.length() {
-    if pending[index].id == tool_call_id {
+    if pending[index].id() == tool_call_id {
       ignore(pending.remove(index))
       return true
     }
@@ -77,8 +77,8 @@ fn flush_pending_tool_calls(
   for call in pending {
     messages.push(
       ChatMessage(
-        Tool(call.id),
-        content="error: previous agent process exited before recording a result for tool \{call.name}",
+        Tool(call.id()),
+        content="error: previous agent process exited before recording a result for tool \{call.name()}",
       ),
     )
   }

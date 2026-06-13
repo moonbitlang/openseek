@@ -107,14 +107,14 @@ pub impl Show for Role with fn to_string(self : Role) -> String {
 /// `ChatMessage(System, content="...")`, or
 /// `ChatMessage(Tool("call_id"), content="...")`.
 /// Assistant tool-call echo messages should pass the assistant response
-/// content explicitly with `ChatMessage(Assistant, content=response.content,
-/// tool_calls=response.tool_calls)`. When that content is empty, it is encoded
-/// with JSON `content: null`.
+/// content explicitly with `ChatMessage(Assistant, content=response.content(),
+/// tool_calls=response.tool_calls())`. When that content is empty, it is
+/// encoded with JSON `content: null`.
 pub struct ChatMessage {
-  role : Role
-  content : String
-  tool_calls : Array[ToolCall]
-  reasoning_content : String?
+  priv role : Role
+  priv content : String
+  priv tool_calls : Array[ToolCall]
+  priv reasoning_content : String?
 } derive(Debug)
 
 ///|
@@ -129,27 +129,105 @@ pub fn ChatMessage::ChatMessage(
 }
 
 ///|
+/// The DeepSeek role for this message.
+pub fn ChatMessage::role(self : ChatMessage) -> Role {
+  self.role
+}
+
+///|
+/// The text content carried by this message.
+pub fn ChatMessage::content(self : ChatMessage) -> String {
+  self.content
+}
+
+///|
+/// Assistant tool calls echoed in this message, empty for ordinary messages.
+pub fn ChatMessage::tool_calls(self : ChatMessage) -> Array[ToolCall] {
+  self.tool_calls
+}
+
+///|
+/// Reasoning content retained in memory for local transcripts, if any.
+pub fn ChatMessage::reasoning_content(self : ChatMessage) -> String? {
+  self.reasoning_content
+}
+
+///|
 /// Token usage reported by DeepSeek chat responses.
 pub struct Usage {
-  prompt_tokens : Int
-  completion_tokens : Int
-  total_tokens : Int
-  prompt_cache_hit_tokens : Int
-  prompt_cache_miss_tokens : Int
+  priv prompt_tokens : Int
+  priv completion_tokens : Int
+  priv total_tokens : Int
+  priv prompt_cache_hit_tokens : Int
+  priv prompt_cache_miss_tokens : Int
 } derive(Debug)
+
+///|
+/// Tokens consumed by prompt input.
+pub fn Usage::prompt_tokens(self : Usage) -> Int {
+  self.prompt_tokens
+}
+
+///|
+/// Tokens produced by assistant completion.
+pub fn Usage::completion_tokens(self : Usage) -> Int {
+  self.completion_tokens
+}
+
+///|
+/// Total prompt plus completion tokens reported by the API.
+pub fn Usage::total_tokens(self : Usage) -> Int {
+  self.total_tokens
+}
+
+///|
+/// Prompt tokens served from DeepSeek's cache.
+pub fn Usage::prompt_cache_hit_tokens(self : Usage) -> Int {
+  self.prompt_cache_hit_tokens
+}
+
+///|
+/// Prompt tokens not served from DeepSeek's cache.
+pub fn Usage::prompt_cache_miss_tokens(self : Usage) -> Int {
+  self.prompt_cache_miss_tokens
+}
 
 ///|
 /// Decoded DeepSeek chat response content, tool calls, and token usage.
 pub struct ChatResponse {
   /// Assistant text content returned by DeepSeek. This is empty when the API
   /// returns JSON `content: null`, such as a tool-call-only assistant message.
-  content : String
+  priv content : String
   /// Reasoning or thinking text returned by DeepSeek. This is empty when the
   /// response does not include `reasoning_content`.
-  reasoning_content : String
+  priv reasoning_content : String
   /// Tool calls requested by the assistant. Echo these in the next assistant
   /// `ChatMessage` before sending the corresponding tool result messages.
-  tool_calls : Array[ToolCall]
+  priv tool_calls : Array[ToolCall]
   /// Token usage metadata reported for the chat completion.
-  usage : Usage
+  priv usage : Usage
 } derive(Debug)
+
+///|
+/// Assistant text content returned by DeepSeek.
+pub fn ChatResponse::content(self : ChatResponse) -> String {
+  self.content
+}
+
+///|
+/// Reasoning or thinking text returned by DeepSeek.
+pub fn ChatResponse::reasoning_content(self : ChatResponse) -> String {
+  self.reasoning_content
+}
+
+///|
+/// Tool calls requested by the assistant.
+pub fn ChatResponse::tool_calls(self : ChatResponse) -> Array[ToolCall] {
+  self.tool_calls
+}
+
+///|
+/// Token usage metadata reported for the chat completion.
+pub fn ChatResponse::usage(self : ChatResponse) -> Usage {
+  self.usage
+}

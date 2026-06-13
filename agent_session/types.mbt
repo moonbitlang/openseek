@@ -78,7 +78,7 @@ priv struct SessionToolCall {
 
 ///|
 fn SessionToolCall::from_deepseek(call : @deepseek.ToolCall) -> SessionToolCall {
-  { id: call.id, name: call.name, arguments: call.arguments }
+  { id: call.id(), name: call.name(), arguments: call.arguments() }
 }
 
 ///|

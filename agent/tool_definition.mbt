@@ -23,7 +23,7 @@ async test "agent registers the expected tool names" {
     let tools = tool_definitions(AgentRuntime(), AgentTaskScope(group))
     let function_tools = tools.function_tools()
     assert_eq(function_tools.length(), 6)
-    let names = [ for t in function_tools => t.name ]
+    let names = [ for t in function_tools => t.name() ]
     assert_true(names.contains("shell"))
     assert_true(names.contains("read"))
     assert_true(names.contains("edit"))

@@ -22,11 +22,11 @@ async test "realworld DeepSeek API smoke test" {
   )
   // It may fail in theory, but in practice it should always work.
   debug_inspect(
-    response.content,
+    response.content(),
     content=(
       #|"{\"answer\":\"pong\"}"
     ),
   )
-  assert_true(response.content.contains("pong"))
-  assert_true(response.usage.total_tokens > 0)
+  assert_true(response.content().contains("pong"))
+  assert_true(response.usage().total_tokens() > 0)
 }

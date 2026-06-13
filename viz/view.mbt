@@ -231,9 +231,9 @@ fn tool_call_view(call : @deepseek.ToolCall) -> @html.Html {
   @html.div(class="tool-call", [
     @html.div(class="tool-call-name", [
       @html.text("→ "),
-      @html.strong(call.name),
+      @html.strong(call.name()),
     ]),
-    @html.pre(class="tool-call-args", pretty_json(call.arguments)),
+    @html.pre(class="tool-call-args", pretty_json(call.arguments())),
   ])
 }
 

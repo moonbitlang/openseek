@@ -1,14 +1,14 @@
 ///|
 test "chat message constructor" {
   let user = @deepseek.ChatMessage(User, content="hello")
-  assert_eq(user.role.to_string(), "user")
-  assert_eq(user.content, "hello")
+  assert_eq(user.role().to_string(), "user")
+  assert_eq(user.content(), "hello")
   let assistant = @deepseek.ChatMessage(Assistant, content="done")
-  assert_eq(assistant.role.to_string(), "assistant")
-  assert_eq(assistant.content, "done")
+  assert_eq(assistant.role().to_string(), "assistant")
+  assert_eq(assistant.content(), "done")
   let tool = @deepseek.ChatMessage(Tool("call_123"), content="tool result")
-  assert_eq(tool.role.to_string(), "tool")
-  assert_eq(tool.content, "tool result")
+  assert_eq(tool.role().to_string(), "tool")
+  assert_eq(tool.content(), "tool result")
 }
 
 ///|
@@ -24,8 +24,8 @@ test "chat message constructor keeps labeled fields" {
     tool_calls=[call],
     reasoning_content="run tests first",
   )
-  assert_eq(message.tool_calls.length(), 1)
-  assert_true(message.reasoning_content is Some("run tests first"))
+  assert_eq(message.tool_calls().length(), 1)
+  assert_true(message.reasoning_content() is Some("run tests first"))
 }
 
 ///|
