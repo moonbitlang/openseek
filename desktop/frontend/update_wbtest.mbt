@@ -603,7 +603,15 @@ test "loaded settings open the popup only when incomplete" {
   let dispatch = test_dispatch()
   let (_, zero_config) = update(
     dispatch,
-    SettingsLoaded(provider="", custom_url="", api_key="", custom_api_key=""),
+    SettingsLoaded(
+      provider="",
+      custom_url="",
+      api_key="",
+      custom_api_key="",
+      wsl_enabled="",
+      wsl_distro="",
+      wsl_engine="",
+    ),
     test_model(),
   )
   inspect(zero_config.setup_open, content="false")
@@ -616,6 +624,9 @@ test "loaded settings open the popup only when incomplete" {
       custom_url="",
       api_key="",
       custom_api_key="",
+      wsl_enabled="",
+      wsl_distro="",
+      wsl_engine="",
     ),
     test_model(),
   )
@@ -628,12 +639,18 @@ test "loaded settings open the popup only when incomplete" {
       custom_url="",
       api_key="sk-stored",
       custom_api_key="sk-custom-stored",
+      wsl_enabled="1",
+      wsl_distro=" Ubuntu ",
+      wsl_engine="/usr/local/bin/openseek",
     ),
     test_model(),
   )
   inspect(restored.setup_open, content="false")
   inspect(restored.api_key, content="sk-stored")
   inspect(restored.custom_api_key, content="sk-custom-stored")
+  inspect(restored.wsl_enabled, content="true")
+  inspect(restored.wsl_distro, content="Ubuntu")
+  inspect(restored.wsl_engine, content="/usr/local/bin/openseek")
   let (_, custom) = update(
     dispatch,
     SettingsLoaded(
@@ -641,6 +658,9 @@ test "loaded settings open the popup only when incomplete" {
       custom_url="https://proxy.example/chat/completions",
       api_key="sk-deepseek",
       custom_api_key="sk-custom",
+      wsl_enabled="",
+      wsl_distro="",
+      wsl_engine="",
     ),
     test_model(),
   )

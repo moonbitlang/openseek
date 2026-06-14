@@ -458,6 +458,17 @@ fn provider_select(
 }
 
 ///|
+fn wsl_select(dispatch : @cmd.Dispatch[Msg], enabled : Bool) -> @html.Html {
+  @html.label([
+    @html.text("Engine environment"),
+    @html.select(on_change=dispatch.map(value => WslModeChanged(value)), [
+      @html.option(value="native", selected=!enabled, "Windows (native)"),
+      @html.option(value="wsl", selected=enabled, "WSL"),
+    ]),
+  ])
+}
+
+///|
 fn provider_hint(provider : ApiProvider) -> String {
   match provider {
     Openseek => "Requests go through the OpenSeek service; no key needed."
@@ -526,6 +537,36 @@ fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
         "Save API key",
       ),
     )
+  }
+  // WSL is Windows-only; elsewhere the section would be dead weight.
+  if model.is_windows {
+    settings.push(wsl_select(dispatch, model.wsl_enabled))
+    if model.wsl_enabled {
+      settings.push(
+        setting_input(
+          "WSL distro",
+          model.wsl_distro,
+          "default distro",
+          @html.InputType::Text,
+          dispatch.map(value => WslDistroChanged(value)),
+        ),
+      )
+      settings.push(
+        setting_input(
+          "Engine command in WSL",
+          model.wsl_engine,
+          "bundled engine",
+          @html.InputType::Text,
+          dispatch.map(value => WslEngineChanged(value)),
+        ),
+      )
+      settings.push(
+        @html.div(
+          class="setting-hint",
+          "Runs the agent engine inside WSL, so its shell and tools see the distro's Linux environment. By default this uses the Linux engine bundled with the app (falling back to openseek on the distro's PATH). Conversations stay in the shared session store either way.",
+        ),
+      )
+    }
   }
   @html.div(class="setup-backdrop", [
     @html.div(class="setup-popup", [

@@ -14,6 +14,17 @@ priv struct StartPayload {
   cwd : String?
   session : String?
   session_root : String?
+  // Present = run the engine inside WSL (Windows only); absent = native.
+  wsl : WslPayload?
+} derive(FromJson)
+
+///|
+/// The WSL half of a start payload: which distro hosts the engine (absent =
+/// the user's default distro) and the engine command inside it (absent =
+/// `openseek` on the distro's PATH).
+priv struct WslPayload {
+  distro : String?
+  engine : String?
 } derive(FromJson)
 
 ///|

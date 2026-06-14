@@ -218,9 +218,20 @@ fn start_openseek(
   api_key : String,
   api_url : String,
   session : String,
+  wsl_enabled~ : Bool,
+  wsl_distro~ : String,
+  wsl_engine~ : String,
 ) -> @cmd.Cmd {
   let payload = start_payload(
-    task, selected_model, max_steps, api_key, api_url, session,
+    task,
+    selected_model,
+    max_steps,
+    api_key,
+    api_url,
+    session,
+    wsl_enabled~,
+    wsl_distro~,
+    wsl_engine~,
   )
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -249,6 +260,9 @@ fn start_payload(
   api_key : String,
   api_url : String,
   session : String,
+  wsl_enabled~ : Bool,
+  wsl_distro~ : String,
+  wsl_engine~ : String,
 ) -> @js.Value {
   let payload = @js.Object::new()
   payload["task"] = task
@@ -258,6 +272,15 @@ fn start_payload(
   set_trimmed(payload, "session", session)
   if parsed_max_steps(max_steps) is Some(steps) {
     payload["max_steps"] = steps
+  }
+  // The presence of `wsl` is the opt-in; blank distro/engine fields are
+  // omitted so the host applies its defaults (default distro, `openseek`
+  // on the distro's PATH).
+  if wsl_enabled {
+    let wsl = @js.Object::new()
+    set_trimmed(wsl, "distro", wsl_distro)
+    set_trimmed(wsl, "engine", wsl_engine)
+    payload["wsl"] = wsl.to_value()
   }
   payload.to_value()
 }

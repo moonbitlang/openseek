@@ -241,16 +241,24 @@ async fn[G] start_serve_engine(
       env["OPENSEEK_SESSION_ROOT"] = root
     }
   }
+  if config.host is Wsl(..) {
+    env["WSLENV"] = wslenv_with_passthrough(@env.get("WSLENV"))
+  }
+  let (program, args) = config.host.serve_command(config.engine, config.cwd)
+  // In WSL mode the working directory is `--cd`'s job: a Linux-path cwd
+  // does not exist on the Windows side, so chdir'ing wsl.exe into it would
+  // fail the spawn.
+  let spawn_cwd = if config.host is Wsl(..) { None } else { config.cwd }
   let process = @process.spawn(
     group,
-    config.engine,
-    ["--serve"],
+    program,
+    args,
     inherit_env=true,
     extra_env=env,
     stdin=child_stdin,
     stdout=child_stdout,
     stderr=child_stderr,
-    cwd?=config.cwd.map(cwd => cwd.view()),
+    cwd?=spawn_cwd.map(cwd => cwd.view()),
     cancel_handler=@process.graceful_cancel(timeout=1000),
     no_wait=true,
   )

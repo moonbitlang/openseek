@@ -12,6 +12,9 @@ fn load_saved_settings(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
           custom_url=load_setting(CustomApiUrlStorageKey),
           api_key=load_setting(ApiKeyStorageKey),
           custom_api_key=load_setting(CustomApiKeyStorageKey),
+          wsl_enabled=load_setting(WslEnabledStorageKey),
+          wsl_distro=load_setting(WslDistroStorageKey),
+          wsl_engine=load_setting(WslEngineStorageKey),
         ),
       ),
     )
@@ -36,6 +39,23 @@ fn save_api_provider(provider : ApiProvider) -> @cmd.Cmd {
 ///|
 fn save_custom_api_url(url : String) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(CustomApiUrlStorageKey, url))
+}
+
+///|
+fn save_wsl_enabled(enabled : Bool) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    save_setting(WslEnabledStorageKey, if enabled { "1" } else { "" })
+  })
+}
+
+///|
+fn save_wsl_distro(distro : String) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(WslDistroStorageKey, distro))
+}
+
+///|
+fn save_wsl_engine(engine : String) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(WslEngineStorageKey, engine))
 }
 
 ///|

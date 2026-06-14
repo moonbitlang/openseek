@@ -27,6 +27,20 @@ const EngineBinary : String =
   "_build/native/release/build/cmd/openseek/openseek.exe"
 
 ///|
+/// Path to the Linux engine built inside WSL, relative to the repository
+/// root. A separate target dir keeps the Linux build's artifacts from
+/// clobbering the Windows build sharing the default `_build` tree. moon's
+/// native backend names the binary `openseek.exe` on Linux too — it is a
+/// genuine ELF despite the extension.
+const WslEngineBinary : String =
+  "_build/wsl_engine/native/release/build/cmd/openseek/openseek.exe"
+
+///|
+/// Bundle name of the Linux engine. The desktop host looks for this file
+/// beside `openseek.exe` when a WSL-mode run does not name an engine.
+const BundledWslEngineName : String = "openseek-linux"
+
+///|
 /// Path to the Lepus codegen CLI staged inside the submodule on Windows,
 /// relative to the desktop workspace.
 const CodegenTool : String = "lepus/target/lepus-tools/lepus_cli.exe"
@@ -223,6 +237,54 @@ async fn build_engine() -> Unit raise {
 }
 
 ///|
+/// The script run inside WSL's `sh`: moon installs to `~/.moon/bin`, which a
+/// non-login shell does not have on PATH, and a script launched from the
+/// `desktop` directory must climb to the repo root first.
+fn wsl_moon_script(command : String) -> String {
+  let prefix = if is_repo_root() { "" } else { "cd .. && " }
+  "PATH=\"$HOME/.moon/bin:$PATH\"; " + prefix + command
+}
+
+///|
+/// Build the Linux engine inside WSL so WSL-mode runs work out of the box.
+/// Best-effort: a packaging machine without WSL — or without moon and a C
+/// toolchain inside it — skips the binary with a loud notice instead of
+/// failing the whole package; the desktop host then falls back to
+/// `openseek` on the distro's PATH at runtime.
+async fn build_wsl_engine() -> Bool {
+  let probe = @process.run(
+    "wsl.exe",
+    ["-e", "sh", "-lc", wsl_moon_script("command -v moon")],
+    inherit_env=true,
+  ) catch {
+    _ => 1
+  }
+  if probe != 0 {
+    println(
+      "note: WSL with moon is not available; skipping the bundled Linux engine",
+    )
+    return false
+  }
+  let build = wsl_moon_script(
+    "moon build \{EnginePackage} --target native --release --target-dir _build/wsl_engine",
+  )
+  println("$ wsl.exe -e sh -lc '\{build}'")
+  let code = @process.run("wsl.exe", ["-e", "sh", "-lc", build], inherit_env=true) catch {
+    _ => 1
+  }
+  if code != 0 || !@fs.path_exists(repo_path(WslEngineBinary)) {
+    println(
+      "warning: the WSL Linux engine build failed; the bundle will not include \{BundledWslEngineName}.",
+    )
+    println(
+      "         Install a C toolchain inside WSL (e.g. sudo apt-get install -y gcc) to bundle it.",
+    )
+    return false
+  }
+  true
+}
+
+///|
 /// Build the Lepus codegen CLI into the submodule if it is not already staged.
 async fn ensure_codegen_tool() -> Unit raise {
   if @fs.path_exists(desktop_path(CodegenTool)) {
@@ -245,7 +307,9 @@ async fn ensure_webview2_headers() -> Unit raise {
 }
 
 ///|
-async fn build_outputs() -> Unit raise {
+/// Build everything the bundle needs; returns whether the optional WSL
+/// Linux engine was built and should be staged.
+async fn build_outputs() -> Bool raise {
   ensure_codegen_tool()
   ensure_webview2_headers()
   run_desktop_moon([
@@ -259,6 +323,7 @@ async fn build_outputs() -> Unit raise {
     "-20",
   ])
   build_engine()
+  build_wsl_engine()
 }
 
 ///|
@@ -287,7 +352,7 @@ async fn set_windows_gui_subsystem(path : String) -> Unit raise {
 }
 
 ///|
-async fn copy_bundle_files() -> Unit raise {
+async fn copy_bundle_files(with_wsl_engine~ : Bool) -> Unit raise {
   let native_binary = desktop_path(NativeBinary)
   let engine_binary = repo_path(EngineBinary)
   let bundled_engine = desktop_path(BundleDir + "/openseek.exe")
@@ -305,6 +370,14 @@ async fn copy_bundle_files() -> Unit raise {
   copy_file(native_binary, desktop_path(BundleDir + "/openseek-desktop.exe"))
   copy_file(engine_binary, bundled_engine)
   set_windows_gui_subsystem(bundled_engine)
+  // Only a binary built this run is staged — a stale leftover from an
+  // earlier packaging would silently ship outdated engine code.
+  if with_wsl_engine {
+    copy_file(
+      repo_path(WslEngineBinary),
+      desktop_path(BundleDir + "/" + BundledWslEngineName),
+    )
+  }
   copy_file(desktop_path("index.html"), desktop_path(AppAssetDir + "/index.html"))
   copy_file(
     desktop_path("frontend.js"),
@@ -389,10 +462,13 @@ async fn main raise {
   if should_build_installer(mode) {
     ensure_makensis()
   }
-  build_outputs()
+  let with_wsl_engine = build_outputs()
   println("built openseek engine: \{repo_path(EngineBinary)}")
+  if with_wsl_engine {
+    println("built WSL Linux engine: \{repo_path(WslEngineBinary)}")
+  }
   reset_bundle_dirs()
-  copy_bundle_files()
+  copy_bundle_files(with_wsl_engine~)
   if should_build_zip(mode) {
     zip_bundle()
     println("generated \{desktop_path(ZipPath)}")

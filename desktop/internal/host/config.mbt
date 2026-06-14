@@ -23,6 +23,11 @@ priv struct RunConfig {
   model : String
   max_steps : Int
   engine : String
+  // Where the engine process runs: natively, or inside a WSL distro. In WSL
+  // mode `engine` above (the bundled Windows binary) still serves the
+  // host's own one-shot session queries; the serve process runs the
+  // distro's engine instead.
+  host : EngineHost
   cwd : String?
   session : String?
   session_root : String?
@@ -75,6 +80,7 @@ async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
     error => if api_url is Some(_) { PlaceholderApiKey } else { raise error }
   }
   let session = payload.session
+  let host = engine_host(payload, engine)
   {
     task,
     api_key,
@@ -85,7 +91,8 @@ async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
     },
     max_steps: configured_max_steps(payload.max_steps),
     engine,
-    cwd: resolved_run_cwd(payload.cwd, session),
+    host,
+    cwd: resolved_run_cwd(payload.cwd, session, host~),
     session,
     session_root: if session is Some(_) {
       @sessiondirs.resolved_session_root(payload.session_root)
@@ -105,8 +112,19 @@ async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
 /// the user's home directory: inheriting the host's own cwd would hand the
 /// agent whatever directory the app happened to be launched from (`/` under
 /// Finder), which is never a sensible place to work in.
-async fn resolved_run_cwd(payload_cwd : String?, session : String?) -> String? {
+///
+/// A WSL run may name an absolute Linux path — a directory that exists only
+/// inside the distro, which the host cannot probe; it is passed through for
+/// `wsl --cd` to resolve (and reject) there.
+async fn resolved_run_cwd(
+  payload_cwd : String?,
+  session : String?,
+  host~ : EngineHost,
+) -> String? {
   if payload_cwd is Some(cwd) {
+    if host is Wsl(..) && is_linux_abs_path(cwd) {
+      return Some(cwd)
+    }
     let cwd = @home.expand(cwd)
     guard is_dir(cwd) else {
       raise HostError("working directory does not exist: " + cwd)
@@ -144,6 +162,7 @@ fn session_key(config : RunConfig) -> String {
 fn engine_fingerprint(config : RunConfig) -> String {
   [
     config.engine,
+    config.host.fingerprint(),
     config.api_key,
     config.api_url.unwrap_or(""),
     config.model,

@@ -20,6 +20,15 @@ const ApiProviderStorageKey : String = "openseek.api_provider"
 const CustomApiUrlStorageKey : String = "openseek.custom_api_url"
 
 ///|
+const WslEnabledStorageKey : String = "openseek.wsl_enabled"
+
+///|
+const WslDistroStorageKey : String = "openseek.wsl_distro"
+
+///|
+const WslEngineStorageKey : String = "openseek.wsl_engine"
+
+///|
 /// The default OpenSeek endpoint: a DeepSeek-compatible proxy that does not
 /// require an API key, so the app works out of the box. The path mirrors the
 /// official API because the engine posts to this URL verbatim.
@@ -129,6 +138,15 @@ priv struct Model {
   // are provider-specific and staged in `setup_api_key` until saved.
   api_provider : ApiProvider
   custom_api_url : String
+  // Run the serve engine inside WSL instead of natively. Windows-only:
+  // `is_windows` (probed from the user agent once at startup) gates both
+  // the settings section and what `start` sends. `wsl_distro` empty means
+  // the user's default distro; `wsl_engine` empty means `openseek` on the
+  // distro's PATH. All three persist to localStorage as they change.
+  is_windows : Bool
+  wsl_enabled : Bool
+  wsl_distro : String
+  wsl_engine : String
   setup_open : Bool
   // The conversation on screen; always present in `conversations` once the
   // startup session rotation lands.
@@ -169,12 +187,16 @@ priv enum Msg {
   BridgeReady
   BridgeUnavailable(String)
   // Persisted settings read back from localStorage at startup. `provider`
-  // is the wire name (`ApiProvider::parse` handles unknown values).
+  // is the wire name (`ApiProvider::parse` handles unknown values); the WSL
+  // fields arrive as the raw stored strings (`wsl_enabled` is "1"/"").
   SettingsLoaded(
     provider~ : String,
     custom_url~ : String,
     api_key~ : String,
-    custom_api_key~ : String
+    custom_api_key~ : String,
+    wsl_enabled~ : String,
+    wsl_distro~ : String,
+    wsl_engine~ : String
   )
   TaskChanged(String)
   ModelChanged(String)
@@ -182,6 +204,10 @@ priv enum Msg {
   SetupApiKeyChanged(String)
   ProviderChanged(String)
   CustomApiUrlChanged(String)
+  // The engine-environment select ("native"/"wsl") and the WSL text fields.
+  WslModeChanged(String)
+  WslDistroChanged(String)
+  WslEngineChanged(String)
   OpenSetup
   CloseSetup
   SaveApiKey
@@ -262,6 +288,10 @@ fn initial_model() -> Model {
     setup_api_key: "",
     api_provider: Openseek,
     custom_api_url: "",
+    is_windows: host_is_windows(),
+    wsl_enabled: false,
+    wsl_distro: "",
+    wsl_engine: "",
     setup_open: false,
     active_session: "",
     conversations: [],
@@ -323,6 +353,14 @@ fn Model::effective_api_key(self : Model) -> String {
     Deepseek => self.api_key
     Custom => self.custom_api_key
   }
+}
+
+///|
+/// Whether `start` should ask for a WSL-hosted engine. The setting only
+/// applies on Windows, so a stored profile read back on another platform
+/// degrades to the native engine instead of failing every run.
+fn Model::wsl_active(self : Model) -> Bool {
+  self.is_windows && self.wsl_enabled
 }
 
 ///|

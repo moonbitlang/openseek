@@ -53,3 +53,18 @@ fn watch_transcript_scroll(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
     })
   })
 }
+
+///|
+/// Whether the webview runs on Windows, probed from the user agent (WebView2
+/// always carries "Windows"). WSL engine mode is a Windows-only feature, so
+/// the settings popup hides its section — and `start` omits the request —
+/// everywhere else.
+fn host_is_windows() -> Bool {
+  guard @interop.js_prop(@js.globalThis, "navigator") is Some(navigator) else {
+    return false
+  }
+  guard @interop.js_prop(navigator, "userAgent") is Some(value) else {
+    return false
+  }
+  (@js.Cast::into(value) : String?) is Some(agent) && agent.contains("Windows")
+}

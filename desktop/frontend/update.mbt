@@ -180,13 +180,24 @@ fn update(
       )
     BridgeUnavailable(message) =>
       (@cmd.none, { ..model, bridge_ready: false, bridge_error: message })
-    SettingsLoaded(provider~, custom_url~, api_key~, custom_api_key~) => {
+    SettingsLoaded(
+      provider~,
+      custom_url~,
+      api_key~,
+      custom_api_key~,
+      wsl_enabled~,
+      wsl_distro~,
+      wsl_engine~
+    ) => {
       let next = {
         ..model,
         api_provider: ApiProvider::parse(provider),
         custom_api_url: custom_url.trim().to_owned(),
         api_key: api_key.trim().to_owned(),
         custom_api_key: custom_api_key.trim().to_owned(),
+        wsl_enabled: wsl_enabled == "1",
+        wsl_distro: wsl_distro.trim().to_owned(),
+        wsl_engine: wsl_engine.trim().to_owned(),
         setup_api_key: "",
       }
       // The default provider needs no setup, so the popup only opens when
@@ -208,6 +219,14 @@ fn update(
     }
     CustomApiUrlChanged(value) =>
       (save_custom_api_url(value), { ..model, custom_api_url: value })
+    WslModeChanged(value) => {
+      let enabled = value == "wsl"
+      (save_wsl_enabled(enabled), { ..model, wsl_enabled: enabled })
+    }
+    WslDistroChanged(value) =>
+      (save_wsl_distro(value), { ..model, wsl_distro: value })
+    WslEngineChanged(value) =>
+      (save_wsl_engine(value), { ..model, wsl_engine: value })
     OpenSetup => (@cmd.none, { ..model, setup_open: true, setup_api_key: "" })
     CloseSetup =>
       // The popup cannot be dismissed while the configured endpoint is
@@ -341,6 +360,9 @@ fn update(
               model.effective_api_key(),
               model.effective_api_url(),
               conv.session_id,
+              wsl_enabled=model.wsl_active(),
+              wsl_distro=model.wsl_distro,
+              wsl_engine=model.wsl_engine,
             ),
             scroll_transcript_after_render(),
           ]),

@@ -33,7 +33,10 @@ async fn start_run(
 
   manager.starts_in_flight.add(key)
   defer clear_start_flag()
-  if config.cwd is Some(cwd) {
+  // A WSL run's Linux-path cwd lives inside the distro — the host cannot
+  // create it here; `wsl --cd` rejects a missing directory at spawn time.
+  if config.cwd is Some(cwd) &&
+    !(config.host is Wsl(..) && is_linux_abs_path(cwd)) {
     ensure_run_cwd(cwd) catch {
       error if @async.is_being_cancelled() => raise error
       error =>
