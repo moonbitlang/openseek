@@ -84,7 +84,7 @@ pub fn Line::spans(self : Line) -> Array[Span] {
 pub fn Line::text(self : Line) -> String {
   let builder = StringBuilder()
   for span in self.spans {
-    builder.write_string(span.text.text())
+    builder <+ "\{span.text.text()}"
   }
   builder.to_string()
 }

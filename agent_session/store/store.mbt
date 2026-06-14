@@ -236,9 +236,9 @@ impl FromJson for SessionHeader with fn from_json(
 
 ///|
 fn events_jsonl(events : @vector.Vector[@agent_session.SessionEvent]) -> String {
-  let builder = StringBuilder::new()
+  let builder = StringBuilder()
   for event in events {
-    builder.write_string("\{event.to_json().stringify()}\n")
+    builder <+ "\{event.to_json().stringify()}\n"
   }
   builder.to_string()
 }

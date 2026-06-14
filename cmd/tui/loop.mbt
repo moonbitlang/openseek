@@ -74,15 +74,13 @@ async fn drain_stderr_capped(reader : @process.ReadFromProcess) -> String {
         }
     }
   }
-  let text = StringBuilder::new()
-  text.write_string(@utf8.decode_lossy(buffer.to_bytes()))
+  let text = StringBuilder()
+  text <+ "\{@utf8.decode_lossy(buffer.to_bytes())}"
   if truncated {
-    text.write_string(
-      "\n… (stderr truncated at \{StderrCaptureLimitBytes} bytes)",
-    )
+    text <+ "\n… (stderr truncated at \{StderrCaptureLimitBytes} bytes)"
   }
   if read_error is Some(message) {
-    text.write_string("\n… (stderr read failed: \{message})")
+    text <+ "\n… (stderr read failed: \{message})"
   }
   text.to_string()
 }
@@ -308,16 +306,16 @@ fn tail_columns(text : String, max_cols : Int) -> String {
 /// code is mostly newlines and indentation, which would otherwise hit the
 /// renderer as control characters.
 fn collapse_preview_whitespace(text : String) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut last_was_space = false
   for ch in text {
     if ch is (' ' | '\t' | '\n' | '\r') {
       if !last_was_space {
-        out.write_char(' ')
+        out <+ " "
       }
       last_was_space = true
     } else {
-      out.write_char(ch)
+      out <+ "\{ch}"
       last_was_space = false
     }
   }

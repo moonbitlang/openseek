@@ -35,10 +35,9 @@ fn sample_session() -> @agent_session.Session {
 ///|
 /// Serialize a session to the append-only JSONL text the store persists.
 fn events_jsonl(session : @agent_session.Session) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for event in session.events() {
-    out.write_string(event.to_json().stringify())
-    out.write_char('\n')
+    out <+ "\{event.to_json().stringify()}\n"
   }
   out.to_string()
 }

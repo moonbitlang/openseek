@@ -76,9 +76,9 @@ fn join_logical_lines(logical_lines : Array[LogicLine]) -> String {
   let builder = StringBuilder()
   for index in 0..<logical_lines.length() {
     if index > 0 {
-      builder.write_string("\n")
+      builder <+ "\n"
     }
-    builder.write_string(logical_lines[index].text())
+    builder <+ "\{logical_lines[index].text()}"
   }
   builder.to_string()
 }

@@ -37,9 +37,9 @@ pub fn sanitize(text : String) -> String {
   let builder = StringBuilder()
   for index, line in @displaytext.split_lines(text) {
     if index > 0 {
-      builder.write_string("\n")
+      builder <+ "\n"
     }
-    builder.write_string(sanitize_line(line))
+    builder <+ "\{sanitize_line(line)}"
   }
   builder.to_string()
 }
@@ -66,10 +66,10 @@ fn sanitize_line(line : @displaytext.DisplayText) -> String {
     let unit = line.view(start, end)
     if unit == "\t" {
       let spaces = TabWidth - col % TabWidth
-      builder.write_string(String::make(spaces, ' '))
+      builder <+ "\{String::make(spaces, ' ')}"
       col = col + spaces
     } else if !is_control_unit(unit) {
-      builder.write_stringview(unit)
+      builder <+ "\{unit}"
       col = col + unit_width(line, start~, end~)
     }
     start = end

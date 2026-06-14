@@ -110,7 +110,7 @@ fn apply_tool_call_delta(
   }
   if json is { "function": { "arguments": String(arguments), .. }, .. } &&
     arguments != "" {
-    call.arguments.write_string(arguments)
+    call.arguments <+ "\{arguments}"
   }
 }
 
@@ -122,11 +122,11 @@ async fn apply_stream_delta(
   on_reasoning_delta~ : async (String) -> Unit,
 ) -> Unit {
   if delta is { "content": String(content), .. } && content != "" {
-    acc.content.write_string(content)
+    acc.content <+ "\{content}"
     on_content_delta(content)
   }
   if delta is { "reasoning_content": String(reasoning), .. } && reasoning != "" {
-    acc.reasoning_content.write_string(reasoning)
+    acc.reasoning_content <+ "\{reasoning}"
     on_reasoning_delta(reasoning)
   }
   if delta is { "tool_calls": Array(calls), .. } {

@@ -164,7 +164,7 @@ async fn random_salt() -> String {
   let salt = StringBuilder()
   for ch in dir[index + prefix.length():] {
     if ch is ('0'..='9' | 'a'..='z' | 'A'..='Z') {
-      salt.write_char(ch)
+      salt <+ "\{ch}"
     }
   }
   salt.to_string()
@@ -487,17 +487,17 @@ const PromptLabelMaxChars : Int = 60
 /// anything beyond `PromptLabelMaxChars` is elided with `…`. A session
 /// without a recorded prompt shows `-` so the column never vanishes.
 fn compact_prompt_label(prompt : String) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut last_was_space = false
   let mut count = 0
   for ch in prompt.trim() {
     if count >= PromptLabelMaxChars {
-      out.write_char('…')
+      out <+ "…"
       break
     }
     if ch is (' ' | '\t' | '\n' | '\r') {
       if !last_was_space {
-        out.write_char(' ')
+        out <+ " "
         count += 1
       }
       last_was_space = true
@@ -508,7 +508,7 @@ fn compact_prompt_label(prompt : String) -> String {
       // commands, not text.
       continue
     } else {
-      out.write_char(ch)
+      out <+ "\{ch}"
       count += 1
       last_was_space = false
     }

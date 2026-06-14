@@ -6,9 +6,9 @@ async fn new_store() -> @store.SessionStore {
 
 ///|
 fn session_events_jsonl(session : @agent_session.Session) -> String {
-  let builder = StringBuilder::new()
+  let builder = StringBuilder()
   for event in session.events() {
-    builder.write_string("\{event.to_json().stringify()}\n")
+    builder <+ "\{event.to_json().stringify()}\n"
   }
   builder.to_string()
 }

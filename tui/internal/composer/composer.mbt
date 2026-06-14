@@ -402,14 +402,8 @@ fn Model::replace_line_range(
   let line = self.logical_lines[line_index]
   let prefix = line.display.view(line.display.start(), start)
   let suffix = line.display.view(end, line.display.end())
-  let cursor_builder = StringBuilder()
-  cursor_builder.write_stringview(prefix)
-  cursor_builder.write_string(replacement)
-  let cursor_text = cursor_builder.to_string()
-  let line_builder = StringBuilder()
-  line_builder.write_string(cursor_text)
-  line_builder.write_stringview(suffix)
-  let new_line = LogicLine::new(DisplayText(line_builder.to_string()))
+  let cursor_text = "\{prefix}\{replacement}"
+  let new_line = LogicLine::new(DisplayText("\{cursor_text}\{suffix}"))
   let replacement_lines = [new_line]
   let logical_lines = splice_logical_lines(
     self.logical_lines,
@@ -438,10 +432,7 @@ fn Model::join_with_next_line(self : Model, line_index~ : Int) -> Unit {
   } else {
     let left = self.logical_lines[line_index].text()
     let right = self.logical_lines[line_index + 1].text()
-    let builder = StringBuilder()
-    builder.write_string(left)
-    builder.write_string(right)
-    let joined = LogicLine::new(DisplayText(builder.to_string()))
+    let joined = LogicLine::new(DisplayText("\{left}\{right}"))
     let replacement_lines = [joined]
     let logical_lines = splice_logical_lines(
       self.logical_lines,
@@ -509,21 +500,11 @@ pub fn Model::insert(self : Model, text : String) -> Unit {
       inserted_line.end(),
     )
     let replacement_line = if inserted.length() == 1 {
-      let builder = StringBuilder()
-      builder.write_stringview(prefix)
-      builder.write_stringview(inserted_text)
-      builder.write_stringview(suffix)
-      LogicLine::new(DisplayText(builder.to_string()))
+      LogicLine::new(DisplayText("\{prefix}\{inserted_text}\{suffix}"))
     } else if index == 0 {
-      let builder = StringBuilder()
-      builder.write_stringview(prefix)
-      builder.write_stringview(inserted_text)
-      LogicLine::new(DisplayText(builder.to_string()))
+      LogicLine::new(DisplayText("\{prefix}\{inserted_text}"))
     } else if index == last {
-      let builder = StringBuilder()
-      builder.write_stringview(inserted_text)
-      builder.write_stringview(suffix)
-      LogicLine::new(DisplayText(builder.to_string()))
+      LogicLine::new(DisplayText("\{inserted_text}\{suffix}"))
     } else {
       LogicLine::new(inserted_line)
     }

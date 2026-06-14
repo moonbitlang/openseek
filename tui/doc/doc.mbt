@@ -170,7 +170,7 @@ fn Text::wrap(self : Text, width~ : Int) -> Array[@surface.Line] {
             spans = []
             used = 0
           }
-          run.write_string(" ")
+          run <+ " "
           run_empty = false
           used += 1
         }
@@ -182,7 +182,7 @@ fn Text::wrap(self : Text, width~ : Int) -> Array[@surface.Line] {
           spans = []
           used = 0
         }
-        run.write_stringview(unit)
+        run <+ "\{unit}"
         run_empty = false
         used += next
       }

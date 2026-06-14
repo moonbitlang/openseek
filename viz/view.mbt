@@ -403,13 +403,13 @@ fn truncate(text : String, limit : Int) -> String {
   if text.length() <= limit {
     return text
   }
-  let kept = StringBuilder::new()
+  let kept = StringBuilder()
   let mut count = 0
   for char in text {
     if count >= limit {
       break
     }
-    kept.write_char(char)
+    kept <+ "\{char}"
     count += 1
   }
   kept.to_string() + "…"

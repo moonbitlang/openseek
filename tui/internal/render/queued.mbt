@@ -11,8 +11,7 @@ fn input_preview_line(input : @core.Input) -> @displaytext.DisplayText {
   let first = lines[0]
   if lines.length() > 1 {
     let builder = StringBuilder()
-    builder.write_string(first.text())
-    builder.write_string(" …")
+    builder <+ "\{first.text()} …"
     DisplayText(builder.to_string())
   } else {
     first
