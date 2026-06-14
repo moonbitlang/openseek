@@ -132,8 +132,11 @@ fn windows_path_to_wsl_mount(path : String) -> String? {
 /// directory, and runs the engine inside it: `--cd` is resolved by wsl.exe
 /// itself and accepts both Windows paths (translated to their `/mnt/...`
 /// mount) and absolute Linux paths, so the host never translates paths.
-/// Everything after `--` is joined into one command line for the distro's
-/// default shell, hence the quoting on the engine path.
+///
+/// The engine path is passed raw, as its own argument. wsl.exe routes the
+/// post-`--` tokens through the distro's shell but quotes each one itself,
+/// so a path with spaces survives as a single word — pre-quoting it here
+/// would make the quote characters part of the filename the shell looks up.
 fn EngineHost::serve_command(
   self : EngineHost,
   native_engine : String,
@@ -152,7 +155,7 @@ fn EngineHost::serve_command(
         args.push(cwd)
       }
       args.push("--")
-      args.push(posix_shell_quoted(engine))
+      args.push(engine)
       args.push("--serve")
       (WslProgram, args)
     }
@@ -198,42 +201,10 @@ fn is_linux_abs_path(path : String) -> Bool {
 }
 
 ///|
-/// Quote one word for the distro's default shell, since wsl.exe hands the
-/// command line after `--` to a shell rather than exec'ing it directly. Bare
-/// command names stay unquoted so PATH lookup reads naturally; anything with
-/// spaces or shell metacharacters is single-quoted POSIX-style.
-fn posix_shell_quoted(word : String) -> String {
-  if word.is_empty() {
-    return "''"
-  }
-  let mut safe = true
-  for c in word {
-    if !(c is ('a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '-' | '.' | '/')) {
-      safe = false
-      break
-    }
-  }
-  if safe {
-    return word
-  }
-  let quoted = StringBuilder::new()
-  quoted.write_char('\'')
-  for c in word {
-    if c is '\'' {
-      quoted.write_string("'\\''")
-    } else {
-      quoted.write_char(c)
-    }
-  }
-  quoted.write_char('\'')
-  quoted.to_string()
-}
-
-///|
-test "serve command selects distro, cwd, and quotes the engine" {
+test "serve command selects distro and cwd, passing the engine path raw" {
   let full : EngineHost = Wsl(
     distro=Some("Ubuntu"),
-    engine="/mnt/c/Program Files/OpenSeek/openseek",
+    engine="/mnt/c/Program Files/OpenSeek/openseek-linux",
   )
   let (program, args) = full.serve_command(
     "C:\\bundle\\openseek.exe",
@@ -241,7 +212,7 @@ test "serve command selects distro, cwd, and quotes the engine" {
   )
   assert_eq(program, "wsl.exe")
   json_inspect(args, content=[
-    "-d", "Ubuntu", "--cd", "C:\\Users\\me\\.openseek\\workspaces\\s1", "--", "'/mnt/c/Program Files/OpenSeek/openseek'",
+    "-d", "Ubuntu", "--cd", "C:\\Users\\me\\.openseek\\workspaces\\s1", "--", "/mnt/c/Program Files/OpenSeek/openseek-linux",
     "--serve",
   ])
   let minimal : EngineHost = Wsl(distro=None, engine=DefaultWslEngine)
@@ -280,18 +251,6 @@ test "wslenv extends the user's own sharing list" {
     wslenv_with_passthrough(Some("MYVAR/u")),
     "MYVAR/u:" + WslEnvPassthrough,
   )
-}
-
-///|
-test "posix quoting leaves safe words alone and escapes quotes" {
-  assert_eq(posix_shell_quoted("openseek"), "openseek")
-  assert_eq(
-    posix_shell_quoted("/usr/local/bin/openseek"),
-    "/usr/local/bin/openseek",
-  )
-  assert_eq(posix_shell_quoted("a b"), "'a b'")
-  assert_eq(posix_shell_quoted("it's"), "'it'\\''s'")
-  assert_eq(posix_shell_quoted(""), "''")
 }
 
 ///|
