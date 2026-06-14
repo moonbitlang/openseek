@@ -1,11 +1,19 @@
 ///|
 async fn main {
-  let config = @argparse.parse(cli_command()) |> config_from_matches
-  let report = @harness.run_suite(config)
-  println(report.markdown())
-  if !report.passed() {
-    fail(report.failure_message())
+  let matches = @argparse.parse(cli_command())
+  if flag(matches, "analyze-only") {
+    let report = @harness.analyze_run(value(matches, "out"))
+    println(report.markdown())
+    if !report.passed() {
+      fail(report.failure_message())
+    }
+    return
   }
+  let config = config_from_matches(matches)
+  let manifest = @harness.run_experiments(config)
+  println(
+    "prompt task run manifest: \{@harness.manifest_path(manifest.out_dir)}",
+  )
 }
 
 ///|
@@ -17,7 +25,7 @@ fn cli_command() -> @argparse.Command {
       OptionArg(
         "api-key",
         long="api-key",
-        required=true,
+        default_values=[""],
         about="DeepSeek API key.",
       ),
       OptionArg(
@@ -91,6 +99,13 @@ fn cli_command() -> @argparse.Command {
         long="system-prompt-addendum-file",
         default_values=[""],
         about="Pass a system prompt addendum file through to OpenSeek.",
+      ),
+    ],
+    flags=[
+      FlagArg(
+        "analyze-only",
+        long="analyze-only",
+        about="Analyze an existing --out directory without running agent trials.",
       ),
     ],
   )

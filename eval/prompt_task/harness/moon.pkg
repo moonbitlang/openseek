@@ -1,6 +1,9 @@
 import {
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_session/log" @session_log,
   "bobzhang/openseek/deepseek",
   "bobzhang/openseek/eval/report",
+  "bobzhang/openseek/eval/session_analyzer",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",

@@ -6,7 +6,11 @@ import {
 }
 
 // Values
-pub async fn run_suite(Config) -> EvalReport
+pub async fn analyze_run(String) -> EvalReport
+
+pub fn manifest_path(String) -> String
+
+pub async fn run_experiments(Config) -> RunManifest
 
 // Errors
 
@@ -37,29 +41,36 @@ pub struct EvalReport {
   min_successes : Int
   successes : Int
   out_dir : String
-  results : Array[TrialResult]
+  results : Array[EvalResult]
 }
 pub fn EvalReport::failure_message(Self) -> String
+pub fn EvalReport::html(Self) -> String
 pub fn EvalReport::markdown(Self) -> String
 pub fn EvalReport::passed(Self) -> Bool
 
-pub struct ProbeResult {
-  passed : Bool
-  reason : String
-}
-
-pub struct TrialResult {
+pub struct EvalResult {
   index : Int
   prompt_label : String
   success : Bool
   reason : String
   workspace : String
   log_path : String
+  session_id : String
+  events_path : String
   exit_code : Int
   steps : Int
+  tool_results : Int
   tool_errors : Int
+  shell_uses : Int
+  shell_failures : Int
+  runtime_notices : Int
   finished : Bool
+  finish_message : String
+  terminal_status : String
+  terminal_message : String
   validation : ValidationResult
+  parse_errors : Int
+  partial_tail : Bool
   moon_check_uses : Int
   moon_test_uses : Int
   moon_run_e_mentions : Int
@@ -75,8 +86,34 @@ pub struct TrialResult {
   try_mentions : Int
   warnings : String
 }
+pub fn EvalResult::html(Self) -> String
+pub fn EvalResult::markdown(Self) -> String
+
+pub struct RunManifest {
+  model : String
+  prompt_label : String
+  task_file : String
+  runs : Int
+  concurrency : Int
+  min_successes : Int
+  max_steps : Int
+  out_dir : String
+  trials : Array[TrialArtifact]
+}
+pub fn RunManifest::RunManifest(model~ : String, prompt_label~ : String, task_file~ : String, runs~ : Int, concurrency~ : Int, min_successes~ : Int, max_steps~ : Int, out_dir~ : String, trials~ : Array[TrialArtifact]) -> Self
+
+pub struct TrialArtifact {
+  index : Int
+  workspace : String
+  log_path : String
+  session_id : String
+  events_path : String
+  exit_code : Int
+}
+pub fn TrialArtifact::TrialArtifact(index~ : Int, workspace~ : String, log_path~ : String, session_id~ : String, events_path~ : String, exit_code~ : Int) -> Self
 
 pub struct ValidationResult {
+  ran : Bool
   passed : Bool
   reason : String
   moon_check : Bool

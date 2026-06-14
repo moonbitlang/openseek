@@ -1,12 +1,18 @@
 # Prompt Task Eval
 
 This harness runs a MoonBit prompt task through the real OpenSeek agent with
-isolated workspaces, per-trial logs, independent validation probes, and bounded
-parallelism.
+isolated workspaces, per-trial raw logs, durable session `events.jsonl` logs,
+and bounded parallelism. Reporting is a separate analyzer pass, so reports can
+be regenerated without rerunning model/API trials.
 
 The default task is `eval/prompt_tasks/toml_parser_cli.md`. The runner replaces
-`{{WORKSPACE}}` in the task template with each trial workspace path, starts the
-agent, then independently validates the final TOML project with:
+`{{WORKSPACE}}` in the task template with each trial workspace path and starts
+the agent with `openseek --dir <trial-workspace>` and an explicit per-trial
+session id. Each session log stays under the trial workspace's `.openseek`
+directory. The analyzer loads the run manifest, recursively resolves the
+workspace-local session logs, evaluates each loaded agent session independently,
+then combines those eval results into a run-level report. Workspace validation
+for the TOML task checks:
 
 - `moon check --target native`
 - `moon test --target native`
@@ -28,6 +34,14 @@ moon run eval/prompt_task/cmd/main -- \
   --out .moonagent/eval_runs/toml_flash_current_5x
 ```
 
+Analyze the finished run later:
+
+```bash
+moon run eval/prompt_task/cmd/main -- \
+  --analyze-only \
+  --out .moonagent/eval_runs/toml_flash_current_5x
+```
+
 Run an A/B comparison by using different output directories and prompt labels:
 
 ```bash
@@ -43,5 +57,10 @@ moon run eval/prompt_task/cmd/main -- \
   --out .moonagent/eval_runs/toml_flash_candidate_5x
 ```
 
-The report records success rate, steps, tool errors, validation pass/fail,
-prompt-sensitive log counters, and paths to each raw log.
+The runner writes `run_manifest.json`, `workspaces/`, and `logs/`. Agent
+session logs remain in each workspace at `.openseek/sessions/<session>/`.
+The analyzer writes aggregate `report.md`, `report.json`, and `report.html`
+files under the run output directory. It also writes one independently
+renderable eval result under `eval_results/<trial>/` with its own markdown,
+JSON, and HTML report. The reports record success rate, typed-session metrics,
+validation pass/fail, prompt-sensitive counters, and paths to each raw log.

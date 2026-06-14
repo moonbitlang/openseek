@@ -27,6 +27,25 @@ test "cli parses prompt and task options" {
 }
 
 ///|
+test "analyze-only mode does not require an api key" {
+  let matches = cli_command().parse(argv=["--analyze-only", "--out", "existing"])
+  assert_true(flag(matches, "analyze-only"))
+  assert_eq(value(matches, "out"), "existing")
+}
+
+///|
+test "running trials requires an api key" {
+  let matches = cli_command().parse(argv=[])
+  let _ = config_from_matches(matches) catch {
+    error => {
+      assert_true("\{error}".contains("--api-key is required"))
+      return
+    }
+  }
+  fail("missing api key parsed")
+}
+
+///|
 test "cli rejects impossible threshold" {
   let matches = cli_command().parse(argv=[
     "--api-key", "test-key", "--runs", "3", "--min-successes", "4",

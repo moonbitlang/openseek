@@ -6,8 +6,10 @@ fn config_from_matches(matches : @argparse.Matches) -> @harness.Config raise {
     "--min-successes",
   )
   guard min_successes <= runs else { fail("--min-successes must be <= --runs") }
+  let api_key = value(matches, "api-key")
+  guard api_key != "" else { fail("--api-key is required for running trials") }
   Config(
-    api_key=value(matches, "api-key"),
+    api_key~,
     model=@deepseek.Model::parse(value(matches, "model")),
     runs~,
     concurrency=parse_positive_int(
@@ -24,6 +26,14 @@ fn config_from_matches(matches : @argparse.Matches) -> @harness.Config raise {
     system_prompt_file=value(matches, "system-prompt-file"),
     system_prompt_addendum_file=value(matches, "system-prompt-addendum-file"),
   )
+}
+
+///|
+fn flag(matches : @argparse.Matches, name : String) -> Bool {
+  match matches.flags.get(name) {
+    Some(value) => value
+    None => false
+  }
 }
 
 ///|
