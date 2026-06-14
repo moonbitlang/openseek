@@ -4,6 +4,10 @@ let default_max_steps : Int = 1000
 ///|
 /// Queue `text` as steering input for the turn running on `runtime`.
 ///
+/// This is a thin public wrapper over `AgentRuntime::queue_steer`. It does not
+/// inspect, trim, deduplicate, or validate the string. The agent loop filters
+/// blank strings later when it drains pending steers.
+///
 /// Steering lands at the next step boundary — after the in-flight model call
 /// and its tool batch complete, where the loop already folds in runtime
 /// updates — so completed work is never thrown away. User input also wins
@@ -12,11 +16,13 @@ let default_max_steps : Int = 1000
 /// ordinary assistant message, or the finish call's batch is closed out)
 /// and the conversation continues with the steer. Only error terminals
 /// (abort, failure, exhausted steps) still end the turn; a steer queued
-/// then applies to the next one. The text is appended to the session as a
-/// user message and a `steer_applied` event is emitted when it takes
-/// effect. The channel is lossless (unlike the runtime event bus, which
-/// discards under flood), so a steer can never be pushed out by noisy
-/// watcher updates.
+/// then is either applied by the next turn that shares the runtime or drained
+/// and rejected by the caller, as serve mode does after a turn finishes.
+///
+/// When the loop applies a non-blank steer, the text is appended to the session
+/// as a user message, pushed into the model-facing message array, and logged as
+/// a `steer_applied` event. The channel is lossless with respect to runtime
+/// event overflow, so noisy watcher updates cannot push out user steering.
 pub fn steer(runtime : @agent_runtime.AgentRuntime, text : String) -> Unit {
   runtime.queue_steer(text)
 }
@@ -24,12 +30,21 @@ pub fn steer(runtime : @agent_runtime.AgentRuntime, text : String) -> Unit {
 ///|
 /// Build the agent's standard tool registry bound to `runtime` and `scope`.
 ///
-/// Stateful tools live in the registry value itself: `moon_check` keeps its
-/// watcher records in the closure this builds, not in `AgentRuntime`. A
-/// serve-mode caller that wants watchers to survive from one turn to the
-/// next must therefore build the registry once and pass it to every
-/// `run_turn_in_scope` call — rebuilding it each turn would orphan the old
-/// watchers and start duplicates.
+/// The returned registry contains the built-in local tools: `shell`, `read`,
+/// `edit`, `write`, `moon_check`, and `finish`. File-oriented tools capture
+/// `runtime.workspace_root()` when this function is called. The `moon_check`
+/// tool captures both `runtime` and `scope` so it can report asynchronous
+/// watcher updates and spawn bounded background work.
+///
+/// Stateful tools live in the registry value itself: `moon_check` keeps watcher
+/// records in the closure this builds, not in `AgentRuntime`. A serve-mode
+/// caller that wants watchers to survive from one turn to the next must build
+/// the registry once and pass it to every `run_turn_in_scope` call. Rebuilding
+/// it each turn would orphan the old watcher records and may start duplicate
+/// watchers for the same workspace.
+///
+/// Raises if the standard tool definitions contain duplicate names. Under the
+/// checked-in registry that should be a programming error, not user input.
 pub fn[X] build_tools(
   runtime : @agent_runtime.AgentRuntime,
   scope : @agent_runtime.AgentTaskScope[X],
@@ -38,19 +53,44 @@ pub fn[X] build_tools(
 }
 
 ///|
-/// Returns the default built-in system prompt.
+/// Return the model-independent convenience default system prompt.
+///
+/// This currently delegates to `default_system_prompt_for_model(V4Pro)`.
+/// Callers that already know the selected DeepSeek model should prefer
+/// `default_system_prompt_for_model(model)` so model-specific prompt selection
+/// stays explicit.
 pub fn default_system_prompt() -> String {
   @prompt.system_prompt_for_model(V4Pro)
 }
 
 ///|
-/// Returns the default system prompt for a DeepSeek model.
+/// Return the built-in system prompt selected for `model`.
+///
+/// `run` uses this function for its `system_prompt_text` default. Passing an
+/// explicit `system_prompt_text` to `run`, or constructing a `Session` with a
+/// custom `system_prompt`, bypasses this helper for that conversation.
 pub fn default_system_prompt_for_model(model : @deepseek.Model) -> String {
   @prompt.system_prompt_for_model(model)
 }
 
 ///|
-/// Runs the OpenSeek agent loop for a single task.
+/// Run a one-shot OpenSeek task and discard the returned session.
+///
+/// This is the highest-level convenience entry point. It creates a fresh
+/// in-memory session with id `"one-shot"`, appends `task` as the first user
+/// event through `run_turn`, runs the agent loop, logs progress through the
+/// configured process logger, and returns `Unit`. It does not persist the
+/// session and does not expose the final `Session` value to the caller.
+///
+/// `system_prompt_text` defaults to `default_system_prompt_for_model(model)`.
+/// `thinking` defaults to `Max`. `workspace_root` defaults to `"."` and is
+/// passed into the per-turn `AgentRuntime`; local file and shell tools resolve
+/// relative paths against that root. `api_url` is forwarded to the DeepSeek
+/// client and is mainly useful for tests or compatible endpoints.
+///
+/// Prefer `run_turn` when the caller needs the final in-memory session, and
+/// `run_turn_with_append` when every committed event must be persisted as the
+/// turn progresses.
 pub async fn run(
   api_key : String,
   model : @deepseek.Model,
@@ -83,6 +123,21 @@ pub async fn run(
 /// Runs one user turn against an in-memory session and returns the updated
 /// session. Callers that need durable persistence should use
 /// `run_turn_with_append`.
+///
+/// This appends `task` to `session`, owns a fresh `AgentRuntime` and
+/// `AgentTaskScope` for this single turn, builds a fresh standard tool registry,
+/// and returns the session produced by `run_turn_in_scope`. The input session is
+/// immutable; it is not changed in place.
+///
+/// Because the runtime and tools are fresh per call, background stateful tools
+/// such as `moon_check` do not survive across separate `run_turn` calls. That
+/// is usually correct for one-shot callers. Long-lived callers should create
+/// one runtime, one task scope, and one `build_tools` registry, then call
+/// `run_turn_in_scope` repeatedly.
+///
+/// `max_steps` bounds the number of model-request iterations. If it is `0`, the
+/// turn appends the user task and then terminates with
+/// `Terminal(Failed("max steps exhausted"))` without making a model request.
 pub async fn run_turn(
   api_key : String,
   model : @deepseek.Model,
@@ -110,6 +165,22 @@ pub async fn run_turn(
 /// Runs one user turn and calls `append_item` for every session event as soon as
 /// it is committed. This lets a filesystem-backed caller preserve progress even
 /// if the engine process exits later in the turn.
+///
+/// This is the persistence hook for one-shot and CLI session recording. The
+/// callback receives the current session snapshot and the next `SessionItem`;
+/// it must return the new session snapshot after appending that item. The agent
+/// uses the returned value as the current session for all later work, so the
+/// callback is the single source of truth for sequencing.
+///
+/// `append_item` is called for the initial user task, every assistant/tool/
+/// runtime/steer event that is committed, and the terminal event. If the
+/// callback raises, the turn attempts to append a failure terminal describing
+/// that append failure and then re-raises the original error. This means a
+/// durable store can preserve the partial turn up to the failure point.
+///
+/// Like `run_turn`, this owns a fresh runtime, task group, and tool registry for
+/// the duration of one turn. Use `run_turn_in_scope` when the caller needs to
+/// preserve runtime state or tool state across turns.
 pub async fn run_turn_with_append(
   api_key : String,
   model : @deepseek.Model,
@@ -187,6 +258,27 @@ async test "run_turn_with_append closes failed persisted turns" {
 /// spawned some. One-shot callers should prefer
 /// `run_turn`/`run_turn_with_append`, which own everything for the duration
 /// of a single turn.
+///
+/// The loop appends `task` as a user message before the first model request.
+/// At each step boundary it first drains and applies pending non-blank steers,
+/// then drains runtime events and turns known tool updates into model-visible
+/// runtime notices. It sends the current DeepSeek chat projection with the
+/// active tool schemas, records assistant responses, executes tool calls in
+/// order, and records tool results. The turn ends when the model answers with
+/// no tool calls, the `finish` tool returns `Control(Finish)`, a tool returns
+/// `Control(Abort)`, `max_steps` is exhausted, the task is cancelled, or an
+/// unexpected error escapes.
+///
+/// A steer that arrives while the model's apparent final answer or a `finish`
+/// tool call is in flight keeps the turn alive. The would-be final answer is
+/// stored as an ordinary assistant message, or the finish batch is closed with
+/// tool-result messages, then the steer is appended and the loop continues.
+///
+/// `tools` should normally be a registry built once with `build_tools(runtime,
+/// scope)` for a long-lived engine. If `tools` is omitted, this function builds
+/// a fresh registry for this call only. `api_url` is forwarded to the DeepSeek
+/// client. The caller owns the lifetime of `runtime`, `scope`, and any shared
+/// `tools` registry passed here.
 pub async fn[X] run_turn_in_scope(
   runtime : @agent_runtime.AgentRuntime,
   scope : @agent_runtime.AgentTaskScope[X],

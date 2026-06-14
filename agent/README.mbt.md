@@ -1,73 +1,272 @@
 # OpenSeek Agent
 
-This package contains the native-only agent loop for `bobzhang/openseek`. It
-owns the local tool schemas, native DeepSeek tool-call handling, and dispatch
-for workspace operations. The built-in prompt text and prompt selection live in
-`bobzhang/openseek/prompt`.
+`bobzhang/openseek/agent` is the native-only OpenSeek loop. It connects four
+lower-level packages:
 
-The package depends on:
+- `agent_session`: immutable conversation state and model-message projection;
+- `agent_runtime`: per-loop runtime state, steering, and background events;
+- `agent_tool`: local tool registry and tool dispatch results;
+- `deepseek` and `deepseek/client`: model types and chat-completion requests.
 
-- `bobzhang/openseek/deepseek` for typed models, messages, roles, and tool
-  definitions.
-- `bobzhang/openseek/deepseek/client` for HTTP chat requests.
-- `bobzhang/openseek/logger` for async stdout logging.
-- `bobzhang/openseek/prompt` for built-in prompt text and default prompt
-  selection.
-- `bobzhang/openseek/agent_tool` for tool registries, typed tool output,
-  loop-control actions, and session-scoped background daemon events.
-- `moonbitlang/async/fs` and `moonbitlang/async/process` for local tool
-  execution.
+The package owns the orchestration policy: when to append session events, when
+to call the model, how to execute tool calls, how to fold in runtime updates,
+and how mid-turn steering changes the active turn.
 
-## API Shape
+## Public API
 
-- `default_system_prompt()`: return the default built-in prompt.
-- `default_system_prompt_for_model(model)`: return the default built-in prompt
-  from the prompt package for a DeepSeek model.
-- `run(api_key, model, task, max_steps?, system_prompt_text?)`: run the agent
-  loop for one natural-language task. `system_prompt_text` defaults to the
-  built-in prompt selected by the prompt package, so callers can run prompt
-  experiments without rebuilding the package.
+The exported surface is small:
 
-`run` creates a DeepSeek client, starts a conversation with a system prompt and
-user task, sends native function tool definitions on each turn, executes any
-returned tool calls, and sends `Respond(ToolOutput(...)).content` back with
-`Tool(call.id)` messages. The loop stops when the model answers directly, a
-tool returns `Control(Finish(...))` / `Control(Abort(...))`, or the step limit
-is reached.
+```mbt nocheck
+let prompt = @agent.default_system_prompt_for_model(V4Pro)
 
-The agent client enables DeepSeek V4 thinking mode explicitly with
-`thinking=max`. When DeepSeek returns
-`reasoning_content` with tool calls, the agent preserves it in the assistant
-tool-call message for the next request.
+@agent.run(api_key, V4Pro, "fix the tests")
 
-The base and Flash-specific prompt sources live in the `prompt` package. That
-package uses the module-level `md_to_mbt_string` rule plus `dev_build` to
-generate MoonBit multiline strings from Markdown. The generated files are
-committed so downstream users can build without running local pre-build
-commands.
+let next = @agent.run_turn(
+  api_key,
+  V4Flash,
+  session,
+  "continue",
+  max_steps=100,
+)
 
-## Tools
+let persisted = @agent.run_turn_with_append(
+  api_key,
+  V4Pro,
+  session,
+  "continue",
+  append_item=(session, item) => store.append(session, item),
+)
 
-The agent exposes six local tools to DeepSeek by default:
+@async.with_task_group() <| group => {
+  let runtime = @agent_runtime.AgentRuntime(workspace_root=".")
+  let scope = @agent_runtime.AgentTaskScope(group)
+  let tools = @agent.build_tools(runtime, scope)
+  let next = @agent.run_turn_in_scope(
+    runtime,
+    scope,
+    api_key,
+    V4Pro,
+    session,
+    "continue",
+    append_item=(session, item) => session.append(item),
+    tools~,
+  )
+}
 
-- `shell`: runs `arguments.cmd` through `sh -c`, optionally in `arguments.cwd`,
-  and returns exit code plus merged output.
-- `read`: reads `arguments.path` as text.
-- `edit`: replaces exact text in `arguments.path`.
-- `write`: overwrites `arguments.path` with `arguments.content`.
-- `moon_check`: starts or reuses a session-scoped
-  `moon check --watch --diagnostic-limit 10` watcher, optionally
-  in `arguments.cwd`, and injects later coalesced updates before model turns.
-- `finish`: ends the task with `arguments.answer`.
+@agent.steer(runtime, "also update README")
+```
 
-Tool-call arguments are parsed from DeepSeek's raw JSON argument string and then
-validated by the dispatcher before execution.
+`run` is the highest-level one-shot entry point. It creates a fresh in-memory
+session with id `"one-shot"`, runs one turn, logs progress, discards the final
+session value, and returns `Unit`.
+
+`run_turn` is the in-memory one-turn API. It returns the updated immutable
+session, but it owns a fresh runtime and fresh tool registry for that call. Use
+it when no background tool state needs to survive into a later turn.
+
+`run_turn_with_append` is the durable one-turn API. The `append_item` callback is
+called for every committed item and returns the new authoritative session
+snapshot. Filesystem-backed callers use this to persist progress even if a later
+model call or tool execution fails.
+
+`run_turn_in_scope` is the long-lived engine API. The caller owns the
+`AgentRuntime`, `AgentTaskScope`, and usually a `Tools` registry built once with
+`build_tools`. This is the API used by serve mode so `moon_check` watchers and
+queued steering can span turns.
+
+`steer` queues raw user steering text on an `AgentRuntime`. It does not trim or
+filter. The loop drops blank strings when it drains steering at a step boundary.
+
+## Prompt Defaults
+
+`default_system_prompt()` is a convenience helper for the current V4Pro default.
+Most callers should choose the model first and call
+`default_system_prompt_for_model(model)`.
+
+```mbt check
+///|
+test "prompt helper contracts" {
+  debug_inspect(
+    [
+      @agent.default_system_prompt() ==
+      @agent.default_system_prompt_for_model(V4Pro),
+      @agent.default_system_prompt_for_model(V4Flash).length() > 0,
+    ],
+    content=(
+      #|[true, true]
+    ),
+  )
+}
+```
+
+`run` defaults `system_prompt_text` through
+`default_system_prompt_for_model(model)`. `run_turn`, `run_turn_with_append`,
+and `run_turn_in_scope` do not choose a prompt; they use the prompt already
+stored in the supplied `Session`.
+
+## Standard Tools
+
+`build_tools(runtime, scope)` returns the standard local tool registry:
+
+- `shell`: run a command under the workspace root or an explicit cwd;
+- `read`: read a text file;
+- `edit`: replace exact text in a file;
+- `write`: overwrite a file;
+- `moon_check`: start/reuse a background `moon check --watch` watcher;
+- `finish`: end the task with a final answer.
+
+File-oriented tools capture `runtime.workspace_root()` when the registry is
+built. `moon_check` also captures the runtime and task scope so it can spawn
+bounded watcher tasks and emit runtime updates.
+
+```mbt check
+///|
+async test "standard tools are registered in dispatch order" {
+  @async.with_task_group() <| group => {
+    let runtime = @agent_runtime.AgentRuntime(workspace_root="/repo")
+    let scope = @agent_runtime.AgentTaskScope(group)
+    let tools = @agent.build_tools(runtime, scope)
+    debug_inspect(
+      [
+        for tool in tools.function_tools() => tool.name
+      ],
+      content=(
+        #|["shell", "read", "edit", "write", "moon_check", "finish"]
+      ),
+    )
+  }
+}
+```
+
+Build the registry once for a long-lived engine. Stateful tool records live in
+the registry value, not in `AgentRuntime`; rebuilding it every turn can orphan
+old watcher records and start duplicate watchers.
+
+## Steering
+
+Steering is user input that arrives while a turn is active. `steer(runtime,
+text)` stores the raw string in the runtime's lossless steering queue:
+
+```mbt check
+///|
+test "steer queues raw text" {
+  let runtime = @agent_runtime.AgentRuntime()
+  @agent.steer(runtime, "also run tests")
+  @agent.steer(runtime, "   ")
+  debug_inspect(
+    runtime.drain_steers(),
+    content=(
+      #|["also run tests", "   "]
+    ),
+  )
+}
+```
+
+The agent loop applies non-blank steering at step boundaries. A steer that races
+with a model's final answer or a `finish` tool call keeps the turn alive: the
+would-be final output is recorded as ordinary conversation state, the steer is
+appended as a user message, and the loop continues. Error terminals such as
+abort, cancellation, failure, or exhausted steps still end the turn.
+
+## One-Shot Turns
+
+`run_turn` appends the task as a user event, runs up to `max_steps` model/tool
+iterations, then appends a terminal event. With `max_steps=0`, no model request
+is made; this is useful for documenting the session contract without a network
+dependency:
+
+```mbt check
+///|
+async test "zero step run_turn appends user then failure terminal" {
+  let session = @agent_session.Session(
+    SessionId("readme-turn"),
+    system_prompt="system",
+  )
+  let result = @agent.run_turn(
+    "unused-api-key",
+    V4Flash,
+    session,
+    "hello",
+    max_steps=0,
+  )
+  debug_inspect(
+    [
+      for event in result.events() => {
+        match event.item() {
+          User(message) => "user:\{message.content()}"
+          Terminal(Failed(message)) => "failed:\{message}"
+          _ => "other"
+        }
+      }
+    ],
+    content=(
+      #|["user:hello", "failed:max steps exhausted"]
+    ),
+  )
+}
+```
+
+Use `run_turn_with_append` when the caller needs every item at the moment it is
+committed. The callback is the sequencing authority: return the session snapshot
+that should be used for the rest of the turn.
+
+```mbt check
+///|
+async test "run_turn_with_append calls the persistence hook for each item" {
+  let session = @agent_session.Session(
+    SessionId("readme-persist"),
+    system_prompt="system",
+  )
+  let appended : Array[String] = []
+  let result = @agent.run_turn_with_append(
+    "unused-api-key",
+    V4Flash,
+    session,
+    "persist me",
+    append_item=(session, item) => {
+      appended.push(
+        match item {
+          User(message) => "user:\{message.content()}"
+          Terminal(Failed(message)) => "failed:\{message}"
+          _ => "other"
+        },
+      )
+      session.append(item)
+    },
+    max_steps=0,
+  )
+  debug_inspect(
+    appended,
+    content=(
+      #|["user:persist me", "failed:max steps exhausted"]
+    ),
+  )
+  debug_inspect(result.last_sequence(), content="2")
+}
+```
+
+## Long-Lived Engines
+
+`run_turn_in_scope` is the API for serve mode and other controllers that keep an
+engine alive across prompts. The caller supplies:
+
+- one shared `AgentRuntime` for steering and runtime event queues;
+- one `AgentTaskScope` from an enclosing `@async.with_task_group`;
+- an `append_item` callback for in-memory or durable session updates;
+- usually one shared `Tools` registry from `build_tools(runtime, scope)`.
+
+At each step boundary the loop first applies non-blank steering, then converts
+known runtime events into model-visible notices, then calls DeepSeek with the
+current session projection and tool schemas. Tool calls are executed in order.
+The turn ends on a direct model answer, `finish`, `abort`, cancellation,
+unexpected failure, or exhausted `max_steps`.
 
 ## Operational Notes
 
-This package is intended for trusted local automation. The `shell` tool can run
-arbitrary commands, while `edit` and `write` can modify files visible to the
-process. Use the CLI package when invoking it as an application.
+This package is intended for trusted local automation. The standard `shell`
+tool can run arbitrary commands, while `edit` and `write` can modify files
+visible to the process. Use the CLI package for application-level policy,
+session storage, logging configuration, and serve-mode wire handling.
 
 Run the package tests with:
 
@@ -83,56 +282,21 @@ improving:
 
 - The model needs concrete MoonBit examples, especially for package manifests,
   type aliases, mutable record fields, map construction, and error handling.
-- The model repeatedly imported Rust habits. The prompt now calls out that
-  MoonBit has no postfix `?` unwrapping for `Result`; generated code should
-  match on `Ok`/`Err` or catch raising functions explicitly.
 - Parser examples should include exact receiver annotations, string APIs, and
   unit syntax: `fn Parser::peek(self : Parser)`, `get_char`, `to_owned`, and
   `()` instead of `{}` for no-op branches.
 - Long parser loops should avoid leaving `while` as the final expression of a
-  function returning `Result`; put the final `Ok(...)`/`Err(...)` after the
-  loop or return from explicit branches.
-- The full-guide rerun improved API discovery and cache behavior, but still
-  needed addendum guidance for native CLI imports, blackbox `Debug` tests,
-  unqualified enum constructors under known types, and avoiding panicking
-  `Map::at` when building nested tables.
+  function returning `Result`; put the final `Ok(...)`/`Err(...)` after the loop
+  or return from explicit branches.
 - Long runs should be observable while they are running. The agent writes loop
-  logs through `moonbitlang/async/stdio` instead of `println` so piped runs
-  such as `2>&1 | tee run.log` receive step output promptly.
-- Real workspace commands need a first-class working directory. The `shell`
-  tool now accepts optional `cwd` to avoid repeated ad hoc `cd` command strings.
-- The default step limit is 1000, and the CLI can override it with
-  `--max-steps` or `OPENSEEK_MAX_STEPS`.
-- Current MoonBit projects use `moon.mod`; `moon.mod.json` is legacy. New
-  projects should create `moon.mod`, and manifest or package-import edits
-  should be followed immediately by starting or inspecting `moon_check`.
-- MoonBit validation should call `moon_check` once near the start of an
-  iterative edit loop and then use background `[moon_check update]` messages for
-  fresh compiler feedback. `moon_check` runs
-  `moon check --watch --diagnostic-limit 10`, so broken intermediate states stay
-  compact enough for the model to act on. Repeated `moon_check` calls are
-  allowed and reuse the existing watcher for the same cwd/options tuple. If
-  `moon --watch`
-  crashes, the tool compacts the crash output and automatically starts a
-  replacement watcher under a restart budget.
+  logs through async logging so piped runs such as `2>&1 | tee run.log` receive
+  step output promptly.
+- Current MoonBit projects use `moon.mod`; `moon.mod.json` is legacy. Manifest
+  or package-import edits should be followed quickly by `moon_check` or an
+  explicit shell validation command.
 - Use `shell` for exact end-to-end MoonBit command validation beyond compiler
   feedback, especially `moon test`, `moon run`, `moon info`, `moon fmt`, and
-  README command checks. Use shell for `moon ide doc`, `moon ide outline`,
-  `moon ide peek-def`, `moon ide find-references`, and `moon ide hover`
-  semantic navigation. Pass `cwd` instead of embedding `cd ... &&`.
-- Before finishing user-facing CLI work, derive two or three acceptance probes
-  from the task and run them with shell `moon run` commands. These probes should
-  exercise real file arguments, stdin when promised, stdout shape, stderr
-  cleanliness, and failure-mode output. This prompt guardrail is intentionally
-  lightweight; future cram-style tests can encode the same probes as durable
-  fixtures.
+  README command checks.
 - For snapshot updates, run plain `moon test` first and only run
   `moon test --update` after deciding the failure is a stale snapshot or
   intentional output change, not a behavior bug.
-- Use shell `moon ide doc` before unfamiliar MoonBit APIs and shell
-  `moon ide outline`, `moon ide peek-def`, or `moon ide find-references` before
-  editing existing packages.
-- MoonBit packages are flat like Go packages: files in the same package share a
-  namespace, and file names do not create importable modules. Split generated
-  code into small cohesive files for reviewability, but never refer to those
-  files as modules.
