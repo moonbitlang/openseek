@@ -35,17 +35,51 @@ test "markdown renders summary metrics and dynamic columns" {
     text.contains("| # | Case | Result | Mode | Steps | Reason | Warnings |"),
   )
   assert_true(text.contains("## Trial Details"))
-  assert_true(text.contains("- Log: `logs/read.log`"))
+  assert_true(text.contains("### Trial 1: `read`"))
+  assert_true(text.contains("### Trial 2: `shell`"))
+  assert_true(text.contains("- Log:\n\n  ```text\n  logs/read.log\n  ```"))
   assert_true(text.contains("contains \\| pipe and newline"))
   assert_eq(report.successes(), 1)
   assert_false(report.all_passed())
 }
 
 ///|
+fn repeated_text(text : String, count : Int) -> String {
+  let out = StringBuilder::new()
+  for _ in 0..<count {
+    out.write_string(text)
+  }
+  out.to_string()
+}
+
+///|
+test "markdown details keep full arbitrary text" {
+  let long_reason = repeated_text("a", 95) + "😊 full reason tail"
+  let warning = "contains `inline` and ```fenced``` backticks"
+  let report = @report.Report(title="Details", rows=[
+    ReportRow(
+      index=1,
+      name="unicode",
+      success=false,
+      reason=long_reason,
+      warnings=warning,
+      details=[Metric(name="Transcript", value="line 1\nline `2`")],
+    ),
+  ])
+  let text = report.markdown()
+  assert_true(text.contains("## Trial Details"))
+  assert_true(text.contains("😊 full reason tail"))
+  assert_true(text.contains("````text"))
+  assert_true(text.contains("contains `inline` and ```fenced``` backticks"))
+}
+
+///|
 async test "report writes markdown json and html files" {
   let root = @fs.tmpdir(prefix="openseek-eval-report")
   let report = @report.Report(title="Tiny Report", rows=[
-    ReportRow(index=1, name="finish", success=true),
+    ReportRow(index=1, name="finish", success=true, details=[
+      Metric(name="Note", value="ok"),
+    ]),
   ])
   report.write_files(root)
   let markdown = @fs.read_file(root + "/report.md").text()
@@ -54,6 +88,7 @@ async test "report writes markdown json and html files" {
   assert_true(markdown.contains("# Tiny Report"))
   assert_true(json.contains("\"title\":\"Tiny Report\""))
   assert_true(html.contains("<title>Tiny Report</title>"))
+  assert_true(html.contains("<h3>Trial 1: <code>finish</code></h3>"))
   assert_true(html.contains("table-wrap"))
   @fs.rmdir(root, recursive=true)
 }

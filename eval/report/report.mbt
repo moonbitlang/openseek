@@ -207,7 +207,9 @@ pub fn Report::html(self : Report) -> String {
     )
     for row in self.rows {
       if row.has_details() {
-        out.write_string("<article class=\"trial-card\"><header><h3><code>")
+        out.write_string("<article class=\"trial-card\"><header><h3>Trial ")
+        out.write_string(row.index.to_string())
+        out.write_string(": <code>")
         out.write_string(escape_html(row.name))
         out.write_string("</code></h3><span class=\"badge ")
         out.write_string(if row.success { "pass" } else { "fail" })
@@ -372,15 +374,18 @@ fn detail_section_lines(rows : Array[ReportRow]) -> Array[String] {
       if lines.length() > 0 {
         lines.push("")
       }
-      lines.push("### `\{row.name}`")
+      lines.push("### Trial \{row.index}: `\{row.name}`")
       lines.push("")
       lines.push("- result: `\{if row.success { "pass" } else { "fail" }}`")
-      lines.push("- reason: \{markdown_text(row.reason)}")
+      lines.push("- reason:")
+      append_markdown_code_block(lines, row.reason)
       if row.warnings != "" {
-        lines.push("- warnings: \{markdown_text(row.warnings)}")
+        lines.push("- warnings:")
+        append_markdown_code_block(lines, row.warnings)
       }
       for detail in row.details {
-        lines.push("- \{detail.name}: `\{escape_backticks(detail.value)}`")
+        lines.push("- \{detail.name}:")
+        append_markdown_code_block(lines, detail.value)
       }
     }
   }
@@ -427,21 +432,57 @@ fn short_cell(text : String) -> String {
     .replace_all(old="\n", new=" ")
     .trim()
     .to_owned()
-  if squashed.length() <= 96 {
-    squashed
-  } else {
-    squashed.sub(start=0, end=96).to_owned() + "..."
+  let out = StringBuilder::new()
+  let mut count = 0
+  for char in squashed {
+    if count >= 96 {
+      return out.to_string() + "..."
+    }
+    out.write_char(char)
+    count += 1
   }
+  out.to_string()
 }
 
 ///|
-fn markdown_text(text : String) -> String {
-  "`\{escape_backticks(short_cell(text))}`"
+fn append_markdown_code_block(lines : Array[String], text : String) -> Unit {
+  let fence = markdown_fence(text)
+  lines.push("")
+  lines.push("  \{fence}text")
+  let normalized = text
+    .replace_all(old="\r\n", new="\n")
+    .replace_all(old="\r", new="\n")
+  for line in normalized.split("\n") {
+    lines.push("  \{line}")
+  }
+  lines.push("  \{fence}")
 }
 
 ///|
-fn escape_backticks(text : String) -> String {
-  text.replace_all(old="`", new="\\`")
+fn markdown_fence(text : String) -> String {
+  let mut current = 0
+  let mut longest = 0
+  for char in text {
+    if char == '`' {
+      current += 1
+      if current > longest {
+        longest = current
+      }
+    } else {
+      current = 0
+    }
+  }
+  let length = if longest >= 3 { longest + 1 } else { 3 }
+  repeat_char('`', length)
+}
+
+///|
+fn repeat_char(char : Char, count : Int) -> String {
+  let out = StringBuilder::new()
+  for _ in 0..<count {
+    out.write_char(char)
+  }
+  out.to_string()
 }
 
 ///|

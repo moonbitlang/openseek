@@ -48,6 +48,6 @@ test "render a tiny report" {
   )
   assert_true(markdown.contains("| 1 | `read` | pass | filesystem | ok |  |"))
   assert_true(markdown.contains("## Trial Details"))
-  assert_true(markdown.contains("- Log: `logs/read.log`"))
+  assert_true(markdown.contains("- Log:\n\n  ```text\n  logs/read.log\n  ```"))
 }
 ```
