@@ -63,6 +63,7 @@ fn eval_session_for_test(session : @agent_session.Session) -> EvalResult {
       file_probe: false,
       stdin_probe: false,
       duplicate_probe: false,
+      probes: [],
     },
     parse_errors: 0,
     partial_tail: false,
@@ -184,6 +185,7 @@ test "finish tool terminal does not double count a model step" {
 test "same output dir preserves absolute workspace paths" {
   let manifest = RunManifest(
     model="deepseek-v4-flash",
+    problem_id="toml_parser_cli",
     prompt_label="flash",
     task_file="eval/prompt_tasks/toml_parser_cli.md",
     runs=1,
@@ -191,6 +193,7 @@ test "same output dir preserves absolute workspace paths" {
     min_successes=1,
     max_steps=160,
     out_dir=".moonagent/eval_runs/default",
+    validation_probes=default_toml_validation_probes(),
     trials=[
       TrialArtifact(
         index=1,
@@ -241,6 +244,7 @@ async test "analyze run writes reports to caller output directory" {
   )
   let manifest_json : Json = {
     "model": "deepseek-v4-flash",
+    "problem_id": "toml_parser_cli",
     "prompt_label": "flash",
     "task_file": "eval/prompt_tasks/toml_parser_cli.md",
     "runs": 0,
@@ -248,6 +252,14 @@ async test "analyze run writes reports to caller output directory" {
     "min_successes": 0,
     "max_steps": 160,
     "out_dir": stale_dir,
+    "validation_probes": (
+      [
+        {
+          "name": "moon check",
+          "command": ["moon", "--version"],
+          "expect_exit": 0,
+        },
+      ] : Json),
     "trials": (
       [
         {
@@ -280,8 +292,13 @@ async test "analyze run writes reports to caller output directory" {
 
 ///|
 test "json stdout probe accepts valid json only" {
-  assert_true(json_stdout_probe(0, "{\"a\":1}\n", "").passed)
-  let invalid = json_stdout_probe(0, "not-json\n", "")
+  let spec = ValidationProbeSpec(
+    name="json probe",
+    command=["noop"],
+    stdout_json=true,
+  )
+  assert_true(probe_output_result(spec, 0, "{\"a\":1}\n", "").passed)
+  let invalid = probe_output_result(spec, 0, "not-json\n", "")
   assert_false(invalid.passed)
   assert_true(invalid.reason.contains("stdout is not JSON"))
 }
@@ -327,6 +344,10 @@ test "markdown report includes prompt label and parser metrics" {
           file_probe: true,
           stdin_probe: true,
           duplicate_probe: true,
+          probes: [
+            ProbeResult(name="moon check", passed=true, reason="ok"),
+            ProbeResult(name="moon test", passed=true, reason="ok"),
+          ],
         },
         parse_errors: 0,
         partial_tail: false,

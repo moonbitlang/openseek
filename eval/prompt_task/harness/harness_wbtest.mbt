@@ -30,6 +30,7 @@ test "trial environment pins workspace-local session root" {
   let config = Config(
     api_key="key",
     model=V4Flash,
+    problem_id="toml_parser_cli",
     runs=1,
     concurrency=1,
     min_successes=1,
@@ -38,6 +39,7 @@ test "trial environment pins workspace-local session root" {
     repo_root=".",
     prompt_label="label",
     task_file="task.md",
+    validation_probes=default_toml_validation_probes(),
     system_prompt_file="",
     system_prompt_addendum_file="",
   )

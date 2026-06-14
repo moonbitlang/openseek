@@ -2,11 +2,28 @@
 async fn main {
   let matches = @argparse.parse(cli_command())
   if flag(matches, "analyze-only") {
-    let report = @harness.analyze_run(value(matches, "out"))
-    println(report.markdown())
-    if !report.passed() {
-      fail(report.failure_message())
+    let out_dir = value(matches, "out")
+    if @harness.suite_manifest_exists(out_dir) {
+      let report = @harness.analyze_suite(out_dir)
+      println(report.markdown())
+      if !report.passed() {
+        fail(report.failure_message())
+      }
+    } else {
+      let report = @harness.analyze_run(out_dir)
+      println(report.markdown())
+      if !report.passed() {
+        fail(report.failure_message())
+      }
     }
+    return
+  }
+  if value(matches, "suite-file") != "" {
+    let config = suite_config_from_matches(matches)
+    let manifest = @harness.run_suite(config)
+    println(
+      "prompt task suite manifest: \{@harness.suite_manifest_path(manifest.out_dir)}",
+    )
     return
   }
   let config = config_from_matches(matches)
@@ -63,6 +80,12 @@ fn cli_command() -> @argparse.Command {
         long="task-file",
         default_values=["eval/prompt_tasks/toml_parser_cli.md"],
         about="Task template file. `{{WORKSPACE}}` is replaced per trial.",
+      ),
+      OptionArg(
+        "suite-file",
+        long="suite-file",
+        default_values=[""],
+        about="JSON suite config containing models, problems, probes, and run shape.",
       ),
       OptionArg(
         "out",

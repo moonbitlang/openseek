@@ -90,7 +90,13 @@ fn ValidationResult::to_json(self : ValidationResult) -> Json {
     "file_probe": self.file_probe,
     "stdin_probe": self.stdin_probe,
     "duplicate_probe": self.duplicate_probe,
+    "probes": ([ for probe in self.probes => probe.to_json() ] : Json),
   }
+}
+
+///|
+fn ProbeResult::to_json(self : ProbeResult) -> Json {
+  { "name": self.name, "passed": self.passed, "reason": self.reason }
 }
 
 ///|
@@ -228,6 +234,10 @@ fn eval_details(
     ),
     Metric(name="Validation Reason", value=result.validation.reason),
     Metric(name="Validation Ran", value=result.validation.ran.to_string()),
+    Metric(
+      name="Validation Probes",
+      value=validation_probe_summary(result.validation),
+    ),
     Metric(name="Moon Check", value=result.validation.moon_check.to_string()),
     Metric(name="Moon Test", value=result.validation.moon_test.to_string()),
     Metric(name="File Probe", value=result.validation.file_probe.to_string()),
@@ -337,6 +347,19 @@ fn validation_status(validation : ValidationResult) -> String {
   } else {
     validation.passed.to_string()
   }
+}
+
+///|
+fn validation_probe_summary(validation : ValidationResult) -> String {
+  if validation.probes.length() == 0 {
+    return "-"
+  }
+  let cells : Array[String] = []
+  for probe in validation.probes {
+    let status = if probe.passed { "pass" } else { "fail" }
+    cells.push(probe.name + "=" + status)
+  }
+  cells.join(", ")
 }
 
 ///|

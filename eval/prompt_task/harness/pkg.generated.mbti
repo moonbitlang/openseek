@@ -8,16 +8,39 @@ import {
 // Values
 pub async fn analyze_run(String) -> EvalReport
 
+pub async fn analyze_suite(String) -> SuiteReport
+
+pub fn default_toml_validation_probes() -> Array[ValidationProbeSpec]
+
 pub fn manifest_path(String) -> String
 
 pub async fn run_experiments(Config) -> RunManifest
 
+pub async fn run_suite(SuiteConfig) -> SuiteManifest
+
+pub async fn suite_config_from_file(String, api_key~ : String, out_dir~ : String, repo_root~ : String, engine~ : String, system_prompt_file~ : String, system_prompt_addendum_file~ : String) -> SuiteConfig
+
+pub async fn suite_manifest_exists(String) -> Bool
+
+pub fn suite_manifest_path(String) -> String
+
 // Errors
 
 // Types and methods
+pub struct ComboRun {
+  model : String
+  problem_id : String
+  prompt_label : String
+  task_file : String
+  out_dir : String
+  manifest_path : String
+}
+pub fn ComboRun::ComboRun(model~ : String, problem_id~ : String, prompt_label~ : String, task_file~ : String, out_dir~ : String, manifest_path~ : String) -> Self
+
 pub struct Config {
   api_key : String
   model : @deepseek.Model
+  problem_id : String
   runs : Int
   concurrency : Int
   min_successes : Int
@@ -27,10 +50,11 @@ pub struct Config {
   engine : String
   prompt_label : String
   task_file : String
+  validation_probes : Array[ValidationProbeSpec]
   system_prompt_file : String
   system_prompt_addendum_file : String
 }
-pub fn Config::Config(api_key~ : String, model~ : @deepseek.Model, runs~ : Int, concurrency~ : Int, min_successes~ : Int, max_steps~ : Int, out_dir~ : String, repo_root~ : String, engine? : String, prompt_label~ : String, task_file~ : String, system_prompt_file~ : String, system_prompt_addendum_file~ : String) -> Self
+pub fn Config::Config(api_key~ : String, model~ : @deepseek.Model, problem_id~ : String, runs~ : Int, concurrency~ : Int, min_successes~ : Int, max_steps~ : Int, out_dir~ : String, repo_root~ : String, engine? : String, prompt_label~ : String, task_file~ : String, validation_probes~ : Array[ValidationProbeSpec], system_prompt_file~ : String, system_prompt_addendum_file~ : String) -> Self
 
 pub struct EvalReport {
   model : String
@@ -89,8 +113,24 @@ pub struct EvalResult {
 pub fn EvalResult::html(Self) -> String
 pub fn EvalResult::markdown(Self) -> String
 
+pub struct ProbeResult {
+  name : String
+  passed : Bool
+  reason : String
+}
+pub fn ProbeResult::ProbeResult(name~ : String, passed~ : Bool, reason~ : String) -> Self
+
+pub struct ProblemSpec {
+  id : String
+  prompt_label : String
+  task_file : String
+  validation_probes : Array[ValidationProbeSpec]
+}
+pub fn ProblemSpec::ProblemSpec(id~ : String, prompt_label? : String, task_file~ : String, validation_probes~ : Array[ValidationProbeSpec]) -> Self
+
 pub struct RunManifest {
   model : String
+  problem_id : String
   prompt_label : String
   task_file : String
   runs : Int
@@ -98,9 +138,53 @@ pub struct RunManifest {
   min_successes : Int
   max_steps : Int
   out_dir : String
+  validation_probes : Array[ValidationProbeSpec]
   trials : Array[TrialArtifact]
 }
-pub fn RunManifest::RunManifest(model~ : String, prompt_label~ : String, task_file~ : String, runs~ : Int, concurrency~ : Int, min_successes~ : Int, max_steps~ : Int, out_dir~ : String, trials~ : Array[TrialArtifact]) -> Self
+pub fn RunManifest::RunManifest(model~ : String, problem_id~ : String, prompt_label~ : String, task_file~ : String, runs~ : Int, concurrency~ : Int, min_successes~ : Int, max_steps~ : Int, out_dir~ : String, validation_probes~ : Array[ValidationProbeSpec], trials~ : Array[TrialArtifact]) -> Self
+
+pub struct SuiteConfig {
+  api_key : String
+  name : String
+  models : Array[@deepseek.Model]
+  runs_per_combo : Int
+  concurrency : Int
+  min_successes : Int
+  max_steps : Int
+  out_dir : String
+  repo_root : String
+  engine : String
+  system_prompt_file : String
+  system_prompt_addendum_file : String
+  problems : Array[ProblemSpec]
+}
+pub fn SuiteConfig::SuiteConfig(api_key~ : String, name~ : String, models~ : Array[@deepseek.Model], runs_per_combo~ : Int, concurrency~ : Int, min_successes~ : Int, max_steps~ : Int, out_dir~ : String, repo_root~ : String, engine? : String, system_prompt_file~ : String, system_prompt_addendum_file~ : String, problems~ : Array[ProblemSpec]) -> Self
+
+pub struct SuiteManifest {
+  name : String
+  out_dir : String
+  runs_per_combo : Int
+  concurrency : Int
+  min_successes : Int
+  max_steps : Int
+  models : Array[String]
+  problems : Array[ProblemSpec]
+  combos : Array[ComboRun]
+}
+pub fn SuiteManifest::SuiteManifest(name~ : String, out_dir~ : String, runs_per_combo~ : Int, concurrency~ : Int, min_successes~ : Int, max_steps~ : Int, models~ : Array[String], problems~ : Array[ProblemSpec], combos~ : Array[ComboRun]) -> Self
+
+pub struct SuiteReport {
+  name : String
+  out_dir : String
+  runs_per_combo : Int
+  concurrency : Int
+  reports : Array[EvalReport]
+}
+pub fn SuiteReport::SuiteReport(name~ : String, out_dir~ : String, runs_per_combo~ : Int, concurrency~ : Int, reports~ : Array[EvalReport]) -> Self
+pub fn SuiteReport::failure_message(Self) -> String
+pub fn SuiteReport::html(Self) -> String
+pub fn SuiteReport::markdown(Self) -> String
+pub fn SuiteReport::passed(Self) -> Bool
 
 pub struct TrialArtifact {
   index : Int
@@ -112,6 +196,20 @@ pub struct TrialArtifact {
 }
 pub fn TrialArtifact::TrialArtifact(index~ : Int, workspace~ : String, log_path~ : String, session_id~ : String, events_path~ : String, exit_code~ : Int) -> Self
 
+pub struct ValidationProbeSpec {
+  name : String
+  command : Array[String]
+  stdin : String
+  write_file : String
+  write_content : String
+  expect_exit : Int
+  output_contains : String
+  stdout_contains : String
+  stderr_contains : String
+  stdout_json : Bool
+}
+pub fn ValidationProbeSpec::ValidationProbeSpec(name~ : String, command~ : Array[String], stdin? : String, write_file? : String, write_content? : String, expect_exit? : Int, output_contains? : String, stdout_contains? : String, stderr_contains? : String, stdout_json? : Bool) -> Self
+
 pub struct ValidationResult {
   ran : Bool
   passed : Bool
@@ -121,6 +219,7 @@ pub struct ValidationResult {
   file_probe : Bool
   stdin_probe : Bool
   duplicate_probe : Bool
+  probes : Array[ProbeResult]
 }
 
 // Type aliases

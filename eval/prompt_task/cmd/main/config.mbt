@@ -11,6 +11,7 @@ fn config_from_matches(matches : @argparse.Matches) -> @harness.Config raise {
   Config(
     api_key~,
     model=@deepseek.Model::parse(value(matches, "model")),
+    problem_id="toml_parser_cli",
     runs~,
     concurrency=parse_positive_int(
       value(matches, "concurrency"),
@@ -23,6 +24,24 @@ fn config_from_matches(matches : @argparse.Matches) -> @harness.Config raise {
     engine=value(matches, "engine"),
     prompt_label=value(matches, "prompt-label"),
     task_file=value(matches, "task-file"),
+    validation_probes=@harness.default_toml_validation_probes(),
+    system_prompt_file=value(matches, "system-prompt-file"),
+    system_prompt_addendum_file=value(matches, "system-prompt-addendum-file"),
+  )
+}
+
+///|
+async fn suite_config_from_matches(
+  matches : @argparse.Matches,
+) -> @harness.SuiteConfig {
+  let api_key = value(matches, "api-key")
+  guard api_key != "" else { fail("--api-key is required for running trials") }
+  @harness.suite_config_from_file(
+    value(matches, "suite-file"),
+    api_key~,
+    out_dir=value(matches, "out"),
+    repo_root=value(matches, "repo-root"),
+    engine=value(matches, "engine"),
     system_prompt_file=value(matches, "system-prompt-file"),
     system_prompt_addendum_file=value(matches, "system-prompt-addendum-file"),
   )

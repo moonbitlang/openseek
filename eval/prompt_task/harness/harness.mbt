@@ -14,6 +14,7 @@ pub async fn run_experiments(config : Config) -> RunManifest {
   })
   let manifest = RunManifest(
     model=config.model.to_string(),
+    problem_id=config.problem_id,
     prompt_label=config.prompt_label,
     task_file=config.task_file,
     runs=config.runs,
@@ -21,6 +22,7 @@ pub async fn run_experiments(config : Config) -> RunManifest {
     min_successes=config.min_successes,
     max_steps=config.max_steps,
     out_dir=config.out_dir,
+    validation_probes=config.validation_probes,
     trials~,
   )
   write_manifest(manifest)

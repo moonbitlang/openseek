@@ -34,6 +34,15 @@ test "analyze-only mode does not require an api key" {
 }
 
 ///|
+test "cli parses suite file option" {
+  let matches = cli_command().parse(argv=[
+    "--api-key", "test-key", "--suite-file", "suite.json", "--out", "runs",
+  ])
+  assert_eq(value(matches, "suite-file"), "suite.json")
+  assert_eq(value(matches, "out"), "runs")
+}
+
+///|
 test "running trials requires an api key" {
   let matches = cli_command().parse(argv=[])
   let _ = config_from_matches(matches) catch {

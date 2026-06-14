@@ -42,6 +42,23 @@ moon run eval/prompt_task/cmd/main -- \
   --out .moonagent/eval_runs/toml_flash_current_5x
 ```
 
+Run a multi-problem suite:
+
+```bash
+moon run eval/prompt_task/cmd/main -- \
+  --api-key "$DEEPSEEK" \
+  --suite-file .repos/openseek-eval-experiments/suites/moonbit_cli_suite_v1/suite.json \
+  --out .repos/openseek-eval-experiments/runs/moonbit_cli_suite_v1_100x \
+  --repo-root .
+```
+
+Suite mode flattens every model/problem/repeat into one global queue controlled
+by `--suite-file`'s `concurrency`. It writes one `suite_manifest.json` and a
+normal `run_manifest.json` under each model/problem combo directory. The same
+analyze-only command works for suites; it detects `suite_manifest.json`,
+regenerates each combo report, then writes the combined suite Markdown, JSON,
+and HTML report.
+
 Run an A/B comparison by using different output directories and prompt labels:
 
 ```bash

@@ -12,6 +12,7 @@
 pub struct Config {
   api_key : String
   model : @deepseek.Model
+  problem_id : String
   runs : Int
   concurrency : Int
   min_successes : Int
@@ -21,6 +22,7 @@ pub struct Config {
   engine : String
   prompt_label : String
   task_file : String
+  validation_probes : Array[ValidationProbeSpec]
   system_prompt_file : String
   system_prompt_addendum_file : String
 }
@@ -31,6 +33,7 @@ pub struct Config {
 pub fn Config::Config(
   api_key~ : String,
   model~ : @deepseek.Model,
+  problem_id~ : String,
   runs~ : Int,
   concurrency~ : Int,
   min_successes~ : Int,
@@ -40,12 +43,14 @@ pub fn Config::Config(
   engine? : String = "",
   prompt_label~ : String,
   task_file~ : String,
+  validation_probes~ : Array[ValidationProbeSpec],
   system_prompt_file~ : String,
   system_prompt_addendum_file~ : String,
 ) -> Config {
   {
     api_key,
     model,
+    problem_id,
     runs,
     concurrency,
     min_successes,
@@ -55,6 +60,7 @@ pub fn Config::Config(
     engine,
     prompt_label,
     task_file,
+    validation_probes,
     system_prompt_file,
     system_prompt_addendum_file,
   }

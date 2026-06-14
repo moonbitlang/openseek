@@ -1,9 +1,20 @@
 ///|
 /// Verdict of one behavioral probe run against a trial's workspace, with the
 /// `reason` it failed ("ok" when it passed).
-priv struct ProbeResult {
+pub struct ProbeResult {
+  name : String
   passed : Bool
   reason : String
+}
+
+///|
+/// Build one validation probe result.
+pub fn ProbeResult::ProbeResult(
+  name~ : String,
+  passed~ : Bool,
+  reason~ : String,
+) -> ProbeResult {
+  { name, passed, reason }
 }
 
 ///|
@@ -17,6 +28,54 @@ pub struct ValidationResult {
   file_probe : Bool
   stdin_probe : Bool
   duplicate_probe : Bool
+  probes : Array[ProbeResult]
+}
+
+///|
+/// Validation probes used by the historical TOML parser prompt task.
+pub fn default_toml_validation_probes() -> Array[ValidationProbeSpec] {
+  [
+    ValidationProbeSpec(name="moon check", command=[
+      "moon", "check", "--target", "native",
+    ]),
+    ValidationProbeSpec(name="moon test", command=[
+      "moon", "test", "--target", "native",
+    ]),
+    ValidationProbeSpec(
+      name="file probe",
+      command=[
+        "moon", "run", "--target", "native", "cmd/tomljson", "--", ".openseek-file-probe.toml",
+      ],
+      write_file=".openseek-file-probe.toml",
+      write_content=(
+        #|[owner]
+        #|name = "Alice"
+        #|age = 30
+        #|[database]
+        #|host = "localhost"
+        #|ports = [8000, 8001]
+        #|
+      ),
+      stdout_json=true,
+    ),
+    ValidationProbeSpec(
+      name="stdin probe",
+      command=[
+        "moon", "run", "--target", "native", "cmd/tomljson", "--", "--stdin",
+      ],
+      stdin="a.b.c = 42\nx.y = true\n",
+      stdout_json=true,
+    ),
+    ValidationProbeSpec(
+      name="duplicate probe",
+      command=[
+        "moon", "run", "--target", "native", "cmd/tomljson", "--", "--stdin",
+      ],
+      stdin="key = 1\nkey = 2\n",
+      expect_exit=-1,
+      output_contains="duplicate",
+    ),
+  ]
 }
 
 ///|
@@ -136,6 +195,7 @@ fn manifest_for_output_dir(
   let original_out_dir = manifest.out_dir
   RunManifest(
     model=manifest.model,
+    problem_id=manifest.problem_id,
     prompt_label=manifest.prompt_label,
     task_file=manifest.task_file,
     runs=manifest.runs,
@@ -143,6 +203,7 @@ fn manifest_for_output_dir(
     min_successes=manifest.min_successes,
     max_steps=manifest.max_steps,
     out_dir~,
+    validation_probes=manifest.validation_probes,
     trials=[
       for trial in manifest.trials => {
         relocate_trial_artifacts(trial, original_out_dir, out_dir)
@@ -228,7 +289,10 @@ async fn analyze_trial(
     id=trial.session_id,
     system_prompt="",
   )
-  let validation = validate_toml_workspace(trial.workspace)
+  let validation = validate_workspace(
+    trial.workspace,
+    manifest.validation_probes,
+  )
   let reasons : Array[String] = []
   if trial.exit_code != 0 {
     reasons.push("agent process exited \{trial.exit_code}")
@@ -373,7 +437,10 @@ fn path_under_dir(path : String, dir : String) -> Bool {
 }
 
 ///|
-async fn validate_toml_workspace(workspace : String) -> ValidationResult {
+async fn validate_workspace(
+  workspace : String,
+  probes : Array[ValidationProbeSpec],
+) -> ValidationResult {
   if !@fs.exists(workspace) || @fs.kind(workspace) != Directory {
     return {
       ran: true,
@@ -384,41 +451,18 @@ async fn validate_toml_workspace(workspace : String) -> ValidationResult {
       file_probe: false,
       stdin_probe: false,
       duplicate_probe: false,
+      probes: [],
     }
   }
-  let readiness = toml_workspace_readiness(workspace)
-  if !readiness.passed {
-    return {
-      ran: true,
-      passed: false,
-      reason: readiness.reason,
-      moon_check: false,
-      moon_test: false,
-      file_probe: false,
-      stdin_probe: false,
-      duplicate_probe: false,
-    }
+  let results : Array[ProbeResult] = []
+  for probe in probes {
+    results.push(run_validation_probe(workspace, probe))
   }
-  let check = run_command(workspace, ["moon", "check", "--target", "native"])
-  let test_probe = run_command(workspace, ["moon", "test", "--target", "native"])
-  let file_probe = run_file_probe(workspace)
-  let stdin_probe = run_stdin_probe(workspace)
-  let duplicate_probe = run_duplicate_probe(workspace)
   let failures : Array[String] = []
-  if !check.passed {
-    failures.push("moon check: " + check.reason)
-  }
-  if !test_probe.passed {
-    failures.push("moon test: " + test_probe.reason)
-  }
-  if !file_probe.passed {
-    failures.push("file probe: " + file_probe.reason)
-  }
-  if !stdin_probe.passed {
-    failures.push("stdin probe: " + stdin_probe.reason)
-  }
-  if !duplicate_probe.passed {
-    failures.push("duplicate probe: " + duplicate_probe.reason)
+  for result in results {
+    if !result.passed {
+      failures.push(result.name + ": " + result.reason)
+    }
   }
   {
     ran: true,
@@ -428,128 +472,165 @@ async fn validate_toml_workspace(workspace : String) -> ValidationResult {
     } else {
       failures.join("; ")
     },
-    moon_check: check.passed,
-    moon_test: test_probe.passed,
-    file_probe: file_probe.passed,
-    stdin_probe: stdin_probe.passed,
-    duplicate_probe: duplicate_probe.passed,
+    moon_check: validation_passed_by_name(results, "moon check"),
+    moon_test: validation_passed_by_name(results, "moon test"),
+    file_probe: validation_passed_by_name(results, "file probe"),
+    stdin_probe: validation_passed_by_name(results, "stdin probe"),
+    duplicate_probe: validation_passed_by_name(results, "duplicate probe"),
+    probes: results,
   }
 }
 
 ///|
-async fn toml_workspace_readiness(workspace : String) -> ProbeResult {
-  if !@fs.exists(workspace + "/moon.mod") {
-    return { passed: false, reason: "moon.mod missing" }
-  }
-  if !@fs.exists(workspace + "/cmd/tomljson/moon.pkg") {
-    return {
-      passed: false,
-      reason: "expected CLI package missing: cmd/tomljson/moon.pkg",
-    }
-  }
-  { passed: true, reason: "ok" }
-}
-
-///|
-async fn run_command(
+async fn run_validation_probe(
   workspace : String,
-  command : Array[String],
+  spec : ValidationProbeSpec,
 ) -> ProbeResult {
-  let args = [ for i in 1..<command.length() => command[i] ]
-  let (code, output) = @process.collect_output_merged(
-    command[0],
-    args,
-    cwd=workspace,
-  )
-  if code == 0 {
-    { passed: true, reason: "ok" }
-  } else {
-    { passed: false, reason: "exit \{code}: " + summarize(output.text()) }
+  if spec.command.length() == 0 {
+    return ProbeResult(name=spec.name, passed=false, reason="command is empty")
   }
-}
-
-///|
-async fn run_file_probe(workspace : String) -> ProbeResult {
-  let path = workspace + "/.openseek-file-probe.toml"
-  @fs.write_file(
-    path,
-    (
-      #|[owner]
-      #|name = "Alice"
-      #|age = 30
-      #|[database]
-      #|host = "localhost"
-      #|ports = [8000, 8001]
-      #|
-    ),
-    create_mode=CreateOrTruncate,
-  )
-  let (code, stdout, stderr) = @process.collect_output(
-    "moon",
-    ["run", "--target", "native", "cmd/tomljson", "--", path],
-    cwd=workspace,
-  )
-  json_stdout_probe(code, stdout.text(), stderr.text())
-}
-
-///|
-async fn run_stdin_probe(workspace : String) -> ProbeResult {
-  let path = workspace + "/.openseek-stdin-probe.toml"
-  @fs.write_file(path, "a.b.c = 42\nx.y = true\n", create_mode=CreateOrTruncate)
-  let (code, stdout, stderr) = @process.collect_output(
-    "moon",
-    ["run", "--target", "native", "cmd/tomljson", "--", "--stdin"],
-    stdin=@process.redirect_from_file(path),
-    cwd=workspace,
-  )
-  json_stdout_probe(code, stdout.text(), stderr.text())
-}
-
-///|
-async fn run_duplicate_probe(workspace : String) -> ProbeResult {
-  let path = workspace + "/.openseek-duplicate-probe.toml"
-  @fs.write_file(path, "key = 1\nkey = 2\n", create_mode=CreateOrTruncate)
-  let (code, stdout, stderr) = @process.collect_output(
-    "moon",
-    ["run", "--target", "native", "cmd/tomljson", "--", "--stdin"],
-    stdin=@process.redirect_from_file(path),
-    cwd=workspace,
-  )
-  let combined = stdout.text() + stderr.text()
-  if combined.contains("RUNTIME ERROR") || combined.contains("panic") {
-    return { passed: false, reason: "debug/panic output leaked" }
+  if spec.write_file != "" {
+    @fs.write_file(
+      workspace_path(workspace, spec.write_file),
+      replace_workspace(spec.write_content, workspace),
+      create_mode=CreateOrTruncate,
+    )
   }
-  if !combined.contains("duplicate") && !combined.contains("Duplicate") {
-    return {
-      passed: false,
-      reason: "missing duplicate-key message, exit \{code}: " +
-      summarize(combined),
+  let args = [
+    for i in 1..<spec.command.length() => {
+      replace_workspace(spec.command[i], workspace)
     }
+  ]
+  let (code, stdout, stderr) = if spec.stdin == "" {
+    @process.collect_output(
+      replace_workspace(spec.command[0], workspace),
+      args,
+      cwd=workspace,
+    )
+  } else {
+    let stdin_path = workspace +
+      "/.openseek-" +
+      sanitize_artifact_name(spec.name) +
+      "-stdin"
+    @fs.write_file(
+      stdin_path,
+      replace_workspace(spec.stdin, workspace),
+      create_mode=CreateOrTruncate,
+    )
+    @process.collect_output(
+      replace_workspace(spec.command[0], workspace),
+      args,
+      stdin=@process.redirect_from_file(stdin_path),
+      cwd=workspace,
+    )
   }
-  { passed: true, reason: "ok" }
+  probe_output_result(spec, code, stdout.text(), stderr.text())
 }
 
 ///|
-fn json_stdout_probe(
+fn probe_output_result(
+  spec : ValidationProbeSpec,
   code : Int,
   stdout : String,
   stderr : String,
 ) -> ProbeResult {
-  if code != 0 {
-    return {
-      passed: false,
-      reason: "exit \{code}: " + summarize(stdout + stderr),
+  let combined = stdout + stderr
+  if combined.contains("RUNTIME ERROR") || combined.contains("panic") {
+    return ProbeResult(
+      name=spec.name,
+      passed=false,
+      reason="debug/panic output leaked: " + summarize(combined),
+    )
+  }
+  if spec.expect_exit >= 0 && code != spec.expect_exit {
+    return ProbeResult(
+      name=spec.name,
+      passed=false,
+      reason="exit \{code}, expected \{spec.expect_exit}: " +
+        summarize(combined),
+    )
+  }
+  if spec.output_contains != "" &&
+    !contains_expected_text(combined, spec.output_contains) {
+    return ProbeResult(
+      name=spec.name,
+      passed=false,
+      reason="missing output text `\{spec.output_contains}`: " +
+        summarize(combined),
+    )
+  }
+  if spec.stdout_contains != "" &&
+    !contains_expected_text(stdout, spec.stdout_contains) {
+    return ProbeResult(
+      name=spec.name,
+      passed=false,
+      reason="missing stdout text `\{spec.stdout_contains}`: " +
+        summarize(stdout),
+    )
+  }
+  if spec.stderr_contains != "" &&
+    !contains_expected_text(stderr, spec.stderr_contains) {
+    return ProbeResult(
+      name=spec.name,
+      passed=false,
+      reason="missing stderr text `\{spec.stderr_contains}`: " +
+        summarize(stderr),
+    )
+  }
+  if spec.stdout_json {
+    let trimmed = stdout.trim().to_owned()
+    let _ = @json.parse(trimmed) catch {
+      error =>
+        return ProbeResult(
+          name=spec.name,
+          passed=false,
+          reason="stdout is not JSON: \{error}; stdout=" + summarize(stdout),
+        )
     }
   }
-  let trimmed = stdout.trim().to_owned()
-  let _ = @json.parse(trimmed) catch {
-    error =>
-      return {
-        passed: false,
-        reason: "stdout is not JSON: \{error}; stdout=" + summarize(stdout),
-      }
+  ProbeResult(name=spec.name, passed=true, reason="ok")
+}
+
+///|
+fn validation_passed_by_name(
+  results : Array[ProbeResult],
+  name : String,
+) -> Bool {
+  for result in results {
+    if result.name == name {
+      return result.passed
+    }
   }
-  { passed: true, reason: "ok" }
+  false
+}
+
+///|
+fn workspace_path(workspace : String, path : String) -> String {
+  if path.has_prefix("/") {
+    path
+  } else {
+    workspace + "/" + path
+  }
+}
+
+///|
+fn replace_workspace(value : String, workspace : String) -> String {
+  value.replace_all(old="{{WORKSPACE}}", new=workspace)
+}
+
+///|
+fn contains_expected_text(haystack : String, needle : String) -> Bool {
+  haystack.contains(needle) ||
+  (needle == "duplicate" && haystack.contains("Duplicate"))
+}
+
+///|
+fn sanitize_artifact_name(name : String) -> String {
+  name
+  .replace_all(old="/", new="_")
+  .replace_all(old="\\", new="_")
+  .replace_all(old=":", new="_")
+  .replace_all(old=" ", new="_")
 }
 
 ///|
