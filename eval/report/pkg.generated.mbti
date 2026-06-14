@@ -4,7 +4,7 @@ package "bobzhang/openseek/eval/report"
 // Values
 pub fn escape_table_cell(String) -> String
 
-pub async fn write_files(String, String, Json) -> Unit
+pub async fn write_files(String, String, Json, html? : String) -> Unit
 
 // Errors
 
@@ -23,6 +23,7 @@ pub struct Report {
 }
 pub fn Report::Report(title~ : String, summary? : Array[Metric], metric_columns? : Array[String], rows? : Array[ReportRow]) -> Self
 pub fn Report::all_passed(Self) -> Bool
+pub fn Report::html(Self) -> String
 pub fn Report::markdown(Self) -> String
 pub fn Report::successes(Self) -> Int
 pub fn Report::to_json(Self) -> Json
@@ -35,9 +36,10 @@ pub struct ReportRow {
   reason : String
   warnings : String
   metrics : Array[Metric]
+  details : Array[Metric]
   log_path : String
 }
-pub fn ReportRow::ReportRow(index~ : Int, name~ : String, success~ : Bool, reason? : String, warnings? : String, metrics? : Array[Metric], log_path? : String) -> Self
+pub fn ReportRow::ReportRow(index~ : Int, name~ : String, success~ : Bool, reason? : String, warnings? : String, metrics? : Array[Metric], details? : Array[Metric], log_path? : String) -> Self
 
 // Type aliases
 
