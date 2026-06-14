@@ -11,11 +11,7 @@ import {
 // Values
 pub fn[X] build_tools(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope[X]) -> @agent_tool.Tools raise
 
-pub fn default_system_prompt() -> String
-
-pub fn default_system_prompt_for_model(@deepseek.Model) -> String
-
-pub async fn run(String, @deepseek.Model, String, max_steps? : Int, system_prompt_text? : String, thinking? : @deepseek.ThinkingMode, api_url? : String, workspace_root? : String) -> Unit
+pub async fn run(String, @deepseek.Model, String, system_prompt_text~ : String, max_steps? : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, workspace_root? : String) -> Unit
 
 pub async fn run_turn(String, @deepseek.Model, @agent_session.Session, String, max_steps? : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, workspace_root? : String) -> @agent_session.Session
 

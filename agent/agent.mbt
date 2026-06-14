@@ -53,27 +53,6 @@ pub fn[X] build_tools(
 }
 
 ///|
-/// Return the model-independent convenience default system prompt.
-///
-/// This currently delegates to `default_system_prompt_for_model(V4Pro)`.
-/// Callers that already know the selected DeepSeek model should prefer
-/// `default_system_prompt_for_model(model)` so model-specific prompt selection
-/// stays explicit.
-pub fn default_system_prompt() -> String {
-  @prompt.system_prompt_for_model(V4Pro)
-}
-
-///|
-/// Return the built-in system prompt selected for `model`.
-///
-/// `run` uses this function for its `system_prompt_text` default. Passing an
-/// explicit `system_prompt_text` to `run`, or constructing a `Session` with a
-/// custom `system_prompt`, bypasses this helper for that conversation.
-pub fn default_system_prompt_for_model(model : @deepseek.Model) -> String {
-  @prompt.system_prompt_for_model(model)
-}
-
-///|
 /// Run a one-shot OpenSeek task and discard the returned session.
 ///
 /// This is the highest-level convenience entry point. It creates a fresh
@@ -82,11 +61,12 @@ pub fn default_system_prompt_for_model(model : @deepseek.Model) -> String {
 /// configured process logger, and returns `Unit`. It does not persist the
 /// session and does not expose the final `Session` value to the caller.
 ///
-/// `system_prompt_text` defaults to `default_system_prompt_for_model(model)`.
-/// `thinking` defaults to `Max`. `workspace_root` defaults to `"."` and is
-/// passed into the per-turn `AgentRuntime`; local file and shell tools resolve
-/// relative paths against that root. `api_url` is forwarded to the DeepSeek
-/// client and is mainly useful for tests or compatible endpoints.
+/// `system_prompt_text` is required. Prompt selection is intentionally owned by
+/// the application layer, not by `agent`; this package does not depend on the
+/// `prompt` package. `thinking` defaults to `Max`. `workspace_root` defaults to
+/// `"."` and is passed into the per-turn `AgentRuntime`; local file and shell
+/// tools resolve relative paths against that root. `api_url` is forwarded to
+/// the DeepSeek client and is mainly useful for tests or compatible endpoints.
 ///
 /// Prefer `run_turn` when the caller needs the final in-memory session, and
 /// `run_turn_with_append` when every committed event must be persisted as the
@@ -95,8 +75,8 @@ pub async fn run(
   api_key : String,
   model : @deepseek.Model,
   task : String,
+  system_prompt_text~ : String,
   max_steps? : Int = default_max_steps,
-  system_prompt_text? : String = default_system_prompt_for_model(model),
   thinking? : @deepseek.ThinkingMode = Max,
   api_url? : String,
   workspace_root? : String = ".",

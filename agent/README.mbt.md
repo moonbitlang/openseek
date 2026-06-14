@@ -12,14 +12,21 @@ The package owns the orchestration policy: when to append session events, when
 to call the model, how to execute tool calls, how to fold in runtime updates,
 and how mid-turn steering changes the active turn.
 
+Prompt text is deliberately outside this package. Applications choose or build
+the system prompt, then pass it to `run` or store it in the `Session` supplied
+to the lower-level turn APIs.
+
 ## Public API
 
 The exported surface is small:
 
 ```mbt nocheck
-let prompt = @agent.default_system_prompt_for_model(V4Pro)
-
-@agent.run(api_key, V4Pro, "fix the tests")
+@agent.run(
+  api_key,
+  V4Pro,
+  "fix the tests",
+  system_prompt_text="You are an OpenSeek agent.",
+)
 
 let next = @agent.run_turn(
   api_key,
@@ -58,7 +65,7 @@ let persisted = @agent.run_turn_with_append(
 
 `run` is the highest-level one-shot entry point. It creates a fresh in-memory
 session with id `"one-shot"`, runs one turn, logs progress, discards the final
-session value, and returns `Unit`.
+session value, and returns `Unit`. The caller must provide `system_prompt_text`.
 
 `run_turn` is the in-memory one-turn API. It returns the updated immutable
 session, but it owns a fresh runtime and fresh tool registry for that call. Use
@@ -77,32 +84,30 @@ queued steering can span turns.
 `steer` queues raw user steering text on an `AgentRuntime`. It does not trim or
 filter. The loop drops blank strings when it drains steering at a step boundary.
 
-## Prompt Defaults
+## Prompt Ownership
 
-`default_system_prompt()` is a convenience helper for the current V4Pro default.
-Most callers should choose the model first and call
-`default_system_prompt_for_model(model)`.
+`agent` does not import `prompt` and does not choose default prompt text. This
+keeps the loop reusable with built-in prompts, test prompts, user-authored
+prompts, or prompts supplied by a different application.
 
 ```mbt check
 ///|
-test "prompt helper contracts" {
+test "turn APIs use the session prompt exactly as supplied" {
+  let session = @agent_session.Session(
+    SessionId("prompt-owner"),
+    system_prompt="custom system",
+  )
   debug_inspect(
-    [
-      @agent.default_system_prompt() ==
-      @agent.default_system_prompt_for_model(V4Pro),
-      @agent.default_system_prompt_for_model(V4Flash).length() > 0,
-    ],
+    session.chat_messages()[0].content,
     content=(
-      #|[true, true]
+      #|"custom system"
     ),
   )
 }
 ```
 
-`run` defaults `system_prompt_text` through
-`default_system_prompt_for_model(model)`. `run_turn`, `run_turn_with_append`,
-and `run_turn_in_scope` do not choose a prompt; they use the prompt already
-stored in the supplied `Session`.
+The CLI remains free to call `@prompt.system_prompt_for_model(model)` before it
+calls `@agent.run`, but that decision lives outside the `agent` package.
 
 ## Standard Tools
 
