@@ -401,11 +401,16 @@ fn update(
     NewChat =>
       // A fresh conversation can start at any time: the current one keeps
       // running in the background and stays one sidebar click away.
-      (rotate_session(dispatch), model)
+      (rotate_session(dispatch), { ..model, loading_session: "" })
     SessionRotated(session_id) =>
       (
         @cmd.none,
-        { ..model.activate(session_id), screen: Chat, transcript_pinned: true },
+        {
+          ..model.activate(session_id),
+          screen: Chat,
+          transcript_pinned: true,
+          loading_session: "",
+        },
       )
     SessionsLoaded(items) =>
       (@cmd.none, { ..model, sessions: items, sessions_error: "" })
@@ -416,7 +421,7 @@ fn update(
       if session_id.is_empty() {
         (@cmd.none, model)
       } else if session_id == model.active_session {
-        (@cmd.none, { ..model, screen: Chat })
+        (@cmd.none, { ..model, screen: Chat, loading_session: "" })
       } else if model.find_conversation(session_id) is Some(_) {
         // The conversation already has live client state — it may well still
         // be running — so switching is just a change of focus. A switch lands
@@ -427,16 +432,23 @@ fn update(
             ..model.activate(session_id),
             screen: Chat,
             transcript_pinned: true,
+            loading_session: "",
           },
         )
       } else {
-        (open_session(dispatch, session_id), { ..model, screen: Chat })
+        (
+          open_session(dispatch, session_id),
+          { ..model, screen: Chat, loading_session: session_id },
+        )
       }
     SessionLoaded(session=session_id, items~) =>
-      // A run that started in this conversation while the load was in flight
-      // wins; dropping the reply keeps the live state intact.
-      if model.find_conversation(session_id) is Some(conv) && conv.running {
+      if model.loading_session != session_id {
         (@cmd.none, model)
+      } else if model.find_conversation(session_id) is Some(conv) &&
+        conv.running {
+        // A run that started in this conversation while the load was in flight
+        // wins; dropping the reply keeps the live state intact.
+        (@cmd.none, { ..model, loading_session: "" })
       } else {
         (
           scroll_transcript_after_render(),
@@ -448,6 +460,7 @@ fn update(
             })
             .activate(session_id),
             transcript_pinned: true,
+            loading_session: "",
           },
         )
       }
@@ -504,6 +517,9 @@ fn update(
           ]),
           model.replace_conversation(next),
         )
+      } else if !model.loading_session.is_empty() &&
+        model.loading_session != session {
+        (@cmd.none, model)
       } else {
         // The conversation never came to exist (a session load failed before
         // creating one): surface the message where the user is looking, but
@@ -515,7 +531,7 @@ fn update(
             scroll_transcript_after_render(),
             fetch_sessions(dispatch),
           ]),
-          model.replace_conversation(conv),
+          { ..model.replace_conversation(conv), loading_session: "" },
         )
       }
     Error(run_id~, message~, diagnostics~) => {

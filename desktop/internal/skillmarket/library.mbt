@@ -157,6 +157,14 @@ pub async fn install_skill(
       "registry returned an unusable skill name: \{found.name}",
     )
   }
+  let target = library + "/" + found.name
+  let sidecar = target + "/" + SidecarFile
+  let flat_target = target + ".md"
+  if @fs.exists(flat_target) || (@fs.exists(target) && !@fs.exists(sidecar)) {
+    raise SkillMarketError(
+      "a skill named \{found.name} already exists in your library; not overwriting it",
+    )
+  }
   let (code, data) = fetch_response(found.url)
   guard code == 200 else {
     raise SkillMarketError("SKILL.md download returned HTTP \{code}")
@@ -165,13 +173,6 @@ pub async fn install_skill(
   guard digest_matches(found.digest, content) else {
     raise SkillMarketError(
       "SKILL.md digest mismatch for \{entry}; not installing",
-    )
-  }
-  let target = library + "/" + found.name
-  let sidecar = target + "/" + SidecarFile
-  if @fs.exists(target) && !@fs.exists(sidecar) {
-    raise SkillMarketError(
-      "a skill named \{found.name} already exists in your library; not overwriting it",
     )
   }
   ensure_dir(target)

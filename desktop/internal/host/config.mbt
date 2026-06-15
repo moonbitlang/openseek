@@ -72,10 +72,7 @@ fn configured_max_steps(value : Int?) -> Int raise HostError {
 async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
   let task = payload.task.trim().to_owned()
   guard !task.is_empty() else { raise HostError("task must not be empty") }
-  let api_url = match payload.api_url {
-    Some(url) => Some(url)
-    None => @env.get("OPENSEEK_API_URL")
-  }
+  let api_url = payload.api_url
   // Only the official endpoint strictly needs a key; a custom endpoint
   // decides for itself, so a missing key becomes a placeholder there. Do
   // not reuse the official DeepSeek env key for a custom/OpenSeek endpoint.

@@ -151,6 +151,9 @@ priv struct Model {
   // The conversation on screen; always present in `conversations` once the
   // startup session rotation lands.
   active_session : String
+  // Durable session currently being fetched from the host, if any. Sidebar
+  // selections can race; only the latest request may activate a stored session.
+  loading_session : String
   // Every conversation with live client state this app run: the active one,
   // those still running in the background, and those visited and kept for an
   // instant switch back. Copy-on-write, like the transcript arrays.
@@ -294,6 +297,7 @@ fn initial_model() -> Model {
     wsl_engine: "",
     setup_open: false,
     active_session: "",
+    loading_session: "",
     conversations: [],
     sessions: [],
     sessions_error: "",

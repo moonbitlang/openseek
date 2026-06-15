@@ -218,6 +218,19 @@ async test "install never overwrites a hand-written skill" {
       @fs.read_file("\{lib}/acme-widget/SKILL.md").text(),
       "my own playbook",
     )
+    let flat_lib = @fs.tmpdir(prefix="skillmarket-")
+    @fs.write_file(
+      "\{flat_lib}/acme-widget.md",
+      "my flat skill",
+      create_mode=CreateOrTruncate,
+    )
+    let message = install_failure(base, flat_lib, "acme/widget")
+    assert_true(message.contains("already exists"))
+    assert_eq(
+      @fs.read_file("\{flat_lib}/acme-widget.md").text(),
+      "my flat skill",
+    )
+    assert_false(@fs.exists("\{flat_lib}/acme-widget"))
   }
 }
 

@@ -147,9 +147,10 @@ test "finished run clears any leftover stream" {
 ///|
 test "new chat keeps the model intact until the rotation lands" {
   let dispatch = test_dispatch()
-  let model = running_model()
+  let model = { ..running_model(), loading_session: "desktop-stale" }
   let (_, next) = update(dispatch, NewChat, model)
   inspect(next.active().running, content="true")
+  inspect(next.loading_session, content="")
 }
 
 ///|
@@ -272,15 +273,49 @@ test "open session switches to a live conversation without reloading it" {
 }
 
 ///|
+test "open session tracks the latest load and ignores stale replies" {
+  let dispatch = test_dispatch()
+  let (_, loading_a) = update(dispatch, OpenSession("desktop-a"), test_model())
+  inspect(loading_a.active_session, content="desktop-test")
+  inspect(loading_a.loading_session, content="desktop-a")
+  let (_, loading_b) = update(dispatch, OpenSession("desktop-b"), loading_a)
+  inspect(loading_b.loading_session, content="desktop-b")
+  let a_items : Array[@transcript.TranscriptItem] = [
+    { kind: User, content: "old selection" },
+  ]
+  let (_, after_a) = update(
+    dispatch,
+    SessionLoaded(session="desktop-a", items=a_items),
+    loading_b,
+  )
+  inspect(after_a.active_session, content="desktop-test")
+  inspect(after_a.loading_session, content="desktop-b")
+  let b_items : Array[@transcript.TranscriptItem] = [
+    { kind: User, content: "latest selection" },
+  ]
+  let (_, after_b) = update(
+    dispatch,
+    SessionLoaded(session="desktop-b", items=b_items),
+    after_a,
+  )
+  inspect(after_b.active_session, content="desktop-b")
+  inspect(after_b.loading_session, content="")
+  inspect(after_b.active().messages[0].content, content="latest selection")
+}
+
+///|
 test "session loaded swaps the active conversation onto the stored session" {
   let dispatch = test_dispatch()
-  let model = test_model().replace_conversation({
-    ..test_conversation(),
-    usage_tokens: 42,
-    watcher_status: "running",
-    streaming_response: "leftover",
-    messages: [{ kind: User, content: "old chat" }],
-  })
+  let model = {
+    ..test_model().replace_conversation({
+      ..test_conversation(),
+      usage_tokens: 42,
+      watcher_status: "running",
+      streaming_response: "leftover",
+      messages: [{ kind: User, content: "old chat" }],
+    }),
+    loading_session: "desktop-stored",
+  }
   let items : Array[@transcript.TranscriptItem] = [
     { kind: User, content: "stored question" },
     { kind: Assistant(false), content: "stored answer" },
@@ -309,7 +344,7 @@ test "session loaded swaps the active conversation onto the stored session" {
 ///|
 test "session loaded is dropped only when that conversation is running" {
   let dispatch = test_dispatch()
-  let model = running_model()
+  let model = { ..running_model(), loading_session: "desktop-stored" }
   let items : Array[@transcript.TranscriptItem] = [
     { kind: User, content: "stored" },
   ]
@@ -325,6 +360,7 @@ test "session loaded is dropped only when that conversation is running" {
   }
   inspect(live.running, content="true")
   // A stale load reply for the running conversation itself is dropped.
+  let model = { ..running_model(), loading_session: "desktop-test" }
   let (_, same) = update(
     dispatch,
     SessionLoaded(session="desktop-test", items~),
@@ -801,7 +837,7 @@ test "explicit user actions re-pin the transcript" {
   let (_, loaded) = update(
     dispatch,
     SessionLoaded(session="desktop-old", items=[]),
-    { ..test_model(), transcript_pinned: false },
+    { ..test_model(), transcript_pinned: false, loading_session: "desktop-old" },
   )
   inspect(loaded.transcript_pinned, content="true")
   let (_, rotated) = update(dispatch, SessionRotated("desktop-fresh"), {

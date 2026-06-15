@@ -80,6 +80,9 @@ jobs:
           git config --global \
             url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
             "git@github.com:"
+          git config --global \
+            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
           git submodule update --init --recursive
 
       - name: Set up MoonBit (nightly)
@@ -142,6 +145,9 @@ jobs:
           git config --global \
             url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
             "git@github.com:"
+          git config --global \
+            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
           git submodule update --init --recursive
 
       - name: Set up MoonBit (nightly)
@@ -203,6 +209,9 @@ jobs:
           git config --global \
             url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
             "git@github.com:"
+          git config --global \
+            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
           git submodule update --init --recursive
 
       - name: Set up MoonBit (nightly)

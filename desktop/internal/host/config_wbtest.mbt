@@ -79,3 +79,39 @@ test "official endpoint still uses DEEPSEEK env fallback" {
   }
   fail("official endpoint accepted a missing key")
 }
+
+///|
+async test "desktop start ignores OPENSEEK_API_URL without an explicit payload URL" {
+  let previous = @sys.get_env_var("OPENSEEK_API_URL")
+  @sys.set_env_var("OPENSEEK_API_URL", "https://env.example/chat/completions")
+  let config = run_config(
+    {
+      task: "hello",
+      api_key: Some("official-key"),
+      api_url: None,
+      model: None,
+      max_steps: None,
+      cwd: Some("."),
+      session: None,
+      session_root: None,
+      wsl: None,
+    },
+    "openseek",
+  ) catch {
+    error => {
+      if previous is Some(value) {
+        @sys.set_env_var("OPENSEEK_API_URL", value)
+      } else {
+        @sys.unset_env_var("OPENSEEK_API_URL")
+      }
+      raise error
+    }
+  }
+  if previous is Some(value) {
+    @sys.set_env_var("OPENSEEK_API_URL", value)
+  } else {
+    @sys.unset_env_var("OPENSEEK_API_URL")
+  }
+  assert_true(config.api_url is None)
+  assert_eq(config.api_key, "official-key")
+}
