@@ -1,6 +1,7 @@
 ///|
 /// Mount the visualizer onto `#app` and kick off the initial session-list fetch.
 /// The frontend talks only to the read-only viz server's JSON/raw-file API.
+#warnings("-alert_unstable")
 fn main {
   let (emit, app_cell) = @rabbita.cell_with_emit(
     model=init_model(),
