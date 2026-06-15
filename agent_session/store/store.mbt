@@ -351,33 +351,18 @@ fn session_from_replayed_events(
 }
 
 ///|
-/// Load a persisted session together with its event-log text exactly as
-/// stored — appenders fingerprint those bytes, never a re-serialization of
-/// the decoded events (decoding does not round-trip for logs whose events
-/// predate the `ts` field).
-async fn read_persisted_session(
-  store : SessionStore,
-  id : @agent_session.SessionId,
-) -> (@agent_session.Session, String) {
-  let header = read_session_header(store, id)
-  validate_loaded_header(header, id)
-  let events_text = read_event_log_text(store.event_log_path(id))
-  (
-    session_from_replayed_events(
-      header,
-      events_text,
-      parse_events_jsonl(events_text),
-    ),
-    events_text,
-  )
-}
-
-///|
 async fn load_persisted_session(
   store : SessionStore,
   id : @agent_session.SessionId,
 ) -> @agent_session.Session {
-  read_persisted_session(store, id).0
+  let header = read_session_header(store, id)
+  validate_loaded_header(header, id)
+  let events_text = read_event_log_text(store.event_log_path(id))
+  session_from_replayed_events(
+    header,
+    events_text,
+    parse_events_jsonl(events_text),
+  )
 }
 
 ///|
@@ -394,18 +379,14 @@ async fn ensure_empty_missing_session(
 }
 
 ///|
-/// Verify the in-memory `session` matches what is durably stored and return
-/// the stored event-log text verbatim ("" when nothing is persisted yet).
-/// Appenders extend these bytes and fingerprint the result, so the header
-/// always describes what is actually on disk.
-async fn checked_stored_log_text(
+async fn ensure_session_is_current(
   store : SessionStore,
   session : @agent_session.Session,
-) -> String {
-  let (persisted, events_text) = read_persisted_session(store, session.id()) catch {
+) -> Unit {
+  let persisted = load_persisted_session(store, session.id()) catch {
     @os_error.OSError(_) as error if error.is_ENOENT() => {
       ensure_empty_missing_session(store, session)
-      return ""
+      return
     }
     error => raise error
   }
@@ -413,23 +394,6 @@ async fn checked_stored_log_text(
     events_jsonl(persisted.events()) != events_jsonl(session.events()) {
     fail("stale session snapshot for \{session.id().value()}")
   }
-  events_text
-}
-
-///|
-/// Write the header with its fingerprint over `events_text` — which must be
-/// the event log's stored bytes (what `create` just wrote, or what an
-/// appender read back plus the line it appended).
-async fn write_header_for_text(
-  store : SessionStore,
-  session : @agent_session.Session,
-  events_text : String,
-  allow_event_log_ahead : Bool,
-) -> Unit {
-  write_text_atomic(
-    store.header_path(session.id()),
-    session_header_json(session, events_text, allow_event_log_ahead).stringify(),
-  )
 }
 
 ///|
@@ -438,11 +402,10 @@ async fn write_header(
   session : @agent_session.Session,
   allow_event_log_ahead : Bool,
 ) -> Unit {
-  write_header_for_text(
-    store,
-    session,
-    events_jsonl(session.events()),
-    allow_event_log_ahead,
+  let events_text = events_jsonl(session.events())
+  write_text_atomic(
+    store.header_path(session.id()),
+    session_header_json(session, events_text, allow_event_log_ahead).stringify(),
   )
 }
 
@@ -458,21 +421,17 @@ async fn write_event_log(
 }
 
 ///|
-/// Append one event line to the log and return the exact text written, so
-/// the caller can fingerprint the stored bytes without reading them back.
 async fn append_event(
   store : SessionStore,
   session : @agent_session.Session,
   event : @agent_session.SessionEvent,
-) -> String {
-  let line = event.to_json().stringify() + "\n"
+) -> Unit {
   @fs.write_file(
     store.event_log_path(session.id()),
-    line,
+    "\{event.to_json().stringify()}\n",
     create_mode=OpenOrCreate,
     append=true,
   )
-  line
 }
 
 ///|
@@ -860,13 +819,13 @@ pub async fn SessionStore::append(
 ) -> @agent_session.Session {
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {
-    let stored_text = checked_stored_log_text(self, session)
+    ensure_session_is_current(self, session)
     let (next, event) = session.append_event(
       item,
       unix_ms=@env.now().reinterpret_as_int64(),
     )
-    let line = append_event(self, next, event)
-    write_header_for_text(self, next, stored_text + line, true)
+    append_event(self, next, event)
+    write_header(self, next, true)
     next
   })
 }
@@ -892,7 +851,7 @@ pub async fn SessionStore::compact(
 ) -> @agent_session.Session {
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {
-    let stored_text = checked_stored_log_text(self, session)
+    ensure_session_is_current(self, session)
     let next = session.compact(
       content~,
       from_sequence~,
@@ -903,8 +862,8 @@ pub async fn SessionStore::compact(
       Some(event) => event
       None => fail("compacted session did not append a summary event")
     }
-    let line = append_event(self, next, event)
-    write_header_for_text(self, next, stored_text + line, true)
+    append_event(self, next, event)
+    write_header(self, next, true)
     next
   })
 }
