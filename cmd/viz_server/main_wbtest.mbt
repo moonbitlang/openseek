@@ -83,9 +83,13 @@ test "asset candidates search cwd first, then the derived checkout" {
       #|[
       #|  "",
       #|  "web/viz_app.js",
+      #|  "_build/js/release/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
+      #|  "_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
       #|  "_build/js/release/build/cmd/viz_app/viz_app.js",
       #|  "_build/js/debug/build/cmd/viz_app/viz_app.js",
       #|  "/repo/web/viz_app.js",
+      #|  "/repo/_build/js/release/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
+      #|  "/repo/_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
       #|  "/repo/_build/js/release/build/cmd/viz_app/viz_app.js",
       #|  "/repo/_build/js/debug/build/cmd/viz_app/viz_app.js",
       #|]
@@ -98,6 +102,8 @@ test "asset candidates search cwd first, then the derived checkout" {
       #|[
       #|  "/x/app.js",
       #|  "web/viz_app.js",
+      #|  "_build/js/release/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
+      #|  "_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
       #|  "_build/js/release/build/cmd/viz_app/viz_app.js",
       #|  "_build/js/debug/build/cmd/viz_app/viz_app.js",
       #|]

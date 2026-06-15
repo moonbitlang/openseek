@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/cmd/viz_app"
+package "bobzhang/openseek-viz-app"
 
 // Values
 
@@ -13,6 +13,8 @@ type Model
 type Msg
 
 type SessionRow
+
+type Theme derive(Eq)
 
 // Type aliases
 

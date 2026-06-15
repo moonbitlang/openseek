@@ -106,7 +106,7 @@ async fn build_reply(
       )
     "/viz_app.js" =>
       search_reply(
-        bundle, "text/javascript; charset=utf-8", "viz_app.js not found; build it with: moon build cmd/viz_app --target js",
+        bundle, "text/javascript; charset=utf-8", "viz_app.js not found; build it with: moon build",
       )
     "/api/sessions" => session_list_reply(catalog)
     _ =>
@@ -496,11 +496,11 @@ fn shell_candidates(web_dir : String, module_root : String?) -> Array[String] {
 
 ///|
 /// Where to look for the compiled frontend bundle, in order: an explicit
-/// `--bundle` path, `<web-dir>/viz_app.js`, moon's release and debug build
-/// outputs relative to the working directory, then the same paths under the
-/// executable-derived checkout root. This lets
-/// `moon build cmd/viz_app --target js` followed by
-/// `moon run cmd/viz_server` work with no copy step — from any directory.
+/// `--bundle` path, `<web-dir>/viz_app.js`, moon's release and debug outputs
+/// for the standalone frontend module, legacy in-module frontend build outputs,
+/// then the same paths under the executable-derived checkout root. This lets
+/// `moon build` followed by `moon run --target native cmd/viz_server` work
+/// with no copy step — from any directory.
 fn bundle_candidates(
   bundle : String,
   web_dir : String,
@@ -509,11 +509,19 @@ fn bundle_candidates(
   let candidates = [
     bundle,
     "\{web_dir}/viz_app.js",
+    "_build/js/release/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
+    "_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
     "_build/js/release/build/cmd/viz_app/viz_app.js",
     "_build/js/debug/build/cmd/viz_app/viz_app.js",
   ]
   if module_root is Some(root) {
     candidates.push("\{root}/web/viz_app.js")
+    candidates.push(
+      "\{root}/_build/js/release/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
+    )
+    candidates.push(
+      "\{root}/_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
+    )
     candidates.push("\{root}/_build/js/release/build/cmd/viz_app/viz_app.js")
     candidates.push("\{root}/_build/js/debug/build/cmd/viz_app/viz_app.js")
   }

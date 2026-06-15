@@ -1,0 +1,4 @@
+members = [
+  ".",
+  "./cmd/viz_app",
+]
