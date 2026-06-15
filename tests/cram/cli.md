@@ -37,7 +37,7 @@ Options:
   --thinking <thinking>                                        DeepSeek thinking mode: no, high, or max. [env: OPENSEEK_THINKING] [default: max]
   --system-prompt-file <system-prompt-file>                    Read the complete system prompt from this file instead of the built-in prompt. [env: OPENSEEK_SYSTEM_PROMPT_FILE] [default: ]
   --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the selected system prompt for prompt experiments. [env: OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE] [default: ]
-  --global-skills-dir <global-skills-dir>                      User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills. [env: OPENSEEK_GLOBAL_SKILLS_DIR] [default: ]
+  --global-skills-dir <global-skills-dir>                      User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills, or %USERPROFILE%/.openseek/skills on Windows. [env: OPENSEEK_GLOBAL_SKILLS_DIR] [default: ]
   --session <session>                                          Create or resume this durable session id. [env: OPENSEEK_SESSION] [default: ]
   --session-root <session-root>                                Directory containing durable OpenSeek sessions. [env: OPENSEEK_SESSION_ROOT] [default: .openseek]
   --session-compact-file <session-compact-file>                Read summary text from this file, append it to --session, and exit. [default: ]
