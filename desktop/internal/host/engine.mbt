@@ -18,6 +18,112 @@ priv struct ServeEngine {
   mut latest_run : Int
   mut run_open : Bool
   mut cancel_requested : Bool
+  steer_runs : SteerRunTracker
+}
+
+///|
+priv struct SteerRunTracker {
+  mut settling_run : Int?
+  open_steers : Array[String]
+  settling_steers : Array[String]
+}
+
+///|
+fn SteerRunTracker::new() -> SteerRunTracker {
+  { settling_run: None, open_steers: [], settling_steers: [] }
+}
+
+///|
+fn SteerRunTracker::begin_run(self : SteerRunTracker) -> Unit {
+  self.open_steers.clear()
+}
+
+///|
+fn SteerRunTracker::record_sent(self : SteerRunTracker, text : String) -> Unit {
+  self.open_steers.push(text)
+}
+
+///|
+fn SteerRunTracker::record_terminal(
+  self : SteerRunTracker,
+  run_id : Int,
+) -> Unit {
+  self.settling_steers.clear()
+  if self.open_steers.length() > 0 {
+    self.settling_run = Some(run_id)
+    for text in self.open_steers {
+      self.settling_steers.push(text)
+    }
+  } else {
+    self.settling_run = None
+  }
+  self.open_steers.clear()
+}
+
+///|
+fn SteerRunTracker::run_id_for_event(
+  self : SteerRunTracker,
+  raw : Json,
+  latest_run : Int,
+) -> Int {
+  if is_steer_settle_event(raw) {
+    let content = stream_event_content(raw)
+    if remove_first_text(self.settling_steers, content) &&
+      self.settling_run is Some(run_id) {
+      if self.settling_steers.is_empty() {
+        self.settling_run = None
+      }
+      return run_id
+    }
+    ignore(remove_first_text(self.open_steers, content))
+  } else {
+    self.settling_run = None
+    self.settling_steers.clear()
+  }
+  latest_run
+}
+
+///|
+fn remove_first_text(items : Array[String], text : String) -> Bool {
+  for index, item in items {
+    if item == text {
+      ignore(items.remove(index))
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn is_steer_settle_event(raw : Json) -> Bool {
+  match stream_event_name(raw) {
+    Some("steer_applied") | Some("steer_dropped") => true
+    _ => false
+  }
+}
+
+///|
+fn stream_event_name(raw : Json) -> String? {
+  match raw {
+    Object(fields) =>
+      match fields.get("event") {
+        Some(String(name)) => Some(name)
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn stream_event_content(raw : Json) -> String {
+  match raw {
+    Object(fields) =>
+      match fields.get("content") {
+        Some(String(content)) => content
+        _ => ""
+      }
+    _ => ""
+  }
 }
 
 ///|
@@ -183,6 +289,7 @@ async fn run_engine_pump(
   }
 
   manager.pump_running = true
+  emit(context, Connected({ ready: true }))
   defer reset()
   @async.with_task_group(group => {
     for ;; {
@@ -269,6 +376,7 @@ async fn[G] start_serve_engine(
     latest_run: 0,
     run_open: false,
     cancel_requested: false,
+    steer_runs: SteerRunTracker::new(),
   }
   manager.engines.set(engine.session_key, engine)
   let messages : @async.Queue[StreamMessage] = Queue(kind=Unbounded)
@@ -301,7 +409,7 @@ async fn serve_engine_consumer(
   for ;; {
     match messages.get() {
       StreamEvent(raw) => {
-        let run_id = engine.latest_run
+        let run_id = engine.steer_runs.run_id_for_event(raw, engine.latest_run)
         match @event.decode_event(raw) {
           // The abort the user asked for: report it as a cancellation, the
           // same wire status the pre-serve host used.
@@ -310,6 +418,7 @@ async fn serve_engine_consumer(
             emit_finished(context, run_id, Cancelled)
             engine.run_open = false
             engine.cancel_requested = false
+            engine.steer_runs.record_terminal(run_id)
           }
           Some(decoded) => {
             // Terminal failures are immediately normalized below; forwarding
@@ -321,6 +430,7 @@ async fn serve_engine_consumer(
             if handle_decoded_event(context, run_id, decoded) {
               engine.run_open = false
               engine.cancel_requested = false
+              engine.steer_runs.record_terminal(run_id)
             }
           }
           None => emit(context, Event({ run_id, event: raw }))

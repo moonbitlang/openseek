@@ -67,6 +67,11 @@ priv struct ErrorPayload {
 } derive(ToJson)
 
 ///|
+priv struct ConnectedPayload {
+  ready : Bool
+} derive(ToJson)
+
+///|
 /// Terminal state of a run. `wire()` is the string sent to the frontend; the
 /// values are part of the IPC contract and must not change casually.
 priv enum RunStatus {
@@ -184,6 +189,7 @@ priv struct UninstallSkillReply {
 /// single place that maps a variant to its wire name and payload, so the
 /// name/payload pairing can never drift out of sync.
 priv enum OutEvent {
+  Connected(ConnectedPayload)
   Started(StartedPayload)
   Event(EventPayload)
   Error(ErrorPayload)
@@ -196,6 +202,7 @@ async fn emit(
   event : OutEvent,
 ) -> Unit {
   match event {
+    Connected(payload) => context.emit("connected", payload)
     Started(payload) => context.emit("started", payload)
     Event(payload) => context.emit("event", payload)
     Error(payload) => context.emit("error", payload)

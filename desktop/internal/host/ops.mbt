@@ -63,6 +63,7 @@ async fn start_run(
   live.latest_run = run_id
   live.run_open = true
   live.cancel_requested = false
+  live.steer_runs.begin_run()
   emit(
     context,
     Started({
@@ -161,6 +162,7 @@ async fn steer_run(
     // never reached it, so report that rather than pretend.
     _ => return { steered: false, run_id: Some(live.latest_run) }
   }
+  live.steer_runs.record_sent(payload.text)
   { steered: true, run_id: Some(live.latest_run) }
 }
 

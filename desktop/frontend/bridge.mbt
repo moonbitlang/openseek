@@ -23,6 +23,7 @@ fn bridge_handles() -> (@js.Value, @js.Value)? {
   guard openseek_api() is Some(api) &&
     @interop.moonbit_bridge_root() is Some(root) &&
     @interop.js_prop(root, "events") is Some(events) &&
+    @interop.js_prop(api, "connect") is Some(_) &&
     @interop.js_prop(api, "start") is Some(_) &&
     @interop.js_prop(api, "cancel") is Some(_) &&
     @interop.js_prop(events, "on") is Some(_) else {
@@ -61,10 +62,9 @@ fn install_bridge_attempt(
     }
     if !bridge_events_wired.val {
       bridge_events_wired.val = true
-      open_engine_host(api)
       wire_engine_events(scheduler, dispatch, events)
+      open_engine_host(scheduler, dispatch, api)
     }
-    scheduler.add(dispatch(BridgeReady))
   })
 }
 
@@ -73,15 +73,21 @@ fn install_bridge_attempt(
 /// persistent `--serve` engine process. The promise only settles if the
 /// host stops; starts then fail with a clear error, so the rejection itself
 /// carries no extra signal.
-fn open_engine_host(api : @js.Value) -> Unit {
-  guard @interop.js_prop(api, "connect") is Some(_) else { return }
+fn open_engine_host(
+  scheduler : &@cmd.Scheduler,
+  dispatch : @cmd.Dispatch[Msg],
+  api : @js.Value,
+) -> Unit {
   @js.async_run(() => {
     let _ : @js.Value = @interop.js_method_promise(
       api,
       "connect",
       @js.Object::new().to_value(),
     ).wait() catch {
-      _ => return
+      error => {
+        scheduler.add(dispatch(BridgeUnavailable(bridge_error_text(error))))
+        return
+      }
     }
   })
 }
@@ -108,6 +114,7 @@ fn wire_engine_events(
   on("openseek.event", engine_msg)
   on("openseek.error", error_msg)
   on("openseek.finished", finished_msg)
+  on("openseek.connected", connected_msg)
 }
 
 ///|
@@ -166,6 +173,11 @@ fn finished_msg(payload : Map[String, Json]) -> Msg? {
       answer=@transcript.json_text(payload, "answer"),
     ),
   )
+}
+
+///|
+fn connected_msg(_payload : Map[String, Json]) -> Msg? {
+  Some(BridgeReady)
 }
 
 ///|
