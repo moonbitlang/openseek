@@ -153,6 +153,33 @@ test "new chat keeps the model intact until the rotation lands" {
 }
 
 ///|
+test "generated session ids include a random suffix" {
+  let id = generated_session_id()
+  let parts : Array[String] = id
+    .split("-")
+    .map(piece => piece.to_owned())
+    .collect()
+  inspect(parts.length(), content="5")
+  inspect(parts[0], content="desktop")
+  inspect(parts[1].length(), content="8")
+  inspect(parts[2].length(), content="6")
+  inspect(parts[3].length(), content="3")
+  inspect(parts[4].length(), content="9")
+  let _ = @string.parse_int(parts[1]) catch {
+    _ => fail("expected numeric date")
+  }
+  let _ = @string.parse_int(parts[2]) catch {
+    _ => fail("expected numeric time")
+  }
+  let _ = @string.parse_int(parts[3]) catch {
+    _ => fail("expected numeric millis")
+  }
+  let _ = @string.parse_int(parts[4]) catch {
+    _ => fail("expected numeric salt")
+  }
+}
+
+///|
 test "session rotation activates a fresh conversation, keeping the old one" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
@@ -539,6 +566,12 @@ test "the saved DeepSeek key is never sent to another endpoint" {
   inspect(openseek.effective_api_key(), content="")
   let official = { ..test_model(), api_provider: Deepseek }
   inspect(official.effective_api_key(), content="sk-test")
+  let custom = {
+    ..test_model(),
+    api_provider: Custom,
+    custom_api_url: "https://proxy.example/v1/chat/completions",
+  }
+  inspect(custom.effective_api_key(), content="")
 }
 
 ///|

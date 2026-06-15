@@ -310,7 +310,8 @@ fn Model::effective_api_url(self : Model) -> String {
 fn Model::effective_api_key(self : Model) -> String {
   match self.api_provider {
     Openseek => ""
-    Deepseek | Custom => self.api_key
+    Deepseek => self.api_key
+    Custom => ""
   }
 }
 
