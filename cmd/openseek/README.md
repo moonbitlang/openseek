@@ -47,9 +47,17 @@ The session-management commands are offline and do not require `--api-key`:
 
 ```bash
 moon run cmd/openseek -- --session-list --session-root .openseek
+moon run cmd/openseek -- --session-list --format=json --session-root .openseek
 moon run cmd/openseek -- --session-show --session parser-fix --session-root .openseek
 moon run cmd/openseek -- --session parser-fix --session-compact-file summary.txt --session-compact-from 1 --session-compact-to 120
 ```
+
+`--session-list --format=json` is the machine-readable form of the listing,
+consumed by clients such as the desktop app's sidebar: one JSON array of
+`{id, title, updated_at_ms}` objects, most recently active first. `title` is
+the first line of the session's first user prompt; `updated_at_ms` is `null`
+for a directory whose session files cannot be stat-ed (such husks sort last,
+like the human-readable listing).
 
 `--session-compact-file` appends a typed summary event. It does not delete raw
 events from `events.jsonl`; `agent_session.Session::chat_messages` uses the

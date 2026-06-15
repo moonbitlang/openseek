@@ -303,6 +303,12 @@ fn cli_command() -> @argparse.Command {
         default_values=[""],
         about="Last event sequence covered by --session-compact-file.",
       ),
+      OptionArg(
+        "format",
+        long="format",
+        default_values=["text"],
+        about="Output format for --session-list: text or json.",
+      ),
     ],
     flags=[
       FlagArg(
@@ -318,7 +324,7 @@ fn cli_command() -> @argparse.Command {
       FlagArg(
         "session-list",
         long="session-list",
-        about="List durable session ids and exit.",
+        about="List durable sessions (see --format) and exit.",
       ),
       FlagArg(
         "session-show",
@@ -569,8 +575,12 @@ async fn handle_session_command(
   let compact_to = value(matches, "session-compact-to").trim().to_owned()
   let store = @store.SessionStore(session_root(matches, workspace_root~))
   if list_sessions {
-    for listing in store.listings() {
-      println(format_session_listing(listing))
+    match session_list_format(matches) {
+      Text =>
+        for listing in store.listings() {
+          println(format_session_listing(listing))
+        }
+      Json => println(session_list_json(store).stringify())
     }
     return true
   }
@@ -610,6 +620,77 @@ fn session_command_count(matches : @argparse.Matches) -> Int raise {
   (if flag(matches, "session-list") { 1 } else { 0 }) +
   (if flag(matches, "session-show") { 1 } else { 0 }) +
   (if compact_session { 1 } else { 0 })
+}
+
+///|
+priv enum SessionListFormat {
+  Text
+  Json
+}
+
+///|
+fn session_list_format(matches : @argparse.Matches) -> SessionListFormat raise {
+  match value(matches, "format") {
+    "text" => Text
+    "json" => Json
+    other => fail("--format must be text or json, got: \{other}")
+  }
+}
+
+///|
+/// Longest title carried by a `--session-list --format=json` entry. Wider
+/// than the terminal listing's label because a GUI sidebar ellipsizes for
+/// itself.
+const SessionTitleMaxChars : Int = 120
+
+///|
+/// The store's listings as JSON for machine consumers (e.g. the desktop
+/// client's sidebar): an array of `{id, title, updated_at_ms}`, most
+/// recently active first. `title` is the first line of the first user
+/// prompt; `updated_at_ms` is `null` for a directory whose session files
+/// cannot be stat-ed (such husks sort last, like the human-readable
+/// listing).
+async fn session_list_json(store : @store.SessionStore) -> Json {
+  let entries : Array[Json] = []
+  for listing in store.listings() {
+    let updated_at_ms : Json = match listing.last_active_unix_seconds() {
+      Some(seconds) => Json::number((seconds * 1000).to_double())
+      None => Json::null()
+    }
+    entries.push({
+      "id": listing.id().value(),
+      "title": session_title(listing.first_prompt()),
+      "updated_at_ms": updated_at_ms,
+    })
+  }
+  Json::array(entries)
+}
+
+///|
+/// A human-readable label for a session: the first line of its first user
+/// prompt, truncated. Empty when the session has no user prompt.
+fn session_title(first_prompt : String) -> String {
+  let content = first_prompt.trim()
+  let first_line = match content.split_once("\n") {
+    Some((line, _)) => line.trim()
+    None => content
+  }
+  truncate_chars(first_line, SessionTitleMaxChars)
+}
+
+///|
+fn truncate_chars(text : StringView, max : Int) -> String {
+  let buf = StringBuilder::new()
+  let mut count = 0
+  for ch in text {
+    if count >= max {
+      buf.write_char('…')
+      break
+    }
+    buf.write_char(ch)
+    count += 1
+  }
+  buf.to_string()
 }
 
 ///|
@@ -1304,6 +1385,75 @@ async test "session list command does not require deepseek setup" {
   )
   assert_true(handle_session_command(parsed))
   @fs.rmdir(root, recursive=true)
+}
+
+///|
+test "session list format defaults to text and rejects unknown values" {
+  let default_format = cli_command().parse(argv=["--session-list"], env={})
+  assert_true(session_list_format(default_format) is Text)
+  let json_format = cli_command().parse(
+    argv=["--session-list", "--format", "json"],
+    env={},
+  )
+  assert_true(session_list_format(json_format) is Json)
+  let bogus = cli_command().parse(argv=["--session-list", "--format", "yaml"], env={})
+  let _ = session_list_format(bogus) catch {
+    error => {
+      assert_true("\{error}".contains("--format must be text or json"))
+      return
+    }
+  }
+  fail("unknown format accepted")
+}
+
+///|
+async test "session list json reports titles newest first with husks last" {
+  let root = @fs.tmpdir(prefix="openseek-cli-session-list-json-")
+  let store = @store.SessionStore(root)
+  let older : @agent_session.Session = Session(
+    SessionId("older"),
+    system_prompt="system",
+  )
+  store.create(
+    older.append(User(UserMessage("  first question\nwith detail  "))),
+  )
+  let newer : @agent_session.Session = Session(
+    SessionId("newer"),
+    system_prompt="system",
+  )
+  store.create(newer)
+  // A directory with no session files at all still appears — last, with no
+  // timestamp — matching the human-readable listing's behavior.
+  @fs.mkdir(root + "/sessions/husk", recursive=true)
+  guard session_list_json(store) is Array(entries) else {
+    fail("expected a JSON array")
+  }
+  assert_eq(entries.length(), 3)
+  guard entries[0] is Object(newest) &&
+    entries[1] is Object(oldest) &&
+    entries[2] is Object(husk) else {
+    fail("expected JSON objects")
+  }
+  assert_true(newest.get("id") is Some(String("newer")))
+  assert_true(newest.get("title") is Some(String("")))
+  assert_true(oldest.get("id") is Some(String("older")))
+  assert_true(oldest.get("title") is Some(String("first question")))
+  guard oldest.get("updated_at_ms") is Some(Number(stamp, ..)) else {
+    fail("expected updated_at_ms")
+  }
+  assert_true(stamp > 0)
+  assert_true(husk.get("id") is Some(String("husk")))
+  assert_true(husk.get("updated_at_ms") is Some(Null))
+  @fs.rmdir(root, recursive=true)
+}
+
+///|
+test "session title keeps the first line and truncates long ones" {
+  assert_eq(session_title("  first line\nsecond line  "), "first line")
+  let long_line = "x".repeat(SessionTitleMaxChars + 7)
+  let title = session_title(long_line)
+  assert_eq(title.char_length(), SessionTitleMaxChars + 1)
+  assert_true(title.has_suffix("…"))
 }
 
 ///|

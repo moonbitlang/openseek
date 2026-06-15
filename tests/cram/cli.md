@@ -27,7 +27,7 @@ Options:
   -h, --help                                                   Show help information.
   --serve                                                      Run as a session server: read JSONL commands (prompt/steer/cancel) from stdin.
   --no-session                                                 Run ephemerally: do not record this run to a durable session.
-  --session-list                                               List durable session ids and exit.
+  --session-list                                               List durable sessions (see --format) and exit.
   --session-show                                               Print the durable session JSON for --session and exit.
   --api-key <api-key>                                          DeepSeek API key. [env: DEEPSEEK] [default: ]
   --model <model>                                              DeepSeek model: deepseek-v4-flash or deepseek-v4-pro. [env: DEEPSEEK_MODEL] [default: deepseek-v4-pro]
@@ -43,6 +43,7 @@ Options:
   --session-compact-file <session-compact-file>                Read summary text from this file, append it to --session, and exit. [default: ]
   --session-compact-from <session-compact-from>                First event sequence covered by --session-compact-file. [default: ]
   --session-compact-to <session-compact-to>                    Last event sequence covered by --session-compact-file. [default: ]
+  --format <format>                                            Output format for --session-list: text or json. [default: text]
 ```
 
 ## A DeepSeek API Key Is Required For Agent Runs
