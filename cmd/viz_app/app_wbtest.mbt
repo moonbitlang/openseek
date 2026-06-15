@@ -115,3 +115,8 @@ test "theme values map to the data-theme attribute" {
   inspect(Theme::value(Dark), content="dark")
   inspect(Theme::value(System), content="system")
 }
+
+///|
+test "visualizer defaults to model view" {
+  assert_true(init_model().view_mode == ModelView)
+}

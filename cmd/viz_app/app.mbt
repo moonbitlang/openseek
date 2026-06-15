@@ -80,7 +80,7 @@ fn init_model() -> Model {
     parsed: None,
     system_prompt: "",
     header_present: false,
-    view_mode: RawLog,
+    view_mode: ModelView,
     theme: Light,
     sidebar_visible: true,
     collapsed_roots: [],
