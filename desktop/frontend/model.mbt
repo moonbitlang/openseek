@@ -11,6 +11,9 @@ const EmptyRunId : Int = -1
 const ApiKeyStorageKey : String = "openseek.deepseek_api_key"
 
 ///|
+const CustomApiKeyStorageKey : String = "openseek.custom_api_key"
+
+///|
 const ApiProviderStorageKey : String = "openseek.api_provider"
 
 ///|
@@ -119,10 +122,11 @@ priv struct Model {
   selected_model : String
   max_steps : String
   api_key : String
+  custom_api_key : String
   setup_api_key : String
   // Which endpoint the engine talks to; `custom_api_url` only matters when
-  // the provider is `Custom`. Both persist to localStorage as they change,
-  // unlike the key, which is staged in `setup_api_key` until saved.
+  // the provider is `Custom`. Provider and URL persist as they change; keys
+  // are provider-specific and staged in `setup_api_key` until saved.
   api_provider : ApiProvider
   custom_api_url : String
   setup_open : Bool
@@ -166,7 +170,12 @@ priv enum Msg {
   BridgeUnavailable(String)
   // Persisted settings read back from localStorage at startup. `provider`
   // is the wire name (`ApiProvider::parse` handles unknown values).
-  SettingsLoaded(provider~ : String, custom_url~ : String, api_key~ : String)
+  SettingsLoaded(
+    provider~ : String,
+    custom_url~ : String,
+    api_key~ : String,
+    custom_api_key~ : String
+  )
   TaskChanged(String)
   ModelChanged(String)
   MaxStepsChanged(String)
@@ -249,6 +258,7 @@ fn initial_model() -> Model {
     selected_model: DefaultModel,
     max_steps: DefaultMaxSteps,
     api_key: "",
+    custom_api_key: "",
     setup_api_key: "",
     api_provider: Openseek,
     custom_api_url: "",
@@ -304,14 +314,14 @@ fn Model::effective_api_url(self : Model) -> String {
 }
 
 ///|
-/// The key sent with `start`. The OpenSeek proxy ignores keys, and the one
-/// stored here belongs to the official endpoint — never leak it to another
-/// host, so send nothing (the native host substitutes a placeholder).
+/// The key sent with `start`. OpenSeek ignores keys; DeepSeek and Custom keep
+/// separate credentials so switching endpoints never leaks one host's secret to
+/// another.
 fn Model::effective_api_key(self : Model) -> String {
   match self.api_provider {
     Openseek => ""
     Deepseek => self.api_key
-    Custom => ""
+    Custom => self.custom_api_key
   }
 }
 

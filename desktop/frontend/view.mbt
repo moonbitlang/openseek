@@ -496,11 +496,20 @@ fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
   // endpoints that can use one. The saved key is never echoed back into the
   // field; saving a new one overwrites it.
   if !(model.api_provider is Openseek) {
+    let saved_key = if model.api_provider is Custom {
+      model.custom_api_key
+    } else {
+      model.api_key
+    }
     settings.push(
       setting_input(
-        "DeepSeek API key",
+        if model.api_provider is Custom {
+          "Custom API key"
+        } else {
+          "DeepSeek API key"
+        },
         model.setup_api_key,
-        if model.api_key.trim().is_empty() {
+        if saved_key.trim().is_empty() {
           "sk-..."
         } else {
           "saved — enter to replace"

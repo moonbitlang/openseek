@@ -11,6 +11,7 @@ fn load_saved_settings(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
           provider=load_setting(ApiProviderStorageKey),
           custom_url=load_setting(CustomApiUrlStorageKey),
           api_key=load_setting(ApiKeyStorageKey),
+          custom_api_key=load_setting(CustomApiKeyStorageKey),
         ),
       ),
     )
@@ -20,6 +21,11 @@ fn load_saved_settings(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
 ///|
 fn save_api_key(api_key : String) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(ApiKeyStorageKey, api_key))
+}
+
+///|
+fn save_custom_api_key(api_key : String) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(CustomApiKeyStorageKey, api_key))
 }
 
 ///|

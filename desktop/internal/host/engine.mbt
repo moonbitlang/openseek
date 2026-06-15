@@ -156,6 +156,14 @@ async fn handle_decoded_event(
 }
 
 ///|
+fn host_reports_terminal_error(decoded : @event.AgentEvent) -> Bool {
+  match decoded {
+    AgentAborted(_) | MaxStepsExhausted | AgentError(_) => true
+    _ => false
+  }
+}
+
+///|
 /// The `connect` op: the long-lived host half of the persistent-engine
 /// design. Lepus runs each IPC request as its own task, so this op's task
 /// group is the only context in which a serve process can outlive individual
@@ -286,7 +294,6 @@ async fn serve_engine_consumer(
     match messages.get() {
       StreamEvent(raw) => {
         let run_id = engine.latest_run
-        emit(context, Event({ run_id, event: raw }))
         match @event.decode_event(raw) {
           // The abort the user asked for: report it as a cancellation, the
           // same wire status the pre-serve host used.
@@ -296,12 +303,19 @@ async fn serve_engine_consumer(
             engine.run_open = false
             engine.cancel_requested = false
           }
-          Some(decoded) =>
+          Some(decoded) => {
+            // Terminal failures are immediately normalized below; forwarding
+            // their raw event as well would make the frontend render the same
+            // failure twice.
+            if !host_reports_terminal_error(decoded) {
+              emit(context, Event({ run_id, event: raw }))
+            }
             if handle_decoded_event(context, run_id, decoded) {
               engine.run_open = false
               engine.cancel_requested = false
             }
-          None => ()
+          }
+          None => emit(context, Event({ run_id, event: raw }))
         }
       }
       StreamReaderFailed(message) =>

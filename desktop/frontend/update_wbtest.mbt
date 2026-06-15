@@ -561,17 +561,22 @@ test "the default provider needs no API key to be ready" {
 }
 
 ///|
-test "the saved DeepSeek key is never sent to another endpoint" {
+test "custom endpoints never reuse the saved DeepSeek key" {
   let openseek = { ..test_model(), api_provider: Openseek }
   inspect(openseek.effective_api_key(), content="")
   let official = { ..test_model(), api_provider: Deepseek }
   inspect(official.effective_api_key(), content="sk-test")
-  let custom = {
+  let unauthenticated_custom = {
     ..test_model(),
     api_provider: Custom,
     custom_api_url: "https://proxy.example/v1/chat/completions",
   }
-  inspect(custom.effective_api_key(), content="")
+  inspect(unauthenticated_custom.effective_api_key(), content="")
+  let authenticated_custom = {
+    ..unauthenticated_custom,
+    custom_api_key: "sk-custom",
+  }
+  inspect(authenticated_custom.effective_api_key(), content="sk-custom")
 }
 
 ///|
@@ -598,7 +603,7 @@ test "loaded settings open the popup only when incomplete" {
   let dispatch = test_dispatch()
   let (_, zero_config) = update(
     dispatch,
-    SettingsLoaded(provider="", custom_url="", api_key=""),
+    SettingsLoaded(provider="", custom_url="", api_key="", custom_api_key=""),
     test_model(),
   )
   inspect(zero_config.setup_open, content="false")
@@ -606,30 +611,84 @@ test "loaded settings open the popup only when incomplete" {
   assert_true(zero_config.display_status() is Ready)
   let (_, keyless) = update(
     dispatch,
-    SettingsLoaded(provider="deepseek", custom_url="", api_key=""),
+    SettingsLoaded(
+      provider="deepseek",
+      custom_url="",
+      api_key="",
+      custom_api_key="",
+    ),
     test_model(),
   )
   inspect(keyless.setup_open, content="true")
   assert_true(keyless.display_status() is ApiKeyRequired)
   let (_, restored) = update(
     dispatch,
-    SettingsLoaded(provider="deepseek", custom_url="", api_key="sk-stored"),
+    SettingsLoaded(
+      provider="deepseek",
+      custom_url="",
+      api_key="sk-stored",
+      custom_api_key="sk-custom-stored",
+    ),
     test_model(),
   )
   inspect(restored.setup_open, content="false")
   inspect(restored.api_key, content="sk-stored")
+  inspect(restored.custom_api_key, content="sk-custom-stored")
+  let (_, custom) = update(
+    dispatch,
+    SettingsLoaded(
+      provider="custom",
+      custom_url="https://proxy.example/chat/completions",
+      api_key="sk-deepseek",
+      custom_api_key="sk-custom",
+    ),
+    test_model(),
+  )
+  inspect(custom.setup_open, content="false")
+  inspect(custom.effective_api_key(), content="sk-custom")
 }
 
 ///|
 test "update is pure: a provider change is idempotent" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), api_key: "" }
+  let model = { ..test_model(), api_key: "", setup_api_key: "typed" }
   let (_, once) = update(dispatch, ProviderChanged("deepseek"), model)
   let (_, twice) = update(dispatch, ProviderChanged("deepseek"), model)
   assert_true(once.api_provider is Deepseek)
   assert_true(twice.api_provider is Deepseek)
+  inspect(once.setup_api_key, content="")
+  inspect(twice.setup_api_key, content="")
   assert_true(once.display_status() is ApiKeyRequired)
   assert_true(twice.display_status() is ApiKeyRequired)
+}
+
+///|
+test "saving a key writes the active provider credential only" {
+  let dispatch = test_dispatch()
+  let deepseek = {
+    ..test_model(),
+    api_provider: Deepseek,
+    api_key: "sk-old",
+    custom_api_key: "sk-custom-old",
+    setup_api_key: "  sk-new  ",
+    setup_open: true,
+  }
+  let (_, saved_deepseek) = update(dispatch, SaveApiKey, deepseek)
+  inspect(saved_deepseek.api_key, content="sk-new")
+  inspect(saved_deepseek.custom_api_key, content="sk-custom-old")
+  inspect(saved_deepseek.setup_open, content="false")
+  let custom = {
+    ..deepseek,
+    api_provider: Custom,
+    custom_api_url: "https://proxy.example/chat/completions",
+    api_key: "sk-deepseek",
+    setup_api_key: "  sk-custom-new  ",
+  }
+  let (_, saved_custom) = update(dispatch, SaveApiKey, custom)
+  inspect(saved_custom.api_key, content="sk-deepseek")
+  inspect(saved_custom.custom_api_key, content="sk-custom-new")
+  inspect(saved_custom.effective_api_key(), content="sk-custom-new")
+  inspect(saved_custom.setup_open, content="false")
 }
 
 ///|

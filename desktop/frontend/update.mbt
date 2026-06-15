@@ -180,12 +180,13 @@ fn update(
       )
     BridgeUnavailable(message) =>
       (@cmd.none, { ..model, bridge_ready: false, bridge_error: message })
-    SettingsLoaded(provider~, custom_url~, api_key~) => {
+    SettingsLoaded(provider~, custom_url~, api_key~, custom_api_key~) => {
       let next = {
         ..model,
         api_provider: ApiProvider::parse(provider),
         custom_api_url: custom_url.trim().to_owned(),
         api_key: api_key.trim().to_owned(),
+        custom_api_key: custom_api_key.trim().to_owned(),
         setup_api_key: "",
       }
       // The default provider needs no setup, so the popup only opens when
@@ -200,7 +201,10 @@ fn update(
     SetupApiKeyChanged(value) => (@cmd.none, { ..model, setup_api_key: value })
     ProviderChanged(value) => {
       let provider = ApiProvider::parse(value)
-      (save_api_provider(provider), { ..model, api_provider: provider })
+      (
+        save_api_provider(provider),
+        { ..model, api_provider: provider, setup_api_key: "" },
+      )
     }
     CustomApiUrlChanged(value) =>
       (save_custom_api_url(value), { ..model, custom_api_url: value })
@@ -218,10 +222,20 @@ fn update(
       if api_key.is_empty() {
         (@cmd.none, model)
       } else {
-        (
-          save_api_key(api_key),
-          { ..model, api_key, setup_api_key: "", setup_open: false },
-        )
+        match model.api_provider {
+          Deepseek => {
+            let next = { ..model, api_key, setup_api_key: "" }
+            (save_api_key(api_key), { ..next, setup_open: !next.api_ready() })
+          }
+          Custom => {
+            let next = { ..model, custom_api_key: api_key, setup_api_key: "" }
+            (
+              save_custom_api_key(api_key),
+              { ..next, setup_open: !next.api_ready() },
+            )
+          }
+          Openseek => (@cmd.none, { ..model, setup_api_key: "" })
+        }
       }
     }
     OpenSkills => {
