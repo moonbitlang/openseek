@@ -1,12 +1,27 @@
 // The user's home directory, and paths expressed relative to it.
 
 ///|
-/// The user's home directory: `HOME`, or `USERPROFILE` on Windows.
+/// The user's home directory: `USERPROFILE` on Windows, otherwise `HOME`.
 pub fn dir() -> String? {
-  if @env.get("HOME") is Some(home) {
+  home_dir_from_env(@env.get("OS"), @env.get("HOME"), @env.get("USERPROFILE"))
+}
+
+///|
+fn home_dir_from_env(
+  os : String?,
+  home : String?,
+  userprofile : String?,
+) -> String? {
+  if os is Some("Windows_NT") {
+    if userprofile is Some(userprofile) {
+      return Some(userprofile)
+    }
+    return home
+  }
+  if home is Some(home) {
     return Some(home)
   }
-  @env.get("USERPROFILE")
+  userprofile
 }
 
 ///|

@@ -34,19 +34,21 @@ priv struct RunConfig {
 }
 
 ///|
-fn required_secret(
-  value : String?,
-  env_name : String,
+fn configured_api_key(
+  payload_key : String?,
+  api_url : String?,
+  deepseek_env : String?,
 ) -> String raise HostError {
-  if value is Some(value) {
+  if payload_key is Some(value) {
     return value
   }
-  if @env.get(env_name) is Some(value) {
+  if api_url is Some(_) {
+    return PlaceholderApiKey
+  }
+  if deepseek_env is Some(value) {
     return value
   }
-  raise HostError(
-    "DeepSeek API key is required; pass api_key or set " + env_name,
-  )
+  raise HostError("DeepSeek API key is required; pass api_key or set DEEPSEEK")
 }
 
 ///|
@@ -75,10 +77,13 @@ async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
     None => @env.get("OPENSEEK_API_URL")
   }
   // Only the official endpoint strictly needs a key; a custom endpoint
-  // decides for itself, so a missing key becomes a placeholder there.
-  let api_key = required_secret(payload.api_key, "DEEPSEEK") catch {
-    error => if api_url is Some(_) { PlaceholderApiKey } else { raise error }
-  }
+  // decides for itself, so a missing key becomes a placeholder there. Do
+  // not reuse the official DeepSeek env key for a custom/OpenSeek endpoint.
+  let api_key = configured_api_key(
+    payload.api_key,
+    api_url,
+    @env.get("DEEPSEEK"),
+  )
   let session = payload.session
   let host = engine_host(payload, engine)
   {

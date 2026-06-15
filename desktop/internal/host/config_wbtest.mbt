@@ -44,3 +44,38 @@ test "switching engine hosts cannot reuse a live engine process" {
     }),
   )
 }
+
+///|
+test "custom endpoint does not reuse DEEPSEEK env fallback" {
+  assert_eq(
+    configured_api_key(
+      None,
+      Some("https://proxy.example/chat/completions"),
+      Some("official-key"),
+    ),
+    PlaceholderApiKey,
+  )
+  assert_eq(
+    configured_api_key(
+      Some("custom-key"),
+      Some("https://proxy.example/chat/completions"),
+      Some("official-key"),
+    ),
+    "custom-key",
+  )
+}
+
+///|
+test "official endpoint still uses DEEPSEEK env fallback" {
+  assert_eq(
+    configured_api_key(None, None, Some("official-key")),
+    "official-key",
+  )
+  let _ = configured_api_key(None, None, None) catch {
+    HostError(message) => {
+      assert_true(message.contains("DeepSeek API key is required"))
+      return
+    }
+  }
+  fail("official endpoint accepted a missing key")
+}
