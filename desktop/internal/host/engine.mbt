@@ -336,6 +336,7 @@ async fn[G] start_serve_engine(
     "DEEPSEEK": config.api_key,
     "DEEPSEEK_MODEL": config.model,
     "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
+    "OPENSEEK_DIR": ".",
   }
   if config.api_url is Some(url) {
     env["OPENSEEK_API_URL"] = url

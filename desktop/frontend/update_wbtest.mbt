@@ -304,6 +304,20 @@ test "open session tracks the latest load and ignores stale replies" {
 }
 
 ///|
+test "abandoned session load failures are dropped" {
+  let dispatch = test_dispatch()
+  let (_, loading) = update(dispatch, OpenSession("desktop-a"), test_model())
+  let (_, abandoned) = update(dispatch, NewChat, loading)
+  let (_, next) = update(
+    dispatch,
+    Failed(session="desktop-a", message="failed to load session desktop-a"),
+    abandoned,
+  )
+  inspect(next.loading_session, content="")
+  inspect(next.active().messages.length(), content="0")
+}
+
+///|
 test "session loaded swaps the active conversation onto the stored session" {
   let dispatch = test_dispatch()
   let model = {
@@ -586,6 +600,28 @@ test "a run that ends with steers in flight sweeps them into notices" {
     fail("expected an error bubble")
   }
   assert_true(next.active().messages[0].content.contains("orphaned"))
+}
+
+///|
+test "late undelivered steer is dropped after run-end sweep" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    pending_steers: ["lost"],
+  })
+  let (_, finished) = update(
+    dispatch,
+    Finished(run_id=7, status="finished", answer=""),
+    model,
+  )
+  let (_, next) = update(
+    dispatch,
+    SteerUndelivered(session="desktop-test", text="lost"),
+    finished,
+  )
+  inspect(next.active().pending_steers.length(), content="0")
+  inspect(next.active().messages.length(), content="1")
+  assert_true(next.active().messages[0].content.contains("lost"))
 }
 
 ///|

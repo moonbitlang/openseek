@@ -181,7 +181,7 @@ fn EngineHost::fingerprint(self : EngineHost) -> String {
 /// direction; the session root adds `/p` so wsl.exe rewrites the Windows
 /// path to its `/mnt/...` mount — the engine then reads and writes the same
 /// session store the host's own `--session-list`/`--session-show` runs use.
-const WslEnvPassthrough : String = "DEEPSEEK/u:DEEPSEEK_MODEL/u:OPENSEEK_MAX_STEPS/u:OPENSEEK_API_URL/u:OPENSEEK_SESSION/u:OPENSEEK_SESSION_ROOT/up"
+const WslEnvPassthrough : String = "DEEPSEEK/u:DEEPSEEK_MODEL/u:OPENSEEK_MAX_STEPS/u:OPENSEEK_DIR/u:OPENSEEK_API_URL/u:OPENSEEK_SESSION/u:OPENSEEK_SESSION_ROOT/up"
 
 ///|
 /// The WSLENV value for an engine spawn: the user's own sharing list (WSLENV

@@ -376,14 +376,17 @@ fn update(
       // The steer never reached the engine, so no `steer_applied` /
       // `steer_dropped` event will settle it — report the loss here instead.
       if model.find_conversation(session) is Some(conv) {
-        (
-          scroll_if_active(model, session),
-          model.replace_conversation(
-            conv
-            .settle_pending_steer(text)
-            .append_item(Assistant(true), steer_dropped_notice(text)),
-          ),
-        )
+        let settled = conv.settle_pending_steer(text)
+        if settled.pending_steers.length() == conv.pending_steers.length() {
+          (@cmd.none, model)
+        } else {
+          (
+            scroll_if_active(model, session),
+            model.replace_conversation(
+              settled.append_item(Assistant(true), steer_dropped_notice(text)),
+            ),
+          )
+        }
       } else {
         (@cmd.none, model)
       }
@@ -517,8 +520,7 @@ fn update(
           ]),
           model.replace_conversation(next),
         )
-      } else if !model.loading_session.is_empty() &&
-        model.loading_session != session {
+      } else if model.loading_session != session {
         (@cmd.none, model)
       } else {
         // The conversation never came to exist (a session load failed before

@@ -7,3 +7,4 @@
 - [Desktop Review: Active Follow-ups And Stacking](plans/desktop-review-active-followups-stacking.md)
 - [Desktop Review: Session Root And Transcript Links](plans/desktop-review-session-root-links.md)
 - [Desktop Review: Serve Pump Follow-ups](plans/desktop-review-serve-pump-followups.md)
+- [Desktop Review: Stale Update Replies](plans/desktop-review-stale-update-replies.md)
