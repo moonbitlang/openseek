@@ -9,12 +9,17 @@
 /// where the engine's relative `.openseek` default could never be created.
 pub fn resolved_session_root(payload_root : String?) -> String? {
   if payload_root is Some(root) {
-    return Some(root)
+    return Some(resolve_explicit_session_root(root))
   }
   if @env.get("OPENSEEK_SESSION_ROOT") is Some(root) {
-    return Some(root)
+    return Some(resolve_explicit_session_root(root))
   }
   home_session_root()
+}
+
+///|
+fn resolve_explicit_session_root(root : String) -> String {
+  (root : @mbpath.Path).resolve().to_string()
 }
 
 ///|

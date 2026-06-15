@@ -5,3 +5,4 @@
 - [Desktop Review: Endpoint Secrets And Windows Home](plans/desktop-review-endpoint-secrets-windows-home.md)
 - [Desktop Drop Pre-ts Session Compatibility](plans/desktop-drop-pre-ts-session-compatibility.md)
 - [Desktop Review: Active Follow-ups And Stacking](plans/desktop-review-active-followups-stacking.md)
+- [Desktop Review: Session Root And Transcript Links](plans/desktop-review-session-root-links.md)

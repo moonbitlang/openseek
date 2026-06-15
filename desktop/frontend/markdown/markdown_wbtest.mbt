@@ -36,6 +36,18 @@ test "raw html stays text instead of markup" {
 }
 
 ///|
+#warnings("-alert_unstable")
+test "markdown links do not navigate the app frame" {
+  let node = link_node("https://example.com", [@html.text("example")])
+  let expected =
+    #|<a href="https://example.com" target="_blank" rel="noopener noreferrer">example</a>
+  inspect(
+    @rabbita.render_to_string(@rabbita.static_cell(node)),
+    content=expected,
+  )
+}
+
+///|
 fn first_paragraph(block : @cmark.Block) -> @cmark.BlockParagraph? {
   match block {
     Paragraph(node) => Some(node.v)

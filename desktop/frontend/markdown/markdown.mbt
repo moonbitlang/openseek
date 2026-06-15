@@ -270,7 +270,7 @@ fn MarkdownRender::link_destination(
 
 ///|
 fn link_node(href : String, children : Array[@html.Html]) -> @html.Html {
-  @html.a(href~, rel="noopener noreferrer", children)
+  @html.a(href~, target=Blank, rel="noopener noreferrer", children)
 }
 
 ///|
