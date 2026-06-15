@@ -319,6 +319,31 @@ async fn run_engine_pump(
 }
 
 ///|
+/// The desktop host owns the Skills panel's library writes, so every serve
+/// engine gets the same resolved global library instead of falling back to
+/// whatever HOME means inside that engine host.
+fn resolved_global_skills_dir(
+  global_dir_env : String?,
+  home_dir : String?,
+) -> String? {
+  if global_dir_env is Some(dir) && !dir.trim().is_empty() {
+    return Some(dir.trim().to_owned())
+  }
+  if home_dir is Some(home) && !home.trim().is_empty() {
+    return Some(home.trim().to_owned() + "/.openseek/skills")
+  }
+  None
+}
+
+///|
+fn resolved_global_skills_dir_env() -> String? {
+  resolved_global_skills_dir(
+    @env.get("OPENSEEK_GLOBAL_SKILLS_DIR"),
+    @home.dir(),
+  )
+}
+
+///|
 /// Spawn one `--serve` engine inside the pump's task group and wire up its
 /// stream tasks: the stdout reader feeding the queue, the stderr drain, and
 /// the consumer that forwards events to the webview for the engine's
@@ -337,6 +362,9 @@ async fn[G] start_serve_engine(
     "DEEPSEEK_MODEL": config.model,
     "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
     "OPENSEEK_DIR": ".",
+  }
+  if resolved_global_skills_dir_env() is Some(dir) {
+    env["OPENSEEK_GLOBAL_SKILLS_DIR"] = dir
   }
   if config.api_url is Some(url) {
     env["OPENSEEK_API_URL"] = url

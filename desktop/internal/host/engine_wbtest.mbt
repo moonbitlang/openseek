@@ -42,3 +42,19 @@ test "new turn events clear stale settling state" {
     8,
   )
 }
+
+///|
+test "serve engines inherit the desktop global skills library" {
+  assert_true(
+    resolved_global_skills_dir(
+      Some(" C:\\Users\\me\\.openseek\\skills "),
+      Some("ignored"),
+    )
+    is Some("C:\\Users\\me\\.openseek\\skills"),
+  )
+  assert_true(
+    resolved_global_skills_dir(None, Some("C:\\Users\\me"))
+    is Some("C:\\Users\\me/.openseek/skills"),
+  )
+  assert_true(resolved_global_skills_dir(Some("  "), None) is None)
+}
