@@ -1,9 +1,9 @@
 ///|
 import {
-  "moonbitlang/async@0.19.1",
-  "moonbitlang/async@0.19.1/fs",
-  "moonbitlang/async@0.19.1/io",
-  "moonbitlang/async@0.19.1/process",
+  "moonbitlang/async@0.19.4",
+  "moonbitlang/async@0.19.4/fs",
+  "moonbitlang/async@0.19.4/io",
+  "moonbitlang/async@0.19.4/process",
   "moonbitlang/core/string",
 }
 

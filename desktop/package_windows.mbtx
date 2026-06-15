@@ -1,7 +1,7 @@
 ///|
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/process",
+  "moonbitlang/async@0.19.4",
+  "moonbitlang/async@0.19.4/process",
   "moonbitlang/x/fs",
   "moonbitlang/x/sys",
 }
