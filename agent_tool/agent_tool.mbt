@@ -81,7 +81,7 @@ pub struct ToolOutput {
   /// Whether the host should treat this as a tool-level error. The content is
   /// still sent to the model so it can recover or choose another action.
   is_error : Bool
-}
+} derive(Debug)
 
 ///|
 /// Constructs typed tool output. `is_error` defaults to `false` for ordinary
@@ -100,7 +100,7 @@ pub(all) enum AgentControl {
   Finish(String)
   /// Stop the loop because execution cannot usefully continue.
   Abort(String)
-}
+} derive(Debug)
 
 ///|
 /// The action returned by a tool executor. Normal tools respond to the model;
@@ -110,7 +110,7 @@ pub(all) enum ToolAction {
   Respond(ToolOutput)
   /// Request a loop-control action such as finishing the task.
   Control(AgentControl)
-}
+} derive(Debug)
 
 ///|
 /// Builds a normal tool response action.

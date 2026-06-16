@@ -3,6 +3,7 @@ package "bobzhang/openseek/agent_tool"
 
 import {
   "bobzhang/openseek/deepseek",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -14,7 +15,7 @@ pub async fn execute_tool_call(AgentToolCall, Tools) -> ToolAction
 pub(all) enum AgentControl {
   Finish(String)
   Abort(String)
-}
+} derive(@debug.Debug)
 
 pub struct AgentToolCall {
   name : String
@@ -35,7 +36,7 @@ pub(all) struct JsonSchema(Json)
 pub(all) enum ToolAction {
   Respond(ToolOutput)
   Control(AgentControl)
-}
+} derive(@debug.Debug)
 pub fn ToolAction::abort(String) -> Self
 pub fn ToolAction::finish(String) -> Self
 pub fn ToolAction::respond(String, is_error? : Bool) -> Self
@@ -48,7 +49,7 @@ pub(all) enum ToolExecutor {
 pub struct ToolOutput {
   content : String
   is_error : Bool
-}
+} derive(@debug.Debug)
 pub fn ToolOutput::ToolOutput(String, is_error? : Bool) -> Self
 
 pub struct Tools {
