@@ -1,0 +1,8 @@
+_build/
+dist/
+target/
+.mooncakes/
+.DS_Store
+
+# Generated frontend bundle (built by `moon run --target native build_frontend.mbtx`)
+/frontend.js

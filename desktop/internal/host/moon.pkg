@@ -1,0 +1,23 @@
+import {
+  "bobzhang/jsonl",
+  "justjavac/lepus_app" @app,
+  "openseek_desktop/internal/appdirs",
+  "openseek_desktop/internal/env",
+  "openseek_desktop/internal/home",
+  "openseek_desktop/internal/event",
+  "openseek_desktop/internal/sessiondirs",
+  "openseek_desktop/internal/skillmarket",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+}
+
+import {
+  "moonbitlang/core/env" @sys,
+} for "wbtest"
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"

@@ -1,0 +1,366 @@
+///|
+import {
+  "moonbitlang/async@0.19.4",
+  "moonbitlang/async@0.19.4/fs",
+  "moonbitlang/async@0.19.4/io",
+  "moonbitlang/async@0.19.4/process",
+  "moonbitlang/core/env",
+  "moonbitlang/core/string",
+}
+
+///|
+const FrontendPackage : String = "frontend"
+
+///|
+const NativePackage : String = "."
+
+///|
+const NativeBinary : String =
+  "_build/native/release/build/openseek_desktop/openseek_desktop.exe"
+
+///|
+/// The openseek engine package, built from the monorepo root (one level up
+/// from this desktop workspace) so the bundled engine always matches the
+/// checkout instead of whatever happens to be on PATH.
+const EnginePackage : String = "cmd/openseek"
+
+///|
+/// Path to the freshly built engine binary, relative to the desktop workspace.
+const EngineBinary : String =
+  "../_build/native/release/build/bobzhang/openseek/cmd/openseek/openseek.exe"
+
+///|
+/// Path to the lepus codegen CLI, staged inside the submodule. The clipboard
+/// extension's pre-build step shells out to it, so a fresh checkout must build
+/// it before the native target can link.
+const CodegenTool : String = "lepus/target/lepus-tools/lepus_cli"
+
+///|
+const AppPath : String = "dist/OpenSeek Desktop.app"
+
+///|
+const ZipPath : String = "dist/OpenSeek Desktop-macos-arm64.zip"
+
+///|
+const ContentsPath : String = AppPath + "/Contents"
+
+///|
+const MacOSPath : String = ContentsPath + "/MacOS"
+
+///|
+const ResourcesPath : String = ContentsPath + "/Resources"
+
+///|
+/// Frontend assets live under Resources, not MacOS: codesign (without the
+/// deprecated `--deep`) treats everything in `Contents/MacOS/` as code and
+/// rejects plain data files there.
+const AppAssetDir : String = ResourcesPath + "/assets"
+
+///|
+suberror PackageError {
+  PackageError(String)
+} derive(Show)
+
+///|
+/// The desktop workspace this script packages. Every command runs with the
+/// workspace as its working directory and every path is joined onto it, so the
+/// script works both from inside the workspace (`moon run package_macos.mbtx`)
+/// and from the monorepo root (`moon run desktop/package_macos.mbtx`).
+priv struct Workspace {
+  dir : String
+}
+
+///|
+async fn locate_workspace() -> Workspace raise {
+  for candidate in [".", "desktop"] {
+    if @fs.exists(candidate + "/package_macos.mbtx") &&
+      @fs.exists(candidate + "/lepus") {
+      return { dir: candidate }
+    }
+  }
+  raise PackageError(
+    "cannot locate the desktop workspace; run from the desktop directory or the monorepo root",
+  )
+}
+
+///|
+fn Workspace::at(self : Workspace, relative : String) -> String {
+  self.dir + "/" + relative
+}
+
+///|
+/// The monorepo root, one level up from the desktop workspace.
+fn Workspace::repo(self : Workspace) -> String {
+  self.dir + "/.."
+}
+
+///|
+/// Minimum macOS the produced binaries run on. Without this, clang pins
+/// LC_BUILD_VERSION's minos to the build machine's OS version and dyld on
+/// any older system refuses to load the binary at all. Must match
+/// LSMinimumSystemVersion in the Info.plist.
+const MinMacOSVersion : String = "12.0"
+
+///|
+async fn run_checked(
+  command : String,
+  args : Array[String],
+  dir~ : String,
+  extra_env? : Map[String, String] = {},
+) -> Unit raise {
+  let joined_args = args.join(" ")
+  println("$ [\{dir}] \{command} \{joined_args}")
+  let code = @process.run(
+    command,
+    args,
+    inherit_env=true,
+    extra_env~,
+    cwd=dir.view(),
+  )
+  if code != 0 {
+    raise PackageError("command failed with exit code \{code}: \{command}")
+  }
+}
+
+///|
+/// Build the openseek engine from the monorepo source. Runs from the repo root
+/// since the engine lives in a separate moon module from this desktop
+/// workspace.
+async fn build_engine(ws : Workspace) -> Unit raise {
+  run_checked(
+    "moon",
+    ["build", EnginePackage, "--target", "native", "--release"],
+    dir=ws.repo(),
+    extra_env={ "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion },
+  )
+  if !@fs.exists(ws.at(EngineBinary)) {
+    raise PackageError(
+      "openseek engine binary not found: \{ws.at(EngineBinary)}",
+    )
+  }
+}
+
+///|
+/// Build the lepus codegen CLI into the submodule if it is not already staged.
+async fn ensure_codegen_tool(ws : Workspace) -> Unit raise {
+  if @fs.exists(ws.at(CodegenTool)) {
+    return
+  }
+  run_checked(
+    "moon",
+    ["install", "./cli", "--bin", "target/lepus-tools"],
+    dir=ws.at("lepus"),
+  )
+}
+
+///|
+async fn build_outputs(ws : Workspace) -> Unit raise {
+  ensure_codegen_tool(ws)
+  run_checked(
+    "moon",
+    ["build", FrontendPackage, "--target", "js", "--release"],
+    dir=ws.dir,
+  )
+  run_checked(
+    "moon",
+    ["run", "--target", "native", "build_frontend.mbtx"],
+    dir=ws.dir,
+  )
+  run_checked(
+    "moon",
+    ["build", NativePackage, "--target", "native", "--release"],
+    dir=ws.dir,
+    extra_env={ "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion },
+  )
+  build_engine(ws)
+}
+
+///|
+async fn reset_bundle_dirs(ws : Workspace) -> Unit raise {
+  run_checked("rm", ["-rf", AppPath, ZipPath], dir=ws.dir)
+  run_checked(
+    "mkdir",
+    ["-p", MacOSPath, ResourcesPath, AppAssetDir],
+    dir=ws.dir,
+  )
+}
+
+///|
+/// The host binary is the bundle's main executable directly — no shell
+/// launcher in between. Resource lookups derive from argv[0] (absolute under
+/// LaunchServices) and the bundled engine is resolved by absolute path, so
+/// nothing needs a `cd` or a PATH entry. A Mach-O main executable is also
+/// what hardened-runtime signing and notarization expect; script launchers
+/// are a recurring Gatekeeper headache.
+async fn copy_bundle_files(ws : Workspace) -> Unit raise {
+  if !@fs.exists(ws.at(NativeBinary)) {
+    raise PackageError("native binary not found: \{ws.at(NativeBinary)}")
+  }
+  run_checked("cp", [NativeBinary, MacOSPath + "/openseek-desktop"], dir=ws.dir)
+  run_checked("cp", [EngineBinary, MacOSPath + "/openseek"], dir=ws.dir)
+  run_checked("cp", ["index.html", AppAssetDir + "/index.html"], dir=ws.dir)
+  run_checked("cp", ["frontend.js", AppAssetDir + "/frontend.js"], dir=ws.dir)
+}
+
+///|
+fn info_plist_source() -> String {
+  let source = #|<?xml version="1.0" encoding="UTF-8"?>
+  #|<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  #|<plist version="1.0">
+  #|<dict>
+  #|  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  #|  <key>CFBundleDisplayName</key><string>OpenSeek Desktop</string>
+  #|  <key>CFBundleExecutable</key><string>openseek-desktop</string>
+  #|  <key>CFBundleIdentifier</key><string>community.moonbit.lepus.openseek-desktop</string>
+  #|  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  #|  <key>CFBundleName</key><string>OpenSeek Desktop</string>
+  #|  <key>CFBundlePackageType</key><string>APPL</string>
+  #|  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  #|  <key>CFBundleVersion</key><string>0.1.0</string>
+  #|  <key>LSMinimumSystemVersion</key><string>12.0</string>
+  #|  <key>NSHighResolutionCapable</key><true/>
+  #|</dict>
+  #|</plist>
+  #|
+  source
+}
+
+///|
+async fn write_bundle_metadata(ws : Workspace) -> Unit raise {
+  @fs.write_file(
+    ws.at(ContentsPath) + "/Info.plist",
+    info_plist_source(),
+    create_mode=CreateOrTruncate,
+  )
+  run_checked(
+    "chmod",
+    ["+x", MacOSPath + "/openseek-desktop", MacOSPath + "/openseek"],
+    dir=ws.dir,
+  )
+}
+
+///|
+/// Signing configuration from the script's arguments (everything after `--`
+/// on the `moon run` command line): `--sign <identity>` names a Developer ID
+/// Application identity for distribution, `--notarize <profile>` a notarytool
+/// keychain profile (created once via
+/// `xcrun notarytool store-credentials <profile> --apple-id … --team-id …`).
+/// Without `--sign` the bundle is ad-hoc signed — it runs on the build
+/// machine but is quarantined by Gatekeeper everywhere else.
+priv struct SignConfig {
+  identity : String?
+  notary_profile : String?
+}
+
+///|
+fn parse_sign_config() -> SignConfig raise {
+  let usage = "usage: package_macos.mbtx [--sign <identity>] [--notarize <keychain-profile>]"
+  let args = @env.args()
+  let mut identity : String? = None
+  let mut notary_profile : String? = None
+  // args[0] is the program itself; the script's own arguments follow.
+  let mut index = 1
+  while index < args.length() {
+    let arg = args[index]
+    guard arg is ("--sign" | "--notarize") else {
+      raise PackageError("unknown argument: \{arg}\n\{usage}")
+    }
+    guard args.get(index + 1) is Some(value) && !value.trim().is_empty() else {
+      raise PackageError("\{arg} needs a value\n\{usage}")
+    }
+    let value = value.trim().to_owned()
+    if arg == "--sign" {
+      identity = Some(value)
+    } else {
+      notary_profile = Some(value)
+    }
+    index += 2
+  }
+  if notary_profile is Some(_) && identity is None {
+    raise PackageError(
+      "--notarize requires --sign: ad-hoc signed apps cannot be notarized",
+    )
+  }
+  { identity, notary_profile }
+}
+
+///|
+async fn sign_app(ws : Workspace, sign : SignConfig) -> Unit raise {
+  guard sign.identity is Some(identity) else {
+    run_checked(
+      "codesign",
+      ["--force", "--deep", "--sign", "-", AppPath],
+      dir=ws.dir,
+    )
+    return
+  }
+  // Real distribution signing: hardened runtime and a secure timestamp are
+  // notarization requirements. Sign inside-out — the nested engine binary
+  // first, then the bundle (which signs the main executable and seals the
+  // resources); `--deep` is deprecated for this and signs nested code with
+  // the wrong designated requirements.
+  run_checked(
+    "codesign",
+    [
+      "--force", "--options", "runtime", "--timestamp", "--sign", identity, MacOSPath +
+      "/openseek",
+    ],
+    dir=ws.dir,
+  )
+  run_checked(
+    "codesign",
+    ["--force", "--options", "runtime", "--timestamp", "--sign", identity, AppPath],
+    dir=ws.dir,
+  )
+  run_checked(
+    "codesign",
+    ["--verify", "--strict", "--verbose=2", AppPath],
+    dir=ws.dir,
+  )
+}
+
+///|
+async fn zip_app(ws : Workspace) -> Unit raise {
+  run_checked(
+    "ditto",
+    ["-c", "-k", "--sequesterRsrc", "--keepParent", AppPath, ZipPath],
+    dir=ws.dir,
+  )
+}
+
+///|
+/// Notarize and staple when `--notarize` named a keychain profile. The zip is
+/// rebuilt afterwards so the distributed archive carries the stapled ticket.
+async fn notarize_if_configured(ws : Workspace, sign : SignConfig) -> Unit raise {
+  guard sign.notary_profile is Some(profile) else { return }
+  run_checked(
+    "xcrun",
+    ["notarytool", "submit", ZipPath, "--keychain-profile", profile, "--wait"],
+    dir=ws.dir,
+  )
+  run_checked("xcrun", ["stapler", "staple", AppPath], dir=ws.dir)
+  run_checked("rm", ["-f", ZipPath], dir=ws.dir)
+  zip_app(ws)
+}
+
+///|
+async fn sign_and_zip(ws : Workspace, sign : SignConfig) -> Unit raise {
+  sign_app(ws, sign)
+  zip_app(ws)
+  notarize_if_configured(ws, sign)
+}
+
+///|
+async fn main raise {
+  // Parse first: a mistyped flag must fail before the build, not after it.
+  let sign = parse_sign_config()
+  let ws = locate_workspace()
+  build_outputs(ws)
+  println("built openseek engine: \{ws.at(EngineBinary)}")
+  reset_bundle_dirs(ws)
+  copy_bundle_files(ws)
+  write_bundle_metadata(ws)
+  sign_and_zip(ws, sign)
+  println("generated \{ws.at(AppPath)}")
+  println("generated \{ws.at(ZipPath)}")
+}

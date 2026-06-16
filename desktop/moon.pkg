@@ -1,0 +1,19 @@
+import {
+  "extensions/clipboard",
+  "justjavac/lepus_app" @app,
+  "justjavac/lepus_manifest" @manifest,
+  "openseek_desktop/internal/appdirs",
+  "openseek_desktop/internal/host",
+  "openseek_desktop/internal/menu",
+  "moonbitlang/core/env",
+  "tonyfettes/xlog",
+}
+
+warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "native"
+
+options(
+  "is-main": true,
+  targets: { "main.mbt": [ "native" ] },
+)

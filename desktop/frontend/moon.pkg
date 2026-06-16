@@ -1,0 +1,19 @@
+import {
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dom",
+  "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/js",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/markdown",
+  "openseek_desktop/frontend/transcript",
+}
+
+supported_targets = "js"
+
+options(
+  "is-main": true,
+  link: { "js": { "exports": [ ], "format": "iife" } },
+)

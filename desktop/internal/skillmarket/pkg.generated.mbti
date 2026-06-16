@@ -1,0 +1,39 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/skillmarket"
+
+// Values
+pub async fn fetch_catalog(registry? : String) -> Array[MarketSkill]
+
+pub async fn install_skill(module_name~ : String, version~ : String, package_path~ : String, registry? : String, library_dir? : String) -> InstalledSkill
+
+pub async fn installed_skills(library_dir? : String) -> Array[InstalledSkill]
+
+pub async fn uninstall_skill(String, library_dir? : String) -> Unit
+
+// Errors
+pub(all) suberror SkillMarketError {
+  SkillMarketError(String)
+}
+
+// Types and methods
+pub struct InstalledSkill {
+  id : String
+  name : String
+  description : String
+  source : String
+} derive(ToJson)
+
+pub struct MarketSkill {
+  name : String
+  module_name : String
+  package_path : String
+  version : String
+  description : String
+  author : String
+  repository : String
+} derive(ToJson)
+
+// Type aliases
+
+// Traits
+

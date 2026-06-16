@@ -1,0 +1,16 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/home"
+
+// Values
+pub fn dir() -> String?
+
+pub fn expand(String) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

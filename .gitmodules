@@ -1,0 +1,3 @@
+[submodule "desktop/lepus"]
+	path = desktop/lepus
+	url = https://github.com/moonbit-community/lepus.git

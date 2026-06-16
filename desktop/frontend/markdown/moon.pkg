@@ -1,0 +1,11 @@
+import {
+  "moonbit-community/cmark/cmark",
+  "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/js",
+}
+
+import {
+  "moonbit-community/rabbita",
+} for "wbtest"
+
+supported_targets = "js"

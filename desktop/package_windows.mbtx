@@ -1,0 +1,481 @@
+///|
+import {
+  "moonbitlang/async@0.19.4",
+  "moonbitlang/async@0.19.4/process",
+  "moonbitlang/x/fs",
+  "moonbitlang/x/sys",
+}
+
+///|
+const FrontendPackage : String = "frontend"
+
+///|
+const NativePackage : String = "."
+
+///|
+const NativeBinary : String =
+  "_build/native/release/build/openseek_desktop/openseek_desktop.exe"
+
+///|
+/// The openseek engine package, built from the monorepo root so the bundled
+/// engine always matches the checkout instead of whatever happens to be on PATH.
+const EnginePackage : String = "cmd/openseek"
+
+///|
+/// Path to the freshly built engine binary, relative to the repository root.
+const EngineBinary : String =
+  "_build/native/release/build/bobzhang/openseek/cmd/openseek/openseek.exe"
+
+///|
+/// Path to the Linux engine built inside WSL, relative to the repository
+/// root. A separate target dir keeps the Linux build's artifacts from
+/// clobbering the Windows build sharing the default `_build` tree. moon's
+/// native backend names the binary `openseek.exe` on Linux too — it is a
+/// genuine ELF despite the extension.
+const WslEngineBinary : String =
+  "_build/wsl_engine/native/release/build/bobzhang/openseek/cmd/openseek/openseek.exe"
+
+///|
+/// Bundle name of the Linux engine. The desktop host looks for this file
+/// beside `openseek.exe` when a WSL-mode run does not name an engine.
+const BundledWslEngineName : String = "openseek-linux"
+
+///|
+/// Path to the Lepus codegen CLI staged inside the submodule on Windows,
+/// relative to the desktop workspace.
+const CodegenTool : String = "lepus/target/lepus-tools/lepus_cli.exe"
+
+///|
+const WebView2Header : String =
+  "lepus/build/_deps/microsoft_web_webview2-src/build/native/include/WebView2.h"
+
+///|
+const BundleDir : String = "dist/windows-x64/OpenSeek Desktop"
+
+///|
+const ZipPath : String = "dist/OpenSeek Desktop-windows-x64.zip"
+
+///|
+const InstallerScript : String = "installer/openseek-desktop.nsi"
+
+///|
+const InstallerPath : String = "dist/OpenSeek-Desktop-Setup.exe"
+
+///|
+const LocalMakensis : String = "dist/tools/nsis-3.12/makensis.exe"
+
+///|
+const ProgramFilesX86Makensis : String =
+  "C:/Program Files (x86)/NSIS/makensis.exe"
+
+///|
+const ProgramFilesMakensis : String = "C:/Program Files/NSIS/makensis.exe"
+
+///|
+const AppAssetDir : String = BundleDir + "/assets"
+
+///|
+suberror PackageError {
+  PackageError(String)
+}
+
+///|
+priv enum PackageMode {
+  ZipOnly
+  InstallerOnly
+  AllOutputs
+}
+
+///|
+fn print_usage() -> Unit {
+  let usage =
+    #|Usage:
+    #|  moon run --target native .\desktop\package_windows.mbtx
+    #|  moon run --target native .\desktop\package_windows.mbtx -- --zip
+    #|  moon run --target native .\desktop\package_windows.mbtx -- --installer
+    #|  moon run --target native .\desktop\package_windows.mbtx -- --all
+    #|
+    #|Modes:
+    #|  --zip        Build the app bundle and portable zip. This is the default.
+    #|  --installer  Build the app bundle and NSIS setup executable.
+    #|  --all        Build both the portable zip and setup executable.
+    #|
+  println(usage)
+}
+
+///|
+fn script_args() -> Array[String] {
+  let argv = @sys.get_cli_args()
+  if argv.length() > 0 { argv[1:].to_owned() } else { [] }
+}
+
+///|
+fn is_help_arg(arg : String) -> Bool {
+  arg == "-h" || arg == "--help"
+}
+
+///|
+fn parse_mode(args : Array[String]) -> PackageMode raise {
+  if args.length() == 0 {
+    return PackageMode::ZipOnly
+  }
+  if args.length() != 1 {
+    raise PackageError("expected at most one package mode")
+  }
+  let mode = args[0]
+  if mode == "--zip" || mode == "zip" {
+    return PackageMode::ZipOnly
+  }
+  if mode == "--installer" || mode == "installer" {
+    return PackageMode::InstallerOnly
+  }
+  if mode == "--all" || mode == "all" {
+    return PackageMode::AllOutputs
+  }
+  raise PackageError("unknown package mode: \{mode}")
+}
+
+///|
+fn should_build_zip(mode : PackageMode) -> Bool {
+  match mode {
+    PackageMode::ZipOnly => true
+    PackageMode::InstallerOnly => false
+    PackageMode::AllOutputs => true
+  }
+}
+
+///|
+fn should_build_installer(mode : PackageMode) -> Bool {
+  match mode {
+    PackageMode::ZipOnly => false
+    PackageMode::InstallerOnly => true
+    PackageMode::AllOutputs => true
+  }
+}
+
+///|
+fn is_repo_root() -> Bool {
+  @fs.path_exists("desktop/moon.mod")
+}
+
+///|
+fn desktop_path(path : String) -> String {
+  if is_repo_root() {
+    "desktop/" + path
+  } else {
+    path
+  }
+}
+
+///|
+fn repo_path(path : String) -> String {
+  if is_repo_root() {
+    path
+  } else {
+    "../" + path
+  }
+}
+
+///|
+async fn run_checked(command : String, args : Array[String]) -> Unit raise {
+  let joined_args = args.join(" ")
+  println("$ \{command} \{joined_args}")
+  let code = @process.run(command, args, inherit_env=true)
+  if code != 0 {
+    raise PackageError("command failed with exit code \{code}: \{command}")
+  }
+}
+
+///|
+async fn run_powershell(script : String) -> Unit raise {
+  run_checked("powershell", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    "$ErrorActionPreference = 'Stop'; " + script,
+  ])
+}
+
+///|
+async fn run_desktop_moon(args : Array[String]) -> Unit raise {
+  if is_repo_root() {
+    run_checked("moon", ["-C", "desktop"] + args)
+  } else {
+    run_checked("moon", args)
+  }
+}
+
+///|
+async fn run_desktop_helper_moon(args : Array[String]) -> Unit raise {
+  let target_dir = "_build/package_windows_helper"
+  if is_repo_root() {
+    run_checked("moon", ["-C", "desktop", "--target-dir", target_dir] + args)
+  } else {
+    run_checked("moon", ["--target-dir", target_dir] + args)
+  }
+}
+
+///|
+/// Build the openseek engine from the monorepo source. Runs from the repo root
+/// since the engine lives in a separate moon module from this desktop workspace.
+async fn build_engine() -> Unit raise {
+  if is_repo_root() {
+    run_checked("moon", [
+      "build", EnginePackage, "--target", "native", "--release",
+    ])
+  } else {
+    run_powershell(
+      "Set-Location -LiteralPath '..'; moon build \{EnginePackage} --target native --release",
+    )
+  }
+  if !@fs.path_exists(repo_path(EngineBinary)) {
+    raise PackageError(
+      "openseek engine binary not found: \{repo_path(EngineBinary)}",
+    )
+  }
+}
+
+///|
+/// The script run inside WSL's `sh`: moon installs to `~/.moon/bin`, which a
+/// non-login shell does not have on PATH, and a script launched from the
+/// `desktop` directory must climb to the repo root first.
+fn wsl_moon_script(command : String) -> String {
+  let prefix = if is_repo_root() { "" } else { "cd .. && " }
+  "PATH=\"$HOME/.moon/bin:$PATH\"; " + prefix + command
+}
+
+///|
+/// Build the Linux engine inside WSL so WSL-mode runs work out of the box.
+/// Best-effort: a packaging machine without WSL — or without moon and a C
+/// toolchain inside it — skips the binary with a loud notice instead of
+/// failing the whole package; the desktop host then falls back to
+/// `openseek` on the distro's PATH at runtime.
+async fn build_wsl_engine() -> Bool {
+  let probe = @process.run(
+    "wsl.exe",
+    ["-e", "sh", "-lc", wsl_moon_script("command -v moon")],
+    inherit_env=true,
+  ) catch {
+    _ => 1
+  }
+  if probe != 0 {
+    println(
+      "note: WSL with moon is not available; skipping the bundled Linux engine",
+    )
+    return false
+  }
+  let build = wsl_moon_script(
+    "moon build \{EnginePackage} --target native --release --target-dir _build/wsl_engine",
+  )
+  println("$ wsl.exe -e sh -lc '\{build}'")
+  let code = @process.run("wsl.exe", ["-e", "sh", "-lc", build], inherit_env=true) catch {
+    _ => 1
+  }
+  if code != 0 || !@fs.path_exists(repo_path(WslEngineBinary)) {
+    println(
+      "warning: the WSL Linux engine build failed; the bundle will not include \{BundledWslEngineName}.",
+    )
+    println(
+      "         Install a C toolchain inside WSL (e.g. sudo apt-get install -y gcc) to bundle it.",
+    )
+    return false
+  }
+  true
+}
+
+///|
+/// Build the Lepus codegen CLI into the submodule if it is not already staged.
+async fn ensure_codegen_tool() -> Unit raise {
+  if @fs.path_exists(desktop_path(CodegenTool)) {
+    return
+  }
+  run_powershell(
+    "Set-Location -LiteralPath '\{desktop_path("lepus")}'; moon install ./cli --bin target/lepus-tools",
+  )
+}
+
+///|
+/// Install WebView2 SDK headers used by Lepus native Windows sources.
+async fn ensure_webview2_headers() -> Unit raise {
+  if @fs.path_exists(desktop_path(WebView2Header)) {
+    return
+  }
+  run_powershell(
+    "Set-Location -LiteralPath '\{desktop_path("lepus")}'; & .\\scripts\\install_webview2_headers.ps1",
+  )
+}
+
+///|
+/// Build everything the bundle needs; returns whether the optional WSL
+/// Linux engine was built and should be staged.
+async fn build_outputs() -> Bool raise {
+  ensure_codegen_tool()
+  ensure_webview2_headers()
+  run_desktop_moon([
+    "build", FrontendPackage, "--target", "js", "--release",
+  ])
+  run_desktop_helper_moon([
+    "run", "--target", "native", "build_frontend.mbtx",
+  ])
+  run_desktop_moon([
+    "build", NativePackage, "--target", "native", "--release", "--warn-list",
+    "-20",
+  ])
+  build_engine()
+  build_wsl_engine()
+}
+
+///|
+async fn reset_bundle_dirs() -> Unit raise {
+  let bundle_dir = desktop_path(BundleDir)
+  let zip_path = desktop_path(ZipPath)
+  let installer_path = desktop_path(InstallerPath)
+  let asset_dir = desktop_path(AppAssetDir)
+  run_powershell(
+    "if (Test-Path -LiteralPath '\{bundle_dir}') { Remove-Item -LiteralPath '\{bundle_dir}' -Recurse -Force }; if (Test-Path -LiteralPath '\{zip_path}') { Remove-Item -LiteralPath '\{zip_path}' -Force }; if (Test-Path -LiteralPath '\{installer_path}') { Remove-Item -LiteralPath '\{installer_path}' -Force }; New-Item -ItemType Directory -Force -Path '\{asset_dir}' | Out-Null",
+  )
+}
+
+///|
+async fn copy_file(source : String, destination : String) -> Unit raise {
+  run_powershell(
+    "Copy-Item -LiteralPath '\{source}' -Destination '\{destination}' -Force",
+  )
+}
+
+///|
+async fn set_windows_gui_subsystem(path : String) -> Unit raise {
+  run_powershell(
+    "$path = '\{path}'; $resolved = (Resolve-Path -LiteralPath $path).Path; $bytes = [System.IO.File]::ReadAllBytes($resolved); $pe = [BitConverter]::ToInt32($bytes, 0x3c); $offset = $pe + 4 + 20 + 68; $subsystem = [BitConverter]::GetBytes([UInt16]2); [Array]::Copy($subsystem, 0, $bytes, $offset, 2); [System.IO.File]::WriteAllBytes($resolved, $bytes)",
+  )
+}
+
+///|
+async fn copy_bundle_files(with_wsl_engine~ : Bool) -> Unit raise {
+  let native_binary = desktop_path(NativeBinary)
+  let engine_binary = repo_path(EngineBinary)
+  let bundled_engine = desktop_path(BundleDir + "/openseek.exe")
+  if !@fs.path_exists(native_binary) {
+    raise PackageError("native binary not found: \{native_binary}")
+  }
+  if !@fs.path_exists(engine_binary) {
+    raise PackageError("openseek engine binary not found: \{engine_binary}")
+  }
+  if !@fs.path_exists(desktop_path("frontend.js")) {
+    raise PackageError(
+      "frontend bundle not found: \{desktop_path("frontend.js")}",
+    )
+  }
+  copy_file(native_binary, desktop_path(BundleDir + "/openseek-desktop.exe"))
+  copy_file(engine_binary, bundled_engine)
+  set_windows_gui_subsystem(bundled_engine)
+  // Only a binary built this run is staged — a stale leftover from an
+  // earlier packaging would silently ship outdated engine code.
+  if with_wsl_engine {
+    copy_file(
+      repo_path(WslEngineBinary),
+      desktop_path(BundleDir + "/" + BundledWslEngineName),
+    )
+  }
+  copy_file(desktop_path("index.html"), desktop_path(AppAssetDir + "/index.html"))
+  copy_file(
+    desktop_path("frontend.js"),
+    desktop_path(AppAssetDir + "/frontend.js"),
+  )
+}
+
+///|
+async fn zip_bundle() -> Unit raise {
+  run_powershell(
+    "Compress-Archive -LiteralPath '\{desktop_path(BundleDir)}' -DestinationPath '\{desktop_path(ZipPath)}' -Force",
+  )
+}
+
+///|
+async fn ensure_makensis() -> Unit raise {
+  if @fs.path_exists(desktop_path(LocalMakensis)) {
+    return
+  }
+  if @fs.path_exists(ProgramFilesX86Makensis) {
+    return
+  }
+  if @fs.path_exists(ProgramFilesMakensis) {
+    return
+  }
+  let code = @process.run("powershell", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    "if (Get-Command makensis.exe -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }",
+  ], inherit_env=true)
+  if code != 0 {
+    let message =
+      "makensis.exe not found. Install NSIS on PATH or extract portable NSIS to \{desktop_path(LocalMakensis)}."
+    println(message)
+    raise PackageError(message)
+  }
+}
+
+///|
+fn makensis_command() -> String {
+  if @fs.path_exists(desktop_path(LocalMakensis)) {
+    desktop_path(LocalMakensis)
+  } else if @fs.path_exists(ProgramFilesX86Makensis) {
+    ProgramFilesX86Makensis
+  } else if @fs.path_exists(ProgramFilesMakensis) {
+    ProgramFilesMakensis
+  } else {
+    "makensis.exe"
+  }
+}
+
+///|
+async fn build_installer() -> Unit raise {
+  if !@fs.path_exists(desktop_path(BundleDir + "/openseek-desktop.exe")) {
+    raise PackageError(
+      "Windows app bundle not found: \{desktop_path(BundleDir)}",
+    )
+  }
+  run_powershell(
+    "$source = (Resolve-Path -LiteralPath '\{desktop_path(BundleDir)}').Path; " +
+    "$output = (Resolve-Path -LiteralPath '\{desktop_path("dist")}').Path; " +
+    "$script = (Resolve-Path -LiteralPath '\{desktop_path(InstallerScript)}').Path; " +
+    "& '\{makensis_command()}' \"/DSOURCE_DIR=$source\" \"/DOUTPUT_DIR=$output\" \"$script\"",
+  )
+}
+
+///|
+async fn main raise {
+  let args = script_args()
+  if args.length() == 1 && is_help_arg(args[0]) {
+    print_usage()
+    return
+  }
+  let mode = parse_mode(args) catch {
+    err => {
+      print_usage()
+      raise err
+    }
+  }
+  if should_build_installer(mode) {
+    ensure_makensis()
+  }
+  let with_wsl_engine = build_outputs()
+  println("built openseek engine: \{repo_path(EngineBinary)}")
+  if with_wsl_engine {
+    println("built WSL Linux engine: \{repo_path(WslEngineBinary)}")
+  }
+  reset_bundle_dirs()
+  copy_bundle_files(with_wsl_engine~)
+  if should_build_zip(mode) {
+    zip_bundle()
+    println("generated \{desktop_path(ZipPath)}")
+  }
+  if should_build_installer(mode) {
+    build_installer()
+    println("generated \{desktop_path(InstallerPath)}")
+  }
+  println("generated \{desktop_path(BundleDir)}")
+}

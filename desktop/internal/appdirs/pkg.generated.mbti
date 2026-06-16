@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/appdirs"
+
+// Values
+pub fn engine_command(String) -> String
+
+pub fn frontend_entry_path(String) -> String
+
+pub fn prepared_runtime_dir() -> String?
+
+pub fn remove_stale_framework_configs(String) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+
