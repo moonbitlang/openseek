@@ -102,8 +102,14 @@ async fn manifest_write_error(path : String, content : String) -> String? {
     }
   }
   if is_moon_pkg_path(path) {
-    if trimmed.length() < 8 {
-      return Some("moon.pkg content is suspiciously small")
+    // This is normal when we create a moon.pkg dummy file
+    // another mistake is AI is trying to write 
+    // # as a comment
+    // if trimmed.length() < 8 {    
+    //   return Some("moon.pkg content is suspiciously small")
+    // }
+    if trimmed.has_prefix("#") {
+      return Some("moon.pkg use // for comment syntax, not #")
     }
     if trimmed.has_prefix("{") {
       return Some("moon.pkg uses current text syntax, not JSON")
