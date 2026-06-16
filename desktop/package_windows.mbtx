@@ -1,8 +1,11 @@
 ///|
 import {
   "moonbitlang/async@0.19.4",
+  "moonbitlang/async@0.19.4/fs" @asyncfs,
+  "moonbitlang/async@0.19.4/http",
   "moonbitlang/async@0.19.4/process",
   "moonbitlang/x/fs",
+  "moonbitlang/x/path",
   "moonbitlang/x/sys",
 }
 
@@ -73,6 +76,18 @@ const ProgramFilesMakensis : String = "C:/Program Files/NSIS/makensis.exe"
 
 ///|
 const AppAssetDir : String = BundleDir + "/assets"
+
+///|
+const MoonbitVersionFile : String = ".moonbit-version"
+
+///|
+const MoonbitToolchainDir : String = "toolchains/moonbit/windows-x64"
+
+///|
+const MoonbitPayloadDir : String = BundleDir + "/" + MoonbitToolchainDir
+
+///|
+const MoonbitToolchainCacheDir : String = "dist/tools/moonbit"
 
 ///|
 suberror PackageError {
@@ -168,6 +183,11 @@ fn desktop_path(path : String) -> String {
 }
 
 ///|
+fn absolute_path(path : String) -> String {
+  (path : @path.Path).resolve().to_string()
+}
+
+///|
 fn repo_path(path : String) -> String {
   if is_repo_root() {
     path
@@ -181,6 +201,20 @@ async fn run_checked(command : String, args : Array[String]) -> Unit raise {
   let joined_args = args.join(" ")
   println("$ \{command} \{joined_args}")
   let code = @process.run(command, args, inherit_env=true)
+  if code != 0 {
+    raise PackageError("command failed with exit code \{code}: \{command}")
+  }
+}
+
+///|
+async fn run_checked_cwd(
+  command : String,
+  args : Array[String],
+  cwd : String,
+) -> Unit raise {
+  let joined_args = args.join(" ")
+  println("$ \{command} \{joined_args}")
+  let code = @process.run(command, args, inherit_env=true, cwd=cwd.view())
   if code != 0 {
     raise PackageError("command failed with exit code \{code}: \{command}")
   }
@@ -225,8 +259,10 @@ async fn build_engine() -> Unit raise {
       "build", EnginePackage, "--target", "native", "--release",
     ])
   } else {
-    run_powershell(
-      "Set-Location -LiteralPath '..'; moon build \{EnginePackage} --target native --release",
+    run_checked_cwd(
+      "moon",
+      ["build", EnginePackage, "--target", "native", "--release"],
+      "..",
     )
   }
   if !@fs.path_exists(repo_path(EngineBinary)) {
@@ -290,8 +326,10 @@ async fn ensure_codegen_tool() -> Unit raise {
   if @fs.path_exists(desktop_path(CodegenTool)) {
     return
   }
-  run_powershell(
-    "Set-Location -LiteralPath '\{desktop_path("lepus")}'; moon install ./cli --bin target/lepus-tools",
+  run_checked_cwd(
+    "moon",
+    ["install", "./cli", "--bin", "target/lepus-tools"],
+    desktop_path("lepus"),
   )
 }
 
@@ -328,20 +366,139 @@ async fn build_outputs() -> Bool raise {
 
 ///|
 async fn reset_bundle_dirs() -> Unit raise {
-  let bundle_dir = desktop_path(BundleDir)
-  let zip_path = desktop_path(ZipPath)
-  let installer_path = desktop_path(InstallerPath)
-  let asset_dir = desktop_path(AppAssetDir)
-  run_powershell(
-    "if (Test-Path -LiteralPath '\{bundle_dir}') { Remove-Item -LiteralPath '\{bundle_dir}' -Recurse -Force }; if (Test-Path -LiteralPath '\{zip_path}') { Remove-Item -LiteralPath '\{zip_path}' -Force }; if (Test-Path -LiteralPath '\{installer_path}') { Remove-Item -LiteralPath '\{installer_path}' -Force }; New-Item -ItemType Directory -Force -Path '\{asset_dir}' | Out-Null",
-  )
+  remove_path_if_exists(desktop_path(BundleDir))
+  remove_path_if_exists(desktop_path(ZipPath))
+  remove_path_if_exists(desktop_path(InstallerPath))
+  ensure_dir(desktop_path(AppAssetDir))
 }
 
 ///|
 async fn copy_file(source : String, destination : String) -> Unit raise {
-  run_powershell(
-    "Copy-Item -LiteralPath '\{source}' -Destination '\{destination}' -Force",
+  @asyncfs.write_file(
+    destination,
+    @asyncfs.read_file(source),
+    create_mode=CreateOrTruncate,
   )
+}
+
+///|
+async fn ensure_dir(path : String) -> Unit raise {
+  if !@asyncfs.exists(path) {
+    @asyncfs.mkdir(path, recursive=true)
+  }
+}
+
+///|
+async fn remove_path_if_exists(path : String) -> Unit raise {
+  if !@asyncfs.exists(path) {
+    return
+  }
+  match @asyncfs.kind(path) {
+    Directory => @asyncfs.rmdir(path, recursive=true)
+    _ => @asyncfs.remove(path)
+  }
+}
+
+///|
+async fn read_moonbit_version() -> String raise {
+  let version = @asyncfs
+    .read_file(desktop_path(MoonbitVersionFile))
+    .text()
+    .trim()
+    .to_owned()
+  if version.is_empty() {
+    raise PackageError("\{desktop_path(MoonbitVersionFile)} is empty")
+  }
+  if version.has_prefix("v") {
+    raise PackageError(
+      "\{desktop_path(MoonbitVersionFile)} should not start with 'v'",
+    )
+  }
+  version
+}
+
+///|
+fn moonbit_url_version(version : String) -> String {
+  version.replace(old="+", new="%2B")
+}
+
+///|
+fn moonbit_zip_cache(version : String) -> String {
+  MoonbitToolchainCacheDir + "/moonbit-windows-x86_64-" + version + ".zip"
+}
+
+///|
+fn moonbit_core_zip_cache(version : String) -> String {
+  MoonbitToolchainCacheDir + "/core-" + version + ".zip"
+}
+
+///|
+fn moonbit_zip_url(version : String) -> String {
+  "https://cli.moonbitlang.com/binaries/" + moonbit_url_version(version) +
+  "/moonbit-windows-x86_64.zip"
+}
+
+///|
+fn moonbit_core_zip_url(version : String) -> String {
+  "https://cli.moonbitlang.com/cores/core-" + moonbit_url_version(version) +
+  ".zip"
+}
+
+///|
+async fn download_file_if_missing(url : String, path : String) -> Unit raise {
+  if @fs.path_exists(path) {
+    return
+  }
+  println("downloading \{url}")
+  let (response, body) = @http.get(url)
+  if response.code < 200 || response.code >= 300 {
+    raise PackageError(
+      "failed to download \{url}: HTTP \{response.code} \{response.reason}",
+    )
+  }
+  @asyncfs.write_file(path, body, create_mode=CreateOrTruncate)
+}
+
+///|
+async fn stage_moonbit_toolchain() -> Unit raise {
+  let version = read_moonbit_version()
+  let cache_dir = desktop_path(MoonbitToolchainCacheDir)
+  let moonbit_zip = desktop_path(moonbit_zip_cache(version))
+  let core_zip = desktop_path(moonbit_core_zip_cache(version))
+  let payload_dir = desktop_path(MoonbitPayloadDir)
+  ensure_dir(cache_dir)
+  download_file_if_missing(moonbit_zip_url(version), moonbit_zip)
+  download_file_if_missing(moonbit_core_zip_url(version), core_zip)
+  remove_path_if_exists(payload_dir)
+  ensure_dir(payload_dir)
+  run_powershell(
+    "$moonbitZip = '\{moonbit_zip}'; " +
+    "$coreZip = '\{core_zip}'; " +
+    "$payload = '\{payload_dir}'; " +
+    "Expand-Archive $moonbitZip -DestinationPath $payload -Force; " +
+    "Expand-Archive $coreZip -DestinationPath (Join-Path $payload 'lib') -Force",
+  )
+  remove_path_if_exists(payload_dir + "/lib/core/_build")
+  let moonc = payload_dir + "/bin/moonc.exe"
+  let (code, output) = @process.collect_output_merged(
+    moonc,
+    ["-v"],
+    inherit_env=true,
+  )
+  if code != 0 {
+    raise PackageError("failed to read MoonBit compiler version")
+  }
+  let compiler_version = output.text().trim().split(" ").collect()[0].to_owned()
+  let actual_version = if compiler_version.has_prefix("v") {
+    compiler_version[1:].to_owned()
+  } else {
+    compiler_version
+  }
+  if actual_version != version {
+    raise PackageError(
+      "downloaded MoonBit version \{actual_version}, expected \{version}",
+    )
+  }
 }
 
 ///|
@@ -383,6 +540,7 @@ async fn copy_bundle_files(with_wsl_engine~ : Bool) -> Unit raise {
     desktop_path("frontend.js"),
     desktop_path(AppAssetDir + "/frontend.js"),
   )
+  stage_moonbit_toolchain()
 }
 
 ///|
@@ -403,13 +561,9 @@ async fn ensure_makensis() -> Unit raise {
   if @fs.path_exists(ProgramFilesMakensis) {
     return
   }
-  let code = @process.run("powershell", [
-    "-NoProfile",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-Command",
-    "if (Get-Command makensis.exe -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }",
-  ], inherit_env=true)
+  let code = @process.run("makensis.exe", ["/VERSION"], inherit_env=true) catch {
+    _ => 1
+  }
   if code != 0 {
     let message =
       "makensis.exe not found. Install NSIS on PATH or extract portable NSIS to \{desktop_path(LocalMakensis)}."
@@ -438,12 +592,11 @@ async fn build_installer() -> Unit raise {
       "Windows app bundle not found: \{desktop_path(BundleDir)}",
     )
   }
-  run_powershell(
-    "$source = (Resolve-Path -LiteralPath '\{desktop_path(BundleDir)}').Path; " +
-    "$output = (Resolve-Path -LiteralPath '\{desktop_path("dist")}').Path; " +
-    "$script = (Resolve-Path -LiteralPath '\{desktop_path(InstallerScript)}').Path; " +
-    "& '\{makensis_command()}' \"/DSOURCE_DIR=$source\" \"/DOUTPUT_DIR=$output\" \"$script\"",
-  )
+  run_checked(makensis_command(), [
+    "/DSOURCE_DIR=\{absolute_path(desktop_path(BundleDir))}",
+    "/DOUTPUT_DIR=\{absolute_path(desktop_path("dist"))}",
+    absolute_path(desktop_path(InstallerScript)),
+  ])
 }
 
 ///|

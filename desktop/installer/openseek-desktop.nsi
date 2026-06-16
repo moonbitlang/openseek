@@ -55,6 +55,9 @@ Section "OpenSeek Desktop" SecInstall
   SetOutPath "$INSTDIR"
   SectionIn RO
 
+  Delete "$INSTDIR\toolchains\moonbit\windows-x64\.openseek-toolchain-marker"
+  Delete "$INSTDIR\toolchains\moonbit\windows-x64\.openseek-toolchain-ready"
+
   File /r "${SOURCE_DIR}\*"
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"

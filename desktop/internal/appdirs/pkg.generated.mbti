@@ -2,11 +2,23 @@
 package "openseek_desktop/internal/appdirs"
 
 // Values
+pub fn bundled_moonbit_payload_dir(String) -> String?
+
 pub fn engine_command(String) -> String
 
 pub fn frontend_entry_path(String) -> String
 
+pub fn moonbit_bin_dir(String) -> String
+
+pub fn moonbit_bundle_stamp_path(String) -> String
+
+pub fn moonbit_native_bundle_probe_path(String) -> String
+
+pub fn moonbit_wasm_gc_bundle_probe_path(String) -> String
+
 pub fn prepared_runtime_dir() -> String?
+
+pub fn prepend_to_path_env(String, String?) -> String
 
 pub fn remove_stale_framework_configs(String) -> Unit
 

@@ -377,6 +377,9 @@ async fn[G] start_serve_engine(
       env["OPENSEEK_SESSION_ROOT"] = root
     }
   }
+  for key, value in moonbit_env_for_engine(config) {
+    env[key] = value
+  }
   if config.host is Wsl(..) {
     env["WSLENV"] = wslenv_with_passthrough(@env.get("WSLENV"))
   }
