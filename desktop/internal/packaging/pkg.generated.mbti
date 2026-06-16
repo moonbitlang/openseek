@@ -1,0 +1,51 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/packaging"
+
+// Values
+pub fn absolute_path(String) -> String
+
+pub async fn build_engine(Workspace, extra_env? : Map[String, String]) -> Unit
+
+pub async fn build_frontend_bundle(Workspace, helper_target_dir? : String) -> Unit
+
+pub async fn build_native_host(Workspace, extra_args? : Array[String], extra_env? : Map[String, String]) -> Unit
+
+pub async fn copy_file(String, String) -> Unit
+
+pub fn engine_binary() -> String
+
+pub fn engine_package() -> String
+
+pub async fn ensure_codegen_tool(Workspace, String) -> Unit
+
+pub async fn ensure_dir(String) -> Unit
+
+pub async fn locate_workspace() -> Workspace
+
+pub fn native_binary() -> String
+
+pub fn posix_codegen_tool() -> String
+
+pub async fn remove_path_if_exists(String) -> Unit
+
+pub async fn run_checked(String, Array[String], dir~ : String, extra_env? : Map[String, String]) -> Unit
+
+pub fn windows_codegen_tool() -> String
+
+pub async fn write_text(String, String) -> Unit
+
+// Errors
+pub(all) suberror PackageError {
+  PackageError(String)
+}
+
+// Types and methods
+type Workspace
+pub fn Workspace::at(Self, String) -> String
+pub fn Workspace::dir(Self) -> String
+pub fn Workspace::repo(Self) -> String
+pub fn Workspace::repo_at(Self, String) -> String
+
+// Type aliases
+
+// Traits
