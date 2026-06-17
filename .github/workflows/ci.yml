@@ -132,7 +132,7 @@ jobs:
             pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
 
       - name: Build the AppImage
-        run: moon -C desktop run --target native cmd/package_linux
+        run: moon -C desktop run --target native package/linux
 
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
@@ -195,7 +195,7 @@ jobs:
       # machines — clear it before launching:
       #   xattr -dr com.apple.quarantine "OpenSeek Desktop.app"
       - name: Build the app bundle
-        run: moon -C desktop run --target native cmd/package_macos
+        run: moon -C desktop run --target native package/macos
 
       - name: Upload app artifact
         uses: actions/upload-artifact@v4
@@ -266,7 +266,7 @@ jobs:
 
       - name: Build the Windows app bundle
         shell: pwsh
-        run: moon -C desktop run --target native cmd/package_windows
+        run: moon -C desktop run --target native package/windows
 
       - name: Upload Windows app artifact
         uses: actions/upload-artifact@v4

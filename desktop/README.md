@@ -181,7 +181,7 @@ The native binary is written to
 The scripted Windows path is:
 
 ```powershell
-moon -C desktop run --target native cmd/package_windows
+moon -C desktop run --target native package/windows
 ```
 
 It builds the Lepus codegen tool if needed, installs WebView2 SDK headers if
@@ -192,9 +192,9 @@ the monorepo root, writes `dist/windows-x64/OpenSeek Desktop/`, and creates
 Use one optional mode argument to choose the Windows distribution output:
 
 ```powershell
-moon -C desktop run --target native cmd/package_windows -- --zip
-moon -C desktop run --target native cmd/package_windows -- --installer
-moon -C desktop run --target native cmd/package_windows -- --all
+moon -C desktop run --target native package/windows -- --zip
+moon -C desktop run --target native package/windows -- --installer
+moon -C desktop run --target native package/windows -- --all
 ```
 
 `--zip` is the default. `--installer` writes only
@@ -291,14 +291,14 @@ The target machine also needs Microsoft WebView2 Runtime installed.
 
 ## Package (macOS)
 
-`cmd/package_macos` runs all of the above (including the codegen bootstrap),
+`package/macos` runs all of the above (including the codegen bootstrap),
 builds the `openseek` engine from the monorepo's `cmd/openseek` source, and
 produces a signed `dist/OpenSeek Desktop.app` plus a zip:
 
 ```sh
-moon run --target native cmd/package_macos
+moon run --target native package/macos
 # or, from the monorepo root:
-moon -C desktop run --target native cmd/package_macos
+moon -C desktop run --target native package/macos
 ```
 
 The bundled engine is built from the same checkout, so the desktop app and its
@@ -317,7 +317,7 @@ are applied automatically) and optionally notarize:
 ```sh
 # one-time: xcrun notarytool store-credentials openseek \
 #   --apple-id you@example.com --team-id TEAMID --password <app-specific-pw>
-moon run --target native cmd/package_macos -- \
+moon run --target native package/macos -- \
   --sign "Developer ID Application: Your Name (TEAMID)" \
   --notarize openseek
 ```
@@ -328,14 +328,14 @@ the app, and rebuilds the zip; without it the app is signed but unnotarized
 
 ## Package (Linux)
 
-`cmd/package_linux` runs the same build steps (including the codegen
+`package/linux` runs the same build steps (including the codegen
 bootstrap), builds the `openseek` engine from the monorepo's `cmd/openseek`
 source, and produces `dist/OpenSeek-Desktop-linux-x86_64.AppImage`:
 
 ```sh
-moon run --target native cmd/package_linux
+moon run --target native package/linux
 # or, from the monorepo root:
-moon -C desktop run --target native cmd/package_linux
+moon -C desktop run --target native package/linux
 ```
 
 Build requirements: `pkg-config` plus the GTK3 and WebKitGTK dev packages

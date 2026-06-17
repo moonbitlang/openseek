@@ -1,5 +1,6 @@
 import {
-  "openseek_desktop/internal/packaging",
+  "openseek_desktop/package/internal/moonbit",
+  "openseek_desktop/package/internal/packaging",
   "moonbitlang/async",
   "moonbitlang/async/fs" @asyncfs,
   "moonbitlang/async/process",

@@ -137,3 +137,79 @@ per-user runtime directory.
 - Review `.mbti` diffs for expected internal package API growth.
 - Do not run full packaging commands unless explicitly requested, because they
   download large toolchain archives and require platform-specific tools.
+
+## Follow-up: Dedicated Desktop Package Tree
+
+### Goal
+
+Move desktop packaging code out of the desktop app/runtime package tree and
+into a dedicated `desktop/package` package subtree, while extracting Windows PE
+header patching into its own internal helper package.
+
+### Accepted Design
+
+- Keep everything inside the existing `openseek_desktop` MoonBit module; do not
+  add a nested `desktop/package/moon.mod`.
+- Move shared packaging helpers from `desktop/internal/packaging` to
+  `desktop/package/internal/packaging`.
+- Move MoonBit toolchain staging helpers from the shared packaging package to
+  `desktop/package/internal/moonbit`.
+- Add `desktop/package/internal/pe` for PE header constants and Windows GUI
+  subsystem patching.
+- Move platform main packages from `desktop/cmd/package_linux`,
+  `desktop/cmd/package_macos`, and `desktop/cmd/package_windows` to
+  `desktop/package/linux`, `desktop/package/macos`, and
+  `desktop/package/windows`.
+- Update README and CI commands to run `package/linux`, `package/macos`, and
+  `package/windows`.
+
+### Target Files And Surfaces
+
+- `desktop/package/internal/packaging`: workspace discovery, package-time
+  command execution, frontend/native/engine build helpers, and common file
+  operations.
+- `desktop/package/internal/moonbit`: package-time MoonBit toolchain target
+  descriptors, archive download/extraction, validation, and seed staging.
+- `desktop/package/internal/pe`: Windows PE subsystem patching.
+- `desktop/package/linux`, `desktop/package/macos`, and
+  `desktop/package/windows`: platform-specific `is-main` packaging entry
+  points.
+- `.github/workflows/ci.yml` and `desktop/README.md`: packaging command paths.
+
+### API And Interface Diff
+
+- Remove internal package APIs at `openseek_desktop/internal/packaging`.
+- Add internal package APIs at:
+  - `openseek_desktop/package/internal/packaging`
+  - `openseek_desktop/package/internal/moonbit`
+  - `openseek_desktop/package/internal/pe`
+- Replace executable package paths:
+  - `openseek_desktop/cmd/package_linux` ->
+    `openseek_desktop/package/linux`
+  - `openseek_desktop/cmd/package_macos` ->
+    `openseek_desktop/package/macos`
+  - `openseek_desktop/cmd/package_windows` ->
+    `openseek_desktop/package/windows`
+- Existing desktop app/runtime APIs remain unchanged.
+
+### Open Questions
+
+- None. The PE helper should expose only the cohesive operation needed by the
+  Windows packager; PE offsets and binary-format constants should stay private.
+
+### Next Implementation Step
+
+Move packages into the new tree, extract `package/internal/moonbit` and
+`package/internal/pe`, update package imports and command references, then
+validate generated interfaces.
+
+### Validation Plan
+
+- Run `moon -C desktop check --target native`.
+- Run `moon -C desktop info`.
+- Run `moon -C desktop fmt`.
+- Run `git diff --check`.
+- Review `.mbti` diffs for expected package path changes and no desktop
+  runtime API changes.
+- Do not run full packaging commands unless explicitly requested, because they
+  download external artifacts and require platform-specific tools.

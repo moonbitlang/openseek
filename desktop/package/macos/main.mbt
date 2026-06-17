@@ -70,8 +70,8 @@ async fn copy_bundle_files(ws : @packaging.Workspace) -> Unit {
     ws.at("frontend.js"),
     ws.at(AppAssetDir + "/frontend.js"),
   )
-  let target = @packaging.moonbit_macos_arm64_toolchain()
-  @packaging.stage_moonbit_toolchain_seed(ws, target, MoonbitSeedDir)
+  let target = @moonbit.moonbit_macos_arm64_toolchain()
+  @moonbit.stage_moonbit_toolchain_seed(ws, target, MoonbitSeedDir)
 }
 
 ///|
@@ -170,7 +170,7 @@ priv struct SignConfig {
 
 ///|
 fn parse_sign_config() -> SignConfig raise {
-  let usage = "usage: moon run cmd/package_macos -- [--sign <identity>] [--notarize <keychain-profile>]"
+  let usage = "usage: moon run package/macos -- [--sign <identity>] [--notarize <keychain-profile>]"
   let args = @env.args()
   let mut identity : String? = None
   let mut notary_profile : String? = None

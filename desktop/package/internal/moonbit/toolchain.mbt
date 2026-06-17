@@ -134,16 +134,18 @@ fn moonbit_url_version(version : String) -> String {
 }
 
 ///|
-async fn read_moonbit_version(ws : Workspace) -> String {
+async fn read_moonbit_version(ws : @packaging.Workspace) -> String {
   let version = @asyncfs.read_file(ws.at(MoonbitVersionFile))
     .text()
     .trim()
     .to_owned()
   if version.is_empty() {
-    raise PackageError("\{ws.at(MoonbitVersionFile)} is empty")
+    raise @packaging.PackageError("\{ws.at(MoonbitVersionFile)} is empty")
   }
   if version.has_prefix("v") {
-    raise PackageError("\{ws.at(MoonbitVersionFile)} should not start with 'v'")
+    raise @packaging.PackageError(
+      "\{ws.at(MoonbitVersionFile)} should not start with 'v'",
+    )
   }
   version
 }
@@ -156,7 +158,7 @@ async fn download_file_if_missing(url : String, path : String) -> Unit {
   println("downloading \{url}")
   let (response, body) = @http.get(url)
   if response.code < 200 || response.code >= 300 {
-    raise PackageError(
+    raise @packaging.PackageError(
       "failed to download \{url}: HTTP \{response.code} \{response.reason}",
     )
   }
@@ -165,11 +167,11 @@ async fn download_file_if_missing(url : String, path : String) -> Unit {
 
 ///|
 async fn extract_zip_archive(
-  ws : Workspace,
+  ws : @packaging.Workspace,
   archive : String,
   destination : String,
 ) -> Unit {
-  run_checked(
+  @packaging.run_checked(
     "powershell",
     [
       "-NoProfile",
@@ -187,16 +189,20 @@ async fn extract_zip_archive(
 
 ///|
 async fn extract_tar_gz_archive(
-  ws : Workspace,
+  ws : @packaging.Workspace,
   archive : String,
   destination : String,
 ) -> Unit {
-  run_checked("tar", ["-xzf", archive, "-C", destination], dir=ws.dir())
+  @packaging.run_checked(
+    "tar",
+    ["-xzf", archive, "-C", destination],
+    dir=ws.dir(),
+  )
 }
 
 ///|
 async fn extract_archive(
-  ws : Workspace,
+  ws : @packaging.Workspace,
   archive : String,
   destination : String,
   uses_zip~ : Bool,
@@ -220,7 +226,7 @@ async fn compiler_version(
     inherit_env=true,
   )
   if code != 0 {
-    raise PackageError(
+    raise @packaging.PackageError(
       "failed to read MoonBit compiler version from \{compiler}: \{output.text().trim()}",
     )
   }
@@ -237,32 +243,35 @@ async fn compiler_version(
 /// package directory. The seed is intentionally not bundled in place; runtime
 /// initialization copies it to the per-user writable runtime directory first.
 pub async fn stage_moonbit_toolchain_seed(
-  ws : Workspace,
+  ws : @packaging.Workspace,
   target : MoonbitToolchainTarget,
   payload_dir : String,
 ) -> Unit {
   let version = read_moonbit_version(ws)
   let binary_archive = target.binary_cache_path(version)
   let core_archive = target.core_cache_path(version)
-  ensure_dir(ws.at(MoonbitToolchainCacheDir))
+  @packaging.ensure_dir(ws.at(MoonbitToolchainCacheDir))
   download_file_if_missing(target.binary_url(version), ws.at(binary_archive))
   download_file_if_missing(target.core_url(version), ws.at(core_archive))
-  remove_path_if_exists(ws.at(payload_dir))
-  ensure_dir(ws.at(payload_dir))
+  @packaging.remove_path_if_exists(ws.at(payload_dir))
+  @packaging.ensure_dir(ws.at(payload_dir))
   extract_archive(ws, binary_archive, payload_dir, uses_zip=target.uses_zip)
-  ensure_dir(ws.at(payload_dir + "/lib"))
+  @packaging.ensure_dir(ws.at(payload_dir + "/lib"))
   extract_archive(
     ws,
     core_archive,
     payload_dir + "/lib",
     uses_zip=target.uses_zip,
   )
-  remove_path_if_exists(ws.at(payload_dir + "/lib/core/_build"))
+  @packaging.remove_path_if_exists(ws.at(payload_dir + "/lib/core/_build"))
   let actual_version = compiler_version(target, ws.at(payload_dir))
   if actual_version != version {
-    raise PackageError(
+    raise @packaging.PackageError(
       "downloaded MoonBit version \{actual_version}, expected \{version}",
     )
   }
-  write_text(ws.at(payload_dir + "/" + MoonbitSeedVersionFile), version)
+  @packaging.write_text(
+    ws.at(payload_dir + "/" + MoonbitSeedVersionFile),
+    version,
+  )
 }

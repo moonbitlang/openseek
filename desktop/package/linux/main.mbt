@@ -57,8 +57,8 @@ async fn copy_bundle_files(ws : @packaging.Workspace) -> Unit {
     ws.at("frontend.js"),
     ws.at(AppAssetDir + "/frontend.js"),
   )
-  let target = @packaging.moonbit_linux_x64_toolchain()
-  @packaging.stage_moonbit_toolchain_seed(
+  let target = @moonbit.moonbit_linux_x64_toolchain()
+  @moonbit.stage_moonbit_toolchain_seed(
     ws,
     target,
     UsrBinPath + "/" + target.seed_relative_dir(),
