@@ -1,5 +1,5 @@
 ///|
-fn main raise {
+async fn main {
   let framework_command = match @app.current_executable_command() {
     Ok(command) => command
     Err(error) => abort(error)

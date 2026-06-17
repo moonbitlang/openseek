@@ -7,7 +7,7 @@
 // host and the framework child can share the file safely.
 
 ///|
-fn launch_logger() -> @xlog.Logger raise {
+async fn launch_logger() -> @xlog.Logger {
   guard @appdirs.prepared_runtime_dir() is Some(dir) else {
     fail("cannot determine the per-user runtime directory")
   }

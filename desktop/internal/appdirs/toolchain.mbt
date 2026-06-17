@@ -6,17 +6,17 @@ const MoonbitBundleStampFile : String = ".openseek-moonbit-bundle-version"
 
 ///|
 fn join_path(base : String, child : String) -> String {
-  (base : @mbpath.Path).join(child).normalize().to_string()
+  @mbpath.Path(base).join(child).normalize().to_string()
 }
 
 ///|
-fn moonbit_payload_looks_complete(path : String) -> Bool {
-  @mbfs.path_exists(join_path(path, "bin/moon.exe")) &&
-  @mbfs.path_exists(join_path(path, "lib/core/moon.mod"))
+async fn moonbit_payload_looks_complete(path : String) -> Bool {
+  @mbfs.exists(join_path(path, "bin/moon.exe")) &&
+  @mbfs.exists(join_path(path, "lib/core/moon.mod"))
 }
 
 ///|
-pub fn bundled_moonbit_payload_dir(engine_command : String) -> String? {
+pub async fn bundled_moonbit_payload_dir(engine_command : String) -> String? {
   let command_dir = (engine_command : @mbpath.Path).dirname().resolve()
   let path = command_dir.join(BundledMoonbitRelativeDir).normalize().to_string()
   if moonbit_payload_looks_complete(path) {

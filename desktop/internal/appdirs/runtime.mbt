@@ -6,11 +6,11 @@
 /// repackage replaces the bundle under a running instance. Uses
 /// `~/Library/Application Support/OpenSeek Desktop` where that layout exists
 /// (macOS) and `~/.openseek-desktop` elsewhere.
-fn app_runtime_dir() -> String? {
+async fn app_runtime_dir() -> String? {
   guard @home.dir() is Some(home) else { return None }
   let home_path : @mbpath.Path = home
   let app_support = home_path.join("Library").join("Application Support")
-  let app_support_exists = @mbfs.is_dir(app_support.to_string()) catch {
+  let app_support_exists = (@mbfs.kind(app_support.to_string()) is Directory) catch {
     _ => false
   }
   let dir = if app_support_exists {
@@ -24,11 +24,11 @@ fn app_runtime_dir() -> String? {
 ///|
 /// The runtime directory, created on demand. `None` when it cannot be
 /// determined or created; callers then fall back to lepus defaults.
-pub fn prepared_runtime_dir() -> String? {
+pub async fn prepared_runtime_dir() -> String? {
   guard app_runtime_dir() is Some(dir) else { return None }
-  let exists = @mbfs.is_dir(dir) catch { _ => false }
+  let exists = (@mbfs.kind(dir) is Directory) catch { _ => false }
   if !exists {
-    @mbfs.create_dir(dir) catch {
+    @mbfs.mkdir(dir) catch {
       _ => return None
     }
   }
@@ -39,11 +39,11 @@ pub fn prepared_runtime_dir() -> String? {
 /// Drop framework configs left behind by earlier launches. Each launch writes
 /// a fresh timestamped file (so two concurrent instances never clobber each
 /// other); without this sweep they would accumulate forever.
-pub fn remove_stale_framework_configs(dir : String) -> Unit {
-  let entries = @mbfs.read_dir(dir) catch { _ => return }
+pub async fn remove_stale_framework_configs(dir : String) -> Unit {
+  let entries = @mbfs.readdir(dir) catch { _ => return }
   for entry in entries {
     if entry.has_prefix("lepus-framework-") && entry.has_suffix(".json") {
-      @mbfs.remove_file(dir + "/" + entry) catch {
+      @mbfs.remove(dir + "/" + entry) catch {
         _ => ()
       }
     }

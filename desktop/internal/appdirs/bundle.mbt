@@ -11,17 +11,15 @@ const DefaultEngine = "openseek"
 /// probe `../Resources/` first; the executable-adjacent layout serves the
 /// Linux AppImage and bare dev builds. Falls back to a cwd-relative path
 /// for `moon run` during development.
-pub fn frontend_entry_path(framework_command : String) -> String {
-  let command_dir : @mbpath.Path = (framework_command : @mbpath.Path)
-    .dirname()
-    .resolve()
+pub async fn frontend_entry_path(framework_command : String) -> String {
+  let command_dir = @mbpath.Path(framework_command).dirname().resolve()
   let candidates = [
     command_dir.join("..").join("Resources").join(FrontendEntryPath),
     command_dir.join(FrontendEntryPath),
   ]
   for candidate in candidates {
     let path = candidate.normalize().to_string()
-    if @mbfs.path_exists(path) {
+    if @mbfs.exists(path) {
       return path
     }
   }
@@ -29,7 +27,7 @@ pub fn frontend_entry_path(framework_command : String) -> String {
 }
 
 ///|
-fn bundled_engine_path(framework_command : String) -> String? {
+async fn bundled_engine_path(framework_command : String) -> String? {
   let command_path : @mbpath.Path = framework_command
   let command_dir = command_path.dirname().resolve()
   let candidates = match @env.get("OS") {
@@ -38,7 +36,7 @@ fn bundled_engine_path(framework_command : String) -> String? {
   }
   for candidate in candidates {
     let path = command_dir.join(candidate).normalize().to_string()
-    if @mbfs.path_exists(path) {
+    if @mbfs.exists(path) {
       return Some(path)
     }
   }
@@ -48,7 +46,7 @@ fn bundled_engine_path(framework_command : String) -> String? {
 ///|
 /// The engine executable to run: the one bundled beside the host binary, or
 /// the `OPENSEEK_ENGINE` override, or `openseek` on PATH.
-pub fn engine_command(framework_command : String) -> String {
+pub async fn engine_command(framework_command : String) -> String {
   if bundled_engine_path(framework_command) is Some(path) {
     return path
   }
