@@ -10,10 +10,16 @@ const ExtensionNamespace = "openseek"
 
 ///|
 /// A host-side failure with a user-facing message. Ops raise it; the IPC
-/// boundary (`to_op_result`) unwraps the message into the `Err` the webview
-/// displays.
+/// boundary stringifies it into the `Err` the webview displays.
 priv suberror HostError {
   HostError(String)
+}
+
+///|
+impl Show for HostError with fn output(self, logger) {
+  match self {
+    HostError(message) => logger.write_string(message)
+  }
 }
 
 ///|
