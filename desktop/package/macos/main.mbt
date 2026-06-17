@@ -169,35 +169,48 @@ priv struct SignConfig {
 }
 
 ///|
-fn parse_sign_config() -> SignConfig raise {
-  let usage = "usage: moon run package/macos -- [--sign <identity>] [--notarize <keychain-profile>]"
-  let args = @env.args()
-  let mut identity : String? = None
-  let mut notary_profile : String? = None
-  // args[0] is the program itself; the package's own arguments follow.
-  let mut index = 1
-  while index < args.length() {
-    let arg = args[index]
-    guard arg is ("--sign" | "--notarize") else {
-      raise @packaging.PackageError("unknown argument: \{arg}\n\{usage}")
+fn package_command() -> @argparse.Command {
+  Command(
+    "package/macos",
+    about="Build the macOS app bundle and zip archive.",
+    options=[
+      OptionArg(
+        "sign",
+        about="Developer ID Application identity for distribution signing.",
+      ),
+      OptionArg(
+        "notarize",
+        about="notarytool keychain profile for notarization.",
+        requires=["sign"],
+      ),
+    ],
+  )
+}
+
+///|
+fn parsed_option_value(
+  matches : @argparse.Matches,
+  name : String,
+) -> String? raise {
+  match matches.values.get(name) {
+    Some([value]) => {
+      let text = value.trim()
+      if text.is_empty() {
+        raise @packaging.PackageError("--\{name} needs a non-empty value")
+      }
+      Some(text.to_owned())
     }
-    guard args.get(index + 1) is Some(value) && !value.trim().is_empty() else {
-      raise @packaging.PackageError("\{arg} needs a value\n\{usage}")
-    }
-    let value = value.trim().to_owned()
-    if arg == "--sign" {
-      identity = Some(value)
-    } else {
-      notary_profile = Some(value)
-    }
-    index += 2
+    _ => None
   }
-  if notary_profile is Some(_) && identity is None {
-    raise @packaging.PackageError(
-      "--notarize requires --sign: ad-hoc signed apps cannot be notarized",
-    )
+}
+
+///|
+fn parse_sign_config(argv? : ArrayView[String]) -> SignConfig raise {
+  let matches = package_command().parse(argv?)
+  {
+    identity: parsed_option_value(matches, "sign"),
+    notary_profile: parsed_option_value(matches, "notarize"),
   }
-  { identity, notary_profile }
 }
 
 ///|

@@ -5,10 +5,13 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs" @asyncfs,
   "moonbitlang/async/process",
-  "moonbitlang/core/string",
+  "moonbitlang/core/argparse",
   "moonbitlang/x/fs",
-  "moonbitlang/x/sys",
 }
+
+import {
+  "moonbitlang/core/string",
+} for "wbtest"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 

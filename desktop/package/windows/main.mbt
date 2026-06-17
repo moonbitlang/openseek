@@ -34,81 +34,11 @@ const ProgramFilesMakensis : String = "C:/Program Files/NSIS/makensis.exe"
 const AppAssetDir : String = BundleDir + "/assets"
 
 ///|
-priv enum PackageMode {
-  ZipOnly
-  InstallerOnly
-  AllOutputs
-}
-
-///|
-fn print_usage() -> Unit {
-  let usage =
-    #|Usage:
-    #|  moon -C desktop run --target native package/windows
-    #|  moon -C desktop run --target native package/windows -- --zip
-    #|  moon -C desktop run --target native package/windows -- --installer
-    #|  moon -C desktop run --target native package/windows -- --all
-    #|
-    #|Modes:
-    #|  --zip        Build the app bundle and portable zip. This is the default.
-    #|  --installer  Build the app bundle and NSIS setup executable.
-    #|  --all        Build both the portable zip and setup executable.
-    #|
-  println(usage)
-}
-
-///|
-fn script_args() -> Array[String] {
-  let argv = @sys.get_cli_args()
-  if argv.length() > 0 {
-    argv[1:].to_owned()
-  } else {
-    []
-  }
-}
-
-///|
-fn is_help_arg(arg : String) -> Bool {
-  arg == "-h" || arg == "--help"
-}
-
-///|
-fn parse_mode(args : Array[String]) -> PackageMode raise {
-  if args.length() == 0 {
-    return ZipOnly
-  }
-  if args.length() != 1 {
-    raise @packaging.PackageError("expected at most one package mode")
-  }
-  let mode = args[0]
-  if mode == "--zip" || mode == "zip" {
-    return ZipOnly
-  }
-  if mode == "--installer" || mode == "installer" {
-    return InstallerOnly
-  }
-  if mode == "--all" || mode == "all" {
-    return AllOutputs
-  }
-  raise @packaging.PackageError("unknown package mode: \{mode}")
-}
-
-///|
-fn should_build_zip(mode : PackageMode) -> Bool {
-  match mode {
-    ZipOnly => true
-    InstallerOnly => false
-    AllOutputs => true
-  }
-}
-
-///|
-fn should_build_installer(mode : PackageMode) -> Bool {
-  match mode {
-    ZipOnly => false
-    InstallerOnly => true
-    AllOutputs => true
-  }
+fn package_command() -> @argparse.Command {
+  Command(
+    "package/windows",
+    about="Build the Windows app bundle, portable zip, and NSIS installer.",
+  )
 }
 
 ///|
@@ -320,21 +250,9 @@ async fn build_installer(ws : @packaging.Workspace) -> Unit {
 
 ///|
 async fn main {
-  let args = script_args()
-  if args.length() == 1 && is_help_arg(args[0]) {
-    print_usage()
-    return
-  }
-  let mode = parse_mode(args) catch {
-    err => {
-      print_usage()
-      raise err
-    }
-  }
+  ignore(package_command().parse())
   let ws = @packaging.locate_workspace()
-  if should_build_installer(mode) {
-    ensure_makensis(ws)
-  }
+  ensure_makensis(ws)
   let with_wsl_engine = build_outputs(ws)
   println("built openseek engine: \{ws.engine_binary()}")
   if with_wsl_engine {
@@ -342,13 +260,9 @@ async fn main {
   }
   reset_bundle_dirs(ws)
   copy_bundle_files(ws, with_wsl_engine~)
-  if should_build_zip(mode) {
-    zip_bundle(ws)
-    println("generated \{ws.at(ZipPath)}")
-  }
-  if should_build_installer(mode) {
-    build_installer(ws)
-    println("generated \{ws.at(InstallerPath)}")
-  }
+  zip_bundle(ws)
+  println("generated \{ws.at(ZipPath)}")
+  build_installer(ws)
+  println("generated \{ws.at(InstallerPath)}")
   println("generated \{ws.at(BundleDir)}")
 }
