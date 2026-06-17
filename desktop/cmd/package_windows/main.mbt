@@ -34,6 +34,33 @@ const ProgramFilesMakensis : String = "C:/Program Files/NSIS/makensis.exe"
 const AppAssetDir : String = BundleDir + "/assets"
 
 ///|
+const PeDosHeaderSize : Int = 64
+
+///|
+const PeHeaderPointerOffset : Int = 0x3C
+
+///|
+const PeSignatureSize : Int = 4
+
+///|
+const PeCoffHeaderSize : Int = 20
+
+///|
+const PeCoffOptionalHeaderSizeOffset : Int = PeSignatureSize + 16
+
+///|
+const PeOptionalHeaderSubsystemOffset : Int = 68
+
+///|
+const PeSubsystemSize : Int = 2
+
+///|
+const PeHeadersPrefixSize : Int = PeSignatureSize +
+  PeCoffHeaderSize +
+  PeOptionalHeaderSubsystemOffset +
+  PeSubsystemSize
+
+///|
 priv enum PackageMode {
   ZipOnly
   InstallerOnly
@@ -215,10 +242,57 @@ async fn set_windows_gui_subsystem(
   ws : @packaging.Workspace,
   path : String,
 ) -> Unit {
-  run_powershell(
-    ws,
-    "$path = '\{path}'; $resolved = (Resolve-Path -LiteralPath $path).Path; $bytes = [System.IO.File]::ReadAllBytes($resolved); $pe = [BitConverter]::ToInt32($bytes, 0x3c); $offset = $pe + 4 + 20 + 68; $subsystem = [BitConverter]::GetBytes([UInt16]2); [Array]::Copy($subsystem, 0, $bytes, $offset, 2); [System.IO.File]::WriteAllBytes($resolved, $bytes)",
+  let file_path = ws.at(path)
+  let file = @asyncfs.open(file_path, mode=ReadWrite)
+  patch_windows_gui_subsystem(file, file_path) catch {
+    error => {
+      file.close()
+      raise error
+    }
+  }
+  file.close()
+}
+
+///|
+async fn patch_windows_gui_subsystem(
+  file : @asyncfs.File,
+  file_path : String,
+) -> Unit {
+  let dos_header = file.read_exactly_at(PeDosHeaderSize, position=0L)
+  if dos_header[0] != b'M' || dos_header[1] != b'Z' {
+    raise @packaging.PackageError("\{file_path} is not a PE executable")
+  }
+  let pe_offset = dos_header
+    .unsafe_read_uint32_le(PeHeaderPointerOffset)
+    .reinterpret_as_int()
+  if pe_offset < 0 {
+    raise @packaging.PackageError(
+      "\{file_path} has an invalid PE header offset",
+    )
+  }
+  let pe_headers = file.read_exactly_at(
+    PeHeadersPrefixSize,
+    position=pe_offset.to_int64(),
   )
+  if pe_headers[0] != b'P' ||
+    pe_headers[1] != b'E' ||
+    pe_headers[2] != b'\x00' ||
+    pe_headers[3] != b'\x00' {
+    raise @packaging.PackageError("\{file_path} has an invalid PE signature")
+  }
+  let optional_header_size = pe_headers
+    .unsafe_read_uint16_le(PeCoffOptionalHeaderSizeOffset)
+    .to_int()
+  if optional_header_size < PeOptionalHeaderSubsystemOffset + PeSubsystemSize {
+    raise @packaging.PackageError(
+      "\{file_path} PE optional header does not contain a subsystem field",
+    )
+  }
+  let subsystem_position = pe_offset +
+    PeSignatureSize +
+    PeCoffHeaderSize +
+    PeOptionalHeaderSubsystemOffset
+  file.write_at(b"\x02\x00".view(), position=subsystem_position.to_int64())
 }
 
 ///|
