@@ -244,13 +244,8 @@ async fn set_windows_gui_subsystem(
 ) -> Unit {
   let file_path = ws.at(path)
   let file = @asyncfs.open(file_path, mode=ReadWrite)
-  patch_windows_gui_subsystem(file, file_path) catch {
-    error => {
-      file.close()
-      raise error
-    }
-  }
-  file.close()
+  defer file.close()
+  patch_windows_gui_subsystem(file, file_path)
 }
 
 ///|
@@ -259,7 +254,7 @@ async fn patch_windows_gui_subsystem(
   file_path : String,
 ) -> Unit {
   let dos_header = file.read_exactly_at(PeDosHeaderSize, position=0L)
-  if dos_header[0] != b'M' || dos_header[1] != b'Z' {
+  guard dos_header is [b'M', b'Z', ..] else {
     raise @packaging.PackageError("\{file_path} is not a PE executable")
   }
   let pe_offset = dos_header
@@ -300,8 +295,8 @@ async fn copy_bundle_files(
   ws : @packaging.Workspace,
   with_wsl_engine~ : Bool,
 ) -> Unit {
-  let native_binary = ws.at(@packaging.native_binary())
-  let engine_binary = ws.repo_at(@packaging.engine_binary())
+  let native_binary = ws.native_binary()
+  let engine_binary = ws.engine_binary()
   let bundled_engine = BundleDir + "/openseek.exe"
   if !@asyncfs.exists(native_binary) {
     raise @packaging.PackageError("native binary not found: \{native_binary}")
@@ -421,7 +416,7 @@ async fn main {
     ensure_makensis(ws)
   }
   let with_wsl_engine = build_outputs(ws)
-  println("built openseek engine: \{ws.repo_at(@packaging.engine_binary())}")
+  println("built openseek engine: \{ws.engine_binary()}")
   if with_wsl_engine {
     println("built WSL Linux engine: \{ws.repo_at(WslEngineBinary)}")
   }

@@ -69,17 +69,17 @@ pub fn Workspace::repo_at(self : Workspace, relative : String) -> String {
 }
 
 ///|
-/// Return the release-mode native desktop host binary path relative to the
-/// desktop workspace.
-pub fn native_binary() -> String {
-  NativeBinary
+/// Return the release-mode native desktop host binary path under the desktop
+/// workspace.
+pub fn Workspace::native_binary(self : Workspace) -> String {
+  self.at(NativeBinary)
 }
 
 ///|
-/// Return the release-mode openseek engine binary path relative to the
-/// monorepo root.
-pub fn engine_binary() -> String {
-  EngineBinary
+/// Return the release-mode openseek engine binary path under the monorepo
+/// root.
+pub fn Workspace::engine_binary(self : Workspace) -> String {
+  self.repo_at(EngineBinary)
 }
 
 ///|
@@ -196,10 +196,9 @@ pub async fn build_engine(
     dir=ws.repo(),
     extra_env~,
   )
-  if !@asyncfs.exists(ws.repo_at(EngineBinary)) {
-    raise PackageError(
-      "openseek engine binary not found: \{ws.repo_at(EngineBinary)}",
-    )
+  let engine_binary = ws.engine_binary()
+  if !@asyncfs.exists(engine_binary) {
+    raise PackageError("openseek engine binary not found: \{engine_binary}")
   }
 }
 

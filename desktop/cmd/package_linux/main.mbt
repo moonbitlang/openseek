@@ -37,24 +37,21 @@ async fn reset_bundle_dirs(ws : @packaging.Workspace) -> Unit {
 
 ///|
 async fn copy_bundle_files(ws : @packaging.Workspace) -> Unit {
-  if !@asyncfs.exists(ws.at(@packaging.native_binary())) {
-    raise @packaging.PackageError(
-      "native binary not found: \{ws.at(@packaging.native_binary())}",
-    )
+  let native_binary = ws.native_binary()
+  let engine_binary = ws.engine_binary()
+  if !@asyncfs.exists(native_binary) {
+    raise @packaging.PackageError("native binary not found: \{native_binary}")
   }
-  if !@asyncfs.exists(ws.repo_at(@packaging.engine_binary())) {
+  if !@asyncfs.exists(engine_binary) {
     raise @packaging.PackageError(
-      "openseek engine binary not found: \{ws.repo_at(@packaging.engine_binary())}",
+      "openseek engine binary not found: \{engine_binary}",
     )
   }
   @packaging.copy_file(
-    ws.at(@packaging.native_binary()),
+    native_binary,
     ws.at(UsrBinPath + "/openseek-desktop-bin"),
   )
-  @packaging.copy_file(
-    ws.repo_at(@packaging.engine_binary()),
-    ws.at(UsrBinPath + "/openseek"),
-  )
+  @packaging.copy_file(engine_binary, ws.at(UsrBinPath + "/openseek"))
   @packaging.copy_file(ws.at("index.html"), ws.at(AppAssetDir + "/index.html"))
   @packaging.copy_file(
     ws.at("frontend.js"),
@@ -188,7 +185,7 @@ async fn build_appimage(ws : @packaging.Workspace, tool : String) -> Unit {
 async fn main {
   let ws = @packaging.locate_workspace()
   build_outputs(ws)
-  println("built openseek engine: \{ws.repo_at(@packaging.engine_binary())}")
+  println("built openseek engine: \{ws.engine_binary()}")
   reset_bundle_dirs(ws)
   copy_bundle_files(ws)
   write_bundle_metadata(ws)
