@@ -17,18 +17,6 @@ priv suberror HostError {
 }
 
 ///|
-/// Adapt a raising op body to the `Result` the lepus IPC boundary expects: a
-/// `HostError` unwraps to the message the webview displays; any other error
-/// is rendered as-is, and cancellation keeps propagating.
-async fn[Reply] to_op_result(body : async () -> Reply) -> Result[Reply, String] {
-  Ok(body()) catch {
-    error if @async.is_being_cancelled() => raise error
-    HostError(message) => Err(message)
-    error => Err(error.to_string())
-  }
-}
-
-///|
 /// The `openseek` IPC extension: every command the webview can invoke, bound
 /// to a fresh engine manager. `engine` is the engine executable to spawn.
 pub fn openseek_extension(engine : String) -> @app.AppCommandExtensionSpec {
@@ -48,12 +36,12 @@ pub fn openseek_extension(engine : String) -> @app.AppCommandExtensionSpec {
       @app.AppCommandApiDescriptor::new("skills_installed"),
       @app.AppCommandApiDescriptor::new("skill_uninstall"),
     ],
-    fn(context) {
-      context.op_async_result("connect", async fn(_payload : Json) {
-        to_op_result(async fn() { run_engine_pump(context, manager) })
+    context => {
+      context.op_async("connect", (_ : Json) => {
+        run_engine_pump(context, manager)
       })
-      context.op_async_result("start", async fn(payload : StartPayload) {
-        to_op_result(async fn() { start_run(context, manager, engine, payload) })
+      context.op_async("start", (payload : StartPayload) => {
+        start_run(context, manager, engine, payload)
       })
       context.op_async("cancel", async fn(payload : CancelPayload) {
         cancel_run(manager, payload)
@@ -61,29 +49,27 @@ pub fn openseek_extension(engine : String) -> @app.AppCommandExtensionSpec {
       context.op_async("steer", async fn(payload : SteerPayload) {
         steer_run(manager, payload)
       })
-      context.op_async_result("list_sessions", async fn(_payload : Json) {
-        to_op_result(async fn() { list_sessions(engine) })
+      context.op_async("list_sessions", async fn(_ : Json) {
+        list_sessions(engine)
       })
-      context.op_async_result("load_session", async fn(
-        payload : LoadSessionPayload,
-      ) {
-        to_op_result(async fn() { load_session(engine, payload) })
+      context.op_async("load_session", async fn(payload : LoadSessionPayload) {
+        load_session(engine, payload)
       })
-      context.op_async_result("skills_catalog", async fn(_payload : Json) {
-        to_op_result(async fn() { skills_catalog_op() })
+      context.op_async("skills_catalog", async fn(_ : Json) {
+        skills_catalog_op()
       })
-      context.op_async_result("skill_install", async fn(
+      context.op_async("skill_install", async fn(
         payload : InstallSkillPayload,
       ) {
-        to_op_result(async fn() { install_skill_op(payload) })
+        install_skill_op(payload)
       })
-      context.op_async_result("skills_installed", async fn(_payload : Json) {
-        to_op_result(async fn() { installed_skills_op() })
+      context.op_async("skills_installed", async fn(_ : Json) {
+        installed_skills_op()
       })
-      context.op_async_result("skill_uninstall", async fn(
+      context.op_async("skill_uninstall", async fn(
         payload : UninstallSkillPayload,
       ) {
-        to_op_result(async fn() { uninstall_skill_op(payload) })
+        uninstall_skill_op(payload)
       })
       Ok(())
     },
