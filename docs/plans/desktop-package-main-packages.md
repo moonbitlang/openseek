@@ -52,7 +52,8 @@ operation logic shared by the Windows, macOS, and Linux packaging flows.
 ## Open Questions
 
 - None for the structural refactor. Cross-platform bundled MoonBit toolchain
-  support is intentionally out of scope for this change.
+  support was intentionally out of scope for the first package split, and is
+  now tracked in the follow-up checkpoint below.
 
 ## Next Implementation Step
 
@@ -69,3 +70,70 @@ old `.mbtx` entry points.
   not change unexpectedly.
 - Do not run full packaging commands unless explicitly requested, because they
   may download external artifacts and require platform-specific tools.
+
+## Follow-up: Cross-platform Bundled MoonBit Toolchain
+
+### Goal
+
+Distribute a bundled MoonBit toolchain on Windows, Linux, and macOS while
+keeping signed/read-only application bundles immutable at runtime.
+
+### Accepted Design
+
+- Move the Windows-only MoonBit toolchain download and staging logic from
+  `desktop/cmd/package_windows` into shared helpers in
+  `desktop/internal/packaging`.
+- Treat the packaged toolchain as a read-only seed. Package commands download
+  and extract the platform-specific MoonBit binary archive plus matching core
+  archive, but do not run `moon bundle` inside the packaged app directory.
+- At runtime, copy the bundled seed into the per-user runtime directory and run
+  `moon bundle --all` plus `moon bundle --target wasm-gc` only in that writable
+  copy. The runtime then passes that writable directory as `MOON_HOME` to the
+  engine.
+- Keep platform differences in small descriptors: archive format, CDN target
+  name, bundled seed relative path, executable suffix, and PATH separator.
+- Preserve `OPENSEEK_DISABLE_BUNDLED_MOON` and `OPENSEEK_MOON_HOME` override
+  behavior.
+
+### Target Files And Surfaces
+
+- `desktop/internal/packaging`: shared package-time toolchain descriptors,
+  download, extraction, version validation, and staging helpers.
+- `desktop/cmd/package_windows`, `desktop/cmd/package_linux`, and
+  `desktop/cmd/package_macos`: call shared toolchain staging with their
+  platform descriptor.
+- `desktop/internal/appdirs`: bundled seed lookup, writable toolchain location,
+  executable names, and PATH separator helpers.
+- `desktop/internal/host`: initialize the writable copy from the bundled seed
+  and run `moon bundle` there.
+- `desktop/README.md`: document that all platform packages ship a MoonBit
+  toolchain seed and initialize it under the per-user runtime directory.
+
+### API And Interface Diff
+
+- `openseek_desktop/internal/packaging` gains public internal-package helpers
+  for MoonBit toolchain platform descriptors and staging.
+- `openseek_desktop/internal/appdirs` gains internal-package helpers for
+  bundled seed lookup and per-user writable toolchain paths.
+- Existing external desktop host behavior remains unchanged except that Linux
+  and macOS packages can now use the bundled MoonBit toolchain like Windows.
+
+### Open Questions
+
+- None for this implementation. The current macOS package remains arm64 and the
+  current Linux package remains x86_64.
+
+### Next Implementation Step
+
+Add shared packaging helpers, update the three package commands, then switch
+runtime initialization from bundle-in-place to seed-copy-then-initialize in the
+per-user runtime directory.
+
+### Validation Plan
+
+- Run `moon -C desktop check --target native`.
+- Run `moon -C desktop info`.
+- Run `moon -C desktop fmt`.
+- Review `.mbti` diffs for expected internal package API growth.
+- Do not run full packaging commands unless explicitly requested, because they
+  download large toolchain archives and require platform-specific tools.

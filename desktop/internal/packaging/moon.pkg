@@ -1,5 +1,6 @@
 import {
   "moonbitlang/async/fs" @asyncfs,
+  "moonbitlang/async/http",
   "moonbitlang/async/process",
   "moonbitlang/core/string",
   "moonbitlang/x/path",

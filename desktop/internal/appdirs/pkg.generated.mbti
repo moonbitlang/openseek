@@ -2,7 +2,7 @@
 package "openseek_desktop/internal/appdirs"
 
 // Values
-pub async fn bundled_moonbit_payload_dir(String) -> String?
+pub async fn bundled_moonbit_seed_dir(String) -> String?
 
 pub async fn engine_command(String) -> String
 
@@ -12,9 +12,17 @@ pub fn moonbit_bin_dir(String) -> String
 
 pub fn moonbit_bundle_stamp_path(String) -> String
 
+pub fn moonbit_command(String) -> String
+
+pub fn moonbit_compiler_command(String) -> String
+
 pub fn moonbit_native_bundle_probe_path(String) -> String
 
+pub fn moonbit_seed_version_path(String) -> String
+
 pub fn moonbit_wasm_gc_bundle_probe_path(String) -> String
+
+pub async fn prepared_moonbit_payload_dir(String) -> String?
 
 pub async fn prepared_runtime_dir() -> String?
 

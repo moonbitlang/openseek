@@ -20,6 +20,10 @@ const ResourcesPath : String = ContentsPath + "/Resources"
 const AppAssetDir : String = ResourcesPath + "/assets"
 
 ///|
+const MoonbitSeedDir : String = ResourcesPath +
+  "/toolchains/moonbit/macos-arm64"
+
+///|
 /// Minimum macOS the produced binaries run on. Without this, clang pins
 /// LC_BUILD_VERSION's minos to the build machine's OS version and dyld on
 /// any older system refuses to load the binary at all. Must match
@@ -72,6 +76,8 @@ async fn copy_bundle_files(ws : @packaging.Workspace) -> Unit {
     ws.at("frontend.js"),
     ws.at(AppAssetDir + "/frontend.js"),
   )
+  let target = @packaging.moonbit_macos_arm64_toolchain()
+  @packaging.stage_moonbit_toolchain_seed(ws, target, MoonbitSeedDir)
 }
 
 ///|
@@ -109,6 +115,54 @@ async fn write_bundle_metadata(ws : @packaging.Workspace) -> Unit {
     ["+x", MacOSPath + "/openseek-desktop", MacOSPath + "/openseek"],
     dir=ws.dir(),
   )
+}
+
+///|
+async fn is_macho_file(path : String) -> Bool {
+  let (code, output) = @process.collect_output_merged(
+    "file",
+    [path],
+    inherit_env=true,
+  )
+  code == 0 && output.text().contains("Mach-O")
+}
+
+///|
+fn codesign_file_args(
+  identity : String,
+  path : String,
+  distribution~ : Bool,
+) -> Array[String] {
+  if distribution {
+    ["--force", "--options", "runtime", "--timestamp", "--sign", identity, path]
+  } else {
+    ["--force", "--sign", identity, path]
+  }
+}
+
+///|
+async fn sign_moonbit_seed_binaries(
+  ws : @packaging.Workspace,
+  identity : String,
+  distribution~ : Bool,
+) -> Unit {
+  let bin_dir = ws.at(MoonbitSeedDir + "/bin")
+  if !@asyncfs.exists(bin_dir) {
+    return
+  }
+  for entry in @asyncfs.readdir(bin_dir, sort=true) {
+    let path = bin_dir + "/" + entry
+    if @asyncfs.kind(path) is Directory {
+      continue
+    }
+    if is_macho_file(path) {
+      @packaging.run_checked(
+        "codesign",
+        codesign_file_args(identity, path, distribution~),
+        dir=ws.dir(),
+      )
+    }
+  }
 }
 
 ///|
@@ -155,6 +209,7 @@ fn parse_sign_config() -> SignConfig raise {
 ///|
 async fn sign_app(ws : @packaging.Workspace, sign : SignConfig) -> Unit {
   guard sign.identity is Some(identity) else {
+    sign_moonbit_seed_binaries(ws, "-", distribution=false)
     @packaging.run_checked(
       "codesign",
       ["--force", "--deep", "--sign", "-", AppPath],
@@ -163,9 +218,10 @@ async fn sign_app(ws : @packaging.Workspace, sign : SignConfig) -> Unit {
     return
   }
   // Real distribution signing: hardened runtime and a secure timestamp are
-  // notarization requirements. Sign inside-out: nested engine first, then the
-  // bundle, because deprecated `--deep` signs nested code with the wrong
+  // notarization requirements. Sign inside-out: nested executables first, then
+  // the bundle, because deprecated `--deep` signs nested code with the wrong
   // designated requirements.
+  sign_moonbit_seed_binaries(ws, identity, distribution=true)
   @packaging.run_checked(
     "codesign",
     [

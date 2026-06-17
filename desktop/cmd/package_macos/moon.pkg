@@ -2,6 +2,7 @@ import {
   "openseek_desktop/internal/packaging",
   "moonbitlang/async",
   "moonbitlang/async/fs" @asyncfs,
+  "moonbitlang/async/process",
   "moonbitlang/core/env",
   "moonbitlang/core/string",
 }

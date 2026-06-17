@@ -5,7 +5,7 @@ A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://moonca
 - `main.mbt` — entry point: wires the window manifest, the IPC extensions, the per-user runtime directory, and the launch log.
 - `internal/host/` — the native host: keeps one persistent `openseek --serve` engine per conversation, streams its JSONL events to the webview, exposes `connect` / `start` / `steer` / `cancel` / `list_sessions` / `load_session` commands plus the `skills_*` / `skill_*` ops backing the Skills panel.
 - `internal/skillmarket/` — the mooncakes.io skill registry client and the local skills-library manager: catalog browsing, digest-verified installs into the engine's global skills directory, and uninstall of what the app itself installed.
-- `internal/appdirs/` — the installed app's own footprint: bundled frontend and engine lookup, the per-user runtime directory.
+- `internal/appdirs/` — the installed app's own footprint: bundled frontend, engine, and MoonBit seed lookup, plus the per-user runtime directory.
 - `internal/sessiondirs/` — where conversations live on disk: per-session workspace directories and the durable session store root.
 - `internal/env/` — process-environment reads (blank means unset).
 - `internal/home/` — the user's home directory and `~` expansion.
@@ -212,6 +212,11 @@ offers optional desktop-shortcut and launch-after-install checkboxes, and
 registers an HKCU uninstall entry, so it does not require administrator
 privileges.
 
+The Windows package also stages a read-only MoonBit toolchain seed under the
+app bundle. At runtime the host copies that seed into the app's per-user
+runtime directory, runs `moon bundle --all` and `moon bundle --target wasm-gc`
+there, and passes the writable copy as `MOON_HOME` to the engine.
+
 The manual steps below are useful when debugging the package script.
 
 From the repository root, initialize the Lepus submodule. If Git for Windows
@@ -299,6 +304,11 @@ moon -C desktop run --target native cmd/package_macos
 The bundled engine is built from the same checkout, so the desktop app and its
 engine never drift out of version with each other.
 
+The app also contains a read-only MoonBit toolchain seed under
+`Contents/Resources`. The signed bundle is not modified on first launch; the
+host initializes a writable copy under the per-user runtime directory before
+setting `MOON_HOME` for the engine.
+
 By default the bundle is ad-hoc signed: it runs on the build machine, but
 Gatekeeper quarantines it everywhere else. For distribution, sign with a
 Developer ID Application identity (hardened runtime and a secure timestamp
@@ -334,7 +344,10 @@ Build requirements: `pkg-config` plus the GTK3 and WebKitGTK dev packages
 run if it is not already on `PATH`).
 
 The AppImage bundles the desktop host, the engine, and the frontend assets,
-but links against the system WebKitGTK: running it requires GTK3 and
+plus a read-only MoonBit toolchain seed. The first engine run initializes a
+writable toolchain copy under the per-user runtime directory and uses that as
+`MOON_HOME`. The AppImage still links against the system WebKitGTK: running it
+requires GTK3 and
 `libwebkit2gtk-4.1` installed on the host system, which is the standard
 arrangement for webview-based AppImages. If your system lacks FUSE2, run it
 with `APPIMAGE_EXTRACT_AND_RUN=1`.

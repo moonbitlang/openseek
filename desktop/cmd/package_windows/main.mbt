@@ -34,18 +34,6 @@ const ProgramFilesMakensis : String = "C:/Program Files/NSIS/makensis.exe"
 const AppAssetDir : String = BundleDir + "/assets"
 
 ///|
-const MoonbitVersionFile : String = ".moonbit-version"
-
-///|
-const MoonbitToolchainDir : String = "toolchains/moonbit/windows-x64"
-
-///|
-const MoonbitPayloadDir : String = BundleDir + "/" + MoonbitToolchainDir
-
-///|
-const MoonbitToolchainCacheDir : String = "dist/tools/moonbit"
-
-///|
 priv enum PackageMode {
   ZipOnly
   InstallerOnly
@@ -223,110 +211,6 @@ async fn reset_bundle_dirs(ws : @packaging.Workspace) -> Unit {
 }
 
 ///|
-async fn read_moonbit_version(ws : @packaging.Workspace) -> String {
-  let version = @asyncfs.read_file(ws.at(MoonbitVersionFile))
-    .text()
-    .trim()
-    .to_owned()
-  if version.is_empty() {
-    raise @packaging.PackageError("\{ws.at(MoonbitVersionFile)} is empty")
-  }
-  if version.has_prefix("v") {
-    raise @packaging.PackageError(
-      "\{ws.at(MoonbitVersionFile)} should not start with 'v'",
-    )
-  }
-  version
-}
-
-///|
-fn moonbit_url_version(version : String) -> String {
-  version.replace(old="+", new="%2B")
-}
-
-///|
-fn moonbit_zip_cache(version : String) -> String {
-  MoonbitToolchainCacheDir + "/moonbit-windows-x86_64-" + version + ".zip"
-}
-
-///|
-fn moonbit_core_zip_cache(version : String) -> String {
-  MoonbitToolchainCacheDir + "/core-" + version + ".zip"
-}
-
-///|
-fn moonbit_zip_url(version : String) -> String {
-  "https://cli.moonbitlang.com/binaries/" +
-  moonbit_url_version(version) +
-  "/moonbit-windows-x86_64.zip"
-}
-
-///|
-fn moonbit_core_zip_url(version : String) -> String {
-  "https://cli.moonbitlang.com/cores/core-" +
-  moonbit_url_version(version) +
-  ".zip"
-}
-
-///|
-async fn download_file_if_missing(url : String, path : String) -> Unit {
-  if @asyncfs.exists(path) {
-    return
-  }
-  println("downloading \{url}")
-  let (response, body) = @http.get(url)
-  if response.code < 200 || response.code >= 300 {
-    raise @packaging.PackageError(
-      "failed to download \{url}: HTTP \{response.code} \{response.reason}",
-    )
-  }
-  @asyncfs.write_file(path, body, create_mode=CreateOrTruncate)
-}
-
-///|
-async fn stage_moonbit_toolchain(ws : @packaging.Workspace) -> Unit {
-  let version = read_moonbit_version(ws)
-  let moonbit_zip = moonbit_zip_cache(version)
-  let core_zip = moonbit_core_zip_cache(version)
-  @packaging.ensure_dir(ws.at(MoonbitToolchainCacheDir))
-  download_file_if_missing(moonbit_zip_url(version), ws.at(moonbit_zip))
-  download_file_if_missing(moonbit_core_zip_url(version), ws.at(core_zip))
-  @packaging.remove_path_if_exists(ws.at(MoonbitPayloadDir))
-  @packaging.ensure_dir(ws.at(MoonbitPayloadDir))
-  run_powershell(
-    ws,
-    "$moonbitZip = '\{moonbit_zip}'; " +
-    "$coreZip = '\{core_zip}'; " +
-    "$payload = '\{MoonbitPayloadDir}'; " +
-    "Expand-Archive $moonbitZip -DestinationPath $payload -Force; " +
-    "Expand-Archive $coreZip -DestinationPath (Join-Path $payload 'lib') -Force",
-  )
-  @packaging.remove_path_if_exists(
-    ws.at(MoonbitPayloadDir + "/lib/core/_build"),
-  )
-  let moonc = ws.at(MoonbitPayloadDir + "/bin/moonc.exe")
-  let (code, output) = @process.collect_output_merged(
-    moonc,
-    ["-v"],
-    inherit_env=true,
-  )
-  if code != 0 {
-    raise @packaging.PackageError("failed to read MoonBit compiler version")
-  }
-  let compiler_version = output.text().trim().split(" ").collect()[0].to_owned()
-  let actual_version = if compiler_version.has_prefix("v") {
-    compiler_version[1:].to_owned()
-  } else {
-    compiler_version
-  }
-  if actual_version != version {
-    raise @packaging.PackageError(
-      "downloaded MoonBit version \{actual_version}, expected \{version}",
-    )
-  }
-}
-
-///|
 async fn set_windows_gui_subsystem(
   ws : @packaging.Workspace,
   path : String,
@@ -377,7 +261,12 @@ async fn copy_bundle_files(
     ws.at("frontend.js"),
     ws.at(AppAssetDir + "/frontend.js"),
   )
-  stage_moonbit_toolchain(ws)
+  let target = @packaging.moonbit_windows_x64_toolchain()
+  @packaging.stage_moonbit_toolchain_seed(
+    ws,
+    target,
+    BundleDir + "/" + target.seed_relative_dir(),
+  )
 }
 
 ///|
