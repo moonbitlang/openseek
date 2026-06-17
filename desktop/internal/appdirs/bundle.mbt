@@ -12,14 +12,14 @@ const DefaultEngine = "openseek"
 /// Linux AppImage and bare dev builds. Falls back to a cwd-relative path
 /// for `moon run` during development.
 pub async fn frontend_entry_path(framework_command : String) -> String {
-  let command_dir = @mbpath.Path(framework_command).dirname().resolve()
+  let command_dir = @path.Path(framework_command).dirname().resolve()
   let candidates = [
     command_dir.join("..").join("Resources").join(FrontendEntryPath),
     command_dir.join(FrontendEntryPath),
   ]
   for candidate in candidates {
     let path = candidate.normalize().to_string()
-    if @mbfs.exists(path) {
+    if @fs.exists(path) {
       return path
     }
   }
@@ -28,7 +28,7 @@ pub async fn frontend_entry_path(framework_command : String) -> String {
 
 ///|
 async fn bundled_engine_path(framework_command : String) -> String? {
-  let command_path : @mbpath.Path = framework_command
+  let command_path : @path.Path = framework_command
   let command_dir = command_path.dirname().resolve()
   let candidates = match @env.get("OS") {
     Some("Windows_NT") => ["openseek.exe", "openseek"]
@@ -36,7 +36,7 @@ async fn bundled_engine_path(framework_command : String) -> String? {
   }
   for candidate in candidates {
     let path = command_dir.join(candidate).normalize().to_string()
-    if @mbfs.exists(path) {
+    if @fs.exists(path) {
       return Some(path)
     }
   }

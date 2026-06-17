@@ -8,9 +8,9 @@
 /// (macOS) and `~/.openseek-desktop` elsewhere.
 async fn app_runtime_dir() -> String? {
   guard @home.dir() is Some(home) else { return None }
-  let home_path : @mbpath.Path = home
+  let home_path : @path.Path = home
   let app_support = home_path.join("Library").join("Application Support")
-  let app_support_exists = (@mbfs.kind(app_support.to_string()) is Directory) catch {
+  let app_support_exists = (@fs.kind(app_support.to_string()) is Directory) catch {
     _ => false
   }
   let dir = if app_support_exists {
@@ -24,14 +24,14 @@ async fn app_runtime_dir() -> String? {
 ///|
 /// The runtime directory, created on demand. `None` when it cannot be
 /// determined or created; callers then fall back to lepus defaults.
-pub async fn prepared_runtime_dir() -> @mbpath.Path? {
+pub async fn prepared_runtime_dir() -> @path.Path? {
   guard app_runtime_dir() is Some(dir) else { return None }
-  let exists = (@mbfs.kind(dir) is Directory) catch {
+  let exists = (@fs.kind(dir) is Directory) catch {
     @os_error.OSError(_) as os_error if os_error.is_ENOENT() => false
     error => raise error
   }
   if !exists {
-    @mbfs.mkdir(dir) catch {
+    @fs.mkdir(dir) catch {
       error if @async.is_being_cancelled() => raise error
       _ => return None
     }
@@ -43,15 +43,15 @@ pub async fn prepared_runtime_dir() -> @mbpath.Path? {
 /// Drop framework configs left behind by earlier launches. Each launch writes
 /// a fresh timestamped file (so two concurrent instances never clobber each
 /// other); without this sweep they would accumulate forever.
-pub async fn remove_stale_framework_configs(dir : @mbpath.Path) -> Unit {
+pub async fn remove_stale_framework_configs(dir : @path.Path) -> Unit {
   let dir = dir.to_string()
-  let entries = @mbfs.readdir(dir) catch {
+  let entries = @fs.readdir(dir) catch {
     error if @async.is_being_cancelled() => raise error
     _ => return
   }
   for entry in entries {
     if entry.has_prefix("lepus-framework-") && entry.has_suffix(".json") {
-      @mbfs.remove(dir + "/" + entry) catch {
+      @fs.remove(dir + "/" + entry) catch {
         error if @async.is_being_cancelled() => raise error
         _ => ()
       }
