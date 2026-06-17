@@ -203,14 +203,14 @@ fn open_run_engine(manager : EngineManager, run_id? : Int) -> ServeEngine? {
 /// packaged engine sits in is read-only (App Translocation even enforces
 /// it), so writing next to the executable would fail every
 /// `--session-list` / `--session-show` in a packaged app.
-async fn prepare_engine_stdin(engine : String) -> &@process.ProcessInput {
+async fn prepare_engine_stdin(engine : @path.Path) -> &@process.ProcessInput {
   let path = if @appdirs.prepared_runtime_dir() is Some(dir) {
-    dir + "/engine.stdin"
+    dir.join("engine.stdin")
   } else {
-    engine + ".stdin"
+    engine.to_string() + ".stdin"
   }
-  @fs.write_file(path, "", create_mode=CreateOrTruncate)
-  @process.redirect_from_file(path)
+  @fs.write_file(path.to_string(), "", create_mode=CreateOrTruncate)
+  @process.redirect_from_file(path.to_string())
 }
 
 ///|

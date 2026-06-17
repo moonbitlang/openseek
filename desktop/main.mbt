@@ -53,7 +53,7 @@ async fn main {
       framework_command,
       registry,
       framework_args=[@app.framework_process_arg()],
-      framework_cwd=runtime_dir,
+      framework_cwd=runtime_dir.map(dir => dir.to_string()),
       framework_config_path~,
     ) {
     Ok(_) => log.info() <? { "message": "host process exit ok" }

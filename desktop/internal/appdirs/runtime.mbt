@@ -24,11 +24,15 @@ async fn app_runtime_dir() -> String? {
 ///|
 /// The runtime directory, created on demand. `None` when it cannot be
 /// determined or created; callers then fall back to lepus defaults.
-pub async fn prepared_runtime_dir() -> String? {
+pub async fn prepared_runtime_dir() -> @mbpath.Path? {
   guard app_runtime_dir() is Some(dir) else { return None }
-  let exists = (@mbfs.kind(dir) is Directory) catch { _ => false }
+  let exists = (@mbfs.kind(dir) is Directory) catch {
+    @os_error.OSError(_) as os_error if os_error.is_ENOENT() => false
+    error => raise error
+  }
   if !exists {
     @mbfs.mkdir(dir) catch {
+      error if @async.is_being_cancelled() => raise error
       _ => return None
     }
   }
@@ -39,11 +43,16 @@ pub async fn prepared_runtime_dir() -> String? {
 /// Drop framework configs left behind by earlier launches. Each launch writes
 /// a fresh timestamped file (so two concurrent instances never clobber each
 /// other); without this sweep they would accumulate forever.
-pub async fn remove_stale_framework_configs(dir : String) -> Unit {
-  let entries = @mbfs.readdir(dir) catch { _ => return }
+pub async fn remove_stale_framework_configs(dir : @mbpath.Path) -> Unit {
+  let dir = dir.to_string()
+  let entries = @mbfs.readdir(dir) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return
+  }
   for entry in entries {
     if entry.has_prefix("lepus-framework-") && entry.has_suffix(".json") {
       @mbfs.remove(dir + "/" + entry) catch {
+        error if @async.is_being_cancelled() => raise error
         _ => ()
       }
     }
