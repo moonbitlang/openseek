@@ -215,6 +215,36 @@ async fn extract_archive(
 }
 
 ///|
+async fn chmod_executable_files(
+  ws : @packaging.Workspace,
+  dir : String,
+) -> Unit {
+  if !@asyncfs.exists(ws.at(dir)) {
+    return
+  }
+  for entry in @asyncfs.readdir(ws.at(dir), sort=true) {
+    let path = dir + "/" + entry
+    if @asyncfs.kind(ws.at(path)) is Directory {
+      chmod_executable_files(ws, path)
+    } else {
+      @packaging.run_checked("chmod", ["+x", path], dir=ws.dir())
+    }
+  }
+}
+
+///|
+async fn normalize_seed_executable_bits(
+  ws : @packaging.Workspace,
+  target : MoonbitToolchainTarget,
+  payload_dir : String,
+) -> Unit {
+  if target.executable_suffix != "" {
+    return
+  }
+  chmod_executable_files(ws, payload_dir + "/bin")
+}
+
+///|
 async fn compiler_version(
   target : MoonbitToolchainTarget,
   payload : String,
@@ -264,6 +294,7 @@ pub async fn stage_moonbit_toolchain_seed(
     uses_zip=target.uses_zip,
   )
   @packaging.remove_path_if_exists(ws.at(payload_dir + "/lib/core/_build"))
+  normalize_seed_executable_bits(ws, target, payload_dir)
   let actual_version = compiler_version(target, ws.at(payload_dir))
   if actual_version != version {
     raise @packaging.PackageError(

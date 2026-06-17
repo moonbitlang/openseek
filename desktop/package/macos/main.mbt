@@ -140,16 +140,25 @@ async fn sign_moonbit_seed_binaries(
   identity : String,
   distribution~ : Bool,
 ) -> Unit {
-  let bin_dir = ws.at(MoonbitSeedDir + "/bin")
-  if !@asyncfs.exists(bin_dir) {
+  let seed_dir = ws.at(MoonbitSeedDir)
+  if !@asyncfs.exists(seed_dir) {
     return
   }
-  for entry in @asyncfs.readdir(bin_dir, sort=true) {
-    let path = bin_dir + "/" + entry
+  sign_macho_files_under(ws, seed_dir, identity, distribution~)
+}
+
+///|
+async fn sign_macho_files_under(
+  ws : @packaging.Workspace,
+  dir : String,
+  identity : String,
+  distribution~ : Bool,
+) -> Unit {
+  for entry in @asyncfs.readdir(dir, sort=true) {
+    let path = dir + "/" + entry
     if @asyncfs.kind(path) is Directory {
-      continue
-    }
-    if is_macho_file(path) {
+      sign_macho_files_under(ws, path, identity, distribution~)
+    } else if is_macho_file(path) {
       @packaging.run_checked(
         "codesign",
         codesign_file_args(identity, path, distribution~),
