@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/fsx"
+
+import {
+  "moonbitlang/x/path",
+}
+
+// Values
+pub async fn copy_file(@path.Path, @path.Path) -> Unit
+
+pub async fn ensure_dir(@path.Path) -> Unit
+
+pub async fn exists(@path.Path) -> Bool
+
+pub async fn is_dir(@path.Path) -> Bool
+
+pub async fn read_text(@path.Path) -> String
+
+pub async fn remove_if_exists(@path.Path) -> Unit
+
+pub async fn try_read_text(@path.Path) -> String?
+
+pub async fn write_text(@path.Path, String) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

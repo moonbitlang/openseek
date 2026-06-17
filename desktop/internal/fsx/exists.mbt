@@ -34,11 +34,28 @@ pub async fn is_dir(path : @path.Path) -> Bool {
 ///|
 /// Copy a file, replacing the destination if it already exists.
 pub async fn copy_file(source : @path.Path, destination : @path.Path) -> Unit {
+  let source = source.to_string()
+  let destination = destination.to_string()
+  let permission = if @fs.can_execute(source) { 0o755 } else { 0o644 }
   @fs.write_file(
-    destination.to_string(),
-    @fs.read_file(source.to_string()),
+    destination,
+    @fs.read_file(source),
     create_mode=CreateOrTruncate,
+    permission~,
   )
+  chmod(destination, permission)
+}
+
+///|
+#cfg(not(platform="windows"))
+async fn chmod(path : StringView, permission : Int) -> Unit {
+  @fs.chmod(path, permission)
+}
+
+///|
+#cfg(platform="windows")
+async fn chmod(_path : StringView, _permission : Int) -> Unit {
+  ()
 }
 
 ///|

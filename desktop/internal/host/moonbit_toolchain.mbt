@@ -10,22 +10,8 @@ fn moonbit_process_env(moon_home : @path.Path) -> Map[String, String] {
 }
 
 ///|
-async fn read_text(path : @path.Path) -> String {
-  @fs.read_file(path.to_string()).text()
-}
-
-///|
-async fn read_text_if_exists(path : @path.Path) -> String? {
-  if @fsx.exists(path) {
-    Some(read_text(path))
-  } else {
-    None
-  }
-}
-
-///|
 async fn bundled_moonbit_seed_version(seed_dir : @path.Path) -> String? {
-  guard read_text_if_exists(@appdirs.moonbit_seed_version_path(seed_dir))
+  guard @fsx.try_read_text(@appdirs.moonbit_seed_version_path(seed_dir))
     is Some(version) else {
     return None
   }
@@ -62,7 +48,7 @@ async fn get_moonc_version(moon_home : @path.Path) -> String {
 
 ///|
 async fn is_moonbit_bundled(moon_home : @path.Path, version : String) -> Bool {
-  guard read_text_if_exists(@appdirs.moonbit_bundle_stamp_path(moon_home))
+  guard @fsx.try_read_text(@appdirs.moonbit_bundle_stamp_path(moon_home))
     is Some(stamp) else {
     return false
   }
@@ -97,33 +83,11 @@ async fn bundle_moonbit(moon_home : @path.Path, args : Array[String]) -> Unit {
 }
 
 ///|
-async fn remove_path_if_exists(path : @path.Path) -> Unit {
-  let path = path.to_string()
-  if !@fs.exists(path) {
-    return
-  }
-  if @fs.kind(path) is Directory {
-    @fs.rmdir(path, recursive=true)
-  } else {
-    @fs.remove(path)
-  }
-}
-
-///|
-async fn copy_file(source : @path.Path, destination : @path.Path) -> Unit {
-  @fs.write_file(
-    destination.to_string(),
-    @fs.read_file(source.to_string()),
-    create_mode=CreateOrTruncate,
-  )
-}
-
-///|
 async fn copy_dir_recursive(
   source : @path.Path,
   destination : @path.Path,
 ) -> Unit {
-  @fs.mkdir(destination.to_string(), recursive=true)
+  @fsx.ensure_dir(destination)
   let dir = @fs.opendir(source.to_string())
   defer dir.close()
   while dir.next() is Some(entry) {
@@ -132,7 +96,7 @@ async fn copy_dir_recursive(
     if entry.is_dir {
       copy_dir_recursive(source_entry, destination_entry)
     } else {
-      copy_file(source_entry, destination_entry)
+      @fsx.copy_file(source_entry, destination_entry)
     }
   }
 }
@@ -171,7 +135,7 @@ async fn prepared_bundled_moonbit_payload(seed_dir : @path.Path) -> @path.Path? 
     is_moonbit_bundled(moon_home, version) {
     return Some(moon_home)
   }
-  remove_path_if_exists(moon_home)
+  @fsx.remove_if_exists(moon_home)
   copy_moonbit_seed_dir(seed_dir, moon_home)
   initialize_moonbit(moon_home)
   Some(moon_home)
