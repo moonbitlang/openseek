@@ -1,10 +1,4 @@
 ///|
-const DisableBundledMoonEnv : String = "OPENSEEK_DISABLE_BUNDLED_MOON"
-
-///|
-const OverrideMoonHomeEnv : String = "OPENSEEK_MOON_HOME"
-
-///|
 fn moonbit_process_env(moon_home : @path.Path) -> Map[String, String] {
   {
     "MOON_HOME": moon_home.to_string(),
@@ -129,23 +123,24 @@ async fn remove_path_if_exists(path : @path.Path) -> Unit {
 }
 
 ///|
-#cfg(platform="windows")
-async fn copy_file(source : String, destination : String) -> Unit {
+async fn copy_file(source : @path.Path, destination : @path.Path) -> Unit {
   @fs.write_file(
-    destination,
-    @fs.read_file(source),
+    destination.to_string(),
+    @fs.read_file(source.to_string()),
     create_mode=CreateOrTruncate,
   )
 }
 
 ///|
-#cfg(platform="windows")
-async fn copy_dir_recursive(source : String, destination : String) -> Unit {
-  @fs.mkdir(destination, recursive=true)
-  for entry in @fs.readdir(source, include_hidden=true) {
-    let source_entry = source + "/" + entry
-    let destination_entry = destination + "/" + entry
-    if @fs.kind(source_entry) is Directory {
+async fn copy_dir_recursive(
+  source : @path.Path,
+  destination : @path.Path,
+) -> Unit {
+  @fs.mkdir(destination.to_string(), recursive=true)
+  for entry in @fs.readdir(source.to_string(), include_hidden=true) {
+    let source_entry = source.join(entry)
+    let destination_entry = destination.join(entry)
+    if @fs.kind(source_entry.to_string()) is Directory {
       copy_dir_recursive(source_entry, destination_entry)
     } else {
       copy_file(source_entry, destination_entry)
@@ -154,28 +149,11 @@ async fn copy_dir_recursive(source : String, destination : String) -> Unit {
 }
 
 ///|
-#cfg(platform="windows")
-async fn copy_moonbit_seed_dir(source : String, destination : String) -> Unit {
-  copy_dir_recursive(source, destination)
-}
-
-///|
-#cfg(not(platform="windows"))
 async fn copy_moonbit_seed_dir(
   source : @path.Path,
   destination : @path.Path,
 ) -> Unit {
-  let (code, output) = @process.collect_output_merged(
-    "cp",
-    ["-pR", source.to_string(), destination.to_string()],
-    inherit_env=true,
-  )
-  if code != 0 {
-    fail(
-      "failed to copy bundled MoonBit toolchain seed: " +
-      output.text().trim().to_owned(),
-    )
-  }
+  copy_dir_recursive(source, destination)
 }
 
 ///|
@@ -200,10 +178,9 @@ async fn prepared_bundled_moonbit_payload(seed_dir : @path.Path) -> @path.Path? 
   guard @appdirs.prepared_moonbit_payload_dir(seed_dir) is Some(moon_home) else {
     return None
   }
-  if bundled_moonbit_seed_version(seed_dir) is Some(version) {
-    if bundled_moonbit_ready(moon_home, version) {
-      return Some(moon_home)
-    }
+  if bundled_moonbit_seed_version(seed_dir) is Some(version) &&
+    bundled_moonbit_ready(moon_home, version) {
+    return Some(moon_home)
   }
   remove_path_if_exists(moon_home)
   copy_moonbit_seed_dir(seed_dir, moon_home)
@@ -213,12 +190,6 @@ async fn prepared_bundled_moonbit_payload(seed_dir : @path.Path) -> @path.Path? 
 
 ///|
 async fn moonbit_env_for_engine(config : RunConfig) -> Map[String, String] {
-  if @env.get(DisableBundledMoonEnv) is Some(_) {
-    return {}
-  }
-  if @env.get(OverrideMoonHomeEnv) is Some(moon_home) {
-    return moonbit_process_env(moon_home)
-  }
   guard config.host is Native else { return {} }
   guard @appdirs.bundled_moonbit_seed_dir(config.engine) is Some(seed_dir) else {
     return {}
