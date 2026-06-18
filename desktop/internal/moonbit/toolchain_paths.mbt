@@ -61,9 +61,7 @@ async fn prepared_moonbit_payload_dir(
     return None
   }
   let root = runtime_dir.join("toolchains/moonbit")
-  @fs.mkdir(root.to_string(), recursive=true) catch {
-    _ => return None
-  }
+  @fsx.ensure_dir(root)
   Some(root.join(seed_name))
 }
 
