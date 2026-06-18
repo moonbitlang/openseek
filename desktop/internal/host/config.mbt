@@ -28,9 +28,9 @@ priv struct RunConfig {
   // host's own one-shot session queries; the serve process runs the
   // distro's engine instead.
   host : EngineHost
-  cwd : String?
+  cwd : @path.Path?
   session : String?
-  session_root : String?
+  session_root : @path.Path?
 }
 
 ///|
@@ -97,7 +97,9 @@ async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
     cwd: resolved_run_cwd(session),
     session,
     session_root: if session is Some(_) {
-      @sessiondirs.resolved_session_root(payload.session_root)
+      @sessiondirs.resolved_session_root(
+        payload_root?=payload.session_root.map(root => Path(root)),
+      )
     } else {
       None
     },
@@ -112,7 +114,7 @@ async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
 /// user's home directory: inheriting the host's own cwd would hand the agent
 /// whatever directory the app happened to be launched from (`/` under Finder),
 /// which is never a sensible place to work in.
-async fn resolved_run_cwd(session : String?) -> String? {
+async fn resolved_run_cwd(session : String?) -> @path.Path? {
   if session is Some(session) &&
     @sessiondirs.session_workspace_dir(session) is Some(dir) {
     return Some(dir)
@@ -139,8 +141,8 @@ fn engine_fingerprint(config : RunConfig) -> String {
     config.api_url.unwrap_or(""),
     config.model,
     config.max_steps.to_string(),
-    config.cwd.unwrap_or(""),
+    config.cwd.map(cwd => cwd.to_string()).unwrap_or(""),
     config.session.unwrap_or(""),
-    config.session_root.unwrap_or(""),
+    config.session_root.map(root => root.to_string()).unwrap_or(""),
   ].join("\u{0}")
 }

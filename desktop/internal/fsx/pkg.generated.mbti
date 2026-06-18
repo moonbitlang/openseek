@@ -16,6 +16,8 @@ pub async fn is_dir(@path.Path) -> Bool
 
 pub async fn read_text(@path.Path) -> String
 
+pub async fn read_text_if_exists(@path.Path) -> String?
+
 pub async fn remove_if_exists(@path.Path) -> Unit
 
 pub async fn rmdir(@path.Path, recursive? : Bool) -> Unit

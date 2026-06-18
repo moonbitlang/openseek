@@ -11,15 +11,15 @@ fn moonbit_process_env(moon_home : @path.Path) -> Map[String, String] {
 
 ///|
 async fn bundled_moonbit_seed_version(seed_dir : @path.Path) -> String? {
-  guard @fsx.try_read_text(@appdirs.moonbit_seed_version_path(seed_dir))
+  guard @fsx.read_text_if_exists(@appdirs.moonbit_seed_version_path(seed_dir))
     is Some(version) else {
     return None
   }
-  let version = version.trim().to_owned()
+  let version = version.trim()
   if version.is_empty() {
     None
   } else {
-    Some(version)
+    Some(version.to_owned())
   }
 }
 
@@ -48,7 +48,7 @@ async fn get_moonc_version(moon_home : @path.Path) -> String {
 
 ///|
 async fn is_moonbit_bundled(moon_home : @path.Path, version : String) -> Bool {
-  guard @fsx.try_read_text(@appdirs.moonbit_bundle_stamp_path(moon_home))
+  guard @fsx.read_text_if_exists(@appdirs.moonbit_bundle_stamp_path(moon_home))
     is Some(stamp) else {
     return false
   }

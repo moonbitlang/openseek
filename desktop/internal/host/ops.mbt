@@ -36,8 +36,8 @@ async fn start_run(
   // A WSL run's Linux-path cwd lives inside the distro — the host cannot
   // create it here; `wsl --cd` rejects a missing directory at spawn time.
   if config.cwd is Some(cwd) &&
-    !(config.host is Wsl(..) && is_linux_abs_path(cwd)) {
-    ensure_run_cwd(cwd) catch {
+    !(config.host is Wsl(..) && @path/posix.Path::is_absolute(cwd.0)) {
+    @fsx.ensure_dir(cwd) catch {
       error if @async.is_being_cancelled() => raise error
       error =>
         raise HostError("failed to create working directory \{cwd}: \{error}")
@@ -72,9 +72,9 @@ async fn start_run(
       engine: config.engine,
       model: config.model,
       max_steps: config.max_steps,
-      cwd: config.cwd,
+      cwd: config.cwd.map(cwd => cwd.to_string()),
       session: config.session,
-      session_root: config.session_root,
+      session_root: config.session_root.map(root => root.to_string()),
     }),
   )
   let command : Json = { "command": "prompt", "text": config.task }
@@ -95,22 +95,6 @@ async fn start_run(
     }
   }
   { run_id, status: "accepted", exit_code: 0 }
-}
-
-///|
-/// Create the run's working directory if it is missing — a conversation's
-/// derived workspace does not exist before its first prompt. `@fs.mkdir`
-/// raises EEXIST even with `recursive=true`, so probe first; losing a
-/// creation race to another process leaves the directory present, which is
-/// just as good.
-async fn ensure_run_cwd(cwd : String) -> Unit {
-  if @fs.exists(cwd) {
-    return
-  }
-  @fs.mkdir(cwd, recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
-    error => if @fs.exists(cwd) { () } else { raise error }
-  }
 }
 
 ///|
@@ -199,11 +183,12 @@ async fn engine_stdout(engine : String, args : Array[String]) -> String {
 
 ///|
 async fn list_sessions(engine : String) -> SessionsReply {
-  guard @sessiondirs.resolved_session_root(None) is Some(root) else {
+  guard @sessiondirs.resolved_session_root() is Some(root) else {
     raise HostError(
       "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
     )
   }
+  let root = root.to_string()
   let output = engine_stdout(engine, [
     "--session-root", root, "--session-list", "--format", "json",
   ]) catch {
@@ -225,13 +210,17 @@ async fn load_session(
   guard !session.is_empty() else {
     raise HostError("session id must not be empty")
   }
-  guard @sessiondirs.resolved_session_root(None) is Some(root) else {
+  guard @sessiondirs.resolved_session_root() is Some(root) else {
     raise HostError(
       "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
     )
   }
   let output = engine_stdout(engine, [
-    "--session-root", root, "--session-show", "--session", session,
+    "--session-root",
+    root.to_string(),
+    "--session-show",
+    "--session",
+    session,
   ]) catch {
     HostError(detail) => raise HostError("session load failed: " + detail)
     error => raise error

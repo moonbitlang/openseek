@@ -1,10 +1,14 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/internal/sessiondirs"
 
-// Values
-pub fn resolved_session_root(String?) -> String?
+import {
+  "moonbitlang/x/path",
+}
 
-pub async fn session_workspace_dir(String) -> String?
+// Values
+pub fn resolved_session_root(payload_root? : @path.Path) -> @path.Path?
+
+pub async fn session_workspace_dir(String) -> @path.Path?
 
 // Errors
 

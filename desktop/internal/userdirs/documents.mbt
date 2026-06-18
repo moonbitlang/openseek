@@ -16,7 +16,7 @@ extern "C" fn known_folder_documents() -> Bytes = "openseek_desktop_documents_di
 /// authority on Windows. `None` when the lookup fails — and always off
 /// Windows, where the native stub returns empty bytes.
 #cfg(platform="windows")
-pub async fn documents_dir() -> String? {
+pub async fn documents_dir() -> @path.Path? {
   let path = known_folder_documents()
   guard path.length() > 0 else { return None }
   Some(@utf8.decode_lossy(path))
@@ -24,7 +24,7 @@ pub async fn documents_dir() -> String? {
 
 ///|
 #cfg(not(platform="windows"))
-pub async fn documents_dir() -> String? {
+pub async fn documents_dir() -> @path.Path? {
   guard @home.dir() is Some(home) else { return None }
   if xdg_documents_override(home) is Some(dir) {
     return Some(dir)
@@ -39,19 +39,18 @@ pub async fn documents_dir() -> String? {
 /// `None` when there is no override. `xdg-user-dirs-update` may reset a removed
 /// user dir to `$HOME`; that value resolves to the home directory like any
 /// other supported value.
-async fn xdg_documents_override(home : @path.Path) -> String? {
-  let config_dir = match @env.get("XDG_CONFIG_HOME") {
-    Some(dir) => @path.Path(dir)
-    None => home.join(".config").to_string()
+async fn xdg_documents_override(home : @path.Path) -> @path.Path? {
+  let config_dir = if @env.get("XDG_CONFIG_HOME") is Some(dir) {
+    @path.Path(dir)
+  } else {
+    home.join(".config")
   }
-  let file = config_dir.join("user-dirs.dirs").to_string()
-  let content = @fs.read_file(file).text() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return None
-  }
-  for line in content.split("\n") {
-    if parse_xdg_documents_dir_line(home, line) is Some(dir) {
-      return Some(dir.normalize().to_string())
+  let file = config_dir.join("user-dirs.dirs")
+  if @fsx.try_read_text(file) is Some(content) {
+    for line in content.split("\n") {
+      if parse_xdg_documents_dir_line(home, line) is Some(dir) {
+        return Some(dir.normalize())
+      }
     }
   }
   None

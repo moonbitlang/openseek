@@ -2,9 +2,8 @@ import {
   "openseek_desktop/internal/env",
   "openseek_desktop/internal/home",
   "openseek_desktop/internal/userdirs",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/x/path" @mbpath,
+  "openseek_desktop/internal/fsx",
+  "moonbitlang/x/path",
 }
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

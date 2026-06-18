@@ -363,7 +363,7 @@ async fn[G] start_serve_engine(
   if config.session is Some(session) {
     env["OPENSEEK_SESSION"] = session
     if config.session_root is Some(root) {
-      env["OPENSEEK_SESSION_ROOT"] = root
+      env["OPENSEEK_SESSION_ROOT"] = root.to_string()
     }
   }
   for key, value in moonbit_env_for_engine(config) {
@@ -386,7 +386,7 @@ async fn[G] start_serve_engine(
     stdin=child_stdin,
     stdout=child_stdout,
     stderr=child_stderr,
-    cwd?=spawn_cwd.map(cwd => cwd.view()),
+    cwd?=spawn_cwd.map(cwd => cwd.to_string().view()),
     cancel_handler=@process.graceful_cancel(timeout=1000),
     no_wait=true,
   )

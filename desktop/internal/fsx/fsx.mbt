@@ -6,14 +6,22 @@ pub async fn exists(path : @path.Path) -> Bool {
 ///|
 pub async fn try_read_text(path : @path.Path) -> String? {
   Some(@fs.read_file(path.to_string()).text()) catch {
-    @os_error.OSError(_) as os_error if os_error.is_ENOENT() => return None
-    error => raise error
+    error if @async.is_being_cancelled() => raise error
+    _ => None
   }
 }
 
 ///|
 pub async fn read_text(path : @path.Path) -> String {
   @fs.read_file(path.to_string()).text()
+}
+
+///|
+pub async fn read_text_if_exists(path : @path.Path) -> String? {
+  Some(@fs.read_file(path.to_string()).text()) catch {
+    @os_error.OSError(_) as os_error if os_error.is_ENOENT() => None
+    error => raise error
+  }
 }
 
 ///|
@@ -29,8 +37,8 @@ pub async fn write_bytes(path : @path.Path, content : Bytes) -> Unit {
 ///|
 pub async fn is_dir(path : @path.Path) -> Bool {
   try @fs.kind(path.to_string()) catch {
-    @os_error.OSError(_) as os_error if os_error.is_ENOENT() => return false
-    error => raise error
+    error if @async.is_being_cancelled() => raise error
+    _ => false
   } noraise {
     kind => kind is Directory
   }

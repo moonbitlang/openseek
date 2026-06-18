@@ -140,7 +140,7 @@ fn windows_path_to_wsl_mount(path : String) -> String? {
 fn EngineHost::serve_command(
   self : EngineHost,
   native_engine : String,
-  cwd : String?,
+  cwd : @path.Path?,
 ) -> (String, Array[String]) {
   match self {
     Native => (native_engine, ["--serve", "--dir", "."])
@@ -152,7 +152,7 @@ fn EngineHost::serve_command(
       }
       if cwd is Some(cwd) {
         args.push("--cd")
-        args.push(cwd)
+        args.push(cwd.to_string())
       }
       args.push("--")
       args.push(engine)
@@ -192,14 +192,6 @@ fn wslenv_with_passthrough(existing : String?) -> String {
     Some(value) if !value.trim().is_empty() => value + ":" + WslEnvPassthrough
     _ => WslEnvPassthrough
   }
-}
-
-///|
-/// Whether `path` is an absolute Linux path — a cwd that exists only inside
-/// the distro, so the host must neither validate nor create it on the
-/// Windows filesystem (`/foo` would resolve against the current drive there).
-fn is_linux_abs_path(path : String) -> Bool {
-  path.has_prefix("/")
 }
 
 ///|
@@ -282,11 +274,4 @@ test "sibling path replaces the file name component" {
     is Some("C:/bundle/openseek-linux"),
   )
   assert_true(sibling_path("openseek.exe", "openseek-linux") is None)
-}
-
-///|
-test "linux path detection" {
-  assert_true(is_linux_abs_path("/home/me/project"))
-  assert_false(is_linux_abs_path("C:\\Users\\me"))
-  assert_false(is_linux_abs_path("relative/path"))
 }

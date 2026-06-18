@@ -7,23 +7,18 @@
 /// absolute default under the user's home directory. The absolute fallback
 /// matters because a packaged app can run with `/` as its working directory,
 /// where the engine's relative `.openseek` default could never be created.
-pub fn resolved_session_root(payload_root : String?) -> String? {
+pub fn resolved_session_root(payload_root? : @path.Path) -> @path.Path? {
   if payload_root is Some(root) {
-    return Some(resolve_explicit_session_root(root))
+    return Some(root.resolve())
   }
   if @env.get("OPENSEEK_SESSION_ROOT") is Some(root) {
-    return Some(resolve_explicit_session_root(root))
+    return Some(@path.Path(root).resolve())
   }
   home_session_root()
 }
 
 ///|
-fn resolve_explicit_session_root(root : String) -> String {
-  (root : @mbpath.Path).resolve().to_string()
-}
-
-///|
-fn home_session_root() -> String? {
+fn home_session_root() -> @path.Path? {
   guard @home.dir() is Some(home) else { return None }
-  Some((home : @mbpath.Path).join(".openseek").normalize().to_string())
+  Some(home.join(".openseek").normalize())
 }

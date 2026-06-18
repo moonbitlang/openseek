@@ -12,10 +12,10 @@ const WorkspaceDirName = "OpenSeek"
 /// lands in the same directory without recording it anywhere. `None` when the
 /// id is unsafe as a path component or no home directory is known; the caller
 /// falls back to the home directory.
-pub async fn session_workspace_dir(session : String) -> String? {
+pub async fn session_workspace_dir(session : String) -> @path.Path? {
   guard safe_workspace_id(session) else { return None }
   guard workspace_root() is Some(root) else { return None }
-  Some((root : @mbpath.Path).join(session).normalize().to_string())
+  Some(root.join(session).normalize())
 }
 
 ///|
@@ -37,23 +37,13 @@ fn safe_workspace_id(session : String) -> Bool {
 /// Documents is comes from the platform (`@userdirs.documents_dir`); when
 /// that folder does not exist (headless machines, say), the folder lives
 /// directly under the home directory.
-async fn workspace_root() -> String? {
+async fn workspace_root() -> @path.Path? {
   guard @home.dir() is Some(home) else { return None }
-  let parent : @mbpath.Path = if @userdirs.documents_dir() is Some(documents) &&
-    is_dir(documents) {
+  let parent : @path.Path = if @userdirs.documents_dir() is Some(documents) &&
+    @fsx.is_dir(documents) {
     documents
   } else {
     home
   }
-  Some(parent.join(WorkspaceDirName).normalize().to_string())
-}
-
-///|
-/// Whether `path` exists and is a directory; probe failures mean "no".
-async fn is_dir(path : String) -> Bool {
-  let kind = @fs.kind(path) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return false
-  }
-  kind is Directory
+  Some(parent.join(WorkspaceDirName).normalize())
 }

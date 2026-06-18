@@ -1,8 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/internal/userdirs"
 
+import {
+  "moonbitlang/x/path",
+}
+
 // Values
-pub async fn documents_dir() -> String?
+pub async fn documents_dir() -> @path.Path?
 
 // Errors
 
