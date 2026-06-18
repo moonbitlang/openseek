@@ -1,4 +1,16 @@
 members = [
   ".",
   "./cmd/viz_app",
+  "./desktop",
+  "./desktop/lepus",
+  "./desktop/lepus/manifest",
+  "./desktop/lepus/ipc",
+  "./desktop/lepus/core",
+  "./desktop/lepus/app",
+  "./desktop/lepus/bootstrap",
+  "./desktop/lepus/catalog",
+  "./desktop/lepus/cli",
+  "./desktop/lepus/extensions",
+  "./desktop/lepus/runtime",
+  "./desktop/lepus/cef",
 ]
