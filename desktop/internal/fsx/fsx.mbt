@@ -22,6 +22,11 @@ pub async fn write_text(path : @path.Path, content : String) -> Unit {
 }
 
 ///|
+pub async fn write_bytes(path : @path.Path, content : Bytes) -> Unit {
+  @fs.write_file(path.to_string(), content, create_mode=CreateOrTruncate)
+}
+
+///|
 pub async fn is_dir(path : @path.Path) -> Bool {
   try @fs.kind(path.to_string()) catch {
     @os_error.OSError(_) as os_error if os_error.is_ENOENT() => return false
@@ -54,7 +59,7 @@ async fn chmod(path : StringView, permission : Int) -> Unit {
 
 ///|
 #cfg(platform="windows")
-async fn chmod(_path : StringView, _permission : Int) -> Unit {
+async fn chmod(_ : StringView, _ : Int) -> Unit {
   ()
 }
 

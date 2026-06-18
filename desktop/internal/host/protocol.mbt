@@ -11,7 +11,6 @@ priv struct StartPayload {
   api_url : String?
   model : String?
   max_steps : Int?
-  cwd : String?
   session : String?
   session_root : String?
   // Present = run the engine inside WSL (Windows only); absent = native.

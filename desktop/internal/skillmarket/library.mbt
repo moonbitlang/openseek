@@ -29,16 +29,12 @@ pub struct InstalledSkill {
 /// home directory (`HOME`, or `USERPROFILE` on Windows) plus
 /// `/.openseek/skills`. Deliberately resolved like the engine resolves it:
 /// installing somewhere the engine never reads would be a silent no-op.
-fn resolved_library_dir(overridden : String?) -> String raise SkillMarketError {
-  if overridden is Some(dir) {
+fn library_dir_from_env() -> @path.Path raise SkillMarketError {
+  if @env.get("OPENSEEK_GLOBAL_SKILLS_DIR") is Some(dir) {
     return dir
   }
-  if @env.get("OPENSEEK_GLOBAL_SKILLS_DIR") is Some(dir) &&
-    !dir.trim().is_empty() {
-    return dir
-  }
-  if @home.dir() is Some(home) && !home.trim().is_empty() {
-    return home + "/.openseek/skills"
+  if @home.dir() is Some(home) {
+    return home.join(".openseek/skills")
   }
   raise SkillMarketError(
     "cannot locate the skills library; set OPENSEEK_GLOBAL_SKILLS_DIR",
@@ -122,14 +118,6 @@ fn decode_sidecar(text : String) -> String {
 }
 
 ///|
-async fn read_text(path : String) -> String? {
-  Some(@fs.read_file(path).text()) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => None
-  }
-}
-
-///|
 /// Download one registry skill and install it as
 /// `<library>/<slug>/SKILL.md`. The discovery index is authoritative: it
 /// names the slug, the download URL, and the digest the content must hash
@@ -140,9 +128,8 @@ pub async fn install_skill(
   version~ : String,
   package_path~ : String,
   registry? : String = DefaultRegistry,
-  library_dir? : String,
+  library_dir? : @path.Path = library_dir_from_env(),
 ) -> InstalledSkill {
-  let library = resolved_library_dir(library_dir)
   let entry = entry_path(module_name, version, package_path)
   let found = fetch_discovery_entry(registry, entry)
   // The index body is registry-controlled data; never let it send the
@@ -157,10 +144,10 @@ pub async fn install_skill(
       "registry returned an unusable skill name: \{found.name}",
     )
   }
-  let target = library + "/" + found.name
-  let sidecar = target + "/" + SidecarFile
-  let flat_target = target + ".md"
-  if @fs.exists(flat_target) || (@fs.exists(target) && !@fs.exists(sidecar)) {
+  let target = library_dir.join(found.name)
+  let sidecar = target.join(SidecarFile)
+  let flat_target = @path.Path("\{target}.md")
+  if @fsx.exists(flat_target) || (@fsx.exists(target) && !@fsx.exists(sidecar)) {
     raise SkillMarketError(
       "a skill named \{found.name} already exists in your library; not overwriting it",
     )
@@ -175,15 +162,15 @@ pub async fn install_skill(
       "SKILL.md digest mismatch for \{entry}; not installing",
     )
   }
-  ensure_dir(target)
-  @fs.write_file(target + "/SKILL.md", content, create_mode=CreateOrTruncate)
+  @fsx.ensure_dir(target)
+  @fsx.write_bytes(target.join("SKILL.md"), content)
   let provenance : Json = {
     "module": module_name,
     "version": version,
     "package": package_path,
     "digest": found.digest,
   }
-  @fs.write_file(sidecar, provenance.stringify(), create_mode=CreateOrTruncate)
+  @fsx.write_text(sidecar, provenance.stringify())
   // Display fields only — the digest already vouched for the content.
   let text = data.text() catch { _ => "" }
   let (name, description) = parse_frontmatter(text, found.name)
@@ -196,42 +183,34 @@ pub async fn install_skill(
 }
 
 ///|
-/// Create `dir` if missing. `@fs.mkdir` raises EEXIST even with
-/// `recursive=true`, so probe first; losing a creation race leaves the
-/// directory present, which is just as good.
-async fn ensure_dir(dir : String) -> Unit {
-  if @fs.exists(dir) {
-    return
-  }
-  @fs.mkdir(dir, recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
-    error => if @fs.exists(dir) { () } else { raise error }
-  }
-}
-
-///|
 /// The library's contents, mirroring the engine's discovery rules: every
 /// `<name>.md`, plus every `<name>/SKILL.md`. A missing or unreadable
 /// library is an empty one. Entries we installed carry their registry
 /// source; everything else is the user's own.
-pub async fn installed_skills(library_dir? : String) -> Array[InstalledSkill] {
-  let library = resolved_library_dir(library_dir)
-  let entries = @fs.readdir(library, sort=true) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return []
+pub async fn installed_skills(
+  library_dir? : @path.Path = library_dir_from_env(),
+) -> Array[InstalledSkill] {
+  let entries = if @fsx.Directory::try_open(library_dir) is Some(dir) {
+    dir.collect()
+  } else {
+    []
   }
   let skills : Array[InstalledSkill] = []
   for entry in entries {
-    let path = library + "/" + entry
-    if entry.has_suffix(".md") {
-      guard read_text(path) is Some(text) else { continue }
-      let id = entry[0:entry.length() - 3].to_owned()
+    let entry = entry.name()
+    let path = library_dir.join(entry)
+    if entry is [.. id, .. ".md"] {
+      guard @fsx.try_read_text(path) is Some(text) else { continue }
+      let id = id.to_owned()
       let (name, description) = parse_frontmatter(text, id)
       skills.push({ id, name, description, source: "" })
     } else {
-      guard read_text(path + "/SKILL.md") is Some(text) else { continue }
+      guard @fsx.try_read_text(path.join("SKILL.md")) is Some(text) else {
+        continue
+      }
       let (name, description) = parse_frontmatter(text, entry)
-      let source = if read_text(path + "/" + SidecarFile) is Some(sidecar) {
+      let source = if @fsx.try_read_text(path.join(SidecarFile))
+        is Some(sidecar) {
         decode_sidecar(sidecar)
       } else {
         ""
@@ -246,21 +225,23 @@ pub async fn installed_skills(library_dir? : String) -> Array[InstalledSkill] {
 /// Remove one installed skill. Only entries carrying our provenance sidecar
 /// are removable — a hand-written skill is the user's file, not ours to
 /// delete.
-pub async fn uninstall_skill(id : String, library_dir? : String) -> Unit {
+pub async fn uninstall_skill(
+  id : String,
+  library_dir? : @path.Path = library_dir_from_env(),
+) -> Unit {
   guard valid_slug(id) else {
     raise SkillMarketError("invalid skill id: \{id}")
   }
-  let library = resolved_library_dir(library_dir)
-  let target = library + "/" + id
-  guard @fs.exists(target) else {
+  let target = library_dir.join(id)
+  guard @fsx.exists(target) else {
     raise SkillMarketError("no skill named \{id} in the library")
   }
-  guard @fs.exists(target + "/" + SidecarFile) else {
+  guard @fsx.exists(target.join(SidecarFile)) else {
     raise SkillMarketError(
       "\{id} was not installed from the registry; remove it by hand",
     )
   }
-  @fs.rmdir(target, recursive=true) catch {
+  @fsx.rmdir(target, recursive=true) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise SkillMarketError("failed to remove \{id}: \{error}")
   }

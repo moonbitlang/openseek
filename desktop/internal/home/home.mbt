@@ -2,37 +2,23 @@
 
 ///|
 /// The user's home directory: `USERPROFILE` on Windows, otherwise `HOME`.
-pub fn dir() -> String? {
-  home_dir_from_env(@env.get("OS"), @env.get("HOME"), @env.get("USERPROFILE"))
-}
-
-///|
-fn home_dir_from_env(
-  os : String?,
-  home : String?,
-  userprofile : String?,
-) -> String? {
-  if os is Some("Windows_NT") {
-    if userprofile is Some(userprofile) {
-      return Some(userprofile)
-    }
-    return home
+#cfg(platform="windows")
+pub fn dir() -> @path.Path? {
+  if @env.get("USERPROFILE") is Some(userprofile) {
+    return Some(userprofile)
   }
-  if home is Some(home) {
+  if @env.get("HOME") is Some(home) {
     return Some(home)
   }
-  userprofile
+  None
 }
 
 ///|
-/// Expand a leading `~` to the home directory; anything else passes through.
-pub fn expand(cwd : String) -> String {
-  guard dir() is Some(home) else { return cwd }
-  if cwd == "~" {
-    home
-  } else if cwd.has_prefix("~/") {
-    home + cwd[1:].to_owned()
+#cfg(not(platform="windows"))
+pub fn dir() -> @path.Path? {
+  if @env.get("HOME") is Some(home) {
+    Some(Path(home))
   } else {
-    cwd
+    None
   }
 }

@@ -91,7 +91,6 @@ async test "desktop start ignores OPENSEEK_API_URL without an explicit payload U
       api_url: None,
       model: None,
       max_steps: None,
-      cwd: Some("."),
       session: None,
       session_root: None,
       wsl: None,

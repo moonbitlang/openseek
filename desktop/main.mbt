@@ -40,12 +40,11 @@ async fn main {
   // too, so neither process depends on the bundle directory being writable —
   // or on it continuing to exist while the app runs.
   let runtime_dir = @appdirs.prepared_runtime_dir()
-  let framework_config_path = match runtime_dir {
-    Some(dir) => {
-      @appdirs.remove_stale_framework_configs(dir)
-      Some("\{dir}/lepus-framework-\{@env.now()}.json")
-    }
-    None => None
+  let framework_config_path = if runtime_dir is Some(dir) {
+    @appdirs.remove_stale_framework_configs(dir)
+    Some("\{dir}/lepus-framework-\{@env.now()}.json")
+  } else {
+    None
   }
   match
     @app.run_app_command_extensions_with_framework_process(

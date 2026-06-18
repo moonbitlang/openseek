@@ -1,10 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/internal/home"
 
-// Values
-pub fn dir() -> String?
+import {
+  "moonbitlang/x/path",
+}
 
-pub fn expand(String) -> String
+// Values
+pub fn dir() -> @path.Path?
 
 // Errors
 

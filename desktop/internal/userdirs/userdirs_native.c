@@ -43,10 +43,4 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t openseek_desktop_documents_dir(void) {
   return result;
 }
 
-#else
-
-MOONBIT_FFI_EXPORT moonbit_bytes_t openseek_desktop_documents_dir(void) {
-  return moonbit_make_bytes(0, 0);
-}
-
 #endif

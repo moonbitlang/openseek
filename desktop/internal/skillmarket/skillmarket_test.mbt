@@ -124,7 +124,7 @@ async fn fake_registry(group : @async.TaskGroup[Unit]) -> String? {
 /// Run an install that must fail and return its user-facing message.
 async fn install_failure(
   base : String,
-  lib : String,
+  lib : @path.Path,
   module_name : String,
 ) -> String {
   try {
@@ -144,7 +144,7 @@ async fn install_failure(
 
 ///|
 /// Run an uninstall that must fail and return its user-facing message.
-async fn uninstall_failure(lib : String, id : String) -> String {
+async fn uninstall_failure(lib : @path.Path, id : String) -> String {
   try {
     @skillmarket.uninstall_skill(id, library_dir=lib)
     fail("uninstall of \{id} should have failed")

@@ -145,10 +145,10 @@ async fn prepared_bundled_moonbit_payload(seed_dir : @path.Path) -> @path.Path? 
 async fn moonbit_env_for_engine(config : RunConfig) -> Map[String, String] {
   guard config.host is Native else { return {} }
   guard @appdirs.bundled_moonbit_seed_dir(config.engine) is Some(seed_dir) else {
-    return {}
+    abort("aaaaa")
   }
   guard prepared_bundled_moonbit_payload(seed_dir) is Some(moon_home) else {
-    return {}
+    abort("bbbbb")
   }
   moonbit_process_env(moon_home)
 }
