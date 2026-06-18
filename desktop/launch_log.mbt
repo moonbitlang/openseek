@@ -11,5 +11,9 @@ async fn launch_logger() -> @xlog.Logger {
   guard @extension.prepared_runtime_dir() is Some(dir) else {
     fail("cannot determine the per-user runtime directory")
   }
-  Logger(@xlog.File(dir.join("openseek-desktop.log").to_string()))
+  @xlog.global().set_handler(
+    @xlog.File(dir.join("openseek-desktop.log").to_string()),
+  )
+  @xlog.global().set_level(Debug)
+  @xlog.global()
 }

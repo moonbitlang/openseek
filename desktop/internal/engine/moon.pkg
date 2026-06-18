@@ -10,15 +10,13 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
+  "moonbitlang/core/env" @sys,
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "moonbitlang/x/path",
   "moonbitlang/x/path/posix" @path/posix,
+  "tonyfettes/xlog",
 }
-
-import {
-  "moonbitlang/core/env" @sys,
-} for "wbtest"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 

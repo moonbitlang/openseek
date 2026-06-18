@@ -136,7 +136,19 @@ async fn initialize_moonbit(
   runtime_dir : @path.Path?,
 ) -> Unit {
   let version = get_moonc_version(moon_home, runtime_dir)
+  @xlog.debug() <?
+    {
+      "event": "desktop_moonbit_initialize",
+      "moon_home": moon_home.to_string(),
+      "version": version,
+    }
   if is_moonbit_bundled(moon_home, version) {
+    @xlog.debug() <?
+      {
+        "event": "desktop_moonbit_initialize_reuse",
+        "moon_home": moon_home.to_string(),
+        "version": version,
+      }
     return
   }
   bundle_moonbit(
@@ -154,6 +166,12 @@ async fn initialize_moonbit(
     "version=\{version}",
     create_mode=CreateOrTruncate,
   )
+  @xlog.debug() <?
+    {
+      "event": "desktop_moonbit_initialize_complete",
+      "moon_home": moon_home.to_string(),
+      "version": version,
+    }
 }
 
 ///|
@@ -164,13 +182,42 @@ async fn prepared_bundled_moonbit_payload(
   guard prepared_moonbit_payload_dir(seed_dir~, runtime_dir?) is Some(moon_home) else {
     return None
   }
+  @xlog.debug() <?
+    {
+      "event": "desktop_moonbit_prepare_payload",
+      "seed_dir": seed_dir.to_string(),
+      "moon_home": moon_home.to_string(),
+      "moon_exists": @fsx.exists(moonbit_command(moon_home)),
+      "moonc_exists": @fsx.exists(moonbit_compiler_command(moon_home)),
+    }
   if bundled_moonbit_seed_version(seed_dir) is Some(version) &&
     is_moonbit_bundled(moon_home, version) {
+    @xlog.debug() <?
+      {
+        "event": "desktop_moonbit_prepare_payload_reuse",
+        "seed_dir": seed_dir.to_string(),
+        "moon_home": moon_home.to_string(),
+        "version": version,
+      }
     return Some(moon_home)
   }
+  @xlog.debug() <?
+    {
+      "event": "desktop_moonbit_prepare_payload_refresh",
+      "seed_dir": seed_dir.to_string(),
+      "moon_home": moon_home.to_string(),
+    }
   @fsx.remove_if_exists(moon_home)
   copy_moonbit_seed_dir(seed_dir, moon_home)
   initialize_moonbit(moon_home, runtime_dir)
+  @xlog.debug() <?
+    {
+      "event": "desktop_moonbit_prepare_payload_complete",
+      "seed_dir": seed_dir.to_string(),
+      "moon_home": moon_home.to_string(),
+      "moon_exists": @fsx.exists(moonbit_command(moon_home)),
+      "moonc_exists": @fsx.exists(moonbit_compiler_command(moon_home)),
+    }
   Some(moon_home)
 }
 
@@ -179,6 +226,12 @@ pub async fn prepare_bundled_home(
   engine_command : String,
   runtime_dir? : @path.Path,
 ) -> @path.Path {
+  @xlog.debug() <?
+    {
+      "event": "desktop_moonbit_prepare_home",
+      "engine_command": engine_command,
+      "runtime_dir": runtime_dir.map(dir => dir.to_string()).unwrap_or(""),
+    }
   guard bundled_moonbit_seed_dir(engine_command) is Some(seed_dir) else {
     fail("bundled MoonBit toolchain seed not found")
   }
@@ -186,5 +239,12 @@ pub async fn prepare_bundled_home(
     is Some(moon_home) else {
     fail("failed to prepare bundled MoonBit toolchain")
   }
+  @xlog.debug() <?
+    {
+      "event": "desktop_moonbit_prepare_home_complete",
+      "engine_command": engine_command,
+      "seed_dir": seed_dir.to_string(),
+      "moon_home": moon_home.to_string(),
+    }
   moon_home
 }

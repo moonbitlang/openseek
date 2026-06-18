@@ -328,19 +328,80 @@ fn prepend_to_path_env(bin_dir : String, current_path : String?) -> String {
 }
 
 ///|
+fn first_path_entry(path : String?) -> String {
+  guard path is Some(path) else { return "" }
+  match path.split(PathSep).collect() {
+    [first, ..] => first.to_owned()
+    [] => ""
+  }
+}
+
+///|
 async fn add_moonbit_path_for_native_engine(
   env : Map[String, String],
   config : RunConfig,
   runtime_dir : @path.Path?,
 ) -> Unit {
-  guard config.host is Native else { return }
+  guard config.host is Native else {
+    @xlog.debug() <?
+      {
+        "event": "desktop_engine_moonbit_path_skipped",
+        "host": config.host.fingerprint(),
+      }
+    return
+  }
   let moon_home = @moonbit.prepare_bundled_home(config.engine, runtime_dir?)
+  let moon_bin_dir = moon_home.join("bin")
+  let moon = moon_bin_dir.join("moon")
+  let moon_exe = moon_bin_dir.join("moon.exe")
   // The agent tools spawn `moon` by name, but `MOON_HOME` would redirect
   // registry/cache lookup into the bundled payload.
-  env["PATH"] = prepend_to_path_env(
-    moon_home.join("bin").to_string(),
-    @env.get("PATH"),
-  )
+  env["PATH"] = prepend_to_path_env(moon_bin_dir.to_string(), env.get("PATH"))
+  @xlog.debug() <?
+    {
+      "event": "desktop_engine_moonbit_path",
+      "host": config.host.fingerprint(),
+      "moon_home": moon_home.to_string(),
+      "moon_bin_dir": moon_bin_dir.to_string(),
+      "moon_exists": @fsx.exists(moon),
+      "moon_exe_exists": @fsx.exists(moon_exe),
+      "path_prefix": first_path_entry(env.get("PATH")),
+    }
+}
+
+///|
+async fn engine_process_env(
+  config : RunConfig,
+  runtime_dir : @path.Path?,
+) -> Map[String, String] {
+  // Build a complete environment and pass it with `inherit_env=false`.
+  // `moonbitlang/async/process` prepends `extra_env` before inherited env on
+  // Unix, so overriding PATH with inheritance enabled can leave two PATH
+  // entries and let `/bin/sh` observe the original one.
+  let env = @sys.get_env_vars()
+  env["DEEPSEEK"] = config.api_key
+  env["DEEPSEEK_MODEL"] = config.model
+  env["OPENSEEK_MAX_STEPS"] = config.max_steps.to_string()
+  env["OPENSEEK_DIR"] = "."
+  if resolved_global_skills_dir() is Some(dir) {
+    env["OPENSEEK_GLOBAL_SKILLS_DIR"] = dir.to_string()
+  }
+  if config.api_url is Some(url) {
+    env["OPENSEEK_API_URL"] = url
+  }
+  // A named session puts the engine in durable-session mode, so the
+  // conversation survives the process and is shared with the CLI/TUI.
+  if config.session is Some(session) {
+    env["OPENSEEK_SESSION"] = session
+    if config.session_root is Some(root) {
+      env["OPENSEEK_SESSION_ROOT"] = root.to_string()
+    }
+  }
+  add_moonbit_path_for_native_engine(env, config, runtime_dir)
+  if config.host is Wsl(..) {
+    env["WSLENV"] = wslenv_with_passthrough(@env.get("WSLENV"))
+  }
+  env
 }
 
 ///|
@@ -357,40 +418,30 @@ async fn[G] start_serve_engine(
   let (child_stdin, writer) = @process.write_to_process()
   let (reader, child_stdout) = @process.read_from_process()
   let (stderr_reader, child_stderr) = @process.read_from_process()
-  let env = {
-    "DEEPSEEK": config.api_key,
-    "DEEPSEEK_MODEL": config.model,
-    "OPENSEEK_MAX_STEPS": config.max_steps.to_string(),
-    "OPENSEEK_DIR": ".",
-  }
-  if resolved_global_skills_dir() is Some(dir) {
-    env["OPENSEEK_GLOBAL_SKILLS_DIR"] = dir.to_string()
-  }
-  if config.api_url is Some(url) {
-    env["OPENSEEK_API_URL"] = url
-  }
-  // A named session puts the engine in durable-session mode, so the
-  // conversation survives the process and is shared with the CLI/TUI.
-  if config.session is Some(session) {
-    env["OPENSEEK_SESSION"] = session
-    if config.session_root is Some(root) {
-      env["OPENSEEK_SESSION_ROOT"] = root.to_string()
-    }
-  }
-  add_moonbit_path_for_native_engine(env, config, manager.runtime_dir)
-  if config.host is Wsl(..) {
-    env["WSLENV"] = wslenv_with_passthrough(@env.get("WSLENV"))
-  }
+  let env = engine_process_env(config, manager.runtime_dir)
   let (program, args) = config.host.serve_command(config.engine, config.cwd)
   // In WSL mode the working directory is `--cd`'s job: a Linux-path cwd
   // does not exist on the Windows side, so chdir'ing wsl.exe into it would
   // fail the spawn.
   let spawn_cwd = if config.host is Wsl(..) { None } else { config.cwd }
+  @xlog.debug() <?
+    {
+      "event": "desktop_engine_spawn",
+      "host": config.host.fingerprint(),
+      "program": program,
+      "cwd": spawn_cwd.map(cwd => cwd.to_string()).unwrap_or(""),
+      "session_key": session_key(config),
+      "runtime_dir": manager.runtime_dir
+      .map(dir => dir.to_string())
+      .unwrap_or(""),
+      "path_prefix": first_path_entry(env.get("PATH")),
+      "inherit_env": false,
+    }
   let process = @process.spawn(
     group,
     program,
     args,
-    inherit_env=true,
+    inherit_env=false,
     extra_env=env,
     stdin=child_stdin,
     stdout=child_stdout,
