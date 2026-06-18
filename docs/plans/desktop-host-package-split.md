@@ -19,7 +19,12 @@ one `desktop/internal/host` package.
   lifecycle, one-shot engine stdout helpers, session root resolution, and
   per-session workspace directories.
 - `desktop/internal/moonbit` owns bundled MoonBit toolchain discovery,
-  preparation, bundle stamps, command paths, and environment injection.
+  preparation, bundle stamps, and command paths.
+- `desktop/internal/engine` decides how the prepared MoonBit toolchain is exposed
+  to the native engine. The current engine tools spawn `moon` by name, so native
+  engine runs prepend the prepared `bin` directory to `PATH`. They do not set
+  `MOON_HOME`, because that redirects MoonBit registry/cache lookup into the
+  runtime toolchain payload and breaks projects that depend on registry packages.
 - Remove `desktop/internal/host`, `desktop/internal/appdirs`, and
   `desktop/internal/sessiondirs` after their contents move. Do not keep
   compatibility shims because current callers are desktop-internal.
@@ -53,8 +58,20 @@ one `desktop/internal/host` package.
   operations required by `extension`.
 - `openseek_desktop/internal/protocol` exposes only the serve protocol command
   and event helpers required by `engine`.
-- `openseek_desktop/internal/moonbit` exposes only the toolchain environment
+- `openseek_desktop/internal/moonbit` exposes only the toolchain preparation
   helper required by `engine`.
+
+## Follow-up: Native Engine MoonBit Environment
+
+- Goal: keep bundled `moon` available to the native engine without isolating its
+  package registry.
+- Accepted design: `moonbit` only prepares a bundled MoonBit home. `engine`
+  prepends `moon_home/bin` to `PATH` for native runs and must not set
+  `MOON_HOME`.
+- Target surface: `desktop/internal/engine/engine.mbt` private environment
+  setup. No public `.mbti` change is expected.
+- Validation plan: `moon -C desktop test internal/engine`, `moon -C desktop
+  info`, and `moon -C desktop fmt`.
 
 ## Open Questions
 

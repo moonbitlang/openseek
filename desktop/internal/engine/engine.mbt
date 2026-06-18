@@ -328,14 +328,15 @@ fn prepend_to_path_env(bin_dir : String, current_path : String?) -> String {
 }
 
 ///|
-async fn add_moonbit_env_for_native_engine(
+async fn add_moonbit_path_for_native_engine(
   env : Map[String, String],
   config : RunConfig,
   runtime_dir : @path.Path?,
 ) -> Unit {
   guard config.host is Native else { return }
   let moon_home = @moonbit.prepare_bundled_home(config.engine, runtime_dir?)
-  env["MOON_HOME"] = moon_home.to_string()
+  // The agent tools spawn `moon` by name, but `MOON_HOME` would redirect
+  // registry/cache lookup into the bundled payload.
   env["PATH"] = prepend_to_path_env(
     moon_home.join("bin").to_string(),
     @env.get("PATH"),
@@ -376,7 +377,7 @@ async fn[G] start_serve_engine(
       env["OPENSEEK_SESSION_ROOT"] = root.to_string()
     }
   }
-  add_moonbit_env_for_native_engine(env, config, manager.runtime_dir)
+  add_moonbit_path_for_native_engine(env, config, manager.runtime_dir)
   if config.host is Wsl(..) {
     env["WSLENV"] = wslenv_with_passthrough(@env.get("WSLENV"))
   }

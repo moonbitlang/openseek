@@ -42,3 +42,13 @@ test "new turn events clear stale settling state" {
     8,
   )
 }
+
+///|
+test "bundled moonbit bin is prepended to native engine path" {
+  assert_eq(prepend_to_path_env("/toolchain/bin", None), "/toolchain/bin")
+  assert_eq(prepend_to_path_env("/toolchain/bin", Some("")), "/toolchain/bin")
+  assert_eq(
+    prepend_to_path_env("/toolchain/bin", Some("/usr/bin")),
+    "/toolchain/bin\{PathSep}/usr/bin",
+  )
+}
