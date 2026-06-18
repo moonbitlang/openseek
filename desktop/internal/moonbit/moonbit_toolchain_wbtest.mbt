@@ -32,8 +32,8 @@ async test "prepared payload dir accepts existing toolchain root" {
   @fs.mkdir(root.to_string(), recursive=true)
   let expected = root.join("macos-arm64").to_string()
   let result = prepared_moonbit_payload_dir(
-    runtime.join("seed").join("macos-arm64"),
-    Some(runtime),
+    seed_dir=runtime.join("seed").join("macos-arm64"),
+    runtime_dir=runtime,
   ) catch {
     error => {
       @fs.rmdir(runtime.to_string(), recursive=true) catch {

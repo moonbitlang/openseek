@@ -158,10 +158,10 @@ async fn initialize_moonbit(
 
 ///|
 async fn prepared_bundled_moonbit_payload(
-  seed_dir : @path.Path,
-  runtime_dir : @path.Path?,
+  seed_dir~ : @path.Path,
+  runtime_dir? : @path.Path,
 ) -> @path.Path? {
-  guard prepared_moonbit_payload_dir(seed_dir, runtime_dir) is Some(moon_home) else {
+  guard prepared_moonbit_payload_dir(seed_dir~, runtime_dir?) is Some(moon_home) else {
     return None
   }
   if bundled_moonbit_seed_version(seed_dir) is Some(version) &&
@@ -182,7 +182,7 @@ pub async fn prepare_bundled_home(
   guard bundled_moonbit_seed_dir(engine_command) is Some(seed_dir) else {
     fail("bundled MoonBit toolchain seed not found")
   }
-  guard prepared_bundled_moonbit_payload(seed_dir, runtime_dir)
+  guard prepared_bundled_moonbit_payload(seed_dir~, runtime_dir?)
     is Some(moon_home) else {
     fail("failed to prepare bundled MoonBit toolchain")
   }

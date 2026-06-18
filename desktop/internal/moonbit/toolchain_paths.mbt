@@ -52,8 +52,8 @@ async fn bundled_moonbit_seed_dir(engine_command : String) -> @path.Path? {
 
 ///|
 async fn prepared_moonbit_payload_dir(
-  seed_dir : @path.Path,
-  runtime_dir : @path.Path?,
+  seed_dir~ : @path.Path,
+  runtime_dir? : @path.Path,
 ) -> @path.Path? {
   guard runtime_dir is Some(runtime_dir) else { return None }
   let seed_name = seed_dir.basename().to_owned()
