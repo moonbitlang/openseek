@@ -77,8 +77,8 @@ async fn start_run(
       session_root: config.session_root.map(root => root.to_string()),
     }),
   )
-  let command : Json = { "command": "prompt", "text": config.task }
-  live.writer.write(command.stringify() + "\n") catch {
+  let command : EngineCommand = Prompt(config.task)
+  live.writer.write(command.to_jsonl()) catch {
     error if @async.is_being_cancelled() => raise error
     error => {
       // The engine died between turns: close the run and drop the handle so
@@ -110,8 +110,8 @@ async fn cancel_run(
     return { cancelled: false, run_id: None }
   }
   live.cancel_requested = true
-  let command : Json = { "command": "cancel" }
-  live.writer.write(command.stringify() + "\n") catch {
+  let command : EngineCommand = Cancel
+  live.writer.write(command.to_jsonl()) catch {
     error if @async.is_being_cancelled() => raise error
     // The engine just died; its reader task closes the run.
     _ => ()
@@ -139,8 +139,8 @@ async fn steer_run(
     !live.cancel_requested else {
     return { steered: false, run_id: None }
   }
-  let command : Json = { "command": "steer", "text": payload.text }
-  live.writer.write(command.stringify() + "\n") catch {
+  let command : EngineCommand = Steer(payload.text)
+  live.writer.write(command.to_jsonl()) catch {
     error if @async.is_being_cancelled() => raise error
     // The engine just died; its reader task closes the run. The steer
     // never reached it, so report that rather than pretend.
