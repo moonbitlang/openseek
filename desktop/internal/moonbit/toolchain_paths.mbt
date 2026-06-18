@@ -34,7 +34,7 @@ async fn moonbit_seed_looks_complete(path : @path.Path) -> Bool {
 }
 
 ///|
-pub async fn bundled_moonbit_seed_dir(engine_command : String) -> @path.Path? {
+async fn bundled_moonbit_seed_dir(engine_command : String) -> @path.Path? {
   let command_dir = @path.Path(engine_command).dirname().resolve()
   let candidates = [
     moonbit_toolchain_dir(command_dir, "windows-x64"),
@@ -51,8 +51,11 @@ pub async fn bundled_moonbit_seed_dir(engine_command : String) -> @path.Path? {
 }
 
 ///|
-pub async fn prepared_moonbit_payload_dir(seed_dir : @path.Path) -> @path.Path? {
-  guard prepared_runtime_dir() is Some(runtime_dir) else { return None }
+async fn prepared_moonbit_payload_dir(
+  seed_dir : @path.Path,
+  runtime_dir : @path.Path?,
+) -> @path.Path? {
+  guard runtime_dir is Some(runtime_dir) else { return None }
   let seed_name = seed_dir.basename().to_owned()
   if seed_name.is_empty() {
     return None
@@ -65,7 +68,7 @@ pub async fn prepared_moonbit_payload_dir(seed_dir : @path.Path) -> @path.Path? 
 }
 
 ///|
-pub fn moonbit_bin_dir(moon_home : @path.Path) -> @path.Path {
+fn moonbit_bin_dir(moon_home : @path.Path) -> @path.Path {
   moon_home.join("bin")
 }
 
@@ -78,32 +81,32 @@ const ExecutableSuffix : String = ".exe"
 const ExecutableSuffix : String = ""
 
 ///|
-pub fn moonbit_command(moon_home : @path.Path) -> @path.Path {
+fn moonbit_command(moon_home : @path.Path) -> @path.Path {
   moon_home.join("bin/moon\{ExecutableSuffix}")
 }
 
 ///|
-pub fn moonbit_compiler_command(moon_home : @path.Path) -> @path.Path {
+fn moonbit_compiler_command(moon_home : @path.Path) -> @path.Path {
   moon_home.join("bin/moonc\{ExecutableSuffix}")
 }
 
 ///|
-pub fn moonbit_bundle_stamp_path(moon_home : @path.Path) -> @path.Path {
+fn moonbit_bundle_stamp_path(moon_home : @path.Path) -> @path.Path {
   moon_home.join(MoonbitBundleStampFile)
 }
 
 ///|
-pub fn moonbit_seed_version_path(seed_dir : @path.Path) -> @path.Path {
+fn moonbit_seed_version_path(seed_dir : @path.Path) -> @path.Path {
   seed_dir.join(MoonbitSeedVersionFile)
 }
 
 ///|
-pub fn moonbit_native_bundle_probe_path(moon_home : @path.Path) -> @path.Path {
+fn moonbit_native_bundle_probe_path(moon_home : @path.Path) -> @path.Path {
   moon_home.join("lib/core/_build/native/release/bundle/prelude/prelude.mi")
 }
 
 ///|
-pub fn moonbit_wasm_gc_bundle_probe_path(moon_home : @path.Path) -> @path.Path {
+fn moonbit_wasm_gc_bundle_probe_path(moon_home : @path.Path) -> @path.Path {
   moon_home.join("lib/core/_build/wasm-gc/release/bundle/prelude/prelude.mi")
 }
 
@@ -116,7 +119,7 @@ const PathSep : String = ";"
 const PathSep : String = ":"
 
 ///|
-pub fn prepend_to_path_env(bin_dir : String, current_path : String?) -> String {
+fn prepend_to_path_env(bin_dir : String, current_path : String?) -> String {
   if current_path is Some(path) && !path.is_empty() {
     "\{bin_dir}\{PathSep}\{path}"
   } else {

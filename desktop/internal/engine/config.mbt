@@ -38,7 +38,7 @@ fn configured_api_key(
   payload_key : String?,
   api_url : String?,
   deepseek_env : String?,
-) -> String raise HostError {
+) -> String raise EngineError {
   if payload_key is Some(value) {
     return value
   }
@@ -48,30 +48,32 @@ fn configured_api_key(
   if deepseek_env is Some(value) {
     return value
   }
-  raise HostError("DeepSeek API key is required; pass api_key or set DEEPSEEK")
+  raise EngineError(
+    "DeepSeek API key is required; pass api_key or set DEEPSEEK",
+  )
 }
 
 ///|
-fn configured_max_steps(value : Int?) -> Int raise HostError {
+fn configured_max_steps(value : Int?) -> Int raise EngineError {
   let parsed = if value is Some(value) {
     value
   } else if @env.get("OPENSEEK_MAX_STEPS") is Some(text) {
     @string.parse_int(text) catch {
-      _ => raise HostError("OPENSEEK_MAX_STEPS must be a positive integer")
+      _ => raise EngineError("OPENSEEK_MAX_STEPS must be a positive integer")
     }
   } else {
     DefaultMaxSteps
   }
   guard parsed > 0 else {
-    raise HostError("max_steps must be a positive integer")
+    raise EngineError("max_steps must be a positive integer")
   }
   parsed
 }
 
 ///|
-async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
+async fn run_config(payload : StartRequest, engine : String) -> RunConfig {
   let task = payload.task.trim().to_owned()
-  guard !task.is_empty() else { raise HostError("task must not be empty") }
+  guard !task.is_empty() else { raise EngineError("task must not be empty") }
   let api_url = payload.api_url
   // Only the official endpoint strictly needs a key; a custom endpoint
   // decides for itself, so a missing key becomes a placeholder there. Do
@@ -82,7 +84,7 @@ async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
     @env.get("DEEPSEEK"),
   )
   let session = payload.session
-  let host = engine_host(payload, engine)
+  let host = engine_host(payload.wsl, engine)
   {
     task,
     api_key,
@@ -97,7 +99,7 @@ async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
     cwd: resolved_run_cwd(session),
     session,
     session_root: if session is Some(_) {
-      @sessiondirs.resolved_session_root(
+      resolved_session_root(
         payload_root?=payload.session_root.map(root => Path(root)),
       )
     } else {
@@ -115,8 +117,7 @@ async fn run_config(payload : StartPayload, engine : String) -> RunConfig {
 /// whatever directory the app happened to be launched from (`/` under Finder),
 /// which is never a sensible place to work in.
 async fn resolved_run_cwd(session : String?) -> @path.Path? {
-  if session is Some(session) &&
-    @sessiondirs.session_workspace_dir(session) is Some(dir) {
+  if session is Some(session) && session_workspace_dir(session) is Some(dir) {
     return Some(dir)
   }
   @home.dir().map(home => home.to_string())

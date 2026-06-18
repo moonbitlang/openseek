@@ -12,7 +12,7 @@ const WorkspaceDirName = "OpenSeek"
 /// lands in the same directory without recording it anywhere. `None` when the
 /// id is unsafe as a path component or no home directory is known; the caller
 /// falls back to the home directory.
-pub async fn session_workspace_dir(session : String) -> @path.Path? {
+async fn session_workspace_dir(session : String) -> @path.Path? {
   guard safe_workspace_id(session) else { return None }
   guard workspace_root() is Some(root) else { return None }
   Some(root.join(session).normalize())

@@ -66,8 +66,8 @@ fn SteerRunTracker::run_id_for_event(
   raw : Json,
   latest_run : Int,
 ) -> Int {
-  if is_steer_settle_event(raw) {
-    let content = stream_event_content(raw)
+  if @protocol.is_steer_settle_event(raw) {
+    let content = @protocol.stream_event_content(raw)
     if remove_first_text(self.settling_steers, content) &&
       self.settling_run is Some(run_id) {
       if self.settling_steers.is_empty() {
@@ -95,43 +95,11 @@ fn remove_first_text(items : Array[String], text : String) -> Bool {
 }
 
 ///|
-fn is_steer_settle_event(raw : Json) -> Bool {
-  match stream_event_name(raw) {
-    Some("steer_applied") | Some("steer_dropped") => true
-    _ => false
-  }
-}
-
-///|
-fn stream_event_name(raw : Json) -> String? {
-  match raw {
-    Object(fields) =>
-      match fields.get("event") {
-        Some(String(name)) => Some(name)
-        _ => None
-      }
-    _ => None
-  }
-}
-
-///|
-fn stream_event_content(raw : Json) -> String {
-  match raw {
-    Object(fields) =>
-      match fields.get("content") {
-        Some(String(content)) => content
-        _ => ""
-      }
-    _ => ""
-  }
-}
-
-///|
 priv enum PumpCommand {
   // Replace the conversation's engine (if any) with one spawned for this
   // config; the queue carries the spawn failure — or None for success —
   // back to the requesting `start` op.
-  SpawnEngine(RunConfig, @async.Queue[HostError?])
+  SpawnEngine(RunConfig, @async.Queue[EngineError?])
 }
 
 ///|
@@ -143,7 +111,9 @@ priv enum PumpCommand {
 /// group that outlives individual IPC requests. Idle engines stay alive for
 /// the app's lifetime — the durable session makes killing them safe, but
 /// keeping them avoids a respawn-and-replay on every conversation switch.
-priv struct EngineManager {
+struct EngineManager {
+  engine : String
+  runtime_dir : @path.Path?
   commands : @async.Queue[PumpCommand]
   engines : Map[String, ServeEngine]
   mut next_run_id : Int
@@ -162,8 +132,13 @@ priv enum StreamMessage {
 }
 
 ///|
-fn new_engine_manager() -> EngineManager {
+pub fn new_engine_manager(
+  engine : String,
+  runtime_dir? : @path.Path,
+) -> EngineManager {
   {
+    engine,
+    runtime_dir,
     commands: Queue(kind=Unbounded),
     engines: {},
     next_run_id: 1,
@@ -203,8 +178,11 @@ fn open_run_engine(manager : EngineManager, run_id? : Int) -> ServeEngine? {
 /// packaged engine sits in is read-only (App Translocation even enforces
 /// it), so writing next to the executable would fail every
 /// `--session-list` / `--session-show` in a packaged app.
-async fn prepare_engine_stdin(engine : @path.Path) -> &@process.ProcessInput {
-  let path = if @appdirs.prepared_runtime_dir() is Some(dir) {
+async fn prepare_engine_stdin(
+  runtime_dir : @path.Path?,
+  engine : @path.Path,
+) -> &@process.ProcessInput {
+  let path = if runtime_dir is Some(dir) {
     dir.join("engine.stdin")
   } else {
     engine.to_string() + ".stdin"
@@ -233,28 +211,28 @@ async fn read_engine_stdout(
 
 ///|
 async fn handle_decoded_event(
-  context : @app.AppCommandExtensionContext,
+  sink : EventSink,
   run_id : Int,
   decoded : @event.AgentEvent,
 ) -> Bool {
   match decoded {
     AgentFinished(answer) => {
-      emit_finished(context, run_id, Finished, answer~)
+      emit_finished(sink, run_id, Finished, answer~)
       true
     }
     AgentAborted(reason) => {
-      emit_error(context, "agent aborted: " + reason, run_id~)
-      emit_finished(context, run_id, Aborted)
+      emit_error(sink, "agent aborted: " + reason, run_id~)
+      emit_finished(sink, run_id, Aborted)
       true
     }
     MaxStepsExhausted => {
-      emit_error(context, "max steps exhausted", run_id~)
-      emit_finished(context, run_id, MaxStepsExhausted)
+      emit_error(sink, "max steps exhausted", run_id~)
+      emit_finished(sink, run_id, MaxStepsExhausted)
       true
     }
     AgentError(message) => {
-      emit_error(context, message, run_id~)
-      emit_finished(context, run_id, Failed)
+      emit_error(sink, message, run_id~)
+      emit_finished(sink, run_id, Failed)
       true
     }
     _ => false
@@ -276,12 +254,12 @@ fn host_reports_terminal_error(decoded : @event.AgentEvent) -> Bool {
 /// `start`/`cancel` calls — the frontend invokes it once at startup and the
 /// call stays open for the app's lifetime. When the webview connection drops
 /// the task group is torn down, taking the engine with it.
-async fn run_engine_pump(
-  context : @app.AppCommandExtensionContext,
+pub async fn run_engine_pump(
+  sink : EventSink,
   manager : EngineManager,
 ) -> PumpReply {
   guard !manager.pump_running else {
-    raise HostError("engine host is already connected")
+    raise EngineError("engine host is already connected")
   }
   fn reset() -> Unit {
     manager.pump_running = false
@@ -289,7 +267,7 @@ async fn run_engine_pump(
   }
 
   manager.pump_running = true
-  emit(context, Connected({ ready: true }))
+  emit(sink, Connected({ ready: true }))
   defer reset()
   @async.with_task_group(group => {
     for ;; {
@@ -303,10 +281,10 @@ async fn run_engine_pump(
             old.writer.close()
             manager.engines.remove(session_key(config))
           }
-          start_serve_engine(context, group, manager, config) catch {
+          start_serve_engine(sink, group, manager, config) catch {
             error if @async.is_being_cancelled() => raise error
             error => {
-              ack.put(Some(HostError("failed to start engine: \{error}")))
+              ack.put(Some(EngineError("failed to start engine: \{error}")))
               continue
             }
           }
@@ -333,12 +311,44 @@ fn resolved_global_skills_dir() -> @path.Path? {
 }
 
 ///|
+#cfg(platform="windows")
+const PathSep : String = ";"
+
+///|
+#cfg(not(platform="windows"))
+const PathSep : String = ":"
+
+///|
+fn prepend_to_path_env(bin_dir : String, current_path : String?) -> String {
+  if current_path is Some(path) && !path.is_empty() {
+    "\{bin_dir}\{PathSep}\{path}"
+  } else {
+    bin_dir
+  }
+}
+
+///|
+async fn add_moonbit_env_for_native_engine(
+  env : Map[String, String],
+  config : RunConfig,
+  runtime_dir : @path.Path?,
+) -> Unit {
+  guard config.host is Native else { return }
+  let moon_home = @moonbit.prepare_bundled_home(config.engine, runtime_dir?)
+  env["MOON_HOME"] = moon_home.to_string()
+  env["PATH"] = prepend_to_path_env(
+    moon_home.join("bin").to_string(),
+    @env.get("PATH"),
+  )
+}
+
+///|
 /// Spawn one `--serve` engine inside the pump's task group and wire up its
 /// stream tasks: the stdout reader feeding the queue, the stderr drain, and
 /// the consumer that forwards events to the webview for the engine's
 /// lifetime.
 async fn[G] start_serve_engine(
-  context : @app.AppCommandExtensionContext,
+  sink : EventSink,
   group : @async.TaskGroup[G],
   manager : EngineManager,
   config : RunConfig,
@@ -366,9 +376,7 @@ async fn[G] start_serve_engine(
       env["OPENSEEK_SESSION_ROOT"] = root.to_string()
     }
   }
-  for key, value in moonbit_env_for_engine(config) {
-    env[key] = value
-  }
+  add_moonbit_env_for_native_engine(env, config, manager.runtime_dir)
   if config.host is Wsl(..) {
     env["WSLENV"] = wslenv_with_passthrough(@env.get("WSLENV"))
   }
@@ -411,7 +419,7 @@ async fn[G] start_serve_engine(
     read_engine_stdout(reader, process, messages)
   })
   group.spawn_bg(no_wait=true, allow_failure=true, () => {
-    serve_engine_consumer(context, manager, engine, messages, stderr_task)
+    serve_engine_consumer(sink, manager, engine, messages, stderr_task)
   })
 }
 
@@ -421,7 +429,7 @@ async fn[G] start_serve_engine(
 /// runs on terminal events, and report a mid-turn death as that run's
 /// failure. Runs until the engine's stdout reader sees EOF.
 async fn serve_engine_consumer(
-  context : @app.AppCommandExtensionContext,
+  sink : EventSink,
   manager : EngineManager,
   engine : ServeEngine,
   messages : @async.Queue[StreamMessage],
@@ -435,8 +443,8 @@ async fn serve_engine_consumer(
           // The abort the user asked for: report it as a cancellation, the
           // same wire status the pre-serve host used.
           Some(AgentAborted(_)) if engine.cancel_requested => {
-            emit_error(context, "cancelled", run_id~)
-            emit_finished(context, run_id, Cancelled)
+            emit_error(sink, "cancelled", run_id~)
+            emit_finished(sink, run_id, Cancelled)
             engine.run_open = false
             engine.cancel_requested = false
             engine.steer_runs.record_terminal(run_id)
@@ -446,19 +454,19 @@ async fn serve_engine_consumer(
             // their raw event as well would make the frontend render the same
             // failure twice.
             if !host_reports_terminal_error(decoded) {
-              emit(context, Event({ run_id, event: raw }))
+              emit(sink, StreamEvent({ run_id, event: raw }))
             }
-            if handle_decoded_event(context, run_id, decoded) {
+            if handle_decoded_event(sink, run_id, decoded) {
               engine.run_open = false
               engine.cancel_requested = false
               engine.steer_runs.record_terminal(run_id)
             }
           }
-          None => emit(context, Event({ run_id, event: raw }))
+          None => emit(sink, StreamEvent({ run_id, event: raw }))
         }
       }
       StreamReaderFailed(message) =>
-        emit_error(context, message, run_id=engine.latest_run)
+        emit_error(sink, message, run_id=engine.latest_run)
       StreamExited(code) => {
         // A respawn may already have replaced this engine in its slot; only
         // clear the slot if it is still ours.
@@ -474,21 +482,21 @@ async fn serve_engine_consumer(
           let diagnostics = stderr_task.wait().trim().to_owned()
           if diagnostics.is_empty() {
             emit_error(
-              context,
+              sink,
               "engine exited without a result",
               run_id=engine.latest_run,
               exit_code=code,
             )
           } else {
             emit_error(
-              context,
+              sink,
               "engine exited without a result:\n" + diagnostics,
               run_id=engine.latest_run,
               exit_code=code,
               diagnostics~,
             )
           }
-          emit_finished(context, engine.latest_run, Failed, exit_code=code)
+          emit_finished(sink, engine.latest_run, Failed, exit_code=code)
         }
         break
       }

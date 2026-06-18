@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/protocol"
+
+// Values
+pub fn cancel() -> EngineCommand
+
+pub fn is_steer_settle_event(Json) -> Bool
+
+pub fn prompt(String) -> EngineCommand
+
+pub fn steer(String) -> EngineCommand
+
+pub fn stream_event_content(Json) -> String
+
+// Errors
+
+// Types and methods
+type EngineCommand
+pub fn EngineCommand::to_jsonl(Self) -> String
+
+// Type aliases
+
+// Traits
+

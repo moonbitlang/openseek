@@ -12,7 +12,8 @@ async test "one-shot session engine overrides ambient OPENSEEK_DIR" {
   )
   let chmod = @process.run("chmod", ["+x", engine])
   assert_eq(chmod, 0)
-  let output = engine_stdout(engine, []) catch {
+  let manager = new_engine_manager(engine)
+  let output = engine_stdout(manager, []) catch {
     error => {
       restore_openseek_dir(previous)
       @fs.rmdir(dir, recursive=true) catch {

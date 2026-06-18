@@ -18,13 +18,13 @@ async fn main {
     }
     return
   }
-  let frontend_entry = @appdirs.frontend_entry_path(framework_command)
-  let engine = @appdirs.engine_command(framework_command)
+  let frontend_entry = @extension.frontend_entry_path(framework_command)
+  let engine = @engine.engine_command(framework_command)
   log.info() <? { "message": "host process start" }
   log.info() <? { "message": "frontend entry", "path": frontend_entry }
   log.info() <? { "message": "engine", "path": engine }
   let extensions : Map[String, @manifest.ExtensionSetting] = {}
-  extensions[@host.ExtensionId] = @manifest.ExtensionSetting::enabled()
+  extensions[@extension.ExtensionId] = @manifest.ExtensionSetting::enabled()
   extensions["justjavac/lepus-clipboard"] = @manifest.ExtensionSetting::enabled()
   let manifest = @manifest.AppManifest::new(
     @manifest.WindowManifest::new("OpenSeek Desktop", 1120, 760, size_hint=None),
@@ -33,15 +33,15 @@ async fn main {
     extensions~,
   )
   let registry = @app.AppCommandExtensionRegistry::new()
-  let _ = registry.register(@host.openseek_extension(engine))
+  let runtime_dir = @extension.prepared_runtime_dir()
+  let _ = registry.register(@extension.openseek_extension(engine, runtime_dir?))
   let _ = registry.register(@clipboard.generated_app_command_extension())
   // Keep all runtime state out of the bundle: the framework IPC config is
   // written to the per-user runtime dir, and the framework child runs there
   // too, so neither process depends on the bundle directory being writable —
   // or on it continuing to exist while the app runs.
-  let runtime_dir = @appdirs.prepared_runtime_dir()
   let framework_config_path = if runtime_dir is Some(dir) {
-    @appdirs.remove_stale_framework_configs(dir)
+    @extension.remove_stale_framework_configs(dir)
     Some("\{dir}/lepus-framework-\{@env.now()}.json")
   } else {
     None

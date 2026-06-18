@@ -1,7 +1,12 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/internal/moonbit"
 
+import {
+  "moonbitlang/x/path",
+}
+
 // Values
+pub async fn prepare_bundled_home(String, runtime_dir? : @path.Path) -> @path.Path
 
 // Errors
 

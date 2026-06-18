@@ -2,8 +2,8 @@
 fn moonbit_process_env(moon_home : @path.Path) -> Map[String, String] {
   {
     "MOON_HOME": moon_home.to_string(),
-    "PATH": @appdirs.prepend_to_path_env(
-      @appdirs.moonbit_bin_dir(moon_home).to_string(),
+    "PATH": prepend_to_path_env(
+      moonbit_bin_dir(moon_home).to_string(),
       @env.get("PATH"),
     ),
   }
@@ -11,7 +11,7 @@ fn moonbit_process_env(moon_home : @path.Path) -> Map[String, String] {
 
 ///|
 async fn bundled_moonbit_seed_version(seed_dir : @path.Path) -> String? {
-  guard @fsx.read_text_if_exists(@appdirs.moonbit_seed_version_path(seed_dir))
+  guard @fsx.read_text_if_exists(moonbit_seed_version_path(seed_dir))
     is Some(version) else {
     return None
   }
@@ -24,9 +24,26 @@ async fn bundled_moonbit_seed_version(seed_dir : @path.Path) -> String? {
 }
 
 ///|
-async fn get_moonc_version(moon_home : @path.Path) -> String {
-  let moonc = @appdirs.moonbit_compiler_command(moon_home)
-  let child_stdin = prepare_engine_stdin(moonc)
+async fn prepare_tool_stdin(
+  runtime_dir : @path.Path?,
+  command : @path.Path,
+) -> &@process.ProcessInput {
+  let path = if runtime_dir is Some(dir) {
+    dir.join("moonbit-tool.stdin")
+  } else {
+    command.to_string() + ".stdin"
+  }
+  @fs.write_file(path.to_string(), "", create_mode=CreateOrTruncate)
+  @process.redirect_from_file(path.to_string())
+}
+
+///|
+async fn get_moonc_version(
+  moon_home : @path.Path,
+  runtime_dir : @path.Path?,
+) -> String {
+  let moonc = moonbit_compiler_command(moon_home)
+  let child_stdin = prepare_tool_stdin(runtime_dir, moonc)
   let (code, output) = @process.collect_output_merged(
     moonc.to_string(),
     ["-v"],
@@ -48,24 +65,28 @@ async fn get_moonc_version(moon_home : @path.Path) -> String {
 
 ///|
 async fn is_moonbit_bundled(moon_home : @path.Path, version : String) -> Bool {
-  guard @fsx.read_text_if_exists(@appdirs.moonbit_bundle_stamp_path(moon_home))
+  guard @fsx.read_text_if_exists(moonbit_bundle_stamp_path(moon_home))
     is Some(stamp) else {
     return false
   }
   if stamp != "version=\{version}" {
     return false
   }
-  @fsx.exists(@appdirs.moonbit_command(moon_home)) &&
-  @fsx.exists(@appdirs.moonbit_compiler_command(moon_home)) &&
-  @fsx.exists(@appdirs.moonbit_native_bundle_probe_path(moon_home)) &&
-  @fsx.exists(@appdirs.moonbit_wasm_gc_bundle_probe_path(moon_home))
+  @fsx.exists(moonbit_command(moon_home)) &&
+  @fsx.exists(moonbit_compiler_command(moon_home)) &&
+  @fsx.exists(moonbit_native_bundle_probe_path(moon_home)) &&
+  @fsx.exists(moonbit_wasm_gc_bundle_probe_path(moon_home))
 }
 
 ///|
-async fn bundle_moonbit(moon_home : @path.Path, args : Array[String]) -> Unit {
-  let moon = @appdirs.moonbit_command(moon_home)
+async fn bundle_moonbit(
+  moon_home : @path.Path,
+  args : Array[String],
+  runtime_dir : @path.Path?,
+) -> Unit {
+  let moon = moonbit_command(moon_home)
   let core_dir = moon_home.join("lib/core")
-  let child_stdin = prepare_engine_stdin(moon)
+  let child_stdin = prepare_tool_stdin(runtime_dir, moon)
   let (code, output) = @process.collect_output_merged(
     moon.to_string(),
     args,
@@ -110,25 +131,37 @@ async fn copy_moonbit_seed_dir(
 }
 
 ///|
-async fn initialize_moonbit(moon_home : @path.Path) -> Unit {
-  let version = get_moonc_version(moon_home)
+async fn initialize_moonbit(
+  moon_home : @path.Path,
+  runtime_dir : @path.Path?,
+) -> Unit {
+  let version = get_moonc_version(moon_home, runtime_dir)
   if is_moonbit_bundled(moon_home, version) {
     return
   }
-  bundle_moonbit(moon_home, ["bundle", "--warn-list", "-a", "--all"])
-  bundle_moonbit(moon_home, [
-    "bundle", "--warn-list", "-a", "--target", "wasm-gc", "--quiet",
-  ])
+  bundle_moonbit(
+    moon_home,
+    ["bundle", "--warn-list", "-a", "--all"],
+    runtime_dir,
+  )
+  bundle_moonbit(
+    moon_home,
+    ["bundle", "--warn-list", "-a", "--target", "wasm-gc", "--quiet"],
+    runtime_dir,
+  )
   @fs.write_file(
-    @appdirs.moonbit_bundle_stamp_path(moon_home).to_string(),
+    moonbit_bundle_stamp_path(moon_home).to_string(),
     "version=\{version}",
     create_mode=CreateOrTruncate,
   )
 }
 
 ///|
-async fn prepared_bundled_moonbit_payload(seed_dir : @path.Path) -> @path.Path? {
-  guard @appdirs.prepared_moonbit_payload_dir(seed_dir) is Some(moon_home) else {
+async fn prepared_bundled_moonbit_payload(
+  seed_dir : @path.Path,
+  runtime_dir : @path.Path?,
+) -> @path.Path? {
+  guard prepared_moonbit_payload_dir(seed_dir, runtime_dir) is Some(moon_home) else {
     return None
   }
   if bundled_moonbit_seed_version(seed_dir) is Some(version) &&
@@ -137,18 +170,21 @@ async fn prepared_bundled_moonbit_payload(seed_dir : @path.Path) -> @path.Path? 
   }
   @fsx.remove_if_exists(moon_home)
   copy_moonbit_seed_dir(seed_dir, moon_home)
-  initialize_moonbit(moon_home)
+  initialize_moonbit(moon_home, runtime_dir)
   Some(moon_home)
 }
 
 ///|
-async fn moonbit_env_for_engine(config : RunConfig) -> Map[String, String] {
-  guard config.host is Native else { return {} }
-  guard @appdirs.bundled_moonbit_seed_dir(config.engine) is Some(seed_dir) else {
-    abort("aaaaa")
+pub async fn prepare_bundled_home(
+  engine_command : String,
+  runtime_dir? : @path.Path,
+) -> @path.Path {
+  guard bundled_moonbit_seed_dir(engine_command) is Some(seed_dir) else {
+    abort("bundled MoonBit toolchain seed not found")
   }
-  guard prepared_bundled_moonbit_payload(seed_dir) is Some(moon_home) else {
-    abort("bbbbb")
+  guard prepared_bundled_moonbit_payload(seed_dir, runtime_dir)
+    is Some(moon_home) else {
+    abort("failed to prepare bundled MoonBit toolchain")
   }
-  moonbit_process_env(moon_home)
+  moon_home
 }

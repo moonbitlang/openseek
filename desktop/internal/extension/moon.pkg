@@ -1,9 +1,12 @@
 import {
-  "moonbitlang/async",
-  "moonbitlang/async/os_error",
-  "openseek_desktop/internal/env",
+  "justjavac/lepus_app" @app,
+  "openseek_desktop/internal/engine",
   "openseek_desktop/internal/home",
+  "openseek_desktop/internal/skillmarket",
+  "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
+  "moonbitlang/core/json",
   "moonbitlang/x/path",
 }
 

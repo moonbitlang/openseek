@@ -25,8 +25,11 @@ impl Show for HostError with fn output(self, logger) {
 ///|
 /// The `openseek` IPC extension: every command the webview can invoke, bound
 /// to a fresh engine manager. `engine` is the engine executable to spawn.
-pub fn openseek_extension(engine : String) -> @app.AppCommandExtensionSpec {
-  let manager = new_engine_manager()
+pub fn openseek_extension(
+  engine : String,
+  runtime_dir? : @path.Path,
+) -> @app.AppCommandExtensionSpec {
+  let manager = @engine.new_engine_manager(engine, runtime_dir?)
   @app.AppCommandExtensionSpec::new(
     ExtensionId,
     ExtensionNamespace,
@@ -43,23 +46,42 @@ pub fn openseek_extension(engine : String) -> @app.AppCommandExtensionSpec {
       @app.AppCommandApiDescriptor::new("skill_uninstall"),
     ],
     context => {
+      let sink = event_sink(context)
       context.op_async("connect", (_ : Json) => {
-        run_engine_pump(context, manager)
+        @engine.run_engine_pump(sink, manager) catch {
+          @engine.EngineError(message) => raise HostError(message)
+          error => raise error
+        }
       })
       context.op_async("start", (payload : StartPayload) => {
-        start_run(context, manager, engine, payload)
+        @engine.start_run(sink, manager, payload.to_request()) catch {
+          @engine.EngineError(message) => raise HostError(message)
+          error => raise error
+        }
       })
       context.op_async("cancel", async fn(payload : CancelPayload) {
-        cancel_run(manager, payload)
+        @engine.cancel_run(manager, payload.to_request()) catch {
+          @engine.EngineError(message) => raise HostError(message)
+          error => raise error
+        }
       })
       context.op_async("steer", async fn(payload : SteerPayload) {
-        steer_run(manager, payload)
+        @engine.steer_run(manager, payload.to_request()) catch {
+          @engine.EngineError(message) => raise HostError(message)
+          error => raise error
+        }
       })
       context.op_async("list_sessions", async fn(_ : Json) {
-        list_sessions(engine)
+        @engine.list_sessions(manager) catch {
+          @engine.EngineError(message) => raise HostError(message)
+          error => raise error
+        }
       })
       context.op_async("load_session", async fn(payload : LoadSessionPayload) {
-        load_session(engine, payload)
+        @engine.load_session(manager, payload.to_request()) catch {
+          @engine.EngineError(message) => raise HostError(message)
+          error => raise error
+        }
       })
       context.op_async("skills_catalog", async fn(_ : Json) {
         skills_catalog_op()

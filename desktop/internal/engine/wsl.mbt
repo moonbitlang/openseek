@@ -43,13 +43,10 @@ priv enum EngineHost {
 /// WSL so the failure is a clear message instead of a cryptic spawn error.
 /// `native_engine` is the bundled Windows engine; an unnamed WSL engine
 /// resolves to the Linux engine staged beside it when the bundle has one.
-async fn engine_host(
-  payload : StartPayload,
-  native_engine : String,
-) -> EngineHost {
-  guard payload.wsl is Some(wsl) else { return Native }
+async fn engine_host(wsl : WslRequest?, native_engine : String) -> EngineHost {
+  guard wsl is Some(wsl) else { return Native }
   guard WslSupported else {
-    raise HostError("WSL engine mode is only available on Windows")
+    raise EngineError("WSL engine mode is only available on Windows")
   }
   let engine = match wsl.engine {
     Some(engine) => engine

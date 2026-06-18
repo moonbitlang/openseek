@@ -1,0 +1,97 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/engine"
+
+import {
+  "moonbitlang/x/path",
+}
+
+// Values
+pub async fn cancel_run(EngineManager, CancelRequest) -> CancelReply
+
+pub async fn engine_command(String) -> String
+
+pub async fn list_sessions(EngineManager) -> SessionsReply
+
+pub async fn load_session(EngineManager, LoadSessionRequest) -> LoadSessionReply
+
+pub fn new_engine_manager(String, runtime_dir? : @path.Path) -> EngineManager
+
+pub async fn run_engine_pump(EventSink, EngineManager) -> PumpReply
+
+pub async fn start_run(EventSink, EngineManager, StartRequest) -> StartReply
+
+pub async fn steer_run(EngineManager, SteerRequest) -> SteerReply
+
+// Errors
+pub(all) suberror EngineError {
+  EngineError(String)
+}
+
+// Types and methods
+type CancelReply derive(ToJson)
+
+pub(all) struct CancelRequest {
+  run_id : Int?
+}
+
+type ConnectedPayload derive(ToJson)
+
+pub(all) enum EngineEvent {
+  Connected(ConnectedPayload)
+  Started(StartedPayload)
+  StreamEvent(EventPayload)
+  Error(ErrorPayload)
+  Finished(FinishedPayload)
+}
+
+type EngineManager
+
+type ErrorPayload derive(ToJson)
+
+type EventPayload derive(ToJson)
+
+pub(all) struct EventSink(async (EngineEvent) -> Unit)
+
+type FinishedPayload derive(ToJson)
+
+type LoadSessionReply derive(ToJson)
+
+pub(all) struct LoadSessionRequest {
+  session : String
+}
+
+type PumpReply derive(ToJson)
+
+type SessionsReply derive(ToJson)
+
+type StartReply derive(ToJson)
+
+pub(all) struct StartRequest {
+  task : String
+  api_key : String?
+  api_url : String?
+  model : String?
+  max_steps : Int?
+  session : String?
+  session_root : String?
+  wsl : WslRequest?
+}
+
+type StartedPayload derive(ToJson)
+
+type SteerReply derive(ToJson)
+
+pub(all) struct SteerRequest {
+  text : String
+  run_id : Int?
+}
+
+pub(all) struct WslRequest {
+  distro : String?
+  engine : String?
+}
+
+// Type aliases
+
+// Traits
+

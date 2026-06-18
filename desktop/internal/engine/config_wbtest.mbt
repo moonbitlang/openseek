@@ -72,7 +72,7 @@ test "official endpoint still uses DEEPSEEK env fallback" {
     "official-key",
   )
   let _ = configured_api_key(None, None, None) catch {
-    HostError(message) => {
+    EngineError(message) => {
       assert_true(message.contains("DeepSeek API key is required"))
       return
     }
