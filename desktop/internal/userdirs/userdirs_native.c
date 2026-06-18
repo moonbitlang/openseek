@@ -1,8 +1,9 @@
 /*
  * The user's Documents folder as the platform knows it. Only Windows has a
  * native authority worth asking (the Documents known folder, which OneDrive's
- * folder move or group policy may relocate); everywhere else the MoonBit side
- * resolves the answer itself and this stub returns empty bytes.
+ * folder move or group policy may relocate). Everywhere else the MoonBit side
+ * resolves the answer itself, so this file exports the FFI symbol only on
+ * Windows.
  */
 
 #include <string.h>

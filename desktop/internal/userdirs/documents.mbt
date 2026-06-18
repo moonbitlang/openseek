@@ -36,9 +36,9 @@ pub async fn documents_dir() -> String? {
 /// The XDG user-dirs override for the Documents folder, read from
 /// `${XDG_CONFIG_HOME:-~/.config}/user-dirs.dirs` (Linux desktops localize
 /// or move Documents there; the file does not exist on macOS or Windows).
-/// `None` when there is no override. The spec marks a disabled folder by
-/// pointing it at `$HOME` itself, which resolves to the home directory like
-/// any other value.
+/// `None` when there is no override. `xdg-user-dirs-update` may reset a removed
+/// user dir to `$HOME`; that value resolves to the home directory like any
+/// other supported value.
 async fn xdg_documents_override(home : @path.Path) -> String? {
   let config_dir = match @env.get("XDG_CONFIG_HOME") {
     Some(dir) => @path.Path(dir)
@@ -50,13 +50,49 @@ async fn xdg_documents_override(home : @path.Path) -> String? {
     _ => return None
   }
   for line in content.split("\n") {
-    let line = line.trim()
-    guard line.has_prefix("XDG_DOCUMENTS_DIR=") else { continue }
-    let value = line["XDG_DOCUMENTS_DIR=".length():].trim(chars="\"")
-    if value.has_prefix("$HOME") {
-      return Some(home.to_string() + value["$HOME".length():].to_owned())
+    if parse_xdg_documents_dir_line(home, line) is Some(dir) {
+      return Some(dir.normalize().to_string())
     }
-    return Some(value.to_owned())
   }
   None
+}
+
+///|
+fn parse_xdg_documents_dir_line(
+  home : @path.Path,
+  line : StringView,
+) -> @path.Path? {
+  guard line.trim().strip_prefix("XDG_DOCUMENTS_DIR=") is Some(value) else {
+    return None
+  }
+  parse_xdg_user_dir_value(home, value)
+}
+
+///|
+fn parse_xdg_user_dir_value(home : @path.Path, raw : StringView) -> @path.Path? {
+  guard unquote_xdg_value(raw.trim()) is Some(value) else { return None }
+  if value == "$HOME" {
+    return Some(home)
+  }
+  if value.strip_prefix("$HOME/") is Some(relative) {
+    return Some(home.join(relative.to_owned()).normalize())
+  }
+  let path = @path.Path(value.to_owned())
+  if path.is_absolute() {
+    Some(path.normalize())
+  } else {
+    None
+  }
+}
+
+///|
+fn unquote_xdg_value(value : StringView) -> StringView? {
+  if value.strip_prefix("\"") is Some(rest) {
+    guard rest.strip_suffix("\"") is Some(inner) else { return None }
+    guard !inner.contains_char('"') else { return None }
+    return Some(inner)
+  }
+  guard value.strip_suffix("\"") is None else { return None }
+  guard !value.contains_char('"') else { return None }
+  Some(value)
 }
