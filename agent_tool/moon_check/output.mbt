@@ -97,12 +97,10 @@ fn compact_moon_check_exit_output(
 
 ///|
 fn first_line_containing(content : String, needle : String) -> String? {
-  for line in content.split("\n") {
-    if line.contains(needle) {
-      return Some(line.trim().to_owned())
-    }
-  }
-  None
+  content
+  .split("\n")
+  .find_first(line => line.contains(needle))
+  .map(line => line.trim().to_owned())
 }
 
 ///|
@@ -198,27 +196,22 @@ fn MoonCheckSnapshot::update_text(update : MoonCheckSnapshot) -> String {
 pub fn runtime_update_text(
   events : Array[@agent_runtime.AgentEvent],
 ) -> String? {
+  // Single pass: dedup by key (last writer wins, as the in-order overwrite
+  // did) while counting, with the map as the accumulator and no `mut`.
   let latest_moon_checks : Map[String, MoonCheckSnapshot] = {}
-  let mut moon_check_count = 0
-  for event in events {
-    match event {
-      MoonCheckUpdate(update) => {
-        latest_moon_checks[update.key] = update
-        moon_check_count += 1
-      }
-      _ => ()
+  let count = for event in events; count = 0 {
+    if event is MoonCheckUpdate(update) {
+      latest_moon_checks[update.key] = update
+      continue count + 1
     }
+  } nobreak {
+    count
   }
-  if moon_check_count == 0 {
-    None
-  } else {
-    let parts = [
-      for update in latest_moon_checks.values() => update.update_text()
-    ]
-    Some(
-      "[moon_check update]\nevents=\{moon_check_count}\n\{parts.join("\n\n")}",
-    )
-  }
+  guard count > 0 else { return None }
+  let parts = [
+    for update in latest_moon_checks.values() => update.update_text()
+  ]
+  Some("[moon_check update]\nevents=\{count}\n\{parts.join("\n\n")}")
 }
 
 ///|
