@@ -180,11 +180,11 @@ pub async fn prepare_bundled_home(
   runtime_dir? : @path.Path,
 ) -> @path.Path {
   guard bundled_moonbit_seed_dir(engine_command) is Some(seed_dir) else {
-    abort("bundled MoonBit toolchain seed not found")
+    fail("bundled MoonBit toolchain seed not found")
   }
   guard prepared_bundled_moonbit_payload(seed_dir, runtime_dir)
     is Some(moon_home) else {
-    abort("failed to prepare bundled MoonBit toolchain")
+    fail("failed to prepare bundled MoonBit toolchain")
   }
   moon_home
 }

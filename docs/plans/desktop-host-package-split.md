@@ -73,6 +73,18 @@ one `desktop/internal/host` package.
 - Validation plan: `moon -C desktop test internal/engine`, `moon -C desktop
   info`, and `moon -C desktop fmt`.
 
+## Follow-up: Bundled MoonBit Preparation Errors
+
+- Goal: make bundled MoonBit preparation failures recoverable by the engine
+  startup path.
+- Accepted design: `prepare_bundled_home` raises a regular `Failure` for missing
+  seeds or failed payload preparation instead of aborting the process. Do not add
+  a public MoonBit-toolchain error type unless callers need to pattern-match it.
+- Target surface: `desktop/internal/moonbit/moonbit_toolchain.mbt` and a focused
+  moonbit package test. No public `.mbti` change is expected.
+- Validation plan: `moon -C desktop test internal/moonbit`, `moon -C desktop
+  test internal/engine`, `moon -C desktop info`, and `moon -C desktop fmt`.
+
 ## Open Questions
 
 - None. The session directory logic is intentionally folded into `engine`.
