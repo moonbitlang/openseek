@@ -10,6 +10,11 @@
 /// manifest fail every later build step.
 pub async fn write_error(path : String, content : String) -> String? {
   let trimmed = content.trim()
+  if is_generated_mbti_path(path) {
+    return Some(
+      "*.generated.mbti files are generated; run moon info instead of editing them",
+    )
+  }
   if is_moon_mod_json_path(path) && !@fs.exists(path) {
     return Some(
       "moon.mod.json is legacy; create moon.mod for new MoonBit projects",
@@ -35,9 +40,6 @@ pub async fn write_error(path : String, content : String) -> String? {
     if trimmed.has_prefix("{") {
       return Some("moon.pkg uses current text syntax, not JSON")
     }
-  }
-  if is_generated_mbti_path(path) {
-    return Some("generated.mbti is an output file, not a source manifest")
   }
   None
 }

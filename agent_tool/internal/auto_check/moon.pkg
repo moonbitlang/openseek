@@ -1,0 +1,13 @@
+import {
+  "bobzhang/openseek/agent_tool/shell",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+}
+
+import {
+  "bobzhang/openseek/testkit/filesystem" @vfs,
+} for "test"
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+native"

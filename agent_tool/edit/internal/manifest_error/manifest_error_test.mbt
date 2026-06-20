@@ -6,6 +6,21 @@ async test "manifest error allows ordinary files" {
 }
 
 ///|
+async test "manifest error rejects generated mbti files" {
+  let message = "*.generated.mbti files are generated; run moon info instead of editing them"
+  guard @manifest_error.write_error("lib/pkg.generated.mbti", "package x")
+    is Some(unix) else {
+    fail("expected generated mbti error")
+  }
+  assert_eq(unix, message)
+  guard @manifest_error.write_error("C:\\workspace\\pkg.generated.mbti", "")
+    is Some(windows) else {
+    fail("expected generated mbti error")
+  }
+  assert_eq(windows, message)
+}
+
+///|
 async test "manifest error rejects new moon.mod.json" {
   @vfs.with_tmpdir(prefix="openseek-edit-manifest-error-", dir => {
     let path = "\{dir}/moon.mod.json"
@@ -84,18 +99,15 @@ async test "manifest error accepts Windows path separators" {
 
 ///|
 async test "manifest error rejects generated interfaces" {
+  let message = "*.generated.mbti files are generated; run moon info instead of editing them"
   guard @manifest_error.write_error("pkg.generated.mbti", "...")
     is Some(root_error) else {
     fail("expected generated interface error")
   }
-  assert_eq(
-    root_error, "generated.mbti is an output file, not a source manifest",
-  )
+  assert_eq(root_error, message)
   guard @manifest_error.write_error("lib\\pkg.generated.mbti", "...")
     is Some(windows_error) else {
     fail("expected generated interface error")
   }
-  assert_eq(
-    windows_error, "generated.mbti is an output file, not a source manifest",
-  )
+  assert_eq(windows_error, message)
 }

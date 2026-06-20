@@ -39,7 +39,7 @@ fn base_prompt() -> String {
     #|   - Keep changes inside the correct package, use `///|` top-level delimiters, and split code into cohesive files.
     #|
     #|6. **Validate in a tight loop**
-    #|   - Run `moon check` after **every** edit. It type-checks without code generation, so it is much faster than `moon build` or `moon test` — make it your primary, high-frequency feedback signal and run it aggressively. Reach for `moon build`/`moon test` only when you actually need build artifacts or test results. Add `--warn-list +unnecessary_annotation` to enable warning 73 for redundant annotations and over-qualified constructors (`--warn-list +73` is equivalent).
+    #|   - Run `moon check` after **every** edit. It type-checks without code generation, so it is much faster than `moon build` or `moon test` — make it your primary, high-frequency feedback signal and run it aggressively. After `edit` or `write` changes `moon.mod`, `moon.pkg`, `.mbt`, or `.mbt.md` inside a MoonBit module, the tool result may append bounded raw feedback from module-root `moon check --diagnostic-limit 1`, starting with `moon check:` and `exit=<code>`; treat it as immediate compiler feedback, and run an explicit `moon check` when you need full diagnostics. Reach for `moon build`/`moon test` only when you actually need build artifacts or test results. Add `--warn-list +unnecessary_annotation` to enable warning 73 for redundant annotations and over-qualified constructors (`--warn-list +73` is equivalent).
     #|   - Run targeted tests with `moon test [dirname|filename] --filter 'glob'` and use `moon test --update` for snapshot changes.
     #|
     #|7. **Finalize before handoff**

@@ -72,13 +72,18 @@ async fn write_file(
     }
     create_parent_dirs(path)
     @fs.write_file(path, input.content, create_mode=CreateOrTruncate)
-    @agent_tool.ToolAction::respond(
+    let content = @auto_check.append_summary(
+      path,
       "ok: wrote \{input.content.length()} chars to \{path}",
+    )
+    @agent_tool.ToolAction::respond(
+      content,
       brief=@agent_tool.brief_line(
         "wrote \{input.content.length()} chars to \{input.path}",
       ),
     )
   } catch {
+    error if @async.is_being_cancelled() => raise error
     error =>
       @agent_tool.ToolAction::respond(
         "error writing \{path}: \{error}",
@@ -121,6 +126,11 @@ fn parent_dir(path : String) -> String {
 ///|
 async fn manifest_write_error(path : String, content : String) -> String? {
   let trimmed = content.trim()
+  if is_generated_mbti_path(path) {
+    return Some(
+      "*.generated.mbti files are generated; run moon info instead of editing them",
+    )
+  }
   if is_moon_mod_json_path(path) && !@fs.exists(path) {
     return Some(
       "moon.mod.json is legacy; create moon.mod for new MoonBit projects",
@@ -150,9 +160,6 @@ async fn manifest_write_error(path : String, content : String) -> String? {
     if trimmed.has_prefix("{") {
       return Some("moon.pkg uses current text syntax, not JSON")
     }
-  }
-  if is_generated_mbti_path(path) {
-    return Some("generated.mbti is an output file, not a source manifest")
   }
   None
 }
@@ -232,6 +239,11 @@ async test "write resolves relative paths under the workspace root" {
 
 ///|
 async test "write manifest guards accept Windows path separators" {
+  guard manifest_write_error("C:\\workspace\\pkg.generated.mbti", "package x")
+    is Some(generated_mbti) else {
+    fail("expected generated mbti guard")
+  }
+  assert_true(generated_mbti.contains("run moon info"))
   guard manifest_write_error("C:\\workspace\\moon.mod", "{\"name\":\"bad\"}")
     is Some(moon_mod) else {
     fail("expected moon.mod guard")
@@ -247,13 +259,6 @@ async test "write manifest guards accept Windows path separators" {
   }
   assert_eq(
     moon_mod_json, "moon.mod.json is legacy; create moon.mod for new MoonBit projects",
-  )
-  guard manifest_write_error("C:\\workspace\\pkg.generated.mbti", "...")
-    is Some(generated_mbti) else {
-    fail("expected generated.mbti guard")
-  }
-  assert_eq(
-    generated_mbti, "generated.mbti is an output file, not a source manifest",
   )
 }
 
@@ -308,18 +313,14 @@ async test "write rejects json style moon.mod" {
 }
 
 ///|
-async test "write rejects generated interfaces" {
+async test "write rejects generated mbti files" {
   @vfs.with_tmpdir(prefix="openseek-write-manifest-", dir => {
     let path = "\{dir}/pkg.generated.mbti"
     @fs.write_file(path, "old interface", create_mode=CreateOrTruncate)
     let result = execute({ "path": path, "content": "new interface" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(
-      output.content.contains(
-        "generated.mbti is an output file, not a source manifest",
-      ),
-    )
+    assert_true(output.content.contains("run moon info"))
     assert_eq(@fs.read_file(path).text(), "old interface")
   })
 }

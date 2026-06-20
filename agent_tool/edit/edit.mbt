@@ -79,6 +79,7 @@ async fn edit_file(
     )
   }
   let content = @fs.read_file(path).text() catch {
+    error if @async.is_being_cancelled() => raise error
     error =>
       return @agent_tool.ToolAction::respond(
         "error editing \{path}: error reading file: \{error}",
@@ -122,11 +123,16 @@ async fn edit_file(
   }
   try {
     @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
-    @agent_tool.ToolAction::respond(
+    let content = @auto_check.append_summary(
+      path,
       "ok: replaced \{replacement_count} occurrence(s) in \{path}",
+    )
+    @agent_tool.ToolAction::respond(
+      content,
       brief="edited \{@agent_tool.brief_basename(path)} (\{replacement_count}×)",
     )
   } catch {
+    error if @async.is_being_cancelled() => raise error
     error =>
       @agent_tool.ToolAction::respond(
         "error editing \{path}: error writing file: \{error}",

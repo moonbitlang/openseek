@@ -179,6 +179,24 @@ async test "edit rejects invalid moon.pkg comment rewrite" {
 }
 
 ///|
+async test "edit rejects generated mbti files" {
+  @vfs.with_tmpdir(prefix="openseek-edit-generated-", dir => {
+    let path = "\{dir}/pkg.generated.mbti"
+    @fs.write_file(path, "package old\n", create_mode=CreateOrTruncate)
+    let result = run_edit({
+      "path": path,
+      "old_string": "old",
+      "new_string": "new",
+    })
+    let read_back = @fs.read_file(path).text()
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    assert_true(output.content.contains("run moon info"))
+    assert_eq(read_back, "package old\n")
+  })
+}
+
+///|
 async test "edit rejects missing match" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/missing.txt"

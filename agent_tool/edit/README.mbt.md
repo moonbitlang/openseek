@@ -63,6 +63,10 @@ The action is always `Respond(ToolOutput(...))` — the agent loop forwards
 has one of these shapes:
 
 - `"ok: replaced <n> occurrence(s) in <path>"` on success.
+  If the target is `moon.mod`, `moon.pkg`, `.mbt`, or `.mbt.md` inside a
+  MoonBit module, the response may append bounded raw compiler feedback from
+  module-root `moon check --diagnostic-limit 1`, starting with
+  `"moon check:\nexit=<code>"` after the success line.
 - `"error editing <path>: old_string not found"` — no exact match was found.
 - `"error editing <path>: old_string matched <n> times on lines <line>, ...; set replace_all=true to replace all occurrences"` — the edit was ambiguous.
 - `"error editing <path>: moon.pkg use // for comment syntax, not #"` or similar

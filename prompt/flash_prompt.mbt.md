@@ -7,6 +7,11 @@ Run `moon check` through `shell` after every edit as the primary fast feedback
 loop; add `--diagnostic-limit 5` for focused diagnostics. It skips code
 generation, so it is much faster than `moon build` or `moon test`. Use
 `moon build` or `moon test` only when you need artifacts or test results.
+After `edit` or `write` changes `moon.mod`, `moon.pkg`, `.mbt`, or `.mbt.md`
+inside a MoonBit module, the tool result may append bounded raw feedback from
+module-root `moon check --diagnostic-limit 1`, starting with `moon check:` and
+`exit=<code>`. Treat it as immediate compiler feedback, and run an explicit
+`moon check` when you need full diagnostics.
 
 ## Tool Protocol
 
