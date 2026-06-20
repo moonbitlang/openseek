@@ -478,17 +478,37 @@ fn path_basename(p : String) -> String {
 }
 
 ///|
+/// Drop a leading `./` so the default-scan labels (`./app/.openseek`) and an
+/// absolute/bare form derive the same group. Without this, `parent_dir` of a
+/// `./app` workspace is `.`, which would merge every direct workspace under one
+/// `.` heading.
+fn strip_dot_prefix(p : String) -> String {
+  if p.has_prefix("./") {
+    p[2:].to_owned()
+  } else {
+    p
+  }
+}
+
+///|
+/// Whether `d` names an actual directory rather than the current one.
+fn is_meaningful_dir(d : String) -> Bool {
+  !d.is_empty() && d != "."
+}
+
+///|
 /// The sidebar group key for a session's `.openseek` store path: the container
 /// directory holding the workspace (grandparent of the store), so sibling run
 /// workspaces (best-of-N / fleet) cluster under one heading. When the store sits
 /// directly under the current directory, group by the workspace itself; a bare
 /// `.openseek` groups under the current directory (`""`).
 fn session_group(root_label : String) -> String {
-  let workspace = parent_dir(root_label)
+  let normalized = strip_dot_prefix(root_label)
+  let workspace = parent_dir(normalized)
   let container = parent_dir(workspace)
-  if !container.is_empty() {
+  if is_meaningful_dir(container) {
     container
-  } else if !workspace.is_empty() {
+  } else if is_meaningful_dir(workspace) {
     workspace
   } else {
     ""
@@ -499,9 +519,10 @@ fn session_group(root_label : String) -> String {
 /// The per-row label distinguishing sessions within a group: the workspace name
 /// when sessions are grouped under a shared container, otherwise the session id.
 fn session_row_label(root_label : String, id : String) -> String {
-  let workspace = path_basename(parent_dir(root_label))
+  let normalized = strip_dot_prefix(root_label)
+  let workspace = path_basename(parent_dir(normalized))
   if !workspace.is_empty() &&
-    session_group(root_label) != parent_dir(root_label) {
+    session_group(root_label) != parent_dir(normalized) {
     workspace
   } else {
     id
@@ -509,13 +530,11 @@ fn session_row_label(root_label : String, id : String) -> String {
 }
 
 ///|
-/// Human heading for a group key: the current directory for an empty key, else
-/// the path with a leading `./` stripped.
+/// Human heading for a group key (already normalized): the current directory for
+/// an empty key, else the path itself.
 fn group_display(group : String) -> String {
   if group.is_empty() {
     "current directory"
-  } else if group.has_prefix("./") {
-    group[2:].to_owned()
   } else {
     group
   }

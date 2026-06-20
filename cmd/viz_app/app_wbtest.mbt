@@ -86,14 +86,15 @@ test "sidebar_groups clusters by container, in listing order, no duplicates" {
       root_label: "/tmp/ab/B-1/.openseek",
       first_prompt: "",
     },
-    // A workspace directly under cwd groups by itself; a bare store by cwd.
-    { key: "2|c", id: "c", root_label: "app/.openseek", first_prompt: "" },
-    { key: "3|d", id: "d", root_label: ".openseek", first_prompt: "" },
+    // Default-scan "./" workspaces stay separate (not merged under ".").
+    { key: "2|c", id: "c", root_label: "./app/.openseek", first_prompt: "" },
+    { key: "3|d", id: "d", root_label: "./lib/.openseek", first_prompt: "" },
+    { key: "4|e", id: "e", root_label: "./.openseek", first_prompt: "" },
   ]
   @debug.debug_inspect(
     sidebar_groups(rows),
     content=(
-      #|["/tmp/ab", "app", ""]
+      #|["/tmp/ab", "app", "lib", ""]
     ),
   )
 }
@@ -104,16 +105,18 @@ test "session grouping derives container, row label, and heading" {
   inspect(session_group("/tmp/ab/A-1/.openseek"), content="/tmp/ab")
   inspect(session_row_label("/tmp/ab/A-1/.openseek", "run"), content="A-1")
   inspect(group_display("/tmp/ab"), content="/tmp/ab")
-  // A workspace directly under cwd: grouped by the workspace, labelled by id.
+  // A workspace directly under cwd groups by itself, labelled by id — and the
+  // default-scan "./" prefix normalizes to the same key as the bare form.
+  inspect(session_group("./app/.openseek"), content="app")
   inspect(session_group("app/.openseek"), content="app")
-  inspect(session_row_label("app/.openseek", "c"), content="c")
+  inspect(session_row_label("./app/.openseek", "c"), content="c")
   // A bare cwd store: the current-directory group, labelled by id.
+  inspect(session_group("./.openseek"), content="")
   inspect(session_group(".openseek"), content="")
   inspect(session_row_label(".openseek", "cli-1"), content="cli-1")
   inspect(group_display(""), content="current directory")
-  // A leading "./" is stripped from the heading.
-  inspect(group_display("./.repos"), content=".repos")
-  inspect(session_group("./.repos/toml_run_1/.openseek"), content="./.repos")
+  // Nested "./"-prefixed roots cluster by their normalized container.
+  inspect(session_group("./.repos/toml_run_1/.openseek"), content=".repos")
   inspect(
     session_row_label("./.repos/toml_run_1/.openseek", "run"),
     content="toml_run_1",
