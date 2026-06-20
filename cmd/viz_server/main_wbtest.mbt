@@ -222,12 +222,14 @@ test "session catalog lookup supports composite and legacy keys" {
         key: "0",
         path: "app/.openseek",
         label: "app/.openseek",
+        is_marker: true,
         store: @store.SessionStore("app/.openseek"),
       },
       {
         key: "1",
         path: "lib/.openseek",
         label: "lib/.openseek",
+        is_marker: true,
         store: @store.SessionStore("lib/.openseek"),
       },
     ],
@@ -264,12 +266,14 @@ async test "session_list_reply includes root metadata and composite keys" {
           key: "0",
           path: "\{root}/app/.openseek",
           label: "app/.openseek",
+          is_marker: true,
           store: app_store,
         },
         {
           key: "1",
           path: "\{root}/lib/.openseek",
           label: "lib/.openseek",
+          is_marker: true,
           store: lib_store,
         },
       ],
@@ -280,5 +284,7 @@ async test "session_list_reply includes root metadata and composite keys" {
     assert_true(text.contains("\"key\":\"1|same\""))
     assert_true(text.contains("\"root_label\":\"app/.openseek\""))
     assert_true(text.contains("\"root_label\":\"lib/.openseek\""))
+    // The marker flag rides along so the sidebar can group by directory.
+    assert_true(text.contains("\"is_marker\":true"))
   })
 }

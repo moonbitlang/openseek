@@ -274,6 +274,7 @@ async fn session_list_reply(catalog : SessionCatalog) -> Reply {
         id,
         root: root.path,
         root_label: root.label,
+        is_marker: root.is_marker,
         last_active: listing.last_active_unix_seconds(),
         first_prompt: listing.first_prompt(),
       })
@@ -288,6 +289,11 @@ priv struct SessionRoot {
   key : String
   path : String
   label : String
+  // Whether this root is a discovered marker store (its directory is named like
+  // the root marker, e.g. `.openseek`) rather than a direct store the user
+  // pointed `--session-root` at. The sidebar uses this to decide whether the
+  // path's last segment is a marker to strip when grouping by directory.
+  is_marker : Bool
   store : @store.SessionStore
 }
 
@@ -302,6 +308,7 @@ priv struct SessionListRow {
   id : String
   root : String
   root_label : String
+  is_marker : Bool
   last_active : Int64?
   first_prompt : String
 }
@@ -317,6 +324,7 @@ fn SessionListRow::to_json(self : SessionListRow) -> Json {
     "id": self.id,
     "root": self.root,
     "root_label": self.root_label,
+    "is_marker": self.is_marker,
     "last_active": last_active,
     "first_prompt": self.first_prompt,
   }
@@ -382,6 +390,7 @@ async fn session_catalog(
       key: index.to_string(),
       path,
       label: root_label(path),
+      is_marker: path_tail(path) == session_root_name,
       store: @store.SessionStore(path),
     })
   }

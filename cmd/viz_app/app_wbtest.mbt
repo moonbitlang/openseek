@@ -74,22 +74,12 @@ test "session_url percent-encodes the id" {
 test "sidebar_groups clusters by container, in listing order, no duplicates" {
   let rows = [
     // Two sibling run workspaces share the /tmp/ab container.
-    {
-      key: "0|a",
-      id: "run",
-      root_label: "/tmp/ab/A-1/.openseek",
-      first_prompt: "",
-    },
-    {
-      key: "1|b",
-      id: "run",
-      root_label: "/tmp/ab/B-1/.openseek",
-      first_prompt: "",
-    },
+    marker_row("0|a", "run", "/tmp/ab/A-1/.openseek"),
+    marker_row("1|b", "run", "/tmp/ab/B-1/.openseek"),
     // Default-scan "./" workspaces stay separate (not merged under ".").
-    { key: "2|c", id: "c", root_label: "./app/.openseek", first_prompt: "" },
-    { key: "3|d", id: "d", root_label: "./lib/.openseek", first_prompt: "" },
-    { key: "4|e", id: "e", root_label: "./.openseek", first_prompt: "" },
+    marker_row("2|c", "c", "./app/.openseek"),
+    marker_row("3|d", "d", "./lib/.openseek"),
+    marker_row("4|e", "e", "./.openseek"),
   ]
   @debug.debug_inspect(
     sidebar_groups(rows),
@@ -100,46 +90,76 @@ test "sidebar_groups clusters by container, in listing order, no duplicates" {
 }
 
 ///|
+fn marker_row(key : String, id : String, root_label : String) -> SessionRow {
+  { key, id, root_label, is_marker: true, first_prompt: "" }
+}
+
+///|
 test "session grouping derives container, row label, and heading" {
-  // A nested run workspace: grouped by container, labelled by workspace name.
-  inspect(session_group("/tmp/ab/A-1/.openseek"), content="/tmp/ab")
-  inspect(session_row_label("/tmp/ab/A-1/.openseek", "run"), content="A-1")
+  // A nested run workspace (marker store): grouped by container, labelled by
+  // workspace name.
+  inspect(session_group("/tmp/ab/A-1/.openseek", true), content="/tmp/ab")
+  inspect(
+    session_row_label("/tmp/ab/A-1/.openseek", "run", true),
+    content="A-1",
+  )
   inspect(group_display("/tmp/ab"), content="/tmp/ab")
   // A workspace directly under cwd groups by itself, labelled by id — and the
   // default-scan "./" prefix normalizes to the same key as the bare form.
-  inspect(session_group("./app/.openseek"), content="app")
-  inspect(session_group("app/.openseek"), content="app")
-  inspect(session_row_label("./app/.openseek", "c"), content="c")
+  inspect(session_group("./app/.openseek", true), content="app")
+  inspect(session_group("app/.openseek", true), content="app")
+  inspect(session_row_label("./app/.openseek", "c", true), content="c")
   // A bare cwd store: the current-directory group, labelled by id.
-  inspect(session_group("./.openseek"), content="")
-  inspect(session_group(".openseek"), content="")
-  inspect(session_row_label(".openseek", "cli-1"), content="cli-1")
+  inspect(session_group("./.openseek", true), content="")
+  inspect(session_group(".openseek", true), content="")
+  inspect(session_row_label(".openseek", "cli-1", true), content="cli-1")
   inspect(group_display(""), content="current directory")
   // Nested "./"-prefixed roots cluster by their normalized container.
-  inspect(session_group("./.repos/toml_run_1/.openseek"), content=".repos")
   inspect(
-    session_row_label("./.repos/toml_run_1/.openseek", "run"),
+    session_group("./.repos/toml_run_1/.openseek", true),
+    content=".repos",
+  )
+  inspect(
+    session_row_label("./.repos/toml_run_1/.openseek", "run", true),
     content="toml_run_1",
   )
-  // A direct custom session root (not a .openseek marker dir) is its own group,
-  // keyed by its full path, with rows labelled by id — it is not stripped down
-  // to a "/tmp" group shared with unrelated stores.
+  // A direct store (is_marker=false) is its own group, labelled by id — even a
+  // hidden one is NOT stripped, so unrelated direct stores never merge.
   inspect(
-    session_group("/tmp/openseek-sessions"),
+    session_group("/tmp/openseek-sessions", false),
     content="/tmp/openseek-sessions",
   )
-  inspect(session_row_label("/tmp/openseek-sessions", "cli-1"), content="cli-1")
   inspect(
-    group_display("/tmp/openseek-sessions"),
-    content="/tmp/openseek-sessions",
+    session_row_label("/tmp/openseek-sessions", "cli-1", false),
+    content="cli-1",
   )
+  inspect(
+    session_group("/tmp/.my-sessions", false),
+    content="/tmp/.my-sessions",
+  )
+  // A non-hidden marker (e.g. --session-root-name sessions) still groups by
+  // container when the server flags it as a marker.
+  inspect(session_group("runs/A-1/sessions", true), content="runs")
+  inspect(session_row_label("runs/A-1/sessions", "x", true), content="A-1")
 }
 
 ///|
 test "sidebar_groups keeps unrelated direct stores separate" {
   let rows = [
-    { key: "0|a", id: "a", root_label: "/srv/store-a", first_prompt: "" },
-    { key: "1|b", id: "b", root_label: "/srv/store-b", first_prompt: "" },
+    {
+      key: "0|a",
+      id: "a",
+      root_label: "/srv/store-a",
+      is_marker: false,
+      first_prompt: "",
+    },
+    {
+      key: "1|b",
+      id: "b",
+      root_label: "/srv/store-b",
+      is_marker: false,
+      first_prompt: "",
+    },
   ]
   @debug.debug_inspect(
     sidebar_groups(rows),
@@ -152,8 +172,8 @@ test "sidebar_groups keeps unrelated direct stores separate" {
 ///|
 test "collapsed group helpers toggle and prune stale groups" {
   let rows = [
-    { key: "0|a", id: "a", root_label: "app/.openseek", first_prompt: "" },
-    { key: "1|b", id: "b", root_label: "lib/.openseek", first_prompt: "" },
+    marker_row("0|a", "a", "app/.openseek"),
+    marker_row("1|b", "b", "lib/.openseek"),
   ]
   let collapsed = toggle_collapsed_root([], "app")
   @debug.debug_inspect(collapsed, content="[\"app\"]")

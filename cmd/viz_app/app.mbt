@@ -6,6 +6,10 @@ struct SessionRow {
   key : String
   id : String
   root_label : String
+  // Whether the server discovered this root as a marker store (a `.openseek`-like
+  // directory) rather than a direct `--session-root` store. Drives whether the
+  // sidebar strips the last path segment when grouping. Absent → `false`.
+  is_marker : Bool
   first_prompt : String
 }
 
@@ -380,11 +384,9 @@ fn sidebar_list(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
   }
   let sections : Array[@html.Html] = []
   for group in sidebar_groups(model.sessions) {
-    let rows : Array[@html.Html] = [
-      for row in model.sessions if session_group(row.root_label) == group => {
-        sidebar_row(emit, model, row)
-      }
-    ]
+    let rows = model.sessions
+      .filter(row => session_group(row.root_label, row.is_marker) == group)
+      .map(row => sidebar_row(emit, model, row))
     let collapsed = root_collapsed(model, group)
     let display = group_display(group)
     sections.push(
@@ -435,7 +437,7 @@ fn session_root_class(collapsed : Bool) -> String {
 fn sidebar_groups(rows : Array[SessionRow]) -> Array[String] {
   let groups : Array[String] = []
   for row in rows {
-    let group = session_group(row.root_label)
+    let group = session_group(row.root_label, row.is_marker)
     if !groups.contains(group) {
       groups.push(group)
     }
@@ -497,25 +499,16 @@ fn is_meaningful_dir(d : String) -> Bool {
 }
 
 ///|
-/// Whether `segment` is a session-store marker directory (a hidden dir like
-/// `.openseek`) rather than the real name of a direct session root. The server
-/// also serves direct stores it pointed `--session-root` at (a dir holding a
-/// `sessions/` child, e.g. `/tmp/openseek-sessions`); those must not be treated
-/// as a marker and stripped, or unrelated stores would merge under their parent.
-fn is_marker_segment(segment : String) -> Bool {
-  segment.has_prefix(".")
-}
-
-///|
-/// The sidebar group key for a session's store path. For a `.openseek` marker
-/// store, the container directory holding the workspace (grandparent of the
-/// store) so sibling run workspaces (best-of-N / fleet) cluster under one
-/// heading; a workspace directly under the cwd groups by itself, and a bare
-/// `.openseek` under the current directory (`""`). A direct (non-marker) store
-/// is its own group, keyed by its full path.
-fn session_group(root_label : String) -> String {
+/// The sidebar group key for a session's store path. The server tells us via
+/// `is_marker` whether the last path segment is a discovered store marker (e.g.
+/// `.openseek`) — only then is it stripped. For a marker store: the container
+/// directory holding the workspace (grandparent of the store) so sibling run
+/// workspaces (best-of-N / fleet) cluster under one heading; a workspace directly
+/// under the cwd groups by itself; a bare marker under the current directory
+/// (`""`). A direct (non-marker) store is its own group, keyed by its full path.
+fn session_group(root_label : String, is_marker : Bool) -> String {
   let normalized = strip_dot_prefix(root_label)
-  guard is_marker_segment(path_basename(normalized)) else { return normalized }
+  guard is_marker else { return normalized }
   let workspace = parent_dir(normalized)
   let container = parent_dir(workspace)
   if is_meaningful_dir(container) {
@@ -530,12 +523,16 @@ fn session_group(root_label : String) -> String {
 ///|
 /// The per-row label distinguishing sessions within a group: the workspace name
 /// when sessions are grouped under a shared container, otherwise the session id.
-fn session_row_label(root_label : String, id : String) -> String {
+fn session_row_label(
+  root_label : String,
+  id : String,
+  is_marker : Bool,
+) -> String {
   let normalized = strip_dot_prefix(root_label)
-  guard is_marker_segment(path_basename(normalized)) else { return id }
+  guard is_marker else { return id }
   let workspace = path_basename(parent_dir(normalized))
   if !workspace.is_empty() &&
-    session_group(root_label) != parent_dir(normalized) {
+    session_group(root_label, is_marker) != parent_dir(normalized) {
     workspace
   } else {
     id
@@ -595,7 +592,7 @@ fn sidebar_row(
     @html.div(class="session-item-label", label),
     @html.div(
       class="session-item-id",
-      session_row_label(row.root_label, row.id),
+      session_row_label(row.root_label, row.id, row.is_marker),
     ),
   ])
 }
@@ -850,7 +847,8 @@ fn session_row_of(json : Json) -> SessionRow? {
     Some(String(value)) => value
     _ => ""
   }
-  Some({ key, id, root_label, first_prompt })
+  let is_marker = fields.get("is_marker") is Some(True)
+  Some({ key, id, root_label, is_marker, first_prompt })
 }
 
 ///|
