@@ -379,19 +379,24 @@ fn sidebar_list(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
     return @html.div(class="sidebar-empty", "no sessions found")
   }
   let sections : Array[@html.Html] = []
-  for root in sidebar_roots(model.sessions) {
+  for group in sidebar_groups(model.sessions) {
     let rows : Array[@html.Html] = [
-      for row in model.sessions if row.root_label == root => {
+      for row in model.sessions if session_group(row.root_label) == group => {
         sidebar_row(emit, model, row)
       }
     ]
-    let collapsed = root_collapsed(model, root)
+    let collapsed = root_collapsed(model, group)
+    let display = group_display(group)
     sections.push(
       @html.div(class=session_root_class(collapsed), [
         @html.button(
           class="session-root-toggle",
-          title=if collapsed { "Expand \{root}" } else { "Collapse \{root}" },
-          on_click=emit(ToggleRoot(root)),
+          title=if collapsed {
+            "Expand \{display}"
+          } else {
+            "Collapse \{display}"
+          },
+          on_click=emit(ToggleRoot(group)),
           [
             @html.span(
               class="session-root-caret",
@@ -401,7 +406,7 @@ fn sidebar_list(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
                 "▾"
               },
             ),
-            @html.span(class="session-root-name", root),
+            @html.span(class="session-root-name", display),
             @html.span(class="session-root-count", rows.length().to_string()),
           ],
         ),
@@ -426,14 +431,94 @@ fn session_root_class(collapsed : Bool) -> String {
 }
 
 ///|
-fn sidebar_roots(rows : Array[SessionRow]) -> Array[String] {
-  let roots : Array[String] = []
+/// Distinct sidebar group keys, in first-seen (most-recently-active) order.
+fn sidebar_groups(rows : Array[SessionRow]) -> Array[String] {
+  let groups : Array[String] = []
   for row in rows {
-    if !roots.contains(row.root_label) {
-      roots.push(row.root_label)
+    let group = session_group(row.root_label)
+    if !groups.contains(group) {
+      groups.push(group)
     }
   }
-  roots
+  groups
+}
+
+///|
+/// Index of the last `/` or `\` in `p`, or -1 when there is none.
+fn last_separator(p : String) -> Int {
+  match (p.rev_find("/"), p.rev_find("\\")) {
+    (Some(a), Some(b)) => if a > b { a } else { b }
+    (Some(a), None) => a
+    (None, Some(b)) => b
+    (None, None) => -1
+  }
+}
+
+///|
+/// The directory portion of `p` (before the last separator), or `""` when `p`
+/// has no directory component.
+fn parent_dir(p : String) -> String {
+  let i = last_separator(p)
+  if i < 0 {
+    ""
+  } else {
+    p[:i].to_owned()
+  }
+}
+
+///|
+/// The last path segment of `p`.
+fn path_basename(p : String) -> String {
+  let i = last_separator(p)
+  if i < 0 {
+    p
+  } else {
+    p[i + 1:].to_owned()
+  }
+}
+
+///|
+/// The sidebar group key for a session's `.openseek` store path: the container
+/// directory holding the workspace (grandparent of the store), so sibling run
+/// workspaces (best-of-N / fleet) cluster under one heading. When the store sits
+/// directly under the current directory, group by the workspace itself; a bare
+/// `.openseek` groups under the current directory (`""`).
+fn session_group(root_label : String) -> String {
+  let workspace = parent_dir(root_label)
+  let container = parent_dir(workspace)
+  if !container.is_empty() {
+    container
+  } else if !workspace.is_empty() {
+    workspace
+  } else {
+    ""
+  }
+}
+
+///|
+/// The per-row label distinguishing sessions within a group: the workspace name
+/// when sessions are grouped under a shared container, otherwise the session id.
+fn session_row_label(root_label : String, id : String) -> String {
+  let workspace = path_basename(parent_dir(root_label))
+  if !workspace.is_empty() &&
+    session_group(root_label) != parent_dir(root_label) {
+    workspace
+  } else {
+    id
+  }
+}
+
+///|
+/// Human heading for a group key: the current directory for an empty key, else
+/// the path with a leading `./` stripped.
+fn group_display(group : String) -> String {
+  if group.is_empty() {
+    "current directory"
+  } else if group.has_prefix("./") {
+    group[2:].to_owned()
+  } else {
+    group
+  }
 }
 
 ///|
@@ -457,8 +542,8 @@ fn prune_collapsed_roots(
   collapsed_roots : Array[String],
   rows : Array[SessionRow],
 ) -> Array[String] {
-  let roots = sidebar_roots(rows)
-  collapsed_roots.filter(root => roots.contains(root))
+  let groups = sidebar_groups(rows)
+  collapsed_roots.filter(group => groups.contains(group))
 }
 
 ///|
@@ -476,7 +561,10 @@ fn sidebar_row(
   let classes = if selected { "session-item selected" } else { "session-item" }
   @html.li(class=classes, on_click=emit(Select(row.key)), [
     @html.div(class="session-item-label", label),
-    @html.div(class="session-item-id", row.id),
+    @html.div(
+      class="session-item-id",
+      session_row_label(row.root_label, row.id),
+    ),
   ])
 }
 
