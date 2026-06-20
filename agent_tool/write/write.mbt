@@ -72,8 +72,12 @@ async fn write_file(
     }
     create_parent_dirs(path)
     @fs.write_file(path, input.content, create_mode=CreateOrTruncate)
-    @agent_tool.ToolAction::respond(
+    let content = @auto_check.append_summary(
+      path,
       "ok: wrote \{input.content.length()} chars to \{path}",
+    )
+    @agent_tool.ToolAction::respond(
+      content,
       brief=@agent_tool.brief_line(
         "wrote \{input.content.length()} chars to \{input.path}",
       ),

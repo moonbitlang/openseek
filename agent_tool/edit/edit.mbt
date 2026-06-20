@@ -122,8 +122,12 @@ async fn edit_file(
   }
   try {
     @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
-    @agent_tool.ToolAction::respond(
+    let content = @auto_check.append_summary(
+      path,
       "ok: replaced \{replacement_count} occurrence(s) in \{path}",
+    )
+    @agent_tool.ToolAction::respond(
+      content,
       brief="edited \{@agent_tool.brief_basename(path)} (\{replacement_count}×)",
     )
   } catch {

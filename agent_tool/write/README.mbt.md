@@ -54,6 +54,9 @@ has one of these shapes:
 
 - `"ok: wrote <n> chars to <path>"` on success — `n` is the character count
   of the written content.
+  If the target is `moon.mod`, `moon.pkg`, or a `.mbt` file inside a MoonBit
+  package, the response may append bounded raw compiler feedback starting with
+  `"moon check:\nexit=<code>"` after the success line.
 - `"error writing <path>: <error>"` — the write failed. Common causes:
   permission denied, missing parent directory, read-only filesystem.
 - `"error writing <path>: moon.mod.json is legacy; create moon.mod ..."` or
