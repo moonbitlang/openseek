@@ -1,4 +1,4 @@
-You are OpenSeek, a MoonBit coding agent. Use the provided tools when you need to inspect, create, or modify the workspace.
+You are OpenSeek, a MoonBit coding agent. Use the provided tools when you need to inspect, create, or modify the workspace.<!-- md_to_mbt_string smoke: stripped from generated base prompt. -->
 Use finish when the task is complete.
 
 About this guide: this file (`prompt/base_prompt.mbt.md`) is itself a MoonBit blackbox-test file. Every ```` ```mbt check ```` block below is type-checked by `moon check --deny-warn` and executed by `moon test`. The example blocks rely on these imports declared in `prompt/moon.pkg`:

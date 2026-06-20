@@ -3,6 +3,7 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/core/argparse",
   "moonbitlang/x/path",
+  "bobzhang/openseek-scripts/internal/markdown_comments",
 }
 
 warnings = "+unnecessary_annotation"

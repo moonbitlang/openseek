@@ -89,6 +89,7 @@ fn generated_source(
   function_name~ : StringView,
   markdown~ : StringView,
 ) -> String {
+  let markdown = @markdown_comments.without_comments(markdown.to_owned())
   let lines = markdown.split("\n")
   (
     $|// Generated from \{base} by moon dev_build. DO NOT EDIT.

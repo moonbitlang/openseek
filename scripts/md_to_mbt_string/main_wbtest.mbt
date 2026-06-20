@@ -73,19 +73,22 @@ test "generated source matches dev_build output shape" {
     function_name="base_prompt",
     markdown="# Title\n\nbody\n",
   )
-  let expected =
-    #|// Generated from base_prompt.md by moon dev_build. DO NOT EDIT.
-    #|///|
-    #|fn base_prompt() -> String {
-    #|  (
-    #|    #|# Title
-    #|    #|
-    #|    #|body
-    #|    #|
-    #|  )
-    #|}
-    #|
-  assert_eq(source, expected)
+  inspect(
+    source,
+    content=(
+      #|// Generated from base_prompt.md by moon dev_build. DO NOT EDIT.
+      #|///|
+      #|fn base_prompt() -> String {
+      #|  (
+      #|    #|# Title
+      #|    #|
+      #|    #|body
+      #|    #|
+      #|  )
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -95,17 +98,112 @@ test "generated source preserves missing final newline" {
     function_name="flash_prompt",
     markdown="one\ntwo",
   )
-  let expected =
-    #|// Generated from flash_prompt.md by moon dev_build. DO NOT EDIT.
-    #|///|
-    #|fn flash_prompt() -> String {
-    #|  (
-    #|    #|one
-    #|    #|two
-    #|  )
-    #|}
+  inspect(
+    source,
+    content=(
+      #|// Generated from flash_prompt.md by moon dev_build. DO NOT EDIT.
+      #|///|
+      #|fn flash_prompt() -> String {
+      #|  (
+      #|    #|one
+      #|    #|two
+      #|  )
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "generated source filters markdown comments" {
+  let markdown =
+    #|# Title
     #|
-  assert_eq(source, expected)
+    #|<!-- hidden block
+    #|still hidden -->
+    #|
+    #|<!-- hidden --> Visible after block comment.
+    #|
+    #|<!-- first --> Visible <!-- second --> after.
+    #|
+    #|Visible <!-- hidden inline --> text.
+    #|
+    #|```markdown
+    #|<!-- kept in code -->
+    #|```
+    #|
+    #|<div>kept html</div>
+    #|
+    #|<div>
+    #|<!-- hidden inside html block -->
+    #|kept html block
+    #|</div>
+    #|
+    #|<div><!-- hidden same-line html block -->kept html inline</div>
+    #|
+  let source = generated_source(
+    base="flash_prompt.md",
+    function_name="flash_prompt",
+    markdown~,
+  )
+  inspect(
+    source,
+    content=(
+      #|// Generated from flash_prompt.md by moon dev_build. DO NOT EDIT.
+      #|///|
+      #|fn flash_prompt() -> String {
+      #|  (
+      #|    #|# Title
+      #|    #|
+      #|    #|
+      #|    #|
+      #|    #| Visible after block comment.
+      #|    #|
+      #|    #| Visible  after.
+      #|    #|
+      #|    #|Visible  text.
+      #|    #|
+      #|    #|```markdown
+      #|    #|<!-- kept in code -->
+      #|    #|```
+      #|    #|
+      #|    #|<div>kept html</div>
+      #|    #|
+      #|    #|<div>
+      #|    #|
+      #|    #|kept html block
+      #|    #|</div>
+      #|    #|
+      #|    #|<div>kept html inline</div>
+      #|    #|
+      #|  )
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "generated source filters multiline inline comments" {
+  let source = generated_source(
+    base="flash_prompt.md",
+    function_name="flash_prompt",
+    markdown="foo <!-- hidden\ncomment --> bar\n",
+  )
+  inspect(
+    source,
+    content=(
+      #|// Generated from flash_prompt.md by moon dev_build. DO NOT EDIT.
+      #|///|
+      #|fn flash_prompt() -> String {
+      #|  (
+      #|    #|foo  bar
+      #|    #|
+      #|  )
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|

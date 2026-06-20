@@ -1,0 +1,8 @@
+import {
+  "moonbit-community/cmark/cmark",
+  "moonbit-community/cmark/cmark_base",
+}
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+native"
