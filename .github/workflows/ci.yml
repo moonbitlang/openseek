@@ -54,6 +54,15 @@ jobs:
       - name: Check (deny warnings)
         run: moon check --deny-warn
 
+      - name: Check generated interfaces
+        run: |
+          moon info
+          if [ -n "$(git status --porcelain -- '*.mbti')" ]; then
+            git status --short -- '*.mbti'
+            git diff -- '*.mbti'
+            exit 1
+          fi
+
       - name: Test
         run: moon test
 

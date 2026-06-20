@@ -32,8 +32,11 @@ Common `moon` subcommands:
   `--`, program arguments go after `--`. Example:
   `moon run --target native cmd/tomljson -- /tmp/input.toml`.
 - shell `moon run -e` or `moon run -`: quick language/API snippets.
-  Verified examples: `moon run --target native -e 'fn main { println("ok") }'`
-  and `moon run --target native - <<'EOF'`.
+  Verified examples: `moon run -e 'fn main { println("ok") }'`
+  and `moon run - <<'EOF'`.
+  `moon run -e` defaults to native on current MoonBit nightlies, but `moon run -`
+  can still default to wasm-gc; pass `--target native` when stdin snippets need
+  native or async support.
   MoonBit also supports `fn main raise`; for example,
   `moon run --warn-list -a -e 'fn main raise { fail("bad input") }'` reports
   the error with a stack trace.
@@ -84,7 +87,7 @@ Common `moon` subcommands:
 
 Example module:
 
-```toml
+```
 name = "username/project"
 version = "0.1.0"
 preferred_target = "native"
@@ -92,6 +95,7 @@ preferred_target = "native"
 import {
   "moonbitlang/async@0.19.1",
 }
+warnings = "+test_unqualified_package" // `moon explain --diagnostic test_unqualified_package` to learn more
 ```
 
 After adding new module dependencies, run `moon update` from the module root if
@@ -99,7 +103,7 @@ After adding new module dependencies, run `moon update` from the module root if
 
 Example native CLI package:
 
-```toml
+```
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
@@ -137,13 +141,14 @@ options(
 - Use `moon run -e` for quick core-language probes. Do not use `moon run -c`;
   `-c` is easy to confuse with `-C`.
 - `-e` requires the MoonBit code as the next command argument, for example
-  `moon run --target native -e 'fn main { println("ok") }'`. Do not run
-  `moon run -e` and send the code on stdin.
+  `moon run -e 'fn main { println("ok") }'`. Do not run `moon run -e` and
+  send the code on stdin.
 - One-off `moon run -e` or `moon run -` snippets do not see project `moon.pkg`
   imports by default, but `.mbtx` snippets may include an `import` block for
   quick dependency probes.
 - For multi-line probes, use shell with a heredoc, for example
-  `moon run --target native - <<'EOF'`.
+  `moon run - <<'EOF'`. Add `--target native` when the snippet needs async or
+  native-only APIs.
 - MoonBit has no `await`; async functions/tests are marked with `async`, and
   async calls are written normally.
 - Use `let mut` only when rebinding a variable. Mutable maps/arrays can be
@@ -155,7 +160,7 @@ options(
 ///|
 test {
   let n : Int = @string.from_str("123")
-  inspect(n, content="123")
+  debug_inspect(n, content="123")
 }
 ```
 
@@ -165,10 +170,9 @@ test {
   text is kept literally.
 - Interpolated multi-line strings use `$|`. Each content line starts with
   `$|`, and interpolation is written as `\{expr}`.
-- Do not write `\(expr)` for interpolation.
 - Do not use `moon run -e` for multi-line snippets unless there is a strong
   reason. Shell quoting around newlines, quotes, backslashes, `#|`, `$|`, and
-  `\{...}` is easy to get wrong. Prefer `moon run --target native - <<'EOF'`
+  `\{...}` is easy to get wrong. Prefer `moon run - <<'EOF'`
   for anything longer than one short line.
 
 ```mbt check
@@ -181,25 +185,22 @@ test {
   let rendered =
     $|hello \{name}
     $|lines: \{raw.split("\n").count()}
-  assert_true(raw.contains("second line"))
-  assert_true(rendered.contains("hello MoonBit"))
+  assert_true(raw =~ re"second line")
+  assert_true(rendered =~ re"hello MoonBit") // re"..." is regex literal
 }
 ```
 
-Native dependency probe with `moon run -` and a heredoc:
+Verified async probe with `moon run --target native -` and a heredoc:
 
 ```sh
-printf 'hello' > /tmp/cat.txt
 moon run --target native - <<'EOF'
 import {
-  "moonbitlang/async@0.19.1",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/stdio",
+  "moonbitlang/async",
 }
 
 async fn main {
-  let data = @fs.read_file("/tmp/cat.txt")
-  @stdio.stdout.write(data)
+  @async.sleep(0)
+  println("async ok")
 }
 EOF
 ```
