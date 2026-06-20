@@ -70,13 +70,13 @@ fn parse_frontmatter(text : String, fallback_name : String) -> (String, String) 
 /// The markdown file's stem (`foo` for `dir/foo.md`), used as the fallback
 /// skill name.
 fn file_stem(path : String) -> String {
-  let base = match path.rev_find("/") {
-    Some(index) => "\{path[index + 1:]}"
+  let base = match path.rev_split_once("/") {
+    Some((_, base)) => base
     None => path
   }
-  match base.rev_find(".") {
-    Some(index) => "\{base[0:index]}"
-    None => base
+  match base.rev_split_once(".") {
+    Some((stem, _)) => "\{stem}"
+    None => "\{base}"
   }
 }
 
@@ -115,13 +115,13 @@ async fn add_skill_file(skills : Array[Skill], path : String) -> Unit {
     "SKILL" => {
       // For <name>/SKILL.md layouts the directory carries the name — its
       // full basename, dots included ("node.js" stays "node.js").
-      let parent = match path.rev_find("/") {
-        Some(index) => "\{path[0:index]}"
+      let parent = match path.rev_split_once("/") {
+        Some((parent, _)) => parent
         None => path
       }
-      match parent.rev_find("/") {
-        Some(index) => "\{parent[index + 1:]}"
-        None => parent
+      match parent.rev_split_once("/") {
+        Some((_, name)) => "\{name}"
+        None => "\{parent}"
       }
     }
     stem => stem

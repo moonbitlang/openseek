@@ -305,8 +305,8 @@ fn within_root(path : String, root : String) -> Bool {
 /// `.openseek/skills` are deliberately kept so a trial behaves like a normal run.
 /// `sessions_rel` is `""` when the session store lives outside the workspace.
 fn copy_skip(rel : String, sessions_rel~ : String) -> Bool {
-  let base = match rel.rev_find("/") {
-    Some(index) => rel[index + 1:].to_owned()
+  let base = match rel.rev_split_once("/") {
+    Some((_, base)) => base
     None => rel
   }
   if base == "_build" || base == "node_modules" {

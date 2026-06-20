@@ -171,9 +171,9 @@ async fn random_salt() -> String {
   // Locate the prefix instead of splitting on a path separator: Windows
   // paths use backslashes, and a `/`-only basename split would drop the
   // salt there entirely (Codex review).
-  guard dir.rev_find(prefix) is Some(index) else { return "" }
+  guard dir.rev_split_once(prefix) is Some((_, suffix)) else { return "" }
   let salt = StringBuilder()
-  for ch in dir[index + prefix.length():] {
+  for ch in suffix {
     if ch is ('0'..='9' | 'a'..='z' | 'A'..='Z') {
       salt <+ "\{ch}"
     }
