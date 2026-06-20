@@ -497,13 +497,25 @@ fn is_meaningful_dir(d : String) -> Bool {
 }
 
 ///|
-/// The sidebar group key for a session's `.openseek` store path: the container
-/// directory holding the workspace (grandparent of the store), so sibling run
-/// workspaces (best-of-N / fleet) cluster under one heading. When the store sits
-/// directly under the current directory, group by the workspace itself; a bare
-/// `.openseek` groups under the current directory (`""`).
+/// Whether `segment` is a session-store marker directory (a hidden dir like
+/// `.openseek`) rather than the real name of a direct session root. The server
+/// also serves direct stores it pointed `--session-root` at (a dir holding a
+/// `sessions/` child, e.g. `/tmp/openseek-sessions`); those must not be treated
+/// as a marker and stripped, or unrelated stores would merge under their parent.
+fn is_marker_segment(segment : String) -> Bool {
+  segment.has_prefix(".")
+}
+
+///|
+/// The sidebar group key for a session's store path. For a `.openseek` marker
+/// store, the container directory holding the workspace (grandparent of the
+/// store) so sibling run workspaces (best-of-N / fleet) cluster under one
+/// heading; a workspace directly under the cwd groups by itself, and a bare
+/// `.openseek` under the current directory (`""`). A direct (non-marker) store
+/// is its own group, keyed by its full path.
 fn session_group(root_label : String) -> String {
   let normalized = strip_dot_prefix(root_label)
+  guard is_marker_segment(path_basename(normalized)) else { return normalized }
   let workspace = parent_dir(normalized)
   let container = parent_dir(workspace)
   if is_meaningful_dir(container) {
@@ -520,6 +532,7 @@ fn session_group(root_label : String) -> String {
 /// when sessions are grouped under a shared container, otherwise the session id.
 fn session_row_label(root_label : String, id : String) -> String {
   let normalized = strip_dot_prefix(root_label)
+  guard is_marker_segment(path_basename(normalized)) else { return id }
   let workspace = path_basename(parent_dir(normalized))
   if !workspace.is_empty() &&
     session_group(root_label) != parent_dir(normalized) {

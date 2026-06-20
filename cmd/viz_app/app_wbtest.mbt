@@ -121,6 +121,32 @@ test "session grouping derives container, row label, and heading" {
     session_row_label("./.repos/toml_run_1/.openseek", "run"),
     content="toml_run_1",
   )
+  // A direct custom session root (not a .openseek marker dir) is its own group,
+  // keyed by its full path, with rows labelled by id — it is not stripped down
+  // to a "/tmp" group shared with unrelated stores.
+  inspect(
+    session_group("/tmp/openseek-sessions"),
+    content="/tmp/openseek-sessions",
+  )
+  inspect(session_row_label("/tmp/openseek-sessions", "cli-1"), content="cli-1")
+  inspect(
+    group_display("/tmp/openseek-sessions"),
+    content="/tmp/openseek-sessions",
+  )
+}
+
+///|
+test "sidebar_groups keeps unrelated direct stores separate" {
+  let rows = [
+    { key: "0|a", id: "a", root_label: "/srv/store-a", first_prompt: "" },
+    { key: "1|b", id: "b", root_label: "/srv/store-b", first_prompt: "" },
+  ]
+  @debug.debug_inspect(
+    sidebar_groups(rows),
+    content=(
+      #|["/srv/store-a", "/srv/store-b"]
+    ),
+  )
 }
 
 ///|
