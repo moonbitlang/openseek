@@ -69,6 +69,7 @@ fn format_moon_check_output_parts(
   output_limit_reached : Bool,
 ) -> String {
   let header = match exit_code {
+    Some(0) => "moon check:"
     Some(code) => "moon check:\nexit=\{code}"
     None => "moon check:\nexit=cancelled"
   }
@@ -203,6 +204,21 @@ test "formats raw moon check output with exit code" {
       #|
       #|Caused by:
       #|    0: Failed to resolve the module dependency graph
+    ),
+  )
+}
+
+///|
+test "formats successful moon check output without exit code" {
+  assert_eq(
+    format_moon_check_output_parts(
+      Some(0),
+      "Finished. moon: ran 2 tasks, now up to date",
+      false,
+    ),
+    (
+      #|moon check:
+      #|Finished. moon: ran 2 tasks, now up to date
     ),
   )
 }

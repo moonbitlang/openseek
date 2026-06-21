@@ -59,7 +59,8 @@ has one of these shapes:
   If the target is `moon.mod`, `moon.pkg`, `.mbt`, or `.mbt.md` inside a
   MoonBit module, the response may append bounded raw compiler feedback from
   module-root `moon check --diagnostic-limit 1`, starting with
-  `"moon check:\nexit=<code>"` after the success line.
+  `"moon check:"` after the success line. Failed checks include `exit=<code>`
+  or `exit=cancelled`.
 - `"error writing <path>: <error>"` — the write failed. Common causes:
   permission denied, missing parent directory, read-only filesystem.
 - `"error writing <path>: moon.mod.json is legacy; create moon.mod ..."` or

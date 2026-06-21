@@ -198,9 +198,8 @@ async test "append_summary runs for MoonBit source without local package" {
       create_mode=CreateOrTruncate,
     )
     let result = @auto_check.append_summary(path, "ok: wrote unpackaged source")
-    assert_true(
-      result.has_prefix("ok: wrote unpackaged source\nmoon check:\nexit="),
-    )
+    assert_true(result.has_prefix("ok: wrote unpackaged source\nmoon check:"))
+    assert_false(result.contains("exit=0"))
     assert_false(result.contains("skipped"))
   })
 }
