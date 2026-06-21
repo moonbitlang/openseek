@@ -74,6 +74,55 @@ fn error_tool_session() -> @agent_session.Session {
 }
 
 ///|
+fn multi_step_session() -> @agent_session.Session {
+  @agent_session.Session(SessionId("steps"), system_prompt="system")
+  .append(User(UserMessage("start")))
+  .append(
+    Assistant(
+      AssistantMessage("checking", tool_calls=[
+        ToolCall(id="c1", name="shell", arguments="{\"cmd\":\"pwd\"}"),
+      ]),
+    ),
+  )
+  .append(
+    Tool(ToolResult(tool_call_id="c1", tool_name="shell", content="/repo")),
+  )
+  .append(Terminal(Finished("final answer")))
+}
+
+///|
+fn occurrences(text : String, needle : String) -> Int {
+  text.split(needle).collect().length() - 1
+}
+
+///|
+fn finish_tool_session() -> @agent_session.Session {
+  @agent_session.Session(SessionId("finish"), system_prompt="system")
+  .append(User(UserMessage("start")))
+  .append(
+    Assistant(
+      AssistantMessage("", tool_calls=[
+        ToolCall(
+          id="finish_1",
+          name="finish",
+          arguments="{\"answer\":\"done\"}",
+        ),
+      ]),
+    ),
+  )
+  .append(
+    Tool(
+      ToolResult(
+        tool_call_id="finish_1",
+        tool_name="finish",
+        content="finished: done",
+      ),
+    ),
+  )
+  .append(Terminal(Finished("done")))
+}
+
+///|
 test "tool calls fold their arguments, empty args stay flat" {
   let html = render(@viz.render_session(error_tool_session(), RawLog))
   // A call with arguments folds: the name becomes a <summary>, args hide in the
@@ -137,6 +186,32 @@ test "model view shows relative event timestamps" {
   assert_true(html.contains("class=\"card-ts\">+3.2s"))
   assert_true(html.contains("class=\"card-ts\">+70.3s"))
   assert_false(html.contains("class=\"card-ts\">+1m 10.3s"))
+}
+
+///|
+test "assistant cards show agent step progress" {
+  let session = multi_step_session()
+  let raw = render(@viz.render_session(session, RawLog))
+  assert_true(raw.contains("class=\"card-step\">Step 1/2"))
+  assert_true(raw.contains("class=\"card-step\">Step 2/2"))
+  inspect(occurrences(raw, "class=\"card-step\""), content="2")
+  let model = render(@viz.render_session(session, ModelView))
+  assert_true(model.contains("class=\"card-step\">Step 1/2"))
+  assert_true(model.contains("class=\"card-step\">Step 2/2"))
+  inspect(occurrences(model, "class=\"card-step\""), content="2")
+  assert_false(model.contains("Step 3/2"))
+}
+
+///|
+test "finish tool terminal does not add an extra step" {
+  let session = finish_tool_session()
+  let raw = render(@viz.render_session(session, RawLog))
+  assert_true(raw.contains("class=\"card-step\">Step 1/1"))
+  inspect(occurrences(raw, "class=\"card-step\""), content="1")
+  let model = render(@viz.render_session(session, ModelView))
+  assert_true(model.contains("class=\"card-step\">Step 1/1"))
+  inspect(occurrences(model, "class=\"card-step\""), content="1")
+  assert_false(model.contains("Step 2/2"))
 }
 
 ///|

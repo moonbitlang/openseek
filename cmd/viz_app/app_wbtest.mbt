@@ -28,18 +28,59 @@ test "parse_load treats a null header as events-only" {
 }
 
 ///|
+fn parsed_log(session : @agent_session.Session) -> @session_log.ParsedLog {
+  {
+    events: [
+      for event in session.events() => event
+    ],
+    errors: [],
+    partial_tail: false,
+  }
+}
+
+///|
 test "session metadata counts steps and total runtime" {
   let text =
     #|{"found":true,"events":"{\"sequence\":1,\"ts\":100000,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\n{\"sequence\":2,\"ts\":101500,\"item\":{\"kind\":\"assistant\",\"payload\":{\"content\":\"\",\"tool_calls\":[]}}}\n{\"sequence\":3,\"ts\":170300,\"item\":{\"kind\":\"terminal\",\"payload\":{\"kind\":\"finished\",\"message\":\"done\"}}}\n","events_bytes":307,"header":null}
   match parse_load(text) {
     Loaded(parsed, _, _, log_bytes) => {
       inspect(format_log_size(log_bytes), content="307 B")
-      inspect(assistant_step_count(parsed), content="1")
+      inspect(agent_step_count(parsed), content="1")
       inspect(runtime_label(parsed), content="70.3s")
       inspect(end_time_label(parsed), content="1970-01-01 00:02 UTC")
     }
     _ => fail("expected Loaded")
   }
+}
+
+///|
+test "session metadata counts terminal final answers as steps" {
+  let parsed = parsed_log(
+    @agent_session.Session(SessionId("terminal-step"), system_prompt="")
+    .append(User(UserMessage("hi")))
+    .append(Terminal(Finished("done"))),
+  )
+  inspect(agent_step_count(parsed), content="1")
+}
+
+///|
+test "session metadata does not double count finish tool terminals" {
+  let parsed = parsed_log(
+    @agent_session.Session(SessionId("finish-step"), system_prompt="")
+    .append(User(UserMessage("hi")))
+    .append(Assistant(AssistantMessage("")))
+    .append(
+      Tool(
+        ToolResult(
+          tool_call_id="finish_1",
+          tool_name="finish",
+          content="finished: done",
+        ),
+      ),
+    )
+    .append(Terminal(Finished("done"))),
+  )
+  inspect(agent_step_count(parsed), content="1")
 }
 
 ///|

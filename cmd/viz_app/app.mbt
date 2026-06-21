@@ -802,7 +802,7 @@ fn session_metadata(
   model : Model,
   parsed : @session_log.ParsedLog,
 ) -> @html.Html {
-  let steps = assistant_step_count(parsed)
+  let steps = agent_step_count(parsed)
   @html.div(class="session-metadata", [
     @html.span("log \{format_log_size(model.log_bytes)}"),
     @html.span("\{steps} step\{plural_s(steps)}"),
@@ -812,13 +812,42 @@ fn session_metadata(
 }
 
 ///|
-fn assistant_step_count(parsed : @session_log.ParsedLog) -> Int {
-  for event in parsed.events; count = 0 {
-    if event.item() is Assistant(_) {
-      continue count + 1
+fn agent_step_count(parsed : @session_log.ParsedLog) -> Int {
+  let mut count = 0
+  let mut previous : @agent_session.SessionEvent? = None
+  for event in parsed.events {
+    if event_represents_agent_step(event, previous) {
+      count += 1
     }
-  } nobreak {
-    count
+    previous = Some(event)
+  }
+  count
+}
+
+///|
+fn event_represents_agent_step(
+  event : @agent_session.SessionEvent,
+  previous : @agent_session.SessionEvent?,
+) -> Bool {
+  match event.item() {
+    Assistant(_) => true
+    Terminal(Finished(_)) => terminal_finished_represents_agent_step(previous)
+    _ => false
+  }
+}
+
+///|
+fn terminal_finished_represents_agent_step(
+  previous : @agent_session.SessionEvent?,
+) -> Bool {
+  match previous {
+    Some(event) =>
+      match event.item() {
+        Assistant(_) => false
+        Tool(result) => result.tool_name() != "finish"
+        _ => true
+      }
+    None => true
   }
 }
 

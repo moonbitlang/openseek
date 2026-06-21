@@ -59,10 +59,11 @@ pub fn render_notices(parsed : @session_log.ParsedLog) -> @html.Html {
 ///|
 fn render_raw(session : @agent_session.Session) -> @html.Html {
   let briefs = tool_call_briefs(session)
+  let step_labels = agent_step_labels(session)
   let turns = group_turns(session.events())
   let blocks : Array[@html.Html] = []
   for index, turn in turns {
-    blocks.push(turn_block(index + 1, turn, briefs))
+    blocks.push(turn_block(index + 1, turn, briefs, step_labels))
   }
   if blocks.is_empty() {
     return empty_state("This session has no events yet.")
@@ -95,10 +96,71 @@ fn group_turns(
 }
 
 ///|
+/// Durable session logs do not store the transient `agent_step` events the CLI
+/// emits while running. Most model iterations persist as `Assistant` events,
+/// but the common final-answer path stores the no-tool response only as
+/// `Terminal(Finished(_))`, so derive stable human-facing labels from both.
+fn agent_step_labels(session : @agent_session.Session) -> Map[Int, String] {
+  let total = agent_step_count(session)
+  let labels : Map[Int, String] = Map([])
+  let mut step = 0
+  let mut previous : @agent_session.SessionEvent? = None
+  for event in session.events() {
+    if event_represents_agent_step(event, previous) {
+      step += 1
+      labels.set(event.sequence(), "Step \{step}/\{total}")
+    }
+    previous = Some(event)
+  }
+  labels
+}
+
+///|
+fn agent_step_count(session : @agent_session.Session) -> Int {
+  let mut count = 0
+  let mut previous : @agent_session.SessionEvent? = None
+  for event in session.events() {
+    if event_represents_agent_step(event, previous) {
+      count += 1
+    }
+    previous = Some(event)
+  }
+  count
+}
+
+///|
+fn event_represents_agent_step(
+  event : @agent_session.SessionEvent,
+  previous : @agent_session.SessionEvent?,
+) -> Bool {
+  match event.item() {
+    Assistant(_) => true
+    Terminal(Finished(_)) => terminal_finished_represents_agent_step(previous)
+    _ => false
+  }
+}
+
+///|
+fn terminal_finished_represents_agent_step(
+  previous : @agent_session.SessionEvent?,
+) -> Bool {
+  match previous {
+    Some(event) =>
+      match event.item() {
+        Assistant(_) => false
+        Tool(result) => result.tool_name() != "finish"
+        _ => true
+      }
+    None => true
+  }
+}
+
+///|
 fn turn_block(
   number : Int,
   turn : Array[@agent_session.SessionEvent],
   briefs : Map[String, String],
+  step_labels : Map[Int, String],
 ) -> @html.Html {
   // Offsets are relative to the turn's first stamped event: for reading a
   // log, "how far into the turn" answers latency questions directly, where
@@ -106,7 +168,12 @@ fn turn_block(
   let base = turn_base_ms(turn)
   let cards : Array[@html.Html] = [
     for event in turn => {
-      event_card(event, time=offset_label(base, event), briefs)
+      event_card(
+        event,
+        time=offset_label(base, event),
+        briefs,
+        step_label=step_labels.get(event.sequence()).unwrap_or(""),
+      )
     }
   ]
   let label = match turn_duration_label(turn) {
@@ -224,19 +291,21 @@ fn event_card(
   event : @agent_session.SessionEvent,
   time~ : String,
   briefs : Map[String, String],
+  step_label~ : String,
 ) -> @html.Html {
   let seq = event.sequence()
   match event.item() {
     User(message) =>
       card("user", "User", seq, time~, [text_block(message.content())])
-    Assistant(message) => assistant_card(seq, time, message, briefs)
+    Assistant(message) =>
+      assistant_card(seq, time, message, briefs, step_label~)
     Tool(result) => tool_card(seq, time, result)
     Runtime(notice) =>
       card("runtime", "Runtime notice", seq, time~, [
         text_block(notice.content()),
       ])
     Summary(summary) => summary_card(seq, time, summary)
-    Terminal(terminal) => terminal_card(seq, time, terminal)
+    Terminal(terminal) => terminal_card(seq, time, terminal, step_label~)
   }
 }
 
@@ -246,6 +315,7 @@ fn assistant_card(
   time : String,
   message : @agent_session.AssistantMessage,
   briefs : Map[String, String],
+  step_label~ : String,
 ) -> @html.Html {
   let body : Array[@html.Html] = []
   if message.reasoning_content() is Some(reasoning) &&
@@ -267,7 +337,7 @@ fn assistant_card(
     ]
     body.push(@html.div(class="tool-calls", call_views))
   }
-  card("assistant", "Assistant", seq, time~, body)
+  card("assistant", "Assistant", seq, time~, body, step_label~)
 }
 
 ///|
@@ -380,6 +450,7 @@ fn terminal_card(
   seq : Int,
   time : String,
   terminal : @agent_session.TurnTerminal,
+  step_label~ : String,
 ) -> @html.Html {
   let (kind, message) = match terminal {
     Finished(answer) => ("finished", answer)
@@ -391,7 +462,7 @@ fn terminal_card(
   if !message.trim().is_empty() {
     body.push(text_block(message))
   }
-  card("terminal", "Turn ended", seq, time~, body)
+  card("terminal", "Turn ended", seq, time~, body, step_label~)
 }
 
 // ---- model projection view -------------------------------------------------
@@ -404,6 +475,7 @@ fn render_model(session : @agent_session.Session) -> @html.Html {
   let tool_results = tool_results_by_id(session)
   let messages = session.chat_messages()
   let time_labels = model_message_time_labels(session)
+  let step_labels = model_message_step_labels(session)
   // Model-view briefs must come only from results the projection actually
   // emitted and the view trusts (see `model_shown_result`); using every durable
   // brief would caption a healed/compacted call with a result the model never
@@ -416,7 +488,12 @@ fn render_model(session : @agent_session.Session) -> @html.Html {
       } else {
         ""
       }
-      message_card(message, tool_results, briefs, time~)
+      let step_label = if index < step_labels.length() {
+        step_labels[index]
+      } else {
+        ""
+      }
+      message_card(message, tool_results, briefs, time~, step_label~)
     }
   ]
   if cards.is_empty() {
@@ -492,6 +569,17 @@ fn flush_pending_tool_time_labels(
 }
 
 ///|
+fn flush_pending_tool_step_labels(
+  pending : Array[String],
+  labels : Array[String],
+) -> Unit {
+  for _ in pending {
+    labels.push("")
+  }
+  pending.clear()
+}
+
+///|
 fn terminal_projects_model_message(
   terminal : @agent_session.TurnTerminal,
 ) -> Bool {
@@ -555,6 +643,43 @@ fn model_message_time_labels(session : @agent_session.Session) -> Array[String] 
 }
 
 ///|
+/// Step labels parallel to `Session::chat_messages()`. Only model-backed
+/// assistant events get a label; terminal answers and synthetic healed tool
+/// results may project as model messages, but they are not agent-loop steps.
+fn model_message_step_labels(session : @agent_session.Session) -> Array[String] {
+  let event_labels = agent_step_labels(session)
+  let labels : Array[String] = [""]
+  let pending_tool_calls : Array[String] = []
+  let events = session.events()
+  for event in events {
+    if model_event_covered_by_later_summary(event, events) {
+      continue
+    }
+    match event.item() {
+      Assistant(message) => {
+        flush_pending_tool_step_labels(pending_tool_calls, labels)
+        labels.push(event_labels.get(event.sequence()).unwrap_or(""))
+        for call in message.tool_calls() {
+          pending_tool_calls.push(call.id)
+        }
+      }
+      Tool(result) =>
+        if remove_pending_tool_id(pending_tool_calls, result.tool_call_id()) {
+          labels.push("")
+        }
+      item => {
+        flush_pending_tool_step_labels(pending_tool_calls, labels)
+        if item_projects_model_message(item) {
+          labels.push(event_labels.get(event.sequence()).unwrap_or(""))
+        }
+      }
+    }
+  }
+  flush_pending_tool_step_labels(pending_tool_calls, labels)
+  labels
+}
+
+///|
 /// Briefs for the model view: keyed by call id, but only from the durable result
 /// the projection emitted for that call and whose content the view trusts. A
 /// compacted-away or healed result contributes no brief, so the call line never
@@ -595,6 +720,7 @@ fn message_card(
   tool_results : Map[String, @agent_session.ToolResult],
   briefs : Map[String, String],
   time~ : String,
+  step_label~ : String,
 ) -> @html.Html {
   match message.role {
     System =>
@@ -607,8 +733,9 @@ fn message_card(
           text_block(message.content),
         ]),
       ])
-    User => model_card("user", "User", message, briefs, time~)
-    Assistant => model_card("assistant", "Assistant", message, briefs, time~)
+    User => model_card("user", "User", message, briefs, time~, step_label~)
+    Assistant =>
+      model_card("assistant", "Assistant", message, briefs, time~, step_label~)
     Tool(_) =>
       model_tool_card(message, model_shown_result(message, tool_results), time~)
   }
@@ -717,6 +844,7 @@ fn model_card(
   message : @deepseek.ChatMessage,
   briefs : Map[String, String],
   time~ : String,
+  step_label~ : String,
 ) -> @html.Html {
   let body : Array[@html.Html] = []
   if message.reasoning_content is Some(reasoning) &&
@@ -738,7 +866,7 @@ fn model_card(
     body.push(@html.div(class="tool-calls", call_views))
   }
   @html.section(class="card \{kind}", [
-    @html.div(class="card-label", model_card_head(label, time~)),
+    @html.div(class="card-label", model_card_head(label, time~, step_label~)),
     @html.div(class="card-body", body),
   ])
 }
@@ -750,8 +878,12 @@ fn model_card_head(
   label : String,
   time~ : String,
   flag? : @html.Html = @html.nothing,
+  step_label? : String = "",
 ) -> Array[@html.Html] {
   let head : Array[@html.Html] = [flag, @html.text(label)]
+  if !step_label.is_empty() {
+    head.push(@html.span(class="card-step", step_label))
+  }
   if !time.is_empty() {
     head.push(@html.span(class="card-ts", time))
   }
@@ -765,9 +897,10 @@ fn card(
   seq : Int,
   time~ : String,
   body : Array[@html.Html],
+  step_label? : String = "",
 ) -> @html.Html {
   @html.section(class="card \{kind}", [
-    @html.div(class="card-label", card_head(label, seq, time~)),
+    @html.div(class="card-label", card_head(label, seq, time~, step_label~)),
     @html.div(class="card-body", body),
   ])
 }
@@ -782,12 +915,16 @@ fn card_head(
   seq : Int,
   time~ : String,
   flag? : @html.Html = @html.nothing,
+  step_label? : String = "",
 ) -> Array[@html.Html] {
   let head : Array[@html.Html] = [
     @html.span(class="card-seq", "#\{seq}"),
     flag,
     @html.text(label),
   ]
+  if !step_label.is_empty() {
+    head.push(@html.span(class="card-step", step_label))
+  }
   if !time.is_empty() {
     head.push(@html.span(class="card-ts", time))
   }
