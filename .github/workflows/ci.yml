@@ -26,6 +26,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      # The root workspace lists packages from the lepus submodule, so even the
+      # root MoonBit checks need it materialized before `moon` resolves packages.
+      - name: Check out the lepus submodule
+        env:
+          LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
+        run: |
+          git config --global \
+            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
+            "git@github.com:"
+          git config --global \
+            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
+            "https://github.com/"
+          git submodule update --init --recursive
+
       - name: Set up MoonBit (${{ matrix.moonbit-channel }})
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "${{ matrix.moonbit-version }}"
@@ -241,6 +255,12 @@ jobs:
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Show MoonBit version
         shell: pwsh
