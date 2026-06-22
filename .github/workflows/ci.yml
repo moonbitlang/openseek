@@ -64,6 +64,12 @@ jobs:
           done
           exit 1
 
+      - name: Install GTK and WebKitGTK dev packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
+
       - name: Install Lepus codegen tool
         run: moon -C desktop/lepus install ./cli --bin target/lepus-tools
 
