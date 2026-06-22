@@ -63,22 +63,24 @@ fn SteerRunTracker::record_terminal(
 ///|
 fn SteerRunTracker::run_id_for_event(
   self : SteerRunTracker,
-  raw : Json,
+  decoded : @event.AgentEvent?,
   latest_run : Int,
 ) -> Int {
-  if @protocol.is_steer_settle_event(raw) {
-    let content = @protocol.stream_event_content(raw)
-    if remove_first_text(self.settling_steers, content) &&
-      self.settling_run is Some(run_id) {
-      if self.settling_steers.is_empty() {
-        self.settling_run = None
+  match decoded {
+    Some(SteerApplied(content)) | Some(SteerDropped(content)) => {
+      if remove_first_text(self.settling_steers, content) &&
+        self.settling_run is Some(run_id) {
+        if self.settling_steers.is_empty() {
+          self.settling_run = None
+        }
+        return run_id
       }
-      return run_id
+      ignore(remove_first_text(self.open_steers, content))
     }
-    ignore(remove_first_text(self.open_steers, content))
-  } else {
-    self.settling_run = None
-    self.settling_steers.clear()
+    _ => {
+      self.settling_run = None
+      self.settling_steers.clear()
+    }
   }
   latest_run
 }
@@ -490,8 +492,12 @@ async fn serve_engine_consumer(
   for ;; {
     match messages.get() {
       StreamEvent(raw) => {
-        let run_id = engine.steer_runs.run_id_for_event(raw, engine.latest_run)
-        match @event.decode_event(raw) {
+        let decoded = @event.decode_event(raw)
+        let run_id = engine.steer_runs.run_id_for_event(
+          decoded,
+          engine.latest_run,
+        )
+        match decoded {
           // The abort the user asked for: report it as a cancellation, the
           // same wire status the pre-serve host used.
           Some(AgentAborted(_)) if engine.cancel_requested => {

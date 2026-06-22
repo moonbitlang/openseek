@@ -26,6 +26,19 @@ test "decode assistant and runtime events" {
 }
 
 ///|
+test "decode steer acknowledgement events" {
+  match
+    @event.decode_event({ "event": "steer_applied", "content": "accepted" }) {
+    Some(SteerApplied(text)) => assert_eq(text, "accepted")
+    _ => fail("expected steer applied")
+  }
+  match @event.decode_event({ "event": "steer_dropped", "content": "late" }) {
+    Some(SteerDropped(text)) => assert_eq(text, "late")
+    _ => fail("expected steer dropped")
+  }
+}
+
+///|
 test "decode tool and terminal events" {
   match
     @event.decode_event({

@@ -36,35 +36,3 @@ fn EngineCommand::to_json(self : EngineCommand) -> Json {
 pub fn EngineCommand::to_jsonl(self : EngineCommand) -> String {
   self.to_json().stringify() + "\n"
 }
-
-///|
-pub fn is_steer_settle_event(raw : Json) -> Bool {
-  match stream_event_name(raw) {
-    Some("steer_applied") | Some("steer_dropped") => true
-    _ => false
-  }
-}
-
-///|
-fn stream_event_name(raw : Json) -> String? {
-  match raw {
-    Object(fields) =>
-      match fields.get("event") {
-        Some(String(name)) => Some(name)
-        _ => None
-      }
-    _ => None
-  }
-}
-
-///|
-pub fn stream_event_content(raw : Json) -> String {
-  match raw {
-    Object(fields) =>
-      match fields.get("content") {
-        Some(String(content)) => content
-        _ => ""
-      }
-    _ => ""
-  }
-}

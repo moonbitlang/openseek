@@ -11,6 +11,8 @@ pub fn decode_event(object : Json) -> AgentEvent? {
     "assistant_message" =>
       Some(AssistantMessage(string_field(object, "content")))
     "runtime_update" => Some(RuntimeUpdate(string_field(object, "content")))
+    "steer_applied" => Some(SteerApplied(string_field(object, "content")))
+    "steer_dropped" => Some(SteerDropped(string_field(object, "content")))
     "usage" => {
       let prompt = int_field(object, "prompt_tokens")
       let completion = int_field(object, "completion_tokens")
