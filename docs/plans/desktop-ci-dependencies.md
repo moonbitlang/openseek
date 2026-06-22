@@ -2,21 +2,23 @@
 
 ## Goal
 
-Fix the remaining CI failures on PR #167 after the desktop submodule and NSIS
-setup fixes.
+Keep the root CI checks focused on the root OpenSeek workspace while preserving
+separate desktop packaging checks for the desktop app.
 
 ## Accepted Design
 
-- In the root `check` job, install the Lepus codegen CLI after `desktop/lepus`
-  is checked out and before root `moon` commands run.
-- In `cmd/openseek`, keep executable-bit preservation for non-Windows targets
-  and make the chmod step a no-op on Windows, where `moonbitlang/async/fs` does
-  not expose `chmod`.
+- The root `moon.work` should contain only the root workspace members and should
+  not include `desktop` or `desktop/lepus` modules.
+- The existing `desktop/moon.work` remains the desktop-local workspace for
+  `desktop` and `desktop/lepus` modules.
+- The root `check` job should keep using `moon test`; with desktop removed from
+  root `moon.work`, it will not run desktop or Lepus submodule tests.
 
 ## Target Files And Surfaces
 
 - `.github/workflows/ci.yml`
-- `cmd/openseek/concurrent.mbt`
+- `moon.work`
+- `desktop/moon.work`
 
 ## API / Interface Diff
 
@@ -29,12 +31,13 @@ setup fixes.
 
 ## Next Implementation Step
 
-Patch the workflow dependency setup and add a private target-conditional chmod
-helper in `cmd/openseek`.
+Remove desktop-related members from root `moon.work` and restore the root CI
+test command to `moon test`.
 
 ## Validation Plan
 
 - Parse the GitHub Actions workflow YAML.
 - Run `git diff --check`.
-- Run focused MoonBit checks for the affected package where locally practical.
+- Use `moon test --outline` to confirm root tests no longer include desktop or
+  Lepus packages.
 - Push and confirm the GitHub Actions checks on PR #167.
