@@ -64,6 +64,9 @@ jobs:
           done
           exit 1
 
+      - name: Install Lepus codegen tool
+        run: moon -C desktop/lepus install ./cli --bin target/lepus-tools
+
       - name: Check formatting
         run: moon fmt --check
 
