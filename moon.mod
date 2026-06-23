@@ -28,5 +28,5 @@ warnings = "+missing_doc+unnecessary_view_op+test_unqualified_package+unused_def
 
 rule(
   name: "md_to_mbt_string",
-  command: "moon run --quiet --target native scripts/md_to_mbt_string -- \"$input\" \"$output\"",
+  command: "moon run scripts/md_to_mbt_string -- \"$input\" \"$output\"",
 )
