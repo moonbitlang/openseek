@@ -2,6 +2,14 @@
 const FrontendPackage : String = "frontend"
 
 ///|
+/// The JS bundle `moon build frontend --target js --release` emits.
+const FrontendBundleArtifact : String = "_build/js/release/build/openseek_desktop/frontend/frontend.js"
+
+///|
+/// The stable path the host and packagers read the frontend bundle from.
+const FrontendBundleOutput : String = "frontend.js"
+
+///|
 const NativePackage : String = "."
 
 ///|
@@ -146,26 +154,15 @@ pub async fn ensure_codegen_tool(ws : Workspace, tool_path : String) -> Unit {
 }
 
 ///|
-/// Build the frontend package and run the bundle helper that materializes the
-/// generated frontend assets.
-pub async fn build_frontend_bundle(
-  ws : Workspace,
-  helper_target_dir? : String,
-) -> Unit {
+/// Build the frontend package and copy the generated JS bundle to the stable
+/// `frontend.js` path the host and packagers consume.
+pub async fn build_frontend_bundle(ws : Workspace) -> Unit {
   run_checked(
     "moon",
     ["build", FrontendPackage, "--target", "js", "--release"],
     dir=ws.dir(),
   )
-  let helper_args = match helper_target_dir {
-    Some(target_dir) => ["--target-dir", target_dir]
-    None => []
-  }
-  run_checked(
-    "moon",
-    helper_args + ["run", "--target", "native", "build_frontend.mbtx"],
-    dir=ws.dir(),
-  )
+  copy_file(ws.at(FrontendBundleArtifact), ws.at(FrontendBundleOutput))
 }
 
 ///|

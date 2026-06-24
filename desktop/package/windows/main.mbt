@@ -123,10 +123,7 @@ async fn ensure_webview2_headers(ws : @packaging.Workspace) -> Unit {
 async fn build_outputs(ws : @packaging.Workspace) -> Bool {
   @packaging.ensure_codegen_tool(ws, @packaging.windows_codegen_tool())
   ensure_webview2_headers(ws)
-  @packaging.build_frontend_bundle(
-    ws,
-    helper_target_dir="_build/package_windows_helper",
-  )
+  @packaging.build_frontend_bundle(ws)
   @packaging.build_native_host(ws, extra_args=["--warn-list", "-20"])
   @packaging.build_engine(ws)
   build_wsl_engine(ws)

@@ -6,7 +6,7 @@ pub fn absolute_path(String) -> String
 
 pub async fn build_engine(Workspace, extra_env? : Map[String, String]) -> Unit
 
-pub async fn build_frontend_bundle(Workspace, helper_target_dir? : String) -> Unit
+pub async fn build_frontend_bundle(Workspace) -> Unit
 
 pub async fn build_native_host(Workspace, extra_args? : Array[String], extra_env? : Map[String, String]) -> Unit
 

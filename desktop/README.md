@@ -169,7 +169,7 @@ Then build the frontend bundle and the native binary:
 
 ```sh
 moon build frontend --target js --release      # produce the JS bundle
-moon run --target native build_frontend.mbtx   # copy it to ./frontend.js
+cp _build/js/release/build/openseek_desktop/frontend/frontend.js frontend.js
 moon build . --target native --release         # build the native binary
 ```
 
@@ -237,7 +237,7 @@ Build the frontend bundle, copy it to `frontend.js`, and build the native host:
 
 ```powershell
 moon build frontend --target js --release
-moon run --target native build_frontend.mbtx
+Copy-Item _build\js\release\build\openseek_desktop\frontend\frontend.js frontend.js
 moon build . --target native --release
 ```
 
