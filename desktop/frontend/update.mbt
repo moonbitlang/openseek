@@ -471,20 +471,25 @@ fn update(
       (@cmd.none, { ..model, transcript_pinned: pinned })
     Started(run_id~, session~, model=selected_model, max_steps~, cwd~) =>
       if model.find_conversation(session) is Some(conv) {
-        (
-          @cmd.none,
-          {
-            ..model.replace_conversation({
-              ..conv,
-              running: true,
-              active_run_id: Some(run_id),
-              status: Running,
-              cwd,
-            }),
-            selected_model,
-            max_steps: max_steps.to_string(),
-          },
-        )
+        let updated = model.replace_conversation({
+          ..conv,
+          running: true,
+          active_run_id: Some(run_id),
+          status: Running,
+          cwd,
+        })
+        // Sync the global model/step settings only when this start belongs to
+        // the conversation on screen. A slow background start (the user switched
+        // chats mid-spawn) must not overwrite settings the user has since
+        // changed for the now-active conversation.
+        if session == model.active_session {
+          (
+            @cmd.none,
+            { ..updated, selected_model, max_steps: max_steps.to_string() },
+          )
+        } else {
+          (@cmd.none, updated)
+        }
       } else {
         (@cmd.none, model)
       }
