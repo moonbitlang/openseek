@@ -12,6 +12,10 @@ pub async fn Directory::try_open(path : @path.Path) -> Directory? {
 ///|
 pub async fn Directory::collect(self : Directory) -> Array[DirectoryEntry] {
   let entries = []
+  // The underlying handle holds a directory descriptor; close it once drained
+  // (and even if iteration raises) so repeated Skills-panel refreshes don't
+  // leak descriptors until the process can no longer open files.
+  defer self.0.close()
   while self.next() is Some(entry) {
     entries.push(entry)
   }
