@@ -27,7 +27,9 @@
 ///   body (`truncated=true`).
 /// - `Respond(ToolOutput("error reading <path>: <error>", is_error=true))`
 ///   if a single-file read fails (missing file, permission denied, invalid
-///   UTF-8, directory path, etc.).
+///   UTF-8, directory path, etc.). When the path is missing and a sibling shares
+///   its stem (e.g. `foo.ts` requested, `foo.mbt` present), the message ends
+///   with ` Did you mean <name>?`.
 /// - `Respond(ToolOutput("error: read requires ...", is_error=true))` for
 ///   invalid arguments.
 pub fn definition(
@@ -104,7 +106,7 @@ async fn read_file(
   let content = @fs.read_file(path).text() catch {
     error =>
       return @agent_tool.ToolAction::respond(
-        "error reading \{path}: \{error}",
+        "error reading \{path}: \{error}\{similar_file_hint(path)}",
         is_error=true,
         brief~,
       )
@@ -145,6 +147,67 @@ fn read_footer(
   rendered : RenderedSelection,
 ) -> String {
   "<system>start_line=\{selection.start_line} shown_lines=\{rendered.shown_lines} total_lines=\{selection.total_lines} truncated=\{rendered.truncated}</system>"
+}
+
+///|
+/// When a read fails because the path does not exist, suggest a sibling file
+/// with the same stem but a different extension (e.g. `foo.ts` requested while
+/// `foo.mbt` is present) so the model can recover without an extra `ls`. Mirrors
+/// Claude Code's `findSimilarFile`: same-stem only, no fuzzy matching, so the
+/// suggestion is almost never misleading. Returns `""` (no hint) when the path
+/// exists — i.e. the read failed for some other reason such as a permission
+/// error or invalid UTF-8 — or when nothing similar is found.
+async fn similar_file_hint(path : String) -> String {
+  // `@fs.exists` only maps ENOENT to `false`; it re-raises other access errors
+  // (EACCES on an unsearchable parent, ENOTDIR for `<file>/child`). This probe
+  // runs while formatting an existing read failure, so any raise here would
+  // escape the clean "error reading ..." response — treat a failed probe as "no
+  // hint", exactly like the `readdir` path below.
+  let exists = @fs.exists(path) catch { _ => return "" }
+  if exists {
+    return ""
+  }
+  let requested : @path.Path = path
+  let name = requested.basename().to_owned()
+  let stem = file_stem(name)
+  if stem == "" {
+    return ""
+  }
+  // `dirname` is "" for a bare relative name (`README`); read its siblings from
+  // the current directory so those paths get the same hint as nested ones.
+  let dirname = requested.dirname().to_string()
+  let parent = if dirname == "" { "." } else { dirname }
+  let names = @fs.readdir(parent, sort=true) catch { _ => return "" }
+  for candidate in names {
+    if candidate == name || file_stem(candidate) != stem {
+      continue
+    }
+    // `read` rejects directories, so a same-stem dir (`foo/` next to `foo.mbt`,
+    // a common package layout) would just point the agent at another failure —
+    // skip it and keep scanning for a same-stem file.
+    let kind = @fs.kind("\{parent}/\{candidate}", follow_symlink=true) catch {
+      _ => continue
+    }
+    if kind is Directory {
+      continue
+    }
+    return " Did you mean \{candidate}?"
+  }
+  ""
+}
+
+///|
+/// A filename without its final extension, matching `basename(name, extname)`.
+/// `"foo.ts"` -> `"foo"`, `"foo.test.ts"` -> `"foo.test"`, and an extensionless
+/// or dotfile name (`"Makefile"`, `".gitignore"`) is returned unchanged.
+fn file_stem(name : String) -> String {
+  let as_path : @path.Path = name
+  let ext = as_path.extname().to_owned()
+  if ext == "" || ext.length() >= name.length() {
+    name
+  } else {
+    name[:name.length() - ext.length()].to_owned()
+  }
 }
 
 ///|
@@ -538,6 +601,72 @@ async test "read surfaces filesystem errors" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.content.contains("error reading"))
     assert_true(output.is_error)
+  })
+}
+
+///|
+async test "read suggests a same-stem sibling when the path is missing" {
+  @vfs.with_tmpdir(dir => {
+    // A different extension on the same stem is the common typo this recovers.
+    @fs.write_file("\{dir}/parser.mbt", "x", create_mode=CreateOrTruncate)
+    let result = execute({ "path": "\{dir}/parser.ts" })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    assert_true(output.content.contains("error reading"))
+    assert_true(output.content.has_suffix("Did you mean parser.mbt?"))
+    // The same recovery works for an extensionless request (`README`).
+    @fs.write_file("\{dir}/README.md", "x", create_mode=CreateOrTruncate)
+    let bare = execute({ "path": "\{dir}/README" })
+    guard bare is Respond(out2) else { fail("expected Respond") }
+    assert_true(out2.content.has_suffix("Did you mean README.md?"))
+  })
+}
+
+///|
+test "file_stem strips only the final extension" {
+  assert_eq(file_stem("foo.ts"), "foo")
+  assert_eq(file_stem("foo.test.ts"), "foo.test")
+  assert_eq(file_stem("Makefile"), "Makefile")
+  assert_eq(file_stem(".gitignore"), ".gitignore")
+}
+
+///|
+async test "read hint probe does not mask errors for a non-directory parent" {
+  @vfs.with_tmpdir(dir => {
+    @fs.write_file("\{dir}/notdir", "x", create_mode=CreateOrTruncate)
+    // Reading `<file>/child` fails with ENOTDIR, which the sibling probe's
+    // `@fs.exists` re-raises; the read must still return a clean tool error
+    // rather than letting that raise escape.
+    let result = execute({ "path": "\{dir}/notdir/child" })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    assert_true(output.content.contains("error reading"))
+  })
+}
+
+///|
+async test "read suggestion skips a same-stem directory for a sibling file" {
+  @vfs.with_tmpdir(dir => {
+    // `parser/` sorts before `parser.mbt`; the hint must skip the directory
+    // (read rejects directories) and point at the file instead.
+    @fs.mkdir("\{dir}/parser")
+    @fs.write_file("\{dir}/parser.mbt", "x", create_mode=CreateOrTruncate)
+    let result = execute({ "path": "\{dir}/parser.ts" })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    assert_true(output.content.has_suffix("Did you mean parser.mbt?"))
+  })
+}
+
+///|
+async test "read omits a suggestion when no sibling shares the stem" {
+  @vfs.with_tmpdir(dir => {
+    @fs.write_file("\{dir}/unrelated.mbt", "x", create_mode=CreateOrTruncate)
+    let result = execute({ "path": "\{dir}/parser.ts" })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    assert_true(output.content.contains("error reading"))
+    assert_false(output.content.contains("Did you mean"))
   })
 }
 

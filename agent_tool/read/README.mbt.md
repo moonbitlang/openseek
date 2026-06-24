@@ -83,7 +83,9 @@ output truncation. The string body has one of these shapes:
   one case that flips `is_error` to `true`.
 - `"error reading <path>: <error>"` — a single-file read failed. Common
   causes: the file is missing, the agent doesn't have read permissions, or
-  the bytes aren't valid UTF-8.
+  the bytes aren't valid UTF-8. When the path is missing and a sibling shares
+  its stem (e.g. `foo.ts` requested while `foo.mbt` exists), the message ends
+  with ` Did you mean <name>?` so the agent can retry without an extra `ls`.
 - `"error: read requires arguments.path"` — payload was an object but named no
   file.
 - `"error: read requires object arguments"` — payload was not a JSON object.
