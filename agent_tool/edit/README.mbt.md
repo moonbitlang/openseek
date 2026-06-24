@@ -68,7 +68,11 @@ has one of these shapes:
   module-root `moon check --diagnostic-limit 1`, starting with
   `"moon check:"` after the success line. Failed checks include `exit=<code>`
   or `exit=cancelled`.
-- `"error editing <path>: old_string not found"` — no exact match was found.
+- `"error editing <path>: old_string not found. <hint>"` — no exact match was
+  found. The hint points at the closest actual line in the file (`The closest
+  text in the file is line N: …`) when a distinctive line of `old_string` still
+  occurs there, or otherwise nudges a re-read — so the model can recover the
+  exact current text instead of guessing again.
 - `"error editing <path>: old_string matched <n> times on lines <line>, ...; set replace_all=true to replace all occurrences"` — the edit was ambiguous.
 - `"error editing <path>: moon.pkg use // for comment syntax, not #"` or similar
   manifest-guard messages — the replacement would likely break MoonBit package

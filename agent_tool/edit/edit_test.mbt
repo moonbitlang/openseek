@@ -207,8 +207,38 @@ async test "edit rejects missing match" {
       "new_string": "gamma",
     })
     guard result is Respond(output) else { fail("expected Respond") }
-    assert_eq(output.content, "error editing \{path}: old_string not found")
+    // "beta" shares nothing with the file, so the hint falls back to a read nudge.
+    assert_true(
+      output.content.has_prefix("error editing \{path}: old_string not found"),
+    )
+    assert_true(output.content.contains("Read the file first"))
     assert_true(output.is_error)
+  })
+}
+
+///|
+async test "edit points at the closest line when old_string is slightly off" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/parser.mbt"
+    @fs.write_file(
+      path,
+      "fn parse(input : String) -> Int {\n  let value = 1\n  value\n}\n",
+      create_mode=CreateOrTruncate,
+    )
+    // The signature line is right but an inner line is wrong, so old_string is
+    // not found verbatim; the hint anchors on the matching signature line so the
+    // model can see the file's actual text and fix its old_string.
+    let result = run_edit({
+      "path": path,
+      "old_string": "fn parse(input : String) -> Int {\n  let value = 99\n}",
+      "new_string": "fn parse(input : String) -> Int {\n  let value = 2\n}",
+    })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    assert_true(output.content.contains("old_string not found"))
+    assert_true(output.content.contains("line 1"))
+    assert_true(output.content.contains("fn parse(input : String) -> Int {"))
+    assert_true(output.content.contains("re-read the file"))
   })
 }
 

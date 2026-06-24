@@ -15,7 +15,9 @@
 ///   success.
 /// - `Respond(ToolOutput("error editing <path>: ...", is_error=true))` for
 ///   filesystem failures, empty/no-op edits, missing matches, or ambiguous
-///   matches. Ambiguous-match errors include the first matching line numbers.
+///   matches. Ambiguous-match errors include the first matching line numbers; a
+///   not-found error points at the closest actual line in the file (or nudges a
+///   re-read) so the model can correct `old_string`.
 /// - `Respond(ToolOutput("error: edit requires ...", is_error=true))` for
 ///   invalid arguments.
 pub fn definition(
@@ -23,7 +25,7 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="edit",
-    description="Replace exact text in arguments.path with arguments.new_string.",
+    description="Replace exact text in arguments.path with arguments.new_string. old_string must match the file's current text exactly — read the file first if you are unsure — and must be unique unless replace_all is set.",
     schema=JsonSchema({
       "type": "object",
       "properties": {
@@ -94,7 +96,7 @@ async fn edit_file(
   let occurrences = parts.length() - 1
   if occurrences == 0 {
     return @agent_tool.ToolAction::respond(
-      "error editing \{path}: old_string not found",
+      "error editing \{path}: old_string not found.\{not_found_hint(content, input.old_string)}",
       is_error=true,
       brief=fail_brief,
     )
@@ -140,6 +142,81 @@ async fn edit_file(
         brief=fail_brief,
       )
   }
+}
+
+///|
+/// Diagnostic appended when `old_string` is not found, so the model has more to
+/// recover from than a bare "not found" — its top failure mode is an
+/// `old_string` that no longer matches the file (misremembered text or a stale
+/// view). Anchors on the most distinctive line of `old_string` — longest, and
+/// containing a letter or digit — that also appears in the file (exact once
+/// trimmed, else a substring overlap) and reports it with its 1-based line
+/// number. Falls back to a read-first nudge when nothing distinctive matches.
+fn not_found_hint(content : String, old_string : String) -> String {
+  let file_lines = [ for line in content.split("\n") => line.to_owned() ]
+  // Longest lines first: they are the most distinctive and least likely to
+  // anchor on the wrong place.
+  let anchors = [ for line in old_string.split("\n") => line.to_owned() ]
+  anchors.sort_by((a, b) => b.trim().length() - a.trim().length())
+  for anchor in anchors {
+    let needle = anchor.trim()
+    if needle.length() < 4 || !has_alnum(needle) {
+      continue
+    }
+    // A line equal once trimmed: same text, most likely different indentation.
+    for index, line in file_lines {
+      if line.trim() == needle {
+        return closest_text_hint(index + 1, line)
+      }
+    }
+    // A line that overlaps the anchor as a substring either way.
+    for index, line in file_lines {
+      let trimmed = line.trim()
+      if line.contains(needle) ||
+        (
+          trimmed.length() >= 4 &&
+          has_alnum(trimmed) &&
+          needle.contains(trimmed)
+        ) {
+        return closest_text_hint(index + 1, line)
+      }
+    }
+  }
+  " Read the file first, then copy old_string exactly from its current contents."
+}
+
+///|
+fn closest_text_hint(line_number : Int, line : String) -> String {
+  " The closest text in the file is line \{line_number}: \{cap_chars(line.trim(), 120)} — re-read the file and copy old_string exactly from its current contents."
+}
+
+///|
+/// First `max` characters of `s`, Unicode-safe (never splitting a code point),
+/// with a trailing ellipsis when it was longer.
+fn cap_chars(s : StringView, max : Int) -> String {
+  let buf = StringBuilder::new()
+  let mut count = 0
+  for c in s {
+    if count >= max {
+      buf.write_string("…")
+      break
+    }
+    buf.write_char(c)
+    count = count + 1
+  }
+  buf.to_string()
+}
+
+///|
+/// Whether `s` contains an ASCII letter or digit. Used to skip structural lines
+/// (`///|`, `{`, `}`) that make poor, ambiguous match anchors.
+fn has_alnum(s : StringView) -> Bool {
+  for c in s {
+    if c is ('0'..='9' | 'a'..='z' | 'A'..='Z') {
+      return true
+    }
+  }
+  false
 }
 
 ///|
