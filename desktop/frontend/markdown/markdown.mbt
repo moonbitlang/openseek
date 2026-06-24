@@ -218,8 +218,16 @@ fn MarkdownRender::push_inline(
     ExtMathSpan(node) => out.push(@html.code(class="inline-code", node.v.tex()))
     Autolink(node) => {
       let url = node.v.link.v
-      let href = if node.v.is_email { "mailto:" + url } else { url }
-      out.push(link_node(href, [@html.text(url)]))
+      // Email autolinks resolve to a safe `mailto:`; a URI autolink like
+      // <javascript:alert(1)> must pass the same unsafe-scheme filter as
+      // regular links and images, otherwise it renders as inert text.
+      if node.v.is_email {
+        out.push(link_node("mailto:" + url, [@html.text(url)]))
+      } else if @cmark.InlineLink::is_unsafe(url) {
+        out.push(@html.text(url))
+      } else {
+        out.push(link_node(url, [@html.text(url)]))
+      }
     }
     Link(node) => {
       let children = self.inline_nodes(node.v.text)
