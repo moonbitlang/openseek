@@ -3,7 +3,7 @@
 // defaults come back next launch.
 
 ///|
-fn load_saved_settings(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
+fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     scheduler.add(
       dispatch(

@@ -4,7 +4,7 @@
 
 ///|
 /// Fetch the registry's catalog of installable skills.
-fn fetch_skills_catalog(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
+fn fetch_skills_catalog(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply = bridge_request("skills_catalog", @js.Object::new().to_value()) catch {
@@ -26,7 +26,7 @@ fn fetch_skills_catalog(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
 
 ///|
 /// Refresh the local skills library's contents.
-fn fetch_installed_skills(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
+fn fetch_installed_skills(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply = bridge_request(
@@ -53,7 +53,7 @@ fn fetch_installed_skills(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
 /// Install one catalog entry into the global skills library. Settles with a
 /// `SkillActionDone` either way; the busy key is the entry's source label.
 fn install_skill(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   item : @transcript.MarketSkillItem,
 ) -> @cmd.Cmd {
   let key = @transcript.market_source_label(item)
@@ -81,7 +81,7 @@ fn install_skill(
 ///|
 /// Remove one registry-installed skill from the library; the busy key is
 /// the library entry's id.
-fn uninstall_skill(dispatch : @cmd.Dispatch[Msg], id : String) -> @cmd.Cmd {
+fn uninstall_skill(dispatch : @cmd.Emit[Msg], id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()

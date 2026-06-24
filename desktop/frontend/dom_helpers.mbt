@@ -29,7 +29,7 @@ let transcript_scroll_watched : Ref[Bool] = Ref(false)
 /// document-level listener keeps working even if the transcript element is
 /// replaced by a render. The callback fires only when the at-bottom state
 /// changes; the slack absorbs fractional scroll positions.
-fn watch_transcript_scroll(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
+fn watch_transcript_scroll(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     guard !transcript_scroll_watched.val else { return }
     transcript_scroll_watched.val = true

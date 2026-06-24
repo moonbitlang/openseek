@@ -2,7 +2,7 @@
 /// Generate a fresh conversation session id and feed it back through
 /// `SessionRotated`. Issued at startup and again by "New chat", so the model
 /// never reads the clock directly.
-fn rotate_session(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
+fn rotate_session(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     scheduler.add(dispatch(SessionRotated(generated_session_id())))
   })

@@ -40,15 +40,12 @@ let bridge_events_wired : Ref[Bool] = Ref(false)
 /// wire the engine-host event stream into messages once, and report
 /// readiness. The 25ms retries add up to ~3 seconds before the bridge is
 /// declared unavailable.
-fn install_bridge(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
+fn install_bridge(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   install_bridge_attempt(dispatch, 0)
 }
 
 ///|
-fn install_bridge_attempt(
-  dispatch : @cmd.Dispatch[Msg],
-  attempt : Int,
-) -> @cmd.Cmd {
+fn install_bridge_attempt(dispatch : @cmd.Emit[Msg], attempt : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     guard bridge_handles() is Some((api, events)) else {
       if attempt > 120 {
@@ -75,7 +72,7 @@ fn install_bridge_attempt(
 /// carries no extra signal.
 fn open_engine_host(
   scheduler : &@cmd.Scheduler,
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   api : @js.Value,
 ) -> Unit {
   @js.async_run(() => {
@@ -95,7 +92,7 @@ fn open_engine_host(
 ///|
 fn wire_engine_events(
   scheduler : &@cmd.Scheduler,
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   events : @js.Value,
 ) -> Unit {
   fn on(name : String, decode : (Map[String, Json]) -> Msg?) -> Unit {
@@ -223,7 +220,7 @@ fn reply_json_text(reply : @js.Value) -> String {
 
 ///|
 fn start_openseek(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   task : String,
   selected_model : String,
   max_steps : String,
@@ -320,7 +317,7 @@ fn parsed_max_steps(text : String) -> Int? {
 
 ///|
 /// Refresh the sidebar's session list from the engine's durable store.
-fn fetch_sessions(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
+fn fetch_sessions(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply = bridge_request("list_sessions", @js.Object::new().to_value()) catch {
@@ -340,7 +337,7 @@ fn fetch_sessions(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
 
 ///|
 /// Load a durable session's transcript so the conversation can be resumed.
-fn open_session(dispatch : @cmd.Dispatch[Msg], session_id : String) -> @cmd.Cmd {
+fn open_session(dispatch : @cmd.Emit[Msg], session_id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
@@ -383,7 +380,7 @@ fn open_session(dispatch : @cmd.Dispatch[Msg], session_id : String) -> @cmd.Cmd 
 /// the steer (turn already closed, engine dead) or the bridge call failed —
 /// so the pending acknowledgment can settle either way.
 fn steer_openseek(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   session : String,
   text : String,
   run_id : Int,
@@ -414,10 +411,7 @@ async fn steer_delivered(text : String, run_id : Int) -> Bool {
 /// command only surfaces the immediate failure — no live engine for the
 /// conversation, or the bridge call itself rejecting — as an error in the
 /// conversation on screen.
-fn compact_openseek(
-  dispatch : @cmd.Dispatch[Msg],
-  session : String,
-) -> @cmd.Cmd {
+fn compact_openseek(dispatch : @cmd.Emit[Msg], session : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
@@ -441,7 +435,7 @@ fn compact_openseek(
 }
 
 ///|
-fn cancel_openseek(dispatch : @cmd.Dispatch[Msg], run_id : Int) -> @cmd.Cmd {
+fn cancel_openseek(dispatch : @cmd.Emit[Msg], run_id : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()

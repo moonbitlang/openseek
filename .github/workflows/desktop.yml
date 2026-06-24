@@ -75,7 +75,10 @@ jobs:
         run: moon -C desktop/lepus install ./cli --bin target/lepus-tools
 
       - name: Check formatting
-        run: moon -C desktop fmt --check
+        # Scope to this module's own packages: the vendored editor submodule is
+        # a workspace member but was formatted with a different toolchain, so a
+        # workspace-wide `fmt --check` would flag its source we don't own.
+        run: moon -C desktop fmt --check . frontend internal package
 
       - name: Check (deny warnings)
         run: moon -C desktop check --target native --deny-warn

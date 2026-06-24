@@ -37,7 +37,7 @@ fn is_compaction_event(event : @transcript.EngineEvent) -> Bool {
 /// mention replaces the composer's `$query` token with the skill name so the
 /// user keeps typing the rest of the prompt. Either way the menu closes.
 fn accept_completion(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   model : Model,
   menu : Completion,
   item : CompletionItem,
@@ -60,7 +60,7 @@ fn accept_completion(
 /// completion menu. The command text is cleared from the composer; an unknown
 /// id just dismisses the menu.
 fn run_slash_command(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   model : Model,
   command : String,
 ) -> (@cmd.Cmd, Model) {
@@ -238,7 +238,7 @@ fn apply_engine_event(
 /// is open and a load is actually due, so it never re-fires while a request is
 /// in flight or the tree is already current.
 fn sync_file_panel(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> (Model, @cmd.Cmd) {
   let panel = model.file_panel
@@ -264,7 +264,7 @@ fn sync_file_panel(
 
 ///|
 fn update(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   msg : Msg,
   model : Model,
 ) -> (@cmd.Cmd, Model) {
@@ -275,7 +275,7 @@ fn update(
 
 ///|
 fn update_msg(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   msg : Msg,
   model : Model,
 ) -> (@cmd.Cmd, Model) {

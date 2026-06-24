@@ -14,7 +14,7 @@ fn setting_input(
   value : String,
   placeholder : String,
   input_type : @html.InputType,
-  on_input : @cmd.Dispatch[String],
+  on_input : @cmd.Emit[String],
 ) -> @html.Html {
   @html.label([
     @html.text(label_text),
@@ -23,7 +23,7 @@ fn setting_input(
 }
 
 ///|
-fn model_select(dispatch : @cmd.Dispatch[Msg], selected : String) -> @html.Html {
+fn model_select(dispatch : @cmd.Emit[Msg], selected : String) -> @html.Html {
   @html.label([
     @html.text("Model"),
     @html.select(on_change=dispatch.map(value => ModelChanged(value)), [
@@ -58,7 +58,7 @@ fn conversation_title(conv : Conversation) -> String {
 /// One sidebar row. A conversation with a turn in flight gets a pulsing dot,
 /// so background work stays visible while another conversation is on screen.
 fn session_row(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   model : Model,
   session_id : String,
   label : String,
@@ -90,10 +90,7 @@ fn session_row(
 /// reached the store yet) first, then the engine's durable sessions, newest
 /// first. Rows stay clickable while runs are active — switching between
 /// conversations mid-run is the point of keeping them concurrent.
-fn session_rows(
-  dispatch : @cmd.Dispatch[Msg],
-  model : Model,
-) -> Array[@html.Html] {
+fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
   let rows : Array[@html.Html] = []
   let listed = (id : String) => {
     for item in model.sessions {
@@ -132,7 +129,7 @@ fn session_rows(
 }
 
 ///|
-fn sidebar_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let sessions_section : Array[@html.Html] = [
     @html.div(class="sidebar-heading", "Chats"),
   ]
@@ -363,7 +360,7 @@ fn pending_steers_panel(conv : Conversation) -> @html.Html {
 /// navigation keys — ↑/↓ move the highlight, Enter/Tab accept, Escape closes —
 /// so they drive the menu instead of the textarea; everything else (and every
 /// key with the menu closed) falls through to the normal submit shortcut.
-fn task_attrs(dispatch : @cmd.Dispatch[Msg], menu_open : Bool) -> @html.Attrs {
+fn task_attrs(dispatch : @cmd.Emit[Msg], menu_open : Bool) -> @html.Attrs {
   @html.Attrs::build().on_keydown(fn(event) {
     if menu_open {
       match event.key() {
@@ -407,7 +404,7 @@ fn task_attrs(dispatch : @cmd.Dispatch[Msg], menu_open : Bool) -> @html.Attrs {
 /// press accepts a row; `mousedown` (not `click`) is used so the textarea does
 /// not blur the menu away before the selection registers.
 fn completion_popup(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   completion : Completion,
 ) -> @html.Html {
   let rows : Array[@html.Html] = []
@@ -444,7 +441,7 @@ fn completion_popup(
 }
 
 ///|
-fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let conv = model.active()
   let has_input = model.bridge_ready &&
     model.api_ready() &&
@@ -540,7 +537,7 @@ fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
 
 ///|
 fn provider_select(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   selected : ApiProvider,
 ) -> @html.Html {
   @html.label([
@@ -562,7 +559,7 @@ fn provider_select(
 }
 
 ///|
-fn wsl_select(dispatch : @cmd.Dispatch[Msg], enabled : Bool) -> @html.Html {
+fn wsl_select(dispatch : @cmd.Emit[Msg], enabled : Bool) -> @html.Html {
   @html.label([
     @html.text("Engine environment"),
     @html.select(on_change=dispatch.map(value => WslModeChanged(value)), [
@@ -582,7 +579,7 @@ fn provider_hint(provider : ApiProvider) -> String {
 }
 
 ///|
-fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+fn setup_popup(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let ready = model.api_ready()
   let settings : Array[@html.Html] = [
     model_select(dispatch, model.selected_model),
@@ -706,7 +703,7 @@ fn setup_popup(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
 /// listed so the user sees everything the engine advertises, but the app
 /// never offers to delete them.
 fn installed_skill_row(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   model : Model,
   skill : @transcript.InstalledSkillItem,
 ) -> @html.Html {
@@ -754,7 +751,7 @@ fn installed_skill_row(
 /// the button alive as the upgrade path), an install in flight reads as
 /// "Installing…".
 fn market_skill_row(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   model : Model,
   item : @transcript.MarketSkillItem,
 ) -> @html.Html {
@@ -812,7 +809,7 @@ fn skill_matches(query : String, fields : Array[String]) -> Bool {
 ///|
 /// The Skills page, shown in the main area in place of the conversation:
 /// header, search, the local library, then the mooncakes.io catalog.
-fn skills_page(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+fn skills_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let sections : Array[@html.Html] = [
     @html.div(class="skills-header", [
       @html.h1("Skills"),
@@ -1021,7 +1018,7 @@ fn launcher_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
 /// the tooltip), live run state on the right — these are per-conversation
 /// runtime facts, not settings, so they live here rather than in the
 /// settings popup.
-fn topbar_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let conv = model.active()
   let items : Array[@html.Html] = [
     @html.button(
@@ -1067,7 +1064,7 @@ fn topbar_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
 /// code viewer. The column is always rendered so the viewer's host element
 /// (`viewer-host`) stays put across renders and screen switches; CSS collapses
 /// it to zero width when closed.
-fn file_panel_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let panel = model.file_panel
   let conv = model.active()
   let sections : Array[@html.Html] = [
@@ -1109,7 +1106,7 @@ fn file_panel_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
 /// The rows for the entries of one directory, with expanded directories'
 /// children spliced in beneath them, depth-first. `depth` drives indentation.
 fn file_tree_rows(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   model : Model,
   dir_path : String,
   depth : Int,
@@ -1131,7 +1128,7 @@ fn file_tree_rows(
 
 ///|
 fn tree_row(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   model : Model,
   entry : FileEntry,
   depth : Int,
@@ -1167,7 +1164,7 @@ fn tree_row(
 }
 
 ///|
-fn view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let content = match model.screen {
     Chat =>
       [

@@ -1,7 +1,7 @@
 ///|
 #warnings("-alert_unstable")
 fn main {
-  let (dispatch, cell) = @rabbita.cell_with_dispatch(
+  let (dispatch, cell) = @rabbita.cell_with_emit(
     model=initial_model(),
     update~,
     view~,

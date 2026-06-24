@@ -3,8 +3,8 @@
 // opaque, so the tests assert on the returned model only.
 
 ///|
-fn test_dispatch() -> @cmd.Dispatch[Msg] {
-  Dispatch(_ => @cmd.none)
+fn test_dispatch() -> @cmd.Emit[Msg] {
+  Emit(_ => @cmd.none)
 }
 
 ///|

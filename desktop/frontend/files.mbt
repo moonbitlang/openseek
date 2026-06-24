@@ -9,7 +9,7 @@
 /// List `path` (relative to the conversation workspace; "" is the root) and
 /// fold the entries back as `DirLoaded`.
 fn read_directory(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   session : String,
   path : String,
 ) -> @cmd.Cmd {
@@ -46,7 +46,7 @@ fn read_directory(
 /// Read `path` and fold its contents back as `FileLoaded`. `name` is the
 /// entry's display name, forwarded for the viewer's title and language guess.
 fn read_file(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   session : String,
   path : String,
   name : String,
