@@ -19,11 +19,13 @@ async fn bundled_engine_path(framework_command : String) -> String? {
 }
 
 ///|
-/// The engine executable to run: the one bundled beside the host binary, or
-/// the `OPENSEEK_ENGINE` override, or `openseek` on PATH.
+/// The engine executable to run: always the one bundled beside the host
+/// binary, falling back to `openseek` on PATH only in unbundled (development)
+/// layouts. The ambient environment cannot redirect a packaged app at a
+/// different engine.
 pub async fn engine_command(framework_command : String) -> String {
   if bundled_engine_path(framework_command) is Some(path) {
     return path
   }
-  @env.get("OPENSEEK_ENGINE").unwrap_or(DefaultEngine)
+  DefaultEngine
 }
