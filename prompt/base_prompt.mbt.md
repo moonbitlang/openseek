@@ -35,7 +35,30 @@ For fast, reliable task execution, follow this order:
    - Keep changes inside the correct package, use `///|` top-level delimiters, and split code into cohesive files.
 
 6. **Validate in a tight loop**
-   - Run `moon check` after **every** edit. It type-checks without code generation, so it is much faster than `moon build` or `moon test` — make it your primary, high-frequency feedback signal and run it aggressively. After `edit` or `write` changes `moon.mod`, `moon.pkg`, `.mbt`, or `.mbt.md` inside a MoonBit module, the tool result may append bounded raw feedback from module-root `moon check --diagnostic-limit 1`, starting with `moon check:`; failures include `exit=<code>` or `exit=cancelled`. Treat it as immediate compiler feedback, and run an explicit `moon check` when you need full diagnostics. Reach for `moon build`/`moon test` only when you actually need build artifacts or test results. Add `--warn-list +unnecessary_annotation` to enable warning 73 for redundant annotations and over-qualified constructors (`--warn-list +73` is equivalent).
+   - Run `moon check` after **every** edit. It type-checks without code generation, so it is much faster than `moon build` or `moon test` — make it your primary, high-frequency feedback signal and run it aggressively. After `edit` or `write` changes `moon.mod`, `moon.pkg`, `.mbt`, or `.mbt.md` inside a MoonBit module, the tool result may append bounded raw feedback from module-root `moon check --diagnostic-limit 1`, starting with `moon check:`; failures include `exit=<code>` or `exit=cancelled`. It may also append an `analysis:` block that groups repeated unbound value identifiers from `moon check --output-json`. Treat this as immediate compiler feedback, and run an explicit `moon check` when you need full diagnostics. Reach for `moon build`/`moon test` only when you actually need build artifacts or test results. Add `--warn-list +unnecessary_annotation` to enable warning 73 for redundant annotations and over-qualified constructors (`--warn-list +73` is equivalent).
+   - When missing local functions or unfinished branches cause a huge cascade of `moon check` errors, declare the intended function/method with the right signature and a `...` body to make the next compiler feedback useful. This can be generic, but the type parameters, labels, optional arguments, method receiver, and `raise` annotation must match the intended code. Do not introduce a generic `todo` helper and do not stub external APIs. Treat `Warning (todo): unfinished code` as blocking; remove every placeholder before final validation.
+     For example, if `moon check` reports many missing local helpers after you wrote their callers (`parse_key`, `parse_value`, `insert_path`, etc.), first declare the real helpers with the types those callers require, then rerun `moon check`:
+
+     ```mbt nocheck
+     ///|
+     fn parse_key(text : String, line~ : Int) -> Array[String] raise {
+       ...
+     }
+
+     ///|
+     fn parse_value(text : String, line~ : Int) -> Json raise {
+       ...
+     }
+
+     ///|
+     fn Parser::insert_path(
+       self : Parser,
+       path : Array[String],
+       value : Json,
+     ) -> Unit raise {
+       ...
+     }
+     ```
    - Run targeted tests with `moon test [dirname|filename] --filter 'glob'` and use `moon test --update` for snapshot changes.
 
 7. **Finalize before handoff**
@@ -757,7 +780,7 @@ async test "sleep completes" {
 - **Visibility**: `fn` is private by default; `pub` exposes read/construct as allowed; `pub(all)` allows external construction.
 - **Naming convention**: lower_snake for values/functions; UpperCamel for types/enums; enum variants start UpperCamel.
 - **Packages**: No `import` in code files; call via `@alias.fn`. Configure imports in `moon.pkg`.
-- **Placeholders**: `...` is a valid placeholder in MoonBit code for incomplete implementations.
+- **Placeholders**: `...` is a valid placeholder in MoonBit code for incomplete implementations. Use it as a short-lived diagnostic stub only on the real local function or method whose signature you are intentionally defining, for example `fn[T] parse_one(...) -> T raise { ... }`. It lets `moon check` move past missing-name noise and report the next useful type errors, while still producing `Warning (todo): unfinished code` so the unfinished implementation is not forgotten.
 - **Global values**: immutable by default and generally require type annotations.
 - **Garbage collection**: MoonBit has a GC, there is no lifetime annotation, there's no ownership system.
   Unlike Rust, like F#, `let mut` is only needed when you want to reassign a variable, not for mutating fields of a struct or elements of an array/map.

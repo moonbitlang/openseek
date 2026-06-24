@@ -10,9 +10,44 @@ generation, so it is much faster than `moon build` or `moon test`. Use
 After `edit` or `write` changes `moon.mod`, `moon.pkg`, `.mbt`, or `.mbt.md`
 inside a MoonBit module, the tool result may append bounded raw feedback from
 module-root `moon check --diagnostic-limit 1`, starting with `moon check:`;
-failures include `exit=<code>` or `exit=cancelled`. Treat it as immediate
-compiler feedback, and run an explicit `moon check` when you need full
-diagnostics.
+failures include `exit=<code>` or `exit=cancelled`. It may also append an
+`analysis:` block that groups repeated unbound value identifiers from
+`moon check --output-json`. Treat this as immediate compiler feedback, and run
+an explicit `moon check` when you need full diagnostics.
+
+When missing local functions or unfinished branches cause a huge cascade of
+`moon check` errors, declare the intended function/method with the right
+signature and a `...` body to make the next compiler feedback useful. This can
+be generic, but the type parameters, labels, optional arguments, method
+receiver, and `raise` annotation must match the intended code. Do not introduce
+a generic `todo` helper and do not stub external APIs. Treat
+`Warning (todo): unfinished code` as blocking; remove every placeholder before
+final validation.
+
+For example, if `moon check` reports many missing local helpers after you wrote
+their callers (`parse_key`, `parse_value`, `insert_path`, etc.), first declare
+the real helpers with the types those callers require, then rerun `moon check`:
+
+```mbt nocheck
+///|
+fn parse_key(text : String, line~ : Int) -> Array[String] raise {
+  ...
+}
+
+///|
+fn parse_value(text : String, line~ : Int) -> Json raise {
+  ...
+}
+
+///|
+fn Parser::insert_path(
+  self : Parser,
+  path : Array[String],
+  value : Json,
+) -> Unit raise {
+  ...
+}
+```
 
 ## Tool Protocol
 

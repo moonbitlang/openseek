@@ -27,6 +27,16 @@ test "cli parses prompt and task options" {
 }
 
 ///|
+test "cli can read api key from DEEPSEEK environment variable" {
+  let original = @env.get_env_var("DEEPSEEK")
+  defer restore_env_var("DEEPSEEK", original)
+  @env.set_env_var("DEEPSEEK", "env-key")
+  let matches = cli_command().parse(argv=["--runs", "1", "--min-successes", "1"])
+  let config = config_from_matches(matches)
+  assert_eq(config.api_key, "env-key")
+}
+
+///|
 test "analyze-only mode does not require an api key" {
   let matches = cli_command().parse(argv=["--analyze-only", "--out", "existing"])
   assert_true(flag(matches, "analyze-only"))
@@ -44,14 +54,25 @@ test "cli parses suite file option" {
 
 ///|
 test "running trials requires an api key" {
+  let original = @env.get_env_var("DEEPSEEK")
+  defer restore_env_var("DEEPSEEK", original)
+  @env.unset_env_var("DEEPSEEK")
   let matches = cli_command().parse(argv=[])
   let _ = config_from_matches(matches) catch {
     error => {
-      assert_true("\{error}".contains("--api-key is required"))
+      assert_true("\{error}".contains("--api-key or DEEPSEEK is required"))
       return
     }
   }
   fail("missing api key parsed")
+}
+
+///|
+fn restore_env_var(name : String, value : String?) -> Unit {
+  match value {
+    Some(value) => @env.set_env_var(name, value)
+    None => @env.unset_env_var(name)
+  }
 }
 
 ///|

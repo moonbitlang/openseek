@@ -31,6 +31,48 @@ async test "append_summary runs compact check for MoonBit source" {
 }
 
 ///|
+async test "append_summary hints repeated unbound local helpers" {
+  @vfs.with_tmpdir(prefix="openseek-auto-check-analysis-", dir => {
+    @fs.write_file(
+      "\{dir}/moon.mod",
+      "name = \"tmp/auto_check_analysis\"\n",
+      create_mode=CreateOrTruncate,
+    )
+    @fs.write_file(
+      "\{dir}/moon.pkg",
+      "warnings = \"+unnecessary_annotation\"\n",
+      create_mode=CreateOrTruncate,
+    )
+    let path = "\{dir}/helpers.mbt"
+    @fs.write_file(
+      path,
+      (
+        #|pub fn a() -> Int {
+        #|  missing_helper
+        #|}
+        #|
+        #|pub fn b() -> Int {
+        #|  missing_helper + 1
+        #|}
+        #|
+        #|pub fn c() -> Int {
+        #|  if missing_helper > 0 { 1 } else { missing_helper }
+        #|}
+        #|
+      ),
+      create_mode=CreateOrTruncate,
+    )
+    let result = @auto_check.append_summary(path, "ok: wrote helpers")
+    assert_true(result.has_prefix("ok: wrote helpers\nmoon check:\nexit="))
+    assert_true(result.contains("missing_helper"))
+    assert_true(result.contains("analysis:"))
+    assert_true(result.contains("repeated unbound value identifiers"))
+    assert_true(result.contains("missing_helper:"))
+    assert_true(result.contains("declare real stubs with `...`"))
+  })
+}
+
+///|
 async test "append_summary checks from module root for nested source" {
   @vfs.with_tmpdir(prefix="openseek-auto-check-root-", dir => {
     @fs.write_file(
@@ -159,7 +201,7 @@ async test "append_summary surfaces failed pre-build despite zero diagnostics" {
         #|options(
         #|  "pre-build": [
         #|    {
-        #|      "command": "false",
+        #|      "command": "sh -c 'printf hit >> side.txt; false'",
         #|      "input": [ "in.txt" ],
         #|      "output": "generated.mbt",
         #|    },
@@ -179,6 +221,8 @@ async test "append_summary surfaces failed pre-build despite zero diagnostics" {
     assert_true(result.contains("Error:"))
     assert_false(result.contains("first error:"))
     assert_false(result.contains("moon check: 0 errors, 0 warnings"))
+    assert_false(result.contains("analysis:"))
+    assert_eq(@fs.read_file("\{dir}/side.txt").text(), "hit")
   })
 }
 

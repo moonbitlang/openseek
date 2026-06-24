@@ -8,6 +8,27 @@ const MoonCheckMaxOutputChars : Int = 12000
 const MoonCheckCommand : String = "moon check --diagnostic-limit 1"
 
 ///|
+const MoonCheckAnalysisCommand : String = "moon check --output-json"
+
+///|
+const MoonCheckAnalysisMaxOutputChars : Int = 30000
+
+///|
+const DiagnosticLimitWarning : String = "diagnostic output limited by --diagnostic-limit"
+
+///|
+const RepeatedUnboundThreshold : Int = 3
+
+///|
+const RepeatedUnboundLimit : Int = 5
+
+///|
+const UnboundValuePrefix : String = "The value identifier "
+
+///|
+const UnboundValueSuffix : String = " is unbound."
+
+///|
 /// Append bounded raw `moon check` feedback after successful writes to MoonBit
 /// source or manifest files. The check runs from the containing MoonBit module
 /// root. Non-MoonBit paths and paths outside a MoonBit module are returned
@@ -40,8 +61,38 @@ async fn auto_check_summary(path : String) -> String? {
     _ => return Some("moon check: failed to run")
   }
   match result {
-    Some(output) => Some(format_moon_check_output(output))
+    Some(output) => {
+      let analysis = moon_check_analysis(cwd, output)
+      Some(format_moon_check_output(output, analysis))
+    }
     None => Some("moon check: timed out")
+  }
+}
+
+///|
+async fn moon_check_analysis(
+  cwd : String,
+  compact_output : @shell.ShellOutput,
+) -> String? {
+  if compact_output.exit_code is Some(0) {
+    return None
+  }
+  if !compact_output.text.contains(DiagnosticLimitWarning) {
+    return None
+  }
+  let result = @async.with_timeout_opt(MoonCheckTimeoutMs, () => {
+    @shell.collect_shell_output(
+      MoonCheckAnalysisCommand,
+      cwd~,
+      max_output_chars=MoonCheckAnalysisMaxOutputChars,
+    )
+  }) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return None
+  }
+  match result {
+    Some(output) => diagnostic_analysis_summary(output.text)
+    None => None
   }
 }
 
@@ -54,11 +105,15 @@ async fn moon_check_cwd(path : String) -> String? {
 }
 
 ///|
-fn format_moon_check_output(output : @shell.ShellOutput) -> String {
+fn format_moon_check_output(
+  output : @shell.ShellOutput,
+  analysis : String?,
+) -> String {
   format_moon_check_output_parts(
     output.exit_code,
     output.text,
     output.output_limit_reached,
+    analysis,
   )
 }
 
@@ -67,6 +122,7 @@ fn format_moon_check_output_parts(
   exit_code : Int?,
   output : String,
   output_limit_reached : Bool,
+  analysis : String?,
 ) -> String {
   let header = match exit_code {
     Some(0) => "moon check:"
@@ -79,9 +135,95 @@ fn format_moon_check_output_parts(
     header
   }
   if output == "" {
-    header
+    append_analysis(header, analysis)
   } else {
-    "\{header}\n\{output}"
+    append_analysis("\{header}\n\{output}", analysis)
+  }
+}
+
+///|
+fn append_analysis(output : String, analysis : String?) -> String {
+  match analysis {
+    Some(analysis) if analysis != "" => "\{output}\n\{analysis}"
+    _ => output
+  }
+}
+
+///|
+priv struct RepeatedDiagnostic {
+  name : String
+  count : Int
+}
+
+///|
+fn diagnostic_analysis_summary(output : String) -> String? {
+  let unbound_values : Map[String, Int] = Map([], capacity=16)
+  for line in output.split("\n") {
+    let json = @json.parse(line.trim()) catch { _ => continue }
+    match json {
+      { "level": String("error"), "message": String(message), .. } =>
+        match unbound_value_name(message) {
+          Some(name) => increment_count(unbound_values, name)
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  let repeated : Array[RepeatedDiagnostic] = []
+  for name, count in unbound_values {
+    if count >= RepeatedUnboundThreshold {
+      repeated.push({ name, count })
+    }
+  }
+  if repeated.is_empty() {
+    return None
+  }
+  repeated.sort_by(fn(left, right) {
+    if left.count == right.count {
+      left.name.compare(right.name)
+    } else {
+      right.count.compare(left.count)
+    }
+  })
+  let lines : Array[String] = [
+    "analysis:", "- repeated unbound value identifiers:",
+  ]
+  let limit = if repeated.length() < RepeatedUnboundLimit {
+    repeated.length()
+  } else {
+    RepeatedUnboundLimit
+  }
+  for i in 0..<limit {
+    let item = repeated[i]
+    lines.push("  - \{item.name}: \{item.count} diagnostics")
+  }
+  lines.push(
+    "- If these are local helpers you intend to implement, infer their typed signatures from the call sites, declare real stubs with `...`, rerun `moon check`, then remove the stubs before final validation.",
+  )
+  Some(lines.join("\n"))
+}
+
+///|
+fn increment_count(counts : Map[String, Int], name : String) -> Unit {
+  match counts.get(name) {
+    Some(count) => counts.set(name, count + 1)
+    None => counts.set(name, 1)
+  }
+}
+
+///|
+fn unbound_value_name(message : String) -> String? {
+  if message.has_prefix(UnboundValuePrefix) &&
+    message.has_suffix(UnboundValueSuffix) {
+    let start = UnboundValuePrefix.length()
+    let end = message.length() - UnboundValueSuffix.length()
+    if end > start {
+      Some(message[start:end].to_owned())
+    } else {
+      None
+    }
+  } else {
+    None
   }
 }
 
@@ -196,6 +338,7 @@ test "formats raw moon check output with exit code" {
         #|    0: Failed to resolve the module dependency graph
       ),
       false,
+      None,
     ),
     (
       #|moon check:
@@ -215,6 +358,7 @@ test "formats successful moon check output without exit code" {
       Some(0),
       "Finished. moon: ran 2 tasks, now up to date",
       false,
+      None,
     ),
     (
       #|moon check:
@@ -226,12 +370,74 @@ test "formats successful moon check output without exit code" {
 ///|
 test "formats truncated moon check output with metadata" {
   assert_eq(
-    format_moon_check_output_parts(None, "long output", true),
+    format_moon_check_output_parts(None, "long output", true, None),
     (
       #|moon check:
       #|exit=cancelled
       #|output_limit_reached=true
       #|long output
     ),
+  )
+}
+
+///|
+test "formats moon check output with analyzer summary" {
+  assert_eq(
+    format_moon_check_output_parts(
+      Some(2),
+      "Error: first compact diagnostic",
+      false,
+      Some(
+        (
+          #|analysis:
+          #|- repeated unbound value identifiers:
+          #|  - parse_value: 4 diagnostics
+        ),
+      ),
+    ),
+    (
+      #|moon check:
+      #|exit=2
+      #|Error: first compact diagnostic
+      #|analysis:
+      #|- repeated unbound value identifiers:
+      #|  - parse_value: 4 diagnostics
+    ),
+  )
+}
+
+///|
+test "diagnostic analyzer summarizes repeated unbound value identifiers" {
+  let summary = diagnostic_analysis_summary(
+    (
+      #|{"level":"error","message":"The value identifier parse_value is unbound."}
+      #|{"level":"error","message":"The value identifier parse_key is unbound."}
+      #|{"level":"error","message":"The value identifier parse_value is unbound."}
+      #|not json
+      #|{"level":"warning","message":"The value identifier ignored is unbound."}
+      #|{"level":"error","message":"The value identifier parse_value is unbound."}
+      #|{"level":"error","message":"The type constructor Missing is unbound."}
+    ),
+  )
+  guard summary is Some(summary) else {
+    fail("expected repeated unbound identifier summary")
+  }
+  assert_true(summary.contains("analysis:"))
+  assert_true(summary.contains("parse_value: 3 diagnostics"))
+  assert_false(summary.contains("parse_key:"))
+  assert_false(summary.contains("ignored:"))
+  assert_true(summary.contains("declare real stubs with `...`"))
+}
+
+///|
+test "diagnostic analyzer ignores identifiers below threshold" {
+  assert_true(
+    diagnostic_analysis_summary(
+      (
+        #|{"level":"error","message":"The value identifier parse_key is unbound."}
+        #|{"level":"error","message":"The value identifier parse_key is unbound."}
+      ),
+    )
+    is None,
   )
 }

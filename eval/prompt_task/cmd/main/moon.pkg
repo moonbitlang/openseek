@@ -3,6 +3,7 @@ import {
   "bobzhang/openseek/eval/prompt_task/harness",
   "moonbitlang/async",
   "moonbitlang/core/argparse",
+  "moonbitlang/core/env",
   "moonbitlang/core/string",
 }
 

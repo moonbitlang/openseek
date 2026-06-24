@@ -2,6 +2,7 @@ import {
   "bobzhang/openseek/agent_tool/shell",
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/core/json",
 }
 
 import {

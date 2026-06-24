@@ -6,8 +6,7 @@ fn config_from_matches(matches : @argparse.Matches) -> @harness.Config raise {
     "--min-successes",
   )
   guard min_successes <= runs else { fail("--min-successes must be <= --runs") }
-  let api_key = value(matches, "api-key")
-  guard api_key != "" else { fail("--api-key is required for running trials") }
+  let api_key = api_key_from_matches(matches)
   Config(
     api_key~,
     model=@deepseek.Model::parse(value(matches, "model")),
@@ -34,8 +33,7 @@ fn config_from_matches(matches : @argparse.Matches) -> @harness.Config raise {
 async fn suite_config_from_matches(
   matches : @argparse.Matches,
 ) -> @harness.SuiteConfig {
-  let api_key = value(matches, "api-key")
-  guard api_key != "" else { fail("--api-key is required for running trials") }
+  let api_key = api_key_from_matches(matches)
   @harness.suite_config_from_file(
     value(matches, "suite-file"),
     api_key~,
@@ -61,6 +59,18 @@ fn value(matches : @argparse.Matches, name : String) -> String raise {
     Some([value]) => value
     Some(values) if values.length() > 0 => values[0]
     _ => fail("missing parsed argument: \{name}")
+  }
+}
+
+///|
+fn api_key_from_matches(matches : @argparse.Matches) -> String raise {
+  match value(matches, "api-key") {
+    "" =>
+      match @env.get_env_var("DEEPSEEK") {
+        Some(key) if key != "" => key
+        _ => fail("--api-key or DEEPSEEK is required for running trials")
+      }
+    key => key
   }
 }
 
