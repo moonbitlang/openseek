@@ -15,16 +15,21 @@ read specific files.
 
 ## Design Rationale
 
-`read` preserves the simple whole-file behavior for small files because that is
-the most convenient path when the agent needs full context. The optional range
-and output-cap arguments exist for the failure mode seen in longer evaluations:
-large generated files and dependency sources can flood the transcript and push
-useful context out of the model window.
+Every read has the **same shape** regardless of whether it is a whole-file read,
+a line range, or a capped read: `<line-number>\t<content>` lines (the common
+`cat -n` style used by other coding agents) followed by a single
+`<system>...</system>` status footer. The optional range and output-cap
+arguments exist for the failure mode seen in longer evaluations: large generated
+files and dependency sources can flood the transcript and push useful context
+out of the model window.
 
-Ranged or capped reads include a metadata header so the model knows what it saw
-and what it did not see. The body of those headered blocks is line-numbered as
-`<line-number>\t<content>`, matching the common `cat -n` style used by other
-coding agents.
+A uniform shape means the model never has to branch on "was this a full or a
+partial read" — line numbers are always present (so it can cite `path:line`
+afterward), and the footer always reports the range it saw (`start_line`,
+`shown_lines`), the file's `total_lines` (so it can tell whether more lines
+follow), and whether the budget cut the body (`truncated`). This matches the
+lean, content-first convention used by Claude Code and the kimi agents, which
+keep status metadata in a small footer rather than a verbose header.
 Automatic output truncation is marked as a tool error even when the file was
 read successfully; that makes lossy context visible to the loop instead of
 silently pretending the returned prefix is complete.
@@ -49,8 +54,9 @@ source where the agent has already identified the relevant region:
 ```
 
 Use `max_output_chars` to protect the transcript when file size is uncertain.
-For headered reads, the cap applies after line-number gutters are rendered.
-Prefer a range plus a cap over reading a large file and relying on truncation.
+The cap applies to the numbered body after line-number gutters are rendered (the
+trailing footer is always appended). Prefer a range plus a cap over reading a
+large file and relying on truncation.
 
 ## Arguments
 
@@ -68,13 +74,12 @@ The action is always `Respond(ToolOutput(...))` — the agent loop forwards
 `false` on success and `true` for read failures, argument failures, or automatic
 output truncation. The string body has one of these shapes:
 
-- The file's text contents on uncapped whole-file success.
-- A metadata header followed by `---` and line-numbered selected content for
-  ranged reads or capped reads. The header includes line counts and UTF-16
-  code-unit counts (`file_chars`, `selected_chars`, `shown_chars`) plus
-  `line_format=<line-number>\t<content>`; `shown_chars` counts the rendered
-  numbered body, and `truncated=true` when `max_output_chars` cut that rendered
-  body.
+- On success: `<line-number>\t<content>` lines, then a newline, then the footer
+  `<system>start_line=<n> shown_lines=<k> total_lines=<t> truncated=<bool></system>`.
+  When the selected body is empty (the range starts past EOF, or the budget is
+  zero) only the footer is returned. `truncated=true` — set when
+  `max_output_chars` cut the numbered body — is the one case that flips
+  `is_error` to `true`.
 - `"error reading <path>: <error>"` — a single-file read failed. Common
   causes: the file is missing, the agent doesn't have read permissions, or
   the bytes aren't valid UTF-8.
@@ -93,7 +98,7 @@ test "read tool advertises the expected schema" {
     content=(
       #|{
       #|  name: "read",
-      #|  description: "Read arguments.path as text. For several known independent files, batch separate read tool calls in one assistant response when possible. Do not use read for directories: inspect them with `ls` or `tree`, then read specific files. Supports optional start_line, max_lines, and max_output_chars for focused single-file reads. Headered outputs use `<line-number>\\t<content>` numbered lines.",
+      #|  description: "Read arguments.path as text. For several known independent files, batch separate read tool calls in one assistant response when possible. Do not use read for directories: inspect them with `ls` or `tree`, then read specific files. Supports optional start_line, max_lines, and max_output_chars for focused single-file reads. Output is `<line-number>\\t<content>` numbered lines followed by a `<system>` status footer.",
       #|  schema: JsonSchema(
       #|    Object(
       #|      {
@@ -142,17 +147,18 @@ async test "read tool reads a workspace note through the registry" {
       ),
     )
     let result = @agent_tool.execute_tool_call(call, tools)
-    debug_inspect(
-      result,
-      content=(
-        #|Respond(
-        #|  {
-        #|    content: "Task: summarize test failures\nStatus: investigating\n",
-        #|    is_error: false,
-        #|    brief: Some("read task.txt"),
-        #|  },
-        #|)
-      ),
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_false(output.is_error)
+    guard output.brief is Some("read task.txt") else {
+      fail("unexpected brief")
+    }
+    // Numbered body (the trailing newline makes line 3 an empty line) then the
+    // status footer.
+    assert_eq(
+      output.content,
+      [
+        "1\tTask: summarize test failures", "2\tStatus: investigating", "3\t", "<system>start_line=1 shown_lines=3 total_lines=3 truncated=false</system>",
+      ].join("\n"),
     )
   })
 }
@@ -180,10 +186,13 @@ async test "read tool supports focused range reads" {
     )
     let result = @agent_tool.execute_tool_call(call, tools)
     guard result is Respond(output) else { fail("expected Respond") }
-    assert_true(output.content.contains("start_line=2"))
-    assert_true(output.content.contains("shown_lines=2"))
-    assert_true(output.content.contains("2\tbeta\n3\tgamma"))
     assert_false(output.is_error)
+    assert_eq(
+      output.content,
+      [
+        "2\tbeta", "3\tgamma", "<system>start_line=2 shown_lines=2 total_lines=4 truncated=false</system>",
+      ].join("\n"),
+    )
   })
 }
 ```

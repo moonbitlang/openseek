@@ -17,10 +17,12 @@
 ///   12000 and is capped at 50000. Truncation never splits a surrogate pair.
 ///
 /// ## Result
-/// - `Respond(ToolOutput(<file contents>))` on success for uncapped whole-file
-///   single reads.
-/// - `Respond(ToolOutput(<metadata header + numbered content>))` for ranged
-///   reads or capped reads.
+/// - `Respond(ToolOutput(<numbered lines> + "\n" + <footer>))` on success.
+///   Every read has the same shape regardless of range or cap: `<line-number>\t
+///   <content>` lines followed by a single
+///   `<system>start_line=.. shown_lines=.. total_lines=.. truncated=..</system>`
+///   footer (footer only when the body is empty). `is_error` is `true` only when
+///   the `max_output_chars` budget cut the body (`truncated=true`).
 /// - `Respond(ToolOutput("error reading <path>: <error>", is_error=true))`
 ///   if a single-file read fails (missing file, permission denied, invalid
 ///   UTF-8, directory path, etc.).
@@ -31,7 +33,7 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="read",
-    description="Read arguments.path as text. For several known independent files, batch separate read tool calls in one assistant response when possible. Do not use read for directories: inspect them with `ls` or `tree`, then read specific files. Supports optional start_line, max_lines, and max_output_chars for focused single-file reads. Headered outputs use `<line-number>\\t<content>` numbered lines.",
+    description="Read arguments.path as text. For several known independent files, batch separate read tool calls in one assistant response when possible. Do not use read for directories: inspect them with `ls` or `tree`, then read specific files. Supports optional start_line, max_lines, and max_output_chars for focused single-file reads. Output is `<line-number>\\t<content>` numbered lines followed by a `<system>` status footer.",
     schema=JsonSchema({
       "type": "object",
       "required": ["path"],
@@ -77,15 +79,12 @@ priv struct ReadSelection {
   start_line : Int
   total_lines : Int
   shown_lines : Int
-  line_limited : Bool
 }
 
 ///|
 priv struct RenderedSelection {
   content : String
-  end_line : Int
   shown_lines : Int
-  shown_chars : Int
   truncated : Bool
 }
 
@@ -94,9 +93,10 @@ async fn read_file(
   input : @decode.ReadInput,
   path~ : String,
 ) -> @agent_tool.ToolAction {
+  let brief = "read \{@agent_tool.brief_basename(path)}"
   match directory_read_error(path) {
     Some(message) =>
-      return @agent_tool.ToolAction::respond(message, is_error=true)
+      return @agent_tool.ToolAction::respond(message, is_error=true, brief~)
     None => ()
   }
   let content = @fs.read_file(path).text() catch {
@@ -104,34 +104,34 @@ async fn read_file(
       return @agent_tool.ToolAction::respond(
         "error reading \{path}: \{error}",
         is_error=true,
-        brief="read \{@agent_tool.brief_basename(path)}",
+        brief~,
       )
   }
   let selection = select_lines(content, input.start_line, input.max_lines)
-  let brief = "read \{@agent_tool.brief_basename(path)}"
-  let include_header = input.start_line != 1 ||
-    input.max_lines is Some(_) ||
-    selection.content.length() > input.max_output_chars
-  if include_header {
-    let rendered = render_numbered_content(selection, input.max_output_chars)
-    let output =
-      $|path=\{path}
-      $|start_line=\{selection.start_line}
-      $|end_line=\{rendered.end_line}
-      $|total_lines=\{selection.total_lines}
-      $|shown_lines=\{rendered.shown_lines}
-      $|file_chars=\{content.length()}
-      $|selected_chars=\{selection.content.length()}
-      $|shown_chars=\{rendered.shown_chars}
-      $|line_limited=\{selection.line_limited}
-      $|truncated=\{rendered.truncated}
-      $|line_format=<line-number>\{"\\t"}<content>
-      $|---
-      $|\{rendered.content}
-    @agent_tool.ToolAction::respond(output, is_error=rendered.truncated, brief~)
+  let rendered = render_numbered_content(selection, input.max_output_chars)
+  // Every read has the same shape: numbered lines followed by a single status
+  // footer. When the body is empty (start past EOF, or a zero budget) only the
+  // footer is returned, so the model still learns what it asked for.
+  let footer = read_footer(selection, rendered)
+  let output = if rendered.content == "" {
+    footer
   } else {
-    @agent_tool.ToolAction::respond(selection.content, brief~)
+    "\{rendered.content}\n\{footer}"
   }
+  @agent_tool.ToolAction::respond(output, is_error=rendered.truncated, brief~)
+}
+
+///|
+/// One-line status footer appended after the numbered content, replacing the
+/// old multi-field header. The model gets the line range it actually saw
+/// (`start_line` plus `shown_lines`), the file's `total_lines` (so it can tell
+/// whether more lines follow), and whether the `max_output_chars` budget cut
+/// the body (`truncated`).
+fn read_footer(
+  selection : ReadSelection,
+  rendered : RenderedSelection,
+) -> String {
+  "<system>start_line=\{selection.start_line} shown_lines=\{rendered.shown_lines} total_lines=\{selection.total_lines} truncated=\{rendered.truncated}</system>"
 }
 
 ///|
@@ -155,17 +155,11 @@ fn select_lines(
     None => total_lines
   }
   let selected = lines[start_index:end_exclusive]
-  let shown_lines = selected.length()
-  let line_limited = match max_lines {
-    Some(_) => end_exclusive < total_lines
-    None => false
-  }
   {
     content: selected.join("\n"),
     start_line,
     total_lines,
-    shown_lines,
-    line_limited,
+    shown_lines: selected.length(),
   }
 }
 
@@ -220,22 +214,10 @@ fn render_numbered_content(
   max_chars : Int,
 ) -> RenderedSelection {
   if selection.shown_lines == 0 {
-    return {
-      content: "",
-      end_line: selection.start_line - 1,
-      shown_lines: 0,
-      shown_chars: 0,
-      truncated: false,
-    }
+    return { content: "", shown_lines: 0, truncated: false }
   }
   if max_chars <= 0 {
-    return {
-      content: "",
-      end_line: selection.start_line - 1,
-      shown_lines: 0,
-      shown_chars: 0,
-      truncated: true,
-    }
+    return { content: "", shown_lines: 0, truncated: true }
   }
   let lines = [ for line in selection.content.split("\n") => line.to_owned() ]
   let numbered : Array[String] = []
@@ -265,25 +247,23 @@ fn render_numbered_content(
   if numbered.length() < lines.length() {
     truncated = true
   }
-  let content = numbered.join("\n")
-  let shown_lines = numbered.length()
-  let end_line = if shown_lines == 0 {
-    selection.start_line - 1
-  } else {
-    selection.start_line + shown_lines - 1
-  }
-  { content, end_line, shown_lines, shown_chars: content.length(), truncated }
+  { content: numbered.join("\n"), shown_lines: numbered.length(), truncated }
 }
 
 ///|
-async test "read returns file contents" {
+async test "read renders a whole file as numbered lines with a status footer" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/test.txt"
     @fs.write_file(path, "hello read", create_mode=CreateOrTruncate)
     let result = execute({ "path": path })
     guard result is Respond(output) else { fail("expected Respond") }
-    assert_eq(output.content, "hello read")
     assert_false(output.is_error)
+    assert_eq(
+      output.content,
+      [
+        "1\thello read", "<system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>",
+      ].join("\n"),
+    )
   })
 }
 
@@ -301,65 +281,88 @@ async test "read resolves relative paths under the workspace root" {
       Sync(_) => fail("read tool should be async")
     }
     guard result is Respond(output) else { fail("expected Respond") }
-    assert_eq(output.content, "workspace read")
     assert_false(output.is_error)
+    assert_eq(
+      output.content,
+      [
+        "1\tworkspace read", "<system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>",
+      ].join("\n"),
+    )
   })
 }
 
 ///|
-async test "read returns empty string for an empty file" {
+async test "read renders an empty file as a single empty numbered line" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/empty.txt"
     @fs.write_file(path, "", create_mode=CreateOrTruncate)
     let result = execute({ "path": path })
     guard result is Respond(output) else { fail("expected Respond") }
-    assert_eq(output.content, "")
     assert_false(output.is_error)
-  })
-}
-
-///|
-async test "read preserves multiline content" {
-  @vfs.with_tmpdir(dir => {
-    let path = "\{dir}/multiline.txt"
-    let content = "line one\nline two\nline three\n"
-    @fs.write_file(path, content, create_mode=CreateOrTruncate)
-    let result = execute({ "path": path })
-    guard result is Respond(output) else { fail("expected Respond") }
-    assert_eq(output.content, content)
-    assert_false(output.is_error)
-  })
-}
-
-///|
-async test "read returns a requested line range with metadata" {
-  @vfs.with_tmpdir(dir => {
-    let path = "\{dir}/range.txt"
-    let content = "line one\nline two\nline three\nline four"
-    @fs.write_file(path, content, create_mode=CreateOrTruncate)
-    let result = execute({ "path": path, "start_line": 2, "max_lines": 2 })
-    guard result is Respond(output) else { fail("expected Respond") }
-    assert_false(output.is_error)
-    // The path is a temp dir, so assert the whole block dynamically rather
-    // than snapshotting it with `inspect`.
     assert_eq(
       output.content,
       [
-        "path=\{path}",
-        "start_line=2",
-        "end_line=3",
-        "total_lines=4",
-        "shown_lines=2",
-        "file_chars=38",
-        "selected_chars=19",
-        "shown_chars=23",
-        "line_limited=true",
-        "truncated=false",
-        "line_format=<line-number>\\t<content>",
-        "---",
-        "2\tline two",
-        "3\tline three",
+        "1\t", "<system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>",
       ].join("\n"),
+    )
+  })
+}
+
+///|
+async test "read numbers every line including a trailing blank from a final newline" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/multiline.txt"
+    @fs.write_file(
+      path,
+      "line one\nline two\nline three\n",
+      create_mode=CreateOrTruncate,
+    )
+    let result = execute({ "path": path })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_false(output.is_error)
+    assert_eq(
+      output.content,
+      [
+        "1\tline one", "2\tline two", "3\tline three", "4\t", "<system>start_line=1 shown_lines=4 total_lines=4 truncated=false</system>",
+      ].join("\n"),
+    )
+  })
+}
+
+///|
+async test "read returns a requested line range and reports more lines remain" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/range.txt"
+    @fs.write_file(
+      path,
+      "line one\nline two\nline three\nline four",
+      create_mode=CreateOrTruncate,
+    )
+    let result = execute({ "path": path, "start_line": 2, "max_lines": 2 })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_false(output.is_error)
+    // shown_lines (2) < total_lines (4) is how the model learns lines 4.. are
+    // still unread; there is no separate `line_limited` flag.
+    assert_eq(
+      output.content,
+      [
+        "2\tline two", "3\tline three", "<system>start_line=2 shown_lines=2 total_lines=4 truncated=false</system>",
+      ].join("\n"),
+    )
+  })
+}
+
+///|
+async test "read returns a footer only when the range starts past EOF" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/short.txt"
+    @fs.write_file(path, "a\nb", create_mode=CreateOrTruncate)
+    let result = execute({ "path": path, "start_line": 10 })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_false(output.is_error)
+    assert_eq(
+      output.content,
+      "<system>start_line=10 shown_lines=0 total_lines=2 truncated=false</system>",
     )
   })
 }
@@ -375,37 +378,32 @@ async test "read caps oversized output and marks it as an error" {
     assert_eq(
       output.content,
       [
-        "path=\{path}",
-        "start_line=1",
-        "end_line=1",
-        "total_lines=1",
-        "shown_lines=1",
-        "file_chars=6",
-        "selected_chars=6",
-        "shown_chars=3",
-        "line_limited=false",
-        "truncated=true",
-        "line_format=<line-number>\\t<content>",
-        "---",
-        "1\ta",
+        "1\ta", "<system>start_line=1 shown_lines=1 total_lines=1 truncated=true</system>",
       ].join("\n"),
     )
   })
 }
 
 ///|
-async test "read caps after adding line number gutters" {
+async test "read counts the line-number gutter against the output budget" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/many-lines.txt"
-    let content = [ for _ in 0..<80 => "x" ].join("\n")
-    @fs.write_file(path, content, create_mode=CreateOrTruncate)
+    @fs.write_file(
+      path,
+      [ for _ in 0..<80 => "x" ].join("\n"),
+      create_mode=CreateOrTruncate,
+    )
     let result = execute({ "path": path, "max_output_chars": 20 })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("shown_chars=19"))
-    assert_true(output.content.contains("truncated=true"))
-    assert_true(output.content.contains("1\tx\n2\tx\n3\tx\n4\tx\n5\tx"))
-    assert_false(output.content.contains("6\tx"))
+    // 20 code units buys exactly five `N\tx` lines (gutters included); the
+    // sixth gutter would overrun, so the body stops at line 5.
+    assert_eq(
+      output.content,
+      [
+        "1\tx", "2\tx", "3\tx", "4\tx", "5\tx", "<system>start_line=1 shown_lines=5 total_lines=80 truncated=true</system>",
+      ].join("\n"),
+    )
   })
 }
 
@@ -415,27 +413,34 @@ async test "read caps unicode content on character boundaries" {
     let path = "\{dir}/unicode.txt"
     // "😀" is one code point but two UTF-16 code units; "😀Z" has length 3.
     @fs.write_file(path, "😀Z", create_mode=CreateOrTruncate)
-    // Budget 4 = "1\t" (2 units) + "😀" (2 units): the emoji fits whole and Z
-    // is dropped.
+    // Budget 4 = "1\t" (2 units) + "😀" (2 units): the emoji fits whole, Z drops.
     let fits = execute({ "path": path, "max_lines": 1, "max_output_chars": 4 })
     guard fits is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("shown_chars=4"))
-    assert_true(output.content.contains("1\t😀"))
-    assert_false(output.content.contains("Z"))
-    // Budget 3 leaves only one unit after the gutter, which would split "😀".
-    // Rather than emit a lone surrogate, the whole emoji is dropped.
+    assert_eq(
+      output.content,
+      [
+        "1\t😀", "<system>start_line=1 shown_lines=1 total_lines=1 truncated=true</system>",
+      ].join("\n"),
+    )
+    // Budget 3 leaves one unit after the gutter, which would split "😀". Rather
+    // than emit a lone surrogate (a slice mid-pair actually panics), the whole
+    // emoji is dropped.
     let splits = execute({ "path": path, "max_lines": 1, "max_output_chars": 3 })
     guard splits is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("shown_chars=2"))
     assert_false(output.content.contains("😀"))
-    assert_true(output.content.has_suffix("1\t"))
+    assert_eq(
+      output.content,
+      [
+        "1\t", "<system>start_line=1 shown_lines=1 total_lines=1 truncated=true</system>",
+      ].join("\n"),
+    )
   })
 }
 
 ///|
-async test "line number gutters use tab-separated cat-n style" {
+async test "read numbers lines cat-n style with no header block" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/aligned.txt"
     let content = [ for index in 1..<=111 => "line \{index}" ].join("\n")
@@ -443,14 +448,20 @@ async test "line number gutters use tab-separated cat-n style" {
     let result = execute({ "path": path, "start_line": 9, "max_lines": 103 })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
-    assert_true(
-      output.content.contains("line_format=<line-number>\\t<content>"),
-    )
     assert_true(output.content.contains("9\tline 9"))
     assert_true(output.content.contains("99\tline 99"))
     assert_true(output.content.contains("100\tline 100"))
     assert_true(output.content.contains("111\tline 111"))
+    assert_true(
+      output.content.has_suffix(
+        "<system>start_line=9 shown_lines=103 total_lines=111 truncated=false</system>",
+      ),
+    )
+    // The old header is gone: no padded arrows, no `path=`/`---`/`line_format`.
     assert_false(output.content.contains("| line"))
+    assert_false(output.content.contains("path="))
+    assert_false(output.content.contains("line_format"))
+    assert_false(output.content.contains("---"))
   })
 }
 
@@ -554,7 +565,11 @@ async test "a huge max_lines returns the remaining lines without overflow" {
     })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
-    assert_true(output.content.contains("2\tb\n3\tc"))
-    assert_true(output.content.contains("shown_lines=2"))
+    assert_eq(
+      output.content,
+      [
+        "2\tb", "3\tc", "<system>start_line=2 shown_lines=2 total_lines=3 truncated=false</system>",
+      ].join("\n"),
+    )
   })
 }
