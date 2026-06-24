@@ -4,6 +4,7 @@ import {
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/agent_tool/edit",
   "bobzhang/openseek/agent_tool/finish",
+  "bobzhang/openseek/agent_tool/read_state",
   "bobzhang/openseek/agent_tool/moon_check",
   "bobzhang/openseek/agent_tool/read",
   "bobzhang/openseek/agent_tool/shell",

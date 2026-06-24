@@ -32,6 +32,7 @@
 ///   invalid arguments.
 pub fn definition(
   workspace_root? : String = ".",
+  read_state? : @read_state.ReadState,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="read",
@@ -49,18 +50,21 @@ pub fn definition(
         "max_output_chars": { "type": "number" },
       },
     }),
-    execute=Async(arguments => execute_with_workspace(workspace_root, arguments)),
+    execute=Async(arguments => {
+      execute_with_workspace(workspace_root, read_state, arguments)
+    }),
   )
 }
 
 ///|
 async fn execute(arguments : Json) -> @agent_tool.ToolAction {
-  execute_with_workspace(".", arguments)
+  execute_with_workspace(".", None, arguments)
 }
 
 ///|
 async fn execute_with_workspace(
   workspace_root : String,
+  read_state : @read_state.ReadState?,
   arguments : Json,
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
@@ -72,7 +76,11 @@ async fn execute_with_workspace(
       )
     }
   }
-  read_file(input, path=@workspace_path.resolve(workspace_root, input.path))
+  read_file(
+    input,
+    path=@workspace_path.resolve(workspace_root, input.path),
+    read_state~,
+  )
 }
 
 ///|
@@ -91,9 +99,19 @@ priv struct RenderedSelection {
 }
 
 ///|
+/// Record `path` as seen this session, when read-state tracking is wired in.
+fn record_seen(read_state : @read_state.ReadState?, path : String) -> Unit {
+  match read_state {
+    Some(state) => state.record(path)
+    None => ()
+  }
+}
+
+///|
 async fn read_file(
   input : @decode.ReadInput,
   path~ : String,
+  read_state~ : @read_state.ReadState?,
 ) -> @agent_tool.ToolAction {
   let brief = "read \{@agent_tool.brief_basename(path)}"
   match directory_read_error(path) {
@@ -114,6 +132,9 @@ async fn read_file(
   // containing only a newline is not empty (it has blank lines) and renders
   // normally.
   if content == "" {
+    // An empty file has no content the agent could miss, so it counts as fully
+    // seen for the purpose of the unread-overwrite check.
+    record_seen(read_state, path)
     return @agent_tool.ToolAction::respond(
       "<system>start_line=\{input.start_line} shown_lines=0 total_lines=0 truncated=false note=empty file</system>",
       is_error=false,
@@ -122,6 +143,15 @@ async fn read_file(
   }
   let selection = select_lines(content, input.start_line, input.max_lines)
   let rendered = render_numbered_content(selection, input.max_output_chars)
+  // Record the file as seen only when this read showed the agent the whole file:
+  // every line was selected (`shown_lines == total_lines`, so the range started
+  // at the top and was not cut short — a high `max_lines` that still covers the
+  // file counts) and the output budget did not truncate the body. A sliced or
+  // truncated read leaves content unseen, so a later `write` must still be
+  // flagged as an unread overwrite.
+  if selection.shown_lines == selection.total_lines && !rendered.truncated {
+    record_seen(read_state, path)
+  }
   // Every read has the same shape: numbered lines followed by a single status
   // footer. When the body is empty (start past EOF, or a zero budget) only the
   // footer is returned, so the model still learns what it asked for.
@@ -580,6 +610,36 @@ async test "read rejects non-object arguments" {
   guard result is Respond(output) else { fail("expected Respond") }
   assert_eq(output.content, "error: read requires object arguments")
   assert_true(output.is_error)
+}
+
+///|
+async test "read marks a file seen only on a complete read" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/notes.txt"
+    @fs.write_file(path, "a\nb\nc\nd\n", create_mode=CreateOrTruncate)
+    // A sliced read (max_lines) leaves most of the file unseen, so it must NOT
+    // be recorded — a later overwrite should still be flagged.
+    let sliced = @read_state.ReadState::ReadState()
+    guard definition(read_state=sliced).execute is Async(read_sliced)
+    let _ = read_sliced({ "path": path, "max_lines": 1 })
+    assert_false(sliced.has_seen(path))
+    // A read from a later line is likewise partial.
+    let offset = @read_state.ReadState::ReadState()
+    guard definition(read_state=offset).execute is Async(read_offset)
+    let _ = read_offset({ "path": path, "start_line": 2 })
+    assert_false(offset.has_seen(path))
+    // A complete read (default args, untruncated) records the file as seen.
+    let full = @read_state.ReadState::ReadState()
+    guard definition(read_state=full).execute is Async(read_full)
+    let _ = read_full({ "path": path })
+    assert_true(full.has_seen(path))
+    // A bounded read whose max_lines comfortably covers the file is still a full
+    // view, so it also counts as seen.
+    let bounded = @read_state.ReadState::ReadState()
+    guard definition(read_state=bounded).execute is Async(read_bounded)
+    let _ = read_bounded({ "path": path, "max_lines": 1000 })
+    assert_true(bounded.has_seen(path))
+  })
 }
 
 ///|

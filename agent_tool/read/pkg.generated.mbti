@@ -3,10 +3,11 @@ package "bobzhang/openseek/agent_tool/read"
 
 import {
   "bobzhang/openseek/agent_tool",
+  "bobzhang/openseek/agent_tool/read_state",
 }
 
 // Values
-pub fn definition(workspace_root? : String) -> @agent_tool.AgentToolDefinition
+pub fn definition(workspace_root? : String, read_state? : @read_state.ReadState) -> @agent_tool.AgentToolDefinition
 
 // Errors
 

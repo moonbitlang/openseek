@@ -18,6 +18,7 @@
 ///   invalid arguments.
 pub fn definition(
   workspace_root? : String = ".",
+  read_state? : @read_state.ReadState,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="write",
@@ -30,18 +31,21 @@ pub fn definition(
       },
       "required": ["path", "content"],
     }),
-    execute=Async(arguments => execute_with_workspace(workspace_root, arguments)),
+    execute=Async(arguments => {
+      execute_with_workspace(workspace_root, read_state, arguments)
+    }),
   )
 }
 
 ///|
 async fn execute(arguments : Json) -> @agent_tool.ToolAction {
-  execute_with_workspace(".", arguments)
+  execute_with_workspace(".", None, arguments)
 }
 
 ///|
 async fn execute_with_workspace(
   workspace_root : String,
+  read_state : @read_state.ReadState?,
   arguments : Json,
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
@@ -54,13 +58,14 @@ async fn execute_with_workspace(
     }
   }
   let path = @workspace_path.resolve(workspace_root, input.path)
-  write_file(input, path~)
+  write_file(input, path~, read_state~)
 }
 
 ///|
 async fn write_file(
   input : @decode.WriteInput,
   path~ : String,
+  read_state~ : @read_state.ReadState?,
 ) -> @agent_tool.ToolAction {
   try {
     match manifest_write_error(path, input.content) {
@@ -78,18 +83,39 @@ async fn write_file(
     // never read is a common way to lose work. A non-ENOENT `exists` error (e.g.
     // ENOTDIR) falls through to the write below and the `catch` reports it.
     let existed = @fs.exists(path)
+    // When a session-scoped `ReadState` is wired in (by the agent loop), call
+    // out an overwrite of a file the agent never read this session — the case
+    // most likely to lose work it could not see. Without one (standalone use)
+    // we keep the plain overwrite note.
+    let unread_overwrite = existed &&
+      (match read_state {
+        Some(state) => !state.has_seen(path)
+        None => false
+      })
     @fs.write_file(path, input.content, create_mode=CreateOrTruncate)
-    let chars = input.content.length()
-    let summary = if existed {
-      "ok: wrote \{chars} chars to \{path} (overwrote existing file)"
-    } else {
-      "ok: wrote \{chars} chars to \{path}"
+    // A successful write means the agent has now seen this file's content.
+    match read_state {
+      Some(state) => state.record(path)
+      None => ()
     }
-    let content = @auto_check.append_summary(path, summary)
+    let chars = input.content.length()
+    let note = if unread_overwrite {
+      " (overwrote existing file you had not read this session)"
+    } else if existed {
+      " (overwrote existing file)"
+    } else {
+      ""
+    }
+    let content = @auto_check.append_summary(
+      path,
+      "ok: wrote \{chars} chars to \{path}\{note}",
+    )
     @agent_tool.ToolAction::respond(
       content,
       brief=@agent_tool.brief_line(
-        if existed {
+        if unread_overwrite {
+          "overwrote unread \{input.path}"
+        } else if existed {
           "overwrote \{input.path}"
         } else {
           "wrote \{chars} chars to \{input.path}"
@@ -309,6 +335,45 @@ async test "write reports whether it created or overwrote a file" {
       second.content,
       "ok: wrote 3 chars to \{path} (overwrote existing file)",
     )
+  })
+}
+
+///|
+async test "write flags overwriting a file the agent never read this session" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/existing.txt"
+    @fs.write_file(path, "original content", create_mode=CreateOrTruncate)
+    let state = @read_state.ReadState::ReadState()
+    guard definition(read_state=state).execute is Async(write_with_state)
+    // Overwriting a pre-existing file the agent never read is called out.
+    guard write_with_state({ "path": path, "content": "new" }) is Respond(first)
+    assert_true(
+      first.content.has_suffix(
+        "(overwrote existing file you had not read this session)",
+      ),
+    )
+    // That write recorded the file as seen, so a second overwrite is the plain
+    // note — no repeated "had not read" warning.
+    guard write_with_state({ "path": path, "content": "newer" })
+      is Respond(second)
+    assert_true(second.content.has_suffix("(overwrote existing file)"))
+    assert_false(second.content.contains("had not read"))
+  })
+}
+
+///|
+async test "write does not flag a file already recorded as seen" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/seen.txt"
+    @fs.write_file(path, "original", create_mode=CreateOrTruncate)
+    let state = @read_state.ReadState::ReadState()
+    // Simulate the read tool having recorded this path earlier this session.
+    state.record(path)
+    guard definition(read_state=state).execute is Async(write_with_state)
+    guard write_with_state({ "path": path, "content": "updated" })
+      is Respond(output)
+    assert_true(output.content.has_suffix("(overwrote existing file)"))
+    assert_false(output.content.contains("had not read"))
   })
 }
 

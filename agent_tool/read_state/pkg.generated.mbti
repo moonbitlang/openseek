@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/agent_tool/read_state"
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct ReadState {
+  seen : Map[String, Unit]
+}
+pub fn ReadState::ReadState() -> Self
+pub fn ReadState::has_seen(Self, String) -> Bool
+pub fn ReadState::record(Self, String) -> Unit
+
+// Type aliases
+
+// Traits
+

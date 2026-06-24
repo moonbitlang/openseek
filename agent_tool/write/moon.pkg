@@ -2,6 +2,7 @@ import {
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/agent_tool/internal/auto_check",
   "bobzhang/openseek/agent_tool/internal/error" @tool_error,
+  "bobzhang/openseek/agent_tool/read_state",
   "bobzhang/openseek/agent_tool/write/internal/decode",
   "bobzhang/openseek/internal/workspace_path",
   "bobzhang/openseek/testkit/filesystem" @vfs,

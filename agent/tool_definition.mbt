@@ -12,11 +12,15 @@ fn[X] tool_definitions(
   // `moon check` through shell).
   ignore(scope)
   let workspace_root = runtime.workspace_root()
+  // One seen-set shared by the file tools for this session: `read` and `edit`
+  // record what the agent has looked at, and `write` uses it to flag an
+  // overwrite of a file that was never read this session.
+  let read_state = @read_state.ReadState::ReadState()
   Tools([
     @shell.definition(workspace_root~),
-    @read.definition(workspace_root~),
+    @read.definition(workspace_root~, read_state~),
     @edit.definition(workspace_root~),
-    @write.definition(workspace_root~),
+    @write.definition(workspace_root~, read_state~),
     @finish.definition(),
   ])
 }
