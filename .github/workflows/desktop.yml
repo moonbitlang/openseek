@@ -6,10 +6,11 @@ name: Desktop
 on:
   push:
     branches: [main]
+  # No paths filter: the desktop package builds and bundles the root
+  # `cmd/openseek` engine, so a root-side change to the engine or its event
+  # protocol can break the desktop app. Run on every PR (as these jobs did when
+  # they lived in ci.yml) rather than enumerate a brittle dependency path list.
   pull_request:
-    paths:
-      - "desktop/**"
-      - ".github/workflows/desktop.yml"
 
 jobs:
   desktop-check:
