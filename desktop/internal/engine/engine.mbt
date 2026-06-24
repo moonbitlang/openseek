@@ -44,6 +44,20 @@ fn SteerRunTracker::record_sent(self : SteerRunTracker, text : String) -> Unit {
 }
 
 ///|
+/// Undo a `record_sent` whose write never reached the engine. The steer may
+/// already have been swept into the settling set by a terminal event that
+/// raced the write, so look there first (mirroring `run_id_for_event`).
+fn SteerRunTracker::discard_sent(self : SteerRunTracker, text : String) -> Unit {
+  if remove_first_text(self.settling_steers, text) {
+    if self.settling_steers.is_empty() {
+      self.settling_run = None
+    }
+  } else {
+    ignore(remove_first_text(self.open_steers, text))
+  }
+}
+
+///|
 fn SteerRunTracker::record_terminal(
   self : SteerRunTracker,
   run_id : Int,

@@ -141,13 +141,20 @@ pub async fn steer_run(
     return { steered: false, run_id: None }
   }
   let command = @protocol.steer(payload.text)
+  // Record before the write: `write` can suspend, and if the run's terminal
+  // event is processed during that suspension, `record_terminal` must already
+  // see this steer to pin it to the finishing run — otherwise a later
+  // `steer_dropped` lands on the next prompt's run id.
+  live.steer_runs.record_sent(payload.text)
   live.writer.write(command.to_jsonl()) catch {
     error if @async.is_being_cancelled() => raise error
-    // The engine just died; its reader task closes the run. The steer
-    // never reached it, so report that rather than pretend.
-    _ => return { steered: false, run_id: Some(live.latest_run) }
+    // The engine just died; its reader task closes the run. The steer never
+    // reached it, so roll back the record and report that rather than pretend.
+    _ => {
+      live.steer_runs.discard_sent(payload.text)
+      return { steered: false, run_id: Some(live.latest_run) }
+    }
   }
-  live.steer_runs.record_sent(payload.text)
   { steered: true, run_id: Some(live.latest_run) }
 }
 
