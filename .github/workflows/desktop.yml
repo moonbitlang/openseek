@@ -29,13 +29,13 @@ jobs:
         env:
           LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
         run: |
-          git config --global \
-            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
-            "git@github.com:"
-          git config --global \
-            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
-            "https://github.com/"
-          git submodule update --init --recursive
+          # Inject the PAT only for this one command via `git -c`, so it never
+          # lands in ~/.gitconfig — where later steps that run PR-controlled
+          # build scripts could read it. (Fork PRs receive no secret and fail
+          # here, as before.)
+          git \
+            -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
+            submodule update --init --recursive
 
       - name: Set up MoonBit (nightly)
         run: |
@@ -104,13 +104,13 @@ jobs:
         env:
           LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
         run: |
-          git config --global \
-            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
-            "git@github.com:"
-          git config --global \
-            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
-            "https://github.com/"
-          git submodule update --init --recursive
+          # Inject the PAT only for this one command via `git -c`, so it never
+          # lands in ~/.gitconfig — where later steps that run PR-controlled
+          # build scripts could read it. (Fork PRs receive no secret and fail
+          # here, as before.)
+          git \
+            -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
+            submodule update --init --recursive
 
       - name: Set up MoonBit (nightly)
         run: |
@@ -158,13 +158,13 @@ jobs:
         env:
           LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
         run: |
-          git config --global \
-            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
-            "git@github.com:"
-          git config --global \
-            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
-            "https://github.com/"
-          git submodule update --init --recursive
+          # Inject the PAT only for this one command via `git -c`, so it never
+          # lands in ~/.gitconfig — where later steps that run PR-controlled
+          # build scripts could read it. (Fork PRs receive no secret and fail
+          # here, as before.)
+          git \
+            -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
+            submodule update --init --recursive
 
       - name: Set up MoonBit (nightly)
         run: |
@@ -223,13 +223,13 @@ jobs:
         env:
           LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
         run: |
-          git config --global \
-            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
-            "git@github.com:"
-          git config --global \
-            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
-            "https://github.com/"
-          git submodule update --init --recursive
+          # Inject the PAT only for this one command via `git -c`, so it never
+          # lands in ~/.gitconfig — where later steps that run PR-controlled
+          # build scripts could read it. (Fork PRs receive no secret and fail
+          # here, as before.)
+          git \
+            -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
+            submodule update --init --recursive
 
       - name: Set up MoonBit (nightly)
         run: |
@@ -287,13 +287,13 @@ jobs:
         env:
           LEPUS_READ_TOKEN: ${{ secrets.LEPUS_READ_TOKEN }}
         run: |
-          git config --global \
-            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
-            "git@github.com:"
-          git config --global \
-            url."https://x-access-token:${LEPUS_READ_TOKEN}@github.com/".insteadOf \
-            "https://github.com/"
-          git submodule update --init --recursive
+          # Inject the PAT only for this one command via `git -c`, so it never
+          # lands in ~/.gitconfig — where later steps that run PR-controlled
+          # build scripts could read it. (Fork PRs receive no secret and fail
+          # here, as before.)
+          git \
+            -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
+            submodule update --init --recursive
 
       - name: Set up MoonBit (nightly)
         shell: pwsh
