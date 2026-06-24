@@ -34,9 +34,13 @@ jobs:
           # lands in ~/.gitconfig — where later steps that run PR-controlled
           # build scripts could read it. (Fork PRs receive no secret and fail
           # here, as before.)
+          # Init only our submodules, non-recursively: the editor submodule
+          # nests microsoft/vscode + codemirror as reference-only mirrors
+          # (huge, LFS-gated) we never build against; lepus has no nested
+          # submodules, so a plain --init covers both.
           git \
             -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
-            submodule update --init --recursive
+            submodule update --init desktop/lepus desktop/editor
 
       - name: Set up MoonBit (nightly)
         run: |
@@ -115,9 +119,13 @@ jobs:
           # lands in ~/.gitconfig — where later steps that run PR-controlled
           # build scripts could read it. (Fork PRs receive no secret and fail
           # here, as before.)
+          # Init only our submodules, non-recursively: the editor submodule
+          # nests microsoft/vscode + codemirror as reference-only mirrors
+          # (huge, LFS-gated) we never build against; lepus has no nested
+          # submodules, so a plain --init covers both.
           git \
             -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
-            submodule update --init --recursive
+            submodule update --init desktop/lepus desktop/editor
 
       - name: Set up MoonBit (nightly)
         run: |
@@ -169,9 +177,13 @@ jobs:
           # lands in ~/.gitconfig — where later steps that run PR-controlled
           # build scripts could read it. (Fork PRs receive no secret and fail
           # here, as before.)
+          # Init only our submodules, non-recursively: the editor submodule
+          # nests microsoft/vscode + codemirror as reference-only mirrors
+          # (huge, LFS-gated) we never build against; lepus has no nested
+          # submodules, so a plain --init covers both.
           git \
             -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
-            submodule update --init --recursive
+            submodule update --init desktop/lepus desktop/editor
 
       - name: Set up MoonBit (nightly)
         run: |
@@ -234,9 +246,13 @@ jobs:
           # lands in ~/.gitconfig — where later steps that run PR-controlled
           # build scripts could read it. (Fork PRs receive no secret and fail
           # here, as before.)
+          # Init only our submodules, non-recursively: the editor submodule
+          # nests microsoft/vscode + codemirror as reference-only mirrors
+          # (huge, LFS-gated) we never build against; lepus has no nested
+          # submodules, so a plain --init covers both.
           git \
             -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
-            submodule update --init --recursive
+            submodule update --init desktop/lepus desktop/editor
 
       - name: Set up MoonBit (nightly)
         run: |
@@ -298,9 +314,13 @@ jobs:
           # lands in ~/.gitconfig — where later steps that run PR-controlled
           # build scripts could read it. (Fork PRs receive no secret and fail
           # here, as before.)
+          # Init only our submodules, non-recursively: the editor submodule
+          # nests microsoft/vscode + codemirror as reference-only mirrors
+          # (huge, LFS-gated) we never build against; lepus has no nested
+          # submodules, so a plain --init covers both.
           git \
             -c "url.https://x-access-token:${LEPUS_READ_TOKEN}@github.com/.insteadOf=https://github.com/" \
-            submodule update --init --recursive
+            submodule update --init desktop/lepus desktop/editor
 
       - name: Set up MoonBit (nightly)
         shell: pwsh
