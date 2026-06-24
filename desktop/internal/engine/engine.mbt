@@ -307,7 +307,7 @@ fn resolved_global_skills_dir() -> @path.Path? {
     return Some(Path(dir))
   }
   if @home.dir() is Some(dir) {
-    return Some(dir)
+    return Some(dir.join(".openseek/skills"))
   }
   None
 }
@@ -388,8 +388,13 @@ async fn engine_process_env(
   if resolved_global_skills_dir() is Some(dir) {
     env["OPENSEEK_GLOBAL_SKILLS_DIR"] = dir.to_string()
   }
+  // The official endpoint leaves `api_url` unset; an `OPENSEEK_API_URL`
+  // exported in the parent shell must not leak through and redirect the
+  // official key at a stale custom URL.
   if config.api_url is Some(url) {
     env["OPENSEEK_API_URL"] = url
+  } else {
+    env.remove("OPENSEEK_API_URL")
   }
   // A named session puts the engine in durable-session mode, so the
   // conversation survives the process and is shared with the CLI/TUI.

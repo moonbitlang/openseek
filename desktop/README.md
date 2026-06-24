@@ -189,18 +189,10 @@ needed, builds the frontend and native host, builds the `openseek` engine from
 the monorepo root, writes `dist/windows-x64/OpenSeek Desktop/`, and creates
 `dist/OpenSeek Desktop-windows-x64.zip`.
 
-Use one optional mode argument to choose the Windows distribution output:
-
-```powershell
-moon -C desktop run --target native package/windows -- --zip
-moon -C desktop run --target native package/windows -- --installer
-moon -C desktop run --target native package/windows -- --all
-```
-
-`--zip` is the default. `--installer` writes only
-`dist/OpenSeek-Desktop-Setup.exe` as the distribution artifact, while keeping
-`dist/windows-x64/OpenSeek Desktop/` as an intermediate bundle directory.
-`--all` writes both the zip and installer.
+The command takes no arguments and always builds every output: the
+`dist/windows-x64/OpenSeek Desktop/` bundle directory, the
+`dist/OpenSeek Desktop-windows-x64.zip` portable zip, and the
+`dist/OpenSeek-Desktop-Setup.exe` NSIS installer.
 
 To build the per-user NSIS installer, install NSIS so `makensis.exe` is on
 `PATH`, or extract portable NSIS to
