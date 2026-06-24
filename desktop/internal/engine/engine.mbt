@@ -370,9 +370,14 @@ async fn add_moonbit_path_for_native_engine(
   let moon_bin_dir = moon_home.join("bin")
   let moon = moon_bin_dir.join("moon")
   let moon_exe = moon_bin_dir.join("moon.exe")
-  // The agent tools spawn `moon` by name, but `MOON_HOME` would redirect
-  // registry/cache lookup into the bundled payload.
+  // The agent tools spawn `moon` by name, so prepend the bundled bin to PATH.
+  // Deliberately do not set `MOON_HOME` (it would redirect registry/cache
+  // lookup into the bundled payload) and drop any ambient `MOON_HOME` the
+  // launching shell exported: moon prefers it over the executable-relative
+  // home and would otherwise run the bundled binary against the user's
+  // (possibly missing or incompatible) MoonBit home.
   env["PATH"] = prepend_to_path_env(moon_bin_dir.to_string(), env.get("PATH"))
+  env.remove("MOON_HOME")
   @xlog.debug() <?
     {
       "event": "desktop_engine_moonbit_path",
