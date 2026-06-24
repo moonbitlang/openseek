@@ -125,7 +125,12 @@ prompt.
 ## Prerequisites
 
 - The [`moon`](https://www.moonbitlang.com/download) toolchain.
-- The `openseek` engine on your `PATH`, for running directly via `moon run` during development. (The packaging script no longer needs it — it builds the engine from the monorepo's `cmd/openseek` source.)
+
+No separate `openseek` engine is needed on your `PATH`: the packaging flow
+builds the engine from the monorepo's `cmd/openseek` source and bundles it, and
+the desktop app always runs that bundled engine alongside its bundled MoonBit
+toolchain seed. Development uses the same bundle flow — see
+[Run during development](#run-during-development).
 
 ## Setup
 
@@ -175,6 +180,25 @@ moon build . --target native --release         # build the native binary
 
 The native binary is written to
 `_build/native/release/build/openseek_desktop/openseek_desktop.exe`.
+
+## Run during development
+
+Run the app through the packaging flow for your platform and launch the produced
+bundle — for example, on macOS:
+
+```sh
+moon run --target native package/macos
+open "dist/OpenSeek Desktop.app"
+```
+
+(Use `package/linux` for the AppImage or `package/windows` for the Windows
+bundle; see the Package sections below.) The host resolves its frontend assets,
+the `openseek` engine, and the bundled MoonBit toolchain seed relative to the
+packaged layout, so running the bare `openseek_desktop` binary unbundled — or
+pointing it at an `openseek` on `PATH` — is not supported. To iterate on the UI,
+rebuild the frontend bundle and re-run the package command; the engine and seed
+are rebuilt and re-staged from the same checkout, so the app never drifts out of
+version with them.
 
 ## Bootstrap Lepus on Windows
 

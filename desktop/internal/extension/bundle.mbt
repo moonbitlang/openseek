@@ -6,8 +6,9 @@ const FrontendEntryPath = "assets/index.html"
 /// the assets live in `Contents/Resources/` — `Contents/MacOS/` may only
 /// hold code, since non-`--deep` codesigning rejects data files there — so
 /// probe `../Resources/` first; the executable-adjacent layout serves the
-/// Linux AppImage and bare dev builds. Falls back to a cwd-relative path
-/// for `moon run` during development.
+/// Linux AppImage and the Windows bundle. The final cwd-relative fallback only
+/// resolves when an `assets/` tree sits in the working directory; the supported
+/// development flow runs a packaged bundle, not the bare host binary.
 pub async fn frontend_entry_path(framework_command : String) -> String {
   let command_dir = @path.Path(framework_command).dirname().resolve()
   let candidates = [
