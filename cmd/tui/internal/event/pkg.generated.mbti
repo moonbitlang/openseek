@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "bobzhang/openseek/cmd/tui/internal/event"
 
+import {
+  "bobzhang/openseek/agent_runtime",
+}
+
 // Values
 pub fn decode_event(Json) -> AgentEvent?
 
@@ -12,10 +16,11 @@ pub(all) enum AgentEvent {
   AssistantDelta(String)
   ReasoningDelta(String)
   ReasoningMessage(String)
-  SteerApplied(String)
+  SteerApplied(@agent_runtime.SteerInput)
   SteerDropped(String)
   AssistantMessage(String)
   RuntimeUpdate(String)
+  SessionError(String)
   Usage(UsageInfo)
   ToolResult(ToolResultEvent)
   AgentFinished(String)

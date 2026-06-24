@@ -253,25 +253,32 @@ async fn run_agent_task(
 /// Unlike a prompt, a shell command is the TUI's own responsibility: it runs it
 /// through the agent's shell execution (`@shell.collect_shell_output`, which
 /// picks `sh`/`pwsh` per platform and captures merged output but skips the
-/// agent-only command policy), renders the output into the transcript, and never
-/// forwards it to the agent engine or any model. A Ctrl-C cancels the child and
-/// reports the interruption like an aborted task.
+/// agent-only command policy), then posts the raw result back to the message
+/// loop for transcript rendering and shell-style text handoff. A Ctrl-C cancels
+/// the child and reports the interruption like an aborted task.
 async fn run_shell_command(
-  run_id : Int,
   command : String,
   messages : @async.Queue[Msg],
+  run_id? : Int,
 ) -> Unit {
-  let item : @ui.TranscriptItem = command_item(
-    command,
-    @shell.collect_shell_output(command),
-  ) catch {
+  let result : Result[@shell.ShellOutput, Error] = try
+    @shell.collect_shell_output(command)
+  catch {
     error if @async.is_being_cancelled() || @async.is_cancellation_error(error) => {
-      messages.put(AgentCancelled(run_id~))
+      // A foreground command owns the run slot: report its cancellation so the
+      // command line survives as a "(cancelled)" card. A background command
+      // (no run id) leaves no trace — it never owned the slot and its agent
+      // turn reports its own interruption.
+      if run_id is Some(id) {
+        messages.put(CommandCancelled(command~, run_id=id))
+      }
       return
     }
-    error => Error("command failed: \{error}")
+    error => Err(error)
+  } noraise {
+    output => Ok(output)
   }
-  messages.put(CommandResult(run_id~, item))
+  messages.put(CommandResult(command~, run_id~, result))
 }
 
 ///|
@@ -374,13 +381,16 @@ fn handle_agent_event(
         cmds.push(AppendItem(reasoning_item(text)))
       }
     }
-    // A steer took effect at the engine's step boundary: echo the input into
-    // the transcript at its true conversational position, the way the model
-    // actually saw it.
-    SteerApplied(text) => {
+    // Prompt steering took effect at the engine's step boundary: echo the input
+    // into the transcript at its true conversational position, the way the
+    // model actually saw it.
+    SteerApplied(Prompt(text)) => {
       confirm_pending_steer(state, text)
       cmds.push(AppendItem(Input(Prompt(text))))
     }
+    // Command context is already rendered as a local shell result; its applied
+    // event is only a delivery acknowledgment.
+    SteerApplied(Command(_)) => ()
     // Normally unreachable from the wire: the engine client routes
     // steer_dropped events to the untagged message (they always trail the
     // racing turn's terminal, so a run-tagged copy would be stale-filtered).
@@ -412,6 +422,7 @@ fn handle_agent_event(
         cmds.push(AppendItem(runtime_item(update)))
       }
     }
+    SessionError(error) => cmds.push(AppendItem(Error(error)))
     Usage(usage) => state.usage = Some(usage)
     ToolResult(result) => cmds.push(AppendItem(tool_item(result)))
     AgentFinished(answer) => {
@@ -453,9 +464,9 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
   match message {
     UiInput(event) =>
       match event {
-        // Enter while idle submits; Enter while a task runs steers it — the
-        // text is folded into the running turn at its next step boundary.
-        // Shell commands cannot steer a model turn, so they still queue.
+        // Enter while idle submits; Enter while a task runs steers it — prompt
+        // text is folded into the running turn at its next step boundary, and
+        // `!` commands run locally before their output is steered.
         Steer(input) =>
           if state.run is Idle {
             state.queued.push(input)
@@ -501,16 +512,13 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
                   // Acknowledge immediately: the transcript echo only comes
                   // at the step boundary, but the user pressed Enter *now*.
                   state.pending_steers.push(text)
-                  cmds.push(SteerAgent(text))
+                  cmds.push(SteerAgent(Prompt(text)))
                 }
-              Command(_) =>
-                cmds.push(
-                  AppendItem(
-                    Error(
-                      "A shell command cannot steer the running task. Press Tab to queue it.",
-                    ),
-                  ),
-                )
+              // No input echo for a `!` command: the result card already shows
+              // `$ command`, and that card is the only form persisted, so an
+              // echo here would double the command line live and diverge from a
+              // resumed session, which only re-renders the card.
+              Command(command) => cmds.push(RunCommand(run_id=None, command))
             }
           }
         Queue(input) => state.queued.push(input)
@@ -543,13 +551,40 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
       cmds.push(AppendItem(Error("interrupted")))
       state.finish_run()
     }
+    CommandCancelled(command~, ..) => {
+      cmds.push(AppendItem(command_cancelled_item(command)))
+      state.finish_run()
+    }
     AgentFailed(error, ..) => {
       cmds.push(AppendItem(Error("agent failed: \{error}")))
       state.finish_run()
     }
-    CommandResult(item, ..) => {
-      cmds.push(AppendItem(item))
-      state.finish_run()
+    CommandResult(command~, run_id~, result) => {
+      let text = @command_context.encode(command, result)
+      // The card lands here, at shell-completion time. For a background command
+      // (run alongside a live turn) that is deliberately *not* the position the
+      // engine persists the corresponding user message — it appends that at the
+      // turn's next step boundary, so assistant/tool events already in flight
+      // can sit after `$ cmd` live but before it on resume. This is intentional:
+      // the live transcript is a real-time log (entries appear when they
+      // happen), while the durable session reflects model-visible conversational
+      // order. Deferring the card to the boundary would leave the user staring
+      // at silence for the rest of a long tool call after their command already
+      // finished, which the immediate card exists to avoid.
+      cmds.push(AppendItem(command_item(command, result)))
+      // Only a foreground command (launched while idle) owns the run slot; a
+      // background command running alongside a live agent turn must leave it be.
+      if run_id is Some(_) {
+        state.finish_run()
+      }
+      // Serve appends the `!` output as durable user-shell context at its
+      // current session boundary. OneShot has no live engine session to append
+      // to, and its command-context path is retired ahead of removing OneShot
+      // entirely: the command still runs and renders locally, it is just not
+      // handed to the model.
+      if state.config.engine_mode is Serve {
+        cmds.push(SteerAgent(Command(text)))
+      }
     }
     // The steer never reached a turn; the text would otherwise vanish
     // silently. Run state is untouched — the run's own death report (or
@@ -562,6 +597,7 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
     // swept its acknowledgments, and a text match here could only steal a
     // fresh identical-text steer's entry from the next turn.
     EngineSteerDropped(text) => cmds.push(AppendItem(steer_dropped_item(text)))
+    EngineSessionError(error) => cmds.push(AppendItem(Error(error)))
     // The engine process is gone, and its watchers with it: an old
     // `moon_check running` segment would be a lie on the status bar.
     EngineExited => state.watcher_status = ""
@@ -576,13 +612,19 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
   // reach "idle with a non-empty queue", so this never fires spuriously.
   if state.run is Idle && state.queued.length() > 0 {
     let input = state.queued.remove(0)
-    cmds.push(AppendItem(Input(input)))
     let run_id = state.start_run(@async.now())
     match input {
-      Prompt(text) => cmds.push(StartAgent(run_id~, text))
+      Prompt(text) => {
+        cmds.push(AppendItem(Input(Prompt(text))))
+        cmds.push(StartAgent(run_id~, text))
+      }
+      // No input echo for a `!` command: the result card (command_item) already
+      // shows `$ command` and is the only form persisted to the session, so
+      // echoing here too would show the command twice live and diverge from
+      // resume, which only re-renders that card.
       Command(command) => {
         state.run_is_command = true
-        cmds.push(RunCommand(run_id~, command))
+        cmds.push(RunCommand(run_id=Some(run_id), command))
       }
     }
   }
@@ -627,13 +669,23 @@ async fn[G] run_message_loop(
                 },
               )
           }
+        // A foreground command (run_id present) owns the cancellable run slot:
+        // spawn it and stash the task so Cancel/Kill can reach it. A background
+        // command (run_id absent) runs alongside a live agent turn and must stay
+        // fire-and-forget, never displacing the turn as the cancel target.
         RunCommand(run_id~, command) =>
-          running_task = Some(
-            group.spawn(no_wait=true) <| () => {
-              run_shell_command(run_id, command, messages)
-            },
-          )
-        SteerAgent(text) => engine.steer(text)
+          if run_id is Some(_) {
+            running_task = Some(
+              group.spawn(no_wait=true) <| () => {
+                run_shell_command(command, messages, run_id?)
+              },
+            )
+          } else {
+            group.spawn_bg(no_wait=true) <| () => {
+              run_shell_command(command, messages, run_id?)
+            }
+          }
+        SteerAgent(input) => engine.steer(group, input)
         CancelAgent =>
           match running_task {
             // A local shell command (or a one-shot engine run) in flight:
@@ -649,9 +701,28 @@ async fn[G] run_message_loop(
             None => engine.kill()
           }
         Quit => {
-          // Closing the engine's stdin is the serve protocol's shutdown
-          // signal; any straggler is reaped by task-group teardown.
+          // Close the engine's stdin (the serve protocol's shutdown signal) and
+          // give it a bounded moment to drain any already-delivered command
+          // context to the store and exit, so quitting right after a `!` does
+          // not lose output the user already saw carded.
           engine.shutdown()
+          // If the engine actually failed to persist a delivered `!` context (or
+          // could not be written to), it emitted a `session_error` the reader
+          // turned into an `EngineSessionError`; one may be sitting in the queue
+          // as we break, so drain and surface it. Everything else queued is
+          // dropped on purpose: a `!` that only finished after we began quitting
+          // never had its card rendered (shell output is carded on completion,
+          // not streamed), so dropping it is consistent with resume and a
+          // deliberate quit has no next turn that needs the output.
+          drain~: for ;; {
+            if messages.try_get() is Some(pending) {
+              if pending is EngineSessionError(error) {
+                ui.append_item(Error(error))
+              }
+            } else {
+              break drain~
+            }
+          }
           break outer~
         }
       }

@@ -1,5 +1,15 @@
 ///|
 test "session items project to transcript items" {
+  let shell_context =
+    #|<user_shell_command>
+    #|<command>
+    #|ls
+    #|</command>
+    #|<result>
+    #|exit=0
+    #|_build
+    #|</result>
+    #|</user_shell_command>
   guard session_item(User(UserMessage("hello"))) is Some(Input(Prompt(text))) else {
     fail("expected input")
   }
@@ -13,5 +23,8 @@ test "session items project to transcript items" {
     )
     is Some(ToolCall(_)) else {
     fail("expected tool")
+  }
+  guard session_item(User(UserMessage(shell_context))) is Some(ToolCall(_)) else {
+    fail("expected command user message to render as a tool")
   }
 }

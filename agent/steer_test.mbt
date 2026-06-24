@@ -169,6 +169,105 @@ async test "a steer racing the final call keeps the turn alive" {
 }
 
 ///|
+async fn inject_override_test_server(
+  group : @async.TaskGroup[Unit],
+  runtime : @agent_runtime.AgentRuntime,
+  context : String,
+) -> String? {
+  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
+    error => {
+      let message = "\{error}"
+      if message.contains("Operation not permitted") {
+        println("local TCP bind unavailable; skipping inject test")
+        return None
+      }
+      raise error
+    }
+  }
+  let mut requests = 0
+  group.spawn_bg(no_wait=true) <| () => {
+    server.run_forever(
+      (_request, body, conn) => {
+        requests += 1
+        let request_body = body.read_all().text()
+        conn.send_response(200, "OK", extra_headers={
+          "Content-Type": "text/event-stream",
+        })
+        if requests == 1 {
+          runtime.queue_steer(Command(context))
+          conn.write(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"draft answer\"}}]}\n\n",
+          )
+        } else {
+          assert_true(request_body.contains("<user_shell_command>"))
+          assert_true(request_body.contains("<command>"))
+          assert_true(request_body.contains("exit=0"))
+          assert_true(request_body.contains("_build"))
+          assert_true(request_body.contains("draft answer"))
+          conn.write(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"contextual answer\"}}]}\n\n",
+          )
+        }
+        conn.write("data: [DONE]\n\n")
+      },
+      max_connections=2,
+    )
+  }
+  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+}
+
+///|
+async test "inject racing the final call keeps the turn alive" {
+  @async.with_task_group() <| group => {
+    let runtime = @agent_runtime.AgentRuntime()
+    let context =
+      #|<user_shell_command>
+      #|<command>
+      #|ls
+      #|</command>
+      #|<result>
+      #|exit=0
+      #|_build
+      #|</result>
+      #|</user_shell_command>
+    guard inject_override_test_server(group, runtime, context) is Some(url) else {
+      return
+    }
+    let scope = @agent_runtime.AgentTaskScope(group)
+    let session = @agent_session.Session(
+      SessionId("inject-override"),
+      system_prompt="system",
+    )
+    let result = @agent.run_turn_in_scope(
+      runtime,
+      scope,
+      "test-key",
+      V4Flash,
+      session,
+      "inspect files",
+      append_item=(session, item) => session.append(item),
+      max_steps=3,
+      api_url=url,
+    )
+    let events = result.events()
+    assert_eq(events.length(), 4)
+    assert_true(events[0].item() is User(_))
+    guard events[1].item() is Assistant(draft) else {
+      fail("expected the draft as an assistant message")
+    }
+    assert_eq(draft.content(), "draft answer")
+    guard events[2].item() is User(inject_message) else {
+      fail("expected inject")
+    }
+    assert_eq(inject_message.content(), context)
+    guard events[3].item() is Terminal(Finished(answer)) else {
+      fail("expected finished terminal")
+    }
+    assert_eq(answer, "contextual answer")
+  }
+}
+
+///|
 async test "blank steering input is dropped at the boundary" {
   @async.with_task_group() <| group => {
     guard steer_test_server(group) is Some(url) else { return }

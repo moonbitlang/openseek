@@ -1,7 +1,10 @@
 import {
-  "bobzhang/openseek/agent_runtime",
-  "bobzhang/openseek/cmd/tui/internal/jsonx",
+  "bobzhang/openseek/agent_tool/shell",
 }
+
+import {
+  "moonbitlang/async",
+} for "test"
 
 warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 

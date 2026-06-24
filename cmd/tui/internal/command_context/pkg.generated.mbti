@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/cmd/tui/internal/command_context"
+
+import {
+  "bobzhang/openseek/agent_tool/shell",
+}
+
+// Values
+pub fn encode(String, Result[@shell.ShellOutput, Error]) -> String
+
+pub fn parse(String) -> ShellCommand?
+
+// Errors
+
+// Types and methods
+pub(all) struct ShellCommand {
+  command : String
+  exit : String
+  output : Array[String]
+  output_limit_reached : Bool
+}
+
+// Type aliases
+
+// Traits
+

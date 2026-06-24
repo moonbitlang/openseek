@@ -15,6 +15,15 @@ fn drain_test_state() -> State {
 }
 
 ///|
+fn drain_oneshot_test_state() -> State {
+  State::new({
+    ..drain_test_state().config,
+    engine: "./replayer",
+    engine_mode: OneShot,
+  })
+}
+
+///|
 fn start_agent_count(cmds : Array[Cmd]) -> Int {
   for cmd in cmds; count = 0 {
     if cmd is StartAgent(_, ..) {
@@ -37,9 +46,22 @@ fn error_item_count(cmds : Array[Cmd]) -> Int {
 }
 
 ///|
+/// Foreground `!` commands: those that own a run slot (run_id present).
 fn run_command_count(cmds : Array[Cmd]) -> Int {
   for cmd in cmds; count = 0 {
-    if cmd is RunCommand(_, ..) {
+    if cmd is RunCommand(run_id=Some(_), _) {
+      continue count + 1
+    }
+  } nobreak {
+    count
+  }
+}
+
+///|
+/// Background `!` commands launched alongside a live turn (run_id absent).
+fn run_background_command_count(cmds : Array[Cmd]) -> Int {
+  for cmd in cmds; count = 0 {
+    if cmd is RunCommand(run_id=None, _) {
       continue count + 1
     }
   } nobreak {
@@ -246,14 +268,20 @@ test "steering a running agent sends a steer command" {
   assert_eq(state.queued.length(), 0)
   assert_eq(start_agent_count(cmds), 0)
   assert_eq(error_item_count(cmds), 0)
-  guard cmds is [SteerAgent(text)] else { fail("expected a steer command") }
+  guard cmds is [SteerAgent(Prompt(text))] else {
+    fail("expected a steer command")
+  }
   assert_eq(text, "b")
   assert_true(state.run is Running(_))
 
-  // A shell command cannot steer a model turn: error, nothing sent.
+  // A shell command runs locally in the background; its output is sent as
+  // command context after the command finishes.
   let cmds = update(state, UiInput(Steer(Command("ls"))))
-  assert_eq(error_item_count(cmds), 1)
+  assert_eq(error_item_count(cmds), 0)
+  assert_eq(run_background_command_count(cmds), 1)
+  assert_eq(run_command_count(cmds), 0)
   assert_true(cmds.iter().all(cmd => !(cmd is SteerAgent(_))))
+  assert_true(state.run is Running(_))
 
   // Queue while running still queues without error.
   let cmds = update(state, UiInput(Queue(Prompt("c"))))
@@ -262,19 +290,28 @@ test "steering a running agent sends a steer command" {
 }
 
 ///|
+test "a background shell command result sends command context" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  assert_true(state.run is Running(_))
+
+  let cmds = update(
+    state,
+    CommandResult(command="ls", run_id=None, Err(Failure::Failure("boom"))),
+  )
+  guard cmds is [AppendItem(_), SteerAgent(Command(text))] else {
+    fail("expected command transcript item and command steer")
+  }
+  assert_true(text.contains("<user_shell_command>"))
+  assert_true(text.contains("<command>\nls\n</command>"))
+  assert_true(text.contains("error running shell:"))
+  assert_eq(state.pending_steers.length(), 0)
+  assert_true(state.run is Running(_))
+}
+
+///|
 test "oneshot engines reject steering with the legacy notice" {
-  let state = State::new({
-    api_key: "k",
-    api_url: None,
-    model: V4Pro,
-    cwd: ".",
-    max_steps: 10,
-    thinking: Max,
-    session_id: SessionId("test"),
-    session_root: ".openseek",
-    engine: "./replayer",
-    engine_mode: OneShot,
-  })
+  let state = drain_oneshot_test_state()
   let _ = update(state, UiInput(Steer(Prompt("a"))))
   assert_true(state.run is Running(_))
   // No command channel into a one-shot process: steering errors instead of
@@ -315,9 +352,132 @@ test "a running shell command is never steered and never kills the engine" {
   // Finishing the command clears the flag.
   let _ = update(
     state,
-    CommandResult(run_id=state.run_id, Error("interrupted")),
+    CommandResult(
+      run_id=Some(state.run_id),
+      command="sleep 5",
+      Err(Failure::Failure("interrupted")),
+    ),
   )
   assert_false(state.run_is_command)
+}
+
+///|
+test "a cancelled foreground shell command survives as a card, not a lost line" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Command("sleep 100"))))
+  let command_run = state.run_id
+  assert_true(state.run_is_command)
+
+  // Ctrl-C moves the command into Interrupting and cancels its local task.
+  let _ = update(state, UiInput(Interrupt))
+  assert_true(state.run is Interrupting(_))
+
+  // The cancelled task reports back with no result. The command line must still
+  // appear — as a "(cancelled)" card, since the live input echo was dropped —
+  // and the run settles without handing anything to the engine.
+  let cmds = update(
+    state,
+    CommandCancelled(command="sleep 100", run_id=command_run),
+  )
+  guard cmds is [AppendItem(ToolCall(_))] else {
+    fail("expected exactly one cancelled command card, not a lost line")
+  }
+  assert_true(cmds.iter().all(cmd => !(cmd is SteerAgent(_))))
+  assert_true(state.run is Idle)
+  assert_false(state.run_is_command)
+}
+
+///|
+test "a completed shell command is persisted as an idle user message" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Command("ls"))))
+  let command_run = state.run_id
+  let cmds = update(
+    state,
+    CommandResult(
+      run_id=Some(command_run),
+      command="ls",
+      Err(Failure::Failure("boom")),
+    ),
+  )
+  // A spawn failure still renders a command card (not a bare error), so the
+  // `$ ls` line survives now that the live input echo is gone — matching the
+  // `$ ls (failed)` card resume reconstructs from the persisted context.
+  guard cmds is [AppendItem(ToolCall(_)), SteerAgent(Command(text))] else {
+    fail("expected a command card and command steer")
+  }
+  assert_true(text.contains("<user_shell_command>"))
+  assert_true(text.contains("<command>\nls\n</command>"))
+  assert_true(text.contains("error running shell:"))
+  assert_true(state.run is Idle)
+  assert_true(cmds.iter().all(cmd => !(cmd is StartAgent(_, ..))))
+  assert_false(state.run_is_command)
+
+  let cmds = update(state, UiInput(Steer(Prompt("what changed?"))))
+  guard cmds
+    is [AppendItem(Input(Prompt("what changed?"))), StartAgent(run_id~, text)] else {
+    fail("expected prompt transcript item and agent start")
+  }
+  assert_true(run_id != command_run)
+  assert_eq(text, "what changed?")
+  assert_true(state.run is Running(_))
+  assert_false(state.run_is_command)
+}
+
+///|
+test "a command context delivery failure reports without prompt fallback" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Command("ls"))))
+  let command_run = state.run_id
+  let cmds = update(
+    state,
+    CommandResult(
+      run_id=Some(command_run),
+      command="ls",
+      Err(Failure::Failure("boom")),
+    ),
+  )
+  guard cmds is [AppendItem(_), SteerAgent(Command(_))] else {
+    fail("expected command steer")
+  }
+  let cmds = update(state, EngineSessionError("store unavailable"))
+  assert_eq(error_item_count(cmds), 1)
+
+  let cmds = update(state, UiInput(Steer(Prompt("what changed?"))))
+  guard cmds
+    is [AppendItem(Input(Prompt("what changed?"))), StartAgent(run_id=_, text)] else {
+    fail("expected prompt transcript item and agent start")
+  }
+  assert_eq(text, "what changed?")
+}
+
+///|
+test "oneshot shell commands run locally but hand nothing to the model" {
+  let state = drain_oneshot_test_state()
+  let _ = update(state, UiInput(Steer(Command("ls"))))
+  let command_run = state.run_id
+  // The command runs and renders, but OneShot delivers no context: no steer is
+  // emitted and the output is not folded into any later prompt.
+  let cmds = update(
+    state,
+    CommandResult(
+      run_id=Some(command_run),
+      command="ls",
+      Err(Failure::Failure("boom")),
+    ),
+  )
+  guard cmds is [AppendItem(_)] else {
+    fail("expected only the command transcript item")
+  }
+  assert_true(cmds.iter().all(cmd => !(cmd is SteerAgent(_))))
+  assert_true(state.run is Idle)
+
+  let cmds = update(state, UiInput(Steer(Prompt("summarize"))))
+  guard cmds
+    is [AppendItem(Input(Prompt("summarize"))), StartAgent(run_id=_, text)] else {
+    fail("expected prompt transcript item and agent start")
+  }
+  assert_eq(text, "summarize")
 }
 
 ///|
@@ -337,7 +497,7 @@ test "a sent steer is acknowledged until the engine settles it" {
   // The engine confirms: acknowledgment clears, transcript echo appends.
   let _ = update(
     state,
-    AgentProgress(run_id=state.run_id, SteerApplied("make it rhyme")),
+    AgentProgress(run_id=state.run_id, SteerApplied(Prompt("make it rhyme"))),
   )
   assert_eq(state.pending_steers.length(), 0)
   assert_eq(pending_steer_segment(state.pending_steers).length(), 0)
@@ -399,13 +559,28 @@ test "a steer_applied event echoes the input into the transcript" {
   let _ = update(state, UiInput(Steer(Prompt("do it"))))
   let cmds = update(
     state,
-    AgentProgress(run_id=state.run_id, SteerApplied("make it rhyme")),
+    AgentProgress(run_id=state.run_id, SteerApplied(Prompt("make it rhyme"))),
   )
   guard cmds is [AppendItem(Input(Prompt(text)))] else {
     fail("expected the steered input echoed as a transcript item")
   }
   assert_eq(text, "make it rhyme")
   // The run keeps going: a steer is not a terminal event.
+  assert_true(state.run is Running(_))
+}
+
+///|
+test "a command steer_applied event is only a delivery acknowledgment" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let cmds = update(
+    state,
+    AgentProgress(
+      run_id=state.run_id,
+      SteerApplied(Command("<user_shell_command>")),
+    ),
+  )
+  assert_eq(cmds.length(), 0)
   assert_true(state.run is Running(_))
 }
 

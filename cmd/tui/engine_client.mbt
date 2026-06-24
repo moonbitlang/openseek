@@ -9,6 +9,9 @@ priv struct EngineProcess {
   // one a respawned successor has since started.
   mut latest_run : Int
   mut run_open : Bool
+  // The stdout reader task for this engine, so a graceful shutdown can wait for
+  // the engine to drain its stdin and exit before teardown kills it.
+  mut reader : @async.Task[Unit]?
 }
 
 ///|
@@ -69,9 +72,15 @@ async fn[G] EngineClient::start(
     stderr=child_stderr,
     no_wait=true,
   )
-  let engine : EngineProcess = { writer, proc, latest_run: 0, run_open: false }
+  let engine : EngineProcess = {
+    writer,
+    proc,
+    latest_run: 0,
+    run_open: false,
+    reader: None,
+  }
   self.live = Some(engine)
-  group.spawn_bg(no_wait=true) <| () => {
+  let reader_task = group.spawn(no_wait=true) <| () => {
     let stderr_task = group.spawn(no_wait=true) <| () => {
       drain_stderr_capped(stderr_reader)
     }
@@ -85,6 +94,14 @@ async fn[G] EngineClient::start(
           // always reaches the user.
           SteerDropped(text) =>
             self.messages.try_put(EngineSteerDropped(text)) |> ignore
+          // A command context's delivery ack. The output is already rendered as
+          // a local card and the engine appended it synchronously, so there is
+          // nothing to do — in particular, do not echo it like a prompt steer.
+          SteerApplied(Command(_)) => ()
+          // The engine reports this when a command-context append failed; surface
+          // it so the lost output is not silent.
+          SessionError(error) =>
+            self.messages.try_put(EngineSessionError(error)) |> ignore
           _ => {
             if is_terminal_event(event) {
               engine.run_open = false
@@ -130,6 +147,7 @@ async fn[G] EngineClient::start(
     // engine-scoped status, whatever the exit reason.
     self.messages.put(EngineExited)
   }
+  engine.reader = Some(reader_task)
 }
 
 ///|
@@ -150,6 +168,8 @@ async fn EngineClient::send(
     return
   }
   live.writer.write("\{command.stringify()}\n") catch {
+    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
+      raise error
     error => {
       self.live = None
       self.messages.put(AgentFailed(run_id~, error))
@@ -166,6 +186,8 @@ async fn[G] EngineClient::prompt(
 ) -> Unit {
   if self.live is None {
     self.start(group) catch {
+      error if @async.is_being_cancelled() ||
+        @async.is_cancellation_error(error) => raise error
       error => {
         self.messages.put(AgentFailed(run_id~, error))
         return
@@ -184,16 +206,85 @@ async fn[G] EngineClient::prompt(
 }
 
 ///|
-/// Steer the running turn, or report the input as undeliverable when there
-/// is no live engine with an open run (e.g. the engine died an instant
-/// before the user pressed Enter). Steering must never spawn an engine: an
-/// idle serve process treats steer as a prompt, which would mutate the
-/// session behind the TUI's back under a run id nobody owns.
-async fn EngineClient::steer(self : EngineClient, text : String) -> Unit {
-  match self.live {
-    Some(live) if live.run_open =>
-      self.send(live.latest_run, { "command": "steer", "text": text })
-    _ => self.messages.put(SteerDropped(text))
+/// Send typed model-visible input to the serve engine. Prompt steering is only
+/// deliverable to an open run; command context may start the long-lived engine
+/// so an idle session can append it without opening a model turn.
+async fn[G] EngineClient::steer(
+  self : EngineClient,
+  group : @async.TaskGroup[G],
+  input : @agent_runtime.SteerInput,
+) -> Unit {
+  match input {
+    Prompt(text) =>
+      match self.live {
+        Some(live) if live.run_open =>
+          self.send(live.latest_run, {
+            "command": "steer",
+            "kind": "prompt",
+            "text": text,
+          })
+        _ => self.messages.put(SteerDropped(text))
+      }
+    Command(text) => {
+      if self.live is None {
+        self.start(group) catch {
+          error if @async.is_being_cancelled() ||
+            @async.is_cancellation_error(error) => raise error
+          error => {
+            self.messages.put(
+              EngineSessionError(
+                "failed to start engine for command context: \{error}",
+              ),
+            )
+            return
+          }
+        }
+      }
+      guard self.live is Some(live) else {
+        self.messages.put(
+          EngineSessionError(
+            "failed to send command context: engine is not running",
+          ),
+        )
+        return
+      }
+      let command : Json = {
+        "command": "steer",
+        "kind": "command",
+        "text": text,
+      }
+      // Delivery here is fire-and-forget by design. The serve protocol's
+      // contract is that every accepted command context is answered with
+      // exactly one terminal ack — `steer_applied` (persisted) or
+      // `session_error` (append failed) — and both are surfaced (the latter as
+      // an error). We deliberately do NOT track an outstanding-ack counter to
+      // cover the one out-of-contract gap: an engine that accepts this line and
+      // then exits emitting neither ack (a crash mid-handler, or a custom engine
+      // that ignores the contract). That case leaves the `!` card on screen but
+      // its output absent from the resumed session, with no error.
+      //
+      // This is an intentional trade-off, not an oversight. The idle append is a
+      // single synchronous store write immediately followed by its ack in the
+      // same handler, so the accept-but-never-ack window is vanishingly small
+      // for the real engine. A previous version tracked the pending write and
+      // reported it at EOF, but that bought this rare true-positive at the cost
+      // of a symmetric *false* positive — an engine dying just after the append
+      // succeeded but before the ack was observed would wrongly warn "output not
+      // saved" when it was — plus the bookkeeping to keep the count exact across
+      // batched steers and append failures. The blast radius of the gap is
+      // cosmetic and recoverable: the command is simply missing on resume as if
+      // never run (the user saw it live and can re-run it); nothing is corrupted.
+      live.writer.write("\{command.stringify()}\n") catch {
+        error if @async.is_being_cancelled() ||
+          @async.is_cancellation_error(error) => raise error
+        error => {
+          self.live = None
+          self.messages.put(
+            EngineSessionError("failed to send command context: \{error}"),
+          )
+        }
+      }
+    }
   }
 }
 
@@ -217,11 +308,31 @@ fn EngineClient::kill(self : EngineClient) -> Unit {
 }
 
 ///|
+/// Grace period for the serve engine to drain a freshly delivered command
+/// context to the store and exit after its stdin is closed, before a hard
+/// teardown. Bounded so a stuck or mid-turn engine cannot hang TUI exit.
+const EngineDrainGraceMs : Int = 2000
+
+///|
 /// Graceful shutdown for TUI exit: closing the engine's stdin is the serve
-/// protocol's EOF signal, letting it finish draining and exit 0. Any
-/// straggler is reaped by task-group teardown.
-fn EngineClient::shutdown(self : EngineClient) -> Unit {
-  if self.live is Some(live) {
-    live.writer.close()
+/// protocol's EOF signal, letting it finish draining and exit 0. We then wait
+/// (bounded) for the stdout reader to observe that exit, so an engine spawned
+/// just to append a `!` command's output gets to persist it before teardown —
+/// quitting right after a `!` must not lose that context. If the engine does
+/// not exit in time (e.g. a turn is still in flight), kill it so exit never
+/// hangs; the task-group teardown reaps whatever remains.
+async fn EngineClient::shutdown(self : EngineClient) -> Unit {
+  guard self.live is Some(live) else { return }
+  live.writer.close()
+  guard live.reader is Some(reader) else { return }
+  if @async.with_timeout_opt(EngineDrainGraceMs, () => reader.wait()) is None {
+    // The protocol-clean exit stalled (e.g. a turn still in flight). Escalate
+    // through the process library's own cancellation: the engine was spawned
+    // with the default `graceful_cancel(timeout=5000)`, so `cancel()` sends
+    // SIGTERM and, if still alive after the grace, SIGKILL — termination is
+    // guaranteed. Wait for the reader to finish observing that exit before
+    // teardown proceeds; that wait is bounded by the escalation.
+    live.proc.cancel()
+    reader.wait()
   }
 }

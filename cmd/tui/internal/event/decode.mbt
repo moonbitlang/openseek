@@ -15,11 +15,18 @@ pub fn decode_event(object : Json) -> AgentEvent? {
     "reasoning_delta" => Some(ReasoningDelta(@jsonx.string(object, "content")))
     "reasoning_message" =>
       Some(ReasoningMessage(@jsonx.string(object, "content")))
-    "steer_applied" => Some(SteerApplied(@jsonx.string(object, "content")))
+    "steer_applied" => {
+      let content = @jsonx.string(object, "content")
+      match @jsonx.string(object, "kind") {
+        "command" => Some(SteerApplied(Command(content)))
+        _ => Some(SteerApplied(Prompt(content)))
+      }
+    }
     "steer_dropped" => Some(SteerDropped(@jsonx.string(object, "content")))
     "assistant_message" =>
       Some(AssistantMessage(@jsonx.string(object, "content")))
     "runtime_update" => Some(RuntimeUpdate(@jsonx.string(object, "content")))
+    "session_error" => Some(SessionError(@jsonx.string(object, "error")))
     "usage" => {
       let prompt = @jsonx.int(object, "prompt_tokens")
       let completion = @jsonx.int(object, "completion_tokens")

@@ -150,7 +150,8 @@ old watcher records and start duplicate watchers.
 ## Steering
 
 Steering is user input that arrives while a turn is active. `steer(runtime,
-text)` stores the raw string in the runtime's lossless steering queue:
+text)` stores the raw string as prompt steering in the runtime's lossless
+steering queue:
 
 ```mbt check
 ///|
@@ -158,12 +159,10 @@ test "steer queues raw text" {
   let runtime = @agent_runtime.AgentRuntime()
   @agent.steer(runtime, "also run tests")
   @agent.steer(runtime, "   ")
-  debug_inspect(
-    runtime.drain_steers(),
-    content=(
-      #|["also run tests", "   "]
-    ),
-  )
+  let drained = runtime.drain_steers()
+  assert_eq(drained.length(), 2)
+  assert_true(drained[0] is Prompt("also run tests"))
+  assert_true(drained[1] is Prompt("   "))
 }
 ```
 

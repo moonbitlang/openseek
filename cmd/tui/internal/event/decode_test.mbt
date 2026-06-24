@@ -38,6 +38,12 @@ test "decode maps each engine event kind" {
     )
     is Some(RuntimeUpdate("checked: 1 error")),
   )
+  assert_true(
+    @event.decode_event(
+      Json::object({ "event": "session_error", "error": "stale session" }),
+    )
+    is Some(SessionError("stale session")),
+  )
   match
     @event.decode_event(
       Json::object({
@@ -63,7 +69,27 @@ test "steer wire events decode to their applied and dropped forms" {
     @event.decode_event(
       Json::object({ "event": "steer_applied", "content": "go left" }),
     )
-    is Some(SteerApplied("go left")),
+    is Some(SteerApplied(Prompt("go left"))),
+  )
+  assert_true(
+    @event.decode_event(
+      Json::object({
+        "event": "steer_applied",
+        "kind": "prompt",
+        "content": "go right",
+      }),
+    )
+    is Some(SteerApplied(Prompt("go right"))),
+  )
+  assert_true(
+    @event.decode_event(
+      Json::object({
+        "event": "steer_applied",
+        "kind": "command",
+        "content": "<user_shell_command>",
+      }),
+    )
+    is Some(SteerApplied(Command("<user_shell_command>"))),
   )
   assert_true(
     @event.decode_event(

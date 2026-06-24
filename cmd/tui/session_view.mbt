@@ -36,7 +36,11 @@ fn terminal_item(terminal : @agent_session.TurnTerminal) -> @ui.TranscriptItem? 
 ///|
 fn session_item(item : @agent_session.SessionItem) -> @ui.TranscriptItem? {
   match item {
-    User(message) => Some(Input(Prompt(message.content())))
+    User(message) =>
+      match command_text_item(message.content()) {
+        Some(item) => Some(item)
+        None => Some(Input(Prompt(message.content())))
+      }
     Assistant(message) =>
       if message.content().trim().is_empty() {
         None

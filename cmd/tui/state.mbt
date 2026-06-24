@@ -157,10 +157,23 @@ priv enum Msg {
   AgentProgress(run_id~ : Int, @event.AgentEvent)
   AgentCancelled(run_id~ : Int)
   AgentFailed(run_id~ : Int, Error)
-  // A `!` shell command the TUI ran locally finished; carries the run id and the
-  // transcript item to append. Commands run in the TUI and never reach the agent
-  // engine.
-  CommandResult(run_id~ : Int, @ui.TranscriptItem)
+  // A `!` shell command the TUI ran locally finished; carries the original
+  // command and raw result so the loop can render the transcript and produce the
+  // shell-style text handed back to the engine. `run_id` is present when the
+  // command owned the run slot (launched while idle) and absent when it ran in
+  // the background alongside a live agent turn — the foreground case settles the
+  // run, the background case must not.
+  CommandResult(
+    command~ : String,
+    run_id~ : Int?,
+    Result[@shell.ShellOutput, Error]
+  )
+  // A foreground `!` command cancelled by Ctrl-C before it produced a result.
+  // It has no output to render or hand to the model, but the command line must
+  // still survive in the transcript (the live input echo was dropped), so it
+  // settles the run with a "(cancelled)" command card. Only a foreground
+  // command reaches here, so `run_id` is always present.
+  CommandCancelled(command~ : String, run_id~ : Int)
   // A steer the client could not deliver (no live engine/turn): show the
   // resubmit notice and settle its acknowledgment — the entry was created an
   // instant ago and cannot have been swept.
@@ -171,6 +184,9 @@ priv enum Msg {
   // nothing — a fresh identical-text steer of the next turn keeps its own
   // acknowledgment.
   EngineSteerDropped(String)
+  // Session errors are not tied to a model turn, so they are reported without a
+  // run id and never affect run lifecycle.
+  EngineSessionError(String)
   // The persistent engine process exited (for any reason): its background
   // watchers died with it, so engine-scoped status must reset.
   EngineExited
@@ -185,10 +201,12 @@ fn Msg::run_id(self : Msg) -> Int? {
     AgentProgress(run_id~, _)
     | AgentCancelled(run_id~)
     | AgentFailed(run_id~, _) => Some(run_id)
-    CommandResult(run_id~, _) => Some(run_id)
+    CommandResult(run_id~, _, ..) => run_id
+    CommandCancelled(run_id~, ..) => Some(run_id)
     UiInput(_)
     | SteerDropped(_)
     | EngineSteerDropped(_)
+    | EngineSessionError(_)
     | EngineExited
     | Tick => None
   }
@@ -200,10 +218,15 @@ priv enum Cmd {
   // Start the agent / a local command for a run; carries the run id to tag that
   // task's messages with.
   StartAgent(run_id~ : Int, String)
-  RunCommand(run_id~ : Int, String)
-  // Redirect the running turn: the text rides the engine's steer command and
-  // lands at the turn's next step boundary.
-  SteerAgent(String)
+  // Run a `!` shell command. `run_id` is present for a foreground command
+  // launched while idle — it owns the cancellable run slot — and absent for a
+  // background command running alongside a live agent turn, which is dispatched
+  // fire-and-forget and must not become the cancel target.
+  RunCommand(run_id~ : Int?, String)
+  // Send typed model-visible input into the persistent serve engine. Prompt
+  // steering lands at the running turn's next step boundary; command context
+  // may also append into an idle engine session without starting a turn.
+  SteerAgent(@agent_runtime.SteerInput)
   CancelAgent
   // Second Ctrl-C while already interrupting: the cancel command was not
   // enough, so kill the engine process outright.

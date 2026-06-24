@@ -19,9 +19,9 @@ pub struct AgentRuntime {
 }
 pub fn AgentRuntime::AgentRuntime(workspace_root? : String) -> Self
 pub fn AgentRuntime::drain_events(Self) -> Array[AgentEvent]
-pub fn AgentRuntime::drain_steers(Self) -> Array[String]
+pub fn AgentRuntime::drain_steers(Self) -> Array[SteerInput]
 pub fn AgentRuntime::emit_event(Self, AgentEvent) -> Unit
-pub fn AgentRuntime::queue_steer(Self, String) -> Unit
+pub fn AgentRuntime::queue_steer(Self, SteerInput) -> Unit
 pub fn AgentRuntime::workspace_root(Self) -> String
 
 pub struct AgentTaskScope[X] {
@@ -29,6 +29,11 @@ pub struct AgentTaskScope[X] {
 }
 pub fn[X] AgentTaskScope::AgentTaskScope(@async.TaskGroup[X]) -> Self[X]
 pub fn[X] AgentTaskScope::group(Self[X]) -> @async.TaskGroup[X]
+
+pub(all) enum SteerInput {
+  Prompt(String)
+  Command(String)
+}
 
 // Type aliases
 

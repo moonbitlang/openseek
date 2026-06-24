@@ -3,7 +3,7 @@
 /// stdin.
 priv enum ServeCommand {
   Prompt(String)
-  Steer(String)
+  Steer(@agent_runtime.SteerInput)
   Compact
   Cancel
 }
@@ -38,22 +38,43 @@ priv enum ServeStep {
 ///|
 /// Decode one JSONL command line from the controller.
 ///
-/// `prompt` starts a turn, `steer` injects input into the running one,
-/// `compact` summarizes the current conversation once no work is active, and
-/// `cancel` interrupts the active or next queued prompt. Anything else is an
-/// `Err` whose text is emitted as a `command_error` event — a controller bug
-/// must be visible on the wire, not silently swallowed, but it must not kill
+/// `prompt` starts a turn, `steer` supplies typed step-boundary input, `compact`
+/// summarizes the current conversation once no work is active, and `cancel`
+/// interrupts the active or next queued prompt. A `steer` with missing `kind` is
+/// prompt steering for compatibility; `kind="command"` is user-shell context
+/// that may be appended while idle without starting a model turn. Anything else
+/// is an `Err` whose text is emitted as a `command_error` event — a controller
+/// bug must be visible on the wire, not silently swallowed, but it must not kill
 /// the session either.
 fn decode_serve_command(json : Json) -> Result[ServeCommand, String] {
   match json {
     { "command": "prompt", "text": String(text), .. } => Ok(Prompt(text))
-    { "command": "steer", "text": String(text), .. } => Ok(Steer(text))
-    { "command": "prompt", .. } | { "command": "steer", .. } =>
-      Err("expected a string \"text\" field")
+    { "command": "steer", .. } =>
+      match decode_steer_input(json) {
+        Ok(input) => Ok(Steer(input))
+        Err(message) => Err(message)
+      }
+    { "command": "prompt", .. } => Err("expected a string \"text\" field")
     { "command": "compact", .. } => Ok(Compact)
     { "command": "cancel", .. } => Ok(Cancel)
     { "command": String(other), .. } => Err("unknown command: \{other}")
     _ => Err("expected a {\"command\": ...} object")
+  }
+}
+
+///|
+fn decode_steer_input(json : Json) -> Result[@agent_runtime.SteerInput, String] {
+  match json {
+    { "kind": String(kind), "text": String(text), .. } =>
+      match kind {
+        "prompt" => Ok(Prompt(text))
+        "command" => Ok(Command(text))
+        other => Err("unknown steer kind: \{other}")
+      }
+    { "kind": _, "text": String(_), .. } =>
+      Err("expected a string \"kind\" field")
+    { "text": String(text), .. } => Ok(Prompt(text))
+    _ => Err("expected a string \"text\" field")
   }
 }
 
@@ -65,14 +86,44 @@ test "serve commands decode and reject with actionable errors" {
   )
   assert_true(
     decode_serve_command({ "command": "steer", "text": "left" })
-    is Ok(Steer("left")),
+    is Ok(Steer(Prompt("left"))),
+  )
+  assert_true(
+    decode_serve_command({
+      "command": "steer",
+      "kind": "prompt",
+      "text": "right",
+    })
+    is Ok(Steer(Prompt("right"))),
+  )
+  assert_true(
+    decode_serve_command({
+      "command": "steer",
+      "kind": "command",
+      "text": "<user_shell_command>",
+    })
+    is Ok(Steer(Command("<user_shell_command>"))),
   )
   assert_true(decode_serve_command({ "command": "compact" }) is Ok(Compact))
   assert_true(decode_serve_command({ "command": "cancel" }) is Ok(Cancel))
-  guard decode_serve_command({ "command": "prompt" }) is Err(message) else {
-    fail("textless prompt accepted")
+  guard decode_serve_command({ "command": "steer" }) is Err(message) else {
+    fail("textless steer accepted")
   }
   assert_true(message.contains("text"))
+  guard decode_serve_command({
+      "command": "steer",
+      "kind": "runtime",
+      "text": "x",
+    })
+    is Err(message) else {
+    fail("unknown steer kind accepted")
+  }
+  assert_true(message.contains("unknown steer kind: runtime"))
+  guard decode_serve_command({ "command": "inject", "text": "x" })
+    is Err(message) else {
+    fail("inject command accepted")
+  }
+  assert_true(message.contains("unknown command: inject"))
   guard decode_serve_command({ "command": "reboot" }) is Err(message) else {
     fail("unknown command accepted")
   }
@@ -217,6 +268,43 @@ async fn run_serve(
         }
       }
     }
+
+    async fn append_command_context(text : String) -> Unit {
+      session = if store is Some(store) {
+        store.append(session, User(UserMessage(text))) catch {
+          error if @async.is_being_cancelled() ||
+            @async.is_cancellation_error(error) => raise error
+          error => {
+            @xlog.error() <?
+              {
+                "event": "session_error",
+                "error": "failed to append command context: \{error}",
+              }
+            return
+          }
+        }
+      } else {
+        session.append(User(UserMessage(text)))
+      }
+      @xlog.info() <?
+        { "event": "steer_applied", "kind": "command", "content": text }
+    }
+
+    // Steers still queued when work ends: prompt steering must not leak into a
+    // later turn, but command context is durable local output, so persist it at
+    // the session's current boundary. Called whenever the loop returns to idle
+    // (turn or compaction done), so a `!` delivered mid-work is never left
+    // orphaned in the steer queue to be lost or applied to an unrelated prompt.
+    async fn drain_command_context() -> Unit {
+      for input in runtime.drain_steers() {
+        match input {
+          Prompt(text) =>
+            @xlog.warn() <? { "event": "steer_dropped", "content": text }
+          Command(text) => append_command_context(text)
+        }
+      }
+    }
+
     fn start_turn(task_text : String) -> @async.Task[Unit] {
       group.spawn() <| () => {
         let _ = @agent.run_turn_in_scope(
@@ -309,14 +397,36 @@ async fn run_serve(
             Some(_) => pending.push(PendingPrompt(text))
             None => active_work = Some(ActiveTurn(start_turn(text)))
           }
-        Wire(Steer(text)) =>
-          match active_work {
-            Some(ActiveTurn(_)) => @agent.steer(runtime, text)
-            Some(ActiveCompact(_)) | None =>
-              if has_pending_prompt(pending) {
-                @agent.steer(runtime, text)
+        Wire(Steer(input)) =>
+          match input {
+            Prompt(text) =>
+              match active_work {
+                // A turn is running, or a prompt is queued ahead of this steer:
+                // the lossless steering queue delivers it at that turn's next
+                // step boundary (or its first, if it has not started yet).
+                Some(ActiveTurn(_)) => @agent.steer(runtime, text)
+                Some(ActiveCompact(_)) | None =>
+                  if has_pending_prompt(pending) {
+                    @agent.steer(runtime, text)
+                  } else {
+                    // An idle (or merely compacting) engine never converts
+                    // prompt steering into a prompt: the only way it arrives
+                    // here is racing a turn's terminal event through the pipes.
+                    // Reject it so the controller can ask for a resubmit.
+                    @xlog.warn() <?
+                      { "event": "steer_dropped", "content": text }
+                  }
+              }
+            Command(text) =>
+              // Defer to the steering queue whenever any work is active (a turn
+              // or a compaction) or a prompt is queued, so the context is
+              // appended at the next turn's drain — never written straight into
+              // a session a running compaction is about to replace. Only a fully
+              // idle engine appends it immediately.
+              if active_work is Some(_) || has_pending_prompt(pending) {
+                runtime.queue_steer(Command(text))
               } else {
-                @xlog.warn() <? { "event": "steer_dropped", "content": text }
+                append_command_context(text)
               }
           }
         Wire(Cancel) =>
@@ -337,13 +447,7 @@ async fn run_serve(
             active_work = Some(ActiveCompact(start_compaction(session)))
           }
         TurnDone => {
-          // A steer that raced the turn's end (or was queued while it was
-          // dying) may still sit in the runtime's steering queue; the next
-          // turn must not inherit input the user aimed at this one. Reject
-          // leftovers on the wire like any other undeliverable steer.
-          for text in runtime.drain_steers() {
-            @xlog.warn() <? { "event": "steer_dropped", "content": text }
-          }
+          drain_command_context()
           active_work = None
           start_next_pending()
           if active_work is None && pending.length() == 0 && shutting_down {
@@ -354,6 +458,16 @@ async fn run_serve(
           session = next
           active_work = None
           start_next_pending()
+          // Only drain if compaction left the engine idle: a command context
+          // deferred during compaction then has no turn to drain it, so persist
+          // it onto the compacted session now. If a pending prompt started
+          // instead, leave the queue for its first step — that turn drains both
+          // the command context and the prompt steers aimed at it, which
+          // (unlike the raced-turn-end leftovers at TurnDone) must not be
+          // dropped.
+          if active_work is None {
+            drain_command_context()
+          }
           if active_work is None && pending.length() == 0 && shutting_down {
             break serve~
           }

@@ -23,7 +23,7 @@ let root = runtime.workspace_root()
 runtime.emit_event(MyToolUpdate("done"))
 let events = runtime.drain_events()
 
-runtime.queue_steer("also check tests")
+runtime.queue_steer(Prompt("also check tests"))
 let steers = runtime.drain_steers()
 
 @async.with_task_group() <| group => {
@@ -42,9 +42,10 @@ when the bus is full, the incoming event is ignored and already queued events
 are retained. Runtime events are for progress/status feedback, where losing some
 updates is better than blocking the tool that posts them.
 
-`queue_steer` writes to a separate unbounded queue. Steering text is lossless
-with respect to event-bus overflow and is stored exactly as supplied; the
-runtime does not trim, deduplicate, or drop blank strings.
+`queue_steer` writes typed `SteerInput` values to a separate unbounded queue.
+Steering input is lossless with respect to event-bus overflow and is stored
+exactly as supplied; the runtime does not trim, deduplicate, or drop blank
+strings inside either variant.
 
 `drain_events` and `drain_steers` return queued values oldest-first and leave
 their respective queues empty.
@@ -136,32 +137,26 @@ test "event bus keeps retained events when full" {
 ## Steering Queue
 
 Steering input is a separate lossless channel. It survives event-bus overflow
-and drains oldest-first. The runtime stores raw strings; filtering blank or
+and drains oldest-first. The runtime stores typed raw input; filtering blank or
 whitespace-only steering is the agent loop's responsibility.
 
 ```mbt check
 ///|
 test "steering drains losslessly and raw" {
   let runtime = @agent_runtime.AgentRuntime()
-  runtime.queue_steer("turn left")
+  runtime.queue_steer(Prompt("turn left"))
   for index in 0..<(@agent_runtime.default_agent_event_capacity * 3) {
     runtime.emit_event(ReadmeFloodEvent(index))
   }
-  runtime.queue_steer("")
-  runtime.queue_steer(" turn right ")
+  runtime.queue_steer(Prompt(""))
+  runtime.queue_steer(Command(" turn right "))
 
-  debug_inspect(
-    runtime.drain_steers(),
-    content=(
-      #|["turn left", "", " turn right "]
-    ),
-  )
-  debug_inspect(
-    runtime.drain_steers(),
-    content=(
-      #|[]
-    ),
-  )
+  let drained = runtime.drain_steers()
+  assert_eq(drained.length(), 3)
+  assert_true(drained[0] is Prompt("turn left"))
+  assert_true(drained[1] is Prompt(""))
+  assert_true(drained[2] is Command(" turn right "))
+  assert_eq(runtime.drain_steers().length(), 0)
 }
 ```
 

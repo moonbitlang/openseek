@@ -7,9 +7,21 @@
 /// such as watcher output, where losing some updates is preferable to blocking
 /// the tool that posts them.
 ///
-/// Steering input does not use this capacity; steers are queued separately in
-/// an unbounded queue.
+/// Steering input does not use this capacity; it is queued separately in an
+/// unbounded queue.
 pub let default_agent_event_capacity : Int = 32
+
+///|
+/// Model-visible input supplied while a turn is already in progress.
+///
+/// Prompt steering is ordinary user redirection. Command steering is contextual
+/// output collected by the controller, such as an explicit TUI `!` shell
+/// command. Both variants are delivered to the model as user-role content, but
+/// consumers may render/acknowledge them differently.
+pub(all) enum SteerInput {
+  Prompt(String)
+  Command(String)
+}
 
 ///|
 /// Open event type for typed runtime updates emitted by tools.
@@ -31,7 +43,7 @@ pub(all) extenum AgentEvent {}
 ///
 /// - the raw `workspace_root` used by local tools to resolve relative paths;
 /// - a bounded, lossy event bus for typed background runtime updates;
-/// - an unbounded, lossless queue for mid-turn steering text.
+/// - an unbounded, lossless queue for typed mid-turn steering input.
 ///
 /// It does not own background task lifetime. Tools that need to spawn bounded
 /// background work receive an `AgentTaskScope` alongside the runtime.
@@ -43,11 +55,10 @@ pub struct AgentRuntime {
   /// tools post updates to; the main loop drains it between steps to surface
   /// retained tool output into the conversation.
   priv events : @aqueue.Queue[AgentEvent]
-  /// Unbounded queue of mid-turn user input. Deliberately separate from the
-  /// lossy event bus: a noisy watcher may fill `events` and cause later
-  /// runtime updates to be ignored, but a user's steering text must never be
-  /// the casualty.
-  priv steers : @aqueue.Queue[String]
+  /// Unbounded queue of typed mid-turn input. Deliberately separate from the
+  /// lossy event bus: a noisy watcher may fill `events` and cause later runtime
+  /// updates to be ignored, but user-visible input must never be the casualty.
+  priv steers : @aqueue.Queue[SteerInput]
 }
 
 ///|
@@ -135,29 +146,33 @@ pub fn AgentRuntime::emit_event(
 }
 
 ///|
-/// Queue one raw steering string for the agent loop.
+/// Queue one typed steering input for the agent loop.
 ///
 /// Steering is the lossless companion channel to `emit_event`: it is stored in
 /// an unbounded queue, so event-bus overflow cannot discard it. The text is
-/// stored exactly as supplied; this method does not trim, deduplicate, or drop
-/// blank strings. The agent loop may apply its own filtering when it drains.
-pub fn AgentRuntime::queue_steer(self : AgentRuntime, text : String) -> Unit {
-  ignore(self.steers.try_put(text) catch { _ => false })
+/// stored exactly as supplied inside its variant; this method does not trim,
+/// deduplicate, or drop blank strings. The agent loop may apply its own
+/// filtering when it drains.
+pub fn AgentRuntime::queue_steer(
+  self : AgentRuntime,
+  input : SteerInput,
+) -> Unit {
+  ignore(self.steers.try_put(input) catch { _ => false })
 }
 
 ///|
-/// Drain all queued steering strings, oldest first.
+/// Drain all queued steering inputs, oldest first.
 ///
-/// The returned array contains exactly the raw strings queued since the previous
+/// The returned array contains exactly the raw values queued since the previous
 /// drain, unless another caller drained them first. The queue is empty after
 /// this call. This method does not trim or filter; consumers decide how to treat
-/// blank steering text.
-pub fn AgentRuntime::drain_steers(self : AgentRuntime) -> Array[String] {
-  let texts : Array[String] = []
-  while (self.steers.try_get() catch { _ => None }) is Some(text) {
-    texts.push(text)
+/// blank steering input.
+pub fn AgentRuntime::drain_steers(self : AgentRuntime) -> Array[SteerInput] {
+  let inputs : Array[SteerInput] = []
+  while (self.steers.try_get() catch { _ => None }) is Some(input) {
+    inputs.push(input)
   }
-  texts
+  inputs
 }
 
 ///|
@@ -204,14 +219,17 @@ test "runtime stores an explicit workspace root" {
 ///|
 test "steering input survives an event-bus flood" {
   let runtime = AgentRuntime()
-  runtime.queue_steer("turn left")
+  runtime.queue_steer(Prompt("turn left"))
   // Flood the lossy event bus far past its capacity: later runtime updates may
   // be ignored, but the steering queue is a separate lossless channel.
   for index in 0..<(default_agent_event_capacity * 3) {
     runtime.emit_event(RuntimeTestEvent("noise \{index}"))
   }
-  runtime.queue_steer("turn right")
-  assert_eq(runtime.drain_steers().join("|"), "turn left|turn right")
+  runtime.queue_steer(Prompt("turn right"))
+  let steers = runtime.drain_steers()
+  assert_eq(steers.length(), 2)
+  assert_true(steers[0] is Prompt("turn left"))
+  assert_true(steers[1] is Prompt("turn right"))
   assert_eq(runtime.drain_steers().length(), 0)
   assert_eq(runtime.drain_events().length(), default_agent_event_capacity)
 }
