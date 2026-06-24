@@ -28,29 +28,29 @@ pub fn render_notices(parsed : @session_log.ParsedLog) -> @html.Html {
   let notices : Array[@html.Html] = []
   if parsed.partial_tail {
     notices.push(
-      @html.div(class="notice notice-warn", [
+      @html.div(class="notice notice-warn") <| [
         @html.text(
           "⚠ trailing partial line ignored (process likely exited mid-append)",
         ),
-      ]),
+      ],
     )
   }
   for error in parsed.errors {
     notices.push(
-      @html.div(class="notice notice-error", [
-        @html.div(class="notice-head", [
+      @html.div(class="notice notice-error") <| [
+        @html.div(class="notice-head") <| [
           @html.text(
             "⚠ line \{error.line_number} could not be decoded: \{error.message}",
           ),
-        ]),
-        @html.pre(class="notice-body", error.content),
-      ]),
+        ],
+        @html.pre(class="notice-body") <| error.content,
+      ],
     )
   }
   if notices.is_empty() {
     @html.nothing
   } else {
-    @html.div(class="notices", notices)
+    @html.div(class="notices") <| notices
   }
 }
 
@@ -69,7 +69,7 @@ fn render_raw(session : @agent_session.Session) -> @html.Html {
   if blocks.is_empty() {
     return empty_state("This session has no events yet.")
   }
-  @html.div(class="log raw-log", blocks)
+  @html.div(class="log raw-log") <| blocks
 }
 
 ///|
@@ -189,16 +189,13 @@ fn turn_block(
   let errors = count_turn_tool_errors(turn)
   if errors > 0 {
     summary.push(
-      @html.span(
-        class="turn-error-badge",
-        " · 🚩 \{errors} error\{plural(errors)}",
-      ),
+      @html.span(class="turn-error-badge") <| " · 🚩 \{errors} error\{plural(errors)}",
     )
   }
-  @html.details(open=true, class="turn", [
-    @html.summary(class="turn-summary", summary),
-    @html.div(class="turn-body", cards),
-  ])
+  @html.details(open=true, class="turn") <| [
+    @html.summary(class="turn-summary") <| summary,
+    @html.div(class="turn-body") <| cards,
+  ]
 }
 
 ///|
@@ -326,10 +323,10 @@ fn assistant_card(
   if message.reasoning_content() is Some(reasoning) &&
     !reasoning.trim().is_empty() {
     body.push(
-      @html.details(class="reasoning", [
+      @html.details(class="reasoning") <| [
         @html.summary("reasoning"),
         text_block(reasoning),
-      ]),
+      ],
     )
   }
   if !message.content().trim().is_empty() {
@@ -340,7 +337,7 @@ fn assistant_card(
     let call_views : Array[@html.Html] = [
       for call in calls => tool_call_view(call, briefs, failed)
     ]
-    body.push(@html.div(class="tool-calls", call_views))
+    body.push(@html.div(class="tool-calls") <| call_views)
   }
   card("assistant", "Assistant", seq, time~, body, step_label~)
 }
@@ -370,7 +367,7 @@ fn tool_call_view(
     @html.strong(call.name),
   ]
   if briefs.get(call.id) is Some(brief) && !brief.trim().is_empty() {
-    name_row.push(@html.span(class="tool-call-brief", " · \{brief}"))
+    name_row.push(@html.span(class="tool-call-brief") <| " · \{brief}")
   }
   let cls = if failed.contains(call.id) {
     "tool-call tool-call-failed"
@@ -379,13 +376,15 @@ fn tool_call_view(
   }
   let original = pretty_json(call.arguments)
   if is_blank_args(original) {
-    return @html.div(class=cls, [@html.div(class="tool-call-name", name_row)])
+    return @html.div(class=cls) <| [
+      @html.div(class="tool-call-name") <| name_row,
+    ]
   }
-  @html.details(class=cls, [
-    @html.summary(class="tool-call-name", name_row),
+  @html.details(class=cls) <| [
+    @html.summary(class="tool-call-name") <| name_row,
     render_args_friendly(call.arguments),
-    @html.pre(class="tool-call-args tool-call-args-original", original),
-  ])
+    @html.pre(class="tool-call-args tool-call-args-original") <| original,
+  ]
 }
 
 ///|
@@ -397,19 +396,18 @@ fn tool_call_view(
 /// does not parse.
 fn render_args_friendly(raw : String) -> @html.Html {
   let json = @json.parse(raw) catch {
-    _ => return @html.pre(class="tool-call-args tool-call-args-rendered", raw)
+    _ => return @html.pre(class="tool-call-args tool-call-args-rendered") <| raw
   }
   match json {
     Object(fields) if !fields.is_empty() => {
       let rows : Array[@html.Html] = [
         for key, value in fields => arg_field(key, value)
       ]
-      @html.div(class="tool-call-args-rendered", rows)
+      @html.div(class="tool-call-args-rendered") <| rows
     }
     _ =>
-      @html.pre(
-        class="tool-call-args tool-call-args-rendered",
-        pretty_json(raw),
+      @html.pre(class="tool-call-args tool-call-args-rendered") <| pretty_json(
+        raw,
       )
   }
 }
@@ -420,20 +418,20 @@ fn render_args_friendly(raw : String) -> @html.Html {
 /// single-line value inline. Non-string scalars render inline; nested arrays and
 /// objects keep their JSON form, which is rare for tool arguments.
 fn arg_field(key : String, value : Json) -> @html.Html {
-  let row : Array[@html.Html] = [@html.span(class="arg-key", key)]
+  let row : Array[@html.Html] = [@html.span(class="arg-key") <| key]
   match value {
     String(text) =>
       if text.contains("\n") {
-        row.push(@html.pre(class="arg-value", text))
+        row.push(@html.pre(class="arg-value") <| text)
       } else {
-        row.push(@html.span(class="arg-value-inline", text))
+        row.push(@html.span(class="arg-value-inline") <| text)
       }
     Array(_) | Object(_) =>
-      row.push(@html.pre(class="arg-value", value.stringify(indent=2)))
+      row.push(@html.pre(class="arg-value") <| value.stringify(indent=2))
     scalar =>
-      row.push(@html.span(class="arg-value-inline", scalar_text(scalar)))
+      row.push(@html.span(class="arg-value-inline") <| scalar_text(scalar))
   }
-  @html.div(class="arg-field", row)
+  @html.div(class="arg-field") <| row
 }
 
 ///|
@@ -512,14 +510,16 @@ fn tool_card(
     "Tool result · \{result.tool_name()}"
   }
   let flag = if is_error {
-    @html.span(class="tool-flag", "🚩 failed")
+    @html.span(class="tool-flag") <| "🚩 failed"
   } else {
     @html.nothing
   }
-  @html.details(class="card \{kind}", [
-    @html.summary(class="card-label", card_head(label, seq, time~, flag~)),
-    @html.div(class="card-body", [text_block(result.content())]),
-  ])
+  @html.details(class="card \{kind}") <| [
+    @html.summary(class="card-label") <| card_head(label, seq, time~, flag~),
+    @html.div(class="card-body") <| [
+      text_block(result.content()),
+    ],
+  ]
 }
 
 ///|
@@ -545,7 +545,9 @@ fn terminal_card(
     Interrupted(reason) => ("interrupted", reason)
     Failed(message) => ("failed", message)
   }
-  let body : Array[@html.Html] = [@html.span(class="badge badge-\{kind}", kind)]
+  let body : Array[@html.Html] = [
+    @html.span(class="badge badge-\{kind}") <| kind,
+  ]
   if !message.trim().is_empty() {
     body.push(text_block(message))
   }
@@ -587,7 +589,7 @@ fn render_model(session : @agent_session.Session) -> @html.Html {
   if cards.is_empty() {
     return empty_state("The model projection is empty.")
   }
-  @html.div(class="log model-log", cards)
+  @html.div(class="log model-log") <| cards
 }
 
 ///|
@@ -846,15 +848,15 @@ fn message_card(
 ) -> @html.Html {
   match message.role {
     System =>
-      @html.section(class="card system", [
-        @html.details(open=false, [
-          @html.summary(
-            class="card-label",
-            model_card_head("System prompt", time~),
+      @html.section(class="card system") <| [
+        @html.details(open=false) <| [
+          @html.summary(class="card-label") <| model_card_head(
+            "System prompt",
+            time~,
           ),
           text_block(message.content),
-        ]),
-      ])
+        ],
+      ]
     User =>
       model_card("user", "User", message, briefs, failed, time~, step_label~)
     Assistant =>
@@ -951,21 +953,20 @@ fn model_tool_card(
     (true, false) => "Tool error · \{name}"
     (false, false) => "Tool result · \{name}"
   }
-  @html.details(class="card \{kind}", [
-    @html.summary(
-      class="card-label",
-      model_card_head(
-        label,
-        time~,
-        flag=if is_error {
-          @html.span(class="tool-flag", "🚩 failed")
-        } else {
-          @html.nothing
-        },
-      ),
+  @html.details(class="card \{kind}") <| [
+    @html.summary(class="card-label") <| model_card_head(
+      label,
+      time~,
+      flag=if is_error {
+        @html.span(class="tool-flag") <| "🚩 failed"
+      } else {
+        @html.nothing
+      },
     ),
-    @html.div(class="card-body", [text_block(message.content)]),
-  ])
+    @html.div(class="card-body") <| [
+      text_block(message.content),
+    ],
+  ]
 }
 
 ///|
@@ -982,10 +983,10 @@ fn model_card(
   if message.reasoning_content is Some(reasoning) &&
     !reasoning.trim().is_empty() {
     body.push(
-      @html.details(class="reasoning", [
+      @html.details(class="reasoning") <| [
         @html.summary("reasoning"),
         text_block(reasoning),
-      ]),
+      ],
     )
   }
   if !message.content.trim().is_empty() {
@@ -995,12 +996,12 @@ fn model_card(
     let call_views : Array[@html.Html] = [
       for call in message.tool_calls => tool_call_view(call, briefs, failed)
     ]
-    body.push(@html.div(class="tool-calls", call_views))
+    body.push(@html.div(class="tool-calls") <| call_views)
   }
-  @html.section(class="card \{kind}", [
-    @html.div(class="card-label", model_card_head(label, time~, step_label~)),
-    @html.div(class="card-body", body),
-  ])
+  @html.section(class="card \{kind}") <| [
+    @html.div(class="card-label") <| model_card_head(label, time~, step_label~),
+    @html.div(class="card-body") <| body,
+  ]
 }
 
 // ---- shared helpers --------------------------------------------------------
@@ -1014,10 +1015,10 @@ fn model_card_head(
 ) -> Array[@html.Html] {
   let head : Array[@html.Html] = [flag, @html.text(label)]
   if !step_label.is_empty() {
-    head.push(@html.span(class="card-step", step_label))
+    head.push(@html.span(class="card-step") <| step_label)
   }
   if !time.is_empty() {
-    head.push(@html.span(class="card-ts", time))
+    head.push(@html.span(class="card-ts") <| time)
   }
   head
 }
@@ -1031,10 +1032,10 @@ fn card(
   body : Array[@html.Html],
   step_label? : String = "",
 ) -> @html.Html {
-  @html.section(class="card \{kind}", [
-    @html.div(class="card-label", card_head(label, seq, time~, step_label~)),
-    @html.div(class="card-body", body),
-  ])
+  @html.section(class="card \{kind}") <| [
+    @html.div(class="card-label") <| card_head(label, seq, time~, step_label~),
+    @html.div(class="card-body") <| body,
+  ]
 }
 
 ///|
@@ -1050,15 +1051,15 @@ fn card_head(
   step_label? : String = "",
 ) -> Array[@html.Html] {
   let head : Array[@html.Html] = [
-    @html.span(class="card-seq", "#\{seq}"),
+    @html.span(class="card-seq") <| "#\{seq}",
     flag,
     @html.text(label),
   ]
   if !step_label.is_empty() {
-    head.push(@html.span(class="card-step", step_label))
+    head.push(@html.span(class="card-step") <| step_label)
   }
   if !time.is_empty() {
-    head.push(@html.span(class="card-ts", time))
+    head.push(@html.span(class="card-ts") <| time)
   }
   head
 }
@@ -1068,15 +1069,17 @@ fn card_head(
 /// placeholder so a card never collapses to nothing.
 fn text_block(content : String) -> @html.Html {
   if content.trim().is_empty() {
-    @html.span(class="empty", "(empty)")
+    @html.span(class="empty") <| "(empty)"
   } else {
-    @html.pre(class="content", content)
+    @html.pre(class="content") <| content
   }
 }
 
 ///|
 fn empty_state(message : String) -> @html.Html {
-  @html.div(class="empty-state", [@html.text(message)])
+  @html.div(class="empty-state") <| [
+    @html.text(message),
+  ]
 }
 
 ///|

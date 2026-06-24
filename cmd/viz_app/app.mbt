@@ -399,13 +399,13 @@ fn events_status(parsed : @session_log.ParsedLog) -> String {
 
 ///|
 fn view(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  @html.div(class=app_class(model), [
+  @html.div(class=app_class(model)) <| [
     sidebar_pane(emit, model),
-    @html.section(class="main", [
+    @html.section(class="main") <| [
       main_toolbar(emit, model),
       main_pane(emit, model),
-    ]),
-  ])
+    ],
+  ]
 }
 
 ///|
@@ -422,22 +422,21 @@ fn sidebar_pane(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if !model.sidebar_visible {
     return @html.nothing
   }
-  @html.aside(class="sidebar", [
-    @html.div(class="sidebar-head", [
-      @html.div(class="sidebar-title-row", [
+  @html.aside(class="sidebar") <| [
+    @html.div(class="sidebar-head") <| [
+      @html.div(class="sidebar-title-row") <| [
         @html.h1(class="brand", "OpenSeek sessions"),
         @html.button(
           class="sidebar-hide-button",
           title="Hide sessions",
           on_click=emit(ToggleSidebar),
-          "Hide",
-        ),
-      ]),
-      @html.div(class="status", model.status),
-    ]),
+        ) <| "Hide",
+      ],
+      @html.div(class="status") <| model.status,
+    ],
     sidebar_list(emit, model),
     theme_toggle(emit, model),
-  ])
+  ]
 }
 
 ///|
@@ -445,23 +444,22 @@ fn main_toolbar(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if model.sidebar_visible {
     return @html.nothing
   }
-  @html.div(class="main-toolbar", [
+  @html.div(class="main-toolbar") <| [
     @html.button(
       class="sidebar-show-button",
       title="Show sessions",
       on_click=emit(ToggleSidebar),
-      "Show sessions",
-    ),
-  ])
+    ) <| "Show sessions",
+  ]
 }
 
 ///|
 fn theme_toggle(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  @html.div(class="theme-toggle", [
+  @html.div(class="theme-toggle") <| [
     theme_button(emit, model, Light, "Light"),
     theme_button(emit, model, Dark, "Dark"),
     theme_button(emit, model, System, "System"),
-  ])
+  ]
 }
 
 ///|
@@ -476,13 +474,13 @@ fn theme_button(
   } else {
     "theme-button"
   }
-  @html.button(class=classes, on_click=emit(SetTheme(theme)), label)
+  @html.button(class=classes, on_click=emit(SetTheme(theme))) <| label
 }
 
 ///|
 fn sidebar_list(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if model.sessions.is_empty() {
-    return @html.div(class="sidebar-empty", "no sessions found")
+    return @html.div(class="sidebar-empty") <| "no sessions found"
   }
   let sections : Array[@html.Html] = []
   for group in sidebar_groups(model.sessions) {
@@ -492,7 +490,7 @@ fn sidebar_list(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
     let collapsed = root_collapsed(model, group)
     let display = group_display(group)
     sections.push(
-      @html.div(class=session_root_class(collapsed), [
+      @html.div(class=session_root_class(collapsed)) <| [
         @html.button(
           class="session-root-toggle",
           title=if collapsed {
@@ -501,28 +499,24 @@ fn sidebar_list(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
             "Collapse \{display}"
           },
           on_click=emit(ToggleRoot(group)),
-          [
-            @html.span(
-              class="session-root-caret",
-              if collapsed {
-                "▸"
-              } else {
-                "▾"
-              },
-            ),
-            @html.span(class="session-root-name", display),
-            @html.span(class="session-root-count", rows.length().to_string()),
-          ],
-        ),
+        ) <| [
+          @html.span(class="session-root-caret") <| (if collapsed {
+            "▸"
+          } else {
+            "▾"
+          }),
+          @html.span(class="session-root-name") <| display,
+          @html.span(class="session-root-count") <| rows.length().to_string(),
+        ],
         if collapsed {
           @html.nothing
         } else {
-          @html.ul(class="session-root-sessions", rows)
+          @html.ul(class="session-root-sessions") <| rows
         },
-      ]),
+      ],
     )
   }
-  @html.div(class="session-list", sections)
+  @html.div(class="session-list") <| sections
 }
 
 ///|
@@ -690,40 +684,35 @@ fn sidebar_row(
     row.first_prompt
   }
   let classes = if selected { "session-item selected" } else { "session-item" }
-  @html.li(class=classes, on_click=emit(Select(row.key)), [
-    @html.div(class="session-item-label", label),
-    @html.div(class="session-item-meta", [
-      @html.span(
-        class="session-item-id",
-        session_row_label(row.root_label, row.id, row.is_marker),
+  @html.li(class=classes, on_click=emit(Select(row.key))) <| [
+    @html.div(class="session-item-label") <| label,
+    @html.div(class="session-item-meta") <| [
+      @html.span(class="session-item-id") <| session_row_label(
+        row.root_label,
+        row.id,
+        row.is_marker,
       ),
       last_active_view(row.last_active),
-    ]),
-  ])
+    ],
+  ]
 }
 
 ///|
 fn main_pane(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
   match model.selected {
     None =>
-      @html.div(
-        class="placeholder",
-        if model.sidebar_visible {
-          "Select a session from the left to view it."
-        } else {
-          "Show sessions to select a session."
-        },
-      )
+      @html.div(class="placeholder") <| (if model.sidebar_visible {
+        "Select a session from the left to view it."
+      } else {
+        "Show sessions to select a session."
+      })
     Some(key) =>
       match model.parsed {
         None =>
           if model.loading {
-            @html.div(
-              class="placeholder",
-              "Loading \{session_label(model, key)}…",
-            )
+            @html.div(class="placeholder") <| "Loading \{session_label(model, key)}…"
           } else {
-            @html.div(class="placeholder", model.status)
+            @html.div(class="placeholder") <| model.status
           }
         Some(parsed) => {
           let row = session_row(model, key)
@@ -737,17 +726,17 @@ fn main_pane(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
             system_prompt=model.system_prompt,
           )
           let error_count = @viz.rendered_error_count(session, model.view_mode)
-          @html.div(class=session_view_class(model), [
+          @html.div(class=session_view_class(model)) <| [
             header_strip(model, id, row.map(row => row.root_label)),
             // Pin the view/args toggles and the error bar to the top of the
             // scroll area so they stay reachable while reading a long log.
-            @html.div(class="sticky-toolbar", [
+            @html.div(class="sticky-toolbar") <| [
               mode_row(emit, model, parsed),
               error_bar(emit, model, error_count),
-            ]),
+            ],
             @viz.render_notices(parsed),
             session_log_view(model, session, error_count),
-          ])
+          ]
         }
       }
   }
@@ -764,21 +753,18 @@ fn header_strip(model : Model, id : String, root_label : String?) -> @html.Html 
     Some(root) => " · \{root}"
     None => ""
   }
-  @html.header(class="header-strip", [
-    @html.div(class="header-id", id),
-    @html.div(
-      class="header-meta",
-      "\{model.status} · \{prompt_note}\{root_note}",
-    ),
-  ])
+  @html.header(class="header-strip") <| [
+    @html.div(class="header-id") <| id,
+    @html.div(class="header-meta") <| "\{model.status} · \{prompt_note}\{root_note}",
+  ]
 }
 
 ///|
 fn mode_toggle(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  @html.div(class="mode-toggle", [
+  @html.div(class="mode-toggle") <| [
     mode_button(emit, model, RawLog, "Raw log"),
     mode_button(emit, model, ModelView, "Model view"),
-  ])
+  ]
 }
 
 ///|
@@ -787,13 +773,13 @@ fn mode_row(
   model : Model,
   parsed : @session_log.ParsedLog,
 ) -> @html.Html {
-  @html.div(class="mode-row", [
-    @html.div(class="mode-cluster", [
+  @html.div(class="mode-row") <| [
+    @html.div(class="mode-cluster") <| [
       mode_toggle(emit, model),
       args_toggle(emit, model),
-    ]),
+    ],
     session_metadata(model, parsed),
-  ])
+  ]
 }
 
 ///|
@@ -801,11 +787,11 @@ fn mode_row(
 /// JSON quoting) and the original pretty-printed JSON kept for debugging. Both are
 /// always in the DOM; this only flips which one the stylesheet shows.
 fn args_toggle(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  @html.div(class="mode-toggle args-toggle", [
-    @html.span(class="args-toggle-label", "Tool args"),
+  @html.div(class="mode-toggle args-toggle") <| [
+    @html.span(class="args-toggle-label") <| "Tool args",
     args_button(emit, model, false, "Rendered"),
     args_button(emit, model, true, "Original"),
-  ])
+  ]
 }
 
 ///|
@@ -820,7 +806,7 @@ fn args_button(
   } else {
     "mode-button"
   }
-  @html.button(class=classes, on_click=emit(SetArgsView(show_original)), label)
+  @html.button(class=classes, on_click=emit(SetArgsView(show_original))) <| label
 }
 
 ///|
@@ -835,7 +821,7 @@ fn mode_button(
   } else {
     "mode-button"
   }
-  @html.button(class=classes, on_click=emit(SetMode(mode)), label)
+  @html.button(class=classes, on_click=emit(SetMode(mode))) <| label
 }
 
 ///|
@@ -844,12 +830,12 @@ fn session_metadata(
   parsed : @session_log.ParsedLog,
 ) -> @html.Html {
   let steps = agent_step_count(parsed)
-  @html.div(class="session-metadata", [
+  @html.div(class="session-metadata") <| [
     @html.span("log \{format_log_size(model.log_bytes)}"),
     @html.span("\{steps} step\{plural_s(steps)}"),
     @html.span("runtime \{runtime_label(parsed)}"),
     @html.span("ended \{end_time_label(parsed)}"),
-  ])
+  ]
 }
 
 ///|
@@ -969,7 +955,7 @@ fn last_active_view(last_active : Int64?) -> @html.Html {
   if label.is_empty() {
     @html.nothing
   } else {
-    @html.span(class="session-item-time", label)
+    @html.span(class="session-item-time") <| label
   }
 }
 
@@ -1021,10 +1007,7 @@ fn error_bar(emit : @cmd.Emit[Msg], model : Model, count : Int) -> @html.Html {
   let children : Array[@html.Html] = []
   if count > 0 {
     children.push(
-      @html.span(
-        class="error-count",
-        "🚩 \{count} tool error\{plural_s(count)}",
-      ),
+      @html.span(class="error-count") <| "🚩 \{count} tool error\{plural_s(count)}",
     )
   }
   children.push(
@@ -1032,12 +1015,7 @@ fn error_bar(emit : @cmd.Emit[Msg], model : Model, count : Int) -> @html.Html {
       class=toggle_class,
       title="Show only failed tool results",
       on_click=emit(ToggleErrorsOnly),
-      if model.errors_only {
-        "Errors only: on"
-      } else {
-        "Errors only"
-      },
-    ),
+    ) <| (if model.errors_only { "Errors only: on" } else { "Errors only" }),
   )
   // Jumps only make sense when there is something to jump to.
   if count > 0 {
@@ -1046,19 +1024,17 @@ fn error_bar(emit : @cmd.Emit[Msg], model : Model, count : Int) -> @html.Html {
         class="error-jump",
         title="Scroll to the previous failure",
         on_click=emit(JumpToError(-1)),
-        "↑ prev",
-      ),
+      ) <| "↑ prev",
     )
     children.push(
       @html.button(
         class="error-jump",
         title="Scroll to the next failure",
         on_click=emit(JumpToError(1)),
-        "↓ next",
-      ),
+      ) <| "↓ next",
     )
   }
-  @html.div(class="error-bar", children)
+  @html.div(class="error-bar") <| children
 }
 
 ///|
@@ -1070,7 +1046,7 @@ fn session_log_view(
   count : Int,
 ) -> @html.Html {
   if model.errors_only && count == 0 {
-    @html.div(class="errors-only-empty", "No failed tool results in this view.")
+    @html.div(class="errors-only-empty") <| "No failed tool results in this view."
   } else {
     @viz.render_session(session, model.view_mode)
   }
