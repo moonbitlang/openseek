@@ -1,0 +1,911 @@
+/* editor/internal/shell/workbench/theme.css */
+/*
+ * Workbench theming for the readonly editor.
+ *
+ * Color values are transcribed from VS Code's Dark Modern / Light Modern
+ * theme definitions and color registry defaults (MIT licensed), kept in the
+ * reference-only `vscode/` submodule:
+ *   - vscode/extensions/theme-defaults/themes/dark_modern.json, light_modern.json
+ *   - vscode/extensions/theme-defaults/themes/dark_plus.json, light_plus.json
+ *     (token colors via dark_vs.json / light_vs.json)
+ *   - vscode/src/vs/platform/theme/common/colors/*.ts (registry defaults)
+ *
+ * Variable names mirror VS Code's `--vscode-<id>` convention with `.`
+ * replaced by `-`.
+ */
+
+.editor-shell {
+  /* Dark Modern (default theme). */
+  --vscode-foreground: #cccccc;
+  --vscode-icon-foreground: #cccccc;
+  --vscode-focusBorder: #0078d4;
+  --vscode-widget-border: #313131;
+  --vscode-widget-shadow: rgb(0 0 0 / 36%);
+  --vscode-shadow-hover: rgb(0 0 0 / 36%);
+  --vscode-cornerRadius-large: 4px;
+
+  --vscode-editor-background: #1f1f1f;
+  --vscode-editor-foreground: #cccccc;
+  --vscode-editorLineNumber-foreground: #6e7681;
+  --vscode-editorLineNumber-activeForeground: #cccccc;
+  --vscode-editor-selectionBackground: #264f78;
+  --vscode-editor-hoverHighlightBackground: #264f7840;
+  --vscode-editor-rangeHighlightBackground: #ffffff0b;
+  --vscode-editorLink-activeForeground: #4e94ce;
+  --vscode-editorWarning-foreground: #cca700;
+  --vscode-editorError-foreground: #f14c4c;
+  --vscode-editorInfo-foreground: #59a4f9;
+
+  --vscode-editorHoverWidget-background: #202020;
+  --vscode-editorHoverWidget-foreground: #cccccc;
+  --vscode-editorHoverWidget-border: #313131;
+  --vscode-editorHoverWidget-statusBarBackground: #2b2b2b;
+  --vscode-toolbar-hoverBackground: #ffffff1a;
+  --vscode-textLink-foreground: #4e94ce;
+  --vscode-textLink-activeForeground: #4e94ce;
+  --vscode-textCodeBlock-background: #2d2d2d;
+
+  --vscode-sideBar-background: #181818;
+  --vscode-sideBar-foreground: #cccccc;
+  --vscode-sideBar-border: #2b2b2b;
+  --vscode-sideBarTitle-foreground: #cccccc;
+  --vscode-sideBarSectionHeader-background: #181818;
+  --vscode-list-hoverBackground: #2a2d2e;
+  --vscode-list-activeSelectionBackground: #04395e;
+  --vscode-list-activeSelectionForeground: #ffffff;
+  --vscode-list-focusOutline: #0078d4;
+  --vscode-tree-indentGuidesStroke: #585858;
+
+  --vscode-titleBar-activeBackground: #181818;
+  --vscode-titleBar-activeForeground: #cccccc;
+  --vscode-titleBar-border: #2b2b2b;
+
+  --vscode-scrollbarSlider-background: #79797966;
+  --vscode-scrollbarSlider-hoverBackground: #646464b3;
+  --vscode-scrollbarSlider-activeBackground: #bfbfbf66;
+  --vscode-scrollbar-shadow: rgb(0 0 0 / 50%);
+
+  --vscode-token-keyword: #569cd6;
+  --vscode-token-variable: #9cdcfe;
+  --vscode-token-string: #ce9178;
+  --vscode-token-number: #b5cea8;
+  --vscode-token-comment: #6a9955;
+  --vscode-token-punctuation: #cccccc;
+  --vscode-token-function: #dcdcaa;
+  --vscode-token-type: #4ec9b0;
+  --vscode-token-string-escape: #d7ba7d;
+  --vscode-token-regexp: #d16969;
+  --vscode-token-invalid: #f44747;
+
+  /* VS Code editor defaults on macOS: 12px Menlo, 1.5x line height. */
+  --editor-font-family: Menlo, Monaco, "Courier New", monospace;
+  --monaco-monospace-font: var(--editor-font-family);
+  --editor-font-size: 12px;
+  /* Keep in sync with `editor_line_height` in viewer/view.mbt. */
+  --editor-line-height: 18px;
+  --ui-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Ubuntu",
+    "Droid Sans", sans-serif;
+  --ui-font-size: 13px;
+}
+
+.editor-shell[data-theme="light"] {
+  /* Light Modern. */
+  --vscode-foreground: #3b3b3b;
+  --vscode-icon-foreground: #3b3b3b;
+  --vscode-focusBorder: #005fb8;
+  --vscode-widget-border: #e5e5e5;
+  --vscode-widget-shadow: rgb(0 0 0 / 16%);
+  --vscode-shadow-hover: rgb(0 0 0 / 16%);
+  --vscode-cornerRadius-large: 4px;
+
+  --vscode-editor-background: #ffffff;
+  --vscode-editor-foreground: #3b3b3b;
+  --vscode-editorLineNumber-foreground: #6e7681;
+  --vscode-editorLineNumber-activeForeground: #171184;
+  --vscode-editor-selectionBackground: #add6ff;
+  --vscode-editor-hoverHighlightBackground: #add6ff26;
+  --vscode-editor-rangeHighlightBackground: #fdff0033;
+  --vscode-editorLink-activeForeground: #0000ff;
+  --vscode-editorWarning-foreground: #bf8803;
+  --vscode-editorError-foreground: #e51400;
+  --vscode-editorInfo-foreground: #0063d3;
+
+  --vscode-editorHoverWidget-background: #f8f8f8;
+  --vscode-editorHoverWidget-foreground: #3b3b3b;
+  --vscode-editorHoverWidget-border: #e5e5e5;
+  --vscode-editorHoverWidget-statusBarBackground: #f0f0f0;
+  --vscode-toolbar-hoverBackground: #00000014;
+  --vscode-textLink-foreground: #006ab1;
+  --vscode-textLink-activeForeground: #0000ff;
+  --vscode-textCodeBlock-background: #f3f3f3;
+
+  --vscode-sideBar-background: #f8f8f8;
+  --vscode-sideBar-foreground: #3b3b3b;
+  --vscode-sideBar-border: #e5e5e5;
+  --vscode-sideBarTitle-foreground: #3b3b3b;
+  --vscode-sideBarSectionHeader-background: #f8f8f8;
+  --vscode-list-hoverBackground: #f2f2f2;
+  --vscode-list-activeSelectionBackground: #e8e8e8;
+  --vscode-list-activeSelectionForeground: #000000;
+  --vscode-list-focusOutline: #005fb8;
+  --vscode-tree-indentGuidesStroke: #a9a9a9;
+
+  --vscode-titleBar-activeBackground: #f8f8f8;
+  --vscode-titleBar-activeForeground: #1e1e1e;
+  --vscode-titleBar-border: #e5e5e5;
+
+  --vscode-scrollbarSlider-background: #64646466;
+  --vscode-scrollbarSlider-hoverBackground: #646464b3;
+  --vscode-scrollbarSlider-activeBackground: #00000099;
+  --vscode-scrollbar-shadow: rgb(0 0 0 / 20%);
+
+  --vscode-token-keyword: #0000ff;
+  --vscode-token-variable: #001080;
+  --vscode-token-string: #a31515;
+  --vscode-token-number: #098658;
+  --vscode-token-comment: #008000;
+  --vscode-token-punctuation: #3b3b3b;
+  --vscode-token-function: #795e26;
+  --vscode-token-type: #267f99;
+  --vscode-token-string-escape: #ee0000;
+  --vscode-token-regexp: #811f3f;
+  --vscode-token-invalid: #cd3131;
+  --monaco-monospace-font: var(--editor-font-family);
+}
+
+/* editor/viewer/editor.css */
+/* The island root owns a Monaco-shaped view tree. Clipping belongs to
+   .overflow-guard so future overflowing widget slots can escape it. */
+.moonbit-viewer.readonly-editor {
+  position: absolute;
+  inset: 0;
+  background: var(--vscode-editor-background);
+  overflow: visible;
+}
+
+.overflow-guard {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--vscode-editor-background);
+}
+
+.moonbit-viewer.source-loaded .source-message {
+  display: none;
+}
+
+.moonbit-viewer.source-empty .overflow-guard,
+.moonbit-viewer.source-empty .overflowingContentWidgets,
+.moonbit-viewer.source-empty .overflowingOverlayWidgets {
+  display: none;
+}
+
+.source-message {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 24px;
+  color: var(--vscode-foreground);
+  font-size: 14px;
+}
+
+/* Hidden glyph probe measured after mount; its width / character count
+   feeds the mouse hit-test char width. */
+.char-probe {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+  visibility: hidden;
+  font: var(--editor-font-size) / var(--editor-line-height)
+    var(--editor-font-family);
+  white-space: pre;
+}
+
+/* editor/viewer/ui/scrollbar/scrollable_element.css */
+/* Shared Monaco scrollbars driven by the ScrollbarState arithmetic. */
+.monaco-scrollable-element {
+  position: relative;
+  overflow: hidden;
+}
+
+.monaco-scrollable-element.editor-scrollable {
+  position: absolute;
+  inset: 0;
+}
+
+.moonbit-viewer .scrollbar,
+.monaco-scrollable-element > .scrollbar {
+  position: absolute;
+}
+
+.moonbit-viewer .scrollbar.vertical {
+  top: 0;
+  right: 0;
+  width: 14px;
+}
+
+.moonbit-viewer .scrollbar.horizontal {
+  bottom: 0;
+  height: 10px;
+  /* left/width are written inline from the scroll model. */
+}
+
+.moonbit-viewer
+  .monaco-scrollable-element.editor-scrollable
+  > .scrollbar.horizontal {
+  height: 12px;
+}
+
+.moonbit-viewer .scrollbar .slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  contain: strict;
+  will-change: transform;
+}
+
+.monaco-scrollable-element > .scrollbar {
+  background: var(--vscode-scrollbar-background);
+}
+
+.monaco-scrollable-element > .visible {
+  z-index: 11;
+  opacity: 1;
+  background: rgb(0 0 0 / 0%);
+  transition: opacity 100ms linear;
+}
+
+.monaco-scrollable-element > .invisible {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.monaco-scrollable-element > .invisible.fade {
+  transition: opacity 800ms linear;
+}
+
+.disable-animations .monaco-scrollable-element > .visible,
+.disable-animations .monaco-scrollable-element > .invisible.fade {
+  transition: none;
+}
+
+.monaco-scrollable-element > .shadow {
+  position: absolute;
+  display: none;
+}
+
+.monaco-scrollable-element > .shadow.top {
+  display: block;
+  top: 0;
+  left: 3px;
+  height: 3px;
+  width: 100%;
+  box-shadow: var(--vscode-scrollbar-shadow) 0 6px 6px -6px inset;
+}
+
+.monaco-scrollable-element > .shadow.left {
+  display: block;
+  top: 3px;
+  left: 0;
+  height: 100%;
+  width: 3px;
+  box-shadow: var(--vscode-scrollbar-shadow) 6px 0 6px -6px inset;
+}
+
+.monaco-scrollable-element > .shadow.top-left-corner {
+  display: block;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 3px;
+}
+
+.monaco-scrollable-element > .shadow.top.left {
+  box-shadow: var(--vscode-scrollbar-shadow) 6px 0 6px -6px inset;
+}
+
+.monaco-scrollable-element > .scrollbar > .slider {
+  background: var(--vscode-scrollbarSlider-background);
+}
+
+.monaco-scrollable-element > .scrollbar > .slider:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+.monaco-scrollable-element > .scrollbar > .slider.active,
+.monaco-scrollable-element > .scrollbar > .slider:active {
+  background: var(--vscode-scrollbarSlider-activeBackground);
+}
+
+/* editor/viewer/view_lines.css */
+/* Lines content starts after the margin; text-like child layers carry
+   the synthetic scroll transform. */
+.lines-content {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
+
+.view-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+  z-index: 1;
+  user-select: none;
+}
+
+.view-line {
+  position: absolute;
+  left: 0;
+  /* top and height are written inline by the recycler (18px lines). */
+  white-space: pre;
+}
+
+.view-line-content {
+  display: inline-block;
+  width: max-content;
+  margin: 0;
+  padding: 0 16px 0 0;
+  color: var(--vscode-editor-foreground);
+  font: var(--editor-font-size) / var(--editor-line-height)
+    var(--editor-font-family);
+  white-space: pre;
+  cursor: text;
+}
+
+/* editor/viewer/view_overlays.css */
+.view-overlays {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+  /* Selection paints behind the text (below .view-lines, z-index 1), matching
+     Monaco: the glyphs render on top of an opaque selection background. */
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* editor/viewer/view_zones.css */
+.view-zones {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+  z-index: 3;
+}
+
+.view-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* editor/viewer/content_widgets.css */
+.contentWidgets {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+  z-index: 50;
+}
+
+.overflowingContentWidgets {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+}
+
+/* editor/viewer/overlay_widgets.css */
+.overlayWidgets {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.overflowingOverlayWidgets {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+}
+
+/* editor/viewer/selections.css */
+/* Monaco paints the selection opaque, behind the text (see .view-overlays
+   z-index). No element opacity: overlapping/merged pieces never stack into
+   darker patches, and the color matches the editor's selectionBackground. */
+.selected-text {
+  position: absolute;
+  box-sizing: border-box;
+  background: var(--vscode-editor-selectionBackground);
+  pointer-events: none;
+}
+
+/* Inverse ("reverse rounded") corner pieces, painted in the editor background
+   so a staircased selection edge reads as a smooth curve. */
+.selection-corner-piece {
+  position: absolute;
+  box-sizing: border-box;
+  background: var(--vscode-editor-background);
+  pointer-events: none;
+}
+
+.top-left-radius {
+  border-top-left-radius: 3px;
+}
+
+.bottom-left-radius {
+  border-bottom-left-radius: 3px;
+}
+
+.top-right-radius {
+  border-top-right-radius: 3px;
+}
+
+.bottom-right-radius {
+  border-bottom-right-radius: 3px;
+}
+
+.view-line-content ::selection,
+.view-line-content::selection {
+  background: var(--vscode-editor-selectionBackground);
+}
+
+/* editor/viewer/margin.css */
+/* Margin layer: viewport-fixed clip that occludes horizontally scrolled
+   content; the inner rail translates vertically only. */
+.margin {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  overflow: hidden;
+  background: var(--vscode-editor-background);
+}
+
+.margin-view-overlays,
+.line-numbers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.line-numbers {
+  will-change: transform;
+}
+
+.line-number {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  padding: 0 26px 0 8px;
+  color: var(--vscode-editorLineNumber-foreground);
+  text-align: right;
+  font: var(--editor-font-size) / var(--editor-line-height)
+    var(--editor-font-family);
+  user-select: none;
+}
+
+/* editor/viewer/folding.css */
+.folding {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  will-change: transform;
+  z-index: 2;
+}
+
+.folding-marker {
+  position: absolute;
+  right: 4px;
+  width: 18px;
+  height: var(--editor-line-height);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--vscode-editorLineNumber-foreground);
+  font: var(--editor-font-size) / var(--editor-line-height)
+    var(--editor-font-family);
+  opacity: 0.78;
+  cursor: pointer;
+}
+
+.folding-marker:hover {
+  opacity: 1;
+}
+
+.folding-marker .codicon {
+  font-size: 14px;
+  line-height: var(--editor-line-height);
+}
+
+/* editor/viewer/tokens.css */
+.tok-keyword {
+  color: var(--vscode-token-keyword);
+}
+
+.tok-identifier {
+  color: var(--vscode-token-variable);
+}
+
+.tok-string {
+  color: var(--vscode-token-string);
+}
+
+.tok-number {
+  color: var(--vscode-token-number);
+}
+
+.tok-comment {
+  color: var(--vscode-token-comment);
+}
+
+.tok-punctuation,
+.tok-operator,
+.tok-delimiter {
+  color: var(--vscode-token-punctuation);
+}
+
+.tok-type {
+  color: var(--vscode-token-type);
+}
+
+.tok-function {
+  color: var(--vscode-token-function);
+}
+
+.tok-variable,
+.tok-attribute {
+  color: var(--vscode-token-variable);
+}
+
+.tok-constant,
+.tok-tag {
+  color: var(--vscode-token-keyword);
+}
+
+.tok-string-escape {
+  color: var(--vscode-token-string-escape);
+}
+
+.tok-comment-doc {
+  color: var(--vscode-token-comment);
+}
+
+.tok-regexp {
+  color: var(--vscode-token-regexp);
+}
+
+.tok-invalid {
+  color: var(--vscode-token-invalid);
+}
+
+/* Semantic token overlays. Declared after the tok-* rules so the semantic
+   color wins where a span carries both classes. */
+.sem-function,
+.sem-method,
+.sem-macro,
+.sem-function_call,
+.sem-function_decl {
+  color: var(--vscode-token-function);
+}
+
+.sem-type,
+.sem-class,
+.sem-struct,
+.sem-enum,
+.sem-interface,
+.sem-typeParameter,
+.sem-namespace {
+  color: var(--vscode-token-type);
+}
+
+.sem-variable,
+.sem-parameter,
+.sem-property,
+.sem-enumMember {
+  color: var(--vscode-token-variable);
+}
+
+.sem-keyword {
+  color: var(--vscode-token-keyword);
+}
+
+.sem-string {
+  color: var(--vscode-token-string);
+}
+
+.sem-number {
+  color: var(--vscode-token-number);
+}
+
+.sem-comment {
+  color: var(--vscode-token-comment);
+}
+
+.sem-operator {
+  color: var(--vscode-token-punctuation);
+}
+
+/* editor/viewer/inlay_hints.css */
+.inlay-hint {
+  color: var(--vscode-descriptionForeground);
+  font-style: normal;
+  opacity: 0.9;
+}
+
+.inlay-hint-type,
+.inlay-hint-parameter {
+  color: var(--vscode-descriptionForeground);
+}
+
+/* editor/viewer/markers.css */
+.diag-warning {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--vscode-editorWarning-foreground);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.diag-error {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--vscode-editorError-foreground);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.diag-info {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--vscode-editorInfo-foreground);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* editor/viewer/hover/hover.css */
+.has-hover {
+  background: var(--vscode-editor-hoverHighlightBackground);
+}
+
+/* Monaco-shaped editor hover, anchored as a content widget. */
+.monaco-resizable-hover {
+  position: absolute;
+  z-index: 50;
+  pointer-events: auto;
+  min-width: 150px;
+  transform: translateY(-100%);
+  cursor: default;
+  user-select: text;
+  box-sizing: content-box;
+  border: 1px solid var(--vscode-editorHoverWidget-border);
+  border-radius: var(--vscode-cornerRadius-large);
+  background-color: var(--vscode-editorHoverWidget-background);
+}
+
+.monaco-resizable-hover.below {
+  transform: none;
+}
+
+.monaco-resizable-hover.measuring {
+  visibility: hidden;
+}
+
+.monaco-hover {
+  position: relative;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: var(--vscode-hover-whiteSpace, normal);
+  color: var(--vscode-editorHoverWidget-foreground);
+  background-color: var(--vscode-editorHoverWidget-background);
+  border: 1px solid var(--vscode-editorHoverWidget-border);
+  border-radius: var(--vscode-cornerRadius-large);
+  box-shadow: 0 2px 8px var(--vscode-shadow-hover);
+  font: var(--editor-font-size) / 1.5 var(--ui-font-family);
+}
+
+.monaco-resizable-hover > .monaco-hover {
+  border: none;
+  border-radius: inherit;
+}
+
+.monaco-hover:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.monaco-hover.fade-in {
+  animation: hover-fade-in 80ms ease-out;
+}
+
+@keyframes hover-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.monaco-hover-content {
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.monaco-hover-content::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.hover-row {
+  padding: 0;
+  border-radius: var(--vscode-cornerRadius-large);
+  display: flex;
+}
+
+.hover-row-contents {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.markdown-hover {
+  min-width: 0;
+}
+
+.hover-contents {
+  padding: 4px 8px;
+  overflow-wrap: break-word;
+}
+
+.monaco-hover .markdown-hover > .hover-contents:not(.code-hover-contents) {
+  width: max-content;
+  max-width: var(--vscode-hover-maxWidth, 500px);
+}
+
+.hover-plaintext {
+  white-space: pre-wrap;
+}
+
+.hover-contents p,
+.hover-contents ul,
+.hover-contents ol,
+.hover-contents blockquote {
+  margin: 8px 0;
+}
+
+.hover-contents p:first-child,
+.hover-contents ul:first-child,
+.hover-contents ol:first-child,
+.hover-contents blockquote:first-child {
+  margin-top: 0;
+}
+
+.hover-contents p:last-child,
+.hover-contents ul:last-child,
+.hover-contents ol:last-child,
+.hover-contents blockquote:last-child {
+  margin-bottom: 0;
+}
+
+.hover-contents ul,
+.hover-contents ol {
+  padding-left: 20px;
+}
+
+.hover-contents li {
+  margin: 2px 0;
+}
+
+.hover-contents code {
+  padding: 0 0.4em;
+  border-radius: 3px;
+  background: var(--vscode-textCodeBlock-background);
+  font-family: var(--monaco-monospace-font);
+}
+
+.monaco-tokenized-source {
+  padding: 6px 8px;
+  border-radius: 3px;
+  background: var(--vscode-textCodeBlock-background);
+  font-family: var(--monaco-monospace-font);
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: var(--vscode-hover-sourceWhiteSpace, pre-wrap);
+}
+
+.monaco-hover .monaco-tokenized-source .view-line-content {
+  display: inline;
+  width: auto;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  white-space: inherit;
+  cursor: inherit;
+}
+
+.hover-contents a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+
+.hover-contents a:hover {
+  color: var(--vscode-textLink-activeForeground);
+  text-decoration: underline;
+}
+
+.hover-contents hr {
+  height: 1px;
+  margin: 4px -8px -4px;
+  border: 0;
+  background: var(--vscode-editorHoverWidget-border);
+}
+
+.monaco-hover .hover-row.status-bar {
+  font-size: 12px;
+  line-height: 22px;
+}
+
+.monaco-hover .hover-row.status-bar .actions {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0 8px;
+  background-color: var(--vscode-editorHoverWidget-statusBarBackground);
+}
+
+.monaco-hover .hover-row.status-bar .actions .action-container {
+  margin-right: 16px;
+  cursor: pointer;
+  overflow: hidden;
+  text-wrap: nowrap;
+  text-overflow: ellipsis;
+}
+
+.monaco-hover .hover-row.hover-row-with-copy {
+  position: relative;
+  padding-right: 20px;
+}
+
+.monaco-hover .hover-copy-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  opacity: 0;
+}
+
+.monaco-hover .hover-row-with-copy:hover .hover-copy-button,
+.monaco-hover .hover-row-with-copy:focus-within .hover-copy-button {
+  opacity: 1;
+}
+
+.monaco-hover .hover-copy-button:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+  cursor: pointer;
+}
+
+.monaco-hover .hover-copy-button:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}

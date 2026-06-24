@@ -155,6 +155,53 @@ priv struct Completion {
 }
 
 ///|
+/// One entry of the file panel's tree: a file or directory directly inside
+/// some listed directory. `path` is relative to the conversation's workspace
+/// ("" being the root), the key the host's `read_directory` / `read_file` ops
+/// take.
+priv struct FileEntry {
+  name : String
+  path : String
+  is_dir : Bool
+}
+
+///|
+/// The editor side-panel's state: a lazily-loaded file tree of the active
+/// conversation's workspace and the file shown in the embedded viewer. Keyed
+/// entirely by workspace-relative paths; `session` records which conversation
+/// the cached tree belongs to, so switching conversations rebuilds it rather
+/// than showing another workspace's files.
+priv struct FilePanel {
+  // Whether the panel column is expanded; the column is always rendered (so
+  // the viewer host element stays put) and merely hidden by CSS when closed.
+  open : Bool
+  session : String
+  // Directory paths the user has expanded, and those with a `read_directory`
+  // in flight; plain arrays since a workspace tree is small.
+  expanded : Array[String]
+  loading : Array[String]
+  // Listed directories' entries, keyed by the directory's relative path.
+  children : Map[String, Array[FileEntry]]
+  // The file currently shown in the viewer, if any.
+  selected : String?
+  // The last directory/file failure, surfaced in the panel header.
+  error : String
+}
+
+///|
+fn empty_file_panel() -> FilePanel {
+  {
+    open: false,
+    session: "",
+    expanded: [],
+    loading: [],
+    children: {},
+    selected: None,
+    error: "",
+  }
+}
+
+///|
 /// The mooncakes.io skill catalog as the Skills page sees it. One enum, so
 /// "loading", "loaded empty" and "failed" cannot be conflated.
 priv enum SkillsCatalog {
@@ -234,6 +281,10 @@ priv struct Model {
   // The topbar app launcher. The app list is probed by the host once (the
   // first time the menu opens) and kept for the app run.
   launcher : Launcher
+  // The editor side-panel: the active conversation's file tree and the file
+  // shown in the embedded viewer. Rooted at `active().cwd`; rebuilt when the
+  // active conversation changes.
+  file_panel : FilePanel
 }
 
 ///|
@@ -339,6 +390,26 @@ priv enum Msg {
     cwd~ : String
   )
   Engine(Int, @transcript.EngineEvent)
+  // Show or hide the editor side-panel. Opening it loads the active
+  // conversation's workspace root if it has not been listed yet.
+  ToggleFilePanel
+  // Expand or collapse a directory row in the file tree; the first expansion
+  // lazily lists the directory through the host.
+  DirToggle(String)
+  // A `read_directory` reply: `session`/`path` say which request it answers so
+  // a reply that lost a conversation switch can be dropped.
+  DirLoaded(session~ : String, path~ : String, entries~ : Array[FileEntry])
+  DirFailed(session~ : String, path~ : String, message~ : String)
+  // A file row was clicked: read it and show it in the viewer. `name` is the
+  // entry's display name, kept for the viewer's title and language guess.
+  FileSelected(path~ : String, name~ : String)
+  FileLoaded(
+    session~ : String,
+    path~ : String,
+    name~ : String,
+    content~ : String
+  )
+  FileFailed(session~ : String, message~ : String)
   // The start request for that conversation never produced a run (the bridge
   // call failed or the host refused it).
   Failed(session~ : String, message~ : String)
@@ -398,6 +469,7 @@ fn initial_model() -> Model {
     skills_notice: "",
     completion: None,
     launcher: { open: false, apps: [], loaded: false, error: "" },
+    file_panel: empty_file_panel(),
   }
 }
 

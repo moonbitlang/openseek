@@ -174,6 +174,42 @@ priv struct UninstallSkillReply {
 } derive(ToJson)
 
 ///|
+/// `read_directory` lists `path`, resolved relative to the conversation's
+/// workspace; `""` lists the workspace root. The host derives the root from
+/// `session`, so the client never names an absolute path.
+priv struct ReadDirPayload {
+  session : String
+  path : String
+} derive(FromJson)
+
+///|
+priv struct DirEntry {
+  name : String
+  is_dir : Bool
+} derive(ToJson)
+
+///|
+/// Reply to `read_directory`: the directory's entries, directories first.
+priv struct ReadDirReply {
+  entries : Array[DirEntry]
+} derive(ToJson)
+
+///|
+priv struct ReadFilePayload {
+  session : String
+  path : String
+} derive(FromJson)
+
+///|
+/// Reply to `read_file`. `truncated` marks a file withheld for being binary
+/// or larger than the read cap, in which case `content` is a short notice
+/// rather than the file's text.
+priv struct ReadFileReply {
+  content : String
+  truncated : Bool
+} derive(ToJson)
+
+///|
 fn event_sink(context : @app.AppCommandExtensionContext) -> @engine.EventSink {
   EventSink(async fn(event) { emit_engine_event(context, event) })
 }

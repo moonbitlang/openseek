@@ -48,6 +48,8 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("open_path"),
       @app.AppCommandApiDescriptor::new("list_apps"),
       @app.AppCommandApiDescriptor::new("launch_app"),
+      @app.AppCommandApiDescriptor::new("read_directory"),
+      @app.AppCommandApiDescriptor::new("read_file"),
     ],
     context => {
       let sink = event_sink(context)
@@ -115,6 +117,12 @@ pub fn openseek_extension(
       context.op_async("list_apps", async fn(_ : Json) { list_apps_op() })
       context.op_async("launch_app", async fn(payload : LaunchAppPayload) {
         launch_app_op(payload)
+      })
+      context.op_async("read_directory", async fn(payload : ReadDirPayload) {
+        read_directory_op(payload)
+      })
+      context.op_async("read_file", async fn(payload : ReadFilePayload) {
+        read_file_op(payload)
       })
       Ok(())
     },

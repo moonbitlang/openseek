@@ -1,0 +1,57 @@
+// Host-local filesystem ops backing the editor side-panel: list a directory
+// and read a file, both resolved under the conversation's workspace. Pure
+// request/response — none of this touches the engine pump. The host derives
+// the workspace root from the session id and rejects any path that escapes
+// it, so the webview can browse a conversation's directory but nothing else.
+
+///|
+/// Largest file the viewer will load. Bigger files return a notice instead of
+/// reading the whole thing into memory.
+const MaxReadFileBytes = 1048576
+
+///|
+async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
+  guard @engine.resolve_in_workspace(payload.session, payload.path) is Some(dir) else {
+    raise HostError("path is outside the conversation workspace")
+  }
+  let names = @fs.readdir(dir.to_string(), sort=true) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise HostError("failed to list directory: \{error}")
+  }
+  let entries : Array[DirEntry] = []
+  for name in names {
+    let child = dir.join((name : @path.Path)).to_string()
+    let is_dir = (@fs.kind(child) catch {
+        error if @async.is_being_cancelled() => raise error
+        _ => Unknown
+      })
+      is Directory
+    entries.push({ name, is_dir })
+  }
+  // Directories first, then files; `readdir(sort=true)` already orders each
+  // group by name, and the partition preserves that order.
+  let dirs = entries.filter(entry => entry.is_dir)
+  let files = entries.filter(entry => !entry.is_dir)
+  { entries: dirs + files }
+}
+
+///|
+async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
+  guard @engine.resolve_in_workspace(payload.session, payload.path)
+    is Some(file) else {
+    raise HostError("path is outside the conversation workspace")
+  }
+  let data = @fs.read_file(file.to_string()) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise HostError("failed to read file: \{error}")
+  }
+  if data.binary().length() > MaxReadFileBytes {
+    return { content: "File is too large to preview.", truncated: true }
+  }
+  // `text()` raises on invalid UTF-8 — treat that as a binary file the
+  // read-only viewer cannot render.
+  let content = data.text() catch {
+    _ => return { content: "Binary file is not previewable.", truncated: true }
+  }
+  { content, truncated: false }
+}

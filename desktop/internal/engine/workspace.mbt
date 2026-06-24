@@ -31,6 +31,38 @@ pub async fn session_cwd(session : String) -> String {
 }
 
 ///|
+/// Resolve a workspace-relative `relative` against the session's workspace
+/// directory, returning the absolute path or `None` when the session id is
+/// unsafe or `relative` would escape the workspace. The client supplies only
+/// `relative`; deriving the root from the session id here keeps the trust
+/// boundary in the host, so a crafted `..` path cannot reach outside the
+/// conversation's directory.
+pub async fn resolve_in_workspace(
+  session : String,
+  relative : String,
+) -> @path.Path? {
+  guard session_workspace_dir(session) is Some(root) else { return None }
+  contained_path(root, relative)
+}
+
+///|
+/// Join `relative` onto `root` and return the absolute result only while it
+/// stays within `root`. An absolute or `..`-laden `relative` that climbs out
+/// of `root` yields `None`. Pure and root-relative, so the containment rule is
+/// unit-testable without a real workspace.
+fn contained_path(root : @path.Path, relative : String) -> @path.Path? {
+  guard !(relative : @path.Path).is_absolute() else { return None }
+  let resolved = root.join((relative : @path.Path)).normalize()
+  // `relative()` of an escaping path is `..`-prefixed (or absolute); anything
+  // else lands inside `root`.
+  let rel = resolved.relative(base=root).to_string()
+  guard rel != ".." && !rel.has_prefix("../") && !rel.has_prefix("..\\") else {
+    return None
+  }
+  Some(resolved)
+}
+
+///|
 /// Whether a session id can serve as a single path component under the
 /// workspace root. Path separators and dot segments could escape the root —
 /// those conversations work in the home directory instead.

@@ -41,3 +41,29 @@ test "a relative path with no working directory is left untouched" {
   assert_eq(open_target("", "core/builtin/array.mbt"), "core/builtin/array.mbt")
   assert_eq(open_target("", ""), "")
 }
+
+///|
+/// The containment rule the FS bridge ops rely on: in-tree relatives resolve
+/// against the root, while anything climbing out — `..` segments or an
+/// absolute path — is rejected. This is the security boundary for browsing a
+/// conversation's workspace from the webview, so pin it directly.
+test "contained_path keeps in-tree relatives and rejects escapes" {
+  let root = @path.Path("/home/u/OpenSeek/sess")
+  assert_eq(
+    contained_path(root, "").unwrap().to_string(),
+    "/home/u/OpenSeek/sess",
+  )
+  assert_eq(
+    contained_path(root, "src/main.mbt").unwrap().to_string(),
+    "/home/u/OpenSeek/sess/src/main.mbt",
+  )
+  assert_eq(
+    contained_path(root, "./a/../b").unwrap().to_string(),
+    "/home/u/OpenSeek/sess/b",
+  )
+  assert_true(contained_path(root, "..") is None)
+  assert_true(contained_path(root, "../sibling") is None)
+  assert_true(contained_path(root, "../../etc/passwd") is None)
+  assert_true(contained_path(root, "/etc/passwd") is None)
+  assert_true(contained_path(root, "src/../../escape") is None)
+}

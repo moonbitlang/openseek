@@ -231,7 +231,50 @@ fn apply_engine_event(
 }
 
 ///|
+/// Reconcile the file panel with the active conversation after every message:
+/// rebuild it when the conversation changed and list the workspace root once
+/// its path is known. Centralizing it here keeps every conversation-switching
+/// handler from having to re-root the panel itself. A no-op unless the panel
+/// is open and a load is actually due, so it never re-fires while a request is
+/// in flight or the tree is already current.
+fn sync_file_panel(
+  dispatch : @cmd.Dispatch[Msg],
+  model : Model,
+) -> (Model, @cmd.Cmd) {
+  let panel = model.file_panel
+  guard panel.open else { return (model, @cmd.none) }
+  let conv = model.active()
+  let panel = if panel.session == conv.session_id {
+    panel
+  } else {
+    { ..empty_file_panel(), open: true, session: conv.session_id }
+  }
+  if conv.cwd.is_empty() ||
+    panel.children.contains("") ||
+    panel.loading.contains("") {
+    return ({ ..model, file_panel: panel }, @cmd.none)
+  }
+  let loading = panel.loading.copy()
+  loading.push("")
+  (
+    { ..model, file_panel: { ..panel, loading, } },
+    read_directory(dispatch, conv.session_id, ""),
+  )
+}
+
+///|
 fn update(
+  dispatch : @cmd.Dispatch[Msg],
+  msg : Msg,
+  model : Model,
+) -> (@cmd.Cmd, Model) {
+  let (cmd, model) = update_msg(dispatch, msg, model)
+  let (model, panel_cmd) = sync_file_panel(dispatch, model)
+  (@cmd.batch([cmd, panel_cmd]), model)
+}
+
+///|
+fn update_msg(
   dispatch : @cmd.Dispatch[Msg],
   msg : Msg,
   model : Model,
@@ -681,6 +724,108 @@ fn update(
         (@cmd.none, model)
       }
     }
+    ToggleFilePanel => {
+      let panel = model.file_panel
+      // Attach the viewer the first time the column has real width, and
+      // re-measure on every width change; loading the tree is left to
+      // `sync_file_panel`.
+      (
+        @cmd.batch([request_viewer_mount(), request_viewer_remeasure()]),
+        { ..model, file_panel: { ..panel, open: !panel.open } },
+      )
+    }
+    DirToggle(path) => {
+      let panel = model.file_panel
+      if panel.expanded.contains(path) {
+        (
+          @cmd.none,
+          {
+            ..model,
+            file_panel: {
+              ..panel,
+              expanded: panel.expanded.filter(entry => entry != path),
+            },
+          },
+        )
+      } else {
+        let expanded = panel.expanded.copy()
+        expanded.push(path)
+        // A directory listed once stays cached, so re-expanding is instant.
+        if panel.children.contains(path) || panel.loading.contains(path) {
+          (@cmd.none, { ..model, file_panel: { ..panel, expanded, } })
+        } else {
+          let loading = panel.loading.copy()
+          loading.push(path)
+          (
+            read_directory(dispatch, model.active().session_id, path),
+            { ..model, file_panel: { ..panel, expanded, loading } },
+          )
+        }
+      }
+    }
+    DirLoaded(session~, path~, entries~) =>
+      // Drop a reply whose conversation is no longer the panel's.
+      if model.file_panel.session != session {
+        (@cmd.none, model)
+      } else {
+        let panel = model.file_panel
+        let children = panel.children.copy()
+        children[path] = entries
+        (
+          @cmd.none,
+          {
+            ..model,
+            file_panel: {
+              ..panel,
+              children,
+              loading: panel.loading.filter(entry => entry != path),
+              error: "",
+            },
+          },
+        )
+      }
+    DirFailed(session~, path~, message~) =>
+      if model.file_panel.session != session {
+        (@cmd.none, model)
+      } else {
+        let panel = model.file_panel
+        (
+          @cmd.none,
+          {
+            ..model,
+            file_panel: {
+              ..panel,
+              loading: panel.loading.filter(entry => entry != path),
+              error: message,
+            },
+          },
+        )
+      }
+    FileSelected(path~, name~) => {
+      let panel = model.file_panel
+      (
+        read_file(dispatch, model.active().session_id, path, name),
+        { ..model, file_panel: { ..panel, selected: Some(path), error: "" } },
+      )
+    }
+    FileLoaded(session~, path~, name~, content~) =>
+      // A stale read — the conversation switched, or another file was clicked
+      // first — must not replace what the viewer now shows.
+      if model.file_panel.session != session ||
+        model.file_panel.selected != Some(path) {
+        (@cmd.none, model)
+      } else {
+        (show_file_in_viewer(path, name, content), model)
+      }
+    FileFailed(session~, message~) =>
+      if model.file_panel.session != session {
+        (@cmd.none, model)
+      } else {
+        (
+          @cmd.none,
+          { ..model, file_panel: { ..model.file_panel, error: message } },
+        )
+      }
     Failed(session~, message~) =>
       if model.find_conversation(session) is Some(conv) {
         let next = {

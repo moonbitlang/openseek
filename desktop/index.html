@@ -170,7 +170,9 @@
 
       .app {
         display: grid;
-        grid-template-columns: minmax(220px, 264px) minmax(0, 1fr);
+        /* Third track is the files panel: zero-width until opened, so the
+           viewer host element stays in the DOM but takes no space. */
+        grid-template-columns: minmax(220px, 264px) minmax(0, 1fr) 0;
         /* Track #app's content box (which already accounts for any scrollbar)
            rather than 100vh, so the two height bases can't disagree. */
         height: 100%;
@@ -185,6 +187,150 @@
       }
       .app.sidebar-collapsed > aside {
         display: none;
+      }
+
+      .app.panel-open {
+        grid-template-columns:
+          minmax(220px, 264px) minmax(0, 1fr) minmax(280px, 380px);
+      }
+      /* Sidebar collapsed and panel open at once: drop the sidebar track so
+         the chat and panel share the width without an empty gap. */
+      .app.sidebar-collapsed.panel-open {
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+      }
+
+      /* ---------- files panel ---------- */
+      .topbar-toggle {
+        margin-left: auto;
+        padding: 4px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink-2);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      button.topbar-toggle:not(:disabled):hover {
+        background: var(--surface-2);
+      }
+
+      .topbar-toggle.active {
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+        border-color: var(--accent-line);
+      }
+
+      .file-panel {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        border-left: 1px solid var(--line);
+        background: var(--surface);
+      }
+
+      .file-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex: 0 0 auto;
+        height: 46px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .file-panel-title {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--ink-2);
+      }
+
+      .file-panel-close {
+        border: none;
+        background: transparent;
+        color: var(--ink-2);
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+
+      button.file-panel-close:not(:disabled):hover {
+        background: var(--surface-2);
+      }
+
+      .file-panel-error {
+        flex: 0 0 auto;
+        padding: 8px 12px;
+        font-size: 12px;
+        color: var(--danger, #c0392b);
+        background: var(--surface-2);
+      }
+
+      .file-tree {
+        flex: 0 1 auto;
+        max-height: 45%;
+        overflow: auto;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .file-panel-empty {
+        padding: 12px;
+        font-size: 12px;
+        color: var(--ink-2);
+      }
+
+      .tree-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding-top: 3px;
+        padding-bottom: 3px;
+        padding-right: 10px;
+        font-size: 13px;
+        color: var(--ink);
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .tree-row:hover {
+        background: var(--surface-2);
+      }
+
+      .tree-row.selected {
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+      }
+
+      .tree-chevron {
+        flex: 0 0 auto;
+        width: 12px;
+        color: var(--ink-2);
+        font-size: 10px;
+      }
+
+      .tree-dir .tree-name {
+        font-weight: 600;
+      }
+
+      .tree-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .viewer-host {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
       }
 
       /* ---------- sidebar ---------- */

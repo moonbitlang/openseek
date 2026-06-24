@@ -1045,8 +1045,125 @@ fn topbar_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
   if !conv.watcher_status.is_empty() {
     items.push(@html.span(class="pill", "moon_check \{conv.watcher_status}"))
   }
+  // Right-aligned toggle for the file side-panel.
+  items.push(
+    @html.button(
+      class=if model.file_panel.open {
+        "topbar-toggle active"
+      } else {
+        "topbar-toggle"
+      },
+      title="Toggle the workspace files panel",
+      on_click=dispatch(ToggleFilePanel),
+      "Files",
+    ),
+  )
   items.push(launcher_view(dispatch, model))
   @html.div(class="topbar", items)
+}
+
+///|
+/// The editor side-panel: the active conversation's file tree over a read-only
+/// code viewer. The column is always rendered so the viewer's host element
+/// (`viewer-host`) stays put across renders and screen switches; CSS collapses
+/// it to zero width when closed.
+fn file_panel_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+  let panel = model.file_panel
+  let conv = model.active()
+  let sections : Array[@html.Html] = [
+    @html.div(class="file-panel-header", [
+      @html.span(class="file-panel-title", "Files"),
+      @html.button(
+        class="file-panel-close",
+        title="Hide files",
+        on_click=dispatch(ToggleFilePanel),
+        "×",
+      ),
+    ]),
+  ]
+  if !panel.error.is_empty() {
+    sections.push(@html.div(class="file-panel-error", panel.error))
+  }
+  let tree_children = if conv.cwd.is_empty() {
+    [
+      @html.div(
+        class="file-panel-empty",
+        "No workspace yet. Send a message to begin.",
+      ),
+    ]
+  } else if !panel.children.contains("") {
+    [@html.div(class="file-panel-empty", "Loading…")]
+  } else {
+    file_tree_rows(dispatch, model, "", 0)
+  }
+  sections.push(@html.div(class="file-tree", tree_children))
+  // The stable element the viewer attaches its imperative DOM into; it must
+  // stay empty and never be re-keyed (see editor_panel.mbt).
+  sections.push(
+    @html.div(id=ViewerHostId, class="viewer-host", ([] : Array[@html.Html])),
+  )
+  @html.div(class="file-panel", sections)
+}
+
+///|
+/// The rows for the entries of one directory, with expanded directories'
+/// children spliced in beneath them, depth-first. `depth` drives indentation.
+fn file_tree_rows(
+  dispatch : @cmd.Dispatch[Msg],
+  model : Model,
+  dir_path : String,
+  depth : Int,
+) -> Array[@html.Html] {
+  guard model.file_panel.children.get(dir_path) is Some(entries) else {
+    return []
+  }
+  let rows : Array[@html.Html] = []
+  for entry in entries {
+    rows.push(tree_row(dispatch, model, entry, depth))
+    if entry.is_dir && model.file_panel.expanded.contains(entry.path) {
+      for child in file_tree_rows(dispatch, model, entry.path, depth + 1) {
+        rows.push(child)
+      }
+    }
+  }
+  rows
+}
+
+///|
+fn tree_row(
+  dispatch : @cmd.Dispatch[Msg],
+  model : Model,
+  entry : FileEntry,
+  depth : Int,
+) -> @html.Html {
+  let pad = "padding-left: \{8 + depth * 14}px"
+  if entry.is_dir {
+    let chevron = if model.file_panel.expanded.contains(entry.path) {
+      "▾"
+    } else {
+      "▸"
+    }
+    @html.div(
+      class="tree-row tree-dir",
+      style=[pad],
+      on_click=dispatch(DirToggle(entry.path)),
+      [
+        @html.span(class="tree-chevron", chevron),
+        @html.span(class="tree-name", entry.name),
+      ],
+    )
+  } else {
+    @html.div(
+      class=if model.file_panel.selected == Some(entry.path) {
+        "tree-row tree-file selected"
+      } else {
+        "tree-row tree-file"
+      },
+      style=[pad],
+      on_click=dispatch(FileSelected(path=entry.path, name=entry.name)),
+      [@html.span(class="tree-name", entry.name)],
+    )
+  }
 }
 
 ///|
@@ -1060,10 +1177,18 @@ fn view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
       ]
     Skills => [skills_page(dispatch, model)]
   }
-  let app = @html.div(
-    class=if model.sidebar_open { "app" } else { "app sidebar-collapsed" },
-    [sidebar_view(dispatch, model), @html.main_(content)],
-  )
+  // The files panel only opens over the chat; on the Skills page it stays
+  // collapsed, but the column (and the viewer host inside it) is still
+  // rendered so the attached viewer is never torn down.
+  let panel_open = model.file_panel.open && model.screen is Chat
+  let app_class = "app" +
+    (if model.sidebar_open { "" } else { " sidebar-collapsed" }) +
+    (if panel_open { " panel-open" } else { "" })
+  let app = @html.div(class=app_class, [
+    sidebar_view(dispatch, model),
+    @html.main_(content),
+    file_panel_view(dispatch, model),
+  ])
   if model.setup_open {
     @html.fragment([app, setup_popup(dispatch, model)])
   } else {

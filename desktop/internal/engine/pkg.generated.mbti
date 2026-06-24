@@ -20,6 +20,8 @@ pub fn new_engine_manager(String, runtime_dir? : @path.Path) -> EngineManager
 
 pub fn open_target(String, String) -> String
 
+pub async fn resolve_in_workspace(String, String) -> @path.Path?
+
 pub async fn run_engine_pump(EventSink, EngineManager) -> PumpReply
 
 pub async fn session_cwd(String) -> String
