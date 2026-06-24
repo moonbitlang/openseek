@@ -76,6 +76,12 @@ jobs:
       - name: Check (deny warnings)
         run: moon -C desktop check --target native --deny-warn
 
+      # The frontend builds to JS; this guards the JS side (and catches native
+      # imports leaking into target-agnostic packages, e.g. a missing
+      # supported_targets) that the native check above cannot see.
+      - name: Check JS target (deny warnings)
+        run: moon -C desktop check --target js --deny-warn
+
       - name: Check generated interfaces
         run: |
           moon -C desktop info --target native
