@@ -18,7 +18,7 @@ fn setting_input(
 ) -> @html.Html {
   @html.label([
     @html.text(label_text),
-    @html.input(input_type~, value~, placeholder~, on_input~, @html.nothing),
+    @html.input(input_type~, value~, placeholder~, on_input~),
   ])
 }
 
@@ -827,7 +827,6 @@ fn skills_page(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
       placeholder="Search skills",
       on_input=dispatch.map(value => SkillsQueryChanged(value)),
       attrs=@html.Attrs::build().class("skills-search"),
-      @html.nothing,
     ),
   ]
   if !model.skills_notice.is_empty() {

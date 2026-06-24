@@ -81,7 +81,7 @@ fn MarkdownRender::push_block(
     HtmlBlock(node) =>
       out.push(@html.pre(class="raw-html", lines_text(node.v.0)))
     List(node) => out.push(self.list(node.v))
-    ThematicBreak(_) => out.push(@html.hr(@html.nothing))
+    ThematicBreak(_) => out.push(@html.hr())
     ExtTable(node) => out.push(self.table(node.v))
     ExtFootnoteDefinition(node) => {
       let children : Array[@html.Html] = [
@@ -274,7 +274,7 @@ fn MarkdownRender::push_inline(
     Image(node) => {
       let alt = plain_text(node.v.text)
       match self.link_destination(node.v) {
-        Some(url) => out.push(@html.img(src=url, alt~, @html.nothing))
+        Some(url) => out.push(@html.img(src=url, alt~))
         None => out.push(@html.text(alt))
       }
     }
