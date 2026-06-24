@@ -80,3 +80,24 @@ test "decode recognizes the steer events" {
     fail("steer_dropped not decoded")
   }
 }
+
+///|
+test "decode recognizes the compaction lifecycle events" {
+  guard decode_engine_event(event_fields({ "event": "compaction_started" }))
+    is Some(CompactionStarted) else {
+    fail("compaction_started not decoded")
+  }
+  guard decode_engine_event(
+      event_fields({ "event": "compaction_finished", "summary": "recap" }),
+    )
+    is Some(CompactionFinished("recap")) else {
+    fail("compaction_finished not decoded")
+  }
+  // The engine reports the failure reason under `error`.
+  guard decode_engine_event(
+      event_fields({ "event": "compaction_failed", "error": "empty summary" }),
+    )
+    is Some(CompactionFailed("empty summary")) else {
+    fail("compaction_failed not decoded")
+  }
+}

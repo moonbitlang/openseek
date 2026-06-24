@@ -81,6 +81,15 @@ priv struct Conversation {
   task : String
   running : Bool
   active_run_id : Int?
+  // The most recent run id this conversation has owned, kept after the run
+  // finishes. Compaction is requested while the engine is idle, so its
+  // engine events arrive stamped with this id once `active_run_id` is already
+  // cleared; routing them needs the retained id.
+  last_run_id : Int?
+  // A compaction (summarize-and-shrink) is in flight for this conversation:
+  // the engine acknowledged it and has not yet reported the summary or a
+  // failure. Display only — shown as a composer notice.
+  compacting : Bool
   // Run-scoped status only (Idle/Starting/Running/…); bridge and settings
   // states are derived at display time by `Model::display_status`.
   status : Status
@@ -111,6 +120,38 @@ priv struct Conversation {
 priv enum Screen {
   Chat
   Skills
+}
+
+///|
+/// Which trigger opened the composer's completion menu: `/` lists built-in
+/// commands that act on the conversation, `$` lists installed skills whose
+/// name is inserted into the prompt.
+priv enum CompletionKind {
+  SlashCommands
+  SkillMentions
+}
+
+///|
+/// One row of the composer completion menu.
+priv struct CompletionItem {
+  // The primary label shown in the row (e.g. "/compact" or "$review-pr").
+  label : String
+  // A short description shown next to the label.
+  detail : String
+  // For a slash command, the id its accepted action dispatches on; empty for
+  // skills. For a skill, `insert` carries the text dropped into the composer.
+  command : String
+  insert : String
+}
+
+///|
+/// The composer's open completion menu: the trigger that opened it, the
+/// currently matching rows, and which row is highlighted. Absent when the
+/// composer text does not begin with a live trigger.
+priv struct Completion {
+  kind : CompletionKind
+  items : Array[CompletionItem]
+  selected : Int
 }
 
 ///|
@@ -182,6 +223,11 @@ priv struct Model {
   skills_query : String
   skills_busy : Array[String]
   skills_notice : String
+  // The composer completion menu, open only while the active conversation's
+  // draft begins with a `/` or `$` trigger. Lives on the model rather than the
+  // conversation: it is transient UI for the on-screen composer, recomputed on
+  // every keystroke and dismissed on blur, send, or conversation switch.
+  completion : Completion?
 }
 
 ///|
@@ -202,6 +248,16 @@ priv enum Msg {
     wsl_engine~ : String
   )
   TaskChanged(String)
+  // Move the completion menu's highlight by a delta (−1 up, +1 down), wrapping
+  // at the ends. Ignored when the menu is closed.
+  CompletionMove(Int)
+  // Accept the highlighted completion: run the slash command or insert the
+  // skill mention into the composer.
+  CompletionAccept
+  // Accept a specific completion row by index, for a mouse click on the menu.
+  CompletionPick(Int)
+  // Close the completion menu without acting (Escape, or a click away).
+  CompletionDismiss
   ModelChanged(String)
   MaxStepsChanged(String)
   SetupApiKeyChanged(String)
@@ -268,6 +324,8 @@ fn empty_conversation(session_id : String) -> Conversation {
     task: "",
     running: false,
     active_run_id: None,
+    last_run_id: None,
+    compacting: false,
     status: Idle,
     usage_tokens: 0,
     cwd: "",
@@ -308,6 +366,7 @@ fn initial_model() -> Model {
     skills_query: "",
     skills_busy: [],
     skills_notice: "",
+    completion: None,
   }
 }
 
@@ -442,6 +501,19 @@ fn Model::replace_conversation(self : Model, conv : Conversation) -> Model {
 fn Model::conversation_by_run(self : Model, run_id : Int) -> Conversation? {
   for conv in self.conversations {
     if conv.active_run_id is Some(active) && active == run_id {
+      return Some(conv)
+    }
+  }
+  None
+}
+
+///|
+/// The conversation that most recently owned run `run_id`, matched even after
+/// the run finished. Used to route compaction events, which the engine stamps
+/// with its last run id while sitting idle between turns.
+fn Model::conversation_by_last_run(self : Model, run_id : Int) -> Conversation? {
+  for conv in self.conversations {
+    if conv.last_run_id is Some(last) && last == run_id {
       return Some(conv)
     }
   }

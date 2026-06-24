@@ -21,6 +21,13 @@ pub(all) enum EngineEvent {
   // dropped because it raced the turn's end. Both echo the original text.
   SteerApplied(String)
   SteerDropped(String)
+  // Conversation compaction lifecycle: the engine started summarizing the
+  // history, finished (carrying the checkpoint summary text), or failed
+  // (carrying the reason). Requested while the engine is idle, so these arrive
+  // outside any open turn.
+  CompactionStarted
+  CompactionFinished(String)
+  CompactionFailed(String)
 }
 
 ///|
@@ -62,6 +69,9 @@ pub fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
     "agent_setup_failed" => Some(AgentSetupFailed(reason))
     "steer_applied" => Some(SteerApplied(content))
     "steer_dropped" => Some(SteerDropped(content))
+    "compaction_started" => Some(CompactionStarted)
+    "compaction_finished" => Some(CompactionFinished(json_text(raw, "summary")))
+    "compaction_failed" => Some(CompactionFailed(reason))
     _ => None
   }
 }

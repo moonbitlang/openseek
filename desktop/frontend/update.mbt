@@ -23,6 +23,60 @@ fn scroll_if_active(model : Model, session_id : String) -> @cmd.Cmd {
 }
 
 ///|
+/// Whether an event is part of the compaction lifecycle, which the engine
+/// emits while idle and the routing therefore matches by last run id.
+fn is_compaction_event(event : @transcript.EngineEvent) -> Bool {
+  match event {
+    CompactionStarted | CompactionFinished(_) | CompactionFailed(_) => true
+    _ => false
+  }
+}
+
+///|
+/// Apply an accepted completion row: a slash command runs its action, a skill
+/// mention replaces the composer's `$query` token with the skill name so the
+/// user keeps typing the rest of the prompt. Either way the menu closes.
+fn accept_completion(
+  dispatch : @cmd.Dispatch[Msg],
+  model : Model,
+  menu : Completion,
+  item : CompletionItem,
+) -> (@cmd.Cmd, Model) {
+  match menu.kind {
+    SlashCommands => run_slash_command(dispatch, model, item.command)
+    SkillMentions =>
+      (
+        @cmd.none,
+        {
+          ..model.replace_conversation({ ..model.active(), task: item.insert }),
+          completion: None,
+        },
+      )
+  }
+}
+
+///|
+/// Run an accepted slash command against the active conversation and close the
+/// completion menu. The command text is cleared from the composer; an unknown
+/// id just dismisses the menu.
+fn run_slash_command(
+  dispatch : @cmd.Dispatch[Msg],
+  model : Model,
+  command : String,
+) -> (@cmd.Cmd, Model) {
+  match command {
+    "compact" => {
+      let conv = model.active()
+      (
+        compact_openseek(dispatch, conv.session_id),
+        { ..model.replace_conversation({ ..conv, task: "" }), completion: None },
+      )
+    }
+    _ => (@cmd.none, { ..model, completion: None })
+  }
+}
+
+///|
 /// Fold one engine event into its conversation. Returns whether the
 /// transcript visibly grew (the caller turns that into a scroll command only
 /// when this conversation is the one on screen) and the new conversation.
@@ -148,6 +202,31 @@ fn apply_engine_event(
         .settle_pending_steer(content)
         .append_item(Assistant(true), steer_dropped_notice(content)),
       )
+    // Compaction runs while the engine is idle and the next prompt will carry
+    // the shrunken context. The summary is appended as a `summary` item, the
+    // same shape a reloaded session shows for the checkpoint, so the live and
+    // replayed transcripts agree.
+    CompactionStarted => (false, { ..conv, compacting: true })
+    CompactionFinished(summary) => {
+      let conv = { ..conv, compacting: false }
+      let summary = summary.trim().to_owned()
+      if summary.is_empty() {
+        (false, conv)
+      } else {
+        (true, conv.append_item(Tool("summary", false), summary))
+      }
+    }
+    CompactionFailed(reason) => {
+      let content = if reason.trim().is_empty() {
+        "compaction failed"
+      } else {
+        "compaction failed: " + reason
+      }
+      (
+        true,
+        { ..conv, compacting: false }.append_item(Assistant(true), content),
+      )
+    }
   }
 }
 
@@ -170,7 +249,9 @@ fn update(
       )
     BridgeReady =>
       (
-        fetch_sessions(dispatch),
+        // The installed skills also feed the composer's `$` completion, so they
+        // are fetched on connect rather than only when the Skills page opens.
+        @cmd.batch([fetch_sessions(dispatch), fetch_installed_skills(dispatch)]),
         {
           ..model,
           bridge_ready: true,
@@ -206,7 +287,32 @@ fn update(
       (@cmd.none, { ..next, setup_open: !next.api_ready() })
     }
     TaskChanged(value) =>
-      (@cmd.none, model.replace_conversation({ ..model.active(), task: value }))
+      (
+        @cmd.none,
+        {
+          ..model.replace_conversation({ ..model.active(), task: value }),
+          completion: compute_completion(value, model.installed_skills),
+        },
+      )
+    CompletionMove(delta) =>
+      if model.completion is Some(menu) {
+        (@cmd.none, { ..model, completion: Some(menu.shifted(delta)) })
+      } else {
+        (@cmd.none, model)
+      }
+    CompletionDismiss => (@cmd.none, { ..model, completion: None })
+    CompletionAccept =>
+      if model.completion is Some(menu) && menu.current() is Some(item) {
+        accept_completion(dispatch, model, menu, item)
+      } else {
+        (@cmd.none, { ..model, completion: None })
+      }
+    CompletionPick(index) =>
+      if model.completion is Some(menu) && menu.items.get(index) is Some(item) {
+        accept_completion(dispatch, model, menu, item)
+      } else {
+        (@cmd.none, { ..model, completion: None })
+      }
     ModelChanged(value) => (@cmd.none, { ..model, selected_model: value })
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value })
     SetupApiKeyChanged(value) => (@cmd.none, { ..model, setup_api_key: value })
@@ -335,6 +441,7 @@ fn update(
             {
               ..model.replace_conversation({ ..conv, pending_steers, task: "" }),
               transcript_pinned: true,
+              completion: None,
             },
           )
         } else {
@@ -368,7 +475,11 @@ fn update(
           ]),
           // Submitting is an explicit jump to the conversation's tail, so it
           // re-pins a transcript the user had scrolled away from.
-          { ..model.replace_conversation(next), transcript_pinned: true },
+          {
+            ..model.replace_conversation(next),
+            transcript_pinned: true,
+            completion: None,
+          },
         )
       }
     }
@@ -413,6 +524,7 @@ fn update(
           screen: Chat,
           transcript_pinned: true,
           loading_session: "",
+          completion: None,
         },
       )
     SessionsLoaded(items) =>
@@ -424,7 +536,10 @@ fn update(
       if session_id.is_empty() {
         (@cmd.none, model)
       } else if session_id == model.active_session {
-        (@cmd.none, { ..model, screen: Chat, loading_session: "" })
+        (
+          @cmd.none,
+          { ..model, screen: Chat, loading_session: "", completion: None },
+        )
       } else if model.find_conversation(session_id) is Some(_) {
         // The conversation already has live client state — it may well still
         // be running — so switching is just a change of focus. A switch lands
@@ -436,6 +551,7 @@ fn update(
             screen: Chat,
             transcript_pinned: true,
             loading_session: "",
+            completion: None,
           },
         )
       } else {
@@ -464,6 +580,7 @@ fn update(
             .activate(session_id),
             transcript_pinned: true,
             loading_session: "",
+            completion: None,
           },
         )
       }
@@ -475,6 +592,7 @@ fn update(
           ..conv,
           running: true,
           active_run_id: Some(run_id),
+          last_run_id: Some(run_id),
           status: Running,
           cwd,
         })
@@ -493,8 +611,20 @@ fn update(
       } else {
         (@cmd.none, model)
       }
-    Engine(run_id, event) =>
-      if model.conversation_by_run(run_id) is Some(conv) {
+    Engine(run_id, event) => {
+      // Compaction is requested between turns, so its events arrive after the
+      // run that owned `run_id` cleared `active_run_id`; fall back to the
+      // conversation that last held the id so the summary still lands.
+      let conv = match model.conversation_by_run(run_id) {
+        Some(conv) => Some(conv)
+        None =>
+          if is_compaction_event(event) {
+            model.conversation_by_last_run(run_id)
+          } else {
+            None
+          }
+      }
+      if conv is Some(conv) {
         let (transcript_grew, next) = apply_engine_event(conv, event)
         (
           if transcript_grew {
@@ -507,6 +637,7 @@ fn update(
       } else {
         (@cmd.none, model)
       }
+    }
     Failed(session~, message~) =>
       if model.find_conversation(session) is Some(conv) {
         let next = {

@@ -40,6 +40,14 @@ pub(all) struct SteerRequest {
 }
 
 ///|
+pub(all) struct CompactRequest {
+  // The conversation to compact, addressed by its durable session id. Unlike
+  // cancel/steer there is no open run to key on: compaction is normally asked
+  // for once a turn has finished and the engine is idle.
+  session : String
+}
+
+///|
 pub(all) struct LoadSessionRequest {
   session : String
 }
@@ -61,6 +69,13 @@ struct CancelReply {
 struct SteerReply {
   steered : Bool
   run_id : Int?
+} derive(ToJson)
+
+///|
+struct CompactReply {
+  // Whether the compaction command reached a live engine for this
+  // conversation; the engine reports the actual progress through events.
+  compacting : Bool
 } derive(ToJson)
 
 ///|

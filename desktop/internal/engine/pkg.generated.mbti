@@ -8,6 +8,8 @@ import {
 // Values
 pub async fn cancel_run(EngineManager, CancelRequest) -> CancelReply
 
+pub async fn compact_run(EngineManager, CompactRequest) -> CompactReply
+
 pub async fn engine_command(String) -> String
 
 pub async fn list_sessions(EngineManager) -> SessionsReply
@@ -32,6 +34,12 @@ type CancelReply derive(ToJson)
 
 pub(all) struct CancelRequest {
   run_id : Int?
+}
+
+type CompactReply derive(ToJson)
+
+pub(all) struct CompactRequest {
+  session : String
 }
 
 type ConnectedPayload derive(ToJson)

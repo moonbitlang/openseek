@@ -134,6 +134,28 @@ pub async fn cancel_run(
 }
 
 ///|
+/// Ask a conversation's serve engine to compact its history: summarize the
+/// turns so far into a checkpoint and drop the raw events behind it, shrinking
+/// the context the next prompt carries. Addressed by session id, not run id —
+/// compaction is normally requested while the engine sits idle between turns.
+/// The engine reports the real progress (started/finished/failed) through its
+/// event stream; this op only confirms the command reached a live engine.
+pub async fn compact_run(
+  manager : EngineManager,
+  payload : CompactRequest,
+) -> CompactReply {
+  guard manager.engines.get(payload.session) is Some(live) else {
+    raise EngineError("this conversation has no running engine to compact")
+  }
+  let command = @protocol.compact()
+  live.writer.write(command.to_jsonl()) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise EngineError("failed to request compaction: \{error}")
+  }
+  { compacting: true }
+}
+
+///|
 /// Inject steering input into an open turn, addressed by run id: the text
 /// rides that serve engine's lossless steering queue and is folded into the
 /// conversation at the turn's next step boundary, where the engine echoes it

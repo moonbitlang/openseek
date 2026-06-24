@@ -10,6 +10,8 @@ test "engine commands encode serve protocol json" {
     steer.to_json()
     is { "command": String("steer"), "text": String("go left"), .. },
   )
+  let compact : EngineCommand = Compact
+  assert_true(compact.to_json() is { "command": String("compact"), .. })
   let cancel : EngineCommand = Cancel
   assert_true(cancel.to_json() is { "command": String("cancel"), .. })
 }

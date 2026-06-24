@@ -342,15 +342,88 @@ fn pending_steers_panel(conv : Conversation) -> @html.Html {
 }
 
 ///|
-fn task_attrs(dispatch : @cmd.Dispatch[Msg]) -> @html.Attrs {
+/// Composer key handling. While the completion menu is open it captures the
+/// navigation keys — ↑/↓ move the highlight, Enter/Tab accept, Escape closes —
+/// so they drive the menu instead of the textarea; everything else (and every
+/// key with the menu closed) falls through to the normal submit shortcut.
+fn task_attrs(dispatch : @cmd.Dispatch[Msg], menu_open : Bool) -> @html.Attrs {
   @html.Attrs::build().on_keydown(fn(event) {
-    if is_submit_shortcut(event) {
+    if menu_open {
+      match event.key() {
+        "ArrowDown" => {
+          event.prevent_default()
+          dispatch(CompletionMove(1))
+        }
+        "ArrowUp" => {
+          event.prevent_default()
+          dispatch(CompletionMove(-1))
+        }
+        "Tab" => {
+          event.prevent_default()
+          dispatch(CompletionAccept)
+        }
+        "Enter" =>
+          if !event.shift_key() && !event.is_composing() {
+            event.prevent_default()
+            dispatch(CompletionAccept)
+          } else {
+            @cmd.none
+          }
+        "Escape" => {
+          event.prevent_default()
+          dispatch(CompletionDismiss)
+        }
+        _ => @cmd.none
+      }
+    } else if is_submit_shortcut(event) {
       event.prevent_default()
       dispatch(Send)
     } else {
       @cmd.none
     }
   })
+}
+
+///|
+/// The completion menu floating above the composer: one row per match, the
+/// highlighted row marked for the keyboard and clickable by mouse. A pointer
+/// press accepts a row; `mousedown` (not `click`) is used so the textarea does
+/// not blur the menu away before the selection registers.
+fn completion_popup(
+  dispatch : @cmd.Dispatch[Msg],
+  completion : Completion,
+) -> @html.Html {
+  let rows : Array[@html.Html] = []
+  for index, item in completion.items {
+    let selected = index == completion.selected
+    let row_class = if selected {
+      "completion-item selected"
+    } else {
+      "completion-item"
+    }
+    rows.push(
+      @html.div(
+        class=row_class,
+        attrs=@html.Attrs::build().on_mousedown(fn(event) {
+          // Keep focus in the textarea; accept the row the press landed on.
+          event.prevent_default()
+          dispatch(CompletionPick(index))
+        }),
+        [
+          @html.span(class="completion-label", item.label),
+          @html.span(class="completion-detail", item.detail),
+        ],
+      ),
+    )
+  }
+  let hint = match completion.kind {
+    SlashCommands => "Commands"
+    SkillMentions => "Skills"
+  }
+  @html.div(class="completion-menu", [
+    @html.div(class="completion-hint", hint),
+    @html.div(class="completion-list", rows),
+  ])
 }
 
 ///|
@@ -412,25 +485,39 @@ fn composer_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
   if conv.pending_steers.length() > 0 {
     children.push(pending_steers_panel(conv))
   }
-  children.push(
-    @html.div(class="composer-inner", [
-      @html.textarea(
-        id="task",
-        value=conv.task,
-        placeholder=if conv.running {
-          "Steer the running task — your message joins it at the next step."
-        } else {
-          "Ask OpenSeek to inspect, edit, or explain this workspace."
-        },
-        on_input=dispatch.map(value => TaskChanged(value)),
-        attrs=task_attrs(dispatch),
-        "",
-      ),
-      @html.div(class="composer-toolbar", [
-        @html.div(class="composer-controls", controls),
+  if conv.compacting {
+    children.push(
+      @html.div(class="composer-notice", [
+        @html.span(class="composer-notice-icon", "🗜"),
+        @html.span(class="composer-notice-text", "Compacting context…"),
       ]),
+    )
+  }
+  let inner : Array[@html.Html] = [
+    @html.textarea(
+      id="task",
+      value=conv.task,
+      placeholder=if conv.running {
+        "Steer the running task — your message joins it at the next step."
+      } else {
+        "Ask OpenSeek to inspect, edit, or explain this workspace."
+      },
+      on_input=dispatch.map(value => TaskChanged(value)),
+      attrs=task_attrs(dispatch, model.completion is Some(_)),
+      "",
+    ),
+    @html.div(class="composer-toolbar", [
+      @html.div(class="composer-controls", controls),
     ]),
-  )
+  ]
+  // The menu floats above the composer via CSS, so its DOM position does not
+  // affect layout. It is appended last (not inserted before the textarea) so
+  // toggling it never shifts the textarea's child index — index-based vdom
+  // diffing would otherwise rebuild the textarea node and drop its focus.
+  if model.completion is Some(completion) {
+    inner.push(completion_popup(dispatch, completion))
+  }
+  children.push(@html.div(class="composer-inner", inner))
   @html.section(class="composer", children)
 }
 

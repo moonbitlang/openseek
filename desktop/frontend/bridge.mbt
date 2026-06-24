@@ -409,6 +409,38 @@ async fn steer_delivered(text : String, run_id : Int) -> Bool {
 }
 
 ///|
+/// Ask a conversation's engine to compact (summarize and shrink) its history.
+/// The engine reports the real progress through `compaction_*` events; this
+/// command only surfaces the immediate failure — no live engine for the
+/// conversation, or the bridge call itself rejecting — as an error in the
+/// conversation on screen.
+fn compact_openseek(
+  dispatch : @cmd.Dispatch[Msg],
+  session : String,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let payload = @js.Object::new()
+      payload["session"] = session
+      let _ : @js.Value = bridge_request("compact", payload.to_value()) catch {
+        error => {
+          scheduler.add(
+            dispatch(
+              Error(
+                run_id=EmptyRunId,
+                message=bridge_error_text(error),
+                diagnostics="",
+              ),
+            ),
+          )
+          return
+        }
+      }
+    })
+  })
+}
+
+///|
 fn cancel_openseek(dispatch : @cmd.Dispatch[Msg], run_id : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {

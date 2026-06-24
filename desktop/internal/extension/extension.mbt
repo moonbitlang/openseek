@@ -38,6 +38,7 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("start"),
       @app.AppCommandApiDescriptor::new("cancel"),
       @app.AppCommandApiDescriptor::new("steer"),
+      @app.AppCommandApiDescriptor::new("compact"),
       @app.AppCommandApiDescriptor::new("list_sessions"),
       @app.AppCommandApiDescriptor::new("load_session"),
       @app.AppCommandApiDescriptor::new("skills_catalog"),
@@ -67,6 +68,12 @@ pub fn openseek_extension(
       })
       context.op_async("steer", async fn(payload : SteerPayload) {
         @engine.steer_run(manager, payload.to_request()) catch {
+          @engine.EngineError(message) => raise HostError(message)
+          error => raise error
+        }
+      })
+      context.op_async("compact", async fn(payload : CompactPayload) {
+        @engine.compact_run(manager, payload.to_request()) catch {
           @engine.EngineError(message) => raise HostError(message)
           error => raise error
         }

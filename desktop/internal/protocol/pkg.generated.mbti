@@ -4,6 +4,8 @@ package "openseek_desktop/internal/protocol"
 // Values
 pub fn cancel() -> EngineCommand
 
+pub fn compact() -> EngineCommand
+
 pub fn prompt(String) -> EngineCommand
 
 pub fn steer(String) -> EngineCommand

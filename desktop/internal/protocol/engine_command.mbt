@@ -5,6 +5,7 @@
 enum EngineCommand {
   Prompt(String)
   Steer(String)
+  Compact
   Cancel
 }
 
@@ -19,6 +20,11 @@ pub fn steer(text : String) -> EngineCommand {
 }
 
 ///|
+pub fn compact() -> EngineCommand {
+  Compact
+}
+
+///|
 pub fn cancel() -> EngineCommand {
   Cancel
 }
@@ -28,6 +34,7 @@ fn EngineCommand::to_json(self : EngineCommand) -> Json {
   match self {
     Prompt(text) => { "command": "prompt", "text": text }
     Steer(text) => { "command": "steer", "text": text }
+    Compact => { "command": "compact" }
     Cancel => { "command": "cancel" }
   }
 }

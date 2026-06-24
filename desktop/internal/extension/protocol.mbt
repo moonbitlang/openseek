@@ -79,6 +79,16 @@ fn SteerPayload::to_request(self : SteerPayload) -> @engine.SteerRequest {
 }
 
 ///|
+priv struct CompactPayload {
+  session : String
+} derive(FromJson)
+
+///|
+fn CompactPayload::to_request(self : CompactPayload) -> @engine.CompactRequest {
+  { session: self.session }
+}
+
+///|
 priv struct InstallSkillPayload {
   module_name : String
   version : String
