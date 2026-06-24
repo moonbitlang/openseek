@@ -31,20 +31,33 @@ pub(all) suberror PackageError {
 
 ///|
 /// The desktop workspace being packaged. The value is opaque to callers so
-/// all path decisions stay centralized here.
+/// all path decisions stay centralized here. `root` is absolute, so every
+/// path derived from it is absolute too and a subprocess's working directory
+/// can never change which file a path names.
 struct Workspace {
-  dir : String
+  // Absolute, normalized path to the desktop workspace directory.
+  root : String
+  // Whether the packager was invoked from the monorepo root (so the workspace
+  // is the `desktop` subdirectory) rather than from inside the desktop
+  // directory. The WSL engine build inherits the packager's working directory,
+  // not an absolute path, so it needs this to decide whether to climb to the
+  // repo root.
+  invoked_from_repo_root : Bool
 }
 
 ///|
 /// Locate the desktop workspace from either the workspace directory itself or
-/// the monorepo root.
+/// the monorepo root. The matched directory is resolved to an absolute path so
+/// later path math is independent of any later working-directory change.
 pub async fn locate_workspace() -> Workspace {
   for candidate in [".", "desktop"] {
     if @asyncfs.exists(candidate + "/moon.mod") &&
       @asyncfs.exists(candidate + "/lepus") &&
       @asyncfs.exists(candidate + "/frontend") {
-      return { dir: candidate }
+      return {
+        root: absolute_path(candidate),
+        invoked_from_repo_root: candidate == "desktop",
+      }
     }
   }
   raise PackageError(
@@ -53,27 +66,43 @@ pub async fn locate_workspace() -> Workspace {
 }
 
 ///|
-/// Return the desktop workspace directory.
+/// Return the absolute desktop workspace directory.
 pub fn Workspace::dir(self : Workspace) -> String {
-  self.dir
+  self.root
 }
 
 ///|
-/// Resolve a path relative to the desktop workspace directory.
+/// Whether the packager was invoked from the monorepo root (the workspace is
+/// the `desktop` subdirectory). The WSL engine build inherits the packager's
+/// working directory and uses this to know whether to climb to the repo root.
+pub fn Workspace::invoked_from_repo_root(self : Workspace) -> Bool {
+  self.invoked_from_repo_root
+}
+
+///|
+/// Resolve a path relative to the desktop workspace directory, as an absolute
+/// path.
 pub fn Workspace::at(self : Workspace, relative : String) -> String {
-  self.dir + "/" + relative
+  join_path(self.root, relative)
 }
 
 ///|
-/// The monorepo root, one level up from the desktop workspace.
+/// The monorepo root, one level up from the desktop workspace, absolute.
 pub fn Workspace::repo(self : Workspace) -> String {
-  self.dir + "/.."
+  (self.root : @path.Path).dirname().to_string()
 }
 
 ///|
-/// Resolve a path relative to the monorepo root.
+/// Resolve a path relative to the monorepo root, as an absolute path.
 pub fn Workspace::repo_at(self : Workspace, relative : String) -> String {
-  self.repo() + "/" + relative
+  join_path(self.repo(), relative)
+}
+
+///|
+/// Join `relative` onto an absolute `base` using host path rules, yielding an
+/// absolute path. Centralizing the join keeps every workspace path absolute.
+fn join_path(base : String, relative : String) -> String {
+  (base : @path.Path).join((relative : @path.Path)).to_string()
 }
 
 ///|

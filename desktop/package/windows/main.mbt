@@ -61,7 +61,7 @@ async fn run_powershell(ws : @packaging.Workspace, script : String) -> Unit {
 /// non-login shell does not have on PATH, and a command launched from the
 /// `desktop` directory must climb to the repo root first.
 fn wsl_moon_script(ws : @packaging.Workspace, command : String) -> String {
-  let prefix = if ws.dir() == "desktop" { "" } else { "cd .. && " }
+  let prefix = if ws.invoked_from_repo_root() { "" } else { "cd .. && " }
   "PATH=\"$HOME/.moon/bin:$PATH\"; " + prefix + command
 }
 
@@ -234,12 +234,14 @@ async fn build_installer(ws : @packaging.Workspace) -> Unit {
       "Windows app bundle not found: \{ws.at(BundleDir)}",
     )
   }
+  // `ws.at(...)` is already absolute, so makensis receives unambiguous paths
+  // regardless of the cwd it runs in.
   @packaging.run_checked(
     makensis_command(ws),
     [
-      "/DSOURCE_DIR=\{@packaging.absolute_path(ws.at(BundleDir))}",
-      "/DOUTPUT_DIR=\{@packaging.absolute_path(ws.at("dist"))}",
-      @packaging.absolute_path(ws.at(InstallerScript)),
+      "/DSOURCE_DIR=\{ws.at(BundleDir)}",
+      "/DOUTPUT_DIR=\{ws.at("dist")}",
+      ws.at(InstallerScript),
     ],
     dir=ws.dir(),
   )

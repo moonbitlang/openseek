@@ -40,6 +40,7 @@ type Workspace
 pub fn Workspace::at(Self, String) -> String
 pub fn Workspace::dir(Self) -> String
 pub fn Workspace::engine_binary(Self) -> String
+pub fn Workspace::invoked_from_repo_root(Self) -> Bool
 pub fn Workspace::native_binary(Self) -> String
 pub fn Workspace::repo(Self) -> String
 pub fn Workspace::repo_at(Self, String) -> String

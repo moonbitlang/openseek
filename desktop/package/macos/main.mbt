@@ -140,6 +140,8 @@ async fn sign_moonbit_seed_binaries(
   identity : String,
   distribution~ : Bool,
 ) -> Unit {
+  // `ws.at(...)` is absolute, so the walked paths name the same file no matter
+  // which cwd `codesign` runs in.
   let seed_dir = ws.at(MoonbitSeedDir)
   if !@asyncfs.exists(seed_dir) {
     return
@@ -148,6 +150,9 @@ async fn sign_moonbit_seed_binaries(
 }
 
 ///|
+/// Sign every Mach-O file under `dir`, an absolute path so the recursive
+/// traversal and the `codesign` invocation resolve the same file regardless of
+/// the process or command working directory.
 async fn sign_macho_files_under(
   ws : @packaging.Workspace,
   dir : String,
