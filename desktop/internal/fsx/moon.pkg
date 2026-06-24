@@ -4,3 +4,5 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/x/path",
 }
+
+supported_targets = "+native"
