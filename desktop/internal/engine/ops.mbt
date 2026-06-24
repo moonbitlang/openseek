@@ -95,6 +95,19 @@ pub async fn start_run(
       raise EngineError(message)
     }
   }
+  // A Stop pressed between the Started event above and this write reaches
+  // `cancel_run` while the serve process is still idle, where its cancel is
+  // ignored — leaving the turn running with the UI stuck on "cancelling". The
+  // prompt is on the wire now, so re-send the cancel: serve is processing the
+  // turn and will honor it. (Started stays before the write so it can never
+  // arrive after a stream event.)
+  if live.cancel_requested {
+    live.writer.write(@protocol.cancel().to_jsonl()) catch {
+      error if @async.is_being_cancelled() => raise error
+      // The engine died; its reader task closes the run.
+      _ => ()
+    }
+  }
   { run_id, status: "accepted", exit_code: 0 }
 }
 
