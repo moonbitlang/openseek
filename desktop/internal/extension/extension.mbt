@@ -30,6 +30,7 @@ pub fn openseek_extension(
   runtime_dir? : @path.Path,
 ) -> @app.AppCommandExtensionSpec {
   let manager = @engine.new_engine_manager(engine, runtime_dir?)
+  let lsp = new_lsp_manager()
   @app.AppCommandExtensionSpec::new(
     ExtensionId,
     ExtensionNamespace,
@@ -50,6 +51,7 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("launch_app"),
       @app.AppCommandApiDescriptor::new("read_directory"),
       @app.AppCommandApiDescriptor::new("read_file"),
+      @app.AppCommandApiDescriptor::new("hover"),
     ],
     context => {
       let sink = event_sink(context)
@@ -123,6 +125,9 @@ pub fn openseek_extension(
       })
       context.op_async("read_file", async fn(payload : ReadFilePayload) {
         read_file_op(payload)
+      })
+      context.op_async("hover", async fn(payload : LspHoverPayload) {
+        lsp_hover_op(lsp, payload)
       })
       Ok(())
     },

@@ -210,6 +210,30 @@ priv struct ReadFileReply {
 } derive(ToJson)
 
 ///|
+/// `hover` asks the workspace's language server for hover at a zero-based
+/// `line`/`character` in `path` (resolved under `session`'s workspace).
+priv struct LspHoverPayload {
+  session : String
+  path : String
+  line : Int
+  character : Int
+} derive(FromJson)
+
+///|
+/// Reply to `hover`. An empty `value` means "no hover here". `range` (the four
+/// position fields) marks the symbol the tooltip describes, valid only when
+/// `has_range` is set; the front-end maps it back to a document offset.
+priv struct LspHoverReply {
+  value : String
+  markdown : Bool
+  has_range : Bool
+  start_line : Int
+  start_character : Int
+  end_line : Int
+  end_character : Int
+} derive(ToJson)
+
+///|
 fn event_sink(context : @app.AppCommandExtensionContext) -> @engine.EventSink {
   EventSink(async fn(event) { emit_engine_event(context, event) })
 }

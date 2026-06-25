@@ -31,6 +31,7 @@ fn viewer() -> @viewer.Viewer {
     Some(viewer) => viewer
     None => {
       register_tokenizers()
+      register_hover_provider()
       let viewer = @viewer.Viewer(
         theme="light",
         placeholder="Select a file to view",
@@ -92,11 +93,15 @@ fn request_viewer_remeasure() -> @cmd.Cmd {
 ///|
 /// Show a file's contents in the viewer as a fresh read-only document.
 fn show_file_in_viewer(
+  session : String,
   path : String,
   name : String,
   content : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
+    // The hover provider addresses the host op by session, but the viewer model
+    // carries only the path; stash the session of whatever file is now shown.
+    current_session.val = session
     model_version.val = model_version.val + 1
     let version = model_version.val
     let uri : @common.Uri = { value: "openseek:///" + path }

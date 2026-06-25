@@ -9,6 +9,7 @@ import {
   "moonbit-community/editor/viewer",
   "moonbit-community/editor/viewer/model",
   "moonbit-community/editor/viewer/languages",
+  "moonbit-community/editor/language",
   "moonbit-community/editor/base/common",
   "moonbit-community/editor/syntax/lang_moonbit",
   "moonbit-community/editor/syntax/lang_javascript",

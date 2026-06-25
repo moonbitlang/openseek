@@ -837,7 +837,7 @@ fn update_msg(
         model.file_panel.selected != Some(path) {
         (@cmd.none, model)
       } else {
-        (show_file_in_viewer(path, name, content), model)
+        (show_file_in_viewer(session, path, name, content), model)
       }
     FileFailed(session~, message~) =>
       if model.file_panel.session != session {
