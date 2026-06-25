@@ -187,6 +187,10 @@ priv struct FilePanel {
   // The file-tree filter query; a blank query lists everything, otherwise only
   // rows whose name contains it (case-insensitive) survive.
   filter : String
+  // Whether the file-tree column is shown inside the editor; collapsing it
+  // hands the whole editor width to the viewer. Independent of `open`, which
+  // toggles the entire right panel.
+  tree_open : Bool
   // The last directory/file failure, surfaced in the panel header.
   error : String
 }
@@ -201,6 +205,7 @@ fn empty_file_panel() -> FilePanel {
     children: {},
     selected: None,
     filter: "",
+    tree_open: true,
     error: "",
   }
 }
@@ -236,6 +241,9 @@ priv struct Model {
   // the user's default distro; `wsl_engine` empty means `openseek` on the
   // distro's PATH. All three persist to localStorage as they change.
   is_windows : Bool
+  // Whether the host is macOS; gates the immersive-titlebar top inset that
+  // keeps content clear of the traffic-light buttons.
+  is_macos : Bool
   wsl_enabled : Bool
   wsl_distro : String
   wsl_engine : String
@@ -397,6 +405,9 @@ priv enum Msg {
   // Show or hide the editor side-panel. Opening it loads the active
   // conversation's workspace root if it has not been listed yet.
   ToggleFilePanel
+  // Show or hide just the file-tree column inside the editor, leaving the
+  // viewer in place.
+  ToggleFileTree
   // Expand or collapse a directory row in the file tree; the first expansion
   // lazily lists the directory through the host.
   DirToggle(String)
@@ -456,6 +467,7 @@ fn initial_model() -> Model {
     api_provider: Openseek,
     custom_api_url: "",
     is_windows: host_is_windows(),
+    is_macos: host_is_macos(),
     wsl_enabled: false,
     wsl_distro: "",
     wsl_engine: "",

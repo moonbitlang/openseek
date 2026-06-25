@@ -744,6 +744,14 @@ fn update_msg(
         { ..model, file_panel: { ..panel, open: !panel.open } },
       )
     }
+    ToggleFileTree => {
+      let panel = model.file_panel
+      // Collapsing the tree widens the viewer's cell, so re-measure it.
+      (
+        request_viewer_remeasure(),
+        { ..model, file_panel: { ..panel, tree_open: !panel.tree_open } },
+      )
+    }
     DirToggle(path) => {
       let panel = model.file_panel
       if panel.expanded.contains(path) {

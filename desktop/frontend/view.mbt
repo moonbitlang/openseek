@@ -1042,17 +1042,18 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if !conv.watcher_status.is_empty() {
     items.push(@html.span(class="pill", "moon_check \{conv.watcher_status}"))
   }
-  // Right-aligned toggle for the file side-panel.
+  // Right-aligned toggle for the whole right-hand panel. The file-tree column
+  // has its own collapse button above the tree (see `file_panel_view`).
   items.push(
     @html.button(
       class=if model.file_panel.open {
-        "topbar-toggle active"
+        "panel-toggle active"
       } else {
-        "topbar-toggle"
+        "panel-toggle"
       },
-      title="Toggle the workspace files panel",
+      title=if model.file_panel.open { "Hide panel" } else { "Show panel" },
       on_click=dispatch(ToggleFilePanel),
-      "Files",
+      "◨",
     ),
   )
   items.push(launcher_view(dispatch, model))
@@ -1092,15 +1093,20 @@ fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       rows
     }
   }
-  // The file-tree column (right): a filter box over the scrollable tree.
+  // The file-tree column (right): a filter box (in a header bar matching the
+  // topbar/breadcrumb height) over the scrollable tree. The collapse toggle
+  // lives on the breadcrumb header (always visible), so the column folds away
+  // entirely when hidden.
   let column_children : Array[@html.Html] = [
-    @html.input(
-      input_type=@html.InputType::Search,
-      value=panel.filter,
-      placeholder="Filter files…",
-      on_input=dispatch.map(value => FileFilterChanged(value)),
-      attrs=@html.Attrs::build().class("file-filter"),
-    ),
+    @html.div(class="file-tree-header", [
+      @html.input(
+        input_type=@html.InputType::Search,
+        value=panel.filter,
+        placeholder="Filter files…",
+        on_input=dispatch.map(value => FileFilterChanged(value)),
+        attrs=@html.Attrs::build().class("file-filter"),
+      ),
+    ]),
   ]
   if !panel.error.is_empty() {
     column_children.push(@html.div(class="file-panel-error", panel.error))
@@ -1118,9 +1124,64 @@ fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       .data_set("theme", "light"),
     ([] : Array[@html.Html]),
   )
-  @html.div(class="editor", [
+  // The viewer pane: a breadcrumb header (the open file's path plus the
+  // file-tree toggle) over the viewer.
+  let viewer_pane = @html.div(class="viewer-pane", [
+    viewer_breadcrumb(dispatch, panel),
     viewer_host,
-    @html.div(class="file-tree-column", column_children),
+  ])
+  @html.div(
+    class=if panel.tree_open { "editor" } else { "editor tree-collapsed" },
+    [viewer_pane, @html.div(class="file-tree-column", column_children)],
+  )
+}
+
+///|
+/// Split a relative path into its non-empty segments, e.g.
+/// `"cef/runtime.mbt"` → `["cef", "runtime.mbt"]`.
+fn path_segments(path : String) -> Array[String] {
+  let segments : Array[String] = []
+  let mut rest = path
+  while rest.split_once("/") is Some((head, tail)) {
+    if !head.is_empty() {
+      segments.push(head.to_owned())
+    }
+    rest = tail.to_owned()
+  }
+  if !rest.is_empty() {
+    segments.push(rest)
+  }
+  segments
+}
+
+///|
+/// The breadcrumb header over the viewer: the open file's path as
+/// `dir › dir › file` (the file segment emphasized, a muted placeholder when
+/// nothing is open) on the left, and the file-tree toggle on the right.
+fn viewer_breadcrumb(dispatch : @cmd.Emit[Msg], panel : FilePanel) -> @html.Html {
+  let crumbs : Array[@html.Html] = []
+  if panel.selected is Some(path) {
+    let segments = path_segments(path)
+    for index, segment in segments {
+      if index > 0 {
+        crumbs.push(@html.span(class="crumb-sep", "›"))
+      }
+      let last = index == segments.length() - 1
+      crumbs.push(
+        @html.span(class=if last { "crumb crumb-file" } else { "crumb" }, segment),
+      )
+    }
+  } else {
+    crumbs.push(@html.span(class="crumb crumb-empty", "No file open"))
+  }
+  @html.div(class="viewer-breadcrumb", [
+    @html.div(class="crumb-path", crumbs),
+    @html.button(
+      class=if panel.tree_open { "tree-toggle active" } else { "tree-toggle" },
+      title=if panel.tree_open { "Hide file tree" } else { "Show file tree" },
+      on_click=dispatch(ToggleFileTree),
+      "▤",
+    ),
   ])
 }
 
@@ -1228,14 +1289,21 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // viewer host inside it) is still rendered so the attached viewer is never
   // torn down.
   let panel_open = model.file_panel.open && model.screen is Chat
-  let app = @html.div(
-    class=if model.sidebar_open { "app" } else { "app sidebar-collapsed" },
-    [
-      sidebar_view(dispatch, model),
-    @html.div(class=if panel_open { "content panel-open" } else { "content" }, [
-      @html.main_(content),
-      file_panel_view(dispatch, model),
-    ]),
+  // `mac` adds the immersive-titlebar top inset (the native window has no title
+  // bar there); `sidebar-collapsed` folds the sidebar.
+  let app_class = "app"
+  let app_class = if model.sidebar_open {
+    app_class
+  } else {
+    app_class + " sidebar-collapsed"
+  }
+  let app_class = if model.is_macos { app_class + " mac" } else { app_class }
+  let app = @html.div(class=app_class, [
+    sidebar_view(dispatch, model),
+    @html.div(
+      class=if panel_open { "content panel-open" } else { "content" },
+      [@html.main_(content), file_panel_view(dispatch, model)],
+    ),
   ])
   if model.setup_open {
     @html.fragment([app, setup_popup(dispatch, model)])
