@@ -10,6 +10,28 @@ const FrontendBundleArtifact : String = "_build/js/release/build/openseek_deskto
 const FrontendBundleOutput : String = "frontend.js"
 
 ///|
+/// The stylesheet the embedded code viewer needs, assembled from the editor
+/// submodule's CSS. `index.html` links it by this name next to `frontend.js`.
+const ViewerStyleOutput : String = "viewer.css"
+
+///|
+/// The editor submodule's CSS files the embedded viewer depends on, in cascade
+/// order: `theme.css` first (it defines the `--vscode-*` / `--editor-*`
+/// variables, scoped to `.editor-shell`), then every viewer-owned stylesheet.
+/// The IDE shell chrome (`shell.css`) and the editor's own file tree
+/// (`file_tree.css`) are deliberately omitted — the desktop app supplies its
+/// own panel layout and file tree.
+fn viewer_css_sources() -> Array[String] {
+  [
+    "editor/internal/shell/workbench/theme.css", "editor/viewer/editor.css", "editor/viewer/ui/scrollbar/scrollable_element.css",
+    "editor/viewer/view_lines.css", "editor/viewer/view_overlays.css", "editor/viewer/view_zones.css",
+    "editor/viewer/content_widgets.css", "editor/viewer/overlay_widgets.css", "editor/viewer/selections.css",
+    "editor/viewer/margin.css", "editor/viewer/folding.css", "editor/viewer/tokens.css",
+    "editor/viewer/inlay_hints.css", "editor/viewer/markers.css", "editor/viewer/hover/hover.css",
+  ]
+}
+
+///|
 const NativePackage : String = "."
 
 ///|
@@ -250,6 +272,31 @@ pub async fn build_frontend_bundle(ws : Workspace) -> Unit {
     dir=ws.dir(),
   )
   copy_file(ws.at(FrontendBundleArtifact), ws.at(FrontendBundleOutput))
+  build_viewer_stylesheet(ws)
+}
+
+///|
+/// Concatenate the embedded viewer's CSS into a single `viewer.css` next to the
+/// frontend bundle, mirroring the editor submodule's own `scripts/build-web`
+/// step. The viewer ships its styles as many files, none of which are loaded
+/// unless assembled here; without them the viewer paints its raw measurement
+/// probes over the panel instead of a styled editor.
+pub async fn build_viewer_stylesheet(ws : Workspace) -> Unit {
+  let css = StringBuilder::new()
+  for source in viewer_css_sources() {
+    let absolute = ws.at(source)
+    if !@asyncfs.exists(absolute) {
+      raise PackageError("viewer stylesheet not found: \{absolute}")
+    }
+    css.write_string("/* " + source + " */\n")
+    let text = @asyncfs.read_file(absolute).text()
+    css.write_string(text)
+    if !text.has_suffix("\n") {
+      css.write_string("\n")
+    }
+    css.write_string("\n")
+  }
+  write_text(ws.at(ViewerStyleOutput), css.to_string())
 }
 
 ///|

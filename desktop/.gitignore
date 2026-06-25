@@ -11,3 +11,5 @@ target/
 
 # Generated frontend bundle (built by `moon run --target native build_frontend.mbtx`)
 /frontend.js
+# Embedded viewer stylesheet, assembled from the editor submodule by the packager.
+/viewer.css

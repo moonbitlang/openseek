@@ -1096,8 +1096,15 @@ fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   sections.push(@html.div(class="file-tree", tree_children))
   // The stable element the viewer attaches its imperative DOM into; it must
   // stay empty and never be re-keyed (see editor_panel.mbt).
+  // `editor-shell` brings in the viewer's `--vscode-*` / `--editor-*` theme
+  // variables (defined on that class in the bundled viewer.css); the viewer's
+  // colors cascade from this host element.
   sections.push(
-    @html.div(id=ViewerHostId, class="viewer-host", ([] : Array[@html.Html])),
+    @html.div(
+      id=ViewerHostId,
+      class="viewer-host editor-shell",
+      ([] : Array[@html.Html]),
+    ),
   )
   @html.div(class="file-panel", sections)
 }

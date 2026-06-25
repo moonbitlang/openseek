@@ -165,6 +165,7 @@ async fn copy_bundle_files(
     ws.at("frontend.js"),
     ws.at(AppAssetDir + "/frontend.js"),
   )
+  @packaging.copy_file(ws.at("viewer.css"), ws.at(AppAssetDir + "/viewer.css"))
   let target = @moonbit.moonbit_windows_x64_toolchain()
   @moonbit.stage_moonbit_toolchain_seed(
     ws,
