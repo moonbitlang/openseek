@@ -773,6 +773,10 @@ fn update_msg(
         }
       }
     }
+    FileFilterChanged(query) => {
+      let panel = model.file_panel
+      (@cmd.none, { ..model, file_panel: { ..panel, filter: query } })
+    }
     DirLoaded(session~, path~, entries~) =>
       // Drop a reply whose conversation is no longer the panel's.
       if model.file_panel.session != session {

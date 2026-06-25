@@ -184,6 +184,9 @@ priv struct FilePanel {
   children : Map[String, Array[FileEntry]]
   // The file currently shown in the viewer, if any.
   selected : String?
+  // The file-tree filter query; a blank query lists everything, otherwise only
+  // rows whose name contains it (case-insensitive) survive.
+  filter : String
   // The last directory/file failure, surfaced in the panel header.
   error : String
 }
@@ -197,6 +200,7 @@ fn empty_file_panel() -> FilePanel {
     loading: [],
     children: {},
     selected: None,
+    filter: "",
     error: "",
   }
 }
@@ -396,6 +400,8 @@ priv enum Msg {
   // Expand or collapse a directory row in the file tree; the first expansion
   // lazily lists the directory through the host.
   DirToggle(String)
+  // The file-tree filter query changed.
+  FileFilterChanged(String)
   // A `read_directory` reply: `session`/`path` say which request it answers so
   // a reply that lost a conversation switch can be dropped.
   DirLoaded(session~ : String, path~ : String, entries~ : Array[FileEntry])

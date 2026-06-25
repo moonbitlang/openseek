@@ -173,9 +173,7 @@
 
       .app {
         display: grid;
-        /* Third track is the files panel: zero-width until opened, so the
-           viewer host element stays in the DOM but takes no space. */
-        grid-template-columns: minmax(220px, 264px) minmax(0, 1fr) 0;
+        grid-template-columns: minmax(220px, 264px) minmax(0, 1fr);
         /* Track #app's content box (which already accounts for any scrollbar)
            rather than 100vh, so the two height bases can't disagree. */
         height: 100%;
@@ -192,14 +190,22 @@
         display: none;
       }
 
-      .app.panel-open {
-        grid-template-columns:
-          minmax(220px, 264px) minmax(0, 1fr) minmax(280px, 380px);
+      /* The conversation (left) and the editor (right) live side by side as two
+         independent parts. The editor track is zero-width until the panel
+         opens, so the viewer host element stays in the DOM but takes no
+         space. */
+      .content {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 0;
+        min-width: 0;
+        min-height: 0;
       }
-      /* Sidebar collapsed and panel open at once: drop the sidebar track so
-         the chat and panel share the width without an empty gap. */
-      .app.sidebar-collapsed.panel-open {
-        grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+
+      /* Open: the conversation and the editor share the content area. The
+         editor needs room for both the viewer and the 232px tree column, so it
+         floors at 460px rather than collapsing the viewer. */
+      .content.panel-open {
+        grid-template-columns: minmax(0, 1fr) minmax(460px, 1fr);
       }
 
       /* ---------- files panel ---------- */
@@ -225,7 +231,22 @@
         border-color: var(--accent-line);
       }
 
-      .file-panel {
+      /* The editor part: viewer (left) beside the file-tree column (right). */
+      .editor {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 232px;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        border-left: 1px solid var(--line);
+        background: var(--surface);
+        /* Own stacking context so the opaque editor always paints above the
+           conversation column, never the other way around. */
+        position: relative;
+        z-index: 1;
+      }
+
+      .file-tree-column {
         display: flex;
         flex-direction: column;
         min-width: 0;
@@ -233,43 +254,14 @@
         overflow: hidden;
         border-left: 1px solid var(--line);
         background: var(--surface);
-        /* Own stacking context so the opaque panel always paints above the
-           chat column, never the other way around. */
-        position: relative;
-        z-index: 1;
       }
 
-      .file-panel-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+      .file-filter {
         flex: 0 0 auto;
-        height: 46px;
-        padding: 0 12px;
-        border-bottom: 1px solid var(--line);
-      }
-
-      .file-panel-title {
+        width: auto;
+        margin: 8px;
+        padding: 6px 9px;
         font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--ink-2);
-      }
-
-      .file-panel-close {
-        border: none;
-        background: transparent;
-        color: var(--ink-2);
-        font-size: 18px;
-        line-height: 1;
-        cursor: pointer;
-        padding: 2px 6px;
-        border-radius: 6px;
-      }
-
-      button.file-panel-close:not(:disabled):hover {
-        background: var(--surface-2);
       }
 
       .file-panel-error {
@@ -281,11 +273,10 @@
       }
 
       .file-tree {
-        flex: 0 1 auto;
-        max-height: 45%;
+        flex: 1 1 auto;
+        min-height: 0;
         overflow: auto;
-        padding: 6px 0;
-        border-bottom: 1px solid var(--line);
+        padding: 4px 0 8px;
       }
 
       .file-panel-empty {
@@ -336,9 +327,9 @@
 
       .viewer-host {
         /* The embedded viewer positions its layers absolutely; without a
-           positioning context here they escape and paint over the chat. */
+           positioning context here they escape and paint over the chat. It is
+           the first cell of the `.editor` grid (the `minmax(0, 1fr)` track). */
         position: relative;
-        flex: 1 1 auto;
         min-width: 0;
         min-height: 0;
         overflow: hidden;

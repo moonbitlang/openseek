@@ -1060,55 +1060,68 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-/// The editor side-panel: the active conversation's file tree over a read-only
-/// code viewer. The column is always rendered so the viewer's host element
-/// (`viewer-host`) stays put across renders and screen switches; CSS collapses
-/// it to zero width when closed.
+/// The editor part: a read-only code viewer (left) beside the active
+/// conversation's file tree (right), the tree fronted by a filter box. The
+/// whole part is always rendered so the viewer's host element (`viewer-host`)
+/// stays put across renders and screen switches; CSS collapses it to zero width
+/// when closed.
 fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let panel = model.file_panel
   let conv = model.active()
-  let sections : Array[@html.Html] = [
-    @html.div(class="file-panel-header", [
-      @html.span(class="file-panel-title", "Files"),
-      @html.button(
-        class="file-panel-close",
-        title="Hide files",
-        on_click=dispatch(ToggleFilePanel),
-        "×",
-      ),
-    ]),
-  ]
-  if !panel.error.is_empty() {
-    sections.push(@html.div(class="file-panel-error", panel.error))
-  }
-  let rows = file_tree_rows(dispatch, model, "", 0)
+  let query = panel.filter.trim().to_owned()
   let tree_children = if conv.session_id.is_empty() {
     [@html.div(class="file-panel-empty", "No conversation selected.")]
   } else if !panel.children.contains("") {
     [@html.div(class="file-panel-empty", "Loading…")]
-  } else if rows.is_empty() {
-    // The workspace exists once the conversation runs; until then (or if the
-    // agent has written nothing) it is simply empty.
-    [@html.div(class="file-panel-empty", "This workspace is empty.")]
+  } else if !query.is_empty() {
+    // Filtering flattens the loaded tree to the matching rows.
+    let rows = []
+    filtered_file_rows(dispatch, model, "", query.to_lower(), rows)
+    if rows.is_empty() {
+      [@html.div(class="file-panel-empty", "No file matches the filter.")]
+    } else {
+      rows
+    }
   } else {
-    rows
+    let rows = file_tree_rows(dispatch, model, "", 0)
+    if rows.is_empty() {
+      // The workspace exists once the conversation runs; until then (or if the
+      // agent has written nothing) it is simply empty.
+      [@html.div(class="file-panel-empty", "This workspace is empty.")]
+    } else {
+      rows
+    }
   }
-  sections.push(@html.div(class="file-tree", tree_children))
+  // The file-tree column (right): a filter box over the scrollable tree.
+  let column_children : Array[@html.Html] = [
+    @html.input(
+      input_type=@html.InputType::Search,
+      value=panel.filter,
+      placeholder="Filter files…",
+      on_input=dispatch.map(value => FileFilterChanged(value)),
+      attrs=@html.Attrs::build().class("file-filter"),
+    ),
+  ]
+  if !panel.error.is_empty() {
+    column_children.push(@html.div(class="file-panel-error", panel.error))
+  }
+  column_children.push(@html.div(class="file-tree", tree_children))
   // The stable element the viewer attaches its imperative DOM into; it must
   // stay empty and never be re-keyed (see editor_panel.mbt).
   // `editor-shell` brings in the viewer's `--vscode-*` / `--editor-*` theme
   // variables (defined on that class in the bundled viewer.css); `data-theme`
   // selects the light palette. The viewer's colors cascade from this host.
-  sections.push(
-    @html.div(
-      attrs=@html.Attrs::build()
-        .id(ViewerHostId)
-        .class("viewer-host editor-shell")
-        .data_set("theme", "light"),
-      ([] : Array[@html.Html]),
-    ),
+  let viewer_host = @html.div(
+    attrs=@html.Attrs::build()
+      .id(ViewerHostId)
+      .class("viewer-host editor-shell")
+      .data_set("theme", "light"),
+    ([] : Array[@html.Html]),
   )
-  @html.div(class="file-panel", sections)
+  @html.div(class="editor", [
+    viewer_host,
+    @html.div(class="file-tree-column", column_children),
+  ])
 }
 
 ///|
@@ -1133,6 +1146,31 @@ fn file_tree_rows(
     }
   }
   rows
+}
+
+///|
+/// Filter mode: walk the already-loaded tree depth-first and append every entry
+/// whose name contains `query` (already lower-cased) as a flat row. Only loaded
+/// directories are descended into, so the filter spans the root listing plus
+/// whatever the user has expanded.
+fn filtered_file_rows(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  dir_path : String,
+  query : String,
+  into : Array[@html.Html],
+) -> Unit {
+  guard model.file_panel.children.get(dir_path) is Some(entries) else {
+    return
+  }
+  for entry in entries {
+    if entry.name.to_lower().contains(query) {
+      into.push(tree_row(dispatch, model, entry, 0))
+    }
+    if entry.is_dir {
+      filtered_file_rows(dispatch, model, entry.path, query, into)
+    }
+  }
 }
 
 ///|
@@ -1183,17 +1221,21 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ]
     Skills => [skills_page(dispatch, model)]
   }
-  // The files panel only opens over the chat; on the Skills page it stays
-  // collapsed, but the column (and the viewer host inside it) is still
-  // rendered so the attached viewer is never torn down.
+  // The app is `sidebar | content`; `content` itself splits into the
+  // conversation (left) and the editor (right) as two independent parts, so
+  // either side can be swapped out later. The files panel only opens over the
+  // chat; on the Skills page it stays collapsed, but the editor column (and the
+  // viewer host inside it) is still rendered so the attached viewer is never
+  // torn down.
   let panel_open = model.file_panel.open && model.screen is Chat
-  let app_class = "app" +
-    (if model.sidebar_open { "" } else { " sidebar-collapsed" }) +
-    (if panel_open { " panel-open" } else { "" })
-  let app = @html.div(class=app_class, [
-    sidebar_view(dispatch, model),
-    @html.main_(content),
-    file_panel_view(dispatch, model),
+  let app = @html.div(
+    class=if model.sidebar_open { "app" } else { "app sidebar-collapsed" },
+    [
+      sidebar_view(dispatch, model),
+    @html.div(class=if panel_open { "content panel-open" } else { "content" }, [
+      @html.main_(content),
+      file_panel_view(dispatch, model),
+    ]),
   ])
   if model.setup_open {
     @html.fragment([app, setup_popup(dispatch, model)])
