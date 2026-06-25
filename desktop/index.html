@@ -494,15 +494,14 @@
       main {
         display: grid;
         grid-template-rows: auto minmax(0, 1fr) auto;
-        /* Constrain the single column: without this it defaults to `auto` and
-           sizes to its widest content (a long code line), so the transcript
-           would grow past `main`'s track. minmax(0, …) holds it to the track
-           and lets inner content wrap/scroll instead. */
+        /* Constrain the single column too: without this it defaults to `auto`
+           and sizes to its widest content (a long code line), so the
+           transcript would grow past `main`'s track and slide under the files
+           panel. minmax(0, …) holds it to the track and lets inner content
+           wrap/scroll instead. */
         grid-template-columns: minmax(0, 1fr);
         min-width: 0;
         min-height: 0;
-        /* Clip the chat to its own column so a wide message or code block can
-           never paint over the files panel in the next grid track. */
         overflow: hidden;
         background: var(--paper);
       }
