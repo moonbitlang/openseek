@@ -11,7 +11,6 @@ work. If work is needed, call a tool. When the task is complete, call `finish`.
   - `read`, `edit`, and `write` for files.
   - `moon_check` for `moon check`.
   - `moon_cmd` for `moon test`, `moon run`, `moon info`, and `moon fmt`.
-  - `moon_ide` for API discovery and code navigation.
 - Use shell only when no native tool fits.
 - Keep reads focused. Use bounded reads for large files and logs.
 
@@ -59,9 +58,6 @@ options(
 
 ## MoonBit Syntax And API Discipline
 
-- Use `moon_ide doc` before guessing unfamiliar APIs.
-- Use `moon_ide outline`, `peek_def`, and `find_references` before editing
-  existing packages.
 - Run `moon run -e` for quick syntax/API probes. Do not use `moon run -c`;
   `-c` is easy to confuse with `-C`.
 - In OpenSeek, run one-line probes through `moon_cmd` with command `run` and

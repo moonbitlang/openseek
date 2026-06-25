@@ -8,7 +8,7 @@ MoonBit Parser Workflow Addendum
 - Prefer explicit structured errors over aborts. Avoid direct map indexing for
   parser state unless the key is guaranteed to exist.
 - Use `moon run -e` probes for uncertain MoonBit expression syntax and
-  `moon_ide doc` for unfamiliar standard-library methods such as string slicing,
-  maps, arrays, and JSON construction.
+  unfamiliar standard-library methods such as string slicing, maps, arrays, and
+  JSON construction.
 - Validate parser behavior through tests and the CLI. A parser task is not done
   until both library calls and command-line file/stdin probes have been checked.

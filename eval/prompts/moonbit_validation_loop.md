@@ -3,9 +3,9 @@ MoonBit Validation Loop Addendum
 - Treat MoonBit knowledge as provisional. Prefer a tiny compiler-backed check
   over memory when syntax, method names, package APIs, or CLI behavior are not
   obvious.
-- Before adding a new public API, run `moon_ide doc` for nearby standard-library
-  or project APIs. Before editing existing code, use `moon_ide outline` or a
-  focused read to locate the right symbols.
+- Before adding a new public API or editing existing code, use a focused read
+  to locate the right symbols and confirm nearby standard-library or project
+  API shapes.
 - After creating `moon.mod` and the relevant `moon.pkg` files, run
   `moon_check` once in the target workspace. Repair the first concrete
   diagnostic before adding more code, then rely on `[moon_check update]`

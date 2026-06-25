@@ -1,8 +1,8 @@
 # `@output` — bounded tool output
 
-Internal helpers shared by the agent's `moon`-running tools (`moon_ide`,
-`moon_cmd`, …) to keep a tool result within a caller-supplied size budget and to
-tell the model, in-band, when output was clipped.
+Internal helpers shared by the agent's `moon`-running tools (`moon_cmd`, …) to
+keep a tool result within a caller-supplied size budget and to tell the model,
+in-band, when output was clipped.
 
 A tool renders its result as an optional **truncation header** followed by the
 **capped body**:

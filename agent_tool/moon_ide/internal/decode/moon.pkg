@@ -1,6 +1,0 @@
-import {
-  "bobzhang/openseek/agent_tool/internal/moon_target",
-  "moonbitlang/core/json",
-}
-
-warnings = "+unnecessary_annotation"

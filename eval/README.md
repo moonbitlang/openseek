@@ -136,8 +136,6 @@ For each run, monitor the log in addition to final tests:
 
 - `moon run -e` and stdin probe use when syntax/API uncertainty appears
 - any `moon run -c` mention, which should trend to zero
-- `moon_ide doc`, `outline`, `peek_def`, and `find_references` use before
-  unfamiliar APIs or existing-code edits
 - compiler/test repair loops and whether the same root cause repeats
 - avoidable tool-call failures: bad schema fields, stale edits, shell bypasses,
   and malformed MoonBit command arguments

@@ -34,8 +34,7 @@ async fn run_harness_with_runtime(
     run_shell_case(4, tools),
     run_moon_check_case(5, tools),
     run_moon_cmd_case(6, tools),
-    run_moon_ide_case(7, tools),
-    run_finish_case(8, tools),
+    run_finish_case(7, tools),
   ]
   build_report(rows)
 }
@@ -52,7 +51,6 @@ fn tool_definitions(
     @shell.definition(),
     @moon_check.definition(runtime, scope),
     @moon_cmd.definition(),
-    @moon_ide.definition(),
     @finish.definition(),
   ])
 }
@@ -224,28 +222,6 @@ async fn run_moon_cmd_case(
     action="test native fixture",
     reason~,
   )
-}
-
-///|
-async fn run_moon_ide_case(
-  index : Int,
-  tools : @agent_tool.Tools,
-) -> @report.ReportRow {
-  let root = moon_library_fixture(prefix="openseek-tool-moon-ide-")
-  let action = dispatch(tools, "moon_ide", {
-    "cwd": root,
-    "action": "outline",
-    "path": ".",
-    "target": "native",
-    "max_output_chars": 4000,
-  })
-  let reason = expect_respond(
-    action,
-    contains=["command=moon ide outline --target native .", "exit=0", "answer"],
-    error=false,
-  )
-  @fs.rmdir(root, recursive=true)
-  row(index~, name="moon_ide", mode="moon", action="outline fixture", reason~)
 }
 
 ///|
