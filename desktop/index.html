@@ -648,6 +648,14 @@
         color: var(--ink-2);
       }
       .msg-content.markdown table {
+        /* Scroll a wide table horizontally inside the message (like a code
+           block) rather than letting it widen or get clipped: display:block +
+           max-content lets overflow-x engage while max-width keeps it in
+           column. */
+        display: block;
+        width: max-content;
+        max-width: 100%;
+        overflow-x: auto;
         margin: 0.55em 0;
         border-collapse: collapse;
         font-size: 12.5px;
