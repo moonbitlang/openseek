@@ -1081,17 +1081,17 @@ fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if !panel.error.is_empty() {
     sections.push(@html.div(class="file-panel-error", panel.error))
   }
-  let tree_children = if conv.cwd.is_empty() {
-    [
-      @html.div(
-        class="file-panel-empty",
-        "No workspace yet. Send a message to begin.",
-      ),
-    ]
+  let rows = file_tree_rows(dispatch, model, "", 0)
+  let tree_children = if conv.session_id.is_empty() {
+    [@html.div(class="file-panel-empty", "No conversation selected.")]
   } else if !panel.children.contains("") {
     [@html.div(class="file-panel-empty", "Loading…")]
+  } else if rows.is_empty() {
+    // The workspace exists once the conversation runs; until then (or if the
+    // agent has written nothing) it is simply empty.
+    [@html.div(class="file-panel-empty", "This workspace is empty.")]
   } else {
-    file_tree_rows(dispatch, model, "", 0)
+    rows
   }
   sections.push(@html.div(class="file-tree", tree_children))
   // The stable element the viewer attaches its imperative DOM into; it must

@@ -14,6 +14,12 @@ async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
   guard @engine.resolve_in_workspace(payload.session, payload.path) is Some(dir) else {
     raise HostError("path is outside the conversation workspace")
   }
+  // A conversation's workspace directory is created lazily on its first run,
+  // so before then it does not exist yet. Treat that as an empty workspace
+  // rather than an error, so the panel can browse a new conversation.
+  if !@fs.exists(dir.to_string()) {
+    return { entries: [] }
+  }
   let names = @fs.readdir(dir.to_string(), sort=true) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to list directory: \{error}")

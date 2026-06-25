@@ -249,7 +249,11 @@ fn sync_file_panel(
   } else {
     { ..empty_file_panel(), open: true, session: conv.session_id }
   }
-  if conv.cwd.is_empty() ||
+  // Load as soon as there is a conversation: the workspace directory is a pure
+  // function of the session id, so the host can list it without waiting for a
+  // run to report `cwd` (it reports an empty workspace until the first turn
+  // creates the directory).
+  if conv.session_id.is_empty() ||
     panel.children.contains("") ||
     panel.loading.contains("") {
     return ({ ..model, file_panel: panel }, @cmd.none)
