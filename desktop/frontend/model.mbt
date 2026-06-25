@@ -189,6 +189,9 @@ priv struct Model {
   wsl_distro : String
   wsl_engine : String
   setup_open : Bool
+  // Whether the left sidebar (chat list + navigation) is shown. Collapsing it
+  // hands the full width to the conversation; the topbar toggle brings it back.
+  sidebar_open : Bool
   // The conversation on screen; always present in `conversations` once the
   // startup session rotation lands.
   active_session : String
@@ -269,6 +272,7 @@ priv enum Msg {
   WslEngineChanged(String)
   OpenSetup
   CloseSetup
+  ToggleSidebar
   SaveApiKey
   OpenSkills
   SkillsQueryChanged(String)
@@ -354,6 +358,7 @@ fn initial_model() -> Model {
     wsl_distro: "",
     wsl_engine: "",
     setup_open: false,
+    sidebar_open: true,
     active_session: "",
     loading_session: "",
     conversations: [],

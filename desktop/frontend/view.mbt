@@ -912,9 +912,15 @@ fn session_tooltip(conv : Conversation) -> String {
 /// the tooltip), live run state on the right — these are per-conversation
 /// runtime facts, not settings, so they live here rather than in the
 /// settings popup.
-fn topbar_view(model : Model) -> @html.Html {
+fn topbar_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
   let conv = model.active()
   let items : Array[@html.Html] = [
+    @html.button(
+      class="topbar-toggle",
+      title=if model.sidebar_open { "Hide sidebar" } else { "Show sidebar" },
+      on_click=dispatch(ToggleSidebar),
+      "☰",
+    ),
     @html.span(class="topbar-icon", "✦"),
     @html.span(
       class="topbar-title",
@@ -938,16 +944,16 @@ fn view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
   let content = match model.screen {
     Chat =>
       [
-        topbar_view(model),
+        topbar_view(dispatch, model),
         transcript_view(model.active()),
         composer_view(dispatch, model),
       ]
     Skills => [skills_page(dispatch, model)]
   }
-  let app = @html.div(class="app", [
-    sidebar_view(dispatch, model),
-    @html.main_(content),
-  ])
+  let app = @html.div(
+    class=if model.sidebar_open { "app" } else { "app sidebar-collapsed" },
+    [sidebar_view(dispatch, model), @html.main_(content)],
+  )
   if model.setup_open {
     @html.fragment([app, setup_popup(dispatch, model)])
   } else {

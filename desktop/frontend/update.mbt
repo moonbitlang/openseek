@@ -342,6 +342,7 @@ fn update(
       } else {
         (@cmd.none, model)
       }
+    ToggleSidebar => (@cmd.none, { ..model, sidebar_open: !model.sidebar_open })
     SaveApiKey => {
       let api_key = model.setup_api_key.trim().to_owned()
       if api_key.is_empty() {
