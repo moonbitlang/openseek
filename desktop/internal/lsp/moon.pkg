@@ -1,0 +1,18 @@
+import {
+  "openseek_desktop/internal/jsonrpc",
+  "moonbitlang/async/io",
+  "moonbitlang/async/semaphore",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+}
+
+import {
+  "openseek_desktop/internal/jsonrpc",
+  "moonbitlang/async",
+  "moonbitlang/async/io",
+} for "test"
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"

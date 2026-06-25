@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/lsp"
+
+import {
+  "moonbitlang/async/io",
+  "openseek_desktop/internal/jsonrpc",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type StreamTransport
+pub fn[R : @io.Reader, W : @io.Writer] StreamTransport::new(R, W) -> Self
+pub impl @jsonrpc.Transport for StreamTransport
+
+// Type aliases
+
+// Traits
+
