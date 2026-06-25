@@ -135,36 +135,8 @@ function windowsGuiLinkFlags(env) {
   }
 }
 
-function patchAsyncWindowsStub(env) {
-  const isWindows = process.platform === "win32" || env.OS === "Windows_NT";
-  if (!isWindows) {
-    return;
-  }
-  const source = path.join(
-    ScriptDir,
-    ".mooncakes",
-    "moonbitlang",
-    "async",
-    "src",
-    "internal",
-    "event_loop",
-    "thread_pool.c",
-  );
-  if (!fs.existsSync(source)) {
-    return;
-  }
-  const oldDeclaration = "int32_t moonbitlang_async_file_kind_from_attr(DWORD attrs);";
-  const newDeclaration = "int32_t moonbitlang_async_kind_from_attr(DWORD attrs);";
-  const before = fs.readFileSync(source, "utf8");
-  const after = before.replace(oldDeclaration, newDeclaration);
-  if (after !== before) {
-    fs.writeFileSync(source, after);
-  }
-}
-
 function main() {
   const env = optionalPayloadEnv();
-  patchAsyncWindowsStub(env);
   const isWindows = process.platform === "win32" || env.OS === "Windows_NT";
   if (!isWindows) {
     if (process.platform === "darwin") {
