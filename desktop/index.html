@@ -328,7 +328,11 @@
       }
 
       .viewer-host {
+        /* The embedded viewer positions its layers absolutely; without a
+           positioning context here they escape and paint over the chat. */
+        position: relative;
         flex: 1 1 auto;
+        min-width: 0;
         min-height: 0;
         overflow: hidden;
       }
