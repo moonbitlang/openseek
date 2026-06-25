@@ -57,6 +57,11 @@ jobs:
         run: moon check --deny-warn
 
       - name: Check generated interfaces
+        # `moon info` formats abstract types differently across toolchain
+        # versions (`type X` on nightly vs `pub struct X { // private fields }`
+        # on stable), and the committed `.mbti` are nightly-generated — so this
+        # consistency check is only meaningful on nightly.
+        if: matrix.moonbit-channel == 'nightly'
         run: |
           moon info
           if [ -n "$(git status --porcelain -- '*.mbti')" ]; then
