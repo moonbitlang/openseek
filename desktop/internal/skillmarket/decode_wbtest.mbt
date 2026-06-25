@@ -66,27 +66,15 @@ test "a non-array catalog is an error" {
 }
 
 ///|
-test "discovery index decoding skips malformed entries" {
-  let json : Json = {
-    "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
-    "skills": [
-      {
-        "name": "alice-alpha",
-        "type": "skill-md",
-        "description": "Run alpha commands",
-        "url": "https://mooncakes.io/assets/alice/alpha@0.2.0/SKILL.md",
-        "digest": "sha256:abc",
-      },
-      { "name": "broken" },
-    ],
-  }
-  guard decode_discovery_index(json) is [entry] else {
-    fail("expected one discovery entry")
-  }
-  assert_eq(entry.name, "alice-alpha")
-  assert_eq(entry.url, "https://mooncakes.io/assets/alice/alpha@0.2.0/SKILL.md")
-  assert_eq(entry.digest, "sha256:abc")
-  assert_eq(decode_discovery_index({ "detail": "nope" }).length(), 0)
+test "slugify turns an owner/name identity into a safe single segment" {
+  assert_eq(slugify("Yoorkin/cowsay"), "yoorkin-cowsay")
+  assert_eq(slugify("acme/widget"), "acme-widget")
+  assert_eq(slugify("moonbit-community/moongrep"), "moonbit-community-moongrep")
+  assert_eq(slugify("alice/alpha/cmd/run"), "alice-alpha-cmd-run")
+  // Leading/trailing and repeated separators collapse; no stray dashes.
+  assert_eq(slugify("/A..B/"), "a-b")
+  // Every slugify output passes the path-safety guard.
+  assert_true(valid_slug(slugify("Yoorkin/cowsay")))
 }
 
 ///|
@@ -116,21 +104,12 @@ test "slug validation rejects anything that could escape the library" {
 }
 
 ///|
-test "digest check hashes the exact bytes" {
+test "content_digest hashes the exact bytes" {
   // sha256 of the empty input — the classic known vector.
-  assert_true(
-    digest_matches(
-      "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      b"",
-    ),
+  assert_eq(
+    content_digest(b""),
+    "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   )
-  assert_true(
-    digest_matches(
-      "SHA256:E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
-      b"",
-    ),
-  )
-  assert_false(digest_matches("sha256:deadbeef", b""))
 }
 
 ///|

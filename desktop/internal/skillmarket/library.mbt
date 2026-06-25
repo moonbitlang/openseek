@@ -42,9 +42,11 @@ fn library_dir_from_env() -> @path.Path raise SkillMarketError {
 }
 
 ///|
-/// Whether `name` is one of the registry's discovery slugs — lowercase
-/// `[a-z0-9-]`, at most 64 chars. Validated locally before it becomes a
-/// directory name, so registry data can never path-escape the library.
+/// Whether `name` is a safe single path segment for the library — lowercase
+/// `[a-z0-9-]`, at most 64 chars. `slugify` produces these; the check is a
+/// final guard that the derived slug is non-empty and in range before it
+/// becomes a directory name, so registry data can never path-escape the
+/// library.
 fn valid_slug(name : String) -> Bool {
   if name.is_empty() || name.length() > 64 {
     return false
@@ -58,10 +60,41 @@ fn valid_slug(name : String) -> Bool {
 }
 
 ///|
-fn digest_matches(expected : String, content : Bytes) -> Bool {
-  let computed = "sha256:" +
-    @crypto.bytes_to_hex_string(@crypto.sha256(content))
-  expected.to_lower() == computed
+/// A safe single-segment library name derived from a skill's `owner/name`
+/// identity: lowercased, with every run of other characters collapsed to one
+/// `-` and no leading or trailing `-`. `Yoorkin/cowsay` -> `yoorkin-cowsay`.
+/// The registry's own (possibly slash-bearing) name can never become a path.
+fn slugify(name : String) -> String {
+  let builder = StringBuilder::new()
+  let mut wrote_alnum = false
+  let mut pending_dash = false
+  for ch in name {
+    let lowered = if ch is ('A'..='Z') { ch.to_ascii_lowercase() } else { ch }
+    if lowered is ('a'..='z' | '0'..='9') {
+      if pending_dash && wrote_alnum {
+        builder.write_char('-')
+      }
+      builder.write_char(lowered)
+      wrote_alnum = true
+      pending_dash = false
+    } else {
+      pending_dash = true
+    }
+  }
+  let slug = builder.to_string()
+  if slug.length() > 64 {
+    slug[0:64].to_owned()
+  } else {
+    slug
+  }
+}
+
+///|
+/// The `sha256:`-prefixed hex digest of `content`, recorded in an install's
+/// provenance sidecar. The registry's per-skill API exposes no SKILL.md digest
+/// to verify against, so this is our own record of what we wrote, not a check.
+fn content_digest(content : Bytes) -> String {
+  "sha256:" + @crypto.bytes_to_hex_string(@crypto.sha256(content))
 }
 
 ///|
@@ -118,10 +151,11 @@ fn decode_sidecar(text : String) -> String {
 }
 
 ///|
-/// Download one registry skill and install it as
-/// `<library>/<slug>/SKILL.md`. The discovery index is authoritative: it
-/// names the slug, the download URL, and the digest the content must hash
-/// to. A same-named entry the user wrote by hand (no sidecar) is never
+/// Download one registry skill and install it as `<library>/<slug>/SKILL.md`.
+/// The per-skill API confirms `entry` is a skill; the slug is derived from the
+/// skill's `owner/name` identity (so the registry's own name can never
+/// path-escape the library), and the SKILL.md is fetched from the skill's
+/// assets. A same-named entry the user wrote by hand (no sidecar) is never
 /// overwritten; one we installed is — that is a reinstall or an upgrade.
 pub async fn install_skill(
   module_name~ : String,
@@ -131,51 +165,45 @@ pub async fn install_skill(
   library_dir? : @path.Path = library_dir_from_env(),
 ) -> InstalledSkill {
   let entry = entry_path(module_name, version, package_path)
-  let found = fetch_discovery_entry(registry, entry)
-  // The index body is registry-controlled data; never let it send the
-  // download anywhere else.
-  guard found.url.has_prefix(registry + "/") else {
-    raise SkillMarketError(
-      "refusing to download \{found.url}: outside the registry",
-    )
+  let download_url = skill_md_url(registry, entry)
+  let identity = if package_path.is_empty() {
+    module_name
+  } else {
+    "\{module_name}/\{package_path}"
   }
-  guard valid_slug(found.name) else {
-    raise SkillMarketError(
-      "registry returned an unusable skill name: \{found.name}",
-    )
+  let slug = slugify(identity)
+  guard valid_slug(slug) else {
+    raise SkillMarketError("registry entry \{entry} has no installable name")
   }
-  let target = library_dir.join(found.name)
+  let target = library_dir.join(slug)
   let sidecar = target.join(SidecarFile)
   let flat_target = @path.Path("\{target}.md")
   if @fsx.exists(flat_target) || (@fsx.exists(target) && !@fsx.exists(sidecar)) {
     raise SkillMarketError(
-      "a skill named \{found.name} already exists in your library; not overwriting it",
+      "a skill named \{slug} already exists in your library; not overwriting it",
     )
   }
-  let (code, data) = fetch_response(found.url)
+  let (code, data) = fetch_response(download_url)
+  if code == 404 {
+    raise SkillMarketError("\{entry} does not publish a SKILL.md")
+  }
   guard code == 200 else {
     raise SkillMarketError("SKILL.md download returned HTTP \{code}")
   }
   let content = data.binary()
-  guard digest_matches(found.digest, content) else {
-    raise SkillMarketError(
-      "SKILL.md digest mismatch for \{entry}; not installing",
-    )
-  }
   @fsx.ensure_dir(target)
   @fsx.write_bytes(target.join("SKILL.md"), content)
   let provenance : Json = {
     "module": module_name,
     "version": version,
     "package": package_path,
-    "digest": found.digest,
+    "digest": content_digest(content),
   }
   @fsx.write_text(sidecar, provenance.stringify())
-  // Display fields only — the digest already vouched for the content.
   let text = data.text() catch { _ => "" }
-  let (name, description) = parse_frontmatter(text, found.name)
+  let (name, description) = parse_frontmatter(text, slug)
   {
-    id: found.name,
+    id: slug,
     name,
     description,
     source: source_label(module_name, version, package_path),

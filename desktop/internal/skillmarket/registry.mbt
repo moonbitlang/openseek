@@ -1,6 +1,6 @@
-// The mooncakes.io skill registry client: the catalog of published skills
-// and the per-module Agent Skills discovery index that locates a skill's
-// SKILL.md and pins its digest.
+// The mooncakes.io skill registry client: the catalog of published skills and
+// the per-skill API that confirms one entry is a skill and locates its
+// SKILL.md.
 
 ///|
 /// The registry every fetch defaults to. Overridable per call so tests can
@@ -63,7 +63,7 @@ pub async fn fetch_catalog(
 /// entry point; only entries with a description are kept — the registry's
 /// doc builder extracts it from SKILL.md frontmatter, so a present
 /// description marks an entry that actually ships a SKILL.md. (Install
-/// double-checks against the discovery index, which is authoritative.)
+/// confirms the SKILL.md is really there before writing anything.)
 fn decode_catalog(json : Json) -> Array[MarketSkill] raise SkillMarketError {
   guard json is Array(items) else {
     raise SkillMarketError("skill registry returned a malformed catalog")
@@ -114,35 +114,6 @@ fn decode_catalog(json : Json) -> Array[MarketSkill] raise SkillMarketError {
 }
 
 ///|
-/// One entry of a module's Agent Skills discovery index: the slug the
-/// registry assigned, where its SKILL.md lives, and the digest the download
-/// must match.
-priv struct DiscoveryEntry {
-  name : String
-  url : String
-  digest : String
-}
-
-///|
-fn decode_discovery_index(json : Json) -> Array[DiscoveryEntry] {
-  guard json is { "skills": Array(items), .. } else { return [] }
-  let entries : Array[DiscoveryEntry] = []
-  for item in items {
-    guard item
-      is {
-        "name": String(name),
-        "url": String(url),
-        "digest": String(digest),
-        ..
-      } else {
-      continue
-    }
-    entries.push({ name, url, digest })
-  }
-  entries
-}
-
-///|
 /// The registry path naming one skill: `module@version`, plus the
 /// subpackage path when the skill lives in one.
 fn entry_path(
@@ -158,34 +129,17 @@ fn entry_path(
 }
 
 ///|
-/// Fetch the discovery-index entry for one skill. The index endpoint wants
-/// an explicit version and 404s when the module publishes no SKILL.md; a
-/// root-skill lookup returns every skill of the module, so the entry is
-/// selected by its SKILL.md path (a subpackage's URL has extra path
-/// segments, so a suffix match cannot confuse the two).
-async fn fetch_discovery_entry(
-  registry : String,
-  entry : String,
-) -> DiscoveryEntry {
-  let (code, data) = fetch_response(
-    "\{registry}/api/v0/skill-sources/\{entry}/.well-known/agent-skills/index.json",
-  )
+/// Confirm `entry` (`module@version[/package]`) is a published skill via the
+/// registry's per-skill API, and return where its SKILL.md lives. The skills
+/// API 404s for anything that is not a registered skill; the SKILL.md itself
+/// sits beside the skill's assets, so its URL is derived from the entry.
+async fn skill_md_url(registry : String, entry : String) -> String {
+  let (code, _data) = fetch_response("\{registry}/api/v0/skills/\{entry}")
   if code == 404 {
-    raise SkillMarketError("\{entry} does not publish a SKILL.md")
+    raise SkillMarketError("\{entry} is not a published skill")
   }
   guard code == 200 else {
     raise SkillMarketError("skill lookup for \{entry} returned HTTP \{code}")
   }
-  let json = data.json() catch {
-    _ =>
-      raise SkillMarketError(
-        "skill registry returned a malformed discovery index",
-      )
-  }
-  for candidate in decode_discovery_index(json) {
-    if candidate.url.has_suffix("/\{entry}/SKILL.md") {
-      return candidate
-    }
-  }
-  raise SkillMarketError("\{entry} does not publish a SKILL.md")
+  "\{registry}/assets/\{entry}/SKILL.md"
 }

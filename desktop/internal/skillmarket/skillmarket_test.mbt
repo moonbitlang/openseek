@@ -1,32 +1,10 @@
 // End-to-end tests against a local stand-in for mooncakes.io: a real HTTP
-// server serving the catalog, discovery indexes, and SKILL.md bodies, with
-// a temporary directory as the skills library.
+// server serving the catalog, the per-skill API, and SKILL.md bodies, with a
+// temporary directory as the skills library.
 
 ///|
-/// The SKILL.md every fake asset serves. Bytes, not String — the digest is
-/// over the exact wire bytes, and MoonBit strings are UTF-16.
+/// The SKILL.md every fake asset serves.
 let skill_body : Bytes = b"---\nname: widget\ndescription: Build widgets fast.\n---\n\nUse moon runwasm acme/widget.\n"
-
-///|
-fn skill_digest() -> String {
-  "sha256:" + @crypto.bytes_to_hex_string(@crypto.sha256(skill_body))
-}
-
-///|
-fn discovery_index(name : String, url : String, digest : String) -> String {
-  let json : Json = {
-    "skills": [
-      {
-        "name": name,
-        "type": "skill-md",
-        "description": "Build widgets fast.",
-        "url": url,
-        "digest": digest,
-      },
-    ],
-  }
-  json.stringify()
-}
 
 ///|
 fn catalog_body() -> String {
@@ -53,19 +31,19 @@ fn catalog_body() -> String {
 }
 
 ///|
-const IndexPathPrefix = "/api/v0/skill-sources/"
+const SkillsPrefix = "/api/v0/skills/"
 
 ///|
-const IndexPathSuffix = "/.well-known/agent-skills/index.json"
+const AssetsPrefix = "/assets/"
 
 ///|
-fn index_path(entry : String) -> String {
-  IndexPathPrefix + entry + IndexPathSuffix
-}
+const SkillMdSuffix = "/SKILL.md"
 
 ///|
 /// A local mooncakes.io stand-in. Returns its base URL, or None when the
-/// sandbox forbids binding a local TCP port.
+/// sandbox forbids binding a local TCP port. `acme/widget@1.0.0` is a skill
+/// with a SKILL.md; `acme/nomd@1.0.0` is a skill whose SKILL.md asset is
+/// missing; everything else is not a skill.
 async fn fake_registry(group : @async.TaskGroup[Unit]) -> String? {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
     error => {
@@ -78,40 +56,37 @@ async fn fake_registry(group : @async.TaskGroup[Unit]) -> String? {
     }
   }
   let base = "http://127.0.0.1:\{server.addr.port()}"
-  let text_routes : Map[String, String] = { "/api/v0/skills": catalog_body() }
-  text_routes[index_path("acme/widget@1.0.0")] = discovery_index(
-    "acme-widget",
-    "\{base}/assets/acme/widget@1.0.0/SKILL.md",
-    skill_digest(),
-  )
-  text_routes[index_path("acme/baddigest@1.0.0")] = discovery_index(
-    "acme-baddigest",
-    "\{base}/assets/acme/baddigest@1.0.0/SKILL.md",
-    "sha256:deadbeef",
-  )
-  text_routes[index_path("acme/evil@1.0.0")] = discovery_index(
-    "acme-evil",
-    "http://evil.invalid/assets/acme/evil@1.0.0/SKILL.md",
-    skill_digest(),
-  )
+  // entry -> whether its SKILL.md asset exists.
+  let skills : Map[String, Bool] = {
+    "acme/widget@1.0.0": true,
+    "acme/nomd@1.0.0": false,
+  }
   group.spawn_bg(no_wait=true) <| () => {
+    let json_headers = { "Content-Type": "application/json" }
     server.run_forever(
       (request, body, conn) => {
         let _ = body.read_all()
-        if request.path == "/assets/acme/widget@1.0.0/SKILL.md" ||
-          request.path == "/assets/acme/baddigest@1.0.0/SKILL.md" {
+        let path = request.path
+        if path == "/api/v0/skills" {
+          conn.send_response(200, "OK", extra_headers=json_headers)
+          conn.write_string(catalog_body())
+        } else if path.has_prefix(SkillsPrefix) &&
+          skills.contains(path[SkillsPrefix.length():].to_owned()) {
+          // The per-skill API only confirms the entry is a skill; the install
+          // ignores the body.
+          conn.send_response(200, "OK", extra_headers=json_headers)
+          conn.write_string("{}")
+        } else if path.has_prefix(AssetsPrefix) &&
+          path.has_suffix(SkillMdSuffix) &&
+          skills.get(
+            path[AssetsPrefix.length():path.length() - SkillMdSuffix.length()].to_owned(),
+          )
+          is Some(true) {
           conn.send_response(200, "OK")
           conn.write(skill_body)
-        } else if text_routes.get(request.path) is Some(reply) {
-          conn.send_response(200, "OK", extra_headers={
-            "Content-Type": "application/json",
-          })
-          conn.write_string(reply)
         } else {
-          conn.send_response(404, "Not Found", extra_headers={
-            "Content-Type": "application/json",
-          })
-          conn.write_string("{\"detail\":\"Skill source not found\"}")
+          conn.send_response(404, "Not Found", extra_headers=json_headers)
+          conn.write_string("{\"detail\":\"Skill not found\"}")
         }
       },
       max_connections=16,
@@ -167,7 +142,7 @@ async test "the catalog lists installable skills only" {
 }
 
 ///|
-async test "install verifies the digest, writes the library and lists the skill" {
+async test "install downloads the SKILL.md, writes the library and lists the skill" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     let lib = @fs.tmpdir(prefix="skillmarket-")
@@ -264,28 +239,7 @@ async test "uninstall removes registry installs and nothing else" {
 }
 
 ///|
-async test "a digest mismatch refuses the install" {
-  @async.with_task_group() <| group => {
-    guard fake_registry(group) is Some(base) else { return }
-    let lib = @fs.tmpdir(prefix="skillmarket-")
-    let message = install_failure(base, lib, "acme/baddigest")
-    assert_true(message.contains("digest mismatch"))
-    assert_false(@fs.exists("\{lib}/acme-baddigest"))
-  }
-}
-
-///|
-async test "an index pointing outside the registry is refused" {
-  @async.with_task_group() <| group => {
-    guard fake_registry(group) is Some(base) else { return }
-    let lib = @fs.tmpdir(prefix="skillmarket-")
-    let message = install_failure(base, lib, "acme/evil")
-    assert_true(message.contains("outside the registry"))
-  }
-}
-
-///|
-async test "a module without a SKILL.md reports it plainly" {
+async test "a non-skill module is refused" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     let message = install_failure(
@@ -293,7 +247,18 @@ async test "a module without a SKILL.md reports it plainly" {
       @fs.tmpdir(prefix="skillmarket-"),
       "acme/nothing",
     )
+    assert_true(message.contains("is not a published skill"))
+  }
+}
+
+///|
+async test "a skill whose SKILL.md is missing reports it plainly" {
+  @async.with_task_group() <| group => {
+    guard fake_registry(group) is Some(base) else { return }
+    let lib = @fs.tmpdir(prefix="skillmarket-")
+    let message = install_failure(base, lib, "acme/nomd")
     assert_true(message.contains("does not publish a SKILL.md"))
+    assert_false(@fs.exists("\{lib}/acme-nomd"))
   }
 }
 
