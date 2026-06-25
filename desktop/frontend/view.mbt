@@ -1097,12 +1097,14 @@ fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // The stable element the viewer attaches its imperative DOM into; it must
   // stay empty and never be re-keyed (see editor_panel.mbt).
   // `editor-shell` brings in the viewer's `--vscode-*` / `--editor-*` theme
-  // variables (defined on that class in the bundled viewer.css); the viewer's
-  // colors cascade from this host element.
+  // variables (defined on that class in the bundled viewer.css); `data-theme`
+  // selects the light palette. The viewer's colors cascade from this host.
   sections.push(
     @html.div(
-      id=ViewerHostId,
-      class="viewer-host editor-shell",
+      attrs=@html.Attrs::build()
+        .id(ViewerHostId)
+        .class("viewer-host editor-shell")
+        .data_set("theme", "light"),
       ([] : Array[@html.Html]),
     ),
   )

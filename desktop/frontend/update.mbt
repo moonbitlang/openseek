@@ -244,10 +244,16 @@ fn sync_file_panel(
   let panel = model.file_panel
   guard panel.open else { return (model, @cmd.none) }
   let conv = model.active()
-  let panel = if panel.session == conv.session_id {
-    panel
+  // When the active conversation changes, drop the cached tree *and* the
+  // viewer's open document — the viewer is imperative state outside the model,
+  // so it would otherwise keep showing the previous conversation's file.
+  let (panel, reroot_cmd) = if panel.session == conv.session_id {
+    (panel, @cmd.none)
   } else {
-    { ..empty_file_panel(), open: true, session: conv.session_id }
+    (
+      { ..empty_file_panel(), open: true, session: conv.session_id },
+      clear_viewer(),
+    )
   }
   // Load as soon as there is a conversation: the workspace directory is a pure
   // function of the session id, so the host can list it without waiting for a
@@ -256,13 +262,13 @@ fn sync_file_panel(
   if conv.session_id.is_empty() ||
     panel.children.contains("") ||
     panel.loading.contains("") {
-    return ({ ..model, file_panel: panel }, @cmd.none)
+    return ({ ..model, file_panel: panel }, reroot_cmd)
   }
   let loading = panel.loading.copy()
   loading.push("")
   (
     { ..model, file_panel: { ..panel, loading, } },
-    read_directory(dispatch, conv.session_id, ""),
+    @cmd.batch([reroot_cmd, read_directory(dispatch, conv.session_id, "")]),
   )
 }
 

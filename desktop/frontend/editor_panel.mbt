@@ -32,7 +32,7 @@ fn viewer() -> @viewer.Viewer {
     None => {
       register_tokenizers()
       let viewer = @viewer.Viewer(
-        theme="dark",
+        theme="light",
         placeholder="Select a file to view",
       )
       viewer_cell.val = Some(viewer)
@@ -109,6 +109,19 @@ fn show_file_in_viewer(
       content,
     )
     viewer().set_model(text_model, view_state=Reset)
+  })
+}
+
+///|
+/// Drop the viewer's current document so it falls back to the placeholder.
+/// Used when the active conversation changes: the viewer is imperative state
+/// outside the model, so it would otherwise keep showing the previous
+/// conversation's file. A no-op until the viewer has been attached.
+fn clear_viewer() -> @cmd.Cmd {
+  @cmd.custom_cmd(_scheduler => {
+    if viewer_attached.val {
+      viewer().clear_model()
+    }
   })
 }
 

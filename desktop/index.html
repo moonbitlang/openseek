@@ -233,6 +233,10 @@
         overflow: hidden;
         border-left: 1px solid var(--line);
         background: var(--surface);
+        /* Own stacking context so the opaque panel always paints above the
+           chat column, never the other way around. */
+        position: relative;
+        z-index: 1;
       }
 
       .file-panel-header {
@@ -497,6 +501,9 @@
         grid-template-columns: minmax(0, 1fr);
         min-width: 0;
         min-height: 0;
+        /* Clip the chat to its own column so a wide message or code block can
+           never paint over the files panel in the next grid track. */
+        overflow: hidden;
         background: var(--paper);
       }
 
