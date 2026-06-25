@@ -12,14 +12,16 @@ jobs:
     permissions:
       contents: read
     strategy:
+      # Run both channels independently (fail-fast: false): a stable/nightly
+      # green-red split tells us at a glance whether a failure is a
+      # nightly-toolchain regression or our own bug.
       fail-fast: false
       matrix:
         include:
-          # Temporarily disabled until `<?` is available on stable/latest.
-          # - moonbit-channel: stable
-          #   moonbit-version: latest
           - moonbit-channel: nightly
             moonbit-version: nightly
+          - moonbit-channel: stable
+            moonbit-version: latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
