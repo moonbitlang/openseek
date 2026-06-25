@@ -446,6 +446,11 @@
 
       .stream {
         display: grid;
+        /* A bare `auto` column takes its minimum from content, so one wide
+           <pre> or long token would blow the track past max-width and shove
+           the message off the right. minmax(0, …) lets it shrink so the
+           pre's own `overflow: auto` scrolls and plain text wraps instead. */
+        grid-template-columns: minmax(0, 1fr);
         gap: 20px;
         max-width: 820px;
         margin: 0 auto;
@@ -529,6 +534,9 @@
       }
 
       .msg-content {
+        /* Let the content box shrink so a wide child (a <pre>) scrolls
+           internally rather than widening the message. */
+        min-width: 0;
         color: var(--ink);
         font-size: 13.5px;
         line-height: 1.62;
