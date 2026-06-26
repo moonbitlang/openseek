@@ -20,7 +20,11 @@ priv struct LspWorkspace {
 ///|
 /// Lazily-started `moon-lsp` instances, keyed by conversation session id.
 priv struct LspManager {
-  command : String
+  // The engine executable, anchoring the bundled-toolchain lookup for `moon-lsp`.
+  engine : String
+  runtime_dir : @path.Path?
+  // The resolved `moon-lsp` to spawn, computed once on first use; "" until then.
+  mut command : String
   workspaces : Map[String, LspWorkspace]
   // Serializes lazy workspace creation so two concurrent hovers don't spawn two
   // servers for the same conversation.
@@ -28,8 +32,37 @@ priv struct LspManager {
 }
 
 ///|
-fn new_lsp_manager(command? : String = "moon-lsp") -> LspManager {
-  { command, workspaces: {}, create_lock: Semaphore(1, initial_value=1) }
+fn new_lsp_manager(engine : String, runtime_dir? : @path.Path) -> LspManager {
+  {
+    engine,
+    runtime_dir,
+    command: "",
+    workspaces: {},
+    create_lock: Semaphore(1, initial_value=1),
+  }
+}
+
+///|
+/// The `moon-lsp` command to spawn, resolved once and cached. Prefer the binary
+/// inside the bundled MoonBit toolchain (a packaged app), so hover works when
+/// the app is launched normally with no `moon-lsp` on PATH; fall back to
+/// `moon-lsp` on PATH for a dev run with no bundle. Resolution is serialized by
+/// the caller's `create_lock`, so the cached write needs no lock of its own.
+async fn moon_lsp_command(manager : LspManager) -> String {
+  if !manager.command.is_empty() {
+    return manager.command
+  }
+  let command = if @moonbit.bundled_moon_lsp(
+      manager.engine,
+      runtime_dir?=manager.runtime_dir,
+    )
+    is Some(path) {
+    path.to_string()
+  } else {
+    "moon-lsp"
+  }
+  manager.command = command
+  command
 }
 
 ///|
@@ -97,10 +130,11 @@ async fn spawn_workspace(
   // The workspace directory is created on a conversation's first run; before
   // then there is nothing for the server to analyze.
   guard @fs.exists(directory) else { return None }
+  let command = moon_lsp_command(manager)
   let (child_stdin, stdin_writer) = @process.write_to_process()
   let (stdout_reader, child_stdout) = @process.read_from_process()
   (@process.spawn_orphan(
-    manager.command,
+    command,
     ["--stdio"],
     stdin=child_stdin,
     stdout=child_stdout,

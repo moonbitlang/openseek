@@ -130,6 +130,11 @@ fn moonbit_compiler_command(moon_home : @path.Path) -> @path.Path {
 }
 
 ///|
+fn moonbit_lsp_command(moon_home : @path.Path) -> @path.Path {
+  moon_home.join("bin/moon-lsp\{ExecutableSuffix}")
+}
+
+///|
 fn moonbit_bundle_stamp_path(moon_home : @path.Path) -> @path.Path {
   moon_home.join(MoonbitBundleStampFile)
 }

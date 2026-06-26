@@ -30,7 +30,7 @@ pub fn openseek_extension(
   runtime_dir? : @path.Path,
 ) -> @app.AppCommandExtensionSpec {
   let manager = @engine.new_engine_manager(engine, runtime_dir?)
-  let lsp = new_lsp_manager()
+  let lsp = new_lsp_manager(engine, runtime_dir?)
   @app.AppCommandExtensionSpec::new(
     ExtensionId,
     ExtensionNamespace,

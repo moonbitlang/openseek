@@ -5,6 +5,7 @@ import {
   "openseek_desktop/internal/home",
   "openseek_desktop/internal/jsonrpc",
   "openseek_desktop/internal/lsp",
+  "openseek_desktop/internal/moonbit",
   "openseek_desktop/internal/platform",
   "openseek_desktop/internal/skillmarket",
   "moonbitlang/async",

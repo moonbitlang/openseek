@@ -248,3 +248,24 @@ pub async fn prepare_bundled_home(
     }
   moon_home
 }
+
+///|
+/// Path to the `moon-lsp` shipped in the bundled MoonBit toolchain, or `None`
+/// when there is no bundled seed (a dev run of the bare host binary, where the
+/// caller falls back to `moon-lsp` on PATH). This shares the home the engine
+/// prepares, so once a conversation has run it is a cheap existence check.
+pub async fn bundled_moon_lsp(
+  engine_command : String,
+  runtime_dir? : @path.Path,
+) -> @path.Path? {
+  let moon_home = prepare_bundled_home(engine_command, runtime_dir?) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return None
+  }
+  let lsp = moonbit_lsp_command(moon_home)
+  if @fsx.exists(lsp) {
+    Some(lsp)
+  } else {
+    None
+  }
+}
