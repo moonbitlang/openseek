@@ -190,18 +190,6 @@
         display: none;
       }
 
-      /* Immersive title bar (macOS): the native window draws no title bar, so
-         the headers run to the very top of the window, inline with the
-         traffic-light buttons. Only the regions the buttons actually sit over
-         get an inset — the sidebar's top while it is open, or the topbar's left
-         once the sidebar is collapsed. */
-      .app.mac aside {
-        padding-top: 36px;
-      }
-      .app.mac.sidebar-collapsed .topbar {
-        padding-left: 84px;
-      }
-
       /* The conversation (left) and the editor (right) live side by side as two
          independent parts. The editor track is zero-width until the panel
          opens, so the viewer host element stays in the DOM but takes no
@@ -1731,82 +1719,6 @@
   </head>
   <body>
     <div id="app"></div>
-    <script>
-      // Immersive title bar (macOS): the headers cover the native draggable
-      // strip, so move the window when the user presses an empty area of the
-      // top header band. Interactive controls are excluded so they still
-      // click; `__lepus_window_drag` only exists on the immersive build.
-      (function () {
-        var HEADER_H = 46;
-        // Whether a press/click in the top header band should act on the
-        // window (an empty area) rather than an interactive control.
-        function isHeaderChrome(event) {
-          if (event.clientY > HEADER_H) {
-            return false;
-          }
-          var target = event.target;
-          return !(
-            target &&
-            target.closest &&
-            target.closest(
-              "button, a, input, textarea, select, [contenteditable], [role='button'], .no-drag",
-            )
-          );
-        }
-        // Defer the native drag until the mouse actually moves: starting it on
-        // mouse-down runs a modal loop that would swallow the mouse-up and break
-        // plain clicks and double-clicks.
-        var pending = null;
-        document.addEventListener(
-          "mousedown",
-          function (event) {
-            pending =
-              event.button === 0 && isHeaderChrome(event)
-                ? { x: event.clientX, y: event.clientY }
-                : null;
-          },
-          true,
-        );
-        document.addEventListener(
-          "mousemove",
-          function (event) {
-            if (!pending) {
-              return;
-            }
-            var dx = event.clientX - pending.x;
-            var dy = event.clientY - pending.y;
-            if (dx * dx + dy * dy < 9) {
-              return;
-            }
-            pending = null;
-            if (typeof window.__lepus_window_drag === "function") {
-              window.__lepus_window_drag();
-            }
-          },
-          true,
-        );
-        document.addEventListener(
-          "mouseup",
-          function () {
-            pending = null;
-          },
-          true,
-        );
-        document.addEventListener(
-          "dblclick",
-          function (event) {
-            if (!isHeaderChrome(event)) {
-              return;
-            }
-            if (typeof window.__lepus_titlebar_dblclick === "function") {
-              event.preventDefault();
-              window.__lepus_titlebar_dblclick();
-            }
-          },
-          true,
-        );
-      })();
-    </script>
     <script src="./frontend.js"></script>
   </body>
 </html>

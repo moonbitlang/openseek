@@ -461,7 +461,7 @@ fn cancel_openseek(dispatch : @cmd.Emit[Msg], run_id : Int) -> @cmd.Cmd {
 /// failure (no opener, missing file) surfaces as an error in the conversation
 /// on screen.
 fn open_file(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   session : String,
   cwd : String,
   path : String,

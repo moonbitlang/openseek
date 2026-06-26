@@ -1240,9 +1240,7 @@ fn filtered_file_rows(
   query : String,
   into : Array[@html.Html],
 ) -> Unit {
-  guard model.file_panel.children.get(dir_path) is Some(entries) else {
-    return
-  }
+  guard model.file_panel.children.get(dir_path) is Some(entries) else { return }
   for entry in entries {
     if entry.name.to_lower().contains(query) {
       into.push(tree_row(dispatch, model, entry, 0))
@@ -1308,22 +1306,16 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // viewer host inside it) is still rendered so the attached viewer is never
   // torn down.
   let panel_open = model.file_panel.open && model.screen is Chat
-  // `mac` adds the immersive-titlebar top inset (the native window has no title
-  // bar there); `sidebar-collapsed` folds the sidebar.
-  let app_class = "app"
-  let app_class = if model.sidebar_open {
-    app_class
-  } else {
-    app_class + " sidebar-collapsed"
-  }
-  let app_class = if model.is_macos { app_class + " mac" } else { app_class }
-  let app = @html.div(class=app_class, [
-    sidebar_view(dispatch, model),
-    @html.div(class=if panel_open { "content panel-open" } else { "content" }, [
-      @html.main_(content),
-      file_panel_view(dispatch, model),
-    ]),
-  ])
+  let app = @html.div(
+    class=if model.sidebar_open { "app" } else { "app sidebar-collapsed" },
+    [
+      sidebar_view(dispatch, model),
+      @html.div(
+        class=if panel_open { "content panel-open" } else { "content" },
+        [@html.main_(content), file_panel_view(dispatch, model)],
+      ),
+    ],
+  )
   if model.setup_open {
     @html.fragment([app, setup_popup(dispatch, model)])
   } else {

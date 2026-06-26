@@ -241,9 +241,6 @@ priv struct Model {
   // the user's default distro; `wsl_engine` empty means `openseek` on the
   // distro's PATH. All three persist to localStorage as they change.
   is_windows : Bool
-  // Whether the host is macOS; gates the immersive-titlebar top inset that
-  // keeps content clear of the traffic-light buttons.
-  is_macos : Bool
   wsl_enabled : Bool
   wsl_distro : String
   wsl_engine : String
@@ -467,7 +464,6 @@ fn initial_model() -> Model {
     api_provider: Openseek,
     custom_api_url: "",
     is_windows: host_is_windows(),
-    is_macos: host_is_macos(),
     wsl_enabled: false,
     wsl_distro: "",
     wsl_engine: "",

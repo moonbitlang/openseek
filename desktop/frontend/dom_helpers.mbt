@@ -68,17 +68,3 @@ fn host_is_windows() -> Bool {
   }
   (@js.Cast::into(value) : String?) is Some(agent) && agent.contains("Windows")
 }
-
-///|
-/// Whether the host is macOS — the immersive title bar (and its top inset for
-/// the traffic-light buttons) only applies there.
-fn host_is_macos() -> Bool {
-  guard @interop.js_prop(@js.globalThis, "navigator") is Some(navigator) else {
-    return false
-  }
-  guard @interop.js_prop(navigator, "userAgent") is Some(value) else {
-    return false
-  }
-  (@js.Cast::into(value) : String?) is Some(agent) &&
-  (agent.contains("Macintosh") || agent.contains("Mac OS"))
-}
