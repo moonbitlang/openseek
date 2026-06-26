@@ -214,10 +214,15 @@
       }
 
       /* Open: the conversation and the editor share the content area. The
-         editor needs room for both the viewer and the 232px tree column, so it
-         floors at 460px rather than collapsing the viewer. */
+         editor's width is `--editor-width`, set as the user drags the handle on
+         its left edge (see editor_resize.mbt); it defaults to half and is
+         clamped against the content area (`100%`, sidebar excluded) so the
+         editor floors at 360px while the conversation keeps at least 240px. The
+         clamp also re-fits the panel on window resize without any script. */
       .content.panel-open {
-        grid-template-columns: minmax(0, 1fr) minmax(460px, 1fr);
+        grid-template-columns:
+          minmax(0, 1fr)
+          clamp(360px, var(--editor-width, 50%), calc(100% - 240px));
       }
 
       /* ---------- files panel ---------- */
@@ -272,6 +277,35 @@
       }
       .editor.tree-collapsed > .file-tree-column {
         display: none;
+      }
+
+      /* Drag-to-resize handle on the editor's left edge. A thin strip floated
+         above the seam (z-index over the viewer) with a col-resize cursor; it
+         tints on hover and while dragging. Hidden when the panel is closed (the
+         editor column is then zero-width). */
+      .editor-resize-handle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 6px;
+        z-index: 3;
+        cursor: col-resize;
+      }
+      .editor-resize-handle:hover,
+      html.is-resizing .editor-resize-handle {
+        background: var(--accent-soft);
+      }
+      .content:not(.panel-open) .editor-resize-handle {
+        display: none;
+      }
+      /* While dragging, keep the resize cursor everywhere and stop the drag from
+         selecting text under the pointer. */
+      html.is-resizing {
+        cursor: col-resize;
+      }
+      html.is-resizing * {
+        user-select: none !important;
       }
 
       .file-tree-column {

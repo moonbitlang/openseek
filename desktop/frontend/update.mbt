@@ -736,11 +736,15 @@ fn update_msg(
     }
     ToggleFilePanel => {
       let panel = model.file_panel
-      // Attach the viewer the first time the column has real width, and
-      // re-measure on every width change; loading the tree is left to
-      // `sync_file_panel`.
+      // Attach the viewer the first time the column has real width, install the
+      // resize-drag handle, and re-measure on every width change; loading the
+      // tree is left to `sync_file_panel`.
       (
-        @cmd.batch([request_viewer_mount(), request_viewer_remeasure()]),
+        @cmd.batch([
+          request_viewer_mount(),
+          request_resize_handle_mount(),
+          request_viewer_remeasure(),
+        ]),
         { ..model, file_panel: { ..panel, open: !panel.open } },
       )
     }

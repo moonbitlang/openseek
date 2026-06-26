@@ -1130,9 +1130,22 @@ fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     viewer_breadcrumb(dispatch, panel),
     viewer_host,
   ])
+  // A grab strip on the editor's left edge for drag-to-resize. Absolutely
+  // positioned, so it is not a grid item and never disturbs the viewer/tree
+  // columns; its drag is wired imperatively (see editor_resize.mbt). Always
+  // rendered (CSS hides it while the panel is closed) so its position among the
+  // editor's children — and thus the never-re-keyed viewer host — stays stable.
+  let resize_handle = @html.div(
+    attrs=@html.Attrs::build().id(ResizeHandleId).class("editor-resize-handle"),
+    ([] : Array[@html.Html]),
+  )
   @html.div(
     class=if panel.tree_open { "editor" } else { "editor tree-collapsed" },
-    [viewer_pane, @html.div(class="file-tree-column", column_children)],
+    [
+      resize_handle,
+      viewer_pane,
+      @html.div(class="file-tree-column", column_children),
+    ],
   )
 }
 
@@ -1158,7 +1171,10 @@ fn path_segments(path : String) -> Array[String] {
 /// The breadcrumb header over the viewer: the open file's path as
 /// `dir › dir › file` (the file segment emphasized, a muted placeholder when
 /// nothing is open) on the left, and the file-tree toggle on the right.
-fn viewer_breadcrumb(dispatch : @cmd.Emit[Msg], panel : FilePanel) -> @html.Html {
+fn viewer_breadcrumb(
+  dispatch : @cmd.Emit[Msg],
+  panel : FilePanel,
+) -> @html.Html {
   let crumbs : Array[@html.Html] = []
   if panel.selected is Some(path) {
     let segments = path_segments(path)
@@ -1168,7 +1184,10 @@ fn viewer_breadcrumb(dispatch : @cmd.Emit[Msg], panel : FilePanel) -> @html.Html
       }
       let last = index == segments.length() - 1
       crumbs.push(
-        @html.span(class=if last { "crumb crumb-file" } else { "crumb" }, segment),
+        @html.span(
+          class=if last { "crumb crumb-file" } else { "crumb" },
+          segment,
+        ),
       )
     }
   } else {
@@ -1300,10 +1319,10 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let app_class = if model.is_macos { app_class + " mac" } else { app_class }
   let app = @html.div(class=app_class, [
     sidebar_view(dispatch, model),
-    @html.div(
-      class=if panel_open { "content panel-open" } else { "content" },
-      [@html.main_(content), file_panel_view(dispatch, model)],
-    ),
+    @html.div(class=if panel_open { "content panel-open" } else { "content" }, [
+      @html.main_(content),
+      file_panel_view(dispatch, model),
+    ]),
   ])
   if model.setup_open {
     @html.fragment([app, setup_popup(dispatch, model)])
