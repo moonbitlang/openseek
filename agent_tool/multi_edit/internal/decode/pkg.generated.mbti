@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/agent_tool/multi_edit/internal/decode"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn decode(Json) -> MultiEditInput raise
+
+// Errors
+
+// Types and methods
+pub struct MultiEditInput {
+  path : String
+  edits : Array[MultiEditItem]
+} derive(@debug.Debug)
+
+pub struct MultiEditItem {
+  old_string : String
+  new_string : String
+  start_line : Int
+  end_line : Int?
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits
+

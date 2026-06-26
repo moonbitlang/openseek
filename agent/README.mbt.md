@@ -117,6 +117,7 @@ calls `@agent.run`, but that decision lives outside the `agent` package.
   `moon check` for compiler feedback);
 - `read`: read a text file;
 - `edit`: replace exact text in a file;
+- `multi_edit`: apply several explicit line-anchored replacements to one file;
 - `write`: overwrite a file;
 - `finish`: end the task with a final answer.
 
@@ -136,7 +137,7 @@ async test "standard tools are registered in dispatch order" {
         for tool in tools.function_tools() => tool.name
       ],
       content=(
-        #|["shell", "read", "edit", "write", "finish"]
+        #|["shell", "read", "edit", "multi_edit", "write", "finish"]
       ),
     )
   }

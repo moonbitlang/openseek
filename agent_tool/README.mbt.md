@@ -8,6 +8,7 @@ Concrete built-in tools live in subpackages:
 
 - `agent_tool/read`
 - `agent_tool/edit`
+- `agent_tool/multi_edit`
 - `agent_tool/write`
 - `agent_tool/shell`
 - `agent_tool/moon_check`

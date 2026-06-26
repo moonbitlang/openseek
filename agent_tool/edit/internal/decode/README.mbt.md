@@ -24,7 +24,7 @@ package.
 | `path` | string | yes | Missing or non-string values raise `arguments.path`. |
 | `old_string` | string | yes | Missing or non-string values raise `arguments.old_string`. |
 | `new_string` | string | yes | Missing or non-string values raise `arguments.new_string`. |
-| `replace_all` | boolean | no | Legacy field. Defaults to `false`; `true` is rejected by `agent_tool/edit` with guidance to use explicit line-anchored edits. |
+| `replace_all` | boolean | no | Legacy field. Defaults to `false`; `true` is rejected by `agent_tool/edit` with guidance to use `multi_edit`. |
 | `start_line` | integer | yes | Required positive 1-based inclusive search start. |
 | `end_line` | integer | no | Optional positive 1-based inclusive range end; when present, it must be greater than or equal to `start_line`. |
 

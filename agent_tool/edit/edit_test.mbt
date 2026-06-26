@@ -100,7 +100,7 @@ async test "edit rejects replace_all even with a range" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_eq(
       output.content,
-      "error editing \{path}: replace_all=true is no longer supported; use separate line-anchored edit calls for multiple replacements",
+      "error editing \{path}: replace_all=true is no longer supported; use multi_edit with explicit line-anchored edits",
     )
     assert_true(output.is_error)
     assert_eq(
@@ -393,7 +393,7 @@ async test "edit rejects unbounded replace_all" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_eq(
       output.content,
-      "error editing \{path}: replace_all=true is no longer supported; use separate line-anchored edit calls for multiple replacements",
+      "error editing \{path}: replace_all=true is no longer supported; use multi_edit with explicit line-anchored edits",
     )
     assert_true(output.is_error)
     assert_eq(@fs.read_file(path).text(), "alpha beta beta")

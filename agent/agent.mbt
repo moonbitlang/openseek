@@ -31,17 +31,10 @@ pub fn steer(runtime : @agent_runtime.AgentRuntime, text : String) -> Unit {
 /// Build the agent's standard tool registry bound to `runtime` and `scope`.
 ///
 /// The returned registry contains the built-in local tools: `shell`, `read`,
-/// `edit`, `write`, `moon_check`, and `finish`. File-oriented tools capture
-/// `runtime.workspace_root()` when this function is called. The `moon_check`
-/// tool captures both `runtime` and `scope` so it can report asynchronous
-/// watcher updates and spawn bounded background work.
-///
-/// Stateful tools live in the registry value itself: `moon_check` keeps watcher
-/// records in the closure this builds, not in `AgentRuntime`. A serve-mode
-/// caller that wants watchers to survive from one turn to the next must build
-/// the registry once and pass it to every `run_turn_in_scope` call. Rebuilding
-/// it each turn would orphan the old watcher records and may start duplicate
-/// watchers for the same workspace.
+/// `edit`, `multi_edit`, `write`, and `finish`. File-oriented tools capture
+/// `runtime.workspace_root()` when this function is called. The `scope`
+/// parameter remains part of the API so future stateful tools can spawn bounded
+/// background work under the caller-owned task scope.
 ///
 /// Raises if the standard tool definitions contain duplicate names. Under the
 /// checked-in registry that should be a programming error, not user input.
@@ -109,11 +102,11 @@ pub async fn run(
 /// and returns the session produced by `run_turn_in_scope`. The input session is
 /// immutable; it is not changed in place.
 ///
-/// Because the runtime and tools are fresh per call, background stateful tools
-/// such as `moon_check` do not survive across separate `run_turn` calls. That
-/// is usually correct for one-shot callers. Long-lived callers should create
-/// one runtime, one task scope, and one `build_tools` registry, then call
-/// `run_turn_in_scope` repeatedly.
+/// Because the runtime and tools are fresh per call, registry-local tool state
+/// does not survive across separate `run_turn` calls. That is usually correct
+/// for one-shot callers. Long-lived callers should create one runtime, one task
+/// scope, and one `build_tools` registry, then call `run_turn_in_scope`
+/// repeatedly.
 ///
 /// `max_steps` bounds the number of model-request iterations. If it is `0`, the
 /// turn appends the user task and then terminates with
@@ -230,12 +223,11 @@ async test "run_turn_with_append closes failed persisted turns" {
 ///
 /// This is the building block for callers that keep an engine alive across
 /// turns (serve mode): the shared `runtime` carries steering input and
-/// runtime updates across the turn boundary, and a `tools` registry built
-/// once with `build_tools` preserves stateful tools — a `moon_check` watcher
-/// started in one turn keeps reporting in the next. When `tools` is omitted
-/// a fresh registry is built for this turn only. `scope` bounds background
-/// work the turn's tools spawn, so it must outlive every turn that may have
-/// spawned some. One-shot callers should prefer
+/// runtime updates across the turn boundary, and a `tools` registry can be
+/// built once with `build_tools` and reused across turns. When `tools` is
+/// omitted a fresh registry is built for this turn only. `scope` bounds
+/// background work the turn's tools spawn, so it must outlive every turn that
+/// may have spawned some. One-shot callers should prefer
 /// `run_turn`/`run_turn_with_append`, which own everything for the duration
 /// of a single turn.
 ///

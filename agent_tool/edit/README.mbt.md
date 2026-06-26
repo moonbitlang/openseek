@@ -9,7 +9,9 @@ code changes where overwriting the whole file would be unnecessarily broad.
 the host can validate the change with simple, deterministic rules. `start_line`
 anchors the edit near the caller's intended location, then the first matching
 `old_string` at or after that line is replaced. Optional `end_line` narrows the
-search when the caller wants a tighter inclusive 1-based line range.
+search when the caller wants a tighter inclusive 1-based line range. Because
+the line anchor carries the location, `old_string` can be the small exact span
+to replace instead of a large surrounding block.
 
 Rejecting empty `old_string` and identical replacements protects against
 no-op or explosive edits. The tool is designed for small surgical changes; if a
@@ -21,7 +23,7 @@ legacy `moon.mod.json`, JSON-style `moon.mod` or `moon.pkg`, or `moon.pkg` with
 
 ## API Style
 
-Use a context-rich exact string near the starting line:
+Use a focused exact string near the starting line:
 
 ```json
 {
@@ -56,8 +58,8 @@ and the edit should stay inside a tighter range:
 | `end_line`    | integer | no  | 1-based last line of the search/replace range. Defaults to the file end. |
 
 Legacy calls with `replace_all=false` are tolerated, but `replace_all=true` is
-rejected. Use separate line-anchored edit calls when several known locations in
-one file should be fixed.
+rejected. Use `multi_edit` when a compiler diagnostic suggests several known
+locations in one file should be fixed efficiently.
 
 ## Action
 
@@ -73,7 +75,7 @@ has one of these shapes:
   `"moon check:"` after the success line. Failed checks include `exit=<code>`
   or `exit=cancelled`.
 - `"error editing <path>: old_string not found"` — no exact match was found in the selected range.
-- `"error editing <path>: replace_all=true is no longer supported; use separate line-anchored edit calls for multiple replacements"` — the call requested a global replacement.
+- `"error editing <path>: replace_all=true is no longer supported; use multi_edit with explicit line-anchored edits"` — the call requested a global replacement.
 - `"error editing <path>: moon.pkg use // for comment syntax, not #"` or similar
   manifest-guard messages — the replacement would likely break MoonBit package
   discovery.

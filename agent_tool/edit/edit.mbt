@@ -9,8 +9,8 @@
 ///   `old_string`.
 /// - `start_line` (integer, required): 1-based inclusive first line to search.
 /// - `end_line` (integer, optional): 1-based inclusive last line to search.
-/// - `replace_all=true` is rejected. Use separate line-anchored edit calls for
-///   multiple replacements.
+/// - `replace_all=true` is rejected. Use `multi_edit` for multiple explicit
+///   line-anchored replacements.
 ///
 /// ## Result
 /// - `Respond(ToolOutput("ok: replaced <n> occurrence(s) at line <line> in <path>"))`
@@ -24,7 +24,7 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="edit",
-    description="Replace the first exact text span at or after arguments.start_line in arguments.path with arguments.new_string. Optional end_line restricts the search to a 1-based inclusive line range. For multiple fixes in one file, use separate edit calls with explicit line anchors.",
+    description="Replace the first exact text span at or after arguments.start_line in arguments.path with arguments.new_string. Optional end_line restricts the search to a 1-based inclusive line range. Because start_line anchors the location, old_string can be a small exact span instead of a large context block. For multiple compiler-feedback fixes in one file, use multi_edit with explicit line-anchored edits.",
     schema=JsonSchema({
       "type": "object",
       "properties": {
@@ -68,7 +68,7 @@ async fn edit_file(
   let fail_brief = "edit \{@agent_tool.brief_basename(path)}"
   if input.replace_all {
     return @agent_tool.ToolAction::respond(
-      "error editing \{path}: replace_all=true is no longer supported; use separate line-anchored edit calls for multiple replacements",
+      "error editing \{path}: replace_all=true is no longer supported; use multi_edit with explicit line-anchored edits",
       is_error=true,
       brief=fail_brief,
     )
