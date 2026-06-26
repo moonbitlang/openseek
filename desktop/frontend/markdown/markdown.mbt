@@ -15,16 +15,29 @@
 /// freeze on the last good frame forever. MoonBit panics on the js target
 /// surface as JS exceptions, so `@js.Error_::wrap` is the one place a cmark
 /// crash can be contained; the fallback shows the raw text instead.
-pub fn markdown_nodes(source : String) -> Array[@html.Html] {
-  @js.Error_::wrap(() => @js.Value::cast_from(parsed_markdown_nodes(source))) catch {
+///
+/// `open_file`, when supplied, turns transcript-referenced file paths —
+/// path-shaped inline code and local-path links — into clickable elements
+/// whose click runs the returned command (the frontend opens the file). Absent
+/// (tests, plain rendering), those paths render as ordinary code and links.
+pub fn markdown_nodes(
+  source : String,
+  open_file? : (String) -> @cmd.Cmd,
+) -> Array[@html.Html] {
+  @js.Error_::wrap(() => {
+    @js.Value::cast_from(parsed_markdown_nodes(source, open_file?))
+  }) catch {
     _ => [@html.pre(class="markdown-fallback", source)]
   }
 }
 
 ///|
-fn parsed_markdown_nodes(source : String) -> Array[@html.Html] {
+fn parsed_markdown_nodes(
+  source : String,
+  open_file? : (String) -> @cmd.Cmd,
+) -> Array[@html.Html] {
   let doc = @cmark.Doc::from_string(source, strict=false)
-  let render = MarkdownRender::{ defs: doc.defs }
+  let render = MarkdownRender::{ defs: doc.defs, open_file }
   render.block_nodes(doc.block)
 }
 
@@ -33,6 +46,8 @@ priv struct MarkdownRender {
   // Link-reference and footnote definitions collected by the parser, used to
   // resolve `[text][label]` style references to their destinations.
   defs : Map[String, @cmark.LabelDef]
+  // How to make a file path clickable; `None` renders paths inertly.
+  open_file : ((String) -> @cmd.Cmd)?
 }
 
 ///|
@@ -210,7 +225,18 @@ fn MarkdownRender::push_inline(
         Hard => out.push(@html.br())
         Soft => out.push(@html.text(" "))
       }
-    CodeSpan(node) => out.push(@html.code(class="inline-code", node.v.code()))
+    CodeSpan(node) => {
+      let code = node.v.code()
+      // Inline code is where the model usually names files (`src/main.mbt`);
+      // path-shaped spans become clickable, everything else stays plain code.
+      if self.open_file is Some(open) && is_file_path(code) {
+        out.push(
+          file_link_node(open, code, [@html.code(class="inline-code", code)]),
+        )
+      } else {
+        out.push(@html.code(class="inline-code", code))
+      }
+    }
     Emphasis(node) => out.push(@html.em(self.inline_nodes(node.v.inline)))
     StrongEmphasis(node) =>
       out.push(@html.strong(self.inline_nodes(node.v.inline)))
@@ -232,7 +258,14 @@ fn MarkdownRender::push_inline(
     Link(node) => {
       let children = self.inline_nodes(node.v.text)
       match self.link_destination(node.v) {
-        Some(url) => out.push(link_node(url, children))
+        // A link whose destination is a local file path opens that file;
+        // external links (`scheme://…`) keep their normal anchor.
+        Some(url) =>
+          if self.open_file is Some(open) && is_file_path(url) {
+            out.push(file_link_node(open, url, children))
+          } else {
+            out.push(link_node(url, children))
+          }
         None => out.push(@html.span(children))
       }
     }
@@ -279,6 +312,134 @@ fn MarkdownRender::link_destination(
 ///|
 fn link_node(href : String, children : Array[@html.Html]) -> @html.Html {
   @html.a(href~, target=Blank, rel="noopener noreferrer", children)
+}
+
+///|
+/// A clickable file reference: a button styled inline whose click runs the
+/// command the frontend built for `path`. A button (not an anchor) because
+/// only buttons carry an `on_click` in this html layer, and opening is an app
+/// action rather than navigation.
+fn file_link_node(
+  open : (String) -> @cmd.Cmd,
+  path : String,
+  children : Array[@html.Html],
+) -> @html.Html {
+  @html.button(
+    class="file-link",
+    type_="button",
+    title="Open \{path}",
+    on_click=open(path),
+    children,
+  )
+}
+
+///|
+/// Whether a string looks like a file path worth making clickable: a single
+/// whitespace-free token, not a URL, whose final component ends in a known
+/// source-file extension. Both `src/main.mbt` and a bare `main.mbt` qualify.
+/// Pure shape only — the host decides at open time whether the file exists, so
+/// a false positive just fails to open rather than misleading the eye much.
+fn is_file_path(text : String) -> Bool {
+  let s = text.trim().to_owned()
+  guard !s.is_empty() else { return false }
+  guard !s.contains_any(chars=" \t\r\n") else { return false }
+  // URLs (`https://…`, `mailto:…`) and bare fragments are not local files.
+  guard !s.contains("://") && !s.has_prefix("#") && !s.has_prefix("mailto:") else {
+    return false
+  }
+  // A trailing separator marks a directory, not a file.
+  guard !s.has_suffix("/") else { return false }
+  let base = match s.rev_split_once("/") {
+    Some((_, base)) => base.to_owned()
+    None => s
+  }
+  guard file_extension(base) is Some(ext) else { return false }
+  // A `/` makes "this is a path" unambiguous, so any real extension counts
+  // (`.pptx`, `.pdf`, …). A bare token needs a recognized type to avoid
+  // lighting up prose like `self.value` or `obj.method`.
+  s.contains("/") || is_known_extension(ext)
+}
+
+///|
+/// The extension of `name` — the suffix after its last dot, with a non-empty
+/// stem (so dotfiles like `.gitignore` do not count) and a plausible length.
+/// `None` when there is no such suffix.
+fn file_extension(name : String) -> String? {
+  guard name.rev_split_once(".") is Some((stem, ext)) else { return None }
+  guard !stem.is_empty() else { return None }
+  let ext = ext.to_owned()
+  guard ext.length() >= 1 && ext.length() <= 8 else { return None }
+  Some(ext)
+}
+
+///|
+/// Whether `ext` is a recognized source, config, document, or media file type.
+/// Only consulted for bare filenames (no directory component); slash-bearing
+/// paths accept any extension.
+fn is_known_extension(ext : String) -> Bool {
+  match ext {
+    "mbt"
+    | "mbti"
+    | "c"
+    | "h"
+    | "cpp"
+    | "cc"
+    | "hpp"
+    | "js"
+    | "mjs"
+    | "cjs"
+    | "ts"
+    | "tsx"
+    | "jsx"
+    | "json"
+    | "md"
+    | "markdown"
+    | "toml"
+    | "yaml"
+    | "yml"
+    | "lock"
+    | "mod"
+    | "pkg"
+    | "rs"
+    | "py"
+    | "go"
+    | "sh"
+    | "css"
+    | "scss"
+    | "html"
+    | "htm"
+    | "txt"
+    | "sql"
+    | "wasm"
+    | "xml"
+    | "ini"
+    | "cfg"
+    | "conf"
+    | "java"
+    | "kt"
+    | "rb"
+    | "php"
+    | "swift"
+    | "cs"
+    | "lua"
+    | "pdf"
+    | "png"
+    | "jpg"
+    | "jpeg"
+    | "gif"
+    | "svg"
+    | "webp"
+    | "csv"
+    | "tsv"
+    | "xlsx"
+    | "xls"
+    | "docx"
+    | "doc"
+    | "pptx"
+    | "ppt"
+    | "zip" => true
+    _ => false
+  }
 }
 
 ///|

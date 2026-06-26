@@ -2,11 +2,12 @@
 package "openseek_desktop/frontend/markdown"
 
 import {
+  "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
 }
 
 // Values
-pub fn markdown_nodes(String) -> Array[@html.Html]
+pub fn markdown_nodes(String, open_file? : (String) -> @cmd.Cmd) -> Array[@html.Html]
 
 // Errors
 

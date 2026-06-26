@@ -101,6 +101,25 @@ priv struct UninstallSkillPayload {
 } derive(FromJson)
 
 ///|
+/// Open a transcript-referenced file in the user's system. `path` is the
+/// literal path the webview displayed; a relative one is taken against the
+/// conversation's working directory — `cwd` when the frontend has it (a live
+/// run), otherwise derived from `session` (a resumed conversation). No
+/// workspace containment is applied — the user clicked a path the agent itself
+/// surfaced.
+priv struct OpenPathPayload {
+  session : String
+  cwd : String
+  path : String
+} derive(FromJson)
+
+///|
+/// Reply to `open_path`: whether the file was handed to the system opener.
+priv struct OpenPathReply {
+  opened : Bool
+} derive(ToJson)
+
+///|
 /// Reply to `skills_catalog`: the registry's installable skills.
 priv struct SkillsCatalogReply {
   skills : Array[@skillmarket.MarketSkill]

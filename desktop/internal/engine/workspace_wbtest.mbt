@@ -19,3 +19,25 @@ test "ids that could escape the workspace root are rejected" {
   assert_false(safe_workspace_id("a\\b"))
   assert_false(safe_workspace_id("../escape"))
 }
+
+///|
+test "absolute paths open as themselves" {
+  assert_eq(open_target("/home/u/repo", "/etc/hosts"), "/etc/hosts")
+  // Normalized, but never re-rooted into the working directory.
+  assert_eq(open_target("/home/u/repo", "/a/b/../c.mbt"), "/a/c.mbt")
+}
+
+///|
+test "relative paths are taken against the working directory" {
+  assert_eq(
+    open_target("/home/u/repo", "core/builtin/array.mbt"),
+    "/home/u/repo/core/builtin/array.mbt",
+  )
+  assert_eq(open_target("/home/u/repo", "./main.mbt"), "/home/u/repo/main.mbt")
+}
+
+///|
+test "a relative path with no working directory is left untouched" {
+  assert_eq(open_target("", "core/builtin/array.mbt"), "core/builtin/array.mbt")
+  assert_eq(open_target("", ""), "")
+}

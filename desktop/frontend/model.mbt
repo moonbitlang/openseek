@@ -304,6 +304,10 @@ priv enum Msg {
   // The transcript's at-bottom state changed (the user scrolled away from,
   // or back to, the tail). Reported by the DOM scroll watcher.
   TranscriptPinned(Bool)
+  // A file path in the transcript was clicked: open it in the system's
+  // default app. The host resolves the path inside the active conversation's
+  // workspace.
+  OpenFile(String)
   // The host accepted a prompt: `session` routes the event to its
   // conversation, and everything after a `started` routes by `run_id`.
   Started(

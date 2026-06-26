@@ -19,6 +19,18 @@ async fn session_workspace_dir(session : String) -> @path.Path? {
 }
 
 ///|
+/// The directory a conversation's engine runs in, as a string — the base for
+/// resolving a relative transcript path to open. `""` when the id is unsafe or
+/// no home directory is known. A pure function of the session id, so it answers
+/// even for a resumed conversation the frontend loaded without a live `cwd`.
+pub async fn session_cwd(session : String) -> String {
+  match session_workspace_dir(session) {
+    Some(dir) => dir.to_string()
+    None => ""
+  }
+}
+
+///|
 /// Whether a session id can serve as a single path component under the
 /// workspace root. Path separators and dot segments could escape the root —
 /// those conversations work in the home directory instead.

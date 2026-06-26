@@ -587,6 +587,14 @@ fn update(
       }
     TranscriptPinned(pinned) =>
       (@cmd.none, { ..model, transcript_pinned: pinned })
+    OpenFile(path) => {
+      // A relative path is taken against the active conversation's working
+      // directory: its `cwd` for a live run, or — when resumed without one —
+      // the directory the host derives from the session id. Absolute paths
+      // open directly. No workspace containment — the agent surfaced it.
+      let conv = model.active()
+      (open_file(dispatch, conv.session_id, conv.cwd, path), model)
+    }
     Started(run_id~, session~, model=selected_model, max_steps~, cwd~) =>
       if model.find_conversation(session) is Some(conv) {
         let updated = model.replace_conversation({

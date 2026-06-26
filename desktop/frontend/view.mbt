@@ -213,7 +213,10 @@ fn inline_code_nodes(content : String) -> Array[@html.Html] {
 }
 
 ///|
-fn transcript_item_view(item : @transcript.TranscriptItem) -> @html.Html {
+fn transcript_item_view(
+  item : @transcript.TranscriptItem,
+  on_open : (String) -> @cmd.Cmd,
+) -> @html.Html {
   match item.kind {
     User =>
       @html.div(class="msg", [
@@ -231,7 +234,7 @@ fn transcript_item_view(item : @transcript.TranscriptItem) -> @html.Html {
       } else {
         @html.div(
           class="msg-content markdown",
-          @markdown.markdown_nodes(item.content),
+          @markdown.markdown_nodes(item.content, open_file=on_open),
         )
       }
       @html.div(class="msg", [
@@ -242,7 +245,7 @@ fn transcript_item_view(item : @transcript.TranscriptItem) -> @html.Html {
         ]),
       ])
     }
-    Reasoning => reasoning_view(item.content, streaming=false)
+    Reasoning => reasoning_view(item.content, streaming=false, on_open)
     Tool(name, is_error) =>
       @html.div(class="tool-row", [
         @html.div(class=tool_class(is_error), [
@@ -254,7 +257,11 @@ fn transcript_item_view(item : @transcript.TranscriptItem) -> @html.Html {
 }
 
 ///|
-fn reasoning_view(content : String, streaming~ : Bool) -> @html.Html {
+fn reasoning_view(
+  content : String,
+  streaming~ : Bool,
+  on_open : (String) -> @cmd.Cmd,
+) -> @html.Html {
   let msg_class = if streaming { "msg streaming" } else { "msg" }
   @html.div(class=msg_class, [
     @html.div(class="avatar agent", "✧"),
@@ -262,7 +269,7 @@ fn reasoning_view(content : String, streaming~ : Bool) -> @html.Html {
       @html.div(class="msg-role", "Thinking"),
       @html.div(
         class="msg-content markdown reasoning",
-        @markdown.markdown_nodes(content),
+        @markdown.markdown_nodes(content, open_file=on_open),
       ),
     ]),
   ])
@@ -274,18 +281,27 @@ fn reasoning_view(content : String, streaming~ : Bool) -> @html.Html {
 /// The partial text is re-parsed as markdown on every delta; an unterminated
 /// construct (e.g. an open code fence) simply renders as plain text until its
 /// closing marker streams in.
-fn streaming_response_view(content : String) -> @html.Html {
+fn streaming_response_view(
+  content : String,
+  on_open : (String) -> @cmd.Cmd,
+) -> @html.Html {
   @html.div(class="msg streaming", [
     @html.div(class="avatar agent", "✦"),
     @html.div(class="msg-body", [
       @html.div(class="msg-role", "openseek"),
-      @html.div(class="msg-content markdown", @markdown.markdown_nodes(content)),
+      @html.div(
+        class="msg-content markdown",
+        @markdown.markdown_nodes(content, open_file=on_open),
+      ),
     ]),
   ])
 }
 
 ///|
-fn transcript_view(conv : Conversation) -> @html.Html {
+fn transcript_view(
+  conv : Conversation,
+  on_open : (String) -> @cmd.Cmd,
+) -> @html.Html {
   let items : Array[@html.Html] = []
   if conv.messages.is_empty() {
     items.push(
@@ -300,7 +316,7 @@ fn transcript_view(conv : Conversation) -> @html.Html {
     )
   } else {
     for item in conv.messages {
-      items.push(transcript_item_view(item))
+      items.push(transcript_item_view(item, on_open))
     }
   }
   // Both buffers can be non-empty at once: the answer starts streaming
@@ -311,11 +327,12 @@ fn transcript_view(conv : Conversation) -> @html.Html {
       reasoning_view(
         conv.streaming_reasoning,
         streaming=conv.streaming_response.is_empty(),
+        on_open,
       ),
     )
   }
   if !conv.streaming_response.is_empty() {
-    items.push(streaming_response_view(conv.streaming_response))
+    items.push(streaming_response_view(conv.streaming_response, on_open))
   }
   @html.section(id="transcript", class="transcript", [
     @html.div(id="stream", class="stream", items),
@@ -945,7 +962,7 @@ fn view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
     Chat =>
       [
         topbar_view(dispatch, model),
-        transcript_view(model.active()),
+        transcript_view(model.active(), path => dispatch(OpenFile(path))),
         composer_view(dispatch, model),
       ]
     Skills => [skills_page(dispatch, model)]

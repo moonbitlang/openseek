@@ -45,6 +45,7 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("skill_install"),
       @app.AppCommandApiDescriptor::new("skills_installed"),
       @app.AppCommandApiDescriptor::new("skill_uninstall"),
+      @app.AppCommandApiDescriptor::new("open_path"),
     ],
     context => {
       let sink = event_sink(context)
@@ -105,6 +106,9 @@ pub fn openseek_extension(
         payload : UninstallSkillPayload,
       ) {
         uninstall_skill_op(payload)
+      })
+      context.op_async("open_path", async fn(payload : OpenPathPayload) {
+        open_path_op(payload)
       })
       Ok(())
     },

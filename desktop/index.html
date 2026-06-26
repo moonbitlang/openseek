@@ -699,6 +699,38 @@
         overflow-wrap: anywhere;
       }
 
+      /* A clickable file reference in transcript text. It is a <button> (the
+         only inline element that carries a click here), stripped of button
+         chrome so it reads as a link, or as accented inline code when it wraps
+         a code span. */
+      .file-link {
+        display: inline;
+        margin: 0;
+        padding: 0;
+        border: none;
+        background: none;
+        font: inherit;
+        text-align: left;
+        color: var(--accent);
+        cursor: pointer;
+        vertical-align: baseline;
+      }
+      .file-link:hover,
+      .file-link:focus-visible {
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .file-link .inline-code {
+        color: var(--accent);
+        border-color: var(--accent);
+        text-decoration: none;
+      }
+      .file-link:hover .inline-code,
+      .file-link:focus-visible .inline-code {
+        background: var(--accent);
+        color: var(--bg, #fff);
+      }
+
       /* tool / step output, indented under the agent avatar */
       .tool-row {
         padding-left: 38px;

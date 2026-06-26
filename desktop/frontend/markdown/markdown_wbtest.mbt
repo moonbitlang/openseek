@@ -71,3 +71,63 @@ test "plain text flattens inline trees" {
   }
   inspect(plain_text(para.inline), content="some bold and code")
 }
+
+///|
+test "file-path shapes are recognized" {
+  // Slash-bearing relative and absolute paths.
+  assert_true(is_file_path("frontend/view.mbt"))
+  assert_true(is_file_path("/Users/me/Documents/OpenSeek/s1/main.mbt"))
+  assert_true(is_file_path("./src/lib.rs"))
+  // Bare filenames with a known extension.
+  assert_true(is_file_path("README.md"))
+  assert_true(is_file_path("moon.pkg"))
+  assert_true(is_file_path("config.json"))
+  // A surrounding space (cmark keeps one in some code spans) is tolerated.
+  assert_true(is_file_path(" view.mbt "))
+}
+
+///|
+test "bare filenames and slash paths alike are clickable" {
+  // Exactly the tokens from a real transcript: bare `.mbt` names and
+  // slash-bearing paths both qualify; a directory and a bare word do not.
+  assert_true(is_file_path("array_nonjs.mbt"))
+  assert_true(is_file_path("core/builtin/array_nonjs_test.mbt"))
+  assert_true(is_file_path("core/builtin/arraycore_nonjs.mbt"))
+  assert_true(is_file_path("array.mbt"))
+  assert_true(is_file_path("view.mbt"))
+  assert_true(is_file_path("array_test.mbt"))
+  assert_false(is_file_path("core"))
+  assert_false(is_file_path("core/array/"))
+  assert_false(is_file_path("_nonjs"))
+}
+
+///|
+test "slash paths accept any extension; bare names need a known one" {
+  // A `/` makes it a path: any plausible extension lights up, even ones the
+  // bare-name allowlist omits.
+  assert_true(is_file_path("~/Documents/openseek-deck/dist/openseek.pptx"))
+  assert_true(is_file_path("pages/*.page.toml"))
+  assert_true(is_file_path("build/out/report.xyz"))
+  // A bare name still needs a recognized type.
+  assert_true(is_file_path("slides.pptx"))
+  assert_true(is_file_path("diagram.png"))
+  assert_false(is_file_path("report.xyz"))
+  // A trailing slash is a directory.
+  assert_false(is_file_path("~/Documents/openseek-deck/"))
+}
+
+///|
+test "non-paths are left alone" {
+  // Identifiers and prose, not files.
+  assert_false(is_file_path("OpenFile"))
+  assert_false(is_file_path("self.value"))
+  assert_false(is_file_path("a.b"))
+  assert_false(is_file_path("moon check --target js"))
+  assert_false(is_file_path(""))
+  // URLs and fragments stay as ordinary links/text.
+  assert_false(is_file_path("https://example.com/readme.md"))
+  assert_false(is_file_path("mailto:me@example.com"))
+  assert_false(is_file_path("#section"))
+  // Dotfiles have an empty stem, so they are not treated as an extension.
+  assert_false(is_file_path(".gitignore"))
+}
