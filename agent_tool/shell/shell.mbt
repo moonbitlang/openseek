@@ -51,13 +51,13 @@ pub fn definition(
 ///|
 #cfg(platform="windows")
 fn shell_description() -> String {
-  "Run arguments.cmd through PowerShell (pwsh -NoProfile -Command), optionally in arguments.cwd, and return exit code plus output. Use PowerShell syntax and cmdlets in arguments.cmd. Source file edits for compiler feedback belong in line-anchored edit; do not use shell rewrites."
+  "Run arguments.cmd through PowerShell (pwsh -NoProfile -Command), optionally in arguments.cwd, and return exit code plus output. Use PowerShell syntax and cmdlets in arguments.cmd. Source file edits for compiler feedback belong in line-anchored edit (or multi_edit for several fixes in one file); do not use shell rewrites."
 }
 
 ///|
 #cfg(not(platform="windows"))
 fn shell_description() -> String {
-  "Run arguments.cmd through the POSIX shell (sh -c), optionally in arguments.cwd, and return exit code plus output. Use POSIX shell syntax in arguments.cmd. Source file edits for compiler feedback belong in line-anchored edit; do not use shell rewrites."
+  "Run arguments.cmd through the POSIX shell (sh -c), optionally in arguments.cwd, and return exit code plus output. Use POSIX shell syntax in arguments.cmd. Source file edits for compiler feedback belong in line-anchored edit (or multi_edit for several fixes in one file); do not use shell rewrites."
 }
 
 ///|

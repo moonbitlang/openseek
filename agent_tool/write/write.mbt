@@ -21,7 +21,7 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="write",
-    description="Create or overwrite arguments.path with arguments.content (missing parent directories are created). If the file already exists, read it first so you do not discard content you have not seen. Prefer line-anchored edit for targeted compiler-feedback changes, and do not use write to route shell-generated rewrites back into source files. Do not create Markdown or README files unless the user explicitly asks for them.",
+    description="Create or overwrite arguments.path with arguments.content (missing parent directories are created). If the file already exists, read it first so you do not discard content you have not seen. Prefer line-anchored edit (or multi_edit for several fixes in one file) for targeted compiler-feedback changes, and do not use write to route shell-generated rewrites back into source files. Do not create Markdown or README files unless the user explicitly asks for them.",
     schema=JsonSchema({
       "type": "object",
       "properties": {

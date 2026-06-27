@@ -65,8 +65,9 @@ profile is cached per normalized workspace root so ordinary read-only shell use
 does not rescan the repository every time. `sandbox-exec` is treated as usable
 only after a probe proves that a deny rule is actually enforced. If a command
 hits that sandbox, the tool keeps the original command output and adds guidance
-to retry compiler-feedback or mechanical code fixes with line-anchored `edit`,
-not shell-generated rewrites routed through another tool.
+to retry compiler-feedback or mechanical code fixes with line-anchored `edit`
+(or `multi_edit` for several fixes in one file), not shell-generated rewrites
+routed through another tool.
 
 Direct output redirects to protected source paths are blocked before the command
 runs. This catches masked forms such as `cmd 2>/dev/null > main.mbt || true`

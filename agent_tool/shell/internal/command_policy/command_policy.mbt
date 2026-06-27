@@ -53,7 +53,7 @@ fn moon_cmd_error_message() -> String {
 
 ///|
 fn sed_in_place_error_message() -> String {
-  "error: `sed -i` edits files in place and is unreliable for code changes; use line-anchored `edit` calls for source changes"
+  "error: `sed -i` edits files in place and is unreliable for code changes; use line-anchored `edit` (or `multi_edit` for several fixes in one file) for source changes"
 }
 
 ///|

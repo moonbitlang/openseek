@@ -9,7 +9,8 @@ shell:
 - the bare tool name `moon_cmd`, typed as a shell command — it is not an
   executable and should be the real `moon ...` subcommand run through shell;
 - `sed -i` (in-place file editing) — it silently misapplies edits often enough
-  to be untrustworthy, so the agent is sent to line-anchored `edit`.
+  to be untrustworthy, so the agent is sent to line-anchored `edit` (or
+  `multi_edit` for several fixes in one file).
 
 Everything else, including `moon check` and read-only `sed` (`sed -n '1,5p'`,
 `... | sed s/a/b/`), runs normally.
@@ -28,7 +29,7 @@ The current policy blocks:
 | Command shape | Reason |
 | --- | --- |
 | `moon_cmd ...` | `moon_cmd` is a tool name, not an executable shell command; run `moon ...` directly. |
-| `sed -i ...` (incl. `--in-place`, `-i.bak`, `-Ei`) | In-place file editing is unreliable; use line-anchored `edit` calls for source changes. |
+| `sed -i ...` (incl. `--in-place`, `-i.bak`, `-Ei`) | In-place file editing is unreliable; use line-anchored `edit` (or `multi_edit` for several fixes in one file) for source changes. |
 
 The policy allows:
 

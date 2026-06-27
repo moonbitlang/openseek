@@ -2,7 +2,7 @@
 const SandboxExecPath : String = "/usr/bin/sandbox-exec"
 
 ///|
-const SandboxSourceWriteFeedback : String = "shell sandbox: source file writes from shell are blocked. For compiler-feedback or mechanical code fixes, use line-anchored `edit` calls instead of shell-generated rewrites. Do not generate rewritten files in shell and then overwrite source files with another tool; keep `shell` for read-only analysis and validation commands."
+const SandboxSourceWriteFeedback : String = "shell sandbox: source file writes from shell are blocked. For compiler-feedback or mechanical code fixes, use line-anchored `edit` (or `multi_edit` for several fixes in one file) instead of shell-generated rewrites. Do not generate rewritten files in shell and then overwrite source files with another tool; keep `shell` for read-only analysis and validation commands."
 
 ///|
 let source_write_profile_cache : Map[String, CachedSourceWriteProfile] = {}

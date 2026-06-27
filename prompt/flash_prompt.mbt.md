@@ -19,13 +19,16 @@ full diagnostics.
 - Do not emit JSON action plans as assistant text, such as `{"tool":"shell"}`.
   Use the actual tool call interface.
 - Use the right tool for the job:
-  - `read`, `edit`, and `write` for files.
+  - `read`, `edit`, `multi_edit`, and `write` for files. Use `edit` for a single
+    span; use `multi_edit` to apply several line-anchored fixes to one file in
+    one call. To fix several files at once, issue one `multi_edit` per file in
+    the same step rather than editing files one turn at a time.
   - `shell` for all Moon commands, including `moon check` for compiler
     feedback; pass the tool's `cwd` field, or use `moon -C dir check` instead
     of embedding repeated `cd ... &&` strings.
     If shell reports that source file writes are blocked, retry compiler
-    feedback fixes with line-anchored `edit`; use `write` only for intentional
-    whole-file replacements.
+    feedback fixes with line-anchored `edit` (or `multi_edit` for several fixes
+    in one file); use `write` only for intentional whole-file replacements.
 - Start `moon check` once `moon.mod` and the relevant `moon.pkg` files exist;
   use `moon build` or `moon test` only when you need artifacts or test results.
 - When fixing compiler feedback, trust the diagnostic path and location. Use
@@ -33,8 +36,9 @@ full diagnostics.
   group repeated diagnostics, then edit the reported locations. Do not perform
   broad source codemods with shell/Python/Perl/Ruby/Node/sed/awk scripts; use
   scripts only to analyze or summarize diagnostics, and apply compiler-feedback
-  source changes through line-anchored `edit`. Do not generate rewritten source
-  files with shell and then overwrite the original files.
+  source changes through line-anchored `edit` (or `multi_edit` for several fixes
+  in one file, one `multi_edit` per file across files). Do not generate
+  rewritten source files with shell and then overwrite the original files.
 - Keep reads focused. Use bounded reads for large files and logs.
 
 Common `moon` subcommands:
