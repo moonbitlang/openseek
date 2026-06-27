@@ -87,7 +87,7 @@ async fn multi_edit_file(
     )
   }
   let new_content = apply_plans(content, plans)
-  match manifest_write_error(path, new_content) {
+  match @manifest_error.write_error(path, new_content) {
     Some(message) =>
       return @agent_tool.ToolAction::respond(
         "error multi_editing \{path}: \{message}; no changes applied",
@@ -313,39 +313,4 @@ fn line_range_label(start_line : Int, end_line : Int?) -> String {
     Some(end) => "line range \{start_line}-\{end}"
     None => "from line \{start_line}"
   }
-}
-
-///|
-async fn manifest_write_error(path : String, content : String) -> String? {
-  let trimmed = content.trim()
-  if @manifest_path.is_generated_mbti_path(path) {
-    return Some(
-      "*.generated.mbti files are generated; run moon info instead of editing them",
-    )
-  }
-  if @manifest_path.is_moon_mod_json_path(path) && !@fs.exists(path) {
-    return Some(
-      "moon.mod.json is legacy; create moon.mod for new MoonBit projects",
-    )
-  }
-  if @manifest_path.is_moon_mod_path(path) {
-    if trimmed == "" {
-      return Some("moon.mod must not be empty")
-    }
-    if trimmed.has_prefix("{") || trimmed.contains("\"name\"") {
-      return Some("moon.mod uses current text syntax, not JSON")
-    }
-    if !trimmed.contains("name =") {
-      return Some("moon.mod should include a module `name = ...` entry")
-    }
-  }
-  if @manifest_path.is_moon_pkg_path(path) {
-    if trimmed.has_prefix("#") {
-      return Some("moon.pkg use // for comment syntax, not #")
-    }
-    if trimmed.has_prefix("{") {
-      return Some("moon.pkg uses current text syntax, not JSON")
-    }
-  }
-  None
 }

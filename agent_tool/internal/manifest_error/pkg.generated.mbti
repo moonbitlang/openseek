@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/edit/internal/manifest_error"
+package "bobzhang/openseek/agent_tool/internal/manifest_error"
 
 // Values
 pub async fn write_error(String, String) -> String?

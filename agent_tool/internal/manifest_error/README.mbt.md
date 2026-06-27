@@ -1,11 +1,13 @@
-# Edit Manifest Error
+# Manifest Error
 
-`bobzhang/openseek/agent_tool/edit/internal/manifest_error` keeps the manifest
-safety checks used before the `edit` tool writes replacement content.
+`bobzhang/openseek/agent_tool/internal/manifest_error` keeps the manifest safety
+checks used before the `edit` and `multi_edit` tools write replacement content,
+so both write paths reject the same known-bad manifest shapes identically.
 
-This package is internal to `agent_tool/edit`. It does not edit files itself;
-it inspects the target path and proposed file content, then returns an optional
-error message for manifest rewrites that look like common agent mistakes.
+This package is shared internally by the write tools under `agent_tool`. It does
+not edit files itself; it inspects the target path and proposed file content,
+then returns an optional error message for manifest rewrites that look like
+common agent mistakes.
 
 ## API Shape
 
@@ -22,7 +24,7 @@ The guard is intentionally narrow and only handles MoonBit manifest paths:
 - `*.generated.mbti` files are rejected because they are generated outputs.
 - Other paths are allowed.
 
-Existing `moon.mod.json` files are allowed so `edit` can still update legacy
+Existing `moon.mod.json` files are allowed so the write tools can still update legacy
 projects deliberately; the guard only blocks creating new legacy manifests.
 
 ## Example
