@@ -49,6 +49,109 @@ async test "multi_edit applies multiple line-anchored replacements" {
 }
 
 ///|
+async test "multi_edit applies edits against original offsets despite length changes" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/offsets.mbt"
+    @fs.write_file(
+      path,
+      "let a = 1\nlet bb = 2\nlet ccc = 3\n",
+      create_mode=CreateOrTruncate,
+    )
+    // edit[0] grows line 1 and edit[1] shrinks line 3. A naive left-to-right
+    // apply would shift the later span; planning against the original keeps both
+    // anchored.
+    let result = run_multi_edit({
+      "path": path,
+      "edits": [
+        {
+          "old_string": "1",
+          "new_string": "1000",
+          "start_line": 1,
+          "end_line": 1,
+        },
+        {
+          "old_string": "ccc",
+          "new_string": "c",
+          "start_line": 3,
+          "end_line": 3,
+        },
+      ],
+    })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_false(output.is_error)
+    assert_eq(
+      @fs.read_file(path).text(),
+      "let a = 1000\nlet bb = 2\nlet c = 3\n",
+    )
+  })
+}
+
+///|
+async test "multi_edit matches the original file, not text introduced by earlier edits" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/cascade.mbt"
+    @fs.write_file(path, "alpha\nbeta\n", create_mode=CreateOrTruncate)
+    // edit[0] rewrites line 1 to "beta"; a sequential rewrite could then let
+    // edit[1] match that introduced text. Validating against the original keeps
+    // edit[1] anchored to line 2's real "beta".
+    let result = run_multi_edit({
+      "path": path,
+      "edits": [
+        {
+          "old_string": "alpha",
+          "new_string": "beta",
+          "start_line": 1,
+          "end_line": 1,
+        },
+        {
+          "old_string": "beta",
+          "new_string": "gamma",
+          "start_line": 2,
+          "end_line": 2,
+        },
+      ],
+    })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_false(output.is_error)
+    assert_eq(@fs.read_file(path).text(), "beta\ngamma\n")
+  })
+}
+
+///|
+async test "multi_edit uses line anchors to disambiguate duplicate spans" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/dup.mbt"
+    @fs.write_file(
+      path,
+      "x = dup\ny = dup\nz = dup\n",
+      create_mode=CreateOrTruncate,
+    )
+    // The same span appears on three lines; each edit's anchor selects exactly
+    // one, leaving the unanchored line 2 untouched.
+    let result = run_multi_edit({
+      "path": path,
+      "edits": [
+        {
+          "old_string": "dup",
+          "new_string": "one",
+          "start_line": 1,
+          "end_line": 1,
+        },
+        {
+          "old_string": "dup",
+          "new_string": "three",
+          "start_line": 3,
+          "end_line": 3,
+        },
+      ],
+    })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_false(output.is_error)
+    assert_eq(@fs.read_file(path).text(), "x = one\ny = dup\nz = three\n")
+  })
+}
+
+///|
 async test "multi_edit resolves relative paths under the workspace root" {
   @vfs.with_tmpdir(prefix="openseek-multi-edit-workspace-", dir => {
     let path = "\{dir}/note.txt"
