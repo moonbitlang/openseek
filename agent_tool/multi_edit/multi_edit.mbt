@@ -13,27 +13,32 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="multi_edit",
-    description="Apply many exact line-anchored replacements across one or more files in a single validated batch. This is the efficient path for compiler-feedback repair loops: when `moon check` (or another analyzer) reports several known locations, batch all the fixes into one multi_edit call instead of many separate edit calls. Each edit names its `file` plus old_string, new_string, and start_line; optional end_line bounds the search. List all edits for a given file contiguously — a file may not reappear after another file's edits. Because each edit is line-anchored, old_string can be the small exact span to replace instead of a large context block, and each edit replaces the first matching span in its selected region. To INSERT new code instead of replacing, set old_string to the empty string: new_string is inserted at the start of start_line (use start_line = last line + 1 to append at end of file). Do not emit separate edits for changes that fall on the same line or in one tight span: combine them into a single edit whose old_string covers the whole span, because adjacent or overlapping edits collide and the whole batch is rejected. Every edit is validated against the original file before anything is written, and if any edit fails no files are changed. For automation, instead of inline `edits` you may set `edits_file` to the path of a JSON file holding the same array of edit objects — generate that file from compiler diagnostics with a script, then apply the whole batch through this one safe, validated call. Provide exactly one of `edits` or `edits_file`.",
+    description="Apply many exact line-anchored replacements across one or more files in a single validated batch — the efficient path for compiler-feedback repair: when `moon check` (or another analyzer) reports several known locations, fix them all in one call instead of many separate `edit` calls. Pass `edits` in one of two forms: an inline array of edit objects, OR a string path to a JSON file (a response file) holding that same array — for large batches, generate that file from compiler diagnostics with a script and pass its path. Each edit is {file, old_string, new_string, start_line, optional end_line}: `file` is the path to change; `start_line` (1-based) anchors the search and `end_line` bounds it, so old_string can be the small exact span instead of a large context block; each edit replaces the first matching span in its range. List all edits for a given file contiguously. To INSERT instead of replace, set old_string to the empty string: new_string is inserted at the start of start_line (use start_line = last line + 1 to append at end of file). Combine changes on the same line (or one tight span) into a single edit, because adjacent or overlapping edits collide and the whole batch is rejected. Every edit is validated against the original files before anything is written; if any edit fails, no files are changed.",
     schema=JsonSchema({
       "type": "object",
       "properties": {
         "edits": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "file": { "type": "string" },
-              "old_string": { "type": "string" },
-              "new_string": { "type": "string" },
-              "start_line": { "type": "integer" },
-              "end_line": { "type": "integer" },
+          "description": "Either an inline array of edit objects, or a string path to a JSON file containing that same array of edit objects.",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "file": { "type": "string" },
+                  "old_string": { "type": "string" },
+                  "new_string": { "type": "string" },
+                  "start_line": { "type": "integer" },
+                  "end_line": { "type": "integer" },
+                },
+                "required": ["file", "old_string", "new_string", "start_line"],
+              },
             },
-            "required": ["file", "old_string", "new_string", "start_line"],
-          },
+            { "type": "string" },
+          ],
         },
-        "edits_file": { "type": "string" },
       },
-      "oneOf": [{ "required": ["edits"] }, { "required": ["edits_file"] }],
+      "required": ["edits"],
     }),
     execute=Async(arguments => execute_with_workspace(workspace_root, arguments)),
   )
@@ -63,7 +68,7 @@ async fn execute_with_workspace(
 }
 
 ///|
-/// Read and parse an `edits_file` spec. Returns the decoded edits, or a ready
+/// Read and parse an `edits file` spec. Returns the decoded edits, or a ready
 /// error response describing why the spec could not be loaded. The spec's
 /// top-level JSON is the same array of edit objects accepted inline.
 async fn load_edits_file(
@@ -77,7 +82,7 @@ async fn load_edits_file(
     error =>
       return Err(
         @agent_tool.ToolAction::respond(
-          "error: multi_edit could not read edits_file \{path}: \{error}",
+          "error: multi_edit could not read edits file \{path}: \{error}",
           is_error=true,
           brief~,
         ),
@@ -87,7 +92,7 @@ async fn load_edits_file(
     error =>
       return Err(
         @agent_tool.ToolAction::respond(
-          "error: multi_edit edits_file \{path} is not valid JSON: \{error}",
+          "error: multi_edit edits file \{path} is not valid JSON: \{error}",
           is_error=true,
           brief~,
         ),
@@ -97,7 +102,7 @@ async fn load_edits_file(
     error =>
       return Err(
         @agent_tool.ToolAction::respond(
-          "error: multi_edit requires \{@tool_error.failure_message("\{error}")} in edits_file \{path}",
+          "error: multi_edit requires \{@tool_error.failure_message("\{error}")} in edits file \{path}",
           is_error=true,
           brief~,
         ),

@@ -30,44 +30,28 @@ test "decode_source returns inline edits" {
 }
 
 ///|
-test "decode_source returns the edits_file path" {
-  let source = @decode.decode_source({ "edits_file": "fixes.json" })
+test "decode_source treats a string edits as a response-file path" {
+  let source = @decode.decode_source({ "edits": "fixes.json" })
   guard source is FromFile(path) else { fail("expected a file source") }
   assert_eq(path, "fixes.json")
 }
 
 ///|
-test "decode_source requires exactly one source" {
-  try
-    @decode.decode_source({
-      "edits": [
-        { "file": "f.mbt", "old_string": "a", "new_string": "b", "start_line": 1 },
-      ],
-      "edits_file": "fixes.json",
-    })
-  catch {
+test "decode_source requires edits to be an array or a path string" {
+  try @decode.decode_source({}) catch {
+    error => assert_true("\{error}".contains("arguments.edits"))
+  } noraise {
+    _ => fail("missing edits decoded")
+  }
+  try @decode.decode_source({ "edits": 5 }) catch {
     error =>
       assert_true(
         "\{error}".contains(
-          "exactly one of arguments.edits or arguments.edits_file",
+          "arguments.edits to be an array of edits or a file path string",
         ),
       )
   } noraise {
-    _ => fail("both sources decoded")
-  }
-  try @decode.decode_source({}) catch {
-    error =>
-      assert_true(
-        "\{error}".contains("arguments.edits or arguments.edits_file"),
-      )
-  } noraise {
-    _ => fail("missing source decoded")
-  }
-  try @decode.decode_source({ "edits_file": 5 }) catch {
-    error =>
-      assert_true("\{error}".contains("arguments.edits_file to be a string"))
-  } noraise {
-    _ => fail("non-string edits_file decoded")
+    _ => fail("numeric edits decoded")
   }
 }
 
@@ -90,7 +74,7 @@ test "decode_edits_json parses a bare array of edits" {
 test "decode_edits_json rejects a non-array document" {
   try @decode.decode_edits_json({ "edits": [] }) catch {
     error =>
-      assert_true("\{error}".contains("edits_file to contain a JSON array"))
+      assert_true("\{error}".contains("edits file to contain a JSON array"))
   } noraise {
     _ => fail("non-array edits_file decoded")
   }

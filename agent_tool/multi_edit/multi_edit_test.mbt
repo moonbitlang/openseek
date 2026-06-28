@@ -421,7 +421,7 @@ async test "multi_edit rejects an edit that omits its file" {
 }
 
 ///|
-async test "multi_edit applies a batch read from an edits_file" {
+async test "multi_edit applies a batch from a response file (string edits)" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/fixed.mbt"
     @fs.write_file(
@@ -435,7 +435,8 @@ async test "multi_edit applies a batch read from an edits_file" {
       { "file": path, "old_string": "old_b", "new_string": "new_b", "start_line": 2 },
     ]
     @fs.write_file(spec_path, spec.stringify(), create_mode=CreateOrTruncate)
-    let result = run_multi_edit({ "edits_file": spec_path })
+    // A string `edits` is a path to a JSON response file holding the array.
+    let result = run_multi_edit({ "edits": spec_path })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_eq(
@@ -447,44 +448,29 @@ async test "multi_edit applies a batch read from an edits_file" {
 }
 
 ///|
-async test "multi_edit rejects providing both edits and edits_file" {
-  let result = run_multi_edit({
-    "edits": [
-      { "file": "f.mbt", "old_string": "a", "new_string": "b", "start_line": 1 },
-    ],
-    "edits_file": "fixes.json",
-  })
-  guard result is Respond(output) else { fail("expected Respond") }
-  assert_true(output.is_error)
-  assert_true(
-    output.content.contains("exactly one of arguments.edits or arguments.edits_file"),
-  )
-}
-
-///|
-async test "multi_edit rejects providing neither edits nor edits_file" {
+async test "multi_edit rejects missing edits" {
   let result = run_multi_edit({})
   guard result is Respond(output) else { fail("expected Respond") }
   assert_true(output.is_error)
-  assert_true(output.content.contains("arguments.edits or arguments.edits_file"))
+  assert_true(output.content.contains("arguments.edits"))
 }
 
 ///|
-async test "multi_edit reports an unreadable edits_file" {
+async test "multi_edit reports an unreadable response file" {
   @vfs.with_tmpdir(dir => {
-    let result = run_multi_edit({ "edits_file": "\{dir}/missing.json" })
+    let result = run_multi_edit({ "edits": "\{dir}/missing.json" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("could not read edits_file"))
+    assert_true(output.content.contains("could not read edits file"))
   })
 }
 
 ///|
-async test "multi_edit reports an edits_file that is not valid JSON" {
+async test "multi_edit reports a response file that is not valid JSON" {
   @vfs.with_tmpdir(dir => {
     let spec_path = "\{dir}/broken.json"
     @fs.write_file(spec_path, "{ not json", create_mode=CreateOrTruncate)
-    let result = run_multi_edit({ "edits_file": spec_path })
+    let result = run_multi_edit({ "edits": spec_path })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("is not valid JSON"))
@@ -492,7 +478,7 @@ async test "multi_edit reports an edits_file that is not valid JSON" {
 }
 
 ///|
-async test "multi_edit reports a malformed edits_file entry" {
+async test "multi_edit reports a malformed response file entry" {
   @vfs.with_tmpdir(dir => {
     let spec_path = "\{dir}/badschema.json"
     // valid JSON array, but the entry omits `file`.
@@ -500,11 +486,11 @@ async test "multi_edit reports a malformed edits_file entry" {
       { "old_string": "a", "new_string": "b", "start_line": 1 },
     ]
     @fs.write_file(spec_path, spec.stringify(), create_mode=CreateOrTruncate)
-    let result = run_multi_edit({ "edits_file": spec_path })
+    let result = run_multi_edit({ "edits": spec_path })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("arguments.edits[0].file"))
-    assert_true(output.content.contains("in edits_file"))
+    assert_true(output.content.contains("in edits file"))
   })
 }
 
@@ -517,7 +503,9 @@ test "multi_edit tool advertises the expected schema" {
   assert_true(text.contains("\"file\""))
   assert_false(text.contains("\"path\""))
   assert_true(text.contains("\"edits\""))
-  assert_true(text.contains("\"edits_file\""))
+  // The two inputs are merged into one polymorphic `edits` field.
+  assert_false(text.contains("\"edits_file\""))
+  assert_true(text.contains("\"oneOf\""))
   assert_true(text.contains("\"old_string\""))
   assert_true(text.contains("\"new_string\""))
   assert_true(text.contains("\"start_line\""))

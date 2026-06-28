@@ -1,28 +1,29 @@
 # Multi Edit Decode
 
 `bobzhang/openseek/agent_tool/multi_edit/internal/decode` converts raw JSON
-tool arguments into the typed `MultiEditInput` record consumed by `multi_edit`.
+tool arguments into the typed `EditSource` consumed by `multi_edit`.
 
 ## API Shape
 
 - `MultiEditItem(file, old_string, new_string, start_line, end_line)`: one exact
   line-anchored replacement against `file`; `end_line` is optional.
-- `EditSource`: either `Inline(edits)` (the inline `edits` array) or
-  `FromFile(path)` (the `edits_file` path, read and parsed by the tool).
-- `decode_source(arguments)`: accepts a JSON object, enforces that exactly one
-  of `edits` / `edits_file` is present, and raises focused errors for malformed
+- `EditSource`: either `Inline(edits)` (the `edits` argument was an inline array)
+  or `FromFile(path)` (the `edits` argument was a string path to a response file,
+  read and parsed by the tool).
+- `decode_source(arguments)`: accepts a JSON object whose single `edits` field is
+  either an array or a string path, and raises focused errors for malformed
   payloads.
-- `decode_edits_json(json)`: parses the bare array read from an `edits_file`
-  into edit items.
+- `decode_edits_json(json)`: parses the bare array read from a response file into
+  edit items.
 
 ## Arguments
 
-Exactly one of `edits` or `edits_file` must be present.
+The single `edits` field is either an array (inline) or a string (a response-file
+path); both forms carry the same edit-object shape.
 
 | Name | Type | Required | Decoder behavior |
 | --- | --- | --- | --- |
-| `edits` | array | one-of | Must be non-empty; entries are decoded in order. |
-| `edits_file` | string | one-of | Path to a JSON file holding the same array of edit objects. |
+| `edits` | array \| string | yes | An array of edit objects (decoded in order; must be non-empty), or a path string to a JSON file holding that array. |
 | `edits[i].file` | string | yes | Missing or non-string values raise `arguments.edits[i].file`. |
 | `edits[i].old_string` | string | yes | Missing or non-string values raise `arguments.edits[i].old_string`. |
 | `edits[i].new_string` | string | yes | Missing or non-string values raise `arguments.edits[i].new_string`. |

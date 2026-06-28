@@ -34,6 +34,8 @@ and known-bad manifest rewrites are rejected before anything is overwritten.
 
 ## API Style
 
+`edits` takes one of two forms. **Inline** — an array of edit objects:
+
 ```json
 {
   "edits": [
@@ -60,11 +62,21 @@ and known-bad manifest rewrites are rejected before anything is overwritten.
 }
 ```
 
+**Response file** — a string path to a JSON file containing that same array.
+This is the automation path: generate the file from `moon check` diagnostics with
+a script, then apply the whole batch in one validated call.
+
+```json
+{ "edits": "fixes.json" }
+```
+
+where `fixes.json` holds `[{ "file": ..., "old_string": ..., "new_string": ..., "start_line": ... }, ...]`.
+
 ## Arguments
 
 | Name | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `edits` | array | yes | Non-empty list of explicit replacements. All edits for a given file must be contiguous. |
+| `edits` | array \| string | yes | Either a non-empty array of edit objects (inline), or a string path to a JSON file (a response file) holding that same array. All edits for a given file must be contiguous. |
 | `edits[i].file` | string | yes | Filesystem path the edit applies to. Relative paths resolve against the agent process's current working directory. |
 | `edits[i].old_string` | string | yes | Exact text to replace. Empty strings request an insertion. |
 | `edits[i].new_string` | string | yes | Replacement text. It must differ from `old_string`. |
