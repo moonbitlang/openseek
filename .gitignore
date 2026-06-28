@@ -23,3 +23,7 @@ eval/*
 !eval/tool_harness/**
 !eval/internal/
 !eval/internal/**
+
+# Generated from *.mbt.md by moon dev_build (regenerated at build time)
+prompt/generated_base_prompt.mbt
+prompt/generated_flash_prompt.mbt
