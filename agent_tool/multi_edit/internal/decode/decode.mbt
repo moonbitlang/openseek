@@ -1,6 +1,9 @@
 ///|
-/// One exact replacement requested by `multi_edit`.
+/// One exact replacement requested by `multi_edit`. Each edit names its own
+/// `file`, so a single call can span several files. All edits for a given file
+/// must be listed contiguously (enforced by the tool, not the decoder).
 pub struct MultiEditItem {
+  file : String
   old_string : String
   new_string : String
   start_line : Int
@@ -8,17 +11,16 @@ pub struct MultiEditItem {
 } derive(Debug)
 
 ///|
-/// Decoded arguments of the `multi_edit` tool: a single file path plus one or
-/// more explicit line-anchored replacements.
+/// Decoded arguments of the `multi_edit` tool: one or more explicit
+/// line-anchored replacements, each carrying the `file` it applies to.
 pub struct MultiEditInput {
-  path : String
   edits : Array[MultiEditItem]
 } derive(Debug)
 
 ///|
 /// Decode `multi_edit` tool-call arguments.
 ///
-/// `path` is required. `edits` must be a non-empty array of objects containing
+/// `edits` must be a non-empty array of objects containing `file`,
 /// `old_string`, `new_string`, and `start_line`. `end_line` is optional. Line
 /// bounds are positive 1-based inclusive integers, and each item validates
 /// `end_line >= start_line` when an end bound is present.
@@ -31,9 +33,7 @@ pub fn decode(arguments : Json) -> MultiEditInput raise {
 
 ///|
 fn parse_fields(fields : Map[String, Json]) -> MultiEditInput raise {
-  let path = required_string(fields, "path")
-  let edits = required_edits(fields)
-  { path, edits }
+  { edits: required_edits(fields) }
 }
 
 ///|
@@ -56,6 +56,7 @@ fn decode_edit_item(item : Json, index : Int) -> MultiEditItem raise {
   match item {
     Object(fields) => {
       let prefix = "arguments.edits[\{index}]"
+      let file = required_string_with_prefix(fields, "file", prefix)
       let old_string = required_string_with_prefix(fields, "old_string", prefix)
       let new_string = required_string_with_prefix(fields, "new_string", prefix)
       let start_line = required_positive_int(fields, "start_line", prefix)
@@ -67,15 +68,10 @@ fn decode_edit_item(item : Json, index : Int) -> MultiEditItem raise {
           )
         _ => ()
       }
-      { old_string, new_string, start_line, end_line }
+      { file, old_string, new_string, start_line, end_line }
     }
     _ => fail("arguments.edits[\{index}] to be an object")
   }
-}
-
-///|
-fn required_string(fields : Map[String, Json], name : String) -> String raise {
-  required_string_with_prefix(fields, name, "arguments")
 }
 
 ///|

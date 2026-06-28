@@ -12,11 +12,11 @@ pub fn decode(Json) -> MultiEditInput raise
 
 // Types and methods
 pub struct MultiEditInput {
-  path : String
   edits : Array[MultiEditItem]
 } derive(@debug.Debug)
 
 pub struct MultiEditItem {
+  file : String
   old_string : String
   new_string : String
   start_line : Int

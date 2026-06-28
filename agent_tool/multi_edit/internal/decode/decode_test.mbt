@@ -2,28 +2,34 @@
 test "decode valid multi_edit input" {
   debug_inspect(
     @decode.decode({
-      "path": "file.mbt",
       "edits": [
         {
+          "file": "file.mbt",
           "old_string": "old one",
           "new_string": "new one",
           "start_line": 2,
           "end_line": 4,
         },
-        { "old_string": "old two", "new_string": "new two", "start_line": 8 },
+        {
+          "file": "other.mbt",
+          "old_string": "old two",
+          "new_string": "new two",
+          "start_line": 8,
+        },
       ],
     }),
     content=(
       #|{
-      #|  path: "file.mbt",
       #|  edits: [
       #|    {
+      #|      file: "file.mbt",
       #|      old_string: "old one",
       #|      new_string: "new one",
       #|      start_line: 2,
       #|      end_line: Some(4),
       #|    },
       #|    {
+      #|      file: "other.mbt",
       #|      old_string: "old two",
       #|      new_string: "new two",
       #|      start_line: 8,
@@ -39,9 +45,9 @@ test "decode valid multi_edit input" {
 test "decode rejects malformed edit entries with indexes" {
   try
     @decode.decode({
-      "path": "file.mbt",
       "edits": [
         {
+          "file": "file.mbt",
           "old_string": "old",
           "new_string": "new",
           "start_line": 0,
@@ -61,9 +67,9 @@ test "decode rejects malformed edit entries with indexes" {
   }
   try
     @decode.decode({
-      "path": "file.mbt",
       "edits": [
         {
+          "file": "file.mbt",
           "old_string": "old",
           "new_string": "new",
           "start_line": 3,
@@ -85,7 +91,7 @@ test "decode rejects malformed edit entries with indexes" {
 
 ///|
 test "decode rejects missing required fields" {
-  try @decode.decode({ "path": "file.mbt", "edits": [] }) catch {
+  try @decode.decode({ "edits": [] }) catch {
     error =>
       assert_true(
         "\{error}".contains("arguments.edits to be a non-empty array"),
@@ -95,8 +101,16 @@ test "decode rejects missing required fields" {
   }
   try
     @decode.decode({
-      "path": "file.mbt",
-      "edits": [{ "old_string": "old", "start_line": 1 }],
+      "edits": [{ "old_string": "old", "new_string": "new", "start_line": 1 }],
+    })
+  catch {
+    error => assert_true("\{error}".contains("arguments.edits[0].file"))
+  } noraise {
+    _ => fail("missing file decoded")
+  }
+  try
+    @decode.decode({
+      "edits": [{ "file": "file.mbt", "old_string": "old", "start_line": 1 }],
     })
   catch {
     error => assert_true("\{error}".contains("arguments.edits[0].new_string"))
@@ -105,8 +119,7 @@ test "decode rejects missing required fields" {
   }
   try
     @decode.decode({
-      "path": "file.mbt",
-      "edits": [{ "old_string": "old", "new_string": "new" }],
+      "edits": [{ "file": "file.mbt", "old_string": "old", "new_string": "new" }],
     })
   catch {
     error => assert_true("\{error}".contains("arguments.edits[0].start_line"))
