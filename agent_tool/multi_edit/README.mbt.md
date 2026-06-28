@@ -81,7 +81,7 @@ once and the response lists the per-file counts:
 On failure, no files are written. Failed-edit reports name the file and the
 original edit index:
 
-- `"error multi_editing: <n> edit(s) failed; no changes applied\n<file> edit[1] line range 10-12: old_string not found"`
+- `"error multi_editing: <n> problem(s); no changes applied\n<file> edit[1] line range 10-12: old_string not found"`
 - `"error multi_editing: edits for <file> must be contiguous; it reappears at edit[2] after another file's edits; list all edits for a file together"`
 - `"error: multi_edit requires arguments.edits[0].start_line to be an integer"`
 

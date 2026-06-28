@@ -322,7 +322,7 @@ async test "multi_edit reports all failed edits and leaves file unchanged" {
     assert_true(output.is_error)
     assert_eq(
       output.content,
-      "error multi_editing: 2 edit(s) failed; no changes applied\n\{path} edit[1] line range 1-1: old_string not found\n\{path} edit[2] line range 3-4: old_string and new_string are identical",
+      "error multi_editing: 2 problem(s); no changes applied\n\{path} edit[1] line range 1-1: old_string not found\n\{path} edit[2] line range 3-4: old_string and new_string are identical",
     )
     assert_eq(@fs.read_file(path).text(), original)
   })
@@ -356,7 +356,7 @@ async test "multi_edit rejects overlapping replacements and leaves file unchange
     assert_true(output.is_error)
     assert_eq(
       output.content,
-      "error multi_editing: 1 edit(s) failed; no changes applied\n\{path} edit[1] line range 1-1: replacement overlaps edit[0]",
+      "error multi_editing: 1 problem(s); no changes applied\n\{path} edit[1] line range 1-1: replacement overlaps edit[0]",
     )
     assert_eq(@fs.read_file(path).text(), original)
   })

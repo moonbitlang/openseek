@@ -227,7 +227,16 @@ async fn multi_edit_files(
         )
     }
   }
-  let response = @auto_check.append_summary(writes[0].path, success_summary(writes))
+  // Append `moon check` feedback once, from the first written file's module. A
+  // batch spanning multiple modules only surfaces the first module's
+  // diagnostics, which is acceptable for the in-project repair case. `writes` is
+  // non-empty here (a non-empty batch with no failures always renders at least
+  // one write), but match defensively rather than index blindly.
+  let summary = success_summary(writes)
+  let response = match writes.get(0) {
+    Some(first) => @auto_check.append_summary(first.path, summary)
+    None => summary
+  }
   @agent_tool.ToolAction::respond(response, brief=success_brief(writes))
 }
 
@@ -236,7 +245,9 @@ async fn multi_edit_files(
 /// ends, that file must not reappear. Returns an error message, or `None` when
 /// every file occupies a single run.
 fn check_contiguity(edits : Array[ResolvedEdit]) -> String? {
-  let ended : Array[String] = []
+  // Set of paths whose contiguous block has already ended, so the membership
+  // test stays O(1) even for a large batch touching many files.
+  let ended : Map[String, Unit] = {}
   let mut current : String? = None
   for edit in edits {
     let same = match current {
@@ -244,13 +255,13 @@ fn check_contiguity(edits : Array[ResolvedEdit]) -> String? {
       None => false
     }
     if !same {
-      if ended.contains(edit.path) {
+      if ended.get(edit.path) is Some(_) {
         return Some(
           "error multi_editing: edits for \{edit.file} must be contiguous; it reappears at edit[\{edit.index}] after another file's edits; list all edits for a file together",
         )
       }
       match current {
-        Some(path) => ended.push(path)
+        Some(path) => ended[path] = ()
         None => ()
       }
       current = Some(edit.path)
@@ -478,7 +489,7 @@ fn apply_plans(content : String, plans : Array[PlannedEdit]) -> String {
 ///|
 fn failure_report(failures : Array[EditFailure]) -> String {
   let lines = [ for failure in failures => format_failure(failure) ]
-  "error multi_editing: \{failures.length()} edit(s) failed; no changes applied\n\{lines.join("\n")}"
+  "error multi_editing: \{failures.length()} problem(s); no changes applied\n\{lines.join("\n")}"
 }
 
 ///|
