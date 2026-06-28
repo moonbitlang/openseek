@@ -116,6 +116,17 @@ priv struct PreparedWrite {
 }
 
 ///|
+/// A file whose edits all validated. `file` is the spelling the caller used
+/// (for messages); `path` is the resolved location (the grouping key and the
+/// write target).
+priv struct PreparedFile {
+  file : String
+  path : String
+  content : String
+  plans : Array[PlannedEdit]
+}
+
+///|
 /// Apply a validated batch across one or more files. Validation runs over every
 /// file first; if any edit fails (or any file can't be read or is write-guarded)
 /// nothing is written. Writes happen only once the entire batch is clean, which
@@ -125,19 +136,30 @@ async fn multi_edit_files(
   edits : Array[@decode.MultiEditItem],
 ) -> @agent_tool.ToolAction {
   let brief = "multi_edit"
+  // Resolve every edit's path up front and key contiguity and grouping on the
+  // resolved path, so two spellings of one file (e.g. `a.mbt` and `./a.mbt`)
+  // collapse into a single group rather than racing each other's writes.
+  let resolved : Array[ResolvedEdit] = []
+  for index, item in edits {
+    resolved.push({
+      index,
+      file: item.file,
+      path: @workspace_path.resolve(workspace_root, item.file),
+      item,
+    })
+  }
   // A file's edits must form one contiguous block so each file is read,
   // validated, and written exactly once.
-  match check_contiguity(edits) {
+  match check_contiguity(resolved) {
     Some(message) =>
       return @agent_tool.ToolAction::respond(message, is_error=true, brief~)
     None => ()
   }
-  let groups = group_contiguous(edits)
+  let groups = group_contiguous(resolved)
   let failures : Array[EditFailure] = []
-  let prepared : Array[(String, String, Array[PlannedEdit])] = []
+  let prepared : Array[PreparedFile] = []
   for group in groups {
-    let path = @workspace_path.resolve(workspace_root, group.file)
-    let content = @fs.read_file(path).text() catch {
+    let content = @fs.read_file(group.path).text() catch {
       error if @async.is_being_cancelled() => raise error
       error => {
         failures.push({
@@ -150,14 +172,14 @@ async fn multi_edit_files(
       }
     }
     let plans : Array[PlannedEdit] = []
-    for indexed in group.items {
-      match validate_edit(content, indexed.item, indexed.index, file=group.file) {
+    for edit in group.items {
+      match validate_edit(content, edit.item, edit.index, file=group.file) {
         Valid(plan) => plans.push(plan)
         Invalid(failure) => failures.push(failure)
       }
     }
     collect_overlap_failures(group.file, plans, failures)
-    prepared.push((group.file, content, plans))
+    prepared.push({ file: group.file, path: group.path, content, plans })
   }
   if failures.length() > 0 {
     return @agent_tool.ToolAction::respond(
@@ -169,14 +191,22 @@ async fn multi_edit_files(
   // Render each file and run the write guard before touching disk, so a guarded
   // path aborts the whole batch instead of leaving earlier files written.
   let writes : Array[PreparedWrite] = []
-  for entry in prepared {
-    let (file, content, plans) = entry
-    let path = @workspace_path.resolve(workspace_root, file)
-    let new_content = apply_plans(content, plans)
-    match @manifest_error.write_error(path, new_content) {
+  for prepared_file in prepared {
+    let new_content = apply_plans(prepared_file.content, prepared_file.plans)
+    match @manifest_error.write_error(prepared_file.path, new_content) {
       Some(message) =>
-        failures.push({ file, index: None, range: "", message })
-      None => writes.push({ path, new_content, edit_count: plans.length() })
+        failures.push({
+          file: prepared_file.file,
+          index: None,
+          range: "",
+          message,
+        })
+      None =>
+        writes.push({
+          path: prepared_file.path,
+          new_content,
+          edit_count: prepared_file.plans.length(),
+        })
     }
   }
   if failures.length() > 0 {
@@ -205,56 +235,61 @@ async fn multi_edit_files(
 /// Reject a batch where a file's edits are not contiguous: once a file's block
 /// ends, that file must not reappear. Returns an error message, or `None` when
 /// every file occupies a single run.
-fn check_contiguity(edits : Array[@decode.MultiEditItem]) -> String? {
+fn check_contiguity(edits : Array[ResolvedEdit]) -> String? {
   let ended : Array[String] = []
   let mut current : String? = None
-  for index, item in edits {
+  for edit in edits {
     let same = match current {
-      Some(file) => file == item.file
+      Some(path) => path == edit.path
       None => false
     }
     if !same {
-      if ended.contains(item.file) {
+      if ended.contains(edit.path) {
         return Some(
-          "error multi_editing: edits for \{item.file} must be contiguous; it reappears at edit[\{index}] after another file's edits; list all edits for a file together",
+          "error multi_editing: edits for \{edit.file} must be contiguous; it reappears at edit[\{edit.index}] after another file's edits; list all edits for a file together",
         )
       }
       match current {
-        Some(file) => ended.push(file)
+        Some(path) => ended.push(path)
         None => ()
       }
-      current = Some(item.file)
+      current = Some(edit.path)
     }
   }
   None
 }
 
 ///|
-/// One decoded edit paired with its position in the original batch, so failures
-/// can point the model back at `edit[index]`.
-priv struct IndexedEdit {
+/// One decoded edit with its position in the original batch and its resolved
+/// path. `index` lets failures point the model back at `edit[index]`; `path` is
+/// the grouping key so aliased spellings of one file land together.
+priv struct ResolvedEdit {
   index : Int
+  file : String
+  path : String
   item : @decode.MultiEditItem
 }
 
 ///|
-/// A contiguous run of edits that all target the same file.
+/// A contiguous run of edits that all target the same resolved file.
 priv struct FileGroup {
   file : String
-  items : Array[IndexedEdit]
+  path : String
+  items : Array[ResolvedEdit]
 }
 
 ///|
-/// Group edits into per-file runs. Contiguity is already guaranteed by
-/// `check_contiguity`, so a file extends only the most recent group.
-fn group_contiguous(edits : Array[@decode.MultiEditItem]) -> Array[FileGroup] {
+/// Group edits into per-file runs keyed on the resolved path. Contiguity is
+/// already guaranteed by `check_contiguity`, so a file extends only the most
+/// recent group.
+fn group_contiguous(edits : Array[ResolvedEdit]) -> Array[FileGroup] {
   let groups : Array[FileGroup] = []
-  for index, item in edits {
+  for edit in edits {
     let count = groups.length()
-    if count > 0 && groups[count - 1].file == item.file {
-      groups[count - 1].items.push({ index, item })
+    if count > 0 && groups[count - 1].path == edit.path {
+      groups[count - 1].items.push(edit)
     } else {
-      groups.push({ file: item.file, items: [{ index, item }] })
+      groups.push({ file: edit.file, path: edit.path, items: [edit] })
     }
   }
   groups

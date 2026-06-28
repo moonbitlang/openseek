@@ -81,6 +81,30 @@ async test "multi_edit applies a batch spanning several files" {
 }
 
 ///|
+async test "multi_edit collapses aliased spellings of one file into a single group" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/note.txt"
+    @fs.write_file(path, "alpha\nbeta\n", create_mode=CreateOrTruncate)
+    // `note.txt` and `./note.txt` resolve to the same file. They must form one
+    // group so both edits land; otherwise the second write would clobber the
+    // first and silently drop an edit.
+    let result = run_multi_edit_in_workspace(dir, {
+      "edits": [
+        { "file": "note.txt", "old_string": "alpha", "new_string": "ALPHA", "start_line": 1 },
+        { "file": "./note.txt", "old_string": "beta", "new_string": "BETA", "start_line": 2 },
+      ],
+    })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_false(output.is_error)
+    assert_eq(
+      output.content,
+      "ok: applied 2 edit(s) across 1 file(s)\n\{path}: 2 edit(s)",
+    )
+    assert_eq(@fs.read_file(path).text(), "ALPHA\nBETA\n")
+  })
+}
+
+///|
 async test "multi_edit rejects a file whose edits are not contiguous" {
   @vfs.with_tmpdir(dir => {
     let first = "\{dir}/a.mbt"
