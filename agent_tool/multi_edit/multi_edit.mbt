@@ -13,7 +13,7 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="multi_edit",
-    description="Apply many exact line-anchored replacements across one or more files in a single validated batch. This is the efficient path for compiler-feedback repair loops: when `moon check` (or another analyzer) reports several known locations, batch all the fixes into one multi_edit call instead of many separate edit calls. Each edit names its `file` plus old_string, new_string, and start_line; optional end_line bounds the search. List all edits for a given file contiguously — a file may not reappear after another file's edits. Because each edit is line-anchored, old_string can be the small exact span to replace instead of a large context block, and each edit replaces the first matching span in its selected region. To INSERT new code instead of replacing, set old_string to the empty string: new_string is inserted at the start of start_line (use start_line = last line + 1 to append at end of file). Do not emit separate edits for changes that fall on the same line or in one tight span: combine them into a single edit whose old_string covers the whole span, because adjacent or overlapping edits collide and the whole batch is rejected. Every edit is validated against the original file before anything is written, and if any edit fails no files are changed.",
+    description="Apply many exact line-anchored replacements across one or more files in a single validated batch. This is the efficient path for compiler-feedback repair loops: when `moon check` (or another analyzer) reports several known locations, batch all the fixes into one multi_edit call instead of many separate edit calls. Each edit names its `file` plus old_string, new_string, and start_line; optional end_line bounds the search. List all edits for a given file contiguously — a file may not reappear after another file's edits. Because each edit is line-anchored, old_string can be the small exact span to replace instead of a large context block, and each edit replaces the first matching span in its selected region. To INSERT new code instead of replacing, set old_string to the empty string: new_string is inserted at the start of start_line (use start_line = last line + 1 to append at end of file). Do not emit separate edits for changes that fall on the same line or in one tight span: combine them into a single edit whose old_string covers the whole span, because adjacent or overlapping edits collide and the whole batch is rejected. Every edit is validated against the original file before anything is written, and if any edit fails no files are changed. For automation, instead of inline `edits` you may set `edits_file` to the path of a JSON file holding the same array of edit objects — generate that file from compiler diagnostics with a script, then apply the whole batch through this one safe, validated call. Provide exactly one of `edits` or `edits_file`.",
     schema=JsonSchema({
       "type": "object",
       "properties": {
@@ -31,8 +31,9 @@ pub fn definition(
             "required": ["file", "old_string", "new_string", "start_line"],
           },
         },
+        "edits_file": { "type": "string" },
       },
-      "required": ["edits"],
+      "oneOf": [{ "required": ["edits"] }, { "required": ["edits_file"] }],
     }),
     execute=Async(arguments => execute_with_workspace(workspace_root, arguments)),
   )
@@ -43,16 +44,66 @@ async fn execute_with_workspace(
   workspace_root : String,
   arguments : Json,
 ) -> @agent_tool.ToolAction {
-  let input = @decode.decode(arguments) catch {
-    error => {
-      let message = @tool_error.failure_message("\{error}")
+  let source = @decode.decode_source(arguments) catch {
+    error =>
       return @agent_tool.ToolAction::respond(
-        "error: multi_edit requires \{message}",
+        "error: multi_edit requires \{@tool_error.failure_message("\{error}")}",
         is_error=true,
       )
-    }
   }
-  multi_edit_files(workspace_root, input.edits)
+  let edits = match source {
+    Inline(edits) => edits
+    FromFile(spec) =>
+      match load_edits_file(workspace_root, spec) {
+        Ok(edits) => edits
+        Err(action) => return action
+      }
+  }
+  multi_edit_files(workspace_root, edits)
+}
+
+///|
+/// Read and parse an `edits_file` spec. Returns the decoded edits, or a ready
+/// error response describing why the spec could not be loaded. The spec's
+/// top-level JSON is the same array of edit objects accepted inline.
+async fn load_edits_file(
+  workspace_root : String,
+  spec : String,
+) -> Result[Array[@decode.MultiEditItem], @agent_tool.ToolAction] {
+  let brief = "multi_edit"
+  let path = @workspace_path.resolve(workspace_root, spec)
+  let text = @fs.read_file(path).text() catch {
+    error if @async.is_being_cancelled() => raise error
+    error =>
+      return Err(
+        @agent_tool.ToolAction::respond(
+          "error: multi_edit could not read edits_file \{path}: \{error}",
+          is_error=true,
+          brief~,
+        ),
+      )
+  }
+  let json = @json.parse(text) catch {
+    error =>
+      return Err(
+        @agent_tool.ToolAction::respond(
+          "error: multi_edit edits_file \{path} is not valid JSON: \{error}",
+          is_error=true,
+          brief~,
+        ),
+      )
+  }
+  let edits = @decode.decode_edits_json(json) catch {
+    error =>
+      return Err(
+        @agent_tool.ToolAction::respond(
+          "error: multi_edit requires \{@tool_error.failure_message("\{error}")} in edits_file \{path}",
+          is_error=true,
+          brief~,
+        ),
+      )
+  }
+  Ok(edits)
 }
 
 ///|

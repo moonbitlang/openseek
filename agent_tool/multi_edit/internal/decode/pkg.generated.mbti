@@ -6,13 +6,16 @@ import {
 }
 
 // Values
-pub fn decode(Json) -> MultiEditInput raise
+pub fn decode_edits_json(Json) -> Array[MultiEditItem] raise
+
+pub fn decode_source(Json) -> EditSource raise
 
 // Errors
 
 // Types and methods
-pub struct MultiEditInput {
-  edits : Array[MultiEditItem]
+pub enum EditSource {
+  Inline(Array[MultiEditItem])
+  FromFile(String)
 } derive(@debug.Debug)
 
 pub struct MultiEditItem {
