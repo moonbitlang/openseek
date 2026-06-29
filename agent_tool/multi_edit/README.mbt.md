@@ -95,7 +95,8 @@ original edit index:
 
 - `"error multi_editing: <n> problem(s); no changes applied\n<file> edit[1] line range 10-12: old_string not found"`
 - `"error multi_editing: edits for <file> must be contiguous; it reappears at edit[2] after another file's edits; list all edits for a file together"`
-- `"error: multi_edit requires arguments.edits[0].start_line to be an integer"`
+- `"error: multi_edit requires arguments.edits[0].start_line to be an integer"` — a present field has the wrong type.
+- `"error: multi_edit requires arguments.edits[0] to include start_line (present keys: file, line, new_string, old_string)"` — a required field is absent; the present keys are listed so a misnamed key (here `line` instead of `start_line`) is obvious.
 
 ```moonbit check
 ///|

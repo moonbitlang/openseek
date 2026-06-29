@@ -140,7 +140,7 @@ test "decode rejects missing required fields" {
       "edits": [{ "old_string": "old", "new_string": "new", "start_line": 1 }],
     })
   catch {
-    error => assert_true("\{error}".contains("arguments.edits[0].file"))
+    error => assert_true("\{error}".contains("arguments.edits[0] to include file"))
   } noraise {
     _ => fail("missing file decoded")
   }
@@ -149,7 +149,8 @@ test "decode rejects missing required fields" {
       "edits": [{ "file": "file.mbt", "old_string": "old", "start_line": 1 }],
     })
   catch {
-    error => assert_true("\{error}".contains("arguments.edits[0].new_string"))
+    error =>
+      assert_true("\{error}".contains("arguments.edits[0] to include new_string"))
   } noraise {
     _ => fail("missing new_string decoded")
   }
@@ -158,9 +159,39 @@ test "decode rejects missing required fields" {
       "edits": [{ "file": "file.mbt", "old_string": "old", "new_string": "new" }],
     })
   catch {
-    error => assert_true("\{error}".contains("arguments.edits[0].start_line"))
+    error =>
+      assert_true("\{error}".contains("arguments.edits[0] to include start_line"))
   } noraise {
     _ => fail("missing start_line decoded")
+  }
+}
+
+///|
+test "decode lists present keys when a required field is misnamed" {
+  // The agent named the line field `line` instead of `start_line` (exactly the
+  // failure seen in an eval). The error should say start_line is missing AND
+  // list the keys that are present, so the misnamed key is obvious.
+  try
+    @decode.decode_source({
+      "edits": [
+        {
+          "file": "file.mbt",
+          "old_string": "old",
+          "new_string": "new",
+          "line": 12,
+        },
+      ],
+    })
+  catch {
+    error => {
+      let text = "\{error}"
+      assert_true(text.contains("arguments.edits[0] to include start_line"))
+      assert_true(text.contains("present keys:"))
+      assert_true(text.contains("line"))
+      assert_false(text.contains("to be an integer"))
+    }
+  } noraise {
+    _ => fail("misnamed start_line decoded")
   }
 }
 

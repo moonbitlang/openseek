@@ -90,8 +90,23 @@ fn required_string_with_prefix(
 ) -> String raise {
   match fields.get(name) {
     Some(String(value)) => value
-    _ => fail("\{prefix}.\{name}")
+    Some(Null) | None => fail(missing_field(fields, name, prefix))
+    Some(_) => fail("\{prefix}.\{name} to be a string")
   }
+}
+
+///|
+/// Message for a required field that is absent. Listing the keys that ARE
+/// present turns a misnamed key (e.g. `line` instead of `start_line`) from a
+/// confusing "to be an integer" type error into an obvious one-look fix.
+fn missing_field(
+  fields : Map[String, Json],
+  name : String,
+  prefix : String,
+) -> String {
+  let keys = [ for key in fields.keys() => key ]
+  keys.sort()
+  "\{prefix} to include \{name} (present keys: \{keys.join(", ")})"
 }
 
 ///|
@@ -111,7 +126,8 @@ fn required_positive_int(
       }
       int_value
     }
-    _ => fail("\{prefix}.\{name} to be an integer")
+    Some(Null) | None => fail(missing_field(fields, name, prefix))
+    Some(_) => fail("\{prefix}.\{name} to be an integer")
   }
 }
 

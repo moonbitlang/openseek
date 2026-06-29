@@ -415,7 +415,7 @@ async test "multi_edit rejects an edit that omits its file" {
   guard result is Respond(output) else { fail("expected Respond") }
   assert_eq(
     output.content,
-    "error: multi_edit requires arguments.edits[0].file",
+    "error: multi_edit requires arguments.edits[0] to include file (present keys: new_string, old_string, start_line)",
   )
   assert_true(output.is_error)
 }
@@ -489,7 +489,7 @@ async test "multi_edit reports a malformed response file entry" {
     let result = run_multi_edit({ "edits": spec_path })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("arguments.edits[0].file"))
+    assert_true(output.content.contains("arguments.edits[0] to include file"))
     assert_true(output.content.contains("in edits file"))
   })
 }
