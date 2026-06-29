@@ -54,7 +54,7 @@ async fn run_system_open(path : String) -> Int {
 /// runtime by `uname`.
 #cfg(not(platform="windows"))
 async fn run_system_open(path : String) -> Int {
-  if uname_is_darwin() {
+  if @platform.is_darwin() {
     // Respect the file's app association, but fall back to the default text
     // editor for types with none — source files like `.mbt` have no associated
     // app, and plain `open` rejects them with "no application knows how to
@@ -68,16 +68,4 @@ async fn run_system_open(path : String) -> Int {
   } else {
     @process.run("xdg-open", [path])
   }
-}
-
-///|
-#cfg(not(platform="windows"))
-async fn uname_is_darwin() -> Bool {
-  let (code, stdout, _) = @process.collect_output("uname", ["-s"]) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return false
-  }
-  guard code == 0 else { return false }
-  let name = (stdout.text() catch { _ => "" }).trim()
-  name == "Darwin"
 }

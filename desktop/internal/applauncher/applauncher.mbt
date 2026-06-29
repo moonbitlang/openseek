@@ -1,13 +1,40 @@
 // The app launcher: detect which of a curated set of editors/terminals are
-// installed, hand the frontend their names and icons, and open one of them on
-// the active conversation's working directory. macOS only for now — the
-// catalog, the install probe, the icon extraction, and the launch command are
-// all platform-specific; other platforms report an empty catalog, so the
-// frontend hides the launcher.
+// installed, hand their names and icons to a caller, and open one of them on a
+// directory. macOS only for now — the catalog, the install probe, the icon
+// extraction, and the launch command are all platform-specific; other platforms
+// report an empty catalog, so the caller hides the launcher.
+//
+// This package is deliberately session-unaware: it maps an app id and a
+// directory to "open it", and knows nothing about conversations, the engine, or
+// the IPC boundary. The extension package adapts it to those concerns.
 
 ///|
-/// A detected app, kept in the module cache so `launch_app` can resolve an id
-/// back to the `.app` it found. `app_path` is empty for `reveal_only` entries
+/// A detected app, as reported to the caller. `icon` is a `data:image/png` URL,
+/// or empty when the icon could not be extracted (the caller falls back to an
+/// initial).
+pub struct App {
+  id : String
+  name : String
+  icon : String
+}
+
+///|
+/// A launch failure carrying a user-facing message (the reason `open` reported,
+/// the directory, and the app name).
+pub suberror LauncherError {
+  LauncherError(String)
+}
+
+///|
+impl Show for LauncherError with fn output(self, logger) {
+  match self {
+    LauncherError(message) => logger.write_string(message)
+  }
+}
+
+///|
+/// A detected app, kept in the module cache so `launch` can resolve an id back
+/// to the `.app` it found. `app_path` is empty for `reveal_only` entries
 /// (Finder), which open the directory through the platform default instead.
 priv struct LauncherApp {
   id : String
@@ -19,7 +46,7 @@ priv struct LauncherApp {
 }
 
 ///|
-/// One catalog entry to probe for: the stable id reported to the frontend, the
+/// One catalog entry to probe for: the stable id reported to the caller, the
 /// display name, the `.app` basenames to look for (without `.app`), a bundle id
 /// for the Spotlight fallback, and whether launching just reveals the folder.
 priv struct AppCandidate {
@@ -46,44 +73,28 @@ async fn ensure_app_catalog() -> Array[LauncherApp] {
 }
 
 ///|
-async fn list_apps_op() -> ListAppsReply {
-  let apps = ensure_app_catalog()
-  { apps: apps.map(app => { id: app.id, name: app.name, icon: app.icon }) }
+/// The apps detected as installed on this machine, in catalog order.
+pub async fn list() -> Array[App] {
+  ensure_app_catalog().map(app => { id: app.id, name: app.name, icon: app.icon })
 }
 
 ///|
-async fn launch_app_op(payload : LaunchAppPayload) -> LaunchAppReply {
-  // A live run hands us its cwd; a resumed conversation has none, so fall back
-  // to the directory the session's engine runs in (same as `open_path`).
-  let dir = if payload.cwd.is_empty() {
-    @engine.session_cwd(payload.session)
-  } else {
-    payload.cwd
-  }
-  guard !dir.is_empty() else {
-    raise HostError("This conversation has no working directory yet")
-  }
+/// Open `dir` in the detected app with id `id`, raising `LauncherError` when the
+/// id is unknown or the launch fails. `dir` is taken as-is — directory existence
+/// and session semantics are the caller's concern.
+pub async fn launch(id~ : String, dir~ : String) -> Unit {
   let apps = ensure_app_catalog()
   let mut target : LauncherApp? = None
   for app in apps {
-    if app.id == payload.app {
+    if app.id == id {
       target = Some(app)
       break
     }
   }
   guard target is Some(app) else {
-    raise HostError("Unknown app \"\{payload.app}\"")
-  }
-  // The engine creates a conversation's workspace on its first run, so a chat
-  // that has never run has no directory to open. The frontend disables the
-  // launcher in that case; this is the backstop if one slips through.
-  guard (@fs.exists(dir) catch { _ => true }) else {
-    raise HostError(
-      "This chat has no workspace yet — send a message to start it",
-    )
+    raise LauncherError("Unknown app \"\{id}\"")
   }
   run_app_open(app, dir)
-  { launched: true }
 }
 
 ///|
@@ -174,7 +185,7 @@ async fn build_app_catalog() -> Array[LauncherApp] {
 /// catalog is empty, so the launcher button stays hidden.
 #cfg(not(platform="windows"))
 async fn build_app_catalog() -> Array[LauncherApp] {
-  guard uname_is_darwin() else { return [] }
+  guard @platform.is_darwin() else { return [] }
   let result : Array[LauncherApp] = []
   for candidate in mac_candidates() {
     guard locate_app(candidate) is Some(app_path) else { continue }
@@ -252,7 +263,7 @@ async fn mdfind_bundle(bundle_id : String) -> String? {
 ///|
 /// Extract an app's icon as a `data:image/png` URL: locate its `.icns`, resize
 /// it to a PNG with `sips`, and base64-encode the result. Returns empty on any
-/// failure — the frontend falls back to a letter avatar.
+/// failure — the caller falls back to a letter avatar.
 #cfg(not(platform="windows"))
 async fn app_icon_data_url(id : String, app_path : String) -> String {
   guard find_app_icns(app_path) is Some(icns) else { return "" }
@@ -329,7 +340,7 @@ async fn read_icon_name(info_path : String) -> String {
 }
 
 ///|
-/// Launch a detected app on `dir`, raising a `HostError` carrying the reason
+/// Launch a detected app on `dir`, raising a `LauncherError` carrying the reason
 /// `open` reported (its stderr) when it fails. `reveal_only` apps (Finder) take
 /// the directory through the platform default; everything else opens it with the
 /// resolved bundle.
@@ -338,7 +349,8 @@ async fn run_app_open(app : LauncherApp, dir : String) -> Unit {
   let args = if app.reveal_only { [dir] } else { ["-a", app.app_path, dir] }
   let (code, _, stderr) = @process.collect_output("open", args) catch {
     error if @async.is_being_cancelled() => raise error
-    error => raise HostError("Could not open \{app.name} (\{dir}): \{error}")
+    error =>
+      raise LauncherError("Could not open \{app.name} (\{dir}): \{error}")
   }
   guard code == 0 else {
     let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
@@ -347,7 +359,7 @@ async fn run_app_open(app : LauncherApp, dir : String) -> Unit {
     } else {
       detail
     }
-    raise HostError("Could not open \{app.name} (\{dir}): \{reason}")
+    raise LauncherError("Could not open \{app.name} (\{dir}): \{reason}")
   }
 }
 
@@ -355,5 +367,5 @@ async fn run_app_open(app : LauncherApp, dir : String) -> Unit {
 #cfg(platform="windows")
 async fn run_app_open(app : LauncherApp, dir : String) -> Unit {
   let _ = app
-  raise HostError("The app launcher is not supported on Windows: \{dir}")
+  raise LauncherError("The app launcher is not supported on Windows: \{dir}")
 }

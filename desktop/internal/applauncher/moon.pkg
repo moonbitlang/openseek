@@ -1,16 +1,10 @@
 import {
-  "justjavac/lepus_app" @app,
-  "openseek_desktop/internal/applauncher",
-  "openseek_desktop/internal/engine",
   "openseek_desktop/internal/home",
   "openseek_desktop/internal/platform",
-  "openseek_desktop/internal/skillmarket",
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/async/os_error",
   "moonbitlang/async/process",
-  "moonbitlang/core/json",
-  "moonbitlang/x/path",
+  "moonbitlang/core/encoding/base64",
 }
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

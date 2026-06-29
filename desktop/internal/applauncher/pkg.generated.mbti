@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/applauncher"
+
+// Values
+pub async fn launch(id~ : String, dir~ : String) -> Unit
+
+pub async fn list() -> Array[App]
+
+// Errors
+pub suberror LauncherError {
+  LauncherError(String)
+}
+
+// Types and methods
+pub struct App {
+  id : String
+  name : String
+  icon : String
+}
+
+// Type aliases
+
+// Traits
+
