@@ -12,19 +12,25 @@ struct StreamTransport {
   // on the read turn while application requests are sending) never interleave
   // their frames on the wire.
   write_lock : @semaphore.Semaphore
+  // Names this server (its module root) in the shared `lsp` traffic log, so the
+  // messages of several moon-lsp servers can be told apart.
+  label : String
 }
 
 ///|
 /// Build a transport over `reader`/`writer`. Closing either end makes `recv`
-/// report end of stream, which the client turns into `Closed`.
+/// report end of stream, which the client turns into `Closed`. `label`
+/// identifies this server in the `lsp`-category traffic log.
 pub fn[R : @io.Reader, W : @io.Writer] StreamTransport::new(
   reader : R,
   writer : W,
+  label? : String = "",
 ) -> StreamTransport {
   {
     reader: reader as &@io.Reader,
     writer: writer as &@io.Writer,
     write_lock: Semaphore(1, initial_value=1),
+    label,
   }
 }
 
@@ -32,6 +38,10 @@ pub fn[R : @io.Reader, W : @io.Writer] StreamTransport::new(
 pub impl @jsonrpc.Transport for StreamTransport with fn send(self, message) {
   self.write_lock.acquire()
   defer self.write_lock.release()
+  // Mirror the wire to the `lsp` log so a broken hover/symbol round-trip can be
+  // read back from `openseek-desktop.log`; it is gated by the log level.
+  @xlog.debug(category="lsp") <?
+    { "event": "lsp_send", "server": self.label, "message": message }
   self.writer.write(frame_message(message.stringify()))
 }
 
@@ -42,6 +52,8 @@ pub impl @jsonrpc.Transport for StreamTransport with fn recv(self) {
   for ;; {
     guard read_frame(self.reader) is Some(text) else { return None }
     if (Some(@json.parse(text)) catch { _ => None }) is Some(message) {
+      @xlog.debug(category="lsp") <?
+        { "event": "lsp_recv", "server": self.label, "message": message }
       return Some(message)
     }
   }

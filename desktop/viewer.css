@@ -531,111 +531,79 @@
 }
 
 /* editor/viewer/tokens.css */
-.tok-keyword {
+/* Monaco theme color map (`mtk<colorId>`). These mirror the byte-for-byte
+   output of `view_model.token_theme_style_block(default_token_color_map())`:
+   the production token model classes each span as `mtk<foregroundColorId>`
+   (see `view_model/token_theme.mbt`), and the renderer resolves the color
+   here. Color ids match `default_token_color_map`. */
+.mtk1 {
+  color: var(--vscode-editor-foreground);
+}
+
+.mtk2 {
+  color: var(--vscode-editor-background);
+}
+
+.mtk3 {
   color: var(--vscode-token-keyword);
 }
 
-.tok-identifier {
+.mtk4 {
   color: var(--vscode-token-variable);
 }
 
-.tok-string {
+.mtk5 {
   color: var(--vscode-token-string);
 }
 
-.tok-number {
+.mtk6 {
   color: var(--vscode-token-number);
 }
 
-.tok-comment {
+.mtk7 {
   color: var(--vscode-token-comment);
 }
 
-.tok-punctuation,
-.tok-operator,
-.tok-delimiter {
+.mtk8 {
   color: var(--vscode-token-punctuation);
 }
 
-.tok-type {
+.mtk9 {
   color: var(--vscode-token-type);
 }
 
-.tok-function {
+.mtk10 {
   color: var(--vscode-token-function);
 }
 
-.tok-variable,
-.tok-attribute {
-  color: var(--vscode-token-variable);
-}
-
-.tok-constant,
-.tok-tag {
-  color: var(--vscode-token-keyword);
-}
-
-.tok-string-escape {
+.mtk11 {
   color: var(--vscode-token-string-escape);
 }
 
-.tok-comment-doc {
-  color: var(--vscode-token-comment);
-}
-
-.tok-regexp {
+.mtk12 {
   color: var(--vscode-token-regexp);
 }
 
-.tok-invalid {
+.mtk13 {
   color: var(--vscode-token-invalid);
 }
 
-/* Semantic token overlays. Declared after the tok-* rules so the semantic
-   color wins where a span carries both classes. */
-.sem-function,
-.sem-method,
-.sem-macro,
-.sem-function_call,
-.sem-function_decl {
-  color: var(--vscode-token-function);
+/* Font-style modifiers emitted alongside `mtk<n>` (see
+   `TokenMetadata::get_class_name_from_metadata`). */
+.mtki {
+  font-style: italic;
 }
 
-.sem-type,
-.sem-class,
-.sem-struct,
-.sem-enum,
-.sem-interface,
-.sem-typeParameter,
-.sem-namespace {
-  color: var(--vscode-token-type);
+.mtkb {
+  font-weight: bold;
 }
 
-.sem-variable,
-.sem-parameter,
-.sem-property,
-.sem-enumMember {
-  color: var(--vscode-token-variable);
+.mtku {
+  text-decoration: underline;
 }
 
-.sem-keyword {
-  color: var(--vscode-token-keyword);
-}
-
-.sem-string {
-  color: var(--vscode-token-string);
-}
-
-.sem-number {
-  color: var(--vscode-token-number);
-}
-
-.sem-comment {
-  color: var(--vscode-token-comment);
-}
-
-.sem-operator {
-  color: var(--vscode-token-punctuation);
+.mtks {
+  text-decoration: line-through;
 }
 
 /* editor/viewer/inlay_hints.css */

@@ -413,7 +413,7 @@ async fn spawn_workspace(
   })
   |> ignore
   let client = @jsonrpc.Client::new(
-    @lsp.StreamTransport::new(stdout_reader, stdin_writer),
+    @lsp.StreamTransport::new(stdout_reader, stdin_writer, label=directory),
   )
   let session_object = @lsp.Session::new(client)
   // A failed handshake is non-fatal: later requests simply return nothing.

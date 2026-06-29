@@ -19,7 +19,7 @@ pub async fn Session::sync_document(Self, uri~ : String, language_id~ : String, 
 pub async fn Session::workspace_symbols(Self, query~ : String) -> Json?
 
 type StreamTransport
-pub fn[R : @io.Reader, W : @io.Writer] StreamTransport::new(R, W) -> Self
+pub fn[R : @io.Reader, W : @io.Writer] StreamTransport::new(R, W, label? : String) -> Self
 pub impl @jsonrpc.Transport for StreamTransport
 
 // Type aliases

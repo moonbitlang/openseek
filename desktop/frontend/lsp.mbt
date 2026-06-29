@@ -27,8 +27,9 @@ impl @language.HoverProvider for LspHoverProvider with fn provide_hover(
   let reply = request_hover(
     session~,
     path=strip_model_uri(model.uri.value),
-    line=position.line,
-    character=position.column,
+    // The viewer's Position is 1-based; the host op speaks 0-based LSP coords.
+    line=position.line_number - 1,
+    character=position.column - 1,
   ) catch {
     _ => return None
   }
@@ -100,23 +101,29 @@ fn hover_range(
   reply : Map[String, Json],
   model : @model.TextModel,
 ) -> @common.Range {
-  guard reply.get("has_range") is Some(True) else {
-    return @common.Range::Range(0, 0)
-  }
   let snapshot = model.snapshot()
+  guard reply.get("has_range") is Some(True) else {
+    let origin = snapshot.position_at_offset(0)
+    return @common.Range::from_positions(origin, origin)
+  }
+  // The reply carries 0-based LSP positions; shift to the viewer's 1-based
+  // Position, then round-trip through offsets so the range stays clamped.
   let start = snapshot.offset_at_position(
     @common.Position::Position(
-      json_int(reply, "start_line"),
-      json_int(reply, "start_character"),
+      json_int(reply, "start_line") + 1,
+      json_int(reply, "start_character") + 1,
     ),
   )
   let end = snapshot.offset_at_position(
     @common.Position::Position(
-      json_int(reply, "end_line"),
-      json_int(reply, "end_character"),
+      json_int(reply, "end_line") + 1,
+      json_int(reply, "end_character") + 1,
     ),
   )
-  @common.Range::Range(start, end)
+  @common.Range::from_positions(
+    snapshot.position_at_offset(start),
+    snapshot.position_at_offset(end),
+  )
 }
 
 ///|
