@@ -935,7 +935,7 @@ fn app_initial(name : String) -> String {
 /// The launcher dropdown's rows: a real icon (or letter fallback) and the app
 /// name, each launching the app on the active workspace. Falls back to a
 /// loading / error / empty notice when there is nothing to list.
-fn launcher_menu(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+fn launcher_menu(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let rows : Array[@html.Html] = []
   if !model.launcher.error.is_empty() {
     rows.push(@html.div(class="launcher-empty danger", model.launcher.error))
@@ -954,7 +954,6 @@ fn launcher_menu(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
           alt=app.name,
           width=24,
           height=24,
-          @html.nothing,
         )
       }
       rows.push(
@@ -974,7 +973,7 @@ fn launcher_menu(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
 /// The topbar app launcher: a button that opens a dropdown of installed apps,
 /// each opening the active conversation's workspace. While open a full-screen
 /// backdrop catches a click away to close it.
-fn launcher_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+fn launcher_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // A conversation's workspace exists only once it has run; a fresh chat with
   // no turn yet has nothing to open, so the launcher is disabled until then.
   let conv = model.active()

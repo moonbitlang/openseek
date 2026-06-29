@@ -5,7 +5,7 @@
 ///|
 /// Fetch the apps the host detects as installed. Settles into `LauncherLoaded`
 /// on success or `LauncherFailed` on a bridge/decoding error.
-fn fetch_apps(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
+fn fetch_apps(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply = bridge_request("list_apps", @js.Object::new().to_value()) catch {
@@ -27,7 +27,7 @@ fn fetch_apps(dispatch : @cmd.Dispatch[Msg]) -> @cmd.Cmd {
 /// conversation's working directory — `cwd` when known, else derived by the
 /// host from `session`. A failure surfaces as an error in the conversation.
 fn launch_app(
-  dispatch : @cmd.Dispatch[Msg],
+  dispatch : @cmd.Emit[Msg],
   session : String,
   cwd : String,
   app : String,
