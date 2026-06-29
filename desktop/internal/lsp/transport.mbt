@@ -38,10 +38,9 @@ pub fn[R : @io.Reader, W : @io.Writer] StreamTransport::new(
 pub impl @jsonrpc.Transport for StreamTransport with fn send(self, message) {
   self.write_lock.acquire()
   defer self.write_lock.release()
-  // Mirror the wire to the `lsp` log so a broken hover/symbol round-trip can be
-  // read back from `openseek-desktop.log`; it is gated by the log level.
-  @xlog.debug(category="lsp") <?
-    { "event": "lsp_send", "server": self.label, "message": message }
+  // Mirror the wire to `lsp.log` so a broken hover/symbol round-trip can be read
+  // back after the fact.
+  log_traffic("lsp_send", self.label, message)
   self.writer.write(frame_message(message.stringify()))
 }
 
@@ -52,8 +51,7 @@ pub impl @jsonrpc.Transport for StreamTransport with fn recv(self) {
   for ;; {
     guard read_frame(self.reader) is Some(text) else { return None }
     if (Some(@json.parse(text)) catch { _ => None }) is Some(message) {
-      @xlog.debug(category="lsp") <?
-        { "event": "lsp_recv", "server": self.label, "message": message }
+      log_traffic("lsp_recv", self.label, message)
       return Some(message)
     }
   }

@@ -31,6 +31,12 @@ pub fn openseek_extension(
 ) -> @app.AppCommandExtensionSpec {
   let manager = @engine.new_engine_manager(engine, runtime_dir?)
   let lsp = new_lsp_manager(engine, runtime_dir?)
+  // Mirror LSP wire traffic to its own log next to the host's runtime state, so
+  // a broken hover/symbol round-trip can be read back without the per-message
+  // noise landing in the main app log.
+  if runtime_dir is Some(dir) {
+    @lsp.enable_traffic_log(dir.join("lsp.log").to_string())
+  }
   @app.AppCommandExtensionSpec::new(
     ExtensionId,
     ExtensionNamespace,
