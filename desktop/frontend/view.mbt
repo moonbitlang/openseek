@@ -925,6 +925,99 @@ fn session_tooltip(conv : Conversation) -> String {
 }
 
 ///|
+/// The first letter of an app name, for the icon fallback when the host could
+/// not extract a real icon.
+fn app_initial(name : String) -> String {
+  if name.iter().next() is Some(c) {
+    "\{c.to_ascii_uppercase()}"
+  } else {
+    "?"
+  }
+}
+
+///|
+/// The launcher dropdown's rows: a real icon (or letter fallback) and the app
+/// name, each launching the app on the active workspace. Falls back to a
+/// loading / error / empty notice when there is nothing to list.
+fn launcher_menu(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+  let rows : Array[@html.Html] = []
+  if !model.launcher.error.is_empty() {
+    rows.push(@html.div(class="launcher-empty danger", model.launcher.error))
+  } else if !model.launcher.loaded {
+    rows.push(@html.div(class="launcher-empty", "Finding apps…"))
+  } else if model.launcher.apps.is_empty() {
+    rows.push(@html.div(class="launcher-empty", "No apps found"))
+  } else {
+    for app in model.launcher.apps {
+      let icon = if app.icon.is_empty() {
+        @html.span(class="launcher-icon letter", app_initial(app.name))
+      } else {
+        @html.img(
+          class="launcher-icon",
+          src=app.icon,
+          alt=app.name,
+          width=24,
+          height=24,
+          @html.nothing,
+        )
+      }
+      rows.push(
+        @html.button(
+          class="launcher-item",
+          type_="button",
+          on_click=dispatch(LaunchApp(app.id)),
+          [icon, @html.span(class="launcher-name", app.name)],
+        ),
+      )
+    }
+  }
+  @html.div(class="launcher-menu", rows)
+}
+
+///|
+/// The topbar app launcher: a button that opens a dropdown of installed apps,
+/// each opening the active conversation's workspace. While open a full-screen
+/// backdrop catches a click away to close it.
+fn launcher_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
+  // A conversation's workspace exists only once it has run; a fresh chat with
+  // no turn yet has nothing to open, so the launcher is disabled until then.
+  let conv = model.active()
+  let ready = !conv.messages.is_empty() || conv.running
+  let children : Array[@html.Html] = [
+    @html.button(
+      class=if model.launcher.open {
+        "launcher-button open"
+      } else {
+        "launcher-button"
+      },
+      type_="button",
+      disabled=!ready,
+      title=if ready {
+        "Open this workspace in an app"
+      } else {
+        "Send a message to create this chat's workspace"
+      },
+      on_click=dispatch(ToggleLauncher),
+      [
+        @html.span(class="launcher-glyph", "↗"),
+        @html.span(class="launcher-caret", "▾"),
+      ],
+    ),
+  ]
+  if ready && model.launcher.open {
+    children.push(
+      @html.div(
+        class="launcher-backdrop",
+        on_click=dispatch(ToggleLauncher),
+        @html.nothing,
+      ),
+    )
+    children.push(launcher_menu(dispatch, model))
+  }
+  @html.div(class="launcher", children)
+}
+
+///|
 /// Top bar: conversation identity on the left (session id and workspace in
 /// the tooltip), live run state on the right — these are per-conversation
 /// runtime facts, not settings, so they live here rather than in the
@@ -953,6 +1046,7 @@ fn topbar_view(dispatch : @cmd.Dispatch[Msg], model : Model) -> @html.Html {
   if !conv.watcher_status.is_empty() {
     items.push(@html.span(class="pill", "moon_check \{conv.watcher_status}"))
   }
+  items.push(launcher_view(dispatch, model))
   @html.div(class="topbar", items)
 }
 

@@ -595,6 +595,40 @@ fn update(
       let conv = model.active()
       (open_file(dispatch, conv.session_id, conv.cwd, path), model)
     }
+    ToggleLauncher => {
+      let opening = !model.launcher.open
+      // Probe the host the first time the menu opens (and again after a
+      // failure); the result is kept for the app run.
+      let cmd = if opening && !model.launcher.loaded {
+        fetch_apps(dispatch)
+      } else {
+        @cmd.none
+      }
+      (cmd, { ..model, launcher: { ..model.launcher, open: opening } })
+    }
+    LauncherLoaded(apps) =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          launcher: { ..model.launcher, apps, loaded: true, error: "" },
+        },
+      )
+    LauncherFailed(message) =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          launcher: { ..model.launcher, loaded: false, error: message },
+        },
+      )
+    LaunchApp(app) => {
+      let conv = model.active()
+      (
+        launch_app(dispatch, conv.session_id, conv.cwd, app),
+        { ..model, launcher: { ..model.launcher, open: false } },
+      )
+    }
     Started(run_id~, session~, model=selected_model, max_steps~, cwd~) =>
       if model.find_conversation(session) is Some(conv) {
         let updated = model.replace_conversation({

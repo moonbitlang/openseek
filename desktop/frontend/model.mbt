@@ -231,6 +231,20 @@ priv struct Model {
   // conversation: it is transient UI for the on-screen composer, recomputed on
   // every keystroke and dismissed on blur, send, or conversation switch.
   completion : Completion?
+  // The topbar app launcher. The app list is probed by the host once (the
+  // first time the menu opens) and kept for the app run.
+  launcher : Launcher
+}
+
+///|
+/// The topbar app launcher's state: whether its menu is open, the detected
+/// apps, whether they have been fetched yet, and the last probe failure (so a
+/// reopen can retry).
+priv struct Launcher {
+  open : Bool
+  apps : Array[@transcript.LauncherAppItem]
+  loaded : Bool
+  error : String
 }
 
 ///|
@@ -308,6 +322,13 @@ priv enum Msg {
   // default app. The host resolves the path inside the active conversation's
   // workspace.
   OpenFile(String)
+  // Open or close the topbar app launcher; opening it fetches the installed-app
+  // list the first time.
+  ToggleLauncher
+  LauncherLoaded(Array[@transcript.LauncherAppItem])
+  LauncherFailed(String)
+  // Launch one detected app (by its id) on the active conversation's workspace.
+  LaunchApp(String)
   // The host accepted a prompt: `session` routes the event to its
   // conversation, and everything after a `started` routes by `run_id`.
   Started(
@@ -376,6 +397,7 @@ fn initial_model() -> Model {
     skills_busy: [],
     skills_notice: "",
     completion: None,
+    launcher: { open: false, apps: [], loaded: false, error: "" },
   }
 }
 

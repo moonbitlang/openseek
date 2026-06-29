@@ -2,6 +2,8 @@
 package "openseek_desktop/frontend/transcript"
 
 // Values
+pub fn decode_apps_reply(String) -> Array[LauncherAppItem]?
+
 pub fn decode_engine_event(Map[String, Json]) -> EngineEvent?
 
 pub fn decode_installed_skills_reply(String) -> Array[InstalledSkillItem]?
@@ -57,6 +59,12 @@ pub(all) enum ItemKind {
   Assistant(Bool)
   Reasoning
   Tool(String, Bool)
+}
+
+pub(all) struct LauncherAppItem {
+  id : String
+  name : String
+  icon : String
 }
 
 pub(all) struct MarketSkillItem {

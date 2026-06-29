@@ -7,6 +7,7 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/async/os_error",
   "moonbitlang/async/process",
+  "moonbitlang/core/encoding/base64",
   "moonbitlang/core/json",
   "moonbitlang/x/path",
 }

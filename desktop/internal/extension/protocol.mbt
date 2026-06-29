@@ -120,6 +120,37 @@ priv struct OpenPathReply {
 } derive(ToJson)
 
 ///|
+/// Reply to `list_apps`: the launcher apps detected as installed on this
+/// machine, in catalog order. `icon` is a `data:image/png` URL (empty when the
+/// app's icon could not be extracted — the frontend falls back to an initial).
+priv struct ListAppsReply {
+  apps : Array[AppEntry]
+} derive(ToJson)
+
+///|
+priv struct AppEntry {
+  id : String
+  name : String
+  icon : String
+} derive(ToJson)
+
+///|
+/// Launch one detected app (`app` = the `id` from `list_apps`) with the
+/// conversation's working directory — `cwd` when the frontend has it, otherwise
+/// derived by the host from `session`, mirroring `open_path`.
+priv struct LaunchAppPayload {
+  session : String
+  cwd : String
+  app : String
+} derive(FromJson)
+
+///|
+/// Reply to `launch_app`: whether the app was handed the directory.
+priv struct LaunchAppReply {
+  launched : Bool
+} derive(ToJson)
+
+///|
 /// Reply to `skills_catalog`: the registry's installable skills.
 priv struct SkillsCatalogReply {
   skills : Array[@skillmarket.MarketSkill]
