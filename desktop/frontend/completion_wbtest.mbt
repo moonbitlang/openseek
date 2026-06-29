@@ -7,25 +7,47 @@ fn installed_skill(
 }
 
 ///|
+/// The `/` and `$` menus do not depend on symbols, so route their tests through
+/// an empty cache and no session.
+fn menu_for(
+  text : String,
+  installed : Array[@transcript.InstalledSkillItem],
+) -> Completion? {
+  compute_completion(text, installed, empty_symbol_cache(), "")
+}
+
+///|
+fn symbol_cache(
+  session : String,
+  query : String,
+  names : Array[String],
+) -> SymbolCache {
+  let items = names.map(name => {
+    symbol_item(name, container="", path="src/main.mbt", line=0)
+  })
+  { session, query, items }
+}
+
+///|
 test "slash trigger lists matching commands and filters by the typed name" {
-  guard compute_completion("/", []) is Some(all) else {
+  guard menu_for("/", []) is Some(all) else {
     fail("a bare slash should open the command menu")
   }
   assert_true(all.kind is SlashCommands)
   assert_true(all.items.length() >= 1)
   assert_eq(all.items[0].label, "/compact")
-  guard compute_completion("/comp", []) is Some(match_) else {
+  guard menu_for("/comp", []) is Some(match_) else {
     fail("a command prefix should keep matching rows")
   }
   assert_eq(match_.items[0].command, "compact")
   // No command contains this, so the menu closes rather than showing nothing.
-  assert_true(compute_completion("/zzz", []) is None)
+  assert_true(menu_for("/zzz", []) is None)
 }
 
 ///|
 test "a completed command word closes the menu" {
   // The space marks the command as typed; further text is its argument.
-  assert_true(compute_completion("/compact now", []) is None)
+  assert_true(menu_for("/compact now", []) is None)
 }
 
 ///|
@@ -34,7 +56,7 @@ test "dollar trigger lists installed skills, name or description matching" {
     installed_skill("review-pr", "Review a pull request"),
     installed_skill("refactor", "Tidy code"),
   ]
-  guard compute_completion("$", skills) is Some(all) else {
+  guard menu_for("$", skills) is Some(all) else {
     fail("a bare dollar should open the skills menu")
   }
   assert_true(all.kind is SkillMentions)
@@ -43,18 +65,18 @@ test "dollar trigger lists installed skills, name or description matching" {
   // Insertion drops the bare name plus a space to keep typing the prompt.
   assert_eq(all.items[0].insert, "review-pr ")
   // Matches the description too, case-insensitively.
-  guard compute_completion("$TIDY", skills) is Some(desc) else {
+  guard menu_for("$TIDY", skills) is Some(desc) else {
     fail("description text should match")
   }
   assert_eq(desc.items[0].label, "$refactor")
   // No installed skills, no menu.
-  assert_true(compute_completion("$x", []) is None)
+  assert_true(menu_for("$x", []) is None)
 }
 
 ///|
 test "plain text opens no completion menu" {
-  assert_true(compute_completion("hello world", []) is None)
-  assert_true(compute_completion("", []) is None)
+  assert_true(menu_for("hello world", []) is None)
+  assert_true(menu_for("", []) is None)
 }
 
 ///|
@@ -64,11 +86,75 @@ test "highlight movement wraps at both ends" {
     installed_skill("b", ""),
     installed_skill("c", ""),
   ]
-  guard compute_completion("$", skills) is Some(menu) else {
-    fail("menu expected")
-  }
+  guard menu_for("$", skills) is Some(menu) else { fail("menu expected") }
   assert_eq(menu.selected, 0)
   assert_eq(menu.shifted(-1).selected, 2)
   assert_eq(menu.shifted(1).selected, 1)
   assert_eq(menu.shifted(1).shifted(1).shifted(1).selected, 0)
+}
+
+///|
+test "hash trigger lists cached symbols, filtered, marked not loading on match" {
+  let cache = symbol_cache("s1", "parse", [
+    "parse_hover", "parse_range", "render",
+  ])
+  guard compute_completion("#parse", [], cache, "s1") is Some(menu) else {
+    fail("a # query should open the symbol menu")
+  }
+  assert_true(menu.kind is Symbols)
+  // The cache answers this exact query/session, so the menu is settled.
+  assert_false(menu.loading)
+  // "render" is filtered out by the live query; the two parses survive.
+  assert_eq(menu.items.length(), 2)
+  assert_eq(menu.items[0].label, "parse_hover")
+  // Accepting drops a backticked reference plus location into the composer.
+  assert_eq(menu.items[0].insert, "`parse_hover` — src/main.mbt:1 ")
+}
+
+///|
+test "hash menu is loading until the cache catches up to the query" {
+  // A bare # opens the menu (it lists everything), empty and loading until the
+  // first results arrive.
+  guard compute_completion("#", [], empty_symbol_cache(), "s1") is Some(bare) else {
+    fail("a bare # should open the symbol menu")
+  }
+  assert_true(bare.loading)
+  assert_eq(bare.items.length(), 0)
+  // A query with no cached results yet: the menu opens empty and loading.
+  guard compute_completion("#parse", [], empty_symbol_cache(), "s1")
+    is Some(fresh) else {
+    fail("a # query should open even before results arrive")
+  }
+  assert_true(fresh.loading)
+  assert_eq(fresh.items.length(), 0)
+  // A cache from another conversation does not answer this one.
+  let other = symbol_cache("s2", "parse", ["parse_hover"])
+  guard compute_completion("#parse", [], other, "s1") is Some(stale) else {
+    fail("menu still opens")
+  }
+  assert_true(stale.loading)
+  // Once the empty-query results are cached, a bare # lists them all, settled.
+  let full = symbol_cache("s1", "", ["alpha", "beta"])
+  guard compute_completion("#", [], full, "s1") is Some(menu) else {
+    fail("bare # lists the cached symbols")
+  }
+  assert_false(menu.loading)
+  assert_eq(menu.items.length(), 2)
+}
+
+///|
+test "decode_symbols parses rows and skips malformed ones" {
+  let text =
+    #|{"symbols":[
+    #|{"name":"parse_hover","kind":12,"container":"Lsp","path":"a/b.mbt","line":4},
+    #|{"name":"","path":"x.mbt","line":0},
+    #|{"path":"y.mbt"}
+    #|]}
+  guard decode_symbols(text) is Some(items) else { fail("expected rows") }
+  // The blank-name and name-less rows are dropped; one good row remains.
+  assert_eq(items.length(), 1)
+  assert_eq(items[0].label, "parse_hover")
+  // Detail reads container · path:line (line shown one-based).
+  assert_eq(items[0].detail, "Lsp · a/b.mbt:5")
+  assert_true(decode_symbols("not json") is None)
 }

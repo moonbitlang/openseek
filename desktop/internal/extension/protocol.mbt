@@ -234,6 +234,35 @@ priv struct LspHoverReply {
 } derive(ToJson)
 
 ///|
+/// `workspace_symbols` searches the conversation workspace's language-server
+/// symbol index for `query` (a substring the server matches). The host derives
+/// the workspace from `session`, so the client never names a path.
+priv struct WorkspaceSymbolsPayload {
+  session : String
+  query : String
+} derive(FromJson)
+
+///|
+/// One row of a `workspace_symbols` reply. `path` is workspace-relative and
+/// `line` is the symbol's zero-based start line (the front-end shows it
+/// one-based); `kind` is the raw LSP `SymbolKind`, forwarded for the front-end
+/// to label or icon as it likes. `container` is the enclosing symbol's name, or
+/// empty.
+priv struct SymbolItem {
+  name : String
+  kind : Int
+  container : String
+  path : String
+  line : Int
+} derive(ToJson)
+
+///|
+/// Reply to `workspace_symbols`: the matching symbols, capped host-side.
+priv struct WorkspaceSymbolsReply {
+  symbols : Array[SymbolItem]
+} derive(ToJson)
+
+///|
 fn event_sink(context : @app.AppCommandExtensionContext) -> @engine.EventSink {
   EventSink(async fn(event) { emit_engine_event(context, event) })
 }

@@ -52,6 +52,7 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("read_directory"),
       @app.AppCommandApiDescriptor::new("read_file"),
       @app.AppCommandApiDescriptor::new("hover"),
+      @app.AppCommandApiDescriptor::new("workspace_symbols"),
     ],
     context => {
       let sink = event_sink(context)
@@ -128,6 +129,11 @@ pub fn openseek_extension(
       })
       context.op_async("hover", async fn(payload : LspHoverPayload) {
         lsp_hover_op(lsp, payload)
+      })
+      context.op_async("workspace_symbols", async fn(
+        payload : WorkspaceSymbolsPayload,
+      ) {
+        workspace_symbols_op(lsp, payload)
       })
       Ok(())
     },

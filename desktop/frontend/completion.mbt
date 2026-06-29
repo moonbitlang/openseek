@@ -22,13 +22,21 @@ fn slash_command_items() -> Array[CompletionItem] {
 ///|
 /// Build the composer completion menu for a draft, or `None` when the draft
 /// does not begin with a live trigger. The menu opens on a leading `/`
-/// (commands) or `$` (installed skills) and stays open only while the token
-/// after the trigger holds no spaces — once the user types past the word, the
-/// command or mention is complete and the menu closes. The highlight resets to
-/// the first row on every rebuild, since filtering reorders what is shown.
+/// (commands), `$` (installed skills), or `#` (workspace symbols) and stays
+/// open only while the token after the trigger holds no spaces — once the user
+/// types past the word, the command/mention/reference is complete and the menu
+/// closes. The highlight resets to the first row on every rebuild, since
+/// filtering reorders what is shown.
+///
+/// Symbols differ from the other two: their rows are fetched asynchronously and
+/// arrive via `SymbolsLoaded`, so they come from `symbols` (cached against
+/// `session`) rather than being computed here. The menu still opens immediately
+/// for a `#` query — empty and `loading` until the cache catches up.
 fn compute_completion(
   text : String,
   installed : Array[@transcript.InstalledSkillItem],
+  symbols : SymbolCache,
+  session : String,
 ) -> Completion? {
   if text.has_prefix("/") {
     let query = trigger_query(text)
@@ -39,7 +47,7 @@ fn compute_completion(
     if items.is_empty() {
       None
     } else {
-      Some({ kind: SlashCommands, items, selected: 0 })
+      Some({ kind: SlashCommands, items, selected: 0, loading: false })
     }
   } else if text.has_prefix("$") {
     let query = trigger_query(text)
@@ -58,8 +66,21 @@ fn compute_completion(
     if items.is_empty() {
       None
     } else {
-      Some({ kind: SkillMentions, items, selected: 0 })
+      Some({ kind: SkillMentions, items, selected: 0, loading: false })
     }
+  } else if text.has_prefix("#") {
+    let query = trigger_query(text)
+    guard query is Some(query) else { return None }
+    // A bare `#` lists everything — an empty query asks the server for all
+    // symbols — and narrows as the user types.
+    let items = symbols.items.filter(item => {
+      completion_matches(query, [item.label, item.detail])
+    })
+    // The cache answers this exact query for this conversation only when both
+    // match; otherwise a fetch is in flight (or about to be) and the menu shows
+    // whatever the cache narrows to meanwhile, marked loading.
+    let loading = symbols.session != session || symbols.query != query
+    Some({ kind: Symbols, items, selected: 0, loading })
   } else {
     None
   }

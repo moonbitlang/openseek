@@ -430,9 +430,16 @@ fn completion_popup(
       ),
     )
   }
+  // A `#` menu opens before its results arrive, so an empty list is a state to
+  // narrate — searching, or genuinely nothing — not an empty box.
+  if rows.is_empty() {
+    let text = if completion.loading { "Searching…" } else { "No symbols" }
+    rows.push(@html.div(class="completion-empty", text))
+  }
   let hint = match completion.kind {
     SlashCommands => "Commands"
     SkillMentions => "Skills"
+    Symbols => "Symbols"
   }
   @html.div(class="completion-menu", [
     @html.div(class="completion-hint", hint),

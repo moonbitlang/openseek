@@ -103,3 +103,26 @@ pub async fn Session::hover(
     Some(result)
   }
 }
+
+///|
+/// Query the workspace's symbol index for `query` (a substring match the server
+/// performs). Best-effort like `hover`: returns the raw `workspace/symbol`
+/// result, or `None` when the server has nothing, errors, or the transport has
+/// closed. No document needs to be synced — the request reads the server's
+/// project index, not an open buffer. Cancellation propagates.
+pub async fn Session::workspace_symbols(
+  self : Session,
+  query~ : String,
+) -> Json? {
+  let result = self.client.request(method_="workspace/symbol", params={
+    "query": query,
+  }) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return None
+  }
+  if result is Null {
+    None
+  } else {
+    Some(result)
+  }
+}

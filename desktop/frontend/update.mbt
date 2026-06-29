@@ -44,7 +44,9 @@ fn accept_completion(
 ) -> (@cmd.Cmd, Model) {
   match menu.kind {
     SlashCommands => run_slash_command(dispatch, model, item.command)
-    SkillMentions =>
+    // A skill mention and a symbol reference both drop `insert` into the
+    // composer and close the menu, leaving the user to keep typing.
+    SkillMentions | Symbols =>
       (
         @cmd.none,
         {
@@ -53,6 +55,60 @@ fn accept_completion(
         },
       )
   }
+}
+
+///|
+/// The command, if any, to fetch workspace symbols for a changed draft. Fires
+/// only when the draft is a live `#` query (a non-empty token, no spaces) whose
+/// results are not already cached for this conversation — so a fresh keystroke
+/// refetches but a repeat of the same query does not.
+fn symbol_fetch_cmd(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  value : String,
+  session : String,
+) -> @cmd.Cmd {
+  guard value.has_prefix("#") && trigger_query(value) is Some(query) else {
+    return @cmd.none
+  }
+  if model.symbol_cache.session == session && model.symbol_cache.query == query {
+    return @cmd.none
+  }
+  read_workspace_symbols(dispatch, session, query)
+}
+
+///|
+/// Fold a workspace-symbol reply into the model: cache it and rebuild the menu,
+/// but only while it still answers the composer's live `#` query for the active
+/// conversation — a reply overtaken by a conversation switch or a later
+/// keystroke is dropped, the same staleness guard the file panel uses.
+fn apply_symbol_reply(
+  model : Model,
+  session : String,
+  query : String,
+  items : Array[CompletionItem],
+) -> (@cmd.Cmd, Model) {
+  let draft = model.active().task
+  guard session == model.active().session_id &&
+    draft.has_prefix("#") &&
+    trigger_query(draft) is Some(live) &&
+    live == query else {
+    return (@cmd.none, model)
+  }
+  let cache : SymbolCache = { session, query, items }
+  (
+    @cmd.none,
+    {
+      ..model,
+      symbol_cache: cache,
+      completion: compute_completion(
+        draft,
+        model.installed_skills,
+        cache,
+        session,
+      ),
+    },
+  )
 }
 
 ///|
@@ -339,14 +395,21 @@ fn update_msg(
       // key, custom endpoint without a URL).
       (@cmd.none, { ..next, setup_open: !next.api_ready() })
     }
-    TaskChanged(value) =>
+    TaskChanged(value) => {
+      let session = model.active().session_id
       (
-        @cmd.none,
+        symbol_fetch_cmd(dispatch, model, value, session),
         {
           ..model.replace_conversation({ ..model.active(), task: value }),
-          completion: compute_completion(value, model.installed_skills),
+          completion: compute_completion(
+            value,
+            model.installed_skills,
+            model.symbol_cache,
+            session,
+          ),
         },
       )
+    }
     CompletionMove(delta) =>
       if model.completion is Some(menu) {
         (@cmd.none, { ..model, completion: Some(menu.shifted(delta)) })
@@ -366,6 +429,12 @@ fn update_msg(
       } else {
         (@cmd.none, { ..model, completion: None })
       }
+    SymbolsLoaded(session~, query~, items~) =>
+      apply_symbol_reply(model, session, query, items)
+    // A failed search reads as "no symbols": cache an empty result for the
+    // query so the menu settles on "No symbols" rather than spinning.
+    SymbolsFailed(session~, query~) =>
+      apply_symbol_reply(model, session, query, [])
     ModelChanged(value) => (@cmd.none, { ..model, selected_model: value })
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value })
     SetupApiKeyChanged(value) => (@cmd.none, { ..model, setup_api_key: value })

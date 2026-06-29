@@ -125,10 +125,12 @@ priv enum Screen {
 ///|
 /// Which trigger opened the composer's completion menu: `/` lists built-in
 /// commands that act on the conversation, `$` lists installed skills whose
-/// name is inserted into the prompt.
+/// name is inserted into the prompt, `#` lists workspace symbols (fetched from
+/// the conversation's language server) whose reference is inserted.
 priv enum CompletionKind {
   SlashCommands
   SkillMentions
+  Symbols
 }
 
 ///|
@@ -147,11 +149,31 @@ priv struct CompletionItem {
 ///|
 /// The composer's open completion menu: the trigger that opened it, the
 /// currently matching rows, and which row is highlighted. Absent when the
-/// composer text does not begin with a live trigger.
+/// composer text does not begin with a live trigger. `loading` is set only for
+/// a `#` menu whose results for the current query have not arrived yet, so the
+/// empty menu can say "Searching…" rather than "No symbols".
 priv struct Completion {
   kind : CompletionKind
   items : Array[CompletionItem]
   selected : Int
+  loading : Bool
+}
+
+///|
+/// The last workspace-symbol results, cached so the `#` menu can show them
+/// without refetching while the query is unchanged. `session` records which
+/// conversation they belong to, so switching conversations refetches rather
+/// than showing another workspace's symbols; `query` is the trigger text they
+/// answer, the key that decides whether a keystroke needs a fresh fetch.
+priv struct SymbolCache {
+  session : String
+  query : String
+  items : Array[CompletionItem]
+}
+
+///|
+fn empty_symbol_cache() -> SymbolCache {
+  { session: "", query: "", items: [] }
 }
 
 ///|
@@ -287,6 +309,10 @@ priv struct Model {
   // conversation: it is transient UI for the on-screen composer, recomputed on
   // every keystroke and dismissed on blur, send, or conversation switch.
   completion : Completion?
+  // The last `#` symbol search's results, kept so the menu shows instantly
+  // while the query is unchanged. Recomputed on every keystroke and refetched
+  // when the query or conversation changes.
+  symbol_cache : SymbolCache
   // The topbar app launcher. The app list is probed by the host once (the
   // first time the menu opens) and kept for the app run.
   launcher : Launcher
@@ -335,6 +361,16 @@ priv enum Msg {
   CompletionPick(Int)
   // Close the completion menu without acting (Escape, or a click away).
   CompletionDismiss
+  // A `workspace_symbols` reply: `session`/`query` say which request it answers
+  // so a reply that lost a conversation switch or a later keystroke is dropped.
+  SymbolsLoaded(
+    session~ : String,
+    query~ : String,
+    items~ : Array[CompletionItem]
+  )
+  // A failed search reads as "no symbols", so it carries no message to show —
+  // only the `session`/`query` needed to settle the right menu.
+  SymbolsFailed(session~ : String, query~ : String)
   ModelChanged(String)
   MaxStepsChanged(String)
   SetupApiKeyChanged(String)
@@ -482,6 +518,7 @@ fn initial_model() -> Model {
     skills_busy: [],
     skills_notice: "",
     completion: None,
+    symbol_cache: empty_symbol_cache(),
     launcher: { open: false, apps: [], loaded: false, error: "" },
     file_panel: empty_file_panel(),
   }

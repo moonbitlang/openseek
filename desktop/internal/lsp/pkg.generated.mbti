@@ -16,6 +16,7 @@ pub async fn Session::hover(Self, uri~ : String, line~ : Int, character~ : Int) 
 pub async fn Session::initialize(Self, root_uri~ : String) -> Unit
 pub fn Session::new(@jsonrpc.Client) -> Self
 pub async fn Session::sync_document(Self, uri~ : String, language_id~ : String, text~ : String) -> Unit
+pub async fn Session::workspace_symbols(Self, query~ : String) -> Json?
 
 type StreamTransport
 pub fn[R : @io.Reader, W : @io.Writer] StreamTransport::new(R, W) -> Self
