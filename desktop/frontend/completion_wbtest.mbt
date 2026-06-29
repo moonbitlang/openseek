@@ -143,6 +143,59 @@ test "hash menu is loading until the cache catches up to the query" {
 }
 
 ///|
+test "push_mention appends new chips and drops exact duplicates" {
+  let skill : Mention = {
+    kind: SkillMention,
+    label: "review-pr",
+    expand: "review-pr ",
+  }
+  let symbol : Mention = {
+    kind: SymbolMention,
+    label: "parse_hover",
+    expand: "`parse_hover` — src/main.mbt:5 ",
+  }
+  let one = push_mention([], skill)
+  assert_eq(one.length(), 1)
+  // A different kind/expansion is a distinct chip.
+  let two = push_mention(one, symbol)
+  assert_eq(two.length(), 2)
+  // Accepting the same skill again is a no-op, not a second chip.
+  let still_two = push_mention(two, skill)
+  assert_eq(still_two.length(), 2)
+  // A symbol of the same name but a different location is its own chip.
+  let other_loc : Mention = {
+    kind: SymbolMention,
+    label: "parse_hover",
+    expand: "`parse_hover` — src/other.mbt:9 ",
+  }
+  assert_eq(push_mention(two, other_loc).length(), 3)
+}
+
+///|
+test "compose_prompt folds chip expansions ahead of the typed text" {
+  let mentions : Array[Mention] = [
+    {
+      kind: SymbolMention,
+      label: "parse_hover",
+      expand: "`parse_hover` — a.mbt:5 ",
+    },
+    { kind: SkillMention, label: "review-pr", expand: "review-pr " },
+  ]
+  // Expansions (each carries its own trailing space) come first, then the text.
+  assert_eq(
+    compose_prompt(mentions, "look at this"),
+    "`parse_hover` — a.mbt:5 review-pr look at this",
+  )
+  // No chips: just the text.
+  assert_eq(compose_prompt([], "plain"), "plain")
+  // Chips alone: the expansions, which the caller trims before sending.
+  assert_eq(
+    compose_prompt(mentions, "").trim().to_owned(),
+    "`parse_hover` — a.mbt:5 review-pr",
+  )
+}
+
+///|
 test "decode_symbols parses rows and skips malformed ones" {
   let text =
     #|{"symbols":[

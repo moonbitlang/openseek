@@ -1214,6 +1214,60 @@
         box-shadow: var(--shadow);
       }
 
+      /* mention chips ($ skills, # symbols) above the textarea; the tray is
+         always in the DOM and collapses to nothing when there are no chips */
+      .mention-tray {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .mention-tray:empty {
+        display: none;
+      }
+      .mention-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        max-width: 260px;
+        padding: 2px 4px 2px 8px;
+        border: 1px solid var(--accent-line);
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+        font-size: 12px;
+      }
+      .mention-glyph {
+        flex: none;
+        font-family: var(--mono);
+        font-weight: 600;
+        opacity: 0.75;
+      }
+      .mention-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: var(--mono);
+      }
+      .mention-remove {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        padding: 0;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--accent-ink);
+        font-size: 13px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .mention-remove:hover {
+        background: color-mix(in srgb, var(--accent) 22%, transparent);
+      }
+
       /* slash/skill completion menu, floated above the composer */
       .completion-menu {
         position: absolute;

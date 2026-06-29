@@ -87,6 +87,36 @@ fn compute_completion(
 }
 
 ///|
+/// Append `mention` to `mentions` copy-on-write, unless an equal chip (same
+/// kind and expansion) is already there — accepting the same skill or symbol
+/// twice is a no-op rather than a duplicate chip. Prior model snapshots keep
+/// their own array.
+fn push_mention(mentions : Array[Mention], mention : Mention) -> Array[Mention] {
+  for existing in mentions {
+    if existing.kind == mention.kind && existing.expand == mention.expand {
+      return mentions
+    }
+  }
+  let next = mentions.copy()
+  next.push(mention)
+  next
+}
+
+///|
+/// Assemble the outgoing prompt from the draft's mention chips and typed text:
+/// each chip's expansion first (each already carries its own trailing space),
+/// then the typed text. With no chips this is just the text; the caller trims
+/// the result for the empty check and the transcript echo.
+fn compose_prompt(mentions : Array[Mention], task : String) -> String {
+  let parts = StringBuilder::new()
+  for mention in mentions {
+    parts.write_string(mention.expand)
+  }
+  parts.write_string(task)
+  parts.to_string()
+}
+
+///|
 /// The text after a single-character trigger, or `None` once it contains a
 /// space — the marker the user has finished the command/mention word and the
 /// menu should close. The trigger is ASCII (`/` or `$`), so slicing one code

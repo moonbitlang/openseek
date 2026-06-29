@@ -448,11 +448,34 @@ fn completion_popup(
 }
 
 ///|
+/// The chips above the textarea for the draft's mentions (`$` skills, `#`
+/// symbols), each removable by its `×`. Always rendered (empty when there are
+/// no chips) so the textarea keeps a stable child index and never loses focus
+/// when a chip comes or goes; CSS collapses the empty tray to nothing.
+fn mention_tray(dispatch : @cmd.Emit[Msg], conv : Conversation) -> @html.Html {
+  let chips : Array[@html.Html] = []
+  for index, mention in conv.mentions {
+    chips.push(
+      @html.div(class="mention-chip", [
+        @html.span(class="mention-glyph", mention.kind.glyph()),
+        @html.span(class="mention-label", mention.label),
+        @html.button(
+          class="mention-remove",
+          type_="button",
+          title="Remove",
+          on_click=dispatch(RemoveMention(index)),
+          "×",
+        ),
+      ]),
+    )
+  }
+  @html.div(class="mention-tray", chips)
+}
+
+///|
 fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let conv = model.active()
-  let has_input = model.bridge_ready &&
-    model.api_ready() &&
-    !conv.task.trim().is_empty()
+  let has_input = model.bridge_ready && model.api_ready() && !conv.draft_empty()
   let can_send = !conv.running && has_input
   let controls : Array[@html.Html] = [
     @html.span(
@@ -462,11 +485,11 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     ),
   ]
   if conv.running {
-    // One morphing button while this conversation's turn runs: typed text
-    // turns it into a steer submit, an empty composer leaves it as the
-    // interrupt. A turn being cancelled cannot be steered, so the button
-    // waits with the user's text in the composer.
-    if conv.task.trim().is_empty() {
+    // One morphing button while this conversation's turn runs: a non-empty
+    // draft (text or chips) turns it into a steer submit, an empty composer
+    // leaves it as the interrupt. A turn being cancelled cannot be steered, so
+    // the button waits with the user's draft in the composer.
+    if conv.draft_empty() {
       controls.push(
         @html.button(
           id="stop",
@@ -515,6 +538,9 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
   }
   let inner : Array[@html.Html] = [
+    // First child, always present, so the textarea's index never shifts (which
+    // would rebuild the node and drop focus) as chips come and go.
+    mention_tray(dispatch, conv),
     @html.textarea(
       id="task",
       value=conv.task,

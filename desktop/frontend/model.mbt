@@ -79,6 +79,10 @@ priv struct Conversation {
   // Composer draft, kept per conversation so switching away (and back)
   // neither loses the text nor sends it to the wrong session.
   task : String
+  // Mention chips attached to the draft (`$` skills, `#` symbols), part of the
+  // draft and so likewise per conversation. Expanded into the prompt on send,
+  // then cleared with the text.
+  mentions : Array[Mention]
   running : Bool
   active_run_id : Int?
   // The most recent run id this conversation has owned, kept after the run
@@ -144,6 +148,36 @@ priv struct CompletionItem {
   // skills. For a skill, `insert` carries the text dropped into the composer.
   command : String
   insert : String
+}
+
+///|
+/// Which trigger produced a composer mention chip. `$` skills and `#` symbols
+/// both become chips in the tray above the textarea; the glyph distinguishes
+/// them. Slash commands never become chips — they execute on accept instead.
+priv enum MentionKind {
+  SkillMention
+  SymbolMention
+} derive(Eq)
+
+///|
+/// The chip glyph: the trigger character the mention came from.
+fn MentionKind::glyph(self : MentionKind) -> String {
+  match self {
+    SkillMention => "$"
+    SymbolMention => "#"
+  }
+}
+
+///|
+/// One accepted mention, shown as a chip above the composer and expanded into
+/// the prompt on send. `label` is the chip text (the bare skill/symbol name);
+/// `expand` is the text spliced into the outgoing prompt for the agent to read
+/// (the skill name, or the symbol's backticked `path:line` reference). Chips
+/// are deduplicated by `kind` + `expand`.
+priv struct Mention {
+  kind : MentionKind
+  label : String
+  expand : String
 }
 
 ///|
@@ -361,6 +395,8 @@ priv enum Msg {
   CompletionPick(Int)
   // Close the completion menu without acting (Escape, or a click away).
   CompletionDismiss
+  // Remove a mention chip from the active conversation's draft, by index.
+  RemoveMention(Int)
   // A `workspace_symbols` reply: `session`/`query` say which request it answers
   // so a reply that lost a conversation switch or a later keystroke is dropped.
   SymbolsLoaded(
@@ -472,6 +508,7 @@ fn empty_conversation(session_id : String) -> Conversation {
   {
     session_id,
     task: "",
+    mentions: [],
     running: false,
     active_run_id: None,
     last_run_id: None,
@@ -686,9 +723,7 @@ fn Model::activate(self : Model, session_id : String) -> Model {
     if conv.session_id == session_id {
       found = true
       conversations.push(conv)
-    } else if conv.running ||
-      conv.messages.length() > 0 ||
-      !conv.task.trim().is_empty() {
+    } else if conv.running || conv.messages.length() > 0 || !conv.draft_empty() {
       conversations.push(conv)
     }
   }
@@ -696,6 +731,14 @@ fn Model::activate(self : Model, session_id : String) -> Model {
     conversations.push(empty_conversation(session_id))
   }
   { ..self, active_session: session_id, conversations }
+}
+
+///|
+/// Whether the composer draft holds nothing to send: no typed text and no
+/// mention chips. A draft of chips alone is still sendable (the chips expand
+/// into the prompt), so both must be empty.
+fn Conversation::draft_empty(self : Conversation) -> Bool {
+  self.task.trim().is_empty() && self.mentions.is_empty()
 }
 
 ///|

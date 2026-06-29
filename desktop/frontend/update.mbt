@@ -33,9 +33,10 @@ fn is_compaction_event(event : @transcript.EngineEvent) -> Bool {
 }
 
 ///|
-/// Apply an accepted completion row: a slash command runs its action, a skill
-/// mention replaces the composer's `$query` token with the skill name so the
-/// user keeps typing the rest of the prompt. Either way the menu closes.
+/// Apply an accepted completion row: a slash command runs its action, while a
+/// skill mention or symbol reference becomes a chip in the composer's mention
+/// tray (its expansion is spliced into the prompt on send). Either way the menu
+/// closes and the typed trigger token is cleared from the textarea.
 fn accept_completion(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -44,17 +45,39 @@ fn accept_completion(
 ) -> (@cmd.Cmd, Model) {
   match menu.kind {
     SlashCommands => run_slash_command(dispatch, model, item.command)
-    // A skill mention and a symbol reference both drop `insert` into the
-    // composer and close the menu, leaving the user to keep typing.
-    SkillMentions | Symbols =>
-      (
-        @cmd.none,
-        {
-          ..model.replace_conversation({ ..model.active(), task: item.insert }),
-          completion: None,
-        },
+    // The chip label is the bare name (the skill's `insert` carries a trailing
+    // space; the symbol's `label` is already bare); `insert` is the expansion
+    // dropped into the prompt on send.
+    SkillMentions =>
+      accept_mention(
+        model,
+        SkillMention,
+        label=item.insert.trim().to_owned(),
+        expand=item.insert,
       )
+    Symbols =>
+      accept_mention(model, SymbolMention, label=item.label, expand=item.insert)
   }
+}
+
+///|
+/// Attach a mention chip to the active conversation's draft (deduplicated),
+/// clear the typed trigger token, and close the menu.
+fn accept_mention(
+  model : Model,
+  kind : MentionKind,
+  label~ : String,
+  expand~ : String,
+) -> (@cmd.Cmd, Model) {
+  let conv = model.active()
+  let mentions = push_mention(conv.mentions, { kind, label, expand })
+  (
+    @cmd.none,
+    {
+      ..model.replace_conversation({ ..conv, task: "", mentions }),
+      completion: None,
+    },
+  )
 }
 
 ///|
@@ -417,6 +440,15 @@ fn update_msg(
         (@cmd.none, model)
       }
     CompletionDismiss => (@cmd.none, { ..model, completion: None })
+    RemoveMention(index) => {
+      let conv = model.active()
+      guard conv.mentions.get(index) is Some(_) else {
+        return (@cmd.none, model)
+      }
+      let mentions = conv.mentions.copy()
+      let _ = mentions.remove(index)
+      (@cmd.none, model.replace_conversation({ ..conv, mentions, }))
+    }
     CompletionAccept =>
       if model.completion is Some(menu) && menu.current() is Some(item) {
         accept_completion(dispatch, model, menu, item)
@@ -543,7 +575,9 @@ fn update_msg(
     }
     Send => {
       let conv = model.active()
-      let task = conv.task.trim().to_owned()
+      // The outgoing prompt folds the mention chips' expansions in ahead of the
+      // typed text; a draft of chips alone still sends.
+      let task = compose_prompt(conv.mentions, conv.task).trim().to_owned()
       if task.is_empty() || !model.bridge_ready || !model.api_ready() {
         (@cmd.none, model)
       } else if conv.running {
@@ -562,7 +596,12 @@ fn update_msg(
               scroll_transcript_after_render(),
             ]),
             {
-              ..model.replace_conversation({ ..conv, pending_steers, task: "" }),
+              ..model.replace_conversation({
+                ..conv,
+                pending_steers,
+                task: "",
+                mentions: [],
+              }),
               transcript_pinned: true,
               completion: None,
             },
@@ -575,6 +614,7 @@ fn update_msg(
         let next = {
           ..next,
           task: "",
+          mentions: [],
           running: true,
           active_run_id: None,
           status: Starting,
