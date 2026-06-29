@@ -4,6 +4,8 @@ package "openseek_desktop/internal/platform"
 // Values
 pub async fn is_darwin() -> Bool
 
+pub async fn open_path(String) -> Int
+
 // Errors
 
 // Types and methods
