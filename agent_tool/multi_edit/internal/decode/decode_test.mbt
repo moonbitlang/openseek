@@ -1,6 +1,6 @@
 ///|
-test "decode_source returns inline edits" {
-  let source = @decode.decode_source({
+test "decode_args returns inline edits" {
+  let args = @decode.decode_args({
     "edits": [
       {
         "file": "file.mbt",
@@ -17,7 +17,8 @@ test "decode_source returns inline edits" {
       },
     ],
   })
-  guard source is Inline(edits) else { fail("expected an inline source") }
+  assert_true(args.edits_file is None)
+  let edits = args.inline
   assert_eq(edits.length(), 2)
   assert_eq(edits[0].file, "file.mbt")
   assert_eq(edits[0].old_string, "old one")
@@ -30,28 +31,53 @@ test "decode_source returns inline edits" {
 }
 
 ///|
-test "decode_source treats a string edits as a response-file path" {
-  let source = @decode.decode_source({ "edits": "fixes.json" })
-  guard source is FromFile(path) else { fail("expected a file source") }
+test "decode_args reads an edits_file path" {
+  let args = @decode.decode_args({ "edits_file": "fixes.json" })
+  assert_eq(args.inline.length(), 0)
+  guard args.edits_file is Some(path) else {
+    fail("expected an edits_file path")
+  }
   assert_eq(path, "fixes.json")
 }
 
 ///|
-test "decode_source requires edits to be an array or a path string" {
-  try @decode.decode_source({}) catch {
-    error => assert_true("\{error}".contains("arguments.edits"))
-  } noraise {
-    _ => fail("missing edits decoded")
-  }
-  try @decode.decode_source({ "edits": 5 }) catch {
+test "decode_args accepts inline edits and an edits_file together" {
+  let args = @decode.decode_args({
+    "edits": [
+      { "file": "a.mbt", "old_string": "a", "new_string": "b", "start_line": 1 },
+    ],
+    "edits_file": "more.json",
+  })
+  assert_eq(args.inline.length(), 1)
+  assert_true(args.edits_file is Some("more.json"))
+}
+
+///|
+test "decode_args allows absent or empty edits (combined-empty is the tool's check)" {
+  let nothing = @decode.decode_args({})
+  assert_eq(nothing.inline.length(), 0)
+  assert_true(nothing.edits_file is None)
+  let empty_array = @decode.decode_args({ "edits": [] })
+  assert_eq(empty_array.inline.length(), 0)
+}
+
+///|
+test "decode_args rejects wrong field types" {
+  try @decode.decode_args({ "edits": 5 }) catch {
     error =>
       assert_true(
-        "\{error}".contains(
-          "arguments.edits to be an array of edits or a file path string",
-        ),
+        "\{error}".contains("arguments.edits to be an array of edit objects"),
       )
   } noraise {
     _ => fail("numeric edits decoded")
+  }
+  try @decode.decode_args({ "edits_file": 5 }) catch {
+    error =>
+      assert_true(
+        "\{error}".contains("arguments.edits_file to be a string path"),
+      )
+  } noraise {
+    _ => fail("numeric edits_file decoded")
   }
 }
 
@@ -76,14 +102,14 @@ test "decode_edits_json rejects a non-array document" {
     error =>
       assert_true("\{error}".contains("edits file to contain a JSON array"))
   } noraise {
-    _ => fail("non-array edits_file decoded")
+    _ => fail("non-array response file decoded")
   }
 }
 
 ///|
 test "decode rejects malformed edit entries with indexes" {
   try
-    @decode.decode_source({
+    @decode.decode_args({
       "edits": [
         {
           "file": "file.mbt",
@@ -105,7 +131,7 @@ test "decode rejects malformed edit entries with indexes" {
     _ => fail("invalid start_line decoded")
   }
   try
-    @decode.decode_source({
+    @decode.decode_args({
       "edits": [
         {
           "file": "file.mbt",
@@ -130,13 +156,8 @@ test "decode rejects malformed edit entries with indexes" {
 
 ///|
 test "decode rejects missing required fields" {
-  try @decode.decode_source({ "edits": [] }) catch {
-    error => assert_true("\{error}".contains("a non-empty array of edits"))
-  } noraise {
-    _ => fail("empty edits decoded")
-  }
   try
-    @decode.decode_source({
+    @decode.decode_args({
       "edits": [{ "old_string": "old", "new_string": "new", "start_line": 1 }],
     })
   catch {
@@ -146,7 +167,7 @@ test "decode rejects missing required fields" {
     _ => fail("missing file decoded")
   }
   try
-    @decode.decode_source({
+    @decode.decode_args({
       "edits": [{ "file": "file.mbt", "old_string": "old", "start_line": 1 }],
     })
   catch {
@@ -158,7 +179,7 @@ test "decode rejects missing required fields" {
     _ => fail("missing new_string decoded")
   }
   try
-    @decode.decode_source({
+    @decode.decode_args({
       "edits": [
         { "file": "file.mbt", "old_string": "old", "new_string": "new" },
       ],
@@ -179,7 +200,7 @@ test "decode lists present keys when a required field is misnamed" {
   // failure seen in an eval). The error should say start_line is missing AND
   // list the keys that are present, so the misnamed key is obvious.
   try
-    @decode.decode_source({
+    @decode.decode_args({
       "edits": [
         {
           "file": "file.mbt",
@@ -204,7 +225,7 @@ test "decode lists present keys when a required field is misnamed" {
 
 ///|
 test "decode rejects non-object arguments" {
-  try @decode.decode_source(Json::null()) catch {
+  try @decode.decode_args(Json::null()) catch {
     error => assert_true("\{error}".contains("object arguments"))
   } noraise {
     _ => fail("non-object decoded")

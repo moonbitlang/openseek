@@ -34,7 +34,11 @@ and known-bad manifest rewrites are rejected before anything is overwritten.
 
 ## API Style
 
-`edits` takes one of two forms. **Inline** — an array of edit objects:
+Edits come from two independent, optional fields — `edits` (inline array) and
+`edits_file` (a path) — and the tool **concatenates** whatever is provided
+(inline first). No `oneOf`: each field is plainly typed, set either or both.
+
+**Inline** — an array of edit objects:
 
 ```json
 {
@@ -46,13 +50,6 @@ and known-bad manifest rewrites are rejected before anything is overwritten.
       "start_line": 20
     },
     {
-      "file": "lib/parser.mbt",
-      "old_string": "Expr::Old",
-      "new_string": "Expr::New",
-      "start_line": 68,
-      "end_line": 70
-    },
-    {
       "file": "lib/eval.mbt",
       "old_string": "parse_expr",
       "new_string": "parse_expression",
@@ -62,21 +59,26 @@ and known-bad manifest rewrites are rejected before anything is overwritten.
 }
 ```
 
-**Response file** — a string path to a JSON file containing that same array.
-This is the automation path: generate the file from `moon check` diagnostics with
-a script, then apply the whole batch in one validated call.
+**Response file** — a path to a JSON file containing that same array. This is the
+automation path: generate the file from `moon check --output-json` diagnostics
+with a script, then apply the whole batch in one validated call.
 
 ```json
-{ "edits": "fixes.json" }
+{ "edits_file": "fixes.json" }
 ```
 
 where `fixes.json` holds `[{ "file": ..., "old_string": ..., "new_string": ..., "start_line": ... }, ...]`.
+Both may be set at once; the inline edits and the file's edits are applied
+together.
 
 ## Arguments
 
+At least one of `edits` / `edits_file` must yield a non-empty batch.
+
 | Name | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `edits` | array \| string | yes | Either a non-empty array of edit objects (inline), or a string path to a JSON file (a response file) holding that same array. All edits for a given file must be contiguous. |
+| `edits` | array | no | Edit objects applied inline. Concatenated with `edits_file` when both are given. All edits for a given file must be contiguous in the combined batch. |
+| `edits_file` | string | no | Path to a JSON file holding an array of the same edit objects (a response file). Concatenated with inline `edits`. |
 | `edits[i].file` | string | yes | Filesystem path the edit applies to. Relative paths resolve against the agent process's current working directory. |
 | `edits[i].old_string` | string | yes | Exact text to replace. Empty strings request an insertion. |
 | `edits[i].new_string` | string | yes | Replacement text. It must differ from `old_string`. |

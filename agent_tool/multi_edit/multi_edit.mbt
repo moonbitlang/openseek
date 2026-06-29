@@ -13,32 +13,41 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="multi_edit",
-    description="Apply many exact line-anchored replacements across one or more files in a single validated batch — the efficient path for compiler-feedback repair: when `moon check` (or another analyzer) reports several known locations, fix them all in one call instead of many separate `edit` calls. Pass `edits` in one of two forms: an inline array of edit objects, OR a string path to a JSON file (a response file) holding that same array — for large batches, generate that file from compiler diagnostics with a script and pass its path. Each edit is {file, old_string, new_string, start_line, optional end_line}: `file` is the path to change; `start_line` (1-based) anchors the search and `end_line` bounds it, so old_string can be the small exact span instead of a large context block; each edit replaces the first matching span in its range. List all edits for a given file contiguously. To INSERT instead of replace, set old_string to the empty string: new_string is inserted at the start of start_line (use start_line = last line + 1 to append at end of file). Combine changes on the same line (or one tight span) into a single edit, because adjacent or overlapping edits collide and the whole batch is rejected. Every edit is validated against the original files before anything is written; if any edit fails, no files are changed.",
+    description="Apply many exact line-anchored replacements across one or more files in a single validated batch — the efficient path for compiler-feedback repair: when `moon check` (or another analyzer) reports several known locations, fix them all in one call instead of many separate `edit` calls. Supply the edits two ways and either or both are used (they are concatenated): `edits` is an inline array of edit objects; `edits_file` is the path to a JSON file holding an array of the same objects — for large batches, generate that file from compiler diagnostics with a script and pass its path. Each edit is {file, old_string, new_string, start_line, optional end_line}: `file` is the path to change; `start_line` (1-based) anchors the search and `end_line` bounds it, so old_string can be the small exact span instead of a large context block; each edit replaces the first matching span in its range. Make old_string uniquely identify the flagged code — include the receiver, e.g. `args.length()` — so a rename cannot stray onto a same-named call elsewhere on the line. List all edits for a given file contiguously. To INSERT instead of replace, set old_string to the empty string: new_string is inserted at the start of start_line (use start_line = last line + 1 to append at end of file). Combine changes on the same line (or one tight span) into a single edit, because adjacent or overlapping edits collide and the whole batch is rejected. Every edit is validated against the original files before anything is written; if any edit fails, no files are changed.",
     schema=JsonSchema({
       "type": "object",
       "properties": {
         "edits": {
-          "description": "Either an inline array of edit objects, or a string path to a JSON file containing that same array of edit objects.",
-          "oneOf": [
-            {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "file": { "type": "string" },
-                  "old_string": { "type": "string" },
-                  "new_string": { "type": "string" },
-                  "start_line": { "type": "integer" },
-                  "end_line": { "type": "integer" },
-                },
-                "required": ["file", "old_string", "new_string", "start_line"],
-              },
+          "type": "array",
+          "description": "Edit objects applied inline. Concatenated with edits_file when both are given.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "file": { "type": "string" },
+              "old_string": { "type": "string" },
+              "new_string": { "type": "string" },
+              "start_line": { "type": "integer" },
+              "end_line": { "type": "integer" },
             },
-            { "type": "string" },
+            "required": ["file", "old_string", "new_string", "start_line"],
+          },
+          "examples": [
+            [
+              {
+                "file": "lib/parser.mbt",
+                "old_string": "args.length()",
+                "new_string": "args.len()",
+                "start_line": 12,
+              },
+            ],
           ],
         },
+        "edits_file": {
+          "type": "string",
+          "description": "Path to a JSON file holding an array of the same edit objects — a response file for large, script-generated batches. Concatenated with inline edits when both are given.",
+          "examples": ["fixes.json"],
+        },
       },
-      "required": ["edits"],
     }),
     execute=Async(arguments => execute_with_workspace(workspace_root, arguments)),
   )
@@ -49,20 +58,31 @@ async fn execute_with_workspace(
   workspace_root : String,
   arguments : Json,
 ) -> @agent_tool.ToolAction {
-  let source = @decode.decode_source(arguments) catch {
+  let args = @decode.decode_args(arguments) catch {
     error =>
       return @agent_tool.ToolAction::respond(
         "error: multi_edit requires \{@tool_error.failure_message("\{error}")}",
         is_error=true,
       )
   }
-  let edits = match source {
-    Inline(edits) => edits
-    FromFile(spec) =>
+  // Concatenate the inline edits with the response file's edits (inline first).
+  let edits = args.inline
+  match args.edits_file {
+    Some(spec) =>
       match load_edits_file(workspace_root, spec) {
-        Ok(edits) => edits
+        Ok(file_edits) =>
+          for edit in file_edits {
+            edits.push(edit)
+          }
         Err(action) => return action
       }
+    None => ()
+  }
+  if edits.is_empty() {
+    return @agent_tool.ToolAction::respond(
+      "error: multi_edit requires edits and/or edits_file (no edits were provided)",
+      is_error=true,
+    )
   }
   multi_edit_files(workspace_root, edits)
 }

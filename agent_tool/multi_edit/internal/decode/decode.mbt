@@ -11,33 +11,41 @@ pub struct MultiEditItem {
 } derive(Debug)
 
 ///|
-/// Where a `multi_edit` batch comes from. The single `edits` argument is either
-/// an inline array of edit objects, or a string path to a JSON response file
-/// holding that same array; the tool resolves and reads the path, then feeds the
-/// parsed JSON back through `decode_edits_json`.
-pub enum EditSource {
-  Inline(Array[MultiEditItem])
-  FromFile(String)
+/// Decoded `multi_edit` arguments: edits provided inline, plus an optional path
+/// to a response file holding more edits. The two are independent, mono-typed
+/// fields (no `oneOf`); the tool concatenates them — inline first, then the
+/// file's contents — so a call may set either, both, or (rejected later as a
+/// combined-empty batch) neither.
+pub struct MultiEditArgs {
+  inline : Array[MultiEditItem]
+  edits_file : String?
 } derive(Debug)
 
 ///|
-/// Decode `multi_edit` tool-call arguments into an `EditSource`.
+/// Decode `multi_edit` tool-call arguments.
 ///
-/// `edits` is required and is one of: a non-empty array of edit objects (applied
-/// inline), or a string path to a JSON file containing that same array. Each
-/// edit object contains `file`, `old_string`, `new_string`, and `start_line`;
-/// `end_line` is optional. Line bounds are positive 1-based inclusive integers,
-/// and each item validates `end_line >= start_line` when an end bound is present.
-pub fn decode_source(arguments : Json) -> EditSource raise {
+/// `edits` (optional) is an array of edit objects applied inline. `edits_file`
+/// (optional) is a path to a JSON file holding an array of the same objects.
+/// Each edit object contains `file`, `old_string`, `new_string`, and
+/// `start_line`; `end_line` is optional. Line bounds are positive 1-based
+/// inclusive integers, and each item validates `end_line >= start_line` when an
+/// end bound is present. The combined-empty case is rejected by the tool, not
+/// here.
+pub fn decode_args(arguments : Json) -> MultiEditArgs raise {
   match arguments {
-    Object(fields) =>
-      match fields.get("edits") {
-        Some(Array(items)) => Inline(decode_edit_array(items))
-        Some(String(path)) => FromFile(path)
-        Some(Null) | None => fail("arguments.edits")
-        _ =>
-          fail("arguments.edits to be an array of edits or a file path string")
+    Object(fields) => {
+      let inline = match fields.get("edits") {
+        Some(Array(items)) => decode_edit_array(items)
+        Some(Null) | None => []
+        Some(_) => fail("arguments.edits to be an array of edit objects")
       }
+      let edits_file = match fields.get("edits_file") {
+        Some(String(path)) => Some(path)
+        Some(Null) | None => None
+        Some(_) => fail("arguments.edits_file to be a string path")
+      }
+      { inline, edits_file }
+    }
     _ => fail("object arguments")
   }
 }
@@ -54,9 +62,8 @@ pub fn decode_edits_json(json : Json) -> Array[MultiEditItem] raise {
 
 ///|
 fn decode_edit_array(items : Array[Json]) -> Array[MultiEditItem] raise {
-  if items.length() == 0 {
-    fail("a non-empty array of edits")
-  }
+  // An empty array is allowed here: the inline `edits` and a response file are
+  // concatenated, and only the combined-empty batch is rejected (by the tool).
   [
     for index, item in items => decode_edit_item(item, index)
   ]
