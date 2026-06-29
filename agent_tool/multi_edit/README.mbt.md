@@ -112,8 +112,18 @@ async test "multi_edit applies fixes through the registry" {
     let tools = @agent_tool.Tools([@multi_edit.definition()])
     let arguments : Json = {
       "edits": [
-        { "file": path, "old_string": "old_a", "new_string": "new_a", "start_line": 1 },
-        { "file": path, "old_string": "old_b", "new_string": "new_b", "start_line": 2 },
+        {
+          "file": path,
+          "old_string": "old_a",
+          "new_string": "new_a",
+          "start_line": 1,
+        },
+        {
+          "file": path,
+          "old_string": "old_b",
+          "new_string": "new_b",
+          "start_line": 2,
+        },
       ],
     }
 

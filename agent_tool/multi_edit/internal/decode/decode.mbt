@@ -35,7 +35,8 @@ pub fn decode_source(arguments : Json) -> EditSource raise {
         Some(Array(items)) => Inline(decode_edit_array(items))
         Some(String(path)) => FromFile(path)
         Some(Null) | None => fail("arguments.edits")
-        _ => fail("arguments.edits to be an array of edits or a file path string")
+        _ =>
+          fail("arguments.edits to be an array of edits or a file path string")
       }
     _ => fail("object arguments")
   }
@@ -56,7 +57,9 @@ fn decode_edit_array(items : Array[Json]) -> Array[MultiEditItem] raise {
   if items.length() == 0 {
     fail("a non-empty array of edits")
   }
-  [ for index, item in items => decode_edit_item(item, index) ]
+  [
+    for index, item in items => decode_edit_item(item, index)
+  ]
 }
 
 ///|

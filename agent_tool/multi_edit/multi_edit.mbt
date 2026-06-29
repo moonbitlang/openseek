@@ -317,7 +317,9 @@ fn success_summary(writes : Array[PreparedWrite]) -> String {
   for write in writes {
     total = total + write.edit_count
   }
-  let lines = [ for write in writes => "\{write.path}: \{write.edit_count} edit(s)" ]
+  let lines = [
+    for write in writes => "\{write.path}: \{write.edit_count} edit(s)"
+  ]
   "ok: applied \{total} edit(s) across \{writes.length()} file(s)\n\{lines.join("\n")}"
 }
 

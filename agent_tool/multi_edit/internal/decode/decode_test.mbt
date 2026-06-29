@@ -140,7 +140,8 @@ test "decode rejects missing required fields" {
       "edits": [{ "old_string": "old", "new_string": "new", "start_line": 1 }],
     })
   catch {
-    error => assert_true("\{error}".contains("arguments.edits[0] to include file"))
+    error =>
+      assert_true("\{error}".contains("arguments.edits[0] to include file"))
   } noraise {
     _ => fail("missing file decoded")
   }
@@ -150,17 +151,23 @@ test "decode rejects missing required fields" {
     })
   catch {
     error =>
-      assert_true("\{error}".contains("arguments.edits[0] to include new_string"))
+      assert_true(
+        "\{error}".contains("arguments.edits[0] to include new_string"),
+      )
   } noraise {
     _ => fail("missing new_string decoded")
   }
   try
     @decode.decode_source({
-      "edits": [{ "file": "file.mbt", "old_string": "old", "new_string": "new" }],
+      "edits": [
+        { "file": "file.mbt", "old_string": "old", "new_string": "new" },
+      ],
     })
   catch {
     error =>
-      assert_true("\{error}".contains("arguments.edits[0] to include start_line"))
+      assert_true(
+        "\{error}".contains("arguments.edits[0] to include start_line"),
+      )
   } noraise {
     _ => fail("missing start_line decoded")
   }

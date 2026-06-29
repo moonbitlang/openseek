@@ -28,7 +28,12 @@ async test "multi_edit applies multiple line-anchored replacements" {
     )
     let result = run_multi_edit({
       "edits": [
-        { "file": path, "old_string": "old_a", "new_string": "new_a", "start_line": 1 },
+        {
+          "file": path,
+          "old_string": "old_a",
+          "new_string": "new_a",
+          "start_line": 1,
+        },
         {
           "file": path,
           "old_string": "old_c",
@@ -64,9 +69,24 @@ async test "multi_edit applies a batch spanning several files" {
     )
     let result = run_multi_edit({
       "edits": [
-        { "file": first, "old_string": "old_a", "new_string": "new_a", "start_line": 1 },
-        { "file": second, "old_string": "old_b", "new_string": "new_b", "start_line": 1 },
-        { "file": second, "old_string": "old_c", "new_string": "new_c", "start_line": 2 },
+        {
+          "file": first,
+          "old_string": "old_a",
+          "new_string": "new_a",
+          "start_line": 1,
+        },
+        {
+          "file": second,
+          "old_string": "old_b",
+          "new_string": "new_b",
+          "start_line": 1,
+        },
+        {
+          "file": second,
+          "old_string": "old_c",
+          "new_string": "new_c",
+          "start_line": 2,
+        },
       ],
     })
     guard result is Respond(output) else { fail("expected Respond") }
@@ -90,8 +110,18 @@ async test "multi_edit collapses aliased spellings of one file into a single gro
     // first and silently drop an edit.
     let result = run_multi_edit_in_workspace(dir, {
       "edits": [
-        { "file": "note.txt", "old_string": "alpha", "new_string": "ALPHA", "start_line": 1 },
-        { "file": "./note.txt", "old_string": "beta", "new_string": "BETA", "start_line": 2 },
+        {
+          "file": "note.txt",
+          "old_string": "alpha",
+          "new_string": "ALPHA",
+          "start_line": 1,
+        },
+        {
+          "file": "./note.txt",
+          "old_string": "beta",
+          "new_string": "BETA",
+          "start_line": 2,
+        },
       ],
     })
     guard result is Respond(output) else { fail("expected Respond") }
@@ -116,9 +146,24 @@ async test "multi_edit rejects a file whose edits are not contiguous" {
     // first reappears at edit[2] after second's block — rejected before any write.
     let result = run_multi_edit({
       "edits": [
-        { "file": first, "old_string": "old_a", "new_string": "new_a", "start_line": 1 },
-        { "file": second, "old_string": "old_b", "new_string": "new_b", "start_line": 1 },
-        { "file": first, "old_string": "old_a2", "new_string": "new_a2", "start_line": 2 },
+        {
+          "file": first,
+          "old_string": "old_a",
+          "new_string": "new_a",
+          "start_line": 1,
+        },
+        {
+          "file": second,
+          "old_string": "old_b",
+          "new_string": "new_b",
+          "start_line": 1,
+        },
+        {
+          "file": first,
+          "old_string": "old_a2",
+          "new_string": "new_a2",
+          "start_line": 2,
+        },
       ],
     })
     guard result is Respond(output) else { fail("expected Respond") }
@@ -141,8 +186,18 @@ async test "multi_edit inserts when old_string is empty, alongside a replacement
     )
     let result = run_multi_edit({
       "edits": [
-        { "file": path, "old_string": "old_a", "new_string": "new_a", "start_line": 1 },
-        { "file": path, "old_string": "", "new_string": "let x = new\n", "start_line": 2 },
+        {
+          "file": path,
+          "old_string": "old_a",
+          "new_string": "new_a",
+          "start_line": 1,
+        },
+        {
+          "file": path,
+          "old_string": "",
+          "new_string": "let x = new\n",
+          "start_line": 2,
+        },
       ],
     })
     guard result is Respond(output) else { fail("expected Respond") }
@@ -160,7 +215,9 @@ async test "multi_edit rejects an edit with empty old_string and new_string" {
     let path = "\{dir}/empty.mbt"
     @fs.write_file(path, "let a = 1\n", create_mode=CreateOrTruncate)
     let result = run_multi_edit({
-      "edits": [{ "file": path, "old_string": "", "new_string": "", "start_line": 1 }],
+      "edits": [
+        { "file": path, "old_string": "", "new_string": "", "start_line": 1 },
+      ],
     })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
@@ -200,7 +257,10 @@ async test "multi_edit applies edits against original offsets despite length cha
     })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "let a = 1000\nlet bb = 2\nlet c = 3\n")
+    assert_eq(
+      @fs.read_file(path).text(),
+      "let a = 1000\nlet bb = 2\nlet c = 3\n",
+    )
   })
 }
 
@@ -240,7 +300,11 @@ async test "multi_edit matches the original file, not text introduced by earlier
 async test "multi_edit uses line anchors to disambiguate duplicate spans" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/dup.mbt"
-    @fs.write_file(path, "x = dup\ny = dup\nz = dup\n", create_mode=CreateOrTruncate)
+    @fs.write_file(
+      path,
+      "x = dup\ny = dup\nz = dup\n",
+      create_mode=CreateOrTruncate,
+    )
     // The same span appears on three lines; each edit's anchor selects exactly
     // one, leaving the unanchored line 2 untouched.
     let result = run_multi_edit({
@@ -274,7 +338,12 @@ async test "multi_edit resolves relative paths under the workspace root" {
     @fs.write_file(path, "alpha\nbeta\n", create_mode=CreateOrTruncate)
     let result = run_multi_edit_in_workspace(dir, {
       "edits": [
-        { "file": "note.txt", "old_string": "beta", "new_string": "delta", "start_line": 2 },
+        {
+          "file": "note.txt",
+          "old_string": "beta",
+          "new_string": "delta",
+          "start_line": 2,
+        },
       ],
     })
     guard result is Respond(output) else { fail("expected Respond") }
@@ -431,8 +500,18 @@ async test "multi_edit applies a batch from a response file (string edits)" {
     )
     let spec_path = "\{dir}/fixes.json"
     let spec : Json = [
-      { "file": path, "old_string": "old_a", "new_string": "new_a", "start_line": 1 },
-      { "file": path, "old_string": "old_b", "new_string": "new_b", "start_line": 2 },
+      {
+        "file": path,
+        "old_string": "old_a",
+        "new_string": "new_a",
+        "start_line": 1,
+      },
+      {
+        "file": path,
+        "old_string": "old_b",
+        "new_string": "new_b",
+        "start_line": 2,
+      },
     ]
     @fs.write_file(spec_path, spec.stringify(), create_mode=CreateOrTruncate)
     // A string `edits` is a path to a JSON response file holding the array.
