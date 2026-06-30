@@ -8,3 +8,4 @@
 - [Desktop CI Dependencies](plans/desktop-ci-dependencies.md)
 - [MoonBit Toolchain Seed Executable Bits](plans/moonbit-toolchain-seed-executable-bits.md)
 - [Proton macOS CEF Close Lifecycle](plans/proton-macos-cef-close-lifecycle.md)
+- [Proton macOS CEF Close Ordering](plans/proton-macos-cef-close-order.md)
