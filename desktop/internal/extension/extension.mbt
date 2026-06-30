@@ -1,8 +1,8 @@
-// The package's public face: the lepus extension spec that exposes the host
-// to the webview, and the error type its op boundary translates.
+// The package's public face: the proton command-extension spec that exposes
+// the host to the webview, and the error type its op boundary translates.
 
 ///|
-/// The lepus extension id; the app manifest must enable it under this name.
+/// The extension id; the proton app enables it under this name.
 pub const ExtensionId = "openseek-desktop"
 
 ///|

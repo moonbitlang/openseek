@@ -8,9 +8,7 @@ import {
   "moonbit-community/rabbita@0.12.1",
   "moonbitlang/x@0.4.45",
   "moonbitlang/async@0.19.4",
-  "justjavac/lepus_app@0.1.0",
-  "justjavac/lepus_manifest@0.1.0",
-  "extensions@0.1.0",
+  "justjavac/proton@0.1.6",
   "tonyfettes/xlog@0.4.0",
 }
 
@@ -18,7 +16,7 @@ readme = "README.md"
 
 license = "MIT"
 
-description = "OpenSeek Desktop — a Lepus + Rabbita desktop client for the OpenSeek agent."
+description = "OpenSeek Desktop — a Proton + Rabbita desktop client for the OpenSeek agent."
 
 options(
   source: "",

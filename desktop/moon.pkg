@@ -1,11 +1,9 @@
 import {
   "moonbitlang/async",
-  "extensions/clipboard",
-  "justjavac/lepus_app" @app,
-  "justjavac/lepus_manifest" @manifest,
+  "justjavac/proton",
+  "justjavac/proton/extension" @proton_extension,
   "openseek_desktop/internal/engine",
   "openseek_desktop/internal/extension",
-  "openseek_desktop/internal/menu",
   "moonbitlang/core/env",
   "tonyfettes/xlog",
 }

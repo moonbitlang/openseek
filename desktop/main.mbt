@@ -1,60 +1,35 @@
 ///|
 async fn main {
-  let framework_command = match @app.current_executable_command() {
-    Ok(command) => command
-    Err(error) => abort(error)
+  // Proton runs everything in one process; the executable path locates the
+  // bundled frontend assets and the engine binary that ship alongside it.
+  let executable = match @env.args().get(0) {
+    Some(command) => command
+    None => abort("current executable command is unavailable")
   }
   let log = launch_logger()
   log.info() <? { "message": "start" }
-  if @app.is_framework_process() {
-    log.info() <? { "message": "framework process start" }
-    @menu.install_main_menu()
-    match @app.run_framework_process_from_cli() {
-      Ok(_) => log.info() <? { "message": "framework process exit ok" }
-      Err(error) => {
-        log.error() <? { "message": "framework process error", "error": error }
-        abort(error)
-      }
-    }
-    return
-  }
-  let frontend_entry = @extension.frontend_entry_path(framework_command)
-  let engine = @engine.engine_command(framework_command)
+  let frontend_entry = @extension.frontend_entry_path(executable)
+  let engine = @engine.engine_command(executable)
   log.info() <? { "message": "host process start" }
   log.info() <? { "message": "frontend entry", "path": frontend_entry }
   log.info() <? { "message": "engine", "path": engine }
-  let extensions : Map[String, @manifest.ExtensionSetting] = {}
-  extensions[@extension.ExtensionId] = @manifest.ExtensionSetting::enabled()
-  extensions["justjavac/lepus-clipboard"] = @manifest.ExtensionSetting::enabled()
-  let manifest = @manifest.AppManifest::new(
-    @manifest.WindowManifest::new("OpenSeek Desktop", 1120, 760, size_hint=None),
-    File(frontend_entry),
-    debug=1,
-    extensions~,
-  )
-  let registry = @app.AppCommandExtensionRegistry::new()
   let runtime_dir = @extension.prepared_runtime_dir()
-  let _ = registry.register(@extension.openseek_extension(engine, runtime_dir?))
-  let _ = registry.register(@clipboard.generated_app_command_extension())
-  // Keep all runtime state out of the bundle: the framework IPC config is
-  // written to the per-user runtime dir, and the framework child runs there
-  // too, so neither process depends on the bundle directory being writable —
-  // or on it continuing to exist while the app runs.
-  let framework_config_path = if runtime_dir is Some(dir) {
-    @extension.remove_stale_framework_configs(dir)
-    Some("\{dir}/lepus-framework-\{@env.now()}.json")
-  } else {
-    None
-  }
-  match
-    @app.run_app_command_extensions_with_framework_process(
-      manifest,
-      framework_command,
-      registry,
-      framework_args=[@app.framework_process_arg()],
-      framework_cwd=runtime_dir.map(dir => dir.to_string()),
-      framework_config_path~,
-    ) {
+  // Proton exposes the `__MoonBit__` bridge — both the ops and the extension
+  // event channel the frontend listens on — only to the `proton://app/` origin
+  // its `html()` entry serves from. A `file://` page gets no bridge bootstrap,
+  // its events are dropped (the dispatcher requires a `proton:` origin), and in
+  // a signed bundle it does not even paint. So embed the frontend document (the
+  // bundled index.html with its JS bundle inlined) and hand the markup to
+  // proton directly instead of pointing at a file on disk.
+  let document = @extension.frontend_document(frontend_entry)
+  let app = @proton.html("OpenSeek Desktop", document, width=1120, height=760)
+    .debug_level(1)
+    .extension(
+      @proton_extension.from_command_spec(
+        @extension.openseek_extension(engine, runtime_dir?),
+      ),
+    )
+  match app.run() {
     Ok(_) => log.info() <? { "message": "host process exit ok" }
     Err(error) => {
       log.error() <? { "message": "host process error", "error": error }

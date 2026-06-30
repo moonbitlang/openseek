@@ -1,5 +1,5 @@
 // The engine-host bridge: typed access to the ops and events the desktop
-// host (`internal/host`) exposes through lepus's injected
+// host (`internal/host`) exposes through proton's injected
 // `globalThis.__MoonBit__` object. Ops are promise-returning calls on
 // `__MoonBit__.openseek`; engine progress arrives as `openseek.*` events on
 // `__MoonBit__.events` and is decoded here into messages.
@@ -10,7 +10,7 @@ priv suberror BridgeError {
 }
 
 ///|
-/// `globalThis.__MoonBit__.openseek`, once the lepus bridge is injected.
+/// `globalThis.__MoonBit__.openseek`, once the proton bridge is injected.
 fn openseek_api() -> @js.Value? {
   guard @interop.moonbit_bridge_root() is Some(root) else { return None }
   @interop.js_prop(root, "openseek")

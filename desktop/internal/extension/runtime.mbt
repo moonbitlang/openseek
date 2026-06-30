@@ -1,8 +1,8 @@
 ///|
-/// Per-user runtime directory for the host's own state. The lepus framework
-/// IPC config lives here instead of inside the .app bundle: a signed bundle
-/// is read-only by convention (and may be mounted read-only under app
-/// translocation), and writing next to the binary also breaks when a
+/// Per-user runtime directory for the host's own state (launch logs, the LSP
+/// traffic log, sessions). It lives here instead of inside the .app bundle: a
+/// signed bundle is read-only by convention (and may be mounted read-only under
+/// app translocation), and writing next to the binary also breaks when a
 /// repackage replaces the bundle under a running instance. Uses
 /// `~/Library/Application Support/OpenSeek Desktop` where that layout exists
 /// (macOS) and `~/.openseek-desktop` elsewhere.
@@ -23,7 +23,7 @@ async fn app_runtime_dir() -> String? {
 
 ///|
 /// The runtime directory, created on demand. `None` when it cannot be
-/// determined or created; callers then fall back to lepus defaults.
+/// determined or created; callers then fall back to runtime defaults.
 pub async fn prepared_runtime_dir() -> @path.Path? {
   guard app_runtime_dir() is Some(dir) else { return None }
   let exists = (@fs.kind(dir) is Directory) catch {
@@ -37,24 +37,4 @@ pub async fn prepared_runtime_dir() -> @path.Path? {
     }
   }
   Some(dir)
-}
-
-///|
-/// Drop framework configs left behind by earlier launches. Each launch writes
-/// a fresh timestamped file (so two concurrent instances never clobber each
-/// other); without this sweep they would accumulate forever.
-pub async fn remove_stale_framework_configs(dir : @path.Path) -> Unit {
-  let dir = dir.to_string()
-  let entries = @fs.readdir(dir) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return
-  }
-  for entry in entries {
-    if entry.has_prefix("lepus-framework-") && entry.has_suffix(".json") {
-      @fs.remove(dir + "/" + entry) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => ()
-      }
-    }
-  }
 }

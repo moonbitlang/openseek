@@ -2,20 +2,20 @@
 package "openseek_desktop/internal/extension"
 
 import {
-  "justjavac/lepus_app",
+  "justjavac/proton/command",
   "moonbitlang/x/path",
 }
 
 // Values
 pub const ExtensionId : String = "openseek-desktop"
 
+pub async fn frontend_document(String) -> String
+
 pub async fn frontend_entry_path(String) -> String
 
-pub fn openseek_extension(String, runtime_dir? : @path.Path) -> @lepus_app.AppCommandExtensionSpec
+pub fn openseek_extension(String, runtime_dir? : @path.Path) -> @command.AppCommandExtensionSpec
 
 pub async fn prepared_runtime_dir() -> @path.Path?
-
-pub async fn remove_stale_framework_configs(@path.Path) -> Unit
 
 // Errors
 

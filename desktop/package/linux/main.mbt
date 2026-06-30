@@ -20,7 +20,8 @@ const AppImageToolUrl : String = "https://github.com/AppImage/appimagetool/relea
 
 ///|
 async fn build_outputs(ws : @packaging.Workspace) -> Unit {
-  @packaging.ensure_codegen_tool(ws, @packaging.posix_codegen_tool())
+  // Assemble the CEF runtime first so the native host links against it.
+  let _ = @packaging.assemble_cef_runtime(ws, @packaging.posix_proton_cli())
   @packaging.build_frontend_bundle(ws)
   @packaging.build_native_host(ws)
   @packaging.build_engine(ws)
@@ -63,6 +64,13 @@ async fn copy_bundle_files(ws : @packaging.Workspace) -> Unit {
     target,
     UsrBinPath + "/" + target.seed_relative_dir(),
   )
+  // Best-effort: ship the assembled CEF runtime (lib/libproton.so, the CEF
+  // shared library, bin/cef_process, resources). AppRun adds its lib dir to
+  // LD_LIBRARY_PATH. The exact layout/rpath needs validation on Linux.
+  @packaging.copy_tree(
+    @packaging.proton_runtime_dist(ws),
+    ws.at(UsrBinPath + "/proton"),
+  )
 }
 
 ///|
@@ -78,6 +86,7 @@ fn apprun_source() -> String {
     #|
     #|APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
     #|export PATH="$APP_DIR/usr/bin:$PATH"
+    #|export LD_LIBRARY_PATH="$APP_DIR/usr/bin/proton/lib:$APP_DIR/usr/bin/proton:${LD_LIBRARY_PATH:-}"
     #|exec "$APP_DIR/usr/bin/openseek-desktop-bin" "$@"
     #|
   source

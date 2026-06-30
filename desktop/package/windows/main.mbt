@@ -7,9 +7,6 @@ const WslEngineBinary : String = "_build/wsl_engine/native/release/build/bobzhan
 const BundledWslEngineName : String = "openseek-linux"
 
 ///|
-const WebView2Header : String = "lepus/build/_deps/microsoft_web_webview2-src/build/native/include/WebView2.h"
-
-///|
 const BundleDir : String = "dist/windows-x64/OpenSeek Desktop"
 
 ///|
@@ -108,21 +105,12 @@ async fn build_wsl_engine(ws : @packaging.Workspace) -> Bool {
 }
 
 ///|
-async fn ensure_webview2_headers(ws : @packaging.Workspace) -> Unit {
-  if @asyncfs.exists(ws.at(WebView2Header)) {
-    return
-  }
-  run_powershell(
-    ws, "Set-Location -LiteralPath 'lepus'; & .\\scripts\\install_webview2_headers.ps1",
-  )
-}
-
-///|
 /// Build everything the bundle needs; returns whether the optional WSL Linux
-/// engine was built and should be staged.
+/// engine was built and should be staged. CEF replaces WebView2, so no
+/// WebView2 SDK headers are fetched.
 async fn build_outputs(ws : @packaging.Workspace) -> Bool {
-  @packaging.ensure_codegen_tool(ws, @packaging.windows_codegen_tool())
-  ensure_webview2_headers(ws)
+  // Assemble the CEF runtime first so the native host links against it.
+  let _ = @packaging.assemble_cef_runtime(ws, @packaging.windows_proton_cli())
   @packaging.build_frontend_bundle(ws)
   @packaging.build_native_host(ws, extra_args=["--warn-list", "-20"])
   @packaging.build_engine(ws)
@@ -182,6 +170,13 @@ async fn copy_bundle_files(
     ws,
     target,
     BundleDir + "/" + target.seed_relative_dir(),
+  )
+  // Best-effort: ship the assembled CEF runtime (proton.dll, libcef.dll,
+  // cef_process.exe, resources). The Windows DLL search expects these beside
+  // the executable; the exact layout needs validation on Windows.
+  @packaging.copy_tree(
+    @packaging.proton_runtime_dist(ws),
+    ws.at(BundleDir + "/proton"),
   )
 }
 

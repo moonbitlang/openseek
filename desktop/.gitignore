@@ -4,5 +4,10 @@ target/
 .mooncakes/
 .DS_Store
 
+# Proton native runtime assembled by `proton_cli cef setup` (CEF framework +
+# helpers + libproton); hundreds of MB, downloaded/generated, never committed.
+.proton/
+.cef-cache/
+
 # Generated frontend bundle (built by `moon run --target native build_frontend.mbtx`)
 /frontend.js

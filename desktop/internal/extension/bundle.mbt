@@ -23,3 +23,36 @@ pub async fn frontend_entry_path(framework_command : String) -> String {
   }
   FrontendEntryPath
 }
+
+///|
+/// The script tag the bundled `index.html` uses to pull in the JS bundle. It is
+/// replaced with the inlined bundle so the document is self-contained.
+const FrontendScriptTag = "<script src=\"./frontend.js\"></script>"
+
+///|
+/// The frontend bundle's filename, a sibling of the entry HTML.
+const FrontendBundleName = "frontend.js"
+
+///|
+/// Build the self-contained HTML document handed to proton's `html()` entry:
+/// the bundled `index.html` with its `<script src="./frontend.js">` reference
+/// replaced by the inlined bundle. Proton serves an `html()` entry from
+/// `proton://app/` (the only origin its `__MoonBit__` bridge reaches) and does
+/// not serve sibling resources from that origin, so the bundle must be embedded
+/// rather than fetched. `entry_path` is the resolved index.html path from
+/// `frontend_entry_path`; the bundle is read from its sibling `frontend.js`.
+pub async fn frontend_document(entry_path : String) -> String {
+  let html = @fs.read_file(entry_path).text()
+  let bundle_path = @path.Path(entry_path)
+    .dirname()
+    .join(FrontendBundleName)
+    .to_string()
+  let bundle = @fs.read_file(bundle_path).text()
+  // Neutralize any literal `</script` in the bundle so it cannot close the
+  // inlined tag early; the browser unescapes `<\/script` back to the same text.
+  let inlined = bundle.replace_all(old="</script", new="<\\/script")
+  html.replace(
+    old=FrontendScriptTag,
+    new="<script>\n" + inlined + "\n</script>",
+  )
+}

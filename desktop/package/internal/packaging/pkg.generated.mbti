@@ -4,6 +4,8 @@ package "openseek_desktop/package/internal/packaging"
 // Values
 pub fn absolute_path(String) -> String
 
+pub async fn assemble_cef_runtime(Workspace, String) -> String
+
 pub async fn build_engine(Workspace, extra_env? : Map[String, String]) -> Unit
 
 pub async fn build_frontend_bundle(Workspace) -> Unit
@@ -12,21 +14,25 @@ pub async fn build_native_host(Workspace, extra_args? : Array[String], extra_env
 
 pub async fn copy_file(String, String) -> Unit
 
-pub fn engine_package() -> String
+pub async fn copy_tree(String, String) -> Unit
 
-pub async fn ensure_codegen_tool(Workspace, String) -> Unit
+pub fn engine_package() -> String
 
 pub async fn ensure_dir(String) -> Unit
 
+pub async fn ensure_proton_cli(Workspace, String) -> Unit
+
 pub async fn locate_workspace() -> Workspace
 
-pub fn posix_codegen_tool() -> String
+pub fn posix_proton_cli() -> String
+
+pub async fn proton_runtime_dist(Workspace) -> String
 
 pub async fn remove_path_if_exists(String) -> Unit
 
 pub async fn run_checked(String, Array[String], dir~ : String, extra_env? : Map[String, String]) -> Unit
 
-pub fn windows_codegen_tool() -> String
+pub fn windows_proton_cli() -> String
 
 pub async fn write_text(String, String) -> Unit
 
