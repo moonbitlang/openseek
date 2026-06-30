@@ -22,7 +22,8 @@ async fn main {
   // its events are dropped (the dispatcher requires a `proton:` origin), and in
   // a signed bundle it does not even paint. So hand the frontend document to
   // proton directly and let the same `proton://app/` origin serve sibling
-  // static assets such as viewer.css from the bundled assets directory.
+  // static assets such as frontend.js and viewer.css from the bundled assets
+  // directory.
   let document = @extension.frontend_document(frontend_entry)
   let app = @proton.html("OpenSeek Desktop", document, width=1120, height=760)
     .asset_dir(frontend_asset_dir)

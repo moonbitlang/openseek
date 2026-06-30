@@ -607,3 +607,54 @@ to verify `proton://app/viewer.css` is served with CSS rules.
 - Launch the generated app and verify through CDP that
   `proton://app/viewer.css` has nonzero `cssRules.length`,
   `window.__MoonBit__.openseek` exists, and Quit still exits cleanly.
+
+## Follow-up: Load Frontend JS Through Proton Assets
+
+### Goal
+
+Stop inlining the frontend JavaScript bundle into `index.html`; load it as the
+existing sibling script resource through the same `proton://app/` asset handler.
+
+### Accepted Design
+
+- Keep the main document on `proton://app/` via `@proton.html`, preserving the
+  Proton bridge origin.
+- Keep `.asset_dir(frontend_asset_dir)` so sibling resources resolve from the
+  packaged `assets/` directory.
+- Leave `desktop/index.html`'s existing
+  `<script src="./frontend.js"></script>` unchanged; the browser resolves it to
+  `proton://app/frontend.js`.
+- Remove the MoonBit-side `frontend.js` read, string replacement, and
+  `</script` escaping from `frontend_document`.
+- Do not change Proton APIs or native resource handler code.
+
+### Target Files And Surfaces
+
+- `desktop/internal/extension/bundle.mbt`: make `frontend_document` return the
+  bundled HTML unchanged and remove private inlining constants.
+- `desktop/main.mbt`: update comments to describe JS and CSS as sibling assets.
+- Generated `.mbti` files should not change because public function signatures
+  stay the same.
+
+### API And Interface Diff
+
+- No intended public API changes.
+- No intended native ABI changes.
+
+### Open Questions
+
+- None.
+
+### Next Implementation Step
+
+Patch the OpenSeek bundle helper, format/regenerate MoonBit metadata, rebuild
+the macOS package, and launch it to verify `proton://app/frontend.js` loads.
+
+### Validation Plan
+
+- Run `moon -C desktop info && moon -C desktop fmt`.
+- Run `moon -C desktop check --target native`.
+- Run `moon -C desktop run --target native package/macos`.
+- Launch the generated app and verify through CDP that
+  `document.scripts` includes `proton://app/frontend.js`,
+  `window.__MoonBit__.openseek` exists, and Quit exits cleanly.
