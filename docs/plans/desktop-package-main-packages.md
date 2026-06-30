@@ -527,3 +527,83 @@ launch the package to verify menu Quit and Cmd+Q exit through `window_closed`.
 - Run `moon -C desktop run --target native package/macos`.
 - Launch the generated app, verify `Cmd+Q`/Quit exits the process, and confirm
   no stale OpenSeek processes remain.
+
+## Follow-up: Proton HTML Asset Resource Handler
+
+### Goal
+
+Load bundled desktop HTML from the secure `proton://app/` origin while allowing
+the same origin to serve sibling static assets such as `viewer.css`, without
+falling back to blocked `file://` subresources or compile-time HTML rewriting.
+
+### Accepted Design
+
+- Add an optional HTML asset directory to the Proton facade app configuration.
+- Keep `Window::load_html(html, base_url)` working as-is for existing callers.
+- Add `Window::load_html_with_assets(html, base_url, asset_dir)` for callers
+  that want the `proton://app/` scheme handler to serve both the main HTML
+  document and files under a safe asset root.
+- Extend the native C ABI with
+  `proton_window_load_html_with_assets(window, html, base_url, asset_root)`;
+  keep `proton_window_load_html(...)` as a compatibility wrapper.
+- Update macOS, Linux, and Windows CEF scheme handlers so the exact base URL
+  returns the supplied HTML and same-origin asset URLs resolve under the
+  configured asset root, rejecting traversal and paths outside that root.
+- Keep OpenSeek's current `frontend.js` inlining for the first fix and use the
+  resource handler to serve `viewer.css`. Removing the JS inliner can be a
+  separate cleanup once the handler path is validated.
+
+### Target Files And Surfaces
+
+- `desktop/lepus/proton/facade_types.mbt`: store the optional HTML asset dir.
+- `desktop/lepus/proton/facade_builders.mbt`: add
+  `pub fn App::asset_dir(self : App, path : String) -> App`.
+- `desktop/lepus/proton/facade_runtime.mbt` and
+  `desktop/lepus/proton/facade_entry.mbt`: pass the asset dir into HTML loading.
+- `desktop/lepus/proton/native/native.mbt`,
+  `desktop/lepus/proton/native/ffi.mbt`, and generated `.mbti` files: expose the
+  native wrapper while preserving the old method.
+- `desktop/lepus/native/src/proton.c` and native headers/prebuilt artifacts:
+  add the C ABI entry point.
+- `desktop/lepus/native/src/engine/cef_mac/proton_engine_cef_mac.m`,
+  `desktop/lepus/native/src/engine/cef_linux/proton_engine_cef_linux.c`, and
+  `desktop/lepus/native/src/engine/cef_win/proton_engine_cef_win.c`: serve
+  same-origin HTML assets through the `proton` scheme.
+- `desktop/main.mbt` and/or `desktop/internal/extension/bundle.mbt`: configure
+  OpenSeek's asset directory from the packaged `assets/index.html` location.
+
+### API And Interface Diff
+
+- Proton facade app API gains:
+  `pub fn App::asset_dir(App, String) -> App`.
+- Proton native MoonBit API gains:
+  `pub fn Window::load_html_with_assets(Window, String, String, String) -> Result[Unit, NativeError]`.
+- Proton C ABI gains:
+  `PROTON_API int32_t proton_window_load_html_with_assets(proton_window_id_t window, const char *html, const char *base_url, const char *asset_root);`.
+- Existing `App`, `Window::load_html`, and `proton_window_load_html` callers
+  remain source-compatible.
+
+### Open Questions
+
+- None for the first implementation. Future cleanup can remove the
+  `frontend.js` inliner after the resource handler has shipped.
+
+### Next Implementation Step
+
+Patch the Lepus submodule and OpenSeek asset-dir configuration, regenerate
+MoonBit interfaces, rebuild native prebuilts, package macOS, and launch the app
+to verify `proton://app/viewer.css` is served with CSS rules.
+
+### Validation Plan
+
+- Run `ctest --test-dir native/build-engine --output-on-failure` in
+  `desktop/lepus`.
+- Run `node native/scripts/verify_link_config.mjs native/dist` in
+  `desktop/lepus`.
+- Run `moon -C desktop check --target native`.
+- Run `moon -C desktop test lepus/proton --target native`.
+- Run `moon -C desktop info && moon -C desktop fmt`.
+- Run `moon -C desktop run --target native package/macos`.
+- Launch the generated app and verify through CDP that
+  `proton://app/viewer.css` has nonzero `cssRules.length`,
+  `window.__MoonBit__.openseek` exists, and Quit still exits cleanly.

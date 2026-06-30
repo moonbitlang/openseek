@@ -12,17 +12,20 @@ async fn main {
   let engine = @engine.engine_command(executable)
   log.info() <? { "message": "host process start" }
   log.info() <? { "message": "frontend entry", "path": frontend_entry }
+  let frontend_asset_dir = @extension.frontend_asset_dir(frontend_entry)
+  log.info() <? { "message": "frontend asset dir", "path": frontend_asset_dir }
   log.info() <? { "message": "engine", "path": engine }
   let runtime_dir = @extension.prepared_runtime_dir()
   // Proton exposes the `__MoonBit__` bridge — both the ops and the extension
   // event channel the frontend listens on — only to the `proton://app/` origin
   // its `html()` entry serves from. A `file://` page gets no bridge bootstrap,
   // its events are dropped (the dispatcher requires a `proton:` origin), and in
-  // a signed bundle it does not even paint. So embed the frontend document (the
-  // bundled index.html with its JS bundle inlined) and hand the markup to
-  // proton directly instead of pointing at a file on disk.
+  // a signed bundle it does not even paint. So hand the frontend document to
+  // proton directly and let the same `proton://app/` origin serve sibling
+  // static assets such as viewer.css from the bundled assets directory.
   let document = @extension.frontend_document(frontend_entry)
   let app = @proton.html("OpenSeek Desktop", document, width=1120, height=760)
+    .asset_dir(frontend_asset_dir)
     .debug_level(1)
     .extension(
       @proton_extension.from_command_spec(

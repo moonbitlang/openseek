@@ -9,6 +9,8 @@ import {
 // Values
 pub const ExtensionId : String = "openseek-desktop"
 
+pub fn frontend_asset_dir(String) -> String
+
 pub async fn frontend_document(String) -> String
 
 pub async fn frontend_entry_path(String) -> String
