@@ -19,8 +19,9 @@ license = "MIT"
 
 description = "OpenSeek Desktop — a Proton + Rabbita desktop client for the OpenSeek agent."
 
+source = ""
+
 options(
-  source: "",
   "--moonbit-unstable-prebuild": "native_link_config.mjs",
   warn_list: "",
   preferred_target: "native",
