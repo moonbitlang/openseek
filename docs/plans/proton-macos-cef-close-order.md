@@ -19,6 +19,9 @@ CEF helper processes running.
   wake the runtime wait source.
 - Keep CEF `on_before_close` as a supported browser cleanup path, but do not
   require it as the only signal that a Proton window has closed.
+- Keep normal CEF shutdown aligned with upstream PR #28: runtime destroy always
+  calls `cef_shutdown()` through the native shutdown helper, and the helper does
+  not unload the CEF framework as part of normal shutdown.
 - Preserve OpenSeek's existing `proton://` HTML asset resource handler and
   `load_html_with_assets` behavior.
 
@@ -47,6 +50,9 @@ Native-only internal behavior changes:
 - restore the AppKit `NSWindowDelegate` close bridge
 - remove the CEF-owned top-level Alloy window path
 - avoid marking `window.closed` directly from `window_close()`
+- remove the local `runtime_destroy()` special case that skipped
+  `cef_shutdown()` when AppKit app termination had been requested
+- keep CEF framework unload out of the normal shutdown helper
 
 ## Open Questions
 
@@ -57,6 +63,8 @@ Native-only internal behavior changes:
 
 Build the desktop macOS package from `haoxiang/file-side-panel`, run it with
 `PROTON_NATIVE_LOG=1`, close the app window, and inspect the log/process state.
+This pass first aligns local shutdown semantics with upstream PR #28 before
+adding any new close workaround.
 
 ## Validation Plan
 
