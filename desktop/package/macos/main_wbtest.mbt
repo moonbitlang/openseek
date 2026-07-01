@@ -24,6 +24,7 @@ test "macos helper plist describes cef helper app" {
       "<key>LSMinimumSystemVersion</key><string>\{MinMacOSVersion}</string>",
     ),
   )
+  assert_true(plist.contains("<key>LSUIElement</key><true/>"))
 }
 
 ///|
