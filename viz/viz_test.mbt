@@ -96,6 +96,77 @@ fn occurrences(text : String, needle : String) -> Int {
 }
 
 ///|
+/// Two calls to the same tool in one assistant turn, each with its own result —
+/// the exact case where the separate result cards were previously
+/// indistinguishable (both just `Tool result · read`).
+fn multi_call_session() -> @agent_session.Session {
+  @agent_session.Session(SessionId("mc"), system_prompt="")
+  .append(User(UserMessage("read both")))
+  .append(
+    Assistant(
+      AssistantMessage("", tool_calls=[
+        ToolCall(id="r1", name="read", arguments="{\"path\":\"a.txt\"}"),
+        ToolCall(id="r2", name="read", arguments="{\"path\":\"b.txt\"}"),
+      ]),
+    ),
+  )
+  .append(Tool(ToolResult(tool_call_id="r1", tool_name="read", content="AAA")))
+  .append(Tool(ToolResult(tool_call_id="r2", tool_name="read", content="BBB")))
+  .append(Terminal(Finished("done")))
+}
+
+///|
+/// Ids that must NOT be paired: an empty id (a streaming glitch can leave one),
+/// a duplicate call id, and an orphan result whose id matches no call.
+fn unpairable_session() -> @agent_session.Session {
+  @agent_session.Session(SessionId("edge"), system_prompt="")
+  .append(
+    Assistant(
+      AssistantMessage("", tool_calls=[
+        ToolCall(id="", name="noop", arguments="{}"),
+        ToolCall(id="dup", name="a", arguments="{}"),
+        ToolCall(id="dup", name="b", arguments="{}"),
+      ]),
+    ),
+  )
+  .append(
+    Tool(ToolResult(tool_call_id="orphan", tool_name="ghost", content="?")),
+  )
+}
+
+///|
+/// One call whose id has TWO results — the result side is ambiguous, so the raw
+/// view (which shows both results) must not pair it.
+fn duplicate_result_session() -> @agent_session.Session {
+  @agent_session.Session(SessionId("dupres"), system_prompt="")
+  .append(
+    Assistant(
+      AssistantMessage("", tool_calls=[
+        ToolCall(id="d", name="read", arguments="{\"path\":\"x\"}"),
+      ]),
+    ),
+  )
+  .append(Tool(ToolResult(tool_call_id="d", tool_name="read", content="one")))
+  .append(Tool(ToolResult(tool_call_id="d", tool_name="read", content="two")))
+}
+
+///|
+/// A unique, non-empty call id with no result event: raw has no result to pair,
+/// but the model projection heals the dangling call with a synthetic result, so
+/// the model view can (and should) pair the two.
+fn dangling_call_session() -> @agent_session.Session {
+  @agent_session.Session(SessionId("dangle"), system_prompt="")
+  .append(
+    Assistant(
+      AssistantMessage("", tool_calls=[
+        ToolCall(id="only", name="read", arguments="{\"path\":\"x\"}"),
+      ]),
+    ),
+  )
+  .append(Terminal(Aborted("stopped")))
+}
+
+///|
 fn finish_tool_session() -> @agent_session.Session {
   @agent_session.Session(SessionId("finish"), system_prompt="system")
   .append(User(UserMessage("start")))
@@ -128,7 +199,12 @@ test "tool calls fold their arguments, empty args stay flat" {
   // A call with arguments folds: the name becomes a <summary>, args hide in the
   // collapsed <details> (no `open` attribute) yet are still in the DOM.
   // c1 (shell) has args and its result failed, so its fold carries the failed tag.
-  assert_true(html.contains("<details class=\"tool-call tool-call-failed\">"))
+  // It also pairs with a result, so it gets a `tool-call-1` anchor.
+  assert_true(
+    html.contains(
+      "<details class=\"tool-call tool-call-failed\" id=\"tool-call-1\">",
+    ),
+  )
   assert_true(html.contains("<summary class=\"tool-call-name\">"))
   assert_true(html.contains("shell"))
   assert_true(html.contains("cmd"))
@@ -260,8 +336,14 @@ test "failed tool result is folded and red-flagged" {
   let html = render(@viz.render_session(error_tool_session(), RawLog))
   // Folded by default (a <details> with no `open`), tagged as an error, and the
   // summary carries the red flag so a collapsed failure still stands out.
-  assert_true(html.contains("<details class=\"card tool error\">"))
-  assert_false(html.contains("<details class=\"card tool error\" open>"))
+  assert_true(
+    html.contains("<details class=\"card tool error\" id=\"tool-result-1\">"),
+  )
+  assert_false(
+    html.contains(
+      "<details class=\"card tool error\" id=\"tool-result-1\" open>",
+    ),
+  )
   assert_true(html.contains("class=\"tool-flag\">🚩 failed"))
   assert_true(html.contains("Tool error · shell"))
   assert_true(html.contains("boom"))
@@ -273,7 +355,9 @@ test "model view recovers the error flag the projection drops" {
   // the view correlates back to the durable ToolResult, so a failed tool (e.g. a
   // non-zero exit) is red-flagged in the model view too — with its tool name.
   let model = render(@viz.render_session(error_tool_session(), ModelView))
-  assert_true(model.contains("<details class=\"card tool error\">"))
+  assert_true(
+    model.contains("<details class=\"card tool error\" id=\"tool-result-1\">"),
+  )
   assert_true(model.contains("class=\"tool-flag\">🚩 failed"))
   assert_true(model.contains("Tool error · shell"))
 }
@@ -358,11 +442,15 @@ test "successful tool result folds without a flag" {
     system_prompt="",
   )
   let raw = render(@viz.render_session(session, RawLog))
-  assert_true(raw.contains("<details class=\"card tool\">"))
+  assert_true(
+    raw.contains("<details class=\"card tool\" id=\"tool-result-1\">"),
+  )
   assert_false(raw.contains("tool-flag"))
   // Model view folds its tool result too (no flag — the projection drops it).
   let model = render(@viz.render_session(session, ModelView))
-  assert_true(model.contains("<details class=\"card tool\">"))
+  assert_true(
+    model.contains("<details class=\"card tool\" id=\"tool-result-1\">"),
+  )
   assert_true(model.contains("Tool result"))
 }
 
@@ -594,6 +682,75 @@ test "notices surface partial tails and bad lines" {
   let html = render(@viz.render_notices(parsed))
   assert_true(html.contains("could not be decoded"))
   assert_true(html.contains("trailing partial line"))
+}
+
+///|
+test "each tool call and its result share a pairing anchor and cross-link" {
+  // Both raw and model view must connect each call to its own result so two
+  // same-tool calls in one turn are no longer ambiguous.
+  for mode in [@viz.RawLog, ModelView] {
+    let html = render(@viz.render_session(multi_call_session(), mode))
+    // Each call and its result carry the anchor the other links to.
+    assert_true(html.contains("id=\"tool-call-1\""))
+    assert_true(html.contains("id=\"tool-call-2\""))
+    assert_true(html.contains("id=\"tool-result-1\""))
+    assert_true(html.contains("id=\"tool-result-2\""))
+    // The call links forward to its result; the result links back to the call.
+    assert_true(html.contains("href=\"#tool-result-1\""))
+    assert_true(html.contains("href=\"#tool-result-2\""))
+    assert_true(html.contains("href=\"#tool-call-1\""))
+    assert_true(html.contains("href=\"#tool-call-2\""))
+    // The same `call N` chip labels both sides of each pair (call + result).
+    inspect(occurrences(html, ">call 1</a>"), content="2")
+    inspect(occurrences(html, ">call 2</a>"), content="2")
+    inspect(occurrences(html, "class=\"tool-link\""), content="4")
+    // Each anchor id is emitted exactly once (no duplicate DOM ids), and there is
+    // no stray third pair — so every `href="#tool-*-N"` resolves to one target.
+    inspect(occurrences(html, "id=\"tool-call-1\""), content="1")
+    inspect(occurrences(html, "id=\"tool-call-2\""), content="1")
+    inspect(occurrences(html, "id=\"tool-result-1\""), content="1")
+    inspect(occurrences(html, "id=\"tool-result-2\""), content="1")
+    assert_false(html.contains("tool-call-3"))
+    assert_false(html.contains("tool-result-3"))
+  }
+}
+
+///|
+test "empty, duplicate, and orphan ids get no pairing chip or anchor" {
+  // A pairing chip must never link to a missing anchor, and no DOM id may be
+  // emitted twice, so none of these unpairable ids may produce pairing markup.
+  for mode in [@viz.RawLog, ModelView] {
+    let html = render(@viz.render_session(unpairable_session(), mode))
+    assert_false(html.contains("id=\"tool-call-"))
+    assert_false(html.contains("id=\"tool-result-"))
+    assert_false(html.contains("class=\"tool-link\""))
+  }
+}
+
+///|
+test "one call with two results is not paired in the raw view" {
+  // Two results for id `d` make the result side ambiguous; the raw view shows
+  // both, so it must not pair (which would need a single `tool-result-N` anchor).
+  let raw = render(@viz.render_session(duplicate_result_session(), RawLog))
+  assert_false(raw.contains("id=\"tool-call-"))
+  assert_false(raw.contains("id=\"tool-result-"))
+  assert_false(raw.contains("class=\"tool-link\""))
+}
+
+///|
+test "a dangling call pairs only in the model view, where it is healed" {
+  let session = dangling_call_session()
+  // Raw has no result event for `only`, so nothing to pair.
+  let raw = render(@viz.render_session(session, RawLog))
+  assert_false(raw.contains("id=\"tool-call-"))
+  assert_false(raw.contains("id=\"tool-result-"))
+  // The model projection heals the dangling call with a synthetic result, giving
+  // it a valid partner — so the call and its healed result cross-link here.
+  let model = render(@viz.render_session(session, ModelView))
+  assert_true(model.contains("id=\"tool-call-1\""))
+  assert_true(model.contains("id=\"tool-result-1\""))
+  assert_true(model.contains("href=\"#tool-result-1\""))
+  assert_true(model.contains("href=\"#tool-call-1\""))
 }
 
 ///|

@@ -60,11 +60,12 @@ pub fn render_notices(parsed : @session_log.ParsedLog) -> @html.Html {
 fn render_raw(session : @agent_session.Session) -> @html.Html {
   let briefs = tool_call_briefs(session)
   let failed = raw_failed_call_ids(session)
+  let tags = raw_pair_tags(session)
   let step_labels = agent_step_labels(session)
   let turns = group_turns(session.events())
   let blocks : Array[@html.Html] = []
   for index, turn in turns {
-    blocks.push(turn_block(index + 1, turn, briefs, failed, step_labels))
+    blocks.push(turn_block(index + 1, turn, briefs, failed, tags, step_labels))
   }
   if blocks.is_empty() {
     return empty_state("This session has no events yet.")
@@ -162,6 +163,7 @@ fn turn_block(
   turn : Array[@agent_session.SessionEvent],
   briefs : Map[String, String],
   failed : Map[String, Unit],
+  tags : Map[String, Int],
   step_labels : Map[Int, String],
 ) -> @html.Html {
   // Offsets are relative to the turn's first stamped event: for reading a
@@ -175,6 +177,7 @@ fn turn_block(
         time=offset_label(base, event),
         briefs,
         failed,
+        tags,
         step_label=step_labels.get(event.sequence()).unwrap_or(""),
       )
     }
@@ -292,6 +295,7 @@ fn event_card(
   time~ : String,
   briefs : Map[String, String],
   failed : Map[String, Unit],
+  tags : Map[String, Int],
   step_label~ : String,
 ) -> @html.Html {
   let seq = event.sequence()
@@ -299,8 +303,8 @@ fn event_card(
     User(message) =>
       card("user", "User", seq, time~, [text_block(message.content())])
     Assistant(message) =>
-      assistant_card(seq, time, message, briefs, failed, step_label~)
-    Tool(result) => tool_card(seq, time, result)
+      assistant_card(seq, time, message, briefs, failed, tags, step_label~)
+    Tool(result) => tool_card(seq, time, result, tags)
     Runtime(notice) =>
       card("runtime", "Runtime notice", seq, time~, [
         text_block(notice.content()),
@@ -317,6 +321,7 @@ fn assistant_card(
   message : @agent_session.AssistantMessage,
   briefs : Map[String, String],
   failed : Map[String, Unit],
+  tags : Map[String, Int],
   step_label~ : String,
 ) -> @html.Html {
   let body : Array[@html.Html] = []
@@ -335,7 +340,7 @@ fn assistant_card(
   let calls = message.tool_calls()
   if !calls.is_empty() {
     let call_views : Array[@html.Html] = [
-      for call in calls => tool_call_view(call, briefs, failed)
+      for call in calls => tool_call_view(call, briefs, failed, tags)
     ]
     body.push(@html.div(class="tool-calls") <| call_views)
   }
@@ -361,6 +366,7 @@ fn tool_call_view(
   call : @deepseek.ToolCall,
   briefs : Map[String, String],
   failed : Map[String, Unit],
+  tags : Map[String, Int],
 ) -> @html.Html {
   let name_row : Array[@html.Html] = [
     @html.text("→ "),
@@ -369,6 +375,19 @@ fn tool_call_view(
   if briefs.get(call.id) is Some(brief) && !brief.trim().is_empty() {
     name_row.push(@html.span(class="tool-call-brief") <| " · \{brief}")
   }
+  // When this call forms an unambiguous pair with a result, tag it `call N` and
+  // link forward to that result's card; the same number labels the result.
+  let pair = tags.get(call.id)
+  if pair is Some(n) {
+    name_row.push(
+      pair_link(
+        n,
+        href="#\{tool_result_anchor(n)}",
+        title="Jump to this call's result (call \{n})",
+      ),
+    )
+  }
+  let anchor = pair.map(n => tool_call_anchor(n))
   let cls = if failed.contains(call.id) {
     "tool-call tool-call-failed"
   } else {
@@ -376,11 +395,11 @@ fn tool_call_view(
   }
   let original = pretty_json(call.arguments)
   if is_blank_args(original) {
-    return @html.div(class=cls) <| [
+    return @html.div(id?=anchor, class=cls) <| [
       @html.div(class="tool-call-name") <| name_row,
     ]
   }
-  @html.details(class=cls) <| [
+  @html.details(id?=anchor, class=cls) <| [
     @html.summary(class="tool-call-name") <| name_row,
     render_args_friendly(call.arguments),
     @html.pre(class="tool-call-args tool-call-args-original") <| original,
@@ -520,6 +539,7 @@ fn tool_card(
   seq : Int,
   time : String,
   result : @agent_session.ToolResult,
+  tags : Map[String, Int],
 ) -> @html.Html {
   let is_error = result.is_error()
   let kind = if is_error { "tool error" } else { "tool" }
@@ -533,8 +553,26 @@ fn tool_card(
   } else {
     @html.nothing
   }
-  @html.details(class="card \{kind}") <| [
-    @html.summary(class="card-label") <| card_head(label, seq, time~, flag~),
+  // Pair this result back to the call that produced it (same `call N` tag).
+  let pair = tags.get(result.tool_call_id())
+  let link = match pair {
+    Some(n) =>
+      pair_link(
+        n,
+        href="#\{tool_call_anchor(n)}",
+        title="Jump to the originating call (call \{n})",
+      )
+    None => @html.nothing
+  }
+  let anchor = pair.map(n => tool_result_anchor(n))
+  @html.details(id?=anchor, class="card \{kind}") <| [
+    @html.summary(class="card-label") <| card_head(
+      label,
+      seq,
+      time~,
+      flag~,
+      link~,
+    ),
     @html.div(class="card-body") <| [
       text_block(result.content()),
     ],
@@ -590,6 +628,7 @@ fn render_model(session : @agent_session.Session) -> @html.Html {
   // brief would caption a healed/compacted call with a result the model never
   // saw. The raw view, which shows every event, uses all briefs.
   let briefs = model_tool_call_briefs(messages, tool_results)
+  let tags = model_pair_tags(messages)
   let cards : Array[@html.Html] = [
     for index, message in messages => {
       let time = if index < time_labels.length() {
@@ -602,7 +641,15 @@ fn render_model(session : @agent_session.Session) -> @html.Html {
       } else {
         ""
       }
-      message_card(message, tool_results, failed, briefs, time~, step_label~)
+      message_card(
+        message,
+        tool_results,
+        failed,
+        briefs,
+        tags,
+        time~,
+        step_label~,
+      )
     }
   ]
   if cards.is_empty() {
@@ -836,6 +883,106 @@ fn raw_failed_call_ids(session : @agent_session.Session) -> Map[String, Unit] {
   ids
 }
 
+// ---- tool call ↔ result pairing --------------------------------------------
+
+///|
+/// A stable 1-based "pair number" for each tool call, so the view can show the
+/// same `call N` chip on a tool call and on its result and cross-link the two by
+/// DOM anchor — the whole point being that one assistant turn can emit several
+/// tool calls and, without this, the separate result cards read only as `Tool
+/// result · <name>` with no visible tie back to which call produced them.
+///
+/// A number is assigned only to an id that forms an unambiguous 1:1 pair in the
+/// rendered view: it must be non-empty and appear exactly once among the calls
+/// AND exactly once among the results. That deliberately skips empty ids (a
+/// streaming glitch can leave `id=""`), duplicate ids, orphan results (a result
+/// with no matching call), and dangling calls (a call with no result) — so a chip
+/// never links to a missing anchor and no DOM id is ever emitted twice. Numbers
+/// run in call order for readability.
+fn assign_pair_tags(
+  call_ids : Array[String],
+  result_ids : Array[String],
+) -> Map[String, Int] {
+  let call_counts : Map[String, Int] = Map([])
+  for id in call_ids {
+    call_counts.set(id, call_counts.get(id).unwrap_or(0) + 1)
+  }
+  let result_counts : Map[String, Int] = Map([])
+  for id in result_ids {
+    result_counts.set(id, result_counts.get(id).unwrap_or(0) + 1)
+  }
+  let tags : Map[String, Int] = Map([])
+  let mut next = 1
+  // A call_count of 1 means the id occurs exactly once in `call_ids`, so the loop
+  // reaches each tagged id once and assigns it a unique number in call order.
+  for id in call_ids {
+    if id != "" &&
+      call_counts.get(id).unwrap_or(0) == 1 &&
+      result_counts.get(id).unwrap_or(0) == 1 {
+      tags.set(id, next)
+      next += 1
+    }
+  }
+  tags
+}
+
+///|
+/// Pair numbers for the raw view, drawn from every durable event it renders.
+fn raw_pair_tags(session : @agent_session.Session) -> Map[String, Int] {
+  let call_ids : Array[String] = []
+  let result_ids : Array[String] = []
+  for event in session.events() {
+    match event.item() {
+      Assistant(message) =>
+        for call in message.tool_calls() {
+          call_ids.push(call.id)
+        }
+      Tool(result) => result_ids.push(result.tool_call_id())
+      _ => ()
+    }
+  }
+  assign_pair_tags(call_ids, result_ids)
+}
+
+///|
+/// Pair numbers for the model view, drawn from the projected messages it renders
+/// (so a healed synthetic tool message is a valid result partner, and a call
+/// compacted away contributes nothing). Only the structural id feeds this — the
+/// error flag, tool name, and brief still come solely through `model_shown_result`.
+fn model_pair_tags(messages : Array[@deepseek.ChatMessage]) -> Map[String, Int] {
+  let call_ids : Array[String] = []
+  let result_ids : Array[String] = []
+  for message in messages {
+    for call in message.tool_calls {
+      call_ids.push(call.id)
+    }
+    if message.role is Tool(id) {
+      result_ids.push(id)
+    }
+  }
+  assign_pair_tags(call_ids, result_ids)
+}
+
+///|
+/// DOM anchor id for a tool call, keyed by pair number.
+fn tool_call_anchor(n : Int) -> String {
+  "tool-call-\{n}"
+}
+
+///|
+/// DOM anchor id for a tool result, keyed by pair number.
+fn tool_result_anchor(n : Int) -> String {
+  "tool-result-\{n}"
+}
+
+///|
+/// The `call N` chip shown on both a tool call and its result. It is an anchor
+/// that jumps to its partner (`href`), so clicking the chip on a call scrolls to
+/// its result card and vice versa; `title` states the direction.
+fn pair_link(n : Int, href~ : String, title~ : String) -> @html.Html {
+  @html.a(class="tool-link", href~, title~) <| "call \{n}"
+}
+
 ///|
 /// Ids of tool calls whose result the model view both showed and saw fail (see
 /// `model_shown_result`). Mirrors the model view's error cards so a tagged call
@@ -862,6 +1009,7 @@ fn message_card(
   tool_results : Map[String, @agent_session.ToolResult],
   failed : Map[String, Unit],
   briefs : Map[String, String],
+  tags : Map[String, Int],
   time~ : String,
   step_label~ : String,
 ) -> @html.Html {
@@ -877,7 +1025,16 @@ fn message_card(
         ],
       ]
     User =>
-      model_card("user", "User", message, briefs, failed, time~, step_label~)
+      model_card(
+        "user",
+        "User",
+        message,
+        briefs,
+        failed,
+        tags,
+        time~,
+        step_label~,
+      )
     Assistant =>
       model_card(
         "assistant",
@@ -885,11 +1042,17 @@ fn message_card(
         message,
         briefs,
         failed,
+        tags,
         time~,
         step_label~,
       )
     Tool(_) =>
-      model_tool_card(message, model_shown_result(message, tool_results), time~)
+      model_tool_card(
+        message,
+        model_shown_result(message, tool_results),
+        tags,
+        time~,
+      )
   }
 }
 
@@ -959,6 +1122,7 @@ pub fn rendered_error_count(
 fn model_tool_card(
   message : @deepseek.ChatMessage,
   shown : @agent_session.ToolResult?,
+  tags : Map[String, Int],
   time~ : String,
 ) -> @html.Html {
   let is_error = shown is Some(r) && r.is_error()
@@ -972,7 +1136,23 @@ fn model_tool_card(
     (true, false) => "Tool error · \{name}"
     (false, false) => "Tool result · \{name}"
   }
-  @html.details(class="card \{kind}") <| [
+  // The pair tag comes from the message's own id (structural), independent of
+  // whether `model_shown_result` trusts the durable result for enrichment.
+  let pair = match message.role {
+    Tool(id) => tags.get(id)
+    _ => None
+  }
+  let link = match pair {
+    Some(n) =>
+      pair_link(
+        n,
+        href="#\{tool_call_anchor(n)}",
+        title="Jump to the originating call (call \{n})",
+      )
+    None => @html.nothing
+  }
+  let anchor = pair.map(n => tool_result_anchor(n))
+  @html.details(id?=anchor, class="card \{kind}") <| [
     @html.summary(class="card-label") <| model_card_head(
       label,
       time~,
@@ -981,6 +1161,7 @@ fn model_tool_card(
       } else {
         @html.nothing
       },
+      link~,
     ),
     @html.div(class="card-body") <| [
       text_block(message.content),
@@ -995,6 +1176,7 @@ fn model_card(
   message : @deepseek.ChatMessage,
   briefs : Map[String, String],
   failed : Map[String, Unit],
+  tags : Map[String, Int],
   time~ : String,
   step_label~ : String,
 ) -> @html.Html {
@@ -1013,7 +1195,9 @@ fn model_card(
   }
   if !message.tool_calls.is_empty() {
     let call_views : Array[@html.Html] = [
-      for call in message.tool_calls => tool_call_view(call, briefs, failed)
+      for call in message.tool_calls => {
+        tool_call_view(call, briefs, failed, tags)
+      }
     ]
     body.push(@html.div(class="tool-calls") <| call_views)
   }
@@ -1030,9 +1214,10 @@ fn model_card_head(
   label : String,
   time~ : String,
   flag? : @html.Html = @html.nothing,
+  link? : @html.Html = @html.nothing,
   step_label? : String = "",
 ) -> Array[@html.Html] {
-  let head : Array[@html.Html] = [flag, @html.text(label)]
+  let head : Array[@html.Html] = [flag, @html.text(label), link]
   if !step_label.is_empty() {
     head.push(@html.span(class="card-step") <| step_label)
   }
@@ -1067,12 +1252,14 @@ fn card_head(
   seq : Int,
   time~ : String,
   flag? : @html.Html = @html.nothing,
+  link? : @html.Html = @html.nothing,
   step_label? : String = "",
 ) -> Array[@html.Html] {
   let head : Array[@html.Html] = [
     @html.span(class="card-seq") <| "#\{seq}",
     flag,
     @html.text(label),
+    link,
   ]
   if !step_label.is_empty() {
     head.push(@html.span(class="card-step") <| step_label)

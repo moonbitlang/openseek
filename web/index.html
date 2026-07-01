@@ -381,6 +381,21 @@
        errors-only keep the assistant card that holds it. */
     .tool-call-failed { border-color: var(--error); }
 
+    /* call <-> result pairing: the same `call N` chip on a tool call and its
+       result, each an anchor that jumps to its partner. When one assistant turn
+       fires several tool calls, this is what ties each result card back to the
+       call that produced it. */
+    .tool-link {
+      font-family: ui-monospace, monospace; font-size: 11px;
+      color: var(--accent); text-decoration: none; margin-left: 8px;
+      text-transform: none; letter-spacing: 0; opacity: .85; white-space: nowrap;
+    }
+    .tool-link:hover { text-decoration: underline; opacity: 1; }
+    /* highlight the call/result you jumped to via a pairing chip */
+    .tool-call:target, .card:target {
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
+
     /* folded tool-result cards: the label is the toggle, body hides until clicked */
     details.card > summary.card-label { cursor: pointer; }
     details.card > summary.card-label:hover { color: var(--text); }
@@ -405,5 +420,28 @@
 <body>
   <div id="app"></div>
   <script src="/viz_app.js"></script>
+  <script>
+    // A pairing chip (`.tool-link`) lives inside a <summary>, so a bare click on
+    // it would both navigate AND toggle the enclosing <details>. Cancel the
+    // default (which suppresses the fold toggle and the native jump) when the
+    // target anchor exists, then drive :target + scroll ourselves. Delegated on
+    // document, so it survives the app's virtual-DOM re-renders. Missing targets
+    // fall through to native navigation.
+    document.addEventListener("click", function (e) {
+      // Leave modified / non-primary clicks to the browser (open-in-new-tab etc.).
+      if (e.defaultPrevented || e.button !== 0) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      if (!(e.target instanceof Element)) return;
+      var link = e.target.closest("a.tool-link");
+      if (!link) return;
+      var href = link.getAttribute("href") || "";
+      if (href.charAt(0) !== "#") return;
+      var el = document.getElementById(href.slice(1));
+      if (!el) return;
+      e.preventDefault();
+      if (location.hash !== href) location.hash = href;
+      el.scrollIntoView({ block: "center" });
+    });
+  </script>
 </body>
 </html>
