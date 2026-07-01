@@ -27,12 +27,17 @@ CEF helper processes running.
 - Make `proton_window_close` request an engine close instead of destroying the
   engine window synchronously; registry invalidation happens when the runtime
   sync observes the engine window closed.
+- When deferred macOS browser creation runs after the AppKit run loop starts,
+  create the CEF browser at `about:blank` first and load the saved
+  `initial_url` only after the browser id is registered to the Proton window.
+  This avoids an initial `proton://app/` navigation reaching the scheme handler
+  before the browser-to-window lookup is available.
 - Preserve OpenSeek's existing `proton://` HTML asset resource handler and
   `load_html_with_assets` behavior.
 
 This follows the updated upstream direction in
 `moonbit-community/lepus#28` at commit
-`18dc2b5e0e92f022b84ec2cee418cbe171ac0890`, adapted on top of the local
+`c82aa54c4077057b758eca9fefe2838cd8e39867`, adapted on top of the local
 OpenSeek asset-serving changes. The earlier CEF-owned Alloy window experiment
 closed processes correctly but showed or risked Chromium window chrome, so it
 is replaced by this AppKit-owned lifecycle.
@@ -54,6 +59,8 @@ Native-only internal behavior changes:
 - add macOS close-state flags for AppKit/CEF coordination
 - add native window ids and pending browser creation so browser creation happens
   after the main run loop starts pumping
+- make deferred macOS browser creation start at `about:blank`, then load the
+  pending Proton URL after browser registration
 - restore the AppKit `NSWindowDelegate` close bridge
 - remove the CEF-owned top-level Alloy window path
 - avoid marking `window.closed` directly from `window_close()`
@@ -70,10 +77,9 @@ Native-only internal behavior changes:
 
 ## Next Step
 
-Build the desktop macOS package from `haoxiang/file-side-panel`, run it with
-`PROTON_NATIVE_LOG=1`, close the app window, and inspect the log/process state.
-This pass first aligns local shutdown semantics with upstream PR #28 before
-adding any new close workaround.
+Apply the latest upstream PR #28 pending-browser loading order, rebuild the
+native library, sync the prebuilt macOS dylib, and verify that the packaged app
+no longer lands on Chromium's `ERR_UNKNOWN_URL_SCHEME` page for `proton://app/`.
 
 ## Validation Plan
 

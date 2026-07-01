@@ -24,12 +24,17 @@ OpenSeek or CEF helper processes running.
 - Make `proton_window_close` request an engine close instead of destroying the
   engine window synchronously; registry invalidation happens when the runtime
   sync observes the engine window closed.
+- When macOS browser creation is deferred until the AppKit run loop is pumping,
+  create the CEF browser at `about:blank` first, then load the pending
+  `initial_url` after the browser id has been registered to the Proton window.
+  This prevents the first `proton://app/` navigation from reaching the scheme
+  handler before `proton_engine_window_from_browser()` can resolve the window.
 - Preserve the existing `proton://` HTML asset resource handler and
   `load_html_with_assets` behavior.
 
 This follows the updated upstream direction in
 `moonbit-community/lepus#28` at commit
-`18dc2b5e0e92f022b84ec2cee418cbe171ac0890`, adapted on top of the local
+`c82aa54c4077057b758eca9fefe2838cd8e39867`, adapted on top of the local
 OpenSeek asset-serving changes.
 
 ## Target Files And Surfaces
@@ -44,6 +49,9 @@ OpenSeek asset-serving changes.
 - Native macOS close behavior changes from waiting primarily on CEF
   `on_before_close` alone to using AppKit `windowWillClose` as the native close
   boundary while still retaining CEF browser ownership until `on_before_close`.
+- Native macOS initial loading changes from creating the browser directly at the
+  pending Proton URL to creating `about:blank` first and navigating after
+  browser registration.
 
 ## Open Questions
 
@@ -52,9 +60,9 @@ OpenSeek asset-serving changes.
 
 ## Next Implementation Step
 
-Replace the current local macOS close lifecycle implementation with the PR #28
-AppKit-owned `NSWindow` lifecycle, including deferred browser creation and
-request-based close semantics, while preserving the local resource handler and
+Apply the latest PR #28 pending-browser update so deferred macOS browser
+creation starts at `about:blank` and then loads the saved initial Proton URL
+after browser registration, while preserving the local resource handler and
 asset-loading changes.
 
 ## Validation Plan
