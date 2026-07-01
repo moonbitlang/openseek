@@ -45,11 +45,13 @@ fn read_directory(
 ///|
 /// Read `path` and fold its contents back as `FileLoaded`. `name` is the
 /// entry's display name, forwarded for the viewer's title and language guess.
+/// `line`, when present, is forwarded for the viewer to reveal once loaded.
 fn read_file(
   dispatch : @cmd.Emit[Msg],
   session : String,
   path : String,
   name : String,
+  line~ : Int?,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -66,7 +68,9 @@ fn read_file(
       }
       match decode_file_content(reply_json_text(reply)) {
         Some(content) =>
-          scheduler.add(dispatch(FileLoaded(session~, path~, name~, content~)))
+          scheduler.add(
+            dispatch(FileLoaded(session~, path~, name~, content~, line~)),
+          )
         None =>
           scheduler.add(
             dispatch(FileFailed(session~, message="could not read file")),
@@ -74,6 +78,16 @@ fn read_file(
       }
     })
   })
+}
+
+///|
+/// A workspace-relative path's final `/`-segment, for a mention chip's jump
+/// target — it carries only the path, not a display name.
+fn basename(path : String) -> String {
+  match path.split("/").collect() {
+    [] => path
+    segments => segments[segments.length() - 1].to_owned()
+  }
 }
 
 ///|

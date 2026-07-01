@@ -1236,6 +1236,28 @@
         color: var(--accent-ink);
         font-size: 12px;
       }
+      /* Wraps the glyph+label: a plain span for a chip with no jump target, or
+         a reset `<button>` (same layout) for one that opens the editor panel
+         at a resolved location. */
+      .mention-body,
+      .mention-jump {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+      }
+      .mention-jump {
+        border: none;
+        background: transparent;
+        padding: 0;
+        margin: 0;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+      .mention-jump:hover .mention-label {
+        text-decoration: underline;
+      }
       .mention-glyph {
         flex: none;
         font-family: var(--mono);

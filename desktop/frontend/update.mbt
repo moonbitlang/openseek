@@ -54,9 +54,18 @@ fn accept_completion(
         SkillMention,
         label=item.insert.trim().to_owned(),
         expand=item.insert,
+        path=None,
+        line=None,
       )
     Symbols =>
-      accept_mention(model, SymbolMention, label=item.label, expand=item.insert)
+      accept_mention(
+        model,
+        SymbolMention,
+        label=item.label,
+        expand=item.insert,
+        path=item.path,
+        line=item.line,
+      )
   }
 }
 
@@ -68,9 +77,11 @@ fn accept_mention(
   kind : MentionKind,
   label~ : String,
   expand~ : String,
+  path~ : String?,
+  line~ : Int?,
 ) -> (@cmd.Cmd, Model) {
   let conv = model.active()
-  let mentions = push_mention(conv.mentions, { kind, label, expand })
+  let mentions = push_mention(conv.mentions, { kind, label, expand, path, line })
   (
     @cmd.none,
     {
@@ -448,6 +459,39 @@ fn update_msg(
       let mentions = conv.mentions.copy()
       let _ = mentions.remove(index)
       (@cmd.none, model.replace_conversation({ ..conv, mentions, }))
+    }
+    JumpToMention(index) => {
+      let conv = model.active()
+      guard conv.mentions.get(index) is Some(mention) else {
+        return (@cmd.none, model)
+      }
+      guard mention.path is Some(path) else { return (@cmd.none, model) }
+      // Re-root only when the panel's cached tree belongs to another
+      // conversation; otherwise `sync_file_panel`'s post-dispatch pass would
+      // see a session mismatch and wipe the `selected`/`open` set below.
+      let panel = if model.file_panel.session == conv.session_id {
+        model.file_panel
+      } else {
+        { ..empty_file_panel(), session: conv.session_id }
+      }
+      (
+        @cmd.batch([
+          request_viewer_mount(),
+          request_resize_handle_mount(),
+          request_viewer_remeasure(),
+          read_file(
+            dispatch,
+            conv.session_id,
+            path,
+            basename(path),
+            line=mention.line,
+          ),
+        ]),
+        {
+          ..model,
+          file_panel: { ..panel, open: true, selected: Some(path), error: "" },
+        },
+      )
     }
     CompletionAccept =>
       if model.completion is Some(menu) && menu.current() is Some(item) {
@@ -936,21 +980,21 @@ fn update_msg(
           },
         )
       }
-    FileSelected(path~, name~) => {
+    FileSelected(path~, name~, line~) => {
       let panel = model.file_panel
       (
-        read_file(dispatch, model.active().session_id, path, name),
+        read_file(dispatch, model.active().session_id, path, name, line~),
         { ..model, file_panel: { ..panel, selected: Some(path), error: "" } },
       )
     }
-    FileLoaded(session~, path~, name~, content~) =>
+    FileLoaded(session~, path~, name~, content~, line~) =>
       // A stale read — the conversation switched, or another file was clicked
       // first — must not replace what the viewer now shows.
       if model.file_panel.session != session ||
         model.file_panel.selected != Some(path) {
         (@cmd.none, model)
       } else {
-        (show_file_in_viewer(session, path, name, content), model)
+        (show_file_in_viewer(session, path, name, content, line~), model)
       }
     FileFailed(session~, message~) =>
       if model.file_panel.session != session {

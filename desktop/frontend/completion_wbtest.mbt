@@ -143,16 +143,36 @@ test "hash menu is loading until the cache catches up to the query" {
 }
 
 ///|
+test "symbol_item resolves a jump target only when the symbol has a path" {
+  let placed = symbol_item(
+    "parse_hover",
+    container="",
+    path="src/main.mbt",
+    line=4,
+  )
+  assert_true(placed.path is Some("src/main.mbt"))
+  // `line` arrives zero-based from the language server, shown/jumped one-based.
+  assert_true(placed.line is Some(5))
+  let unplaced = symbol_item("parse_hover", container="", path="", line=0)
+  assert_true(unplaced.path is None)
+  assert_true(unplaced.line is None)
+}
+
+///|
 test "push_mention appends new chips and drops exact duplicates" {
   let skill : Mention = {
     kind: SkillMention,
     label: "review-pr",
     expand: "review-pr ",
+    path: None,
+    line: None,
   }
   let symbol : Mention = {
     kind: SymbolMention,
     label: "parse_hover",
     expand: "`parse_hover` — src/main.mbt:5 ",
+    path: Some("src/main.mbt"),
+    line: Some(6),
   }
   let one = push_mention([], skill)
   assert_eq(one.length(), 1)
@@ -167,6 +187,8 @@ test "push_mention appends new chips and drops exact duplicates" {
     kind: SymbolMention,
     label: "parse_hover",
     expand: "`parse_hover` — src/other.mbt:9 ",
+    path: Some("src/other.mbt"),
+    line: Some(10),
   }
   assert_eq(push_mention(two, other_loc).length(), 3)
 }
@@ -178,8 +200,16 @@ test "compose_prompt folds chip expansions ahead of the typed text" {
       kind: SymbolMention,
       label: "parse_hover",
       expand: "`parse_hover` — a.mbt:5 ",
+      path: Some("a.mbt"),
+      line: Some(5),
     },
-    { kind: SkillMention, label: "review-pr", expand: "review-pr " },
+    {
+      kind: SkillMention,
+      label: "review-pr",
+      expand: "review-pr ",
+      path: None,
+      line: None,
+    },
   ]
   // Expansions (each carries its own trailing space) come first, then the text.
   assert_eq(

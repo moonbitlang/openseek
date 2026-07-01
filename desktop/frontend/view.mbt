@@ -451,14 +451,28 @@ fn completion_popup(
 /// The chips above the textarea for the draft's mentions (`$` skills, `#`
 /// symbols), each removable by its `×`. Always rendered (empty when there are
 /// no chips) so the textarea keeps a stable child index and never loses focus
-/// when a chip comes or goes; CSS collapses the empty tray to nothing.
+/// when a chip comes or goes; CSS collapses the empty tray to nothing. A
+/// symbol chip with a resolved location is also clickable, opening (or
+/// refocusing) the editor side-panel on that spot.
 fn mention_tray(dispatch : @cmd.Emit[Msg], conv : Conversation) -> @html.Html {
   let chips : Array[@html.Html] = []
   for index, mention in conv.mentions {
+    let glyph = @html.span(class="mention-glyph", mention.kind.glyph())
+    let label = @html.span(class="mention-label", mention.label)
+    let body = if mention.path is Some(path) {
+      @html.button(
+        class="mention-jump",
+        type_="button",
+        title="Jump to \{path}",
+        on_click=dispatch(JumpToMention(index)),
+        [glyph, label],
+      )
+    } else {
+      @html.span(class="mention-body", [glyph, label])
+    }
     chips.push(
       @html.div(class="mention-chip", [
-        @html.span(class="mention-glyph", mention.kind.glyph()),
-        @html.span(class="mention-label", mention.label),
+        body,
         @html.button(
           class="mention-remove",
           type_="button",
@@ -1314,7 +1328,9 @@ fn tree_row(
         "tree-row tree-file"
       },
       style=[pad],
-      on_click=dispatch(FileSelected(path=entry.path, name=entry.name)),
+      on_click=dispatch(
+        FileSelected(path=entry.path, name=entry.name, line=None),
+      ),
       [@html.span(class="tree-name", entry.name)],
     )
   }

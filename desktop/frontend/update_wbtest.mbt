@@ -1032,3 +1032,41 @@ test "catalog and library replies land on the model" {
   )
   inspect(noticed.skills_notice, content="library unreadable")
 }
+
+///|
+test "JumpToMention opens the editor panel and selects the mention's file" {
+  let dispatch = test_dispatch()
+  let mention : Mention = {
+    kind: SymbolMention,
+    label: "parse_hover",
+    expand: "`parse_hover` — src/main.mbt:5 ",
+    path: Some("src/main.mbt"),
+    line: Some(5),
+  }
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    mentions: [mention],
+  })
+  let (_, next) = update(dispatch, JumpToMention(0), model)
+  assert_true(next.file_panel.open)
+  assert_true(next.file_panel.selected is Some("src/main.mbt"))
+}
+
+///|
+test "JumpToMention is a no-op for a chip without a resolved location" {
+  let dispatch = test_dispatch()
+  let mention : Mention = {
+    kind: SkillMention,
+    label: "review-pr",
+    expand: "review-pr ",
+    path: None,
+    line: None,
+  }
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    mentions: [mention],
+  })
+  let (_, next) = update(dispatch, JumpToMention(0), model)
+  assert_false(next.file_panel.open)
+  assert_true(next.file_panel.selected is None)
+}

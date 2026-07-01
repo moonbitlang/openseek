@@ -148,6 +148,11 @@ priv struct CompletionItem {
   // skills. For a skill, `insert` carries the text dropped into the composer.
   command : String
   insert : String
+  // A symbol row's resolved location (workspace-relative path, 1-based line),
+  // so the chip it becomes can jump there. `None` for slash commands, skills,
+  // and symbols the language server could not place in a file.
+  path : String?
+  line : Int?
 }
 
 ///|
@@ -173,11 +178,15 @@ fn MentionKind::glyph(self : MentionKind) -> String {
 /// the prompt on send. `label` is the chip text (the bare skill/symbol name);
 /// `expand` is the text spliced into the outgoing prompt for the agent to read
 /// (the skill name, or the symbol's backticked `path:line` reference). Chips
-/// are deduplicated by `kind` + `expand`.
+/// are deduplicated by `kind` + `expand`. `path`/`line` mirror the symbol's
+/// resolved location (`None` for a skill, or a symbol without one) so the
+/// chip can jump the editor panel there.
 priv struct Mention {
   kind : MentionKind
   label : String
   expand : String
+  path : String?
+  line : Int?
 }
 
 ///|
@@ -397,6 +406,10 @@ priv enum Msg {
   CompletionDismiss
   // Remove a mention chip from the active conversation's draft, by index.
   RemoveMention(Int)
+  // Jump the editor side-panel to a mention chip's resolved location, by
+  // index. A no-op for a chip with no `path` (a skill, or an unresolved
+  // symbol).
+  JumpToMention(Int)
   // A `workspace_symbols` reply: `session`/`query` say which request it answers
   // so a reply that lost a conversation switch or a later keystroke is dropped.
   SymbolsLoaded(
@@ -488,12 +501,15 @@ priv enum Msg {
   DirFailed(session~ : String, path~ : String, message~ : String)
   // A file row was clicked: read it and show it in the viewer. `name` is the
   // entry's display name, kept for the viewer's title and language guess.
-  FileSelected(path~ : String, name~ : String)
+  // `line`, when present, is revealed in the viewer once the file loads (a
+  // mention chip's jump target; a plain tree click leaves it `None`).
+  FileSelected(path~ : String, name~ : String, line~ : Int?)
   FileLoaded(
     session~ : String,
     path~ : String,
     name~ : String,
-    content~ : String
+    content~ : String,
+    line~ : Int?
   )
   FileFailed(session~ : String, message~ : String)
   // The start request for that conversation never produced a run (the bridge

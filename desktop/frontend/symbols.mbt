@@ -79,5 +79,17 @@ fn symbol_item(
   } else {
     "`\{name}` — \{location}"
   }
-  { label: name, detail, command: "", insert: reference + " " }
+  let (target_path, target_line) = if path.is_empty() {
+    (None, None)
+  } else {
+    (Some(path), Some(line + 1))
+  }
+  {
+    label: name,
+    detail,
+    command: "",
+    insert: reference + " ",
+    path: target_path,
+    line: target_line,
+  }
 }

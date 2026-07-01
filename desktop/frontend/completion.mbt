@@ -15,6 +15,8 @@ fn slash_command_items() -> Array[CompletionItem] {
       detail: "Summarize and shrink this conversation's context",
       command: "compact",
       insert: "",
+      path: None,
+      line: None,
     },
   ]
 }
@@ -60,6 +62,8 @@ fn compute_completion(
           detail: skill.description,
           command: "",
           insert: skill.name + " ",
+          path: None,
+          line: None,
         })
       }
     }
