@@ -14,20 +14,25 @@ CEF helper processes running.
 - Use an `NSWindowDelegate` to coordinate close requests with CEF through
   `is_ready_to_be_closed`, `try_close_browser`, and `close_browser`.
 - Treat AppKit `windowWillClose` as the terminal Proton window lifecycle point:
-  release the CEF browser reference, clear native AppKit references, mark the
-  Proton window closed, remove pending bridge requests for that browser, and
-  wake the runtime wait source.
+  request a forced CEF browser close, detach the browser view, clear native
+  AppKit references, and wake the runtime wait source. Keep the CEF browser
+  reference alive until `on_before_close` reports completion; that callback
+  marks the Proton window closed, removes pending bridge requests for that
+  browser, releases the browser reference, and wakes the runtime wait source.
 - Keep CEF `on_before_close` as a supported browser cleanup path, but do not
   require it as the only signal that a Proton window has closed.
 - Keep normal CEF shutdown aligned with upstream PR #28: runtime destroy always
   calls `cef_shutdown()` through the native shutdown helper, and the helper does
   not unload the CEF framework as part of normal shutdown.
+- Make `proton_window_close` request an engine close instead of destroying the
+  engine window synchronously; registry invalidation happens when the runtime
+  sync observes the engine window closed.
 - Preserve OpenSeek's existing `proton://` HTML asset resource handler and
   `load_html_with_assets` behavior.
 
 This follows the updated upstream direction in
 `moonbit-community/lepus#28` at commit
-`d431d163fb4be2f2ef5a6d304bb9d13d2f673fab`, adapted on top of the local
+`18dc2b5e0e92f022b84ec2cee418cbe171ac0890`, adapted on top of the local
 OpenSeek asset-serving changes. The earlier CEF-owned Alloy window experiment
 closed processes correctly but showed or risked Chromium window chrome, so it
 is replaced by this AppKit-owned lifecycle.
@@ -46,10 +51,14 @@ required.
 Native-only internal behavior changes:
 
 - split browser release from public window closed marking
-- add a macOS close-state flag for AppKit/CEF coordination
+- add macOS close-state flags for AppKit/CEF coordination
+- add native window ids and pending browser creation so browser creation happens
+  after the main run loop starts pumping
 - restore the AppKit `NSWindowDelegate` close bridge
 - remove the CEF-owned top-level Alloy window path
 - avoid marking `window.closed` directly from `window_close()`
+- make `proton_window_close` request close on engine-backed windows instead of
+  calling destroy directly
 - remove the local `runtime_destroy()` special case that skipped
   `cef_shutdown()` when AppKit app termination had been requested
 - keep CEF framework unload out of the normal shutdown helper

@@ -14,17 +14,22 @@ OpenSeek or CEF helper processes running.
 - Use an `NSWindowDelegate` to coordinate close requests with CEF through
   `is_ready_to_be_closed`, `try_close_browser`, and `close_browser`.
 - Treat AppKit `windowWillClose` as the terminal Proton window lifecycle point:
-  release the CEF browser reference, clear native AppKit references, mark the
-  Proton window closed, remove pending bridge requests for that browser, and
-  wake the runtime wait source.
+  request a forced CEF browser close, detach the browser view, clear native
+  AppKit references, and wake the runtime wait source. Keep the CEF browser
+  reference alive until `on_before_close` reports completion; that callback
+  marks the Proton window closed, removes pending bridge requests for that
+  browser, releases the browser reference, and wakes the runtime wait source.
 - Keep CEF `on_before_close` as a cleanup path, but do not require it as the
   only signal that a Proton window has closed.
+- Make `proton_window_close` request an engine close instead of destroying the
+  engine window synchronously; registry invalidation happens when the runtime
+  sync observes the engine window closed.
 - Preserve the existing `proton://` HTML asset resource handler and
   `load_html_with_assets` behavior.
 
 This follows the updated upstream direction in
 `moonbit-community/lepus#28` at commit
-`d431d163fb4be2f2ef5a6d304bb9d13d2f673fab`, adapted on top of the local
+`18dc2b5e0e92f022b84ec2cee418cbe171ac0890`, adapted on top of the local
 OpenSeek asset-serving changes.
 
 ## Target Files And Surfaces
@@ -37,8 +42,8 @@ OpenSeek asset-serving changes.
 - No MoonBit public API changes are intended.
 - No generated `.mbti` changes are expected.
 - Native macOS close behavior changes from waiting primarily on CEF
-  `on_before_close` to using AppKit `windowWillClose` as the Proton lifecycle
-  boundary.
+  `on_before_close` alone to using AppKit `windowWillClose` as the native close
+  boundary while still retaining CEF browser ownership until `on_before_close`.
 
 ## Open Questions
 
@@ -48,8 +53,9 @@ OpenSeek asset-serving changes.
 ## Next Implementation Step
 
 Replace the current local macOS close lifecycle implementation with the PR #28
-AppKit-owned `NSWindow` lifecycle, while preserving the local resource handler
-and asset-loading changes.
+AppKit-owned `NSWindow` lifecycle, including deferred browser creation and
+request-based close semantics, while preserving the local resource handler and
+asset-loading changes.
 
 ## Validation Plan
 
