@@ -1070,3 +1070,73 @@ test "JumpToMention is a no-op for a chip without a resolved location" {
   assert_false(next.file_panel.open)
   assert_true(next.file_panel.selected is None)
 }
+
+///|
+test "RevealDirectory(\"\") returns to the tree without a highlight" {
+  let dispatch = test_dispatch()
+  let model = test_model()
+  let panel = {
+    ..model.file_panel,
+    open: true,
+    session: "desktop-test",
+    selected: Some("README.md"),
+    highlighted: Some("src"),
+  }
+  let (_, next) = update(dispatch, RevealDirectory(""), {
+    ..model,
+    file_panel: panel,
+  })
+  assert_true(next.file_panel.selected is None)
+  assert_true(next.file_panel.highlighted is None)
+}
+
+///|
+test "RevealDirectory expands an uncached ancestor and highlights the target" {
+  let dispatch = test_dispatch()
+  let model = test_model()
+  let panel = { ..model.file_panel, open: true, session: "desktop-test" }
+  let (_, next) = update(dispatch, RevealDirectory("src/foo"), {
+    ..model,
+    file_panel: panel,
+  })
+  assert_true(next.file_panel.expanded.contains("src"))
+  assert_true(next.file_panel.loading.contains("src"))
+  assert_true(next.file_panel.selected is None)
+  assert_true(next.file_panel.highlighted is Some("src/foo"))
+}
+
+///|
+test "RevealDirectory on an already-cached ancestor needs no reload" {
+  let dispatch = test_dispatch()
+  let model = test_model()
+  let children : Map[String, Array[FileEntry]] = { "src": [] }
+  let panel = {
+    ..model.file_panel,
+    open: true,
+    session: "desktop-test",
+    children,
+  }
+  let (_, next) = update(dispatch, RevealDirectory("src/foo"), {
+    ..model,
+    file_panel: panel,
+  })
+  assert_true(next.file_panel.expanded.contains("src"))
+  assert_false(next.file_panel.loading.contains("src"))
+}
+
+///|
+test "HighlightCleared only clears a highlight that still matches" {
+  let dispatch = test_dispatch()
+  let model = test_model()
+  let panel = { ..model.file_panel, highlighted: Some("src") }
+  let (_, stale) = update(dispatch, HighlightCleared("old"), {
+    ..model,
+    file_panel: panel,
+  })
+  assert_true(stale.file_panel.highlighted is Some("src"))
+  let (_, cleared) = update(dispatch, HighlightCleared("src"), {
+    ..model,
+    file_panel: panel,
+  })
+  assert_true(cleared.file_panel.highlighted is None)
+}

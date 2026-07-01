@@ -1107,11 +1107,13 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-/// The editor part: a read-only code viewer (left) beside the active
-/// conversation's file tree (right), the tree fronted by a filter box. The
-/// whole part is always rendered so the viewer's host element (`viewer-host`)
-/// stays put across renders and screen switches; CSS collapses it to zero width
-/// when closed.
+/// The editor part: a single pane that shows either the workspace tree (a
+/// filterable, expandable tree always rooted at the workspace root) or the
+/// selected file's content, never both — a file tree is just the editor for
+/// a directory. The whole part is always rendered so the viewer's host
+/// element (`viewer-host`) stays put across renders and screen switches; CSS
+/// hides whichever half is not current and collapses the pane to zero width
+/// when the panel is closed.
 fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let panel = model.file_panel
   let conv = model.active()
@@ -1139,11 +1141,8 @@ fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       rows
     }
   }
-  // The file-tree column (right): a filter box (in a header bar matching the
-  // topbar/breadcrumb height) over the scrollable tree. The collapse toggle
-  // lives on the breadcrumb header (always visible), so the column folds away
-  // entirely when hidden.
-  let column_children : Array[@html.Html] = [
+  // The filter box, in a header bar matching the topbar/breadcrumb height.
+  let browse_children : Array[@html.Html] = [
     @html.div(class="file-tree-header", [
       @html.input(
         input_type=@html.InputType::Search,
@@ -1155,9 +1154,9 @@ fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     ]),
   ]
   if !panel.error.is_empty() {
-    column_children.push(@html.div(class="file-panel-error", panel.error))
+    browse_children.push(@html.div(class="file-panel-error", panel.error))
   }
-  column_children.push(@html.div(class="file-tree", tree_children))
+  browse_children.push(@html.div(class="file-tree", tree_children))
   // The stable element the viewer attaches its imperative DOM into; it must
   // stay empty and never be re-keyed (see editor_panel.mbt).
   // `editor-shell` brings in the viewer's `--vscode-*` / `--editor-*` theme
@@ -1170,28 +1169,24 @@ fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       .data_set("theme", "light"),
     ([] : Array[@html.Html]),
   )
-  // The viewer pane: a breadcrumb header (the open file's path plus the
-  // file-tree toggle) over the viewer.
-  let viewer_pane = @html.div(class="viewer-pane", [
-    viewer_breadcrumb(dispatch, panel),
-    viewer_host,
-  ])
   // A grab strip on the editor's left edge for drag-to-resize. Absolutely
-  // positioned, so it is not a grid item and never disturbs the viewer/tree
-  // columns; its drag is wired imperatively (see editor_resize.mbt). Always
-  // rendered (CSS hides it while the panel is closed) so its position among the
-  // editor's children — and thus the never-re-keyed viewer host — stays stable.
+  // positioned, so it is not a grid item and never disturbs the pane's
+  // children; its drag is wired imperatively (see editor_resize.mbt). Always
+  // rendered (CSS hides it while the panel is closed) so its position among
+  // the editor's children — and thus the never-re-keyed viewer host — stays
+  // stable.
   let resize_handle = @html.div(
     attrs=@html.Attrs::build().id(ResizeHandleId).class("editor-resize-handle"),
     ([] : Array[@html.Html]),
   )
+  let children = [resize_handle, viewer_breadcrumb(dispatch, panel)]
+  for child in browse_children {
+    children.push(child)
+  }
+  children.push(viewer_host)
   @html.div(
-    class=if panel.tree_open { "editor" } else { "editor tree-collapsed" },
-    [
-      resize_handle,
-      viewer_pane,
-      @html.div(class="file-tree-column", column_children),
-    ],
+    class=if panel.selected is None { "editor browsing" } else { "editor" },
+    children,
   )
 }
 
@@ -1214,40 +1209,74 @@ fn path_segments(path : String) -> Array[String] {
 }
 
 ///|
-/// The breadcrumb header over the viewer: the open file's path as
-/// `dir › dir › file` (the file segment emphasized, a muted placeholder when
-/// nothing is open) on the left, and the file-tree toggle on the right.
+/// The path formed by joining `segments`' first `count` entries, e.g.
+/// `segments_prefix(["cef", "runtime.mbt"], 1)` → `"cef"`. The inverse of
+/// `path_segments`, used to recover an ancestor directory's path for a
+/// breadcrumb click.
+fn segments_prefix(segments : Array[String], count : Int) -> String {
+  let mut path = ""
+  for index in 0..<count {
+    path = child_path(path, segments[index])
+  }
+  path
+}
+
+///|
+/// The proper ancestors of `path`, nearest-root first, e.g.
+/// `ancestor_paths("src/foo/bar.mbt")` → `["src", "src/foo"]`. Excludes the
+/// workspace root (`""`) and `path` itself.
+fn ancestor_paths(path : String) -> Array[String] {
+  let segments = path_segments(path)
+  let paths : Array[String] = []
+  for count in 1..<segments.length() {
+    paths.push(segments_prefix(segments, count))
+  }
+  paths
+}
+
+///|
+/// A breadcrumb segment that reveals `path` in the tree when clicked.
+fn crumb_link(
+  dispatch : @cmd.Emit[Msg],
+  label : String,
+  path : String,
+) -> @html.Html {
+  @html.span(
+    class="crumb",
+    attrs=@html.Attrs::build().on_click(_ => dispatch(RevealDirectory(path))),
+    label,
+  )
+}
+
+///|
+/// The breadcrumb header over the panel: in file mode, the open file's path
+/// as `dir › dir › file` (the file segment emphasized) behind a leading
+/// "Workspace" crumb; in browse mode, just the "Workspace" crumb, since the
+/// tree is always rooted there. Every crumb but the last reveals that
+/// ancestor directory in the (always-rooted) tree when clicked.
 fn viewer_breadcrumb(
   dispatch : @cmd.Emit[Msg],
   panel : FilePanel,
 ) -> @html.Html {
   let crumbs : Array[@html.Html] = []
-  if panel.selected is Some(path) {
-    let segments = path_segments(path)
-    for index, segment in segments {
-      if index > 0 {
+  match panel.selected {
+    Some(path) => {
+      crumbs.push(crumb_link(dispatch, "Workspace", ""))
+      let segments = path_segments(path)
+      for index, segment in segments {
         crumbs.push(@html.span(class="crumb-sep", "›"))
+        if index == segments.length() - 1 {
+          crumbs.push(@html.span(class="crumb crumb-file", segment))
+        } else {
+          crumbs.push(
+            crumb_link(dispatch, segment, segments_prefix(segments, index + 1)),
+          )
+        }
       }
-      let last = index == segments.length() - 1
-      crumbs.push(
-        @html.span(
-          class=if last { "crumb crumb-file" } else { "crumb" },
-          segment,
-        ),
-      )
     }
-  } else {
-    crumbs.push(@html.span(class="crumb crumb-empty", "No file open"))
+    None => crumbs.push(@html.span(class="crumb crumb-file", "Workspace"))
   }
-  @html.div(class="viewer-breadcrumb", [
-    @html.div(class="crumb-path", crumbs),
-    @html.button(
-      class=if panel.tree_open { "tree-toggle active" } else { "tree-toggle" },
-      title=if panel.tree_open { "Hide file tree" } else { "Show file tree" },
-      on_click=dispatch(ToggleFileTree),
-      "▤",
-    ),
-  ])
+  @html.div(class="viewer-breadcrumb", [@html.div(class="crumb-path", crumbs)])
 }
 
 ///|
@@ -1311,10 +1340,17 @@ fn tree_row(
     } else {
       "▸"
     }
+    // `data-path` is `reveal_tree_row`'s hook for scrolling a breadcrumb's
+    // `RevealDirectory` target into view.
     @html.div(
-      class="tree-row tree-dir",
+      class=if model.file_panel.highlighted == Some(entry.path) {
+        "tree-row tree-dir highlighted"
+      } else {
+        "tree-row tree-dir"
+      },
       style=[pad],
       on_click=dispatch(DirToggle(entry.path)),
+      attrs=@html.Attrs::build().data_set("path", entry.path),
       [
         @html.span(class="tree-chevron", chevron),
         @html.span(class="tree-name", entry.name),

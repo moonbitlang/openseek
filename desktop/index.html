@@ -242,10 +242,11 @@
         color: var(--accent-ink);
       }
 
-      /* The editor part: viewer (left) beside the file-tree column (right). */
+      /* The editor part: one pane that shows either the browsed directory's
+         listing or the selected file's viewer, never both. */
       .editor {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 232px;
+        display: flex;
+        flex-direction: column;
         min-width: 0;
         min-height: 0;
         overflow: hidden;
@@ -257,13 +258,15 @@
         z-index: 1;
       }
 
-      /* Tree collapsed: the column folds away entirely and the viewer takes the
-         whole editor width. The column stays mounted (display:none) so its
-         filter state survives; the breadcrumb toggle brings it back. */
-      .editor.tree-collapsed {
-        grid-template-columns: minmax(0, 1fr) 0;
+      /* Both halves stay mounted (see file_panel_view) so the viewer host is
+         never re-keyed and the filter's state survives switching; only the
+         half matching the current mode is shown. */
+      .editor.browsing > .viewer-host {
+        display: none;
       }
-      .editor.tree-collapsed > .file-tree-column {
+      .editor:not(.browsing) > .file-tree-header,
+      .editor:not(.browsing) > .file-panel-error,
+      .editor:not(.browsing) > .file-tree {
         display: none;
       }
 
@@ -294,16 +297,6 @@
       }
       html.is-resizing * {
         user-select: none !important;
-      }
-
-      .file-tree-column {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-        min-height: 0;
-        overflow: hidden;
-        border-left: 1px solid var(--line);
-        background: var(--surface);
       }
 
       /* The filter sits in a header bar the same height as the topbar and
@@ -359,6 +352,7 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        transition: background-color 1.2s ease;
       }
 
       .tree-row:hover {
@@ -368,6 +362,13 @@
       .tree-row.selected {
         background: var(--accent-soft);
         color: var(--accent-ink);
+      }
+
+      /* A breadcrumb's `RevealDirectory` target, flashed until
+         `HighlightCleared` removes the class; the transition above eases it
+         back out. */
+      .tree-row.highlighted {
+        background: var(--accent-soft);
       }
 
       .tree-chevron {
@@ -386,16 +387,6 @@
         text-overflow: ellipsis;
       }
 
-      /* The viewer pane (first cell of the `.editor` grid): a breadcrumb header
-         over the viewer, stacked vertically. */
-      .viewer-pane {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-        min-height: 0;
-        overflow: hidden;
-      }
-
       /* Matches the topbar height (46px) so the header divider is continuous
          across the chat, viewer, and file-tree columns. */
       .viewer-breadcrumb {
@@ -412,7 +403,7 @@
         overflow: hidden;
       }
 
-      /* The path crumbs grow and ellipsize; the toggle stays pinned right. */
+      /* The path crumbs grow and ellipsize. */
       .crumb-path {
         display: flex;
         align-items: center;
@@ -422,41 +413,25 @@
         overflow: hidden;
       }
 
-      /* The file-tree toggle on the breadcrumb header. */
-      .tree-toggle {
-        display: grid;
-        place-items: center;
-        flex: 0 0 auto;
-        width: 24px;
-        height: 24px;
-        border: 0;
-        border-radius: var(--radius-sm);
-        background: transparent;
-        color: var(--ink-3);
-        font-size: 14px;
-        line-height: 1;
-        cursor: pointer;
-      }
-      button.tree-toggle:not(:disabled):hover {
-        background: var(--surface-2);
-        color: var(--ink);
-      }
-      .tree-toggle.active {
-        color: var(--ink);
-      }
-
+      /* Every crumb but the current one is a `BrowseDir` link. */
       .crumb {
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         color: var(--ink-2);
+        cursor: pointer;
+      }
+      .crumb:hover {
+        color: var(--ink);
+        text-decoration: underline;
       }
       .crumb-file {
         color: var(--ink);
         font-weight: 500;
+        cursor: default;
       }
-      .crumb-empty {
-        color: var(--ink-3);
+      .crumb-file:hover {
+        text-decoration: none;
       }
       .crumb-sep {
         flex: 0 0 auto;

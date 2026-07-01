@@ -247,15 +247,15 @@ priv struct FilePanel {
   loading : Array[String]
   // Listed directories' entries, keyed by the directory's relative path.
   children : Map[String, Array[FileEntry]]
-  // The file currently shown in the viewer, if any.
+  // The file currently shown in the viewer, if any. `None` puts the panel in
+  // browse mode, showing the workspace tree instead.
   selected : String?
+  // The directory a breadcrumb click most recently revealed, flashed in the
+  // tree until `HighlightCleared` fires.
+  highlighted : String?
   // The file-tree filter query; a blank query lists everything, otherwise only
   // rows whose name contains it (case-insensitive) survive.
   filter : String
-  // Whether the file-tree column is shown inside the editor; collapsing it
-  // hands the whole editor width to the viewer. Independent of `open`, which
-  // toggles the entire right panel.
-  tree_open : Bool
   // The last directory/file failure, surfaced in the panel header.
   error : String
 }
@@ -269,8 +269,8 @@ fn empty_file_panel() -> FilePanel {
     loading: [],
     children: {},
     selected: None,
+    highlighted: None,
     filter: "",
-    tree_open: true,
     error: "",
   }
 }
@@ -487,9 +487,14 @@ priv enum Msg {
   // Show or hide the editor side-panel. Opening it loads the active
   // conversation's workspace root if it has not been listed yet.
   ToggleFilePanel
-  // Show or hide just the file-tree column inside the editor, leaving the
-  // viewer in place.
-  ToggleFileTree
+  // A breadcrumb segment was clicked: switch back to the (always-rooted)
+  // tree and reveal this directory — expanding whatever ancestors are
+  // needed to show it, then scrolling to and flashing it. `""` (the leading
+  // "Workspace" crumb) just returns to the plain tree with no highlight.
+  RevealDirectory(String)
+  // A `RevealDirectory` highlight's flash delay elapsed; clears it unless a
+  // newer reveal has since replaced it.
+  HighlightCleared(String)
   // Expand or collapse a directory row in the file tree; the first expansion
   // lazily lists the directory through the host.
   DirToggle(String)

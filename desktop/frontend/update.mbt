@@ -901,14 +901,60 @@ fn update_msg(
         { ..model, file_panel: { ..panel, open: !panel.open } },
       )
     }
-    ToggleFileTree => {
-      let panel = model.file_panel
-      // Collapsing the tree widens the viewer's cell, so re-measure it.
-      (
-        request_viewer_remeasure(),
-        { ..model, file_panel: { ..panel, tree_open: !panel.tree_open } },
-      )
-    }
+    RevealDirectory(path) =>
+      if path.is_empty() {
+        (
+          @cmd.none,
+          {
+            ..model,
+            file_panel: {
+              ..model.file_panel,
+              selected: None,
+              highlighted: None,
+            },
+          },
+        )
+      } else {
+        let panel = model.file_panel
+        let expanded = panel.expanded.copy()
+        let loading = panel.loading.copy()
+        let cmds = []
+        for ancestor in ancestor_paths(path) {
+          if !expanded.contains(ancestor) {
+            expanded.push(ancestor)
+          }
+          if !panel.children.contains(ancestor) && !loading.contains(ancestor) {
+            loading.push(ancestor)
+            cmds.push(
+              read_directory(dispatch, model.active().session_id, ancestor),
+            )
+          }
+        }
+        cmds.push(reveal_row_after_render(path))
+        cmds.push(@cmd.delay(dispatch(HighlightCleared(path)), 1500))
+        (
+          @cmd.batch(cmds),
+          {
+            ..model,
+            file_panel: {
+              ..panel,
+              expanded,
+              loading,
+              selected: None,
+              highlighted: Some(path),
+            },
+          },
+        )
+      }
+    HighlightCleared(path) =>
+      if model.file_panel.highlighted == Some(path) {
+        (
+          @cmd.none,
+          { ..model, file_panel: { ..model.file_panel, highlighted: None } },
+        )
+      } else {
+        (@cmd.none, model)
+      }
     DirToggle(path) => {
       let panel = model.file_panel
       if panel.expanded.contains(path) {
@@ -950,8 +996,17 @@ fn update_msg(
         let panel = model.file_panel
         let children = panel.children.copy()
         children[path] = entries
+        // A pending highlight's target row may only now exist in the DOM —
+        // this directory could be one of the ancestors `RevealDirectory` had
+        // to list first (e.g. reached via a mention jump, which never
+        // touched `expanded`/`children` itself).
+        let reveal_cmd = match panel.highlighted {
+          Some(target) if ancestor_paths(target).contains(path) =>
+            reveal_row_after_render(target)
+          _ => @cmd.none
+        }
         (
-          @cmd.none,
+          reveal_cmd,
           {
             ..model,
             file_panel: {
