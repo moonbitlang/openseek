@@ -791,7 +791,9 @@ test "changing settings mid-run leaves the run status alone" {
 }
 
 ///|
-test "the settings page cannot be left while the endpoint is unusable" {
+/// The Settings page has no Done button — the sidebar is the only way out,
+/// even while the endpoint is unusable (the composer blocks sending then).
+test "sidebar navigation leaves the settings page" {
   let dispatch = test_dispatch()
   let model = {
     ..test_model(),
@@ -799,13 +801,8 @@ test "the settings page cannot be left while the endpoint is unusable" {
     api_key: "",
     screen: Settings,
   }
-  let (_, stuck) = update(dispatch, CloseSetup, model)
-  assert_true(stuck.screen is Settings)
-  let (_, closed) = update(dispatch, CloseSetup, {
-    ..model,
-    api_provider: Openseek,
-  })
-  assert_true(closed.screen is Chat)
+  let (_, next) = update(dispatch, SessionRotated("s-fresh"), model)
+  assert_true(next.screen is Chat)
 }
 
 ///|

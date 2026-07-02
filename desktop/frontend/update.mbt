@@ -553,14 +553,6 @@ fn update_msg(
     WslEngineChanged(value) =>
       (save_wsl_engine(value), { ..model, wsl_engine: value })
     OpenSetup => (@cmd.none, { ..model, screen: Settings, setup_api_key: "" })
-    CloseSetup =>
-      // "Done" returns to the conversation, but not while the configured
-      // endpoint is unusable — there would be nothing the composer could do.
-      if model.api_ready() {
-        (@cmd.none, { ..model, screen: Chat, setup_api_key: "" })
-      } else {
-        (@cmd.none, model)
-      }
     ToggleSidebar => (@cmd.none, { ..model, sidebar_open: !model.sidebar_open })
     SaveApiKey => {
       let api_key = model.setup_api_key.trim().to_owned()

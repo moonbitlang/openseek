@@ -447,7 +447,6 @@ priv enum Msg {
   WslDistroChanged(String)
   WslEngineChanged(String)
   OpenSetup
-  CloseSetup
   ToggleSidebar
   SaveApiKey
   OpenSkills

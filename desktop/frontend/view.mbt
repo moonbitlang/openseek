@@ -900,9 +900,9 @@ fn provider_hint(provider : ApiProvider) -> String {
 
 ///|
 /// The Settings page, shown in the main area in place of the conversation
-/// (mirroring the Skills page). While the configured endpoint is unusable it
-/// takes over on its own and "Done" stays disabled — there would be nothing
-/// the composer could do.
+/// (mirroring the Skills page — the sidebar is the way out, no Done button).
+/// While the configured endpoint is unusable the page takes over on its own,
+/// and the composer keeps Send disabled until a usable endpoint is saved.
 fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let ready = model.api_ready()
   let model_rows : Array[@html.Html] = [
@@ -1034,24 +1034,16 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @html.section(class="settings-page", [
     @html.div(class="settings-page-inner", [
       @html.div(class="settings-header", [
-        @html.div(class="setup-title", [
-          @html.h1("Settings"),
-          @html.div(
-            class="settings-subtitle",
-            if ready {
-              "Runtime settings for the OpenSeek engine."
-            } else if model.api_provider is Custom {
-              "Enter a chat-completions endpoint URL to start."
-            } else {
-              "Enter a DeepSeek API key to start."
-            },
-          ),
-        ]),
-        @html.button(
-          class="secondary close-button",
-          disabled=!ready,
-          on_click=dispatch(CloseSetup),
-          "Done",
+        @html.h1("Settings"),
+        @html.div(
+          class="settings-subtitle",
+          if ready {
+            "Runtime settings for the OpenSeek engine."
+          } else if model.api_provider is Custom {
+            "Enter a chat-completions endpoint URL to start."
+          } else {
+            "Enter a DeepSeek API key to start."
+          },
         ),
       ]),
       @html.div(class="settings", groups),
