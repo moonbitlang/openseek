@@ -106,11 +106,15 @@ fn session_row(
   session_id : String,
   label : String,
   archivable? : Bool = false,
+  nested? : Bool = false,
 ) -> @html.Html {
   let active = session_id == model.active_session
   let running = model.find_conversation(session_id) is Some(conv) &&
     conv.running
   let mut class = "conversation-row"
+  if nested {
+    class = class + " nested"
+  }
   if active {
     class = class + " active"
   }
@@ -172,14 +176,50 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
     }
     false
   }
-  // One section per store: each attached workspace under its own heading in
-  // registration order, then the default store's conversations under "Chats"
-  // — projects first, loose chats below them.
-  for path in model.workspaces {
-    rows.push(group_heading(dispatch, model, path))
-    push_group_rows(rows, dispatch, model, path, listed~, archived~)
+  // Two sections, matching the projects-then-chats shape chat apps settled
+  // on: "Workspaces" lists each attached project as a folder row with its
+  // conversations nested beneath, "Chats" holds the default store's loose
+  // conversations. The section headings share one style; the ＋ on each adds
+  // to that section (a workspace, or a chat outside any workspace).
+  rows.push(
+    section_heading(
+      dispatch,
+      "Workspaces",
+      PickWorkspace,
+      action_title="Add a workspace",
+    ),
+  )
+  for control in add_workspace_controls(dispatch, model) {
+    rows.push(control)
   }
-  rows.push(group_heading(dispatch, model, ""))
+  for path in model.workspaces {
+    rows.push(workspace_row(dispatch, model, path))
+    let before = rows.length()
+    push_group_rows(
+      rows,
+      dispatch,
+      model,
+      path,
+      listed~,
+      archived~,
+      nested=true,
+    )
+    if rows.length() == before {
+      rows.push(
+        @html.div(class="conversation-row nested placeholder", [
+          @html.span(class="sidebar-label", "No chats yet"),
+        ]),
+      )
+    }
+  }
+  rows.push(
+    section_heading(
+      dispatch,
+      "Chats",
+      NewChatIn(""),
+      action_title="New chat outside any workspace",
+    ),
+  )
   push_group_rows(rows, dispatch, model, "", listed~, archived~)
   if !model.sessions_error.is_empty() {
     rows.push(
@@ -228,13 +268,20 @@ fn push_group_rows(
   workspace : String,
   listed~ : (String) -> Bool,
   archived~ : (String) -> Bool,
+  nested? : Bool = false,
 ) -> Unit {
   for conv in model.conversations.rev_iter() {
     if conv.workspace == workspace &&
       !listed(conv.session_id) &&
       !archived(conv.session_id) {
       rows.push(
-        session_row(dispatch, model, conv.session_id, conversation_title(conv)),
+        session_row(
+          dispatch,
+          model,
+          conv.session_id,
+          conversation_title(conv),
+          nested~,
+        ),
       )
     }
   }
@@ -248,75 +295,89 @@ fn push_group_rows(
     } else {
       @transcript.non_empty_or(item.title, item.id)
     }
-    rows.push(session_row(dispatch, model, item.id, label, archivable=true))
+    rows.push(
+      session_row(dispatch, model, item.id, label, archivable=true, nested~),
+    )
   }
 }
 
 ///|
-/// A store section's heading: the project folder's name for a workspace
-/// (full path in the tooltip), "Chats" for the default store. Hover controls
-/// start a new chat in that store, and — for a workspace — detach it
-/// (registry only; the folder and its sessions stay).
-fn group_heading(
+/// A section heading in the chat list — "Workspaces" or "Chats" — with a
+/// hover-revealed ＋ that adds to that section. Both sections share this one
+/// style, so the two labels always match.
+fn section_heading(
+  dispatch : @cmd.Emit[Msg],
+  label : String,
+  action : Msg,
+  action_title~ : String,
+) -> @html.Html {
+  @html.div(class="sidebar-heading section-heading", [
+    @html.span(class="sidebar-label", label),
+    @html.button(
+      class="row-archive",
+      type_="button",
+      title=action_title,
+      attrs=@html.Attrs::build().on_click(event => {
+        event.stop_propagation()
+        dispatch(action)
+      }),
+      icon(icon_add),
+    ),
+  ])
+}
+
+///|
+/// One attached workspace: a folder row (full path in the tooltip) with its
+/// conversations nested beneath it. Hover controls start a new chat in the
+/// project or detach it (registry only; the folder and its sessions stay).
+/// The active workspace — where a plain "New chat" lands — reads as the
+/// darker label.
+fn workspace_row(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   path : String,
 ) -> @html.Html {
-  let mut class = "sidebar-heading workspace-heading"
+  let mut class = "workspace-row"
   if path == model.active_workspace {
     class = class + " active"
   }
-  let label = if path.is_empty() { "Chats" } else { workspace_label(path) }
-  let children = [@html.span(class="sidebar-label", label)]
-  if !path.is_empty() {
-    children.push(
-      @html.button(
-        class="row-archive",
-        type_="button",
-        title="Detach this workspace — its files and sessions stay",
-        attrs=@html.Attrs::build().on_click(event => {
-          event.stop_propagation()
-          dispatch(RemoveWorkspace(path))
-        }),
-        icon(icon_close),
-      ),
-    )
-  }
-  children.push(
+  @html.div(class~, title=path, [
+    @html.span(class="sidebar-icon", icon(icon_folder)),
+    @html.span(class="sidebar-label", workspace_label(path)),
     @html.button(
       class="row-archive",
       type_="button",
-      title=if path.is_empty() {
-        "New chat outside any workspace"
-      } else {
-        "New chat in this workspace"
-      },
+      title="Detach this workspace — its files and sessions stay",
+      attrs=@html.Attrs::build().on_click(event => {
+        event.stop_propagation()
+        dispatch(RemoveWorkspace(path))
+      }),
+      icon(icon_close),
+    ),
+    @html.button(
+      class="row-archive",
+      type_="button",
+      title="New chat in this workspace",
       attrs=@html.Attrs::build().on_click(event => {
         event.stop_propagation()
         dispatch(NewChatIn(path))
       }),
       icon(icon_add),
     ),
-  )
-  @html.div(class~, title=path, children)
+  ])
 }
 
 ///|
-/// The sidebar's "Add workspace" affordance, beside "New chat" at the top:
-/// the button asks the host for the system folder chooser; on platforms
-/// without one it opens the manual path input below instead (Enter submits,
-/// Escape closes). Either way the host validates the directory and the
-/// updated registry comes back through `WorkspacesLoaded`.
+/// The rows under the "Workspaces" heading that back its ＋ control: the ＋
+/// asks the host for the system folder chooser; on platforms without one it
+/// opens this manual path input instead (Enter submits, Escape closes).
+/// Either way the host validates the directory and the updated registry
+/// comes back through `WorkspacesLoaded`.
 fn add_workspace_controls(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> Array[@html.Html] {
-  let controls : Array[@html.Html] = [
-    @html.button(class="sidebar-button", on_click=dispatch(PickWorkspace), [
-      @html.span(class="sidebar-icon", icon(icon_add)),
-      @html.span(class="sidebar-label", "Add workspace"),
-    ]),
-  ]
+  let controls : Array[@html.Html] = []
   if model.workspace_input is Some(text) {
     controls.push(
       @html.div(class="workspace-add", [
@@ -386,9 +447,6 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @html.span(class="sidebar-label", "New chat"),
     ]),
   ]
-  for control in add_workspace_controls(dispatch, model) {
-    top_section.push(control)
-  }
   @html.aside([
     @html.div(class="sidebar-main", [
       @html.div(class="sidebar-section", top_section),

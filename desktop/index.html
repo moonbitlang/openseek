@@ -594,26 +594,71 @@
         color: var(--ink);
       }
 
-      /* A workspace section's heading: the folder name with hover-revealed
-         new-chat and detach controls, sharing the row-archive treatment. */
-      .workspace-heading {
+      /* The chat list's two section headings ("Workspaces", "Chats"): the
+         sidebar-heading type with a hover-revealed ＋ that adds to the
+         section, sharing the row-archive treatment. */
+      .section-heading {
         display: flex;
         align-items: center;
         gap: 4px;
-        margin-top: 10px;
+        margin-bottom: 0;
         border-radius: var(--radius-sm);
       }
-      .workspace-heading > .sidebar-label {
+      .section-heading:not(:first-child) {
+        margin-top: 14px;
+      }
+      .section-heading > .sidebar-label {
+        flex: 1 1 auto;
+      }
+      .section-heading:hover .row-archive {
+        visibility: visible;
+      }
+
+      /* An attached workspace: a folder row with its conversations nested
+         beneath. Not clickable itself — the hover controls do the work —
+         and the active workspace (where a plain "New chat" lands) reads as
+         the darker label. */
+      .workspace-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        min-height: 32px;
+        padding: 0 8px;
+        border-radius: var(--radius-sm);
+        color: var(--ink-2);
+        font-size: 12.5px;
+      }
+      .workspace-row > .sidebar-label {
         flex: 1 1 auto;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .workspace-heading.active > .sidebar-label {
-        color: var(--ink-2);
+      .workspace-row > .sidebar-icon {
+        color: var(--ink-3);
       }
-      .workspace-heading:hover .row-archive {
+      .workspace-row.active {
+        color: var(--ink);
+        font-weight: 500;
+      }
+      .workspace-row:hover {
+        background: var(--surface-2);
+      }
+      .workspace-row:hover .row-archive {
         visibility: visible;
+      }
+
+      /* A conversation nested under its workspace row. */
+      .conversation-row.nested {
+        padding-left: 28px;
+      }
+      .conversation-row.placeholder {
+        color: var(--ink-3);
+        cursor: default;
+      }
+      .conversation-row.placeholder:hover {
+        background: transparent;
       }
 
       /* The manual path input behind "Add workspace", shown only when the
