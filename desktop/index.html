@@ -154,6 +154,44 @@
         background: transparent;
       }
 
+      /* Inline SVG icons (vscode-codicons); they take the surrounding
+         control's color via currentColor and size per context below. */
+      .icon {
+        display: inline-flex;
+        flex: none;
+        width: 16px;
+        height: 16px;
+      }
+      .icon svg {
+        width: 100%;
+        height: 100%;
+      }
+      .sidebar-icon .icon,
+      .composer-notice-icon .icon {
+        width: 14px;
+        height: 14px;
+      }
+      .topbar-toggle .icon,
+      .panel-toggle .icon,
+      .icon-button .icon,
+      .jump-latest .icon {
+        width: 15px;
+        height: 15px;
+      }
+      .launcher-glyph .icon,
+      .row-archive .icon {
+        width: 13px;
+        height: 13px;
+      }
+      .mention-remove .icon {
+        width: 12px;
+        height: 12px;
+      }
+      .launcher-caret .icon {
+        width: 9px;
+        height: 9px;
+      }
+
       @keyframes pulseDot {
         0% {
           box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);

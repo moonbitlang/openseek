@@ -117,7 +117,7 @@ fn session_row(
           event.stop_propagation()
           dispatch(ArchiveSession(session_id))
         }),
-        "⤓",
+        icon(icon_archive),
       ),
     )
   }
@@ -221,7 +221,7 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     @html.div(class="sidebar-main", [
       @html.div(class="sidebar-section", [
         @html.button(class="sidebar-button", on_click=dispatch(NewChat), [
-          @html.span(class="sidebar-icon", "+"),
+          @html.span(class="sidebar-icon", icon(icon_add)),
           @html.span(class="sidebar-label", "New chat"),
         ]),
       ]),
@@ -236,7 +236,7 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         },
         on_click=dispatch(OpenSkills),
         [
-          @html.span(class="sidebar-icon", "⬡"),
+          @html.span(class="sidebar-icon", icon(icon_extensions)),
           @html.span(class="sidebar-label", "Skills"),
         ],
       ),
@@ -248,7 +248,7 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         },
         on_click=dispatch(OpenSetup),
         [
-          @html.span(class="sidebar-icon", "⚙"),
+          @html.span(class="sidebar-icon", icon(icon_settings_gear)),
           @html.span(class="sidebar-label", "Settings"),
         ],
       ),
@@ -590,7 +590,7 @@ fn transcript_view(
           type_="button",
           title="Jump to latest",
           on_click=dispatch(JumpToLatest),
-          "↓",
+          icon(icon_arrow_down),
         ),
       ]),
     )
@@ -740,7 +740,7 @@ fn mention_tray(dispatch : @cmd.Emit[Msg], conv : Conversation) -> @html.Html {
           type_="button",
           title="Remove",
           on_click=dispatch(RemoveMention(index)),
-          "×",
+          icon(icon_close),
         ),
       ]),
     )
@@ -773,7 +773,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           title="Stop",
           disabled=!can_stop(conv),
           on_click=dispatch(Stop),
-          "■",
+          icon(icon_debug_stop),
         ),
       )
     } else {
@@ -785,7 +785,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           title="Steer the running task",
           disabled=!can_steer,
           on_click=dispatch(Send),
-          "↑",
+          icon(icon_arrow_up),
         ),
       )
     }
@@ -797,7 +797,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         title="Send",
         disabled=!can_send,
         on_click=dispatch(Send),
-        "↑",
+        icon(icon_arrow_up),
       ),
     )
   }
@@ -808,7 +808,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if conv.compacting {
     children.push(
       @html.div(class="composer-notice", [
-        @html.span(class="composer-notice-icon", "🗜"),
+        @html.span(class="composer-notice-icon", icon(icon_fold)),
         @html.span(class="composer-notice-text", "Compacting context…"),
       ]),
     )
@@ -1035,7 +1035,7 @@ fn installed_skill_row(
     ),
   )
   let children : Array[@html.Html] = [
-    @html.div(class="skill-avatar", "⬡"),
+    @html.div(class="skill-avatar", icon(icon_extensions)),
     @html.div(class="skill-info", info),
   ]
   if skill.source.is_empty() {
@@ -1096,7 +1096,7 @@ fn market_skill_row(
     )
   }
   @html.div(class="skill-row", title=item.repository, [
-    @html.div(class="skill-avatar", "⬡"),
+    @html.div(class="skill-avatar", icon(icon_extensions)),
     @html.div(class="skill-info", info),
     action,
   ])
@@ -1307,8 +1307,8 @@ fn launcher_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       },
       on_click=dispatch(ToggleLauncher),
       [
-        @html.span(class="launcher-glyph", "↗"),
-        @html.span(class="launcher-caret", "▾"),
+        @html.span(class="launcher-glyph", icon(icon_link_external)),
+        @html.span(class="launcher-caret", icon(icon_chevron_down)),
       ],
     ),
   ]
@@ -1337,7 +1337,7 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       class="topbar-toggle",
       title=if model.sidebar_open { "Hide sidebar" } else { "Show sidebar" },
       on_click=dispatch(ToggleSidebar),
-      "☰",
+      icon(icon_layout_sidebar_left),
     ),
     @html.span(class="topbar-icon", "✦"),
     @html.span(
@@ -1369,7 +1369,7 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       },
       title=if model.file_panel.open { "Hide panel" } else { "Show panel" },
       on_click=dispatch(ToggleFilePanel),
-      "◨",
+      icon(icon_layout_sidebar_right),
     ),
   )
   items.push(launcher_view(dispatch, model))
