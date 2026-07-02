@@ -18,16 +18,21 @@ const ViewerStyleOutput : String = "viewer.css"
 /// The editor submodule's CSS files the embedded viewer depends on, in cascade
 /// order: `theme.css` first (it defines the `--vscode-*` / `--editor-*`
 /// variables, scoped to `.editor-shell`), then every viewer-owned stylesheet.
-/// The IDE shell chrome (`shell.css`) and the editor's own file tree
-/// (`file_tree.css`) are deliberately omitted — the desktop app supplies its
-/// own panel layout and file tree.
+/// Mirrors the submodule's own `scripts/build-web.mbtx` `css_sources()` —
+/// re-sync on a submodule bump. The IDE shell chrome (`shell.css`) and the
+/// editor's own file tree (`file_tree.css`) are deliberately omitted — the
+/// desktop app supplies its own panel layout and file tree.
 fn viewer_css_sources() -> Array[String] {
   [
-    "editor/internal/shell/workbench/theme.css", "editor/viewer/editor.css", "editor/viewer/ui/scrollbar/scrollable_element.css",
-    "editor/viewer/view_lines.css", "editor/viewer/view_overlays.css", "editor/viewer/view_zones.css",
-    "editor/viewer/content_widgets.css", "editor/viewer/overlay_widgets.css", "editor/viewer/selections.css",
-    "editor/viewer/margin.css", "editor/viewer/folding.css", "editor/viewer/tokens.css",
-    "editor/viewer/inlay_hints.css", "editor/viewer/markers.css", "editor/viewer/hover/hover.css",
+    "editor/internal/shell/workbench/theme.css", "editor/viewer/browser/view/editor.css",
+    "editor/viewer/ui/scrollbar/scrollable_element.css", "editor/viewer/browser/view_parts/view_lines/view_lines.css",
+    "editor/viewer/browser/view_parts/selections/view_overlays.css", "editor/viewer/browser/view_parts/view_zones/view_zones.css",
+    "editor/viewer/browser/view_parts/content_widgets/content_widgets.css", "editor/viewer/browser/view_parts/overlay_widgets/overlay_widgets.css",
+    "editor/viewer/browser/view_parts/selections/selections.css", "editor/viewer/browser/view_parts/selections/current_line_highlight.css",
+    "editor/viewer/browser/view_parts/selections/decorations.css", "editor/viewer/browser/view_parts/view_cursors/view_cursors.css",
+    "editor/viewer/browser/view_parts/margin/margin.css", "editor/viewer/browser/view_parts/margin/folding.css",
+    "editor/viewer/browser/view_parts/view_lines/tokens.css", "editor/viewer/browser/view_parts/view_lines/inlay_hints.css",
+    "editor/viewer/browser/view_parts/view_lines/markers.css", "editor/viewer/contrib/hover/hover.css",
   ]
 }
 
@@ -46,9 +51,21 @@ const EngineBinary : String = "_build/native/release/build/bobzhang/openseek/cmd
 ///|
 /// Raised when a packaging helper cannot complete a filesystem, build, or
 /// toolchain step.
+///
+/// The `Show` impl renders the payload message: an uncaught `PackageError`
+/// surfaces through the async runtime's `println(err)` (via the
+/// `%error.to_string` intrinsic), which would otherwise print only the
+/// qualified constructor name and drop the message.
 pub(all) suberror PackageError {
   /// A packaging failure with a human-readable diagnostic.
   PackageError(String)
+}
+
+///|
+pub impl Show for PackageError with fn output(self, logger) {
+  match self {
+    PackageError(message) => logger.write_string("package error: \{message}")
+  }
 }
 
 ///|

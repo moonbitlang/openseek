@@ -25,3 +25,16 @@ test "workspace path join preserves spaces and nested segments" {
   )
   assert_false(ws.invoked_from_repo_root())
 }
+
+///|
+/// An uncaught `PackageError` reaches the user through the async runtime's
+/// `println(err : Error)`; this pins that the message survives that path
+/// (the intrinsic falls back to the bare constructor name without the Show
+/// impl).
+test "a PackageError shown as an Error keeps its message" {
+  let error : Error = PackageError("viewer stylesheet not found: /x.css")
+  assert_eq(
+    error.to_string(),
+    "package error: viewer stylesheet not found: /x.css",
+  )
+}

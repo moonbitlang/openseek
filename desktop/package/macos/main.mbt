@@ -58,6 +58,21 @@ const HelperBundleIdentifier : String = AppBundleIdentifier + ".helper"
 const SigningEntitlementsPath : String = "dist/OpenSeek Desktop.entitlements"
 
 ///|
+/// Entitlements for the bundled `moonrun`: it JIT-compiles wasm, so under the
+/// hardened runtime it needs `MAP_JIT` (and wasm engines without a
+/// pthread_jit_write_protect discipline fall back to unsigned executable
+/// memory). Signed onto the seed binary in both the adhoc and distribution
+/// paths so a locally built bundle behaves like a notarized one.
+const JitEntitlementsPath : String = "dist/moonrun.entitlements"
+
+///|
+/// The seed binaries that execute JIT-compiled code and need
+/// `JitEntitlementsPath` at signing time.
+fn needs_jit_entitlements(file_name : String) -> Bool {
+  file_name == "moonrun"
+}
+
+///|
 /// Minimum macOS the produced binaries run on. Without this, clang pins
 /// LC_BUILD_VERSION's minos to the build machine's OS version and dyld on
 /// any older system refuses to load the binary at all. Must match
@@ -308,6 +323,21 @@ fn signing_entitlements_source() -> String {
 }
 
 ///|
+fn jit_entitlements_source() -> String {
+  let source =
+    $|<?xml version="1.0" encoding="UTF-8"?>
+    $|<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    $|<plist version="1.0">
+    $|<dict>
+    $|  <key>com.apple.security.cs.allow-jit</key><true/>
+    $|  <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+    $|</dict>
+    $|</plist>
+    $|
+  source
+}
+
+///|
 fn info_plist_source() -> String {
   let source =
     $|<?xml version="1.0" encoding="UTF-8"?>
@@ -359,12 +389,17 @@ fn codesign_file_args(
   identity : String,
   path : String,
   distribution~ : Bool,
+  entitlements? : String,
 ) -> Array[String] {
+  let args = ["--force"]
   if distribution {
-    ["--force", "--options", "runtime", "--timestamp", "--sign", identity, path]
-  } else {
-    ["--force", "--sign", identity, path]
+    args.append(["--options", "runtime", "--timestamp"])
   }
+  if entitlements is Some(entitlements) {
+    args.append(["--entitlements", entitlements])
+  }
+  args.append(["--sign", identity, path])
+  args
 }
 
 ///|
@@ -411,6 +446,7 @@ fn codesign_cef_process_args(
 async fn sign_moonbit_seed_binaries(
   ws : @packaging.Workspace,
   identity : String,
+  jit_entitlements : String,
   distribution~ : Bool,
 ) -> Unit {
   // `ws.at(...)` is absolute, so the walked paths name the same file no matter
@@ -419,29 +455,49 @@ async fn sign_moonbit_seed_binaries(
   if !@asyncfs.exists(seed_dir) {
     return
   }
-  sign_macho_files_under(ws, seed_dir, identity, distribution~)
+  sign_macho_files_under(
+    ws,
+    seed_dir,
+    identity,
+    jit_entitlements,
+    distribution~,
+  )
 }
 
 ///|
 /// Sign every Mach-O file under `dir`, an absolute path so the recursive
 /// traversal and the `codesign` invocation resolve the same file regardless of
-/// the process or command working directory.
+/// the process or command working directory. Binaries that JIT wasm get the
+/// JIT entitlements; everything else is signed bare.
 async fn sign_macho_files_under(
   ws : @packaging.Workspace,
   dir : String,
   identity : String,
+  jit_entitlements : String,
   distribution~ : Bool,
 ) -> Unit {
   for entry in @asyncfs.readdir(dir, sort=true) {
     let path = dir + "/" + entry
     if @asyncfs.kind(path) is Directory {
-      sign_macho_files_under(ws, path, identity, distribution~)
-    } else if is_macho_file(path) {
-      @packaging.run_checked(
-        "codesign",
-        codesign_file_args(identity, path, distribution~),
-        dir=ws.dir(),
+      sign_macho_files_under(
+        ws,
+        path,
+        identity,
+        jit_entitlements,
+        distribution~,
       )
+    } else if is_macho_file(path) {
+      let args = if needs_jit_entitlements(entry) {
+        codesign_file_args(
+          identity,
+          path,
+          distribution~,
+          entitlements=jit_entitlements,
+        )
+      } else {
+        codesign_file_args(identity, path, distribution~)
+      }
+      @packaging.run_checked("codesign", args, dir=ws.dir())
     }
   }
 }
@@ -537,6 +593,13 @@ async fn write_signing_entitlements(ws : @packaging.Workspace) -> String {
 }
 
 ///|
+async fn write_jit_entitlements(ws : @packaging.Workspace) -> String {
+  let path = ws.at(JitEntitlementsPath)
+  @packaging.write_text(path, jit_entitlements_source())
+  path
+}
+
+///|
 /// Signing configuration from the package arguments: `--sign <identity>` names
 /// a Developer ID Application identity for distribution, `--notarize <profile>`
 /// names a notarytool keychain profile.
@@ -593,8 +656,9 @@ fn parse_sign_config(argv? : ArrayView[String]) -> SignConfig raise {
 ///|
 async fn sign_app(ws : @packaging.Workspace, sign : SignConfig) -> Unit {
   let entitlements = write_signing_entitlements(ws)
+  let jit_entitlements = write_jit_entitlements(ws)
   guard sign.identity is Some(identity) else {
-    sign_moonbit_seed_binaries(ws, "-", distribution=false)
+    sign_moonbit_seed_binaries(ws, "-", jit_entitlements, distribution=false)
     sign_cef_helper(ws, "-", entitlements, distribution=false)
     // Do NOT re-sign the bundled CEF runtime. `cef setup` ships it
     // linker-signed (a valid adhoc signature); re-signing with `codesign`
@@ -617,7 +681,7 @@ async fn sign_app(ws : @packaging.Workspace, sign : SignConfig) -> Unit {
   // notarization requirements. Sign inside-out: nested executables first, then
   // the bundle, because deprecated `--deep` signs nested code with the wrong
   // designated requirements.
-  sign_moonbit_seed_binaries(ws, identity, distribution=true)
+  sign_moonbit_seed_binaries(ws, identity, jit_entitlements, distribution=true)
   // Sign the bundled CEF runtime inside-out before the app so every executable
   // carries the hardened-runtime signature notarization requires. UNVALIDATED:
   // no Developer ID host here. Unlike the adhoc path (which must leave the

@@ -42,6 +42,7 @@ pub async fn write_text(String, String) -> Unit
 pub(all) suberror PackageError {
   PackageError(String)
 }
+pub impl Show for PackageError
 
 // Types and methods
 type Workspace
