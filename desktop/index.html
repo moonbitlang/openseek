@@ -973,6 +973,28 @@
         font-size: 12.5px;
       }
 
+      /* Committed reasoning folds behind its "Thinking" line; only the live
+         stream stays expanded. The summary keeps the msg-role look plus a
+         chevron that flips with the details state. */
+      .reasoning-summary {
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+      }
+      .reasoning-summary::-webkit-details-marker {
+        display: none;
+      }
+      .reasoning-summary::after {
+        content: " ▸";
+        letter-spacing: 0;
+      }
+      .reasoning-details[open] > .reasoning-summary::after {
+        content: " ▾";
+      }
+      .reasoning-summary:hover {
+        color: var(--ink-2);
+      }
+
       /* markdown-rendered assistant content: block elements own the spacing,
          so the pre-wrap used for plain text would double every newline */
       .msg-content.markdown {

@@ -266,7 +266,7 @@ fn transcript_item_view(
         ]),
       ])
     }
-    Reasoning => reasoning_view(item.content, streaming=false, on_open)
+    Reasoning => collapsed_reasoning_view(item.content, on_open)
     Tool(name, is_error) =>
       @html.div(class="tool-row", [
         @html.div(class=tool_class(is_error), [
@@ -278,6 +278,32 @@ fn transcript_item_view(
 }
 
 ///|
+/// A committed reasoning block, folded to its "Thinking" line: the transcript
+/// is for answers, so past thinking tucks away behind a native `<details>`
+/// toggle. The open state lives in the DOM — index-based diffing patches the
+/// same element across renders, so it survives streaming without any model
+/// bookkeeping. The in-flight stream stays expanded (`reasoning_view`).
+fn collapsed_reasoning_view(
+  content : String,
+  on_open : (String) -> @cmd.Cmd,
+) -> @html.Html {
+  @html.div(class="msg", [
+    @html.div(class="avatar agent", "✧"),
+    @html.div(class="msg-body", [
+      @html.details(class="reasoning-details", [
+        @html.summary(class="msg-role reasoning-summary", "Thinking"),
+        @html.div(
+          class="msg-content markdown reasoning",
+          @markdown.markdown_nodes(content, open_file=on_open),
+        ),
+      ]),
+    ]),
+  ])
+}
+
+///|
+/// The live reasoning stream, always expanded — folding text that is still
+/// arriving would hide the one thing the user is watching.
 fn reasoning_view(
   content : String,
   streaming~ : Bool,
