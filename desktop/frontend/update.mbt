@@ -395,7 +395,11 @@ fn update_msg(
       (
         // The installed skills also feed the composer's `$` completion, so they
         // are fetched on connect rather than only when the Skills page opens.
-        @cmd.batch([fetch_sessions(dispatch), fetch_installed_skills(dispatch)]),
+        @cmd.batch([
+          fetch_sessions(dispatch),
+          fetch_installed_skills(dispatch),
+          fetch_archived(dispatch),
+        ]),
         {
           ..model,
           bridge_ready: true,
@@ -758,6 +762,22 @@ fn update_msg(
       )
     SessionsLoaded(items) =>
       (@cmd.none, { ..model, sessions: items, sessions_error: "" })
+    ArchiveSession(session_id) =>
+      (archive_session(dispatch, session_id), { ..model, archive_error: "" })
+    ArchivedLoaded(ids) => {
+      // Live client state for anything archived is dropped; when that
+      // includes the conversation on screen, rotate to a fresh chat.
+      let conversations = model.conversations.filter(conv => {
+        !ids.contains(conv.session_id)
+      })
+      let next = { ..model, archived: ids, conversations, archive_error: "" }
+      if ids.contains(model.active_session) {
+        (rotate_session(dispatch), { ..next, loading_session: "" })
+      } else {
+        (@cmd.none, next)
+      }
+    }
+    ArchiveFailed(message) => (@cmd.none, { ..model, archive_error: message })
     SessionsFailed(message) => (@cmd.none, { ..model, sessions_error: message })
     OpenSession(session_id) =>
       // Selecting a conversation always returns to the chat — including

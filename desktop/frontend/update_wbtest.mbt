@@ -842,6 +842,40 @@ test "a branch reply lands on its conversation and an empty one hides it" {
 }
 
 ///|
+test "an archived background session drops its live state, active stays" {
+  let dispatch = test_dispatch()
+  let model = {
+    ..test_model(),
+    conversations: [test_conversation(), empty_conversation("desktop-old")],
+  }
+  let (_, next) = update(dispatch, ArchivedLoaded(["desktop-old"]), model)
+  assert_true(next.archived.contains("desktop-old"))
+  assert_true(next.find_conversation("desktop-old") is None)
+  inspect(next.active_session, content="desktop-test")
+}
+
+///|
+test "archiving the active conversation clears it for the rotation" {
+  let dispatch = test_dispatch()
+  let (_, next) = update(
+    dispatch,
+    ArchivedLoaded(["desktop-test"]),
+    test_model(),
+  )
+  assert_true(next.find_conversation("desktop-test") is None)
+  assert_true(next.archived.contains("desktop-test"))
+}
+
+///|
+test "an archive failure lands in archive_error and a retry clears it" {
+  let dispatch = test_dispatch()
+  let (_, failed) = update(dispatch, ArchiveFailed("zip missing"), test_model())
+  inspect(failed.archive_error, content="zip missing")
+  let (_, retried) = update(dispatch, ArchiveSession("desktop-test"), failed)
+  inspect(retried.archive_error, content="")
+}
+
+///|
 test "the color-scheme watcher's report lands on the model" {
   let dispatch = test_dispatch()
   let (_, dark) = update(dispatch, ColorSchemeChanged(true), test_model())

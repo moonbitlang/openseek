@@ -81,11 +81,14 @@ fn conversation_title(conv : Conversation) -> String {
 ///|
 /// One sidebar row. A conversation with a turn in flight gets a pulsing dot,
 /// so background work stays visible while another conversation is on screen.
+/// A durable, idle row also carries a hover-revealed archive button; the row
+/// itself is a div (not a button) so that control can nest inside it.
 fn session_row(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   session_id : String,
   label : String,
+  archivable? : Bool = false,
 ) -> @html.Html {
   let active = session_id == model.active_session
   let running = model.find_conversation(session_id) is Some(conv) &&
@@ -101,7 +104,24 @@ fn session_row(
   if running {
     children.push(@html.span(class="run-dot accent pulse", ""))
   }
-  @html.button(
+  // Archiving a running conversation would pull the workspace out from under
+  // its engine, so the button waits for the turn to end.
+  if archivable && !running {
+    children.push(
+      @html.button(
+        class="row-archive",
+        type_="button",
+        title="Archive — zip the workspace folder and tuck this chat away",
+        attrs=@html.Attrs::build().on_click(event => {
+          // The row itself opens the session; the archive click must not.
+          event.stop_propagation()
+          dispatch(ArchiveSession(session_id))
+        }),
+        "⤓",
+      ),
+    )
+  }
+  @html.div(
     class~,
     title=session_id,
     on_click=dispatch(OpenSession(session_id)),
@@ -127,25 +147,62 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
   // Newest rotation last in the array; show unlisted conversations newest
   // first to match the store list's ordering.
   for conv in model.conversations.rev_iter() {
-    if !listed(conv.session_id) {
+    if !listed(conv.session_id) && !model.archived.contains(conv.session_id) {
       rows.push(
         session_row(dispatch, model, conv.session_id, conversation_title(conv)),
       )
     }
   }
   for item in model.sessions {
+    if model.archived.contains(item.id) {
+      continue
+    }
     let label = if model.find_conversation(item.id) is Some(conv) &&
       item.id == model.active_session {
       conversation_title(conv)
     } else {
       @transcript.non_empty_or(item.title, item.id)
     }
-    rows.push(session_row(dispatch, model, item.id, label))
+    rows.push(session_row(dispatch, model, item.id, label, archivable=true))
   }
   if !model.sessions_error.is_empty() {
     rows.push(
       @html.div(class="conversation-row error", title=model.sessions_error, [
         @html.span(class="sidebar-label", "sessions unavailable"),
+      ]),
+    )
+  }
+  if !model.archive_error.is_empty() {
+    rows.push(
+      @html.div(class="conversation-row error", title=model.archive_error, [
+        @html.span(class="sidebar-label", "archive failed"),
+      ]),
+    )
+  }
+  // Archived conversations stay reachable (their transcripts live in the
+  // engine's store; only the workspace folder was zipped away) but fold
+  // behind a collapsed group at the end of the list.
+  let archived_rows : Array[@html.Html] = []
+  for item in model.sessions {
+    if model.archived.contains(item.id) {
+      archived_rows.push(
+        session_row(
+          dispatch,
+          model,
+          item.id,
+          @transcript.non_empty_or(item.title, item.id),
+        ),
+      )
+    }
+  }
+  if archived_rows.length() > 0 {
+    rows.push(
+      @html.details(class="sidebar-archived", [
+        @html.summary(
+          class="sidebar-heading archived-heading",
+          "Archived (\{archived_rows.length()})",
+        ),
+        @html.div(class="archived-rows", archived_rows),
       ]),
     )
   }

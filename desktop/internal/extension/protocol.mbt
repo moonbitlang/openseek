@@ -191,6 +191,21 @@ priv struct WorkspaceBranchReply {
 } derive(ToJson)
 
 ///|
+/// `archive_session` packs the conversation's workspace folder into a zip
+/// beside the live workspaces and hides the session under the sidebar's
+/// Archived group. The engine's durable store is untouched.
+priv struct ArchiveSessionPayload {
+  session : String
+} derive(FromJson)
+
+///|
+/// Reply to `archive_session` and `archived_sessions`: every archived
+/// session id, oldest first.
+priv struct ArchivedSessionsReply {
+  sessions : Array[String]
+} derive(ToJson)
+
+///|
 /// `read_directory` lists `path`, resolved relative to the conversation's
 /// workspace; `""` lists the workspace root. The host derives the root from
 /// `session`, so the client never names an absolute path.

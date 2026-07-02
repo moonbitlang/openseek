@@ -341,6 +341,12 @@ priv struct Model {
   // Why the sidebar list could not be refreshed; empty when the last refresh
   // succeeded.
   sessions_error : String
+  // Session ids the host has archived (workspace zipped away); the sidebar
+  // tucks their rows under a collapsed "Archived" group. Reported by the
+  // host, which keeps the durable record.
+  archived : Array[String]
+  // Why the last archive attempt failed; empty otherwise.
+  archive_error : String
   // Whether the transcript is scrolled to its bottom. Streaming output only
   // auto-follows while this holds — scrolling up to read history must not be
   // yanked back down by the next delta. Maintained by a DOM scroll watcher;
@@ -471,6 +477,13 @@ priv enum Msg {
   SessionsFailed(String)
   OpenSession(String)
   SessionLoaded(session~ : String, items~ : Array[@transcript.TranscriptItem])
+  // Archive a conversation: the host zips its workspace folder away and the
+  // sidebar moves the row under the Archived group.
+  ArchiveSession(String)
+  // The archived-session ids — the reply to `archived_sessions` and to a
+  // successful `archive_session` alike.
+  ArchivedLoaded(Array[String])
+  ArchiveFailed(String)
   // The transcript's at-bottom state changed (the user scrolled away from,
   // or back to, the tail). Reported by the DOM scroll watcher.
   TranscriptPinned(Bool)
@@ -589,6 +602,8 @@ fn initial_model() -> Model {
     conversations: [],
     sessions: [],
     sessions_error: "",
+    archived: [],
+    archive_error: "",
     transcript_pinned: true,
     screen: Chat,
     skills_catalog: CatalogIdle,

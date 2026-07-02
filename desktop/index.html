@@ -501,8 +501,7 @@
       }
 
       .conversation-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
+        display: flex;
         align-items: center;
         gap: 8px;
         min-width: 0;
@@ -511,6 +510,10 @@
         border-radius: var(--radius-sm);
         color: var(--ink-2);
         font-size: 12.5px;
+        cursor: pointer;
+      }
+      .conversation-row > .sidebar-label {
+        flex: 1 1 auto;
       }
 
       .conversation-row:hover {
@@ -522,29 +525,62 @@
         color: var(--accent-ink);
       }
 
-      button.conversation-row {
-        width: 100%;
-        border: 0;
-        background: transparent;
-        font: inherit;
-        text-align: left;
-        cursor: pointer;
-      }
-
-      button.conversation-row:disabled {
+      .conversation-row.error {
+        color: var(--del);
         cursor: default;
       }
 
-      button.conversation-row.active {
-        background: var(--accent-soft);
+      /* Hover-revealed archive control on a durable row. Kept in layout
+         (visibility, not display) so the label doesn't shift as it appears. */
+      .row-archive {
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--ink-3);
+        font-size: 12px;
+        line-height: 1;
+        cursor: pointer;
+        visibility: hidden;
+      }
+      .conversation-row:hover .row-archive {
+        visibility: visible;
+      }
+      .row-archive:hover {
+        background: color-mix(in srgb, var(--ink) 10%, transparent);
+        color: var(--ink);
       }
 
-      .conversation-row.error {
-        color: var(--del);
+      /* The collapsed group holding archived conversations, at the tail of
+         the chat list. */
+      .sidebar-archived {
+        margin-top: 10px;
       }
-
-      .conversation-row.running {
-        grid-template-columns: minmax(0, 1fr) auto;
+      .archived-heading {
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+      }
+      .archived-heading::-webkit-details-marker {
+        display: none;
+      }
+      .archived-heading::after {
+        content: " ▸";
+      }
+      .sidebar-archived[open] > .archived-heading::after {
+        content: " ▾";
+      }
+      .archived-rows {
+        display: grid;
+        gap: 4px;
+      }
+      .archived-rows .conversation-row {
+        color: var(--ink-3);
       }
 
       .sidebar-icon {

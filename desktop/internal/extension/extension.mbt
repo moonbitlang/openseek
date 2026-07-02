@@ -54,6 +54,8 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("skill_uninstall"),
       @app.AppCommandApiDescriptor::new("open_path"),
       @app.AppCommandApiDescriptor::new("workspace_branch"),
+      @app.AppCommandApiDescriptor::new("archive_session"),
+      @app.AppCommandApiDescriptor::new("archived_sessions"),
       @app.AppCommandApiDescriptor::new("list_apps"),
       @app.AppCommandApiDescriptor::new("launch_app"),
       @app.AppCommandApiDescriptor::new("read_directory"),
@@ -128,6 +130,14 @@ pub fn openseek_extension(
         payload : WorkspaceBranchPayload,
       ) {
         workspace_branch_op(payload)
+      })
+      context.op_async("archive_session", async fn(
+        payload : ArchiveSessionPayload,
+      ) {
+        archive_session_op(runtime_dir, payload)
+      })
+      context.op_async("archived_sessions", async fn(_ : Json) {
+        archived_sessions_op(runtime_dir)
       })
       context.op_async("list_apps", async fn(_ : Json) { list_apps_op() })
       context.op_async("launch_app", async fn(payload : LaunchAppPayload) {
