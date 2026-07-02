@@ -172,14 +172,15 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
     }
     false
   }
-  // One section per store: the default store's conversations first (no
-  // heading — a workspace-less install keeps today's flat list), then each
-  // attached workspace under its own heading, in registration order.
-  push_group_rows(rows, dispatch, model, "", listed~, archived~)
+  // One section per store: each attached workspace under its own heading in
+  // registration order, then the default store's conversations under "Chats"
+  // — projects first, loose chats below them.
   for path in model.workspaces {
-    rows.push(workspace_heading(dispatch, model, path))
+    rows.push(group_heading(dispatch, model, path))
     push_group_rows(rows, dispatch, model, path, listed~, archived~)
   }
+  rows.push(group_heading(dispatch, model, ""))
+  push_group_rows(rows, dispatch, model, "", listed~, archived~)
   if !model.sessions_error.is_empty() {
     rows.push(
       @html.div(class="conversation-row error", title=model.sessions_error, [
@@ -252,10 +253,11 @@ fn push_group_rows(
 }
 
 ///|
-/// A workspace section's heading: the project folder's name (full path in
-/// the tooltip) with hover controls — start a new chat in this workspace, or
-/// detach it (registry only; the folder and its sessions stay).
-fn workspace_heading(
+/// A store section's heading: the project folder's name for a workspace
+/// (full path in the tooltip), "Chats" for the default store. Hover controls
+/// start a new chat in that store, and — for a workspace — detach it
+/// (registry only; the folder and its sessions stay).
+fn group_heading(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   path : String,
@@ -264,29 +266,39 @@ fn workspace_heading(
   if path == model.active_workspace {
     class = class + " active"
   }
-  @html.div(class~, title=path, [
-    @html.span(class="sidebar-label", workspace_label(path)),
+  let label = if path.is_empty() { "Chats" } else { workspace_label(path) }
+  let children = [@html.span(class="sidebar-label", label)]
+  if !path.is_empty() {
+    children.push(
+      @html.button(
+        class="row-archive",
+        type_="button",
+        title="Detach this workspace — its files and sessions stay",
+        attrs=@html.Attrs::build().on_click(event => {
+          event.stop_propagation()
+          dispatch(RemoveWorkspace(path))
+        }),
+        icon(icon_close),
+      ),
+    )
+  }
+  children.push(
     @html.button(
       class="row-archive",
       type_="button",
-      title="Detach this workspace — its files and sessions stay",
-      attrs=@html.Attrs::build().on_click(event => {
-        event.stop_propagation()
-        dispatch(RemoveWorkspace(path))
-      }),
-      icon(icon_close),
-    ),
-    @html.button(
-      class="row-archive",
-      type_="button",
-      title="New chat in this workspace",
+      title=if path.is_empty() {
+        "New chat outside any workspace"
+      } else {
+        "New chat in this workspace"
+      },
       attrs=@html.Attrs::build().on_click(event => {
         event.stop_propagation()
         dispatch(NewChatIn(path))
       }),
       icon(icon_add),
     ),
-  ])
+  )
+  @html.div(class~, title=path, children)
 }
 
 ///|
@@ -364,9 +376,7 @@ fn archived_row(
 
 ///|
 fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  let sessions_section : Array[@html.Html] = [
-    @html.div(class="sidebar-heading", "Chats"),
-  ]
+  let sessions_section : Array[@html.Html] = []
   for row in session_rows(dispatch, model) {
     sessions_section.push(row)
   }
