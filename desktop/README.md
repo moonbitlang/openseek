@@ -63,7 +63,7 @@ stay under `~/.openseek`; the workspace holds only what the agent writes.
 
 The sidebar lists every durable session in the store, newest first, titled by
 the first user message (the host shells out to the bundled engine's
-`--session-list --format=json`). Clicking one replays its event log into the
+`sessions list --format=json`). Clicking one replays its event log into the
 transcript — reasoning, tool cards, runtime notices, and error bubbles for
 turns that were cancelled or failed — and points the conversation at that
 session id, so the next prompt continues it with full context. The list

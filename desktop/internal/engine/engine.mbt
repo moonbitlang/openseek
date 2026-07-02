@@ -193,7 +193,7 @@ fn open_run_engine(manager : EngineManager, run_id? : Int) -> ServeEngine? {
 /// the per-user runtime dir, not beside the engine binary: the bundle a
 /// packaged engine sits in is read-only (App Translocation even enforces
 /// it), so writing next to the executable would fail every
-/// `--session-list` / `--session-show` in a packaged app.
+/// `sessions list` / `sessions show` in a packaged app.
 async fn prepare_engine_stdin(
   runtime_dir : @path.Path?,
   engine : @path.Path,

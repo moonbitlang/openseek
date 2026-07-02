@@ -234,7 +234,7 @@ pub async fn list_sessions(manager : EngineManager) -> SessionsReply {
   }
   let root = root.to_string()
   let output = engine_stdout(manager, [
-    "--session-root", root, "--session-list", "--format", "json",
+    "sessions", "list", "--session-root", root, "--format", "json",
   ]) catch {
     EngineError(detail) => raise EngineError("session list failed: " + detail)
     error => raise error
@@ -260,11 +260,11 @@ pub async fn load_session(
     )
   }
   let output = engine_stdout(manager, [
+    "sessions",
+    "show",
+    session,
     "--session-root",
     root.to_string(),
-    "--session-show",
-    "--session",
-    session,
   ]) catch {
     EngineError(detail) => raise EngineError("session load failed: " + detail)
     error => raise error

@@ -1,5 +1,5 @@
 // Decoding of the host's session replies. Both shapes originate in the
-// engine (`--session-list --format=json` and `--session-show`) and are
+// engine (`sessions list --format=json` and `sessions show`) and are
 // passed through
 // the host verbatim; this module turns them into sidebar entries and
 // transcript items, mirroring how the live event stream renders the same
