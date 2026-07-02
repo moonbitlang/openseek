@@ -810,6 +810,10 @@ fn update_msg(
         },
       )
     }
+    PickWorkspace =>
+      (pick_workspace(dispatch), { ..model, workspace_error: "" })
+    OpenWorkspaceInput =>
+      (@cmd.none, { ..model, workspace_input: Some(""), workspace_error: "" })
     ToggleWorkspaceInput =>
       (
         @cmd.none,

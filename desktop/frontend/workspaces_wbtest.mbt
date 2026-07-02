@@ -86,6 +86,18 @@ test "opening a stored session adopts its workspace" {
 }
 
 ///|
+test "the picker fallback opens the manual input and a pick clears errors" {
+  let dispatch = test_dispatch()
+  let model = { ..test_model(), workspace_error: "boom" }
+  let (_, picked) = update(dispatch, PickWorkspace, model)
+  assert_true(picked.workspace_input is None)
+  inspect(picked.workspace_error, content="")
+  let (_, fallback) = update(dispatch, OpenWorkspaceInput, model)
+  assert_true(fallback.workspace_input is Some(""))
+  inspect(fallback.workspace_error, content="")
+}
+
+///|
 test "the add-workspace input opens, edits, and submits" {
   let dispatch = test_dispatch()
   let (_, opened) = update(dispatch, ToggleWorkspaceInput, test_model())

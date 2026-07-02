@@ -180,14 +180,6 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
     rows.push(workspace_heading(dispatch, model, path))
     push_group_rows(rows, dispatch, model, path, listed~, archived~)
   }
-  rows.push(add_workspace_row(dispatch, model))
-  if !model.workspace_error.is_empty() {
-    rows.push(
-      @html.div(class="conversation-row error", title=model.workspace_error, [
-        @html.span(class="sidebar-label", "workspace failed"),
-      ]),
-    )
-  }
   if !model.sessions_error.is_empty() {
     rows.push(
       @html.div(class="conversation-row error", title=model.sessions_error, [
@@ -298,38 +290,49 @@ fn workspace_heading(
 }
 
 ///|
-/// The sidebar's "Add workspace" affordance: a row that opens into a path
-/// input. Enter submits, Escape closes; the host validates the path and the
+/// The sidebar's "Add workspace" affordance, beside "New chat" at the top:
+/// the button asks the host for the system folder chooser; on platforms
+/// without one it opens the manual path input below instead (Enter submits,
+/// Escape closes). Either way the host validates the directory and the
 /// updated registry comes back through `WorkspacesLoaded`.
-fn add_workspace_row(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+fn add_workspace_controls(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> Array[@html.Html] {
+  let controls : Array[@html.Html] = [
+    @html.button(class="sidebar-button", on_click=dispatch(PickWorkspace), [
+      @html.span(class="sidebar-icon", icon(icon_add)),
+      @html.span(class="sidebar-label", "Add workspace"),
+    ]),
+  ]
   if model.workspace_input is Some(text) {
-    @html.div(class="workspace-add", [
-      @html.input(
-        input_type=@html.InputType::Text,
-        value=text,
-        placeholder="/path/to/project",
-        autofocus=true,
-        on_input=dispatch.map(value => WorkspaceInput(value)),
-        attrs=@html.Attrs::build().on_keydown(event => {
-          match event.key() {
-            "Enter" => dispatch(AddWorkspace)
-            "Escape" => dispatch(ToggleWorkspaceInput)
-            _ => @cmd.none
-          }
-        }),
-      ),
-    ])
-  } else {
-    @html.button(
-      class="conversation-row workspace-add-button",
-      type_="button",
-      on_click=dispatch(ToggleWorkspaceInput),
-      [
-        @html.span(class="sidebar-icon", icon(icon_add)),
-        @html.span(class="sidebar-label", "Add workspace"),
-      ],
+    controls.push(
+      @html.div(class="workspace-add", [
+        @html.input(
+          input_type=@html.InputType::Text,
+          value=text,
+          placeholder="/path/to/project",
+          autofocus=true,
+          on_input=dispatch.map(value => WorkspaceInput(value)),
+          attrs=@html.Attrs::build().on_keydown(event => {
+            match event.key() {
+              "Enter" => dispatch(AddWorkspace)
+              "Escape" => dispatch(ToggleWorkspaceInput)
+              _ => @cmd.none
+            }
+          }),
+        ),
+      ]),
     )
   }
+  if !model.workspace_error.is_empty() {
+    controls.push(
+      @html.div(class="conversation-row error", title=model.workspace_error, [
+        @html.span(class="sidebar-label", "workspace failed"),
+      ]),
+    )
+  }
+  controls
 }
 
 ///|
@@ -367,14 +370,18 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   for row in session_rows(dispatch, model) {
     sessions_section.push(row)
   }
+  let top_section : Array[@html.Html] = [
+    @html.button(class="sidebar-button", on_click=dispatch(NewChat), [
+      @html.span(class="sidebar-icon", icon(icon_add)),
+      @html.span(class="sidebar-label", "New chat"),
+    ]),
+  ]
+  for control in add_workspace_controls(dispatch, model) {
+    top_section.push(control)
+  }
   @html.aside([
     @html.div(class="sidebar-main", [
-      @html.div(class="sidebar-section", [
-        @html.button(class="sidebar-button", on_click=dispatch(NewChat), [
-          @html.span(class="sidebar-icon", icon(icon_add)),
-          @html.span(class="sidebar-label", "New chat"),
-        ]),
-      ]),
+      @html.div(class="sidebar-section", top_section),
       @html.div(class="sidebar-section sessions", sessions_section),
     ]),
     @html.div(class="sidebar-footer", [

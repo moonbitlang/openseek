@@ -616,23 +616,10 @@
         visibility: visible;
       }
 
-      /* The "Add workspace" affordance: a quiet row that opens into a path
-         input. */
-      .workspace-add-button {
-        width: 100%;
-        margin-top: 10px;
-        border: 0;
-        background: transparent;
-        color: var(--ink-3);
-        font: inherit;
-        font-size: 12px;
-        text-align: left;
-      }
-      .workspace-add-button:hover {
-        color: var(--ink-2);
-      }
+      /* The manual path input behind "Add workspace", shown only when the
+         platform has no system folder chooser. */
       .workspace-add {
-        margin-top: 10px;
+        margin-top: 4px;
         padding: 0 2px;
       }
       .workspace-add input {

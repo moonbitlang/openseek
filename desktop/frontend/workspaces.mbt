@@ -1,8 +1,9 @@
-// The sidebar's workspace flow: `list_workspaces` reads the attached project
-// directories back, `add_workspace`/`remove_workspace` change the registry.
-// All three ops reply with the updated registry, so one decoder serves them
-// all — and since attaching or detaching a workspace changes which session
-// groups exist, the two action commands refresh the session list too.
+// The sidebar's workspace flow: `pick_workspace` opens the system folder
+// chooser, `list_workspaces` reads the attached project directories back,
+// and `add_workspace`/`remove_workspace` change the registry. The registry
+// ops reply with the updated list, so one decoder serves them all — and
+// since attaching or detaching a workspace changes which session groups
+// exist, the action commands refresh the session list too.
 
 ///|
 fn fetch_workspaces(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
@@ -33,29 +34,61 @@ fn remove_workspace(dispatch : @cmd.Emit[Msg], path : String) -> @cmd.Cmd {
 }
 
 ///|
+/// Open the system folder chooser and register whatever it returns. A
+/// cancelled pick does nothing; a host whose platform has no chooser (the
+/// op raises) falls back to the sidebar's manual path input.
+fn pick_workspace(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let reply = bridge_request("pick_workspace", @js.Object::new().to_value()) catch {
+        _ => {
+          scheduler.add(dispatch(OpenWorkspaceInput))
+          return
+        }
+      }
+      let json = @json.parse(reply_json_text(reply)) catch { _ => return }
+      guard json is Object(fields) &&
+        fields.get("path") is Some(String(path)) &&
+        !path.is_empty() else {
+        return
+      }
+      workspace_action_into(scheduler, dispatch, "add_workspace", path)
+    })
+  })
+}
+
+///|
 fn workspace_action(
   dispatch : @cmd.Emit[Msg],
   op : String,
   path : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["path"] = path
-      let reply = bridge_request(op, payload.to_value()) catch {
-        error => {
-          scheduler.add(dispatch(WorkspaceFailed(bridge_error_text(error))))
-          return
-        }
-      }
-      scheduler.add(
-        dispatch(WorkspacesLoaded(decode_workspaces(reply_json_text(reply)))),
-      )
-      // The registry changed, so the sidebar has a session group to gain or
-      // drop; refresh the list that carries them.
-      refresh_sessions_into(scheduler, dispatch)
-    })
+    @js.async_run(() => workspace_action_into(scheduler, dispatch, op, path))
   })
+}
+
+///|
+async fn workspace_action_into(
+  scheduler : &@cmd.Scheduler,
+  dispatch : @cmd.Emit[Msg],
+  op : String,
+  path : String,
+) -> Unit noraise {
+  let payload = @js.Object::new()
+  payload["path"] = path
+  let reply = bridge_request(op, payload.to_value()) catch {
+    error => {
+      scheduler.add(dispatch(WorkspaceFailed(bridge_error_text(error))))
+      return
+    }
+  }
+  scheduler.add(
+    dispatch(WorkspacesLoaded(decode_workspaces(reply_json_text(reply)))),
+  )
+  // The registry changed, so the sidebar has a session group to gain or
+  // drop; refresh the list that carries them.
+  refresh_sessions_into(scheduler, dispatch)
 }
 
 ///|

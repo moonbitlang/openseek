@@ -51,6 +51,7 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("list_workspaces"),
       @app.AppCommandApiDescriptor::new("add_workspace"),
       @app.AppCommandApiDescriptor::new("remove_workspace"),
+      @app.AppCommandApiDescriptor::new("pick_workspace"),
       @app.AppCommandApiDescriptor::new("skills_catalog"),
       @app.AppCommandApiDescriptor::new("skill_install"),
       @app.AppCommandApiDescriptor::new("skills_installed"),
@@ -130,6 +131,9 @@ pub fn openseek_extension(
           @engine.EngineError(message) => raise HostError(message)
           error => raise error
         }
+      })
+      context.op_async("pick_workspace", async fn(_ : Json) {
+        pick_workspace_op()
       })
       context.op_async("skills_catalog", async fn(_ : Json) {
         skills_catalog_op()

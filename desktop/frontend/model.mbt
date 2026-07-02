@@ -494,7 +494,12 @@ priv enum Msg {
   // The registered workspaces — the reply to `list_workspaces` and to a
   // successful add/remove alike.
   WorkspacesLoaded(Array[String])
-  // Open (or close) the sidebar's add-workspace input.
+  // Ask the host for the system folder chooser; its pick is registered
+  // directly. Falls back to `OpenWorkspaceInput` on platforms without one.
+  PickWorkspace
+  // Open the sidebar's manual add-workspace input.
+  OpenWorkspaceInput
+  // Close (or reopen) the sidebar's add-workspace input.
   ToggleWorkspaceInput
   // The add-workspace input's text changed.
   WorkspaceInput(String)
