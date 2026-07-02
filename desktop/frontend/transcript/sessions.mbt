@@ -20,9 +20,7 @@ pub fn decode_sessions_reply(text : String) -> Array[SessionListItem]? {
     guard group is Object(group_fields) else { continue }
     let workspace = json_text(group_fields, "workspace")
     let workspace_name = json_text(group_fields, "name")
-    guard group_fields.get("sessions") is Some(Array(entries)) else {
-      continue
-    }
+    guard group_fields.get("sessions") is Some(Array(entries)) else { continue }
     for entry in entries {
       guard entry is Object(fields) else { continue }
       guard fields.get("id") is Some(String(id)) && !id.is_empty() else {

@@ -1,13 +1,16 @@
-// The sidebar's archive flow: `archive_session` asks the host to zip a
-// conversation's workspace folder away, `archived_sessions` reads back which
-// ids are archived. Both ops reply with the full archived list, so one
-// decoder serves the startup fetch and the action alike.
+// The sidebar's archive flow: `archive_session` asks the host to move a
+// conversation's durable record into its store's `archived` twin,
+// `unarchive_session` moves it back, and `archived_sessions` reads the
+// archived conversations back. All three ops reply with the archived groups
+// in the same shape as `list_sessions`, so one decoder serves them all —
+// and since archiving moves records between the stores the sidebar lists,
+// the two action commands refresh the live list too.
 
 ///|
 fn fetch_archived(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      // A host without the op (or without runtime state) just reads as an
+      // A host without the op (or without a session store) just reads as an
       // empty Archived group.
       let reply = bridge_request(
         "archived_sessions",
@@ -16,7 +19,12 @@ fn fetch_archived(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         _ => return
       }
       scheduler.add(
-        dispatch(ArchivedLoaded(decode_archived(reply_json_text(reply)))),
+        dispatch(
+          ArchivedLoaded(
+            @transcript.decode_sessions_reply(reply_json_text(reply)).unwrap_or([],
+            ),
+          ),
+        ),
       )
     })
   })
@@ -24,33 +32,54 @@ fn fetch_archived(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 
 ///|
 fn archive_session(dispatch : @cmd.Emit[Msg], session : String) -> @cmd.Cmd {
+  archive_action(dispatch, "archive_session", session)
+}
+
+///|
+fn unarchive_session(dispatch : @cmd.Emit[Msg], session : String) -> @cmd.Cmd {
+  archive_action(dispatch, "unarchive_session", session)
+}
+
+///|
+fn archive_action(
+  dispatch : @cmd.Emit[Msg],
+  op : String,
+  session : String,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session
-      let reply = bridge_request("archive_session", payload.to_value()) catch {
+      let reply = bridge_request(op, payload.to_value()) catch {
         error => {
           scheduler.add(dispatch(ArchiveFailed(bridge_error_text(error))))
           return
         }
       }
       scheduler.add(
-        dispatch(ArchivedLoaded(decode_archived(reply_json_text(reply)))),
+        dispatch(
+          ArchivedLoaded(
+            @transcript.decode_sessions_reply(reply_json_text(reply)).unwrap_or([],
+            ),
+          ),
+        ),
       )
+      // The record moved between the live and archived stores; the sidebar's
+      // live list is stale until re-fetched.
+      let sessions = bridge_request(
+        "list_sessions",
+        @js.Object::new().to_value(),
+      ) catch {
+        error => {
+          scheduler.add(dispatch(SessionsFailed(bridge_error_text(error))))
+          return
+        }
+      }
+      match @transcript.decode_sessions_reply(reply_json_text(sessions)) {
+        Some(items) => scheduler.add(dispatch(SessionsLoaded(items)))
+        None =>
+          scheduler.add(dispatch(SessionsFailed("malformed session list")))
+      }
     })
   })
-}
-
-///|
-fn decode_archived(text : String) -> Array[String] {
-  let json = @json.parse(text) catch { _ => return [] }
-  guard json is Object(reply) else { return [] }
-  guard reply.get("sessions") is Some(Array(items)) else { return [] }
-  let ids : Array[String] = []
-  for item in items {
-    if item is String(id) && !id.is_empty() {
-      ids.push(id)
-    }
-  }
-  ids
 }

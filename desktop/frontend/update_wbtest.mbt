@@ -215,7 +215,12 @@ test "sessions loaded replaces the sidebar list and clears its error" {
   let dispatch = test_dispatch()
   let model = { ..test_model(), sessions_error: "boom" }
   let items : Array[@transcript.SessionListItem] = [
-    { id: "desktop-a", title: "first question", workspace: "", workspace_name: "" },
+    {
+      id: "desktop-a",
+      title: "first question",
+      workspace: "",
+      workspace_name: "",
+    },
   ]
   let (_, once) = update(dispatch, SessionsLoaded(items), model)
   let (_, twice) = update(dispatch, SessionsLoaded(items), model)
@@ -839,14 +844,24 @@ test "a branch reply lands on its conversation and an empty one hides it" {
 }
 
 ///|
+fn archived_item(id : String) -> @transcript.SessionListItem {
+  { id, title: "", workspace: "", workspace_name: "" }
+}
+
+///|
 test "an archived background session drops its live state, active stays" {
   let dispatch = test_dispatch()
   let model = {
     ..test_model(),
     conversations: [test_conversation(), empty_conversation("desktop-old")],
   }
-  let (_, next) = update(dispatch, ArchivedLoaded(["desktop-old"]), model)
-  assert_true(next.archived.contains("desktop-old"))
+  let (_, next) = update(
+    dispatch,
+    ArchivedLoaded([archived_item("desktop-old")]),
+    model,
+  )
+  inspect(next.archived.length(), content="1")
+  inspect(next.archived[0].id, content="desktop-old")
   assert_true(next.find_conversation("desktop-old") is None)
   inspect(next.active_session, content="desktop-test")
 }
@@ -856,11 +871,11 @@ test "archiving the active conversation clears it for the rotation" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
-    ArchivedLoaded(["desktop-test"]),
+    ArchivedLoaded([archived_item("desktop-test")]),
     test_model(),
   )
   assert_true(next.find_conversation("desktop-test") is None)
-  assert_true(next.archived.contains("desktop-test"))
+  inspect(next.archived[0].id, content="desktop-test")
 }
 
 ///|

@@ -341,10 +341,11 @@ priv struct Model {
   // Why the sidebar list could not be refreshed; empty when the last refresh
   // succeeded.
   sessions_error : String
-  // Session ids the host has archived (workspace zipped away); the sidebar
-  // tucks their rows under a collapsed "Archived" group. Reported by the
-  // host, which keeps the durable record.
-  archived : Array[String]
+  // Conversations the host has archived (durable record moved into the
+  // store's `archived` twin); the sidebar tucks their rows under a collapsed
+  // "Archived" group with an unarchive control. Reported by the host in the
+  // same entry shape as the live list.
+  archived : Array[@transcript.SessionListItem]
   // Why the last archive attempt failed; empty otherwise.
   archive_error : String
   // Whether the transcript is scrolled to its bottom. Streaming output only
@@ -476,12 +477,15 @@ priv enum Msg {
   SessionsFailed(String)
   OpenSession(String)
   SessionLoaded(session~ : String, items~ : Array[@transcript.TranscriptItem])
-  // Archive a conversation: the host zips its workspace folder away and the
-  // sidebar moves the row under the Archived group.
+  // Archive a conversation: the host moves its durable record into the
+  // store's `archived` twin and the sidebar moves the row under the Archived
+  // group.
   ArchiveSession(String)
-  // The archived-session ids — the reply to `archived_sessions` and to a
-  // successful `archive_session` alike.
-  ArchivedLoaded(Array[String])
+  // Restore an archived conversation into the live list.
+  UnarchiveSession(String)
+  // The archived conversations — the reply to `archived_sessions` and to a
+  // successful `archive_session`/`unarchive_session` alike.
+  ArchivedLoaded(Array[@transcript.SessionListItem])
   ArchiveFailed(String)
   // The transcript's at-bottom state changed (the user scrolled away from,
   // or back to, the tail). Reported by the DOM scroll watcher.

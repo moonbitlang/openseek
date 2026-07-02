@@ -8,6 +8,10 @@ import {
 // Values
 pub async fn add_workspace(String) -> Array[String]
 
+pub async fn archive_session(EngineManager, String) -> SessionsReply
+
+pub async fn archived_sessions(EngineManager) -> SessionsReply
+
 pub async fn attach_workspace(String) -> WorkspacesReply
 
 pub async fn cancel_run(EngineManager, CancelRequest) -> CancelReply
@@ -41,6 +45,8 @@ pub async fn session_cwd(String) -> String
 pub async fn start_run(EventSink, EngineManager, StartRequest) -> StartReply
 
 pub async fn steer_run(EngineManager, SteerRequest) -> SteerReply
+
+pub async fn unarchive_session(EngineManager, String) -> SessionsReply
 
 pub fn workspace_session_root(@path.Path) -> @path.Path
 

@@ -204,19 +204,14 @@ priv struct WorkspaceBranchReply {
 } derive(ToJson)
 
 ///|
-/// `archive_session` packs the conversation's workspace folder into a zip
-/// beside the live workspaces and hides the session under the sidebar's
-/// Archived group. The engine's durable store is untouched.
+/// `archive_session` / `unarchive_session` move the conversation's durable
+/// record into (out of) its session store's `archived` twin, hiding it from
+/// (restoring it to) the live list. The reply — shared with
+/// `archived_sessions` — is the archived conversations, grouped per store
+/// exactly like `list_sessions`.
 priv struct ArchiveSessionPayload {
   session : String
 } derive(FromJson)
-
-///|
-/// Reply to `archive_session` and `archived_sessions`: every archived
-/// session id, oldest first.
-priv struct ArchivedSessionsReply {
-  sessions : Array[String]
-} derive(ToJson)
 
 ///|
 /// `read_directory` lists `path`, resolved relative to the conversation's

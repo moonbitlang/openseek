@@ -756,14 +756,19 @@ fn update_msg(
       (@cmd.none, { ..model, sessions: items, sessions_error: "" })
     ArchiveSession(session_id) =>
       (archive_session(dispatch, session_id), { ..model, archive_error: "" })
-    ArchivedLoaded(ids) => {
+    UnarchiveSession(session_id) =>
+      (unarchive_session(dispatch, session_id), { ..model, archive_error: "" })
+    ArchivedLoaded(items) => {
       // Live client state for anything archived is dropped; when that
       // includes the conversation on screen, rotate to a fresh chat.
+      let archived_now = (id : String) => {
+        items.iter().any(item => item.id == id)
+      }
       let conversations = model.conversations.filter(conv => {
-        !ids.contains(conv.session_id)
+        !archived_now(conv.session_id)
       })
-      let next = { ..model, archived: ids, conversations, archive_error: "" }
-      if ids.contains(model.active_session) {
+      let next = { ..model, archived: items, conversations, archive_error: "" }
+      if archived_now(model.active_session) {
         (rotate_session(dispatch), { ..next, loading_session: "" })
       } else {
         (@cmd.none, next)

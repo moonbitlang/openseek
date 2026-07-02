@@ -239,9 +239,7 @@ pub async fn list_sessions(manager : EngineManager) -> SessionsReply {
   let groups : Array[SessionGroup] = [session_group(manager, "", root)]
   for path in registered_workspaces() {
     let workspace : @path.Path = Path(path)
-    groups.push(
-      session_group(manager, path, workspace_session_root(workspace)),
-    )
+    groups.push(session_group(manager, path, workspace_session_root(workspace)))
   }
   { groups, }
 }

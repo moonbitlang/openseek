@@ -58,6 +58,7 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("open_path"),
       @app.AppCommandApiDescriptor::new("workspace_branch"),
       @app.AppCommandApiDescriptor::new("archive_session"),
+      @app.AppCommandApiDescriptor::new("unarchive_session"),
       @app.AppCommandApiDescriptor::new("archived_sessions"),
       @app.AppCommandApiDescriptor::new("list_apps"),
       @app.AppCommandApiDescriptor::new("launch_app"),
@@ -157,10 +158,15 @@ pub fn openseek_extension(
       context.op_async("archive_session", async fn(
         payload : ArchiveSessionPayload,
       ) {
-        archive_session_op(runtime_dir, payload)
+        archive_session_op(manager, payload)
+      })
+      context.op_async("unarchive_session", async fn(
+        payload : ArchiveSessionPayload,
+      ) {
+        unarchive_session_op(manager, payload)
       })
       context.op_async("archived_sessions", async fn(_ : Json) {
-        archived_sessions_op(runtime_dir)
+        archived_sessions_op(manager)
       })
       context.op_async("list_apps", async fn(_ : Json) { list_apps_op() })
       context.op_async("launch_app", async fn(payload : LaunchAppPayload) {

@@ -121,14 +121,14 @@ fn session_row(
   if running {
     children.push(@html.span(class="run-dot accent pulse", ""))
   }
-  // Archiving a running conversation would pull the workspace out from under
-  // its engine, so the button waits for the turn to end.
+  // Archiving a running conversation would pull the durable record out from
+  // under its engine, so the button waits for the turn to end.
   if archivable && !running {
     children.push(
       @html.button(
         class="row-archive",
         type_="button",
-        title="Archive — zip the workspace folder and tuck this chat away",
+        title="Archive — tuck this chat away; its files stay where they are",
         attrs=@html.Attrs::build().on_click(event => {
           // The row itself opens the session; the archive click must not.
           event.stop_propagation()
@@ -161,17 +161,28 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
     }
     false
   }
+  // An archived record has moved out of the live store, so the live list
+  // normally cannot contain it; the filter covers the moment between the
+  // archive reply and the list refetch that follows it.
+  let archived = (id : String) => {
+    for item in model.archived {
+      if item.id == id {
+        return true
+      }
+    }
+    false
+  }
   // Newest rotation last in the array; show unlisted conversations newest
   // first to match the store list's ordering.
   for conv in model.conversations.rev_iter() {
-    if !listed(conv.session_id) && !model.archived.contains(conv.session_id) {
+    if !listed(conv.session_id) && !archived(conv.session_id) {
       rows.push(
         session_row(dispatch, model, conv.session_id, conversation_title(conv)),
       )
     }
   }
   for item in model.sessions {
-    if model.archived.contains(item.id) {
+    if archived(item.id) {
       continue
     }
     let label = if model.find_conversation(item.id) is Some(conv) &&
@@ -196,21 +207,13 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
       ]),
     )
   }
-  // Archived conversations stay reachable (their transcripts live in the
-  // engine's store; only the workspace folder was zipped away) but fold
-  // behind a collapsed group at the end of the list.
+  // Archived conversations fold behind a collapsed group at the end of the
+  // list. Their records live in the store's `archived` twin, so they come
+  // from the host's archived reply, not the live list; each row carries a
+  // restore control instead of the archive one.
   let archived_rows : Array[@html.Html] = []
-  for item in model.sessions {
-    if model.archived.contains(item.id) {
-      archived_rows.push(
-        session_row(
-          dispatch,
-          model,
-          item.id,
-          @transcript.non_empty_or(item.title, item.id),
-        ),
-      )
-    }
+  for item in model.archived {
+    archived_rows.push(archived_row(dispatch, item))
   }
   if archived_rows.length() > 0 {
     rows.push(
@@ -224,6 +227,33 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
     )
   }
   rows
+}
+
+///|
+/// One row of the Archived group: the conversation's title and a
+/// hover-revealed restore button. The row is inert — an archived record is
+/// invisible to `load_session` until it is restored, so the click that
+/// brings it back is the unarchive control.
+fn archived_row(
+  dispatch : @cmd.Emit[Msg],
+  item : @transcript.SessionListItem,
+) -> @html.Html {
+  @html.div(class="conversation-row archived", title=item.id, [
+    @html.span(
+      class="sidebar-label",
+      @transcript.non_empty_or(item.title, item.id),
+    ),
+    @html.button(
+      class="row-archive",
+      type_="button",
+      title="Restore this conversation to the sidebar",
+      attrs=@html.Attrs::build().on_click(event => {
+        event.stop_propagation()
+        dispatch(UnarchiveSession(item.id))
+      }),
+      icon(icon_arrow_up),
+    ),
+  ])
 }
 
 ///|

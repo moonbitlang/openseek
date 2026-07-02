@@ -27,8 +27,7 @@ pub async fn registered_workspaces() -> Array[String] {
   }
   guard text is Some(text) else { return [] }
   let json = @json.parse(text) catch { _ => return [] }
-  guard json is Object(fields) &&
-    fields.get("workspaces") is Some(Array(items)) else {
+  guard json is Object(fields) && fields.get("workspaces") is Some(Array(items)) else {
     return []
   }
   let paths : Array[String] = []
@@ -66,9 +65,7 @@ async fn write_registry(paths : Array[String]) -> Unit {
 /// project never dirties its status.
 pub async fn add_workspace(path : String) -> Array[String] {
   let dir = expanded_workspace_path(path)
-  guard @fsx.is_dir(dir) else {
-    raise EngineError("\{dir} is not a directory")
-  }
+  guard @fsx.is_dir(dir) else { raise EngineError("\{dir} is not a directory") }
   let canonical = dir.to_string()
   let paths = registered_workspaces()
   if !paths.contains(canonical) {
