@@ -6,13 +6,21 @@ import {
 }
 
 // Values
+pub async fn add_workspace(String) -> Array[String]
+
+pub async fn attach_workspace(String) -> WorkspacesReply
+
 pub async fn cancel_run(EngineManager, CancelRequest) -> CancelReply
 
 pub async fn compact_run(EngineManager, CompactRequest) -> CompactReply
 
+pub async fn detach_workspace(String) -> WorkspacesReply
+
 pub async fn engine_command(String) -> String
 
 pub async fn list_sessions(EngineManager) -> SessionsReply
+
+pub async fn list_workspaces() -> WorkspacesReply
 
 pub async fn load_session(EngineManager, LoadSessionRequest) -> LoadSessionReply
 
@@ -20,7 +28,11 @@ pub fn new_engine_manager(String, runtime_dir? : @path.Path) -> EngineManager
 
 pub fn open_target(String, String) -> String
 
-pub async fn resolve_in_workspace(String, String) -> @path.Path?
+pub async fn registered_workspaces() -> Array[String]
+
+pub async fn remove_workspace(String) -> Array[String]
+
+pub async fn resolve_in_workspace(String, String, workspace? : String) -> @path.Path?
 
 pub async fn run_engine_pump(EventSink, EngineManager) -> PumpReply
 
@@ -29,6 +41,8 @@ pub async fn session_cwd(String) -> String
 pub async fn start_run(EventSink, EngineManager, StartRequest) -> StartReply
 
 pub async fn steer_run(EngineManager, SteerRequest) -> SteerReply
+
+pub fn workspace_session_root(@path.Path) -> @path.Path
 
 // Errors
 pub(all) suberror EngineError {
@@ -72,9 +86,12 @@ type LoadSessionReply derive(ToJson)
 
 pub(all) struct LoadSessionRequest {
   session : String
+  workspace : String?
 }
 
 type PumpReply derive(ToJson)
+
+type SessionGroup derive(ToJson)
 
 type SessionsReply derive(ToJson)
 
@@ -88,6 +105,7 @@ pub(all) struct StartRequest {
   max_steps : Int?
   session : String?
   session_root : String?
+  workspace : String?
   wsl : WslRequest?
 }
 
@@ -99,6 +117,8 @@ pub(all) struct SteerRequest {
   text : String
   run_id : Int?
 }
+
+type WorkspacesReply derive(ToJson)
 
 pub(all) struct WslRequest {
   distro : String?

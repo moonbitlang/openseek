@@ -226,23 +226,53 @@ async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String 
 }
 
 ///|
+/// The sidebar's conversations, one group per session store: the global root
+/// first (scratch conversations), then each registered workspace's in-project
+/// store, in registration order. A group whose listing fails reports the
+/// failure in its `error` field rather than failing the whole reply.
 pub async fn list_sessions(manager : EngineManager) -> SessionsReply {
   guard resolved_session_root() is Some(root) else {
     raise EngineError(
       "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
     )
   }
+  let groups : Array[SessionGroup] = [session_group(manager, "", root)]
+  for path in registered_workspaces() {
+    let workspace : @path.Path = Path(path)
+    groups.push(
+      session_group(manager, path, workspace_session_root(workspace)),
+    )
+  }
+  { groups, }
+}
+
+///|
+async fn session_group(
+  manager : EngineManager,
+  workspace : String,
+  root : @path.Path,
+) -> SessionGroup {
+  let name = if workspace.is_empty() {
+    ""
+  } else {
+    (workspace : @path.Path).basename().to_owned()
+  }
   let root = root.to_string()
+  fn failed(error : String) -> SessionGroup {
+    { workspace, name, session_root: root, sessions: Json::array([]), error }
+  }
+
   let output = engine_stdout(manager, [
     "sessions", "list", "--session-root", root, "--format", "json",
   ]) catch {
-    EngineError(detail) => raise EngineError("session list failed: " + detail)
-    error => raise error
+    error if @async.is_being_cancelled() => raise error
+    EngineError(detail) => return failed("session list failed: " + detail)
+    error => return failed("session list failed: \{error}")
   }
   let sessions = @json.parse(output) catch {
-    _ => raise EngineError("engine returned a malformed session list")
+    _ => return failed("engine returned a malformed session list")
   }
-  { sessions, session_root: root }
+  { workspace, name, session_root: root, sessions, error: "" }
 }
 
 ///|
@@ -254,7 +284,16 @@ pub async fn load_session(
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
   }
-  guard resolved_session_root() is Some(root) else {
+  // The client's workspace hint says which store to read; without one (or
+  // with an unregistered path) the session's record is located by probing
+  // the registered workspaces, then the global root.
+  let root = if payload.workspace is Some(hint) &&
+    registered_workspace(hint) is Some(workspace) {
+    Some(workspace_session_root(workspace))
+  } else {
+    session_store_root(session)
+  }
+  guard root is Some(root) else {
     raise EngineError(
       "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
     )
@@ -273,4 +312,19 @@ pub async fn load_session(
     _ => raise EngineError("engine returned a malformed session")
   }
   { session: json }
+}
+
+///|
+pub async fn list_workspaces() -> WorkspacesReply {
+  { workspaces: registered_workspaces() }
+}
+
+///|
+pub async fn attach_workspace(path : String) -> WorkspacesReply {
+  { workspaces: add_workspace(path) }
+}
+
+///|
+pub async fn detach_workspace(path : String) -> WorkspacesReply {
+  { workspaces: remove_workspace(path) }
 }

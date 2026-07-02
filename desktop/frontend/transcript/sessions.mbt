@@ -6,20 +6,35 @@
 // conversation.
 
 ///|
-/// Parse a `list_sessions` reply into sidebar entries. `None` only for
-/// structurally unusable JSON; unrecognized entries are skipped so one odd
-/// session cannot blank the whole sidebar.
+/// Parse a `list_sessions` reply into sidebar entries: the host groups
+/// sessions by workspace store, and each entry carries its group's workspace
+/// so the sidebar can section them. `None` only for structurally unusable
+/// JSON; unrecognized entries (and failed groups — their error is the group's
+/// own affair) are skipped so one odd session cannot blank the whole sidebar.
 pub fn decode_sessions_reply(text : String) -> Array[SessionListItem]? {
   let json = @json.parse(text) catch { _ => return None }
   guard json is Object(reply) else { return None }
-  guard reply.get("sessions") is Some(Array(entries)) else { return None }
+  guard reply.get("groups") is Some(Array(groups)) else { return None }
   let items : Array[SessionListItem] = []
-  for entry in entries {
-    guard entry is Object(fields) else { continue }
-    guard fields.get("id") is Some(String(id)) && !id.is_empty() else {
+  for group in groups {
+    guard group is Object(group_fields) else { continue }
+    let workspace = json_text(group_fields, "workspace")
+    let workspace_name = json_text(group_fields, "name")
+    guard group_fields.get("sessions") is Some(Array(entries)) else {
       continue
     }
-    items.push({ id, title: json_text(fields, "title") })
+    for entry in entries {
+      guard entry is Object(fields) else { continue }
+      guard fields.get("id") is Some(String(id)) && !id.is_empty() else {
+        continue
+      }
+      items.push({
+        id,
+        title: json_text(fields, "title"),
+        workspace,
+        workspace_name,
+      })
+    }
   }
   Some(items)
 }

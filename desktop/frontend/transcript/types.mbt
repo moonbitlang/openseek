@@ -28,10 +28,14 @@ pub struct RuntimeUpdateView {
 ///|
 /// One sidebar entry from the engine's durable session list: the session id
 /// and its display title (first user message, already truncated engine-side;
-/// empty for a session with no user message yet).
+/// empty for a session with no user message yet). `workspace` is the project
+/// directory whose store holds the session ("" for a scratch conversation)
+/// and `workspace_name` its display label, both from the host's grouping.
 pub(all) struct SessionListItem {
   id : String
   title : String
+  workspace : String
+  workspace_name : String
 }
 
 ///|

@@ -85,6 +85,18 @@ async fn run_config(payload : StartRequest, engine : String) -> RunConfig {
   )
   let session = payload.session
   let host = engine_host(payload.wsl, engine)
+  // A workspace run happens in the project directory itself, with the
+  // session's durable record in the in-project store. Only registered
+  // workspaces qualify — the registry, not the payload, decides which
+  // directories a run may work in.
+  let workspace : @path.Path? = if payload.workspace is Some(path) {
+    match registered_workspace(path) {
+      Some(dir) => Some(dir)
+      None => raise EngineError("\{path} is not a registered workspace")
+    }
+  } else {
+    None
+  }
   {
     task,
     api_key,
@@ -96,9 +108,15 @@ async fn run_config(payload : StartRequest, engine : String) -> RunConfig {
     max_steps: configured_max_steps(payload.max_steps),
     engine,
     host,
-    cwd: resolved_run_cwd(session),
+    cwd: if workspace is Some(dir) {
+      Some(dir)
+    } else {
+      resolved_run_cwd(session)
+    },
     session,
-    session_root: if session is Some(_) {
+    session_root: if workspace is Some(dir) {
+      Some(workspace_session_root(dir))
+    } else if session is Some(_) {
       resolved_session_root(
         payload_root?=payload.session_root.map(root => Path(root)),
       )

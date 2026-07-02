@@ -11,7 +11,12 @@ const MaxReadFileBytes = 1048576
 
 ///|
 async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
-  guard @engine.resolve_in_workspace(payload.session, payload.path) is Some(dir) else {
+  guard @engine.resolve_in_workspace(
+      payload.session,
+      payload.path,
+      workspace?=payload.workspace,
+    )
+    is Some(dir) else {
     raise HostError("path is outside the conversation workspace")
   }
   // A conversation's workspace directory is created lazily on its first run,
@@ -43,7 +48,11 @@ async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
 
 ///|
 async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
-  guard @engine.resolve_in_workspace(payload.session, payload.path)
+  guard @engine.resolve_in_workspace(
+      payload.session,
+      payload.path,
+      workspace?=payload.workspace,
+    )
     is Some(file) else {
     raise HostError("path is outside the conversation workspace")
   }

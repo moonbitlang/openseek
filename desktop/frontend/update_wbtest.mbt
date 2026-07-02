@@ -215,7 +215,7 @@ test "sessions loaded replaces the sidebar list and clears its error" {
   let dispatch = test_dispatch()
   let model = { ..test_model(), sessions_error: "boom" }
   let items : Array[@transcript.SessionListItem] = [
-    { id: "desktop-a", title: "first question" },
+    { id: "desktop-a", title: "first question", workspace: "", workspace_name: "" },
   ]
   let (_, once) = update(dispatch, SessionsLoaded(items), model)
   let (_, twice) = update(dispatch, SessionsLoaded(items), model)

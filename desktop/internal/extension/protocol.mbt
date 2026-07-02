@@ -13,6 +13,8 @@ priv struct StartPayload {
   max_steps : Int?
   session : String?
   session_root : String?
+  // A registered workspace directory to run in; absent = scratch workspace.
+  workspace : String?
   // Present = run the engine inside WSL (Windows only); absent = native.
   wsl : WslPayload?
 } derive(FromJson)
@@ -41,6 +43,7 @@ fn StartPayload::to_request(self : StartPayload) -> @engine.StartRequest {
     max_steps: self.max_steps,
     session: self.session,
     session_root: self.session_root,
+    workspace: self.workspace,
     wsl: self.wsl.map(wsl => wsl.to_request()),
   }
 }
@@ -58,14 +61,24 @@ fn CancelPayload::to_request(self : CancelPayload) -> @engine.CancelRequest {
 ///|
 priv struct LoadSessionPayload {
   session : String
+  // The workspace whose store holds the session, when the client knows it.
+  workspace : String?
 } derive(FromJson)
 
 ///|
 fn LoadSessionPayload::to_request(
   self : LoadSessionPayload,
 ) -> @engine.LoadSessionRequest {
-  { session: self.session }
+  { session: self.session, workspace: self.workspace }
 }
+
+///|
+/// `add_workspace` / `remove_workspace` name the project directory to attach
+/// or detach; the reply (shared with `list_workspaces`) is the updated
+/// registry.
+priv struct WorkspacePayload {
+  path : String
+} derive(FromJson)
 
 ///|
 priv struct SteerPayload {
@@ -212,6 +225,9 @@ priv struct ArchivedSessionsReply {
 priv struct ReadDirPayload {
   session : String
   path : String
+  // The conversation's workspace, when it has one — lets a fresh workspace
+  // conversation browse the project before its durable record exists.
+  workspace : String?
 } derive(FromJson)
 
 ///|
@@ -230,6 +246,8 @@ priv struct ReadDirReply {
 priv struct ReadFilePayload {
   session : String
   path : String
+  // The conversation's workspace, when it has one (see `read_directory`).
+  workspace : String?
 } derive(FromJson)
 
 ///|

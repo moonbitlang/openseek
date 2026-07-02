@@ -48,6 +48,9 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("compact"),
       @app.AppCommandApiDescriptor::new("list_sessions"),
       @app.AppCommandApiDescriptor::new("load_session"),
+      @app.AppCommandApiDescriptor::new("list_workspaces"),
+      @app.AppCommandApiDescriptor::new("add_workspace"),
+      @app.AppCommandApiDescriptor::new("remove_workspace"),
       @app.AppCommandApiDescriptor::new("skills_catalog"),
       @app.AppCommandApiDescriptor::new("skill_install"),
       @app.AppCommandApiDescriptor::new("skills_installed"),
@@ -103,6 +106,26 @@ pub fn openseek_extension(
       })
       context.op_async("load_session", async fn(payload : LoadSessionPayload) {
         @engine.load_session(manager, payload.to_request()) catch {
+          @engine.EngineError(message) => raise HostError(message)
+          error => raise error
+        }
+      })
+      context.op_async("list_workspaces", async fn(_ : Json) {
+        @engine.list_workspaces() catch {
+          @engine.EngineError(message) => raise HostError(message)
+          error => raise error
+        }
+      })
+      context.op_async("add_workspace", async fn(payload : WorkspacePayload) {
+        @engine.attach_workspace(payload.path) catch {
+          @engine.EngineError(message) => raise HostError(message)
+          error => raise error
+        }
+      })
+      context.op_async("remove_workspace", async fn(
+        payload : WorkspacePayload,
+      ) {
+        @engine.detach_workspace(payload.path) catch {
           @engine.EngineError(message) => raise HostError(message)
           error => raise error
         }

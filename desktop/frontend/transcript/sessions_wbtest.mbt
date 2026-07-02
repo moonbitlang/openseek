@@ -4,26 +4,34 @@
 ///|
 test "session list decoding keeps well-formed entries and skips the rest" {
   let text =
-    #|{"sessions":[
-    #|  {"id":"desktop-b","title":"newest","updated_at_ms":2000,"last_sequence":4},
-    #|  {"id":"","title":"no id"},
-    #|  "not an object",
-    #|  {"id":"tui-a","title":""}
-    #|],"session_root":"/home/user/.openseek"}
+    #|{"groups":[
+    #|  {"workspace":"","name":"","session_root":"/home/user/.openseek","error":"","sessions":[
+    #|    {"id":"desktop-b","title":"newest","updated_at_ms":2000,"last_sequence":4},
+    #|    {"id":"","title":"no id"},
+    #|    "not an object"
+    #|  ]},
+    #|  {"workspace":"/home/user/proj","name":"proj","session_root":"/home/user/proj/.openseek","error":"","sessions":[
+    #|    {"id":"tui-a","title":""}
+    #|  ]},
+    #|  {"workspace":"/home/user/broken","name":"broken","session_root":"/home/user/broken/.openseek","error":"session list failed","sessions":[]}
+    #|]}
   guard decode_sessions_reply(text) is Some(items) else {
     fail("expected a decoded list")
   }
   inspect(items.length(), content="2")
   inspect(items[0].id, content="desktop-b")
   inspect(items[0].title, content="newest")
+  inspect(items[0].workspace, content="")
   inspect(items[1].id, content="tui-a")
   inspect(items[1].title, content="")
+  inspect(items[1].workspace, content="/home/user/proj")
+  inspect(items[1].workspace_name, content="proj")
 }
 
 ///|
 test "session list decoding rejects structurally unusable replies" {
   assert_true(decode_sessions_reply("not json") is None)
-  assert_true(decode_sessions_reply("{\"sessions\":42}") is None)
+  assert_true(decode_sessions_reply("{\"groups\":42}") is None)
   assert_true(decode_sessions_reply("[]") is None)
 }
 

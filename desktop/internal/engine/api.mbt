@@ -25,6 +25,10 @@ pub(all) struct StartRequest {
   max_steps : Int?
   session : String?
   session_root : String?
+  // A registered workspace directory to run in: the engine works in the
+  // project itself and the session's durable record lands in its in-project
+  // store. Overrides the derived scratch cwd and `session_root`.
+  workspace : String?
   wsl : WslRequest?
 }
 
@@ -50,6 +54,9 @@ pub(all) struct CompactRequest {
 ///|
 pub(all) struct LoadSessionRequest {
   session : String
+  // The workspace whose store holds the session, when the client knows it;
+  // otherwise the host probes the registered workspaces and the global root.
+  workspace : String?
 }
 
 ///|
@@ -84,9 +91,28 @@ struct PumpReply {
 } derive(ToJson)
 
 ///|
-struct SessionsReply {
-  sessions : Json
+/// One sidebar group of `list_sessions`: the conversations stored under one
+/// session root. `workspace` is the project directory ("" for the default
+/// group of scratch conversations) and `name` its display label (the folder's
+/// basename). A group whose listing failed carries the engine's message in
+/// `error` and an empty `sessions` — one broken workspace must not take the
+/// whole sidebar down.
+struct SessionGroup {
+  workspace : String
+  name : String
   session_root : String
+  sessions : Json
+  error : String
+} derive(ToJson)
+
+///|
+struct SessionsReply {
+  groups : Array[SessionGroup]
+} derive(ToJson)
+
+///|
+struct WorkspacesReply {
+  workspaces : Array[String]
 } derive(ToJson)
 
 ///|

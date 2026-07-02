@@ -5,14 +5,19 @@
 const WorkspaceDirName = "OpenSeek"
 
 ///|
-/// Per-conversation workspace directory: `<workspace root>/<session id>`,
-/// flat — desktop ids embed their creation date, so a name-sorted listing is
-/// already chronological without a grouping level. A pure function of the
-/// session id, so resuming a conversation — even from a fresh app launch —
-/// lands in the same directory without recording it anywhere. `None` when the
-/// id is unsafe as a path component or no home directory is known; the caller
-/// falls back to the home directory.
+/// Per-conversation workspace directory. A conversation whose durable record
+/// lives inside a registered workspace works in that project directory; a
+/// scratch conversation gets `<workspace root>/<session id>`, flat — desktop
+/// ids embed their creation date, so a name-sorted listing is already
+/// chronological without a grouping level. Either way the directory follows
+/// from the session id and what's on disk, so resuming a conversation — even
+/// from a fresh app launch — lands in the same directory without recording it
+/// anywhere. `None` when the id is unsafe as a path component or no home
+/// directory is known; the caller falls back to the home directory.
 async fn session_workspace_dir(session : String) -> @path.Path? {
+  if workspace_of_session(session) is Some(workspace) {
+    return Some(workspace)
+  }
   guard safe_workspace_id(session) else { return None }
   guard workspace_root() is Some(root) else { return None }
   Some(root.join(session).normalize())
@@ -34,14 +39,23 @@ pub async fn session_cwd(session : String) -> String {
 /// Resolve a workspace-relative `relative` against the session's workspace
 /// directory, returning the absolute path or `None` when the session id is
 /// unsafe or `relative` would escape the workspace. The client supplies only
-/// `relative`; deriving the root from the session id here keeps the trust
-/// boundary in the host, so a crafted `..` path cannot reach outside the
-/// conversation's directory.
+/// `relative` and (optionally) a `workspace` hint — honored only when the
+/// path is a registered workspace, covering a fresh workspace conversation
+/// whose durable record does not exist on disk yet. Deriving the root
+/// host-side keeps the trust boundary here: a crafted `..` path or workspace
+/// cannot reach outside directories the user attached.
 pub async fn resolve_in_workspace(
   session : String,
   relative : String,
+  workspace? : String,
 ) -> @path.Path? {
-  guard session_workspace_dir(session) is Some(root) else { return None }
+  let root = if workspace is Some(hint) &&
+    registered_workspace(hint) is Some(dir) {
+    Some(dir)
+  } else {
+    session_workspace_dir(session)
+  }
+  guard root is Some(root) else { return None }
   contained_path(root, relative)
 }
 
