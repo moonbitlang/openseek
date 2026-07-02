@@ -309,6 +309,11 @@ priv struct Model {
   wsl_enabled : Bool
   wsl_distro : String
   wsl_engine : String
+  // Whether the host prefers a dark color scheme. The app's own palette
+  // follows `prefers-color-scheme` in CSS; this mirror drives the embedded
+  // viewer's `data-theme` attribute, which CSS media queries cannot set.
+  // Seeded at startup and kept fresh by `watch_color_scheme`.
+  dark_mode : Bool
   setup_open : Bool
   // Whether the left sidebar (chat list + navigation) is shown. Collapsing it
   // hands the full width to the conversation; the topbar toggle brings it back.
@@ -463,6 +468,9 @@ priv enum Msg {
   // The transcript's at-bottom state changed (the user scrolled away from,
   // or back to, the tail). Reported by the DOM scroll watcher.
   TranscriptPinned(Bool)
+  // The host's dark-mode preference changed (the user switched the OS theme).
+  // Reported by the `matchMedia` watcher.
+  ColorSchemeChanged(Bool)
   // A file path in the transcript was clicked: open it in the system's
   // default app. The host resolves the path inside the active conversation's
   // workspace.
@@ -561,6 +569,7 @@ fn initial_model() -> Model {
     wsl_enabled: false,
     wsl_distro: "",
     wsl_engine: "",
+    dark_mode: host_prefers_dark(),
     setup_open: false,
     sidebar_open: true,
     active_session: "",

@@ -386,6 +386,7 @@ fn update_msg(
           install_bridge(dispatch),
           load_saved_settings(dispatch),
           watch_transcript_scroll(dispatch),
+          watch_color_scheme(dispatch),
           rotate_session(dispatch),
         ]),
         model,
@@ -793,6 +794,7 @@ fn update_msg(
       }
     TranscriptPinned(pinned) =>
       (@cmd.none, { ..model, transcript_pinned: pinned })
+    ColorSchemeChanged(dark) => (@cmd.none, { ..model, dark_mode: dark })
     OpenFile(path) => {
       // A relative path is taken against the active conversation's working
       // directory: its `cwd` for a live run, or — when resumed without one —

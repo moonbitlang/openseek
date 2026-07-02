@@ -1161,12 +1161,14 @@ fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // stay empty and never be re-keyed (see editor_panel.mbt).
   // `editor-shell` brings in the viewer's `--vscode-*` / `--editor-*` theme
   // variables (defined on that class in the bundled viewer.css); `data-theme`
-  // selects the light palette. The viewer's colors cascade from this host.
+  // picks the palette matching the app's own light/dark scheme (the shell's
+  // default is dark, `light` overrides). The viewer's colors cascade from
+  // this host.
   let viewer_host = @html.div(
     attrs=@html.Attrs::build()
       .id(ViewerHostId)
       .class("viewer-host editor-shell")
-      .data_set("theme", "light"),
+      .data_set("theme", if model.dark_mode { "dark" } else { "light" }),
     ([] : Array[@html.Html]),
   )
   // A grab strip on the editor's left edge for drag-to-resize. Absolutely

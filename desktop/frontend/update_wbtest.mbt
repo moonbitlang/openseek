@@ -819,6 +819,15 @@ test "the scroll watcher's report lands on the model" {
 }
 
 ///|
+test "the color-scheme watcher's report lands on the model" {
+  let dispatch = test_dispatch()
+  let (_, dark) = update(dispatch, ColorSchemeChanged(true), test_model())
+  inspect(dark.dark_mode, content="true")
+  let (_, light) = update(dispatch, ColorSchemeChanged(false), dark)
+  inspect(light.dark_mode, content="false")
+}
+
+///|
 test "update is pure: a pinned-state change is idempotent" {
   let dispatch = test_dispatch()
   let (_, first) = update(dispatch, TranscriptPinned(false), test_model())
