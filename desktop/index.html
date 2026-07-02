@@ -837,6 +837,40 @@
         margin: 0 auto;
       }
 
+      /* Floating "jump to latest" over the transcript's bottom edge, shown
+         only while auto-follow is unpinned. Sticky inside the scroller; zero
+         height so it never adds scroll length, the transform lifts the button
+         into view. */
+      .jump-latest-wrap {
+        position: sticky;
+        bottom: 0;
+        display: flex;
+        justify-content: center;
+        height: 0;
+        overflow: visible;
+        z-index: 5;
+      }
+      .jump-latest {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        transform: translateY(-42px);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--ink-2);
+        font-size: 15px;
+        line-height: 1;
+        cursor: pointer;
+        box-shadow: var(--shadow-pop);
+      }
+      .jump-latest:hover {
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+        border-color: var(--accent-line);
+      }
+
       /* empty state */
       .empty {
         display: grid;

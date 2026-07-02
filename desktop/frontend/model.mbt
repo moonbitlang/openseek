@@ -473,6 +473,9 @@ priv enum Msg {
   // The transcript's at-bottom state changed (the user scrolled away from,
   // or back to, the tail). Reported by the DOM scroll watcher.
   TranscriptPinned(Bool)
+  // The floating "jump to latest" button: scroll the transcript back to its
+  // tail and re-pin auto-follow.
+  JumpToLatest
   // The host's dark-mode preference changed (the user switched the OS theme).
   // Reported by the `matchMedia` watcher.
   ColorSchemeChanged(Bool)

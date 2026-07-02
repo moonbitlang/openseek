@@ -296,7 +296,9 @@ fn streaming_response_view(
 
 ///|
 fn transcript_view(
+  dispatch : @cmd.Emit[Msg],
   conv : Conversation,
+  pinned~ : Bool,
   on_open : (String) -> @cmd.Cmd,
 ) -> @html.Html {
   let items : Array[@html.Html] = []
@@ -331,9 +333,24 @@ fn transcript_view(
   if !conv.streaming_response.is_empty() {
     items.push(streaming_response_view(conv.streaming_response, on_open))
   }
-  @html.section(id="transcript", class="transcript", [
-    @html.div(id="stream", class="stream", items),
-  ])
+  let children = [@html.div(id="stream", class="stream", items)]
+  // Reading history unpins auto-follow (see `watch_transcript_scroll`); the
+  // floating button is the way back to the live tail. Sticky inside the
+  // scroller with zero height, so it never adds scroll length.
+  if !pinned {
+    children.push(
+      @html.div(class="jump-latest-wrap", [
+        @html.button(
+          class="jump-latest",
+          type_="button",
+          title="Jump to latest",
+          on_click=dispatch(JumpToLatest),
+          "↓",
+        ),
+      ]),
+    )
+  }
+  @html.section(id="transcript", class="transcript", children)
 }
 
 ///|
@@ -1384,7 +1401,12 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     Chat =>
       [
         topbar_view(dispatch, model),
-        transcript_view(model.active(), path => dispatch(OpenFile(path))),
+        transcript_view(
+          dispatch,
+          model.active(),
+          pinned=model.transcript_pinned,
+          path => dispatch(OpenFile(path)),
+        ),
         composer_view(dispatch, model),
       ]
     Skills => [skills_page(dispatch, model)]

@@ -799,6 +799,10 @@ fn update_msg(
       }
     TranscriptPinned(pinned) =>
       (@cmd.none, { ..model, transcript_pinned: pinned })
+    // Pin eagerly so the button hides on the click's own render; the scroll
+    // watcher would only confirm it after the scroll settles.
+    JumpToLatest =>
+      (scroll_transcript_after_render(), { ..model, transcript_pinned: true })
     ColorSchemeChanged(dark) => (@cmd.none, { ..model, dark_mode: dark })
     BranchLoaded(session~, branch~) =>
       if model.find_conversation(session) is Some(conv) {
