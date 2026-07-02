@@ -209,6 +209,126 @@ fn tool_class(is_error : Bool) -> String {
 }
 
 ///|
+/// One tool result's card (name header + output), shown inside an expanded
+/// tool group.
+fn tool_card(name : String, is_error : Bool, content : String) -> @html.Html {
+  @html.div(class=tool_class(is_error), [
+    @html.div(class="tool-head", @transcript.non_empty_or(name, "tool")),
+    @html.pre(content),
+  ])
+}
+
+///|
+/// The summary line for a run of consecutive tool cards, counting calls by
+/// what the engine's tools do — "Read 3 files, edited 2 files, ran 1
+/// command". Only the name's first token matters, so a runtime-update title
+/// like "moon_check compiling" counts as a check update.
+fn tool_group_summary(items : Array[@transcript.TranscriptItem]) -> String {
+  let mut reads = 0
+  let mut writes = 0
+  let mut edits = 0
+  let mut runs = 0
+  let mut checks = 0
+  let mut others = 0
+  for item in items {
+    guard item.kind is Tool(name, _) else { continue }
+    let head = match name.trim().split(" ").head() {
+      Some(head) => head.to_owned()
+      None => ""
+    }
+    match head {
+      "read" => reads = reads + 1
+      "write" => writes = writes + 1
+      "edit" | "multi_edit" => edits = edits + 1
+      "shell" | "moon_cmd" => runs = runs + 1
+      "moon_check" => checks = checks + 1
+      _ => others = others + 1
+    }
+  }
+  fn count(value : Int, one : String, many : String) -> String {
+    if value == 1 {
+      one
+    } else {
+      many.replace(old="#", new=value.to_string())
+    }
+  }
+
+  let parts : Array[String] = []
+  if reads > 0 {
+    parts.push(count(reads, "read 1 file", "read # files"))
+  }
+  if writes > 0 {
+    parts.push(count(writes, "wrote 1 file", "wrote # files"))
+  }
+  if edits > 0 {
+    parts.push(count(edits, "edited 1 file", "edited # files"))
+  }
+  if runs > 0 {
+    parts.push(count(runs, "ran 1 command", "ran # commands"))
+  }
+  if checks > 0 {
+    parts.push(count(checks, "1 check update", "# check updates"))
+  }
+  if others > 0 {
+    parts.push(count(others, "1 tool call", "# tool calls"))
+  }
+  capitalize(parts.join(", "))
+}
+
+///|
+fn capitalize(text : String) -> String {
+  if text.iter().next() is Some(first) {
+    "\{first.to_ascii_uppercase()}" + text[1:].to_owned()
+  } else {
+    text
+  }
+}
+
+///|
+/// A run of consecutive tool results, folded into one card: the collapsed
+/// line is the group's summary, expanding shows the individual outputs. A
+/// group with a failure starts open and badges the count — errors are the
+/// one thing that must not hide behind the fold. The open state is the
+/// browser's (`<details>`), so a reader's toggle survives streaming
+/// re-renders.
+fn tool_group_view(items : Array[@transcript.TranscriptItem]) -> @html.Html {
+  let mut failed = 0
+  let cards : Array[@html.Html] = []
+  for item in items {
+    guard item.kind is Tool(name, is_error) else { continue }
+    if is_error {
+      failed = failed + 1
+    }
+    cards.push(tool_card(name, is_error, item.content))
+  }
+  let summary : Array[@html.Html] = [
+    @html.span(class="tool-group-text", tool_group_summary(items)),
+  ]
+  if failed > 0 {
+    summary.push(
+      @html.span(
+        class="tool-group-failed",
+        if failed == 1 {
+          "1 failed"
+        } else {
+          "\{failed} failed"
+        },
+      ),
+    )
+  }
+  @html.div(class="tool-row", [
+    @html.details(
+      class=if failed > 0 { "tool-group error" } else { "tool-group" },
+      open=failed > 0,
+      [
+        @html.summary(class="tool-group-summary", summary),
+        @html.div(class="tool-group-body", cards),
+      ],
+    ),
+  ])
+}
+
+///|
 fn inline_code_nodes(content : String) -> Array[@html.Html] {
   let nodes : Array[@html.Html] = []
   let mut rest = content
@@ -275,13 +395,9 @@ fn transcript_item_view(
       ])
     }
     Reasoning => collapsed_reasoning_view(item.content, on_open)
-    Tool(name, is_error) =>
-      @html.div(class="tool-row", [
-        @html.div(class=tool_class(is_error), [
-          @html.div(class="tool-head", @transcript.non_empty_or(name, "tool")),
-          @html.pre(item.content),
-        ]),
-      ])
+    // Reached only for a tool item outside a group (the transcript loop
+    // batches consecutive ones into `tool_group_view` itself).
+    Tool(_) => tool_group_view([item])
   }
 }
 
@@ -372,8 +488,22 @@ fn transcript_view(
       ]),
     )
   } else {
-    for item in conv.messages {
-      items.push(transcript_item_view(item, on_open))
+    // Consecutive tool results fold into one summarized group card; any
+    // other item breaks the run.
+    let mut index = 0
+    while index < conv.messages.length() {
+      if conv.messages[index].kind is Tool(_) {
+        let group : Array[@transcript.TranscriptItem] = []
+        while index < conv.messages.length() &&
+              conv.messages[index].kind is Tool(_) {
+          group.push(conv.messages[index])
+          index = index + 1
+        }
+        items.push(tool_group_view(group))
+      } else {
+        items.push(transcript_item_view(conv.messages[index], on_open))
+        index = index + 1
+      }
     }
   }
   // Both buffers can be non-empty at once: the answer starts streaming

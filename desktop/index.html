@@ -1191,6 +1191,69 @@
         animation: riseIn 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
       }
 
+      /* A run of consecutive tool calls folds into one card: the summary
+         line collapsed by default, the individual outputs behind it. */
+      .tool-group {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        overflow: hidden;
+      }
+      .tool-group.error {
+        border-color: var(--del-line);
+      }
+      .tool-group-summary {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 7px 12px;
+        background: var(--surface-2);
+        color: var(--ink-2);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+      }
+      .tool-group-summary::-webkit-details-marker {
+        display: none;
+      }
+      .tool-group-summary::before {
+        content: "▸";
+        flex: 0 0 auto;
+        color: var(--ink-3);
+        font-size: 9px;
+      }
+      .tool-group[open] > .tool-group-summary::before {
+        content: "▾";
+      }
+      .tool-group[open] > .tool-group-summary {
+        border-bottom: 1px solid var(--line-2);
+      }
+      .tool-group-summary:hover {
+        color: var(--ink);
+      }
+      .tool-group-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tool-group-failed {
+        flex: 0 0 auto;
+        margin-left: auto;
+        color: var(--del);
+      }
+      .tool-group.error > .tool-group-summary {
+        background: var(--del-bg);
+        color: var(--del);
+      }
+      .tool-group-body {
+        display: grid;
+        gap: 8px;
+        padding: 8px;
+      }
+
       .tool-card {
         border: 1px solid var(--line);
         border-radius: var(--radius-sm);
