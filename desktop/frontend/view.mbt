@@ -183,10 +183,18 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.span(class="sidebar-label", "Skills"),
         ],
       ),
-      @html.button(class="sidebar-button", on_click=dispatch(OpenSetup), [
-        @html.span(class="sidebar-icon", "⚙"),
-        @html.span(class="sidebar-label", "Settings"),
-      ]),
+      @html.button(
+        class=if model.screen is Settings {
+          "sidebar-button active"
+        } else {
+          "sidebar-button"
+        },
+        on_click=dispatch(OpenSetup),
+        [
+          @html.span(class="sidebar-icon", "⚙"),
+          @html.span(class="sidebar-label", "Settings"),
+        ],
+      ),
     ]),
   ])
 }
@@ -693,7 +701,11 @@ fn provider_hint(provider : ApiProvider) -> String {
 }
 
 ///|
-fn setup_popup(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+/// The Settings page, shown in the main area in place of the conversation
+/// (mirroring the Skills page). While the configured endpoint is unusable it
+/// takes over on its own and "Done" stays disabled — there would be nothing
+/// the composer could do.
+fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let ready = model.api_ready()
   let settings : Array[@html.Html] = [
     model_select(dispatch, model.selected_model),
@@ -783,11 +795,11 @@ fn setup_popup(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       )
     }
   }
-  @html.div(class="setup-backdrop", [
-    @html.div(class="setup-popup", [
-      @html.div(class="setup-header", [
+  @html.section(class="settings-page", [
+    @html.div(class="settings-page-inner", [
+      @html.div(class="settings-header", [
         @html.div(class="setup-title", [
-          @html.h2("Settings"),
+          @html.h1("Settings"),
           @html.div(
             class="status",
             if ready {
@@ -803,7 +815,7 @@ fn setup_popup(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           class="secondary close-button",
           disabled=!ready,
           on_click=dispatch(CloseSetup),
-          "Close",
+          "Done",
         ),
       ]),
       @html.div(class="settings", settings),
@@ -1460,6 +1472,7 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         composer_view(dispatch, model),
       ]
     Skills => [skills_page(dispatch, model)]
+    Settings => [settings_page(dispatch, model)]
   }
   // The app is `sidebar | content`; `content` itself splits into the
   // conversation (left) and the editor (right) as two independent parts, so
@@ -1468,7 +1481,7 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // viewer host inside it) is still rendered so the attached viewer is never
   // torn down.
   let panel_open = model.file_panel.open && model.screen is Chat
-  let app = @html.div(
+  @html.div(
     class=if model.sidebar_open { "app" } else { "app sidebar-collapsed" },
     [
       sidebar_view(dispatch, model),
@@ -1478,9 +1491,4 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ),
     ],
   )
-  if model.setup_open {
-    @html.fragment([app, setup_popup(dispatch, model)])
-  } else {
-    app
-  }
 }

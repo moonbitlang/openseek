@@ -1583,34 +1583,32 @@
         border-color: var(--accent-ink);
       }
 
-      /* ---------- settings popup ---------- */
-      .setup-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 10;
-        display: grid;
-        place-items: center;
-        padding: 24px;
-        background: color-mix(in srgb, var(--ink) 22%, transparent);
-        backdrop-filter: blur(3px);
+      /* ---------- settings page ---------- */
+      .settings-page {
+        grid-row: 1 / -1;
+        min-height: 0;
+        overflow: auto;
+        padding: 40px 28px 28px;
       }
 
-      .setup-popup {
+      .settings-page-inner {
         display: grid;
+        align-content: start;
         gap: 18px;
-        width: min(520px, 100%);
-        border: 1px solid var(--line);
-        border-radius: var(--radius-lg);
-        background: var(--surface);
-        padding: 20px;
-        box-shadow: var(--shadow-pop);
+        max-width: 520px;
+        margin: 0 auto;
       }
 
-      .setup-header {
+      .settings-header {
         display: flex;
         gap: 16px;
         align-items: flex-start;
         justify-content: space-between;
+      }
+
+      .settings-header h1 {
+        font-size: 22px;
+        letter-spacing: -0.02em;
       }
 
       .setup-title {
@@ -1826,11 +1824,6 @@
 
         .tool-row {
           padding-left: 0;
-        }
-
-        .setup-backdrop {
-          align-items: start;
-          padding: 18px;
         }
       }
     </style>

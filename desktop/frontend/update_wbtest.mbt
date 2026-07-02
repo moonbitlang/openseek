@@ -28,7 +28,6 @@ fn test_model() -> Model {
     ..initial_model(),
     bridge_ready: true,
     api_key: "sk-test",
-    setup_open: false,
     active_session: "desktop-test",
     conversations: [test_conversation()],
   }
@@ -686,7 +685,7 @@ test "loaded settings open the popup only when incomplete" {
     ),
     test_model(),
   )
-  inspect(zero_config.setup_open, content="false")
+  assert_true(zero_config.screen is Chat)
   assert_true(zero_config.api_provider is Openseek)
   assert_true(zero_config.display_status() is Ready)
   let (_, keyless) = update(
@@ -702,7 +701,7 @@ test "loaded settings open the popup only when incomplete" {
     ),
     test_model(),
   )
-  inspect(keyless.setup_open, content="true")
+  assert_true(keyless.screen is Settings)
   assert_true(keyless.display_status() is ApiKeyRequired)
   let (_, restored) = update(
     dispatch,
@@ -717,7 +716,7 @@ test "loaded settings open the popup only when incomplete" {
     ),
     test_model(),
   )
-  inspect(restored.setup_open, content="false")
+  assert_true(restored.screen is Chat)
   inspect(restored.api_key, content="sk-stored")
   inspect(restored.custom_api_key, content="sk-custom-stored")
   inspect(restored.wsl_enabled, content="true")
@@ -736,7 +735,7 @@ test "loaded settings open the popup only when incomplete" {
     ),
     test_model(),
   )
-  inspect(custom.setup_open, content="false")
+  assert_true(custom.screen is Chat)
   inspect(custom.effective_api_key(), content="sk-custom")
 }
 
@@ -763,12 +762,12 @@ test "saving a key writes the active provider credential only" {
     api_key: "sk-old",
     custom_api_key: "sk-custom-old",
     setup_api_key: "  sk-new  ",
-    setup_open: true,
+    screen: Settings,
   }
   let (_, saved_deepseek) = update(dispatch, SaveApiKey, deepseek)
   inspect(saved_deepseek.api_key, content="sk-new")
   inspect(saved_deepseek.custom_api_key, content="sk-custom-old")
-  inspect(saved_deepseek.setup_open, content="false")
+  assert_true(saved_deepseek.screen is Chat)
   let custom = {
     ..deepseek,
     api_provider: Custom,
@@ -780,7 +779,7 @@ test "saving a key writes the active provider credential only" {
   inspect(saved_custom.api_key, content="sk-deepseek")
   inspect(saved_custom.custom_api_key, content="sk-custom-new")
   inspect(saved_custom.effective_api_key(), content="sk-custom-new")
-  inspect(saved_custom.setup_open, content="false")
+  assert_true(saved_custom.screen is Chat)
 }
 
 ///|
@@ -792,21 +791,21 @@ test "changing settings mid-run leaves the run status alone" {
 }
 
 ///|
-test "the popup cannot close while the endpoint is unusable" {
+test "the settings page cannot be left while the endpoint is unusable" {
   let dispatch = test_dispatch()
   let model = {
     ..test_model(),
     api_provider: Deepseek,
     api_key: "",
-    setup_open: true,
+    screen: Settings,
   }
   let (_, stuck) = update(dispatch, CloseSetup, model)
-  inspect(stuck.setup_open, content="true")
+  assert_true(stuck.screen is Settings)
   let (_, closed) = update(dispatch, CloseSetup, {
     ..model,
     api_provider: Openseek,
   })
-  inspect(closed.setup_open, content="false")
+  assert_true(closed.screen is Chat)
 }
 
 ///|

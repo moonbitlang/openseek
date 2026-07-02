@@ -123,12 +123,14 @@ priv struct Conversation {
 }
 
 ///|
-/// What the main area shows: the active conversation, or the Skills page.
-/// Selecting a conversation (or rotating to a new one) always returns to
-/// the chat.
+/// What the main area shows: the active conversation, the Skills page, or
+/// the Settings page. Selecting a conversation (or rotating to a new one)
+/// always returns to the chat. Settings also opens on its own while the
+/// configured endpoint is unusable, since the composer would be dead weight.
 priv enum Screen {
   Chat
   Skills
+  Settings
 }
 
 ///|
@@ -319,7 +321,6 @@ priv struct Model {
   // viewer's `data-theme` attribute, which CSS media queries cannot set.
   // Seeded at startup and kept fresh by `watch_color_scheme`.
   dark_mode : Bool
-  setup_open : Bool
   // Whether the left sidebar (chat list + navigation) is shown. Collapsing it
   // hands the full width to the conversation; the topbar toggle brings it back.
   sidebar_open : Bool
@@ -582,7 +583,6 @@ fn initial_model() -> Model {
     wsl_distro: "",
     wsl_engine: "",
     dark_mode: host_prefers_dark(),
-    setup_open: false,
     sidebar_open: true,
     active_session: "",
     loading_session: "",

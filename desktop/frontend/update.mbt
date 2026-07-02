@@ -400,7 +400,13 @@ fn update_msg(
           ..model,
           bridge_ready: true,
           bridge_error: "",
-          setup_open: model.setup_open || !model.api_ready(),
+          // An unusable endpoint routes straight to Settings — the composer
+          // could do nothing anyway.
+          screen: if model.api_ready() {
+            model.screen
+          } else {
+            Settings
+          },
         },
       )
     BridgeUnavailable(message) =>
@@ -425,10 +431,20 @@ fn update_msg(
         wsl_engine: wsl_engine.trim().to_owned(),
         setup_api_key: "",
       }
-      // The default provider needs no setup, so the popup only opens when
-      // the stored settings are incomplete (official endpoint without a
-      // key, custom endpoint without a URL).
-      (@cmd.none, { ..next, setup_open: !next.api_ready() })
+      // The default provider needs no setup, so the Settings page only takes
+      // over when the stored settings are incomplete (official endpoint
+      // without a key, custom endpoint without a URL).
+      (
+        @cmd.none,
+        {
+          ..next,
+          screen: if next.api_ready() {
+            next.screen
+          } else {
+            Settings
+          },
+        },
+      )
     }
     TaskChanged(value) => {
       let session = model.active().session_id
@@ -532,12 +548,12 @@ fn update_msg(
       (save_wsl_distro(value), { ..model, wsl_distro: value })
     WslEngineChanged(value) =>
       (save_wsl_engine(value), { ..model, wsl_engine: value })
-    OpenSetup => (@cmd.none, { ..model, setup_open: true, setup_api_key: "" })
+    OpenSetup => (@cmd.none, { ..model, screen: Settings, setup_api_key: "" })
     CloseSetup =>
-      // The popup cannot be dismissed while the configured endpoint is
-      // unusable — there would be nothing the composer could do.
+      // "Done" returns to the conversation, but not while the configured
+      // endpoint is unusable — there would be nothing the composer could do.
       if model.api_ready() {
-        (@cmd.none, { ..model, setup_open: false, setup_api_key: "" })
+        (@cmd.none, { ..model, screen: Chat, setup_api_key: "" })
       } else {
         (@cmd.none, model)
       }
@@ -548,15 +564,20 @@ fn update_msg(
         (@cmd.none, model)
       } else {
         match model.api_provider {
+          // Saving the key that completes the setup returns to the chat —
+          // the same auto-dismiss the popup used to have.
           Deepseek => {
             let next = { ..model, api_key, setup_api_key: "" }
-            (save_api_key(api_key), { ..next, setup_open: !next.api_ready() })
+            (
+              save_api_key(api_key),
+              { ..next, screen: if next.api_ready() { Chat } else { Settings } },
+            )
           }
           Custom => {
             let next = { ..model, custom_api_key: api_key, setup_api_key: "" }
             (
               save_custom_api_key(api_key),
-              { ..next, setup_open: !next.api_ready() },
+              { ..next, screen: if next.api_ready() { Chat } else { Settings } },
             )
           }
           Openseek => (@cmd.none, { ..model, setup_api_key: "" })
