@@ -4,13 +4,19 @@ fn Ui::composer_surface(
   cols~ : Int,
   rows~ : Int,
 ) -> @surface.Surface {
-  let completion = match self.completion_menu() {
-    Some(menu) if !self.completion.dismissed =>
-      @completion.Model::open(
-        items=menu.items,
-        selected=self.completion.selected,
-      )
-    _ => @completion.Model::closed()
+  // An open picker takes the single menu slot; otherwise the autocomplete menu.
+  let completion = if self.picker is Some(picker) &&
+    self.completion_menu_visible() {
+    @completion.Model::open(items=picker.items, selected=picker.selected)
+  } else {
+    match self.completion_menu() {
+      Some(menu) if !self.completion.dismissed =>
+        @completion.Model::open(
+          items=menu.items,
+          selected=self.completion.selected,
+        )
+      _ => @completion.Model::closed()
+    }
   }
   @render.composer_surface(
     self.composer,

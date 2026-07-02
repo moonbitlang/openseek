@@ -330,6 +330,10 @@ async fn run_tui(config : AppConfig, initial : String?) -> Unit {
         name="compact",
         description="summarize and compact the conversation",
       ),
+      @ui.SlashCommandSpec::new(
+        name="skills",
+        description="list and insert a skill",
+      ),
     ]),
     ui => run_app(config, initial, ui),
   )

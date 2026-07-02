@@ -8,6 +8,9 @@ struct Ui {
   composer : @composer.Model
   history : @history.History
   completion : CompletionState
+  // An open modal picker (e.g. `/skills`), or `None` when closed. Mutually
+  // exclusive with the completion menu — opening one resets the other.
+  mut picker : PickerState?
   transcript : Array[@doc.Doc]
   mut activity : @doc.Text?
   mut queued_inputs : Array[Input]
@@ -30,6 +33,7 @@ fn Ui::new(tty : @tty.Tty, config : Config) -> Ui {
     composer,
     history: @history.History::new(),
     completion: CompletionState::new(),
+    picker: None,
     transcript: [],
     activity: None,
     queued_inputs: [],

@@ -199,6 +199,9 @@ priv enum Msg {
   // The persistent engine process exited (for any reason): its background
   // watchers died with it, so engine-scoped status must reset.
   EngineExited
+  // Skills discovered off the UI thread for the `/skills` command; carries the
+  // picker items (skill name + description). Not tied to a model run.
+  SkillsDiscovered(Array[@completion.CompletionItem])
   Tick
 }
 
@@ -217,6 +220,7 @@ fn Msg::run_id(self : Msg) -> Int? {
     | EngineSteerDropped(_)
     | EngineSessionError(_)
     | EngineExited
+    | SkillsDiscovered(_)
     | Tick => None
   }
 }
@@ -244,5 +248,11 @@ priv enum Cmd {
   // Second Ctrl-C while already interrupting: the cancel command was not
   // enough, so kill the engine process outright.
   KillEngine
+  // Discover the available skills off the UI thread, then deliver them as a
+  // `SkillsDiscovered` message (the `/skills` command's async first half).
+  DiscoverSkills
+  // Open the modal skill picker over the discovered items (the second half of
+  // `/skills`).
+  OpenPicker(Array[@completion.CompletionItem])
   Quit
 }

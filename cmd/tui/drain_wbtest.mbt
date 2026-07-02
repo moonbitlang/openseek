@@ -148,6 +148,30 @@ test "exit slash command quits" {
 }
 
 ///|
+test "skills slash command starts async discovery; arguments are rejected" {
+  let state = drain_test_state()
+  let cmds = update(state, UiInput(SlashCommand(name="skills", arguments="")))
+  guard cmds is [DiscoverSkills] else { fail("expected DiscoverSkills") }
+  let rejected = update(
+    state,
+    UiInput(SlashCommand(name="skills", arguments="oops")),
+  )
+  assert_eq(error_item_count(rejected), 1)
+}
+
+///|
+test "discovered skills open the picker; an empty library just notes it" {
+  let state = drain_test_state()
+  let item = @completion.CompletionItem::new(label="demo", description="a demo")
+  let opened = update(state, SkillsDiscovered([item]))
+  guard opened is [OpenPicker(_)] else { fail("expected OpenPicker") }
+  let empty = update(state, SkillsDiscovered([]))
+  // Empty library: a transcript notice (not an error, not a picker).
+  assert_eq(error_item_count(empty), 0)
+  guard empty is [AppendItem(_)] else { fail("expected a notice item") }
+}
+
+///|
 test "compact slash command starts a compaction run when idle" {
   let state = drain_test_state()
   let cmds = update(state, UiInput(SlashCommand(name="compact", arguments="")))
