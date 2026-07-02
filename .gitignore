@@ -23,6 +23,11 @@ eval/*
 !eval/tool_harness/**
 !eval/internal/
 !eval/internal/**
+!eval/swe_agi/
+!eval/swe_agi/**
+eval/swe_agi/**/_build/
+eval/swe_agi/**/target/
+eval/swe_agi/**/.openseek/
 
 # Generated from *.mbt.md by moon dev_build (regenerated at build time)
 prompt/generated_base_prompt.mbt
