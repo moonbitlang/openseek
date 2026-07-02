@@ -60,7 +60,17 @@ test "decode normalizes legacy names, numbers, and unknown events" {
     decode_engine_event(
       event_fields({ "event": "tool_result", "tool_name": "read" }),
     )
-    is Some(ToolResult(tool_name="read", is_error=false, content="")),
+    is Some(ToolResult(tool_name="read", is_error=false, content="", brief="")),
+  )
+  assert_true(
+    decode_engine_event(
+      event_fields({
+        "event": "tool_result",
+        "tool_name": "read",
+        "brief": "read moon.mod",
+      }),
+    )
+    is Some(ToolResult(brief="read moon.mod", ..)),
   )
   assert_true(decode_engine_event(event_fields({ "event": "novel" })) is None)
 }

@@ -218,9 +218,13 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
       "Chats",
       NewChatIn(""),
       action_title="New chat outside any workspace",
+      toggle=ToggleChatsSection,
+      collapsed=model.chats_collapsed,
     ),
   )
-  push_group_rows(rows, dispatch, model, "", listed~, archived~)
+  if !model.chats_collapsed {
+    push_group_rows(rows, dispatch, model, "", listed~, archived~)
+  }
   if !model.sessions_error.is_empty() {
     rows.push(
       @html.div(class="conversation-row error", title=model.sessions_error, [
@@ -304,14 +308,28 @@ fn push_group_rows(
 ///|
 /// A section heading in the chat list — "Workspaces" or "Chats" — with a
 /// hover-revealed ＋ that adds to that section. Both sections share this one
-/// style, so the two labels always match.
+/// style, so the two labels always match. `toggle`, when given, makes the
+/// heading itself clickable to fold the section (the ＋ stops propagation, so
+/// it never toggles); `collapsed` picks the chevron the CSS appends.
 fn section_heading(
   dispatch : @cmd.Emit[Msg],
   label : String,
   action : Msg,
   action_title~ : String,
+  toggle? : Msg,
+  collapsed? : Bool = false,
 ) -> @html.Html {
-  @html.div(class="sidebar-heading section-heading", [
+  let class = match toggle {
+    Some(_) =>
+      if collapsed {
+        "sidebar-heading section-heading collapsible collapsed"
+      } else {
+        "sidebar-heading section-heading collapsible"
+      }
+    None => "sidebar-heading section-heading"
+  }
+  let on_click = toggle.map(msg => dispatch(msg))
+  @html.div(class~, on_click?, [
     @html.span(class="sidebar-label", label),
     @html.button(
       class="row-archive",
@@ -482,25 +500,6 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-fn tool_class(is_error : Bool) -> String {
-  if is_error {
-    "tool-card error"
-  } else {
-    "tool-card"
-  }
-}
-
-///|
-/// One tool result's card (name header + output), shown inside an expanded
-/// tool group.
-fn tool_card(name : String, is_error : Bool, content : String) -> @html.Html {
-  @html.div(class=tool_class(is_error), [
-    @html.div(class="tool-head", @transcript.non_empty_or(name, "tool")),
-    @html.pre(content),
-  ])
-}
-
-///|
 /// The summary line for a run of consecutive tool cards, counting calls by
 /// what the engine's tools do — "Read 3 files, edited 2 files, ran 1
 /// command". Only the name's first token matters, so a runtime-update title
@@ -513,7 +512,7 @@ fn tool_group_summary(items : Array[@transcript.TranscriptItem]) -> String {
   let mut checks = 0
   let mut others = 0
   for item in items {
-    guard item.kind is Tool(name, _) else { continue }
+    guard item.kind is Tool(name~, ..) else { continue }
     let head = match name.trim().split(" ").head() {
       Some(head) => head.to_owned()
       None => ""
@@ -567,47 +566,195 @@ fn capitalize(text : String) -> String {
 }
 
 ///|
-/// A run of consecutive tool results, folded into one card: the collapsed
-/// line is the group's summary, expanding shows the individual outputs. A
-/// group with a failure starts open and badges the count — errors are the
-/// one thing that must not hide behind the fold. The open state is the
-/// browser's (`<details>`), so a reader's toggle survives streaming
-/// re-renders.
-fn tool_group_view(items : Array[@transcript.TranscriptItem]) -> @html.Html {
+fn count_failed(items : Array[@transcript.TranscriptItem]) -> Int {
   let mut failed = 0
-  let cards : Array[@html.Html] = []
   for item in items {
-    guard item.kind is Tool(name, is_error) else { continue }
-    if is_error {
+    if item.kind is Tool(is_error=true, ..) {
       failed = failed + 1
     }
-    cards.push(tool_card(name, is_error, item.content))
   }
+  failed
+}
+
+///|
+fn failed_badge(failed : Int) -> @html.Html {
+  @html.span(
+    class="activity-failed",
+    if failed == 1 {
+      "1 failed"
+    } else {
+      "\{failed} failed"
+    },
+  )
+}
+
+///|
+/// One turn's finished work — reasoning, tool results, and any interim
+/// assistant narration between tool calls — folded behind a single summary
+/// line ("Read 3 files, ran 1 command"), the way Codex folds a turn behind
+/// "Worked for 46s". Expanding shows the work log in order: reasoning as
+/// muted prose, narration as plain prose, each burst of tool calls as a
+/// one-line sublist. Failures never force the fold open; they badge the
+/// summary instead. The open state is the browser's (`<details>`), so a
+/// reader's toggle survives re-renders.
+fn activity_view(
+  items : Array[@transcript.TranscriptItem],
+  on_open : (String) -> @cmd.Cmd,
+) -> @html.Html {
+  let log : Array[@html.Html] = []
+  let mut index = 0
+  while index < items.length() {
+    if items[index].kind is Tool(..) {
+      let tools : Array[@transcript.TranscriptItem] = []
+      while index < items.length() && items[index].kind is Tool(..) {
+        tools.push(items[index])
+        index = index + 1
+      }
+      log.push(tool_line_view(tools))
+    } else {
+      // Reasoning or interim assistant narration; callers never pass user
+      // messages or error bubbles.
+      let prose_class = if items[index].kind is Assistant(_) {
+        "msg-content markdown activity-response"
+      } else {
+        "msg-content markdown activity-thinking"
+      }
+      log.push(
+        @html.div(
+          class=prose_class,
+          @markdown.markdown_nodes(items[index].content, open_file=on_open),
+        ),
+      )
+      index = index + 1
+    }
+  }
+  let failed = count_failed(items)
   let summary : Array[@html.Html] = [
-    @html.span(class="tool-group-text", tool_group_summary(items)),
+    @html.span(class="activity-text", tool_group_summary(items)),
   ]
   if failed > 0 {
-    summary.push(
-      @html.span(
-        class="tool-group-failed",
-        if failed == 1 {
-          "1 failed"
-        } else {
-          "\{failed} failed"
-        },
-      ),
-    )
+    summary.push(failed_badge(failed))
   }
-  @html.div(class="tool-row", [
-    @html.details(
-      class=if failed > 0 { "tool-group error" } else { "tool-group" },
-      open=failed > 0,
-      [
-        @html.summary(class="tool-group-summary", summary),
-        @html.div(class="tool-group-body", cards),
-      ],
-    ),
+  @html.div(class="activity-row", [
+    @html.details(class="activity", [
+      @html.summary(class="activity-summary", summary),
+      @html.div(class="activity-body", log),
+    ]),
   ])
+}
+
+///|
+/// A settled work run (and any live reasoning-driven one): the trailing
+/// assistant message pops out as the visible answer, and whatever work
+/// precedes it folds into a collapsed activity — provided there was a tool
+/// call. Runs without one (thinking-only turns, plain answers) keep their
+/// ordinary rows instead of a blank-summary fold.
+fn push_settled_run(
+  items : Array[@html.Html],
+  run : Array[@transcript.TranscriptItem],
+  on_open : (String) -> @cmd.Cmd,
+) -> Unit {
+  let mut work_end = run.length()
+  if run[work_end - 1].kind is Assistant(_) {
+    work_end = work_end - 1
+  }
+  let work = run[0:work_end].to_owned()
+  if work.iter().any(item => item.kind is Tool(..)) {
+    items.push(activity_view(work, on_open))
+  } else {
+    for item in work {
+      items.push(transcript_item_view(item, on_open))
+    }
+  }
+  if work_end < run.length() {
+    items.push(transcript_item_view(run[work_end], on_open))
+  }
+}
+
+///|
+/// A live response-narrated run, kept flat while the engine works: the
+/// narration reads as normal assistant bubbles, committed reasoning folds to
+/// its "Thinking" row, and each burst of tool calls is a one-line row. The
+/// turn's end replaces all of it with `push_settled_run`'s collapsed
+/// activity.
+fn push_live_run(
+  items : Array[@html.Html],
+  run : Array[@transcript.TranscriptItem],
+  on_open : (String) -> @cmd.Cmd,
+) -> Unit {
+  let mut index = 0
+  while index < run.length() {
+    if run[index].kind is Tool(..) {
+      let tools : Array[@transcript.TranscriptItem] = []
+      while index < run.length() && run[index].kind is Tool(..) {
+        tools.push(run[index])
+        index = index + 1
+      }
+      items.push(@html.div(class="activity-row", [tool_line_view(tools)]))
+    } else {
+      items.push(transcript_item_view(run[index], on_open))
+      index = index + 1
+    }
+  }
+}
+
+///|
+/// A burst of consecutive tool calls inside an activity: one gray line
+/// ("Read 2 files, ran 1 command") that expands to the per-call briefs. A
+/// burst with a failure starts open — inside an already-expanded activity,
+/// the failure is what the reader came for.
+fn tool_line_view(tools : Array[@transcript.TranscriptItem]) -> @html.Html {
+  let failed = count_failed(tools)
+  let summary : Array[@html.Html] = [
+    @html.span(class="tool-line-text", tool_group_summary(tools)),
+  ]
+  if failed > 0 {
+    summary.push(failed_badge(failed))
+  }
+  @html.details(class="tool-line", open=failed > 0, [
+    @html.summary(class="tool-line-summary", summary),
+    @html.div(class="tool-line-body", tools.map(tool_call_view)),
+  ])
+}
+
+///|
+/// One tool call inside an expanded burst: its brief ("Read moon.mod", the
+/// tool name when the engine sent none), expandable to the call's output.
+/// Failed calls start open and read red.
+fn tool_call_view(item : @transcript.TranscriptItem) -> @html.Html {
+  guard item.kind is Tool(name~, is_error~, brief~) else {
+    return @html.text("")
+  }
+  let label = capitalize(@transcript.non_empty_or(brief, name))
+  let error_class = if is_error { " error" } else { "" }
+  if item.content.trim().is_empty() {
+    @html.div(class="tool-call-label" + error_class, label)
+  } else {
+    @html.details(class="tool-call" + error_class, open=is_error, [
+      @html.summary(class="tool-call-summary", label),
+      @html.pre(truncate_output(item.content)),
+    ])
+  }
+}
+
+///|
+/// Clamp a tool output to its first and last lines around a skip marker, so
+/// one huge read or log dump cannot swallow the transcript. The transcript
+/// is the only scroll area — outputs grow the page instead of nesting a
+/// second scrollbar that traps the wheel.
+fn truncate_output(content : String) -> String {
+  let head_limit = 60
+  let tail_limit = 40
+  let lines = content.split("\n").map(line => line.to_owned()).to_array()
+  if lines.length() <= head_limit + tail_limit + 1 {
+    return content
+  }
+  let parts = lines[0:head_limit].to_owned()
+  parts.push(
+    "⋯ \{lines.length() - head_limit - tail_limit} lines skipped ⋯",
+  )
+  parts.append(lines[lines.length() - tail_limit:].to_owned())
+  parts.join("\n")
 }
 
 ///|
@@ -678,8 +825,8 @@ fn transcript_item_view(
     }
     Reasoning => collapsed_reasoning_view(item.content, on_open)
     // Reached only for a tool item outside a group (the transcript loop
-    // batches consecutive ones into `tool_group_view` itself).
-    Tool(_) => tool_group_view([item])
+    // batches runs of reasoning and tools into `activity_view` itself).
+    Tool(..) => activity_view([item], on_open)
   }
 }
 
@@ -770,21 +917,35 @@ fn transcript_view(
       ]),
     )
   } else {
-    // Consecutive tool results fold into one summarized group card; any
-    // other item breaks the run.
+    // A turn's work — reasoning, tool results, and any interim assistant
+    // narration between tool calls — folds into one activity block once the
+    // turn is over; only the run's trailing assistant message (the answer)
+    // stays out. While the run is live, what shows depends on who narrates
+    // the tools: reasoning-driven work (no narration) folds immediately —
+    // thinking is too verbose to stream in the transcript — while
+    // response-narrated work stays flat until the turn ends, narration as
+    // normal bubbles and tool bursts as one-line rows. User messages and
+    // error bubbles always break the run and stay visible.
     let mut index = 0
     while index < conv.messages.length() {
-      if conv.messages[index].kind is Tool(_) {
-        let group : Array[@transcript.TranscriptItem] = []
-        while index < conv.messages.length() &&
-              conv.messages[index].kind is Tool(_) {
-          group.push(conv.messages[index])
-          index = index + 1
-        }
-        items.push(tool_group_view(group))
-      } else {
+      guard conv.messages[index].kind
+        is (Tool(..) | Reasoning | Assistant(false)) else {
         items.push(transcript_item_view(conv.messages[index], on_open))
         index = index + 1
+        continue
+      }
+      let run : Array[@transcript.TranscriptItem] = []
+      while index < conv.messages.length() &&
+            conv.messages[index].kind
+            is (Tool(..) | Reasoning | Assistant(false)) {
+        run.push(conv.messages[index])
+        index = index + 1
+      }
+      let live = conv.running && index == conv.messages.length()
+      if live && run.iter().any(item => item.kind is Assistant(_)) {
+        push_live_run(items, run, on_open)
+      } else {
+        push_settled_run(items, run, on_open)
       }
     }
   }
@@ -978,12 +1139,20 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let conv = model.active()
   let has_input = model.bridge_ready && model.api_ready() && !conv.draft_empty()
   let can_send = !conv.running && has_input
-  let controls : Array[@html.Html] = [
+  // The left status group: the model, plus the workspace's git branch (moved
+  // out of the topbar; a workspace that is not a repository has no chip).
+  let status : Array[@html.Html] = [
     @html.span(
       class="composer-model",
       title=model.selected_model,
       model.selected_model,
     ),
+  ]
+  if !conv.branch.is_empty() {
+    status.push(@html.span(class="composer-branch", conv.branch))
+  }
+  let controls : Array[@html.Html] = [
+    @html.div(class="composer-status", status),
   ]
   if conv.running {
     // One morphing button while this conversation's turn runs: a non-empty
@@ -1596,19 +1765,14 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     ),
   ]
   // The conversation's attached project; a scratch conversation has no chip.
+  // The git branch is not shown here — it lives in the composer's status row.
   if !conv.workspace.is_empty() {
     items.push(
-      @html.span(
-        class="topbar-branch",
-        title=conv.workspace,
-        workspace_label(conv.workspace),
-      ),
+      @html.span(class="topbar-workspace", title=conv.workspace, [
+        icon(icon_folder),
+        @html.text(workspace_label(conv.workspace)),
+      ]),
     )
-  }
-  // The workspace's real branch, reported by the host; a workspace that is
-  // not a repository simply has no chip.
-  if !conv.branch.is_empty() {
-    items.push(@html.span(class="topbar-branch", conv.branch))
   }
   items.push(run_indicator(model))
   if conv.usage_tokens > 0 {
@@ -1617,21 +1781,21 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if !conv.watcher_status.is_empty() {
     items.push(@html.span(class="pill", "moon_check \{conv.watcher_status}"))
   }
-  // Right-aligned toggle for the whole right-hand panel. The file-tree column
-  // has its own collapse button above the tree (see `file_panel_view`).
-  items.push(
-    @html.button(
-      class=if model.file_panel.open {
-        "panel-toggle active"
-      } else {
-        "panel-toggle"
-      },
-      title=if model.file_panel.open { "Hide panel" } else { "Show panel" },
-      on_click=dispatch(ToggleFilePanel),
-      icon(icon_layout_sidebar_right),
-    ),
-  )
   items.push(launcher_view(dispatch, model))
+  // Rightmost: the toggle for the whole right-hand panel — only while the
+  // panel is closed; an open panel carries the toggle at the right edge of
+  // its breadcrumb instead, keeping this bar uncrowded. Both spots hug the
+  // window's right edge, so the toggle stays put as the panel opens/closes.
+  if !model.file_panel.open {
+    items.push(
+      @html.button(
+        class="panel-toggle",
+        title="Show panel",
+        on_click=dispatch(ToggleFilePanel),
+        icon(icon_layout_sidebar_right),
+      ),
+    )
+  }
   @html.div(class="topbar", items)
 }
 
@@ -1807,7 +1971,17 @@ fn viewer_breadcrumb(
     }
     None => crumbs.push(@html.span(class="crumb crumb-file", "Workspace"))
   }
-  @html.div(class="viewer-breadcrumb", [@html.div(class="crumb-path", crumbs)])
+  // The panel's close toggle rides the breadcrumb's right edge; the topbar
+  // only shows the (open) toggle while the panel is closed.
+  @html.div(class="viewer-breadcrumb", [
+    @html.div(class="crumb-path", crumbs),
+    @html.button(
+      class="panel-toggle",
+      title="Hide panel",
+      on_click=dispatch(ToggleFilePanel),
+      icon(icon_layout_sidebar_right),
+    ),
+  ])
 }
 
 ///|
@@ -1895,9 +2069,7 @@ fn tree_row(
         "tree-row tree-file"
       },
       style=[pad],
-      on_click=dispatch(
-        FileSelected(path=entry.path, name=entry.name, line=None),
-      ),
+      on_click=dispatch(FileSelected(path=entry.path, name=entry.name)),
       [@html.span(class="tree-name", entry.name)],
     )
   }

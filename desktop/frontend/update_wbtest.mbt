@@ -1119,7 +1119,7 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
     label: "parse_hover",
     expand: "`parse_hover` — src/main.mbt:5 ",
     path: Some("src/main.mbt"),
-    line: Some(5),
+    range: Some(@common.Range::Range(5, 1, 5, 12)),
   }
   let model = test_model().replace_conversation({
     ..test_conversation(),
@@ -1138,7 +1138,7 @@ test "JumpToMention is a no-op for a chip without a resolved location" {
     label: "review-pr",
     expand: "review-pr ",
     path: None,
-    line: None,
+    range: None,
   }
   let model = test_model().replace_conversation({
     ..test_conversation(),

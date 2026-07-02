@@ -16,7 +16,7 @@ fn slash_command_items() -> Array[CompletionItem] {
       command: "compact",
       insert: "",
       path: None,
-      line: None,
+      range: None,
     },
   ]
 }
@@ -63,7 +63,7 @@ fn compute_completion(
           command: "",
           insert: skill.name + " ",
           path: None,
-          line: None,
+          range: None,
         })
       }
     }

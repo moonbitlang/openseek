@@ -49,7 +49,7 @@ fn decode_symbols(text : String) -> Array[CompletionItem]? {
         name,
         container=@transcript.json_text(fields, "container"),
         path=@transcript.json_text(fields, "path"),
-        line=@transcript.json_int(fields, "line", 0),
+        range=json_range(fields),
       ),
     )
   }
@@ -57,18 +57,40 @@ fn decode_symbols(text : String) -> Array[CompletionItem]? {
 }
 
 ///|
+/// A symbol row's `range` (LSP-shaped, zero-based) as a one-based viewer
+/// range. A missing or malformed range collapses to the empty range at the
+/// document start — the same shape the host sends for a location without one.
+fn json_range(fields : Map[String, Json]) -> @common.Range {
+  guard fields.get("range")
+    is Some(Object({ "start": Object(start), "end": Object(end_), .. })) else {
+    return @common.Range::Range(1, 1, 1, 1)
+  }
+  @common.Range::Range(
+    @transcript.json_int(start, "line", 0) + 1,
+    @transcript.json_int(start, "col", 0) + 1,
+    @transcript.json_int(end_, "line", 0) + 1,
+    @transcript.json_int(end_, "col", 0) + 1,
+  )
+}
+
+///|
 /// Build a symbol's completion row. The label is the bare name; the detail
 /// reads as `container · path:line` (each part dropped when blank). Accepting it
 /// drops a reference into the composer for the agent — the name in backticks and
-/// the location as the clickable `path:line` convention. `line` arrives
-/// zero-based and is shown one-based.
+/// the location as the clickable `path:line` convention. `range` is one-based
+/// (viewer coordinates); an empty range still anchors the reference's line,
+/// it just gives the jump nothing to select.
 fn symbol_item(
   name : String,
   container~ : String,
   path~ : String,
-  line~ : Int,
+  range~ : @common.Range,
 ) -> CompletionItem {
-  let location = if path.is_empty() { "" } else { "\{path}:\{line + 1}" }
+  let location = if path.is_empty() {
+    ""
+  } else {
+    "\{path}:\{range.start_line_number}"
+  }
   let detail = match (container.is_empty(), location.is_empty()) {
     (true, _) => location
     (false, true) => container
@@ -79,10 +101,10 @@ fn symbol_item(
   } else {
     "`\{name}` — \{location}"
   }
-  let (target_path, target_line) = if path.is_empty() {
+  let (target_path, target_range) = if path.is_empty() {
     (None, None)
   } else {
-    (Some(path), Some(line + 1))
+    (Some(path), Some(range))
   }
   {
     label: name,
@@ -90,6 +112,6 @@ fn symbol_item(
     command: "",
     insert: reference + " ",
     path: target_path,
-    line: target_line,
+    range: target_range,
   }
 }

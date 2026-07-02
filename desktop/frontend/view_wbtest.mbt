@@ -3,7 +3,7 @@ fn tool_item(
   name : String,
   is_error? : Bool = false,
 ) -> @transcript.TranscriptItem {
-  { kind: Tool(name, is_error), content: "output" }
+  { kind: Tool(name~, is_error~, brief=""), content: "output" }
 }
 
 ///|
@@ -27,6 +27,23 @@ test "a tool group's summary counts calls by what the tools do" {
     tool_group_summary([tool_item("shell", is_error=true)]),
     content="Ran 1 command",
   )
+}
+
+///|
+test "tool output truncation keeps the head and tail around a skip marker" {
+  let short = "a\nb\nc"
+  inspect(truncate_output(short), content="a\nb\nc")
+  let lines : Array[String] = []
+  for index in 0..<200 {
+    lines.push("line \{index}")
+  }
+  let clamped = truncate_output(lines.join("\n")).split("\n").to_array()
+  inspect(clamped.length(), content="101")
+  inspect(clamped[0], content="line 0")
+  inspect(clamped[59], content="line 59")
+  inspect(clamped[60], content="⋯ 100 lines skipped ⋯")
+  inspect(clamped[61], content="line 160")
+  inspect(clamped[100], content="line 199")
 }
 
 ///|

@@ -289,16 +289,31 @@ priv struct WorkspaceSymbolsPayload {
 
 ///|
 /// One row of a `workspace_symbols` reply. `path` is workspace-relative and
-/// `line` is the symbol's zero-based start line (the front-end shows it
-/// one-based); `kind` is the raw LSP `SymbolKind`, forwarded for the front-end
-/// to label or icon as it likes. `container` is the enclosing symbol's name, or
+/// `range` is the symbol's zero-based `location.range` (the front-end shows
+/// it one-based) — all zeros when the server returned a location without a
+/// range; `kind` is the raw LSP `SymbolKind`, forwarded for the front-end to
+/// label or icon as it likes. `container` is the enclosing symbol's name, or
 /// empty.
 priv struct SymbolItem {
   name : String
   kind : Int
   container : String
   path : String
+  range : SymbolRange
+} derive(ToJson)
+
+///|
+/// A symbol's location range on the wire, mirroring the LSP shape with
+/// zero-based positions.
+priv struct SymbolRange {
+  start : SymbolPosition
+  end : SymbolPosition
+} derive(ToJson)
+
+///|
+priv struct SymbolPosition {
   line : Int
+  col : Int
 } derive(ToJson)
 
 ///|

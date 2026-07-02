@@ -55,7 +55,7 @@ fn accept_completion(
         label=item.insert.trim().to_owned(),
         expand=item.insert,
         path=None,
-        line=None,
+        range=None,
       )
     Symbols =>
       accept_mention(
@@ -64,7 +64,7 @@ fn accept_completion(
         label=item.label,
         expand=item.insert,
         path=item.path,
-        line=item.line,
+        range=item.range,
       )
   }
 }
@@ -78,10 +78,16 @@ fn accept_mention(
   label~ : String,
   expand~ : String,
   path~ : String?,
-  line~ : Int?,
+  range~ : @common.Range?,
 ) -> (@cmd.Cmd, Model) {
   let conv = model.active()
-  let mentions = push_mention(conv.mentions, { kind, label, expand, path, line })
+  let mentions = push_mention(conv.mentions, {
+    kind,
+    label,
+    expand,
+    path,
+    range,
+  })
   (
     @cmd.none,
     {
@@ -223,7 +229,11 @@ fn apply_engine_event(
         (
           true,
           next.append_item(
-            Tool(@transcript.runtime_update_title(update), false),
+            Tool(
+              name=@transcript.runtime_update_title(update),
+              is_error=false,
+              brief="",
+            ),
             update.diagnostics.join("\n"),
           ),
         )
@@ -233,11 +243,15 @@ fn apply_engine_event(
     }
     Usage(prompt_tokens~, completion_tokens~) =>
       (false, { ..conv, usage_tokens: prompt_tokens + completion_tokens })
-    ToolResult(tool_name~, is_error~, content~) =>
+    ToolResult(tool_name~, is_error~, content~, brief~) =>
       (
         true,
         conv.append_item(
-          Tool(@transcript.non_empty_or(tool_name, "tool"), is_error),
+          Tool(
+            name=@transcript.non_empty_or(tool_name, "tool"),
+            is_error~,
+            brief~,
+          ),
           content,
         ),
       )
@@ -245,7 +259,11 @@ fn apply_engine_event(
       (
         true,
         conv.append_item(
-          Tool(@transcript.non_empty_or(tool_name, "tool"), true),
+          Tool(
+            name=@transcript.non_empty_or(tool_name, "tool"),
+            is_error=true,
+            brief="",
+          ),
           @transcript.non_empty_or(reason, "tool call decode error"),
         ),
       )
@@ -303,7 +321,13 @@ fn apply_engine_event(
       if summary.is_empty() {
         (false, conv)
       } else {
-        (true, conv.append_item(Tool("summary", false), summary))
+        (
+          true,
+          conv.append_item(
+            Tool(name="summary", is_error=false, brief=""),
+            summary,
+          ),
+        )
       }
     }
     CompactionFailed(reason) => {
@@ -509,7 +533,7 @@ fn update_msg(
             conv.session_id,
             path,
             basename(path),
-            line=mention.line,
+            range=mention.range,
             workspace=conv.workspace,
           ),
         ]),
@@ -559,6 +583,8 @@ fn update_msg(
       (save_wsl_engine(value), { ..model, wsl_engine: value })
     OpenSetup => (@cmd.none, { ..model, screen: Settings, setup_api_key: "" })
     ToggleSidebar => (@cmd.none, { ..model, sidebar_open: !model.sidebar_open })
+    ToggleChatsSection =>
+      (@cmd.none, { ..model, chats_collapsed: !model.chats_collapsed })
     SaveApiKey => {
       let api_key = model.setup_api_key.trim().to_owned()
       if api_key.is_empty() {
@@ -750,10 +776,16 @@ fn update_msg(
       (rotate_session(dispatch), { ..model, loading_session: "" })
     NewChatIn(workspace) =>
       // A workspace section's own "new chat": the fresh conversation lands in
-      // that project, and the workspace stays active for the next one.
+      // that project, and the workspace stays active for the next one. A new
+      // loose chat unfolds the Chats section so its row is visible.
       (
         rotate_session(dispatch),
-        { ..model, active_workspace: workspace, loading_session: "" },
+        {
+          ..model,
+          active_workspace: workspace,
+          loading_session: "",
+          chats_collapsed: model.chats_collapsed && !workspace.is_empty(),
+        },
       )
     SessionRotated(session_id) => {
       let activated = model.activate(session_id)
@@ -1205,7 +1237,7 @@ fn update_msg(
           },
         )
       }
-    FileSelected(path~, name~, line~) => {
+    FileSelected(path~, name~) => {
       let panel = model.file_panel
       (
         read_file(
@@ -1213,20 +1245,20 @@ fn update_msg(
           model.active().session_id,
           path,
           name,
-          line~,
+          range=None,
           workspace=model.active().workspace,
         ),
         { ..model, file_panel: { ..panel, selected: Some(path), error: "" } },
       )
     }
-    FileLoaded(session~, path~, name~, content~, line~) =>
+    FileLoaded(session~, path~, name~, content~, range~) =>
       // A stale read — the conversation switched, or another file was clicked
       // first — must not replace what the viewer now shows.
       if model.file_panel.session != session ||
         model.file_panel.selected != Some(path) {
         (@cmd.none, model)
       } else {
-        (show_file_in_viewer(session, path, name, content, line~), model)
+        (show_file_in_viewer(session, path, name, content, range~), model)
       }
     FileFailed(session~, message~) =>
       if model.file_panel.session != session {

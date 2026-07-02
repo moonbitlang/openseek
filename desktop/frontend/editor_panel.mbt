@@ -91,15 +91,16 @@ fn request_viewer_remeasure() -> @cmd.Cmd {
 }
 
 ///|
-/// Show a file's contents in the viewer as a fresh read-only document. `line`,
-/// when present (a mention chip's jump target), is revealed centered once the
-/// document is set.
+/// Show a file's contents in the viewer as a fresh read-only document. A
+/// symbol jump's `range`, when present, is revealed centered once the
+/// document is set and — unless empty (a symbol placed without a range) —
+/// selected, so the named code reads highlighted.
 fn show_file_in_viewer(
   session : String,
   path : String,
   name : String,
   content : String,
-  line? : Int? = None,
+  range? : @common.Range? = None,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     // The hover provider addresses the host op by session, but the viewer model
@@ -117,8 +118,18 @@ fn show_file_in_viewer(
       content,
     )
     viewer().set_model(text_model, view_state=Reset)
-    if line is Some(line_number) {
-      viewer().reveal_line_in_center(line_number)
+    if range is Some(range) {
+      if !range.is_empty() {
+        // `set_selection` never scrolls on its own (the Monaco contract), so
+        // pair it with the reveal below.
+        viewer().set_selection(
+          @view_model.Selection::from_positions(
+            range.get_start_position(),
+            range.get_end_position(),
+          ),
+        )
+      }
+      viewer().reveal_range_in_center(range)
     }
   })
 }

@@ -159,11 +159,14 @@ priv struct CompletionItem {
   // skills. For a skill, `insert` carries the text dropped into the composer.
   command : String
   insert : String
-  // A symbol row's resolved location (workspace-relative path, 1-based line),
-  // so the chip it becomes can jump there. `None` for slash commands, skills,
-  // and symbols the language server could not place in a file.
+  // A symbol row's resolved location — workspace-relative path and the
+  // symbol's full range (one-based, viewer coordinates) — so the chip it
+  // becomes can jump there and select the named code. `None` for slash
+  // commands, skills, and symbols the language server could not place in a
+  // file. A server that placed the symbol without a range yields an empty
+  // range anchored at its line.
   path : String?
-  line : Int?
+  range : @common.Range?
 }
 
 ///|
@@ -189,15 +192,15 @@ fn MentionKind::glyph(self : MentionKind) -> String {
 /// the prompt on send. `label` is the chip text (the bare skill/symbol name);
 /// `expand` is the text spliced into the outgoing prompt for the agent to read
 /// (the skill name, or the symbol's backticked `path:line` reference). Chips
-/// are deduplicated by `kind` + `expand`. `path`/`line` mirror the symbol's
+/// are deduplicated by `kind` + `expand`. `path`/`range` mirror the symbol's
 /// resolved location (`None` for a skill, or a symbol without one) so the
-/// chip can jump the editor panel there.
+/// chip can jump the editor panel there and select the named code.
 priv struct Mention {
   kind : MentionKind
   label : String
   expand : String
   path : String?
-  line : Int?
+  range : @common.Range?
 }
 
 ///|
@@ -328,6 +331,10 @@ priv struct Model {
   // Whether the left sidebar (chat list + navigation) is shown. Collapsing it
   // hands the full width to the conversation; the topbar toggle brings it back.
   sidebar_open : Bool
+  // Whether the sidebar's "Chats" section (the default store's loose
+  // conversations) is folded down to its heading; clicking the heading flips
+  // it.
+  chats_collapsed : Bool
   // The conversation on screen; always present in `conversations` once the
   // startup session rotation lands.
   active_session : String
@@ -463,6 +470,8 @@ priv enum Msg {
   WslEngineChanged(String)
   OpenSetup
   ToggleSidebar
+  // The sidebar's "Chats" heading was clicked — fold or unfold the section.
+  ToggleChatsSection
   SaveApiKey
   OpenSkills
   SkillsQueryChanged(String)
@@ -576,15 +585,16 @@ priv enum Msg {
   DirFailed(session~ : String, path~ : String, message~ : String)
   // A file row was clicked: read it and show it in the viewer. `name` is the
   // entry's display name, kept for the viewer's title and language guess.
-  // `line`, when present, is revealed in the viewer once the file loads (a
-  // mention chip's jump target; a plain tree click leaves it `None`).
-  FileSelected(path~ : String, name~ : String, line~ : Int?)
+  FileSelected(path~ : String, name~ : String)
+  // `range`, when present, is a jumped-to symbol's one-based range, revealed
+  // in the viewer once the file loads and — unless empty — selected so the
+  // code it names reads highlighted. A plain tree click leaves it `None`.
   FileLoaded(
     session~ : String,
     path~ : String,
     name~ : String,
     content~ : String,
-    line~ : Int?
+    range~ : @common.Range?
   )
   FileFailed(session~ : String, message~ : String)
   // The start request for that conversation never produced a run (the bridge
@@ -638,6 +648,7 @@ fn initial_model() -> Model {
     wsl_engine: "",
     dark_mode: host_prefers_dark(),
     sidebar_open: true,
+    chats_collapsed: false,
     active_session: "",
     loading_session: "",
     conversations: [],

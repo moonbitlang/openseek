@@ -31,10 +31,25 @@
   --vscode-editor-selectionBackground: #264f78;
   --vscode-editor-hoverHighlightBackground: #264f7840;
   --vscode-editor-rangeHighlightBackground: #ffffff0b;
+  /* editorCursor.foreground / editor.lineHighlightBorder registry defaults
+     (editorColorRegistry.ts:16,22); Dark Modern does not override them.
+     editor.lineHighlightBackground stays null like VS Code's defaults, so the
+     current line renders as the border box, not a fill. */
+  --vscode-editorCursor-foreground: #aeafad;
+  --vscode-editor-lineHighlightBorder: #282828;
   --vscode-editorLink-activeForeground: #4e94ce;
   --vscode-editorWarning-foreground: #cca700;
   --vscode-editorError-foreground: #f14c4c;
   --vscode-editorInfo-foreground: #59a4f9;
+  --vscode-editorHint-foreground: #eeeeeeb3;
+
+  /* editorError/Warning/Info/Hint.border are null in VS Code's normal (non-HC)
+     themes, so they stay unset here too — the visible squiggle is the runtime
+     inline-SVG background computed from the *-foreground tokens above
+     (viewer/browser/view/squiggly_theme.mbt), not this border rule. The
+     border-double/dotted CSS in markers.css is a faithful copy of the HC
+     fallback and is correctly inert (this viewer has no high-contrast theme). */
+  --vscode-editorUnnecessaryCode-opacity: 0.67;
 
   --vscode-editorHoverWidget-background: #202020;
   --vscode-editorHoverWidget-foreground: #cccccc;
@@ -105,10 +120,18 @@
   --vscode-editor-selectionBackground: #add6ff;
   --vscode-editor-hoverHighlightBackground: #add6ff26;
   --vscode-editor-rangeHighlightBackground: #fdff0033;
+  /* See the Dark Modern block above (light defaults: black caret, #eeeeee
+     line-highlight border). */
+  --vscode-editorCursor-foreground: #000000;
+  --vscode-editor-lineHighlightBorder: #eeeeee;
   --vscode-editorLink-activeForeground: #0000ff;
   --vscode-editorWarning-foreground: #bf8803;
   --vscode-editorError-foreground: #e51400;
   --vscode-editorInfo-foreground: #0063d3;
+  --vscode-editorHint-foreground: #6c6c6c;
+
+  /* See the Dark Modern block above. */
+  --vscode-editorUnnecessaryCode-opacity: 0.47;
 
   --vscode-editorHoverWidget-background: #f8f8f8;
   --vscode-editorHoverWidget-foreground: #3b3b3b;
@@ -153,7 +176,7 @@
   --monaco-monospace-font: var(--editor-font-family);
 }
 
-/* editor/viewer/editor.css */
+/* editor/viewer/browser/view/editor.css */
 /* The island root owns a Monaco-shaped view tree. Clipping belongs to
    .overflow-guard so future overflowing widget slots can escape it. */
 .moonbit-viewer.readonly-editor {
@@ -318,7 +341,7 @@
   background: var(--vscode-scrollbarSlider-activeBackground);
 }
 
-/* editor/viewer/view_lines.css */
+/* editor/viewer/browser/view_parts/view_lines/view_lines.css */
 /* Lines content starts after the margin; text-like child layers carry
    the synthetic scroll transform. */
 .lines-content {
@@ -357,7 +380,7 @@
   cursor: text;
 }
 
-/* editor/viewer/view_overlays.css */
+/* editor/viewer/browser/view_parts/selections/view_overlays.css */
 .view-overlays {
   position: absolute;
   top: 0;
@@ -369,7 +392,7 @@
   pointer-events: none;
 }
 
-/* editor/viewer/view_zones.css */
+/* editor/viewer/browser/view_parts/view_zones/view_zones.css */
 .view-zones {
   position: absolute;
   top: 0;
@@ -386,7 +409,7 @@
   overflow: hidden;
 }
 
-/* editor/viewer/content_widgets.css */
+/* editor/viewer/browser/view_parts/content_widgets/content_widgets.css */
 .contentWidgets {
   position: absolute;
   top: 0;
@@ -402,7 +425,7 @@
   pointer-events: none;
 }
 
-/* editor/viewer/overlay_widgets.css */
+/* editor/viewer/browser/view_parts/overlay_widgets/overlay_widgets.css */
 .overlayWidgets {
   position: absolute;
   inset: 0;
@@ -417,7 +440,7 @@
   pointer-events: none;
 }
 
-/* editor/viewer/selections.css */
+/* editor/viewer/browser/view_parts/selections/selections.css */
 /* Monaco paints the selection opaque, behind the text (see .view-overlays
    z-index). No element opacity: overlapping/merged pieces never stack into
    darker patches, and the color matches the editor's selectionBackground. */
@@ -458,7 +481,113 @@
   background: var(--vscode-editor-selectionBackground);
 }
 
-/* editor/viewer/margin.css */
+/* editor/viewer/browser/view_parts/selections/current_line_highlight.css */
+/* Ported from
+   vscode/src/vs/editor/browser/viewParts/currentLineHighlight/currentLineHighlight.css
+   plus the registerThemingParticipant rules (currentLineHighlight.ts:237-264),
+   as static var() CSS (the viewer's theming design). Covers both the content
+   overlay (this package) and the margin overlay (view_parts/margin), like the
+   Monaco source file. Deviations:
+   - the flat overlays size their pieces inline, so Monaco's `height: 100%`
+     (of a per-line container) is dropped;
+   - editor.inactiveLineHighlightBackground defaults to
+     editor.lineHighlightBackground and both are null in the shipped themes,
+     so the unfocused background rule is omitted;
+   - Monaco emits the border rules only when no (opaque) background color is
+     defined (cLH:253-263) — statically true for the shipped themes, which
+     define only --vscode-editor-lineHighlightBorder. */
+
+.monaco-editor .view-overlays .current-line {
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.monaco-editor .margin-view-overlays .current-line {
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.monaco-editor
+  .margin-view-overlays
+  .current-line.current-line-margin.current-line-margin-both {
+  border-right: 0;
+}
+
+.monaco-editor.focused .view-overlays .current-line {
+  background-color: var(--vscode-editor-lineHighlightBackground, transparent);
+}
+
+.monaco-editor.focused .margin-view-overlays .current-line-margin {
+  background-color: var(--vscode-editor-lineHighlightBackground, transparent);
+  border: none;
+}
+
+.monaco-editor .view-overlays .current-line-exact {
+  border: 2px solid var(--vscode-editor-lineHighlightBorder);
+}
+
+.monaco-editor .margin-view-overlays .current-line-exact-margin {
+  border: 2px solid var(--vscode-editor-lineHighlightBorder);
+}
+
+/* editor/viewer/browser/view_parts/selections/decorations.css */
+/* Ported from vscode/src/vs/editor/browser/viewParts/decorations/decorations.css.
+ * cdr = core decorations rendering (div). The flat-overlay pieces carry an
+ * explicit top/height (see decorations_overlay.mbt) instead of Monaco's
+ * per-line container, so height comes inline rather than `height: 100%`. */
+.moonbit-viewer .view-overlays .cdr {
+  position: absolute;
+}
+
+/* Stock classNames for the standard decoration colors (Monaco registers
+ * these through registerThemingParticipant; the viewer's colors cascade via
+ * CSS custom properties — recorded theming design). The hoverHighlight rule
+ * lives with the hover feature (viewer/contrib/hover/hover.css). */
+.moonbit-viewer .rangeHighlight {
+  background-color: var(--vscode-editor-rangeHighlightBackground);
+}
+
+/* editor/viewer/browser/view_parts/view_cursors/view_cursors.css */
+/* Ported from
+   vscode/src/vs/editor/browser/viewParts/viewCursors/viewCursors.css (base
+   rules) plus the caret color rule from the registerThemingParticipant in
+   viewCursors.ts:391-417, reduced to the reachable readonly arms: no blink
+   keyframes (the readonly product renders cursor-solid only), no multi-cursor
+   .cursor-primary/.cursor-secondary variants, and the runtime theme rules
+   become static var() CSS (the viewer's theming design — colors cascade from
+   the host's --vscode-* custom properties). editorCursor.background defaults
+   to null → caret.opposite(), which only colors block-cursor text (N-A for
+   the Line style); the editor background stands in for it. */
+.cursors-layer {
+  position: absolute;
+  top: 0;
+  /* Deviations from Monaco (which stacks by DOM order and hit-tests through
+     its own target classification): the port's layers carry explicit
+     z-indices (view-overlays 0 < view-lines 1 < view-zones 3 < caret 4 <
+     contentWidgets 50), and the caret must not intercept the DOM caret
+     hit-testing (caretPositionFromPoint) the port's selection uses. */
+  z-index: 4;
+  pointer-events: none;
+}
+
+.cursors-layer > .cursor {
+  position: absolute;
+  overflow: hidden;
+  box-sizing: border-box;
+  background-color: var(--vscode-editorCursor-foreground);
+  border-color: var(--vscode-editorCursor-foreground);
+  color: var(--vscode-editor-background);
+}
+
+/* editor/viewer/browser/view_parts/margin/margin.css */
 /* Margin layer: viewport-fixed clip that occludes horizontally scrolled
    content; the inner rail translates vertically only. */
 .margin {
@@ -496,7 +625,7 @@
   user-select: none;
 }
 
-/* editor/viewer/folding.css */
+/* editor/viewer/browser/view_parts/margin/folding.css */
 .folding {
   position: absolute;
   top: 0;
@@ -530,7 +659,7 @@
   line-height: var(--editor-line-height);
 }
 
-/* editor/viewer/tokens.css */
+/* editor/viewer/browser/view_parts/view_lines/tokens.css */
 /* Monaco theme color map (`mtk<colorId>`). These mirror the byte-for-byte
    output of `view_model.token_theme_style_block(default_token_color_map())`:
    the production token model classes each span as `mtk<foregroundColorId>`
@@ -606,7 +735,7 @@
   text-decoration: line-through;
 }
 
-/* editor/viewer/inlay_hints.css */
+/* editor/viewer/browser/view_parts/view_lines/inlay_hints.css */
 .inlay-hint {
   color: var(--vscode-descriptionForeground);
   font-style: normal;
@@ -618,53 +747,79 @@
   color: var(--vscode-descriptionForeground);
 }
 
-/* editor/viewer/markers.css */
-.diag-warning {
-  text-decoration-line: underline;
-  text-decoration-style: wavy;
-  text-decoration-color: var(--vscode-editorWarning-foreground);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+/* editor/viewer/browser/view_parts/view_lines/markers.css */
+/*
+ * Marker squiggle decorations, ported from
+ * vscode/src/vs/editor/browser/widget/codeEditor/editor.css:81-120.
+ *
+ * This `border-bottom` double/dotted/dashed underline is Monaco's
+ * high-contrast-only fallback — the `*-border` color tokens default to `null`
+ * in normal (non-HC) themes, so this rule is correctly inert here (this
+ * viewer has no high-contrast theme; see view_lines.mbt's equivalent note).
+ * The real, visible wavy squiggle is a runtime inline-SVG background image
+ * computed from `editor*.foreground` (`viewer/browser/view/
+ * squiggly_theme.mbt`, porting `codeEditorWidget.ts`'s
+ * `registerThemingParticipant`), injected as a separate stylesheet.
+ *
+ * Deviation: Monaco's `::before { background: var(--vscode-editor*-background) }`
+ * error-text fill is omitted. `editor*.background` is `null` (transparent) in
+ * non-HC themes, and a `display:block` pseudo-element would inject a block box
+ * into the inline view-line span flow.
+ */
+
+.moonbit-viewer .squiggly-error {
+  border-bottom: 4px double var(--vscode-editorError-border);
 }
 
-.diag-error {
-  text-decoration-line: underline;
-  text-decoration-style: wavy;
-  text-decoration-color: var(--vscode-editorError-foreground);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+.moonbit-viewer .squiggly-warning {
+  border-bottom: 4px double var(--vscode-editorWarning-border);
 }
 
-.diag-info {
-  text-decoration-line: underline;
-  text-decoration-style: wavy;
-  text-decoration-color: var(--vscode-editorInfo-foreground);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+.moonbit-viewer .squiggly-info {
+  border-bottom: 4px double var(--vscode-editorInfo-border);
 }
 
-/* editor/viewer/hover/hover.css */
-.has-hover {
+.moonbit-viewer .squiggly-hint {
+  border-bottom: 2px dotted var(--vscode-editorHint-border);
+}
+
+.moonbit-viewer.showUnused .squiggly-unnecessary {
+  border-bottom: 2px dashed var(--vscode-editorUnnecessaryCode-border);
+}
+
+/* Generated from editorUnnecessaryCode.opacity (the color's alpha), the
+   `.squiggly-inline-unnecessary { opacity }` rule. */
+.moonbit-viewer.showUnused .squiggly-inline-unnecessary {
+  opacity: var(--vscode-editorUnnecessaryCode-opacity, 1);
+}
+
+.moonbit-viewer.showDeprecated .squiggly-inline-deprecated {
+  text-decoration: line-through;
+  text-decoration-color: var(--vscode-editor-foreground, inherit);
+}
+
+/* editor/viewer/contrib/hover/hover.css */
+.hoverHighlight {
   background: var(--vscode-editor-hoverHighlightBackground);
 }
 
-/* Monaco-shaped editor hover, anchored as a content widget. */
+/* Monaco-shaped editor hover, anchored as a content widget. Positioned by an
+ * exact `top`/`left` computed in JS (`ContentWidget::style`, porting Monaco's
+ * `_layoutBoxInViewport`: `aboveTop = aboveLineTop - height`), not a CSS
+ * transform — a transform-based "shift up by own height" trick was tried
+ * here previously and reproducibly corrupted this element's background paint
+ * in Chromium under the sizing cluster's synchronous style churn. */
 .monaco-resizable-hover {
   position: absolute;
   z-index: 50;
   pointer-events: auto;
   min-width: 150px;
-  transform: translateY(-100%);
   cursor: default;
   user-select: text;
   box-sizing: content-box;
   border: 1px solid var(--vscode-editorHoverWidget-border);
   border-radius: var(--vscode-cornerRadius-large);
   background-color: var(--vscode-editorHoverWidget-background);
-}
-
-.monaco-resizable-hover.below {
-  transform: none;
 }
 
 .monaco-resizable-hover.measuring {
@@ -843,6 +998,17 @@
   text-overflow: ellipsis;
 }
 
+.monaco-hover .hover-row.status-bar .actions .action-container .action .icon {
+  padding-right: 4px;
+  vertical-align: middle;
+  font-size: inherit;
+}
+
+.monaco-hover .hover-row.status-bar .actions .action-container a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+
 .monaco-hover .hover-row.hover-row-with-copy {
   position: relative;
   padding-right: 20px;
@@ -877,3 +1043,4 @@
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: -1px;
 }
+

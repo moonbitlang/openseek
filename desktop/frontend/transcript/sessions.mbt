@@ -121,8 +121,9 @@ fn append_session_item(
       let is_error = payload.get("is_error") is Some(True)
       items.push({
         kind: Tool(
-          non_empty_or(json_text(payload, "tool_name"), "tool"),
-          is_error,
+          name=non_empty_or(json_text(payload, "tool_name"), "tool"),
+          is_error~,
+          brief=json_text(payload, "brief"),
         ),
         content: json_text(payload, "content"),
       })
@@ -133,7 +134,11 @@ fn append_session_item(
         let update = parse_runtime_update(content)
         if !update.status.is_empty() || update.diagnostics.length() > 0 {
           items.push({
-            kind: Tool(runtime_update_title(update), false),
+            kind: Tool(
+              name=runtime_update_title(update),
+              is_error=false,
+              brief="",
+            ),
             content: update.diagnostics.join("\n"),
           })
         }
@@ -142,7 +147,10 @@ fn append_session_item(
     "summary" => {
       let content = json_text(payload, "content").trim().to_owned()
       if !content.is_empty() {
-        items.push({ kind: Tool("summary", false), content })
+        items.push({
+          kind: Tool(name="summary", is_error=false, brief=""),
+          content,
+        })
       }
     }
     "terminal" => append_terminal_item(items, payload)

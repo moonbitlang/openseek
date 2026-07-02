@@ -196,21 +196,40 @@ fn parse_symbols(raw : Json?, workspace_dir : String) -> WorkspaceSymbolsReply {
       kind,
       container,
       path: workspace_relative(uri, workspace_dir),
-      line: symbol_line(location),
+      range: symbol_range(location),
     })
   }
   { symbols, }
 }
 
 ///|
-/// The zero-based start line of a symbol's `location.range`, or 0 when the
-/// location carries no range (some servers return a bare `uri`).
-fn symbol_line(location : Map[String, Json]) -> Int {
+/// A symbol's zero-based `location.range`, or an all-zeros range when the
+/// location carries none (some servers return a bare `uri`).
+fn symbol_range(location : Map[String, Json]) -> SymbolRange {
   guard location.get("range")
-    is Some(Object({ "start": Object({ "line": Number(line, ..), .. }), .. })) else {
-    return 0
+    is Some(
+      Object(
+        {
+          "start": Object(
+            { "line": Number(line, ..), "character": Number(col, ..), .. }
+          ),
+          "end": Object(
+            {
+              "line": Number(end_line, ..),
+              "character": Number(end_col, ..),
+              ..
+            }
+          ),
+          ..
+        }
+      )
+    ) else {
+    return { start: { line: 0, col: 0 }, end: { line: 0, col: 0 } }
   }
-  line.to_int()
+  {
+    start: { line: line.to_int(), col: col.to_int() },
+    end: { line: end_line.to_int(), col: end_col.to_int() },
+  }
 }
 
 ///|

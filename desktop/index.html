@@ -431,14 +431,16 @@
       }
 
       /* Matches the topbar height (46px) so the header divider is continuous
-         across the chat, viewer, and file-tree columns. */
+         across the chat, viewer, and file-tree columns. The right padding
+         matches the topbar's so the panel toggle riding this edge sits at the
+         same screen position as the topbar's (panel-closed) toggle. */
       .viewer-breadcrumb {
         display: flex;
         align-items: center;
         gap: 6px;
         flex: 0 0 auto;
         height: 46px;
-        padding: 0 8px 0 12px;
+        padding: 0 18px 0 12px;
         border-bottom: 1px solid var(--line);
         font-size: 12px;
         color: var(--ink-3);
@@ -612,6 +614,18 @@
       }
       .section-heading:hover .row-archive {
         visibility: visible;
+      }
+      /* A foldable section ("Chats"): the heading toggles it, wearing the
+         same textual chevron as the archived group. */
+      .section-heading.collapsible {
+        cursor: pointer;
+        user-select: none;
+      }
+      .section-heading.collapsible > .sidebar-label::after {
+        content: " ▾";
+      }
+      .section-heading.collapsible.collapsed > .sidebar-label::after {
+        content: " ▸";
       }
 
       /* An attached workspace: a folder row with its conversations nested
@@ -824,16 +838,21 @@
         color: var(--ink);
       }
 
-      .topbar-branch {
+      .topbar-workspace {
         display: inline-flex;
         align-items: center;
         gap: 5px;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         font-size: 11.5px;
         color: var(--ink-3);
       }
-      .topbar-branch::before {
-        content: "⎇";
-        font-size: 12px;
+      .topbar-workspace .icon {
+        width: 12px;
+        height: 12px;
+        flex: 0 0 auto;
       }
 
       .run-status {
@@ -1346,113 +1365,131 @@
         color: var(--bg, #fff);
       }
 
-      /* tool / step output, indented under the agent avatar */
-      .tool-row {
+      /* One turn's work (thinking + tool calls), indented under the agent
+         avatar and folded behind a single summary line. Borderless on
+         purpose: the work log is typography, not chrome — prose for
+         reasoning, gray one-liners for tool calls. */
+      .activity-row {
         padding-left: 38px;
         min-width: 0;
         animation: riseIn 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
       }
 
-      /* A run of consecutive tool calls folds into one card: the summary
-         line collapsed by default, the individual outputs behind it. */
-      .tool-group {
-        border: 1px solid var(--line);
-        border-radius: var(--radius-sm);
-        background: var(--surface);
-        overflow: hidden;
-      }
-      .tool-group.error {
-        border-color: var(--del-line);
-      }
-      .tool-group-summary {
-        display: flex;
-        align-items: baseline;
-        gap: 10px;
-        padding: 7px 12px;
-        background: var(--surface-2);
-        color: var(--ink-2);
-        font-size: 11px;
-        letter-spacing: 0.04em;
+      .activity-summary,
+      .tool-line-summary,
+      .tool-call-summary {
         cursor: pointer;
         list-style: none;
         user-select: none;
       }
-      .tool-group-summary::-webkit-details-marker {
+      .activity-summary::-webkit-details-marker,
+      .tool-line-summary::-webkit-details-marker,
+      .tool-call-summary::-webkit-details-marker {
         display: none;
       }
-      .tool-group-summary::before {
-        content: "▸";
-        flex: 0 0 auto;
+
+      .activity-summary {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
         color: var(--ink-3);
-        font-size: 9px;
+        font-size: 12px;
+        letter-spacing: 0.02em;
       }
-      .tool-group[open] > .tool-group-summary::before {
-        content: "▾";
+      .activity-summary:hover {
+        color: var(--ink-2);
       }
-      .tool-group[open] > .tool-group-summary {
-        border-bottom: 1px solid var(--line-2);
-      }
-      .tool-group-summary:hover {
-        color: var(--ink);
-      }
-      .tool-group-text {
+      .activity-text {
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .tool-group-failed {
+      .activity-text::after {
+        content: " ▸";
+      }
+      .activity[open] > .activity-summary .activity-text::after {
+        content: " ▾";
+      }
+      .activity-failed {
         flex: 0 0 auto;
-        margin-left: auto;
         color: var(--del);
+        font-size: 11px;
       }
-      .tool-group.error > .tool-group-summary {
-        background: var(--del-bg);
-        color: var(--del);
-      }
-      .tool-group-body {
+
+      .activity-body {
         display: grid;
-        gap: 8px;
-        padding: 8px;
+        gap: 14px;
+        padding: 12px 0 4px;
       }
 
-      .tool-card {
-        border: 1px solid var(--line);
-        border-radius: var(--radius-sm);
-        background: var(--surface);
-        overflow: hidden;
-      }
-      .tool-card.error {
-        border-color: var(--del-line);
-      }
-
-      .tool-head {
-        padding: 7px 12px;
-        border-bottom: 1px solid var(--line-2);
-        background: var(--surface-2);
+      /* Reasoning inside the work log: full-width prose, slightly muted —
+         it narrates the tool calls around it. */
+      .activity-thinking {
         color: var(--ink-2);
-        font-size: 10.5px;
-        letter-spacing: 0.04em;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .tool-card.error .tool-head {
-        color: var(--del);
-        background: var(--del-bg);
-        border-bottom-color: var(--del-line);
+        font-size: 13px;
       }
 
-      .tool-card pre {
-        max-height: 260px;
-        margin: 0;
-        padding: 11px 13px;
-        overflow: auto;
+      /* Interim assistant narration folded into the work log: real messages,
+         so normal ink — just sized down to the log's scale. */
+      .activity-response {
+        font-size: 13px;
+      }
+
+      /* A burst of consecutive tool calls: a gray one-line summary that
+         expands to the per-call briefs. */
+      .tool-line-summary {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        color: var(--ink-3);
+        font-size: 12.5px;
+      }
+      .tool-line-summary:hover {
+        color: var(--ink-2);
+      }
+      .tool-line-text::after {
+        content: " ▸";
+      }
+      .tool-line[open] > .tool-line-summary .tool-line-text::after {
+        content: " ▾";
+      }
+      .tool-line-body {
+        display: grid;
+        gap: 4px;
+        padding: 6px 0 2px 16px;
+      }
+
+      /* One call inside a burst: its brief, expandable to the output. */
+      .tool-call-label,
+      .tool-call-summary {
+        color: var(--ink-3);
+        font-size: 12.5px;
+      }
+      .tool-call-summary:hover {
+        color: var(--ink-2);
+      }
+      .tool-call-label.error,
+      .tool-call.error > .tool-call-summary {
+        color: var(--del);
+      }
+
+      /* Output grows the page instead of scrolling in place: the transcript
+         stays the only scroll area, so the wheel is never trapped by a
+         nested scrollbar. Long dumps are clamped in the renderer. */
+      .tool-call pre {
+        margin: 6px 0 8px;
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        background: var(--surface-2);
         color: var(--code);
         font-size: 12px;
         line-height: 1.55;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
+      }
+      .tool-call.error pre {
+        background: var(--del-bg);
       }
 
       /* ---------- composer ---------- */
@@ -1707,6 +1744,31 @@
         gap: 8px;
         width: 100%;
         min-width: 0;
+      }
+
+      /* The toolbar's left status group: the model chip plus the workspace's
+         git branch (which lives here, not in the topbar). */
+      .composer-status {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .composer-branch {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11.5px;
+        color: var(--ink-3);
+      }
+      .composer-branch::before {
+        content: "⎇";
+        font-size: 12px;
       }
 
       .composer-model {
@@ -2091,7 +2153,7 @@
           max-width: 38%;
         }
 
-        .tool-row {
+        .activity-row {
           padding-left: 0;
         }
       }

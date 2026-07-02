@@ -47,13 +47,14 @@ fn read_directory(
 ///|
 /// Read `path` and fold its contents back as `FileLoaded`. `name` is the
 /// entry's display name, forwarded for the viewer's title and language guess.
-/// `line`, when present, is forwarded for the viewer to reveal once loaded.
+/// `range`, when present (a symbol jump's target), is forwarded for the
+/// viewer to reveal and select once loaded.
 fn read_file(
   dispatch : @cmd.Emit[Msg],
   session : String,
   path : String,
   name : String,
-  line~ : Int?,
+  range~ : @common.Range?,
   workspace~ : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
@@ -73,7 +74,7 @@ fn read_file(
       match decode_file_content(reply_json_text(reply)) {
         Some(content) =>
           scheduler.add(
-            dispatch(FileLoaded(session~, path~, name~, content~, line~)),
+            dispatch(FileLoaded(session~, path~, name~, content~, range~)),
           )
         None =>
           scheduler.add(

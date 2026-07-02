@@ -8,7 +8,10 @@ pub(all) enum ItemKind {
   User
   Assistant(Bool)
   Reasoning
-  Tool(String, Bool)
+  // A tool call's result: the tool name, whether it failed, and the tool's
+  // optional one-line human-readable summary of what the call did ("" when
+  // the tool supplied none — display falls back to the name).
+  Tool(name~ : String, is_error~ : Bool, brief~ : String)
 }
 
 ///|

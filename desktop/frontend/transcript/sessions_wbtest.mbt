@@ -48,7 +48,7 @@ fn session_reply(events_json : String) -> String {
 test "transcript mapping replays a finished conversation" {
   let events =
     #|{"sequence":1,"item":{"kind":"user","payload":{"content":"  question  "}}},
-    #|{"sequence":2,"item":{"kind":"tool_result","payload":{"tool_call_id":"c1","tool_name":"shell","content":"output","is_error":true}}},
+    #|{"sequence":2,"item":{"kind":"tool_result","payload":{"tool_call_id":"c1","tool_name":"shell","content":"output","is_error":true,"brief":"ran ls → exit 1"}}},
     #|{"sequence":3,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[],"reasoning_content":"thought"}}},
     #|{"sequence":4,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
   guard transcript_from_session_json(session_reply(events)) is Some(items) else {
@@ -57,7 +57,10 @@ test "transcript mapping replays a finished conversation" {
   inspect(items.length(), content="4")
   guard items[0].kind is User else { fail("expected user item") }
   inspect(items[0].content, content="question")
-  guard items[1].kind is Tool("shell", true) else { fail("expected tool card") }
+  guard items[1].kind is Tool(name="shell", is_error=true, brief~) else {
+    fail("expected tool card")
+  }
+  inspect(brief, content="ran ls → exit 1")
   inspect(items[1].content, content="output")
   guard items[2].kind is Reasoning else { fail("expected reasoning item") }
   inspect(items[2].content, content="thought")
@@ -102,10 +105,10 @@ test "transcript mapping keeps summaries and meaningful runtime notices" {
     fail("expected transcript items")
   }
   inspect(items.length(), content="2")
-  guard items[0].kind is Tool("summary", false) else {
+  guard items[0].kind is Tool(name="summary", is_error=false, ..) else {
     fail("expected summary")
   }
-  guard items[1].kind is Tool("moon_check failed", false) else {
+  guard items[1].kind is Tool(name="moon_check failed", is_error=false, ..) else {
     fail("expected runtime notice card")
   }
   inspect(items[1].content, content="main.mbt:1 error")

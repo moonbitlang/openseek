@@ -23,7 +23,12 @@ fn symbol_cache(
   names : Array[String],
 ) -> SymbolCache {
   let items = names.map(name => {
-    symbol_item(name, container="", path="src/main.mbt", line=0)
+    symbol_item(
+      name,
+      container="",
+      path="src/main.mbt",
+      range=@common.Range::Range(1, 1, 1, 1),
+    )
   })
   { session, query, items }
 }
@@ -144,18 +149,22 @@ test "hash menu is loading until the cache catches up to the query" {
 
 ///|
 test "symbol_item resolves a jump target only when the symbol has a path" {
+  let range = @common.Range::Range(5, 4, 5, 15)
   let placed = symbol_item(
     "parse_hover",
     container="",
     path="src/main.mbt",
-    line=4,
+    range~,
   )
   assert_true(placed.path is Some("src/main.mbt"))
-  // `line` arrives zero-based from the language server, shown/jumped one-based.
-  assert_true(placed.line is Some(5))
-  let unplaced = symbol_item("parse_hover", container="", path="", line=0)
+  assert_true(
+    placed.range is Some(placed_range) && placed_range.equals_range(range),
+  )
+  // The reference anchors at the range's (one-based) start line.
+  assert_eq(placed.detail, "src/main.mbt:5")
+  let unplaced = symbol_item("parse_hover", container="", path="", range~)
   assert_true(unplaced.path is None)
-  assert_true(unplaced.line is None)
+  assert_true(unplaced.range is None)
 }
 
 ///|
@@ -165,14 +174,14 @@ test "push_mention appends new chips and drops exact duplicates" {
     label: "review-pr",
     expand: "review-pr ",
     path: None,
-    line: None,
+    range: None,
   }
   let symbol : Mention = {
     kind: SymbolMention,
     label: "parse_hover",
     expand: "`parse_hover` — src/main.mbt:5 ",
     path: Some("src/main.mbt"),
-    line: Some(6),
+    range: Some(@common.Range::Range(5, 1, 5, 12)),
   }
   let one = push_mention([], skill)
   assert_eq(one.length(), 1)
@@ -188,7 +197,7 @@ test "push_mention appends new chips and drops exact duplicates" {
     label: "parse_hover",
     expand: "`parse_hover` — src/other.mbt:9 ",
     path: Some("src/other.mbt"),
-    line: Some(10),
+    range: Some(@common.Range::Range(9, 1, 9, 12)),
   }
   assert_eq(push_mention(two, other_loc).length(), 3)
 }
@@ -201,14 +210,14 @@ test "compose_prompt folds chip expansions ahead of the typed text" {
       label: "parse_hover",
       expand: "`parse_hover` — a.mbt:5 ",
       path: Some("a.mbt"),
-      line: Some(5),
+      range: Some(@common.Range::Range(5, 1, 5, 12)),
     },
     {
       kind: SkillMention,
       label: "review-pr",
       expand: "review-pr ",
       path: None,
-      line: None,
+      range: None,
     },
   ]
   // Expansions (each carries its own trailing space) come first, then the text.
@@ -229,8 +238,9 @@ test "compose_prompt folds chip expansions ahead of the typed text" {
 test "decode_symbols parses rows and skips malformed ones" {
   let text =
     #|{"symbols":[
-    #|{"name":"parse_hover","kind":12,"container":"Lsp","path":"a/b.mbt","line":4},
-    #|{"name":"","path":"x.mbt","line":0},
+    #|{"name":"parse_hover","kind":12,"container":"Lsp","path":"a/b.mbt",
+    #| "range":{"start":{"line":4,"col":2},"end":{"line":4,"col":13}}},
+    #|{"name":"","path":"x.mbt"},
     #|{"path":"y.mbt"}
     #|]}
   guard decode_symbols(text) is Some(items) else { fail("expected rows") }
@@ -239,5 +249,10 @@ test "decode_symbols parses rows and skips malformed ones" {
   assert_eq(items[0].label, "parse_hover")
   // Detail reads container · path:line (line shown one-based).
   assert_eq(items[0].detail, "Lsp · a/b.mbt:5")
+  // The zero-based wire range arrives as one-based viewer coordinates.
+  assert_true(
+    items[0].range is Some(range) &&
+    range.equals_range(@common.Range::Range(5, 3, 5, 14)),
+  )
   assert_true(decode_symbols("not json") is None)
 }

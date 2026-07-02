@@ -11,7 +11,12 @@ pub(all) enum EngineEvent {
   AssistantMessage(String)
   RuntimeUpdate(String)
   Usage(prompt_tokens~ : Int, completion_tokens~ : Int)
-  ToolResult(tool_name~ : String, is_error~ : Bool, content~ : String)
+  ToolResult(
+    tool_name~ : String,
+    is_error~ : Bool,
+    content~ : String,
+    brief~ : String
+  )
   ToolCallDecodeError(tool_name~ : String, reason~ : String)
   AgentFinished(String)
   AgentAborted(String)
@@ -60,6 +65,7 @@ pub fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
           tool_name~,
           is_error=raw.get("is_error") is Some(True),
           content~,
+          brief=json_text(raw, "brief"),
         ),
       )
     "tool_call_decode_error" => Some(ToolCallDecodeError(tool_name~, reason~))
