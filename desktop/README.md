@@ -3,7 +3,7 @@
 A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://mooncakes.io/docs/moonbit-community/rabbita) desktop client for the OpenSeek agent, written in MoonBit.
 
 - `main.mbt` — entry point: wires the window manifest, the IPC extensions, the per-user runtime directory, and the launch log.
-- `internal/host/` — the native host: keeps one persistent `openseek --serve` engine per conversation, streams its JSONL events to the webview, exposes `connect` / `start` / `steer` / `cancel` / `list_sessions` / `load_session` commands plus the `skills_*` / `skill_*` ops backing the Skills panel.
+- `internal/host/` — the native host: keeps one persistent `openseek serve` engine per conversation, streams its JSONL events to the webview, exposes `connect` / `start` / `steer` / `cancel` / `list_sessions` / `load_session` commands plus the `skills_*` / `skill_*` ops backing the Skills panel.
 - `internal/skillmarket/` — the mooncakes.io skill registry client and the local skills-library manager: catalog browsing, digest-verified installs into the engine's global skills directory, and uninstall of what the app itself installed.
 - `internal/appdirs/` — the installed app's own footprint: bundled frontend, engine, and MoonBit seed lookup, plus the per-user runtime directory.
 - `internal/sessiondirs/` — where conversations live on disk: per-session workspace directories and the durable session store root.
@@ -20,7 +20,7 @@ A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://moonca
 
 ## Sessions and streaming
 
-Each conversation is served by one persistent `openseek --serve` engine
+Each conversation is served by one persistent `openseek serve` engine
 process: the host spawns it on the conversation's first prompt and then talks
 to it over stdio (`{"command": "prompt"|"cancel", ...}` JSONL in, the usual
 event stream out). Because the process spans turns, stateful tools survive

@@ -140,7 +140,7 @@ fn EngineHost::serve_command(
   cwd : @path.Path?,
 ) -> (String, Array[String]) {
   match self {
-    Native => (native_engine, ["--serve", "--dir", "."])
+    Native => (native_engine, ["serve", "--dir", "."])
     Wsl(distro~, engine~) => {
       let args : Array[String] = []
       if distro is Some(distro) {
@@ -153,7 +153,7 @@ fn EngineHost::serve_command(
       }
       args.push("--")
       args.push(engine)
-      args.push("--serve")
+      args.push("serve")
       args.push("--dir")
       args.push(".")
       (WslProgram, args)
@@ -204,16 +204,16 @@ test "serve command selects distro and cwd, passing the engine path raw" {
   assert_eq(program, "wsl.exe")
   json_inspect(args, content=[
     "-d", "Ubuntu", "--cd", "C:\\Users\\me\\.openseek\\workspaces\\s1", "--", "/mnt/c/Program Files/OpenSeek/openseek-linux",
-    "--serve", "--dir", ".",
+    "serve", "--dir", ".",
   ])
   let minimal : EngineHost = Wsl(distro=None, engine=DefaultWslEngine)
   let (program, args) = minimal.serve_command("C:\\bundle\\openseek.exe", None)
   assert_eq(program, "wsl.exe")
-  json_inspect(args, content=["--", "openseek", "--serve", "--dir", "."])
+  json_inspect(args, content=["--", "openseek", "serve", "--dir", "."])
   let native : EngineHost = Native
   let (program, args) = native.serve_command("C:\\bundle\\openseek.exe", None)
   assert_eq(program, "C:\\bundle\\openseek.exe")
-  json_inspect(args, content=["--serve", "--dir", "."])
+  json_inspect(args, content=["serve", "--dir", "."])
 }
 
 ///|

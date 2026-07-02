@@ -1,5 +1,5 @@
 ///|
-/// One stdin command sent from the desktop host to an `openseek --serve`
+/// One stdin command sent from the desktop host to an `openseek serve`
 /// engine. The enum is package-local; it models the host's outgoing half of
 /// the serve protocol without widening any cross-module API.
 enum EngineCommand {

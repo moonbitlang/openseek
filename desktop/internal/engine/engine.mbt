@@ -1,9 +1,9 @@
-// The persistent-engine machinery: one `--serve` process per conversation,
+// The persistent-engine machinery: one `serve` process per conversation,
 // owned by the `connect` op's task group, fed prompts over stdin and drained
 // through a per-engine consumer that forwards events to the webview.
 
 ///|
-/// A live `--serve` engine process: one process serves every prompt of one
+/// A live `serve` engine process: one process serves every prompt of one
 /// conversation. Prompts and cancels are JSONL commands on its stdin; its
 /// stdout event stream is consumed for the engine's lifetime. Turns are
 /// strictly sequential on the wire *per conversation*, so events are stamped
@@ -431,7 +431,7 @@ async fn engine_process_env(
 }
 
 ///|
-/// Spawn one `--serve` engine inside the pump's task group and wire up its
+/// Spawn one `serve` engine inside the pump's task group and wire up its
 /// stream tasks: the stdout reader feeding the queue, the stderr drain, and
 /// the consumer that forwards events to the webview for the engine's
 /// lifetime.
