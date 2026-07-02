@@ -594,6 +594,62 @@
         color: var(--ink);
       }
 
+      /* A workspace section's heading: the folder name with hover-revealed
+         new-chat and detach controls, sharing the row-archive treatment. */
+      .workspace-heading {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 10px;
+        border-radius: var(--radius-sm);
+      }
+      .workspace-heading > .sidebar-label {
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .workspace-heading.active > .sidebar-label {
+        color: var(--ink-2);
+      }
+      .workspace-heading:hover .row-archive {
+        visibility: visible;
+      }
+
+      /* The "Add workspace" affordance: a quiet row that opens into a path
+         input. */
+      .workspace-add-button {
+        width: 100%;
+        margin-top: 10px;
+        border: 0;
+        background: transparent;
+        color: var(--ink-3);
+        font: inherit;
+        font-size: 12px;
+        text-align: left;
+      }
+      .workspace-add-button:hover {
+        color: var(--ink-2);
+      }
+      .workspace-add {
+        margin-top: 10px;
+        padding: 0 2px;
+      }
+      .workspace-add input {
+        width: 100%;
+        padding: 5px 8px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        color: var(--ink);
+        font: inherit;
+        font-size: 12px;
+      }
+      .workspace-add input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+
       /* The collapsed group holding archived conversations, at the tail of
          the chat list. */
       .sidebar-archived {

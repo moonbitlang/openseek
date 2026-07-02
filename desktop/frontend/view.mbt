@@ -172,26 +172,21 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
     }
     false
   }
-  // Newest rotation last in the array; show unlisted conversations newest
-  // first to match the store list's ordering.
-  for conv in model.conversations.rev_iter() {
-    if !listed(conv.session_id) && !archived(conv.session_id) {
-      rows.push(
-        session_row(dispatch, model, conv.session_id, conversation_title(conv)),
-      )
-    }
+  // One section per store: the default store's conversations first (no
+  // heading — a workspace-less install keeps today's flat list), then each
+  // attached workspace under its own heading, in registration order.
+  push_group_rows(rows, dispatch, model, "", listed~, archived~)
+  for path in model.workspaces {
+    rows.push(workspace_heading(dispatch, model, path))
+    push_group_rows(rows, dispatch, model, path, listed~, archived~)
   }
-  for item in model.sessions {
-    if archived(item.id) {
-      continue
-    }
-    let label = if model.find_conversation(item.id) is Some(conv) &&
-      item.id == model.active_session {
-      conversation_title(conv)
-    } else {
-      @transcript.non_empty_or(item.title, item.id)
-    }
-    rows.push(session_row(dispatch, model, item.id, label, archivable=true))
+  rows.push(add_workspace_row(dispatch, model))
+  if !model.workspace_error.is_empty() {
+    rows.push(
+      @html.div(class="conversation-row error", title=model.workspace_error, [
+        @html.span(class="sidebar-label", "workspace failed"),
+      ]),
+    )
   }
   if !model.sessions_error.is_empty() {
     rows.push(
@@ -227,6 +222,114 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
     )
   }
   rows
+}
+
+///|
+/// One store's conversation rows: the app-run-only (unlisted) conversations
+/// newest first, then the store's durable sessions in list order — the same
+/// ordering the flat sidebar always had, applied per group.
+fn push_group_rows(
+  rows : Array[@html.Html],
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  workspace : String,
+  listed~ : (String) -> Bool,
+  archived~ : (String) -> Bool,
+) -> Unit {
+  for conv in model.conversations.rev_iter() {
+    if conv.workspace == workspace &&
+      !listed(conv.session_id) &&
+      !archived(conv.session_id) {
+      rows.push(
+        session_row(dispatch, model, conv.session_id, conversation_title(conv)),
+      )
+    }
+  }
+  for item in model.sessions {
+    if item.workspace != workspace || archived(item.id) {
+      continue
+    }
+    let label = if model.find_conversation(item.id) is Some(conv) &&
+      item.id == model.active_session {
+      conversation_title(conv)
+    } else {
+      @transcript.non_empty_or(item.title, item.id)
+    }
+    rows.push(session_row(dispatch, model, item.id, label, archivable=true))
+  }
+}
+
+///|
+/// A workspace section's heading: the project folder's name (full path in
+/// the tooltip) with hover controls — start a new chat in this workspace, or
+/// detach it (registry only; the folder and its sessions stay).
+fn workspace_heading(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  path : String,
+) -> @html.Html {
+  let mut class = "sidebar-heading workspace-heading"
+  if path == model.active_workspace {
+    class = class + " active"
+  }
+  @html.div(class~, title=path, [
+    @html.span(class="sidebar-label", workspace_label(path)),
+    @html.button(
+      class="row-archive",
+      type_="button",
+      title="Detach this workspace — its files and sessions stay",
+      attrs=@html.Attrs::build().on_click(event => {
+        event.stop_propagation()
+        dispatch(RemoveWorkspace(path))
+      }),
+      icon(icon_close),
+    ),
+    @html.button(
+      class="row-archive",
+      type_="button",
+      title="New chat in this workspace",
+      attrs=@html.Attrs::build().on_click(event => {
+        event.stop_propagation()
+        dispatch(NewChatIn(path))
+      }),
+      icon(icon_add),
+    ),
+  ])
+}
+
+///|
+/// The sidebar's "Add workspace" affordance: a row that opens into a path
+/// input. Enter submits, Escape closes; the host validates the path and the
+/// updated registry comes back through `WorkspacesLoaded`.
+fn add_workspace_row(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  if model.workspace_input is Some(text) {
+    @html.div(class="workspace-add", [
+      @html.input(
+        input_type=@html.InputType::Text,
+        value=text,
+        placeholder="/path/to/project",
+        autofocus=true,
+        on_input=dispatch.map(value => WorkspaceInput(value)),
+        attrs=@html.Attrs::build().on_keydown(event => {
+          match event.key() {
+            "Enter" => dispatch(AddWorkspace)
+            "Escape" => dispatch(ToggleWorkspaceInput)
+            _ => @cmd.none
+          }
+        }),
+      ),
+    ])
+  } else {
+    @html.button(
+      class="conversation-row workspace-add-button",
+      type_="button",
+      on_click=dispatch(ToggleWorkspaceInput),
+      [
+        @html.span(class="sidebar-icon", icon(icon_add)),
+        @html.span(class="sidebar-label", "Add workspace"),
+      ],
+    )
+  }
 }
 
 ///|
@@ -1417,6 +1520,16 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       conversation_title(conv),
     ),
   ]
+  // The conversation's attached project; a scratch conversation has no chip.
+  if !conv.workspace.is_empty() {
+    items.push(
+      @html.span(
+        class="topbar-branch",
+        title=conv.workspace,
+        workspace_label(conv.workspace),
+      ),
+    )
+  }
   // The workspace's real branch, reported by the host; a workspace that is
   // not a repository simply has no chip.
   if !conv.branch.is_empty() {

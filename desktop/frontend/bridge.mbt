@@ -227,6 +227,7 @@ fn start_openseek(
   api_key : String,
   api_url : String,
   session : String,
+  workspace~ : String,
   wsl_enabled~ : Bool,
   wsl_distro~ : String,
   wsl_engine~ : String,
@@ -238,6 +239,7 @@ fn start_openseek(
     api_key,
     api_url,
     session,
+    workspace~,
     wsl_enabled~,
     wsl_distro~,
     wsl_engine~,
@@ -259,9 +261,9 @@ fn start_openseek(
 ///|
 /// The start payload. Optional fields are trimmed and omitted when blank —
 /// the host documents that a present field always carries non-blank text —
-/// and it carries no `cwd`: the host derives each conversation's workspace
-/// directory from its session id, so echoing a previous run's cwd back
-/// would pin a resumed conversation to the wrong workspace.
+/// and it carries no `cwd`: `workspace` (the conversation's attached project,
+/// omitted for scratch conversations) is the only placement the host takes;
+/// everything else it derives from the session id.
 fn start_payload(
   task : String,
   selected_model : String,
@@ -269,6 +271,7 @@ fn start_payload(
   api_key : String,
   api_url : String,
   session : String,
+  workspace~ : String,
   wsl_enabled~ : Bool,
   wsl_distro~ : String,
   wsl_engine~ : String,
@@ -279,6 +282,7 @@ fn start_payload(
   set_trimmed(payload, "api_key", api_key)
   set_trimmed(payload, "api_url", api_url)
   set_trimmed(payload, "session", session)
+  set_trimmed(payload, "workspace", workspace)
   if parsed_max_steps(max_steps) is Some(steps) {
     payload["max_steps"] = steps
   }
@@ -319,29 +323,44 @@ fn parsed_max_steps(text : String) -> Int? {
 /// Refresh the sidebar's session list from the engine's durable store.
 fn fetch_sessions(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
-      let reply = bridge_request("list_sessions", @js.Object::new().to_value()) catch {
-        error => {
-          scheduler.add(dispatch(SessionsFailed(bridge_error_text(error))))
-          return
-        }
-      }
-      match @transcript.decode_sessions_reply(reply_json_text(reply)) {
-        Some(items) => scheduler.add(dispatch(SessionsLoaded(items)))
-        None =>
-          scheduler.add(dispatch(SessionsFailed("malformed session list")))
-      }
-    })
+    @js.async_run(() => refresh_sessions_into(scheduler, dispatch))
   })
 }
 
 ///|
+/// Fetch the live session list and fold the reply into `scheduler` — the
+/// body of `fetch_sessions`, shared with every command whose op changes what
+/// that list contains (archive/unarchive moves, workspace add/remove).
+async fn refresh_sessions_into(
+  scheduler : &@cmd.Scheduler,
+  dispatch : @cmd.Emit[Msg],
+) -> Unit noraise {
+  let reply = bridge_request("list_sessions", @js.Object::new().to_value()) catch {
+    error => {
+      scheduler.add(dispatch(SessionsFailed(bridge_error_text(error))))
+      return
+    }
+  }
+  match @transcript.decode_sessions_reply(reply_json_text(reply)) {
+    Some(items) => scheduler.add(dispatch(SessionsLoaded(items)))
+    None => scheduler.add(dispatch(SessionsFailed("malformed session list")))
+  }
+}
+
+///|
 /// Load a durable session's transcript so the conversation can be resumed.
-fn open_session(dispatch : @cmd.Emit[Msg], session_id : String) -> @cmd.Cmd {
+/// `workspace` says which store holds it ("" = the default store; the host
+/// can also locate it by probing, so a stale value only costs the probe).
+fn open_session(
+  dispatch : @cmd.Emit[Msg],
+  session_id : String,
+  workspace~ : String,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session_id
+      set_trimmed(payload, "workspace", workspace)
       let reply = bridge_request("load_session", payload.to_value()) catch {
         error => {
           scheduler.add(

@@ -358,7 +358,10 @@ fn sync_file_panel(
   loading.push("")
   (
     { ..model, file_panel: { ..panel, loading, } },
-    @cmd.batch([reroot_cmd, read_directory(dispatch, conv.session_id, "")]),
+    @cmd.batch([
+      reroot_cmd,
+      read_directory(dispatch, conv.session_id, "", workspace=conv.workspace),
+    ]),
   )
 }
 
@@ -399,6 +402,7 @@ fn update_msg(
           fetch_sessions(dispatch),
           fetch_installed_skills(dispatch),
           fetch_archived(dispatch),
+          fetch_workspaces(dispatch),
         ]),
         {
           ..model,
@@ -506,6 +510,7 @@ fn update_msg(
             path,
             basename(path),
             line=mention.line,
+            workspace=conv.workspace,
           ),
         ]),
         {
@@ -692,6 +697,7 @@ fn update_msg(
               model.effective_api_key(),
               model.effective_api_url(),
               conv.session_id,
+              workspace=conv.workspace,
               wsl_enabled=model.wsl_active(),
               wsl_distro=model.wsl_distro,
               wsl_engine=model.wsl_engine,
@@ -739,21 +745,101 @@ fn update_msg(
     }
     NewChat =>
       // A fresh conversation can start at any time: the current one keeps
-      // running in the background and stays one sidebar click away.
+      // running in the background and stays one sidebar click away. It lands
+      // in the active workspace — the one the on-screen conversation uses.
       (rotate_session(dispatch), { ..model, loading_session: "" })
-    SessionRotated(session_id) =>
+    NewChatIn(workspace) =>
+      // A workspace section's own "new chat": the fresh conversation lands in
+      // that project, and the workspace stays active for the next one.
+      (
+        rotate_session(dispatch),
+        { ..model, active_workspace: workspace, loading_session: "" },
+      )
+    SessionRotated(session_id) => {
+      let activated = model.activate(session_id)
+      // A rotation creates the conversation, so stamp it with the workspace
+      // it was asked into; an existing conversation keeps its own.
+      let conversations = activated.conversations.map(conv => {
+        if conv.session_id == session_id &&
+          conv.messages.length() == 0 &&
+          !conv.running {
+          { ..conv, workspace: model.active_workspace }
+        } else {
+          conv
+        }
+      })
       (
         @cmd.none,
         {
-          ..model.activate(session_id),
+          ..activated,
+          conversations,
           screen: Chat,
           transcript_pinned: true,
           loading_session: "",
           completion: None,
         },
       )
+    }
     SessionsLoaded(items) =>
       (@cmd.none, { ..model, sessions: items, sessions_error: "" })
+    WorkspacesLoaded(paths) => {
+      // A workspace that vanished from the registry cannot host runs anymore;
+      // conversations attached to it fall back to the default store so their
+      // next start does not error on an unregistered path.
+      let conversations = model.conversations.map(conv => {
+        if !conv.workspace.is_empty() && !paths.contains(conv.workspace) {
+          { ..conv, workspace: "" }
+        } else {
+          conv
+        }
+      })
+      let active_workspace = if model.active_workspace.is_empty() ||
+        paths.contains(model.active_workspace) {
+        model.active_workspace
+      } else {
+        ""
+      }
+      (
+        @cmd.none,
+        {
+          ..model,
+          workspaces: paths,
+          conversations,
+          active_workspace,
+          workspace_error: "",
+        },
+      )
+    }
+    ToggleWorkspaceInput =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          workspace_input: if model.workspace_input is Some(_) {
+            None
+          } else {
+            Some("")
+          },
+          workspace_error: "",
+        },
+      )
+    WorkspaceInput(text) =>
+      (@cmd.none, { ..model, workspace_input: Some(text) })
+    AddWorkspace => {
+      let path = model.workspace_input.unwrap_or("").trim().to_owned()
+      if path.is_empty() {
+        (@cmd.none, model)
+      } else {
+        (
+          add_workspace(dispatch, path),
+          { ..model, workspace_input: None, workspace_error: "" },
+        )
+      }
+    }
+    RemoveWorkspace(path) =>
+      (remove_workspace(dispatch, path), { ..model, workspace_error: "" })
+    WorkspaceFailed(message) =>
+      (@cmd.none, { ..model, workspace_error: message })
     ArchiveSession(session_id) =>
       (archive_session(dispatch, session_id), { ..model, archive_error: "" })
     UnarchiveSession(session_id) =>
@@ -786,7 +872,7 @@ fn update_msg(
           @cmd.none,
           { ..model, screen: Chat, loading_session: "", completion: None },
         )
-      } else if model.find_conversation(session_id) is Some(_) {
+      } else if model.find_conversation(session_id) is Some(conv) {
         // The conversation already has live client state — it may well still
         // be running — so switching is just a change of focus. A switch lands
         // at the new conversation's tail, so the transcript re-pins.
@@ -798,12 +884,21 @@ fn update_msg(
             transcript_pinned: true,
             loading_session: "",
             completion: None,
+            active_workspace: conv.workspace,
           },
         )
       } else {
+        // The sidebar item says which store holds the session; opening it
+        // also makes its workspace the active one, so "New chat" follows.
+        let workspace = model.session_workspace(session_id)
         (
-          open_session(dispatch, session_id),
-          { ..model, screen: Chat, loading_session: session_id },
+          open_session(dispatch, session_id, workspace~),
+          {
+            ..model,
+            screen: Chat,
+            loading_session: session_id,
+            active_workspace: workspace,
+          },
         )
       }
     SessionLoaded(session=session_id, items~) =>
@@ -825,7 +920,10 @@ fn update_msg(
           {
             ..model
             .replace_conversation({
-              ..empty_conversation(session_id),
+              ..empty_conversation(
+                session_id,
+                workspace=model.session_workspace(session_id),
+              ),
               messages: items,
             })
             .activate(session_id),
@@ -984,7 +1082,12 @@ fn update_msg(
           if !panel.children.contains(ancestor) && !loading.contains(ancestor) {
             loading.push(ancestor)
             cmds.push(
-              read_directory(dispatch, model.active().session_id, ancestor),
+              read_directory(
+                dispatch,
+                model.active().session_id,
+                ancestor,
+                workspace=model.active().workspace,
+              ),
             )
           }
         }
@@ -1036,7 +1139,12 @@ fn update_msg(
           let loading = panel.loading.copy()
           loading.push(path)
           (
-            read_directory(dispatch, model.active().session_id, path),
+            read_directory(
+              dispatch,
+              model.active().session_id,
+              path,
+              workspace=model.active().workspace,
+            ),
             { ..model, file_panel: { ..panel, expanded, loading } },
           )
         }
@@ -1096,7 +1204,14 @@ fn update_msg(
     FileSelected(path~, name~, line~) => {
       let panel = model.file_panel
       (
-        read_file(dispatch, model.active().session_id, path, name, line~),
+        read_file(
+          dispatch,
+          model.active().session_id,
+          path,
+          name,
+          line~,
+          workspace=model.active().workspace,
+        ),
         { ..model, file_panel: { ..panel, selected: Some(path), error: "" } },
       )
     }

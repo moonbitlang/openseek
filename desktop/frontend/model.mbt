@@ -76,6 +76,10 @@ priv struct Conversation {
   // Durable engine session backing this conversation; consecutive runs share
   // it so the agent keeps context between prompts.
   session_id : String
+  // The project directory this conversation is attached to, "" for a scratch
+  // conversation in the app-managed workspace. Sent with every start so the
+  // engine runs in the project and stores the session inside it.
+  workspace : String
   // Composer draft, kept per conversation so switching away (and back)
   // neither loses the text nor sends it to the wrong session.
   task : String
@@ -348,6 +352,16 @@ priv struct Model {
   archived : Array[@transcript.SessionListItem]
   // Why the last archive attempt failed; empty otherwise.
   archive_error : String
+  // Project directories attached as workspaces: the host registry's absolute
+  // paths in registration order. The sidebar shows one section per entry.
+  workspaces : Array[String]
+  // Where "New chat" lands: a registered workspace path, or "" for the
+  // default scratch store. Follows the conversation last opened or created.
+  active_workspace : String
+  // The sidebar's add-workspace input text; None while the input is closed.
+  workspace_input : String?
+  // Why the last workspace operation failed; empty otherwise.
+  workspace_error : String
   // Whether the transcript is scrolled to its bottom. Streaming output only
   // auto-follows while this holds — scrolling up to read history must not be
   // yanked back down by the next delta. Maintained by a DOM scroll watcher;
@@ -477,6 +491,21 @@ priv enum Msg {
   SessionsFailed(String)
   OpenSession(String)
   SessionLoaded(session~ : String, items~ : Array[@transcript.TranscriptItem])
+  // The registered workspaces — the reply to `list_workspaces` and to a
+  // successful add/remove alike.
+  WorkspacesLoaded(Array[String])
+  // Open (or close) the sidebar's add-workspace input.
+  ToggleWorkspaceInput
+  // The add-workspace input's text changed.
+  WorkspaceInput(String)
+  // Submit the add-workspace input: register its path with the host.
+  AddWorkspace
+  // Detach a workspace: only the registry entry goes away — the directory
+  // and the sessions inside it stay, so re-adding restores them.
+  RemoveWorkspace(String)
+  WorkspaceFailed(String)
+  // Start a fresh conversation in a workspace ("" = the default store).
+  NewChatIn(String)
   // Archive a conversation: the host moves its durable record into the
   // store's `archived` twin and the sidebar moves the row under the Archived
   // group.
@@ -561,9 +590,13 @@ priv enum Msg {
 }
 
 ///|
-fn empty_conversation(session_id : String) -> Conversation {
+fn empty_conversation(
+  session_id : String,
+  workspace? : String = "",
+) -> Conversation {
   {
     session_id,
+    workspace,
     task: "",
     mentions: [],
     running: false,
@@ -607,6 +640,10 @@ fn initial_model() -> Model {
     sessions_error: "",
     archived: [],
     archive_error: "",
+    workspaces: [],
+    active_workspace: "",
+    workspace_input: None,
+    workspace_error: "",
     transcript_pinned: true,
     screen: Chat,
     skills_catalog: CatalogIdle,
@@ -717,6 +754,22 @@ fn Model::find_conversation(self : Model, session_id : String) -> Conversation? 
     }
   }
   None
+}
+
+///|
+/// The workspace a session belongs to: the sidebar list's grouping when the
+/// store knows the session, the live conversation's own placement otherwise
+/// (a fresh chat that has not reached the store yet). "" = the default store.
+fn Model::session_workspace(self : Model, session_id : String) -> String {
+  for item in self.sessions {
+    if item.id == session_id {
+      return item.workspace
+    }
+  }
+  match self.find_conversation(session_id) {
+    Some(conv) => conv.workspace
+    None => ""
+  }
 }
 
 ///|

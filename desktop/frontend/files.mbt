@@ -12,12 +12,14 @@ fn read_directory(
   dispatch : @cmd.Emit[Msg],
   session : String,
   path : String,
+  workspace~ : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session
       payload["path"] = path
+      set_trimmed(payload, "workspace", workspace)
       let reply = bridge_request("read_directory", payload.to_value()) catch {
         error => {
           scheduler.add(
@@ -52,12 +54,14 @@ fn read_file(
   path : String,
   name : String,
   line~ : Int?,
+  workspace~ : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session
       payload["path"] = path
+      set_trimmed(payload, "workspace", workspace)
       let reply = bridge_request("read_file", payload.to_value()) catch {
         error => {
           scheduler.add(
