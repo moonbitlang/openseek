@@ -63,10 +63,11 @@ fn render_raw(session : @agent_session.Session) -> @html.Html {
   let tags = raw_pair_tags(session)
   let step_labels = agent_step_labels(session)
   let turns = group_turns(session.events())
-  let blocks : Array[@html.Html] = []
-  for index, turn in turns {
-    blocks.push(turn_block(index + 1, turn, briefs, failed, tags, step_labels))
-  }
+  let blocks : Array[@html.Html] = [
+    for index, turn in turns => {
+      turn_block(index + 1, turn, briefs, failed, tags, step_labels)
+    }
+  ]
   if blocks.is_empty() {
     return empty_state("This session has no events yet.")
   }
@@ -237,17 +238,6 @@ fn turn_base_ms(turn : Array[@agent_session.SessionEvent]) -> Int64 {
 
 ///|
 fn offset_label(base : Int64, event : @agent_session.SessionEvent) -> String {
-  if base == 0 || event.unix_ms() == 0 {
-    return ""
-  }
-  "+\{format_span_total_seconds(event.unix_ms() - base)}"
-}
-
-///|
-fn model_offset_label(
-  base : Int64,
-  event : @agent_session.SessionEvent,
-) -> String {
   if base == 0 || event.unix_ms() == 0 {
     return ""
   }
@@ -549,18 +539,19 @@ fn prefix_lines(text : String, marker : String) -> String {
 /// Render a synthesized diff string as colored lines: `+ ` added (green), `- `
 /// removed (red), anything else context (muted). Shown verbatim, monospace.
 fn diff_block(text : String) -> @html.Html {
-  let lines : Array[@html.Html] = []
-  for raw in text.split("\n") {
-    let line = raw.to_owned()
-    let cls = if line.has_prefix("+ ") {
-      "diff-add"
-    } else if line.has_prefix("- ") {
-      "diff-del"
-    } else {
-      "diff-ctx"
+  let lines : Array[@html.Html] = [
+    for raw in text.split("\n") => {
+      let line = raw.to_owned()
+      let cls = if line.has_prefix("+ ") {
+        "diff-add"
+      } else if line.has_prefix("- ") {
+        "diff-del"
+      } else {
+        "diff-ctx"
+      }
+      @html.div(class=cls) <| line
     }
-    lines.push(@html.div(class=cls) <| line)
-  }
+  ]
   @html.div(class="arg-value diff-block") <| lines
 }
 
@@ -788,7 +779,7 @@ fn event_time_labels(session : @agent_session.Session) -> Map[Int, String] {
   for turn in group_turns(session.events()) {
     let base = turn_base_ms(turn)
     for event in turn {
-      labels.set(event.sequence(), model_offset_label(base, event))
+      labels.set(event.sequence(), offset_label(base, event))
     }
   }
   labels
@@ -833,24 +824,13 @@ fn remove_pending_tool_id(
 }
 
 ///|
-fn flush_pending_tool_time_labels(
+fn flush_pending_tool_labels(
   pending : Array[String],
   labels : Array[String],
 ) -> Unit {
   for _ in pending {
     // Synthetic repair messages are not backed by a durable event, so they do
-    // not get a timestamp label.
-    labels.push("")
-  }
-  pending.clear()
-}
-
-///|
-fn flush_pending_tool_step_labels(
-  pending : Array[String],
-  labels : Array[String],
-) -> Unit {
-  for _ in pending {
+    // not get a timestamp/step label.
     labels.push("")
   }
   pending.clear()
@@ -897,7 +877,7 @@ fn model_message_time_labels(session : @agent_session.Session) -> Array[String] 
     }
     match event.item() {
       Assistant(message) => {
-        flush_pending_tool_time_labels(pending_tool_calls, times)
+        flush_pending_tool_labels(pending_tool_calls, times)
         times.push(event_label(labels, event))
         for call in message.tool_calls() {
           pending_tool_calls.push(call.id)
@@ -908,14 +888,14 @@ fn model_message_time_labels(session : @agent_session.Session) -> Array[String] 
           times.push(event_label(labels, event))
         }
       item => {
-        flush_pending_tool_time_labels(pending_tool_calls, times)
+        flush_pending_tool_labels(pending_tool_calls, times)
         if item_projects_model_message(item) {
           times.push(event_label(labels, event))
         }
       }
     }
   }
-  flush_pending_tool_time_labels(pending_tool_calls, times)
+  flush_pending_tool_labels(pending_tool_calls, times)
   times
 }
 
@@ -934,7 +914,7 @@ fn model_message_step_labels(session : @agent_session.Session) -> Array[String] 
     }
     match event.item() {
       Assistant(message) => {
-        flush_pending_tool_step_labels(pending_tool_calls, labels)
+        flush_pending_tool_labels(pending_tool_calls, labels)
         labels.push(event_labels.get(event.sequence()).unwrap_or(""))
         for call in message.tool_calls() {
           pending_tool_calls.push(call.id)
@@ -945,14 +925,14 @@ fn model_message_step_labels(session : @agent_session.Session) -> Array[String] 
           labels.push("")
         }
       item => {
-        flush_pending_tool_step_labels(pending_tool_calls, labels)
+        flush_pending_tool_labels(pending_tool_calls, labels)
         if item_projects_model_message(item) {
           labels.push(event_labels.get(event.sequence()).unwrap_or(""))
         }
       }
     }
   }
-  flush_pending_tool_step_labels(pending_tool_calls, labels)
+  flush_pending_tool_labels(pending_tool_calls, labels)
   labels
 }
 
