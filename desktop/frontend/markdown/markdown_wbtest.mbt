@@ -82,7 +82,7 @@ test "file-path shapes are recognized" {
   assert_true(is_file_path("README.md"))
   assert_true(is_file_path("moon.pkg"))
   assert_true(is_file_path("config.json"))
-  // A surrounding space (cmark keeps one in some code spans) is tolerated.
+  // Stray surrounding whitespace in a destination is tolerated.
   assert_true(is_file_path(" view.mbt "))
 }
 

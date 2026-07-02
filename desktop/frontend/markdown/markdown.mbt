@@ -16,10 +16,11 @@
 /// surface as JS exceptions, so `@js.Error_::wrap` is the one place a cmark
 /// crash can be contained; the fallback shows the raw text instead.
 ///
-/// `open_file`, when supplied, turns transcript-referenced file paths —
-/// path-shaped inline code and local-path links — into clickable elements
-/// whose click runs the returned command (the frontend opens the file). Absent
-/// (tests, plain rendering), those paths render as ordinary code and links.
+/// `open_file`, when supplied, turns links whose destination is a local file
+/// path into clickable elements whose click runs the returned command (the
+/// frontend opens the file). Absent (tests, plain rendering), those links
+/// render as ordinary anchors. Inline code never links, even when it names a
+/// file — only an explicit markdown link opens anything.
 pub fn markdown_nodes(
   source : String,
   open_file? : (String) -> @cmd.Cmd,
@@ -225,18 +226,11 @@ fn MarkdownRender::push_inline(
         Hard => out.push(@html.br())
         Soft => out.push(@html.text(" "))
       }
-    CodeSpan(node) => {
-      let code = node.v.code()
-      // Inline code is where the model usually names files (`src/main.mbt`);
-      // path-shaped spans become clickable, everything else stays plain code.
-      if self.open_file is Some(open) && is_file_path(code) {
-        out.push(
-          file_link_node(open, code, [@html.code(class="inline-code", code)]),
-        )
-      } else {
-        out.push(@html.code(class="inline-code", code))
-      }
-    }
+    // Inline code stays plain code even when it names a file — only an
+    // explicit markdown link (below) opens anything. Path-shaped spans used
+    // to light up too, but the guesswork misfired often enough on prose-like
+    // tokens that the feature read as noise.
+    CodeSpan(node) => out.push(@html.code(class="inline-code", node.v.code()))
     Emphasis(node) => out.push(@html.em(self.inline_nodes(node.v.inline)))
     StrongEmphasis(node) =>
       out.push(@html.strong(self.inline_nodes(node.v.inline)))
