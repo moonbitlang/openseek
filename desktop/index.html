@@ -4,16 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenSeek Desktop</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
     <!-- The embedded code viewer's styles, assembled from the editor submodule
          by the packager (see build_viewer_stylesheet). -->
     <link rel="stylesheet" href="viewer.css" />
     <style>
+      /* Geist Mono is bundled (fonts/, SIL OFL 1.1) rather than fetched from
+         Google Fonts, so the app renders identically offline. The variable
+         file covers every weight the UI uses. */
+      @font-face {
+        font-family: "Geist Mono";
+        src: url("fonts/GeistMono-Variable.woff2") format("woff2");
+        font-weight: 100 900;
+        font-style: normal;
+        font-display: swap;
+      }
+
       /* openseek — calm, minimal, all-mono coding agent.
          Light mode primary, warm paper surfaces, hairline borders, blue accent. */
       :root {

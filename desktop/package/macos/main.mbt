@@ -183,6 +183,7 @@ async fn copy_bundle_files(ws : @packaging.Workspace) -> Unit {
     ws.at(AppAssetDir + "/frontend.js"),
   )
   @packaging.copy_file(ws.at("viewer.css"), ws.at(AppAssetDir + "/viewer.css"))
+  @packaging.copy_tree(ws.at("fonts"), ws.at(AppAssetDir + "/fonts"))
   bundle_proton_runtime(ws)
   let target = @moonbit.moonbit_macos_arm64_toolchain()
   @moonbit.stage_moonbit_toolchain_seed(ws, target, MoonbitSeedDir)
