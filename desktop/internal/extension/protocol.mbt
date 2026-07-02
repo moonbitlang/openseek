@@ -174,6 +174,23 @@ priv struct UninstallSkillReply {
 } derive(ToJson)
 
 ///|
+/// `workspace_branch` reports the git branch of the conversation's working
+/// directory — `cwd` when the frontend has it (a live run), otherwise derived
+/// from `session`, mirroring `open_path`.
+priv struct WorkspaceBranchPayload {
+  session : String
+  cwd : String
+} derive(FromJson)
+
+///|
+/// Reply to `workspace_branch`. `branch` is the checked-out branch (a
+/// detached HEAD reads as its short hash); empty when the directory is not a
+/// git repository or git is unavailable.
+priv struct WorkspaceBranchReply {
+  branch : String
+} derive(ToJson)
+
+///|
 /// `read_directory` lists `path`, resolved relative to the conversation's
 /// workspace; `""` lists the workspace root. The host derives the root from
 /// `session`, so the client never names an absolute path.

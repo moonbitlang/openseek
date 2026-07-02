@@ -53,6 +53,7 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("skills_installed"),
       @app.AppCommandApiDescriptor::new("skill_uninstall"),
       @app.AppCommandApiDescriptor::new("open_path"),
+      @app.AppCommandApiDescriptor::new("workspace_branch"),
       @app.AppCommandApiDescriptor::new("list_apps"),
       @app.AppCommandApiDescriptor::new("launch_app"),
       @app.AppCommandApiDescriptor::new("read_directory"),
@@ -122,6 +123,11 @@ pub fn openseek_extension(
       })
       context.op_async("open_path", async fn(payload : OpenPathPayload) {
         open_path_op(payload)
+      })
+      context.op_async("workspace_branch", async fn(
+        payload : WorkspaceBranchPayload,
+      ) {
+        workspace_branch_op(payload)
       })
       context.op_async("list_apps", async fn(_ : Json) { list_apps_op() })
       context.op_async("launch_app", async fn(payload : LaunchAppPayload) {

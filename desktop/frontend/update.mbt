@@ -778,7 +778,12 @@ fn update_msg(
         (@cmd.none, { ..model, loading_session: "" })
       } else {
         (
-          scroll_transcript_after_render(),
+          // The host derives the resumed workspace from the session id, so
+          // the branch probe sends no cwd.
+          @cmd.batch([
+            scroll_transcript_after_render(),
+            fetch_branch(dispatch, session_id, ""),
+          ]),
           {
             ..model
             .replace_conversation({
@@ -795,6 +800,12 @@ fn update_msg(
     TranscriptPinned(pinned) =>
       (@cmd.none, { ..model, transcript_pinned: pinned })
     ColorSchemeChanged(dark) => (@cmd.none, { ..model, dark_mode: dark })
+    BranchLoaded(session~, branch~) =>
+      if model.find_conversation(session) is Some(conv) {
+        (@cmd.none, model.replace_conversation({ ..conv, branch, }))
+      } else {
+        (@cmd.none, model)
+      }
     OpenFile(path) => {
       // A relative path is taken against the active conversation's working
       // directory: its `cwd` for a live run, or — when resumed without one —
@@ -847,17 +858,20 @@ fn update_msg(
           status: Running,
           cwd,
         })
+        // The run's workspace directory now exists, so the branch chip can be
+        // probed (and refreshed — a rerun may follow a checkout).
+        let branch_cmd = fetch_branch(dispatch, session, cwd)
         // Sync the global model/step settings only when this start belongs to
         // the conversation on screen. A slow background start (the user switched
         // chats mid-spawn) must not overwrite settings the user has since
         // changed for the now-active conversation.
         if session == model.active_session {
           (
-            @cmd.none,
+            branch_cmd,
             { ..updated, selected_model, max_steps: max_steps.to_string() },
           )
         } else {
-          (@cmd.none, updated)
+          (branch_cmd, updated)
         }
       } else {
         (@cmd.none, model)
@@ -1134,19 +1148,21 @@ fn update_msg(
         }
         let answer = answer.trim().to_owned()
         // The finished run just appended to the durable store, so the
-        // sidebar list (and this conversation's title) may have changed.
+        // sidebar list (and this conversation's title) may have changed —
+        // and the turn may have created the repository or switched branches.
+        let refresh = @cmd.batch([
+          fetch_sessions(dispatch),
+          fetch_branch(dispatch, conv.session_id, conv.cwd),
+        ])
         if should_append_answer(conv, answer) {
           (
-            @cmd.batch([
-              scroll_if_active(model, conv.session_id),
-              fetch_sessions(dispatch),
-            ]),
+            @cmd.batch([scroll_if_active(model, conv.session_id), refresh]),
             model.replace_conversation(
               base.append_item(Assistant(false), answer),
             ),
           )
         } else {
-          (fetch_sessions(dispatch), model.replace_conversation(base))
+          (refresh, model.replace_conversation(base))
         }
       } else {
         (@cmd.none, model)

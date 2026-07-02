@@ -1079,9 +1079,13 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       title=session_tooltip(conv),
       conversation_title(conv),
     ),
-    @html.span(class="topbar-branch", "main"),
-    run_indicator(model),
   ]
+  // The workspace's real branch, reported by the host; a workspace that is
+  // not a repository simply has no chip.
+  if !conv.branch.is_empty() {
+    items.push(@html.span(class="topbar-branch", conv.branch))
+  }
+  items.push(run_indicator(model))
   if conv.usage_tokens > 0 {
     items.push(@html.span(class="pill", token_label(conv.usage_tokens)))
   }

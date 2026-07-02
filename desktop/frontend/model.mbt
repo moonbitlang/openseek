@@ -102,6 +102,11 @@ priv struct Conversation {
   // `started` event — display only (topbar tooltip); the host derives it
   // from the session id, so it is never sent back with a start request.
   cwd : String
+  // The git branch checked out in the workspace, reported by the host's
+  // `workspace_branch` op — display only (topbar chip). Empty when the
+  // workspace is not a repository (the chip hides). Refreshed when a run
+  // starts, a stored session opens, and a run finishes.
+  branch : String
   watcher_status : String
   // Live text of the in-flight assistant turn, accumulated from
   // `assistant_delta` / `reasoning_delta` events and cleared once the engine
@@ -471,6 +476,9 @@ priv enum Msg {
   // The host's dark-mode preference changed (the user switched the OS theme).
   // Reported by the `matchMedia` watcher.
   ColorSchemeChanged(Bool)
+  // A `workspace_branch` reply: the git branch of `session`'s workspace, or
+  // `""` when it is not a repository (a failed probe also reads as `""`).
+  BranchLoaded(session~ : String, branch~ : String)
   // A file path in the transcript was clicked: open it in the system's
   // default app. The host resolves the path inside the active conversation's
   // workspace.
@@ -545,6 +553,7 @@ fn empty_conversation(session_id : String) -> Conversation {
     status: Idle,
     usage_tokens: 0,
     cwd: "",
+    branch: "",
     watcher_status: "",
     streaming_response: "",
     streaming_reasoning: "",

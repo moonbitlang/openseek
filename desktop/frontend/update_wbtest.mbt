@@ -819,6 +819,30 @@ test "the scroll watcher's report lands on the model" {
 }
 
 ///|
+test "a branch reply lands on its conversation and an empty one hides it" {
+  let dispatch = test_dispatch()
+  let (_, named) = update(
+    dispatch,
+    BranchLoaded(session="desktop-test", branch="feature/x"),
+    test_model(),
+  )
+  inspect(named.active().branch, content="feature/x")
+  let (_, cleared) = update(
+    dispatch,
+    BranchLoaded(session="desktop-test", branch=""),
+    named,
+  )
+  inspect(cleared.active().branch, content="")
+  // A reply for an unknown session is dropped.
+  let (_, ignored) = update(
+    dispatch,
+    BranchLoaded(session="desktop-gone", branch="main"),
+    test_model(),
+  )
+  inspect(ignored.active().branch, content="")
+}
+
+///|
 test "the color-scheme watcher's report lands on the model" {
   let dispatch = test_dispatch()
   let (_, dark) = update(dispatch, ColorSchemeChanged(true), test_model())
