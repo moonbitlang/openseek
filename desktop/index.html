@@ -1721,6 +1721,8 @@
       }
 
       /* ---------- settings page ---------- */
+      /* Shares the Skills page's shell — same column width, header type, and
+         section headings — so the two pages read as siblings. */
       .settings-page {
         grid-row: 1 / -1;
         min-height: 0;
@@ -1732,7 +1734,7 @@
         display: grid;
         align-content: start;
         gap: 18px;
-        max-width: 520px;
+        max-width: 720px;
         margin: 0 auto;
       }
 
@@ -1750,7 +1752,7 @@
 
       .setup-title {
         display: grid;
-        gap: 4px;
+        gap: 6px;
         min-width: 0;
       }
 
@@ -1762,31 +1764,80 @@
         line-height: 1.3;
       }
 
-      .status {
+      .settings-subtitle {
         color: var(--ink-3);
-        font-size: 12px;
+        font-size: 13px;
       }
 
       .settings {
         display: grid;
         align-content: start;
-        gap: 14px;
+        gap: 20px;
       }
 
-      .setting-hint {
-        margin-top: -8px;
-        color: var(--ink-3);
-        font-size: 11.5px;
-      }
-
-      label {
+      .settings-group {
         display: grid;
-        gap: 6px;
+        gap: 4px;
+      }
+
+      .settings-group-title {
         color: var(--ink-3);
         font-size: 10.5px;
         font-weight: 500;
         letter-spacing: 0.06em;
         text-transform: uppercase;
+        margin-bottom: 2px;
+      }
+
+      .setting-row {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 9px 2px;
+        border-radius: var(--radius-sm);
+      }
+
+      .setting-row:hover {
+        background: var(--surface-2);
+      }
+
+      .setting-row.stack {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .setting-text {
+        flex: 1;
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+      }
+
+      .setting-name {
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .setting-desc {
+        color: var(--ink-2);
+        font-size: 12px;
+      }
+
+      .setting-control {
+        flex-shrink: 0;
+        width: 280px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .setting-row.stack .setting-control {
+        width: auto;
+      }
+
+      #saveApiKey {
+        justify-self: end;
       }
 
       input,

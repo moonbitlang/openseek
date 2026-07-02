@@ -33,35 +33,52 @@ fn compact_count(value : Int) -> String {
 }
 
 ///|
-fn setting_input(
-  label_text : String,
-  value : String,
-  placeholder : String,
-  input_type : @html.InputType,
-  on_input : @cmd.Emit[String],
+/// One settings row: name and optional description on the left, the control
+/// on the right. `stack=true` drops the control below the text at full
+/// width instead, for free-form fields (URLs, keys) that a narrow right
+/// column would squeeze.
+fn setting_row(
+  name : String,
+  controls : Array[@html.Html],
+  desc? : String,
+  stack? : Bool = false,
 ) -> @html.Html {
-  @html.label([
-    @html.text(label_text),
-    @html.input(input_type~, value~, placeholder~, on_input~),
+  let text : Array[@html.Html] = [@html.div(class="setting-name", name)]
+  if desc is Some(desc) && !desc.is_empty() {
+    text.push(@html.div(class="setting-desc", desc))
+  }
+  @html.div(class=if stack { "setting-row stack" } else { "setting-row" }, [
+    @html.div(class="setting-text", text),
+    @html.div(class="setting-control", controls),
   ])
 }
 
 ///|
+/// A titled run of settings rows under an uppercase heading, mirroring the
+/// Skills page's "Installed" / "Mooncakes registry" sections.
+fn settings_group(title : String, rows : Array[@html.Html]) -> @html.Html {
+  let children : Array[@html.Html] = [
+    @html.div(class="settings-group-title", title),
+  ]
+  for row in rows {
+    children.push(row)
+  }
+  @html.div(class="settings-group", children)
+}
+
+///|
 fn model_select(dispatch : @cmd.Emit[Msg], selected : String) -> @html.Html {
-  @html.label([
-    @html.text("Model"),
-    @html.select(on_change=dispatch.map(value => ModelChanged(value)), [
-      @html.option(
-        value="deepseek-v4-pro",
-        selected=selected == "deepseek-v4-pro",
-        "deepseek-v4-pro",
-      ),
-      @html.option(
-        value="deepseek-v4-flash",
-        selected=selected == "deepseek-v4-flash",
-        "deepseek-v4-flash",
-      ),
-    ]),
+  @html.select(on_change=dispatch.map(value => ModelChanged(value)), [
+    @html.option(
+      value="deepseek-v4-pro",
+      selected=selected == "deepseek-v4-pro",
+      "deepseek-v4-pro",
+    ),
+    @html.option(
+      value="deepseek-v4-flash",
+      selected=selected == "deepseek-v4-flash",
+      "deepseek-v4-flash",
+    ),
   ])
 }
 
@@ -849,32 +866,26 @@ fn provider_select(
   dispatch : @cmd.Emit[Msg],
   selected : ApiProvider,
 ) -> @html.Html {
-  @html.label([
-    @html.text("API endpoint"),
-    @html.select(on_change=dispatch.map(value => ProviderChanged(value)), [
-      @html.option(
-        value="openseek",
-        selected=selected is Openseek,
-        "OpenSeek (default, no API key)",
-      ),
-      @html.option(
-        value="deepseek",
-        selected=selected is Deepseek,
-        "DeepSeek official (your API key)",
-      ),
-      @html.option(value="custom", selected=selected is Custom, "Custom URL"),
-    ]),
+  @html.select(on_change=dispatch.map(value => ProviderChanged(value)), [
+    @html.option(
+      value="openseek",
+      selected=selected is Openseek,
+      "OpenSeek (default, no API key)",
+    ),
+    @html.option(
+      value="deepseek",
+      selected=selected is Deepseek,
+      "DeepSeek official (your API key)",
+    ),
+    @html.option(value="custom", selected=selected is Custom, "Custom URL"),
   ])
 }
 
 ///|
 fn wsl_select(dispatch : @cmd.Emit[Msg], enabled : Bool) -> @html.Html {
-  @html.label([
-    @html.text("Engine environment"),
-    @html.select(on_change=dispatch.map(value => WslModeChanged(value)), [
-      @html.option(value="native", selected=!enabled, "Windows (native)"),
-      @html.option(value="wsl", selected=enabled, "WSL"),
-    ]),
+  @html.select(on_change=dispatch.map(value => WslModeChanged(value)), [
+    @html.option(value="native", selected=!enabled, "Windows (native)"),
+    @html.option(value="wsl", selected=enabled, "WSL"),
   ])
 }
 
@@ -894,26 +905,45 @@ fn provider_hint(provider : ApiProvider) -> String {
 /// the composer could do.
 fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let ready = model.api_ready()
-  let settings : Array[@html.Html] = [
-    model_select(dispatch, model.selected_model),
-    setting_input(
-      "Max steps",
-      model.max_steps,
-      "1000",
-      @html.InputType::Number,
-      dispatch.map(value => MaxStepsChanged(value)),
+  let model_rows : Array[@html.Html] = [
+    setting_row(
+      "Model",
+      [model_select(dispatch, model.selected_model)],
+      desc="Used for new turns in every conversation.",
     ),
-    provider_select(dispatch, model.api_provider),
-    @html.div(class="setting-hint", provider_hint(model.api_provider)),
+    setting_row(
+      "Max steps",
+      [
+        @html.input(
+          input_type=@html.InputType::Number,
+          value=model.max_steps,
+          placeholder="1000",
+          on_input=dispatch.map(value => MaxStepsChanged(value)),
+        ),
+      ],
+      desc="How many agent steps one turn may take.",
+    ),
+  ]
+  let api_rows : Array[@html.Html] = [
+    setting_row(
+      "API endpoint",
+      [provider_select(dispatch, model.api_provider)],
+      desc=provider_hint(model.api_provider),
+    ),
   ]
   if model.api_provider is Custom {
-    settings.push(
-      setting_input(
+    api_rows.push(
+      setting_row(
         "Endpoint URL",
-        model.custom_api_url,
-        "https://host/chat/completions",
-        @html.InputType::Text,
-        dispatch.map(value => CustomApiUrlChanged(value)),
+        [
+          @html.input(
+            input_type=@html.InputType::Text,
+            value=model.custom_api_url,
+            placeholder="https://host/chat/completions",
+            on_input=dispatch.map(value => CustomApiUrlChanged(value)),
+          ),
+        ],
+        stack=true,
       ),
     )
   }
@@ -926,61 +956,80 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     } else {
       model.api_key
     }
-    settings.push(
-      setting_input(
+    api_rows.push(
+      setting_row(
         if model.api_provider is Custom {
           "Custom API key"
         } else {
           "DeepSeek API key"
         },
-        model.setup_api_key,
-        if saved_key.trim().is_empty() {
-          "sk-..."
-        } else {
-          "saved — enter to replace"
-        },
-        @html.InputType::Password,
-        dispatch.map(value => SetupApiKeyChanged(value)),
-      ),
-    )
-    settings.push(
-      @html.button(
-        id="saveApiKey",
-        disabled=model.setup_api_key.trim().is_empty(),
-        on_click=dispatch(SaveApiKey),
-        "Save API key",
+        [
+          @html.input(
+            input_type=@html.InputType::Password,
+            value=model.setup_api_key,
+            placeholder=if saved_key.trim().is_empty() {
+              "sk-..."
+            } else {
+              "saved — enter to replace"
+            },
+            on_input=dispatch.map(value => SetupApiKeyChanged(value)),
+          ),
+          @html.button(
+            id="saveApiKey",
+            disabled=model.setup_api_key.trim().is_empty(),
+            on_click=dispatch(SaveApiKey),
+            "Save API key",
+          ),
+        ],
+        desc="Stored on this machine and sent only with API requests.",
+        stack=true,
       ),
     )
   }
+  let groups : Array[@html.Html] = [
+    settings_group("Model", model_rows),
+    settings_group("API", api_rows),
+  ]
   // WSL is Windows-only; elsewhere the section would be dead weight.
   if model.is_windows {
-    settings.push(wsl_select(dispatch, model.wsl_enabled))
+    let engine_rows : Array[@html.Html] = [
+      setting_row(
+        "Engine environment",
+        [wsl_select(dispatch, model.wsl_enabled)],
+        desc="WSL runs the agent engine inside the distro, so its shell and tools see the Linux environment. Conversations stay in the shared session store either way.",
+      ),
+    ]
     if model.wsl_enabled {
-      settings.push(
-        setting_input(
+      engine_rows.push(
+        setting_row(
           "WSL distro",
-          model.wsl_distro,
-          "default distro",
-          @html.InputType::Text,
-          dispatch.map(value => WslDistroChanged(value)),
+          [
+            @html.input(
+              input_type=@html.InputType::Text,
+              value=model.wsl_distro,
+              placeholder="default distro",
+              on_input=dispatch.map(value => WslDistroChanged(value)),
+            ),
+          ],
+          desc="Blank uses the default distro.",
         ),
       )
-      settings.push(
-        setting_input(
+      engine_rows.push(
+        setting_row(
           "Engine command in WSL",
-          model.wsl_engine,
-          "bundled engine",
-          @html.InputType::Text,
-          dispatch.map(value => WslEngineChanged(value)),
-        ),
-      )
-      settings.push(
-        @html.div(
-          class="setting-hint",
-          "Runs the agent engine inside WSL, so its shell and tools see the distro's Linux environment. By default this uses the Linux engine bundled with the app (falling back to openseek on the distro's PATH). Conversations stay in the shared session store either way.",
+          [
+            @html.input(
+              input_type=@html.InputType::Text,
+              value=model.wsl_engine,
+              placeholder="bundled engine",
+              on_input=dispatch.map(value => WslEngineChanged(value)),
+            ),
+          ],
+          desc="Blank runs the Linux engine bundled with the app, falling back to openseek on the distro's PATH.",
         ),
       )
     }
+    groups.push(settings_group("Engine", engine_rows))
   }
   @html.section(class="settings-page", [
     @html.div(class="settings-page-inner", [
@@ -988,9 +1037,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.div(class="setup-title", [
           @html.h1("Settings"),
           @html.div(
-            class="status",
+            class="settings-subtitle",
             if ready {
-              "Update OpenSeek runtime settings."
+              "Runtime settings for the OpenSeek engine."
             } else if model.api_provider is Custom {
               "Enter a chat-completions endpoint URL to start."
             } else {
@@ -1005,7 +1054,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           "Done",
         ),
       ]),
-      @html.div(class="settings", settings),
+      @html.div(class="settings", groups),
     ]),
   ])
 }
