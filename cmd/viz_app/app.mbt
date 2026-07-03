@@ -868,9 +868,9 @@ fn main_pane(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
       }
     (None, None) =>
       @html.div(class="placeholder") <| (if model.sidebar_visible {
-        "Select a session from the left to view it, or drop an openseek_session.jsonl file anywhere in this window."
+        "Select a session from the left to view it, or drop an openseek session .jsonl file anywhere in this window."
       } else {
-        "Show sessions to select a session, or drop an openseek_session.jsonl file anywhere in this window."
+        "Show sessions to select a session, or drop an openseek session .jsonl file anywhere in this window."
       })
     (None, Some(key)) =>
       match model.parsed {

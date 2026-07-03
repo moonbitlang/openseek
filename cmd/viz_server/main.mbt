@@ -6,7 +6,8 @@
 /// - `GET /viz_app.js`                        → the compiled frontend bundle
 /// - `GET /api/sessions`                      → JSON listing across known roots
 /// - `GET /api/sessions/<key>`                → `{found, events, events_bytes}` envelope
-/// - `GET /api/sessions/<key>/openseek_session.jsonl` → raw session file (header line + events)
+/// - `GET /api/sessions/<key>/openseek_session-<id>.jsonl` → raw session file (header line
+///   + events); the pre-suffix name `openseek_session.jsonl` is kept as an alias
 ///
 /// It never writes to the stores, so pointing it at live session roots is safe.
 async fn main {
@@ -199,7 +200,10 @@ async fn session_path_reply(catalog : SessionCatalog, rest : String) -> Reply {
   let id = @agent_session.SessionId(id_value)
   match file {
     None => session_envelope_reply(root.store, id)
-    Some("openseek_session.jsonl") =>
+    // Both the id-suffixed session file name and the legacy fixed name are
+    // accepted URLs; the store resolves whichever layout is actually on disk.
+    Some(name) if name == "openseek_session-\{id_value}.jsonl" ||
+      name == "openseek_session.jsonl" =>
       asset_reply(
         root.store.session_file(id),
         "application/x-ndjson; charset=utf-8",

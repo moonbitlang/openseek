@@ -1,8 +1,8 @@
 ///|
 /// Run the prompt task `config.runs` times, `config.concurrency` at a time,
 /// writing only durable artifacts: workspaces, raw process logs, recorded
-/// session `openseek_session.jsonl` files, and a run manifest. No validation or report
-/// analysis is performed in this phase.
+/// session `openseek_session-<id>.jsonl` files, and a run manifest. No
+/// validation or report analysis is performed in this phase.
 pub async fn run_experiments(config : Config) -> RunManifest {
   if config.api_key == "" {
     fail("api_key is required for running trials")
@@ -114,7 +114,7 @@ async fn run_trial(
   let events_path = discover_session_events(
     real_workspace,
     session_id,
-    fallback="\{real_workspace}/.openseek/sessions/\{session_id}/openseek_session.jsonl",
+    fallback="\{real_workspace}/.openseek/sessions/\{session_id}/openseek_session-\{session_id}.jsonl",
   )
   TrialArtifact(
     index=index + 1,
@@ -179,8 +179,13 @@ async fn collect_session_events(
     let path = "\{dir}/\{name}"
     if is_directory(path) {
       collect_session_events(path, session_id, matches)
-    } else if name == "openseek_session.jsonl" &&
+    } else if (
+        name == "openseek_session-\{session_id}.jsonl" ||
+        name == "openseek_session.jsonl"
+      ) &&
       path.contains("/sessions/\{session_id}/") {
+      // Both the id-suffixed name and the legacy fixed name match, so the
+      // analyzer keeps reading run directories produced before the suffix.
       matches.push(path)
     }
   }
