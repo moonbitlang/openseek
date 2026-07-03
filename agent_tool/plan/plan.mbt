@@ -69,6 +69,55 @@ pub fn definition() -> @agent_tool.AgentToolDefinition {
 }
 
 ///|
+/// Best-effort numbered rendering of `plan` tool-call arguments for host-side
+/// staleness reminders: `1. [in_progress] fix the parser` lines. Returns
+/// `None` for arguments that do not decode as a plan, or that cleared it, so
+/// callers fall back to a plan-free nudge. Lives here so the agent loop never
+/// grows its own copy of the plan argument syntax.
+pub fn reminder_checklist(arguments : Json) -> String? {
+  let input = @decode.decode(arguments) catch { _ => return None }
+  if input.steps.length() == 0 {
+    return None
+  }
+  let lines = StringBuilder::new()
+  for index, step in input.steps {
+    let status = match step.status {
+      Pending => "pending"
+      InProgress => "in_progress"
+      Completed => "completed"
+    }
+    if index > 0 {
+      lines.write_char('\n')
+    }
+    lines.write_string("\{index + 1}. [\{status}] \{step.title}")
+  }
+  Some(lines.to_string())
+}
+
+///|
+test "reminder_checklist renders numbered statuses and falls back to None" {
+  guard reminder_checklist({
+      "steps": [
+        { "title": "read the failing test", "status": "completed" },
+        { "title": "fix the parser", "status": "in_progress" },
+      ],
+    })
+    is Some(lines) else {
+    fail("expected a checklist")
+  }
+  assert_eq(
+    lines,
+    (
+      #|1. [completed] read the failing test
+      #|2. [in_progress] fix the parser
+    ),
+  )
+  // A cleared plan and undecodable arguments both yield None.
+  assert_true(reminder_checklist({ "steps": [] }) is None)
+  assert_true(reminder_checklist({ "nonsense": true }) is None)
+}
+
+///|
 fn execute(arguments : Json) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
     error => {

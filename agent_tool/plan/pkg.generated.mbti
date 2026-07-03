@@ -8,6 +8,8 @@ import {
 // Values
 pub fn definition() -> @agent_tool.AgentToolDefinition
 
+pub fn reminder_checklist(Json) -> String?
+
 // Errors
 
 // Types and methods

@@ -2,6 +2,30 @@
 let default_max_steps : Int = 1000
 
 ///|
+/// Model requests since the last successful `plan` call — and since the last
+/// reminder — before the loop injects a plan staleness reminder. Both
+/// thresholds mirror the 10-turn / 10-turn cadence Claude Code uses for its
+/// todo reminder: long enough that short tasks never see a nag, and the
+/// second threshold caps re-nagging of a model that ignores the first at
+/// once per ten requests.
+let plan_reminder_after_steps : Int = 10
+
+///|
+/// The staleness reminder injected when the `plan` tool has gone unused for
+/// `plan_reminder_after_steps` model requests. With a known current plan the
+/// reminder re-surfaces it — the last plan call may sit dozens of steps back
+/// in context — and otherwise it nudges once toward recording a plan, while
+/// staying explicit that trivial work should ignore it.
+fn plan_reminder_text(checklist : String?) -> String {
+  match checklist {
+    Some(lines) =>
+      "[plan reminder]\nThe plan tool has not been called in a while. If progress was made, update step statuses; if the plan no longer matches the work, replace it or clear it with steps: []. Current plan:\n\{lines}"
+    None =>
+      "[plan reminder]\nThe plan tool has not been used in this turn. If this task takes several distinct steps, record a plan with the plan tool and keep step statuses current. If not, ignore this reminder."
+  }
+}
+
+///|
 /// Queue `text` as steering input for the turn running on `runtime`.
 ///
 /// This is a thin public wrapper over `AgentRuntime::queue_steer(Prompt(...))`.
@@ -234,12 +258,16 @@ async test "run_turn_with_append closes failed persisted turns" {
 /// The loop appends `task` as a user message before the first model request.
 /// At each step boundary it first drains and applies pending non-blank steers,
 /// then drains runtime events and turns known tool updates into model-visible
-/// runtime notices. It sends the current DeepSeek chat projection with the
-/// active tool schemas, records assistant responses, executes tool calls in
-/// order, and records tool results. The turn ends when the model answers with
-/// no tool calls, the `finish` tool returns `Control(Finish)`, a tool returns
-/// `Control(Abort)`, `max_steps` is exhausted, the task is cancelled, or an
-/// unexpected error escapes.
+/// runtime notices. When the registry includes the `plan` tool and
+/// `plan_reminder_after_steps` model requests pass without a successful
+/// `plan` call, the loop also injects a durable plan staleness reminder that
+/// re-surfaces the recorded plan (rate-limited by the same threshold). It
+/// sends the current DeepSeek chat projection with the active tool schemas,
+/// records assistant responses, executes tool calls in order, and records
+/// tool results. The turn ends when the model answers with no tool calls, the
+/// `finish` tool returns `Control(Finish)`, a tool returns `Control(Abort)`,
+/// `max_steps` is exhausted, the task is cancelled, or an unexpected error
+/// escapes.
 ///
 /// A steer that arrives while the model's apparent final answer or a `finish`
 /// tool call is in flight keeps the turn alive. The would-be final answer is
@@ -284,6 +312,14 @@ pub async fn[X] run_turn_in_scope(
     }
     let messages = session.chat_messages()
     let watcher_fingerprints : Map[String, String] = {}
+    // Plan staleness tracking: counters advance once per model request and
+    // reset when a `plan` call succeeds, so the reminder fires only after
+    // `plan_reminder_after_steps` requests of plan silence. Turn-local by
+    // design — a fresh user turn resets the cadence.
+    let plan_registered = tools.find("plan") is Some(_)
+    let mut steps_since_plan = 0
+    let mut steps_since_reminder = 0
+    let mut plan_checklist : String? = None
     steps~: for step in 0..<max_steps {
       // Steering first: user-visible mid-turn input should precede runtime
       // chatter the model reads alongside it.
@@ -320,6 +356,17 @@ pub async fn[X] run_turn_in_scope(
         session = append_item(session, Runtime(RuntimeNotice(notice)))
         messages.push(ChatMessage(User, content=notice))
       }
+      if plan_registered &&
+        steps_since_plan >= plan_reminder_after_steps &&
+        steps_since_reminder >= plan_reminder_after_steps {
+        let reminder = plan_reminder_text(plan_checklist)
+        @xlog.info() <? { "event": "plan_reminder", "content": reminder }
+        session = append_item(session, Runtime(RuntimeNotice(reminder)))
+        messages.push(ChatMessage(User, content=reminder))
+        steps_since_reminder = 0
+      }
+      steps_since_plan += 1
+      steps_since_reminder += 1
       @xlog.info() <? { "event": "agent_step", "step": step + 1 }
       let response = client.chat(
         messages,
@@ -494,6 +541,13 @@ pub async fn[X] run_turn_in_scope(
             return next
           }
           Respond(output) => output
+        }
+        if tool_call.name == "plan" && !output.is_error {
+          // A successful plan write restarts the staleness cadence and
+          // refreshes the checklist the next reminder would re-surface; a
+          // cleared plan drops back to the plan-free nudge.
+          steps_since_plan = 0
+          plan_checklist = @plan.reminder_checklist(tool_call.arguments)
         }
         @xlog.info() <?
           {
