@@ -35,9 +35,7 @@ async fn main {
     )
   match app.run() {
     Ok(_) => log.info() <? { "message": "host process exit ok" }
-    Err(error) => {
+    Err(error) =>
       log.error() <? { "message": "host process error", "error": error }
-      abort(error)
-    }
   }
 }
