@@ -27,12 +27,12 @@ async fn pick_workspace_op(
     request_context.window(),
   )
   match
-    @proton.pick_file_dialog(
+    @proton_native.choose_directory_dialog_async(
       window,
-      title="Choose a project folder",
-      mode=ChooseDirectory,
+      Some("Choose a project folder"),
+      None,
     ) {
-    Err(message) => Err("could not open the folder picker: \{message}")
+    Err(error) => Err("could not open the folder picker: \{error.message}")
     Ok(None) => Ok({ path: None })
     Ok(Some(text)) => Ok({ path: normalized_folder(text) })
   }

@@ -1,5 +1,4 @@
 import {
-  "justjavac/proton",
   "justjavac/proton/command" @app,
   "justjavac/proton/native" @proton_native,
   "openseek_desktop/internal/applauncher",
