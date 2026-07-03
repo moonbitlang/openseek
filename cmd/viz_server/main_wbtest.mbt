@@ -324,6 +324,39 @@ async test "session_list_reply includes root metadata and composite keys" {
 }
 
 ///|
+async test "raw session file route decodes the file segment like the key" {
+  @vfs.with_tmpdir(prefix="openseek-viz-raw-", root => {
+    let store = @store.SessionStore("\{root}/.openseek")
+    // An id with a space forces percent-encoding in both URL segments.
+    let session = @agent_session.Session(SessionId("run 1"), system_prompt="").append(
+      User(UserMessage("hi")),
+    )
+    store.create(session)
+    let catalog : SessionCatalog = {
+      roots: [
+        {
+          key: "0",
+          path: "\{root}/.openseek",
+          label: ".openseek",
+          is_marker: true,
+          store,
+        },
+      ],
+    }
+    let reply = session_path_reply(
+      catalog, "0%7Crun%201/openseek_session-run%201.jsonl",
+    )
+    inspect(reply.code, content="200")
+    assert_true(reply.body.contains("\"id\":\"run 1\""))
+    // The pre-suffix fixed name stays served as an alias.
+    let alias_reply = session_path_reply(
+      catalog, "0%7Crun%201/openseek_session.jsonl",
+    )
+    inspect(alias_reply.code, content="200")
+  })
+}
+
+///|
 async test "session_envelope_reply includes event log byte size" {
   @vfs.with_tmpdir(prefix="openseek-viz-envelope-", root => {
     let store = @store.SessionStore("\{root}/.openseek")

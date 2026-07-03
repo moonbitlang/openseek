@@ -179,14 +179,16 @@ async fn build_reply(
 ///|
 /// Resolve `<key>` (envelope) or `<key>/<file>` (raw) after the
 /// `/api/sessions/` route prefix. A key is either legacy `<id>` for the first
-/// root, or `<root>|<id>` for a discovered root. The segment is percent-decoded, so ids containing
-/// URL-reserved characters (spaces, `?`, `#`) still resolve to the right
-/// session. The store's own id validation rejects path separators and `..`, so
-/// a crafted id cannot escape the session directory.
+/// root, or `<root>|<id>` for a discovered root. Both segments are
+/// percent-decoded — the file name embeds the session id, so ids containing
+/// URL-reserved characters (spaces, `?`, `#`) must decode in both positions
+/// to resolve the right session. The store's own id validation rejects path
+/// separators and `..`, so a crafted id cannot escape the session directory.
 async fn session_path_reply(catalog : SessionCatalog, rest : String) -> Reply {
   let (key, file) = match rest.split_once("/") {
     None => (percent_decode(rest), None)
-    Some((key, file)) => (percent_decode("\{key}"), Some("\{file}"))
+    Some((key, file)) =>
+      (percent_decode("\{key}"), Some(percent_decode("\{file}")))
   }
   let (root, id_value) = match catalog.lookup(key) {
     Some(found) => found

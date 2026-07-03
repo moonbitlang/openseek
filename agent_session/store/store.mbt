@@ -154,6 +154,38 @@ async fn SessionStore::resolved_session_file_path(
 }
 
 ///|
+async fn mtime_or_none(path : String) -> (Int64, Int)? {
+  Some(@fs.mtime(path)) catch {
+    _ => None
+  }
+}
+
+///|
+/// Stat a session's jsonl mtime together with the path that produced it,
+/// without holding the session lock. Probes the suffixed name, the legacy
+/// name, then the suffixed name once more: a concurrent writer's migration
+/// renames legacy to suffixed atomically, and it can do so at most once
+/// between the first two probes, so a third miss means no session file
+/// exists. `None` when the file is absent; invalid ids raise.
+async fn SessionStore::stat_session_file(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> (String, Int64, Int)? {
+  let path = self.session_file_path(id)
+  if mtime_or_none(path) is Some((seconds, nanoseconds)) {
+    return Some((path, seconds, nanoseconds))
+  }
+  let legacy = self.legacy_session_file_path(id)
+  if mtime_or_none(legacy) is Some((seconds, nanoseconds)) {
+    return Some((legacy, seconds, nanoseconds))
+  }
+  if mtime_or_none(path) is Some((seconds, nanoseconds)) {
+    return Some((path, seconds, nanoseconds))
+  }
+  None
+}
+
+///|
 /// Move a legacy fixed-name session file to its id-suffixed name. Called
 /// with the exclusive session lock held, so no other writer races the
 /// rename; the lock path itself is layout-independent. Writers converge a
@@ -707,14 +739,11 @@ pub async fn SessionStore::listings(
   let stamped : Array[(SessionListing, Int64, Int)] = []
   let unreadable : Array[SessionListing] = []
   for id in self.list() {
-    let path = self.resolved_session_file_path(id) catch { _ => continue }
-    let stamp = @fs.mtime(path) catch {
-      _ => {
-        unreadable.push({ id, last_active_unix_seconds: None, first_prompt: "" })
-        continue
-      }
+    let stat = self.stat_session_file(id) catch { _ => continue }
+    guard stat is Some((path, seconds, nanoseconds)) else {
+      unreadable.push({ id, last_active_unix_seconds: None, first_prompt: "" })
+      continue
     }
-    let (seconds, nanoseconds) = stamp
     stamped.push(
       (
         {
@@ -751,10 +780,10 @@ pub async fn SessionStore::latest(
 ) -> @agent_session.SessionId? {
   let stamped : Array[(@agent_session.SessionId, Int64, Int)] = []
   for id in self.list() {
-    let stamp = @fs.mtime(self.resolved_session_file_path(id)) catch {
-      _ => continue
+    guard (self.stat_session_file(id) catch { _ => None })
+      is Some((_, seconds, nanoseconds)) else {
+      continue
     }
-    let (seconds, nanoseconds) = stamp
     stamped.push((id, seconds, nanoseconds))
   }
   // Newest first.
