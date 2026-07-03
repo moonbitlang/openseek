@@ -9,10 +9,13 @@
 //
 // The set of servers is re-detected on each request, so a project created mid
 // conversation is picked up (and one whose module moved is retired): a layout
-// change spawns the new roots and closes the gone ones. moon-lsp is spawned as
-// an orphan rather than into a task group: the pull-based `@jsonrpc.Client`
-// needs no background reader, so the only thing to keep alive between requests
-// is the process, and closing the host's stdin end makes it exit.
+// change spawns the new roots and closes the gone ones. A moon-lsp process must
+// outlive the individual request that first needs it, so — mirroring the engine
+// pump — it is owned by the long-lived task group of the `connect` op, not a
+// per-request one: `ensure_workspaces` hands each spawn to that group's LSP pump
+// over a queue and waits for the server back. Retiring a server closes the
+// host's stdin end (EOF, so moon-lsp exits) and cancels the process; dropping
+// the `connect` group tears every server down with it.
 
 ///|
 /// The largest number of `moon-lsp` servers one conversation may run at once.
@@ -34,6 +37,9 @@ priv struct LspWorkspace {
   // answers for, and the key that decides whether a re-detected layout still
   // wants this server.
   root : String
+  // The moon-lsp process, owned by the connect op's task group. Retiring this
+  // server cancels it; the connect group tears it down on disconnect.
+  process : @process.Process
   // The host's ends of the server's pipes. Closing the stdin end EOFs moon-lsp
   // so it exits when this server is retired.
   stdin : @process.WriteToProcess
@@ -55,6 +61,20 @@ priv struct LspManager {
   // Serializes server reconciliation so two concurrent requests don't spawn two
   // servers for the same root.
   create_lock : @semaphore.Semaphore
+  // Spawn requests from per-request ops to the LSP pump, which owns the moon-lsp
+  // processes in the `connect` op's long-lived task group.
+  commands : @async.Queue[LspCommand]
+  // Set while the pump loop is running; a spawn request is only enqueued when a
+  // pump is there to service it.
+  mut pump_running : Bool
+}
+
+///|
+/// A request to the LSP pump: spawn a `moon-lsp` server rooted at the given
+/// directory into the pump's task group, delivering the started server (or
+/// `None` on failure) back over the queue.
+priv enum LspCommand {
+  SpawnWorkspace(@path.Path, @async.Queue[LspWorkspace?])
 }
 
 ///|
@@ -65,6 +85,31 @@ fn new_lsp_manager(engine : String, runtime_dir? : @path.Path) -> LspManager {
     command: "",
     workspaces: {},
     create_lock: Semaphore(1, initial_value=1),
+    commands: Queue(kind=Unbounded),
+    pump_running: false,
+  }
+}
+
+///|
+/// The LSP host loop: runs inside the `connect` op's task group for the app's
+/// lifetime, servicing spawn requests so each `moon-lsp` is owned by that
+/// long-lived group rather than the per-request task that first needed it.
+/// Returns only when the group is torn down (webview disconnect), which cancels
+/// every server it started.
+async fn[G] run_lsp_pump(
+  group : @async.TaskGroup[G],
+  manager : LspManager,
+) -> Unit {
+  manager.pump_running = true
+  defer {
+    manager.pump_running = false
+    manager.workspaces.clear()
+  }
+  for ;; {
+    match manager.commands.get() {
+      SpawnWorkspace(root, ack) =>
+        ack.put(spawn_workspace(group, manager, root))
+    }
   }
 }
 
@@ -284,10 +329,15 @@ async fn ensure_workspaces(
       close_workspace(workspace)
     }
   }
-  // Spawn a server for each newly wanted root.
+  // Spawn a server for each newly wanted root — via the pump, so the process is
+  // owned by the connect op's task group and outlives this request. With no pump
+  // running (the webview never called `connect`) there is nothing to analyze
+  // against anyway, so skip rather than block on a spawn no one will service.
   for root in roots {
-    if !servers_has_root(live, root.to_string()) {
-      if spawn_workspace(manager, root) is Some(workspace) {
+    if !servers_has_root(live, root.to_string()) && manager.pump_running {
+      let ack : @async.Queue[LspWorkspace?] = Queue(kind=Unbounded)
+      manager.commands.put(SpawnWorkspace(root, ack))
+      if ack.get() is Some(workspace) {
         live.push(workspace)
       }
     }
@@ -340,8 +390,10 @@ fn servers_has_root(servers : Array[LspWorkspace], root : String) -> Bool {
 }
 
 ///|
-/// Retire a server: closing the host's pipe ends EOFs moon-lsp so it exits.
+/// Retire a server: cancel the process and close the host's pipe ends (the EOF
+/// on stdin is moon-lsp's own exit signal; the cancel is the backstop).
 fn close_workspace(workspace : LspWorkspace) -> Unit {
+  workspace.process.cancel()
   workspace.stdin.close()
   workspace.stdout.close()
 }
@@ -410,9 +462,11 @@ async fn manifest_mtime(dir : @path.Path) -> Int64? {
 }
 
 ///|
-/// Spawn `moon-lsp` rooted at the module directory `root` and run the
-/// initialize handshake. `None` if the process could not start.
-async fn spawn_workspace(
+/// Spawn `moon-lsp` rooted at the module directory `root` into `group` and run
+/// the initialize handshake. `None` if the process could not start. Called only
+/// from the pump, whose `group` owns the process for the app's lifetime.
+async fn[G] spawn_workspace(
+  group : @async.TaskGroup[G],
   manager : LspManager,
   root : @path.Path,
 ) -> LspWorkspace? {
@@ -420,17 +474,20 @@ async fn spawn_workspace(
   let command = moon_lsp_command(manager)
   let (child_stdin, stdin_writer) = @process.write_to_process()
   let (stdout_reader, child_stdout) = @process.read_from_process()
-  (@process.spawn_orphan(
+  // `no_wait`: the group cancels the server at teardown rather than waiting for
+  // an exit that only comes once its stdin is closed.
+  let process = @process.spawn(
+    group,
     command,
     ["--stdio"],
     stdin=child_stdin,
     stdout=child_stdout,
     cwd=directory,
+    no_wait=true,
   ) catch {
     error if @async.is_being_cancelled() => raise error
     _ => return None
-  })
-  |> ignore
+  }
   let client = @jsonrpc.Client::new(
     @lsp.StreamTransport::new(stdout_reader, stdin_writer, label=directory),
   )
@@ -443,6 +500,7 @@ async fn spawn_workspace(
   Some({
     session: session_object,
     root: directory,
+    process,
     stdin: stdin_writer,
     stdout: stdout_reader,
     synced: {},

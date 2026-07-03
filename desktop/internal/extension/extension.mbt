@@ -71,10 +71,18 @@ pub fn openseek_extension(
     context => {
       let sink = event_sink(context)
       context.op_async("connect", (_ : Json) => {
-        @engine.run_engine_pump(sink, manager) catch {
-          @engine.EngineError(message) => raise HostError(message)
-          error => raise error
-        }
+        // The connect op is the app-lifetime host task, so its group owns the
+        // moon-lsp servers too: they run alongside the engine pump and are torn
+        // down together when the webview disconnects. The LSP pump is
+        // best-effort (`allow_failure`), so a hover/symbol subsystem hiccup
+        // never drops the engine connection.
+        @async.with_task_group(group => {
+          group.spawn_bg(allow_failure=true, () => run_lsp_pump(group, lsp))
+          @engine.run_engine_pump(sink, manager) catch {
+            @engine.EngineError(message) => raise HostError(message)
+            error => raise error
+          }
+        })
       })
       context.op_async("start", (payload : StartPayload) => {
         @engine.start_run(sink, manager, payload.to_request()) catch {
