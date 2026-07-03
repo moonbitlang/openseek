@@ -24,7 +24,7 @@ async test "manifest round trips run artifacts" {
           log_path: root + "/logs/01.log",
           session_id: "trial-01",
           events_path: root +
-          "/workspaces/01/.openseek/sessions/trial-01/openseek_session.jsonl",
+          "/workspaces/01/.openseek/sessions/trial-01/openseek_session-trial-01.jsonl",
           exit_code: 0,
         },
       ],

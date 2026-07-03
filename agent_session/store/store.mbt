@@ -4,21 +4,15 @@ let session_dir_name : String = "sessions"
 ///|
 /// Session files carry their id in the name so files collected out of their
 /// directories — for cross-session visualization or comparison — stay
-/// self-naming. Stores written before this naming used a fixed
-/// `openseek_session.jsonl`; reads fall back to it and writes migrate it.
-let legacy_session_file_name : String = "openseek_session.jsonl"
-
-///|
+/// self-naming.
 fn session_file_name(id : @agent_session.SessionId) -> String {
   "openseek_session-\{id.value()}.jsonl"
 }
 
 ///|
-/// The lock file name is deliberately fixed, with no id suffix: it is
-/// transient local coordination, never collected, and keeping its path
-/// identical across layout generations means binaries from before and after
-/// the suffixed naming still contend on the same lock instead of writing
-/// concurrently.
+/// The lock file carries no id suffix: it already lives inside the per-id
+/// session directory, and it is transient local coordination that is never
+/// collected alongside the jsonl.
 let lock_file_name : String = "session.lock"
 
 ///|
@@ -121,93 +115,6 @@ fn SessionStore::session_file_path(
   id : @agent_session.SessionId,
 ) -> String raise {
   "\{self.session_dir(id)}/\{session_file_name(id)}"
-}
-
-///|
-fn SessionStore::legacy_session_file_path(
-  self : SessionStore,
-  id : @agent_session.SessionId,
-) -> String raise {
-  "\{self.session_dir(id)}/\{legacy_session_file_name}"
-}
-
-///|
-/// The on-disk path of a session's jsonl: the id-suffixed name when it
-/// exists — or when neither layout does, since that is the name new writes
-/// create — otherwise the legacy fixed name from stores written before the
-/// suffix. Readers resolve instead of migrating, so read-only tooling (the
-/// visualizer server, listings) can point at old stores without writing.
-async fn SessionStore::resolved_session_file_path(
-  self : SessionStore,
-  id : @agent_session.SessionId,
-) -> String {
-  let path = self.session_file_path(id)
-  if @fs.exists(path) {
-    return path
-  }
-  let legacy = self.legacy_session_file_path(id)
-  if @fs.exists(legacy) {
-    legacy
-  } else {
-    path
-  }
-}
-
-///|
-async fn mtime_or_none(path : String) -> (Int64, Int)? {
-  Some(@fs.mtime(path)) catch {
-    _ => None
-  }
-}
-
-///|
-/// Stat a session's jsonl mtime together with the path that produced it,
-/// without holding the session lock. Probes the suffixed name, the legacy
-/// name, then the suffixed name once more: a concurrent writer's migration
-/// renames legacy to suffixed atomically, and it can do so at most once
-/// between the first two probes, so a third miss means no session file
-/// exists. `None` when the file is absent; invalid ids raise.
-async fn SessionStore::stat_session_file(
-  self : SessionStore,
-  id : @agent_session.SessionId,
-) -> (String, Int64, Int)? {
-  let path = self.session_file_path(id)
-  if mtime_or_none(path) is Some((seconds, nanoseconds)) {
-    return Some((path, seconds, nanoseconds))
-  }
-  let legacy = self.legacy_session_file_path(id)
-  if mtime_or_none(legacy) is Some((seconds, nanoseconds)) {
-    return Some((legacy, seconds, nanoseconds))
-  }
-  if mtime_or_none(path) is Some((seconds, nanoseconds)) {
-    return Some((path, seconds, nanoseconds))
-  }
-  None
-}
-
-///|
-/// Move a legacy fixed-name session file to its id-suffixed name. Called
-/// with the exclusive session lock held, so no other writer races the
-/// rename; the lock path itself is layout-independent. Writers converge a
-/// store on the suffixed layout as sessions are touched. Finding both
-/// layouts is ambiguous corruption — better to stop than to guess which
-/// file is the session.
-async fn migrate_legacy_session_file(
-  store : SessionStore,
-  id : @agent_session.SessionId,
-) -> Unit {
-  let legacy = store.legacy_session_file_path(id)
-  if !@fs.exists(legacy) {
-    return
-  }
-  let path = store.session_file_path(id)
-  if @fs.exists(path) {
-    fail(
-      "both session file layouts exist for \{id.value()}: remove \{legacy} or \{path}",
-    )
-  }
-  @fs.rename(legacy, path)
-  sync_dir_best_effort(store.session_dir(id))
 }
 
 ///|
@@ -344,10 +251,7 @@ async fn read_session_file(
   store : SessionStore,
   id : @agent_session.SessionId,
 ) -> ParsedSessionFile {
-  parse_session_file(
-    id,
-    @fs.read_file(store.resolved_session_file_path(id)).text(),
-  )
+  parse_session_file(id, @fs.read_file(store.session_file_path(id)).text())
 }
 
 ///|
@@ -382,9 +286,7 @@ async fn record_mark(
   store : SessionStore,
   session : @agent_session.Session,
 ) -> Unit {
-  let path = store.resolved_session_file_path(session.id()) catch {
-    _ => return
-  }
+  let path = store.session_file_path(session.id()) catch { _ => return }
   match file_fingerprint(path) {
     Some(fingerprint) =>
       store.marks[session.id().value()] = { session, fingerprint }
@@ -409,7 +311,7 @@ async fn ensure_session_is_current(
 ) -> Bool {
   match store.marks.get(session.id().value()) {
     Some(mark) if physical_equal(mark.session, session) =>
-      match file_fingerprint(store.resolved_session_file_path(session.id())) {
+      match file_fingerprint(store.session_file_path(session.id())) {
         Some(fingerprint) =>
           if fingerprint == mark.fingerprint {
             // The store only ever syncs newline-terminated text, so an
@@ -599,19 +501,17 @@ pub async fn SessionStore::exists(
 
 ///|
 /// Return the absolute or relative path to a session's
-/// `openseek_session-<id>.jsonl` file, falling back to the legacy fixed-name
-/// `openseek_session.jsonl` when only that exists.
+/// `openseek_session-<id>.jsonl` file.
 ///
-/// The path is probed but the file is not opened, and the returned path may
-/// not exist (a missing session resolves to the id-suffixed name). Invalid
-/// ids raise. This helper exists for read-only tooling, such as the
-/// visualizer server, that wants to stream the raw session file without
-/// duplicating the store layout rules.
-pub async fn SessionStore::session_file(
+/// The path is formed from the store root and `id`; the file is not opened and
+/// may not exist. Invalid ids raise. This helper exists for read-only tooling,
+/// such as the visualizer server, that wants to stream the raw session file
+/// without duplicating the store layout rules.
+pub fn SessionStore::session_file(
   self : SessionStore,
   id : @agent_session.SessionId,
-) -> String {
-  self.resolved_session_file_path(id)
+) -> String raise {
+  self.session_file_path(id)
 }
 
 ///|
@@ -739,11 +639,14 @@ pub async fn SessionStore::listings(
   let stamped : Array[(SessionListing, Int64, Int)] = []
   let unreadable : Array[SessionListing] = []
   for id in self.list() {
-    let stat = self.stat_session_file(id) catch { _ => continue }
-    guard stat is Some((path, seconds, nanoseconds)) else {
-      unreadable.push({ id, last_active_unix_seconds: None, first_prompt: "" })
-      continue
+    let path = self.session_file_path(id) catch { _ => continue }
+    let stamp = @fs.mtime(path) catch {
+      _ => {
+        unreadable.push({ id, last_active_unix_seconds: None, first_prompt: "" })
+        continue
+      }
     }
+    let (seconds, nanoseconds) = stamp
     stamped.push(
       (
         {
@@ -780,10 +683,8 @@ pub async fn SessionStore::latest(
 ) -> @agent_session.SessionId? {
   let stamped : Array[(@agent_session.SessionId, Int64, Int)] = []
   for id in self.list() {
-    guard (self.stat_session_file(id) catch { _ => None })
-      is Some((_, seconds, nanoseconds)) else {
-      continue
-    }
+    let stamp = @fs.mtime(self.session_file_path(id)) catch { _ => continue }
+    let (seconds, nanoseconds) = stamp
     stamped.push((id, seconds, nanoseconds))
   }
   // Newest first.
@@ -813,7 +714,6 @@ pub async fn SessionStore::create(
 ) -> Unit {
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {
-    migrate_legacy_session_file(self, session.id())
     write_text_atomic(
       self.session_file_path(session.id()),
       session_file_text(session),
@@ -828,8 +728,8 @@ pub async fn SessionStore::create(
 ///
 /// A `SessionStore` is a directory-backed collection, not a handle to one
 /// current session. For a store rooted at `root`, the id selects the files
-/// under `root/sessions/<id>/`: `openseek_session-<id>.jsonl` (or the legacy
-/// `openseek_session.jsonl`) and `session.lock`.
+/// under `root/sessions/<id>/`: `openseek_session-<id>.jsonl` and
+/// `session.lock`.
 ///
 /// `load` validates the id before constructing paths, takes a shared lock when
 /// the session directory already exists, reads the session jsonl file,
@@ -888,7 +788,6 @@ pub async fn SessionStore::append(
 ) -> @agent_session.Session {
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {
-    migrate_legacy_session_file(self, session.id())
     let repair_tail = ensure_session_is_current(self, session)
     let (next, event) = session.append_event(
       item,
@@ -921,7 +820,6 @@ pub async fn SessionStore::compact(
 ) -> @agent_session.Session {
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {
-    migrate_legacy_session_file(self, session.id())
     let repair_tail = ensure_session_is_current(self, session)
     let next = session.compact(
       content~,

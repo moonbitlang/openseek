@@ -68,7 +68,13 @@ async fn run_trial(
   let workspace = "\{config.out_dir}/workspaces/\{trial_name}"
   @fs.mkdir(workspace, recursive=true)
   let real_workspace = @fs.realpath(workspace)
-  let session_id = "trial-\{trial_name}"
+  // Run-unique: the timestamp keeps trial sessions from colliding when jsonl
+  // files from several runs are collected side by side; the trial index keeps
+  // them unique within a run.
+  let session_id = @agent_session.SessionId::generated(
+    prefix="trial-\{trial_name}",
+    now_ms=@env.now().reinterpret_as_int64(),
+  ).value()
   let task = task_template.replace_all(old="{{WORKSPACE}}", new=real_workspace)
   // The engine runs from the OpenSeek checkout and receives --dir for the
   // isolated trial workspace. This keeps launcher-relative paths stable while
@@ -179,13 +185,8 @@ async fn collect_session_events(
     let path = "\{dir}/\{name}"
     if is_directory(path) {
       collect_session_events(path, session_id, matches)
-    } else if (
-        name == "openseek_session-\{session_id}.jsonl" ||
-        name == "openseek_session.jsonl"
-      ) &&
+    } else if name == "openseek_session-\{session_id}.jsonl" &&
       path.contains("/sessions/\{session_id}/") {
-      // Both the id-suffixed name and the legacy fixed name match, so the
-      // analyzer keeps reading run directories produced before the suffix.
       matches.push(path)
     }
   }

@@ -151,7 +151,7 @@ async test "copy_tree keeps files, .git dir, skills; skips build and sessions" {
       create_mode=CreateOrTruncate,
     )
     @fs.write_file(
-      "\{src}/.openseek/sessions/old/openseek_session.jsonl",
+      "\{src}/.openseek/sessions/old/openseek_session-old.jsonl",
       "{}",
       create_mode=CreateOrTruncate,
     )

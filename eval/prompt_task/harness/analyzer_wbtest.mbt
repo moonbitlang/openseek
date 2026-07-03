@@ -219,7 +219,7 @@ test "same output dir preserves absolute workspace paths" {
         workspace="/tmp/openseek/.moonagent/eval_runs/default/workspaces/01",
         log_path=".moonagent/eval_runs/default/logs/01.log",
         session_id="trial-01",
-        events_path="/tmp/openseek/.moonagent/eval_runs/default/workspaces/01/.openseek/sessions/trial-01/openseek_session.jsonl",
+        events_path="/tmp/openseek/.moonagent/eval_runs/default/workspaces/01/.openseek/sessions/trial-01/openseek_session-trial-01.jsonl",
         exit_code=0,
       ),
     ],
@@ -240,9 +240,9 @@ async test "analyze run writes reports to caller output directory" {
     let stale_dir = root + "/stale"
     @fs.mkdir(out_dir, recursive=true)
     let actual_events_path = out_dir +
-      "/workspaces/01/.openseek/sessions/trial-01/openseek_session.jsonl"
+      "/workspaces/01/.openseek/sessions/trial-01/openseek_session-trial-01.jsonl"
     let stale_events_path = stale_dir +
-      "/workspaces/01/.openseek/sessions/trial-01/openseek_session.jsonl"
+      "/workspaces/01/.openseek/sessions/trial-01/openseek_session-trial-01.jsonl"
     @fs.mkdir(
       out_dir + "/workspaces/01/.openseek/sessions/trial-01",
       recursive=true,

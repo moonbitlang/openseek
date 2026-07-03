@@ -31,7 +31,7 @@ pub async fn SessionStore::list(Self) -> Array[@agent_session.SessionId]
 pub async fn SessionStore::listings(Self) -> Array[SessionListing]
 pub async fn SessionStore::load(Self, @agent_session.SessionId) -> @agent_session.Session
 pub fn SessionStore::root(Self) -> String
-pub async fn SessionStore::session_file(Self, @agent_session.SessionId) -> String
+pub fn SessionStore::session_file(Self, @agent_session.SessionId) -> String raise
 
 // Type aliases
 

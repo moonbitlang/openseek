@@ -10,23 +10,6 @@ fn session_file(store : @store.SessionStore, id : String) -> String {
 }
 
 ///|
-fn legacy_session_file(store : @store.SessionStore, id : String) -> String {
-  "\{store.root()}/sessions/\{id}/openseek_session.jsonl"
-}
-
-///|
-/// Lay down a session in the pre-suffix layout: create it normally, then move
-/// the jsonl to the legacy fixed name.
-async fn create_legacy_layout_session(
-  store : @store.SessionStore,
-  session : @agent_session.Session,
-) -> Unit {
-  store.create(session)
-  let id = session.id().value()
-  @fs.rename(session_file(store, id), legacy_session_file(store, id))
-}
-
-///|
 async test "store creates and loads a session from one session file" {
   let store = new_store()
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
@@ -922,96 +905,6 @@ async test "store rejects path-like session ids" {
     }
   }
   fail("invalid session id accepted")
-}
-
-///|
-async test "store reads sessions written in the legacy fixed-name layout" {
-  let store = new_store()
-  let session = @agent_session.Session(SessionId("old"), system_prompt="system").append(
-    User(UserMessage("hello")),
-  )
-  create_legacy_layout_session(store, session)
-  // A fresh store instance sees only the legacy file.
-  let reader : @store.SessionStore = SessionStore(store.root())
-  let loaded = reader.load(SessionId("old"))
-  assert_eq(loaded.events().length(), 1)
-  assert_eq(loaded.system_prompt(), "system")
-  // Read-only surfaces resolve the legacy path without renaming anything.
-  assert_eq(
-    reader.session_file(SessionId("old")),
-    legacy_session_file(store, "old"),
-  )
-  let listings = reader.listings()
-  assert_eq(listings.length(), 1)
-  assert_true(listings[0].last_active_unix_seconds() is Some(_))
-  assert_eq(listings[0].first_prompt(), "hello")
-  guard reader.latest() is Some(id) else { fail("expected a latest session") }
-  assert_eq(id.value(), "old")
-  assert_true(@fs.exists(legacy_session_file(store, "old")))
-  assert_false(@fs.exists(session_file(store, "old")))
-  @fs.rmdir(store.root(), recursive=true)
-}
-
-///|
-async test "append migrates a legacy session file to the id-suffixed name" {
-  let store = new_store()
-  let session = @agent_session.Session(SessionId("old"), system_prompt="system").append(
-    User(UserMessage("hello")),
-  )
-  create_legacy_layout_session(store, session)
-  let writer : @store.SessionStore = SessionStore(store.root())
-  let resumed = writer.load(SessionId("old"))
-  let next = writer.append(resumed, Runtime(RuntimeNotice("migrated")))
-  assert_eq(next.events().length(), 2)
-  assert_false(@fs.exists(legacy_session_file(store, "old")))
-  assert_true(@fs.exists(session_file(store, "old")))
-  let reloaded = writer.load(SessionId("old"))
-  assert_eq(reloaded.events().length(), 2)
-  guard reloaded.events()[0].item() is User(message) else {
-    fail("expected the pre-migration event to survive")
-  }
-  assert_eq(message.content(), "hello")
-  @fs.rmdir(store.root(), recursive=true)
-}
-
-///|
-async test "create replaces a legacy session file instead of leaving both layouts" {
-  let store = new_store()
-  create_legacy_layout_session(
-    store,
-    Session(SessionId("old"), system_prompt="system"),
-  )
-  let writer : @store.SessionStore = SessionStore(store.root())
-  writer.create(Session(SessionId("old"), system_prompt="rewritten"))
-  assert_false(@fs.exists(legacy_session_file(store, "old")))
-  assert_eq(writer.load(SessionId("old")).system_prompt(), "rewritten")
-  @fs.rmdir(store.root(), recursive=true)
-}
-
-///|
-async test "writes fail loudly when both session file layouts exist" {
-  let store = new_store()
-  let session = @agent_session.Session(
-    SessionId("both"),
-    system_prompt="system",
-  )
-  store.create(session)
-  // A second file in the other layout is ambiguous corruption: refusing to
-  // write beats guessing which file is the session.
-  @fs.write_file(
-    legacy_session_file(store, "both"),
-    @fs.read_file(session_file(store, "both")).text(),
-    create_mode=CreateOrTruncate,
-  )
-  let _ = store.append(session, User(UserMessage("boom"))) catch {
-    error => {
-      assert_true("\{error}".contains("both session file layouts"))
-      @fs.rmdir(store.root(), recursive=true)
-      return
-    }
-  }
-  @fs.rmdir(store.root(), recursive=true)
-  fail("ambiguous double-layout store accepted a write")
 }
 
 ///|

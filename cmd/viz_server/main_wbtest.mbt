@@ -348,11 +348,6 @@ async test "raw session file route decodes the file segment like the key" {
     )
     inspect(reply.code, content="200")
     assert_true(reply.body.contains("\"id\":\"run 1\""))
-    // The pre-suffix fixed name stays served as an alias.
-    let alias_reply = session_path_reply(
-      catalog, "0%7Crun%201/openseek_session.jsonl",
-    )
-    inspect(alias_reply.code, content="200")
   })
 }
 
