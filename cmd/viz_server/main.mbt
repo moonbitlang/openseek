@@ -26,7 +26,7 @@ async fn main {
       "--session-root-name or OPENSEEK_VIZ_SESSION_ROOT_NAME must not be empty",
     )
   }
-  let search_dirs = non_empty_values(matches, "search-dir")
+  let search_dirs = effective_search_dirs(matches)
   let web_dir = value(matches, "web-dir")
   let bundle = value(matches, "bundle")
   let module_root = match @env.args() {
@@ -745,7 +745,7 @@ fn cli_command() -> @argparse.Command {
         env="OPENSEEK_VIZ_SEARCH_DIR",
         action=Append,
         default_values=["."],
-        about="Directory to scan recursively for session roots; repeat to scan several trees.",
+        about="Directory to scan recursively for session roots; repeat to scan several trees. The default '.' scan is skipped when --session-root is given explicitly.",
       ),
       OptionArg(
         "session-root-name",
@@ -778,6 +778,29 @@ fn value(matches : @argparse.Matches, name : String) -> String raise {
     Some([value, ..]) => value
     _ => fail("missing parsed argument: \{name}")
   }
+}
+
+///|
+/// The directories to scan recursively for session roots. An explicit
+/// `--session-root` (flag or env) narrows serving to that root, so the
+/// default `.` scan is dropped — pointing the server at another project's
+/// sessions must not also pull in whatever tree it was started from. An
+/// explicit `--search-dir` always wins: giving both flags means "that root,
+/// plus these scans".
+fn effective_search_dirs(matches : @argparse.Matches) -> Array[String] {
+  if explicitly_provided(matches, "session-root") &&
+    !explicitly_provided(matches, "search-dir") {
+    []
+  } else {
+    non_empty_values(matches, "search-dir")
+  }
+}
+
+///|
+/// Whether the user supplied `name` on the command line or via its
+/// environment variable, rather than the built-in default filling it in.
+fn explicitly_provided(matches : @argparse.Matches, name : String) -> Bool {
+  matches.sources.get(name) is (Some(Argv) | Some(Env))
 }
 
 ///|
