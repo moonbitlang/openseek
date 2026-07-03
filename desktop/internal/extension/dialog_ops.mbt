@@ -1,10 +1,10 @@
-// The system folder picker behind the sidebar's "Add workspace". The host
-// shells out to the platform's chooser — AppleScript's `choose folder` on
-// macOS, WinForms' FolderBrowserDialog on Windows — rather than linking a
-// native dialog: the picker runs out of process, so the UI thread and the
-// async runtime keep breathing while it is open. `path: None` means the user
-// cancelled; a platform without a chooser raises, and the frontend falls
-// back to its manual path input.
+// The system folder picker behind the sidebar's "Add workspace". macOS goes
+// through Proton's async sheet dialog: the panel is shown without nesting a
+// modal run loop, so the bridge, timers and the CEF pump keep breathing while
+// it is open. Windows still shells out to PowerShell's FolderBrowserDialog
+// until the async dialog grows a win32 backend. `path: None` means the user
+// cancelled; a platform without a chooser errors, and the frontend falls back
+// to its manual path input.
 
 ///|
 priv struct PickFolderReply {
@@ -12,36 +12,38 @@ priv struct PickFolderReply {
 } derive(ToJson)
 
 ///|
-async fn pick_workspace_op() -> PickFolderReply {
-  { path: pick_folder() }
-}
-
-///|
 #cfg(not(platform="windows"))
-async fn pick_folder() -> String? {
+async fn pick_workspace_op(
+  request_context : @app.AppCommandRequestContext,
+) -> Result[PickFolderReply, String] {
   let supported = @platform.is_darwin() catch {
     error if @async.is_being_cancelled() => raise error
     _ => false
   }
   guard supported else {
-    raise HostError("no system folder picker on this platform")
+    return Err("no system folder picker on this platform")
   }
-  let (code, stdout, _) = @process.collect_output("osascript", [
-    "-e", "POSIX path of (choose folder with prompt \"Choose a project folder\")",
-  ]) catch {
-    error if @async.is_being_cancelled() => raise error
-    error => raise HostError("could not open the folder picker: \{error}")
+  let window = @proton_native.WindowRef::unsafe_from_handle(
+    request_context.window(),
+  )
+  match
+    @proton.pick_file_dialog(
+      window,
+      title="Choose a project folder",
+      mode=ChooseDirectory,
+    ) {
+    Err(message) => Err("could not open the folder picker: \{message}")
+    Ok(None) => Ok({ path: None })
+    Ok(Some(text)) => Ok({ path: normalized_folder(text) })
   }
-  // Cancelling reads as a non-zero exit ("User canceled." on stderr), not
-  // as an error worth surfacing.
-  guard code == 0 else { return None }
-  let text = (stdout.text() catch { _ => return None }).trim().to_owned()
-  normalized_folder(text)
 }
 
 ///|
 #cfg(platform="windows")
-async fn pick_folder() -> String? {
+async fn pick_workspace_op(
+  request_context : @app.AppCommandRequestContext,
+) -> Result[PickFolderReply, String] {
+  ignore(request_context)
   // -STA: FolderBrowserDialog needs a single-threaded apartment.
   let script = "Add-Type -AssemblyName System.Windows.Forms; " +
     "$d = New-Object System.Windows.Forms.FolderBrowserDialog; " +
@@ -51,11 +53,13 @@ async fn pick_folder() -> String? {
     "-NoProfile", "-STA", "-Command", script,
   ]) catch {
     error if @async.is_being_cancelled() => raise error
-    error => raise HostError("could not open the folder picker: \{error}")
+    error => return Err("could not open the folder picker: \{error}")
   }
-  guard code == 0 else { return None }
-  let text = (stdout.text() catch { _ => return None }).trim().to_owned()
-  normalized_folder(text)
+  guard code == 0 else { return Ok({ path: None }) }
+  let text = (stdout.text() catch { _ => return Ok({ path: None }) })
+    .trim()
+    .to_owned()
+  Ok({ path: normalized_folder(text) })
 }
 
 ///|

@@ -132,8 +132,11 @@ pub fn openseek_extension(
           error => raise error
         }
       })
-      context.op_async("pick_workspace", async fn(_ : Json) {
-        pick_workspace_op()
+      context.op_async_result_with_context("pick_workspace", async fn(
+        request_context : @app.AppCommandRequestContext,
+        _ : Json,
+      ) {
+        pick_workspace_op(request_context)
       })
       context.op_async("skills_catalog", async fn(_ : Json) {
         skills_catalog_op()
