@@ -1,7 +1,7 @@
 # OpenSeek session visualizer
 
 A browser viewer for OpenSeek's durable session logs. It renders the
-`openseek_session.jsonl` file of a session (a header line plus append-only event lines) two ways, side by side behind a
+`openseek_session-<id>.jsonl` file of a session (a header line plus append-only event lines) two ways, side by side behind a
 toggle:
 
 - **Raw log** — every event in file order, grouped into turns (user prompt →
@@ -31,13 +31,13 @@ no browser needed in CI.
 - `GET /viz_app.js` → the compiled frontend bundle (auto-located from the moon build output)
 - `GET /api/sessions` → `[{key, id, root, root_label, last_active, first_prompt}, …]`, most recent first across all roots
 - `GET /api/sessions/<key>` → `{found, events, events_bytes}` envelope for the frontend (`events` is the raw session-file text; its first line is the header record)
-- `GET /api/sessions/<key>/openseek_session.jsonl` → raw session file
+- `GET /api/sessions/<key>/openseek_session-<id>.jsonl` → raw session file
 
 ## Drag and drop
 
 A session file is self-contained (the header line carries the id and system
 prompt), so the viewer also renders files that are not in any scanned store:
-drop an `openseek_session.jsonl` anywhere in the window and it is read and
+drop any session `.jsonl` anywhere in the window and it is read and
 rendered entirely client-side — nothing is uploaded. Selecting a session from
 the sidebar returns to the served view.
 

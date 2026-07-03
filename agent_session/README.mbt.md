@@ -233,10 +233,10 @@ The store layout is:
 
 ```text
 <root>/sessions/<session-id>/
-  openseek_session.jsonl
+  openseek_session-<session-id>.jsonl
 ```
 
-`openseek_session.jsonl` holds the whole session: a header record
+`openseek_session-<session-id>.jsonl` holds the whole session: a header record
 (`{"version":1,"id":...,"system_prompt":...}`) on the first line, then one
 append-only event per line. Loading replays the event lines into a `Session`.
 

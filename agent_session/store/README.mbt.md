@@ -14,17 +14,21 @@ Each session lives under:
 
 ```text
 <root>/sessions/<session-id>/
-  openseek_session.jsonl
+  openseek_session-<session-id>.jsonl
   session.lock
 ```
 
-`openseek_session.jsonl` is the whole durable session: its first line is a
-header record (`{"version":1,"id":...,"system_prompt":...}`) and every
-following line is one typed `SessionEvent`. Events are append-only. Loading
-replays the event lines into an immutable `agent_session.Session`.
+`openseek_session-<session-id>.jsonl` is the whole durable session: its first
+line is a header record (`{"version":1,"id":...,"system_prompt":...}`) and
+every following line is one typed `SessionEvent`. Events are append-only.
+Loading replays the event lines into an immutable `agent_session.Session`.
+The file name carries the session id so files collected out of their
+directories — for cross-session visualization or comparison — stay
+self-naming.
 
 `session.lock` is an implementation detail used to serialize writers and keep a
-reader from seeing a half-updated session.
+reader from seeing a half-updated session. It carries no id suffix: it already
+lives inside the per-id directory and is never collected alongside the jsonl.
 
 ## API Shape
 
@@ -53,8 +57,8 @@ new event.
 
 `load` takes a `SessionId` because `SessionStore(root)` is a directory-backed
 collection, not a handle to one current session. The id selects
-`<root>/sessions/<id>/openseek_session.jsonl`; the store intentionally does not
-keep a hidden "current" session. When the caller needs to discover a session
+`<root>/sessions/<id>/openseek_session-<id>.jsonl`; the store intentionally
+does not keep a hidden "current" session. When the caller needs to discover a session
 first, use `list`, `listings`, or `latest`, then pass the chosen id to `load`.
 
 ## Create And Load
@@ -68,8 +72,8 @@ More pedantically, `load(id)`:
 
 - validates `id` before using it in a path;
 - takes a shared session lock when the session directory exists;
-- reads `openseek_session.jsonl` and checks that the first line is a header
-  record whose id equals the requested id;
+- reads `openseek_session-<id>.jsonl` and checks that the first line is a
+  header record whose id equals the requested id;
 - parses every following JSON line as a typed `SessionEvent`;
 - checks that event sequence numbers are contiguous;
 - returns a rebuilt immutable `Session`;
