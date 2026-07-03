@@ -335,6 +335,10 @@ priv struct Model {
   // conversations) is folded down to its heading; clicking the heading flips
   // it.
   chats_collapsed : Bool
+  // Whether the sidebar's "Workspaces" section (the attached projects and their
+  // nested conversations) is folded down to its heading; clicking the heading
+  // flips it.
+  workspaces_collapsed : Bool
   // The conversation on screen; always present in `conversations` once the
   // startup session rotation lands.
   active_session : String
@@ -472,6 +476,8 @@ priv enum Msg {
   ToggleSidebar
   // The sidebar's "Chats" heading was clicked — fold or unfold the section.
   ToggleChatsSection
+  // The sidebar's "Workspaces" heading was clicked — fold or unfold the section.
+  ToggleWorkspacesSection
   SaveApiKey
   OpenSkills
   SkillsQueryChanged(String)
@@ -649,6 +655,7 @@ fn initial_model() -> Model {
     dark_mode: host_prefers_dark(),
     sidebar_open: true,
     chats_collapsed: false,
+    workspaces_collapsed: false,
     active_session: "",
     loading_session: "",
     conversations: [],

@@ -187,29 +187,33 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
       "Workspaces",
       PickWorkspace,
       action_title="Add a workspace",
+      toggle=ToggleWorkspacesSection,
+      collapsed=model.workspaces_collapsed,
     ),
   )
-  for control in add_workspace_controls(dispatch, model) {
-    rows.push(control)
-  }
-  for path in model.workspaces {
-    rows.push(workspace_row(dispatch, model, path))
-    let before = rows.length()
-    push_group_rows(
-      rows,
-      dispatch,
-      model,
-      path,
-      listed~,
-      archived~,
-      nested=true,
-    )
-    if rows.length() == before {
-      rows.push(
-        @html.div(class="conversation-row nested placeholder", [
-          @html.span(class="sidebar-label", "No chats yet"),
-        ]),
+  if !model.workspaces_collapsed {
+    for control in add_workspace_controls(dispatch, model) {
+      rows.push(control)
+    }
+    for path in model.workspaces {
+      rows.push(workspace_row(dispatch, model, path))
+      let before = rows.length()
+      push_group_rows(
+        rows,
+        dispatch,
+        model,
+        path,
+        listed~,
+        archived~,
+        nested=true,
       )
+      if rows.length() == before {
+        rows.push(
+          @html.div(class="conversation-row nested placeholder", [
+            @html.span(class="sidebar-label", "No chats yet"),
+          ]),
+        )
+      }
     }
   }
   rows.push(
@@ -465,7 +469,26 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @html.span(class="sidebar-label", "New chat"),
     ]),
   ]
+  // A 46px header matching the content column's topbar, so the sidebar
+  // toggle rides the window's left edge here while the sidebar is open and
+  // in the topbar's left while it's closed — the same screen position in both
+  // states, mirroring how the right-panel toggle stays put (topbar-right when
+  // closed, breadcrumb-right when open). Only the Chat screen offers the
+  // toggle: Skills and Settings have no topbar to reopen from, and the
+  // sidebar is their only way out.
+  let header_children : Array[@html.Html] = []
+  if model.screen is Chat {
+    header_children.push(
+      @html.button(
+        class="topbar-toggle",
+        title="Hide sidebar",
+        on_click=dispatch(ToggleSidebar),
+        icon(icon_layout_sidebar_left),
+      ),
+    )
+  }
   @html.aside([
+    @html.div(class="sidebar-header", header_children),
     @html.div(class="sidebar-main", [
       @html.div(class="sidebar-section", top_section),
       @html.div(class="sidebar-section sessions", sessions_section),
@@ -589,14 +612,16 @@ fn failed_badge(failed : Int) -> @html.Html {
 }
 
 ///|
-/// One turn's finished work — reasoning, tool results, and any interim
-/// assistant narration between tool calls — folded behind a single summary
-/// line ("Read 3 files, ran 1 command"), the way Codex folds a turn behind
-/// "Worked for 46s". Expanding shows the work log in order: reasoning as
-/// muted prose, narration as plain prose, each burst of tool calls as a
-/// one-line sublist. Failures never force the fold open; they badge the
-/// summary instead. The open state is the browser's (`<details>`), so a
-/// reader's toggle survives re-renders.
+/// One turn's work — reasoning, tool results, and any interim assistant
+/// narration between tool calls — folded behind a single summary line ("Read
+/// 3 files, ran 1 command"), the way Codex folds a turn behind "Worked for
+/// 46s". Expanding shows the work log in order: reasoning as muted prose —
+/// never a labelled "Thinking" row of its own — narration as plain prose,
+/// each burst of tool calls as a one-line sublist. A turn that only thought
+/// folds behind a plain "Thought" line. Failures never force the fold open;
+/// they badge the summary instead. The open state is the browser's
+/// (`<details>`), so a reader's toggle survives re-renders and the run
+/// growing while live.
 fn activity_view(
   items : Array[@transcript.TranscriptItem],
   on_open : (String) -> @cmd.Cmd,
@@ -629,8 +654,16 @@ fn activity_view(
     }
   }
   let failed = count_failed(items)
+  let summary_label = tool_group_summary(items)
   let summary : Array[@html.Html] = [
-    @html.span(class="activity-text", tool_group_summary(items)),
+    @html.span(
+      class="activity-text",
+      if summary_label.is_empty() {
+        "Thought"
+      } else {
+        summary_label
+      },
+    ),
   ]
   if failed > 0 {
     summary.push(failed_badge(failed))
@@ -644,12 +677,12 @@ fn activity_view(
 }
 
 ///|
-/// A settled work run (and any live reasoning-driven one): the trailing
-/// assistant message pops out as the visible answer, and whatever work
-/// precedes it folds into a collapsed activity — provided there was a tool
-/// call. Runs without one (thinking-only turns, plain answers) keep their
-/// ordinary rows instead of a blank-summary fold.
-fn push_settled_run(
+/// A turn's work folded behind one collapsed activity card, rendered the same
+/// whether the turn is still streaming or long settled; only the run's
+/// trailing assistant message (the answer) pops out as a visible bubble.
+/// Folding identically in both states is deliberate: the transcript never
+/// shows anything live that would vanish or restyle once the turn lands.
+fn push_run(
   items : Array[@html.Html],
   run : Array[@transcript.TranscriptItem],
   on_open : (String) -> @cmd.Cmd,
@@ -658,13 +691,8 @@ fn push_settled_run(
   if run[work_end - 1].kind is Assistant(_) {
     work_end = work_end - 1
   }
-  let work = run[0:work_end].to_owned()
-  if work.iter().any(item => item.kind is Tool(..)) {
-    items.push(activity_view(work, on_open))
-  } else {
-    for item in work {
-      items.push(transcript_item_view(item, on_open))
-    }
+  if work_end > 0 {
+    items.push(activity_view(run[0:work_end].to_owned(), on_open))
   }
   if work_end < run.length() {
     items.push(transcript_item_view(run[work_end], on_open))
@@ -672,37 +700,9 @@ fn push_settled_run(
 }
 
 ///|
-/// A live response-narrated run, kept flat while the engine works: the
-/// narration reads as normal assistant bubbles, committed reasoning folds to
-/// its "Thinking" row, and each burst of tool calls is a one-line row. The
-/// turn's end replaces all of it with `push_settled_run`'s collapsed
-/// activity.
-fn push_live_run(
-  items : Array[@html.Html],
-  run : Array[@transcript.TranscriptItem],
-  on_open : (String) -> @cmd.Cmd,
-) -> Unit {
-  let mut index = 0
-  while index < run.length() {
-    if run[index].kind is Tool(..) {
-      let tools : Array[@transcript.TranscriptItem] = []
-      while index < run.length() && run[index].kind is Tool(..) {
-        tools.push(run[index])
-        index = index + 1
-      }
-      items.push(@html.div(class="activity-row", [tool_line_view(tools)]))
-    } else {
-      items.push(transcript_item_view(run[index], on_open))
-      index = index + 1
-    }
-  }
-}
-
-///|
-/// A burst of consecutive tool calls inside an activity: one gray line
-/// ("Read 2 files, ran 1 command") that expands to the per-call briefs. A
-/// burst with a failure starts open — inside an already-expanded activity,
-/// the failure is what the reader came for.
+/// A burst of consecutive tool calls: one gray line ("Read 2 files, ran 1
+/// command") that expands to the per-call briefs. A burst with a failure
+/// starts open — the failure is what the reader came for.
 fn tool_line_view(tools : Array[@transcript.TranscriptItem]) -> @html.Html {
   let failed = count_failed(tools)
   let summary : Array[@html.Html] = [
@@ -823,52 +823,32 @@ fn transcript_item_view(
         ]),
       ])
     }
-    Reasoning => collapsed_reasoning_view(item.content, on_open)
-    // Reached only for a tool item outside a group (the transcript loop
-    // batches runs of reasoning and tools into `activity_view` itself).
+    // Unreachable in practice — the transcript loop batches every reasoning
+    // and tool item into a run and `push_run` folds those into the activity
+    // card itself — but the match must cover them, so a stray item gets the
+    // same one-item card.
+    Reasoning => activity_view([item], on_open)
     Tool(..) => activity_view([item], on_open)
   }
 }
 
 ///|
-/// A committed reasoning block, folded to its "Thinking" line: the transcript
-/// is for answers, so past thinking tucks away behind a native `<details>`
-/// toggle. The open state lives in the DOM — index-based diffing patches the
-/// same element across renders, so it survives streaming without any model
-/// bookkeeping. The in-flight stream stays expanded (`reasoning_view`).
-fn collapsed_reasoning_view(
-  content : String,
-  on_open : (String) -> @cmd.Cmd,
-) -> @html.Html {
-  @html.div(class="msg", [
-    @html.div(class="avatar agent", "✧"),
-    @html.div(class="msg-body", [
-      @html.details(class="reasoning-details", [
-        @html.summary(class="msg-role reasoning-summary", "Thinking"),
-        @html.div(
-          class="msg-content markdown reasoning",
-          @markdown.markdown_nodes(content, open_file=on_open),
-        ),
-      ]),
-    ]),
-  ])
-}
-
-///|
-/// The live reasoning stream, always expanded — folding text that is still
-/// arriving would hide the one thing the user is watching.
+/// The live reasoning stream: muted prose in the activity indent, with no
+/// role label or avatar — the thought reads as quiet work and tucks into the
+/// turn's folded activity card once it commits, so nothing shown here
+/// vanishes or restyles at that point. It stays expanded while it streams:
+/// folding text that is still arriving would hide the one thing the user is
+/// watching.
 fn reasoning_view(
   content : String,
   streaming~ : Bool,
   on_open : (String) -> @cmd.Cmd,
 ) -> @html.Html {
   let msg_class = if streaming { "msg streaming" } else { "msg" }
-  @html.div(class=msg_class, [
-    @html.div(class="avatar agent", "✧"),
-    @html.div(class="msg-body", [
-      @html.div(class="msg-role", "Thinking"),
+  @html.div(class="activity-row", [
+    @html.div(class=msg_class, [
       @html.div(
-        class="msg-content markdown reasoning",
+        class="msg-content markdown activity-thinking",
         @markdown.markdown_nodes(content, open_file=on_open),
       ),
     ]),
@@ -918,14 +898,12 @@ fn transcript_view(
     )
   } else {
     // A turn's work — reasoning, tool results, and any interim assistant
-    // narration between tool calls — folds into one activity block once the
-    // turn is over; only the run's trailing assistant message (the answer)
-    // stays out. While the run is live, what shows depends on who narrates
-    // the tools: reasoning-driven work (no narration) folds immediately —
-    // thinking is too verbose to stream in the transcript — while
-    // response-narrated work stays flat until the turn ends, narration as
-    // normal bubbles and tool bursts as one-line rows. User messages and
-    // error bubbles always break the run and stay visible.
+    // narration between tool calls — folds behind one collapsed activity
+    // card; only the run's trailing assistant message (the answer) stays
+    // out. The same fold renders whether the turn is still streaming or long
+    // settled, so nothing shown live vanishes or restyles when the turn
+    // lands. User messages and error bubbles always break the run and stay
+    // visible.
     let mut index = 0
     while index < conv.messages.length() {
       guard conv.messages[index].kind
@@ -941,12 +919,7 @@ fn transcript_view(
         run.push(conv.messages[index])
         index = index + 1
       }
-      let live = conv.running && index == conv.messages.length()
-      if live && run.iter().any(item => item.kind is Assistant(_)) {
-        push_live_run(items, run, on_open)
-      } else {
-        push_settled_run(items, run, on_open)
-      }
+      push_run(items, run, on_open)
     }
   }
   // Both buffers can be non-empty at once: the answer starts streaming
@@ -1750,20 +1723,29 @@ fn launcher_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 /// settings popup.
 fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let conv = model.active()
-  let items : Array[@html.Html] = [
-    @html.button(
-      class="topbar-toggle",
-      title=if model.sidebar_open { "Hide sidebar" } else { "Show sidebar" },
-      on_click=dispatch(ToggleSidebar),
-      icon(icon_layout_sidebar_left),
-    ),
-    @html.span(class="topbar-icon", "✦"),
+  let items : Array[@html.Html] = []
+  // The sidebar toggle rides the window's left edge. While the sidebar is open
+  // it lives in the sidebar's own header; only when the sidebar is closed does
+  // it fall back to the topbar's left, so it holds the same screen position
+  // either way (the same trick the right-panel toggle uses on the right edge).
+  if !model.sidebar_open {
+    items.push(
+      @html.button(
+        class="topbar-toggle",
+        title="Show sidebar",
+        on_click=dispatch(ToggleSidebar),
+        icon(icon_layout_sidebar_left),
+      ),
+    )
+  }
+  items.push(@html.span(class="topbar-icon", "✦"))
+  items.push(
     @html.span(
       class="topbar-title",
       title=session_tooltip(conv),
       conversation_title(conv),
     ),
-  ]
+  )
   // The conversation's attached project; a scratch conversation has no chip.
   // The git branch is not shown here — it lives in the composer's status row.
   if !conv.workspace.is_empty() {

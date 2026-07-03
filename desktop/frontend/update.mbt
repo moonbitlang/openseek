@@ -585,6 +585,11 @@ fn update_msg(
     ToggleSidebar => (@cmd.none, { ..model, sidebar_open: !model.sidebar_open })
     ToggleChatsSection =>
       (@cmd.none, { ..model, chats_collapsed: !model.chats_collapsed })
+    ToggleWorkspacesSection =>
+      (
+        @cmd.none,
+        { ..model, workspaces_collapsed: !model.workspaces_collapsed },
+      )
     SaveApiKey => {
       let api_key = model.setup_api_key.trim().to_owned()
       if api_key.is_empty() {
@@ -777,7 +782,8 @@ fn update_msg(
     NewChatIn(workspace) =>
       // A workspace section's own "new chat": the fresh conversation lands in
       // that project, and the workspace stays active for the next one. A new
-      // loose chat unfolds the Chats section so its row is visible.
+      // loose chat unfolds the Chats section so its row is visible; a new
+      // workspace chat unfolds the Workspaces section for the same reason.
       (
         rotate_session(dispatch),
         {
@@ -785,6 +791,8 @@ fn update_msg(
           active_workspace: workspace,
           loading_session: "",
           chats_collapsed: model.chats_collapsed && !workspace.is_empty(),
+          workspaces_collapsed: model.workspaces_collapsed &&
+          workspace.is_empty(),
         },
       )
     SessionRotated(session_id) => {

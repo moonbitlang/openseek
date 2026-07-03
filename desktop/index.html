@@ -495,16 +495,32 @@
       }
 
       /* ---------- sidebar ---------- */
+      /* The aside carries no horizontal padding of its own: each row (header,
+         sections, footer) owns its inset, so the scrolling sessions list can
+         run its scrollbar at the sidebar's true edge instead of trapping it
+         inside a shared padding box. */
       aside {
         display: grid;
-        grid-template-rows: minmax(0, 1fr) auto;
+        grid-template-rows: auto minmax(0, 1fr) auto;
         gap: 14px;
         min-width: 0;
         min-height: 0;
-        padding: 14px 12px;
+        padding-bottom: 14px;
         border-right: 1px solid var(--line);
         background: var(--surface);
         color: var(--ink-2);
+      }
+
+      /* The sidebar's own 46px header, matching the topbar so the sidebar
+         toggle sitting here (while the sidebar is open) lands at the same
+         screen position as the topbar's toggle (while it's closed), and the
+         bottom divider continues the topbar's across the two columns. */
+      .sidebar-header {
+        display: flex;
+        align-items: center;
+        height: 46px;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--line);
       }
 
       .sidebar-main {
@@ -521,12 +537,18 @@
         overflow-x: hidden;
         min-height: 0;
         align-content: start;
+        /* The scroll box spans to the sidebar's edge; the right inset is the
+           reserved scrollbar gutter (9px) plus 3px of clearance — 12px in
+           total, matching the other sections whether or not the bar shows. */
+        padding-right: 3px;
+        scrollbar-gutter: stable;
       }
 
       .sidebar-section {
         display: grid;
         gap: 4px;
         min-width: 0;
+        padding: 0 12px;
       }
 
       .sidebar-heading {
@@ -743,6 +765,7 @@
         display: grid;
         gap: 8px;
         min-width: 0;
+        padding: 0 12px;
       }
 
       .sidebar-button {
@@ -1147,35 +1170,6 @@
         padding: 8px 12px;
       }
 
-      .msg-content.reasoning {
-        border-left: 2px solid var(--line-2);
-        padding-left: 10px;
-        color: var(--ink-3);
-        font-size: 12.5px;
-      }
-
-      /* Committed reasoning folds behind its "Thinking" line; only the live
-         stream stays expanded. The summary keeps the msg-role look plus a
-         chevron that flips with the details state. */
-      .reasoning-summary {
-        cursor: pointer;
-        list-style: none;
-        user-select: none;
-      }
-      .reasoning-summary::-webkit-details-marker {
-        display: none;
-      }
-      .reasoning-summary::after {
-        content: " ▸";
-        letter-spacing: 0;
-      }
-      .reasoning-details[open] > .reasoning-summary::after {
-        content: " ▾";
-      }
-      .reasoning-summary:hover {
-        color: var(--ink-2);
-      }
-
       /* markdown-rendered assistant content: block elements own the spacing,
          so the pre-wrap used for plain text would double every newline */
       .msg-content.markdown {
@@ -1423,8 +1417,9 @@
         padding: 12px 0 4px;
       }
 
-      /* Reasoning inside the work log: full-width prose, slightly muted —
-         it narrates the tool calls around it. */
+      /* Reasoning inside the work log — and the live stream before it commits
+         (`reasoning_view`): full-width muted prose, never a labelled
+         "Thinking" row of its own. */
       .activity-thinking {
         color: var(--ink-2);
         font-size: 13px;
