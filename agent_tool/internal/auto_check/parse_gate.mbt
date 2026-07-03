@@ -443,15 +443,24 @@ async test "content_parse_errors gates real content through moonc" {
   }
   assert_eq(clean.errors.length(), 0)
   assert_false(clean.truncated)
-  guard content_parse_errors("///|\npub fn bad() -> Int {\n  let x =\n}\n")
-    is Some(gate) else {
+  let bad_content = "///|\npub fn bad() -> Int {\n  let x =\n}\n"
+  guard content_parse_errors(bad_content) is Some(gate) else {
     fail("expected the gate to run (is moonc on PATH?)")
   }
   assert_true(gate.errors.length() > 0)
   assert_true(gate.errors[0].message.contains("Parse error"))
-  // The scratch-dir invocation (relative file name, cwd inside the dir) makes
-  // moonc emit its own context excerpt; the formatter prefers it.
-  assert_true(gate.errors[0].context != "")
+  // Whether the diagnostic carries moonc's own `context` excerpt is
+  // toolchain-dependent (nightly emits one, stable omits the field), so
+  // assert the gate's actual contract instead: the formatted report always
+  // shows a numbered excerpt under the header — the compiler's when present,
+  // synthesized from the content via the diagnostic's loc otherwise.
+  let formatted = format_parse_gate_errors(
+    "candidate.mbt",
+    bad_content,
+    gate.errors,
+  )
+  assert_true(formatted.length() > 0)
+  assert_true(formatted[0].contains("\n  "))
   // moonc EXITS 0 when its parser recovers from an error (e.g. `&mut` in a
   // parameter type), so the gate must trust captured diagnostics, never the
   // exit code — this content must still be rejected.
