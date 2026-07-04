@@ -262,20 +262,15 @@ pub async fn[X] run_turn_in_scope(
   let client = @client.Client(api_key~, model~, thinking~, api_url?)
   let mut session = append_item(session, User(UserMessage(task)))
   try {
-    let tools = match tools {
-      Some(tools) => tools
-      None =>
-        build_tools(runtime, scope) catch {
-          error => {
-            let next = append_item(
-              session,
-              Terminal(Failed("agent setup failed: \{error}")),
-            )
-            @xlog.error() <?
-              { "event": "agent_setup_failed", "error": "\{error}" }
-            return next
-          }
-        }
+    let tools = tools.unwrap_or_else(() => build_tools(runtime, scope)) catch {
+      error => {
+        let next = append_item(
+          session,
+          Terminal(Failed("agent setup failed: \{error}")),
+        )
+        @xlog.error() <? { "event": "agent_setup_failed", "error": "\{error}" }
+        return next
+      }
     }
     let messages = session.chat_messages()
     let watcher_fingerprints : Map[String, String] = {}
@@ -287,7 +282,7 @@ pub async fn[X] run_turn_in_scope(
     let mut steps_since_plan = 0
     let mut steps_since_reminder = 0
     let mut plan_checklist : String? = None
-    steps~: for step in 0..<max_steps {
+    loop_steps~: for step in 0..<max_steps {
       // Steering first: user-visible mid-turn input should precede runtime
       // chatter the model reads alongside it.
       session = session.apply_steer_inputs(
@@ -385,7 +380,7 @@ pub async fn[X] run_turn_in_scope(
           messages,
           append_item~,
         )
-        continue steps~
+        continue loop_steps~
       }
       let assistant_message : @deepseek.ChatMessage = ChatMessage(
         Assistant,
@@ -486,7 +481,7 @@ pub async fn[X] run_turn_in_scope(
               messages,
               append_item~,
             )
-            continue steps~
+            continue loop_steps~
           }
           Control(Abort(reason)) => {
             session = append_item(
