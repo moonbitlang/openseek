@@ -37,6 +37,20 @@ fn plan_reminder_text(checklist : String?) -> String {
 }
 
 ///|
+/// Plan staleness tracking for one turn: counters advance once per model
+/// request. A successful `plan` call resets `steps_since_plan` and refreshes
+/// `checklist`; injecting a reminder resets `steps_since_reminder`, so the
+/// reminder fires only after both enough plan silence and enough reminder
+/// silence. Turn-local by design — a fresh user turn resets the cadence.
+/// `checklist` carries the last successfully recorded plan for the reminder to
+/// re-surface.
+priv struct PlanCadence {
+  mut steps_since_plan : Int
+  mut steps_since_reminder : Int
+  mut checklist : String?
+}
+
+///|
 /// Run a one-shot OpenSeek task and discard the returned session.
 ///
 /// This is the highest-level convenience entry point. It creates a fresh
@@ -274,14 +288,12 @@ pub async fn[X] run_turn_in_scope(
     }
     let messages = session.chat_messages()
     let watcher_fingerprints : Map[String, String] = {}
-    // Plan staleness tracking: counters advance once per model request and
-    // reset when a `plan` call succeeds, so the reminder fires only after
-    // `plan_reminder_after_steps` requests of plan silence. Turn-local by
-    // design — a fresh user turn resets the cadence.
     let plan_registered = tools.find("plan") is Some(_)
-    let mut steps_since_plan = 0
-    let mut steps_since_reminder = 0
-    let mut plan_checklist : String? = None
+    let cadence : PlanCadence = {
+      steps_since_plan: 0,
+      steps_since_reminder: 0,
+      checklist: None,
+    }
     loop_steps~: for step in 0..<max_steps {
       // Steering first: user-visible mid-turn input should precede runtime
       // chatter the model reads alongside it.
@@ -318,16 +330,16 @@ pub async fn[X] run_turn_in_scope(
         messages.push(ChatMessage(User, content=notice))
       }
       if plan_registered &&
-        steps_since_plan >= plan_reminder_after_steps &&
-        steps_since_reminder >= plan_reminder_after_steps {
-        let reminder = plan_reminder_text(plan_checklist)
+        cadence.steps_since_plan >= plan_reminder_after_steps &&
+        cadence.steps_since_reminder >= plan_reminder_after_steps {
+        let reminder = plan_reminder_text(cadence.checklist)
         @xlog.info() <? { "event": "plan_reminder", "content": reminder }
         session = append_item(session, Runtime(RuntimeNotice(reminder)))
         messages.push(ChatMessage(User, content=reminder))
-        steps_since_reminder = 0
+        cadence.steps_since_reminder = 0
       }
-      steps_since_plan += 1
-      steps_since_reminder += 1
+      cadence.steps_since_plan += 1
+      cadence.steps_since_reminder += 1
       @xlog.info() <? { "event": "agent_step", "step": step + 1 }
       let response = client.chat(
         messages,
@@ -505,8 +517,8 @@ pub async fn[X] run_turn_in_scope(
           // A successful plan write restarts the staleness cadence and
           // refreshes the checklist the next reminder would re-surface; a
           // cleared plan drops back to the plan-free nudge.
-          steps_since_plan = 0
-          plan_checklist = @plan.reminder_checklist(tool_call.arguments)
+          cadence.steps_since_plan = 0
+          cadence.checklist = @plan.reminder_checklist(tool_call.arguments)
         }
         @xlog.info() <?
           {
