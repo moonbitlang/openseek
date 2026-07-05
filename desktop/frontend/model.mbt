@@ -29,6 +29,9 @@ const WslDistroStorageKey : String = "openseek.wsl_distro"
 const WslEngineStorageKey : String = "openseek.wsl_engine"
 
 ///|
+const NotificationCornerStorageKey : String = "openseek.notification_corner"
+
+///|
 /// The default OpenSeek endpoint: a DeepSeek-compatible proxy that does not
 /// require an API key, so the app works out of the box. The path mirrors the
 /// official API because the engine posts to this URL verbatim.
@@ -353,16 +356,11 @@ priv struct Model {
   // when the bridge connects and when a run reaches the store. A new
   // conversation appears here once its first turn has been persisted.
   sessions : Array[@transcript.SessionListItem]
-  // Why the sidebar list could not be refreshed; empty when the last refresh
-  // succeeded.
-  sessions_error : String
   // Conversations the host has archived (durable record moved into the
   // store's `archived` twin); the sidebar tucks their rows under a collapsed
   // "Archived" group with an unarchive control. Reported by the host in the
   // same entry shape as the live list.
   archived : Array[@transcript.SessionListItem]
-  // Why the last archive attempt failed; empty otherwise.
-  archive_error : String
   // Project directories attached as workspaces: the host registry's absolute
   // paths in registration order. The sidebar shows one section per entry.
   workspaces : Array[String]
@@ -371,8 +369,6 @@ priv struct Model {
   active_workspace : String
   // The sidebar's add-workspace input text; None while the input is closed.
   workspace_input : String?
-  // Why the last workspace operation failed; empty otherwise.
-  workspace_error : String
   // Whether the transcript is scrolled to its bottom. Streaming output only
   // auto-follows while this holds — scrolling up to read history must not be
   // yanked back down by the next delta. Maintained by a DOM scroll watcher;
@@ -406,6 +402,13 @@ priv struct Model {
   // shown in the embedded viewer. Rooted at `active().cwd`; rebuilt when the
   // active conversation changes.
   file_panel : FilePanel
+  // Transient error toasts, oldest first, and the id the next toast will
+  // take. Ids only ever grow, so a toast's auto-dismiss timer can never
+  // collide with a later toast.
+  notifications : Array[Notification]
+  notification_seq : Int
+  // Which window corner toasts pop up in; a Settings choice, persisted.
+  notification_corner : NotificationCorner
 }
 
 ///|
@@ -434,7 +437,8 @@ priv enum Msg {
     custom_api_key~ : String,
     wsl_enabled~ : String,
     wsl_distro~ : String,
-    wsl_engine~ : String
+    wsl_engine~ : String,
+    notification_corner~ : String
   )
   TaskChanged(String)
   // Move the completion menu's highlight by a delta (−1 up, +1 down), wrapping
@@ -472,6 +476,12 @@ priv enum Msg {
   WslModeChanged(String)
   WslDistroChanged(String)
   WslEngineChanged(String)
+  // The Settings choice of which window corner error toasts pop up in.
+  NotificationCornerChanged(String)
+  // A toast's lifetime elapsed; drops it unless a click already did.
+  NotificationExpired(Int)
+  // A toast was clicked: dismiss it now.
+  DismissNotification(Int)
   OpenSetup
   ToggleSidebar
   // The sidebar's "Chats" heading was clicked — fold or unfold the section.
@@ -506,6 +516,14 @@ priv enum Msg {
   SessionsFailed(String)
   OpenSession(String)
   SessionLoaded(session~ : String, items~ : Array[@transcript.TranscriptItem])
+  // Loading a stored session failed before its conversation ever existed
+  // (bridge call errored, or the data was malformed): pops an error toast
+  // rather than poisoning the conversation on screen. `session` says which
+  // request failed, so a load abandoned by a newer selection is dropped.
+  SessionLoadFailed(session~ : String, message~ : String)
+  // A host-side action with no conversation of its own (opening a file in
+  // the system app, launching an app) failed: pops an error toast.
+  HostActionFailed(String)
   // The registered workspaces — the reply to `list_workspaces` and to a
   // successful add/remove alike.
   WorkspacesLoaded(Array[String])
@@ -660,13 +678,10 @@ fn initial_model() -> Model {
     loading_session: "",
     conversations: [],
     sessions: [],
-    sessions_error: "",
     archived: [],
-    archive_error: "",
     workspaces: [],
     active_workspace: "",
     workspace_input: None,
-    workspace_error: "",
     transcript_pinned: true,
     screen: Chat,
     skills_catalog: CatalogIdle,
@@ -678,6 +693,9 @@ fn initial_model() -> Model {
     symbol_cache: empty_symbol_cache(),
     launcher: { open: false, apps: [], loaded: false, error: "" },
     file_panel: empty_file_panel(),
+    notifications: [],
+    notification_seq: 0,
+    notification_corner: BottomRight,
   }
 }
 
@@ -875,6 +893,14 @@ fn Model::activate(self : Model, session_id : String) -> Model {
 /// into the prompt), so both must be empty.
 fn Conversation::draft_empty(self : Conversation) -> Bool {
   self.task.trim().is_empty() && self.mentions.is_empty()
+}
+
+///|
+/// Whether the conversation has actually gotten under way — a run in flight,
+/// or transcript items from one. A fresh "New chat" (even with a typed
+/// draft) has not, and stays out of the sidebar until its first send.
+fn Conversation::has_begun(self : Conversation) -> Bool {
+  self.running || self.messages.length() > 0
 }
 
 ///|

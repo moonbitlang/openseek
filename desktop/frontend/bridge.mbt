@@ -365,7 +365,7 @@ fn open_session(
         error => {
           scheduler.add(
             dispatch(
-              Failed(
+              SessionLoadFailed(
                 session=session_id,
                 message="failed to load session \{session_id}: " +
                   bridge_error_text(error),
@@ -381,7 +381,7 @@ fn open_session(
         None =>
           scheduler.add(
             dispatch(
-              Failed(
+              SessionLoadFailed(
                 session=session_id,
                 message="failed to load session \{session_id}: malformed data",
               ),
@@ -477,8 +477,7 @@ fn cancel_openseek(dispatch : @cmd.Emit[Msg], run_id : Int) -> @cmd.Cmd {
 /// Ask the host to open a transcript-referenced file in the system's default
 /// app. A relative `path` is taken against the conversation's working
 /// directory — `cwd` when known, else derived by the host from `session`. A
-/// failure (no opener, missing file) surfaces as an error in the conversation
-/// on screen.
+/// failure (no opener, missing file) pops an error toast.
 fn open_file(
   dispatch : @cmd.Emit[Msg],
   session : String,
@@ -493,15 +492,7 @@ fn open_file(
       payload["path"] = path
       let _ : @js.Value = bridge_request("open_path", payload.to_value()) catch {
         error => {
-          scheduler.add(
-            dispatch(
-              Error(
-                run_id=EmptyRunId,
-                message=bridge_error_text(error),
-                diagnostics="",
-              ),
-            ),
-          )
+          scheduler.add(dispatch(HostActionFailed(bridge_error_text(error))))
           return
         }
       }

@@ -229,20 +229,6 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
   if !model.chats_collapsed {
     push_group_rows(rows, dispatch, model, "", listed~, archived~)
   }
-  if !model.sessions_error.is_empty() {
-    rows.push(
-      @html.div(class="conversation-row error", title=model.sessions_error, [
-        @html.span(class="sidebar-label", "sessions unavailable"),
-      ]),
-    )
-  }
-  if !model.archive_error.is_empty() {
-    rows.push(
-      @html.div(class="conversation-row error", title=model.archive_error, [
-        @html.span(class="sidebar-label", "archive failed"),
-      ]),
-    )
-  }
   // Archived conversations fold behind a collapsed group at the end of the
   // list. Their records live in the store's `archived` twin, so they come
   // from the host's archived reply, not the live list; each row carries a
@@ -278,8 +264,12 @@ fn push_group_rows(
   archived~ : (String) -> Bool,
   nested? : Bool = false,
 ) -> Unit {
+  // Only conversations that have gotten under way get a row — a fresh
+  // "New chat" is already on screen, and a row for it is just noise until
+  // its first send.
   for conv in model.conversations.rev_iter() {
     if conv.workspace == workspace &&
+      conv.has_begun() &&
       !listed(conv.session_id) &&
       !archived(conv.session_id) {
       rows.push(
@@ -420,13 +410,6 @@ fn add_workspace_controls(
       ]),
     )
   }
-  if !model.workspace_error.is_empty() {
-    controls.push(
-      @html.div(class="conversation-row error", title=model.workspace_error, [
-        @html.span(class="sidebar-label", "workspace failed"),
-      ]),
-    )
-  }
   controls
 }
 
@@ -463,19 +446,14 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   for row in session_rows(dispatch, model) {
     sessions_section.push(row)
   }
-  let top_section : Array[@html.Html] = [
-    @html.button(class="sidebar-button", on_click=dispatch(NewChat), [
-      @html.span(class="sidebar-icon", icon(icon_add)),
-      @html.span(class="sidebar-label", "New chat"),
-    ]),
-  ]
   // A 46px header matching the content column's topbar, so the sidebar
   // toggle rides the window's left edge here while the sidebar is open and
   // in the topbar's left while it's closed — the same screen position in both
   // states, mirroring how the right-panel toggle stays put (topbar-right when
   // closed, breadcrumb-right when open). Only the Chat screen offers the
   // toggle: Skills and Settings have no topbar to reopen from, and the
-  // sidebar is their only way out.
+  // sidebar is their only way out. New chat rides the header's right edge on
+  // every screen — rotating a session lands back on Chat regardless.
   let header_children : Array[@html.Html] = []
   if model.screen is Chat {
     header_children.push(
@@ -487,10 +465,17 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ),
     )
   }
+  header_children.push(
+    @html.button(
+      class="topbar-toggle header-new-chat",
+      title="New chat",
+      on_click=dispatch(NewChat),
+      icon(icon_add),
+    ),
+  )
   @html.aside([
     @html.div(class="sidebar-header", header_children),
     @html.div(class="sidebar-main", [
-      @html.div(class="sidebar-section", top_section),
       @html.div(class="sidebar-section sessions", sessions_section),
     ]),
     @html.div(class="sidebar-footer", [
@@ -1232,6 +1217,34 @@ fn provider_select(
 }
 
 ///|
+fn corner_select(
+  dispatch : @cmd.Emit[Msg],
+  selected : NotificationCorner,
+) -> @html.Html {
+  @html.select(
+    on_change=dispatch.map(value => NotificationCornerChanged(value)),
+    [
+      @html.option(
+        value="bottom-right",
+        selected=selected is BottomRight,
+        "Bottom right",
+      ),
+      @html.option(
+        value="bottom-left",
+        selected=selected is BottomLeft,
+        "Bottom left",
+      ),
+      @html.option(
+        value="top-right",
+        selected=selected is TopRight,
+        "Top right",
+      ),
+      @html.option(value="top-left", selected=selected is TopLeft, "Top left"),
+    ],
+  )
+}
+
+///|
 fn wsl_select(dispatch : @cmd.Emit[Msg], enabled : Bool) -> @html.Html {
   @html.select(on_change=dispatch.map(value => WslModeChanged(value)), [
     @html.option(value="native", selected=!enabled, "Windows (native)"),
@@ -1339,6 +1352,13 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let groups : Array[@html.Html] = [
     settings_group("Model", model_rows),
     settings_group("API", api_rows),
+    settings_group("Interface", [
+      setting_row(
+        "Notification corner",
+        [corner_select(dispatch, model.notification_corner)],
+        desc="Where error notifications pop up.",
+      ),
+    ]),
   ]
   // WSL is Windows-only; elsewhere the section would be dead weight.
   if model.is_windows {
@@ -2081,14 +2101,42 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // viewer host inside it) is still rendered so the attached viewer is never
   // torn down.
   let panel_open = model.file_panel.open && model.screen is Chat
+  let children : Array[@html.Html] = [
+    sidebar_view(dispatch, model),
+    @html.div(class=if panel_open { "content panel-open" } else { "content" }, [
+      @html.main_(content),
+      file_panel_view(dispatch, model),
+    ]),
+  ]
+  // The toast stack floats over everything (position: fixed), so appending
+  // it last never shifts the layout; skipping it entirely while empty keeps
+  // the corner clickable.
+  if model.notifications.length() > 0 {
+    children.push(notifications_view(dispatch, model))
+  }
   @html.div(
     class=if model.sidebar_open { "app" } else { "app sidebar-collapsed" },
-    [
-      sidebar_view(dispatch, model),
+    children,
+  )
+}
+
+///|
+/// The floating toast stack, fixed to the configured window corner. Each
+/// toast dismisses on click; its timer gets the rest.
+fn notifications_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  let toasts : Array[@html.Html] = []
+  for toast in model.notifications {
+    toasts.push(
       @html.div(
-        class=if panel_open { "content panel-open" } else { "content" },
-        [@html.main_(content), file_panel_view(dispatch, model)],
+        class="notification",
+        title="Dismiss",
+        on_click=dispatch(DismissNotification(toast.id)),
+        toast.message,
       ),
-    ],
+    )
+  }
+  @html.div(
+    class="notifications corner-\{model.notification_corner.wire()}",
+    toasts,
   )
 }

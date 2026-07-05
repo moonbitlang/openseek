@@ -523,11 +523,19 @@
         border-bottom: 1px solid var(--line);
       }
 
+      /* New chat holds the header's right edge; the auto margin also keeps it
+         there when the sidebar toggle is absent (Skills/Settings screens).
+         The -4px mirrors the toggle's left pull so both icons sit the same
+         optical distance from their window edge. */
+      .sidebar-header .header-new-chat {
+        margin-left: auto;
+        margin-right: -4px;
+      }
+
       .sidebar-main {
         display: grid;
-        grid-template-rows: auto minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
         align-content: start;
-        gap: 18px;
         min-width: 0;
         min-height: 0;
       }
@@ -2128,6 +2136,62 @@
       }
       .danger {
         color: var(--del);
+      }
+
+      /* ---------- notifications ---------- */
+      /* Transient error toasts, stacked in whichever window corner Settings
+         picked. The stack floats over everything and is only rendered while
+         something is up, so it never eats clicks meant for the app. */
+      .notifications {
+        position: fixed;
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: min(380px, calc(100vw - 32px));
+      }
+      .notifications.corner-bottom-right {
+        right: 16px;
+        bottom: 16px;
+        align-items: flex-end;
+      }
+      .notifications.corner-bottom-left {
+        left: 16px;
+        bottom: 16px;
+        align-items: flex-start;
+      }
+      .notifications.corner-top-right {
+        right: 16px;
+        top: 16px;
+        align-items: flex-end;
+      }
+      .notifications.corner-top-left {
+        left: 16px;
+        top: 16px;
+        align-items: flex-start;
+      }
+      .notification {
+        cursor: pointer;
+        padding: 10px 14px;
+        border: 1px solid var(--del-line);
+        border-radius: var(--radius);
+        background: var(--del-bg);
+        color: var(--del);
+        box-shadow: var(--shadow-pop);
+        font-size: 12.5px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+        animation: notification-in 160ms ease-out;
+      }
+      @keyframes notification-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
       }
 
       @media (max-width: 760px) {

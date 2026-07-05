@@ -25,7 +25,7 @@ fn fetch_apps(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 ///|
 /// Ask the host to open app `app` (an id from `list_apps`) on the
 /// conversation's working directory — `cwd` when known, else derived by the
-/// host from `session`. A failure surfaces as an error in the conversation.
+/// host from `session`. A failure pops an error toast.
 fn launch_app(
   dispatch : @cmd.Emit[Msg],
   session : String,
@@ -40,15 +40,7 @@ fn launch_app(
       payload["app"] = app
       let _ : @js.Value = bridge_request("launch_app", payload.to_value()) catch {
         error => {
-          scheduler.add(
-            dispatch(
-              Error(
-                run_id=EmptyRunId,
-                message=bridge_error_text(error),
-                diagnostics="",
-              ),
-            ),
-          )
+          scheduler.add(dispatch(HostActionFailed(bridge_error_text(error))))
           return
         }
       }

@@ -40,13 +40,11 @@ test "workspaces loaded resets placements the registry no longer has" {
       workspace: "/gone",
     }),
     active_workspace: "/gone",
-    workspace_error: "boom",
   }
   let (_, next) = update(dispatch, WorkspacesLoaded(["/kept"]), model)
   inspect(next.workspaces.length(), content="1")
   inspect(next.active().workspace, content="")
   inspect(next.active_workspace, content="")
-  inspect(next.workspace_error, content="")
   // A still-registered placement survives the same reply.
   let attached = {
     ..test_model().replace_conversation({
@@ -86,15 +84,27 @@ test "opening a stored session adopts its workspace" {
 }
 
 ///|
-test "the picker fallback opens the manual input and a pick clears errors" {
+test "the picker keeps the manual input closed; its fallback opens it" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), workspace_error: "boom" }
-  let (_, picked) = update(dispatch, PickWorkspace, model)
+  let (_, picked) = update(dispatch, PickWorkspace, test_model())
   assert_true(picked.workspace_input is None)
-  inspect(picked.workspace_error, content="")
-  let (_, fallback) = update(dispatch, OpenWorkspaceInput, model)
+  let (_, fallback) = update(dispatch, OpenWorkspaceInput, test_model())
   assert_true(fallback.workspace_input is Some(""))
-  inspect(fallback.workspace_error, content="")
+}
+
+///|
+test "a workspace failure pops a toast" {
+  let dispatch = test_dispatch()
+  let (_, next) = update(
+    dispatch,
+    WorkspaceFailed("not a directory"),
+    test_model(),
+  )
+  inspect(next.notifications.length(), content="1")
+  inspect(
+    next.notifications[0].message,
+    content="Workspace error: not a directory",
+  )
 }
 
 ///|

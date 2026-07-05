@@ -211,9 +211,8 @@ test "session rotation prunes abandoned empty conversations" {
 }
 
 ///|
-test "sessions loaded replaces the sidebar list and clears its error" {
+test "sessions loaded replaces the sidebar list" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), sessions_error: "boom" }
   let items : Array[@transcript.SessionListItem] = [
     {
       id: "desktop-a",
@@ -222,23 +221,26 @@ test "sessions loaded replaces the sidebar list and clears its error" {
       workspace_name: "",
     },
   ]
-  let (_, once) = update(dispatch, SessionsLoaded(items), model)
-  let (_, twice) = update(dispatch, SessionsLoaded(items), model)
+  let (_, once) = update(dispatch, SessionsLoaded(items), test_model())
+  let (_, twice) = update(dispatch, SessionsLoaded(items), test_model())
   inspect(once.sessions.length(), content="1")
   inspect(once.sessions[0].id, content="desktop-a")
-  inspect(once.sessions_error, content="")
   inspect(twice.sessions.length(), content="1")
 }
 
 ///|
-test "sessions failure is recorded without touching the transcript" {
+test "sessions failure pops a toast without touching the transcript" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
     messages: [{ kind: User, content: "hi" }],
   })
   let (_, next) = update(dispatch, SessionsFailed("engine exploded"), model)
-  inspect(next.sessions_error, content="engine exploded")
+  inspect(next.notifications.length(), content="1")
+  inspect(
+    next.notifications[0].message,
+    content="Session list unavailable: engine exploded",
+  )
   inspect(next.active().messages.length(), content="1")
 }
 
@@ -314,11 +316,50 @@ test "abandoned session load failures are dropped" {
   let (_, abandoned) = update(dispatch, NewChat, loading)
   let (_, next) = update(
     dispatch,
-    Failed(session="desktop-a", message="failed to load session desktop-a"),
+    SessionLoadFailed(
+      session="desktop-a",
+      message="failed to load session desktop-a",
+    ),
     abandoned,
   )
   inspect(next.loading_session, content="")
   inspect(next.active().messages.length(), content="0")
+  inspect(next.notifications.length(), content="0")
+}
+
+///|
+test "a live session load failure pops a toast, not a transcript bubble" {
+  let dispatch = test_dispatch()
+  let (_, loading) = update(dispatch, OpenSession("desktop-a"), test_model())
+  let (_, next) = update(
+    dispatch,
+    SessionLoadFailed(
+      session="desktop-a",
+      message="failed to load session desktop-a: no such file",
+    ),
+    loading,
+  )
+  inspect(next.loading_session, content="")
+  inspect(next.notifications.length(), content="1")
+  inspect(
+    next.notifications[0].message,
+    content="failed to load session desktop-a: no such file",
+  )
+  // The conversation on screen keeps its transcript and status untouched.
+  inspect(next.active().messages.length(), content="0")
+  assert_true(next.display_status() is Ready)
+}
+
+///|
+test "a host action failure pops a toast" {
+  let dispatch = test_dispatch()
+  let (_, next) = update(
+    dispatch,
+    HostActionFailed("open path failed: no opener"),
+    test_model(),
+  )
+  inspect(next.notifications.length(), content="1")
+  inspect(next.notifications[0].message, content="open path failed: no opener")
 }
 
 ///|
@@ -687,6 +728,7 @@ test "loaded settings open the popup only when incomplete" {
       wsl_enabled="",
       wsl_distro="",
       wsl_engine="",
+      notification_corner="",
     ),
     test_model(),
   )
@@ -703,6 +745,7 @@ test "loaded settings open the popup only when incomplete" {
       wsl_enabled="",
       wsl_distro="",
       wsl_engine="",
+      notification_corner="",
     ),
     test_model(),
   )
@@ -718,6 +761,7 @@ test "loaded settings open the popup only when incomplete" {
       wsl_enabled="1",
       wsl_distro=" Ubuntu ",
       wsl_engine="/usr/local/bin/openseek",
+      notification_corner="top-left",
     ),
     test_model(),
   )
@@ -727,6 +771,9 @@ test "loaded settings open the popup only when incomplete" {
   inspect(restored.wsl_enabled, content="true")
   inspect(restored.wsl_distro, content="Ubuntu")
   inspect(restored.wsl_engine, content="/usr/local/bin/openseek")
+  assert_true(restored.notification_corner is TopLeft)
+  // An unknown stored corner falls back to the default.
+  assert_true(zero_config.notification_corner is BottomRight)
   let (_, custom) = update(
     dispatch,
     SettingsLoaded(
@@ -737,11 +784,29 @@ test "loaded settings open the popup only when incomplete" {
       wsl_enabled="",
       wsl_distro="",
       wsl_engine="",
+      notification_corner="",
     ),
     test_model(),
   )
   assert_true(custom.screen is Chat)
   inspect(custom.effective_api_key(), content="sk-custom")
+}
+
+///|
+test "the notification-corner setting parses its wire names" {
+  let dispatch = test_dispatch()
+  let (_, moved) = update(
+    dispatch,
+    NotificationCornerChanged("top-right"),
+    test_model(),
+  )
+  assert_true(moved.notification_corner is TopRight)
+  let (_, unknown) = update(
+    dispatch,
+    NotificationCornerChanged("nowhere"),
+    moved,
+  )
+  assert_true(unknown.notification_corner is BottomRight)
 }
 
 ///|
@@ -879,12 +944,35 @@ test "archiving the active conversation clears it for the rotation" {
 }
 
 ///|
-test "an archive failure lands in archive_error and a retry clears it" {
+test "an archive failure pops a toast that a click or its timer dismisses" {
   let dispatch = test_dispatch()
   let (_, failed) = update(dispatch, ArchiveFailed("zip missing"), test_model())
-  inspect(failed.archive_error, content="zip missing")
-  let (_, retried) = update(dispatch, ArchiveSession("desktop-test"), failed)
-  inspect(retried.archive_error, content="")
+  inspect(failed.notifications.length(), content="1")
+  inspect(
+    failed.notifications[0].message,
+    content="Archive failed: zip missing",
+  )
+  let id = failed.notifications[0].id
+  // A stale timer (the toast is already gone) must not touch a later toast.
+  let (_, dismissed) = update(dispatch, DismissNotification(id), failed)
+  inspect(dismissed.notifications.length(), content="0")
+  let (_, again) = update(dispatch, ArchiveFailed("still missing"), dismissed)
+  let (_, expired) = update(dispatch, NotificationExpired(id), again)
+  inspect(expired.notifications.length(), content="1")
+  inspect(
+    expired.notifications[0].message,
+    content="Archive failed: still missing",
+  )
+}
+
+///|
+test "toast ids only ever grow, so timers and toasts stay paired" {
+  let dispatch = test_dispatch()
+  let (_, first) = update(dispatch, ArchiveFailed("one"), test_model())
+  let (_, second) = update(dispatch, SessionsFailed("two"), first)
+  inspect(second.notifications.length(), content="2")
+  assert_true(second.notifications[0].id != second.notifications[1].id)
+  inspect(second.notification_seq, content="2")
 }
 
 ///|

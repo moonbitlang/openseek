@@ -450,7 +450,8 @@ fn update_msg(
       custom_api_key~,
       wsl_enabled~,
       wsl_distro~,
-      wsl_engine~
+      wsl_engine~,
+      notification_corner~
     ) => {
       let next = {
         ..model,
@@ -461,6 +462,7 @@ fn update_msg(
         wsl_enabled: wsl_enabled == "1",
         wsl_distro: wsl_distro.trim().to_owned(),
         wsl_engine: wsl_engine.trim().to_owned(),
+        notification_corner: NotificationCorner::parse(notification_corner),
         setup_api_key: "",
       }
       // The default provider needs no setup, so the Settings page only takes
@@ -581,6 +583,18 @@ fn update_msg(
       (save_wsl_distro(value), { ..model, wsl_distro: value })
     WslEngineChanged(value) =>
       (save_wsl_engine(value), { ..model, wsl_engine: value })
+    NotificationCornerChanged(value) => {
+      let corner = NotificationCorner::parse(value)
+      (
+        save_notification_corner(corner),
+        { ..model, notification_corner: corner },
+      )
+    }
+    NotificationExpired(id) | DismissNotification(id) =>
+      (
+        @cmd.none,
+        { ..model, notifications: model.notifications.filter(t => t.id != id) },
+      )
     OpenSetup => (@cmd.none, { ..model, screen: Settings, setup_api_key: "" })
     ToggleSidebar => (@cmd.none, { ..model, sidebar_open: !model.sidebar_open })
     ToggleChatsSection =>
@@ -820,8 +834,7 @@ fn update_msg(
         },
       )
     }
-    SessionsLoaded(items) =>
-      (@cmd.none, { ..model, sessions: items, sessions_error: "" })
+    SessionsLoaded(items) => (@cmd.none, { ..model, sessions: items })
     WorkspacesLoaded(paths) => {
       // A workspace that vanished from the registry cannot host runs anymore;
       // conversations attached to it fall back to the default store so their
@@ -841,19 +854,11 @@ fn update_msg(
       }
       (
         @cmd.none,
-        {
-          ..model,
-          workspaces: paths,
-          conversations,
-          active_workspace,
-          workspace_error: "",
-        },
+        { ..model, workspaces: paths, conversations, active_workspace },
       )
     }
-    PickWorkspace =>
-      (pick_workspace(dispatch), { ..model, workspace_error: "" })
-    OpenWorkspaceInput =>
-      (@cmd.none, { ..model, workspace_input: Some(""), workspace_error: "" })
+    PickWorkspace => (pick_workspace(dispatch), model)
+    OpenWorkspaceInput => (@cmd.none, { ..model, workspace_input: Some("") })
     ToggleWorkspaceInput =>
       (
         @cmd.none,
@@ -864,7 +869,6 @@ fn update_msg(
           } else {
             Some("")
           },
-          workspace_error: "",
         },
       )
     WorkspaceInput(text) =>
@@ -874,20 +878,15 @@ fn update_msg(
       if path.is_empty() {
         (@cmd.none, model)
       } else {
-        (
-          add_workspace(dispatch, path),
-          { ..model, workspace_input: None, workspace_error: "" },
-        )
+        (add_workspace(dispatch, path), { ..model, workspace_input: None })
       }
     }
-    RemoveWorkspace(path) =>
-      (remove_workspace(dispatch, path), { ..model, workspace_error: "" })
+    RemoveWorkspace(path) => (remove_workspace(dispatch, path), model)
     WorkspaceFailed(message) =>
-      (@cmd.none, { ..model, workspace_error: message })
-    ArchiveSession(session_id) =>
-      (archive_session(dispatch, session_id), { ..model, archive_error: "" })
+      model.notify_error(dispatch, "Workspace error: \{message}")
+    ArchiveSession(session_id) => (archive_session(dispatch, session_id), model)
     UnarchiveSession(session_id) =>
-      (unarchive_session(dispatch, session_id), { ..model, archive_error: "" })
+      (unarchive_session(dispatch, session_id), model)
     ArchivedLoaded(items) => {
       // Live client state for anything archived is dropped; when that
       // includes the conversation on screen, rotate to a fresh chat.
@@ -897,15 +896,17 @@ fn update_msg(
       let conversations = model.conversations.filter(conv => {
         !archived_now(conv.session_id)
       })
-      let next = { ..model, archived: items, conversations, archive_error: "" }
+      let next = { ..model, archived: items, conversations }
       if archived_now(model.active_session) {
         (rotate_session(dispatch), { ..next, loading_session: "" })
       } else {
         (@cmd.none, next)
       }
     }
-    ArchiveFailed(message) => (@cmd.none, { ..model, archive_error: message })
-    SessionsFailed(message) => (@cmd.none, { ..model, sessions_error: message })
+    ArchiveFailed(message) =>
+      model.notify_error(dispatch, "Archive failed: \{message}")
+    SessionsFailed(message) =>
+      model.notify_error(dispatch, "Session list unavailable: \{message}")
     OpenSession(session_id) =>
       // Selecting a conversation always returns to the chat — including
       // re-selecting the active one from the Skills page.
@@ -1278,6 +1279,8 @@ fn update_msg(
         )
       }
     Failed(session~, message~) =>
+      // The start request broke the turn the user just sent, so the error
+      // belongs in that conversation's transcript.
       if model.find_conversation(session) is Some(conv) {
         let next = {
           ..conv
@@ -1295,22 +1298,24 @@ fn update_msg(
           ]),
           model.replace_conversation(next),
         )
-      } else if model.loading_session != session {
+      } else {
+        (@cmd.none, model)
+      }
+    SessionLoadFailed(session~, message~) =>
+      // Only the newest selection may settle the loading marker; a failure
+      // overtaken by a later click (or an abandoning New chat) is dropped.
+      if model.loading_session != session {
         (@cmd.none, model)
       } else {
-        // The conversation never came to exist (a session load failed before
-        // creating one): surface the message where the user is looking, but
-        // leave that conversation's own run state alone.
-        let conv = model.active().append_item(Assistant(true), message)
-        let conv = if conv.running { conv } else { { ..conv, status: Failed } }
+        // The sidebar may be listing sessions the store no longer has —
+        // refresh it alongside the toast.
+        let (toast, next) = model.notify_error(dispatch, message)
         (
-          @cmd.batch([
-            scroll_transcript_after_render(),
-            fetch_sessions(dispatch),
-          ]),
-          { ..model.replace_conversation(conv), loading_session: "" },
+          @cmd.batch([toast, fetch_sessions(dispatch)]),
+          { ..next, loading_session: "" },
         )
       }
+    HostActionFailed(message) => model.notify_error(dispatch, message)
     Error(run_id~, message~, diagnostics~) => {
       // A host error without a run (run_id is the empty sentinel) belongs to
       // whatever conversation the user is looking at.
