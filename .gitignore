@@ -19,6 +19,8 @@ eval/*
 !eval/file_edit/**
 !eval/report/
 !eval/report/**
+!eval/session_analyzer/
+!eval/session_analyzer/**
 !eval/tool_harness/
 !eval/tool_harness/**
 !eval/internal/
@@ -29,6 +31,5 @@ eval/swe_agi/**/_build/
 eval/swe_agi/**/target/
 eval/swe_agi/**/.openseek/
 
-# Generated from *.mbt.md by moon dev_build (regenerated at build time)
-prompt/generated_base_prompt.mbt
-prompt/generated_flash_prompt.mbt
+# Generated from *.mbt.md by moon dev_build and kept in release archives so
+# published packages can be checked without the nested scripts module.
