@@ -10,6 +10,7 @@ import {
   "moonbitlang/x@0.4.45",
   "moonbitlang/async@0.19.4",
   "justjavac/proton@0.1.6",
+  "tonyfettes/platform@0.1.1",
   "tonyfettes/xlog@0.4.0",
 }
 

@@ -68,7 +68,12 @@ async fn ensure_app_catalog() -> Array[LauncherApp] {
     return apps
   }
   let apps = build_app_catalog()
-  app_catalog_cache.val = Some(apps)
+  // An empty catalog is indistinguishable from a transiently failed probe
+  // (filesystem stats or the Spotlight fallback erroring), so only a real
+  // detection is cached — re-probing a genuinely app-less machine is cheap.
+  if apps.length() > 0 {
+    app_catalog_cache.val = Some(apps)
+  }
   apps
 }
 
@@ -201,6 +206,11 @@ async fn build_app_catalog() -> Array[LauncherApp] {
       reveal_only: candidate.reveal_only,
     })
   }
+  @xlog.debug() <?
+    {
+      "event": "desktop_applauncher_catalog",
+      "detected": result.map(app => app.id.to_json()),
+    }
   result
 }
 

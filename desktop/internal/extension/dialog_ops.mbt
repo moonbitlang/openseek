@@ -16,11 +16,7 @@ priv struct PickFolderReply {
 async fn pick_workspace_op(
   request_context : @app.AppCommandRequestContext,
 ) -> Result[PickFolderReply, String] {
-  let supported = @platform.is_darwin() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => false
-  }
-  guard supported else {
+  guard @platform.is_darwin() else {
     return Err("no system folder picker on this platform")
   }
   let window = @proton_native.WindowRef::unsafe_from_handle(
