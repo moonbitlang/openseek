@@ -64,6 +64,13 @@ async fn write_registry(paths : Array[String]) -> Unit {
 /// in-project session store added to `.git/info/exclude`, so attaching a
 /// project never dirties its status.
 pub async fn add_workspace(path : String) -> Array[String] {
+  // A real directory pick never contains control characters. A NUL-padded
+  // dialog buffer once slipped through the is_dir check below — C-level
+  // filesystem calls truncate at the first NUL while the MoonBit string
+  // keeps the rest — and poisoned the registry, so refuse them outright.
+  guard !path.iter().any(ch => ch.is_control()) else {
+    raise EngineError("workspace path contains control characters")
+  }
   let dir = expanded_workspace_path(path)
   guard @fsx.is_dir(dir) else { raise EngineError("\{dir} is not a directory") }
   let canonical = dir.to_string()
