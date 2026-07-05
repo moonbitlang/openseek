@@ -907,6 +907,21 @@ fn update_msg(
       model.notify_error(dispatch, "Archive failed: \{message}")
     SessionsFailed(message) =>
       model.notify_error(dispatch, "Session list unavailable: \{message}")
+    NotificationClicked(run_id~) => {
+      // The run has finished by the time its notification is clicked, so the
+      // owner usually matches by last run id; a still-running owner (steered
+      // runs re-notify per turn) matches by active run.
+      let conv = if model.conversation_by_last_run(run_id) is Some(conv) {
+        Some(conv)
+      } else {
+        model.conversation_by_run(run_id)
+      }
+      if conv is Some(conv) {
+        update_msg(dispatch, OpenSession(conv.session_id), model)
+      } else {
+        (@cmd.none, model)
+      }
+    }
     OpenSession(session_id) =>
       // Selecting a conversation always returns to the chat — including
       // re-selecting the active one from the Skills page.
@@ -1350,7 +1365,10 @@ fn update_msg(
           ..conv.clear_streams().sweep_pending_steers(),
           running: false,
           active_run_id: None,
-          status: Finished(status),
+          status: Finished(RunOutcome::parse(status)),
+          // A finish the user watched happen needs no reminder; one landing
+          // in a background conversation leaves a dot until they visit.
+          unseen_finish: conv.session_id != model.active_session,
         }
         let answer = answer.trim().to_owned()
         // The finished run just appended to the durable store, so the

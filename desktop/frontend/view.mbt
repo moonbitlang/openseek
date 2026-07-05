@@ -109,8 +109,20 @@ fn session_row(
   nested? : Bool = false,
 ) -> @html.Html {
   let active = session_id == model.active_session
-  let running = model.find_conversation(session_id) is Some(conv) &&
-    conv.running
+  let conv = model.find_conversation(session_id)
+  let running = conv is Some(conv) && conv.running
+  // The row's status dot: pulsing while a run is in flight, then — when the
+  // run finished off screen — settling into a solid dot (accent for success,
+  // warn otherwise) until the conversation is opened (`Model::activate`
+  // clears the mark).
+  let dot = match conv {
+    Some(conv) if conv.running => Some("accent pulse")
+    Some(conv) if conv.unseen_finish && !active =>
+      // Success wears accent (continuity with the running pulse), any other
+      // ending warn — the same success/other split `Status::kind` draws.
+      Some(if conv.status.kind() is Ok { "accent" } else { "warn" })
+    _ => None
+  }
   let mut class = "conversation-row"
   if nested {
     class = class + " nested"
@@ -122,13 +134,18 @@ fn session_row(
     class = class + " running"
   }
   let children = [@html.span(class="sidebar-label", label)]
-  if running {
-    children.push(@html.span(class="run-dot accent pulse", ""))
+  // Status dot and archive button share one fixed trailing slot (stacked in
+  // the same grid cell), so the dot sits at the same offset whether or not
+  // the row is archivable; hovering an archivable row swaps the dot for the
+  // button.
+  let trailing : Array[@html.Html] = []
+  if dot is Some(kind) {
+    trailing.push(@html.span(class="run-dot \{kind}", ""))
   }
   // Archiving a running conversation would pull the durable record out from
   // under its engine, so the button waits for the turn to end.
   if archivable && !running {
-    children.push(
+    trailing.push(
       @html.button(
         class="row-archive",
         type_="button",
@@ -141,6 +158,9 @@ fn session_row(
         icon(icon_archive),
       ),
     )
+  }
+  if trailing.length() > 0 {
+    children.push(@html.span(class="row-trailing", trailing))
   }
   @html.div(
     class~,

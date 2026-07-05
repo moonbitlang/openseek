@@ -86,7 +86,12 @@ type EventPayload derive(ToJson)
 
 pub(all) struct EventSink(async (EngineEvent) -> Unit)
 
-type FinishedPayload derive(ToJson)
+pub struct FinishedPayload {
+  run_id : Int
+  status : String
+  answer : String?
+  exit_code : Int?
+} derive(ToJson)
 
 type LoadSessionReply derive(ToJson)
 

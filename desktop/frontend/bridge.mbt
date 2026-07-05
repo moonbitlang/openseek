@@ -112,6 +112,10 @@ fn wire_engine_events(
   on("openseek.error", error_msg)
   on("openseek.finished", finished_msg)
   on("openseek.connected", connected_msg)
+  // Emitted by proton itself (not the openseek extension) when the user
+  // clicks a system notification; the payload is the run id the host stamped
+  // on the notification.
+  on("proton.notification_clicked", notification_clicked_msg)
 }
 
 ///|
@@ -175,6 +179,17 @@ fn finished_msg(payload : Map[String, Json]) -> Msg? {
 ///|
 fn connected_msg(_payload : Map[String, Json]) -> Msg? {
   Some(BridgeReady)
+}
+
+///|
+/// A clicked notification's payload is the decimal run id `notify.mbt`
+/// stamped on it; anything unparsable is dropped (a stale notification from
+/// an older build, or a payload another surface posted).
+fn notification_clicked_msg(payload : Map[String, Json]) -> Msg? {
+  let run_id = @string.parse_int(@transcript.json_text(payload, "payload")) catch {
+    _ => return None
+  }
+  Some(NotificationClicked(run_id~))
 }
 
 ///|

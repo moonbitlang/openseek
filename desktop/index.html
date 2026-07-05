@@ -625,6 +625,23 @@
         background: color-mix(in srgb, var(--ink) 10%, transparent);
         color: var(--ink);
       }
+      /* A conversation row's trailing slot: the status dot and the archive
+         button stack in one fixed-size cell, so the dot sits at the same
+         offset whether or not the row is archivable. Hovering a row that
+         has an action swaps the dot for it. */
+      .row-trailing {
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+      }
+      .row-trailing > * {
+        grid-area: 1 / 1;
+      }
+      .conversation-row:hover .row-trailing:has(.row-archive) .run-dot {
+        display: none;
+      }
 
       /* The chat list's two section headings ("Workspaces", "Chats"): the
          sidebar-heading type with a hover-revealed ＋ that adds to the

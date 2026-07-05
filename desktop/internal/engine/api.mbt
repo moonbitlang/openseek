@@ -144,7 +144,7 @@ struct EventPayload {
 } derive(ToJson)
 
 ///|
-struct FinishedPayload {
+pub struct FinishedPayload {
   run_id : Int
   status : String
   answer : String?

@@ -104,6 +104,10 @@ priv struct Conversation {
   // Run-scoped status only (Idle/Starting/Running/…); bridge and settings
   // states are derived at display time by `Model::display_status`.
   status : Status
+  // A run finished while this conversation was off screen and the user has
+  // not looked since: the sidebar's running pulse settles into a solid dot
+  // (accent for success, warn otherwise) until the conversation is opened.
+  unseen_finish : Bool
   usage_tokens : Int
   // The conversation's workspace directory as reported by the host's
   // `started` event — display only (topbar tooltip); the host derives it
@@ -515,6 +519,10 @@ priv enum Msg {
   SessionsLoaded(Array[@transcript.SessionListItem])
   SessionsFailed(String)
   OpenSession(String)
+  // The user clicked the system notification a finished run posted: jump to
+  // the conversation that owned that run (the window itself is already
+  // brought forward natively).
+  NotificationClicked(run_id~ : Int)
   SessionLoaded(session~ : String, items~ : Array[@transcript.TranscriptItem])
   // Loading a stored session failed before its conversation ever existed
   // (bridge call errored, or the data was malformed): pops an error toast
@@ -643,6 +651,7 @@ fn empty_conversation(
     last_run_id: None,
     compacting: false,
     status: Idle,
+    unseen_finish: false,
     usage_tokens: 0,
     cwd: "",
     branch: "",
@@ -876,7 +885,8 @@ fn Model::activate(self : Model, session_id : String) -> Model {
   for conv in self.conversations {
     if conv.session_id == session_id {
       found = true
-      conversations.push(conv)
+      // Opening the conversation is what "seen" means.
+      conversations.push({ ..conv, unseen_finish: false })
     } else if conv.running || conv.messages.length() > 0 || !conv.draft_empty() {
       conversations.push(conv)
     }
@@ -990,6 +1000,44 @@ fn StatusKind::css(self : StatusKind) -> String {
 }
 
 ///|
+/// How a run ended, parsed from the engine's wire status. An unrecognized
+/// wire value survives as `Unknown` — a newer engine's statuses still get a
+/// label, they just fall on the cautious side of every typed split.
+priv enum RunOutcome {
+  Completed
+  Aborted
+  RunFailed
+  Cancelled
+  MaxStepsExhausted
+  Unknown(String)
+}
+
+///|
+fn RunOutcome::parse(wire : String) -> RunOutcome {
+  match wire {
+    "finished" => Completed
+    "aborted" => Aborted
+    "failed" => RunFailed
+    "cancelled" => Cancelled
+    "max_steps_exhausted" => MaxStepsExhausted
+    other => Unknown(other)
+  }
+}
+
+///|
+fn RunOutcome::label(self : RunOutcome) -> String {
+  match self {
+    Completed => "Finished"
+    Aborted => "Aborted"
+    RunFailed => "Failed"
+    Cancelled => "Cancelled"
+    MaxStepsExhausted => "Max steps exhausted"
+    // An empty wire status reads as a plain finish, like `parse`'s inverse.
+    Unknown(wire) => if wire.trim().is_empty() { "Finished" } else { wire }
+  }
+}
+
+///|
 /// A single source of truth for run/setup state. The display label and its
 /// severity are both derived from the variant so they cannot drift. A
 /// conversation only ever stores the run-scoped variants (`Idle` through
@@ -1007,7 +1055,7 @@ priv enum Status {
   Step(String)
   Failed
   Errored
-  Finished(String)
+  Finished(RunOutcome)
   Unavailable(String)
 }
 
@@ -1032,12 +1080,7 @@ fn Status::label(self : Status) -> String {
       }
     Failed => "Failed"
     Errored => "Error"
-    Finished(status) =>
-      if status.trim().is_empty() || status == "finished" {
-        "Finished"
-      } else {
-        status
-      }
+    Finished(outcome) => outcome.label()
     Unavailable(message) => message
   }
 }
@@ -1054,6 +1097,6 @@ fn Status::kind(self : Status) -> StatusKind {
     | Cancelling
     | Step(_) => Warn
     Failed | Errored | Unavailable(_) => Danger
-    Finished(status) => if status == "finished" { Ok } else { Warn }
+    Finished(outcome) => if outcome is Completed { Ok } else { Warn }
   }
 }

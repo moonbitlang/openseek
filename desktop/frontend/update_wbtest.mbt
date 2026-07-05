@@ -144,6 +144,38 @@ test "finished run clears any leftover stream" {
 }
 
 ///|
+test "a finish the user watched leaves no unseen dot" {
+  let dispatch = test_dispatch()
+  let (_, next) = update(
+    dispatch,
+    Finished(run_id=7, status="finished", answer="done"),
+    running_model(),
+  )
+  inspect(next.active().unseen_finish, content="false")
+}
+
+///|
+test "a background finish marks its conversation until it is opened" {
+  let dispatch = test_dispatch()
+  // The run belongs to "desktop-test"; the user is looking at another chat.
+  let model = { ..running_model(), active_session: "desktop-elsewhere" }
+  let (_, next) = update(
+    dispatch,
+    Finished(run_id=7, status="finished", answer="done"),
+    model,
+  )
+  guard next.find_conversation("desktop-test") is Some(conv) else {
+    fail("conversation missing")
+  }
+  inspect(conv.unseen_finish, content="true")
+  let opened = next.activate("desktop-test")
+  guard opened.find_conversation("desktop-test") is Some(seen) else {
+    fail("conversation missing after activate")
+  }
+  inspect(seen.unseen_finish, content="false")
+}
+
+///|
 test "new chat keeps the model intact until the rotation lands" {
   let dispatch = test_dispatch()
   let model = { ..running_model(), loading_session: "desktop-stale" }
