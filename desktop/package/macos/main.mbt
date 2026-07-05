@@ -504,10 +504,12 @@ async fn sign_macho_files_under(
 
 ///|
 /// Sign the bundled CEF runtime for Developer ID distribution. The loose dylibs
-/// and the runtime's loose `cef_process` binary are signed individually, then
-/// the Chromium framework is signed as a bundle. The framework's inner mach-o
-/// is never signed on its own: doing so breaks the framework's seal.
-/// UNVALIDATED — no Developer ID signing host is available here.
+/// and the runtime's loose `cef_process` binary are signed individually. The
+/// Chromium framework is signed inside-out: notarization rejects any nested
+/// mach-o without a Developer ID signature and secure timestamp, so its
+/// `Libraries/*.dylib` are signed first, then the bundle signature seals over
+/// them. (Touching inner files AFTER the bundle signature is what breaks the
+/// seal, not signing them before.)
 async fn sign_proton_runtime_for_distribution(
   ws : @packaging.Workspace,
   identity : String,
@@ -518,16 +520,29 @@ async fn sign_proton_runtime_for_distribution(
   if @asyncfs.exists(frameworks_dir) {
     for entry in @asyncfs.readdir(frameworks_dir, sort=true) {
       if entry.has_suffix(".framework") {
+        let framework = frameworks_dir + "/" + entry
+        let libraries_dir = framework + "/Libraries"
+        if @asyncfs.exists(libraries_dir) {
+          for library in @asyncfs.readdir(libraries_dir, sort=true) {
+            let library_path = libraries_dir + "/" + library
+            if @asyncfs.kind(library_path) is Regular &&
+              is_macho_file(library_path) {
+              @packaging.run_checked(
+                "codesign",
+                [
+                  "--force", "--options", "runtime", "--timestamp", "--sign", identity,
+                  library_path,
+                ],
+                dir=ws.dir(),
+              )
+            }
+          }
+        }
         @packaging.run_checked(
           "codesign",
           [
-            "--force",
-            "--options",
-            "runtime",
-            "--timestamp",
-            "--sign",
-            identity,
-            frameworks_dir + "/" + entry,
+            "--force", "--options", "runtime", "--timestamp", "--sign", identity,
+            framework,
           ],
           dir=ws.dir(),
         )
