@@ -1344,15 +1344,33 @@ test "an update announcement adds one sticky toast" {
   let dispatch = test_dispatch()
   let (_, model) = update(
     dispatch,
-    UpdateAvailable(version="0.2.0"),
+    UpdateAvailable(version="0.2.0", reason=None),
     test_model(),
   )
   assert_eq(model.notifications.length(), 1)
   assert_true(model.notifications[0].action is Some(AcknowledgeUpdate))
   assert_true(model.notifications[0].message.contains("0.2.0"))
+  assert_false(model.notifications[0].message.contains("failed"))
   // A duplicate announcement must not stack a second toast.
-  let (_, again) = update(dispatch, UpdateAvailable(version="0.2.0"), model)
+  let (_, again) = update(
+    dispatch,
+    UpdateAvailable(version="0.2.0", reason=None),
+    model,
+  )
   assert_eq(again.notifications.length(), 1)
+}
+
+///|
+test "a staging failure surfaces its cause in the toast" {
+  let dispatch = test_dispatch()
+  let (_, model) = update(
+    dispatch,
+    UpdateAvailable(version="0.2.0", reason=Some("digest mismatch")),
+    test_model(),
+  )
+  assert_eq(model.notifications.length(), 1)
+  assert_true(model.notifications[0].message.contains("digest mismatch"))
+  assert_true(model.notifications[0].message.contains("0.2.0"))
 }
 
 ///|
@@ -1370,7 +1388,11 @@ test "a staged update announces restart-to-update and applies on click" {
   )
   assert_eq(clicked.notifications.length(), 0)
   // Only one sticky update toast at a time, whatever the mix.
-  let (_, mixed) = update(dispatch, UpdateAvailable(version="0.2.0"), model)
+  let (_, mixed) = update(
+    dispatch,
+    UpdateAvailable(version="0.2.0", reason=None),
+    model,
+  )
   assert_eq(mixed.notifications.length(), 1)
   assert_true(mixed.notifications[0].action is Some(RestartToUpdate))
 }
@@ -1380,7 +1402,7 @@ test "clicking the update toast dismisses it" {
   let dispatch = test_dispatch()
   let (_, model) = update(
     dispatch,
-    UpdateAvailable(version="0.2.0"),
+    UpdateAvailable(version="0.2.0", reason=None),
     test_model(),
   )
   let (_, clicked) = update(

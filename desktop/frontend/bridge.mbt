@@ -185,11 +185,18 @@ fn connected_msg(_payload : Map[String, Json]) -> Msg? {
 
 ///|
 /// The host announced a newer hosted release this build cannot install by
-/// itself; there is nothing sensible to show without a version.
+/// itself; there is nothing sensible to show without a version. `reason`
+/// (the staging failure) is optional detail.
 fn update_available_msg(payload : Map[String, Json]) -> Msg? {
   let version = @transcript.json_text(payload, "version")
   guard !version.is_empty() else { return None }
-  Some(UpdateAvailable(version~))
+  let reason = @transcript.json_text(payload, "reason")
+  Some(
+    UpdateAvailable(
+      version~,
+      reason=if reason.is_empty() { None } else { Some(reason) },
+    ),
+  )
 }
 
 ///|

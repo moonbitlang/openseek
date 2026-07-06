@@ -595,11 +595,15 @@ fn update_msg(
         @cmd.none,
         { ..model, notifications: model.notifications.filter(t => t.id != id) },
       )
-    UpdateAvailable(version~) =>
+    UpdateAvailable(version~, reason~) =>
       (
         @cmd.none,
         model.notify_update(
-          "OpenSeek \{version} is available",
+          match reason {
+            Some(reason) =>
+              "OpenSeek \{version} is available, but automatic update failed: \{reason}"
+            None => "OpenSeek \{version} is available"
+          },
           AcknowledgeUpdate,
         ),
       )

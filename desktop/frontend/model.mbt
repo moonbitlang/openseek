@@ -490,8 +490,9 @@ priv enum Msg {
   // A toast was clicked: dismiss it now.
   DismissNotification(Int)
   // The host found a newer hosted release it cannot install by itself:
-  // show a sticky informational toast.
-  UpdateAvailable(version~ : String)
+  // show a sticky informational toast. `reason` is the staging failure
+  // when that is why in-app install is off the table.
+  UpdateAvailable(version~ : String, reason~ : String?)
   // The host verified and staged a newer bundle: show the sticky toast
   // whose click restarts into it.
   UpdateReady(version~ : String)

@@ -40,9 +40,12 @@ fn new_update_state(
 
 ///|
 /// The `update_available` event: fallback announcement for builds that
-/// cannot install the update themselves. Informational only.
+/// cannot install the update themselves. Informational only; `reason`
+/// carries the staging failure when that is why the flow degraded, so the
+/// toast can say more than "an update exists".
 priv struct UpdateAvailablePayload {
   version : String
+  reason : String?
 } derive(ToJson)
 
 ///|
@@ -79,7 +82,7 @@ async fn announce_update(
             "version": info.version,
             "error": "\{error}",
           }
-        announce_available(context, info)
+        announce_available(context, info, reason="\{error}")
         return
       }
     }
@@ -95,8 +98,9 @@ async fn announce_update(
 async fn announce_available(
   context : @app.AppCommandExtensionContext,
   info : @update.UpdateInfo,
+  reason? : String,
 ) -> Unit {
-  let payload : UpdateAvailablePayload = { version: info.version }
+  let payload : UpdateAvailablePayload = { version: info.version, reason }
   context.emit("update_available", payload)
 }
 
