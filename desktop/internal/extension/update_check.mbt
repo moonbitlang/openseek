@@ -69,8 +69,16 @@ async fn announce_update(
     let staged = @update.stage_update(info, work_dir=dir, bundle_path=bundle) catch {
       error if @async.is_being_cancelled() => raise error
       // Staging is opportunistic: a failed download or a signature that
-      // does not check out downgrades to the informational announcement.
-      _ => {
+      // does not check out downgrades to the informational announcement —
+      // but the cause goes to openseek-desktop.log, or the degradation is
+      // undiagnosable on exactly the installs where it matters.
+      error => {
+        @xlog.warn(category="update") <?
+          {
+            "event": "stage_failed",
+            "version": info.version,
+            "error": "\{error}",
+          }
         announce_available(context, info)
         return
       }
