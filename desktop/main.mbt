@@ -30,12 +30,29 @@ async fn main {
     .debug_level(1)
     .extension(
       @proton_extension.from_command_spec(
-        @extension.openseek_extension(engine, runtime_dir?),
+        @extension.openseek_extension(engine, runtime_dir?, executable~),
       ),
     )
   match app.run() {
     Ok(_) => log.info() <? { "message": "host process exit ok" }
     Err(error) =>
       log.error() <? { "message": "host process error", "error": error }
+  }
+  // A successful `apply_update` swapped the bundle on disk and left a
+  // relaunch marker: reopen the new version now that the run loop is done.
+  // `open -n` hands the launch to LaunchServices, so the new instance is
+  // not our child and this process can exit right after.
+  if runtime_dir is Some(dir) &&
+    @update.take_relaunch_target(work_dir=dir.to_string()) is Some(target) {
+    log.info() <? { "message": "relaunch after update", "path": target }
+    let code = @process.run("open", ["-n", target]) catch {
+      error => {
+        log.error() <? { "message": "relaunch failed", "error": "\{error}" }
+        return
+      }
+    }
+    if code != 0 {
+      log.error() <? { "message": "relaunch failed", "code": code }
+    }
   }
 }

@@ -2147,10 +2147,12 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 fn notifications_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let toasts : Array[@html.Html] = []
   for toast in model.notifications {
-    let (title, on_click) = if toast.url is Some(url) {
-      ("Open the download page", dispatch(OpenUpdatePage(id=toast.id, url~)))
-    } else {
-      ("Dismiss", dispatch(DismissNotification(toast.id)))
+    let (title, on_click) = match toast.action {
+      Some(OpenPage(url)) =>
+        ("Open the download page", dispatch(OpenUpdatePage(id=toast.id, url~)))
+      Some(RestartToUpdate) =>
+        ("Restart and update", dispatch(ApplyUpdate(id=toast.id)))
+      None => ("Dismiss", dispatch(DismissNotification(toast.id)))
     }
     toasts.push(
       @html.div(class="notification", title~, on_click~, toast.message),

@@ -141,6 +141,12 @@ priv struct OpenUrlPayload {
 } derive(FromJson)
 
 ///|
+/// Reply to `apply_update`: the swap succeeded and the window may close.
+priv struct ApplyUpdateReply {
+  applied : Bool
+} derive(ToJson)
+
+///|
 /// Reply to `list_apps`: the launcher apps detected as installed on this
 /// machine, in catalog order. `icon` is a `data:image/png` URL (empty when the
 /// app's icon could not be extracted — the frontend falls back to an initial).

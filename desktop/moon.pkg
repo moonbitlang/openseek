@@ -4,6 +4,8 @@ import {
   "justjavac/proton/extension" @proton_extension,
   "openseek_desktop/internal/engine",
   "openseek_desktop/internal/extension",
+  "openseek_desktop/internal/update",
+  "moonbitlang/async/process",
   "moonbitlang/core/env",
   "tonyfettes/xlog",
 }

@@ -6,14 +6,39 @@ import {
 }
 
 // Values
+pub async fn apply_staged(staged_app~ : String, bundle_path~ : String) -> Unit
+
 pub async fn check_for_update(current~ : String) -> UpdateInfo?
 
+pub async fn cleanup_leftovers(work_dir~ : String, bundle_path~ : String) -> Unit
+
+pub async fn stage_update(UpdateInfo, work_dir~ : String, bundle_path~ : String) -> StagedUpdate
+
+pub async fn take_relaunch_target(work_dir~ : String) -> String?
+
+pub async fn write_relaunch_marker(work_dir~ : String, bundle_path~ : String) -> Unit
+
 // Errors
+pub(all) suberror UpdateError {
+  UpdateError(String)
+}
+pub impl Show for UpdateError
 
 // Types and methods
+pub struct PackageInfo {
+  url : String
+  sha256 : String
+} derive(Eq, @debug.Debug)
+
+pub struct StagedUpdate {
+  version : String
+  app_path : String
+}
+
 pub struct UpdateInfo {
   version : String
   url : String
+  artifact : PackageInfo?
 } derive(Eq, @debug.Debug)
 
 // Type aliases

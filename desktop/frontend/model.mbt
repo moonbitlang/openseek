@@ -489,10 +489,19 @@ priv enum Msg {
   NotificationExpired(Int)
   // A toast was clicked: dismiss it now.
   DismissNotification(Int)
-  // The host found a newer hosted release: show the sticky update toast.
+  // The host found a newer hosted release it cannot install by itself:
+  // show the sticky toast whose click opens the release page.
   UpdateAvailable(version~ : String, url~ : String)
+  // The host verified and staged a newer bundle: show the sticky toast
+  // whose click restarts into it.
+  UpdateReady(version~ : String)
   // The update toast was clicked: open its download page and dismiss it.
   OpenUpdatePage(id~ : Int, url~ : String)
+  // The restart-to-update toast was clicked: ask the host to swap the
+  // staged bundle in.
+  ApplyUpdate(id~ : Int)
+  // The host swapped the bundle; close the window so `main` can relaunch.
+  UpdateApplied
   OpenSetup
   ToggleSidebar
   // The sidebar's "Chats" heading was clicked — fold or unfold the section.

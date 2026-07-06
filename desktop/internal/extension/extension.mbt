@@ -24,13 +24,18 @@ impl Show for HostError with fn output(self, logger) {
 
 ///|
 /// The `openseek` IPC extension: every command the webview can invoke, bound
-/// to a fresh engine manager. `engine` is the engine executable to spawn.
+/// to a fresh engine manager. `engine` is the engine executable to spawn;
+/// `executable` is the host's own binary, which self-update uses to locate
+/// the running .app bundle (absent or non-bundle layouts only lose the
+/// in-app install, never the announcement).
 pub fn openseek_extension(
   engine : String,
   runtime_dir? : @path.Path,
+  executable? : String,
 ) -> @app.AppCommandExtensionSpec {
   let manager = @engine.new_engine_manager(engine, runtime_dir?)
   let lsp = new_lsp_manager(engine, runtime_dir?)
+  let updates = new_update_state(runtime_dir, executable)
   // Mirror LSP wire traffic to its own log next to the host's runtime state, so
   // a broken hover/symbol round-trip can be read back without the per-message
   // noise landing in the main app log.
@@ -58,6 +63,7 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("skill_uninstall"),
       @app.AppCommandApiDescriptor::new("open_path"),
       @app.AppCommandApiDescriptor::new("open_url"),
+      @app.AppCommandApiDescriptor::new("apply_update"),
       @app.AppCommandApiDescriptor::new("workspace_branch"),
       @app.AppCommandApiDescriptor::new("archive_session"),
       @app.AppCommandApiDescriptor::new("unarchive_session"),
@@ -82,7 +88,9 @@ pub fn openseek_extension(
           // One release-manifest check per webview connection: late enough
           // that the frontend is listening, background so a slow or dead
           // network never shows up anywhere.
-          group.spawn_bg(allow_failure=true, () => announce_update(context))
+          group.spawn_bg(allow_failure=true, () => {
+            announce_update(context, updates)
+          })
           @engine.run_engine_pump(sink, manager) catch {
             @engine.EngineError(message) => raise HostError(message)
             error => raise error
@@ -172,6 +180,9 @@ pub fn openseek_extension(
       })
       context.op_async("open_url", async fn(payload : OpenUrlPayload) {
         open_url_op(payload)
+      })
+      context.op_async("apply_update", async fn(_ : Json) {
+        apply_update_op(updates)
       })
       context.op_async("workspace_branch", async fn(
         payload : WorkspaceBranchPayload,

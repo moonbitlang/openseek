@@ -1349,7 +1349,8 @@ test "an update announcement adds one sticky link toast" {
   )
   assert_eq(model.notifications.length(), 1)
   assert_true(
-    model.notifications[0].url is Some("https://example.com/releases"),
+    model.notifications[0].action
+    is Some(OpenPage("https://example.com/releases")),
   )
   assert_true(model.notifications[0].message.contains("0.2.0"))
   // A duplicate announcement must not stack a second toast.
@@ -1359,6 +1360,30 @@ test "an update announcement adds one sticky link toast" {
     model,
   )
   assert_eq(again.notifications.length(), 1)
+}
+
+///|
+test "a staged update announces restart-to-update and applies on click" {
+  let dispatch = test_dispatch()
+  let (_, model) = update(dispatch, UpdateReady(version="0.2.0"), test_model())
+  assert_eq(model.notifications.length(), 1)
+  assert_true(model.notifications[0].action is Some(RestartToUpdate))
+  assert_true(model.notifications[0].message.contains("0.2.0"))
+  // Clicking hands off to the host and dismisses the toast.
+  let (_, clicked) = update(
+    dispatch,
+    ApplyUpdate(id=model.notifications[0].id),
+    model,
+  )
+  assert_eq(clicked.notifications.length(), 0)
+  // Only one sticky update toast at a time, whatever the mix.
+  let (_, mixed) = update(
+    dispatch,
+    UpdateAvailable(version="0.2.0", url="https://example.com/releases"),
+    model,
+  )
+  assert_eq(mixed.notifications.length(), 1)
+  assert_true(mixed.notifications[0].action is Some(RestartToUpdate))
 }
 
 ///|

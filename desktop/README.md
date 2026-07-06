@@ -130,6 +130,24 @@ only while its `OPENSEEK_CLIENT_TOKENS` enforcement is off; set
 `OPENSEEK_CLIENT_TOKEN` in the app's environment to test against an
 enforcing proxy.
 
+## Updates
+
+After the webview connects, the host fetches the hosted release manifest
+(`/desktop/releases/latest.json` on the OpenSeek proxy origin, see
+`internal/version` for the version it compares against) in the background.
+On macOS, when the manifest lists a `macos-arm64` package and the running
+bundle is Developer ID signed, the host downloads the zip, checks its
+sha256 against the manifest, extracts it, and verifies the new bundle's
+code signature carries the same team — only then does a sticky toast offer
+"restart and update". Clicking it swaps the bundle on disk (macOS allows
+renaming a running .app; the old one is parked as `<name>.app.old` and
+removed on the next launch), the window closes through the normal path,
+and `main` relaunches the new bundle via `open -n` after the run loop
+exits. Anything less than that fully verified path — other platforms, dev
+binaries, ad-hoc signatures, a failed download — degrades to a toast that
+opens the release page in the browser, and every check failure just means
+no toast at all.
+
 ## Prerequisites
 
 - The [`moon`](https://www.moonbitlang.com/download) toolchain.

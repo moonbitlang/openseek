@@ -596,12 +596,32 @@ fn update_msg(
         { ..model, notifications: model.notifications.filter(t => t.id != id) },
       )
     UpdateAvailable(version~, url~) =>
-      (@cmd.none, model.notify_update(version, url))
+      (
+        @cmd.none,
+        model.notify_update(
+          "OpenSeek \{version} is available — click to download",
+          OpenPage(url),
+        ),
+      )
+    UpdateReady(version~) =>
+      (
+        @cmd.none,
+        model.notify_update(
+          "OpenSeek \{version} is ready — click to restart and update",
+          RestartToUpdate,
+        ),
+      )
     OpenUpdatePage(id~, url~) =>
       (
         open_url(dispatch, url),
         { ..model, notifications: model.notifications.filter(t => t.id != id) },
       )
+    ApplyUpdate(id~) =>
+      (
+        apply_update(dispatch),
+        { ..model, notifications: model.notifications.filter(t => t.id != id) },
+      )
+    UpdateApplied => (close_window(), model)
     OpenSetup => (@cmd.none, { ..model, screen: Settings, setup_api_key: "" })
     ToggleSidebar => (@cmd.none, { ..model, sidebar_open: !model.sidebar_open })
     ToggleChatsSection =>

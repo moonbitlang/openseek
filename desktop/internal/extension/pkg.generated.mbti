@@ -9,13 +9,15 @@ import {
 // Values
 pub const ExtensionId : String = "openseek-desktop"
 
+pub fn app_bundle_path(String) -> String?
+
 pub fn frontend_asset_dir(String) -> String
 
 pub async fn frontend_document(String) -> String
 
 pub async fn frontend_entry_path(String) -> String
 
-pub fn openseek_extension(String, runtime_dir? : @path.Path) -> @command.AppCommandExtensionSpec
+pub fn openseek_extension(String, runtime_dir? : @path.Path, executable? : String) -> @command.AppCommandExtensionSpec
 
 pub async fn prepared_runtime_dir() -> @path.Path?
 

@@ -113,6 +113,7 @@ fn wire_engine_events(
   on("openseek.finished", finished_msg)
   on("openseek.connected", connected_msg)
   on("openseek.update_available", update_available_msg)
+  on("openseek.update_ready", update_ready_msg)
   // Emitted by proton itself (not the openseek extension) when the user
   // clicks a system notification; the payload is the run id the host stamped
   // on the notification.
@@ -190,6 +191,14 @@ fn update_available_msg(payload : Map[String, Json]) -> Msg? {
   let url = @transcript.json_text(payload, "url")
   guard !version.is_empty() && !url.is_empty() else { return None }
   Some(UpdateAvailable(version~, url~))
+}
+
+///|
+/// The host verified and staged a newer bundle, ready to swap in.
+fn update_ready_msg(payload : Map[String, Json]) -> Msg? {
+  let version = @transcript.json_text(payload, "version")
+  guard !version.is_empty() else { return None }
+  Some(UpdateReady(version~))
 }
 
 ///|
@@ -496,6 +505,41 @@ fn cancel_openseek(dispatch : @cmd.Emit[Msg], run_id : Int) -> @cmd.Cmd {
         }
       }
     })
+  })
+}
+
+///|
+/// Ask the host to swap the staged update into place. Success means the
+/// bundle on disk is already the new version; the follow-up `UpdateApplied`
+/// closes the window so `main` can relaunch it. A failure pops an error
+/// toast and the app keeps running the current version.
+fn apply_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let _ : @js.Value = bridge_request(
+        "apply_update",
+        @js.Object::new().to_value(),
+      ) catch {
+        error => {
+          scheduler.add(dispatch(HostActionFailed(bridge_error_text(error))))
+          return
+        }
+      }
+      scheduler.add(dispatch(UpdateApplied))
+    })
+  })
+}
+
+///|
+/// Close the window through the normal close path — the same teardown as
+/// the user clicking the close button, so engines and the host unwind
+/// before `main` relaunches the swapped bundle.
+fn close_window() -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    let _ : @js.Value = @js.globalThis.apply_with_string(
+      "close",
+      ([] : Array[@js.Value]),
+    )
   })
 }
 
