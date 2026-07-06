@@ -184,13 +184,12 @@ fn connected_msg(_payload : Map[String, Json]) -> Msg? {
 }
 
 ///|
-/// The host announced a newer hosted release. Both fields are required —
-/// there is nothing sensible to show or open without either.
+/// The host announced a newer hosted release this build cannot install by
+/// itself; there is nothing sensible to show without a version.
 fn update_available_msg(payload : Map[String, Json]) -> Msg? {
   let version = @transcript.json_text(payload, "version")
-  let url = @transcript.json_text(payload, "url")
-  guard !version.is_empty() && !url.is_empty() else { return None }
-  Some(UpdateAvailable(version~, url~))
+  guard !version.is_empty() else { return None }
+  Some(UpdateAvailable(version~))
 }
 
 ///|
@@ -540,24 +539,6 @@ fn close_window() -> @cmd.Cmd {
       "close",
       ([] : Array[@js.Value]),
     )
-  })
-}
-
-///|
-/// Ask the host to open a web link in the user's default browser (the host
-/// accepts https only). A failure pops an error toast.
-fn open_url(dispatch : @cmd.Emit[Msg], url : String) -> @cmd.Cmd {
-  @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["url"] = url
-      let _ : @js.Value = bridge_request("open_url", payload.to_value()) catch {
-        error => {
-          scheduler.add(dispatch(HostActionFailed(bridge_error_text(error))))
-          return
-        }
-      }
-    })
   })
 }
 

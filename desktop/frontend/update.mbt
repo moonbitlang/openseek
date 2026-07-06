@@ -595,12 +595,12 @@ fn update_msg(
         @cmd.none,
         { ..model, notifications: model.notifications.filter(t => t.id != id) },
       )
-    UpdateAvailable(version~, url~) =>
+    UpdateAvailable(version~) =>
       (
         @cmd.none,
         model.notify_update(
-          "OpenSeek \{version} is available — click to download",
-          OpenPage(url),
+          "OpenSeek \{version} is available",
+          AcknowledgeUpdate,
         ),
       )
     UpdateReady(version~) =>
@@ -610,11 +610,6 @@ fn update_msg(
           "OpenSeek \{version} is ready — click to restart and update",
           RestartToUpdate,
         ),
-      )
-    OpenUpdatePage(id~, url~) =>
-      (
-        open_url(dispatch, url),
-        { ..model, notifications: model.notifications.filter(t => t.id != id) },
       )
     ApplyUpdate(id~) =>
       (

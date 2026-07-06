@@ -18,11 +18,11 @@ priv struct Notification {
 }
 
 ///|
-/// What clicking a sticky toast does: open the release page in the browser
-/// (the fallback when no verified bundle is staged), or swap in the staged
-/// update and restart.
+/// What clicking a sticky toast does: dismiss the announcement (the
+/// fallback when this build cannot install the update itself), or swap in
+/// the staged update and restart.
 priv enum NotificationAction {
-  OpenPage(String)
+  AcknowledgeUpdate
   RestartToUpdate
 }
 

@@ -490,13 +490,11 @@ priv enum Msg {
   // A toast was clicked: dismiss it now.
   DismissNotification(Int)
   // The host found a newer hosted release it cannot install by itself:
-  // show the sticky toast whose click opens the release page.
-  UpdateAvailable(version~ : String, url~ : String)
+  // show a sticky informational toast.
+  UpdateAvailable(version~ : String)
   // The host verified and staged a newer bundle: show the sticky toast
   // whose click restarts into it.
   UpdateReady(version~ : String)
-  // The update toast was clicked: open its download page and dismiss it.
-  OpenUpdatePage(id~ : Int, url~ : String)
   // The restart-to-update toast was clicked: ask the host to swap the
   // staged bundle in.
   ApplyUpdate(id~ : Int)

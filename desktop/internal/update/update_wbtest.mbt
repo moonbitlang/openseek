@@ -23,32 +23,24 @@ test "malformed versions are never newer" {
 }
 
 ///|
-test "manifest decode demands a newer version and a web url" {
+test "manifest decode demands a strictly newer version" {
   let manifest : Json = {
     "version": "0.2.0",
     "url": "https://github.com/moonbitlang/openseek/releases",
   }
   @debug.assert_eq(
     newer_update(manifest, current="0.1.0", platform_key=None),
-    Some({
-      version: "0.2.0",
-      url: "https://github.com/moonbitlang/openseek/releases",
-      artifact: None,
-    }),
+    Some({ version: "0.2.0", artifact: None }),
   )
   @debug.assert_eq(
     newer_update(manifest, current="0.2.0", platform_key=None),
     None,
   )
-  let not_web : Json = { "version": "0.2.0", "url": "file:///etc/passwd" }
-  @debug.assert_eq(
-    newer_update(not_web, current="0.1.0", platform_key=None),
-    None,
-  )
+  // The legacy top-level page url is ignored, present or not.
   let missing_url : Json = { "version": "0.2.0" }
   @debug.assert_eq(
     newer_update(missing_url, current="0.1.0", platform_key=None),
-    None,
+    Some({ version: "0.2.0", artifact: None }),
   )
   @debug.assert_eq(
     newer_update("nonsense", current="0.1.0", platform_key=None),
@@ -75,14 +67,13 @@ test "a well-formed platforms entry becomes the artifact" {
     newer_update(manifest, current="0.1.0", platform_key=Some("macos-arm64")),
     Some({
       version: "0.2.0",
-      url: "https://example.com/releases",
       artifact: Some({
         url: "https://example.com/OpenSeek-0.2.0-macos-arm64.zip",
         sha256: TestSha,
       }),
     }),
   )
-  // Another platform's key, or no key at all, keeps the page-only shape.
+  // Another platform's key, or no key at all, keeps the plain shape.
   @debug.assert_eq(
     newer_update(manifest, current="0.1.0", platform_key=Some("windows-x64")).unwrap().artifact,
     None,
@@ -94,7 +85,7 @@ test "a well-formed platforms entry becomes the artifact" {
 }
 
 ///|
-test "a malformed platforms entry degrades to the page announcement" {
+test "a malformed platforms entry degrades to the plain announcement" {
   let bad_digest : Json = {
     "version": "0.2.0",
     "url": "https://example.com/releases",

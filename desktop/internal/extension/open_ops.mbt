@@ -24,23 +24,6 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
 }
 
 ///|
-/// Open an https link in the user's default browser via the same platform
-/// opener. The scheme guard is the whole containment story: the host only
-/// ever announces web pages, so anything else is a bug or an injection.
-async fn open_url_op(payload : OpenUrlPayload) -> OpenPathReply {
-  let url = payload.url.trim().to_owned()
-  guard url.has_prefix("https://") else {
-    raise HostError("Only https links can be opened")
-  }
-  let code = @platform.open_path(url) catch {
-    error if @async.is_being_cancelled() => raise error
-    error => raise HostError("Could not open \{url}: \{error}")
-  }
-  guard code == 0 else { raise HostError("Could not open \{url}") }
-  { opened: true }
-}
-
-///|
 /// Expand a leading `~` (the agent often writes paths home-relative) to the
 /// user's home directory; other paths pass through for `open_target` to take
 /// against the working directory.

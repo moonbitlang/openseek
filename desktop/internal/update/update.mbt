@@ -23,12 +23,11 @@ fn manifest_url() -> String {
 }
 
 ///|
-/// A newer hosted release: the version to announce, the download page to
-/// open as the fallback action, and — when the manifest carries one for
-/// this platform — the package the app can install by itself.
+/// A newer hosted release: the version to announce, and — when the manifest
+/// carries one for this platform — the package the app can install by
+/// itself. Without a package the announcement is informational only.
 pub struct UpdateInfo {
   version : String
-  url : String
   artifact : PackageInfo?
 } derive(Eq, Debug)
 
@@ -71,21 +70,18 @@ pub async fn check_for_update(current~ : String) -> UpdateInfo? {
 
 ///|
 /// Decode a manifest and keep it only when it names a strictly newer
-/// version and a web download page. Pure, so tests can cover the manifest
-/// contract without a server.
+/// version. The manifest's top-level page `url` is ignored: older builds
+/// required it, so the server still publishes one, but nothing here opens
+/// it anymore. Pure, so tests can cover the manifest contract without a
+/// server.
 fn newer_update(
   json : Json,
   current~ : String,
   platform_key~ : String?,
 ) -> UpdateInfo? {
-  guard json is { "version": String(version), "url": String(url), .. } else {
-    return None
-  }
-  // The URL is opened in the user's browser; anything but a web link
-  // (file:, custom schemes) has no business in a manifest.
-  guard url.has_prefix("https://") else { return None }
+  guard json is { "version": String(version), .. } else { return None }
   if is_newer(version, than=current) {
-    Some({ version, url, artifact: manifest_artifact(json, platform_key) })
+    Some({ version, artifact: manifest_artifact(json, platform_key) })
   } else {
     None
   }

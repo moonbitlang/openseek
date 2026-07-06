@@ -1340,25 +1340,18 @@ test "HighlightCleared only clears a highlight that still matches" {
 }
 
 ///|
-test "an update announcement adds one sticky link toast" {
+test "an update announcement adds one sticky toast" {
   let dispatch = test_dispatch()
   let (_, model) = update(
     dispatch,
-    UpdateAvailable(version="0.2.0", url="https://example.com/releases"),
+    UpdateAvailable(version="0.2.0"),
     test_model(),
   )
   assert_eq(model.notifications.length(), 1)
-  assert_true(
-    model.notifications[0].action
-    is Some(OpenPage("https://example.com/releases")),
-  )
+  assert_true(model.notifications[0].action is Some(AcknowledgeUpdate))
   assert_true(model.notifications[0].message.contains("0.2.0"))
   // A duplicate announcement must not stack a second toast.
-  let (_, again) = update(
-    dispatch,
-    UpdateAvailable(version="0.2.0", url="https://example.com/releases"),
-    model,
-  )
+  let (_, again) = update(dispatch, UpdateAvailable(version="0.2.0"), model)
   assert_eq(again.notifications.length(), 1)
 }
 
@@ -1377,11 +1370,7 @@ test "a staged update announces restart-to-update and applies on click" {
   )
   assert_eq(clicked.notifications.length(), 0)
   // Only one sticky update toast at a time, whatever the mix.
-  let (_, mixed) = update(
-    dispatch,
-    UpdateAvailable(version="0.2.0", url="https://example.com/releases"),
-    model,
-  )
+  let (_, mixed) = update(dispatch, UpdateAvailable(version="0.2.0"), model)
   assert_eq(mixed.notifications.length(), 1)
   assert_true(mixed.notifications[0].action is Some(RestartToUpdate))
 }
@@ -1391,15 +1380,12 @@ test "clicking the update toast dismisses it" {
   let dispatch = test_dispatch()
   let (_, model) = update(
     dispatch,
-    UpdateAvailable(version="0.2.0", url="https://example.com/releases"),
+    UpdateAvailable(version="0.2.0"),
     test_model(),
   )
   let (_, clicked) = update(
     dispatch,
-    OpenUpdatePage(
-      id=model.notifications[0].id,
-      url="https://example.com/releases",
-    ),
+    DismissNotification(model.notifications[0].id),
     model,
   )
   assert_eq(clicked.notifications.length(), 0)

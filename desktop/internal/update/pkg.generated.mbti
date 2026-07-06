@@ -37,7 +37,6 @@ pub struct StagedUpdate {
 
 pub struct UpdateInfo {
   version : String
-  url : String
   artifact : PackageInfo?
 } derive(Eq, @debug.Debug)
 

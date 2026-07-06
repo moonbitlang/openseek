@@ -2142,17 +2142,16 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 
 ///|
 /// The floating toast stack, fixed to the configured window corner. Each
-/// toast dismisses on click — a link toast (the update announcement) also
-/// opens its page; plain toasts leave the rest to their timer.
+/// toast dismisses on click — the restart toast also applies the staged
+/// update; plain toasts leave the rest to their timer.
 fn notifications_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let toasts : Array[@html.Html] = []
   for toast in model.notifications {
     let (title, on_click) = match toast.action {
-      Some(OpenPage(url)) =>
-        ("Open the download page", dispatch(OpenUpdatePage(id=toast.id, url~)))
       Some(RestartToUpdate) =>
         ("Restart and update", dispatch(ApplyUpdate(id=toast.id)))
-      None => ("Dismiss", dispatch(DismissNotification(toast.id)))
+      Some(AcknowledgeUpdate) | None =>
+        ("Dismiss", dispatch(DismissNotification(toast.id)))
     }
     toasts.push(
       @html.div(class="notification", title~, on_click~, toast.message),

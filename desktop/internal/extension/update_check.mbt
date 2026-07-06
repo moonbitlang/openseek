@@ -3,16 +3,15 @@
 // cannot take the engine pump down. When the manifest carries a package
 // this build can install (macOS bundle, Developer ID signed), the host
 // downloads and verifies it up front and announces `update_ready`; anything
-// less ends at `update_available`, whose click merely opens the release
-// page. The swap itself happens in the `apply_update` op; `main` performs
-// the relaunch after the run loop exits, so no process ever outlives the
-// host.
+// less ends at `update_available`, a purely informational nudge. The swap
+// itself happens in the `apply_update` op; `main` performs the relaunch
+// after the run loop exits, so no process ever outlives the host.
 
 ///|
 /// What self-update needs to know about this installation, plus the staged
 /// bundle once verification passed. `work_dir`/`bundle_path` are None for
 /// dev binaries and non-macOS layouts, which pins the flow to the
-/// release-page fallback.
+/// informational fallback.
 priv struct UpdateState {
   mut staged : @update.StagedUpdate?
   work_dir : String?
@@ -40,11 +39,10 @@ fn new_update_state(
 }
 
 ///|
-/// The `update_available` event: fallback announcement — clicking opens the
-/// release page in the browser.
+/// The `update_available` event: fallback announcement for builds that
+/// cannot install the update themselves. Informational only.
 priv struct UpdateAvailablePayload {
   version : String
-  url : String
 } derive(ToJson)
 
 ///|
@@ -71,9 +69,9 @@ async fn announce_update(
     let staged = @update.stage_update(info, work_dir=dir, bundle_path=bundle) catch {
       error if @async.is_being_cancelled() => raise error
       // Staging is opportunistic: a failed download or a signature that
-      // does not check out downgrades to the release-page announcement.
+      // does not check out downgrades to the informational announcement.
       _ => {
-        announce_page(context, info)
+        announce_available(context, info)
         return
       }
     }
@@ -82,18 +80,15 @@ async fn announce_update(
     context.emit("update_ready", payload)
     return
   }
-  announce_page(context, info)
+  announce_available(context, info)
 }
 
 ///|
-async fn announce_page(
+async fn announce_available(
   context : @app.AppCommandExtensionContext,
   info : @update.UpdateInfo,
 ) -> Unit {
-  let payload : UpdateAvailablePayload = {
-    version: info.version,
-    url: info.url,
-  }
+  let payload : UpdateAvailablePayload = { version: info.version }
   context.emit("update_available", payload)
 }
 
