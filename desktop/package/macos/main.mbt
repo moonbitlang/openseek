@@ -767,29 +767,6 @@ async fn sign_and_zip(ws : @packaging.Workspace, sign : SignConfig) -> Unit {
 }
 
 ///|
-/// The published archive name: the dist zip renamed to the release naming
-/// convention (`OpenSeek-Desktop-<platform>.<ext>`, URL-safe — the server's
-/// path guard rejects spaces). The infix is the manifest platforms key.
-const ReleaseFileName : String = "OpenSeek-Desktop-macos-arm64.zip"
-
-///|
-/// Assemble `dist/releases/` as the exact tree the server's releases
-/// directory expects: this platform's artifact in the versioned directory,
-/// and a `latest.json` regenerated from the directory's contents. A
-/// multi-platform release drops the other packagers' artifacts into the
-/// same directory and reruns `package/release`; this fresh-start wipe is
-/// therefore per-build, not per-publish.
-async fn stage_release_layout(ws : @packaging.Workspace) -> Unit {
-  let version = @version.AppVersion
-  let layout = ws.at(@packaging.ReleasesLayoutDir)
-  @packaging.remove_path_if_exists(layout)
-  let versioned = "\{layout}/v\{version}"
-  @packaging.ensure_dir(versioned)
-  @packaging.copy_file(ws.at(ZipPath), "\{versioned}/\{ReleaseFileName}")
-  @packaging.write_release_manifest(ws, version)
-}
-
-///|
 async fn main {
   // Parse first: a mistyped flag must fail before the build, not after it.
   let sign = parse_sign_config()
@@ -800,10 +777,9 @@ async fn main {
   copy_bundle_files(ws)
   write_bundle_metadata(ws)
   sign_and_zip(ws, sign)
-  stage_release_layout(ws)
   println("generated \{ws.at(AppPath)}")
   println("generated \{ws.at(ZipPath)}")
   println(
-    "generated \{ws.at(@packaging.ReleasesLayoutDir)} — copy its contents into the server's releases directory to publish",
+    "release with scripts/publish-release.sh — it uploads the zip to openseek-api and publishes the version",
   )
 }
