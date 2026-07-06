@@ -66,6 +66,61 @@ test "custom endpoint does not reuse DEEPSEEK env fallback" {
 }
 
 ///|
+test "official OpenSeek proxy authenticates with the client token" {
+  assert_eq(
+    configured_api_key(
+      None,
+      Some("https://openseek-api.moonbitlang.cn/chat/completions"),
+      Some("official-key"),
+      client_token="stamped-token",
+    ),
+    "stamped-token",
+  )
+  // A user-provided key always wins over the stamped token.
+  assert_eq(
+    configured_api_key(
+      Some("user-key"),
+      Some("https://openseek-api.moonbitlang.cn/chat/completions"),
+      None,
+      client_token="stamped-token",
+    ),
+    "user-key",
+  )
+  // An unstamped build behaves as before.
+  assert_eq(
+    configured_api_key(
+      None,
+      Some("https://openseek-api.moonbitlang.cn/chat/completions"),
+      None,
+    ),
+    PlaceholderApiKey,
+  )
+}
+
+///|
+test "other endpoints never see the client token" {
+  assert_eq(
+    configured_api_key(
+      None,
+      Some("https://proxy.example/chat/completions"),
+      None,
+      client_token="stamped-token",
+    ),
+    PlaceholderApiKey,
+  )
+  // A lookalike host on another domain does not match the prefix.
+  assert_eq(
+    configured_api_key(
+      None,
+      Some("https://openseek-api.moonbitlang.cn.evil.example/chat/completions"),
+      None,
+      client_token="stamped-token",
+    ),
+    PlaceholderApiKey,
+  )
+}
+
+///|
 test "official endpoint still uses DEEPSEEK env fallback" {
   assert_eq(
     configured_api_key(None, None, Some("official-key")),

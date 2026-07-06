@@ -317,18 +317,86 @@ pub async fn build_viewer_stylesheet(ws : Workspace) -> Unit {
 }
 
 ///|
-/// Build the native desktop host in release mode.
+/// Where the host's OpenSeek client token constant lives, relative to the
+/// workspace. `build_native_host` stamps the packaging machine's token into
+/// this file for the duration of the host build.
+const ClientTokenSource : String = "internal/engine/client_token.mbt"
+
+///|
+const ClientTokenEnv : String = "OPENSEEK_CLIENT_TOKEN"
+
+///|
+/// The exact source line the stamp replaces. A full line, so drift in
+/// `client_token.mbt` fails packaging loudly instead of silently shipping an
+/// unstamped host.
+const ClientTokenNeedle : String = "const StampedOpenseekClientToken : String = \"\""
+
+///|
+fn stamped_client_token_line(token : String) -> String {
+  "const StampedOpenseekClientToken : String = \"" + token + "\""
+}
+
+///|
+/// Rewrite the host's client-token constant from the OPENSEEK_CLIENT_TOKEN
+/// environment, returning the original source text so the caller can restore
+/// it after the build; None when no token is set (development packaging).
+async fn stamp_client_token(ws : Workspace) -> String? {
+  guard @env.get(ClientTokenEnv) is Some(token) else { return None }
+  guard token.iter().all(c => c.is_ascii_graphic() && c != '"' && c != '\\') else {
+    raise PackageError(
+      "\{ClientTokenEnv} must be printable ASCII without quotes or backslashes",
+    )
+  }
+  let path = ws.at(ClientTokenSource)
+  let original = @asyncfs.read_file(path).text()
+  if !original.contains(ClientTokenNeedle) {
+    raise PackageError(
+      "client token stamp line not found in \{ClientTokenSource}",
+    )
+  }
+  write_text(
+    path,
+    original.replace(
+      old=ClientTokenNeedle,
+      new=stamped_client_token_line(token),
+    ),
+  )
+  Some(original)
+}
+
+///|
+/// Restore the committed client-token source after the host build. Runs on
+/// failed builds too, and inside `protect_from_cancel` so a Ctrl-C during
+/// the build cannot leave the token in the working tree.
+async fn restore_client_token(ws : Workspace, original : String?) -> Unit {
+  guard original is Some(text) else { return }
+  @async.protect_from_cancel(() => write_text(ws.at(ClientTokenSource), text))
+}
+
+///|
+/// Build the native desktop host in release mode. When the packaging
+/// machine sets OPENSEEK_CLIENT_TOKEN, the token is stamped into the host
+/// source for the build and the committed source is restored afterwards —
+/// even when the build fails — so the token reaches the binary but never
+/// the repository.
 pub async fn build_native_host(
   ws : Workspace,
   extra_args? : Array[String] = [],
   extra_env? : Map[String, String] = {},
 ) -> Unit {
+  let original = stamp_client_token(ws)
   run_checked(
     "moon",
     ["build", NativePackage, "--target", "native", "--release"] + extra_args,
     dir=ws.dir(),
     extra_env~,
-  )
+  ) catch {
+    error => {
+      restore_client_token(ws, original)
+      raise error
+    }
+  }
+  restore_client_token(ws, original)
 }
 
 ///|

@@ -33,8 +33,11 @@ const NotificationCornerStorageKey : String = "openseek.notification_corner"
 
 ///|
 /// The default OpenSeek endpoint: a DeepSeek-compatible proxy that does not
-/// require an API key, so the app works out of the box. The path mirrors the
-/// official API because the engine posts to this URL verbatim.
+/// require a user API key, so the app works out of the box. The path mirrors
+/// the official API because the engine posts to this URL verbatim. The host
+/// recognizes this URL by prefix (`OpenseekProxyPrefix` in
+/// `internal/engine/config.mbt`) and authenticates with the packaged client
+/// token — keep the two constants in sync.
 const OpenseekApiUrl : String = "https://openseek-api.moonbitlang.cn/chat/completions"
 
 ///|

@@ -27,6 +27,16 @@ test "workspace path join preserves spaces and nested segments" {
 }
 
 ///|
+/// The token stamp replaces an exact source line; if `client_token.mbt`
+/// drifts away from the needle, packaging must fail instead of silently
+/// shipping an unstamped host. This pins the needle to the committed file.
+async test "client token needle matches the committed host source" {
+  let ws = locate_workspace()
+  let source = @asyncfs.read_file(ws.at(ClientTokenSource)).text()
+  assert_true(source.contains(ClientTokenNeedle))
+}
+
+///|
 /// An uncaught `PackageError` reaches the user through the async runtime's
 /// `println(err : Error)`; this pins that the message survives that path
 /// (the intrinsic falls back to the bare constructor name without the Show

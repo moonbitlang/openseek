@@ -1,4 +1,6 @@
 import {
+  "openseek_desktop/internal/env",
+  "moonbitlang/async",
   "moonbitlang/async/fs" @asyncfs,
   "moonbitlang/async/process",
   "moonbitlang/core/json",

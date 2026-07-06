@@ -34,15 +34,27 @@ priv struct RunConfig {
 }
 
 ///|
+/// The official OpenSeek proxy; must stay a prefix of the frontend's
+/// `OpenseekApiUrl`. Endpoints under it authenticate with the packaged
+/// client token instead of a user API key.
+const OpenseekProxyPrefix : String = "https://openseek-api.moonbitlang.cn/"
+
+///|
 fn configured_api_key(
   payload_key : String?,
   api_url : String?,
   deepseek_env : String?,
+  client_token? : String,
 ) -> String raise EngineError {
   if payload_key is Some(value) {
     return value
   }
-  if api_url is Some(_) {
+  if api_url is Some(url) {
+    // Only the official proxy gets the client token; any other endpoint
+    // would be handing the credential to a third-party server.
+    if url.has_prefix(OpenseekProxyPrefix) && client_token is Some(token) {
+      return token
+    }
     return PlaceholderApiKey
   }
   if deepseek_env is Some(value) {
@@ -82,6 +94,7 @@ async fn run_config(payload : StartRequest, engine : String) -> RunConfig {
     payload.api_key,
     api_url,
     @env.get("DEEPSEEK"),
+    client_token?=openseek_client_token(),
   )
   let session = payload.session
   let host = engine_host(payload.wsl, engine)

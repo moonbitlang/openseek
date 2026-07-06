@@ -109,18 +109,26 @@ Uninstall button.
 ## API endpoint
 
 The settings popup offers three endpoints. The default, **OpenSeek**, routes
-requests through `openseek-api.moonbitlang.cn` and needs no API key, so the
-app works out of the box. **DeepSeek official** sends requests straight to
-`api.deepseek.com` with your own key (BYOK). **Custom URL** accepts any
+requests through `openseek-api.moonbitlang.cn` and needs no user API key, so
+the app works out of the box. **DeepSeek official** sends requests straight
+to `api.deepseek.com` with your own key (BYOK). **Custom URL** accepts any
 DeepSeek-compatible chat-completions endpoint, with the key optional —
 whether one is needed is the endpoint's business. The choice, the custom
 URL, and the key persist in the webview's localStorage; the key entered for
 the official endpoint is never sent to any other endpoint. The host passes
 the endpoint to the engine as `OPENSEEK_API_URL`, substituting a placeholder
 key when a custom endpoint is configured without one (the engine insists on
-a non-empty key; the OpenSeek service ignores it). Changing the endpoint
-mid-conversation retires that conversation's engine process on the next
-prompt.
+a non-empty key). Changing the endpoint mid-conversation retires that
+conversation's engine process on the next prompt.
+
+Requests to the OpenSeek proxy authenticate with a client token instead of a
+user key: release packaging stamps it into the host from the packaging
+machine's `OPENSEEK_CLIENT_TOKEN` (in CI, the secret of the same name), and
+the host sends it as the bearer key for that endpoint only. Unstamped
+development builds fall back to the placeholder key, which the proxy accepts
+only while its `OPENSEEK_CLIENT_TOKENS` enforcement is off; set
+`OPENSEEK_CLIENT_TOKEN` in the app's environment to test against an
+enforcing proxy.
 
 ## Prerequisites
 

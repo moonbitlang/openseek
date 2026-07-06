@@ -218,7 +218,13 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
 
+      # OPENSEEK_CLIENT_TOKEN is the bearer credential the packaged host
+      # presents to the hosted OpenSeek proxy; unset (fork PRs) builds an
+      # unstamped bundle that works only while the proxy has token
+      # enforcement off.
       - name: Build the AppImage
+        env:
+          OPENSEEK_CLIENT_TOKEN: ${{ secrets.OPENSEEK_CLIENT_TOKEN }}
         run: moon -C desktop run --target native package/linux
 
       - name: Upload AppImage artifact
@@ -286,6 +292,8 @@ jobs:
       # machines — clear it before launching:
       #   xattr -dr com.apple.quarantine "OpenSeek Desktop.app"
       - name: Build the app bundle
+        env:
+          OPENSEEK_CLIENT_TOKEN: ${{ secrets.OPENSEEK_CLIENT_TOKEN }}
         run: moon -C desktop run --target native package/macos
 
       - name: Upload app artifact
@@ -367,6 +375,8 @@ jobs:
 
       - name: Build the Windows app bundle
         shell: pwsh
+        env:
+          OPENSEEK_CLIENT_TOKEN: ${{ secrets.OPENSEEK_CLIENT_TOKEN }}
         run: moon -C desktop run --target native package/windows
 
       - name: Upload Windows app artifact
