@@ -56,6 +56,25 @@ ignores `.DS_Store`, lock files, and malformed/husk directories, and it can
 serve a normal `.openseek` store, a directory of copied JSONL files, or a single
 matching JSONL file.
 
+## Standalone export
+
+`--export <path>` writes a single self-contained HTML file with every discovered
+session baked in, then exits without serving:
+
+```sh
+moon run --target native cmd/viz_server -- \
+  --session-root path/to/archive --export sessions.html
+```
+
+The exported file inlines the compiled frontend bundle and bakes each API
+response the server would return — the `/api/sessions` listing plus one envelope
+per session — into a `window.__OPENSEEK_DATA__` map. The frontend answers its two
+fetches from that map before touching the network, so the file opens directly
+from disk (`file://`), with no server and no network. Because the bundle that
+understands these logs ships alongside them, an export keeps rendering unchanged
+as the live `.jsonl` format and parser evolve — it is a frozen archive, not a
+live view.
+
 If the server cannot find the generated JavaScript bundle, pass it explicitly:
 
 ```sh

@@ -38,6 +38,19 @@ async fn main {
   let shell = shell_candidates(web_dir, module_root)
   let bundle_paths = bundle_candidates(bundle, web_dir, module_root)
   let catalog = session_catalog(session_root, search_dirs, session_root_name)
+  // Export mode: freeze the sessions the server would serve into one standalone
+  // HTML and exit, rather than run_forever. The exported file is decoupled from
+  // this server and from the current parser — it carries its own bundle + data.
+  let export_path = @cli.value(matches, "export")
+  if export_path != "" {
+    let rows = catalog.rows()
+    let html = build_export_html(rows, shell, bundle_paths)
+    @fs.write_file(export_path, html, create_mode=CreateOrTruncate)
+    println(
+      "openseek viz: wrote standalone export '\{export_path}' (\{rows.length()} session(s), \{html.length()} chars)",
+    )
+    return
+  }
   let addr = @socket.Addr::parse("\{host}:\{port}") catch {
     _ => fail("invalid --host/--port: \{host}:\{port}")
   }
@@ -245,20 +258,158 @@ fn valid_session_id(value : String) -> Bool {
 /// text — the header line followed by event lines — which the frontend parser
 /// splits apart itself.
 async fn session_envelope_reply(path : String) -> Reply {
+  json_reply(session_envelope_body(path))
+}
+
+///|
+/// The `{found, events, events_bytes}` payload for one session, factored out of
+/// `session_envelope_reply` so the standalone exporter can bake the exact same
+/// body the live server would return into the embedded data map.
+async fn session_envelope_body(path : String) -> Json {
   if !@fs.exists(path) {
-    return json_reply({ "found": false })
+    return { "found": false }
   }
-  json_reply({
+  {
     "found": true,
     "events": read_text_lossy(path),
     "events_bytes": Json::number(file_size(path).to_double()),
-  })
+  }
 }
 
 ///|
 async fn session_list_reply(catalog : SessionCatalog) -> Reply {
-  let rows = catalog.rows()
-  json_reply(rows.map(row => row.to_json()).to_json())
+  json_reply(session_list_json(catalog.rows()))
+}
+
+///|
+/// The `/api/sessions` listing as JSON, shared by the live route and the
+/// standalone exporter so both encode the sidebar rows identically.
+fn session_list_json(rows : Array[SessionListRow]) -> Json {
+  rows.map(row => row.to_json()).to_json()
+}
+
+///|
+/// Assemble a single self-contained HTML file: the viewer shell with the
+/// compiled frontend bundle inlined and every API response the server would
+/// serve — the `/api/sessions` listing plus one envelope per session — baked
+/// into a `window.__OPENSEEK_DATA__` map, keyed by request path. The frontend's
+/// transport checks that map before hitting the network, so the exported file
+/// renders every session offline, with no server and no dependence on the
+/// current parser: the bundle that understands these logs ships alongside them.
+async fn build_export_html(
+  rows : Array[SessionListRow],
+  shell : Array[String],
+  bundle : Array[String],
+) -> String {
+  let shell_html = read_first_existing(
+    shell, "index.html shell (build with `moon build` or pass --web-dir)",
+  )
+  let bundle_js = read_first_existing(
+    bundle, "viz_app.js bundle (build with `moon build` or pass --bundle)",
+  )
+  // Bake the two live endpoints the frontend fetches: the sidebar listing and
+  // one envelope per session, keyed exactly as the frontend requests them.
+  let data : Map[String, Json] = Map([])
+  data["/api/sessions"] = Json::string(session_list_json(rows).stringify())
+  for row in rows {
+    data["/api/sessions/\{row.key}"] = Json::string(
+      session_envelope_body(row.path).stringify(),
+    )
+  }
+  // Escape every `<` in the data to its JSON unicode escape so no `<!--`,
+  // `<script`, or `</script` in session text can drive HTML's script-data
+  // tokenizer out of the inline block — the `<!--`+`<script` double-escape trap
+  // would otherwise swallow the following bundle and blank the page. The escape
+  // decodes back to `<` in the JS/JSON parser, so the data round-trips unchanged.
+  let blob = escape_json_for_html(data.to_json().stringify())
+  let bundle_inline = escape_script_close(bundle_js)
+  let scripts = "<script>window.__OPENSEEK_DATA__ = \{blob};</script>\n<script>\n\{bundle_inline}\n</script>"
+  let marker = "<script src=\"/viz_app.js\"></script>"
+  match shell_html.split_once(marker) {
+    Some((before, after)) => "\{before}\{scripts}\{after}"
+    None =>
+      fail(
+        "index.html shell is missing the \{marker} tag; cannot inline the bundle",
+      )
+  }
+}
+
+///|
+/// Read the first existing candidate as text, or fail naming what was missing.
+async fn read_first_existing(
+  candidates : Array[String],
+  what : String,
+) -> String {
+  for candidate in candidates {
+    if candidate != "" && @fs.exists(candidate) {
+      return read_text_lossy(candidate)
+    }
+  }
+  fail("could not locate \{what}")
+}
+
+///|
+/// Rewrite every `<` in a stringified JSON payload to its `<` escape, so an
+/// inline `<script>…</script>` data block carrying it cannot be pushed out of
+/// HTML's script-data state. Every state transition there begins with `<`, so
+/// escaping `<` alone defeats `<!--`, `<script`, and `</script` (including the
+/// `<!--`+`<script` double-escape trap). The escape decodes back to `<` in the
+/// JS/JSON parser, so the embedded data is unchanged. A `<` only ever appears
+/// inside a string value here (keys and structure have none), so this is safe.
+fn escape_json_for_html(json : String) -> String {
+  let builder = StringBuilder()
+  for c in json {
+    if c == '<' {
+      builder <+ "\\u003c"
+    } else {
+      builder.write_char(c)
+    }
+  }
+  builder.to_string()
+}
+
+///|
+/// Neutralise any literal `</script` in inlined JavaScript so it cannot close
+/// the enclosing `<script>` block early. The match is case-insensitive because
+/// an HTML parser closes the tag on `</script` in any letter case; a backslash
+/// after `<` yields `<\/script`, the same token to a JS parser (a backslash
+/// before `/` is a no-op outside a regex/string, and legal inside both), so the
+/// bundle's behaviour is unchanged.
+fn escape_script_close(js : String) -> String {
+  let chars = js.to_array()
+  let builder = StringBuilder()
+  let n = chars.length()
+  let mut i = 0
+  while i < n {
+    if chars[i] == '<' && is_script_close_tail(chars, i + 1) {
+      builder <+ "<\\/"
+      i += 2
+    } else {
+      builder.write_char(chars[i])
+      i += 1
+    }
+  }
+  builder.to_string()
+}
+
+///|
+/// Whether `chars[at..]` begins with `/script` case-insensitively — the tail of
+/// a `</script` close tag once the leading `<` has matched. HTML matches the tag
+/// name in any case, so `</SCRIPT` and `</Script` must be caught too.
+fn is_script_close_tail(chars : Array[Char], at : Int) -> Bool {
+  let tail = ['/', 's', 'c', 'r', 'i', 'p', 't']
+  guard at + tail.length() <= chars.length() else { return false }
+  for k in 0..<tail.length() {
+    let actual = chars[at + k]
+    let want = tail[k]
+    // Uppercase of an ASCII letter is its lowercase minus 32; `/` has no case.
+    let matches = actual == want ||
+      (want >= 'a' && want <= 'z' && actual.to_int() == want.to_int() - 32)
+    if !matches {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -973,6 +1124,13 @@ fn cli_command() -> @argparse.Command {
         env="OPENSEEK_VIZ_BUNDLE",
         default_values=[""],
         about="Path to the compiled viz_app.js; defaults to auto-locating the moon build output.",
+      ),
+      OptionArg(
+        "export",
+        long="export",
+        env="OPENSEEK_VIZ_EXPORT",
+        default_values=[""],
+        about="Write a self-contained standalone HTML (all discovered sessions embedded, no server needed) to this path and exit, instead of serving.",
       ),
     ],
   )
