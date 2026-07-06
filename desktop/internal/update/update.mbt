@@ -10,6 +10,19 @@
 const ManifestUrl : String = "https://openseek-api.moonbitlang.cn/desktop/releases/latest.json"
 
 ///|
+/// The manifest endpoint actually queried: the packaged default, or the
+/// OPENSEEK_UPDATE_MANIFEST_URL override for exercising the flow against a
+/// staging server (launch the bundle's executable from a terminal so the
+/// variable is inherited). https only, like everything else here.
+fn manifest_url() -> String {
+  guard @env.get("OPENSEEK_UPDATE_MANIFEST_URL") is Some(url) &&
+    url.has_prefix("https://") else {
+    return ManifestUrl
+  }
+  url
+}
+
+///|
 /// A newer hosted release: the version to announce, the download page to
 /// open as the fallback action, and — when the manifest carries one for
 /// this platform — the package the app can install by itself.
@@ -44,7 +57,7 @@ fn manifest_platform_key() -> String? {
 /// None — including on any failure, so the nudge can never surface as an
 /// app error.
 pub async fn check_for_update(current~ : String) -> UpdateInfo? {
-  let (response, data) = @http.get(ManifestUrl) catch {
+  let (response, data) = @http.get(manifest_url()) catch {
     error if @async.is_being_cancelled() => raise error
     _ => return None
   }

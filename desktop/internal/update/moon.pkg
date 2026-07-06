@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/internal/env",
   "openseek_desktop/internal/platform",
   "moonbitlang/async",
   "moonbitlang/async/fs",
