@@ -1340,6 +1340,21 @@ test "HighlightCleared only clears a highlight that still matches" {
 }
 
 ///|
+/// A prompt submitted mid-compaction must not start: the serve engine would
+/// queue it behind the compaction, out of Stop's reach. The draft stays put.
+test "a prompt submitted during compaction stays in the composer" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    compacting: true,
+    task: "do the thing",
+  })
+  let (_, next) = update(dispatch, Send, model)
+  inspect(next.active().task, content="do the thing")
+  inspect(next.active().messages.length(), content="0")
+}
+
+///|
 test "an update announcement adds one sticky toast" {
   let dispatch = test_dispatch()
   let (_, model) = update(

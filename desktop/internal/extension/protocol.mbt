@@ -268,6 +268,10 @@ priv struct LspHoverPayload {
   path : String
   line : Int
   character : Int
+  // The conversation's workspace, when it has one — lets a fresh workspace
+  // conversation (no durable record on disk yet) reach its project's
+  // language server (see `read_directory`).
+  workspace : String?
 } derive(FromJson)
 
 ///|
@@ -291,6 +295,8 @@ priv struct LspHoverReply {
 priv struct WorkspaceSymbolsPayload {
   session : String
   query : String
+  // The conversation's workspace, when it has one (see `hover`).
+  workspace : String?
 } derive(FromJson)
 
 ///|

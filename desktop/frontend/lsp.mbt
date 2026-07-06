@@ -10,6 +10,12 @@
 let current_session : Ref[String] = Ref("")
 
 ///|
+/// That session's workspace ("" when scratch), stashed alongside it: a fresh
+/// workspace conversation has no durable record on disk yet, so the host can
+/// only find its project through this hint (see `read_directory`).
+let current_workspace : Ref[String] = Ref("")
+
+///|
 priv struct LspHoverProvider {}
 
 ///|
@@ -26,6 +32,7 @@ impl @language.HoverProvider for LspHoverProvider with fn provide_hover(
   guard !session.is_empty() else { return None }
   let reply = request_hover(
     session~,
+    workspace=current_workspace.val,
     path=strip_model_uri(model.uri.value),
     // The viewer's Position is 1-based; the host op speaks 0-based LSP coords.
     line=position.line_number - 1,
@@ -62,6 +69,7 @@ fn strip_model_uri(uri : String) -> String {
 /// Call the host `hover` op for `path` at a zero-based `line`/`character`.
 async fn request_hover(
   session~ : String,
+  workspace~ : String,
   path~ : String,
   line~ : Int,
   character~ : Int,
@@ -71,6 +79,7 @@ async fn request_hover(
   payload["path"] = path
   payload["line"] = line
   payload["character"] = character
+  set_trimmed(payload, "workspace", workspace)
   bridge_request("hover", payload.to_value())
 }
 

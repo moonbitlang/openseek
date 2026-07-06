@@ -11,12 +11,14 @@ fn read_workspace_symbols(
   dispatch : @cmd.Emit[Msg],
   session : String,
   query : String,
+  workspace~ : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session
       payload["query"] = query
+      set_trimmed(payload, "workspace", workspace)
       let reply = bridge_request("workspace_symbols", payload.to_value()) catch {
         _ => {
           scheduler.add(dispatch(SymbolsFailed(session~, query~)))

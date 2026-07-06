@@ -114,7 +114,12 @@ fn symbol_fetch_cmd(
   if model.symbol_cache.session == session && model.symbol_cache.query == query {
     return @cmd.none
   }
-  read_workspace_symbols(dispatch, session, query)
+  read_workspace_symbols(
+    dispatch,
+    session,
+    query,
+    workspace=model.session_workspace(session),
+  )
 }
 
 ///|
@@ -747,6 +752,12 @@ fn update_msg(
         } else {
           (@cmd.none, model)
         }
+      } else if conv.compacting {
+        // A prompt submitted mid-compaction would sit in the serve engine's
+        // queue behind it, where Stop (which cancels only the compaction)
+        // cannot reach it — the user's cancel would not stop the submitted
+        // work. The draft stays in the composer until compaction settles.
+        (@cmd.none, model)
       } else {
         let next = conv.append_item(User, task)
         let next = {
@@ -1308,7 +1319,17 @@ fn update_msg(
         model.file_panel.selected != Some(path) {
         (@cmd.none, model)
       } else {
-        (show_file_in_viewer(session, path, name, content, range~), model)
+        (
+          show_file_in_viewer(
+            session,
+            path,
+            name,
+            content,
+            workspace=model.session_workspace(session),
+            range~,
+          ),
+          model,
+        )
       }
     FileFailed(session~, message~) =>
       if model.file_panel.session != session {

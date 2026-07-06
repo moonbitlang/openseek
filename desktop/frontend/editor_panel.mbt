@@ -100,12 +100,15 @@ fn show_file_in_viewer(
   path : String,
   name : String,
   content : String,
+  workspace~ : String,
   range? : @common.Range? = None,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     // The hover provider addresses the host op by session, but the viewer model
-    // carries only the path; stash the session of whatever file is now shown.
+    // carries only the path; stash the session (and its workspace hint) of
+    // whatever file is now shown.
     current_session.val = session
+    current_workspace.val = workspace
     model_version.val = model_version.val + 1
     let version = model_version.val
     let uri : @common.Uri = { value: "openseek:///" + path }

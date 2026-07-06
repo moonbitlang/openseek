@@ -143,11 +143,19 @@ async fn lsp_hover_op(
   manager : LspManager,
   payload : LspHoverPayload,
 ) -> LspHoverReply {
-  guard @engine.resolve_in_workspace(payload.session, payload.path)
+  guard @engine.resolve_in_workspace(
+      payload.session,
+      payload.path,
+      workspace?=payload.workspace,
+    )
     is Some(file) else {
     raise HostError("path is outside the conversation workspace")
   }
-  let servers = ensure_workspaces(manager, payload.session)
+  let servers = ensure_workspaces(
+    manager,
+    payload.session,
+    workspace?=payload.workspace,
+  )
   guard server_for_file(servers, file.to_string()) is Some(workspace) else {
     return no_hover()
   }
@@ -179,7 +187,12 @@ async fn workspace_symbols_op(
 ) -> WorkspaceSymbolsReply {
   // An empty query is valid — it asks the server for every symbol, which backs
   // the bare `#` menu (capped like any other result).
-  guard @engine.resolve_in_workspace(payload.session, "") is Some(dir) else {
+  guard @engine.resolve_in_workspace(
+      payload.session,
+      "",
+      workspace?=payload.workspace,
+    )
+    is Some(dir) else {
     return { symbols: [] }
   }
   let workspace_dir = dir.to_string()
@@ -188,7 +201,12 @@ async fn workspace_symbols_op(
   // result against the conversation workspace (the common ancestor) so rows
   // from `<cwd>/a` and `<cwd>/b` come back as `a/...` and `b/...`. Sequential
   // is fine for the usual one or two servers.
-  for workspace in ensure_workspaces(manager, payload.session) {
+  for
+    workspace in ensure_workspaces(
+      manager,
+      payload.session,
+      workspace?=payload.workspace,
+    ) {
     if symbols.length() >= MaxSymbolResults {
       break
     }
@@ -278,19 +296,18 @@ fn symbol_range(location : Map[String, Json]) -> SymbolRange {
 }
 
 ///|
-/// Turn an absolute `file://` URI into a path relative to `workspace_dir`. A URI
+/// Turn an absolute `file:` URI into a path relative to `workspace_dir`. A URI
 /// already inside the workspace loses the directory prefix; one that is not (the
-/// server should not return such, but be safe) keeps its absolute path.
+/// server should not return such, but be safe) keeps its absolute path. Both
+/// sides compare with forward slashes so a Windows workspace path matches the
+/// URI-derived one.
 fn workspace_relative(uri : String, workspace_dir : String) -> String {
-  let path = if uri.has_prefix("file://") {
-    uri["file://".length():].to_owned()
-  } else {
-    uri
-  }
-  let prefix = workspace_dir + "/"
+  let path = file_uri_path(uri)
+  let root = workspace_dir.replace_all(old="\\", new="/")
+  let prefix = root + "/"
   if path.has_prefix(prefix) {
-    path[prefix.length():].to_owned()
-  } else if path == workspace_dir {
+    path.view(start_offset=prefix.length()).to_owned()
+  } else if path == root {
     ""
   } else {
     path
@@ -306,8 +323,9 @@ fn workspace_relative(uri : String, workspace_dir : String) -> String {
 async fn ensure_workspaces(
   manager : LspManager,
   session : String,
+  workspace? : String,
 ) -> Array[LspWorkspace] {
-  guard @engine.resolve_in_workspace(session, "") is Some(dir) else {
+  guard @engine.resolve_in_workspace(session, "", workspace?) is Some(dir) else {
     return []
   }
   // The workspace directory is created on a conversation's first run; before
@@ -518,14 +536,6 @@ async fn read_text(file : @path.Path) -> String? {
   Some(data.text()) catch {
     _ => None
   }
-}
-
-///|
-/// Build a `file:` URI for an absolute path. On a Unix path `/a/b` this yields
-/// `file:///a/b`. (Native targets are macOS/Linux; Windows paths would need a
-/// drive prefix and percent-encoding.)
-fn file_uri(absolute_path : String) -> String {
-  "file://" + absolute_path
 }
 
 ///|

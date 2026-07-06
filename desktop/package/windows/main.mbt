@@ -173,13 +173,30 @@ async fn copy_bundle_files(
     target,
     BundleDir + "/" + target.seed_relative_dir(),
   )
-  // Best-effort: ship the assembled CEF runtime (proton.dll, libcef.dll,
-  // cef_process.exe, resources). The Windows DLL search expects these beside
-  // the executable; the exact layout needs validation on Windows.
-  @packaging.copy_tree(
-    @packaging.proton_runtime_dist(ws),
-    ws.at(BundleDir + "/proton"),
-  )
+  stage_proton_runtime(ws)
+}
+
+///|
+/// Stage the CEF runtime the way the Windows loader needs it. proton.dll
+/// (and libcef.dll, which it imports) must sit in the executable's own
+/// directory: both are in the import table, and the DLL search never
+/// descends into a subdirectory, so a nested layout fails before any
+/// MoonBit code runs. proton.dll then derives every other path from its
+/// own module directory — cef_process.exe beside itself, `Resources\`
+/// (with `locales\`) under the same root — so flattening `bin\` into the
+/// bundle root keeps those defaults working too.
+async fn stage_proton_runtime(ws : @packaging.Workspace) -> Unit {
+  let dist = @packaging.proton_runtime_dist(ws)
+  let bin = dist + "/bin"
+  for entry in @asyncfs.readdir(bin, sort=true) {
+    let source = "\{bin}/\{entry}"
+    if @asyncfs.kind(source) is Directory {
+      @packaging.copy_tree(source, ws.at(BundleDir + "/" + entry))
+    } else {
+      @packaging.copy_file(source, ws.at(BundleDir + "/" + entry))
+    }
+  }
+  @packaging.copy_tree(dist + "/Resources", ws.at(BundleDir + "/Resources"))
 }
 
 ///|
@@ -236,6 +253,7 @@ async fn build_installer(ws : @packaging.Workspace) -> Unit {
   @packaging.run_checked(
     makensis_command(ws),
     [
+      "/DAPP_VERSION=\{@version.AppVersion}",
       "/DSOURCE_DIR=\{ws.at(BundleDir)}",
       "/DOUTPUT_DIR=\{ws.at("dist")}",
       ws.at(InstallerScript),

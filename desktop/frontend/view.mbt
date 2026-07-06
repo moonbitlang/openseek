@@ -1116,7 +1116,9 @@ fn mention_tray(dispatch : @cmd.Emit[Msg], conv : Conversation) -> @html.Html {
 fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let conv = model.active()
   let has_input = model.bridge_ready && model.api_ready() && !conv.draft_empty()
-  let can_send = !conv.running && has_input
+  // A compacting conversation cannot accept a prompt either: the serve
+  // engine would queue it behind the compaction, where Stop cannot reach it.
+  let can_send = !conv.running && !conv.compacting && has_input
   // The left status group: the model, plus the workspace's git branch (moved
   // out of the topbar; a workspace that is not a repository has no chip).
   let status : Array[@html.Html] = [
