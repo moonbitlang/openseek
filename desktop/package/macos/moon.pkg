@@ -7,6 +7,7 @@ import {
   "moonbitlang/async/process",
   "moonbitlang/core/argparse",
   "moonbitlang/core/string",
+  "moonbitlang/x/crypto",
 }
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

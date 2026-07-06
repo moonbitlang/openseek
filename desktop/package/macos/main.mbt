@@ -767,6 +767,73 @@ async fn sign_and_zip(ws : @packaging.Workspace, sign : SignConfig) -> Unit {
 }
 
 ///|
+/// Where release files download from; must stay in sync with openseek-api's
+/// `/desktop/releases/` routes.
+const ReleasesBaseUrl : String = "https://openseek-api.moonbitlang.cn/desktop/releases"
+
+///|
+/// The page the update toast opens when in-app install is unavailable.
+const ReleasePageUrl : String = "https://github.com/moonbitlang/openseek/releases/latest"
+
+///|
+/// The published archive name: the dist zip renamed URL-safe (the server's
+/// path guard rejects spaces).
+const ReleaseFileName : String = "OpenSeek-Desktop-macos-arm64.zip"
+
+///|
+const ReleasesLayoutDir : String = "dist/releases"
+
+///|
+priv struct ReleaseArtifact {
+  url : String
+  sha256 : String
+} derive(ToJson)
+
+///|
+/// The manifest the desktop's update checker consumes; see
+/// `internal/update` for the decoding contract.
+priv struct ReleaseManifest {
+  version : String
+  url : String
+  platforms : Map[String, ReleaseArtifact]
+} derive(ToJson)
+
+///|
+fn release_manifest_source(version : String, digest : String) -> String {
+  let manifest : ReleaseManifest = {
+    version,
+    url: ReleasePageUrl,
+    platforms: {
+      "macos-arm64": {
+        url: "\{ReleasesBaseUrl}/v\{version}/\{ReleaseFileName}",
+        sha256: digest,
+      },
+    },
+  }
+  manifest.to_json().stringify(indent=2) + "\n"
+}
+
+///|
+/// Assemble `dist/releases/` as the exact tree the server's releases
+/// directory expects — the versioned zip plus a `latest.json` whose digest
+/// is computed here — so publishing a release is one recursive copy.
+async fn stage_release_layout(ws : @packaging.Workspace) -> Unit {
+  let version = @version.AppVersion
+  let layout = ws.at(ReleasesLayoutDir)
+  @packaging.remove_path_if_exists(layout)
+  let versioned = "\{layout}/v\{version}"
+  @packaging.ensure_dir(versioned)
+  @packaging.copy_file(ws.at(ZipPath), "\{versioned}/\{ReleaseFileName}")
+  let digest = @crypto.bytes_to_hex_string(
+    @crypto.sha256(@asyncfs.read_file(ws.at(ZipPath)).binary()),
+  ).to_lower()
+  @packaging.write_text(
+    "\{layout}/latest.json",
+    release_manifest_source(version, digest),
+  )
+}
+
+///|
 async fn main {
   // Parse first: a mistyped flag must fail before the build, not after it.
   let sign = parse_sign_config()
@@ -777,6 +844,10 @@ async fn main {
   copy_bundle_files(ws)
   write_bundle_metadata(ws)
   sign_and_zip(ws, sign)
+  stage_release_layout(ws)
   println("generated \{ws.at(AppPath)}")
   println("generated \{ws.at(ZipPath)}")
+  println(
+    "generated \{ws.at(ReleasesLayoutDir)} — copy its contents into the server's releases directory to publish",
+  )
 }
