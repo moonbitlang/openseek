@@ -595,6 +595,13 @@ fn update_msg(
         @cmd.none,
         { ..model, notifications: model.notifications.filter(t => t.id != id) },
       )
+    UpdateAvailable(version~, url~) =>
+      (@cmd.none, model.notify_update(version, url))
+    OpenUpdatePage(id~, url~) =>
+      (
+        open_url(dispatch, url),
+        { ..model, notifications: model.notifications.filter(t => t.id != id) },
+      )
     OpenSetup => (@cmd.none, { ..model, screen: Settings, setup_api_key: "" })
     ToggleSidebar => (@cmd.none, { ..model, sidebar_open: !model.sidebar_open })
     ToggleChatsSection =>

@@ -296,8 +296,8 @@ fn helper_info_plist_source(helper : CefHelperVariant) -> String {
     $|  <key>CFBundleName</key><string>\{name}</string>
     $|  <key>CFBundlePackageType</key><string>APPL</string>
     $|  <key>LSUIElement</key><true/>
-    $|  <key>CFBundleShortVersionString</key><string>0.1.0</string>
-    $|  <key>CFBundleVersion</key><string>0.1.0</string>
+    $|  <key>CFBundleShortVersionString</key><string>\{@version.AppVersion}</string>
+    $|  <key>CFBundleVersion</key><string>\{@version.AppVersion}</string>
     $|  <key>LSMinimumSystemVersion</key><string>\{MinMacOSVersion}</string>
     $|</dict>
     $|</plist>
@@ -351,8 +351,8 @@ fn info_plist_source() -> String {
     $|  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
     $|  <key>CFBundleName</key><string>OpenSeek Desktop</string>
     $|  <key>CFBundlePackageType</key><string>APPL</string>
-    $|  <key>CFBundleShortVersionString</key><string>0.1.0</string>
-    $|  <key>CFBundleVersion</key><string>0.1.0</string>
+    $|  <key>CFBundleShortVersionString</key><string>\{@version.AppVersion}</string>
+    $|  <key>CFBundleVersion</key><string>\{@version.AppVersion}</string>
     $|  <key>LSMinimumSystemVersion</key><string>\{MinMacOSVersion}</string>
     $|  <key>NSHighResolutionCapable</key><true/>
     $|</dict>

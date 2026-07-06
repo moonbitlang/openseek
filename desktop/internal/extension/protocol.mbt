@@ -133,6 +133,14 @@ priv struct OpenPathReply {
 } derive(ToJson)
 
 ///|
+/// `open_url` payload: a web link to hand to the user's browser. Only
+/// https:// is accepted — the frontend passes along host-announced URLs
+/// (release pages), and no other scheme has a reason to cross this op.
+priv struct OpenUrlPayload {
+  url : String
+} derive(FromJson)
+
+///|
 /// Reply to `list_apps`: the launcher apps detected as installed on this
 /// machine, in catalog order. `icon` is a `data:image/png` URL (empty when the
 /// app's icon could not be extracted — the frontend falls back to an initial).

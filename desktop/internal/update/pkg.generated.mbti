@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/update"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub async fn check_for_update(current~ : String) -> UpdateInfo?
+
+// Errors
+
+// Types and methods
+pub struct UpdateInfo {
+  version : String
+  url : String
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
+

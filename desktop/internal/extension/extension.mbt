@@ -57,6 +57,7 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("skills_installed"),
       @app.AppCommandApiDescriptor::new("skill_uninstall"),
       @app.AppCommandApiDescriptor::new("open_path"),
+      @app.AppCommandApiDescriptor::new("open_url"),
       @app.AppCommandApiDescriptor::new("workspace_branch"),
       @app.AppCommandApiDescriptor::new("archive_session"),
       @app.AppCommandApiDescriptor::new("unarchive_session"),
@@ -78,6 +79,10 @@ pub fn openseek_extension(
         // never drops the engine connection.
         @async.with_task_group(group => {
           group.spawn_bg(allow_failure=true, () => run_lsp_pump(group, lsp))
+          // One release-manifest check per webview connection: late enough
+          // that the frontend is listening, background so a slow or dead
+          // network never shows up anywhere.
+          group.spawn_bg(allow_failure=true, () => announce_update(context))
           @engine.run_engine_pump(sink, manager) catch {
             @engine.EngineError(message) => raise HostError(message)
             error => raise error
@@ -164,6 +169,9 @@ pub fn openseek_extension(
       })
       context.op_async("open_path", async fn(payload : OpenPathPayload) {
         open_path_op(payload)
+      })
+      context.op_async("open_url", async fn(payload : OpenUrlPayload) {
+        open_url_op(payload)
       })
       context.op_async("workspace_branch", async fn(
         payload : WorkspaceBranchPayload,

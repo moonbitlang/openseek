@@ -1338,3 +1338,44 @@ test "HighlightCleared only clears a highlight that still matches" {
   })
   assert_true(cleared.file_panel.highlighted is None)
 }
+
+///|
+test "an update announcement adds one sticky link toast" {
+  let dispatch = test_dispatch()
+  let (_, model) = update(
+    dispatch,
+    UpdateAvailable(version="0.2.0", url="https://example.com/releases"),
+    test_model(),
+  )
+  assert_eq(model.notifications.length(), 1)
+  assert_true(
+    model.notifications[0].url is Some("https://example.com/releases"),
+  )
+  assert_true(model.notifications[0].message.contains("0.2.0"))
+  // A duplicate announcement must not stack a second toast.
+  let (_, again) = update(
+    dispatch,
+    UpdateAvailable(version="0.2.0", url="https://example.com/releases"),
+    model,
+  )
+  assert_eq(again.notifications.length(), 1)
+}
+
+///|
+test "clicking the update toast dismisses it" {
+  let dispatch = test_dispatch()
+  let (_, model) = update(
+    dispatch,
+    UpdateAvailable(version="0.2.0", url="https://example.com/releases"),
+    test_model(),
+  )
+  let (_, clicked) = update(
+    dispatch,
+    OpenUpdatePage(
+      id=model.notifications[0].id,
+      url="https://example.com/releases",
+    ),
+    model,
+  )
+  assert_eq(clicked.notifications.length(), 0)
+}

@@ -9,10 +9,12 @@ const NotificationLifetimeMs : Int = 6000
 ///|
 /// One transient toast. `id` pairs the auto-dismiss timer with its toast, so
 /// a timer whose toast was already clicked away expires harmlessly instead
-/// of touching a newer one.
+/// of touching a newer one. A toast carrying `url` is a link: clicking it
+/// opens the page (and dismisses), and it never expires on its own.
 priv struct Notification {
   id : Int
   message : String
+  url : String?
 }
 
 ///|
@@ -54,11 +56,30 @@ fn Model::notify_error(
   dispatch : @cmd.Emit[Msg],
   message : String,
 ) -> (@cmd.Cmd, Model) {
-  let toast : Notification = { id: self.notification_seq, message }
+  let toast : Notification = { id: self.notification_seq, message, url: None }
   let notifications = self.notifications.copy()
   notifications.push(toast)
   (
     @cmd.delay(dispatch(NotificationExpired(toast.id)), NotificationLifetimeMs),
     { ..self, notification_seq: toast.id + 1, notifications },
   )
+}
+
+///|
+/// Announce a newer release with a sticky link toast: no expiry timer, so a
+/// user who is away from the window cannot miss it, and clicking it opens
+/// the download page. One at a time — the check runs once per connection,
+/// but a duplicate announcement must not stack a second toast.
+fn Model::notify_update(self : Model, version : String, url : String) -> Model {
+  if self.notifications.iter().any(toast => toast.url is Some(_)) {
+    return self
+  }
+  let toast : Notification = {
+    id: self.notification_seq,
+    message: "OpenSeek \{version} is available — click to download",
+    url: Some(url),
+  }
+  let notifications = self.notifications.copy()
+  notifications.push(toast)
+  { ..self, notification_seq: toast.id + 1, notifications }
 }

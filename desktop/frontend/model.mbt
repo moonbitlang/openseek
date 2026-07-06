@@ -489,6 +489,10 @@ priv enum Msg {
   NotificationExpired(Int)
   // A toast was clicked: dismiss it now.
   DismissNotification(Int)
+  // The host found a newer hosted release: show the sticky update toast.
+  UpdateAvailable(version~ : String, url~ : String)
+  // The update toast was clicked: open its download page and dismiss it.
+  OpenUpdatePage(id~ : Int, url~ : String)
   OpenSetup
   ToggleSidebar
   // The sidebar's "Chats" heading was clicked — fold or unfold the section.

@@ -112,6 +112,7 @@ fn wire_engine_events(
   on("openseek.error", error_msg)
   on("openseek.finished", finished_msg)
   on("openseek.connected", connected_msg)
+  on("openseek.update_available", update_available_msg)
   // Emitted by proton itself (not the openseek extension) when the user
   // clicks a system notification; the payload is the run id the host stamped
   // on the notification.
@@ -179,6 +180,16 @@ fn finished_msg(payload : Map[String, Json]) -> Msg? {
 ///|
 fn connected_msg(_payload : Map[String, Json]) -> Msg? {
   Some(BridgeReady)
+}
+
+///|
+/// The host announced a newer hosted release. Both fields are required —
+/// there is nothing sensible to show or open without either.
+fn update_available_msg(payload : Map[String, Json]) -> Msg? {
+  let version = @transcript.json_text(payload, "version")
+  let url = @transcript.json_text(payload, "url")
+  guard !version.is_empty() && !url.is_empty() else { return None }
+  Some(UpdateAvailable(version~, url~))
 }
 
 ///|
@@ -481,6 +492,24 @@ fn cancel_openseek(dispatch : @cmd.Emit[Msg], run_id : Int) -> @cmd.Cmd {
               Error(run_id~, message=bridge_error_text(error), diagnostics=""),
             ),
           )
+          return
+        }
+      }
+    })
+  })
+}
+
+///|
+/// Ask the host to open a web link in the user's default browser (the host
+/// accepts https only). A failure pops an error toast.
+fn open_url(dispatch : @cmd.Emit[Msg], url : String) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let payload = @js.Object::new()
+      payload["url"] = url
+      let _ : @js.Value = bridge_request("open_url", payload.to_value()) catch {
+        error => {
+          scheduler.add(dispatch(HostActionFailed(bridge_error_text(error))))
           return
         }
       }
