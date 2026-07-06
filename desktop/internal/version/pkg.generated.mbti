@@ -2,7 +2,7 @@
 package "openseek_desktop/internal/version"
 
 // Values
-pub const AppVersion : String = "0.1.0"
+pub const AppVersion : String = "0.1.1"
 
 // Errors
 
