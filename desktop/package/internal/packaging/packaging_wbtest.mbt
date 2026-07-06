@@ -48,3 +48,54 @@ test "a PackageError shown as an Error keeps its message" {
     "package error: viewer stylesheet not found: /x.css",
   )
 }
+
+///|
+/// The published manifest must keep the exact shape `internal/update`
+/// decodes: version + page url at the top, per-platform url/sha256 under
+/// `platforms`, keyed by the artifact filename's infix.
+test "release manifest carries the shape the update checker decodes" {
+  inspect(
+    release_manifest_source("0.2.0", {
+      "macos-arm64": {
+        url: "https://openseek-api.moonbitlang.cn/desktop/releases/v0.2.0/OpenSeek-Desktop-macos-arm64.zip",
+        sha256: "abc123",
+      },
+      "windows-x64": {
+        url: "https://openseek-api.moonbitlang.cn/desktop/releases/v0.2.0/OpenSeek-Desktop-windows-x64.zip",
+        sha256: "def456",
+      },
+    }),
+    content=(
+      #|{
+      #|  "version": "0.2.0",
+      #|  "url": "https://github.com/moonbitlang/openseek/releases/latest",
+      #|  "platforms": {
+      #|    "macos-arm64": {
+      #|      "url": "https://openseek-api.moonbitlang.cn/desktop/releases/v0.2.0/OpenSeek-Desktop-macos-arm64.zip",
+      #|      "sha256": "abc123"
+      #|    },
+      #|    "windows-x64": {
+      #|      "url": "https://openseek-api.moonbitlang.cn/desktop/releases/v0.2.0/OpenSeek-Desktop-windows-x64.zip",
+      #|      "sha256": "def456"
+      #|    }
+      #|  }
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "artifact filenames map to platform keys by their infix" {
+  assert_true(
+    artifact_platform_key("OpenSeek-Desktop-macos-arm64.zip")
+    is Some("macos-arm64"),
+  )
+  assert_true(
+    artifact_platform_key("OpenSeek-Desktop-linux-x86_64.AppImage")
+    is Some("linux-x86_64"),
+  )
+  assert_true(artifact_platform_key("latest.json") is None)
+  assert_true(artifact_platform_key("OpenSeek-Desktop-.zip") is None)
+  assert_true(artifact_platform_key("OpenSeek-Desktop-noext") is None)
+}

@@ -2,6 +2,8 @@
 package "openseek_desktop/package/internal/packaging"
 
 // Values
+pub const ReleasesLayoutDir : String = "dist/releases"
+
 pub fn absolute_path(String) -> String
 
 pub async fn assemble_cef_runtime(Workspace, String) -> String
@@ -35,6 +37,8 @@ pub async fn remove_path_if_exists(String) -> Unit
 pub async fn run_checked(String, Array[String], dir~ : String, extra_env? : Map[String, String]) -> Unit
 
 pub fn windows_proton_cli() -> String
+
+pub async fn write_release_manifest(Workspace, String) -> Unit
 
 pub async fn write_text(String, String) -> Unit
 

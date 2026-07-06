@@ -86,30 +86,3 @@ test "macos notarization requires distribution signing" {
     _ => fail("expected --notarize without --sign to fail")
   }
 }
-
-///|
-/// The published manifest must keep the exact shape `internal/update`
-/// decodes: version + page url at the top, per-platform url/sha256 under
-/// `platforms`.
-test "release manifest carries the shape the update checker decodes" {
-  inspect(
-    release_manifest_source(
-      "0.2.0",
-      "abc123",
-      base_url="https://openseek-api.moonbitlang.cn/desktop/releases",
-    ),
-    content=(
-      #|{
-      #|  "version": "0.2.0",
-      #|  "url": "https://github.com/moonbitlang/openseek/releases/latest",
-      #|  "platforms": {
-      #|    "macos-arm64": {
-      #|      "url": "https://openseek-api.moonbitlang.cn/desktop/releases/v0.2.0/OpenSeek-Desktop-macos-arm64.zip",
-      #|      "sha256": "abc123"
-      #|    }
-      #|  }
-      #|}
-      #|
-    ),
-  )
-}

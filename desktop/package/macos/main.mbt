@@ -767,87 +767,26 @@ async fn sign_and_zip(ws : @packaging.Workspace, sign : SignConfig) -> Unit {
 }
 
 ///|
-/// Where release files download from by default: openseek-api's
-/// `/desktop/releases/` routes. Override with OPENSEEK_RELEASES_BASE_URL to
-/// publish the zips elsewhere (an OSS bucket / CDN) — the manifest is data,
-/// so the client follows whatever https URL it names.
-const DefaultReleasesBaseUrl : String = "https://openseek-api.moonbitlang.cn/desktop/releases"
-
-///|
-const ReleasesBaseUrlEnv : String = "OPENSEEK_RELEASES_BASE_URL"
-
-///|
-fn releases_base_url() -> String {
-  guard @env.get(ReleasesBaseUrlEnv) is Some(base) else {
-    return DefaultReleasesBaseUrl
-  }
-  base.trim_end(chars="/").to_owned()
-}
-
-///|
-/// The page the update toast opens when in-app install is unavailable.
-const ReleasePageUrl : String = "https://github.com/moonbitlang/openseek/releases/latest"
-
-///|
-/// The published archive name: the dist zip renamed URL-safe (the server's
-/// path guard rejects spaces).
+/// The published archive name: the dist zip renamed to the release naming
+/// convention (`OpenSeek-Desktop-<platform>.<ext>`, URL-safe — the server's
+/// path guard rejects spaces). The infix is the manifest platforms key.
 const ReleaseFileName : String = "OpenSeek-Desktop-macos-arm64.zip"
 
 ///|
-const ReleasesLayoutDir : String = "dist/releases"
-
-///|
-priv struct ReleaseArtifact {
-  url : String
-  sha256 : String
-} derive(ToJson)
-
-///|
-/// The manifest the desktop's update checker consumes; see
-/// `internal/update` for the decoding contract.
-priv struct ReleaseManifest {
-  version : String
-  url : String
-  platforms : Map[String, ReleaseArtifact]
-} derive(ToJson)
-
-///|
-fn release_manifest_source(
-  version : String,
-  digest : String,
-  base_url~ : String,
-) -> String {
-  let manifest : ReleaseManifest = {
-    version,
-    url: ReleasePageUrl,
-    platforms: {
-      "macos-arm64": {
-        url: "\{base_url}/v\{version}/\{ReleaseFileName}",
-        sha256: digest,
-      },
-    },
-  }
-  manifest.to_json().stringify(indent=2) + "\n"
-}
-
-///|
 /// Assemble `dist/releases/` as the exact tree the server's releases
-/// directory expects — the versioned zip plus a `latest.json` whose digest
-/// is computed here — so publishing a release is one recursive copy.
+/// directory expects: this platform's artifact in the versioned directory,
+/// and a `latest.json` regenerated from the directory's contents. A
+/// multi-platform release drops the other packagers' artifacts into the
+/// same directory and reruns `package/release`; this fresh-start wipe is
+/// therefore per-build, not per-publish.
 async fn stage_release_layout(ws : @packaging.Workspace) -> Unit {
   let version = @version.AppVersion
-  let layout = ws.at(ReleasesLayoutDir)
+  let layout = ws.at(@packaging.ReleasesLayoutDir)
   @packaging.remove_path_if_exists(layout)
   let versioned = "\{layout}/v\{version}"
   @packaging.ensure_dir(versioned)
   @packaging.copy_file(ws.at(ZipPath), "\{versioned}/\{ReleaseFileName}")
-  let digest = @crypto.bytes_to_hex_string(
-    @crypto.sha256(@asyncfs.read_file(ws.at(ZipPath)).binary()),
-  ).to_lower()
-  @packaging.write_text(
-    "\{layout}/latest.json",
-    release_manifest_source(version, digest, base_url=releases_base_url()),
-  )
+  @packaging.write_release_manifest(ws, version)
 }
 
 ///|
@@ -865,6 +804,6 @@ async fn main {
   println("generated \{ws.at(AppPath)}")
   println("generated \{ws.at(ZipPath)}")
   println(
-    "generated \{ws.at(ReleasesLayoutDir)} — copy its contents into the server's releases directory to publish",
+    "generated \{ws.at(@packaging.ReleasesLayoutDir)} — copy its contents into the server's releases directory to publish",
   )
 }
