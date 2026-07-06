@@ -93,7 +93,11 @@ test "macos notarization requires distribution signing" {
 /// `platforms`.
 test "release manifest carries the shape the update checker decodes" {
   inspect(
-    release_manifest_source("0.2.0", "abc123"),
+    release_manifest_source(
+      "0.2.0",
+      "abc123",
+      base_url="https://openseek-api.moonbitlang.cn/desktop/releases",
+    ),
     content=(
       #|{
       #|  "version": "0.2.0",

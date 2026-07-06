@@ -767,9 +767,22 @@ async fn sign_and_zip(ws : @packaging.Workspace, sign : SignConfig) -> Unit {
 }
 
 ///|
-/// Where release files download from; must stay in sync with openseek-api's
-/// `/desktop/releases/` routes.
-const ReleasesBaseUrl : String = "https://openseek-api.moonbitlang.cn/desktop/releases"
+/// Where release files download from by default: openseek-api's
+/// `/desktop/releases/` routes. Override with OPENSEEK_RELEASES_BASE_URL to
+/// publish the zips elsewhere (an OSS bucket / CDN) — the manifest is data,
+/// so the client follows whatever https URL it names.
+const DefaultReleasesBaseUrl : String = "https://openseek-api.moonbitlang.cn/desktop/releases"
+
+///|
+const ReleasesBaseUrlEnv : String = "OPENSEEK_RELEASES_BASE_URL"
+
+///|
+fn releases_base_url() -> String {
+  guard @env.get(ReleasesBaseUrlEnv) is Some(base) else {
+    return DefaultReleasesBaseUrl
+  }
+  base.trim_end(chars="/").to_owned()
+}
 
 ///|
 /// The page the update toast opens when in-app install is unavailable.
@@ -799,13 +812,17 @@ priv struct ReleaseManifest {
 } derive(ToJson)
 
 ///|
-fn release_manifest_source(version : String, digest : String) -> String {
+fn release_manifest_source(
+  version : String,
+  digest : String,
+  base_url~ : String,
+) -> String {
   let manifest : ReleaseManifest = {
     version,
     url: ReleasePageUrl,
     platforms: {
       "macos-arm64": {
-        url: "\{ReleasesBaseUrl}/v\{version}/\{ReleaseFileName}",
+        url: "\{base_url}/v\{version}/\{ReleaseFileName}",
         sha256: digest,
       },
     },
@@ -829,7 +846,7 @@ async fn stage_release_layout(ws : @packaging.Workspace) -> Unit {
   ).to_lower()
   @packaging.write_text(
     "\{layout}/latest.json",
-    release_manifest_source(version, digest),
+    release_manifest_source(version, digest, base_url=releases_base_url()),
   )
 }
 
