@@ -311,8 +311,25 @@ fn fetch_text(
   url : String,
   to_msg : (Result[String, Error]) -> Msg,
 ) -> @cmd.Cmd {
-  @http.get(url).expect_text(emit.map(to_msg))
+  // A standalone export bakes the API responses into `window.__OPENSEEK_DATA__`,
+  // so answer from there when present and skip the network entirely; a normal
+  // server build has no such global and falls through to HTTP unchanged.
+  if embedded_has(url) {
+    emit(to_msg(Ok(embedded_get(url))))
+  } else {
+    @http.get(url).expect_text(emit.map(to_msg))
+  }
 }
+
+///|
+/// Whether a self-contained export (see `cmd/viz_server --export`) baked a
+/// response for `url` into `window.__OPENSEEK_DATA__`. False in a normal server
+/// build, where the global is absent and every lookup misses.
+extern "js" fn embedded_has(url : String) -> Bool = "(url) => (typeof window !== 'undefined') && !!window.__OPENSEEK_DATA__ && Object.prototype.hasOwnProperty.call(window.__OPENSEEK_DATA__, url)"
+
+///|
+/// The baked response body for `url`. Only called after `embedded_has` is true.
+extern "js" fn embedded_get(url : String) -> String = "(url) => window.__OPENSEEK_DATA__[url]"
 
 ///|
 /// Switch the viewer to a locally dropped session file. Everything comes from

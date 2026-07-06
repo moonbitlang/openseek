@@ -9,11 +9,11 @@ fn main {
     view~,
   )
   let app = @rabbita.new(app_cell)
+  // Route the initial listing through fetch_text so a standalone export answers
+  // it from the embedded data map instead of the (absent) server.
   app.with_init(
     @cmd.batch([
-      @http.get("/api/sessions").expect_text(
-        emit.map(result => SessionsFetched(result)),
-      ),
+      fetch_text(emit, "/api/sessions", result => SessionsFetched(result)),
       install_shortcuts(emit),
     ]),
   )
