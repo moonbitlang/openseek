@@ -4,16 +4,57 @@
 // the front-end only marshals the position and decodes the reply.
 
 ///|
-/// The session whose file the viewer currently shows. The hover provider needs
-/// it to address the host op, but a `TextModel` carries only the file path — so
-/// it is stashed here whenever a file is shown.
-let current_session : Ref[String] = Ref("")
+/// The scheme prefixing viewer model URIs. The hover provider only ever
+/// receives the `TextModel`, never the app `Model`, so the URI carries
+/// everything the provider needs to address the host op:
+/// `openseek:///<path>?session=<id>&ws=<workspace>` (each part
+/// percent-encoded; `ws` present only for workspace conversations).
+const ModelUriPrefix : String = "openseek:///"
 
 ///|
-/// That session's workspace ("" when scratch), stashed alongside it: a fresh
-/// workspace conversation has no durable record on disk yet, so the host can
-/// only find its project through this hint (see `read_directory`).
-let current_workspace : Ref[String] = Ref("")
+/// What a model URI addresses: the conversation, its workspace hint (`""`
+/// when scratch), and the workspace-relative file path.
+priv struct ModelTarget {
+  session : String
+  workspace : String
+  path : String
+}
+
+///|
+fn model_uri(session : String, workspace : String, path : String) -> String {
+  let uri = StringBuilder::new()
+  uri.write_string(ModelUriPrefix)
+  uri.write_string(@uri.encode_path(path))
+  uri.write_string("?session=")
+  uri.write_string(@uri.encode_component(session))
+  if !workspace.is_empty() {
+    uri.write_string("&ws=")
+    uri.write_string(@uri.encode_component(workspace))
+  }
+  uri.to_string()
+}
+
+///|
+/// Decode a viewer model URI; `None` for a URI this app did not mint (no
+/// scheme, no session), which has no host op to route to anyway.
+fn parse_model_uri(uri : String) -> ModelTarget? {
+  guard uri.strip_prefix(ModelUriPrefix) is Some(rest) else { return None }
+  let (path, query) = match rest.split_once("?") {
+    Some((path, query)) => (path, query)
+    None => (rest, "".view())
+  }
+  let mut session = ""
+  let mut workspace = ""
+  for pair in query.split("&") {
+    match pair.split_once("=") {
+      Some(("session", value)) => session = @uri.decode(value)
+      Some(("ws", value)) => workspace = @uri.decode(value)
+      _ => ()
+    }
+  }
+  guard !session.is_empty() else { return None }
+  Some({ session, workspace, path: @uri.decode(path) })
+}
 
 ///|
 priv struct LspHoverProvider {}
@@ -28,12 +69,11 @@ impl @language.HoverProvider for LspHoverProvider with fn provide_hover(
   // v1 covers MoonBit only; other languages have no server behind the op.
   guard model.language_id == "moonbit" else { return None }
   guard !token.is_cancellation_requested() else { return None }
-  let session = current_session.val
-  guard !session.is_empty() else { return None }
+  guard parse_model_uri(model.uri.value) is Some(target) else { return None }
   let reply = request_hover(
-    session~,
-    workspace=current_workspace.val,
-    path=strip_model_uri(model.uri.value),
+    session=target.session,
+    workspace=target.workspace,
+    path=target.path,
     // The viewer's Position is 1-based; the host op speaks 0-based LSP coords.
     line=position.line_number - 1,
     character=position.column - 1,
@@ -51,18 +91,6 @@ fn register_hover_provider() -> Unit {
     LspHoverProvider::{  },
   )
   |> ignore
-}
-
-///|
-/// Strip the `openseek:///` scheme the viewer models use, leaving the
-/// workspace-relative path the host op expects.
-fn strip_model_uri(uri : String) -> String {
-  let prefix = "openseek:///"
-  if uri.has_prefix(prefix) {
-    uri[prefix.length():].to_owned()
-  } else {
-    uri
-  }
 }
 
 ///|

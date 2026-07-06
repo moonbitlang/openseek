@@ -15,6 +15,7 @@ import {
   "moonbit-community/editor/syntax/lang_moonbit",
   "moonbit-community/editor/syntax/lang_javascript",
   "moonbit-community/editor/syntax/lang_json",
+  "openseek_desktop/internal/uri",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/markdown",
   "openseek_desktop/frontend/transcript",

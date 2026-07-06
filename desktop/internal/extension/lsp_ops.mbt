@@ -160,7 +160,7 @@ async fn lsp_hover_op(
     return no_hover()
   }
   guard read_text(file) is Some(text) else { return no_hover() }
-  let uri = file_uri(file.to_string())
+  let uri = @uri.file_uri(file.to_string())
   // Re-sync only when the file's text actually changed since the last hover.
   if !(workspace.synced.get(uri) is Some(synced) && synced == text) {
     workspace.session.sync_document(uri~, language_id="moonbit", text~)
@@ -302,7 +302,7 @@ fn symbol_range(location : Map[String, Json]) -> SymbolRange {
 /// sides compare with forward slashes so a Windows workspace path matches the
 /// URI-derived one.
 fn workspace_relative(uri : String, workspace_dir : String) -> String {
-  let path = file_uri_path(uri)
+  let path = @uri.file_uri_path(uri)
   let root = workspace_dir.replace_all(old="\\", new="/")
   let prefix = root + "/"
   if path.has_prefix(prefix) {
@@ -511,7 +511,7 @@ async fn[G] spawn_workspace(
   )
   let session_object = @lsp.Session::new(client)
   // A failed handshake is non-fatal: later requests simply return nothing.
-  session_object.initialize(root_uri=file_uri(directory)) catch {
+  session_object.initialize(root_uri=@uri.file_uri(directory)) catch {
     error if @async.is_being_cancelled() => raise error
     _ => ()
   }
