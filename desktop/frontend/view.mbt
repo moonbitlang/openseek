@@ -521,7 +521,7 @@ fn sidebar_footer_buttons(
   if update_label is Some(label) {
     buttons.push(
       @html.button(
-        class="sidebar-button update-accent",
+        class="sidebar-button primary",
         disabled=!(model.update_ux is UpdateAvailable(..)),
         on_click=dispatch(UpdateClicked),
         [
@@ -1343,7 +1343,7 @@ fn update_check_controls(
       if installable {
         controls.push(
           @html.button(
-            class="update-accent",
+            class="primary",
             on_click=dispatch(UpdateClicked),
             "Update to \{version}",
           ),
@@ -1359,7 +1359,7 @@ fn update_check_controls(
     ConfirmingRestart(version~) =>
       // The interrupt modal is up over this row; keep the button visible
       // behind it so the row does not blink while the user decides.
-      controls.push(@html.button(class="update-accent", "Update to \{version}"))
+      controls.push(@html.button(class="primary", "Update to \{version}"))
     DownloadingUpdate(version~) =>
       controls.push(
         @html.span(class="update-status", "Downloading \{version}…"),
@@ -1468,7 +1468,10 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             on_input=dispatch.map(value => SetupApiKeyChanged(value)),
           ),
           @html.button(
+            // The id is layout only (grid placement); the fill is the
+            // shared primary style.
             id="saveApiKey",
+            class="primary",
             disabled=model.setup_api_key.trim().is_empty(),
             on_click=dispatch(SaveApiKey),
             "Save API key",
@@ -2284,7 +2287,7 @@ fn update_confirm_modal(
       @html.div(class="modal-actions", [
         @html.button(on_click=dispatch(CancelUpdateRestart), "Keep working"),
         @html.button(
-          class="update-accent",
+          class="primary",
           on_click=dispatch(ConfirmUpdateRestart),
           "Update and restart",
         ),

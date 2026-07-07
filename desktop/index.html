@@ -824,33 +824,6 @@
         color: var(--ink);
       }
 
-      /* The self-update call to action: the one accent-filled control in the
-         chrome, in the sidebar footer and the Settings updates row alike. */
-      button.update-accent {
-        background: var(--accent);
-        color: #fff;
-        border: 0;
-        border-radius: var(--radius-sm);
-        cursor: pointer;
-      }
-      /* Outside the sidebar it sits next to button.secondary — same metrics,
-         accent fill. */
-      button.update-accent:not(.sidebar-button) {
-        padding: 6px 12px;
-        font-size: 12px;
-      }
-      button.update-accent .sidebar-icon,
-      button.update-accent.sidebar-button {
-        color: #fff;
-      }
-      button.update-accent:not(:disabled):hover {
-        background: var(--accent-ink);
-        color: #fff;
-      }
-      button.update-accent:disabled {
-        opacity: 0.7;
-        cursor: default;
-      }
 
       /* ---------- main column ---------- */
       main {
@@ -1906,16 +1879,29 @@
         background: var(--surface-2);
       }
 
-      #saveApiKey {
+      /* The accent-filled call to action, button.secondary's counterpart:
+         Save API key, the self-update controls, modal confirms. As a
+         sidebar-button it keeps the sidebar's geometry, only the fill. */
+      button.primary {
         border-color: var(--accent);
         background: var(--accent);
         color: #fff;
-        padding: 8px 14px;
-        font-size: 12.5px;
       }
-      #saveApiKey:not(:disabled):hover {
+      button.primary:not(.sidebar-button) {
+        padding: 6px 12px;
+        font-size: 12px;
+      }
+      button.primary .sidebar-icon {
+        color: #fff;
+      }
+      button.primary:not(:disabled):hover {
         background: var(--accent-ink);
         border-color: var(--accent-ink);
+        color: #fff;
+      }
+      button.primary:disabled {
+        opacity: 0.7;
+        cursor: default;
       }
 
       /* ---------- settings page ---------- */
@@ -2284,11 +2270,16 @@
       .modal-actions button:hover {
         background: var(--surface-2);
       }
-      .modal-actions button.update-accent {
-        border: 0;
+      /* Re-assert the accent fill: the generic .modal-actions button rule
+         above outranks button.primary by document order. */
+      .modal-actions button.primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #fff;
       }
-      .modal-actions button.update-accent:hover {
+      .modal-actions button.primary:hover {
         background: var(--accent-ink);
+        border-color: var(--accent-ink);
       }
 
       /* Inline outcome text in the Settings updates row. */
