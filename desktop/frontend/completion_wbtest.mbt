@@ -203,7 +203,7 @@ test "push_mention appends new chips and drops exact duplicates" {
 }
 
 ///|
-test "compose_prompt folds chip expansions ahead of the typed text" {
+test "compose_prompt folds the chips into a parseable envelope after the text" {
   let mentions : Array[Mention] = [
     {
       kind: SymbolMention,
@@ -220,18 +220,43 @@ test "compose_prompt folds chip expansions ahead of the typed text" {
       range: None,
     },
   ]
-  // Expansions (each carries its own trailing space) come first, then the text.
-  assert_eq(
+  // The typed text leads (the engine titles sessions by the first prompt's
+  // first line); the chips follow as the tagged block the transcript parses
+  // back into chips, live and on session reload alike.
+  inspect(
     compose_prompt(mentions, "look at this"),
-    "`parse_hover` — a.mbt:5 review-pr look at this",
+    content=(
+      #|look at this
+      #|
+      #|<user_mentions>
+      #|<symbol name="parse_hover" file="a.mbt" line="5"/>
+      #|<skill name="review-pr"/>
+      #|</user_mentions>
+    ),
   )
-  // No chips: just the text.
+  // No chips: just the text, no envelope.
   assert_eq(compose_prompt([], "plain"), "plain")
-  // Chips alone: the expansions, which the caller trims before sending.
-  assert_eq(
-    compose_prompt(mentions, "").trim().to_owned(),
-    "`parse_hover` — a.mbt:5 review-pr",
-  )
+}
+
+///|
+test "a draft of chips alone is not sendable" {
+  let conv = {
+    ..empty_conversation("s"),
+    mentions: [
+      {
+        kind: SkillMention,
+        label: "review-pr",
+        expand: "review-pr ",
+        path: None,
+        range: None,
+      },
+    ],
+  }
+  // Chips are context for an instruction; without typed text the draft is
+  // retained (not empty) but cannot be submitted.
+  assert_false(conv.draft_sendable())
+  assert_false(conv.draft_empty())
+  assert_true({ ..conv, task: "do it" }.draft_sendable())
 }
 
 ///|

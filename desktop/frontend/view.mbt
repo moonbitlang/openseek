@@ -86,7 +86,9 @@ fn model_select(dispatch : @cmd.Emit[Msg], selected : String) -> @html.Html {
 fn conversation_title(conv : Conversation) -> String {
   for item in conv.messages {
     if item.kind is User {
-      let title = item.content.trim().to_owned()
+      // A prompt sent with chips titles by what was typed (or, chips alone,
+      // by their labels) — never by the raw `<user_mentions>` envelope.
+      let title = user_display_text(item.content).trim().to_owned()
       if !title.is_empty() {
         return title
       }
@@ -831,19 +833,94 @@ fn inline_code_nodes(content : String) -> Array[@html.Html] {
 }
 
 ///|
+/// A transcript chip's display form: the trigger glyph the composer used, the
+/// label text, and the jump target (`file` empty when it has none). An
+/// annotation labels as its location — its texts live in the chip's tooltip
+/// and the message body the model read.
+priv struct MentionChip {
+  glyph : String
+  label : String
+  file : String
+  line : Int
+}
+
+///|
+fn mention_chip(mention : @mention_context.MentionRef) -> MentionChip {
+  match mention {
+    Skill(name~) => { glyph: "$", label: name, file: "", line: 0 }
+    Symbol(name~, file~, line~) => { glyph: "#", label: name, file, line }
+    Annotation(file~, start_line~, end_line~, ..) =>
+      {
+        glyph: "✎",
+        label: "\{file}:\{start_line}-\{end_line}",
+        file,
+        line: start_line,
+      }
+  }
+}
+
+///|
+/// A user message bubble. A content that carries a `<user_mentions>` envelope
+/// (a prompt sent with chips) renders as the chips it was composed with — the
+/// same tray the composer showed, minus the remove buttons — above the typed
+/// text; anything else is plain text. A chip with a resolved location jumps
+/// the editor panel there via `on_jump`, when the caller wires one.
+fn user_message_view(
+  content : String,
+  on_jump? : (String, Int) -> @cmd.Cmd,
+) -> @html.Html {
+  let body : Array[@html.Html] = [@html.div(class="msg-role", "You")]
+  match @mention_context.parse(content) {
+    Some(parsed) => {
+      let chips : Array[@html.Html] = []
+      for mention in parsed.mentions {
+        let parts = mention_chip(mention)
+        let glyph = @html.span(class="mention-glyph", parts.glyph)
+        let label = @html.span(class="mention-label", parts.label)
+        let title = if mention is Annotation(comment~, ..) {
+          comment
+        } else if parts.file.is_empty() {
+          parts.label
+        } else {
+          "Jump to \{parts.file}:\{parts.line}"
+        }
+        let chip = if !parts.file.is_empty() && on_jump is Some(jump) {
+          @html.button(
+            class="mention-jump",
+            type_="button",
+            title~,
+            on_click=jump(parts.file, parts.line),
+            [glyph, label],
+          )
+        } else {
+          @html.span(class="mention-body", [glyph, label])
+        }
+        chips.push(@html.div(class="mention-chip", [chip]))
+      }
+      body.push(@html.div(class="mention-tray", chips))
+      if !parsed.task.is_empty() {
+        body.push(
+          @html.div(class="msg-content", inline_code_nodes(parsed.task)),
+        )
+      }
+    }
+    None =>
+      body.push(@html.div(class="msg-content", inline_code_nodes(content)))
+  }
+  @html.div(class="msg", [
+    @html.div(class="avatar user", "›"),
+    @html.div(class="msg-body", body),
+  ])
+}
+
+///|
 fn transcript_item_view(
   item : @transcript.TranscriptItem,
   on_open : (String) -> @cmd.Cmd,
+  on_jump? : (String, Int) -> @cmd.Cmd,
 ) -> @html.Html {
   match item.kind {
-    User =>
-      @html.div(class="msg", [
-        @html.div(class="avatar user", "›"),
-        @html.div(class="msg-body", [
-          @html.div(class="msg-role", "You"),
-          @html.div(class="msg-content", inline_code_nodes(item.content)),
-        ]),
-      ])
+    User => user_message_view(item.content, on_jump?)
     Assistant(is_danger) => {
       // Errors and abort notices are plain text; only real assistant replies
       // are markdown.
@@ -948,7 +1025,12 @@ fn transcript_view(
     while index < conv.messages.length() {
       guard conv.messages[index].kind
         is (Tool(..) | Reasoning | Assistant(false)) else {
-        items.push(transcript_item_view(conv.messages[index], on_open))
+        items.push(
+          transcript_item_view(conv.messages[index], on_open, on_jump=(
+            path,
+            line,
+          ) => dispatch(JumpToLocation(path~, line~))),
+        )
         index = index + 1
         continue
       }
@@ -1005,15 +1087,34 @@ fn transcript_view(
 fn pending_steers_panel(conv : Conversation) -> @html.Html {
   let rows : Array[@html.Html] = []
   for text in conv.pending_steers {
+    let shown = user_display_text(text)
     rows.push(
-      @html.div(class="pending-steer-row", title=text, [
+      @html.div(class="pending-steer-row", title=shown, [
         @html.span(class="pending-steer-icon", "⤷"),
-        @html.span(class="pending-steer-text", text),
+        @html.span(class="pending-steer-text", shown),
         @html.span(class="pending-steer-state", "steering…"),
       ]),
     )
   }
   @html.div(class="pending-steers", rows)
+}
+
+///|
+/// The one-line display form of a submitted prompt (steer bubbles, sidebar
+/// titles): a submission that carried chips is shown as its typed text plus
+/// `$name`/`#name` markers rather than the raw `<user_mentions>` envelope the
+/// engine receives.
+fn user_display_text(text : String) -> String {
+  guard @mention_context.parse(text) is Some(parsed) else { return text }
+  let parts : Array[String] = []
+  if !parsed.task.is_empty() {
+    parts.push(parsed.task)
+  }
+  for mention in parsed.mentions {
+    let chip = mention_chip(mention)
+    parts.push(chip.glyph + chip.label)
+  }
+  parts.join(" ")
 }
 
 ///|
@@ -1150,7 +1251,7 @@ fn mention_tray(dispatch : @cmd.Emit[Msg], conv : Conversation) -> @html.Html {
 ///|
 fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let conv = model.active()
-  let has_input = model.bridge_ready && model.api_ready() && !conv.draft_empty()
+  let has_input = model.bridge_ready && model.api_ready() && conv.draft_sendable()
   // A compacting conversation cannot accept a prompt either: the serve
   // engine would queue it behind the compaction, where Stop cannot reach it.
   let can_send = !conv.running && !conv.compacting && has_input
@@ -1170,11 +1271,12 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     @html.div(class="composer-status", status),
   ]
   if conv.running {
-    // One morphing button while this conversation's turn runs: a non-empty
-    // draft (text or chips) turns it into a steer submit, an empty composer
-    // leaves it as the interrupt. A turn being cancelled cannot be steered, so
-    // the button waits with the user's draft in the composer.
-    if conv.draft_empty() {
+    // One morphing button while this conversation's turn runs: a sendable
+    // draft (typed text) turns it into a steer submit, anything else —
+    // empty, or chips still waiting for their instruction — leaves it as the
+    // interrupt. A turn being cancelled cannot be steered, so the button
+    // waits with the user's draft in the composer.
+    if !conv.draft_sendable() {
       controls.push(
         @html.button(
           id="stop",

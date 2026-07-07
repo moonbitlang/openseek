@@ -219,6 +219,25 @@ priv struct Mention {
 }
 
 ///|
+/// The chip's envelope form — its label plus the resolved location's
+/// file/start line (`""`/0 when it has none) — which is everything
+/// `@mention_context.encode` writes into the outgoing prompt and `parse`
+/// recovers for the transcript's chip row.
+fn Mention::to_ref(self : Mention) -> @mention_context.MentionRef {
+  match self.kind {
+    SkillMention => Skill(name=self.label)
+    SymbolMention => {
+      let (file, line) = if self.path is Some(path) && self.range is Some(range) {
+        (path, range.start_line_number)
+      } else {
+        ("", 0)
+      }
+      Symbol(name=self.label, file~, line~)
+    }
+  }
+}
+
+///|
 /// The composer's open completion menu: the trigger that opened it, the
 /// currently matching rows, and which row is highlighted. Absent when the
 /// composer text does not begin with a live trigger. `loading` is set only for
@@ -476,6 +495,10 @@ priv enum Msg {
   // index. A no-op for a chip with no `path` (a skill, or an unresolved
   // symbol).
   JumpToMention(Int)
+  // Jump the editor side-panel to a transcript chip's resolved location — a
+  // sent message's mention, parsed back out of its `<user_mentions>` envelope,
+  // so it carries the location itself rather than a draft index.
+  JumpToLocation(path~ : String, line~ : Int)
   // A `workspace_symbols` reply: `session`/`query` say which request it answers
   // so a reply that lost a conversation switch or a later keystroke is dropped.
   SymbolsLoaded(
@@ -937,11 +960,20 @@ fn Model::activate(self : Model, session_id : String) -> Model {
 }
 
 ///|
-/// Whether the composer draft holds nothing to send: no typed text and no
-/// mention chips. A draft of chips alone is still sendable (the chips expand
-/// into the prompt), so both must be empty.
+/// Whether the composer draft holds nothing at all — no typed text and no
+/// mention chips. This is the retention test (`Model::activate` keeps a
+/// conversation whose draft still holds anything), not the send gate: that is
+/// `draft_sendable`.
 fn Conversation::draft_empty(self : Conversation) -> Bool {
   self.task.trim().is_empty() && self.mentions.is_empty()
+}
+
+///|
+/// Whether the draft can be submitted: only typed text makes a prompt.
+/// Chips alone don't send — a mention is context *for* an instruction, so
+/// the instruction is required; the chips ride along in the envelope.
+fn Conversation::draft_sendable(self : Conversation) -> Bool {
+  !self.task.trim().is_empty()
 }
 
 ///|

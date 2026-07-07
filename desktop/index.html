@@ -1608,6 +1608,15 @@
       .mention-remove:hover {
         background: color-mix(in srgb, var(--accent) 22%, transparent);
       }
+      /* chips re-rendered inside a sent message (parsed back out of its
+         <user_mentions> envelope): same chip chrome, no remove button, so the
+         padding evens out; a small gap before the typed text below */
+      .msg-body .mention-tray {
+        margin: 2px 0 4px;
+      }
+      .msg-body .mention-chip {
+        padding: 2px 8px;
+      }
 
       /* slash/skill completion menu, floated above the composer */
       .completion-menu {

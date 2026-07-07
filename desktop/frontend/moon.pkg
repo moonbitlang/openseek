@@ -20,6 +20,7 @@ import {
   "openseek_desktop/internal/uri",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/markdown",
+  "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/transcript",
 }
 

@@ -98,6 +98,45 @@ fn accept_mention(
 }
 
 ///|
+/// Open (or refocus) the editor side-panel on `path`, revealing `range` when
+/// given — the shared tail of a composer chip's and a transcript chip's jump.
+fn open_editor_at(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  path : String,
+  range : @common.Range?,
+) -> (@cmd.Cmd, Model) {
+  let conv = model.active()
+  // Re-root only when the panel's cached tree belongs to another
+  // conversation; otherwise `sync_file_panel`'s post-dispatch pass would
+  // see a session mismatch and wipe the `selected`/`open` set below.
+  let panel = if model.file_panel.session == conv.session_id {
+    model.file_panel
+  } else {
+    { ..empty_file_panel(), session: conv.session_id }
+  }
+  (
+    @cmd.batch([
+      request_viewer_mount(),
+      request_resize_handle_mount(),
+      request_viewer_remeasure(),
+      read_file(
+        dispatch,
+        conv.session_id,
+        path,
+        basename(path),
+        range~,
+        workspace=conv.workspace,
+      ),
+    ]),
+    {
+      ..model,
+      file_panel: { ..panel, open: true, selected: Some(path), error: "" },
+    },
+  )
+}
+
+///|
 /// The command, if any, to fetch workspace symbols for a changed draft. Fires
 /// only when the draft is a live `#` query (a non-empty token, no spaces) whose
 /// results are not already cached for this conversation — so a fresh keystroke
@@ -527,33 +566,18 @@ fn update_msg(
         return (@cmd.none, model)
       }
       guard mention.path is Some(path) else { return (@cmd.none, model) }
-      // Re-root only when the panel's cached tree belongs to another
-      // conversation; otherwise `sync_file_panel`'s post-dispatch pass would
-      // see a session mismatch and wipe the `selected`/`open` set below.
-      let panel = if model.file_panel.session == conv.session_id {
-        model.file_panel
+      open_editor_at(dispatch, model, path, mention.range)
+    }
+    JumpToLocation(path~, line~) => {
+      // A transcript chip carries only the reference's line (the envelope
+      // stores `path:line`); an empty range still anchors the viewer there,
+      // it just selects nothing.
+      let range = if line >= 1 {
+        Some(@common.Range::Range(line, 1, line, 1))
       } else {
-        { ..empty_file_panel(), session: conv.session_id }
+        None
       }
-      (
-        @cmd.batch([
-          request_viewer_mount(),
-          request_resize_handle_mount(),
-          request_viewer_remeasure(),
-          read_file(
-            dispatch,
-            conv.session_id,
-            path,
-            basename(path),
-            range=mention.range,
-            workspace=conv.workspace,
-          ),
-        ]),
-        {
-          ..model,
-          file_panel: { ..panel, open: true, selected: Some(path), error: "" },
-        },
-      )
+      open_editor_at(dispatch, model, path, range)
     }
     CompletionAccept =>
       if model.completion is Some(menu) && menu.current() is Some(item) {
@@ -852,10 +876,11 @@ fn update_msg(
     }
     Send => {
       let conv = model.active()
-      // The outgoing prompt folds the mention chips' expansions in ahead of the
-      // typed text; a draft of chips alone still sends.
+      // The outgoing prompt is the typed text with the chips folded in as the
+      // `<user_mentions>` envelope. Typed text is required — chips alone are
+      // context without an instruction and stay in the composer.
       let task = compose_prompt(conv.mentions, conv.task).trim().to_owned()
-      if task.is_empty() || !model.bridge_ready || !model.api_ready() {
+      if !conv.draft_sendable() || !model.bridge_ready || !model.api_ready() {
         (@cmd.none, model)
       } else if conv.running {
         // Submitting while this conversation's turn runs steers it: the text

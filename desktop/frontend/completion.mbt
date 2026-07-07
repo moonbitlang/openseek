@@ -108,16 +108,12 @@ fn push_mention(mentions : Array[Mention], mention : Mention) -> Array[Mention] 
 
 ///|
 /// Assemble the outgoing prompt from the draft's mention chips and typed text:
-/// each chip's expansion first (each already carries its own trailing space),
-/// then the typed text. With no chips this is just the text; the caller trims
-/// the result for the empty check and the transcript echo.
+/// the text first, then the chips folded into a `<user_mentions>` envelope
+/// (`@mention_context.encode`) — the durable form the transcript parses back
+/// into chips when the message re-renders, live or from a reloaded session.
+/// With no chips this is just the text.
 fn compose_prompt(mentions : Array[Mention], task : String) -> String {
-  let parts = StringBuilder::new()
-  for mention in mentions {
-    parts.write_string(mention.expand)
-  }
-  parts.write_string(task)
-  parts.to_string()
+  @mention_context.encode(mentions.map(Mention::to_ref), task)
 }
 
 ///|
