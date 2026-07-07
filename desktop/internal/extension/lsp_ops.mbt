@@ -298,19 +298,12 @@ fn symbol_range(location : Map[String, Json]) -> SymbolRange {
 ///|
 /// Turn an absolute `file:` URI into a path relative to `workspace_dir`. A URI
 /// already inside the workspace loses the directory prefix; one that is not (the
-/// server should not return such, but be safe) keeps its absolute path. Both
-/// sides compare with forward slashes so a Windows workspace path matches the
-/// URI-derived one.
+/// server should not return such, but be safe) keeps its absolute path.
 fn workspace_relative(uri : String, workspace_dir : String) -> String {
   let path = @uri.file_uri_path(uri)
-  let root = workspace_dir.replace_all(old="\\", new="/")
-  let prefix = root + "/"
-  if path.has_prefix(prefix) {
-    path.view(start_offset=prefix.length()).to_owned()
-  } else if path == root {
-    ""
-  } else {
-    path
+  match @pathx.relative_to(path, root=workspace_dir) {
+    Some(relative) => relative
+    None => path
   }
 }
 
@@ -374,23 +367,13 @@ fn server_for_file(
 ) -> LspWorkspace? {
   let mut best : LspWorkspace? = None
   for workspace in servers {
-    guard root_contains_file(workspace.root, file) else { continue }
+    guard @pathx.contains(workspace.root, file) else { continue }
     if best is Some(current) && current.root.length() >= workspace.root.length() {
       continue
     }
     best = Some(workspace)
   }
   best
-}
-
-///|
-/// Whether `file` is `root` or lives under it. Both sides compare with
-/// forward slashes: on Windows `@path.Path::to_string()` produces
-/// backslashes, which a naive `root + "/"` prefix check never matches.
-fn root_contains_file(root : String, file : String) -> Bool {
-  let root = root.replace_all(old="\\", new="/")
-  let file = file.replace_all(old="\\", new="/")
-  file == root || file.has_prefix(root + "/")
 }
 
 ///|

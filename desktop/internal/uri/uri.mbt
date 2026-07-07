@@ -55,7 +55,7 @@ pub fn decode(text : StringView) -> String {
 /// (`C:\a` → `file:///C:/a`), and reserved or non-ASCII bytes
 /// percent-encode.
 pub fn file_uri(absolute_path : String) -> String {
-  let path = absolute_path.replace_all(old="\\", new="/")
+  let path = @pathx.normalize(absolute_path)
   let uri = StringBuilder::new()
   uri.write_string("file://")
   if !path.has_prefix("/") {
