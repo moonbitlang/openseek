@@ -3,7 +3,6 @@ import {
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/agent_tool/edit",
   "bobzhang/openseek/agent_tool/finish",
-  "bobzhang/openseek/agent_tool/moon_check",
   "bobzhang/openseek/agent_tool/moon_cmd",
   "bobzhang/openseek/agent_tool/plan",
   "bobzhang/openseek/agent_tool/read",

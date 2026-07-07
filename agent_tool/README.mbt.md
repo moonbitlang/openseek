@@ -11,7 +11,6 @@ Concrete built-in tools live in subpackages:
 - `agent_tool/multi_edit`
 - `agent_tool/write`
 - `agent_tool/shell`
-- `agent_tool/moon_check`
 - `agent_tool/moon_cmd`
 - `agent_tool/plan`
 - `agent_tool/finish`
@@ -48,22 +47,19 @@ so ending the run is a host-loop decision rather than another message the model
 has to interpret.
 
 Stateful tools use `agent_runtime` when they need loop-scoped capabilities such
-as the workspace root, bounded background work, or typed runtime events. For
-example, `moon_check` owns its watcher state in its own package and uses an
-`AgentTaskScope` for watcher tasks; its direct tool results still follow the
-normal `Respond(ToolOutput(...))` contract.
+as the workspace root, bounded background work, or typed runtime events. Such a
+tool owns its state in its own package and reaches for an `AgentTaskScope` when
+it spawns background work; its direct tool results still follow the normal
+`Respond(ToolOutput(...))` contract.
 
 ```mermaid
 flowchart LR
   Model[DeepSeek tool call] --> Agent[agent loop]
   Agent --> Tools[Tools registry]
   Agent --> Runtime[agent_runtime scope/root]
-  Runtime --> MoonCheck
-  Tools --> MoonCheck[moon_check executor]
-  MoonCheck --> Watcher[moon check --watch]
-  Watcher --> Monitor[reader task]
-  Monitor --> MoonCheck
-  MoonCheck --> Agent
+  Tools --> Executor[tool executor]
+  Runtime --> Executor
+  Executor --> Agent
   Agent --> Model
 ```
 

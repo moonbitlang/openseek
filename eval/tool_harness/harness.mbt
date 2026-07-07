@@ -32,10 +32,9 @@ async fn run_harness_with_runtime(
     run_write_case(2, tools),
     run_edit_case(3, tools),
     run_shell_case(4, tools),
-    run_moon_check_case(5, tools),
-    run_moon_cmd_case(6, tools),
-    run_plan_case(7, tools),
-    run_finish_case(8, tools),
+    run_moon_cmd_case(5, tools),
+    run_plan_case(6, tools),
+    run_finish_case(7, tools),
   ]
   build_report(rows)
 }
@@ -45,12 +44,16 @@ fn tool_definitions(
   runtime : @agent_runtime.AgentRuntime,
   scope : @agent_runtime.AgentTaskScope[@report.Report],
 ) -> @agent_tool.Tools raise {
+  // No harness tool needs the runtime or task scope now that the moon_check
+  // watcher is gone; the parameters stay so the registry shape still mirrors
+  // the agent's build_tools.
+  ignore(runtime)
+  ignore(scope)
   Tools([
     @read.definition(),
     @write.definition(),
     @edit.definition(),
     @shell.definition(),
-    @moon_check.definition(runtime, scope),
     @moon_cmd.definition(),
     @plan.definition(),
     @finish.definition(),
@@ -172,31 +175,6 @@ async fn run_shell_case(
     name="shell",
     mode="process",
     action="run harmless command",
-    reason~,
-  )
-}
-
-///|
-async fn run_moon_check_case(
-  index : Int,
-  tools : @agent_tool.Tools,
-) -> @report.ReportRow {
-  let root = moon_library_fixture(prefix="openseek-tool-moon-check-")
-  let action = dispatch(tools, "moon_check", { "cwd": root, "target": "native" })
-  let reason = expect_respond(
-    action,
-    contains=[
-      "command=moon check --watch --diagnostic-limit 10 --target native", "watcher=started",
-      "status=running",
-    ],
-    error=false,
-  )
-  @fs.rmdir(root, recursive=true)
-  row(
-    index~,
-    name="moon_check",
-    mode="moon",
-    action="check native fixture",
     reason~,
   )
 }
