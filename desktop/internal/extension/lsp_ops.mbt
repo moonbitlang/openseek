@@ -374,15 +374,23 @@ fn server_for_file(
 ) -> LspWorkspace? {
   let mut best : LspWorkspace? = None
   for workspace in servers {
-    guard file == workspace.root || file.has_prefix(workspace.root + "/") else {
-      continue
-    }
+    guard root_contains_file(workspace.root, file) else { continue }
     if best is Some(current) && current.root.length() >= workspace.root.length() {
       continue
     }
     best = Some(workspace)
   }
   best
+}
+
+///|
+/// Whether `file` is `root` or lives under it. Both sides compare with
+/// forward slashes: on Windows `@path.Path::to_string()` produces
+/// backslashes, which a naive `root + "/"` prefix check never matches.
+fn root_contains_file(root : String, file : String) -> Bool {
+  let root = root.replace_all(old="\\", new="/")
+  let file = file.replace_all(old="\\", new="/")
+  file == root || file.has_prefix(root + "/")
 }
 
 ///|

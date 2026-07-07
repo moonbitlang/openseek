@@ -56,12 +56,19 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
     is Some(file) else {
     raise HostError("path is outside the conversation workspace")
   }
-  let data = @fs.read_file(file.to_string()) catch {
+  let source = @fs.open(file.to_string(), mode=ReadOnly) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to read file: \{error}")
   }
-  if data.binary().length() > MaxReadFileBytes {
+  defer source.close()
+  // Check the size before reading anything: a multi-gigabyte build artifact
+  // must produce the notice, not a host-sized allocation.
+  if source.size() > MaxReadFileBytes.to_int64() {
     return { content: "File is too large to preview.", truncated: true }
+  }
+  let data = source.read_all() catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise HostError("failed to read file: \{error}")
   }
   // `text()` raises on invalid UTF-8 — treat that as a binary file the
   // read-only viewer cannot render.

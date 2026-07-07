@@ -23,8 +23,9 @@ fn relaunch_marker_path(work_dir : String) -> String {
 
 ///|
 /// Swap the staged bundle into the running bundle's place. On a failed
-/// move-in the old bundle is moved straight back, so the app on disk is
-/// never half-replaced.
+/// move-in the old bundle is rolled back (clearing any partial copy the
+/// failure left behind first); if even that fails, the raised error names
+/// the parked copy instead of pretending the disk is intact.
 pub async fn apply_staged(staged_app~ : String, bundle_path~ : String) -> Unit {
   guard @fs.exists(staged_app) else {
     raise UpdateError("the staged update disappeared; restart to try again")
@@ -39,26 +40,47 @@ pub async fn apply_staged(staged_app~ : String, bundle_path~ : String) -> Unit {
   // volume than the bundle, and mv falls back to copying there.
   let code = @process.run("mv", [staged_app, bundle_path]) catch {
     error if @async.is_being_cancelled() => raise error
-    error => {
-      restore_aside(aside, bundle_path)
-      raise UpdateError("cannot install the update: \{error}")
-    }
+    error => raise move_in_failure(aside, bundle_path, "\{error}")
   }
   guard code == 0 else {
-    restore_aside(aside, bundle_path)
-    raise UpdateError("cannot install the update (mv exited \{code})")
+    raise move_in_failure(aside, bundle_path, "mv exited \{code}")
   }
 }
 
 ///|
-async fn restore_aside(aside : String, bundle_path : String) -> Unit {
+/// The error for a failed move-in, after attempting the rollback. When even
+/// the rollback fails, the message says so and names the parked copy — the
+/// app on disk is broken at that point, and pretending otherwise (the old
+/// silent swallow) hid exactly the state the user must act on.
+async fn move_in_failure(
+  aside : String,
+  bundle_path : String,
+  reason : String,
+) -> UpdateError {
+  if restore_aside(aside, bundle_path) {
+    UpdateError("cannot install the update: \{reason}")
+  } else {
+    UpdateError(
+      "cannot install the update: \{reason} — and restoring the previous version failed; reinstall it from \{aside}",
+    )
+  }
+}
+
+///|
+/// Roll the parked bundle back into place after a failed move-in, reporting
+/// whether the original is back. A cross-volume mv that died mid-copy
+/// leaves a partial bundle at the destination; that debris must go first,
+/// or the rename-back itself fails on a non-empty directory. The partial
+/// tree is always mv's leavings, never the original — the original was
+/// renamed to `aside` before mv ran.
+async fn restore_aside(aside : String, bundle_path : String) -> Bool {
+  remove_tree(bundle_path)
+  guard !@fs.exists(bundle_path) else { return false }
   @fs.rename(aside, bundle_path) catch {
     error if @async.is_being_cancelled() => raise error
-    // The rollback itself failing leaves the aside bundle in place next to
-    // the missing original — unrecoverable from here, but the aside copy
-    // keeps the app reinstallable by hand.
-    _ => ()
+    _ => return false
   }
+  true
 }
 
 ///|
