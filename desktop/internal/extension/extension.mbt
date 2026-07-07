@@ -62,6 +62,8 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("skills_installed"),
       @app.AppCommandApiDescriptor::new("skill_uninstall"),
       @app.AppCommandApiDescriptor::new("open_path"),
+      @app.AppCommandApiDescriptor::new("check_update"),
+      @app.AppCommandApiDescriptor::new("download_update"),
       @app.AppCommandApiDescriptor::new("apply_update"),
       @app.AppCommandApiDescriptor::new("workspace_branch"),
       @app.AppCommandApiDescriptor::new("archive_session"),
@@ -84,12 +86,10 @@ pub fn openseek_extension(
         // never drops the engine connection.
         @async.with_task_group(group => {
           group.spawn_bg(allow_failure=true, () => run_lsp_pump(group, lsp))
-          // One release-manifest check per webview connection: late enough
-          // that the frontend is listening, background so a slow or dead
-          // network never shows up anywhere.
-          group.spawn_bg(allow_failure=true, () => {
-            announce_update(context, updates)
-          })
+          // Sweep what a previous update left behind; checking for new
+          // releases is the frontend's call (`check_update`), not the
+          // host's.
+          group.spawn_bg(allow_failure=true, () => cleanup_updates(updates))
           @engine.run_engine_pump(sink, manager) catch {
             @engine.EngineError(message) => raise HostError(message)
             error => raise error
@@ -176,6 +176,16 @@ pub fn openseek_extension(
       })
       context.op_async("open_path", async fn(payload : OpenPathPayload) {
         open_path_op(payload)
+      })
+      context.op_async("check_update", async fn(
+        payload : UpdateChannelPayload,
+      ) {
+        check_update_op(updates, payload)
+      })
+      context.op_async("download_update", async fn(
+        payload : UpdateChannelPayload,
+      ) {
+        download_update_op(updates, payload)
       })
       context.op_async("apply_update", async fn(_ : Json) {
         apply_update_op(updates)

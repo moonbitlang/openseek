@@ -32,6 +32,11 @@ const WslEngineStorageKey : String = "openseek.wsl_engine"
 const NotificationCornerStorageKey : String = "openseek.notification_corner"
 
 ///|
+/// Which release stream updates come from; stores "staging" for the staging
+/// server, anything else reads as production.
+const UpdateChannelStorageKey : String = "openseek.update_channel"
+
+///|
 /// The default OpenSeek endpoint: a DeepSeek-compatible proxy that does not
 /// require a user API key, so the app works out of the box. The path mirrors
 /// the official API because the engine posts to this URL verbatim. The host
@@ -416,6 +421,12 @@ priv struct Model {
   notification_seq : Int
   // Which window corner toasts pop up in; a Settings choice, persisted.
   notification_corner : NotificationCorner
+  // Which release stream `check_update` asks; a Settings choice, persisted.
+  update_channel : UpdateChannel
+  // Where the self-update flow stands, from "never checked" through the
+  // download to the restart. One enum, so "checking", "downloading" and
+  // "confirming" cannot overlap.
+  update_ux : UpdateUx
 }
 
 ///|
@@ -445,7 +456,8 @@ priv enum Msg {
     wsl_enabled~ : String,
     wsl_distro~ : String,
     wsl_engine~ : String,
-    notification_corner~ : String
+    notification_corner~ : String,
+    update_channel~ : String
   )
   TaskChanged(String)
   // Move the completion menu's highlight by a delta (−1 up, +1 down), wrapping
@@ -489,16 +501,24 @@ priv enum Msg {
   NotificationExpired(Int)
   // A toast was clicked: dismiss it now.
   DismissNotification(Int)
-  // The host found a newer hosted release it cannot install by itself:
-  // show a sticky informational toast. `reason` is the staging failure
-  // when that is why in-app install is off the table.
-  UpdateAvailable(version~ : String, reason~ : String?)
-  // The host verified and staged a newer bundle: show the sticky toast
-  // whose click restarts into it.
-  UpdateReady(version~ : String)
-  // The restart-to-update toast was clicked: ask the host to swap the
-  // staged bundle in.
-  ApplyUpdate(id~ : Int)
+  // The Settings choice of release stream (production/staging, by wire name).
+  UpdateChannelChanged(String)
+  // The Settings "Check for updates" button.
+  CheckForUpdates
+  // A `check_update` reply (or its failure, folded into `Unreachable`).
+  // `explicit` says a user asked, which is what decides how loudly each
+  // outcome shows.
+  UpdateCheckFinished(result~ : UpdateCheck, explicit~ : Bool)
+  // The accent Update button (sidebar or Settings row): confirm first when
+  // a conversation is running, otherwise start the download.
+  UpdateClicked
+  // The interrupt-confirmation modal's two exits.
+  ConfirmUpdateRestart
+  CancelUpdateRestart
+  // `download_update` finished: the bundle is staged and verified.
+  UpdateDownloaded
+  // The download or the swap failed; back to Available with a toast.
+  UpdateFailed(message~ : String)
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
@@ -722,6 +742,8 @@ fn initial_model() -> Model {
     notifications: [],
     notification_seq: 0,
     notification_corner: BottomRight,
+    update_channel: Production,
+    update_ux: UpdateUnknown,
   }
 }
 

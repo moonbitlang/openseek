@@ -112,8 +112,6 @@ fn wire_engine_events(
   on("openseek.error", error_msg)
   on("openseek.finished", finished_msg)
   on("openseek.connected", connected_msg)
-  on("openseek.update_available", update_available_msg)
-  on("openseek.update_ready", update_ready_msg)
   // Emitted by proton itself (not the openseek extension) when the user
   // clicks a system notification; the payload is the run id the host stamped
   // on the notification.
@@ -181,30 +179,6 @@ fn finished_msg(payload : Map[String, Json]) -> Msg? {
 ///|
 fn connected_msg(_payload : Map[String, Json]) -> Msg? {
   Some(BridgeReady)
-}
-
-///|
-/// The host announced a newer hosted release this build cannot install by
-/// itself; there is nothing sensible to show without a version. `reason`
-/// (the staging failure) is optional detail.
-fn update_available_msg(payload : Map[String, Json]) -> Msg? {
-  let version = @transcript.json_text(payload, "version")
-  guard !version.is_empty() else { return None }
-  let reason = @transcript.json_text(payload, "reason")
-  Some(
-    UpdateAvailable(
-      version~,
-      reason=if reason.is_empty() { None } else { Some(reason) },
-    ),
-  )
-}
-
-///|
-/// The host verified and staged a newer bundle, ready to swap in.
-fn update_ready_msg(payload : Map[String, Json]) -> Msg? {
-  let version = @transcript.json_text(payload, "version")
-  guard !version.is_empty() else { return None }
-  Some(UpdateReady(version~))
 }
 
 ///|
@@ -527,7 +501,9 @@ fn apply_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         @js.Object::new().to_value(),
       ) catch {
         error => {
-          scheduler.add(dispatch(HostActionFailed(bridge_error_text(error))))
+          scheduler.add(
+            dispatch(UpdateFailed(message=bridge_error_text(error))),
+          )
           return
         }
       }

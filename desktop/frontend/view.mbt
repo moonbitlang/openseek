@@ -498,33 +498,68 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     @html.div(class="sidebar-main", [
       @html.div(class="sidebar-section sessions", sessions_section),
     ]),
-    @html.div(class="sidebar-footer", [
-      @html.button(
-        class=if model.screen is Skills {
-          "sidebar-button active"
-        } else {
-          "sidebar-button"
-        },
-        on_click=dispatch(OpenSkills),
-        [
-          @html.span(class="sidebar-icon", icon(icon_extensions)),
-          @html.span(class="sidebar-label", "Skills"),
-        ],
-      ),
-      @html.button(
-        class=if model.screen is Settings {
-          "sidebar-button active"
-        } else {
-          "sidebar-button"
-        },
-        on_click=dispatch(OpenSetup),
-        [
-          @html.span(class="sidebar-icon", icon(icon_settings_gear)),
-          @html.span(class="sidebar-label", "Settings"),
-        ],
-      ),
-    ]),
+    @html.div(class="sidebar-footer", sidebar_footer_buttons(dispatch, model)),
   ])
+}
+
+///|
+/// The sidebar footer: Skills and Settings, and — while an installable
+/// release is on offer — the accent Update button above them, tracking the
+/// download so its progress stays visible from any screen.
+fn sidebar_footer_buttons(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> Array[@html.Html] {
+  let buttons : Array[@html.Html] = []
+  let update_label : String? = match model.update_ux {
+    UpdateAvailable(installable=true, ..) | ConfirmingRestart(..) =>
+      Some("Update")
+    DownloadingUpdate(..) => Some("Downloading…")
+    RestartingForUpdate(..) => Some("Restarting…")
+    _ => None
+  }
+  if update_label is Some(label) {
+    buttons.push(
+      @html.button(
+        class="sidebar-button update-accent",
+        disabled=!(model.update_ux is UpdateAvailable(..)),
+        on_click=dispatch(UpdateClicked),
+        [
+          @html.span(class="sidebar-icon", icon(icon_arrow_up)),
+          @html.span(class="sidebar-label", label),
+        ],
+      ),
+    )
+  }
+  buttons.push(
+    @html.button(
+      class=if model.screen is Skills {
+        "sidebar-button active"
+      } else {
+        "sidebar-button"
+      },
+      on_click=dispatch(OpenSkills),
+      [
+        @html.span(class="sidebar-icon", icon(icon_extensions)),
+        @html.span(class="sidebar-label", "Skills"),
+      ],
+    ),
+  )
+  buttons.push(
+    @html.button(
+      class=if model.screen is Settings {
+        "sidebar-button active"
+      } else {
+        "sidebar-button"
+      },
+      on_click=dispatch(OpenSetup),
+      [
+        @html.span(class="sidebar-icon", icon(icon_settings_gear)),
+        @html.span(class="sidebar-label", "Settings"),
+      ],
+    ),
+  )
+  buttons
 }
 
 ///|
@@ -1267,6 +1302,80 @@ fn corner_select(
 }
 
 ///|
+fn channel_select(
+  dispatch : @cmd.Emit[Msg],
+  selected : UpdateChannel,
+) -> @html.Html {
+  @html.select(on_change=dispatch.map(value => UpdateChannelChanged(value)), [
+    @html.option(
+      value="production",
+      selected=selected is Production,
+      "Production",
+    ),
+    @html.option(value="staging", selected=selected is Staging, "Staging"),
+  ])
+}
+
+///|
+/// The Settings check-for-updates row: the button, the inline outcome of
+/// the last check, and — once an installable release is found — the same
+/// accent Update button the sidebar shows.
+fn update_check_controls(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> Array[@html.Html] {
+  let controls : Array[@html.Html] = [
+    @html.button(
+      disabled=model.update_ux
+        is (CheckingForUpdate(..)
+        | DownloadingUpdate(..)
+        | RestartingForUpdate(..)),
+      on_click=dispatch(CheckForUpdates),
+      "Check for updates",
+    ),
+  ]
+  match model.update_ux {
+    UpdateUnknown => ()
+    CheckingForUpdate(..) =>
+      controls.push(@html.span(class="update-status", "Checking…"))
+    UpToDate =>
+      controls.push(@html.span(class="update-status", "You are up to date."))
+    UpdateAvailable(version~, installable~) =>
+      if installable {
+        controls.push(
+          @html.button(
+            class="update-accent",
+            on_click=dispatch(UpdateClicked),
+            "Update to \{version}",
+          ),
+        )
+      } else {
+        controls.push(
+          @html.span(
+            class="update-status",
+            "\{version} is available, but this build cannot install updates.",
+          ),
+        )
+      }
+    ConfirmingRestart(version~) =>
+      // The interrupt modal is up over this row; keep the button visible
+      // behind it so the row does not blink while the user decides.
+      controls.push(@html.button(class="update-accent", "Update to \{version}"))
+    DownloadingUpdate(version~) =>
+      controls.push(
+        @html.span(class="update-status", "Downloading \{version}…"),
+      )
+    RestartingForUpdate(version~) =>
+      controls.push(
+        @html.span(class="update-status", "Restarting into \{version}…"),
+      )
+    UpdateCheckFailed(message~) =>
+      controls.push(@html.span(class="update-status update-error", message))
+  }
+  controls
+}
+
+///|
 fn wsl_select(dispatch : @cmd.Emit[Msg], enabled : Bool) -> @html.Html {
   @html.select(on_change=dispatch.map(value => WslModeChanged(value)), [
     @html.option(value="native", selected=!enabled, "Windows (native)"),
@@ -1379,6 +1488,18 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         "Notification corner",
         [corner_select(dispatch, model.notification_corner)],
         desc="Where error notifications pop up.",
+      ),
+    ]),
+    settings_group("Updates", [
+      setting_row(
+        "Update channel",
+        [channel_select(dispatch, model.update_channel)],
+        desc="Staging serves pre-release builds for testing.",
+      ),
+      setting_row(
+        "Check for updates",
+        update_check_controls(dispatch, model),
+        desc="Current version: \{@version.AppVersion}. The app also checks once at launch.",
       ),
     ]),
   ]
@@ -2136,6 +2257,10 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if model.notifications.length() > 0 {
     children.push(notifications_view(dispatch, model))
   }
+  // The interrupt-confirmation modal floats the same way, above the toasts.
+  if model.update_ux is ConfirmingRestart(version~) {
+    children.push(update_confirm_modal(dispatch, version))
+  }
   @html.div(
     class=if model.sidebar_open { "app" } else { "app sidebar-collapsed" },
     children,
@@ -2143,20 +2268,45 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
+/// The modal shown when updating would cut running conversations off:
+/// restarting tears the engine processes down mid-run. The backdrop and the
+/// Cancel button both keep the current version running.
+fn update_confirm_modal(
+  dispatch : @cmd.Emit[Msg],
+  version : String,
+) -> @html.Html {
+  @html.div(class="modal-backdrop", on_click=dispatch(CancelUpdateRestart), [
+    @html.div(class="modal", [
+      @html.div(class="modal-title", "Update to \{version}?"),
+      @html.div(
+        class="modal-body",
+        "A conversation is still running. Updating restarts the app and interrupts it; the transcript so far is saved.",
+      ),
+      @html.div(class="modal-actions", [
+        @html.button(on_click=dispatch(CancelUpdateRestart), "Keep working"),
+        @html.button(
+          class="update-accent",
+          on_click=dispatch(ConfirmUpdateRestart),
+          "Update and restart",
+        ),
+      ]),
+    ]),
+  ])
+}
+
+///|
 /// The floating toast stack, fixed to the configured window corner. Each
-/// toast dismisses on click — the restart toast also applies the staged
-/// update; plain toasts leave the rest to their timer.
+/// toast dismisses on click; its timer handles the rest.
 fn notifications_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let toasts : Array[@html.Html] = []
   for toast in model.notifications {
-    let (title, on_click) = match toast.action {
-      Some(RestartToUpdate) =>
-        ("Restart and update", dispatch(ApplyUpdate(id=toast.id)))
-      Some(AcknowledgeUpdate) | None =>
-        ("Dismiss", dispatch(DismissNotification(toast.id)))
-    }
     toasts.push(
-      @html.div(class="notification", title~, on_click~, toast.message),
+      @html.div(
+        class="notification",
+        title="Dismiss",
+        on_click=dispatch(DismissNotification(toast.id)),
+        toast.message,
+      ),
     )
   }
   @html.div(

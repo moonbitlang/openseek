@@ -16,6 +16,7 @@ fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           wsl_distro=load_setting(WslDistroStorageKey),
           wsl_engine=load_setting(WslEngineStorageKey),
           notification_corner=load_setting(NotificationCornerStorageKey),
+          update_channel=load_setting(UpdateChannelStorageKey),
         ),
       ),
     )
@@ -62,6 +63,11 @@ fn save_wsl_engine(engine : String) -> @cmd.Cmd {
 ///|
 fn save_notification_corner(corner : NotificationCorner) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(NotificationCornerStorageKey, corner.wire()))
+}
+
+///|
+fn save_update_channel(channel : UpdateChannel) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(UpdateChannelStorageKey, channel.wire()))
 }
 
 ///|

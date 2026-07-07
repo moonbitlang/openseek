@@ -11,14 +11,31 @@
 const ManifestUrl : String = "https://openseek-api.moonbitlang.cn/desktop/releases/latest.json"
 
 ///|
-/// The manifest endpoint actually queried: the packaged default, or the
-/// OPENSEEK_UPDATE_MANIFEST_URL override for exercising the flow against a
-/// staging server (launch the bundle's executable from a terminal so the
+/// The staging deployment's manifest, for exercising a release before it
+/// goes live — a Settings choice, not a build variant.
+const StagingManifestUrl : String = "https://openseek-api-staging.moonbitlang.cn/desktop/releases/latest.json"
+
+///|
+/// Which release stream to check against. A user-facing Settings choice;
+/// Production is the default and the only sensible pick outside of
+/// pre-release testing.
+pub(all) enum UpdateChannel {
+  Production
+  Staging
+} derive(Eq, Debug)
+
+///|
+/// The manifest endpoint actually queried: the channel's packaged URL, or
+/// the OPENSEEK_UPDATE_MANIFEST_URL override for pointing a dev build at an
+/// arbitrary server (launch the bundle's executable from a terminal so the
 /// variable is inherited). https only, like everything else here.
-fn manifest_url() -> String {
+fn manifest_url(channel : UpdateChannel) -> String {
   guard @env.get("OPENSEEK_UPDATE_MANIFEST_URL") is Some(url) &&
     url.has_prefix("https://") else {
-    return ManifestUrl
+    return match channel {
+      Production => ManifestUrl
+      Staging => StagingManifestUrl
+    }
   }
   url
 }
@@ -49,6 +66,14 @@ pub suberror ManifestError {
 }
 
 ///|
+/// The update server could not be asked at all: offline, DNS, TLS, or a
+/// non-200 answer. Routine — the caller decides whether the user was asking
+/// (report it) or the app was (stay quiet).
+pub suberror Unreachable {
+  Unreachable(reason~ : String)
+}
+
+///|
 /// A downloadable update package: where to fetch it and the hex sha256 the
 /// download must match.
 pub struct PackageInfo {
@@ -69,22 +94,36 @@ fn manifest_platform_key() -> String? {
 }
 
 ///|
-/// Fetch the hosted manifest and report a release newer than `current`, or
-/// None. Fetch failures — offline, HTTP errors — read as "no update", so
-/// the nudge can never surface as an app error; a served manifest that
-/// cannot be used raises `ManifestError` so the caller can report it
-/// instead of silently not installing.
-pub async fn check_for_update(current~ : String) -> UpdateInfo? {
-  let (response, data) = @http.get(manifest_url()) catch {
+/// Fetch the channel's manifest and report a release newer than `current`;
+/// None means the check succeeded and there is nothing newer. Every failure
+/// is typed rather than swallowed: `Unreachable` when the server could not
+/// answer, `ManifestError` when it answered with something unusable — the
+/// caller chooses what each is worth showing.
+pub async fn check_for_update(
+  current~ : String,
+  channel~ : UpdateChannel,
+) -> UpdateInfo? {
+  let (response, data) = @http.get(manifest_url(channel)) catch {
     error if @async.is_being_cancelled() => raise error
-    _ => return None
+    error => raise Unreachable(reason="\{error}")
   }
-  guard response.code == 200 else { return None }
+  guard response.code == 200 else {
+    raise Unreachable(reason="the update server answered HTTP \{response.code}")
+  }
   let json = data.json() catch {
     error if @async.is_being_cancelled() => raise error
     _ => raise MalformedManifest(reason="the manifest is not valid JSON")
   }
   newer_update(json, current~, platform_key=manifest_platform_key())
+}
+
+///|
+/// Whether this installation can swap a downloaded bundle in by itself:
+/// it must be a real .app bundle signed by a Developer ID team — the same
+/// requirement `stage_update` enforces, checked here so a "can I install"
+/// answer never turns into a download that was doomed from the start.
+pub async fn can_self_update(bundle_path~ : String) -> Bool {
+  team_identifier(bundle_path) is Some(_)
 }
 
 ///|

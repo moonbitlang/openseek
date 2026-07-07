@@ -1,11 +1,11 @@
-// Self-update orchestration. The check runs in the background of the
-// app-lifetime connect task, so it never delays startup and its failures
-// cannot take the engine pump down. When the manifest carries a package
-// this build can install (macOS bundle, Developer ID signed), the host
-// downloads and verifies it up front and announces `update_ready`; anything
-// less ends at `update_available`, a purely informational nudge. The swap
-// itself happens in the `apply_update` op; `main` performs the relaunch
-// after the run loop exits, so no process ever outlives the host.
+// Self-update ops, driven entirely by the webview: `check_update` asks the
+// channel's manifest and reports what it found as data (never an op
+// rejection — every outcome is a state the frontend renders); a user
+// clicking Update runs `download_update` (fetch + verify into the staging
+// dir) and then `apply_update` (swap the bundle and arrange the relaunch
+// that `main` performs once the run loop exits). Nothing here runs on its
+// own: the host's only startup involvement is sweeping leftovers of a
+// previous update.
 
 ///|
 /// What self-update needs to know about this installation, plus the staged
@@ -39,36 +39,77 @@ fn new_update_state(
 }
 
 ///|
-/// The `update_available` event: fallback announcement for builds that
-/// cannot install the update themselves. Informational only; `reason`
-/// carries the staging failure when that is why the flow degraded, so the
-/// toast can say more than "an update exists".
-priv struct UpdateAvailablePayload {
-  version : String
-  reason : String?
-} derive(ToJson)
-
-///|
-/// The `update_ready` event: a verified bundle is staged; clicking restarts
-/// into it.
-priv struct UpdateReadyPayload {
-  version : String
-} derive(ToJson)
-
-///|
-async fn announce_update(
-  context : @app.AppCommandExtensionContext,
-  state : UpdateState,
-) -> Unit {
+/// Sweep debris a previous update may have left behind (a staging dir, the
+/// old bundle parked aside) — the host's only unprompted update work.
+async fn cleanup_updates(state : UpdateState) -> Unit {
   if state.work_dir is Some(dir) && state.bundle_path is Some(bundle) {
     @update.cleanup_leftovers(work_dir=dir, bundle_path=bundle)
   }
-  // A served-but-unusable manifest is loud, scaled to how sure we are it is
-  // the publisher's fault: a malformed platform entry can only come from a
-  // bad `latest.json`, so its reason reaches the toast; a manifest that is
-  // garbage wholesale also happens under captive portals, so it goes to the
-  // log alone rather than alarming the user on every hotel Wi-Fi.
-  let checked = @update.check_for_update(current=@version.AppVersion) catch {
+}
+
+///|
+/// The channel half of `check_update` / `download_update`. Anything but the
+/// literal "staging" reads as production, so a stale stored value can only
+/// fall back to the safe default.
+priv struct UpdateChannelPayload {
+  channel : String?
+} derive(FromJson)
+
+///|
+fn UpdateChannelPayload::to_channel(
+  self : UpdateChannelPayload,
+) -> @update.UpdateChannel {
+  match self.channel {
+    Some("staging") => Staging
+    _ => Production
+  }
+}
+
+///|
+/// Reply to `check_update`, discriminated on the wire by a `kind` field.
+/// Every outcome is data — the op only rejects on cancellation — because
+/// each kind is worth a different amount of noise: `broken` can only be the
+/// publisher's fault (toast material), `malformed` also happens under
+/// captive portals (log material), `unreachable` is routine offline life.
+priv enum CheckUpdateReply {
+  UpToDate
+  Available(version~ : String, installable~ : Bool)
+  Unreachable(reason~ : String)
+  Malformed(reason~ : String)
+  Broken(version~ : String, reason~ : String)
+}
+
+///|
+impl ToJson for CheckUpdateReply with fn to_json(self) {
+  match self {
+    UpToDate => { "kind": "up_to_date" }
+    Available(version~, installable~) =>
+      { "kind": "available", "version": version, "installable": installable }
+    Unreachable(reason~) => { "kind": "unreachable", "reason": reason }
+    Malformed(reason~) => { "kind": "malformed", "reason": reason }
+    Broken(version~, reason~) =>
+      { "kind": "broken", "version": version, "reason": reason }
+  }
+}
+
+///|
+/// Ask the channel's manifest for a newer release. `installable` reports
+/// whether `download_update` would work here: a real signed .app bundle
+/// with a package published for this platform.
+async fn check_update_op(
+  state : UpdateState,
+  payload : UpdateChannelPayload,
+) -> CheckUpdateReply {
+  let info = @update.check_for_update(
+    current=@version.AppVersion,
+    channel=payload.to_channel(),
+  ) catch {
+    @update.Unreachable(reason~) => return Unreachable(reason~)
+    @update.MalformedManifest(reason~) => {
+      @xlog.warn(category="update") <?
+        { "event": "manifest_malformed", "error": reason }
+      return Malformed(reason~)
+    }
     @update.MalformedArtifact(version~, reason~) => {
       @xlog.warn(category="update") <?
         {
@@ -76,53 +117,66 @@ async fn announce_update(
           "version": version,
           "error": reason,
         }
-      announce_available(context, version~, reason~)
-      return
-    }
-    @update.MalformedManifest(reason~) => {
-      @xlog.warn(category="update") <?
-        { "event": "manifest_malformed", "error": reason }
-      return
+      return Broken(version~, reason~)
     }
     error => raise error
   }
-  guard checked is Some(info) else { return }
-  if info.artifact is Some(_) &&
-    state.work_dir is Some(dir) &&
-    state.bundle_path is Some(bundle) {
-    let staged = @update.stage_update(info, work_dir=dir, bundle_path=bundle) catch {
-      error if @async.is_being_cancelled() => raise error
-      // Staging is opportunistic: a failed download or a signature that
-      // does not check out downgrades to the informational announcement —
-      // but the cause goes to openseek-desktop.log, or the degradation is
-      // undiagnosable on exactly the installs where it matters.
-      error => {
-        @xlog.warn(category="update") <?
-          {
-            "event": "stage_failed",
-            "version": info.version,
-            "error": "\{error}",
-          }
-        announce_available(context, version=info.version, reason="\{error}")
-        return
-      }
-    }
-    state.staged = Some(staged)
-    let payload : UpdateReadyPayload = { version: info.version }
-    context.emit("update_ready", payload)
-    return
-  }
-  announce_available(context, version=info.version)
+  guard info is Some(info) else { return UpToDate }
+  let installable = info.artifact is Some(_) &&
+    state.work_dir is Some(_) &&
+    state.bundle_path is Some(bundle) &&
+    @update.can_self_update(bundle_path=bundle)
+  Available(version=info.version, installable~)
 }
 
 ///|
-async fn announce_available(
-  context : @app.AppCommandExtensionContext,
-  version~ : String,
-  reason? : String,
-) -> Unit {
-  let payload : UpdateAvailablePayload = { version, reason }
-  context.emit("update_available", payload)
+/// Reply to `download_update`: the version now staged and verified.
+priv struct DownloadUpdateReply {
+  version : String
+} derive(ToJson)
+
+///|
+/// Download and verify the channel's package, leaving it staged for
+/// `apply_update`. Deliberately re-checks the manifest rather than trusting
+/// what the frontend saw earlier — the release may have moved between the
+/// check and the click. Failures raise: the frontend initiated this, so the
+/// rejection message is the user-facing answer (and goes to the log too).
+async fn download_update_op(
+  state : UpdateState,
+  payload : UpdateChannelPayload,
+) -> DownloadUpdateReply {
+  guard state.work_dir is Some(dir) && state.bundle_path is Some(bundle) else {
+    raise HostError("this build cannot install updates")
+  }
+  let info = @update.check_for_update(
+    current=@version.AppVersion,
+    channel=payload.to_channel(),
+  ) catch {
+    @update.Unreachable(reason~) => raise HostError(reason)
+    @update.MalformedManifest(reason~) => raise HostError(reason)
+    @update.MalformedArtifact(reason~, ..) => raise HostError(reason)
+    error => raise error
+  }
+  guard info is Some(info) else {
+    raise HostError("no newer release is published")
+  }
+  let staged = @update.stage_update(info, work_dir=dir, bundle_path=bundle) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => {
+      @xlog.warn(category="update") <?
+        {
+          "event": "stage_failed",
+          "version": info.version,
+          "error": "\{error}",
+        }
+      raise match error {
+        @update.UpdateError(message) => HostError(message)
+        _ => HostError("\{error}")
+      }
+    }
+  }
+  state.staged = Some(staged)
+  { version: staged.version }
 }
 
 ///|

@@ -761,6 +761,7 @@ test "loaded settings open the popup only when incomplete" {
       wsl_distro="",
       wsl_engine="",
       notification_corner="",
+      update_channel="",
     ),
     test_model(),
   )
@@ -778,6 +779,7 @@ test "loaded settings open the popup only when incomplete" {
       wsl_distro="",
       wsl_engine="",
       notification_corner="",
+      update_channel="",
     ),
     test_model(),
   )
@@ -794,6 +796,7 @@ test "loaded settings open the popup only when incomplete" {
       wsl_distro=" Ubuntu ",
       wsl_engine="/usr/local/bin/openseek",
       notification_corner="top-left",
+      update_channel="staging",
     ),
     test_model(),
   )
@@ -804,8 +807,10 @@ test "loaded settings open the popup only when incomplete" {
   inspect(restored.wsl_distro, content="Ubuntu")
   inspect(restored.wsl_engine, content="/usr/local/bin/openseek")
   assert_true(restored.notification_corner is TopLeft)
-  // An unknown stored corner falls back to the default.
+  assert_true(restored.update_channel is Staging)
+  // An unknown stored corner or channel falls back to the default.
   assert_true(zero_config.notification_corner is BottomRight)
+  assert_true(zero_config.update_channel is Production)
   let (_, custom) = update(
     dispatch,
     SettingsLoaded(
@@ -817,6 +822,7 @@ test "loaded settings open the popup only when incomplete" {
       wsl_distro="",
       wsl_engine="",
       notification_corner="",
+      update_channel="",
     ),
     test_model(),
   )
@@ -1355,75 +1361,189 @@ test "a prompt submitted during compaction stays in the composer" {
 }
 
 ///|
-test "an update announcement adds one sticky toast" {
+test "a startup check surfaces an installable release as the Update button" {
   let dispatch = test_dispatch()
   let (_, model) = update(
     dispatch,
-    UpdateAvailable(version="0.2.0", reason=None),
+    UpdateCheckFinished(
+      result=CheckFound(version="0.2.0", installable=true),
+      explicit=false,
+    ),
     test_model(),
   )
-  assert_eq(model.notifications.length(), 1)
-  assert_true(model.notifications[0].action is Some(AcknowledgeUpdate))
-  assert_true(model.notifications[0].message.contains("0.2.0"))
-  assert_false(model.notifications[0].message.contains("failed"))
-  // A duplicate announcement must not stack a second toast.
-  let (_, again) = update(
-    dispatch,
-    UpdateAvailable(version="0.2.0", reason=None),
-    model,
+  assert_true(
+    model.update_ux is UpdateAvailable(version="0.2.0", installable=true),
   )
-  assert_eq(again.notifications.length(), 1)
+  assert_eq(model.notifications.length(), 0)
 }
 
 ///|
-test "a staging failure surfaces its cause in the toast" {
+test "quiet startup outcomes leave no trace; explicit ones answer" {
+  let dispatch = test_dispatch()
+  for
+    result in [
+      CheckUpToDate,
+      CheckUnreachable(reason="offline"),
+      CheckMalformed(reason="not json"),
+    ] {
+    let (_, silent) = update(
+      dispatch,
+      UpdateCheckFinished(result~, explicit=false),
+      test_model(),
+    )
+    assert_true(silent.update_ux is UpdateUnknown)
+    assert_eq(silent.notifications.length(), 0)
+  }
+  let (_, ok) = update(
+    dispatch,
+    UpdateCheckFinished(result=CheckUpToDate, explicit=true),
+    test_model(),
+  )
+  assert_true(ok.update_ux is UpToDate)
+  let (_, offline) = update(
+    dispatch,
+    UpdateCheckFinished(
+      result=CheckUnreachable(reason="offline"),
+      explicit=true,
+    ),
+    test_model(),
+  )
+  assert_true(
+    offline.update_ux is UpdateCheckFailed(..) &&
+    offline.update_ux is UpdateCheckFailed(message~) &&
+    message.contains("offline"),
+  )
+}
+
+///|
+test "a broken package entry is loud even when the app asked" {
   let dispatch = test_dispatch()
   let (_, model) = update(
     dispatch,
-    UpdateAvailable(version="0.2.0", reason=Some("digest mismatch")),
+    UpdateCheckFinished(
+      result=CheckBroken(version="0.2.0", reason="url is not https"),
+      explicit=false,
+    ),
     test_model(),
   )
   assert_eq(model.notifications.length(), 1)
-  assert_true(model.notifications[0].message.contains("digest mismatch"))
-  assert_true(model.notifications[0].message.contains("0.2.0"))
+  assert_true(model.notifications[0].message.contains("url is not https"))
+  assert_true(model.update_ux is UpdateCheckFailed(..))
 }
 
 ///|
-test "a staged update announces restart-to-update and applies on click" {
+test "clicking Update goes straight to download when nothing runs" {
   let dispatch = test_dispatch()
-  let (_, model) = update(dispatch, UpdateReady(version="0.2.0"), test_model())
-  assert_eq(model.notifications.length(), 1)
-  assert_true(model.notifications[0].action is Some(RestartToUpdate))
-  assert_true(model.notifications[0].message.contains("0.2.0"))
-  // Clicking hands off to the host and dismisses the toast.
-  let (_, clicked) = update(
-    dispatch,
-    ApplyUpdate(id=model.notifications[0].id),
-    model,
-  )
-  assert_eq(clicked.notifications.length(), 0)
-  // Only one sticky update toast at a time, whatever the mix.
-  let (_, mixed) = update(
-    dispatch,
-    UpdateAvailable(version="0.2.0", reason=None),
-    model,
-  )
-  assert_eq(mixed.notifications.length(), 1)
-  assert_true(mixed.notifications[0].action is Some(RestartToUpdate))
+  let available = {
+    ..test_model(),
+    update_ux: UpdateAvailable(version="0.2.0", installable=true),
+  }
+  let (_, clicked) = update(dispatch, UpdateClicked, available)
+  assert_true(clicked.update_ux is DownloadingUpdate(version="0.2.0"))
+  // Downloaded hands off to apply and marks the restart.
+  let (_, done) = update(dispatch, UpdateDownloaded, clicked)
+  assert_true(done.update_ux is RestartingForUpdate(version="0.2.0"))
 }
 
 ///|
-test "clicking the update toast dismisses it" {
+test "clicking Update asks first while a conversation runs" {
   let dispatch = test_dispatch()
-  let (_, model) = update(
-    dispatch,
-    UpdateAvailable(version="0.2.0", reason=None),
-    test_model(),
+  let busy = {
+    ..test_model().replace_conversation({ ..test_conversation(), running: true }),
+    update_ux: UpdateAvailable(version="0.2.0", installable=true),
+  }
+  let (_, asked) = update(dispatch, UpdateClicked, busy)
+  assert_true(asked.update_ux is ConfirmingRestart(version="0.2.0"))
+  // Cancel restores the offer; confirm starts the download.
+  let (_, kept) = update(dispatch, CancelUpdateRestart, asked)
+  assert_true(
+    kept.update_ux is UpdateAvailable(version="0.2.0", installable=true),
   )
-  let (_, clicked) = update(
+  let (_, confirmed) = update(dispatch, ConfirmUpdateRestart, asked)
+  assert_true(confirmed.update_ux is DownloadingUpdate(version="0.2.0"))
+}
+
+///|
+test "a failed download says why and restores the offer" {
+  let dispatch = test_dispatch()
+  let downloading = {
+    ..test_model(),
+    update_ux: DownloadingUpdate(version="0.2.0"),
+  }
+  let (_, failed) = update(
     dispatch,
-    DismissNotification(model.notifications[0].id),
-    model,
+    UpdateFailed(message="digest mismatch"),
+    downloading,
   )
-  assert_eq(clicked.notifications.length(), 0)
+  assert_eq(failed.notifications.length(), 1)
+  assert_true(failed.notifications[0].message.contains("digest mismatch"))
+  assert_true(
+    failed.update_ux is UpdateAvailable(version="0.2.0", installable=true),
+  )
+}
+
+///|
+test "a stale check reply cannot clobber a download in flight" {
+  let dispatch = test_dispatch()
+  let downloading = {
+    ..test_model(),
+    update_ux: DownloadingUpdate(version="0.2.0"),
+  }
+  let (_, next) = update(
+    dispatch,
+    UpdateCheckFinished(result=CheckUpToDate, explicit=false),
+    downloading,
+  )
+  assert_true(next.update_ux is DownloadingUpdate(version="0.2.0"))
+}
+
+///|
+test "switching the update channel forgets the previous answer" {
+  let dispatch = test_dispatch()
+  let available = {
+    ..test_model(),
+    update_ux: UpdateAvailable(version="0.2.0", installable=true),
+  }
+  let (_, switched) = update(
+    dispatch,
+    UpdateChannelChanged("staging"),
+    available,
+  )
+  assert_true(switched.update_channel is Staging)
+  assert_true(switched.update_ux is UpdateUnknown)
+}
+
+///|
+test "check_update replies decode by kind" {
+  assert_true(
+    decode_update_check("{\"kind\":\"up_to_date\"}") is Some(CheckUpToDate),
+  )
+  assert_true(
+    decode_update_check(
+      "{\"kind\":\"available\",\"version\":\"0.2.0\",\"installable\":true}",
+    )
+    is Some(CheckFound(version="0.2.0", installable=true)),
+  )
+  assert_true(
+    decode_update_check("{\"kind\":\"available\",\"version\":\"0.2.0\"}")
+    is Some(CheckFound(version="0.2.0", installable=false)),
+  )
+  assert_true(
+    decode_update_check("{\"kind\":\"unreachable\",\"reason\":\"offline\"}")
+    is Some(CheckUnreachable(reason="offline")),
+  )
+  assert_true(
+    decode_update_check("{\"kind\":\"malformed\",\"reason\":\"not json\"}")
+    is Some(CheckMalformed(reason="not json")),
+  )
+  assert_true(
+    decode_update_check(
+      "{\"kind\":\"broken\",\"version\":\"0.2.0\",\"reason\":\"bad url\"}",
+    )
+    is Some(CheckBroken(version="0.2.0", reason="bad url")),
+  )
+  // Unknown kinds and structurally unusable replies are indecipherable.
+  assert_true(decode_update_check("{\"kind\":\"available\"}") is None)
+  assert_true(decode_update_check("{\"kind\":\"surprise\"}") is None)
+  assert_true(decode_update_check("garbage") is None)
 }

@@ -427,11 +427,14 @@ fn update_msg(
       (
         // The installed skills also feed the composer's `$` completion, so they
         // are fetched on connect rather than only when the Skills page opens.
+        // The startup update check rides here too: settings (the channel)
+        // load synchronously at Init, so they are in by bridge time.
         @cmd.batch([
           fetch_sessions(dispatch),
           fetch_installed_skills(dispatch),
           fetch_archived(dispatch),
           fetch_workspaces(dispatch),
+          check_for_updates(dispatch, model.update_channel, explicit=false),
         ]),
         {
           ..model,
@@ -456,7 +459,8 @@ fn update_msg(
       wsl_enabled~,
       wsl_distro~,
       wsl_engine~,
-      notification_corner~
+      notification_corner~,
+      update_channel~
     ) => {
       let next = {
         ..model,
@@ -468,6 +472,7 @@ fn update_msg(
         wsl_distro: wsl_distro.trim().to_owned(),
         wsl_engine: wsl_engine.trim().to_owned(),
         notification_corner: NotificationCorner::parse(notification_corner),
+        update_channel: UpdateChannel::parse(update_channel),
         setup_api_key: "",
       }
       // The default provider needs no setup, so the Settings page only takes
@@ -600,31 +605,160 @@ fn update_msg(
         @cmd.none,
         { ..model, notifications: model.notifications.filter(t => t.id != id) },
       )
-    UpdateAvailable(version~, reason~) =>
+    UpdateChannelChanged(value) => {
+      let channel = UpdateChannel::parse(value)
+      // Whatever the old channel said no longer applies; the next check
+      // (Settings button or next launch) answers for the new one.
       (
-        @cmd.none,
-        model.notify_update(
-          match reason {
-            Some(reason) =>
-              "OpenSeek \{version} is available, but automatic update failed: \{reason}"
-            None => "OpenSeek \{version} is available"
-          },
-          AcknowledgeUpdate,
-        ),
+        save_update_channel(channel),
+        { ..model, update_channel: channel, update_ux: UpdateUnknown },
       )
-    UpdateReady(version~) =>
-      (
-        @cmd.none,
-        model.notify_update(
-          "OpenSeek \{version} is ready — click to restart and update",
-          RestartToUpdate,
-        ),
-      )
-    ApplyUpdate(id~) =>
-      (
-        apply_update(dispatch),
-        { ..model, notifications: model.notifications.filter(t => t.id != id) },
-      )
+    }
+    CheckForUpdates =>
+      // A user-initiated check; never stacks on an in-flight one, and never
+      // interrupts a download already underway.
+      if model.update_ux
+        is (CheckingForUpdate(..)
+        | ConfirmingRestart(..)
+        | DownloadingUpdate(..)
+        | RestartingForUpdate(..)) {
+        (@cmd.none, model)
+      } else {
+        (
+          check_for_updates(dispatch, model.update_channel, explicit=true),
+          { ..model, update_ux: CheckingForUpdate(explicit=true) },
+        )
+      }
+    UpdateCheckFinished(result~, explicit~) => {
+      // A stale reply must not clobber a flow the user has since started
+      // (confirming, downloading); only the waiting states accept results.
+      guard model.update_ux
+        is (UpdateUnknown
+        | CheckingForUpdate(..)
+        | UpToDate
+        | UpdateCheckFailed(..)) else {
+        return (@cmd.none, model)
+      }
+      match result {
+        CheckFound(version~, installable~) =>
+          (
+            @cmd.none,
+            { ..model, update_ux: UpdateAvailable(version~, installable~) },
+          )
+        CheckUpToDate =>
+          (
+            @cmd.none,
+            {
+              ..model
+              // Only worth stating when the user asked; a quiet startup
+              // check leaves nothing behind.
+              ,
+              update_ux: if explicit {
+                UpToDate
+              } else {
+                UpdateUnknown
+              },
+            },
+          )
+        CheckUnreachable(reason~) =>
+          // Offline is routine for the app, an answer for the user.
+          if explicit {
+            (
+              @cmd.none,
+              {
+                ..model,
+                update_ux: UpdateCheckFailed(
+                  message="Could not reach the update server: \{reason}",
+                ),
+              },
+            )
+          } else {
+            (@cmd.none, { ..model, update_ux: UpdateUnknown })
+          }
+        CheckMalformed(reason~) =>
+          // A garbage manifest also happens under captive portals, so the
+          // app asking stays quiet (the host logged it); the user asking
+          // gets the truth.
+          if explicit {
+            (
+              @cmd.none,
+              {
+                ..model,
+                update_ux: UpdateCheckFailed(
+                  message="The update server answered unusably: \{reason}",
+                ),
+              },
+            )
+          } else {
+            (@cmd.none, { ..model, update_ux: UpdateUnknown })
+          }
+        CheckBroken(version~, reason~) => {
+          // A broken package entry can only be the publisher's fault:
+          // loud both ways.
+          let message = "OpenSeek \{version} is published but its package is unusable: \{reason}"
+          let (cmd, next) = if explicit {
+            (@cmd.none, model)
+          } else {
+            model.notify_error(dispatch, message)
+          }
+          (cmd, { ..next, update_ux: UpdateCheckFailed(message~) })
+        }
+      }
+    }
+    UpdateClicked =>
+      // Only meaningful while an installable release is on offer; the
+      // button does not render otherwise, but a stale click must not
+      // restart a download.
+      if model.update_ux is UpdateAvailable(version~, installable=true) {
+        if model.any_conversation_busy() {
+          (@cmd.none, { ..model, update_ux: ConfirmingRestart(version~) })
+        } else {
+          (
+            download_update(dispatch, model.update_channel),
+            { ..model, update_ux: DownloadingUpdate(version~) },
+          )
+        }
+      } else {
+        (@cmd.none, model)
+      }
+    ConfirmUpdateRestart =>
+      if model.update_ux is ConfirmingRestart(version~) {
+        (
+          download_update(dispatch, model.update_channel),
+          { ..model, update_ux: DownloadingUpdate(version~) },
+        )
+      } else {
+        (@cmd.none, model)
+      }
+    CancelUpdateRestart =>
+      if model.update_ux is ConfirmingRestart(version~) {
+        (
+          @cmd.none,
+          { ..model, update_ux: UpdateAvailable(version~, installable=true) },
+        )
+      } else {
+        (@cmd.none, model)
+      }
+    UpdateDownloaded =>
+      if model.update_ux is DownloadingUpdate(version~) {
+        (
+          apply_update(dispatch),
+          { ..model, update_ux: RestartingForUpdate(version~) },
+        )
+      } else {
+        (@cmd.none, model)
+      }
+    UpdateFailed(message~) => {
+      // Download or swap failed: say why, and put the button back so the
+      // user can retry.
+      let (cmd, next) = model.notify_error(dispatch, message)
+      let update_ux = match next.update_ux {
+        DownloadingUpdate(version~) | RestartingForUpdate(version~) =>
+          UpdateAvailable(version~, installable=true)
+        other => other
+      }
+      (cmd, { ..next, update_ux, })
+    }
     UpdateApplied => (close_window(), model)
     OpenSetup => (@cmd.none, { ..model, screen: Settings, setup_api_key: "" })
     ToggleSidebar => (@cmd.none, { ..model, sidebar_open: !model.sidebar_open })

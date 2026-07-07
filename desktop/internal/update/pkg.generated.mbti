@@ -8,7 +8,9 @@ import {
 // Values
 pub async fn apply_staged(staged_app~ : String, bundle_path~ : String) -> Unit
 
-pub async fn check_for_update(current~ : String) -> UpdateInfo?
+pub async fn can_self_update(bundle_path~ : String) -> Bool
+
+pub async fn check_for_update(current~ : String, channel~ : UpdateChannel) -> UpdateInfo?
 
 pub async fn cleanup_leftovers(work_dir~ : String, bundle_path~ : String) -> Unit
 
@@ -22,6 +24,10 @@ pub async fn write_relaunch_marker(work_dir~ : String, bundle_path~ : String) ->
 pub suberror ManifestError {
   MalformedManifest(reason~ : String)
   MalformedArtifact(version~ : String, reason~ : String)
+}
+
+pub suberror Unreachable {
+  Unreachable(reason~ : String)
 }
 
 pub(all) suberror UpdateError {
@@ -39,6 +45,11 @@ pub struct StagedUpdate {
   version : String
   app_path : String
 }
+
+pub(all) enum UpdateChannel {
+  Production
+  Staging
+} derive(Eq, @debug.Debug)
 
 pub struct UpdateInfo {
   version : String

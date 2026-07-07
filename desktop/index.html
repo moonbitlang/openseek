@@ -824,6 +824,31 @@
         color: var(--ink);
       }
 
+      /* The self-update call to action: the one accent-filled control in the
+         chrome, in the sidebar footer and the Settings updates row alike. */
+      button.update-accent {
+        background: var(--accent);
+        color: #fff;
+        border: 0;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+      }
+      button.update-accent:not(.sidebar-button) {
+        padding: 6px 12px;
+      }
+      button.update-accent .sidebar-icon,
+      button.update-accent.sidebar-button {
+        color: #fff;
+      }
+      button.update-accent:not(:disabled):hover {
+        background: var(--accent-ink);
+        color: #fff;
+      }
+      button.update-accent:disabled {
+        opacity: 0.7;
+        cursor: default;
+      }
+
       /* ---------- main column ---------- */
       main {
         display: grid;
@@ -2209,6 +2234,68 @@
           opacity: 1;
           transform: none;
         }
+      }
+
+      /* ---------- confirmation modal ---------- */
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        display: grid;
+        place-items: center;
+        background: color-mix(in srgb, var(--ink) 24%, transparent);
+      }
+      .modal {
+        width: min(420px, calc(100vw - 48px));
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        box-shadow: var(--shadow-pop);
+      }
+      .modal-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .modal-body {
+        margin-top: 8px;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--ink-2);
+      }
+      .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .modal-actions button {
+        padding: 6px 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        color: var(--ink);
+        cursor: pointer;
+      }
+      .modal-actions button:hover {
+        background: var(--surface-2);
+      }
+      .modal-actions button.update-accent {
+        border: 0;
+      }
+      .modal-actions button.update-accent:hover {
+        background: var(--accent-ink);
+      }
+
+      /* Inline outcome text in the Settings updates row. */
+      .update-status {
+        align-self: center;
+        font-size: 12.5px;
+        color: var(--ink-2);
+      }
+      .update-status.update-error {
+        color: var(--del);
       }
 
       @media (max-width: 760px) {
