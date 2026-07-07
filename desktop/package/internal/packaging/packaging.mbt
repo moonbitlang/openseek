@@ -24,17 +24,35 @@ const ViewerStyleOutput : String = "viewer.css"
 /// desktop app supplies its own panel layout and file tree.
 fn viewer_css_sources() -> Array[String] {
   [
-    "editor/internal/shell/workbench/theme.css", "editor/viewer/browser/view/editor.css",
-    "editor/viewer/ui/scrollbar/scrollable_element.css", "editor/viewer/browser/view_parts/view_lines/view_lines.css",
-    "editor/viewer/browser/view_parts/selections/view_overlays.css", "editor/viewer/browser/view_parts/view_zones/view_zones.css",
-    "editor/viewer/browser/view_parts/content_widgets/content_widgets.css", "editor/viewer/browser/view_parts/overlay_widgets/overlay_widgets.css",
-    "editor/viewer/browser/view_parts/selections/selections.css", "editor/viewer/browser/view_parts/selections/current_line_highlight.css",
-    "editor/viewer/browser/view_parts/selections/decorations.css", "editor/viewer/browser/view_parts/view_cursors/view_cursors.css",
-    "editor/viewer/browser/view_parts/margin/margin.css", "editor/viewer/browser/view_parts/margin/folding.css",
+    "editor/internal/shell/workbench/theme.css", "editor/viewer/browser/view/codicon/codicon.css",
+    "editor/viewer/browser/view/editor.css", "editor/viewer/ui/scrollbar/scrollable_element.css",
+    "editor/viewer/browser/view_parts/view_lines/view_lines.css", "editor/viewer/browser/view_parts/selections/view_overlays.css",
+    "editor/viewer/browser/view_parts/view_zones/view_zones.css", "editor/viewer/browser/view_parts/content_widgets/content_widgets.css",
+    "editor/viewer/browser/view_parts/overlay_widgets/overlay_widgets.css", "editor/viewer/browser/view_parts/selections/selections.css",
+    "editor/viewer/browser/view_parts/current_line_highlight/current_line_highlight.css",
+    "editor/viewer/browser/view_parts/decorations/decorations.css", "editor/viewer/browser/view_parts/view_cursors/view_cursors.css",
+    "editor/viewer/browser/view_parts/margin/margin.css", "editor/viewer/browser/view_parts/margin/lines_decorations.css",
     "editor/viewer/browser/view_parts/view_lines/tokens.css", "editor/viewer/browser/view_parts/view_lines/inlay_hints.css",
     "editor/viewer/browser/view_parts/view_lines/markers.css", "editor/viewer/contrib/hover/hover.css",
+    "editor/viewer/contrib/agent_feedback/browser/agent_feedback.css",
   ]
 }
+
+///|
+/// The vendored codicon icon font `codicon.css`'s `@font-face` loads. The
+/// editor serves it at the site root (`/codicon.ttf`); the desktop keeps its
+/// fonts under `fonts/`, so `build_viewer_stylesheet` rewrites the URL and
+/// copies the font here (the packagers already ship the `fonts/` tree).
+const CodiconFontSource : String = "editor/viewer/browser/view/codicon/codicon.ttf"
+
+///|
+const CodiconFontOutput : String = "fonts/codicon.ttf"
+
+///|
+const CodiconFontUpstreamUrl : String = "url(\"/codicon.ttf\")"
+
+///|
+const CodiconFontDesktopUrl : String = "url(\"fonts/codicon.ttf\")"
 
 ///|
 const NativePackage : String = "."
@@ -306,7 +324,9 @@ pub async fn build_viewer_stylesheet(ws : Workspace) -> Unit {
       raise PackageError("viewer stylesheet not found: \{absolute}")
     }
     css.write_string("/* " + source + " */\n")
-    let text = @asyncfs.read_file(absolute).text()
+    let text = @asyncfs.read_file(absolute)
+      .text()
+      .replace(old=CodiconFontUpstreamUrl, new=CodiconFontDesktopUrl)
     css.write_string(text)
     if !text.has_suffix("\n") {
       css.write_string("\n")
@@ -314,6 +334,7 @@ pub async fn build_viewer_stylesheet(ws : Workspace) -> Unit {
     css.write_string("\n")
   }
   write_text(ws.at(ViewerStyleOutput), css.to_string())
+  copy_file(ws.at(CodiconFontSource), ws.at(CodiconFontOutput))
 }
 
 ///|

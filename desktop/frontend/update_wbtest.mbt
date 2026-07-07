@@ -1241,10 +1241,7 @@ test "catalog and library replies land on the model" {
 test "JumpToMention opens the editor panel and selects the mention's file" {
   let dispatch = test_dispatch()
   let mention : Mention = {
-    kind: SymbolMention,
-    label: "parse_hover",
-    expand: "`parse_hover` — src/main.mbt:5 ",
-    path: Some("src/main.mbt"),
+    ref_: Symbol(name="parse_hover", file="src/main.mbt", line=5),
     range: Some(@common.Range::Range(5, 1, 5, 12)),
   }
   let model = test_model().replace_conversation({
@@ -1259,13 +1256,7 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
 ///|
 test "JumpToMention is a no-op for a chip without a resolved location" {
   let dispatch = test_dispatch()
-  let mention : Mention = {
-    kind: SkillMention,
-    label: "review-pr",
-    expand: "review-pr ",
-    path: None,
-    range: None,
-  }
+  let mention : Mention = { ref_: Skill(name="review-pr"), range: None }
   let model = test_model().replace_conversation({
     ..test_conversation(),
     mentions: [mention],
@@ -1273,6 +1264,49 @@ test "JumpToMention is a no-op for a chip without a resolved location" {
   let (_, next) = update(dispatch, JumpToMention(0), model)
   assert_false(next.file_panel.open)
   assert_true(next.file_panel.selected is None)
+}
+
+///|
+test "EditorCommentAdded attaches a deduplicated annotation chip, relativized" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    cwd: "/work/project",
+  })
+  let msg : Msg = EditorCommentAdded(
+    path="/work/project/src/main.mbt",
+    range=@common.Range::Range(5, 1, 6, 3),
+    quote="fn parse_hover() {",
+    comment="rename this",
+    feedback_id="viewer-feedback-0",
+  )
+  let (_, next) = update(dispatch, msg, model)
+  let mentions = next.active().mentions
+  assert_eq(mentions.length(), 1)
+  // The chip names the file the way the conversation does — workspace-relative.
+  assert_true(
+    mentions[0].ref_
+    is Annotation(file="src/main.mbt", start_line=5, end_line=6, ..),
+  )
+  // Submitting the identical comment again is a no-op, not a second chip.
+  let (_, again) = update(dispatch, msg, next)
+  assert_eq(again.active().mentions.length(), 1)
+  // A file outside the workspace keeps its absolute path.
+  let (_, outside) = update(
+    dispatch,
+    EditorCommentAdded(
+      path="/elsewhere/note.md",
+      range=@common.Range::Range(1, 1, 1, 1),
+      quote="",
+      comment="hm",
+      feedback_id="viewer-feedback-1",
+    ),
+    next,
+  )
+  assert_true(
+    outside.active().mentions[1].ref_
+    is Annotation(file="/elsewhere/note.md", ..),
+  )
 }
 
 ///|

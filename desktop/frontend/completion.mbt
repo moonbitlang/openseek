@@ -92,12 +92,12 @@ fn compute_completion(
 
 ///|
 /// Append `mention` to `mentions` copy-on-write, unless an equal chip (same
-/// kind and expansion) is already there — accepting the same skill or symbol
-/// twice is a no-op rather than a duplicate chip. Prior model snapshots keep
-/// their own array.
+/// envelope form) is already there — accepting the same skill, symbol, or
+/// comment twice is a no-op rather than a duplicate chip. Prior model
+/// snapshots keep their own array.
 fn push_mention(mentions : Array[Mention], mention : Mention) -> Array[Mention] {
   for existing in mentions {
-    if existing.kind == mention.kind && existing.expand == mention.expand {
+    if existing.ref_ == mention.ref_ {
       return mentions
     }
   }
@@ -113,7 +113,7 @@ fn push_mention(mentions : Array[Mention], mention : Mention) -> Array[Mention] 
 /// into chips when the message re-renders, live or from a reloaded session.
 /// With no chips this is just the text.
 fn compose_prompt(mentions : Array[Mention], task : String) -> String {
-  @mention_context.encode(mentions.map(Mention::to_ref), task)
+  @mention_context.encode(mentions.map(mention => mention.ref_), task)
 }
 
 ///|

@@ -1211,21 +1211,27 @@ fn completion_popup(
 
 ///|
 /// The chips above the textarea for the draft's mentions (`$` skills, `#`
-/// symbols), each removable by its `×`. Always rendered (empty when there are
-/// no chips) so the textarea keeps a stable child index and never loses focus
-/// when a chip comes or goes; CSS collapses the empty tray to nothing. A
-/// symbol chip with a resolved location is also clickable, opening (or
-/// refocusing) the editor side-panel on that spot.
+/// symbols, `✎` editor comments), each removable by its `×`. Always rendered
+/// (empty when there are no chips) so the textarea keeps a stable child index
+/// and never loses focus when a chip comes or goes; CSS collapses the empty
+/// tray to nothing. A chip with a resolved location is also clickable,
+/// opening (or refocusing) the editor side-panel on that spot; a comment
+/// chip's tooltip is the comment itself.
 fn mention_tray(dispatch : @cmd.Emit[Msg], conv : Conversation) -> @html.Html {
   let chips : Array[@html.Html] = []
   for index, mention in conv.mentions {
-    let glyph = @html.span(class="mention-glyph", mention.kind.glyph())
-    let label = @html.span(class="mention-label", mention.label)
-    let body = if mention.path is Some(path) {
+    let parts = mention_chip(mention.ref_)
+    let glyph = @html.span(class="mention-glyph", parts.glyph)
+    let label = @html.span(class="mention-label", parts.label)
+    let body = if !parts.file.is_empty() {
       @html.button(
         class="mention-jump",
         type_="button",
-        title="Jump to \{path}",
+        title=if mention.ref_ is Annotation(comment~, ..) {
+          comment
+        } else {
+          "Jump to \{parts.file}"
+        },
         on_click=dispatch(JumpToMention(index)),
         [glyph, label],
       )

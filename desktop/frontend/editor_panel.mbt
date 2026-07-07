@@ -75,9 +75,14 @@ fn register_tokenizers() -> Unit {
 /// Create the viewer in its host element after the next paint, once (the
 /// tokenizers and hover provider register with it). A no-op if already
 /// mounted or the host element is not in the DOM yet.
-fn request_viewer_mount() -> @cmd.Cmd {
+///
+/// Mounting also wires the comment flow: a comment the user submits through
+/// the viewer's agent-feedback input is handed to the update loop as
+/// `EditorCommentAdded` — with the selected source quoted out of the current
+/// model — so it becomes a chip on the composer draft.
+fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _after => {
+    scheduler => {
       if viewer_cell.val is None &&
         @dom.document().get_element_by_id(ViewerHostId).to_option()
         is Some(host) {
@@ -94,10 +99,54 @@ fn request_viewer_mount() -> @cmd.Cmd {
           ),
         )
         viewer_cell.val = Some(viewer)
+        services.agent_feedback.on_did_add_feedback(event => {
+          // Only user comments on a file this app put on screen (a URI it
+          // minted) become chips; anything else is not ours to carry.
+          guard event.feedback.kind is UserReview else { return }
+          guard parse_model_uri(event.feedback.resource.value) is Some(absolute) else {
+            return
+          }
+          let quote = if viewer.get_model() is Some(model) &&
+            model.uri.value == event.feedback.resource.value {
+            model.get_value_in_range(event.feedback.range)
+          } else {
+            ""
+          }
+          scheduler.add(
+            dispatch(
+              EditorCommentAdded(
+                path=absolute.0,
+                range=event.feedback.range,
+                quote~,
+                comment=event.feedback.text,
+                feedback_id=event.feedback.id,
+              ),
+            ),
+          )
+        })
+        |> ignore
       }
     },
     kind=@cmd.after_render,
   )
+}
+
+///|
+/// Clear one comment bubble from the editor once its text has become a
+/// composer chip — the chip is the comment's carrier from then on. Routed by
+/// the same model URI the feedback was filed under.
+fn remove_editor_feedback(
+  absolute_path : String,
+  feedback_id : String,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(_scheduler => {
+    if services_cell.val is Some(services) {
+      services.agent_feedback.remove_feedback(
+        { value: model_uri(Absolute(absolute_path)) },
+        feedback_id,
+      )
+    }
+  })
 }
 
 ///|
@@ -152,6 +201,11 @@ fn show_file_in_viewer(
     // `set_model` resets the view state itself (the Monaco contract), so a
     // fresh document always opens at the top.
     viewer.set_model(Some(text_model))
+    // Commenting (select → inline input → composer chip) is for real files;
+    // a notice document has nothing behind it to comment on.
+    if services_cell.val is Some(services) {
+      services.agent_feedback.set_feedback_enabled(uri, absolute is Some(_))
+    }
     if range is Some(range) {
       if !range.is_empty() {
         // `set_selection` never scrolls on its own (the Monaco contract), so

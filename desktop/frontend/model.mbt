@@ -185,56 +185,16 @@ priv struct CompletionItem {
 }
 
 ///|
-/// Which trigger produced a composer mention chip. `$` skills and `#` symbols
-/// both become chips in the tray above the textarea; the glyph distinguishes
-/// them. Slash commands never become chips — they execute on accept instead.
-priv enum MentionKind {
-  SkillMention
-  SymbolMention
-} derive(Eq)
-
-///|
-/// The chip glyph: the trigger character the mention came from.
-fn MentionKind::glyph(self : MentionKind) -> String {
-  match self {
-    SkillMention => "$"
-    SymbolMention => "#"
-  }
-}
-
-///|
-/// One accepted mention, shown as a chip above the composer and expanded into
-/// the prompt on send. `label` is the chip text (the bare skill/symbol name);
-/// `expand` is the text spliced into the outgoing prompt for the agent to read
-/// (the skill name, or the symbol's backticked `path:line` reference). Chips
-/// are deduplicated by `kind` + `expand`. `path`/`range` mirror the symbol's
-/// resolved location (`None` for a skill, or a symbol without one) so the
-/// chip can jump the editor panel there and select the named code.
+/// One accepted mention, shown as a chip above the composer and folded into
+/// the outgoing prompt's `<user_mentions>` envelope on send. `ref` is the
+/// envelope form itself (`$` skill, `#` symbol, or an editor comment) — the
+/// single source for the chip's glyph/label/jump target (`mention_chip`) and
+/// for dedup. `range` keeps the full resolved range the envelope's
+/// `file:line` cannot carry, so a draft chip's jump still selects the exact
+/// span (`None` for a skill or an unplaced symbol).
 priv struct Mention {
-  kind : MentionKind
-  label : String
-  expand : String
-  path : String?
+  ref_ : @mention_context.MentionRef
   range : @common.Range?
-}
-
-///|
-/// The chip's envelope form — its label plus the resolved location's
-/// file/start line (`""`/0 when it has none) — which is everything
-/// `@mention_context.encode` writes into the outgoing prompt and `parse`
-/// recovers for the transcript's chip row.
-fn Mention::to_ref(self : Mention) -> @mention_context.MentionRef {
-  match self.kind {
-    SkillMention => Skill(name=self.label)
-    SymbolMention => {
-      let (file, line) = if self.path is Some(path) && self.range is Some(range) {
-        (path, range.start_line_number)
-      } else {
-        ("", 0)
-      }
-      Symbol(name=self.label, file~, line~)
-    }
-  }
 }
 
 ///|
@@ -499,6 +459,19 @@ priv enum Msg {
   // sent message's mention, parsed back out of its `<user_mentions>` envelope,
   // so it carries the location itself rather than a draft index.
   JumpToLocation(path~ : String, line~ : Int)
+  // The user commented on a selection in the editor viewer (the
+  // agent-feedback inline input): the comment becomes an annotation chip on
+  // the active draft. `path` is the commented file's host-resolved absolute
+  // path (the update relativizes it against the conversation's cwd for the
+  // envelope); `quote` is the selected source; `feedback_id` lets the handler
+  // clear the editor's own bubble — the chip is the comment's carrier now.
+  EditorCommentAdded(
+    path~ : String,
+    range~ : @common.Range,
+    quote~ : String,
+    comment~ : String,
+    feedback_id~ : String
+  )
   // A `workspace_symbols` reply: `session`/`query` say which request it answers
   // so a reply that lost a conversation switch or a later keystroke is dropped.
   SymbolsLoaded(

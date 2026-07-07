@@ -37,6 +37,9 @@
      current line renders as the border box, not a fill. */
   --vscode-editorCursor-foreground: #aeafad;
   --vscode-editor-lineHighlightBorder: #282828;
+  /* editorWhitespace.foreground registry default (editorColorRegistry.ts:28);
+     the Modern themes do not override it. */
+  --vscode-editorWhitespace-foreground: #e3e4e229;
   --vscode-editorLink-activeForeground: #4e94ce;
   --vscode-editorWarning-foreground: #cca700;
   --vscode-editorError-foreground: #f14c4c;
@@ -54,7 +57,25 @@
   --vscode-editorHoverWidget-background: #202020;
   --vscode-editorHoverWidget-foreground: #cccccc;
   --vscode-editorHoverWidget-border: #313131;
-  --vscode-editorHoverWidget-statusBarBackground: #2b2b2b;
+  /* editorWidget/input/button: Dark Modern theme values; editorWidget.border
+     and .foreground are registry defaults (editorColors.ts:53-59 —
+     `transparent(foreground, 0.2)` and `foreground`). */
+  --vscode-editorWidget-background: #202020;
+  --vscode-editorWidget-foreground: #cccccc;
+  --vscode-editorWidget-border: #cccccc33;
+  --vscode-input-background: #313131;
+  --vscode-input-foreground: #cccccc;
+  --vscode-input-border: #3c3c3c;
+  --vscode-button-background: #0078d4;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-hoverBackground: #026ec1;
+  --vscode-descriptionForeground: #9d9d9d;
+  /* editorGutter.commentRangeForeground / commentGlyphForeground registry
+     defaults (commentGlyphWidget.ts:18,23): `opaque(
+     listInactiveSelectionBackground, editorBackground)` and
+     `editorForeground`. */
+  --vscode-editorGutter-commentRangeForeground: #37373d;
+  --vscode-editorGutter-commentGlyphForeground: #cccccc;
   --vscode-toolbar-hoverBackground: #ffffff1a;
   --vscode-textLink-foreground: #4e94ce;
   --vscode-textLink-activeForeground: #4e94ce;
@@ -124,6 +145,8 @@
      line-highlight border). */
   --vscode-editorCursor-foreground: #000000;
   --vscode-editor-lineHighlightBorder: #eeeeee;
+  /* See the Dark Modern block above (light registry default). */
+  --vscode-editorWhitespace-foreground: #33333333;
   --vscode-editorLink-activeForeground: #0000ff;
   --vscode-editorWarning-foreground: #bf8803;
   --vscode-editorError-foreground: #e51400;
@@ -136,7 +159,21 @@
   --vscode-editorHoverWidget-background: #f8f8f8;
   --vscode-editorHoverWidget-foreground: #3b3b3b;
   --vscode-editorHoverWidget-border: #e5e5e5;
-  --vscode-editorHoverWidget-statusBarBackground: #f0f0f0;
+  /* See the Dark Modern block above (Light Modern theme values + registry
+     defaults). commentRangeForeground = `darken(opaque(
+     listInactiveSelectionBackground #e4e6f1, #ffffff), .05)`. */
+  --vscode-editorWidget-background: #f8f8f8;
+  --vscode-editorWidget-foreground: #3b3b3b;
+  --vscode-editorWidget-border: #3b3b3b33;
+  --vscode-input-background: #ffffff;
+  --vscode-input-foreground: #3b3b3b;
+  --vscode-input-border: #cecece;
+  --vscode-button-background: #005fb8;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-hoverBackground: #0258a8;
+  --vscode-descriptionForeground: #3b3b3b;
+  --vscode-editorGutter-commentRangeForeground: #d5d8e9;
+  --vscode-editorGutter-commentGlyphForeground: #3b3b3b;
   --vscode-toolbar-hoverBackground: #00000014;
   --vscode-textLink-foreground: #006ab1;
   --vscode-textLink-activeForeground: #0000ff;
@@ -174,6 +211,43 @@
   --vscode-token-regexp: #811f3f;
   --vscode-token-invalid: #cd3131;
   --monaco-monospace-font: var(--editor-font-family);
+}
+
+/* editor/viewer/browser/view/codicon/codicon.css */
+/* Ported from vscode/src/vs/base/browser/ui/codicons/codicon/codicon.css
+   (the @font-face + base class), with the icon content rules the viewer
+   uses inlined from the codepoints in
+   vscode/src/vs/base/common/codiconsLibrary.ts — Monaco generates these
+   dynamically through the theme service's icon stylesheet
+   (iconsStyleSheet.ts), which the viewer does not port. codicon.ttf is the
+   vendored VS Code icon font (served as /codicon.ttf). */
+
+@font-face {
+  font-family: "codicon";
+  font-display: block;
+  src: url("fonts/codicon.ttf") format("truetype");
+}
+
+.codicon[class*="codicon-"] {
+  font: normal normal normal 16px/1 codicon;
+  display: inline-block;
+  text-decoration: none;
+  text-rendering: auto;
+  text-align: center;
+  text-transform: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* codiconsLibrary.ts codepoints for the icons the viewer renders. */
+.codicon-chevron-down:before {
+  content: "\eab4";
+}
+
+.codicon-chevron-right:before {
+  content: "\eab6";
 }
 
 /* editor/viewer/browser/view/editor.css */
@@ -380,6 +454,17 @@
   cursor: text;
 }
 
+/* Rendered-whitespace parts (`·`/`→`), Monaco `viewLines.css:74-81`: the
+   faded `editorWhitespace.foreground` overrides the token color. */
+.monaco-editor .mtkw {
+  color: var(--vscode-editorWhitespace-foreground, #e3e4e229) !important;
+}
+
+.monaco-editor .mtkz {
+  display: inline-block;
+  color: var(--vscode-editorWhitespace-foreground, #e3e4e229) !important;
+}
+
 /* editor/viewer/browser/view_parts/selections/view_overlays.css */
 .view-overlays {
   position: absolute;
@@ -481,7 +566,7 @@
   background: var(--vscode-editor-selectionBackground);
 }
 
-/* editor/viewer/browser/view_parts/selections/current_line_highlight.css */
+/* editor/viewer/browser/view_parts/current_line_highlight/current_line_highlight.css */
 /* Ported from
    vscode/src/vs/editor/browser/viewParts/currentLineHighlight/currentLineHighlight.css
    plus the registerThemingParticipant rules (currentLineHighlight.ts:237-264),
@@ -538,7 +623,7 @@
   border: 2px solid var(--vscode-editor-lineHighlightBorder);
 }
 
-/* editor/viewer/browser/view_parts/selections/decorations.css */
+/* editor/viewer/browser/view_parts/decorations/decorations.css */
 /* Ported from vscode/src/vs/editor/browser/viewParts/decorations/decorations.css.
  * cdr = core decorations rendering (div). The flat-overlay pieces carry an
  * explicit top/height (see decorations_overlay.mbt) instead of Monaco's
@@ -625,38 +710,21 @@
   user-select: none;
 }
 
-/* editor/viewer/browser/view_parts/margin/folding.css */
-.folding {
+/* editor/viewer/browser/view_parts/margin/lines_decorations.css */
+/* The line-decorations gutter lane (Monaco `linesDecorations.css` +
+   `glyphMargin.css` `.cldr`): a margin layer of absolutely-positioned pieces
+   between the line numbers and the content. Each `.cldr` carries inline
+   left/width/top/height (see lines_decorations.mbt). */
+.lines-decorations {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   will-change: transform;
-  z-index: 2;
 }
 
-.folding-marker {
+.lines-decorations .cldr {
   position: absolute;
-  right: 4px;
-  width: 18px;
-  height: var(--editor-line-height);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--vscode-editorLineNumber-foreground);
-  font: var(--editor-font-size) / var(--editor-line-height)
-    var(--editor-font-family);
-  opacity: 0.78;
-  cursor: pointer;
-}
-
-.folding-marker:hover {
-  opacity: 1;
-}
-
-.folding-marker .codicon {
-  font-size: 14px;
-  line-height: var(--editor-line-height);
 }
 
 /* editor/viewer/browser/view_parts/view_lines/tokens.css */
@@ -749,34 +817,56 @@
 
 /* editor/viewer/browser/view_parts/view_lines/markers.css */
 /*
- * Marker squiggle decorations, ported from
+ * Marker squiggle decorations, ported line-for-line from
  * vscode/src/vs/editor/browser/widget/codeEditor/editor.css:81-120.
  *
- * This `border-bottom` double/dotted/dashed underline is Monaco's
+ * The `border-bottom` double/dotted/dashed underline is Monaco's
  * high-contrast-only fallback — the `*-border` color tokens default to `null`
  * in normal (non-HC) themes, so this rule is correctly inert here (this
  * viewer has no high-contrast theme; see view_lines.mbt's equivalent note).
+ * Likewise the `::before` layer fills the marked text with
+ * `editor*.background`, which is also `null` outside HC themes — inert in
+ * normal themes, ported for fidelity.
  * The real, visible wavy squiggle is a runtime inline-SVG background image
  * computed from `editor*.foreground` (`viewer/browser/view/
  * squiggly_theme.mbt`, porting `codeEditorWidget.ts`'s
  * `registerThemingParticipant`), injected as a separate stylesheet.
- *
- * Deviation: Monaco's `::before { background: var(--vscode-editor*-background) }`
- * error-text fill is omitted. `editor*.background` is `null` (transparent) in
- * non-HC themes, and a `display:block` pseudo-element would inject a block box
- * into the inline view-line span flow.
  */
 
 .moonbit-viewer .squiggly-error {
   border-bottom: 4px double var(--vscode-editorError-border);
 }
 
+.moonbit-viewer .squiggly-error::before {
+  display: block;
+  content: '';
+  width: 100%;
+  height: 100%;
+  background: var(--vscode-editorError-background);
+}
+
 .moonbit-viewer .squiggly-warning {
   border-bottom: 4px double var(--vscode-editorWarning-border);
 }
 
+.moonbit-viewer .squiggly-warning::before {
+  display: block;
+  content: '';
+  width: 100%;
+  height: 100%;
+  background: var(--vscode-editorWarning-background);
+}
+
 .moonbit-viewer .squiggly-info {
   border-bottom: 4px double var(--vscode-editorInfo-border);
+}
+
+.moonbit-viewer .squiggly-info::before {
+  display: block;
+  content: '';
+  width: 100%;
+  height: 100%;
+  background: var(--vscode-editorInfo-background);
 }
 
 .moonbit-viewer .squiggly-hint {
@@ -977,38 +1067,6 @@
   background: var(--vscode-editorHoverWidget-border);
 }
 
-.monaco-hover .hover-row.status-bar {
-  font-size: 12px;
-  line-height: 22px;
-}
-
-.monaco-hover .hover-row.status-bar .actions {
-  display: flex;
-  box-sizing: border-box;
-  width: 100%;
-  padding: 0 8px;
-  background-color: var(--vscode-editorHoverWidget-statusBarBackground);
-}
-
-.monaco-hover .hover-row.status-bar .actions .action-container {
-  margin-right: 16px;
-  cursor: pointer;
-  overflow: hidden;
-  text-wrap: nowrap;
-  text-overflow: ellipsis;
-}
-
-.monaco-hover .hover-row.status-bar .actions .action-container .action .icon {
-  padding-right: 4px;
-  vertical-align: middle;
-  font-size: inherit;
-}
-
-.monaco-hover .hover-row.status-bar .actions .action-container a {
-  color: var(--vscode-textLink-foreground);
-  text-decoration: none;
-}
-
 .monaco-hover .hover-row.hover-row-with-copy {
   position: relative;
   padding-right: 20px;
@@ -1042,5 +1100,516 @@
 .monaco-hover .hover-copy-button:focus {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: -1px;
+}
+
+/* editor/viewer/contrib/agent_feedback/browser/agent_feedback.css */
+/* Agent-feedback contrib styling: a transcription of vscode
+   sessions/contrib/agentFeedback/browser/media/agentFeedbackEditorInput.css.
+   The upstream file leans on the new design-token vars
+   (--vscode-spacing-*, --vscode-cornerRadius-*, --vscode-shadow-lg,
+   --vscode-icon-plus-content/-font-family); the viewer's theme.css carries
+   none of those, so they are inlined to their default values (spacing-size60
+   = 6px, size120 = 12px, size200 = 20px, cornerRadius-small/large = 2px/6px)
+   and the icons are the vendored codicon font (plus \ea60, send \ec0f —
+   codiconsLibrary.ts codepoints), following the comments.css precedent. */
+
+/* --- hover "+" gutter glyph -------------------------------------------- */
+
+.monaco-editor .agent-feedback-glyph {
+  cursor: pointer;
+  z-index: 10;
+}
+
+.margin-view-overlays .agent-feedback-glyph.line-hover {
+  margin-left: 12px;
+  /* Keep the lane element itself inside the gutter band: the upstream
+     20px-wide element would spill its click target past the gutter edge
+     into the text (the comments glyph's width recipe). The visible plus is
+     the ::before, drawn back over the lane. */
+  width: 4px !important;
+}
+
+.margin-view-overlays .agent-feedback-glyph.line-hover::before {
+  content: "\ea60";
+  font-family: "codicon";
+  font-size: 14px;
+  position: absolute;
+  height: 100%;
+  width: 18px;
+  left: -8px;
+  z-index: 10;
+  color: var(--vscode-editorGutter-commentGlyphForeground, var(--vscode-foreground));
+  background-color: var(--vscode-editorGutter-commentRangeForeground);
+  text-align: center;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+}
+
+/* --- inline input widget ------------------------------------------------ */
+
+.agent-feedback-input-widget {
+  position: absolute;
+  z-index: 10000;
+  pointer-events: auto;
+  background-color: var(--vscode-panel-background, var(--vscode-editorWidget-background));
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-contrastBorder, #454545));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  padding: 4px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  animation: agentFeedbackInputAppear 0.15s ease-out;
+}
+
+@keyframes agentFeedbackInputAppear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-feedback-input-widget {
+    animation: none;
+    transform: none;
+  }
+}
+
+.agent-feedback-input-widget textarea {
+  background-color: var(--vscode-panel-background, var(--vscode-editorWidget-background));
+  border: none;
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 13px;
+  line-height: 22px;
+  border-radius: 2px;
+  padding: 0 0 0 6px;
+  outline: none;
+  min-width: 150px;
+  max-width: 400px;
+  resize: none;
+  overflow-y: hidden;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  box-sizing: border-box;
+  display: block;
+  flex: 1;
+}
+
+.agent-feedback-input-widget textarea:focus {
+  border-color: var(--vscode-focusBorder);
+  outline: none !important;
+}
+
+.agent-feedback-input-widget textarea::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.agent-feedback-input-widget .agent-feedback-input-measure {
+  position: absolute;
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+  white-space: pre;
+  font: inherit;
+  font-size: 13px;
+}
+
+.agent-feedback-input-widget .agent-feedback-input-actions {
+  display: flex;
+  align-items: center;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.agent-feedback-input-widget .agent-feedback-input-action {
+  box-sizing: content-box;
+  width: 16px;
+  height: 16px;
+  padding: 3px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agent-feedback-input-widget .agent-feedback-input-action:hover:not([disabled]) {
+  background-color: var(--vscode-list-hoverBackground, rgba(90, 93, 94, 0.31));
+}
+
+.agent-feedback-input-widget .agent-feedback-input-action[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.agent-feedback-input-widget .agent-feedback-input-action::before {
+  font-family: "codicon";
+  font-size: 16px;
+}
+
+.agent-feedback-input-widget .agent-feedback-input-action-add::before {
+  content: "\ea60";
+}
+
+.agent-feedback-input-widget .agent-feedback-input-action-send::before {
+  content: "\ec0f";
+}
+
+/* --- feedback speech-bubble widget --------------------------------------
+   Transcription of media/agentFeedbackEditorWidget.css with the design
+   tokens inlined (cornerRadius-large/small = 6px/2px, fontSize-label1/2/3 =
+   12px/11px/10px, fontWeight-semiBold = 600, charts-purple fallback
+   #b180d7) and codicon glyphs for the header/toggle/action icons. */
+
+.agent-feedback-widget {
+  position: absolute;
+  pointer-events: auto;
+  max-width: 280px;
+  min-width: 180px;
+  background-color: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-contrastBorder, #454545));
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  z-index: 10;
+}
+
+.agent-feedback-widget.visible {
+  opacity: 1;
+}
+
+.agent-feedback-widget:focus {
+  outline: none;
+}
+
+.agent-feedback-widget-arrow {
+  display: none;
+}
+
+.agent-feedback-widget-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 4px 4px 8px;
+  border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border));
+  border-radius: 6px 6px 0 0;
+  overflow: hidden;
+  cursor: pointer;
+  gap: 6px;
+}
+
+.agent-feedback-widget.collapsed .agent-feedback-widget-header {
+  border-bottom: none;
+  border-radius: 6px;
+}
+
+.agent-feedback-widget-header:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.agent-feedback-widget-icon::before {
+  content: "\ea6b";
+  font-family: "codicon";
+  font-size: 14px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.agent-feedback-widget-title {
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--vscode-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.agent-feedback-widget-spacer {
+  flex: 1;
+}
+
+.agent-feedback-widget-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--vscode-foreground);
+  opacity: 0.7;
+  transition: opacity 0.1s;
+}
+
+.agent-feedback-widget-toggle:hover {
+  opacity: 1;
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.agent-feedback-widget-toggle::before {
+  font-family: "codicon";
+  font-size: 14px;
+}
+
+.agent-feedback-widget-toggle-down::before {
+  content: "\eab4";
+}
+
+.agent-feedback-widget-toggle-up::before {
+  content: "\eab7";
+}
+
+.agent-feedback-widget-body {
+  transition: max-height 0.2s ease-in-out, padding 0.2s ease-in-out;
+  border-radius: 0 0 6px 6px;
+  overflow: hidden;
+}
+
+.agent-feedback-widget-body.collapsed {
+  max-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.agent-feedback-widget-item {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 4px 8px 8px;
+  border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border));
+  cursor: pointer;
+  position: relative;
+  gap: 6px;
+}
+
+.agent-feedback-widget-item:last-child {
+  border-bottom: none;
+}
+
+.agent-feedback-widget-item:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.agent-feedback-widget-item.focused {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.agent-feedback-widget-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agent-feedback-widget-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.agent-feedback-widget-item-actions {
+  margin-left: auto;
+  flex: 0 0 auto;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  display: flex;
+  gap: 2px;
+}
+
+.agent-feedback-widget-item:hover .agent-feedback-widget-item-actions {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.agent-feedback-widget-action {
+  width: 16px;
+  height: 16px;
+  padding: 2px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agent-feedback-widget-action:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.agent-feedback-widget-action::before {
+  font-family: "codicon";
+  font-size: 14px;
+}
+
+.agent-feedback-widget-action-reply::before {
+  content: "\eac7";
+}
+
+.agent-feedback-widget-action-edit::before {
+  content: "\ea73";
+}
+
+.agent-feedback-widget-action-remove::before {
+  content: "\ea76";
+}
+
+.agent-feedback-widget-item-type {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  background: color-mix(in srgb, var(--vscode-charts-purple, #b180d7) 22%, var(--vscode-editorWidget-background));
+  color: var(--vscode-charts-purple, #b180d7);
+}
+
+.agent-feedback-widget-line-info {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.agent-feedback-widget-text {
+  color: var(--vscode-foreground);
+  word-wrap: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.agent-feedback-widget-text p,
+.agent-feedback-widget-reply-text p {
+  margin: 0;
+}
+
+.agent-feedback-widget-text code,
+.agent-feedback-widget-reply-text code {
+  font-family: var(--monaco-monospace-font, monospace);
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--vscode-editorWidget-border, var(--vscode-widget-border)) 25%, transparent);
+}
+
+/* Gutter decoration for the hovered item's range indicator */
+.agent-feedback-widget-range-glyph {
+  margin-left: 8px;
+  z-index: 5;
+  border-left: 2px solid var(--vscode-editorGutter-modifiedBackground, #0078d4);
+}
+
+.agent-feedback-widget-text.editing {
+  padding: 0 4px 0 0;
+}
+
+.agent-feedback-widget-edit-textarea {
+  width: 100%;
+  min-height: 22px;
+  padding: 4px 6px;
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  resize: none;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.agent-feedback-widget-edit-textarea:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+.agent-feedback-widget-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-feedback-widget-reply {
+  padding-top: 4px;
+  border-top: 1px dashed color-mix(in srgb, var(--vscode-editorWidget-border, var(--vscode-widget-border)) 60%, transparent);
+}
+
+.agent-feedback-widget-reply-text {
+  color: var(--vscode-foreground);
+  word-wrap: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.agent-feedback-widget-add-reply {
+  padding-top: 4px;
+  border-top: 1px dashed color-mix(in srgb, var(--vscode-editorWidget-border, var(--vscode-widget-border)) 60%, transparent);
+}
+
+.agent-feedback-widget-add-reply .agent-feedback-widget-edit-textarea::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+  opacity: 1;
+}
+
+.agent-feedback-widget-actions-bar {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.agent-feedback-widget-actions-bar button {
+  flex: 1;
+  padding: 2px 10px;
+  width: auto;
+  font-size: 11px;
+  line-height: 18px;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.agent-feedback-widget-button-accept {
+  background: var(--vscode-charts-purple, #b180d7);
+  color: var(--vscode-button-foreground, #ffffff);
+}
+
+.agent-feedback-widget-button-accept:hover {
+  background: color-mix(in srgb, var(--vscode-charts-purple, #b180d7) 85%, var(--vscode-foreground));
+}
+
+.agent-feedback-widget-button-delete {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.agent-feedback-widget-button-delete:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
 }
 

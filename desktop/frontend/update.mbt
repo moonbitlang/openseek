@@ -45,27 +45,27 @@ fn accept_completion(
 ) -> (@cmd.Cmd, Model) {
   match menu.kind {
     SlashCommands => run_slash_command(dispatch, model, item.command)
-    // The chip label is the bare name (the skill's `insert` carries a trailing
-    // space; the symbol's `label` is already bare); `insert` is the expansion
-    // dropped into the prompt on send.
+    // The chip carries its envelope form directly: the skill's bare name (its
+    // `insert` has a trailing space), or the symbol's name plus resolved
+    // location.
     SkillMentions =>
       accept_mention(
         model,
-        SkillMention,
-        label=item.insert.trim().to_owned(),
-        expand=item.insert,
-        path=None,
+        Skill(name=item.insert.trim().to_owned()),
         range=None,
       )
-    Symbols =>
+    Symbols => {
+      let (file, line) = if item.path is Some(path) && item.range is Some(range) {
+        (path, range.start_line_number)
+      } else {
+        ("", 0)
+      }
       accept_mention(
         model,
-        SymbolMention,
-        label=item.label,
-        expand=item.insert,
-        path=item.path,
+        Symbol(name=item.label, file~, line~),
         range=item.range,
       )
+    }
   }
 }
 
@@ -74,20 +74,11 @@ fn accept_completion(
 /// clear the typed trigger token, and close the menu.
 fn accept_mention(
   model : Model,
-  kind : MentionKind,
-  label~ : String,
-  expand~ : String,
-  path~ : String?,
+  ref_ : @mention_context.MentionRef,
   range~ : @common.Range?,
 ) -> (@cmd.Cmd, Model) {
   let conv = model.active()
-  let mentions = push_mention(conv.mentions, {
-    kind,
-    label,
-    expand,
-    path,
-    range,
-  })
+  let mentions = push_mention(conv.mentions, { ref_, range })
   (
     @cmd.none,
     {
@@ -117,7 +108,7 @@ fn open_editor_at(
   }
   (
     @cmd.batch([
-      request_viewer_mount(),
+      request_viewer_mount(dispatch),
       request_resize_handle_mount(),
       request_viewer_remeasure(),
       read_file(
@@ -565,8 +556,9 @@ fn update_msg(
       guard conv.mentions.get(index) is Some(mention) else {
         return (@cmd.none, model)
       }
-      guard mention.path is Some(path) else { return (@cmd.none, model) }
-      open_editor_at(dispatch, model, path, mention.range)
+      let chip = mention_chip(mention.ref_)
+      guard !chip.file.is_empty() else { return (@cmd.none, model) }
+      open_editor_at(dispatch, model, chip.file, mention.range)
     }
     JumpToLocation(path~, line~) => {
       // A transcript chip carries only the reference's line (the envelope
@@ -578,6 +570,35 @@ fn update_msg(
         None
       }
       open_editor_at(dispatch, model, path, range)
+    }
+    EditorCommentAdded(path~, range~, quote~, comment~, feedback_id~) => {
+      let conv = model.active()
+      // The envelope (and the chip) name the file the way the rest of the
+      // conversation does: relative to the workspace when it lives inside,
+      // absolute otherwise.
+      let file = if !conv.cwd.is_empty() &&
+        path.strip_prefix(conv.cwd + "/") is Some(rest) {
+        rest.to_owned()
+      } else {
+        path
+      }
+      let mentions = push_mention(conv.mentions, {
+        ref_: Annotation(
+          file~,
+          start_line=range.start_line_number,
+          end_line=range.end_line_number,
+          quote~,
+          comment~,
+        ),
+        range: Some(range),
+      })
+      // The chip is the comment's carrier from here on; clearing the editor's
+      // own bubble keeps the two from drifting apart (and from double-sending
+      // if the user comments again).
+      (
+        remove_editor_feedback(path, feedback_id),
+        model.replace_conversation({ ..conv, mentions, }),
+      )
     }
     CompletionAccept =>
       if model.completion is Some(menu) && menu.current() is Some(item) {
@@ -1306,7 +1327,7 @@ fn update_msg(
       // tree is left to `sync_file_panel`.
       (
         @cmd.batch([
-          request_viewer_mount(),
+          request_viewer_mount(dispatch),
           request_resize_handle_mount(),
           request_viewer_remeasure(),
         ]),

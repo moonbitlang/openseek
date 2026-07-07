@@ -169,23 +169,14 @@ test "symbol_item resolves a jump target only when the symbol has a path" {
 
 ///|
 test "push_mention appends new chips and drops exact duplicates" {
-  let skill : Mention = {
-    kind: SkillMention,
-    label: "review-pr",
-    expand: "review-pr ",
-    path: None,
-    range: None,
-  }
+  let skill : Mention = { ref_: Skill(name="review-pr"), range: None }
   let symbol : Mention = {
-    kind: SymbolMention,
-    label: "parse_hover",
-    expand: "`parse_hover` — src/main.mbt:5 ",
-    path: Some("src/main.mbt"),
+    ref_: Symbol(name="parse_hover", file="src/main.mbt", line=5),
     range: Some(@common.Range::Range(5, 1, 5, 12)),
   }
   let one = push_mention([], skill)
   assert_eq(one.length(), 1)
-  // A different kind/expansion is a distinct chip.
+  // A different envelope form is a distinct chip.
   let two = push_mention(one, symbol)
   assert_eq(two.length(), 2)
   // Accepting the same skill again is a no-op, not a second chip.
@@ -193,32 +184,34 @@ test "push_mention appends new chips and drops exact duplicates" {
   assert_eq(still_two.length(), 2)
   // A symbol of the same name but a different location is its own chip.
   let other_loc : Mention = {
-    kind: SymbolMention,
-    label: "parse_hover",
-    expand: "`parse_hover` — src/other.mbt:9 ",
-    path: Some("src/other.mbt"),
+    ref_: Symbol(name="parse_hover", file="src/other.mbt", line=9),
     range: Some(@common.Range::Range(9, 1, 9, 12)),
   }
   assert_eq(push_mention(two, other_loc).length(), 3)
+  // A comment chip dedups on its envelope form like the others.
+  let note : Mention = {
+    ref_: Annotation(
+      file="src/main.mbt",
+      start_line=5,
+      end_line=6,
+      quote="fn parse_hover() {",
+      comment="rename this",
+    ),
+    range: Some(@common.Range::Range(5, 1, 6, 1)),
+  }
+  let three = push_mention(two, note)
+  assert_eq(three.length(), 3)
+  assert_eq(push_mention(three, note).length(), 3)
 }
 
 ///|
 test "compose_prompt folds the chips into a parseable envelope after the text" {
   let mentions : Array[Mention] = [
     {
-      kind: SymbolMention,
-      label: "parse_hover",
-      expand: "`parse_hover` — a.mbt:5 ",
-      path: Some("a.mbt"),
+      ref_: Symbol(name="parse_hover", file="a.mbt", line=5),
       range: Some(@common.Range::Range(5, 1, 5, 12)),
     },
-    {
-      kind: SkillMention,
-      label: "review-pr",
-      expand: "review-pr ",
-      path: None,
-      range: None,
-    },
+    { ref_: Skill(name="review-pr"), range: None },
   ]
   // The typed text leads (the engine titles sessions by the first prompt's
   // first line); the chips follow as the tagged block the transcript parses
@@ -242,15 +235,7 @@ test "compose_prompt folds the chips into a parseable envelope after the text" {
 test "a draft of chips alone is not sendable" {
   let conv = {
     ..empty_conversation("s"),
-    mentions: [
-      {
-        kind: SkillMention,
-        label: "review-pr",
-        expand: "review-pr ",
-        path: None,
-        range: None,
-      },
-    ],
+    mentions: [{ ref_: Skill(name="review-pr"), range: None }],
   }
   // Chips are context for an instruction; without typed text the draft is
   // retained (not empty) but cannot be submitted.
