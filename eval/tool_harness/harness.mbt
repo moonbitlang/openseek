@@ -31,9 +31,10 @@ async fn run_harness_with_runtime(
     run_read_case(1, tools),
     run_write_case(2, tools),
     run_edit_case(3, tools),
-    run_shell_case(4, tools),
-    run_plan_case(5, tools),
-    run_finish_case(6, tools),
+    run_multi_edit_case(4, tools),
+    run_shell_case(5, tools),
+    run_plan_case(6, tools),
+    run_finish_case(7, tools),
   ]
   build_report(rows)
 }
@@ -52,6 +53,7 @@ fn tool_definitions(
     @read.definition(),
     @write.definition(),
     @edit.definition(),
+    @multi_edit.definition(),
     @shell.definition(),
     @plan.definition(),
     @finish.definition(),
@@ -150,6 +152,62 @@ async fn run_edit_case(
     name="edit",
     mode="filesystem",
     action="exact replacement",
+    reason~,
+  )
+}
+
+///|
+async fn run_multi_edit_case(
+  index : Int,
+  tools : @agent_tool.Tools,
+) -> @report.ReportRow {
+  let root = @fs.tmpdir(prefix="openseek-tool-multi-edit-")
+  @vfs.FileSystem({
+    "src/note.txt": (
+      #|alpha
+      #|beta
+      #|gamma
+      #|
+    ),
+  }).write_to(root)
+  // Two line-anchored replacements in one batch on the same file.
+  let action = dispatch(tools, "multi_edit", {
+    "edits": [
+      {
+        "file": "\{root}/src/note.txt",
+        "old_string": "alpha\n",
+        "new_string": "one\n",
+        "start_line": 1,
+      },
+      {
+        "file": "\{root}/src/note.txt",
+        "old_string": "gamma\n",
+        "new_string": "three\n",
+        "start_line": 3,
+      },
+    ],
+  })
+  let mut reason = expect_respond(
+    action,
+    contains=["ok: applied 2 edit(s)"],
+    error=false,
+  )
+  if reason == "" {
+    reason = @vfs.FileSystem({
+      "src/note.txt": (
+        #|one
+        #|beta
+        #|three
+        #|
+      ),
+    }).mismatch_on_disk(root)
+  }
+  @fs.rmdir(root, recursive=true)
+  row(
+    index~,
+    name="multi_edit",
+    mode="filesystem",
+    action="batched replacements",
     reason~,
   )
 }

@@ -14,6 +14,7 @@ be invoked correctly through the same typed boundary the agent loop uses.
 - `read`: ranged text read from a virtual filesystem fixture.
 - `write`: creates a file and compares disk state with `testkit/filesystem`.
 - `edit`: exact replacement plus final disk-state comparison.
+- `multi_edit`: a batch of line-anchored replacements with a disk-state check.
 - `shell`: harmless process execution with exit-code output.
 - `plan`: happy-path acknowledgment plus a malformed-status rejection.
 - `finish`: verifies the control action returned by the loop terminator.
