@@ -181,8 +181,8 @@ fn compile_fix_case() -> EvalCase {
     id: "compile_fix",
     instructions: (
       #|This MoonBit workspace has one type error in lib.mbt. Fix the function
-      #|so `moon check` passes. Use moon_cmd for validation after editing.
-      #|Do not change moon.mod or moon.pkg.
+      #|so `moon check` passes. Run `moon check` through shell to validate after
+      #|editing. Do not change moon.mod or moon.pkg.
     ),
     initial: FileSystem({
       "moon.mod": (

@@ -5,9 +5,9 @@
 /// `max_units <= 0` is returned unchanged. Callers pass `max_units <
 /// content.length()` so the index access stays in bounds.
 ///
-/// Shared by every tool that caps output to a UTF-16 code-unit budget (`read`
-/// renders numbered lines, `agent_tool/internal/output` caps tool output) so
-/// the surrogate-safety rule lives in exactly one place.
+/// Shared by every tool that caps output to a UTF-16 code-unit budget (for
+/// example `read`, which renders numbered lines) so the surrogate-safety rule
+/// lives in exactly one place.
 pub fn char_boundary_at_or_below(content : StringView, max_units : Int) -> Int {
   if max_units > 0 && content[max_units].is_trailing_surrogate() {
     max_units - 1

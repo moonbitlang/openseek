@@ -32,9 +32,8 @@ async fn run_harness_with_runtime(
     run_write_case(2, tools),
     run_edit_case(3, tools),
     run_shell_case(4, tools),
-    run_moon_cmd_case(5, tools),
-    run_plan_case(6, tools),
-    run_finish_case(7, tools),
+    run_plan_case(5, tools),
+    run_finish_case(6, tools),
   ]
   build_report(rows)
 }
@@ -54,7 +53,6 @@ fn tool_definitions(
     @write.definition(),
     @edit.definition(),
     @shell.definition(),
-    @moon_cmd.definition(),
     @plan.definition(),
     @finish.definition(),
   ])
@@ -180,32 +178,6 @@ async fn run_shell_case(
 }
 
 ///|
-async fn run_moon_cmd_case(
-  index : Int,
-  tools : @agent_tool.Tools,
-) -> @report.ReportRow {
-  let root = moon_library_fixture(prefix="openseek-tool-moon-cmd-")
-  let action = dispatch(tools, "moon_cmd", {
-    "cwd": root,
-    "command": "test",
-    "target": "native",
-  })
-  let reason = expect_respond(
-    action,
-    contains=["command=moon test --target native", "exit=0"],
-    error=false,
-  )
-  @fs.rmdir(root, recursive=true)
-  row(
-    index~,
-    name="moon_cmd",
-    mode="moon",
-    action="test native fixture",
-    reason~,
-  )
-}
-
-///|
 async fn run_plan_case(
   index : Int,
   tools : @agent_tool.Tools,
@@ -245,40 +217,6 @@ async fn run_finish_case(
   let action = dispatch(tools, "finish", { "answer": "tool harness complete" })
   let reason = expect_finish(action, "tool harness complete")
   row(index~, name="finish", mode="control", action="finish loop", reason~)
-}
-
-///|
-async fn moon_library_fixture(prefix~ : String) -> String {
-  let root = @fs.tmpdir(prefix~)
-  @vfs.FileSystem({
-    "moon.mod": (
-      #|name = "openseek/tool_harness_fixture"
-      #|
-      #|version = "0.1.0"
-      #|
-      #|preferred_target = "native"
-      #|
-    ),
-    "moon.pkg": (
-      #|warnings = "+unnecessary_annotation"
-      #|
-    ),
-    "lib.mbt": (
-      #|///|
-      #|pub fn answer() -> Int {
-      #|  42
-      #|}
-      #|
-    ),
-    "lib_wbtest.mbt": (
-      #|///|
-      #|test "answer" {
-      #|  assert_eq(answer(), 42)
-      #|}
-      #|
-    ),
-  }).write_to(root)
-  root
 }
 
 ///|

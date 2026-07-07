@@ -3,7 +3,7 @@
 /// eval `case_id`, `prompt_label`), the verdict (`success`/`reason`), where
 /// it ran (`workspace`, `log_path`, `exit_code`), agent-loop measurements
 /// (`steps`, `tool_errors`), per-tool usage counters (how the agent split
-/// its work across shell, moon_cmd, edit, write, …), and the case's two
+/// its work across shell, edit, write, …), and the case's two
 /// gates — the workspace matched the expected files (`validation_passed`)
 /// and the required marker text was produced (`marker_present`).
 pub struct TrialResult {

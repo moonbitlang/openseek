@@ -11,7 +11,6 @@ Concrete built-in tools live in subpackages:
 - `agent_tool/multi_edit`
 - `agent_tool/write`
 - `agent_tool/shell`
-- `agent_tool/moon_cmd`
 - `agent_tool/plan`
 - `agent_tool/finish`
 
