@@ -2,9 +2,6 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const ScriptDir = path.dirname(fileURLToPath(import.meta.url));
 
 function optionalPayloadEnv() {
   try {
@@ -139,19 +136,6 @@ function main() {
   const env = optionalPayloadEnv();
   const isWindows = process.platform === "win32" || env.OS === "Windows_NT";
   if (!isWindows) {
-    if (process.platform === "darwin") {
-      // The main-menu stub (internal/menu) calls the Objective-C runtime
-      // and AppKit.
-      process.stdout.write(JSON.stringify({
-        link_configs: [
-          {
-            package: "openseek_desktop/internal/menu",
-            link_flags: "-lobjc -framework AppKit",
-          },
-        ],
-      }));
-      return;
-    }
     process.stdout.write(JSON.stringify({ link_configs: [] }));
     return;
   }
