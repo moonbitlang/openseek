@@ -1,7 +1,8 @@
 // Checking the hosted release manifest for a newer desktop build. The check
-// is a nudge, not a feature the app depends on: every failure — offline,
-// HTTP error, malformed manifest, unparsable versions — reads as "no
-// update".
+// is a nudge, not a feature the app depends on: fetch failures — offline,
+// HTTP error, garbage, unparsable versions — read as "no update". The one
+// loud case is `MalformedArtifact`: a manifest that names a package this
+// platform cannot use is a publisher error, raised so it gets reported.
 
 ///|
 /// The hosted release manifest, served by openseek-api from its releases
@@ -32,6 +33,15 @@ pub struct UpdateInfo {
 } derive(Eq, Debug)
 
 ///|
+/// A manifest whose entry for this platform exists but cannot be used — a
+/// publisher error, unlike the absence of an entry (the normal shape for
+/// platforms that do not self-update). It carries the release version so
+/// the caller can still announce the update alongside the reason.
+pub suberror MalformedArtifact {
+  MalformedArtifact(version~ : String, reason~ : String)
+}
+
+///|
 /// A downloadable update package: where to fetch it and the hex sha256 the
 /// download must match.
 pub struct PackageInfo {
@@ -53,8 +63,10 @@ fn manifest_platform_key() -> String? {
 
 ///|
 /// Fetch the hosted manifest and report a release newer than `current`, or
-/// None — including on any failure, so the nudge can never surface as an
-/// app error.
+/// None. Fetch and parse failures — offline, HTTP errors, garbage — all
+/// read as "no update", so the nudge can never surface as an app error; a
+/// malformed platform entry is the one exception, raised so the caller can
+/// report the publisher error instead of silently not installing.
 pub async fn check_for_update(current~ : String) -> UpdateInfo? {
   let (response, data) = @http.get(manifest_url()) catch {
     error if @async.is_being_cancelled() => raise error
@@ -78,28 +90,45 @@ fn newer_update(
   json : Json,
   current~ : String,
   platform_key~ : String?,
-) -> UpdateInfo? {
+) -> UpdateInfo? raise MalformedArtifact {
   guard json is { "version": String(version), .. } else { return None }
   if is_newer(version, than=current) {
-    Some({ version, artifact: manifest_artifact(json, platform_key) })
+    Some({ version, artifact: manifest_artifact(json, platform_key, version~) })
   } else {
     None
   }
 }
 
 ///|
-/// The manifest's package entry for this platform, if it is well-formed: a
-/// web URL plus a plausible sha256 (optionally `sha256:`-prefixed). A
-/// malformed entry reads as "no package" — the page URL still works.
-fn manifest_artifact(json : Json, platform_key : String?) -> PackageInfo? {
+/// The manifest's package entry for this platform, when there is one: a web
+/// URL plus a plausible sha256 (optionally `sha256:`-prefixed). An entry
+/// that exists but fails those checks raises, naming what is wrong with it.
+fn manifest_artifact(
+  json : Json,
+  platform_key : String?,
+  version~ : String,
+) -> PackageInfo? raise MalformedArtifact {
   guard platform_key is Some(key) else { return None }
   guard json is { "platforms": Object(platforms), .. } else { return None }
-  guard platforms.get(key)
-    is Some({ "url": String(url), "sha256": String(sha256), .. }) else {
-    return None
+  guard platforms.get(key) is Some(entry) else { return None }
+  guard entry is { "url": String(url), "sha256": String(sha256), .. } else {
+    raise MalformedArtifact(
+      version~,
+      reason="the platform entry lacks url/sha256",
+    )
   }
-  guard url.has_prefix("https://") else { return None }
-  guard normalized_sha256(sha256) is Some(sha256) else { return None }
+  guard url.has_prefix("https://") else {
+    raise MalformedArtifact(
+      version~,
+      reason="the package url is not https: \{url}",
+    )
+  }
+  guard normalized_sha256(sha256) is Some(sha256) else {
+    raise MalformedArtifact(
+      version~,
+      reason="the package sha256 is not a hex digest",
+    )
+  }
   Some({ url, sha256 })
 }
 

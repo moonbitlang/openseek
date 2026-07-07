@@ -63,9 +63,23 @@ async fn announce_update(
   if state.work_dir is Some(dir) && state.bundle_path is Some(bundle) {
     @update.cleanup_leftovers(work_dir=dir, bundle_path=bundle)
   }
-  guard @update.check_for_update(current=@version.AppVersion) is Some(info) else {
-    return
+  // A malformed platform entry is a publisher error, not the absence of a
+  // package: say what is wrong with it, in the log and in the toast, so a
+  // bad `latest.json` never reads as a build that merely cannot install.
+  let checked = @update.check_for_update(current=@version.AppVersion) catch {
+    @update.MalformedArtifact(version~, reason~) => {
+      @xlog.warn(category="update") <?
+        {
+          "event": "manifest_artifact_malformed",
+          "version": version,
+          "error": reason,
+        }
+      announce_available(context, version~, reason~)
+      return
+    }
+    error => raise error
   }
+  guard checked is Some(info) else { return }
   if info.artifact is Some(_) &&
     state.work_dir is Some(dir) &&
     state.bundle_path is Some(bundle) {
@@ -82,7 +96,7 @@ async fn announce_update(
             "version": info.version,
             "error": "\{error}",
           }
-        announce_available(context, info, reason="\{error}")
+        announce_available(context, version=info.version, reason="\{error}")
         return
       }
     }
@@ -91,16 +105,16 @@ async fn announce_update(
     context.emit("update_ready", payload)
     return
   }
-  announce_available(context, info)
+  announce_available(context, version=info.version)
 }
 
 ///|
 async fn announce_available(
   context : @app.AppCommandExtensionContext,
-  info : @update.UpdateInfo,
+  version~ : String,
   reason? : String,
 ) -> Unit {
-  let payload : UpdateAvailablePayload = { version: info.version, reason }
+  let payload : UpdateAvailablePayload = { version, reason }
   context.emit("update_available", payload)
 }
 

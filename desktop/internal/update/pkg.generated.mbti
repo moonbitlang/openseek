@@ -19,6 +19,10 @@ pub async fn take_relaunch_target(work_dir~ : String) -> String?
 pub async fn write_relaunch_marker(work_dir~ : String, bundle_path~ : String) -> Unit
 
 // Errors
+pub suberror MalformedArtifact {
+  MalformedArtifact(version~ : String, reason~ : String)
+}
+
 pub(all) suberror UpdateError {
   UpdateError(String)
 }

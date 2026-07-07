@@ -73,7 +73,8 @@ test "a well-formed platforms entry becomes the artifact" {
       }),
     }),
   )
-  // Another platform's key, or no key at all, keeps the plain shape.
+  // Another platform's key, or no key at all, is the normal package-less
+  // shape, not an error.
   @debug.assert_eq(
     newer_update(manifest, current="0.1.0", platform_key=Some("windows-x64")).unwrap().artifact,
     None,
@@ -85,28 +86,49 @@ test "a well-formed platforms entry becomes the artifact" {
 }
 
 ///|
-test "a malformed platforms entry degrades to the plain announcement" {
-  let bad_digest : Json = {
-    "version": "0.2.0",
-    "url": "https://example.com/releases",
-    "platforms": {
-      "macos-arm64": { "url": "https://example.com/a.zip", "sha256": "short" },
-    },
+fn expect_malformed(manifest : Json, reason~ : String) -> Unit raise {
+  try
+    newer_update(manifest, current="0.1.0", platform_key=Some("macos-arm64"))
+  catch {
+    MalformedArtifact(version~, reason=actual) => {
+      assert_eq(version, "0.2.0")
+      assert_eq(actual, reason)
+    }
+  } noraise {
+    _ => fail("expected a malformed-artifact raise")
   }
-  @debug.assert_eq(
-    newer_update(bad_digest, current="0.1.0", platform_key=Some("macos-arm64")).unwrap().artifact,
-    None,
+}
+
+///|
+test "a malformed platforms entry raises with what is wrong" {
+  expect_malformed(
+    {
+      "version": "0.2.0",
+      "url": "https://example.com/releases",
+      "platforms": {
+        "macos-arm64": { "url": "https://example.com/a.zip", "sha256": "short" },
+      },
+    },
+    reason="the package sha256 is not a hex digest",
   )
-  let not_web : Json = {
-    "version": "0.2.0",
-    "url": "https://example.com/releases",
-    "platforms": {
-      "macos-arm64": { "url": "ftp://example.com/a.zip", "sha256": TestSha },
+  // A schemeless or non-https url — a misconfigured releases base url on
+  // the server — must surface, not read as "no package".
+  expect_malformed(
+    {
+      "version": "0.2.0",
+      "url": "https://example.com/releases",
+      "platforms": {
+        "macos-arm64": { "url": "example.com/a.zip", "sha256": TestSha },
+      },
     },
-  }
-  @debug.assert_eq(
-    newer_update(not_web, current="0.1.0", platform_key=Some("macos-arm64")).unwrap().artifact,
-    None,
+    reason="the package url is not https: example.com/a.zip",
+  )
+  expect_malformed(
+    {
+      "version": "0.2.0",
+      "platforms": { "macos-arm64": { "note": "coming soon" } },
+    },
+    reason="the platform entry lacks url/sha256",
   )
 }
 
