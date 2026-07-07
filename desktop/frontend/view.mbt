@@ -1327,16 +1327,14 @@ fn update_check_controls(
   let controls : Array[@html.Html] = [
     @html.button(
       disabled=model.update_ux
-        is (CheckingForUpdate(..)
-        | DownloadingUpdate(..)
-        | RestartingForUpdate(..)),
+        is (CheckingForUpdate | DownloadingUpdate(..) | RestartingForUpdate(..)),
       on_click=dispatch(CheckForUpdates),
       "Check for updates",
     ),
   ]
   match model.update_ux {
     UpdateUnknown => ()
-    CheckingForUpdate(..) =>
+    CheckingForUpdate =>
       controls.push(@html.span(class="update-status", "Checking…"))
     UpToDate =>
       controls.push(@html.span(class="update-status", "You are up to date."))

@@ -29,13 +29,13 @@ fn UpdateChannel::wire(self : UpdateChannel) -> String {
 }
 
 ///|
-/// Where the self-update flow stands. `explicit` on the checking state says
-/// the user asked from Settings — the same reply is shown differently when
-/// the app asked on its own (quiet unless it is certainly the publisher's
-/// fault).
+/// Where the self-update flow stands. Who asked (the user from Settings or
+/// the app at startup) travels with the request instead — `explicit` on
+/// `UpdateCheckFinished` — since it is a property of the reply's routing,
+/// not of the state.
 priv enum UpdateUx {
   UpdateUnknown
-  CheckingForUpdate(explicit~ : Bool)
+  CheckingForUpdate
   UpToDate
   // A newer release; `installable` gates the accent Update button — a dev
   // binary or a platform without a package only gets the announcement.

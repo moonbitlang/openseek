@@ -618,7 +618,7 @@ fn update_msg(
       // A user-initiated check; never stacks on an in-flight one, and never
       // interrupts a download already underway.
       if model.update_ux
-        is (CheckingForUpdate(..)
+        is (CheckingForUpdate
         | ConfirmingRestart(..)
         | DownloadingUpdate(..)
         | RestartingForUpdate(..)) {
@@ -626,7 +626,7 @@ fn update_msg(
       } else {
         (
           check_for_updates(dispatch, model.update_channel, explicit=true),
-          { ..model, update_ux: CheckingForUpdate(explicit=true) },
+          { ..model, update_ux: CheckingForUpdate },
         )
       }
     UpdateCheckFinished(result~, explicit~) => {
@@ -634,7 +634,7 @@ fn update_msg(
       // (confirming, downloading); only the waiting states accept results.
       guard model.update_ux
         is (UpdateUnknown
-        | CheckingForUpdate(..)
+        | CheckingForUpdate
         | UpToDate
         | UpdateCheckFailed(..)) else {
         return (@cmd.none, model)
