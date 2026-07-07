@@ -5,6 +5,13 @@
 // hand-roll `replace_all` + `has_prefix` again.
 
 ///|
+/// An absolute filesystem path, as resolved by the host. The newtype keeps
+/// workspace-relative strings from flowing into APIs that mean an absolute
+/// path; it asserts provenance, not validity — construct it where the path
+/// is known absolute.
+pub(all) struct Absolute(String) derive(Eq)
+
+///|
 /// The path with every backslash turned into a forward slash. Purely
 /// lexical: no resolution, no deduplication of separators.
 pub fn normalize(path : String) -> String {

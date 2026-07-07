@@ -65,11 +65,7 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
   // Check the size before reading anything: a multi-gigabyte build artifact
   // must produce the notice, not a host-sized allocation.
   if source.size() > MaxReadFileBytes.to_int64() {
-    return {
-      content: "File is too large to preview.",
-      truncated: true,
-      absolute,
-    }
+    return Oversized
   }
   let data = source.read_all() catch {
     error if @async.is_being_cancelled() => raise error
@@ -77,13 +73,6 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
   }
   // `text()` raises on invalid UTF-8 — treat that as a binary file the
   // read-only viewer cannot render.
-  let content = data.text() catch {
-    _ =>
-      return {
-        content: "Binary file is not previewable.",
-        truncated: true,
-        absolute,
-      }
-  }
-  { content, truncated: false, absolute }
+  let content = data.text() catch { _ => return Binary }
+  Content(content~, absolute~)
 }

@@ -48,12 +48,21 @@ test "decode_dir_entries rejects structurally unusable replies" {
 }
 
 ///|
-test "decode_file_content reads the content and absolute path" {
-  let reply = decode_file_content(
-    "{\"content\":\"hello\",\"truncated\":false,\"absolute\":\"/ws/a.mbt\"}",
-  ).unwrap()
-  assert_eq(reply.content, "hello")
-  assert_eq(reply.absolute, "/ws/a.mbt")
+test "decode_file_content decodes each reply kind" {
+  assert_true(
+    decode_file_content(
+      "{\"kind\":\"content\",\"content\":\"hello\",\"absolute\":\"/ws/a.mbt\"}",
+    )
+    is Some(Content(content="hello", absolute=Absolute("/ws/a.mbt"))),
+  )
+  assert_true(decode_file_content("{\"kind\":\"binary\"}") is Some(Binary))
+  assert_true(
+    decode_file_content("{\"kind\":\"oversized\"}") is Some(Oversized),
+  )
+  // A content reply without an address is unusable, as is anything else.
+  assert_true(
+    decode_file_content("{\"kind\":\"content\",\"content\":\"x\"}") is None,
+  )
   assert_true(decode_file_content("{\"truncated\":true}") is None)
   assert_true(decode_file_content("garbage") is None)
 }

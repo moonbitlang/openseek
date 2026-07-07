@@ -1312,14 +1312,21 @@ fn update_msg(
         { ..model, file_panel: { ..panel, selected: Some(path), error: "" } },
       )
     }
-    FileLoaded(session~, path~, name~, content~, absolute~, range~) =>
+    FileLoaded(session~, path~, name~, file~, range~) =>
       // A stale read — the conversation switched, or another file was clicked
       // first — must not replace what the viewer now shows.
       if model.file_panel.session != session ||
         model.file_panel.selected != Some(path) {
         (@cmd.none, model)
       } else {
-        (show_file_in_viewer(name, content, absolute~, range~), model)
+        let cmd = match file {
+          Content(content~, absolute~) =>
+            show_file_in_viewer(name, content, absolute~, range~)
+          Binary => show_file_in_viewer(name, "Binary file is not previewable.")
+          Oversized =>
+            show_file_in_viewer(name, "File is too large to preview.")
+        }
+        (cmd, model)
       }
     FileFailed(session~, message~) =>
       if model.file_panel.session != session {

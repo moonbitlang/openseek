@@ -72,11 +72,9 @@ fn read_file(
         }
       }
       match decode_file_content(reply_json_text(reply)) {
-        Some({ content, absolute }) =>
+        Some(file) =>
           scheduler.add(
-            dispatch(
-              FileLoaded(session~, path~, name~, content~, absolute~, range~),
-            ),
+            dispatch(FileLoaded(session~, path~, name~, file~, range~)),
           )
         None =>
           scheduler.add(
@@ -127,18 +125,29 @@ fn decode_dir_entries(text : String, parent : String) -> Array[FileEntry]? {
 }
 
 ///|
-/// A decoded `read_file` reply: the text to show (already the host's short
-/// notice for binary/oversized files) and the host-resolved absolute path,
-/// the viewer model's address for path-routed ops.
-priv struct FileContent {
-  content : String
-  absolute : String
+/// A decoded `read_file` reply. Withheld files are their own cases — the
+/// wording of their notices is this side's business — and only a real file
+/// carries an address for path-routed ops (hover on a notice document has
+/// nothing to ask about).
+priv enum FileContent {
+  Binary
+  Oversized
+  Content(content~ : String, absolute~ : @pathx.Absolute)
 }
 
 ///|
 fn decode_file_content(text : String) -> FileContent? {
   let json = @json.parse(text) catch { _ => return None }
   guard json is Object(reply) else { return None }
-  guard reply.get("content") is Some(String(content)) else { return None }
-  Some({ content, absolute: @transcript.json_text(reply, "absolute") })
+  match @transcript.json_text(reply, "kind") {
+    "binary" => Some(Binary)
+    "oversized" => Some(Oversized)
+    "content" => {
+      guard reply.get("content") is Some(String(content)) else { return None }
+      let absolute = @transcript.json_text(reply, "absolute")
+      guard !absolute.is_empty() else { return None }
+      Some(Content(content~, absolute=Absolute(absolute)))
+    }
+    _ => None
+  }
 }

@@ -11,18 +11,18 @@
 const ModelUriPrefix : String = "openseek://"
 
 ///|
-fn model_uri(absolute_path : String) -> String {
-  ModelUriPrefix + @uri.encode_path(absolute_path)
+fn model_uri(absolute_path : @pathx.Absolute) -> String {
+  ModelUriPrefix + @uri.encode_path(absolute_path.0)
 }
 
 ///|
 /// Decode a viewer model URI into the absolute path it names; `None` for a
 /// URI this app did not mint, which has no host op to route to anyway.
-fn parse_model_uri(uri : String) -> String? {
+fn parse_model_uri(uri : String) -> @pathx.Absolute? {
   guard uri.strip_prefix(ModelUriPrefix) is Some(rest) else { return None }
   let path = @uri.decode(rest)
   guard !path.is_empty() else { return None }
-  Some(path)
+  Some(Absolute(path))
 }
 
 ///|
@@ -64,12 +64,12 @@ fn register_hover_provider() -> Unit {
 /// Call the host `hover` op for the absolute `path` at a zero-based
 /// `line`/`character`.
 async fn request_hover(
-  path~ : String,
+  path~ : @pathx.Absolute,
   line~ : Int,
   character~ : Int,
 ) -> @js.Value {
   let payload = @js.Object::new()
-  payload["path"] = path
+  payload["path"] = path.0
   payload["line"] = line
   payload["character"] = character
   bridge_request("hover", payload.to_value())

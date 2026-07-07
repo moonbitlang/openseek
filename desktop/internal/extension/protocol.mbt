@@ -252,16 +252,27 @@ priv struct ReadFilePayload {
 } derive(FromJson)
 
 ///|
-/// Reply to `read_file`. `truncated` marks a file withheld for being binary
-/// or larger than the read cap, in which case `content` is a short notice
-/// rather than the file's text.
-priv struct ReadFileReply {
-  content : String
-  truncated : Bool
-  // The host-resolved absolute path of the file — the address the frontend
-  // uses for path-routed ops (`hover`).
-  absolute : String
-} derive(ToJson)
+/// Reply to `read_file`, discriminated on the wire by a `kind` field.
+priv enum ReadFileReply {
+  // Withheld files carry no content and no address — a notice document has
+  // no file behind it for path-routed ops, and the frontend owns the
+  // user-facing wording.
+  Binary
+  Oversized
+  // `absolute` is the host-resolved absolute path — the address the
+  // frontend uses for path-routed ops (`hover`).
+  Content(content~ : String, absolute~ : String)
+}
+
+///|
+impl ToJson for ReadFileReply with fn to_json(self) {
+  match self {
+    Binary => { "kind": "binary" }
+    Oversized => { "kind": "oversized" }
+    Content(content~, absolute~) =>
+      { "kind": "content", "content": content, "absolute": absolute }
+  }
+}
 
 ///|
 /// `hover` asks a language server for hover at a zero-based

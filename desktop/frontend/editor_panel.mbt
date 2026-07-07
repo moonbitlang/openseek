@@ -98,15 +98,22 @@ fn request_viewer_remeasure() -> @cmd.Cmd {
 fn show_file_in_viewer(
   name : String,
   content : String,
-  absolute~ : String,
+  absolute? : @pathx.Absolute,
   range? : @common.Range? = None,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     model_version.val = model_version.val + 1
     let version = model_version.val
     // The URI is the file's absolute path — the whole address the hover
-    // provider needs, travelling with the model itself.
-    let uri : @common.Uri = { value: model_uri(absolute) }
+    // provider needs, travelling with the model itself. A notice document
+    // (withheld binary/oversized file) has no file behind it, so its inert
+    // URI never parses as a model path and hover stays off.
+    let uri : @common.Uri = {
+      value: match absolute {
+        Some(absolute) => model_uri(absolute)
+        None => "openseek-notice://" + @uri.encode_path(name)
+      },
+    }
     let text_model = @model.TextModel(
       uri,
       name,
