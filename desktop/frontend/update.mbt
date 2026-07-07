@@ -1479,14 +1479,19 @@ fn update_msg(
         (@cmd.none, model)
       } else {
         let cmd = match file {
-          // A real file also gets a diagnostics request: the host opens it in
-          // the language server and returns its current diagnostics, and future
-          // re-analysis arrives as `diagnostics` events.
-          Content(content~, absolute~) =>
-            @cmd.batch([
-              show_file_in_viewer(name, content, absolute~, range~),
-              request_diagnostics(dispatch, absolute),
-            ])
+          // A real MoonBit file also gets a diagnostics request: the host opens
+          // it in the language server and returns its current diagnostics, and
+          // future re-analysis arrives as `diagnostics` events. Other files have
+          // no server behind `lsp_open` — syncing a README or JSON file to
+          // moon-lsp would surface bogus squiggles — so only the viewer shows.
+          Content(content~, absolute~) => {
+            let show = show_file_in_viewer(name, content, absolute~, range~)
+            if language_id(name) == "moonbit" {
+              @cmd.batch([show, request_diagnostics(dispatch, absolute)])
+            } else {
+              show
+            }
+          }
           Binary => show_file_in_viewer(name, "Binary file is not previewable.")
           Oversized =>
             show_file_in_viewer(name, "File is too large to preview.")
