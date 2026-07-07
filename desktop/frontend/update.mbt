@@ -1312,24 +1312,14 @@ fn update_msg(
         { ..model, file_panel: { ..panel, selected: Some(path), error: "" } },
       )
     }
-    FileLoaded(session~, path~, name~, content~, range~) =>
+    FileLoaded(session~, path~, name~, content~, absolute~, range~) =>
       // A stale read — the conversation switched, or another file was clicked
       // first — must not replace what the viewer now shows.
       if model.file_panel.session != session ||
         model.file_panel.selected != Some(path) {
         (@cmd.none, model)
       } else {
-        (
-          show_file_in_viewer(
-            session,
-            path,
-            name,
-            content,
-            workspace=model.session_workspace(session),
-            range~,
-          ),
-          model,
-        )
+        (show_file_in_viewer(name, content, absolute~, range~), model)
       }
     FileFailed(session~, message~) =>
       if model.file_panel.session != session {

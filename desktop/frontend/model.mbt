@@ -633,14 +633,17 @@ priv enum Msg {
   // A file row was clicked: read it and show it in the viewer. `name` is the
   // entry's display name, kept for the viewer's title and language guess.
   FileSelected(path~ : String, name~ : String)
-  // `range`, when present, is a jumped-to symbol's one-based range, revealed
-  // in the viewer once the file loads and — unless empty — selected so the
-  // code it names reads highlighted. A plain tree click leaves it `None`.
+  // `absolute` is the host-resolved absolute path, the viewer model's
+  // address for path-routed ops (hover). `range`, when present, is a
+  // jumped-to symbol's one-based range, revealed in the viewer once the file
+  // loads and — unless empty — selected so the code it names reads
+  // highlighted. A plain tree click leaves it `None`.
   FileLoaded(
     session~ : String,
     path~ : String,
     name~ : String,
     content~ : String,
+    absolute~ : String,
     range~ : @common.Range?
   )
   FileFailed(session~ : String, message~ : String)

@@ -5,6 +5,7 @@ import {
   "openseek_desktop/internal/fsx",
   "openseek_desktop/internal/home",
   "openseek_desktop/internal/moonbit",
+  "openseek_desktop/internal/pathx",
   "openseek_desktop/internal/protocol",
   "openseek_desktop/internal/userdirs",
   "moonbitlang/async",

@@ -3,25 +3,28 @@
 // at its root (`<cwd>/moon.mod`) or, just as often, a project the agent created
 // one level down (`<cwd>/<project>/moon.mod`); moon-lsp does not discover nested
 // modules, so the host finds them and spawns one `moon-lsp --stdio` rooted at
-// each. Hover routes to the server whose root contains the file; symbol search
-// fans out to all of them. Everything is best-effort — no module yet, a failed
-// spawn, a server error, or a non-text file all just yield nothing.
+// each. Hover routes by the file's absolute path — workspace, then deepest
+// module root; symbol search resolves its conversation's workspace and fans
+// out to that workspace's servers. Everything is best-effort — no module yet,
+// a failed spawn, a server error, or a non-text file all just yield nothing.
 //
-// The set of servers is re-detected on each request, so a project created mid
-// conversation is picked up (and one whose module moved is retired): a layout
-// change spawns the new roots and closes the gone ones. A moon-lsp process must
-// outlive the individual request that first needs it, so — mirroring the engine
-// pump — it is owned by the long-lived task group of the `connect` op, not a
-// per-request one: `ensure_workspaces` hands each spawn to that group's LSP pump
-// over a queue and waits for the server back. Retiring a server closes the
-// host's stdin end (EOF, so moon-lsp exits) and cancels the process; dropping
-// the `connect` group tears every server down with it.
+// Servers live in one global pool keyed by module root, so conversations
+// sharing a project share its servers. Roots are re-detected on each request:
+// a project created mid conversation is picked up, one whose module moved is
+// retired, and the pool caps at MaxLspServers by retiring the least recently
+// used. A moon-lsp process must outlive the individual request that first
+// needs it, so — mirroring the engine pump — it is owned by the long-lived
+// task group of the `connect` op, not a per-request one: `ensure_servers`
+// hands each spawn to that group's LSP pump over a queue and waits for the
+// server back. Retiring a server closes the host's stdin end (EOF, so
+// moon-lsp exits) and cancels the process; dropping the `connect` group tears
+// every server down with it.
 
 ///|
-/// The largest number of `moon-lsp` servers one conversation may run at once.
-/// A workspace rarely holds more than a couple of modules; the cap only matters
-/// for a pathological tree (a folder of sample projects), where the most
-/// recently modified modules win the slots.
+/// The largest number of pooled `moon-lsp` servers. A workspace rarely holds
+/// more than a couple of modules; the cap only matters across many
+/// conversations or a pathological tree (a folder of sample projects), where
+/// the most recently used roots win the slots.
 const MaxLspServers = 6
 
 ///|
@@ -49,15 +52,17 @@ priv struct LspWorkspace {
 }
 
 ///|
-/// Lazily-started `moon-lsp` instances, keyed by conversation session id — a
-/// conversation can run several when its workspace holds several modules.
+/// Lazily-started `moon-lsp` instances in one global pool keyed by module
+/// root — conversations sharing a project share its servers.
 priv struct LspManager {
   // The engine executable, anchoring the bundled-toolchain lookup for `moon-lsp`.
   engine : String
   runtime_dir : @path.Path?
   // The resolved `moon-lsp` to spawn, computed once on first use; "" until then.
   mut command : String
-  workspaces : Map[String, Array[LspWorkspace]]
+  servers : Map[String, LspWorkspace]
+  // Pool recency, freshest first — the MaxLspServers eviction order.
+  order : Array[String]
   // Serializes server reconciliation so two concurrent requests don't spawn two
   // servers for the same root.
   create_lock : @semaphore.Semaphore
@@ -83,7 +88,8 @@ fn new_lsp_manager(engine : String, runtime_dir? : @path.Path) -> LspManager {
     engine,
     runtime_dir,
     command: "",
-    workspaces: {},
+    servers: {},
+    order: [],
     create_lock: Semaphore(1, initial_value=1),
     commands: Queue(kind=Unbounded),
     pump_running: false,
@@ -103,7 +109,9 @@ async fn[G] run_lsp_pump(
   manager.pump_running = true
   defer {
     manager.pump_running = false
-    manager.workspaces.clear()
+    // The group teardown cancels the pooled processes themselves.
+    manager.servers.clear()
+    manager.order.clear()
   }
   for ;; {
     match manager.commands.get() {
@@ -137,25 +145,19 @@ async fn moon_lsp_command(manager : LspManager) -> String {
 }
 
 ///|
-/// Resolve the file under the conversation's workspace, ensure its server is
-/// running, sync the file if its text changed, and request hover.
+/// Route hover by the file's absolute path — the workspace it belongs to,
+/// then the deepest module root within it. The path is the whole address:
+/// no session is involved, so the viewer can ask about any attached file.
 async fn lsp_hover_op(
   manager : LspManager,
   payload : LspHoverPayload,
 ) -> LspHoverReply {
-  guard @engine.resolve_in_workspace(
-      payload.session,
-      payload.path,
-      workspace?=payload.workspace,
-    )
-    is Some(file) else {
-    raise HostError("path is outside the conversation workspace")
+  guard @engine.attached_workspace_dir(payload.path) is Some(dir) else {
+    raise HostError("path is outside every attached workspace")
   }
-  let servers = ensure_workspaces(
-    manager,
-    payload.session,
-    workspace?=payload.workspace,
-  )
+  let file : @path.Path = Path(payload.path)
+  let file = file.normalize()
+  let servers = ensure_servers(manager, dir)
   guard server_for_file(servers, file.to_string()) is Some(workspace) else {
     return no_hover()
   }
@@ -201,12 +203,7 @@ async fn workspace_symbols_op(
   // result against the conversation workspace (the common ancestor) so rows
   // from `<cwd>/a` and `<cwd>/b` come back as `a/...` and `b/...`. Sequential
   // is fine for the usual one or two servers.
-  for
-    workspace in ensure_workspaces(
-      manager,
-      payload.session,
-      workspace?=payload.workspace,
-    ) {
+  for workspace in ensure_servers(manager, dir) {
     if symbols.length() >= MaxSymbolResults {
       break
     }
@@ -308,53 +305,90 @@ fn workspace_relative(uri : String, workspace_dir : String) -> String {
 }
 
 ///|
-/// The conversation's language servers, reconciled against the workspace's
-/// current module layout: a server is spawned for each module that lacks one
-/// and retired for each that has gone. Returns the live set (empty when the
-/// workspace holds no module yet — the caller waits rather than rooting a
-/// server at a non-project directory).
-async fn ensure_workspaces(
+/// The pooled servers answering for `dir`'s module roots: a pooled root is
+/// reused (two conversations on the same project share one moon-lsp), a
+/// missing one spawns via the pump, a pooled server under `dir` whose module
+/// vanished retires, and the pool caps at MaxLspServers by retiring the
+/// least recently used. Empty when the directory holds no module yet — the
+/// caller waits rather than rooting a server at a non-project directory.
+async fn ensure_servers(
   manager : LspManager,
-  session : String,
-  workspace? : String,
+  dir : @path.Path,
 ) -> Array[LspWorkspace] {
-  guard @engine.resolve_in_workspace(session, "", workspace?) is Some(dir) else {
-    return []
-  }
-  // The workspace directory is created on a conversation's first run; before
-  // then there is nothing to analyze.
+  // A conversation's directory is created on its first run; before then
+  // there is nothing to analyze.
   guard @fs.exists(dir.to_string()) else { return [] }
   let roots = lsp_roots(dir)
   manager.create_lock.acquire()
   defer manager.create_lock.release()
-  let existing = match manager.workspaces.get(session) {
-    Some(servers) => servers
-    None => []
+  // Retire pooled servers rooted under `dir` whose module is gone — the
+  // per-request re-detection that picks up mid-conversation layout changes.
+  let stale : Array[String] = []
+  for root, _ in manager.servers {
+    if @pathx.contains(dir.to_string(), root) && !roots_contains(roots, root) {
+      stale.push(root)
+    }
   }
-  // Keep the servers whose root is still wanted; close the rest.
+  for root in stale {
+    retire_server(manager, root)
+  }
+  // Reuse or spawn — via the pump, so a new process is owned by the connect
+  // op's task group and outlives this request. With no pump running (the
+  // webview never called `connect`) there is nothing to analyze against
+  // anyway, so skip rather than block on a spawn no one will service.
   let live : Array[LspWorkspace] = []
-  for workspace in existing {
-    if roots_contains(roots, workspace.root) {
-      live.push(workspace)
-    } else {
-      close_workspace(workspace)
-    }
-  }
-  // Spawn a server for each newly wanted root — via the pump, so the process is
-  // owned by the connect op's task group and outlives this request. With no pump
-  // running (the webview never called `connect`) there is nothing to analyze
-  // against anyway, so skip rather than block on a spawn no one will service.
   for root in roots {
-    if !servers_has_root(live, root.to_string()) && manager.pump_running {
-      let ack : @async.Queue[LspWorkspace?] = Queue(kind=Unbounded)
-      manager.commands.put(SpawnWorkspace(root, ack))
-      if ack.get() is Some(workspace) {
-        live.push(workspace)
-      }
+    let key = root.to_string()
+    if manager.servers.get(key) is Some(server) {
+      touch_server(manager, key)
+      live.push(server)
+      continue
     }
+    guard manager.pump_running else { continue }
+    let ack : @async.Queue[LspWorkspace?] = Queue(kind=Unbounded)
+    manager.commands.put(SpawnWorkspace(root, ack))
+    guard ack.get() is Some(server) else { continue }
+    manager.servers.set(key, server)
+    manager.order.insert(0, key)
+    live.push(server)
   }
-  manager.workspaces.set(session, live)
+  evict_over_cap(manager, keep=live)
   live
+}
+
+///|
+/// Move a pooled root to the front of the recency order.
+fn touch_server(manager : LspManager, root : String) -> Unit {
+  if manager.order.search(root) is Some(index) {
+    manager.order.remove(index) |> ignore
+  }
+  manager.order.insert(0, root)
+}
+
+///|
+/// Close and forget a pooled server.
+fn retire_server(manager : LspManager, root : String) -> Unit {
+  guard manager.servers.get(root) is Some(server) else { return }
+  close_workspace(server)
+  manager.servers.remove(root)
+  if manager.order.search(root) is Some(index) {
+    manager.order.remove(index) |> ignore
+  }
+}
+
+///|
+/// Retire the least recently used pooled servers until the pool fits the
+/// cap, never touching the ones the current request is about to use.
+fn evict_over_cap(manager : LspManager, keep~ : Array[LspWorkspace]) -> Unit {
+  for root in manager.order.copy().rev() {
+    if manager.servers.length() <= MaxLspServers {
+      break
+    }
+    if keep.iter().any(server => server.root == root) {
+      continue
+    }
+    retire_server(manager, root)
+  }
 }
 
 ///|
@@ -381,17 +415,6 @@ fn server_for_file(
 fn roots_contains(roots : Array[@path.Path], root : String) -> Bool {
   for candidate in roots {
     if candidate.to_string() == root {
-      return true
-    }
-  }
-  false
-}
-
-///|
-/// Whether a live server is already rooted at `root`.
-fn servers_has_root(servers : Array[LspWorkspace], root : String) -> Bool {
-  for workspace in servers {
-    if workspace.root == root {
       return true
     }
   }

@@ -60,6 +60,42 @@ pub async fn resolve_in_workspace(
 }
 
 ///|
+/// The workspace directory an absolute `path` belongs to: the deepest
+/// registered workspace containing it (the nested-roots convention language
+/// clients use — VS Code's `getWorkspaceFolder` picks the innermost folder),
+/// or — under the scratch-workspace root — the per-session directory that
+/// owns it. `None` for a relative path or anything outside, which ops routed
+/// by path alone must refuse.
+pub async fn attached_workspace_dir(path : String) -> @path.Path? {
+  let candidate : @path.Path = Path(path)
+  guard candidate.is_absolute() else { return None }
+  let resolved = candidate.normalize().to_string()
+  let mut best : String? = None
+  for workspace in registered_workspaces() {
+    guard @pathx.contains(workspace, resolved) else { continue }
+    if best is Some(current) && current.length() >= workspace.length() {
+      continue
+    }
+    best = Some(workspace)
+  }
+  if best is Some(workspace) {
+    return Some(Path(workspace))
+  }
+  guard workspace_root() is Some(root) else { return None }
+  guard @pathx.relative_to(resolved, root=root.to_string()) is Some(rest) &&
+    !rest.is_empty() else {
+    return None
+  }
+  // The first segment under the scratch root names the owning session's
+  // directory; the root itself belongs to no conversation.
+  let session = match rest.find("/") {
+    Some(index) => rest.view(end_offset=index).to_owned()
+    None => rest
+  }
+  Some(root.join(Path(session)).normalize())
+}
+
+///|
 /// Join `relative` onto `root` and return the absolute result only while it
 /// stays within `root`. An absolute or `..`-laden `relative` that climbs out
 /// of `root` yields `None`. Pure and root-relative, so the containment rule is

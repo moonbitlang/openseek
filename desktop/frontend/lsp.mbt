@@ -5,55 +5,24 @@
 
 ///|
 /// The scheme prefixing viewer model URIs. The hover provider only ever
-/// receives the `TextModel`, never the app `Model`, so the URI carries
-/// everything the provider needs to address the host op:
-/// `openseek:///<path>?session=<id>&ws=<workspace>` (each part
-/// percent-encoded; `ws` present only for workspace conversations).
-const ModelUriPrefix : String = "openseek:///"
+/// receives the `TextModel`, never the app `Model`, so the URI carries the
+/// file's host-resolved absolute path (percent-encoded) — the whole address
+/// the path-routed `hover` op needs.
+const ModelUriPrefix : String = "openseek://"
 
 ///|
-/// What a model URI addresses: the conversation, its workspace hint (`""`
-/// when scratch), and the workspace-relative file path.
-priv struct ModelTarget {
-  session : String
-  workspace : String
-  path : String
+fn model_uri(absolute_path : String) -> String {
+  ModelUriPrefix + @uri.encode_path(absolute_path)
 }
 
 ///|
-fn model_uri(session : String, workspace : String, path : String) -> String {
-  let uri = StringBuilder::new()
-  uri.write_string(ModelUriPrefix)
-  uri.write_string(@uri.encode_path(path))
-  uri.write_string("?session=")
-  uri.write_string(@uri.encode_component(session))
-  if !workspace.is_empty() {
-    uri.write_string("&ws=")
-    uri.write_string(@uri.encode_component(workspace))
-  }
-  uri.to_string()
-}
-
-///|
-/// Decode a viewer model URI; `None` for a URI this app did not mint (no
-/// scheme, no session), which has no host op to route to anyway.
-fn parse_model_uri(uri : String) -> ModelTarget? {
+/// Decode a viewer model URI into the absolute path it names; `None` for a
+/// URI this app did not mint, which has no host op to route to anyway.
+fn parse_model_uri(uri : String) -> String? {
   guard uri.strip_prefix(ModelUriPrefix) is Some(rest) else { return None }
-  let (path, query) = match rest.split_once("?") {
-    Some((path, query)) => (path, query)
-    None => (rest, "".view())
-  }
-  let mut session = ""
-  let mut workspace = ""
-  for pair in query.split("&") {
-    match pair.split_once("=") {
-      Some(("session", value)) => session = @uri.decode(value)
-      Some(("ws", value)) => workspace = @uri.decode(value)
-      _ => ()
-    }
-  }
-  guard !session.is_empty() else { return None }
-  Some({ session, workspace, path: @uri.decode(path) })
+  let path = @uri.decode(rest)
+  guard !path.is_empty() else { return None }
+  Some(path)
 }
 
 ///|
@@ -69,11 +38,9 @@ impl @language.HoverProvider for LspHoverProvider with fn provide_hover(
   // v1 covers MoonBit only; other languages have no server behind the op.
   guard model.language_id == "moonbit" else { return None }
   guard !token.is_cancellation_requested() else { return None }
-  guard parse_model_uri(model.uri.value) is Some(target) else { return None }
+  guard parse_model_uri(model.uri.value) is Some(path) else { return None }
   let reply = request_hover(
-    session=target.session,
-    workspace=target.workspace,
-    path=target.path,
+    path~,
     // The viewer's Position is 1-based; the host op speaks 0-based LSP coords.
     line=position.line_number - 1,
     character=position.column - 1,
@@ -94,20 +61,17 @@ fn register_hover_provider() -> Unit {
 }
 
 ///|
-/// Call the host `hover` op for `path` at a zero-based `line`/`character`.
+/// Call the host `hover` op for the absolute `path` at a zero-based
+/// `line`/`character`.
 async fn request_hover(
-  session~ : String,
-  workspace~ : String,
   path~ : String,
   line~ : Int,
   character~ : Int,
 ) -> @js.Value {
   let payload = @js.Object::new()
-  payload["session"] = session
   payload["path"] = path
   payload["line"] = line
   payload["character"] = character
-  set_trimmed(payload, "workspace", workspace)
   bridge_request("hover", payload.to_value())
 }
 

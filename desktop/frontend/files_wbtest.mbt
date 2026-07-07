@@ -48,11 +48,12 @@ test "decode_dir_entries rejects structurally unusable replies" {
 }
 
 ///|
-test "decode_file_content reads the content string" {
-  assert_eq(
-    decode_file_content("{\"content\":\"hello\",\"truncated\":false}").unwrap(),
-    "hello",
-  )
+test "decode_file_content reads the content and absolute path" {
+  let reply = decode_file_content(
+    "{\"content\":\"hello\",\"truncated\":false,\"absolute\":\"/ws/a.mbt\"}",
+  ).unwrap()
+  assert_eq(reply.content, "hello")
+  assert_eq(reply.absolute, "/ws/a.mbt")
   assert_true(decode_file_content("{\"truncated\":true}") is None)
   assert_true(decode_file_content("garbage") is None)
 }

@@ -96,19 +96,17 @@ fn request_viewer_remeasure() -> @cmd.Cmd {
 /// document is set and — unless empty (a symbol placed without a range) —
 /// selected, so the named code reads highlighted.
 fn show_file_in_viewer(
-  session : String,
-  path : String,
   name : String,
   content : String,
-  workspace~ : String,
+  absolute~ : String,
   range? : @common.Range? = None,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     model_version.val = model_version.val + 1
     let version = model_version.val
-    // The URI addresses the file for the hover provider: session, workspace
-    // hint, and path travel with the model itself.
-    let uri : @common.Uri = { value: model_uri(session, workspace, path) }
+    // The URI is the file's absolute path — the whole address the hover
+    // provider needs, travelling with the model itself.
+    let uri : @common.Uri = { value: model_uri(absolute) }
     let text_model = @model.TextModel(
       uri,
       name,

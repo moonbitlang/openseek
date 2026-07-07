@@ -258,20 +258,20 @@ priv struct ReadFilePayload {
 priv struct ReadFileReply {
   content : String
   truncated : Bool
+  // The host-resolved absolute path of the file — the address the frontend
+  // uses for path-routed ops (`hover`).
+  absolute : String
 } derive(ToJson)
 
 ///|
-/// `hover` asks the workspace's language server for hover at a zero-based
-/// `line`/`character` in `path` (resolved under `session`'s workspace).
+/// `hover` asks a language server for hover at a zero-based
+/// `line`/`character` in `path` — an absolute path, the request's whole
+/// address: the host maps it to its attached workspace and module root, and
+/// rejects paths outside every attached directory.
 priv struct LspHoverPayload {
-  session : String
   path : String
   line : Int
   character : Int
-  // The conversation's workspace, when it has one — lets a fresh workspace
-  // conversation (no durable record on disk yet) reach its project's
-  // language server (see `read_directory`).
-  workspace : String?
 } derive(FromJson)
 
 ///|
@@ -295,7 +295,7 @@ priv struct LspHoverReply {
 priv struct WorkspaceSymbolsPayload {
   session : String
   query : String
-  // The conversation's workspace, when it has one (see `hover`).
+  // The conversation's workspace, when it has one (see `read_directory`).
   workspace : String?
 } derive(FromJson)
 

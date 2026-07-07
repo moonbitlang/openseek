@@ -72,9 +72,11 @@ fn read_file(
         }
       }
       match decode_file_content(reply_json_text(reply)) {
-        Some(content) =>
+        Some({ content, absolute }) =>
           scheduler.add(
-            dispatch(FileLoaded(session~, path~, name~, content~, range~)),
+            dispatch(
+              FileLoaded(session~, path~, name~, content~, absolute~, range~),
+            ),
           )
         None =>
           scheduler.add(
@@ -125,11 +127,18 @@ fn decode_dir_entries(text : String, parent : String) -> Array[FileEntry]? {
 }
 
 ///|
-/// Parse a `read_file` reply. `content` already holds a short notice when the
-/// host withheld a binary or oversized file, so the panel shows it verbatim.
-fn decode_file_content(text : String) -> String? {
+/// A decoded `read_file` reply: the text to show (already the host's short
+/// notice for binary/oversized files) and the host-resolved absolute path,
+/// the viewer model's address for path-routed ops.
+priv struct FileContent {
+  content : String
+  absolute : String
+}
+
+///|
+fn decode_file_content(text : String) -> FileContent? {
   let json = @json.parse(text) catch { _ => return None }
   guard json is Object(reply) else { return None }
   guard reply.get("content") is Some(String(content)) else { return None }
-  Some(content)
+  Some({ content, absolute: @transcript.json_text(reply, "absolute") })
 }

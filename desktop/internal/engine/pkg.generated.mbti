@@ -14,6 +14,8 @@ pub async fn archived_sessions(EngineManager) -> SessionsReply
 
 pub async fn attach_workspace(String) -> WorkspacesReply
 
+pub async fn attached_workspace_dir(String) -> @path.Path?
+
 pub async fn cancel_run(EngineManager, CancelRequest) -> CancelReply
 
 pub async fn compact_run(EngineManager, CompactRequest) -> CompactReply
