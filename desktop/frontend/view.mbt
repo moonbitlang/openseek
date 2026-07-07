@@ -1326,6 +1326,7 @@ fn update_check_controls(
 ) -> Array[@html.Html] {
   let controls : Array[@html.Html] = [
     @html.button(
+      class="secondary",
       disabled=model.update_ux
         is (CheckingForUpdate | DownloadingUpdate(..) | RestartingForUpdate(..)),
       on_click=dispatch(CheckForUpdates),
@@ -1497,7 +1498,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       setting_row(
         "Check for updates",
         update_check_controls(dispatch, model),
-        desc="Current version: \{@version.AppVersion}. The app also checks once at launch.",
+        desc="Current version: \{@version.AppVersion}.",
       ),
     ]),
   ]

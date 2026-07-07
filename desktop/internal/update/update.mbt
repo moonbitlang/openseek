@@ -25,19 +25,16 @@ pub(all) enum UpdateChannel {
 } derive(Eq, Debug)
 
 ///|
-/// The manifest endpoint actually queried: the channel's packaged URL, or
-/// the OPENSEEK_UPDATE_MANIFEST_URL override for pointing a dev build at an
-/// arbitrary server (launch the bundle's executable from a terminal so the
-/// variable is inherited). https only, like everything else here.
+/// The manifest endpoint the channel names. Nothing else can redirect the
+/// check — the old OPENSEEK_UPDATE_MANIFEST_URL environment override is
+/// gone, because an exported variable silently outranking a visible
+/// Settings choice is exactly how a "Production" check ends up answering
+/// from staging.
 fn manifest_url(channel : UpdateChannel) -> String {
-  guard @env.get("OPENSEEK_UPDATE_MANIFEST_URL") is Some(url) &&
-    url.has_prefix("https://") else {
-    return match channel {
-      Production => ManifestUrl
-      Staging => StagingManifestUrl
-    }
+  match channel {
+    Production => ManifestUrl
+    Staging => StagingManifestUrl
   }
-  url
 }
 
 ///|
