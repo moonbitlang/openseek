@@ -67,3 +67,37 @@ test "contained_path keeps in-tree relatives and rejects escapes" {
   assert_true(contained_path(root, "/etc/passwd") is None)
   assert_true(contained_path(root, "src/../../escape") is None)
 }
+
+///|
+/// The symlink half of the trust boundary: `contained_path` is purely lexical,
+/// so a link *inside* the workspace pointing *outside* it passes that check;
+/// `real_contains` follows the link and rejects it. A real in-tree file passes,
+/// and a path that does not exist has no link to follow so it is trusted.
+async test "real_contains rejects a symlink escaping the boundary" {
+  let root = @fs.tmpdir(prefix="openseek-boundary-")
+  let outside = @fs.tmpdir(prefix="openseek-outside-")
+  // A real file inside the boundary, and a symlink inside the boundary that
+  // points at a file outside it (the escape the lexical check misses).
+  let inside = root + "/inside.txt"
+  @fs.write_file(inside, b"x", create_mode=CreateOrTruncate)
+  let secret = outside + "/secret.txt"
+  @fs.write_file(secret, b"s", create_mode=CreateOrTruncate)
+  let link = root + "/link.txt"
+  @fs.symlink(target=secret, link)
+  // Capture the verdicts, then clean up before asserting — `@fs.rmdir` is
+  // async so it cannot run in a `defer`, and a failed assertion must not leak
+  // the temp trees.
+  let inside_ok = real_contains(root, inside)
+  // A path that does not exist is trusted: no link to follow, no file to leak.
+  let missing_ok = real_contains(root, root + "/missing.txt")
+  let link_escapes = real_contains(root, link)
+  @fs.rmdir(root, recursive=true) catch {
+    _ => ()
+  }
+  @fs.rmdir(outside, recursive=true) catch {
+    _ => ()
+  }
+  assert_true(inside_ok)
+  assert_true(missing_ok)
+  assert_false(link_escapes)
+}

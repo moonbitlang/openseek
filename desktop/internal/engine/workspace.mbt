@@ -56,7 +56,32 @@ pub async fn resolve_in_workspace(
     session_workspace_dir(session)
   }
   guard root is Some(root) else { return None }
-  contained_path(root, relative)
+  guard contained_path(root, relative) is Some(resolved) else { return None }
+  // The lexical containment above stops `..` traversal but not a symlink inside
+  // the workspace pointing outside it; reject one whose real target escapes.
+  guard real_contains(root.to_string(), resolved.to_string()) else {
+    return None
+  }
+  Some(resolved)
+}
+
+///|
+/// Whether `path`'s real location — following symlinks — is `boundary` or lives
+/// under it. The lexical `contained_path` / `@pathx.contains` checks resolve
+/// `..` but not symlinks, so a link inside the boundary can still point out;
+/// this canonicalizes both ends and re-checks. When either cannot be resolved —
+/// most often the target does not exist, so there is no symlink to follow and
+/// no file to leak — it trusts the lexical result already established.
+async fn real_contains(boundary : String, path : String) -> Bool {
+  let real_boundary = @fs.realpath(boundary) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return true
+  }
+  let real_path = @fs.realpath(path) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return true
+  }
+  @pathx.contains(real_boundary, real_path)
 }
 
 ///|
@@ -78,21 +103,26 @@ pub async fn attached_workspace_dir(path : String) -> @path.Path? {
     }
     best = Some(workspace)
   }
-  if best is Some(workspace) {
-    return Some(Path(workspace))
+  let dir : @path.Path = if best is Some(workspace) {
+    Path(workspace)
+  } else {
+    guard workspace_root() is Some(root) else { return None }
+    guard @pathx.relative_to(resolved, root=root.to_string()) is Some(rest) &&
+      !rest.is_empty() else {
+      return None
+    }
+    // The first segment under the scratch root names the owning session's
+    // directory; the root itself belongs to no conversation.
+    let session = match rest.find("/") {
+      Some(index) => rest.view(end_offset=index).to_owned()
+      None => rest
+    }
+    root.join(Path(session)).normalize()
   }
-  guard workspace_root() is Some(root) else { return None }
-  guard @pathx.relative_to(resolved, root=root.to_string()) is Some(rest) &&
-    !rest.is_empty() else {
-    return None
-  }
-  // The first segment under the scratch root names the owning session's
-  // directory; the root itself belongs to no conversation.
-  let session = match rest.find("/") {
-    Some(index) => rest.view(end_offset=index).to_owned()
-    None => rest
-  }
-  Some(root.join(Path(session)).normalize())
+  // Reject an absolute path whose real target — following symlinks — escapes
+  // the owning directory; the lexical containment above does not follow links.
+  guard real_contains(dir.to_string(), resolved) else { return None }
+  Some(dir)
 }
 
 ///|
