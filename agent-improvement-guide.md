@@ -44,8 +44,8 @@ The strongest negative references all point at the same gap:
   extra runtime failure output. Tests were not enough to catch dirty stdout.
 - JSON Schema V1 and V2 failed from context blowups after generated native C was
   printed into the transcript. Output caps fixed the next run.
-- Jqmini crashed after an oversized `moon ide doc @array` response. The model did
-  not need more text; it needed smaller, shaped documentation.
+- Jqmini crashed after an oversized semantic-doc response for `@array`. The model
+  did not need more text; it needed smaller, shaped documentation.
 
 These are not isolated task bugs. They are system design signals.
 
@@ -99,7 +99,8 @@ That single check would have caught the V4 schema-validator contract gap.
 
 ### Design Direction
 
-Add a `moon_accept` tool, or extend `moon_cmd`, with structured assertions:
+Add a `moon_accept` tool, or extend a structured moon-command runner, with
+structured assertions:
 
 - `command`: array of argv, not a shell string
 - `stdin`: optional string
@@ -165,10 +166,10 @@ reasoning budget on the domain logic instead of guessing MoonBit runtime APIs.
 
 ### Motivation
 
-The agent now has `moon_cmd`, but raw shell can still bypass policy. In one eval,
-`moon_cmd` rejected an unreviewed `moon test --update`; the agent then used shell
-to run the same command. Other runs lost time to shell quoting for expressions
-with `|`, spaces, brackets, and parentheses.
+A structured command policy can still be bypassed by raw shell. In one eval, a
+guarded command path rejected an unreviewed `moon test --update`; the agent then
+used shell to run the same command. Other runs lost time to shell quoting for
+expressions with `|`, spaces, brackets, and parentheses.
 
 ### Good Example
 
@@ -182,7 +183,7 @@ the shell tool should either reject it or route it through the same command
 policy:
 
 ```text
-moon_cmd:
+structured command:
   command = test
   update_snapshots = true
   test_update_kind = intentional_snapshot_refresh
@@ -200,27 +201,27 @@ The agent should not have to rely on shell quoting to preserve the query.
 
 ### Why It Matters
 
-Command policy is only real if every path respects it. If `moon_cmd` is safe but
-`shell` can bypass it, the agent will eventually take the loose path under
-pressure. Routing also improves eval quality because command failures become
+Command policy is only real if every path respects it. If a guarded command path
+is safe but `shell` can bypass it, the agent will eventually take the loose path
+under pressure. Routing also improves eval quality because command failures become
 tool-feedback failures, not quoting accidents.
 
-## Priority 4: Shape `moon_ide` And Source Output
+## Priority 4: Shape Semantic Docs And Source Output
 
 ### Motivation
 
-`moon_ide` improved API discovery, especially for JSON, async file reads, and
-`io.Data`. But broad doc/source output caused avoidable waste. Jqmini's oversized
-`moon ide doc @array` response was followed by a transport reset. JSON Schema
-spent many steps reading too much dependency source before finding the relevant
-file-read pattern.
+Semantic doc lookups improved API discovery, especially for JSON, async file
+reads, and `io.Data`. But broad doc/source output caused avoidable waste.
+Jqmini's oversized semantic-doc response for `@array` was followed by a transport
+reset. JSON Schema spent many steps reading too much dependency source before
+finding the relevant file-read pattern.
 
 ### Good Example
 
 Prefer shaped responses:
 
 ```text
-moon_ide doc @json.Json
+semantic doc @json.Json
 
 response:
   summary
@@ -233,7 +234,7 @@ response:
 For definitions:
 
 ```text
-moon_ide peek_def @io.Data::text
+semantic peek_def @io.Data::text
 
 response:
   exact signature
@@ -305,8 +306,6 @@ The agent already had prompt guidance for:
 - current `moon.mod`
 - flat MoonBit package structure
 - smaller files
-- `moon_cmd`
-- `moon_ide`
 - bounded reads
 - native CLI arguments
 
@@ -315,9 +314,7 @@ reason is structural: a prompt can ask the model to remember a rule, while a too
 can make the wrong state impossible to overlook. The strongest improvements so
 far were tool-level:
 
-- `moon_cmd` caught real test, run, README, and target mismatches
 - output caps prevented JSON Schema context blowups
-- `moon_ide` reduced API guessing
 - bounded `read` made repair loops more focused
 
 The next investments should follow that same pattern.
@@ -331,9 +328,9 @@ The next investments should follow that same pattern.
 2. Add a CLI/error cookbook and inject it into the agent prompt.
    This gives the model a reliable native CLI pattern while the semantic
    validator proves the result.
-3. Enforce MoonBit command routing through `moon_cmd` or equivalent policy.
+3. Enforce MoonBit command routing through a structured command policy.
    Close shell bypasses and reduce quoting failures for query-heavy tasks.
-4. Shape `moon_ide` responses and broad source reads.
+4. Shape semantic-doc responses and broad source reads.
    Keep API discovery useful but bounded.
 5. Add manifest/debug/edit guardrails.
    Prevent recurring cleanup and package-regression failures.
