@@ -1317,22 +1317,14 @@ fn channel_select(
 }
 
 ///|
-/// The Settings check-for-updates row: the button, the inline outcome of
-/// the last check, and — once an installable release is found — the same
-/// accent Update button the sidebar shows.
+/// The Settings check-for-updates row: the last check's outcome — status
+/// text, or the accent Update button once an installable release is found —
+/// on the left, the Check button on the right.
 fn update_check_controls(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> Array[@html.Html] {
-  let controls : Array[@html.Html] = [
-    @html.button(
-      class="secondary",
-      disabled=model.update_ux
-        is (CheckingForUpdate | DownloadingUpdate(..) | RestartingForUpdate(..)),
-      on_click=dispatch(CheckForUpdates),
-      "Check for updates",
-    ),
-  ]
+  let controls : Array[@html.Html] = []
   match model.update_ux {
     UpdateUnknown => ()
     CheckingForUpdate =>
@@ -1371,6 +1363,15 @@ fn update_check_controls(
     UpdateCheckFailed(message~) =>
       controls.push(@html.span(class="update-status update-error", message))
   }
+  controls.push(
+    @html.button(
+      class="secondary",
+      disabled=model.update_ux
+        is (CheckingForUpdate | DownloadingUpdate(..) | RestartingForUpdate(..)),
+      on_click=dispatch(CheckForUpdates),
+      "Check for updates",
+    ),
+  )
   controls
 }
 

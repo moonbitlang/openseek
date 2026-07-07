@@ -2002,19 +2002,26 @@
         font-size: 12px;
       }
 
+      /* A row's controls sit on one line, hugging the right edge; a lone
+         select/input still fills the column via its own width: 100%. */
       .setting-control {
         flex-shrink: 0;
         width: 280px;
-        display: grid;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
         gap: 8px;
       }
 
       .setting-row.stack .setting-control {
         width: auto;
+        flex-direction: column;
+        align-items: stretch;
       }
 
       #saveApiKey {
-        justify-self: end;
+        align-self: flex-end;
       }
 
       input,
