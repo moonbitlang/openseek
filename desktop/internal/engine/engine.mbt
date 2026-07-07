@@ -400,8 +400,12 @@ async fn engine_process_env(
   // Unix, so overriding PATH with inheritance enabled can leave two PATH
   // entries and let `/bin/sh` observe the original one.
   let env = @sys.get_env_vars()
+  // The engine reads the key from `DEEPSEEK` but the model from `OPENSEEK_MODEL`
+  // (the CLI's `--deepseek-api-key`/`--model` env bindings); the prefixes differ
+  // on purpose, so the model must not go into `DEEPSEEK_MODEL` — the engine
+  // ignores that and falls back to its default model.
   env["DEEPSEEK"] = config.api_key
-  env["DEEPSEEK_MODEL"] = config.model
+  env["OPENSEEK_MODEL"] = config.model
   env["OPENSEEK_MAX_STEPS"] = config.max_steps.to_string()
   env["OPENSEEK_DIR"] = "."
   if resolved_global_skills_dir() is Some(dir) {
