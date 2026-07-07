@@ -74,6 +74,7 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("read_directory"),
       @app.AppCommandApiDescriptor::new("read_file"),
       @app.AppCommandApiDescriptor::new("hover"),
+      @app.AppCommandApiDescriptor::new("lsp_open"),
       @app.AppCommandApiDescriptor::new("workspace_symbols"),
     ],
     context => {
@@ -86,6 +87,11 @@ pub fn openseek_extension(
         // never drops the engine connection.
         @async.with_task_group(group => {
           group.spawn_bg(allow_failure=true, () => run_lsp_pump(group, lsp))
+          group.spawn_bg(allow_failure=true, () => {
+            run_diagnostics_pump(lsp, async fn(push) {
+              context.emit("diagnostics", push)
+            })
+          })
           // Sweep what a previous update left behind; checking for new
           // releases is the frontend's call (`check_update`), not the
           // host's.
@@ -220,6 +226,9 @@ pub fn openseek_extension(
       })
       context.op_async("hover", async fn(payload : LspHoverPayload) {
         lsp_hover_op(lsp, payload)
+      })
+      context.op_async("lsp_open", async fn(payload : LspOpenPayload) {
+        lsp_open_op(lsp, payload)
       })
       context.op_async("workspace_symbols", async fn(
         payload : WorkspaceSymbolsPayload,

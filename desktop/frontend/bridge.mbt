@@ -112,6 +112,7 @@ fn wire_engine_events(
   on("openseek.error", error_msg)
   on("openseek.finished", finished_msg)
   on("openseek.connected", connected_msg)
+  on("openseek.diagnostics", diagnostics_msg)
   // Emitted by proton itself (not the openseek extension) when the user
   // clicks a system notification; the payload is the run id the host stamped
   // on the notification.
@@ -179,6 +180,21 @@ fn finished_msg(payload : Map[String, Json]) -> Msg? {
 ///|
 fn connected_msg(_payload : Map[String, Json]) -> Msg? {
   Some(BridgeReady)
+}
+
+///|
+/// A `diagnostics` push: the language server re-analyzed a file. The payload
+/// carries the absolute `path` and the raw LSP `diagnostics` array; the update
+/// filters it to the file on screen.
+fn diagnostics_msg(payload : Map[String, Json]) -> Msg? {
+  let path = @transcript.json_text(payload, "path")
+  guard !path.is_empty() else { return None }
+  Some(
+    DiagnosticsPublished(
+      absolute=Absolute(path),
+      diagnostics=payload.get("diagnostics").unwrap_or([]),
+    ),
+  )
 }
 
 ///|

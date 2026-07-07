@@ -69,6 +69,11 @@ priv struct LspManager {
   // Spawn requests from per-request ops to the LSP pump, which owns the moon-lsp
   // processes in the `connect` op's long-lived task group.
   commands : @async.Queue[LspCommand]
+  // Diagnostics published by any pooled server, tagged with the file's absolute
+  // path, awaiting forwarding to the webview by `run_diagnostics_pump`. Bounded
+  // and drop-oldest so a diagnostics storm can never outrun the drain and grow
+  // without bound.
+  diagnostics : @async.Queue[DiagnosticsPush]
   // Set while the pump loop is running; a spawn request is only enqueued when a
   // pump is there to service it.
   mut pump_running : Bool
@@ -92,6 +97,7 @@ fn new_lsp_manager(engine : String, runtime_dir? : @path.Path) -> LspManager {
     order: [],
     create_lock: Semaphore(1, initial_value=1),
     commands: Queue(kind=Unbounded),
+    diagnostics: Queue(kind=DiscardOldest(256)),
     pump_running: false,
   }
 }
@@ -175,6 +181,49 @@ async fn lsp_hover_op(
       character=payload.character,
     ),
   )
+}
+
+///|
+/// Sync the file the editor just opened into its server so the server analyzes
+/// it and begins publishing diagnostics, and return whatever it has already
+/// reported. Routes by absolute path exactly like `hover`. Best-effort: no
+/// workspace, no server, or a non-text file yields no diagnostics. Later
+/// changes arrive as `diagnostics` events.
+async fn lsp_open_op(
+  manager : LspManager,
+  payload : LspOpenPayload,
+) -> LspDiagnosticsReply {
+  guard @engine.attached_workspace_dir(payload.path) is Some(dir) else {
+    raise HostError("path is outside every attached workspace")
+  }
+  let file : @path.Path = Path(payload.path)
+  let file = file.normalize()
+  let servers = ensure_servers(manager, dir)
+  guard server_for_file(servers, file.to_string()) is Some(workspace) else {
+    return { diagnostics: [] }
+  }
+  guard read_text(file) is Some(text) else { return { diagnostics: [] } }
+  let uri = @uri.file_uri(file.to_string())
+  // Re-sync only when the file's text actually changed since the last request.
+  if !(workspace.synced.get(uri) is Some(synced) && synced == text) {
+    workspace.session.sync_document(uri~, language_id="moonbit", text~)
+    workspace.synced.set(uri, text)
+  }
+  { diagnostics: workspace.session.diagnostics_for(uri~).unwrap_or([]) }
+}
+
+///|
+/// Forward published diagnostics to the webview. Runs in the connect op's task
+/// group alongside the LSP pump for the app's lifetime: each server's handler
+/// enqueues onto `manager.diagnostics`, and this loop emits them as
+/// `diagnostics` events. Returns only when the group is torn down.
+async fn run_diagnostics_pump(
+  manager : LspManager,
+  emit : async (DiagnosticsPush) -> Unit,
+) -> Unit {
+  for ;; {
+    emit(manager.diagnostics.get())
+  }
 }
 
 ///|
@@ -524,6 +573,24 @@ async fn[G] spawn_workspace(
     @lsp.StreamTransport::new(stdout_reader, stdin_writer, label=directory),
   )
   let session_object = @lsp.Session::new(client)
+  // Forward the server's diagnostics to the webview, keyed by the file's
+  // absolute path (the model URI's address) — no session, since a pooled server
+  // is shared across conversations and the path is the whole address. The
+  // handler runs on the client's reader task, so it only enqueues.
+  session_object.on_publish_diagnostics((uri, diags) => {
+    (manager.diagnostics.try_put({
+      path: @uri.file_uri_path(uri),
+      diagnostics: diags,
+    }) catch {
+      _ => false
+    })
+    |> ignore
+  })
+  // A standing reader in the pump's group, so the server's `publishDiagnostics`
+  // notifications are read as they arrive — not only while a hover/symbol
+  // request happens to be in flight. It shares routing with those requests, so
+  // their replies still reach them; it ends when the transport closes.
+  group.spawn_bg(allow_failure=true, () => client.run_message_pump())
   // A failed handshake is non-fatal: later requests simply return nothing.
   session_object.initialize(root_uri=@uri.file_uri(directory)) catch {
     error if @async.is_being_cancelled() => raise error

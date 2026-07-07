@@ -92,7 +92,7 @@ test "classify_incoming distinguishes peer requests from notifications" {
     "method": "textDocument/publishDiagnostics",
   }
   match classify_incoming(notification) {
-    Notification => ()
+    Notification(_, _) => ()
     _ => fail("expected a Notification")
   }
 }

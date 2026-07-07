@@ -1479,14 +1479,22 @@ fn update_msg(
         (@cmd.none, model)
       } else {
         let cmd = match file {
+          // A real file also gets a diagnostics request: the host opens it in
+          // the language server and returns its current diagnostics, and future
+          // re-analysis arrives as `diagnostics` events.
           Content(content~, absolute~) =>
-            show_file_in_viewer(name, content, absolute~, range~)
+            @cmd.batch([
+              show_file_in_viewer(name, content, absolute~, range~),
+              request_diagnostics(dispatch, absolute),
+            ])
           Binary => show_file_in_viewer(name, "Binary file is not previewable.")
           Oversized =>
             show_file_in_viewer(name, "File is too large to preview.")
         }
         (cmd, model)
       }
+    DiagnosticsPublished(absolute~, diagnostics~) =>
+      (apply_diagnostics(absolute, diagnostics), model)
     FileFailed(session~, message~) =>
       if model.file_panel.session != session {
         (@cmd.none, model)

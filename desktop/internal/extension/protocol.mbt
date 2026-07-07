@@ -286,6 +286,33 @@ priv struct LspHoverPayload {
 } derive(FromJson)
 
 ///|
+/// `lsp_open` tells the host the editor is now showing the file at absolute
+/// `path`, so the language server opens/syncs it and starts publishing
+/// diagnostics. The reply carries whatever the server has already reported;
+/// later changes arrive as `diagnostics` events.
+priv struct LspOpenPayload {
+  path : String
+} derive(FromJson)
+
+///|
+/// Reply to `lsp_open`: the server's current diagnostics for the file (the raw
+/// LSP `diagnostics` array, 0-based ranges), empty when it has none yet.
+priv struct LspDiagnosticsReply {
+  diagnostics : Json
+} derive(ToJson)
+
+///|
+/// A `diagnostics` event pushed to the webview: the absolute `path` whose
+/// diagnostics changed and the raw LSP `diagnostics` array — the same shape
+/// `lsp_open` replies with, so the editor decodes both through one path. The
+/// path is the whole address (matching the viewer's model URI); no session is
+/// involved, mirroring `hover`.
+priv struct DiagnosticsPush {
+  path : String
+  diagnostics : Json
+} derive(ToJson)
+
+///|
 /// Reply to `hover`. An empty `value` means "no hover here". `range` (the four
 /// position fields) marks the symbol the tooltip describes, valid only when
 /// `has_range` is set; the front-end maps it back to a document offset.

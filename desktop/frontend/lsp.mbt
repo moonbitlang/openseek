@@ -135,3 +135,107 @@ fn json_int(fields : Map[String, Json], key : String) -> Int {
     _ => 0
   }
 }
+
+///|
+/// Tell the host the viewer now shows the file at `absolute`, so its language
+/// server syncs the file and starts publishing diagnostics, then apply whatever
+/// it already has. Best-effort: a failed call just leaves the file without
+/// squiggles; live re-analysis still arrives as `diagnostics` events. Routes by
+/// absolute path exactly like hover — v1 covers MoonBit only, the only language
+/// with a server behind the op.
+fn request_diagnostics(
+  dispatch : @cmd.Emit[Msg],
+  absolute : @pathx.Absolute,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let reply = request_lsp_open(path=absolute) catch { _ => return }
+      let diagnostics = reply_diagnostics(reply_json_text(reply))
+      scheduler.add(dispatch(DiagnosticsPublished(absolute~, diagnostics~)))
+    })
+  })
+}
+
+///|
+/// Call the host `lsp_open` op for the absolute `path`.
+async fn request_lsp_open(path~ : @pathx.Absolute) -> @js.Value {
+  let payload = @js.Object::new()
+  payload["path"] = path.0
+  bridge_request("lsp_open", payload.to_value())
+}
+
+///|
+/// The `diagnostics` array from an `lsp_open` reply; an empty array when the
+/// reply is malformed or the server has none.
+fn reply_diagnostics(text : String) -> Json {
+  let json = @json.parse(text) catch { _ => return [] }
+  guard json is Object(reply) && reply.get("diagnostics") is Some(diagnostics) else {
+    return []
+  }
+  diagnostics
+}
+
+///|
+/// Decode a raw LSP `diagnostics` array into the viewer's `Diagnostic` shape.
+/// LSP positions are 0-based; the viewer's ranges are 1-based, so each bound
+/// shifts by one. An item without a range or message is skipped.
+fn decode_diagnostics(diagnostics : Json) -> Array[@language.Diagnostic] {
+  guard diagnostics is Array(items) else { return [] }
+  let result : Array[@language.Diagnostic] = []
+  for item in items {
+    guard item is Object(fields) else { continue }
+    guard fields.get("range")
+      is Some(Object({ "start": Object(start), "end": Object(end_), .. })) else {
+      continue
+    }
+    let message = @transcript.json_text(fields, "message")
+    guard !message.is_empty() else { continue }
+    result.push(@language.Diagnostic::{
+      range: @common.Range::Range(
+        json_int(start, "line") + 1,
+        json_int(start, "character") + 1,
+        json_int(end_, "line") + 1,
+        json_int(end_, "character") + 1,
+      ),
+      severity: diagnostic_severity(json_int(fields, "severity")),
+      message,
+      tags: decode_diagnostic_tags(fields),
+    })
+  }
+  result
+}
+
+///|
+/// Map an LSP `DiagnosticSeverity` (`Error=1 … Hint=4`) to the viewer's. An
+/// absent or unknown severity reads as `Error`, LSP's own fallback.
+fn diagnostic_severity(value : Int) -> @language.DiagnosticSeverity {
+  match value {
+    2 => Warning
+    3 => Info
+    4 => Hint
+    _ => Error
+  }
+}
+
+///|
+/// Decode the optional LSP `tags` array (`Unnecessary=1`, `Deprecated=2`) that
+/// drives the viewer's faded/struck-through rendering. `None` when there are
+/// none, so the diagnostic carries no tag list at all.
+fn decode_diagnostic_tags(
+  fields : Map[String, Json],
+) -> Array[@language.DiagnosticTag]? {
+  guard fields.get("tags") is Some(Array(items)) else { return None }
+  let tags : Array[@language.DiagnosticTag] = []
+  for item in items {
+    match item {
+      Number(1, ..) => tags.push(Unnecessary)
+      Number(2, ..) => tags.push(Deprecated)
+      _ => ()
+    }
+  }
+  if tags.is_empty() {
+    None
+  } else {
+    Some(tags)
+  }
+}

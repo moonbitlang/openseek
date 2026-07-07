@@ -689,6 +689,11 @@ priv enum Msg {
     range~ : @common.Range?
   )
   FileFailed(session~ : String, message~ : String)
+  // The language server's diagnostics for the file at `absolute`, either
+  // returned by `lsp_open` when the file is shown or pushed later as the server
+  // re-analyzes. `diagnostics` is the raw LSP array (0-based ranges). Applied to
+  // the viewer only while it still shows that file; a stale one is dropped.
+  DiagnosticsPublished(absolute~ : @pathx.Absolute, diagnostics~ : Json)
   // The start request for that conversation never produced a run (the bridge
   // call failed or the host refused it).
   Failed(session~ : String, message~ : String)

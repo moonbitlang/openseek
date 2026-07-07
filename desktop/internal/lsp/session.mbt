@@ -12,13 +12,57 @@ struct Session {
   // Documents synced to the server, mapped to the last version sent. A repeat
   // sync of a uri bumps the version with a full-text `didChange`.
   opened : Map[String, Int]
+  // The server's latest `publishDiagnostics` per document uri (the raw LSP
+  // `diagnostics` array). A late subscriber — the editor opening a file the
+  // server already analyzed — reads the current set here rather than waiting for
+  // the next publish.
+  diagnostics : Map[String, Json]
   mut initialized : Bool
+  // Called when the server publishes diagnostics for a uri, with the raw
+  // `diagnostics` array. The default drops them; a host that forwards them to
+  // the editor installs its own via `on_publish_diagnostics`.
+  mut on_publish : (String, Json) -> Unit
 }
 
 ///|
-/// Build a session over an already-connected client.
+/// Build a session over an already-connected client. Wires the client's
+/// notification handler to capture `textDocument/publishDiagnostics`.
 pub fn Session::new(client : @jsonrpc.Client) -> Session {
-  { client, opened: {}, initialized: false }
+  let session = {
+    client,
+    opened: {},
+    diagnostics: {},
+    initialized: false,
+    on_publish: (_, _) => (),
+  }
+  client.set_notification_handler((method_, params) => {
+    guard method_ == "textDocument/publishDiagnostics" else { return }
+    guard params is { "uri": String(uri), "diagnostics": diagnostics, .. } else {
+      return
+    }
+    session.diagnostics.set(uri, diagnostics)
+    (session.on_publish)(uri, diagnostics)
+  })
+  session
+}
+
+///|
+/// Install the handler run when the server publishes diagnostics for a uri
+/// (uri, raw `diagnostics` array). Replaces any previous handler. It runs on the
+/// client's reader task, so it must not block on I/O — a host forwarding to the
+/// editor should hand off over a queue.
+pub fn Session::on_publish_diagnostics(
+  self : Session,
+  handler : (String, Json) -> Unit,
+) -> Unit {
+  self.on_publish = handler
+}
+
+///|
+/// The server's latest diagnostics for `uri` (the raw LSP `diagnostics` array),
+/// or `None` if it has published none.
+pub fn Session::diagnostics_for(self : Session, uri~ : String) -> Json? {
+  self.diagnostics.get(uri)
 }
 
 ///|

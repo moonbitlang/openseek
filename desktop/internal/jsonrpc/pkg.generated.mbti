@@ -14,6 +14,8 @@ type Client
 pub fn[T : Transport] Client::new(T) -> Self
 pub async fn Client::notify(Self, method_~ : String, params~ : Json) -> Unit
 pub async fn Client::request(Self, method_~ : String, params~ : Json) -> Json
+pub async fn Client::run_message_pump(Self) -> Unit
+pub fn Client::set_notification_handler(Self, (String, Json) -> Unit) -> Unit
 
 // Type aliases
 

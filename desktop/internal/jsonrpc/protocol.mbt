@@ -66,8 +66,9 @@ priv enum Incoming {
   Reply(Int, Result[Json, ResponseError])
   // A peer-initiated request; carries the raw id to echo back in the reply.
   PeerRequest(Json)
-  // A peer-initiated notification: ignored.
-  Notification
+  // A peer-initiated notification: its method and params, delivered to the
+  // client's notification handler (e.g. LSP `textDocument/publishDiagnostics`).
+  Notification(String, Json)
   // Neither — malformed, or a reply with a non-numeric id we never issue.
   Unknown
 }
@@ -76,10 +77,11 @@ priv enum Incoming {
 /// Classify an inbound message. A `method` field marks a request (with id) or a
 /// notification (without); otherwise an `id` marks a reply.
 fn classify_incoming(message : Json) -> Incoming {
-  if message is { "method": String(_), .. } {
+  if message is { "method": String(method_), .. } {
     match message {
       { "id": id, .. } => PeerRequest(id)
-      _ => Notification
+      { "params": params, .. } => Notification(method_, params)
+      _ => Notification(method_, Json::null())
     }
   } else {
     match message {

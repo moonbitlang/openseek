@@ -19,6 +19,25 @@ let viewer_cell : Ref[@viewer.Viewer?] = Ref(None)
 let viewer_attached : Ref[Bool] = Ref(false)
 
 ///|
+/// The viewer's services, built here rather than defaulted inside the viewer so
+/// we keep a handle on the `MarkerService` — the viewer holds them privately.
+/// The host pushes diagnostics through it (`apply_diagnostics`), and the viewer
+/// renders the squiggles for whichever resource its model currently shows.
+let services_cell : Ref[@viewer.ViewerServices?] = Ref(None)
+
+///|
+/// The absolute path of the file the viewer currently shows, so a diagnostics
+/// push that arrives for a different file (or after the panel cleared its
+/// document) is dropped rather than drawn over the wrong document. `None` when
+/// the viewer shows a notice or nothing.
+let current_absolute : Ref[@pathx.Absolute?] = Ref(None)
+
+///|
+/// The `MarkerService` owner for the language server's diagnostics — Monaco
+/// keys markers by owner so one source's set replaces cleanly.
+const DiagnosticsOwner = "moon-lsp"
+
+///|
 /// Monotonic model version; the viewer treats a new version as a new document.
 let model_version : Ref[Int] = Ref(0)
 
@@ -32,7 +51,10 @@ fn viewer() -> @viewer.Viewer {
     None => {
       register_tokenizers()
       register_hover_provider()
+      let services = @viewer.ViewerServices::new()
+      services_cell.val = Some(services)
       let viewer = @viewer.Viewer(
+        services~,
         theme="light",
         placeholder="Select a file to view",
       )
@@ -102,6 +124,9 @@ fn show_file_in_viewer(
   range? : @common.Range? = None,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
+    // Gate incoming diagnostics to the file now on screen (a notice document,
+    // with no absolute path, takes no diagnostics).
+    current_absolute.val = absolute
     model_version.val = model_version.val + 1
     let version = model_version.val
     // The URI is the file's absolute path — the whole address the hover
@@ -147,7 +172,32 @@ fn show_file_in_viewer(
 fn clear_viewer() -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     if viewer_attached.val {
+      current_absolute.val = None
       viewer().clear_model()
+    }
+  })
+}
+
+///|
+/// Draw the language server's diagnostics for the file at `absolute` onto the
+/// viewer — but only while it still shows that file, so a push that raced a
+/// file switch or a cleared panel is dropped. The diagnostics are keyed to the
+/// model's own URI, so the viewer's marker-decoration service renders their
+/// squiggles on the document on screen.
+fn apply_diagnostics(
+  absolute : @pathx.Absolute,
+  diagnostics : Json,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(_scheduler => {
+    if current_absolute.val is Some(current) &&
+      current == absolute &&
+      services_cell.val is Some(services) {
+      let uri : @common.Uri = { value: model_uri(absolute) }
+      services.markers.set_diagnostics(
+        DiagnosticsOwner,
+        uri,
+        decode_diagnostics(diagnostics),
+      )
     }
   })
 }
