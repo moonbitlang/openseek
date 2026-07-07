@@ -1,8 +1,8 @@
 // Checking the hosted release manifest for a newer desktop build. The check
 // is a nudge, not a feature the app depends on: fetch failures — offline,
-// HTTP error, garbage, unparsable versions — read as "no update". The one
-// loud case is `MalformedArtifact`: a manifest that names a package this
-// platform cannot use is a publisher error, raised so it gets reported.
+// HTTP error — read as "no update". But a manifest the server actually
+// served and that cannot be used is loud: it raises `ManifestError` so the
+// caller reports it rather than reading a broken release as "no update".
 
 ///|
 /// The hosted release manifest, served by openseek-api from its releases
@@ -33,11 +33,18 @@ pub struct UpdateInfo {
 } derive(Eq, Debug)
 
 ///|
-/// A manifest whose entry for this platform exists but cannot be used — a
-/// publisher error, unlike the absence of an entry (the normal shape for
-/// platforms that do not self-update). It carries the release version so
-/// the caller can still announce the update alongside the reason.
-pub suberror MalformedArtifact {
+/// A manifest the server actually served (HTTP 200) but that cannot be
+/// used, split by how sure we are it is the publisher's fault.
+/// `MalformedManifest` — not JSON, no version, version not semver — also
+/// happens under captive portals and intercepting proxies, so it is worth
+/// a log line but not a user-facing announcement. `MalformedArtifact` — a
+/// well-formed manifest whose entry for this platform cannot be used — can
+/// only come from the publisher, unlike the absence of an entry (the
+/// normal shape for platforms that do not self-update); it carries the
+/// release version so the caller can announce the update alongside the
+/// reason.
+pub suberror ManifestError {
+  MalformedManifest(reason~ : String)
   MalformedArtifact(version~ : String, reason~ : String)
 }
 
@@ -63,10 +70,10 @@ fn manifest_platform_key() -> String? {
 
 ///|
 /// Fetch the hosted manifest and report a release newer than `current`, or
-/// None. Fetch and parse failures — offline, HTTP errors, garbage — all
-/// read as "no update", so the nudge can never surface as an app error; a
-/// malformed platform entry is the one exception, raised so the caller can
-/// report the publisher error instead of silently not installing.
+/// None. Fetch failures — offline, HTTP errors — read as "no update", so
+/// the nudge can never surface as an app error; a served manifest that
+/// cannot be used raises `ManifestError` so the caller can report it
+/// instead of silently not installing.
 pub async fn check_for_update(current~ : String) -> UpdateInfo? {
   let (response, data) = @http.get(manifest_url()) catch {
     error if @async.is_being_cancelled() => raise error
@@ -75,7 +82,7 @@ pub async fn check_for_update(current~ : String) -> UpdateInfo? {
   guard response.code == 200 else { return None }
   let json = data.json() catch {
     error if @async.is_being_cancelled() => raise error
-    _ => return None
+    _ => raise MalformedManifest(reason="the manifest is not valid JSON")
   }
   newer_update(json, current~, platform_key=manifest_platform_key())
 }
@@ -90,8 +97,15 @@ fn newer_update(
   json : Json,
   current~ : String,
   platform_key~ : String?,
-) -> UpdateInfo? raise MalformedArtifact {
-  guard json is { "version": String(version), .. } else { return None }
+) -> UpdateInfo? raise ManifestError {
+  guard json is { "version": String(version), .. } else {
+    raise MalformedManifest(reason="the manifest carries no version")
+  }
+  guard parse_version(version) is Some(_) else {
+    raise MalformedManifest(
+      reason="the manifest version is not semver: \{version}",
+    )
+  }
   if is_newer(version, than=current) {
     Some({ version, artifact: manifest_artifact(json, platform_key, version~) })
   } else {
@@ -107,7 +121,7 @@ fn manifest_artifact(
   json : Json,
   platform_key : String?,
   version~ : String,
-) -> PackageInfo? raise MalformedArtifact {
+) -> PackageInfo? raise ManifestError {
   guard platform_key is Some(key) else { return None }
   guard json is { "platforms": Object(platforms), .. } else { return None }
   guard platforms.get(key) is Some(entry) else { return None }

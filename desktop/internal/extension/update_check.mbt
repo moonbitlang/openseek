@@ -63,9 +63,11 @@ async fn announce_update(
   if state.work_dir is Some(dir) && state.bundle_path is Some(bundle) {
     @update.cleanup_leftovers(work_dir=dir, bundle_path=bundle)
   }
-  // A malformed platform entry is a publisher error, not the absence of a
-  // package: say what is wrong with it, in the log and in the toast, so a
-  // bad `latest.json` never reads as a build that merely cannot install.
+  // A served-but-unusable manifest is loud, scaled to how sure we are it is
+  // the publisher's fault: a malformed platform entry can only come from a
+  // bad `latest.json`, so its reason reaches the toast; a manifest that is
+  // garbage wholesale also happens under captive portals, so it goes to the
+  // log alone rather than alarming the user on every hotel Wi-Fi.
   let checked = @update.check_for_update(current=@version.AppVersion) catch {
     @update.MalformedArtifact(version~, reason~) => {
       @xlog.warn(category="update") <?
@@ -75,6 +77,11 @@ async fn announce_update(
           "error": reason,
         }
       announce_available(context, version~, reason~)
+      return
+    }
+    @update.MalformedManifest(reason~) => {
+      @xlog.warn(category="update") <?
+        { "event": "manifest_malformed", "error": reason }
       return
     }
     error => raise error

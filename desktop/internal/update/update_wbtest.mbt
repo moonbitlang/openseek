@@ -42,9 +42,28 @@ test "manifest decode demands a strictly newer version" {
     newer_update(missing_url, current="0.1.0", platform_key=None),
     Some({ version: "0.2.0", artifact: None }),
   )
-  @debug.assert_eq(
-    newer_update("nonsense", current="0.1.0", platform_key=None),
-    None,
+}
+
+///|
+fn expect_manifest_error(manifest : Json, reason~ : String) -> Unit raise {
+  try newer_update(manifest, current="0.1.0", platform_key=None) catch {
+    MalformedManifest(reason=actual) => assert_eq(actual, reason)
+    _ => fail("unexpected manifest-error constructor")
+  } noraise {
+    _ => fail("expected a malformed-manifest raise")
+  }
+}
+
+///|
+test "a served manifest that cannot be decoded raises" {
+  expect_manifest_error("nonsense", reason="the manifest carries no version")
+  expect_manifest_error(
+    { "version": 2 },
+    reason="the manifest carries no version",
+  )
+  expect_manifest_error(
+    { "version": "latest" },
+    reason="the manifest version is not semver: latest",
   )
 }
 
@@ -94,6 +113,7 @@ fn expect_malformed(manifest : Json, reason~ : String) -> Unit raise {
       assert_eq(version, "0.2.0")
       assert_eq(actual, reason)
     }
+    _ => fail("unexpected manifest-error constructor")
   } noraise {
     _ => fail("expected a malformed-artifact raise")
   }
