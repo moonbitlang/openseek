@@ -104,26 +104,22 @@ fn hover_range(
 ) -> @common.Range {
   let snapshot = model.snapshot()
   guard reply.get("has_range") is Some(True) else {
-    let origin = snapshot.position_at_offset(0)
+    let origin = snapshot.get_position_at(0)
     return @common.Range::from_positions(origin, origin)
   }
   // The reply carries 0-based LSP positions; shift to the viewer's 1-based
-  // Position, then round-trip through offsets so the range stays clamped.
-  let start = snapshot.offset_at_position(
-    @common.Position::Position(
-      json_int(reply, "start_line") + 1,
-      json_int(reply, "start_character") + 1,
-    ),
+  // line/column, then round-trip through offsets so the range stays clamped.
+  let start = snapshot.get_offset_at(
+    json_int(reply, "start_line") + 1,
+    json_int(reply, "start_character") + 1,
   )
-  let end = snapshot.offset_at_position(
-    @common.Position::Position(
-      json_int(reply, "end_line") + 1,
-      json_int(reply, "end_character") + 1,
-    ),
+  let end = snapshot.get_offset_at(
+    json_int(reply, "end_line") + 1,
+    json_int(reply, "end_character") + 1,
   )
   @common.Range::from_positions(
-    snapshot.position_at_offset(start),
-    snapshot.position_at_offset(end),
+    snapshot.get_position_at(start),
+    snapshot.get_position_at(end),
   )
 }
 

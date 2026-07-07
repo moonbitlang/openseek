@@ -118,8 +118,8 @@ fn end_resize(_event : @dom.Event) -> Unit {
   guard resizing.val else { return }
   resizing.val = false
   set_root_class("")
-  if viewer_attached.val {
-    viewer().remeasure()
+  if mounted_viewer() is Some(viewer) {
+    viewer.layout()
   }
 }
 
@@ -152,14 +152,14 @@ fn document_element() -> @dom.Element? {
 /// flood of `mousemove`s does not thrash its layout (the viewer fills its host
 /// with absolutely-positioned layers and cannot see a CSS width change itself).
 fn schedule_remeasure() -> Unit {
-  if remeasure_pending.val || !viewer_attached.val {
+  if remeasure_pending.val || mounted_viewer() is None {
     return
   }
   remeasure_pending.val = true
   @dom.window().request_animation_frame(_ => {
     remeasure_pending.val = false
-    if viewer_attached.val {
-      viewer().remeasure()
+    if mounted_viewer() is Some(viewer) {
+      viewer.layout()
     }
   })
   |> ignore

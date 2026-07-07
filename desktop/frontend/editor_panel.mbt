@@ -11,12 +11,13 @@
 const ViewerHostId = "viewer-host"
 
 ///|
-/// The single viewer instance, built lazily so its tokenizers register once.
+/// The single viewer instance. `None` until the first `request_viewer_mount`
+/// finds the host element in the DOM — the viewer API constructs attached
+/// (`Viewer::create`), so creation and mounting are one step. The host is
+/// rendered on every screen from the first paint, and every file read is
+/// batched behind a mount request whose after-render tick precedes the async
+/// reply, so by the time a document arrives the viewer exists.
 let viewer_cell : Ref[@viewer.Viewer?] = Ref(None)
-
-///|
-/// Whether the viewer has been attached to its host element yet.
-let viewer_attached : Ref[Bool] = Ref(false)
 
 ///|
 /// The viewer's services, built here rather than defaulted inside the viewer so
@@ -42,26 +43,11 @@ const DiagnosticsOwner = "moon-lsp"
 let model_version : Ref[Int] = Ref(0)
 
 ///|
-/// The viewer, constructing it (and registering language tokenizers) on first
-/// use. Held in a `Ref` rather than the model because it is imperative DOM
-/// state the virtual DOM must not own.
-fn viewer() -> @viewer.Viewer {
-  match viewer_cell.val {
-    Some(viewer) => viewer
-    None => {
-      register_tokenizers()
-      register_hover_provider()
-      let services = @viewer.ViewerServices::new()
-      services_cell.val = Some(services)
-      let viewer = @viewer.Viewer(
-        services~,
-        theme="light",
-        placeholder="Select a file to view",
-      )
-      viewer_cell.val = Some(viewer)
-      viewer
-    }
-  }
+/// The mounted viewer, or `None` before the first mount. Held in a `Ref`
+/// rather than the model because it is imperative DOM state the virtual DOM
+/// must not own.
+fn mounted_viewer() -> @viewer.Viewer? {
+  viewer_cell.val
 }
 
 ///|
@@ -86,16 +72,28 @@ fn register_tokenizers() -> Unit {
 }
 
 ///|
-/// Attach the viewer to its host element after the next paint, once. A no-op
-/// if already attached or the host element is not in the DOM yet.
+/// Create the viewer in its host element after the next paint, once (the
+/// tokenizers and hover provider register with it). A no-op if already
+/// mounted or the host element is not in the DOM yet.
 fn request_viewer_mount() -> @cmd.Cmd {
   @cmd.custom_cmd(
     _after => {
-      if !viewer_attached.val &&
+      if viewer_cell.val is None &&
         @dom.document().get_element_by_id(ViewerHostId).to_option()
         is Some(host) {
-        viewer().attach(host)
-        viewer_attached.val = true
+        register_tokenizers()
+        register_hover_provider()
+        let services = @viewer.ViewerServices::new()
+        services_cell.val = Some(services)
+        let viewer = @viewer.Viewer::create(
+          host,
+          services~,
+          options=@viewer.ViewerOptions(
+            theme="light",
+            placeholder="Select a file to view",
+          ),
+        )
+        viewer_cell.val = Some(viewer)
       }
     },
     kind=@cmd.after_render,
@@ -107,7 +105,7 @@ fn request_viewer_mount() -> @cmd.Cmd {
 /// CSS, so the viewer cannot see the change on its own).
 fn request_viewer_remeasure() -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _after => if viewer_attached.val { viewer().remeasure() },
+    _after => if mounted_viewer() is Some(viewer) { viewer.layout() },
     kind=@cmd.after_render,
   )
 }
@@ -124,6 +122,10 @@ fn show_file_in_viewer(
   range? : @common.Range? = None,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
+    // Reads are always batched behind a mount request whose after-render tick
+    // runs before this async reply, so the viewer exists here (see
+    // `viewer_cell`); the guard only drops a pathological stray.
+    guard mounted_viewer() is Some(viewer) else { return }
     // Gate incoming diagnostics to the file now on screen (a notice document,
     // with no absolute path, takes no diagnostics).
     current_absolute.val = absolute
@@ -147,19 +149,21 @@ fn show_file_in_viewer(
       "v" + version.to_string(),
       content,
     )
-    viewer().set_model(text_model, view_state=Reset)
+    // `set_model` resets the view state itself (the Monaco contract), so a
+    // fresh document always opens at the top.
+    viewer.set_model(Some(text_model))
     if range is Some(range) {
       if !range.is_empty() {
         // `set_selection` never scrolls on its own (the Monaco contract), so
         // pair it with the reveal below.
-        viewer().set_selection(
+        viewer.set_selection(
           @view_model.Selection::from_positions(
             range.get_start_position(),
             range.get_end_position(),
           ),
         )
       }
-      viewer().reveal_range_in_center(range)
+      viewer.reveal_range_in_center(range)
     }
   })
 }
@@ -171,9 +175,9 @@ fn show_file_in_viewer(
 /// conversation's file. A no-op until the viewer has been attached.
 fn clear_viewer() -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    if viewer_attached.val {
+    if mounted_viewer() is Some(viewer) {
       current_absolute.val = None
-      viewer().clear_model()
+      viewer.set_model(None)
     }
   })
 }
