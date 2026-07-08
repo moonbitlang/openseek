@@ -39,20 +39,16 @@ fn viewer_css_sources() -> Array[String] {
 }
 
 ///|
-/// The vendored codicon icon font `codicon.css`'s `@font-face` loads. The
-/// editor serves it at the site root (`/codicon.ttf`); the desktop keeps its
-/// fonts under `fonts/`, so `build_viewer_stylesheet` rewrites the URL and
-/// copies the font here (the packagers already ship the `fonts/` tree).
+/// The vendored codicon icon font `codicon.css`'s `@font-face` loads at the
+/// site root (`url("/codicon.ttf")`), exactly like the editor's own web
+/// build serves it. Proton resolves `/codicon.ttf` against the
+/// `proton://app/` origin and maps it to the asset directory root, so the
+/// desktop ships the upstream CSS unmodified and just places the font next
+/// to `viewer.css`.
 const CodiconFontSource : String = "editor/viewer/browser/view/codicon/codicon.ttf"
 
 ///|
-const CodiconFontOutput : String = "fonts/codicon.ttf"
-
-///|
-const CodiconFontUpstreamUrl : String = "url(\"/codicon.ttf\")"
-
-///|
-const CodiconFontDesktopUrl : String = "url(\"fonts/codicon.ttf\")"
+const CodiconFontOutput : String = "codicon.ttf"
 
 ///|
 const NativePackage : String = "."
@@ -324,9 +320,7 @@ pub async fn build_viewer_stylesheet(ws : Workspace) -> Unit {
       raise PackageError("viewer stylesheet not found: \{absolute}")
     }
     css.write_string("/* " + source + " */\n")
-    let text = @asyncfs.read_file(absolute)
-      .text()
-      .replace(old=CodiconFontUpstreamUrl, new=CodiconFontDesktopUrl)
+    let text = @asyncfs.read_file(absolute).text()
     css.write_string(text)
     if !text.has_suffix("\n") {
       css.write_string("\n")
@@ -406,6 +400,12 @@ pub async fn build_native_host(
   extra_env? : Map[String, String] = {},
   disable_mimalloc? : Bool = false,
 ) -> Unit {
+  // Stamp before any global state is swapped: a malformed token (or a
+  // drifted stamp needle) raises here, while there is nothing to restore
+  // yet. Every later raise restores whatever has been swapped so far — the
+  // token alone if the mimalloc swap itself fails, both after it succeeds —
+  // so no exit can leave the user's global `libmoonbitrun.o` replaced.
+  let original = stamp_client_token(ws)
   // The host embeds CEF, whose allocator shim takes over the macOS default
   // malloc zone with PartitionAlloc. That collides with the MoonBit runtime's
   // statically linked mimalloc: `@fs.realpath`'s libc-allocated result gets
@@ -415,11 +415,15 @@ pub async fn build_native_host(
   // allocator, which frees each pointer through its owning zone. Temporary,
   // until the async fix lands.
   let mimalloc = if disable_mimalloc {
-    install_empty_mimalloc(ws)
+    install_empty_mimalloc(ws) catch {
+      error => {
+        restore_client_token(ws, original)
+        raise error
+      }
+    }
   } else {
     None
   }
-  let original = stamp_client_token(ws)
   run_checked(
     "moon",
     ["build", NativePackage, "--target", "native", "--release"] + extra_args,
@@ -450,25 +454,37 @@ priv struct MimallocSwap {
 }
 
 ///|
-/// Overwrite `$MOON_HOME/lib/libmoonbitrun.o` — the object that statically
-/// overrides malloc/free with mimalloc and registers mimalloc's macOS zone —
-/// with an empty object, so the next `moon build` links the host without
-/// mimalloc. The MoonBit runtime proper lives in a separate `runtime.o`, so
-/// only the allocator override is dropped; malloc/free resolve to libc. This
-/// mutates a file under `MOON_HOME` for the duration of one build;
-/// `restore_mimalloc` (via `defer`) puts the original back. `None` — leaving
-/// mimalloc in place — when `MOON_HOME` is unset or the object is missing.
+/// Overwrite the MoonBit home's `lib/libmoonbitrun.o` — the object that
+/// statically overrides malloc/free with mimalloc and registers mimalloc's
+/// macOS zone — with an empty object, so the next `moon build` links the
+/// host without mimalloc. The MoonBit runtime proper lives in a separate
+/// `runtime.o`, so only the allocator override is dropped; malloc/free
+/// resolve to libc. This mutates a file under the MoonBit home for the
+/// duration of one build; `restore_mimalloc` puts the original back. A home
+/// or object that cannot be found is a hard error: a host built with
+/// mimalloc crashes deterministically under CEF's allocator, so failing the
+/// package run beats shipping it.
 async fn install_empty_mimalloc(ws : Workspace) -> MimallocSwap? {
-  guard @env.get("MOON_HOME") is Some(moon_home) else {
-    println("warning: MOON_HOME unset; building the host with mimalloc enabled")
-    return None
+  // moon's own resolution: `MOON_HOME` when exported, else `~/.moon`. A
+  // normal install never exports `MOON_HOME` (only `~/.moon/bin` lands on
+  // PATH), so the default is what makes the swap happen on a typical
+  // packaging machine.
+  let moon_home = match @env.get("MOON_HOME") {
+    Some(home) => home
+    None =>
+      match @env.get("HOME") {
+        Some(home) => join_path(home, ".moon")
+        None =>
+          raise PackageError(
+            "cannot locate the MoonBit home (MOON_HOME and HOME are both unset); the host must be built without mimalloc",
+          )
+      }
   }
   let object = join_path(moon_home, "lib/libmoonbitrun.o")
   if !@asyncfs.exists(object) {
-    println(
-      "warning: \{object} not found; building the host with mimalloc enabled",
+    raise PackageError(
+      "\{object} not found; cannot disable mimalloc for the host build (a mimalloc host crashes under CEF's allocator)",
     )
-    return None
   }
   let scratch = @asyncfs.tmpdir(prefix="openseek-disable-mimalloc-")
   let backup = join_path(scratch, "libmoonbitrun.o")
@@ -482,7 +498,8 @@ async fn install_empty_mimalloc(ws : Workspace) -> MimallocSwap? {
 
 ///|
 /// Restore the real `libmoonbitrun.o` swapped out by `install_empty_mimalloc`
-/// and remove its scratch directory. A no-op when nothing was swapped.
+/// and remove its scratch directory (`build_native_host` calls it on every
+/// exit path). A no-op when nothing was swapped.
 /// Restoration failures are reported rather than raised — leaving a stale
 /// empty object would quietly disable mimalloc in every later native build,
 /// which matters more to surface than the current command's exit path.

@@ -166,6 +166,12 @@ async fn copy_bundle_files(
     ws.at(AppAssetDir + "/frontend.js"),
   )
   @packaging.copy_file(ws.at("viewer.css"), ws.at(AppAssetDir + "/viewer.css"))
+  // The codicon font is served at the site root (`/codicon.ttf`), so it sits
+  // next to `viewer.css` rather than under `fonts/`.
+  @packaging.copy_file(
+    ws.at("codicon.ttf"),
+    ws.at(AppAssetDir + "/codicon.ttf"),
+  )
   @packaging.copy_tree(ws.at("fonts"), ws.at(AppAssetDir + "/fonts"))
   let target = @moonbit.moonbit_windows_x64_toolchain()
   @moonbit.stage_moonbit_toolchain_seed(

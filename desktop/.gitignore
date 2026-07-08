@@ -13,3 +13,6 @@ target/
 /frontend.js
 # Embedded viewer stylesheet, assembled from the editor submodule by the packager.
 /viewer.css
+# The codicon icon font, copied from the editor submodule next to viewer.css so
+# proton serves it at the site root (`/codicon.ttf`).
+/codicon.ttf
