@@ -807,6 +807,24 @@ fn Model::active(self : Model) -> Conversation {
 }
 
 ///|
+/// Whether the conversation on screen is a fresh "New chat" — nothing sent
+/// yet and no stored record, so it owns no sidebar row of its own. While this
+/// holds, the active workspace's row carries the sidebar's selection
+/// highlight in its place.
+fn Model::composing_new_chat(self : Model) -> Bool {
+  let conv = self.active()
+  if conv.has_begun() {
+    return false
+  }
+  for item in self.sessions {
+    if item.id == conv.session_id {
+      return false
+    }
+  }
+  true
+}
+
+///|
 /// Replace (or add) the entry sharing `conv`'s session id, copy-on-write —
 /// prior model snapshots keep their own conversations array.
 fn Model::replace_conversation(self : Model, conv : Conversation) -> Model {

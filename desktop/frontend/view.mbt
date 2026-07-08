@@ -365,7 +365,9 @@ fn section_heading(
 /// conversations nested beneath it. Hover controls start a new chat in the
 /// project or detach it (registry only; the folder and its sessions stay).
 /// The active workspace — where a plain "New chat" lands — reads as the
-/// darker label.
+/// darker label; while a fresh "New chat" is on screen there (no sidebar row
+/// of its own yet) the workspace row wears the selected conversation's
+/// accent pill in its place.
 fn workspace_row(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -374,6 +376,9 @@ fn workspace_row(
   let mut class = "workspace-row"
   if path == model.active_workspace {
     class = class + " active"
+    if model.composing_new_chat() {
+      class = class + " composing"
+    }
   }
   @html.div(class~, title=path, [
     @html.span(class="sidebar-icon", icon(icon_folder)),

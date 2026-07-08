@@ -810,7 +810,9 @@
       /* An attached workspace: a folder row with its conversations nested
          beneath. Not clickable itself — the hover controls do the work —
          and the active workspace (where a plain "New chat" lands) reads as
-         the darker label. */
+         the darker label. While a fresh "New chat" is on screen there (no
+         sidebar row of its own yet), the workspace row wears the selected
+         conversation's accent pill in its place. */
       .workspace-row {
         display: flex;
         align-items: center;
@@ -831,12 +833,19 @@
       .workspace-row > .sidebar-icon {
         color: var(--ink-3);
       }
+      .workspace-row:hover {
+        background: var(--surface-2);
+      }
       .workspace-row.active {
         color: var(--ink);
         font-weight: 500;
       }
-      .workspace-row:hover {
-        background: var(--surface-2);
+      .workspace-row.composing {
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+      }
+      .workspace-row.composing > .sidebar-icon {
+        color: var(--accent-ink);
       }
       .workspace-row:hover .row-archive {
         visibility: visible;
