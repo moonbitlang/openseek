@@ -7,13 +7,19 @@
 fn fetch_skills_catalog(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = bridge_request("skills_catalog", @js.Object::new().to_value()) catch {
+      let reply = @interop.bridge_request(
+        "skills_catalog",
+        @js.Object::new().to_value(),
+      ) catch {
         error => {
-          scheduler.add(dispatch(SkillsCatalogFailed(bridge_error_text(error))))
+          scheduler.add(
+            dispatch(SkillsCatalogFailed(@interop.bridge_error_text(error))),
+          )
           return
         }
       }
-      match @transcript.decode_skills_catalog_reply(reply_json_text(reply)) {
+      match
+        @transcript.decode_skills_catalog_reply(@interop.reply_json_text(reply)) {
         Some(items) => scheduler.add(dispatch(SkillsCatalogLoaded(items)))
         None =>
           scheduler.add(
@@ -29,16 +35,21 @@ fn fetch_skills_catalog(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 fn fetch_installed_skills(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = bridge_request(
+      let reply = @interop.bridge_request(
         "skills_installed",
         @js.Object::new().to_value(),
       ) catch {
         error => {
-          scheduler.add(dispatch(SkillsNotice(bridge_error_text(error))))
+          scheduler.add(
+            dispatch(SkillsNotice(@interop.bridge_error_text(error))),
+          )
           return
         }
       }
-      match @transcript.decode_installed_skills_reply(reply_json_text(reply)) {
+      match
+        @transcript.decode_installed_skills_reply(
+          @interop.reply_json_text(reply),
+        ) {
         Some(items) => scheduler.add(dispatch(InstalledSkillsLoaded(items)))
         None =>
           scheduler.add(
@@ -65,10 +76,15 @@ fn install_skill(
       if !item.package_path.is_empty() {
         payload["package_path"] = item.package_path
       }
-      let _ : @js.Value = bridge_request("skill_install", payload.to_value()) catch {
+      let _ : @js.Value = @interop.bridge_request(
+        "skill_install",
+        payload.to_value(),
+      ) catch {
         error => {
           scheduler.add(
-            dispatch(SkillActionDone(key~, error=bridge_error_text(error))),
+            dispatch(
+              SkillActionDone(key~, error=@interop.bridge_error_text(error)),
+            ),
           )
           return
         }
@@ -86,10 +102,15 @@ fn uninstall_skill(dispatch : @cmd.Emit[Msg], id : String) -> @cmd.Cmd {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["id"] = id
-      let _ : @js.Value = bridge_request("skill_uninstall", payload.to_value()) catch {
+      let _ : @js.Value = @interop.bridge_request(
+        "skill_uninstall",
+        payload.to_value(),
+      ) catch {
         error => {
           scheduler.add(
-            dispatch(SkillActionDone(key=id, error=bridge_error_text(error))),
+            dispatch(
+              SkillActionDone(key=id, error=@interop.bridge_error_text(error)),
+            ),
           )
           return
         }

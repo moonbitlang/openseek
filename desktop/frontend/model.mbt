@@ -233,62 +233,6 @@ fn empty_symbol_cache() -> SymbolCache {
 }
 
 ///|
-/// One entry of the file panel's tree: a file or directory directly inside
-/// some listed directory. `path` is relative to the conversation's workspace
-/// ("" being the root), the key the host's `read_directory` / `read_file` ops
-/// take.
-priv struct FileEntry {
-  name : String
-  path : @pathx.Relative
-  is_dir : Bool
-}
-
-///|
-/// The editor side-panel's state: a lazily-loaded file tree of the active
-/// conversation's workspace and the file shown in the embedded viewer. Keyed
-/// entirely by workspace-relative paths; `session` records which conversation
-/// the cached tree belongs to, so switching conversations rebuilds it rather
-/// than showing another workspace's files.
-priv struct FilePanel {
-  // Whether the panel column is expanded; the column is always rendered (so
-  // the viewer host element stays put) and merely hidden by CSS when closed.
-  open : Bool
-  session : String
-  // Directory paths the user has expanded, and those with a `read_directory`
-  // in flight; plain arrays since a workspace tree is small.
-  expanded : Array[@pathx.Relative]
-  loading : Array[@pathx.Relative]
-  // Listed directories' entries, keyed by the directory's relative path.
-  children : Map[@pathx.Relative, Array[FileEntry]]
-  // The file currently shown in the viewer, if any. `None` puts the panel in
-  // browse mode, showing the workspace tree instead.
-  selected : @pathx.Relative?
-  // The directory a breadcrumb click most recently revealed, flashed in the
-  // tree until `HighlightCleared` fires.
-  highlighted : @pathx.Relative?
-  // The file-tree filter query; a blank query lists everything, otherwise only
-  // rows whose name contains it (case-insensitive) survive.
-  filter : String
-  // The last directory/file failure, surfaced in the panel header.
-  error : String
-}
-
-///|
-fn empty_file_panel() -> FilePanel {
-  {
-    open: false,
-    session: "",
-    expanded: [],
-    loading: [],
-    children: {},
-    selected: None,
-    highlighted: None,
-    filter: "",
-    error: "",
-  }
-}
-
-///|
 /// The mooncakes.io skill catalog as the Skills page sees it. One enum, so
 /// "loading", "loaded empty" and "failed" cannot be conflated.
 priv enum SkillsCatalog {
@@ -396,8 +340,9 @@ priv struct Model {
   launcher : Launcher
   // The editor side-panel: the active conversation's file tree and the file
   // shown in the embedded viewer. Rooted at `active().cwd`; rebuilt when the
-  // active conversation changes.
-  file_panel : FilePanel
+  // active conversation changes. Owned by the `fileeditor` package; this
+  // model only carries its state and routes `FileEditor` messages to it.
+  file_panel : @fileeditor.State
   // Transient error toasts, oldest first, and the id the next toast will
   // take. Ids only ever grow, so a toast's auto-dismiss timer can never
   // collide with a later toast.
@@ -470,24 +415,6 @@ priv enum Msg {
   // also carries its comment text, re-shown as an editor bubble over that
   // range.
   JumpToLocation(path~ : String, range~ : @common.Range?, annotation~ : String?)
-  // The user commented on a selection in the editor viewer (the
-  // agent-feedback inline input): the comment becomes an annotation chip on
-  // the active draft. `resource` is the viewer model URI the comment was
-  // filed under — only the key for clearing the editor's own bubble; `file`
-  // is the file as the conversation names it (workspace-relative, recorded
-  // when the panel opened the file), the form the chip and the
-  // `<user_mentions>` envelope store. Each side carries the form it is
-  // authoritative for, so neither is ever derived from the other. `quote` is
-  // the selected source; `feedback_id` addresses the bubble to clear — the
-  // chip is the comment's carrier from then on.
-  EditorCommentAdded(
-    resource~ : ModelUri,
-    file~ : @pathx.Relative,
-    range~ : @common.Range,
-    quote~ : String,
-    comment~ : String,
-    feedback_id~ : String
-  )
   // A `workspace_symbols` reply: `session`/`query` say which request it answers
   // so a reply that lost a conversation switch or a later keystroke is dropped.
   SymbolsLoaded(
@@ -642,54 +569,12 @@ priv enum Msg {
     cwd~ : @pathx.Absolute?
   )
   Engine(Int, @transcript.EngineEvent)
-  // Show or hide the editor side-panel. Opening it loads the active
-  // conversation's workspace root if it has not been listed yet.
-  ToggleFilePanel
-  // A breadcrumb segment was clicked: switch back to the (always-rooted)
-  // tree and reveal this directory — expanding whatever ancestors are
-  // needed to show it, then scrolling to and flashing it. `""` (the leading
-  // "Workspace" crumb) just returns to the plain tree with no highlight.
-  RevealDirectory(@pathx.Relative)
-  // A `RevealDirectory` highlight's flash delay elapsed; clears it unless a
-  // newer reveal has since replaced it.
-  HighlightCleared(@pathx.Relative)
-  // Expand or collapse a directory row in the file tree; the first expansion
-  // lazily lists the directory through the host.
-  DirToggle(@pathx.Relative)
-  // The file-tree filter query changed.
-  FileFilterChanged(String)
-  // A `read_directory` reply: `session`/`path` say which request it answers so
-  // a reply that lost a conversation switch can be dropped.
-  DirLoaded(
-    session~ : String,
-    path~ : @pathx.Relative,
-    entries~ : Array[FileEntry]
-  )
-  DirFailed(session~ : String, path~ : @pathx.Relative, message~ : String)
-  // A file row was clicked: read it and show it in the viewer. `name` is the
-  // entry's display name, kept for the viewer's title and language guess.
-  FileSelected(path~ : @pathx.Relative, name~ : String)
-  // `file` is the decoded reply (content + address, or a withheld-file
-  // case). `range`, when present, is a jumped-to symbol's one-based range,
-  // revealed in the viewer once the file loads and — unless empty —
-  // selected so the code it names reads highlighted. `annotation`, when
-  // present (an annotation chip's jump), is the user's comment text,
-  // re-shown as an editor bubble over `range`. A plain tree click leaves
-  // both `None`.
-  FileLoaded(
-    session~ : String,
-    path~ : @pathx.Relative,
-    name~ : String,
-    file~ : FileContent,
-    range~ : @common.Range?,
-    annotation~ : String?
-  )
-  FileFailed(session~ : String, message~ : String)
-  // The language server's diagnostics for the file at `absolute`, either
-  // returned by `lsp_open` when the file is shown or pushed later as the server
-  // re-analyzes. `diagnostics` is the raw LSP array (0-based ranges). Applied to
-  // the viewer only while it still shows that file; a stale one is dropped.
-  DiagnosticsPublished(absolute~ : @pathx.Absolute, diagnostics~ : Json)
+  // The editor side-panel's own messages (tree, viewer, diagnostics,
+  // comments), routed to the `fileeditor` package's update. The one
+  // exception is `EditorCommentAdded`, which this update intercepts: the
+  // comment becomes a chip on the composer draft, which only the app model
+  // knows about.
+  FileEditor(@fileeditor.Msg)
   // The start request for that conversation never produced a run (the bridge
   // call failed or the host refused it).
   Failed(session~ : String, message~ : String)
@@ -786,7 +671,7 @@ fn initial_model() -> Model {
     completion: None,
     symbol_cache: empty_symbol_cache(),
     launcher: { open: false, apps: [], loaded: false, error: "" },
-    file_panel: empty_file_panel(),
+    file_panel: @fileeditor.State::empty(),
     notifications: [],
     notification_seq: 0,
     notification_corner: BottomRight,

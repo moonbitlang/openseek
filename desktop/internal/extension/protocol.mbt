@@ -260,8 +260,11 @@ priv enum ReadFileReply {
   Binary
   Oversized
   // `absolute` is the host-resolved absolute path — the address the
-  // frontend uses for path-routed ops (`hover`).
-  Content(content~ : String, absolute~ : String)
+  // frontend uses for path-routed ops (`hover`). `sig` is the file's
+  // mtime signature (see `stat_files`), stat'ed from the same open handle,
+  // so a loaded tab carries the baseline the change detector compares
+  // against without a second round-trip.
+  Content(content~ : String, absolute~ : String, sig~ : String)
 }
 
 ///|
@@ -269,10 +272,61 @@ impl ToJson for ReadFileReply with fn to_json(self) {
   match self {
     Binary => { "kind": "binary" }
     Oversized => { "kind": "oversized" }
-    Content(content~, absolute~) =>
-      { "kind": "content", "content": content, "absolute": absolute }
+    Content(content~, absolute~, sig~) =>
+      {
+        "kind": "content",
+        "content": content,
+        "absolute": absolute,
+        "sig": sig,
+      }
   }
 }
+
+///|
+/// `stat_files` asks for the mtime signatures of the open tabs' files, all
+/// resolved under the conversation's workspace like `read_file`. One op for
+/// the whole tab set: the frontend calls it on every coarse "something
+/// changed" push to decide which files to re-read.
+priv struct StatFilesPayload {
+  session : String
+  paths : Array[String]
+  // The conversation's workspace, when it has one (see `read_directory`).
+  workspace : String?
+} derive(FromJson)
+
+///|
+/// One file's signature: `"{seconds}:{nanos}"` of its mtime, or `""` when
+/// the file is missing (deleted, or the path stopped resolving). The
+/// frontend only ever compares signatures for equality, so the shape stays
+/// opaque text — no Int64 crossing JSON.
+priv struct FileStat {
+  path : String
+  sig : String
+} derive(ToJson)
+
+///|
+priv struct StatFilesReply {
+  stats : Array[FileStat]
+} derive(ToJson)
+
+///|
+/// `watch_workspace` points the host's single workspace watcher at the
+/// conversation's workspace root (the panel shows one conversation at a
+/// time, so one watcher suffices). An empty `session` stops watching —
+/// sent when the panel closes with no tabs open.
+priv struct WatchWorkspacePayload {
+  session : String
+  // The conversation's workspace, when it has one (see `read_directory`).
+  workspace : String?
+} derive(FromJson)
+
+///|
+/// The `fs_changed` push: something under `root` changed. Coarse by design —
+/// the watcher reports no paths, so the frontend re-stats its open tabs and
+/// re-lists its expanded directories itself.
+priv struct FsChangedPayload {
+  root : String
+} derive(ToJson)
 
 ///|
 /// `hover` asks a language server for hover at a zero-based

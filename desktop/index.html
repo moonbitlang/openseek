@@ -285,8 +285,8 @@
         color: var(--accent-ink);
       }
 
-      /* The editor part: one pane that shows either the browsed directory's
-         listing or the selected file's viewer, never both. */
+      /* The editor part: a tab strip of open files over the viewer, with the
+         file tree as a toggleable pane on the viewer's right. */
       .editor {
         display: flex;
         flex-direction: column;
@@ -301,15 +301,95 @@
         z-index: 1;
       }
 
-      /* Both halves stay mounted (see file_panel_view) so the viewer host is
-         never re-keyed and the filter's state survives switching; only the
-         half matching the current mode is shown. */
-      .editor.browsing > .viewer-host {
+      /* The strip of open-file tabs. Always in the DOM (the editor's child
+         order is structural — see panel_view); collapses when no files are
+         open. Overflow scrolls horizontally rather than wrapping. */
+      .editor-tabs {
+        display: flex;
+        flex: 0 0 auto;
+        overflow-x: auto;
+        scrollbar-width: thin;
+        background: var(--surface);
+      }
+      .editor-tabs:empty {
         display: none;
       }
-      .editor:not(.browsing) > .file-tree-header,
-      .editor:not(.browsing) > .file-panel-error,
-      .editor:not(.browsing) > .file-tree {
+      .editor-tabs:not(:empty) {
+        border-bottom: 1px solid var(--line);
+      }
+
+      .editor-tab {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex: 0 0 auto;
+        max-width: 200px;
+        padding: 5px 4px 5px 12px;
+        font-size: 12px;
+        color: var(--ink-2);
+        border-right: 1px solid var(--line);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .editor-tab:hover {
+        background: var(--surface-2);
+      }
+      .editor-tab.active {
+        color: var(--ink);
+        background: var(--surface-2);
+        box-shadow: inset 0 -2px var(--accent-ink);
+      }
+      /* A tab whose file vanished from disk keeps its place, struck through
+         until the file reappears or the tab is closed. */
+      .editor-tab.deleted .tab-name {
+        text-decoration: line-through;
+        color: var(--ink-3);
+      }
+      .tab-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tab-close {
+        flex: 0 0 auto;
+        width: 18px;
+        height: 18px;
+        padding: 0;
+        border: none;
+        border-radius: 4px;
+        background: transparent;
+        color: var(--ink-3);
+        font-size: 13px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .editor-tab .tab-close:hover {
+        background: var(--accent-soft);
+        color: var(--ink);
+      }
+
+      /* The viewer and the toggleable file-tree pane share the row below the
+         tab strip. Both stay mounted (see panel_view) so the viewer host is
+         never re-keyed and the filter's state survives toggling; CSS alone
+         hides the tree pane. */
+      .editor-body {
+        display: flex;
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+      }
+      .file-tree-pane {
+        display: flex;
+        flex-direction: column;
+        flex: 0 0 240px;
+        min-height: 0;
+        overflow: hidden;
+        border-left: 1px solid var(--line);
+      }
+      .editor:not(.tree-open) .file-tree-pane {
+        display: none;
+      }
+      .file-panel-error.empty {
         display: none;
       }
 

@@ -19,18 +19,22 @@ fn read_directory(
       let payload = @js.Object::new()
       payload["session"] = session
       payload["path"] = path.0
-      set_workspace(payload, workspace)
-      let reply = bridge_request("read_directory", payload.to_value()) catch {
+      @interop.set_workspace(payload, workspace)
+      let reply = @interop.bridge_request("read_directory", payload.to_value()) catch {
         error => {
           scheduler.add(
             dispatch(
-              DirFailed(session~, path~, message=bridge_error_text(error)),
+              DirFailed(
+                session~,
+                path~,
+                message=@interop.bridge_error_text(error),
+              ),
             ),
           )
           return
         }
       }
-      match decode_dir_entries(reply_json_text(reply), path) {
+      match decode_dir_entries(@interop.reply_json_text(reply), path) {
         Some(entries) =>
           scheduler.add(dispatch(DirLoaded(session~, path~, entries~)))
         None =>
@@ -51,7 +55,7 @@ fn read_directory(
 /// viewer to reveal and select once loaded; `annotation` (an annotation
 /// chip's comment) rides along the same way, re-shown as an editor bubble
 /// over that range.
-fn read_file(
+pub fn read_file(
   dispatch : @cmd.Emit[Msg],
   session : String,
   path : @pathx.Relative,
@@ -65,16 +69,18 @@ fn read_file(
       let payload = @js.Object::new()
       payload["session"] = session
       payload["path"] = path.0
-      set_workspace(payload, workspace)
-      let reply = bridge_request("read_file", payload.to_value()) catch {
+      @interop.set_workspace(payload, workspace)
+      let reply = @interop.bridge_request("read_file", payload.to_value()) catch {
         error => {
           scheduler.add(
-            dispatch(FileFailed(session~, message=bridge_error_text(error))),
+            dispatch(
+              FileFailed(session~, message=@interop.bridge_error_text(error)),
+            ),
           )
           return
         }
       }
-      match decode_file_content(reply_json_text(reply)) {
+      match decode_file_content(@interop.reply_json_text(reply)) {
         Some(file) =>
           scheduler.add(
             dispatch(
@@ -91,17 +97,9 @@ fn read_file(
 }
 
 ///|
-/// Attach the workspace hint to an op payload, when the conversation has one.
-fn set_workspace(payload : @js.Object, workspace : @pathx.Absolute?) -> Unit {
-  if workspace is Some(workspace) {
-    set_trimmed(payload, "workspace", workspace.0)
-  }
-}
-
-///|
 /// A workspace-relative path's final `/`-segment, for a mention chip's jump
 /// target — it carries only the path, not a display name.
-fn basename(path : @pathx.Relative) -> String {
+pub fn basename(path : @pathx.Relative) -> String {
   match path.0.split("/").collect() {
     [] => path.0
     segments => segments[segments.length() - 1].to_owned()
@@ -141,17 +139,6 @@ fn decode_dir_entries(
 }
 
 ///|
-/// A decoded `read_file` reply. Withheld files are their own cases — the
-/// wording of their notices is this side's business — and only a real file
-/// carries an address for path-routed ops (hover on a notice document has
-/// nothing to ask about).
-priv enum FileContent {
-  Binary
-  Oversized
-  Content(content~ : String, absolute~ : @pathx.Absolute)
-}
-
-///|
 fn decode_file_content(text : String) -> FileContent? {
   let json = @json.parse(text) catch { _ => return None }
   guard json is Object(reply) else { return None }
@@ -162,8 +149,78 @@ fn decode_file_content(text : String) -> FileContent? {
       guard reply.get("content") is Some(String(content)) else { return None }
       let absolute = @transcript.json_text(reply, "absolute")
       guard !absolute.is_empty() else { return None }
-      Some(Content(content~, absolute=Absolute(absolute)))
+      Some(
+        Content(
+          content~,
+          absolute=Absolute(absolute),
+          sig=@transcript.json_text(reply, "sig"),
+        ),
+      )
     }
     _ => None
   }
+}
+
+///|
+/// Stat the open tabs' files and fold the signatures back as `StatsLoaded`.
+/// Best-effort: a failed call is dropped — the next change push retries.
+fn stat_files(
+  dispatch : @cmd.Emit[Msg],
+  session : String,
+  paths : Array[@pathx.Relative],
+  workspace~ : @pathx.Absolute?,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let payload = @js.Object::new()
+      payload["session"] = session
+      payload["paths"] = paths.map(path => path.0)
+      @interop.set_workspace(payload, workspace)
+      let reply = @interop.bridge_request("stat_files", payload.to_value()) catch {
+        _ => return
+      }
+      guard decode_file_stats(@interop.reply_json_text(reply)) is Some(stats) else {
+        return
+      }
+      scheduler.add(dispatch(StatsLoaded(session~, stats~)))
+    })
+  })
+}
+
+///|
+fn decode_file_stats(text : String) -> Array[FileStat]? {
+  let json = @json.parse(text) catch { _ => return None }
+  guard json is Object(reply) else { return None }
+  guard reply.get("stats") is Some(Array(items)) else { return None }
+  let stats : Array[FileStat] = []
+  for item in items {
+    guard item is Object(fields) else { continue }
+    let path = @transcript.json_text(fields, "path")
+    guard !path.is_empty() else { continue }
+    stats.push({
+      path: Relative(path),
+      sig: @transcript.json_text(fields, "sig"),
+    })
+  }
+  Some(stats)
+}
+
+///|
+/// Point the host's workspace watcher at `session`'s workspace (`""` parks
+/// it). Fire-and-forget: there is no reply worth folding, and a failure just
+/// means no live updates until the next reconciliation re-sends.
+fn watch_workspace(session : String, workspace~ : @pathx.Absolute?) -> @cmd.Cmd {
+  @cmd.custom_cmd(_scheduler => {
+    @js.async_run(() => {
+      let payload = @js.Object::new()
+      payload["session"] = session
+      @interop.set_workspace(payload, workspace)
+      let _ : @js.Value = @interop.bridge_request(
+        "watch_workspace",
+        payload.to_value(),
+      ) catch {
+        _ => return
+      }
+    })
+  })
 }

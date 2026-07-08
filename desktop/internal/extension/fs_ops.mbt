@@ -71,8 +71,49 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
     error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to read file: \{error}")
   }
+  // The change-detection baseline, from the same open handle as the content
+  // so the two cannot disagree about which version of the file was read.
+  let (seconds, nanos) = source.mtime() catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise HostError("failed to read file: \{error}")
+  }
   // `text()` raises on invalid UTF-8 — treat that as a binary file the
   // read-only viewer cannot render.
   let content = data.text() catch { _ => return Binary }
-  Content(content~, absolute~)
+  Content(content~, absolute~, sig="\{seconds}:\{nanos}")
+}
+
+///|
+/// The mtime signatures of the open tabs' files (see `StatFilesPayload`).
+/// A path that stopped resolving inside the workspace reads as missing
+/// rather than an error: to the panel, a file it can no longer address is a
+/// deleted file.
+async fn stat_files_op(payload : StatFilesPayload) -> StatFilesReply {
+  let stats : Array[FileStat] = []
+  for path in payload.paths {
+    let sig = match
+      @engine.resolve_in_workspace(
+        payload.session,
+        path,
+        workspace?=payload.workspace,
+      ) {
+      Some(file) => file_signature(file.to_string())
+      None => ""
+    }
+    stats.push({ path, sig })
+  }
+  { stats, }
+}
+
+///|
+/// `"{seconds}:{nanos}"` of the file's mtime, or `""` when it cannot be
+/// stat'ed — a missing file, by far the common case; any other stat failure
+/// reads the same way, and the panel's read-on-change then surfaces the real
+/// error if the file actually exists.
+async fn file_signature(absolute : String) -> String {
+  let (seconds, nanos) = @fs.mtime(absolute) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return ""
+  }
+  "\{seconds}:\{nanos}"
 }

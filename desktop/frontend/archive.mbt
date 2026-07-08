@@ -12,7 +12,7 @@ fn fetch_archived(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
     @js.async_run(() => {
       // A host without the op (or without a session store) just reads as an
       // empty Archived group.
-      let reply = bridge_request(
+      let reply = @interop.bridge_request(
         "archived_sessions",
         @js.Object::new().to_value(),
       ) catch {
@@ -21,7 +21,7 @@ fn fetch_archived(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       scheduler.add(
         dispatch(
           ArchivedLoaded(
-            @transcript.decode_sessions_reply(reply_json_text(reply)).unwrap_or([],
+            @transcript.decode_sessions_reply(@interop.reply_json_text(reply)).unwrap_or([],
             ),
           ),
         ),
@@ -50,32 +50,37 @@ fn archive_action(
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session
-      let reply = bridge_request(op, payload.to_value()) catch {
+      let reply = @interop.bridge_request(op, payload.to_value()) catch {
         error => {
-          scheduler.add(dispatch(ArchiveFailed(bridge_error_text(error))))
+          scheduler.add(
+            dispatch(ArchiveFailed(@interop.bridge_error_text(error))),
+          )
           return
         }
       }
       scheduler.add(
         dispatch(
           ArchivedLoaded(
-            @transcript.decode_sessions_reply(reply_json_text(reply)).unwrap_or([],
+            @transcript.decode_sessions_reply(@interop.reply_json_text(reply)).unwrap_or([],
             ),
           ),
         ),
       )
       // The record moved between the live and archived stores; the sidebar's
       // live list is stale until re-fetched.
-      let sessions = bridge_request(
+      let sessions = @interop.bridge_request(
         "list_sessions",
         @js.Object::new().to_value(),
       ) catch {
         error => {
-          scheduler.add(dispatch(SessionsFailed(bridge_error_text(error))))
+          scheduler.add(
+            dispatch(SessionsFailed(@interop.bridge_error_text(error))),
+          )
           return
         }
       }
-      match @transcript.decode_sessions_reply(reply_json_text(sessions)) {
+      match
+        @transcript.decode_sessions_reply(@interop.reply_json_text(sessions)) {
         Some(items) => scheduler.add(dispatch(SessionsLoaded(items)))
         None =>
           scheduler.add(dispatch(SessionsFailed("malformed session list")))

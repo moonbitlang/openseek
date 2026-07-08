@@ -5,22 +5,10 @@
 // `__MoonBit__.events` and is decoded here into messages.
 
 ///|
-priv suberror BridgeError {
-  BridgeError(String)
-}
-
-///|
-/// `globalThis.__MoonBit__.openseek`, once the proton bridge is injected.
-fn openseek_api() -> @js.Value? {
-  guard @interop.moonbit_bridge_root() is Some(root) else { return None }
-  @interop.js_prop(root, "openseek")
-}
-
-///|
 /// Both bridge handles, present only when the surface the frontend relies
 /// on is fully injected.
 fn bridge_handles() -> (@js.Value, @js.Value)? {
-  guard openseek_api() is Some(api) &&
+  guard @interop.openseek_api() is Some(api) &&
     @interop.moonbit_bridge_root() is Some(root) &&
     @interop.js_prop(root, "events") is Some(events) &&
     @interop.js_prop(api, "connect") is Some(_) &&
@@ -82,7 +70,9 @@ fn open_engine_host(
       @js.Object::new().to_value(),
     ).wait() catch {
       error => {
-        scheduler.add(dispatch(BridgeUnavailable(bridge_error_text(error))))
+        scheduler.add(
+          dispatch(BridgeUnavailable(@interop.bridge_error_text(error))),
+        )
         return
       }
     }
@@ -113,6 +103,7 @@ fn wire_engine_events(
   on("openseek.finished", finished_msg)
   on("openseek.connected", connected_msg)
   on("openseek.diagnostics", diagnostics_msg)
+  on("openseek.fs_changed", fs_changed_msg)
   // Emitted by proton itself (not the openseek extension) when the user
   // clicks a system notification; the payload is the run id the host stamped
   // on the notification.
@@ -193,11 +184,22 @@ fn diagnostics_msg(payload : Map[String, Json]) -> Msg? {
   let path = @transcript.json_text(payload, "path")
   guard !path.is_empty() else { return None }
   Some(
-    DiagnosticsPublished(
-      absolute=Absolute(path),
-      diagnostics=payload.get("diagnostics").unwrap_or([]),
+    FileEditor(
+      DiagnosticsPublished(
+        absolute=Absolute(path),
+        diagnostics=payload.get("diagnostics").unwrap_or([]),
+      ),
     ),
   )
+}
+
+///|
+/// An `fs_changed` push: something under the watched workspace changed. The
+/// payload's `root` is not carried — the panel re-checks against whatever
+/// conversation is current, so a push that raced a switch stats the right
+/// files anyway.
+fn fs_changed_msg(_payload : Map[String, Json]) -> Msg? {
+  Some(FileEditor(FsChanged))
 }
 
 ///|
@@ -209,47 +211,6 @@ fn notification_clicked_msg(payload : Map[String, Json]) -> Msg? {
     _ => return None
   }
   Some(NotificationClicked(run_id~))
-}
-
-///|
-/// Call one engine-host op and wait for its reply. Raises when the bridge
-/// is missing, the call throws, or the op rejects.
-async fn bridge_request(op : String, payload : @js.Value) -> @js.Value {
-  guard openseek_api() is Some(api) && @interop.js_prop(api, op) is Some(_) else {
-    raise BridgeError("OpenSeek bridge unavailable")
-  }
-  @interop.js_method_promise(api, op, payload).wait()
-}
-
-///|
-/// A user-facing message for a failed bridge call, preferring the JS
-/// error's `message` over its stringified form.
-fn bridge_error_text(error : Error) -> String {
-  match error {
-    BridgeError(message) => message
-    @js.Error_(value) =>
-      if @interop.js_prop(value, "message") is Some(message) &&
-        (@js.Cast::into(message) : String?) is Some(text) &&
-        !text.is_empty() {
-        text
-      } else {
-        value.to_string()
-      }
-    _ => "\{error}"
-  }
-}
-
-///|
-/// The op reply as JSON text for the session decoders. A reply of
-/// `undefined`/`null` (an op that returned nothing) reads as the empty
-/// object; an unserializable reply reads as malformed input.
-fn reply_json_text(reply : @js.Value) -> String {
-  if reply.is_undefined() || reply.is_null() {
-    return "{}"
-  }
-  reply.to_json_string() catch {
-    _ => ""
-  }
 }
 
 ///|
@@ -280,10 +241,12 @@ fn start_openseek(
   )
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let _ : @js.Value = bridge_request("start", payload) catch {
+      let _ : @js.Value = @interop.bridge_request("start", payload) catch {
         error => {
           scheduler.add(
-            dispatch(Failed(session~, message=bridge_error_text(error))),
+            dispatch(
+              Failed(session~, message=@interop.bridge_error_text(error)),
+            ),
           )
           return
         }
@@ -312,11 +275,11 @@ fn start_payload(
 ) -> @js.Value {
   let payload = @js.Object::new()
   payload["task"] = task
-  set_trimmed(payload, "model", selected_model)
-  set_trimmed(payload, "api_key", api_key)
-  set_trimmed(payload, "api_url", api_url)
-  set_trimmed(payload, "session", session)
-  set_workspace(payload, workspace)
+  @interop.set_trimmed(payload, "model", selected_model)
+  @interop.set_trimmed(payload, "api_key", api_key)
+  @interop.set_trimmed(payload, "api_url", api_url)
+  @interop.set_trimmed(payload, "session", session)
+  @interop.set_workspace(payload, workspace)
   if parsed_max_steps(max_steps) is Some(steps) {
     payload["max_steps"] = steps
   }
@@ -325,19 +288,11 @@ fn start_payload(
   // on the distro's PATH).
   if wsl_enabled {
     let wsl = @js.Object::new()
-    set_trimmed(wsl, "distro", wsl_distro)
-    set_trimmed(wsl, "engine", wsl_engine)
+    @interop.set_trimmed(wsl, "distro", wsl_distro)
+    @interop.set_trimmed(wsl, "engine", wsl_engine)
     payload["wsl"] = wsl.to_value()
   }
   payload.to_value()
-}
-
-///|
-fn set_trimmed(payload : @js.Object, key : String, value : String) -> Unit {
-  let text = value.trim().to_owned()
-  if !text.is_empty() {
-    payload[key] = text
-  }
 }
 
 ///|
@@ -369,13 +324,16 @@ async fn refresh_sessions_into(
   scheduler : &@cmd.Scheduler,
   dispatch : @cmd.Emit[Msg],
 ) -> Unit noraise {
-  let reply = bridge_request("list_sessions", @js.Object::new().to_value()) catch {
+  let reply = @interop.bridge_request(
+    "list_sessions",
+    @js.Object::new().to_value(),
+  ) catch {
     error => {
-      scheduler.add(dispatch(SessionsFailed(bridge_error_text(error))))
+      scheduler.add(dispatch(SessionsFailed(@interop.bridge_error_text(error))))
       return
     }
   }
-  match @transcript.decode_sessions_reply(reply_json_text(reply)) {
+  match @transcript.decode_sessions_reply(@interop.reply_json_text(reply)) {
     Some(items) => scheduler.add(dispatch(SessionsLoaded(items)))
     None => scheduler.add(dispatch(SessionsFailed("malformed session list")))
   }
@@ -394,22 +352,25 @@ fn open_session(
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session_id
-      set_trimmed(payload, "workspace", workspace)
-      let reply = bridge_request("load_session", payload.to_value()) catch {
+      @interop.set_trimmed(payload, "workspace", workspace)
+      let reply = @interop.bridge_request("load_session", payload.to_value()) catch {
         error => {
           scheduler.add(
             dispatch(
               SessionLoadFailed(
                 session=session_id,
                 message="failed to load session \{session_id}: " +
-                  bridge_error_text(error),
+                  @interop.bridge_error_text(error),
               ),
             ),
           )
           return
         }
       }
-      match @transcript.transcript_from_session_json(reply_json_text(reply)) {
+      match
+        @transcript.transcript_from_session_json(
+          @interop.reply_json_text(reply),
+        ) {
         Some(items) =>
           scheduler.add(dispatch(SessionLoaded(session=session_id, items~)))
         None =>
@@ -453,7 +414,7 @@ async fn steer_delivered(text : String, run_id : Int) -> Bool {
   let payload = @js.Object::new()
   payload["text"] = text
   payload["run_id"] = run_id
-  let reply = bridge_request("steer", payload.to_value())
+  let reply = @interop.bridge_request("steer", payload.to_value())
   @interop.js_prop(reply, "steered") is Some(flag) &&
   (@js.Cast::into(flag) : Bool?) is Some(true)
 }
@@ -469,13 +430,13 @@ fn compact_openseek(dispatch : @cmd.Emit[Msg], session : String) -> @cmd.Cmd {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session
-      let _ : @js.Value = bridge_request("compact", payload.to_value()) catch {
+      let _ : @js.Value = @interop.bridge_request("compact", payload.to_value()) catch {
         error => {
           scheduler.add(
             dispatch(
               Error(
                 run_id=EmptyRunId,
-                message=bridge_error_text(error),
+                message=@interop.bridge_error_text(error),
                 diagnostics="",
               ),
             ),
@@ -493,11 +454,15 @@ fn cancel_openseek(dispatch : @cmd.Emit[Msg], run_id : Int) -> @cmd.Cmd {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["run_id"] = run_id
-      let _ : @js.Value = bridge_request("cancel", payload.to_value()) catch {
+      let _ : @js.Value = @interop.bridge_request("cancel", payload.to_value()) catch {
         error => {
           scheduler.add(
             dispatch(
-              Error(run_id~, message=bridge_error_text(error), diagnostics=""),
+              Error(
+                run_id~,
+                message=@interop.bridge_error_text(error),
+                diagnostics="",
+              ),
             ),
           )
           return
@@ -515,13 +480,13 @@ fn cancel_openseek(dispatch : @cmd.Emit[Msg], run_id : Int) -> @cmd.Cmd {
 fn apply_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let _ : @js.Value = bridge_request(
+      let _ : @js.Value = @interop.bridge_request(
         "apply_update",
         @js.Object::new().to_value(),
       ) catch {
         error => {
           scheduler.add(
-            dispatch(UpdateFailed(message=bridge_error_text(error))),
+            dispatch(UpdateFailed(message=@interop.bridge_error_text(error))),
           )
           return
         }
@@ -561,9 +526,14 @@ fn open_file(
       payload["session"] = session
       payload["cwd"] = workspace_token(cwd)
       payload["path"] = path
-      let _ : @js.Value = bridge_request("open_path", payload.to_value()) catch {
+      let _ : @js.Value = @interop.bridge_request(
+        "open_path",
+        payload.to_value(),
+      ) catch {
         error => {
-          scheduler.add(dispatch(HostActionFailed(bridge_error_text(error))))
+          scheduler.add(
+            dispatch(HostActionFailed(@interop.bridge_error_text(error))),
+          )
           return
         }
       }

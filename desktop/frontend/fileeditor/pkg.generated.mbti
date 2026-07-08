@@ -1,0 +1,122 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/fileeditor"
+
+import {
+  "moonbit-community/editor/base/common",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/internal/pathx",
+}
+
+// Values
+pub fn basename(@pathx.Relative) -> String
+
+pub fn mount_cmds(@cmd.Emit[Msg]) -> @cmd.Cmd
+
+pub fn open_file(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, range~ : @common.Range?, annotation? : String) -> (@cmd.Cmd, State)
+
+pub fn panel_view(@cmd.Emit[Msg], State, Ctx) -> @html.Html
+
+pub fn read_file(@cmd.Emit[Msg], String, @pathx.Relative, String, range~ : @common.Range?, annotation? : String, workspace~ : @pathx.Absolute?) -> @cmd.Cmd
+
+pub fn remove_editor_feedback(ModelUri, String) -> @cmd.Cmd
+
+pub fn sync(@cmd.Emit[Msg], State, Ctx) -> (State, @cmd.Cmd)
+
+pub fn update(@cmd.Emit[Msg], Msg, State, Ctx) -> (@cmd.Cmd, State)
+
+// Errors
+
+// Types and methods
+pub(all) struct Ctx {
+  session : String
+  workspace : @pathx.Absolute?
+  dark_mode : Bool
+}
+
+pub(all) enum FileContent {
+  Binary
+  Oversized
+  Content(content~ : String, absolute~ : @pathx.Absolute, sig~ : String)
+}
+
+pub(all) struct FileEntry {
+  name : String
+  path : @pathx.Relative
+  is_dir : Bool
+}
+
+pub(all) struct FileStat {
+  path : @pathx.Relative
+  sig : String
+}
+
+pub struct ModelUri(String)
+pub fn ModelUri::of(@pathx.Absolute) -> Self
+
+pub(all) enum Msg {
+  ToggleFilePanel
+  RevealDirectory(@pathx.Relative)
+  HighlightCleared(@pathx.Relative)
+  ToggleTree
+  TabActivated(@pathx.Relative)
+  TabClosed(@pathx.Relative)
+  DirToggle(@pathx.Relative)
+  FileFilterChanged(String)
+  DirLoaded(session~ : String, path~ : @pathx.Relative, entries~ : Array[FileEntry])
+  DirFailed(session~ : String, path~ : @pathx.Relative, message~ : String)
+  FileSelected(path~ : @pathx.Relative, name~ : String)
+  FileLoaded(session~ : String, path~ : @pathx.Relative, name~ : String, file~ : FileContent, range~ : @common.Range?, annotation~ : String?)
+  FileFailed(session~ : String, message~ : String)
+  FsChanged
+  StatsLoaded(session~ : String, stats~ : Array[FileStat])
+  DiagnosticsPublished(absolute~ : @pathx.Absolute, diagnostics~ : Json)
+  EditorCommentAdded(resource~ : ModelUri, file~ : @pathx.Relative, range~ : @common.Range, quote~ : String, comment~ : String, feedback_id~ : String)
+}
+
+pub(all) struct RememberedTab {
+  path : @pathx.Relative
+  name : String
+}
+
+pub(all) struct RememberedTabs {
+  entries : Array[RememberedTab]
+  active : @pathx.Relative?
+}
+
+pub(all) struct State {
+  open : Bool
+  session : String
+  tree_open : Bool
+  watching : String
+  expanded : Array[@pathx.Relative]
+  loading : Array[@pathx.Relative]
+  children : Map[@pathx.Relative, Array[FileEntry]]
+  tabs : Array[Tab]
+  active : @pathx.Relative?
+  remembered : Map[String, RememberedTabs]
+  highlighted : @pathx.Relative?
+  filter : String
+  error : String
+}
+pub fn State::empty() -> Self
+
+pub(all) struct Tab {
+  path : @pathx.Relative
+  name : String
+  state : TabState
+  stale : Bool
+}
+
+pub(all) enum TabState {
+  TabLoading
+  TabLoaded(content~ : String, absolute~ : @pathx.Absolute, sig~ : String)
+  TabBinary
+  TabOversized
+  TabDeleted
+}
+
+// Type aliases
+
+// Traits
+

@@ -10,14 +10,16 @@ fn fetch_workspaces(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       // A host without the op just reads as "no workspaces attached".
-      let reply = bridge_request(
+      let reply = @interop.bridge_request(
         "list_workspaces",
         @js.Object::new().to_value(),
       ) catch {
         _ => return
       }
       scheduler.add(
-        dispatch(WorkspacesLoaded(decode_workspaces(reply_json_text(reply)))),
+        dispatch(
+          WorkspacesLoaded(decode_workspaces(@interop.reply_json_text(reply))),
+        ),
       )
     })
   })
@@ -40,13 +42,18 @@ fn remove_workspace(dispatch : @cmd.Emit[Msg], path : String) -> @cmd.Cmd {
 fn pick_workspace(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = bridge_request("pick_workspace", @js.Object::new().to_value()) catch {
+      let reply = @interop.bridge_request(
+        "pick_workspace",
+        @js.Object::new().to_value(),
+      ) catch {
         _ => {
           scheduler.add(dispatch(OpenWorkspaceInput))
           return
         }
       }
-      let json = @json.parse(reply_json_text(reply)) catch { _ => return }
+      let json = @json.parse(@interop.reply_json_text(reply)) catch {
+        _ => return
+      }
       guard json is Object(fields) &&
         fields.get("path") is Some(String(path)) &&
         !path.is_empty() else {
@@ -77,14 +84,18 @@ async fn workspace_action_into(
 ) -> Unit noraise {
   let payload = @js.Object::new()
   payload["path"] = path
-  let reply = bridge_request(op, payload.to_value()) catch {
+  let reply = @interop.bridge_request(op, payload.to_value()) catch {
     error => {
-      scheduler.add(dispatch(WorkspaceFailed(bridge_error_text(error))))
+      scheduler.add(
+        dispatch(WorkspaceFailed(@interop.bridge_error_text(error))),
+      )
       return
     }
   }
   scheduler.add(
-    dispatch(WorkspacesLoaded(decode_workspaces(reply_json_text(reply)))),
+    dispatch(
+      WorkspacesLoaded(decode_workspaces(@interop.reply_json_text(reply))),
+    ),
   )
   // The registry changed, so the sidebar has a session group to gain or
   // drop; refresh the list that carries them.

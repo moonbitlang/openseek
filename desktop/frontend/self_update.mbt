@@ -108,13 +108,13 @@ fn check_for_updates(
       let payload = @js.Object::new()
       payload["channel"] = channel.wire()
       let result = try {
-        let reply = bridge_request("check_update", payload.to_value())
-        match decode_update_check(reply_json_text(reply)) {
+        let reply = @interop.bridge_request("check_update", payload.to_value())
+        match decode_update_check(@interop.reply_json_text(reply)) {
           Some(result) => result
           None => CheckUnreachable(reason="the host answered unintelligibly")
         }
       } catch {
-        error => CheckUnreachable(reason=bridge_error_text(error))
+        error => CheckUnreachable(reason=@interop.bridge_error_text(error))
       }
       scheduler.add(dispatch(UpdateCheckFinished(result~, explicit~)))
     })
@@ -132,10 +132,13 @@ fn download_update(
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["channel"] = channel.wire()
-      let _ : @js.Value = bridge_request("download_update", payload.to_value()) catch {
+      let _ : @js.Value = @interop.bridge_request(
+        "download_update",
+        payload.to_value(),
+      ) catch {
         error => {
           scheduler.add(
-            dispatch(UpdateFailed(message=bridge_error_text(error))),
+            dispatch(UpdateFailed(message=@interop.bridge_error_text(error))),
           )
           return
         }

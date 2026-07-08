@@ -18,14 +18,17 @@ fn read_workspace_symbols(
       let payload = @js.Object::new()
       payload["session"] = session
       payload["query"] = query
-      set_workspace(payload, workspace)
-      let reply = bridge_request("workspace_symbols", payload.to_value()) catch {
+      @interop.set_workspace(payload, workspace)
+      let reply = @interop.bridge_request(
+        "workspace_symbols",
+        payload.to_value(),
+      ) catch {
         _ => {
           scheduler.add(dispatch(SymbolsFailed(session~, query~)))
           return
         }
       }
-      match decode_symbols(reply_json_text(reply)) {
+      match decode_symbols(@interop.reply_json_text(reply)) {
         Some(items) =>
           scheduler.add(dispatch(SymbolsLoaded(session~, query~, items~)))
         None => scheduler.add(dispatch(SymbolsFailed(session~, query~)))

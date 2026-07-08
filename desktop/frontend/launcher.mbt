@@ -8,13 +8,18 @@
 fn fetch_apps(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = bridge_request("list_apps", @js.Object::new().to_value()) catch {
+      let reply = @interop.bridge_request(
+        "list_apps",
+        @js.Object::new().to_value(),
+      ) catch {
         error => {
-          scheduler.add(dispatch(LauncherFailed(bridge_error_text(error))))
+          scheduler.add(
+            dispatch(LauncherFailed(@interop.bridge_error_text(error))),
+          )
           return
         }
       }
-      match @transcript.decode_apps_reply(reply_json_text(reply)) {
+      match @transcript.decode_apps_reply(@interop.reply_json_text(reply)) {
         Some(items) => scheduler.add(dispatch(LauncherLoaded(items)))
         None => scheduler.add(dispatch(LauncherFailed("malformed app list")))
       }
@@ -38,9 +43,14 @@ fn launch_app(
       payload["session"] = session
       payload["cwd"] = workspace_token(cwd)
       payload["app"] = app
-      let _ : @js.Value = bridge_request("launch_app", payload.to_value()) catch {
+      let _ : @js.Value = @interop.bridge_request(
+        "launch_app",
+        payload.to_value(),
+      ) catch {
         error => {
-          scheduler.add(dispatch(HostActionFailed(bridge_error_text(error))))
+          scheduler.add(
+            dispatch(HostActionFailed(@interop.bridge_error_text(error))),
+          )
           return
         }
       }

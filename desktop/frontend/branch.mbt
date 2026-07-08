@@ -16,7 +16,10 @@ fn fetch_branch(
       let payload = @js.Object::new()
       payload["session"] = session
       payload["cwd"] = workspace_token(cwd)
-      let reply = bridge_request("workspace_branch", payload.to_value()) catch {
+      let reply = @interop.bridge_request(
+        "workspace_branch",
+        payload.to_value(),
+      ) catch {
         _ => {
           scheduler.add(dispatch(BranchLoaded(session~, branch="")))
           return
@@ -24,7 +27,10 @@ fn fetch_branch(
       }
       scheduler.add(
         dispatch(
-          BranchLoaded(session~, branch=decode_branch(reply_json_text(reply))),
+          BranchLoaded(
+            session~,
+            branch=decode_branch(@interop.reply_json_text(reply)),
+          ),
         ),
       )
     })

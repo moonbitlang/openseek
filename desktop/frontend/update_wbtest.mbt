@@ -1253,7 +1253,7 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
   assert_true(next.file_panel.open)
-  assert_true(next.file_panel.selected is Some(Relative("src/main.mbt")))
+  assert_true(next.file_panel.active is Some(Relative("src/main.mbt")))
 }
 
 ///|
@@ -1266,7 +1266,7 @@ test "JumpToMention is a no-op for a chip without a resolved location" {
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
   assert_false(next.file_panel.open)
-  assert_true(next.file_panel.selected is None)
+  assert_true(next.file_panel.active is None)
 }
 
 ///|
@@ -1275,13 +1275,15 @@ test "EditorCommentAdded attaches a deduplicated annotation chip" {
   let model = test_model()
   // The chip path arrives workspace-relative from the panel (recorded when
   // the file was shown); the resource URI only routes the bubble removal.
-  let msg : Msg = EditorCommentAdded(
-    resource=ModelUri::of(Absolute("/work/project/src/main.mbt")),
-    file=Relative("src/main.mbt"),
-    range=@common.Range::Range(5, 1, 6, 3),
-    quote="fn parse_hover() {",
-    comment="rename this",
-    feedback_id="viewer-feedback-0",
+  let msg : Msg = FileEditor(
+    EditorCommentAdded(
+      resource=@fileeditor.ModelUri::of(Absolute("/work/project/src/main.mbt")),
+      file=Relative("src/main.mbt"),
+      range=@common.Range::Range(5, 1, 6, 3),
+      quote="fn parse_hover() {",
+      comment="rename this",
+      feedback_id="viewer-feedback-0",
+    ),
   )
   let (_, next) = update(dispatch, msg, model)
   let mentions = next.active().mentions
@@ -1312,7 +1314,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ),
     model,
   )
-  assert_true(next.file_panel.selected is Some(Relative("src/main.mbt")))
+  assert_true(next.file_panel.active is Some(Relative("src/main.mbt")))
   // Before the first run reports cwd, the attached workspace serves as root.
   let model = test_model().replace_conversation({
     ..test_conversation(),
@@ -1327,7 +1329,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ),
     model,
   )
-  assert_true(next.file_panel.selected is Some(Relative("src/main.mbt")))
+  assert_true(next.file_panel.active is Some(Relative("src/main.mbt")))
   // An absolute path outside every root cannot be opened; the panel says so
   // instead of sending the host a bogus read.
   let (_, outside) = update(
@@ -1339,26 +1341,30 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ),
     model,
   )
-  assert_true(outside.file_panel.selected is None)
+  assert_true(outside.file_panel.active is None)
   assert_false(outside.file_panel.error.is_empty())
 }
 
 ///|
-test "RevealDirectory(\"\") returns to the tree without a highlight" {
+test "RevealDirectory(\"\") opens the tree pane without a highlight" {
   let dispatch = test_dispatch()
   let model = test_model()
   let panel = {
     ..model.file_panel,
     open: true,
     session: "desktop-test",
-    selected: Some(Relative("README.md")),
+    tree_open: false,
+    active: Some(Relative("README.md")),
     highlighted: Some(Relative("src")),
   }
-  let (_, next) = update(dispatch, RevealDirectory(@pathx.Relative::root()), {
-    ..model,
-    file_panel: panel,
-  })
-  assert_true(next.file_panel.selected is None)
+  let (_, next) = update(
+    dispatch,
+    FileEditor(RevealDirectory(@pathx.Relative::root())),
+    { ..model, file_panel: panel },
+  )
+  // The active tab stays put — revealing the tree must not close the file.
+  assert_true(next.file_panel.active is Some(Relative("README.md")))
+  assert_true(next.file_panel.tree_open)
   assert_true(next.file_panel.highlighted is None)
 }
 
@@ -1367,13 +1373,13 @@ test "RevealDirectory expands an uncached ancestor and highlights the target" {
   let dispatch = test_dispatch()
   let model = test_model()
   let panel = { ..model.file_panel, open: true, session: "desktop-test" }
-  let (_, next) = update(dispatch, RevealDirectory(Relative("src/foo")), {
-    ..model,
-    file_panel: panel,
-  })
+  let (_, next) = update(
+    dispatch,
+    FileEditor(RevealDirectory(Relative("src/foo"))),
+    { ..model, file_panel: panel },
+  )
   assert_true(next.file_panel.expanded.contains(Relative("src")))
   assert_true(next.file_panel.loading.contains(Relative("src")))
-  assert_true(next.file_panel.selected is None)
   assert_true(next.file_panel.highlighted is Some(Relative("src/foo")))
 }
 
@@ -1381,7 +1387,7 @@ test "RevealDirectory expands an uncached ancestor and highlights the target" {
 test "RevealDirectory on an already-cached ancestor needs no reload" {
   let dispatch = test_dispatch()
   let model = test_model()
-  let children : Map[@pathx.Relative, Array[FileEntry]] = Map([
+  let children : Map[@pathx.Relative, Array[@fileeditor.FileEntry]] = Map([
     (Relative("src"), []),
   ])
   let panel = {
@@ -1390,10 +1396,11 @@ test "RevealDirectory on an already-cached ancestor needs no reload" {
     session: "desktop-test",
     children,
   }
-  let (_, next) = update(dispatch, RevealDirectory(Relative("src/foo")), {
-    ..model,
-    file_panel: panel,
-  })
+  let (_, next) = update(
+    dispatch,
+    FileEditor(RevealDirectory(Relative("src/foo"))),
+    { ..model, file_panel: panel },
+  )
   assert_true(next.file_panel.expanded.contains(Relative("src")))
   assert_false(next.file_panel.loading.contains(Relative("src")))
 }
@@ -1403,15 +1410,17 @@ test "HighlightCleared only clears a highlight that still matches" {
   let dispatch = test_dispatch()
   let model = test_model()
   let panel = { ..model.file_panel, highlighted: Some(Relative("src")) }
-  let (_, stale) = update(dispatch, HighlightCleared(Relative("old")), {
-    ..model,
-    file_panel: panel,
-  })
+  let (_, stale) = update(
+    dispatch,
+    FileEditor(HighlightCleared(Relative("old"))),
+    { ..model, file_panel: panel },
+  )
   assert_true(stale.file_panel.highlighted is Some(Relative("src")))
-  let (_, cleared) = update(dispatch, HighlightCleared(Relative("src")), {
-    ..model,
-    file_panel: panel,
-  })
+  let (_, cleared) = update(
+    dispatch,
+    FileEditor(HighlightCleared(Relative("src"))),
+    { ..model, file_panel: panel },
+  )
   assert_true(cleared.file_panel.highlighted is None)
 }
 

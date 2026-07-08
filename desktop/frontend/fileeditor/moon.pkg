@@ -1,0 +1,22 @@
+import {
+  "moonbitlang/core/json",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dom",
+  "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/js",
+  "moonbit-community/editor/viewer",
+  "moonbit-community/editor/viewer/common/model",
+  "moonbit-community/editor/viewer/common/languages",
+  "moonbit-community/editor/viewer/common/view_model",
+  "moonbit-community/editor/language",
+  "moonbit-community/editor/base/common",
+  "moonbit-community/editor/syntax/lang_moonbit",
+  "moonbit-community/editor/syntax/lang_javascript",
+  "moonbit-community/editor/syntax/lang_json",
+  "openseek_desktop/internal/pathx",
+  "openseek_desktop/internal/uri",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/transcript",
+}
+
+supported_targets = "js"

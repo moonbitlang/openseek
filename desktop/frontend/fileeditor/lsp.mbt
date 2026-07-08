@@ -16,10 +16,13 @@ const ModelUriPrefix : String = "openseek://"
 /// (feedback, markers) index by. The newtype keeps arbitrary strings and
 /// filesystem paths out of APIs that mean a viewer document; mint one with
 /// `ModelUri::of`, or wrap only a string that `parse_model_uri` just accepted.
-priv struct ModelUri(String)
+/// Read-only outside this package: the main package carries one in
+/// `EditorCommentAdded` and hands it back to `remove_editor_feedback`, but
+/// only this package mints them.
+pub struct ModelUri(String)
 
 ///|
-fn ModelUri::of(absolute_path : @pathx.Absolute) -> ModelUri {
+pub fn ModelUri::of(absolute_path : @pathx.Absolute) -> ModelUri {
   ModelUri(ModelUriPrefix + @uri.encode_path(absolute_path.0))
 }
 
@@ -55,7 +58,7 @@ impl @language.HoverProvider for LspHoverProvider with fn provide_hover(
   ) catch {
     _ => return None
   }
-  decode_hover(reply_json_text(reply), model)
+  decode_hover(@interop.reply_json_text(reply), model)
 }
 
 ///|
@@ -80,7 +83,7 @@ async fn request_hover(
   payload["path"] = path.0
   payload["line"] = line
   payload["character"] = character
-  bridge_request("hover", payload.to_value())
+  @interop.bridge_request("hover", payload.to_value())
 }
 
 ///|
@@ -154,7 +157,7 @@ fn request_diagnostics(
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply = request_lsp_open(path=absolute) catch { _ => return }
-      let diagnostics = reply_diagnostics(reply_json_text(reply))
+      let diagnostics = reply_diagnostics(@interop.reply_json_text(reply))
       scheduler.add(dispatch(DiagnosticsPublished(absolute~, diagnostics~)))
     })
   })
@@ -165,7 +168,7 @@ fn request_diagnostics(
 async fn request_lsp_open(path~ : @pathx.Absolute) -> @js.Value {
   let payload = @js.Object::new()
   payload["path"] = path.0
-  bridge_request("lsp_open", payload.to_value())
+  @interop.bridge_request("lsp_open", payload.to_value())
 }
 
 ///|

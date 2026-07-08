@@ -137,21 +137,18 @@ fn open_editor_at(
   annotation? : String,
 ) -> (@cmd.Cmd, Model) {
   let conv = model.active()
+  let femit = dispatch.map(msg => FileEditor(msg))
   // Re-root only when the panel's cached tree belongs to another
   // conversation; otherwise `sync_file_panel`'s post-dispatch pass would
-  // see a session mismatch and wipe the `selected`/`open` set below.
+  // see a session mismatch and wipe the tab/`open` set below.
   let panel = if model.file_panel.session == conv.session_id {
     model.file_panel
   } else {
-    { ..empty_file_panel(), session: conv.session_id }
+    { ..@fileeditor.State::empty(), session: conv.session_id }
   }
   guard conversation_relative(conv, path) is Some(relative) else {
     return (
-      @cmd.batch([
-        request_viewer_mount(dispatch),
-        request_resize_handle_mount(),
-        request_viewer_remeasure(),
-      ]),
+      @fileeditor.mount_cmds(femit),
       {
         ..model,
         file_panel: {
@@ -162,26 +159,15 @@ fn open_editor_at(
       },
     )
   }
-  (
-    @cmd.batch([
-      request_viewer_mount(dispatch),
-      request_resize_handle_mount(),
-      request_viewer_remeasure(),
-      read_file(
-        dispatch,
-        conv.session_id,
-        relative,
-        basename(relative),
-        range~,
-        annotation?,
-        workspace=conv.workspace,
-      ),
-    ]),
-    {
-      ..model,
-      file_panel: { ..panel, open: true, selected: Some(relative), error: "" },
-    },
+  let (cmd, panel) = @fileeditor.open_file(
+    femit,
+    panel,
+    file_ctx(model),
+    relative,
+    range~,
+    annotation?,
   )
+  (cmd, { ..model, file_panel: panel })
 }
 
 ///|
@@ -437,53 +423,32 @@ fn apply_engine_event(
 }
 
 ///|
-/// Reconcile the file panel with the active conversation after every message:
-/// rebuild it when the conversation changed and list the workspace root once
-/// its path is known. Centralizing it here keeps every conversation-switching
-/// handler from having to re-root the panel itself. A no-op unless the panel
-/// is open and a load is actually due, so it never re-fires while a request is
-/// in flight or the tree is already current.
+/// The file-editor package's view of the active conversation: which session
+/// the panel serves, the workspace hint its fs ops carry, and the viewer's
+/// theme. Recomputed per dispatch — it is only a projection of the model.
+fn file_ctx(model : Model) -> @fileeditor.Ctx {
+  let conv = model.active()
+  {
+    session: conv.session_id,
+    workspace: conv.workspace,
+    dark_mode: model.dark_mode,
+  }
+}
+
+///|
+/// Reconcile the file panel with the active conversation after every message
+/// (see `@fileeditor.sync`). Centralizing it here keeps every
+/// conversation-switching handler from having to re-root the panel itself.
 fn sync_file_panel(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> (Model, @cmd.Cmd) {
-  let panel = model.file_panel
-  guard panel.open else { return (model, @cmd.none) }
-  let conv = model.active()
-  // When the active conversation changes, drop the cached tree *and* the
-  // viewer's open document — the viewer is imperative state outside the model,
-  // so it would otherwise keep showing the previous conversation's file.
-  let (panel, reroot_cmd) = if panel.session == conv.session_id {
-    (panel, @cmd.none)
-  } else {
-    (
-      { ..empty_file_panel(), open: true, session: conv.session_id },
-      clear_viewer(),
-    )
-  }
-  // Load as soon as there is a conversation: the workspace directory is a pure
-  // function of the session id, so the host can list it without waiting for a
-  // run to report `cwd` (it reports an empty workspace until the first turn
-  // creates the directory).
-  if conv.session_id.is_empty() ||
-    panel.children.contains("") ||
-    panel.loading.contains("") {
-    return ({ ..model, file_panel: panel }, reroot_cmd)
-  }
-  let loading = panel.loading.copy()
-  loading.push("")
-  (
-    { ..model, file_panel: { ..panel, loading, } },
-    @cmd.batch([
-      reroot_cmd,
-      read_directory(
-        dispatch,
-        conv.session_id,
-        @pathx.Relative::root(),
-        workspace=conv.workspace,
-      ),
-    ]),
+  let (panel, cmd) = @fileeditor.sync(
+    dispatch.map(msg => FileEditor(msg)),
+    model.file_panel,
+    file_ctx(model),
   )
+  ({ ..model, file_panel: panel }, cmd)
 }
 
 ///|
@@ -638,7 +603,19 @@ fn update_msg(
     }
     JumpToLocation(path~, range~, annotation~) =>
       open_editor_at(dispatch, model, path, range, annotation?)
-    EditorCommentAdded(resource~, file~, range~, quote~, comment~, feedback_id~) => {
+    // Intercepted here rather than delegated to the fileeditor package: the
+    // comment becomes an annotation chip on the composer draft, which only
+    // this model knows about. `quote`/`range` come from the panel's viewer.
+    FileEditor(
+      EditorCommentAdded(
+        resource~,
+        file~,
+        range~,
+        quote~,
+        comment~,
+        feedback_id~
+      )
+    ) => {
       let conv = model.active()
       let mentions = push_mention(conv.mentions, {
         ref_: Annotation(
@@ -654,7 +631,7 @@ fn update_msg(
       // own bubble keeps the two from drifting apart (and from double-sending
       // if the user comments again).
       (
-        remove_editor_feedback(resource, feedback_id),
+        @fileeditor.remove_editor_feedback(resource, feedback_id),
         model.replace_conversation({ ..conv, mentions, }),
       )
     }
@@ -1385,223 +1362,17 @@ fn update_msg(
         (@cmd.none, model)
       }
     }
-    ToggleFilePanel => {
-      let panel = model.file_panel
-      // Attach the viewer the first time the column has real width, install the
-      // resize-drag handle, and re-measure on every width change; loading the
-      // tree is left to `sync_file_panel`.
-      (
-        @cmd.batch([
-          request_viewer_mount(dispatch),
-          request_resize_handle_mount(),
-          request_viewer_remeasure(),
-        ]),
-        { ..model, file_panel: { ..panel, open: !panel.open } },
+    // Everything else the panel owns (tree, viewer, diagnostics) is the
+    // fileeditor package's business; route it there and adopt its state.
+    FileEditor(msg) => {
+      let (cmd, panel) = @fileeditor.update(
+        dispatch.map(msg => FileEditor(msg)),
+        msg,
+        model.file_panel,
+        file_ctx(model),
       )
+      (cmd, { ..model, file_panel: panel })
     }
-    RevealDirectory(path) =>
-      if path.is_root() {
-        (
-          @cmd.none,
-          {
-            ..model,
-            file_panel: {
-              ..model.file_panel,
-              selected: None,
-              highlighted: None,
-            },
-          },
-        )
-      } else {
-        let panel = model.file_panel
-        let expanded = panel.expanded.copy()
-        let loading = panel.loading.copy()
-        let cmds = []
-        for ancestor in ancestor_paths(path) {
-          if !expanded.contains(ancestor) {
-            expanded.push(ancestor)
-          }
-          if !panel.children.contains(ancestor) && !loading.contains(ancestor) {
-            loading.push(ancestor)
-            cmds.push(
-              read_directory(
-                dispatch,
-                model.active().session_id,
-                ancestor,
-                workspace=model.active().workspace,
-              ),
-            )
-          }
-        }
-        cmds.push(reveal_row_after_render(path))
-        cmds.push(@cmd.delay(dispatch(HighlightCleared(path)), 1500))
-        (
-          @cmd.batch(cmds),
-          {
-            ..model,
-            file_panel: {
-              ..panel,
-              expanded,
-              loading,
-              selected: None,
-              highlighted: Some(path),
-            },
-          },
-        )
-      }
-    HighlightCleared(path) =>
-      if model.file_panel.highlighted == Some(path) {
-        (
-          @cmd.none,
-          { ..model, file_panel: { ..model.file_panel, highlighted: None } },
-        )
-      } else {
-        (@cmd.none, model)
-      }
-    DirToggle(path) => {
-      let panel = model.file_panel
-      if panel.expanded.contains(path) {
-        (
-          @cmd.none,
-          {
-            ..model,
-            file_panel: {
-              ..panel,
-              expanded: panel.expanded.filter(entry => entry != path),
-            },
-          },
-        )
-      } else {
-        let expanded = panel.expanded.copy()
-        expanded.push(path)
-        // A directory listed once stays cached, so re-expanding is instant.
-        if panel.children.contains(path) || panel.loading.contains(path) {
-          (@cmd.none, { ..model, file_panel: { ..panel, expanded, } })
-        } else {
-          let loading = panel.loading.copy()
-          loading.push(path)
-          (
-            read_directory(
-              dispatch,
-              model.active().session_id,
-              path,
-              workspace=model.active().workspace,
-            ),
-            { ..model, file_panel: { ..panel, expanded, loading } },
-          )
-        }
-      }
-    }
-    FileFilterChanged(query) => {
-      let panel = model.file_panel
-      (@cmd.none, { ..model, file_panel: { ..panel, filter: query } })
-    }
-    DirLoaded(session~, path~, entries~) =>
-      // Drop a reply whose conversation is no longer the panel's.
-      if model.file_panel.session != session {
-        (@cmd.none, model)
-      } else {
-        let panel = model.file_panel
-        let children = panel.children.copy()
-        children[path] = entries
-        // A pending highlight's target row may only now exist in the DOM —
-        // this directory could be one of the ancestors `RevealDirectory` had
-        // to list first (e.g. reached via a mention jump, which never
-        // touched `expanded`/`children` itself).
-        let reveal_cmd = match panel.highlighted {
-          Some(target) if ancestor_paths(target).contains(path) =>
-            reveal_row_after_render(target)
-          _ => @cmd.none
-        }
-        (
-          reveal_cmd,
-          {
-            ..model,
-            file_panel: {
-              ..panel,
-              children,
-              loading: panel.loading.filter(entry => entry != path),
-              error: "",
-            },
-          },
-        )
-      }
-    DirFailed(session~, path~, message~) =>
-      if model.file_panel.session != session {
-        (@cmd.none, model)
-      } else {
-        let panel = model.file_panel
-        (
-          @cmd.none,
-          {
-            ..model,
-            file_panel: {
-              ..panel,
-              loading: panel.loading.filter(entry => entry != path),
-              error: message,
-            },
-          },
-        )
-      }
-    FileSelected(path~, name~) => {
-      let panel = model.file_panel
-      (
-        read_file(
-          dispatch,
-          model.active().session_id,
-          path,
-          name,
-          range=None,
-          workspace=model.active().workspace,
-        ),
-        { ..model, file_panel: { ..panel, selected: Some(path), error: "" } },
-      )
-    }
-    FileLoaded(session~, path~, name~, file~, range~, annotation~) =>
-      // A stale read — the conversation switched, or another file was clicked
-      // first — must not replace what the viewer now shows.
-      if model.file_panel.session != session ||
-        model.file_panel.selected != Some(path) {
-        (@cmd.none, model)
-      } else {
-        let cmd = match file {
-          // A real MoonBit file also gets a diagnostics request: the host opens
-          // it in the language server and returns its current diagnostics, and
-          // future re-analysis arrives as `diagnostics` events. Other files have
-          // no server behind `lsp_open` — syncing a README or JSON file to
-          // moon-lsp would surface bogus squiggles — so only the viewer shows.
-          Content(content~, absolute~) => {
-            let show = show_file_in_viewer(
-              name,
-              content,
-              absolute~,
-              relative=path,
-              range~,
-              annotation?,
-            )
-            if language_id(name) == "moonbit" {
-              @cmd.batch([show, request_diagnostics(dispatch, absolute)])
-            } else {
-              show
-            }
-          }
-          Binary => show_file_in_viewer(name, "Binary file is not previewable.")
-          Oversized =>
-            show_file_in_viewer(name, "File is too large to preview.")
-        }
-        (cmd, model)
-      }
-    DiagnosticsPublished(absolute~, diagnostics~) =>
-      (apply_diagnostics(absolute, diagnostics), model)
-    FileFailed(session~, message~) =>
-      if model.file_panel.session != session {
-        (@cmd.none, model)
-      } else {
-        (
-          @cmd.none,
-          { ..model, file_panel: { ..model.file_panel, error: message } },
-        )
-      }
     Failed(session~, message~) =>
       // The start request broke the turn the user just sent, so the error
       // belongs in that conversation's transcript.

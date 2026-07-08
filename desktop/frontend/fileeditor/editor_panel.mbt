@@ -49,6 +49,11 @@ priv struct ViewerHost {
   // Monotonic model version; the viewer treats a new version as a new
   // document.
   mut version : Int
+  // Each open tab's last scroll position, keyed by workspace-relative path,
+  // saved as the viewer switches away and restored when the tab returns.
+  // Scroll is DOM state, so it lives here beside the viewer rather than in
+  // the Rabbita model.
+  view_states : Map[String, @viewer.ViewerViewState]
 }
 
 ///|
@@ -58,6 +63,7 @@ let viewer_state : ViewerHost = {
   absolute: None,
   relative: None,
   version: 0,
+  view_states: {},
 }
 
 ///|
@@ -156,8 +162,9 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 ///|
 /// Clear one comment bubble from the editor once its text has become a
 /// composer chip — the chip is the comment's carrier from then on. Routed by
-/// the same model URI the feedback was filed under.
-fn remove_editor_feedback(
+/// the same model URI the feedback was filed under. Public for the main
+/// package's `EditorCommentAdded` handler, which owns the chip flow.
+pub fn remove_editor_feedback(
   resource : ModelUri,
   feedback_id : String,
 ) -> @cmd.Cmd {
@@ -188,6 +195,11 @@ fn request_viewer_remeasure() -> @cmd.Cmd {
 /// selected, so the named code reads highlighted. `annotation`, when present
 /// (an annotation chip's jump), is re-shown as a comment bubble over `range`
 /// — the bubble the chip replaced when the comment was filed.
+///
+/// The outgoing document's scroll position is always saved under its
+/// relative path; `restore_scroll` (a tab switch or an in-place reload)
+/// brings the incoming document back to its saved position instead of the
+/// top — the Monaco save/restore-view-state contract around `set_model`.
 fn show_file_in_viewer(
   name : String,
   content : String,
@@ -195,12 +207,17 @@ fn show_file_in_viewer(
   relative? : @pathx.Relative,
   range? : @common.Range? = None,
   annotation? : String,
+  restore_scroll? : Bool = false,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     // Reads are always batched behind a mount request whose after-render tick
     // runs before this async reply, so the viewer exists here (see
     // `ViewerHost::viewer`); the guard only drops a pathological stray.
     guard viewer_state.viewer is Some(viewer) else { return }
+    // Park the outgoing document's scroll position for its tab's return.
+    if viewer_state.relative is Some(prev) && viewer.has_model() {
+      viewer_state.view_states[prev.0] = viewer.save_view_state()
+    }
     // Gate incoming diagnostics to the file now on screen (a notice document,
     // with no absolute path, takes no diagnostics). The relative name rides
     // along for comments filed on this document (see `ViewerHost::relative`).
@@ -227,8 +244,14 @@ fn show_file_in_viewer(
       content,
     )
     // `set_model` resets the view state itself (the Monaco contract), so a
-    // fresh document always opens at the top.
+    // fresh document always opens at the top; a tab switch or reload then
+    // restores the saved position over that reset.
     viewer.set_model(Some(text_model))
+    if restore_scroll &&
+      relative is Some(rel) &&
+      viewer_state.view_states.get(rel.0) is Some(saved) {
+      viewer.restore_view_state(saved)
+    }
     // Commenting (select → inline input → composer chip) is for real files;
     // a notice document has nothing behind it to comment on.
     if viewer_state.services is Some(services) {
@@ -271,10 +294,27 @@ fn show_file_in_viewer(
 
 ///|
 /// Drop the viewer's current document so it falls back to the placeholder.
-/// Used when the active conversation changes: the viewer is imperative state
-/// outside the model, so it would otherwise keep showing the previous
-/// conversation's file. A no-op until the viewer has been attached.
+/// Used when the active conversation changes (which also invalidates every
+/// parked scroll position — they belong to the previous workspace's tabs)
+/// and when the last tab closes: the viewer is imperative state outside the
+/// model, so it would otherwise keep showing the previous document. A no-op
+/// until the viewer has been attached.
 fn clear_viewer() -> @cmd.Cmd {
+  @cmd.custom_cmd(_scheduler => {
+    viewer_state.view_states.clear()
+    if viewer_state.viewer is Some(viewer) {
+      viewer_state.absolute = None
+      viewer_state.relative = None
+      viewer.set_model(None)
+    }
+  })
+}
+
+///|
+/// Show the viewer's placeholder without touching the other tabs' parked
+/// scroll positions — the last-tab-closed case, where the panel stays on
+/// this conversation.
+fn clear_document() -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     if viewer_state.viewer is Some(viewer) {
       viewer_state.absolute = None
@@ -282,6 +322,14 @@ fn clear_viewer() -> @cmd.Cmd {
       viewer.set_model(None)
     }
   })
+}
+
+///|
+/// Forget a closed tab's parked scroll position. Batched after the
+/// neighbor's `show_file_in_viewer` (which re-parks the outgoing document,
+/// closed tab included), so the closed tab's entry does not linger.
+fn forget_view_state(path : @pathx.Relative) -> @cmd.Cmd {
+  @cmd.custom_cmd(_scheduler => viewer_state.view_states.remove(path.0))
 }
 
 ///|

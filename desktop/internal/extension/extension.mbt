@@ -36,6 +36,7 @@ pub fn openseek_extension(
   let manager = @engine.new_engine_manager(engine, runtime_dir?)
   let lsp = new_lsp_manager(engine, runtime_dir?)
   let updates = new_update_state(runtime_dir, executable)
+  let watches = new_watch_state()
   // Mirror LSP wire traffic to its own log next to the host's runtime state, so
   // a broken hover/symbol round-trip can be read back without the per-message
   // noise landing in the main app log.
@@ -73,6 +74,8 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("launch_app"),
       @app.AppCommandApiDescriptor::new("read_directory"),
       @app.AppCommandApiDescriptor::new("read_file"),
+      @app.AppCommandApiDescriptor::new("stat_files"),
+      @app.AppCommandApiDescriptor::new("watch_workspace"),
       @app.AppCommandApiDescriptor::new("hover"),
       @app.AppCommandApiDescriptor::new("lsp_open"),
       @app.AppCommandApiDescriptor::new("workspace_symbols"),
@@ -90,6 +93,13 @@ pub fn openseek_extension(
           group.spawn_bg(allow_failure=true, () => {
             run_diagnostics_pump(lsp, async fn(push) {
               context.emit("diagnostics", push)
+            })
+          })
+          // The workspace watcher behind the editor panel's live updates —
+          // best-effort for the same reason as the LSP pumps.
+          group.spawn_bg(allow_failure=true, () => {
+            run_watch_pump(watches, async fn(push) {
+              context.emit("fs_changed", push)
             })
           })
           // Sweep what a previous update left behind; checking for new
@@ -223,6 +233,14 @@ pub fn openseek_extension(
       })
       context.op_async("read_file", async fn(payload : ReadFilePayload) {
         read_file_op(payload)
+      })
+      context.op_async("stat_files", async fn(payload : StatFilesPayload) {
+        stat_files_op(payload)
+      })
+      context.op_async("watch_workspace", async fn(
+        payload : WatchWorkspacePayload,
+      ) {
+        watch_workspace_op(watches, payload)
       })
       context.op_async("hover", async fn(payload : LspHoverPayload) {
         lsp_hover_op(lsp, payload)

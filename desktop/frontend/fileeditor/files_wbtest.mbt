@@ -55,7 +55,7 @@ test "decode_file_content decodes each reply kind" {
     decode_file_content(
       "{\"kind\":\"content\",\"content\":\"hello\",\"absolute\":\"/ws/a.mbt\"}",
     )
-    is Some(Content(content="hello", absolute=Absolute("/ws/a.mbt"))),
+    is Some(Content(content="hello", absolute=Absolute("/ws/a.mbt"), ..)),
   )
   assert_true(decode_file_content("{\"kind\":\"binary\"}") is Some(Binary))
   assert_true(
