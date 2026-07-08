@@ -1409,7 +1409,13 @@ test "RevealDirectory on an already-cached ancestor needs no reload" {
 test "HighlightCleared only clears a highlight that still matches" {
   let dispatch = test_dispatch()
   let model = test_model()
-  let panel = { ..model.file_panel, highlighted: Some(Relative("src")) }
+  // Rooted in the active session, or the post-dispatch `sync` re-roots the
+  // panel and clears the highlight itself.
+  let panel = {
+    ..model.file_panel,
+    session: "desktop-test",
+    highlighted: Some(Relative("src")),
+  }
   let (_, stale) = update(
     dispatch,
     FileEditor(HighlightCleared(Relative("old"))),

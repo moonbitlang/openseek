@@ -162,21 +162,27 @@ fn with_watch(state : State, ctx : Ctx, cmd : @cmd.Cmd) -> (State, @cmd.Cmd) {
 /// conversation's tabs in `remembered`, restoring the new one's), list the
 /// workspace root once its path is known, and keep the host's file watcher
 /// pointed at the right workspace. The main update runs this post-dispatch,
-/// so no conversation-switching handler has to re-root the panel itself. A
-/// no-op unless something is actually due, so it never re-fires while a
-/// request is in flight or the tree is already current.
+/// so no conversation-switching handler has to re-root the panel itself.
+/// The re-root happens whether the panel is open or closed — hidden tabs
+/// and the watcher must always agree on the session — while listing the
+/// tree waits for an open panel. A no-op unless something is actually due,
+/// so it never re-fires while a request is in flight or the tree is already
+/// current.
 pub fn sync(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
 ) -> (State, @cmd.Cmd) {
-  guard state.open else { return with_watch(state, ctx, @cmd.none) }
   // When the active conversation changes, drop the cached tree *and* the
   // viewer's open document — the viewer is imperative state outside the
   // model, so it would otherwise keep showing the previous conversation's
   // file. The open tabs are parked by session id and restored (identities
   // only: the active one reloads now, the rest load on activation) when
-  // their conversation returns.
+  // their conversation returns. This runs even while the panel is closed:
+  // `with_watch` follows `ctx.session` whenever tabs remain, so leaving the
+  // tabs rooted in the previous conversation would have the next fs_changed
+  // stat their paths against the new conversation's workspace — marking
+  // hidden tabs deleted/stale for files that never moved.
   let (state, reroot_cmd) = if state.session == ctx.session {
     (state, @cmd.none)
   } else {
@@ -201,7 +207,10 @@ pub fn sync(
       None => ([], (None : @pathx.Relative?))
     }
     let cmds = [clear_viewer()]
-    if active is Some(path) &&
+    // A hidden panel's restored active tab is not worth a read yet; it stays
+    // TabLoading and `ToggleFilePanel` reads it on reopen.
+    if state.open &&
+      active is Some(path) &&
       tabs.search_by(tab => tab.path == path) is Some(index) {
       cmds.push(
         read_file(
@@ -217,7 +226,7 @@ pub fn sync(
     (
       {
         ..State::empty(),
-        open: true,
+        open: state.open,
         session: ctx.session,
         tree_open: state.tree_open,
         // What the host actually watches doesn't change with the reroot;
@@ -230,6 +239,9 @@ pub fn sync(
       @cmd.batch(cmds),
     )
   }
+  // A closed panel re-roots (above) and keeps the watcher placed, but the
+  // tree itself can wait for the reopen.
+  guard state.open else { return with_watch(state, ctx, reroot_cmd) }
   // Load as soon as there is a conversation: the workspace directory is a pure
   // function of the session id, so the host can list it without waiting for a
   // run to report `cwd` (it reports an empty workspace until the first turn
@@ -264,9 +276,21 @@ pub fn update(
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
   match msg {
-    ToggleFilePanel =>
-      // Loading the tree is left to `sync`.
-      (mount_cmds(dispatch), { ..state, open: !state.open })
+    ToggleFilePanel => {
+      // Loading the tree is left to `sync`. A re-root while the panel was
+      // closed leaves the restored active tab unread (TabLoading); opening
+      // is what makes it worth showing, so read it now (a duplicate of an
+      // in-flight read folds idempotently).
+      let opening = !state.open
+      let cmds = [mount_cmds(dispatch)]
+      if opening &&
+        state.active is Some(path) &&
+        tab_index(state, path) is Some(index) &&
+        state.tabs[index].state is TabLoading {
+        cmds.push(show_tab(dispatch, ctx, state.tabs[index]))
+      }
+      (@cmd.batch(cmds), { ..state, open: opening })
+    }
     ToggleTree =>
       // The viewer's width changes with the pane, and it cannot see a CSS
       // change on its own.

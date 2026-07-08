@@ -237,6 +237,47 @@ test "sync parks the outgoing conversation's tabs and restores them later" {
 }
 
 ///|
+/// The bug this guards against: with the panel closed but tabs remaining,
+/// switching conversations used to skip the re-root while `with_watch`
+/// followed the new session — the next fs_changed then stat'ed the old
+/// conversation's paths against the new workspace, marking hidden tabs
+/// deleted or stale for files that never moved.
+test "a closed panel still re-roots when the conversation switches" {
+  let emit = test_emit()
+  let state = {
+    ..open_state(),
+    open: false,
+    watching: "desktop-test",
+    tabs: [loaded_tab("a.mbt", "a.mbt")],
+    active: Some(Relative("a.mbt")),
+  }
+  let other : Ctx = {
+    session: "other-session",
+    workspace: None,
+    dark_mode: false,
+  }
+  let (parked, _) = sync(emit, state, other)
+  assert_eq(parked.session, "other-session")
+  assert_false(parked.open)
+  assert_eq(parked.tabs.length(), 0)
+  assert_true(parked.remembered.contains("desktop-test"))
+  // Nothing left to track in the new conversation, so the watcher parks.
+  assert_eq(parked.watching, "")
+  // Switching back restores the identities — still hidden, not read yet —
+  // and the watcher follows the tabs again.
+  let (restored, _) = sync(emit, parked, test_ctx())
+  assert_false(restored.open)
+  assert_eq(restored.tabs.length(), 1)
+  assert_true(restored.tabs[0].state is TabLoading)
+  assert_true(restored.active is Some(Relative("a.mbt")))
+  assert_eq(restored.watching, "desktop-test")
+  // Reopening is what reads the restored active tab (the command is opaque;
+  // the tab stays TabLoading until the reply lands).
+  let (_, reopened) = update(emit, ToggleFilePanel, restored, test_ctx())
+  assert_true(reopened.open)
+}
+
+///|
 test "ToggleTree flips the pane and RevealDirectory forces it open" {
   let emit = test_emit()
   let (_, closed) = update(emit, ToggleTree, open_state(), test_ctx())
