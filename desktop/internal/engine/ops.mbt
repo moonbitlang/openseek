@@ -18,10 +18,20 @@ pub async fn start_run(
   }
   let config = run_config(payload, manager.engine)
   let key = session_key(config)
-  if manager.engines.get(key) is Some(live) && live.run_open {
-    raise EngineError(
-      "OpenSeek run \{live.latest_run} is still active in this conversation",
-    )
+  if manager.engines.get(key) is Some(live) {
+    match live.phase {
+      Running(..) =>
+        raise EngineError(
+          "OpenSeek run \{live.latest_run} is still active in this conversation",
+        )
+      // A prompt accepted now would queue behind the compaction, where a
+      // Stop (which cancels only the compaction) could not reach it.
+      Compacting =>
+        raise EngineError(
+          "this conversation is compacting; wait for it to finish",
+        )
+      Idle => ()
+    }
   }
   if manager.starts_in_flight.contains(key) {
     raise EngineError(
@@ -62,8 +72,7 @@ pub async fn start_run(
   let run_id = manager.next_run_id
   manager.next_run_id = manager.next_run_id + 1
   live.latest_run = run_id
-  live.run_open = true
-  live.cancel_requested = false
+  live.phase = Running(cancel_requested=false)
   live.steer_runs.begin_run()
   emit(
     sink,
@@ -84,7 +93,7 @@ pub async fn start_run(
     error => {
       // The engine died between turns: close the run and drop the handle so
       // the next prompt respawns on the same durable session.
-      live.run_open = false
+      live.phase = Idle
       if manager.engines.get(key) is Some(current) &&
         physical_equal(current, live) {
         manager.engines.remove(key)
@@ -101,7 +110,7 @@ pub async fn start_run(
   // prompt is on the wire now, so re-send the cancel: serve is processing the
   // turn and will honor it. (Started stays before the write so it can never
   // arrive after a stream event.)
-  if live.cancel_requested {
+  if live.phase is Running(cancel_requested=true) {
     live.writer.write(@protocol.cancel().to_jsonl()) catch {
       error if @async.is_being_cancelled() => raise error
       // The engine died; its reader task closes the run.
@@ -123,7 +132,8 @@ pub async fn cancel_run(
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) else {
     return { cancelled: false, run_id: None }
   }
-  live.cancel_requested = true
+  // `open_run_engine` only returns engines with an open run.
+  live.phase = Running(cancel_requested=true)
   let command = @protocol.cancel()
   live.writer.write(command.to_jsonl()) catch {
     error if @async.is_being_cancelled() => raise error
@@ -147,14 +157,29 @@ pub async fn compact_run(
   guard manager.engines.get(payload.session) is Some(live) else {
     raise EngineError("this conversation has no running engine to compact")
   }
+  match live.phase {
+    Compacting => raise EngineError("this conversation is already compacting")
+    // Sent mid-turn, the command queues behind the open run; the engine's
+    // own compaction_started event flips the phase when it actually begins,
+    // so the run's state is left alone here.
+    Running(..) => ()
+    // Enter the phase BEFORE the write: the write can suspend, and a short
+    // compaction could report finished during that suspension — the
+    // consumer's Idle transition must land after ours, not before it.
+    Idle => live.phase = Compacting
+  }
   let command = @protocol.compact()
   live.writer.write(command.to_jsonl()) catch {
     error if @async.is_being_cancelled() => raise error
-    error => raise EngineError("failed to request compaction: \{error}")
+    error => {
+      // The command never reached the engine; nothing will report a
+      // compaction, so leave the phase as the consumer sees it.
+      if live.phase is Compacting {
+        live.phase = Idle
+      }
+      raise EngineError("failed to request compaction: \{error}")
+    }
   }
-  // Cleared by the consumer when the engine reports compaction
-  // finished/failed; archiving is refused while this is set.
-  live.compacting = true
   { compacting: true }
 }
 
@@ -175,7 +200,7 @@ pub async fn steer_run(
     return { steered: false, run_id: None }
   }
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
-    !live.cancel_requested else {
+    live.phase is Running(cancel_requested=false) else {
     return { steered: false, run_id: None }
   }
   let command = @protocol.steer(payload.text)

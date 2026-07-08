@@ -37,7 +37,7 @@ pub(all) enum EngineEvent {
   AssistantMessage(String)
   RuntimeUpdate(String)
   Usage(prompt_tokens~ : Int, completion_tokens~ : Int)
-  ToolResult(tool_name~ : String, is_error~ : Bool, content~ : String)
+  ToolResult(tool_name~ : String, is_error~ : Bool, content~ : String, brief~ : String)
   ToolCallDecodeError(tool_name~ : String, reason~ : String)
   AgentFinished(String)
   AgentAborted(String)
@@ -45,6 +45,9 @@ pub(all) enum EngineEvent {
   AgentSetupFailed(String)
   SteerApplied(String)
   SteerDropped(String)
+  CompactionStarted
+  CompactionFinished(String)
+  CompactionFailed(String)
 }
 
 pub(all) struct InstalledSkillItem {
@@ -58,7 +61,7 @@ pub(all) enum ItemKind {
   User
   Assistant(Bool)
   Reasoning
-  Tool(String, Bool)
+  Tool(name~ : String, is_error~ : Bool, brief~ : String)
 }
 
 pub(all) struct LauncherAppItem {
@@ -85,6 +88,8 @@ pub struct RuntimeUpdateView {
 pub(all) struct SessionListItem {
   id : String
   title : String
+  workspace : String
+  workspace_name : String
 }
 
 pub(all) struct TranscriptItem {

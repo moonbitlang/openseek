@@ -61,22 +61,24 @@ pub async fn archive_session(
     raise EngineError("invalid session id")
   }
   if manager.engines.get(session) is Some(live) {
-    if live.run_open {
-      raise EngineError("this conversation is still running; stop it first")
+    match live.phase {
+      Running(..) =>
+        raise EngineError("this conversation is still running; stop it first")
+      // No open run, but the engine is still appending the summary to the
+      // very record this op moves.
+      Compacting =>
+        raise EngineError(
+          "this conversation is compacting; wait for it to finish",
+        )
+      // Closing stdin is the serve protocol's EOF signal: the idle engine
+      // drains and exits, and its reader task cleans up. Merely removing
+      // the map entry would leak the process until the app shuts down (the
+      // respawn path closes the same way).
+      Idle => {
+        live.writer.close()
+        manager.engines.remove(session)
+      }
     }
-    // Compaction runs between turns (`run_open` is false), but the engine is
-    // still appending the summary to the very record this op moves.
-    if live.compacting {
-      raise EngineError(
-        "this conversation is compacting; wait for it to finish",
-      )
-    }
-    // Closing stdin is the serve protocol's EOF signal: the idle engine
-    // drains and exits, and its reader task cleans up. Merely removing the
-    // map entry would leak the process until the app shuts down (the
-    // respawn path closes the same way).
-    live.writer.close()
-    manager.engines.remove(session)
   }
   guard session_store_root(session) is Some(root) else {
     raise EngineError(

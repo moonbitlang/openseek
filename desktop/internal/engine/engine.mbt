@@ -16,14 +16,30 @@ priv struct ServeEngine {
   spec_key : String
   writer : @process.WriteToProcess
   mut latest_run : Int
-  mut run_open : Bool
-  mut cancel_requested : Bool
-  // A `/compact` was sent and its finished/failed event has not come back.
-  // Compaction runs between turns (`run_open` stays false), yet the engine
-  // is still appending the summary to the durable record — operations that
-  // move that record (archiving) must wait for this to clear.
-  mut compacting : Bool
+  mut phase : EnginePhase
   steer_runs : SteerRunTracker
+}
+
+///|
+/// What the serve engine is doing right now — one value instead of loose
+/// booleans, so the impossible combinations (a compaction with an open run,
+/// a cancel request with nothing to cancel) cannot be represented, and every
+/// operation names the phase it requires instead of consulting flags that
+/// can drift apart across suspension points. The steering bookkeeping stays
+/// in `SteerRunTracker`: steers deliberately settle across a phase boundary.
+priv enum EnginePhase {
+  // Between turns; nothing is writing to the durable record. The only phase
+  // that accepts a prompt, a compaction, or archiving.
+  Idle
+  // A prompt's turn is open on the wire. `cancel_requested` marks that a
+  // cancel was sent (or must be re-sent once the racing prompt lands).
+  Running(cancel_requested~ : Bool)
+  // A `/compact` is rewriting the durable record: no run is open, but
+  // starts and archiving must wait. Entered by `compact_run` (idle send)
+  // or the engine's own `compaction_started`, left on
+  // `compaction_finished`/`compaction_failed` — or on engine death, which
+  // reports a synthetic failure so the frontend never sticks.
+  Compacting
 }
 
 ///|
@@ -175,7 +191,7 @@ pub fn new_engine_manager(
 fn open_run_engine(manager : EngineManager, run_id? : Int) -> ServeEngine? {
   if run_id is Some(id) {
     for _, engine in manager.engines {
-      if engine.run_open && engine.latest_run == id {
+      if engine.phase is Running(..) && engine.latest_run == id {
         return Some(engine)
       }
     }
@@ -183,7 +199,7 @@ fn open_run_engine(manager : EngineManager, run_id? : Int) -> ServeEngine? {
   }
   let mut found : ServeEngine? = None
   for _, engine in manager.engines {
-    if engine.run_open {
+    if engine.phase is Running(..) {
       if found is Some(_) {
         return None
       }
@@ -536,9 +552,7 @@ async fn[G] start_serve_engine(
     spec_key: engine_fingerprint(config),
     writer,
     latest_run: 0,
-    run_open: false,
-    cancel_requested: false,
-    compacting: false,
+    phase: Idle,
     steer_runs: SteerRunTracker::new(),
   }
   manager.engines.set(engine.session_key, engine)
@@ -580,11 +594,11 @@ async fn serve_engine_consumer(
         match decoded {
           // The abort the user asked for: report it as a cancellation, the
           // same wire status the pre-serve host used.
-          Some(AgentAborted(_)) if engine.cancel_requested => {
+          Some(AgentAborted(_)) if engine.phase
+            is Running(cancel_requested=true) => {
             emit_error(sink, "cancelled", run_id~)
             emit_finished(sink, run_id, Cancelled)
-            engine.run_open = false
-            engine.cancel_requested = false
+            engine.phase = Idle
             engine.steer_runs.record_terminal(run_id)
           }
           Some(decoded) => {
@@ -594,22 +608,39 @@ async fn serve_engine_consumer(
             if !host_reports_terminal_error(decoded) {
               emit(sink, StreamEvent({ run_id, event: raw }))
             }
-            // Either way the engine is done writing the record's summary, so
-            // operations gated on compaction (archiving) may proceed.
-            if decoded is (CompactionFinished | CompactionFailed) {
-              engine.compacting = false
+            match decoded {
+              // A compaction queued behind an open turn begins only now, so
+              // the engine's own event is what flips the phase; entering
+              // from anything but Idle would clobber a run's state.
+              CompactionStarted =>
+                if engine.phase is Idle {
+                  engine.phase = Compacting
+                }
+              // Either way the engine is done writing the record's summary,
+              // so operations gated on compaction (starts, archiving) may
+              // proceed.
+              CompactionFinished | CompactionFailed => engine.phase = Idle
+              _ => ()
             }
             if handle_decoded_event(sink, run_id, decoded) {
-              engine.run_open = false
-              engine.cancel_requested = false
+              engine.phase = Idle
               engine.steer_runs.record_terminal(run_id)
             }
           }
           None => emit(sink, StreamEvent({ run_id, event: raw }))
         }
       }
-      StreamReaderFailed(message) =>
+      StreamReaderFailed(message) => {
         emit_error(sink, message, run_id=engine.latest_run)
+        // A broken stream can no longer deliver compaction_finished/failed;
+        // report the compaction as failed now so the frontend does not stay
+        // stuck with Send disabled (the exit branch below then has nothing
+        // left to report for it).
+        if engine.phase is Compacting {
+          engine.phase = Idle
+          emit_compaction_failed(sink, engine.latest_run, message)
+        }
+      }
       StreamExited(code) => {
         // A respawn may already have replaced this engine in its slot; only
         // clear the slot if it is still ours.
@@ -617,32 +648,70 @@ async fn serve_engine_consumer(
           physical_equal(current, engine) {
           manager.engines.remove(engine.session_key)
         }
-        // EOF with a run still open means the engine died mid-turn: close
-        // that run with its only available diagnostics. A clean exit after a
-        // terminal event (session switch, app shutdown) reports nothing.
-        if engine.run_open {
-          engine.run_open = false
-          let diagnostics = stderr_task.wait().trim().to_owned()
-          if diagnostics.is_empty() {
-            emit_error(
-              sink,
-              "engine exited without a result",
-              run_id=engine.latest_run,
-              exit_code=code,
-            )
-          } else {
-            emit_error(
-              sink,
-              "engine exited without a result:\n" + diagnostics,
-              run_id=engine.latest_run,
-              exit_code=code,
-              diagnostics~,
-            )
+        match engine.phase {
+          // EOF with a run still open means the engine died mid-turn: close
+          // that run with its only available diagnostics.
+          Running(..) => {
+            engine.phase = Idle
+            let diagnostics = stderr_task.wait().trim().to_owned()
+            if diagnostics.is_empty() {
+              emit_error(
+                sink,
+                "engine exited without a result",
+                run_id=engine.latest_run,
+                exit_code=code,
+              )
+            } else {
+              emit_error(
+                sink,
+                "engine exited without a result:\n" + diagnostics,
+                run_id=engine.latest_run,
+                exit_code=code,
+                diagnostics~,
+              )
+            }
+            emit_finished(sink, engine.latest_run, Failed, exit_code=code)
           }
-          emit_finished(sink, engine.latest_run, Failed, exit_code=code)
+          // EOF mid-compaction: no run is open, but the frontend set its
+          // compacting notice on compaction_started and only a terminal
+          // compaction event clears it — synthesize the failure the engine
+          // can no longer send.
+          Compacting => {
+            engine.phase = Idle
+            let diagnostics = stderr_task.wait().trim().to_owned()
+            let reason = if diagnostics.is_empty() {
+              "engine exited during compaction"
+            } else {
+              "engine exited during compaction:\n" + diagnostics
+            }
+            emit_compaction_failed(sink, engine.latest_run, reason)
+          }
+          // A clean exit after a terminal event (session switch, app
+          // shutdown) reports nothing.
+          Idle => ()
         }
         break
       }
     }
   }
+}
+
+///|
+/// A synthetic `compaction_failed` stream event for a compaction whose
+/// engine died before reporting one itself — the same wire shape the engine
+/// emits, so the frontend's one decoder clears its compacting notice either
+/// way. Routed by the engine's latest run id: the frontend matches
+/// compaction events to the conversation that last held the id.
+async fn emit_compaction_failed(
+  sink : EventSink,
+  run_id : Int,
+  reason : String,
+) -> Unit {
+  emit(
+    sink,
+    StreamEvent({
+      run_id,
+      event: { "event": "compaction_failed", "reason": Json::string(reason) },
+    }),
+  )
 }
