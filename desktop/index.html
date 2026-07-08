@@ -655,10 +655,9 @@
         border-bottom: 1px solid var(--line);
       }
 
-      /* New chat holds the header's right edge; the auto margin also keeps it
-         there when the sidebar toggle is absent (Skills/Settings screens).
-         The -4px mirrors the toggle's left pull so both icons sit the same
-         optical distance from their window edge. */
+      /* New chat holds the header's right edge. The -4px mirrors the
+         toggle's left pull so both icons sit the same optical distance from
+         their window edge. */
       .sidebar-header .header-new-chat {
         margin-left: auto;
         margin-right: -4px;
@@ -1010,6 +1009,18 @@
       .topbar-toggle:hover {
         background: var(--surface-2);
         color: var(--ink);
+      }
+
+      /* The sidebar toggle's fallback on screens without a topbar (Skills,
+         Settings): fixed at the exact screen position the sidebar-header
+         toggle holds while the sidebar is open (46px header, 18px padding,
+         -4px pull), shown only while the sidebar is closed. */
+      .page-sidebar-toggle {
+        position: fixed;
+        top: 9px;
+        left: 14px;
+        z-index: 5;
+        margin-left: 0;
       }
 
       .topbar-icon {

@@ -475,23 +475,19 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   }
   // A 46px header matching the content column's topbar, so the sidebar
   // toggle rides the window's left edge here while the sidebar is open and
-  // in the topbar's left while it's closed — the same screen position in both
-  // states, mirroring how the right-panel toggle stays put (topbar-right when
-  // closed, breadcrumb-right when open). Only the Chat screen offers the
-  // toggle: Skills and Settings have no topbar to reopen from, and the
-  // sidebar is their only way out. New chat rides the header's right edge on
-  // every screen — rotating a session lands back on Chat regardless.
-  let header_children : Array[@html.Html] = []
-  if model.screen is Chat {
-    header_children.push(
-      @html.button(
-        class="topbar-toggle",
-        title="Hide sidebar",
-        on_click=dispatch(ToggleSidebar),
-        icon(icon_layout_sidebar_left),
-      ),
-    )
-  }
+  // at the same screen position while it's closed — the topbar's left on
+  // Chat, a floating button on Skills/Settings (see `page_with_toggle`) —
+  // mirroring how the right-panel toggle stays put (topbar-right when
+  // closed, breadcrumb-right when open). New chat rides the header's right
+  // edge on every screen — rotating a session lands back on Chat regardless.
+  let header_children : Array[@html.Html] = [
+    @html.button(
+      class="topbar-toggle",
+      title="Hide sidebar",
+      on_click=dispatch(ToggleSidebar),
+      icon(icon_layout_sidebar_left),
+    ),
+  ]
   header_children.push(
     @html.button(
       class="topbar-toggle header-new-chat",
@@ -2117,6 +2113,31 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
+/// Skills and Settings have no topbar, so while the sidebar is closed they
+/// float their own reopen button at the sidebar toggle's screen position —
+/// without it the sidebar, their only way back to any other screen, would be
+/// unrecoverable.
+fn page_with_toggle(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  page : @html.Html,
+) -> Array[@html.Html] {
+  if model.sidebar_open {
+    [page]
+  } else {
+    [
+      @html.button(
+        class="topbar-toggle page-sidebar-toggle",
+        title="Show sidebar",
+        on_click=dispatch(ToggleSidebar),
+        icon(icon_layout_sidebar_left),
+      ),
+      page,
+    ]
+  }
+}
+
+///|
 fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let content = match model.screen {
     Chat =>
@@ -2130,8 +2151,9 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ),
         composer_view(dispatch, model),
       ]
-    Skills => [skills_page(dispatch, model)]
-    Settings => [settings_page(dispatch, model)]
+    Skills => page_with_toggle(dispatch, model, skills_page(dispatch, model))
+    Settings =>
+      page_with_toggle(dispatch, model, settings_page(dispatch, model))
   }
   // The app is `sidebar | content`; `content` itself splits into the
   // conversation (left) and the editor (right) as two independent parts, so
