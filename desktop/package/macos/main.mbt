@@ -142,7 +142,9 @@ async fn build_outputs(ws : @packaging.Workspace) -> Unit {
   // `.proton/runtime.json` to link the host against libproton/CEF.
   let _ = assemble_macos_cef_runtime(ws, env)
   @packaging.build_frontend_bundle(ws)
-  @packaging.build_native_host(ws, extra_env=env)
+  // Build the host without mimalloc: its static malloc/free override crashes
+  // against CEF's PartitionAlloc default zone on the first `@fs.realpath`.
+  @packaging.build_native_host(ws, extra_env=env, disable_mimalloc=true)
   @packaging.build_engine(ws, extra_env=env)
 }
 

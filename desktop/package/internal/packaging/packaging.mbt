@@ -404,7 +404,21 @@ pub async fn build_native_host(
   ws : Workspace,
   extra_args? : Array[String] = [],
   extra_env? : Map[String, String] = {},
+  disable_mimalloc? : Bool = false,
 ) -> Unit {
+  // The host embeds CEF, whose allocator shim takes over the macOS default
+  // malloc zone with PartitionAlloc. That collides with the MoonBit runtime's
+  // statically linked mimalloc: `@fs.realpath`'s libc-allocated result gets
+  // freed by mimalloc, which reads a PA guard page and crashes on startup
+  // (see the async realpath cross-allocator bug). Building the host without
+  // mimalloc sidesteps it — malloc/free fall back to libc's zone-aware
+  // allocator, which frees each pointer through its owning zone. Temporary,
+  // until the async fix lands.
+  let mimalloc = if disable_mimalloc {
+    install_empty_mimalloc(ws)
+  } else {
+    None
+  }
   let original = stamp_client_token(ws)
   run_checked(
     "moon",
@@ -414,10 +428,75 @@ pub async fn build_native_host(
   ) catch {
     error => {
       restore_client_token(ws, original)
+      restore_mimalloc(mimalloc)
       raise error
     }
   }
   restore_client_token(ws, original)
+  restore_mimalloc(mimalloc)
+}
+
+///|
+/// A swapped-out `libmoonbitrun.o`, so `restore_mimalloc` can put the real one
+/// back after the build.
+priv struct MimallocSwap {
+  // The runtime object the build links: overwritten with an empty object.
+  object : String
+  // A copy of the original, restored verbatim afterward.
+  backup : String
+  // The scratch directory holding the backup and the empty source, removed on
+  // restore.
+  scratch : String
+}
+
+///|
+/// Overwrite `$MOON_HOME/lib/libmoonbitrun.o` — the object that statically
+/// overrides malloc/free with mimalloc and registers mimalloc's macOS zone —
+/// with an empty object, so the next `moon build` links the host without
+/// mimalloc. The MoonBit runtime proper lives in a separate `runtime.o`, so
+/// only the allocator override is dropped; malloc/free resolve to libc. This
+/// mutates a file under `MOON_HOME` for the duration of one build;
+/// `restore_mimalloc` (via `defer`) puts the original back. `None` — leaving
+/// mimalloc in place — when `MOON_HOME` is unset or the object is missing.
+async fn install_empty_mimalloc(ws : Workspace) -> MimallocSwap? {
+  guard @env.get("MOON_HOME") is Some(moon_home) else {
+    println("warning: MOON_HOME unset; building the host with mimalloc enabled")
+    return None
+  }
+  let object = join_path(moon_home, "lib/libmoonbitrun.o")
+  if !@asyncfs.exists(object) {
+    println(
+      "warning: \{object} not found; building the host with mimalloc enabled",
+    )
+    return None
+  }
+  let scratch = @asyncfs.tmpdir(prefix="openseek-disable-mimalloc-")
+  let backup = join_path(scratch, "libmoonbitrun.o")
+  copy_file(object, backup)
+  let empty_source = join_path(scratch, "empty.c")
+  write_text(empty_source, "int openseek_mimalloc_disabled;\n")
+  run_checked("cc", ["-c", empty_source, "-o", object], dir=ws.dir())
+  println("Disabled mimalloc for the host build: \{object}")
+  Some({ object, backup, scratch })
+}
+
+///|
+/// Restore the real `libmoonbitrun.o` swapped out by `install_empty_mimalloc`
+/// and remove its scratch directory. A no-op when nothing was swapped.
+/// Restoration failures are reported rather than raised — leaving a stale
+/// empty object would quietly disable mimalloc in every later native build,
+/// which matters more to surface than the current command's exit path.
+async fn restore_mimalloc(swap : MimallocSwap?) -> Unit {
+  guard swap is Some(swap) else { return }
+  copy_file(swap.backup, swap.object) catch {
+    error =>
+      println(
+        "warning: failed to restore \{swap.object} (\{error}); rerun to fix mimalloc",
+      )
+  }
+  remove_path_if_exists(swap.scratch) catch {
+    _ => ()
+  }
 }
 
 ///|
