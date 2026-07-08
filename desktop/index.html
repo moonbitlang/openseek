@@ -301,43 +301,61 @@
         z-index: 1;
       }
 
-      /* The strip of open-file tabs. Always in the DOM (the editor's child
-         order is structural — see panel_view); collapses when no files are
-         open. Overflow scrolls horizontally rather than wrapping. */
-      .editor-tabs {
+      /* The editor's top bar, the same height as the topbar so the header
+         divider runs continuously across the window: the open-file tabs on
+         the left, the whole-panel toggle hugging the right edge (matching
+         the topbar's toggle position, so it stays put as the panel
+         opens/closes). Always rendered — the editor's child order is
+         structural (see panel_view). */
+      .editor-tabsbar {
         display: flex;
+        align-items: center;
+        gap: 10px;
         flex: 0 0 auto;
-        overflow-x: auto;
-        scrollbar-width: thin;
+        height: 46px;
+        padding: 0 18px 0 12px;
+        border-bottom: 1px solid var(--line);
         background: var(--surface);
       }
-      .editor-tabs:empty {
-        display: none;
-      }
-      .editor-tabs:not(:empty) {
-        border-bottom: 1px solid var(--line);
-      }
 
-      .editor-tab {
+      /* The tabs scroll horizontally rather than wrapping; the scrollbar is
+         hidden — the chips themselves make the overflow discoverable. */
+      .editor-tabs {
         display: flex;
         align-items: center;
         gap: 4px;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .editor-tabs::-webkit-scrollbar {
+        display: none;
+      }
+
+      /* One open file, styled like the app's other selectable chips
+         (tree rows, panel toggles): a quiet rounded chip, accent-tinted
+         when active. */
+      .editor-tab {
+        display: flex;
+        align-items: center;
+        gap: 2px;
         flex: 0 0 auto;
         max-width: 200px;
-        padding: 5px 4px 5px 12px;
+        padding: 4px 4px 4px 10px;
         font-size: 12px;
         color: var(--ink-2);
-        border-right: 1px solid var(--line);
+        border-radius: var(--radius-sm);
         cursor: pointer;
         white-space: nowrap;
       }
       .editor-tab:hover {
         background: var(--surface-2);
+        color: var(--ink);
       }
       .editor-tab.active {
-        color: var(--ink);
-        background: var(--surface-2);
-        box-shadow: inset 0 -2px var(--accent-ink);
+        background: var(--accent-soft);
+        color: var(--accent-ink);
       }
       /* A tab whose file vanished from disk keeps its place, struck through
          until the file reappears or the tab is closed. */
@@ -352,24 +370,29 @@
       }
       .tab-close {
         flex: 0 0 auto;
-        width: 18px;
-        height: 18px;
+        display: grid;
+        place-items: center;
+        width: 16px;
+        height: 16px;
         padding: 0;
         border: none;
         border-radius: 4px;
         background: transparent;
         color: var(--ink-3);
-        font-size: 13px;
+        font-size: 12px;
         line-height: 1;
         cursor: pointer;
       }
       .editor-tab .tab-close:hover {
-        background: var(--accent-soft);
+        background: color-mix(in srgb, var(--ink) 12%, transparent);
         color: var(--ink);
+      }
+      .editor-tab.active .tab-close {
+        color: var(--accent-ink);
       }
 
       /* The viewer and the toggleable file-tree pane share the row below the
-         tab strip. Both stay mounted (see panel_view) so the viewer host is
+         breadcrumb. Both stay mounted (see panel_view) so the viewer host is
          never re-keyed and the filter's state survives toggling; CSS alone
          hides the tree pane. */
       .editor-body {
@@ -377,6 +400,36 @@
         flex: 1 1 auto;
         min-width: 0;
         min-height: 0;
+      }
+
+      /* The viewer plus its notice overlay. The overlay covers the viewer
+         while the active tab has no document (deleted / binary / oversized
+         file) — panel chrome, not a synthesized source document. */
+      .viewer-stack {
+        position: relative;
+        display: flex;
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+      }
+      .viewer-stack > .viewer-host {
+        flex: 1 1 auto;
+      }
+      .viewer-notice {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        text-align: center;
+        font-size: 13px;
+        color: var(--ink-2);
+        background: var(--surface);
+      }
+      .viewer-notice.hidden {
+        display: none;
       }
       .file-tree-pane {
         display: flex;
@@ -510,16 +563,15 @@
         text-overflow: ellipsis;
       }
 
-      /* Matches the topbar height (46px) so the header divider is continuous
-         across the chat, viewer, and file-tree columns. The right padding
-         matches the topbar's so the panel toggle riding this edge sits at the
-         same screen position as the topbar's (panel-closed) toggle. */
+      /* The slimmer second row under the tab bar: the active file's path,
+         with the tree-pane toggle at the right edge — the same padding as
+         the tab bar above, so it sits directly under the panel toggle. */
       .viewer-breadcrumb {
         display: flex;
         align-items: center;
         gap: 6px;
         flex: 0 0 auto;
-        height: 46px;
+        height: 34px;
         padding: 0 18px 0 12px;
         border-bottom: 1px solid var(--line);
         font-size: 12px;

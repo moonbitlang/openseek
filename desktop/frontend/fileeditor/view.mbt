@@ -68,21 +68,23 @@ pub fn panel_view(
   )
   @html.div(class=if state.tree_open { "editor tree-open" } else { "editor" }, [
     resize_handle,
+    tabs_bar(dispatch, state),
     viewer_breadcrumb(dispatch, state),
-    tab_strip(dispatch, state),
     @html.div(class="editor-body", [
-      viewer_host,
+      @html.div(class="viewer-stack", [viewer_host, viewer_notice(state)]),
       tree_pane(dispatch, state, ctx),
     ]),
   ])
 }
 
 ///|
-/// The strip of open-file tabs between the breadcrumb and the viewer. Always
-/// rendered (CSS collapses it when empty) so the editor's child order stays
-/// structural. Clicking a tab activates it; the `×` closes it without
-/// activating (the close click must not bubble into the tab's own handler).
-fn tab_strip(dispatch : @cmd.Emit[Msg], state : State) -> @html.Html {
+/// The editor's top bar, aligned with the topbar: the open-file tabs, with
+/// the whole-panel toggle riding the right edge (the topbar only shows the
+/// open toggle while the panel is closed). Always rendered so the editor's
+/// child order stays structural. Clicking a tab activates it; the `×`
+/// closes it without activating (the close click must not bubble into the
+/// tab's own handler).
+fn tabs_bar(dispatch : @cmd.Emit[Msg], state : State) -> @html.Html {
   let tabs : Array[@html.Html] = []
   for tab in state.tabs {
     let mut classes = "editor-tab"
@@ -112,7 +114,43 @@ fn tab_strip(dispatch : @cmd.Emit[Msg], state : State) -> @html.Html {
       ),
     )
   }
-  @html.div(class="editor-tabs", tabs)
+  @html.div(class="editor-tabsbar", [
+    @html.div(class="editor-tabs", tabs),
+    @html.button(
+      class="panel-toggle",
+      title="Hide panel",
+      on_click=dispatch(ToggleFilePanel),
+      icon(icon_layout_sidebar_right),
+    ),
+  ])
+}
+
+///|
+/// The notice covering the viewer while the active tab has no document to
+/// show — a deleted, binary, or oversized file. Plain panel chrome laid
+/// over the (cleared) viewer, so a notice never renders as a highlighted
+/// source document. Always in the DOM; blank and hidden otherwise.
+fn viewer_notice(state : State) -> @html.Html {
+  let text = match state.active {
+    Some(path) =>
+      match state.tabs.search_by(tab => tab.path == path) {
+        Some(index) => {
+          let tab = state.tabs[index]
+          match tab.state {
+            TabDeleted => "\{tab.name} was deleted on disk."
+            TabBinary => "\{tab.name} is a binary file and cannot be previewed."
+            TabOversized => "\{tab.name} is too large to preview."
+            TabLoading | TabLoaded(..) => ""
+          }
+        }
+        None => ""
+      }
+    None => ""
+  }
+  @html.div(
+    class=if text.is_empty() { "viewer-notice hidden" } else { "viewer-notice" },
+    text,
+  )
 }
 
 ///|
@@ -226,11 +264,13 @@ fn crumb_link(
 }
 
 ///|
-/// The breadcrumb header over the panel: with a tab active, its path as
+/// The breadcrumb row under the tab bar: with a tab active, its path as
 /// `dir › dir › file` (the file segment emphasized) behind a leading
 /// "Workspace" crumb; otherwise just the "Workspace" crumb, since the tree
 /// is always rooted there. Every crumb but the last reveals that ancestor
 /// directory in the tree pane when clicked (opening the pane if needed).
+/// The tree-pane toggle rides this row's right edge, directly under the tab
+/// bar's panel toggle.
 fn viewer_breadcrumb(dispatch : @cmd.Emit[Msg], state : State) -> @html.Html {
   let crumbs : Array[@html.Html] = []
   match state.active {
@@ -250,9 +290,6 @@ fn viewer_breadcrumb(dispatch : @cmd.Emit[Msg], state : State) -> @html.Html {
     }
     None => crumbs.push(@html.span(class="crumb crumb-file", "Workspace"))
   }
-  // The tree-pane toggle and the panel's close toggle ride the breadcrumb's
-  // right edge; the topbar only shows the (open) toggle while the panel is
-  // closed.
   @html.div(class="viewer-breadcrumb", [
     @html.div(class="crumb-path", crumbs),
     @html.button(
@@ -260,12 +297,6 @@ fn viewer_breadcrumb(dispatch : @cmd.Emit[Msg], state : State) -> @html.Html {
       title=if state.tree_open { "Hide file tree" } else { "Show file tree" },
       on_click=dispatch(ToggleTree),
       icon(icon_folder),
-    ),
-    @html.button(
-      class="panel-toggle",
-      title="Hide panel",
-      on_click=dispatch(ToggleFilePanel),
-      icon(icon_layout_sidebar_right),
     ),
   ])
 }

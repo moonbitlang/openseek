@@ -55,11 +55,10 @@ fn show_tab(dispatch : @cmd.Emit[Msg], ctx : Ctx, tab : Tab) -> @cmd.Cmd {
         show
       }
     }
-    TabBinary =>
-      show_file_in_viewer(tab.name, "Binary file is not previewable.")
-    TabOversized =>
-      show_file_in_viewer(tab.name, "File is too large to preview.")
-    TabDeleted => show_file_in_viewer(tab.name, "File was deleted on disk.")
+    // Withheld and deleted tabs show the panel's own notice overlay (see
+    // `viewer_notice`), never a synthesized source document; the viewer just
+    // drops back to no document underneath it.
+    TabBinary | TabOversized | TabDeleted => clear_document()
   }
   // A tab that went stale in the background (or was deleted and reappeared)
   // shows what it has and reloads in the same breath; the reply lands with
@@ -473,10 +472,9 @@ pub fn update(
                 show
               }
             }
-            Binary =>
-              show_file_in_viewer(name, "Binary file is not previewable.")
-            Oversized =>
-              show_file_in_viewer(name, "File is too large to preview.")
+            // The notice overlay (rendered from the tab's new state) covers
+            // the viewer; drop whatever document it was showing.
+            Binary | Oversized => clear_document()
           }
         } else {
           @cmd.none
@@ -533,10 +531,10 @@ pub fn update(
             // notice replaces the document if it is the one on screen.
             if !(tab.state is TabDeleted) {
               tabs[index] = { ..tab, state: TabDeleted, stale: false }
+              // The notice overlay renders from the tab's new state; the
+              // viewer only needs its stale document dropped.
               if state.active == Some(tab.path) {
-                cmds.push(
-                  show_file_in_viewer(tab.name, "File was deleted on disk."),
-                )
+                cmds.push(clear_document())
               }
             }
           } else {
