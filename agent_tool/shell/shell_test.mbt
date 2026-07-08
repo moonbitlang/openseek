@@ -1,9 +1,11 @@
 ///|
-async fn run_shell(arguments : Json) -> @agent_tool.ToolAction {
-  match @shell.definition().execute {
+async fn run_shell(arguments : Json) -> @agent_tool.ToolOutput {
+  let action = match @shell.definition().execute {
     Async(execute) => execute(arguments)
     Sync(_) => fail("shell tool should be async")
   }
+  guard action is Respond(output) else { fail("expected Respond") }
+  output
 }
 
 ///|
@@ -14,11 +16,13 @@ async fn run_shell(arguments : Json) -> @agent_tool.ToolAction {
 async fn run_shell_wired(
   bg : @bgjobs.BgJobRuntime,
   arguments : Json,
-) -> @agent_tool.ToolAction {
-  match @shell.definition(bg_runtime=bg).execute {
+) -> @agent_tool.ToolOutput {
+  let action = match @shell.definition(bg_runtime=bg).execute {
     Async(execute) => execute(arguments)
     Sync(_) => fail("shell tool should be async")
   }
+  guard action is Respond(output) else { fail("expected Respond") }
+  output
 }
 
 ///|
@@ -26,11 +30,10 @@ async fn run_shell_wired(
 async test "run_in_background starts a job and returns its id" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
-    let action = run_shell_wired(bg, {
+    let output = run_shell_wired(bg, {
       "cmd": "printf hi",
       "run_in_background": true,
     })
-    guard action is Respond(output) else { fail("expected a Respond action") }
     assert_false(output.is_error)
     assert_true(output.content.contains("started background job"))
     assert_true(bg.list().length() == 1)
@@ -42,12 +45,11 @@ async test "run_in_background starts a job and returns its id" {
 async test "run_in_background rejects timeout_ms" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
-    let action = run_shell_wired(bg, {
+    let output = run_shell_wired(bg, {
       "cmd": "printf hi",
       "run_in_background": true,
       "timeout_ms": 1000,
     })
-    guard action is Respond(output) else { fail("expected a Respond action") }
     assert_true(output.is_error)
     assert_true(output.content.contains("not supported with run_in_background"))
   })
@@ -58,8 +60,7 @@ async test "run_in_background rejects timeout_ms" {
 async test "foreground runs through the execution model" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
-    let action = run_shell_wired(bg, { "cmd": "printf hi" })
-    guard action is Respond(output) else { fail("expected a Respond action") }
+    let output = run_shell_wired(bg, { "cmd": "printf hi" })
     assert_false(output.is_error)
     assert_true(output.content.contains("hi"))
     assert_true(output.content.contains("exit=0"))
@@ -73,8 +74,7 @@ async test "wired foreground reports binary output as a tool error" {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
     // The wired path (through ShellExecution) must match the per-call path:
     // non-UTF-8 output is a tool error, not replacement characters as success.
-    let action = run_shell_wired(bg, { "cmd": "printf '\\377'" })
-    guard action is Respond(output) else { fail("expected a Respond action") }
+    let output = run_shell_wired(bg, { "cmd": "printf '\\377'" })
     assert_true(output.is_error)
     assert_true(output.content.contains("Malformed"))
   })
@@ -87,8 +87,7 @@ async test "foreground enforces max_output_chars with an output-limit error" {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
     // `yes` exceeds the tiny budget; the shared foreground path must report the
     // output-limit error, not silently drop output as a success.
-    let action = run_shell_wired(bg, { "cmd": "yes", "max_output_chars": 100 })
-    guard action is Respond(output) else { fail("expected a Respond action") }
+    let output = run_shell_wired(bg, { "cmd": "yes", "max_output_chars": 100 })
     assert_true(output.is_error)
     assert_true(output.content.contains("output_limit_reached"))
   })
@@ -102,12 +101,11 @@ async test "a timed command that floods output is an output-limit error, not det
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group), spill_dir=dir)
     // A long timeout, but the runaway must be killed at the output limit promptly
     // (not run to the timeout and then backgrounded).
-    let action = run_shell_wired(bg, {
+    let output = run_shell_wired(bg, {
       "cmd": "yes",
       "timeout_ms": 30000,
       "max_output_chars": 100,
     })
-    guard action is Respond(output) else { fail("expected a Respond action") }
     assert_true(output.is_error)
     assert_true(output.content.contains("output_limit_reached"))
     @fs.rmdir(dir, recursive=true) catch {
@@ -125,12 +123,11 @@ async test "a detached foreground job retains full output past the inline cap" {
     // Under the output limit at the timeout (still sleeping) → cleanly detached;
     // then it floods output, which a detached job retains (the output-limit kill
     // is cleared on detach).
-    let action = run_shell_wired(bg, {
+    let output = run_shell_wired(bg, {
       "cmd": "sleep 0.3; seq 1 5000",
       "timeout_ms": 150,
       "max_output_chars": 100,
     })
-    guard action is Respond(output) else { fail("expected a Respond action") }
     assert_true(output.content.contains("moved to the background"))
     // The detached job is file-backed, so its full output is retained, not
     // capped at the foreground budget. Poll until the monitor has flushed it.
@@ -156,8 +153,7 @@ async test "a detached foreground job retains full output past the inline cap" {
 async test "a foreground command that times out is detached to the background" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
-    let action = run_shell_wired(bg, { "cmd": "sleep 2", "timeout_ms": 100 })
-    guard action is Respond(output) else { fail("expected a Respond action") }
+    let output = run_shell_wired(bg, { "cmd": "sleep 2", "timeout_ms": 100 })
     assert_false(output.is_error)
     assert_true(output.content.contains("moved to the background"))
     assert_true(bg.list().length() == 1)
@@ -169,11 +165,13 @@ async test "a foreground command that times out is detached to the background" {
 async fn run_shell_in_workspace(
   workspace_root : String,
   arguments : Json,
-) -> @agent_tool.ToolAction {
-  match @shell.definition(workspace_root~).execute {
+) -> @agent_tool.ToolOutput {
+  let action = match @shell.definition(workspace_root~).execute {
     Async(execute) => execute(arguments)
     Sync(_) => fail("shell tool should be async")
   }
+  guard action is Respond(output) else { fail("expected Respond") }
+  output
 }
 
 ///|
@@ -203,11 +201,10 @@ async fn assert_answer_main_unchanged(
 /// Respond carrying the `marker` phrase plus the shared feedback line (and,
 /// when `line_anchored`, the edit-tool redirection hint).
 fn expect_source_write_blocked(
-  result : @agent_tool.ToolAction,
+  output : @agent_tool.ToolOutput,
   marker? : String = "source tree operation is blocked",
   line_anchored? : Bool = false,
 ) -> Unit raise {
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_true(output.is_error)
   assert_true(output.content.contains(marker))
   assert_true(
@@ -323,8 +320,7 @@ async test "shell description teaches background jobs only when a runtime is wir
 
 ///|
 async test "shell runs cmd and returns exit code plus output" {
-  let result = run_shell({ "cmd": "echo hello" })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "echo hello" })
   assert_false(output.is_error)
   assert_true(output.content.contains("exit=0"))
   assert_true(output.content.contains("hello"))
@@ -332,8 +328,7 @@ async test "shell runs cmd and returns exit code plus output" {
 
 ///|
 async test "shell propagates non-zero exit codes" {
-  let result = run_shell({ "cmd": "exit 7" })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "exit 7" })
   assert_true(output.is_error)
   assert_true(output.content.contains("exit=7"))
 }
@@ -341,8 +336,7 @@ async test "shell propagates non-zero exit codes" {
 ///|
 #cfg(platform="windows")
 async test "shell follows PowerShell native Windows exit semantics" {
-  let result = run_shell({ "cmd": "cmd /c exit 7" })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "cmd /c exit 7" })
   assert_true(output.is_error)
   assert_true(output.content.contains("exit=1"))
 }
@@ -350,8 +344,7 @@ async test "shell follows PowerShell native Windows exit semantics" {
 ///|
 #cfg(platform="windows")
 async test "shell follows final successful PowerShell command on Windows" {
-  let result = run_shell({ "cmd": "cmd /c exit 7; Write-Output 'ok'" })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "cmd /c exit 7; Write-Output 'ok'" })
   assert_false(output.is_error)
   assert_true(output.content.contains("exit=0"))
   assert_true(output.content.contains("ok"))
@@ -360,11 +353,10 @@ async test "shell follows final successful PowerShell command on Windows" {
 ///|
 async test "shell honors cwd when non-empty" {
   @vfs.with_tmpdir(prefix="openseek-shell-cwd-", dir => {
-    let result = run_shell({ "cmd": "echo cwd-ok > marker.txt", "cwd": dir })
+    let output = run_shell({ "cmd": "echo cwd-ok > marker.txt", "cwd": dir })
     let dir_path : @path.Path = dir
     let marker_path = dir_path.join("marker.txt").normalize().to_string()
     let marker = @fs.read_file(marker_path).text() catch { _ => "" }
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_true(output.content.contains("exit=0"))
     assert_eq(marker.trim(), "cwd-ok")
@@ -379,8 +371,7 @@ async test "shell uses the workspace root when cwd is omitted" {
       "root-ok\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(dir, { "cmd": "cat marker.txt" })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_shell_in_workspace(dir, { "cmd": "cat marker.txt" })
     assert_false(output.is_error)
     assert_true(output.content.contains("exit=0"))
     assert_true(output.content.contains("root-ok"))
@@ -396,8 +387,7 @@ async test "shell reads a virtual filesystem fixture from cwd" {
         #|
       ),
     }).write_to(project)
-    let result = run_shell({ "cmd": "cat data/input.txt", "cwd": project })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_shell({ "cmd": "cat data/input.txt", "cwd": project })
     assert_false(output.is_error)
     inspect(
       output.content.trim(),
@@ -411,8 +401,7 @@ async test "shell reads a virtual filesystem fixture from cwd" {
 
 ///|
 async test "shell treats empty cwd as missing" {
-  let result = run_shell({ "cmd": "echo cwdless", "cwd": "" })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "echo cwdless", "cwd": "" })
   assert_false(output.is_error)
   assert_true(output.content.contains("exit=0"))
   assert_true(output.content.contains("cwdless"))
@@ -421,11 +410,10 @@ async test "shell treats empty cwd as missing" {
 ///|
 #cfg(platform="windows")
 async test "shell leaves output at exact limit as a normal result on Windows" {
-  let result = run_shell({
+  let output = run_shell({
     "cmd": "[Console]::Out.Write('abc')",
     "max_output_chars": 3,
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_false(output.is_error)
   assert_eq(output.content, "abc\n<system>exit=0</system>")
 }
@@ -433,8 +421,7 @@ async test "shell leaves output at exact limit as a normal result on Windows" {
 ///|
 #cfg(not(platform="windows"))
 async test "shell leaves output at exact limit as a normal result on Unix" {
-  let result = run_shell({ "cmd": "printf %s 'abc'", "max_output_chars": 3 })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "printf %s 'abc'", "max_output_chars": 3 })
   assert_false(output.is_error)
   assert_eq(output.content, "abc\n<system>exit=0</system>")
 }
@@ -442,11 +429,10 @@ async test "shell leaves output at exact limit as a normal result on Unix" {
 ///|
 #cfg(platform="windows")
 async test "shell counts output limits in characters for non-ascii text on Windows" {
-  let result = run_shell({
+  let output = run_shell({
     "cmd": "[Console]::Out.Write('中中')",
     "max_output_chars": 2,
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_false(output.is_error)
   assert_eq(output.content, "中中\n<system>exit=0</system>")
 }
@@ -454,8 +440,7 @@ async test "shell counts output limits in characters for non-ascii text on Windo
 ///|
 #cfg(not(platform="windows"))
 async test "shell counts output limits in characters for non-ascii text on Unix" {
-  let result = run_shell({ "cmd": "printf %s '中中'", "max_output_chars": 2 })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "printf %s '中中'", "max_output_chars": 2 })
   assert_false(output.is_error)
   assert_eq(output.content, "中中\n<system>exit=0</system>")
 }
@@ -463,11 +448,10 @@ async test "shell counts output limits in characters for non-ascii text on Unix"
 ///|
 #cfg(platform="windows")
 async test "shell leaves four-byte utf8 output at exact character limit on Windows" {
-  let result = run_shell({
+  let output = run_shell({
     "cmd": "[Console]::Out.Write('😀')",
     "max_output_chars": 1,
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_false(output.is_error)
   assert_eq(output.content, "😀\n<system>exit=0</system>")
 }
@@ -475,8 +459,7 @@ async test "shell leaves four-byte utf8 output at exact character limit on Windo
 ///|
 #cfg(not(platform="windows"))
 async test "shell leaves four-byte utf8 output at exact character limit on Unix" {
-  let result = run_shell({ "cmd": "printf %s '😀'", "max_output_chars": 1 })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "printf %s '😀'", "max_output_chars": 1 })
   assert_false(output.is_error)
   assert_eq(output.content, "😀\n<system>exit=0</system>")
 }
@@ -484,12 +467,11 @@ async test "shell leaves four-byte utf8 output at exact character limit on Unix"
 ///|
 #cfg(platform="windows")
 async test "shell stops oversized output while the command is still running on Windows" {
-  let result = run_shell({
+  let output = run_shell({
     "cmd": "[Console]::Out.Write('abcdef'); Start-Sleep -Seconds 2",
     "max_output_chars": 3,
     "timeout_ms": 1000,
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_true(output.is_error)
   assert_true(
     output.content =~ re"^abc\n<system>exit=cancelled truncated=true output_limit_reached=true shown_chars=3 max_output_chars=3</system>$",
@@ -501,12 +483,11 @@ async test "shell stops oversized output while the command is still running on W
 ///|
 #cfg(not(platform="windows"))
 async test "shell stops oversized output while the command is still running on Unix" {
-  let result = run_shell({
+  let output = run_shell({
     "cmd": "printf %s 'abcdef'; sleep 2",
     "max_output_chars": 3,
     "timeout_ms": 1000,
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_true(output.is_error)
   assert_true(
     output.content =~ re"^abc\n<system>exit=cancelled truncated=true output_limit_reached=true shown_chars=3 max_output_chars=3</system>$",
@@ -518,12 +499,11 @@ async test "shell stops oversized output while the command is still running on U
 ///|
 #cfg(platform="windows")
 async test "shell does not cut multi-byte utf8 output mid-character on Windows" {
-  let result = run_shell({
+  let output = run_shell({
     "cmd": "[Console]::Out.Write('中中中'); Start-Sleep -Seconds 2",
     "max_output_chars": 2,
     "timeout_ms": 1000,
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_true(output.is_error)
   assert_true(
     output.content =~ re"^中中\n<system>exit=cancelled truncated=true output_limit_reached=true shown_chars=2 max_output_chars=2</system>$",
@@ -535,12 +515,11 @@ async test "shell does not cut multi-byte utf8 output mid-character on Windows" 
 ///|
 #cfg(not(platform="windows"))
 async test "shell does not cut multi-byte utf8 output mid-character on Unix" {
-  let result = run_shell({
+  let output = run_shell({
     "cmd": "printf %s '中中中'; sleep 2",
     "max_output_chars": 2,
     "timeout_ms": 1000,
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_true(output.is_error)
   assert_true(
     output.content =~ re"^中中\n<system>exit=cancelled truncated=true output_limit_reached=true shown_chars=2 max_output_chars=2</system>$",
@@ -552,12 +531,11 @@ async test "shell does not cut multi-byte utf8 output mid-character on Unix" {
 ///|
 #cfg(platform="windows")
 async test "shell does not split four-byte utf8 characters on Windows" {
-  let result = run_shell({
+  let output = run_shell({
     "cmd": "[Console]::Out.Write('😀😀'); Start-Sleep -Seconds 2",
     "max_output_chars": 1,
     "timeout_ms": 1000,
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_true(output.is_error)
   assert_true(
     output.content =~ re"^😀\n<system>exit=cancelled truncated=true output_limit_reached=true shown_chars=1 max_output_chars=1</system>$",
@@ -569,12 +547,11 @@ async test "shell does not split four-byte utf8 characters on Windows" {
 ///|
 #cfg(not(platform="windows"))
 async test "shell does not split four-byte utf8 characters on Unix" {
-  let result = run_shell({
+  let output = run_shell({
     "cmd": "printf %s '😀😀'; sleep 2",
     "max_output_chars": 1,
     "timeout_ms": 1000,
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_true(output.is_error)
   assert_true(
     output.content =~ re"^😀\n<system>exit=cancelled truncated=true output_limit_reached=true shown_chars=1 max_output_chars=1</system>$",
@@ -586,10 +563,9 @@ async test "shell does not split four-byte utf8 characters on Unix" {
 ///|
 #cfg(platform="windows")
 async test "shell reports binary output as a tool error on Windows" {
-  let result = run_shell({
+  let output = run_shell({
     "cmd": "[Console]::OpenStandardOutput().WriteByte(255)",
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_true(output.is_error)
   assert_true(output.content.contains("error running shell:"))
   assert_true(output.content.contains("Malformed"))
@@ -598,8 +574,7 @@ async test "shell reports binary output as a tool error on Windows" {
 ///|
 #cfg(not(platform="windows"))
 async test "shell reports binary output as a tool error on Unix" {
-  let result = run_shell({ "cmd": "printf '\\377'" })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "printf '\\377'" })
   assert_true(output.is_error)
   assert_true(output.content.contains("error running shell:"))
   assert_true(output.content.contains("Malformed"))
@@ -608,12 +583,11 @@ async test "shell reports binary output as a tool error on Unix" {
 ///|
 #cfg(platform="windows")
 async test "shell output limit wins over an unbounded producer on Windows" {
-  let result = run_shell({
+  let output = run_shell({
     "cmd": "while ($true) { [Console]::Out.Write('yyyyyyyyyy') }",
     "max_output_chars": 5,
     "timeout_ms": 1000,
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_true(output.is_error)
   assert_true(
     output.content =~ re"^yyyyy\n<system>exit=cancelled truncated=true output_limit_reached=true shown_chars=5 max_output_chars=5</system>$",
@@ -624,12 +598,11 @@ async test "shell output limit wins over an unbounded producer on Windows" {
 ///|
 #cfg(not(platform="windows"))
 async test "shell output limit wins over an unbounded producer on Unix" {
-  let result = run_shell({
+  let output = run_shell({
     "cmd": "while :; do printf %s 'yyyyyyyyyy'; done",
     "max_output_chars": 5,
     "timeout_ms": 1000,
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_true(output.is_error)
   assert_true(
     output.content =~ re"^yyyyy\n<system>exit=cancelled truncated=true output_limit_reached=true shown_chars=5 max_output_chars=5</system>$",
@@ -640,8 +613,7 @@ async test "shell output limit wins over an unbounded producer on Unix" {
 ///|
 #cfg(platform="windows")
 async test "shell merges stderr into the captured output on Windows" {
-  let result = run_shell({ "cmd": "[Console]::Error.WriteLine('oops')" })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "[Console]::Error.WriteLine('oops')" })
   assert_false(output.is_error)
   assert_true(output.content.contains("oops"))
 }
@@ -649,8 +621,7 @@ async test "shell merges stderr into the captured output on Windows" {
 ///|
 #cfg(not(platform="windows"))
 async test "shell merges stderr into the captured output on Unix" {
-  let result = run_shell({ "cmd": "printf '%s\\n' 'oops' 1>&2" })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "printf '%s\\n' 'oops' 1>&2" })
   assert_false(output.is_error)
   assert_true(output.content.contains("oops"))
 }
@@ -658,8 +629,7 @@ async test "shell merges stderr into the captured output on Unix" {
 ///|
 #cfg(platform="windows")
 async test "shell times out long running commands on Windows" {
-  let result = run_shell({ "cmd": "Start-Sleep -Seconds 2", "timeout_ms": 50 })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "Start-Sleep -Seconds 2", "timeout_ms": 50 })
   assert_true(output.is_error)
   assert_eq(output.content, "error: shell command timed out after 50ms")
 }
@@ -667,8 +637,7 @@ async test "shell times out long running commands on Windows" {
 ///|
 #cfg(not(platform="windows"))
 async test "shell times out long running commands on Unix" {
-  let result = run_shell({ "cmd": "sleep 2", "timeout_ms": 50 })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "sleep 2", "timeout_ms": 50 })
   assert_true(output.is_error)
   assert_eq(output.content, "error: shell command timed out after 50ms")
 }
@@ -679,8 +648,7 @@ async test "shell rejects moon_cmd as a shell command" {
   // is the bare `moon_cmd` tool name, blocked before execution. We do not
   // exercise `moon check` here: the shell tool would run a nested `moon` under
   // `moon test` and deadlock on the build lock.
-  let result = run_shell({ "cmd": "moon_cmd run cmd/main" })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "moon_cmd run cmd/main" })
   assert_true(output.is_error)
   assert_true(output.content.contains("moon_cmd is not a shell command"))
 }
@@ -689,8 +657,7 @@ async test "shell rejects moon_cmd as a shell command" {
 async test "shell rejects sed -i in-place editing" {
   // Blocked by policy before execution, so no file is touched; the model is
   // redirected to the edit tool.
-  let result = run_shell({ "cmd": "sed -i 's/old/new/' main.mbt" })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cmd": "sed -i 's/old/new/' main.mbt" })
   assert_true(output.is_error)
   assert_true(output.content.contains("sed -i"))
   assert_true(output.content.contains("edit"))
@@ -709,11 +676,10 @@ async test "shell sandbox blocks source writes and points to edit tools" {
     // The redirect target hides behind a variable, so the static preblock cannot
     // see it. The write only fails because the kernel source-write sandbox denies
     // it at runtime, which is exactly the enforcement this test must cover.
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "dest=main.mbt; printf 'pub fn answer() -> Int { 43 }\\n' > \"$dest\"",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(
       output.content.contains("Operation not permitted") ||
@@ -739,11 +705,10 @@ async test "shell sandbox allows generated source writes under _build" {
     @fs.mkdir("\{dir}/_build")
     // `_build/main.mbt` matches the source-file shape but lives under a
     // Moon-managed build tree, so the SBPL carve-out must keep it writable.
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "awk 'BEGIN { print \"pub fn generated() -> Int { 1 }\" > \"_build/main.mbt\" }'",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_false(
       output.content.contains("source file writes from shell are blocked"),
@@ -760,11 +725,10 @@ async test "shell sandbox allows generated source writes under _build" {
 async test "shell sandbox reports masked source write denials as errors" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-masked-denial-", dir => {
     write_answer_main(dir)
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "printf %s changed 2>/dev/null > main.mbt || true",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("<system>exit=blocked</system>"))
     assert_true(output.content.contains("blocked before execution"))
@@ -783,11 +747,10 @@ async test "shell sandbox preblocks source write through symlink redirect" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-symlink-redirect-", dir => {
     write_answer_main(dir)
     @fs.symlink(target="main.mbt", "\{dir}/out.log")
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "moon fmt > out.log",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(
       output.content.contains("source file write redirect is blocked"),
@@ -838,11 +801,10 @@ async test "shell sandbox preblocks tee through symlinked source destination" {
 #cfg(not(platform="windows"))
 async test "shell sandbox does not treat unrelated output as source denial" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-unrelated-denial-", dir => {
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "printf '%s\\n' 'foo: Operation not permitted'",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_true(output.content.contains("foo: Operation not permitted"))
     assert_false(
@@ -856,11 +818,10 @@ async test "shell sandbox does not treat unrelated output as source denial" {
 async test "shell sandbox preblocks source write after uncertain cd chain" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-cd-chain-", dir => {
     write_answer_main(dir)
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "cd /definitely-missing-openseek 2>/dev/null && :; printf changed > main.mbt",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("blocked before execution"))
     assert_true(
@@ -875,11 +836,10 @@ async test "shell sandbox preblocks source write after uncertain cd chain" {
 async test "shell sandbox preblocks source write after entering workspace from external cwd" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-external-cwd-", dir => {
     write_answer_main(dir)
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "cd \{dir}; printf changed 2>/dev/null > main.mbt || true",
       "cwd": "/tmp",
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("blocked before execution"))
     assert_answer_main_unchanged(dir)
@@ -896,11 +856,10 @@ async test "shell sandbox preblocks source directory moves" {
       "pub fn answer() -> Int { 42 }\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "mv pkg pkg.bak",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("source tree operation is blocked"))
     assert_true(output.content.contains("line-anchored"))
@@ -1128,11 +1087,10 @@ async test "shell sandbox preserves mkdir predictions across fallback branches" 
 #cfg(not(platform="windows"))
 async test "shell sandbox preblocks nested shell source generation" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-nested-sh-source-", dir => {
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "sh -c 'mkdir -p _build/gen; printf source > _build/gen/main.mbt; mv _build/gen pkg'",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("source tree operation is blocked"))
     assert_true(output.content.contains("line-anchored"))
@@ -1189,13 +1147,10 @@ async test "shell sandbox preblocks scripted external source directory imports" 
       expect_source_write_blocked(result, line_anchored=true)
       assert_true(@fs.exists("\{generated}/main.mbt"))
       assert_false(@fs.exists("\{workspace}/pkg/main.mbt"))
-      let copy_result = run_shell_in_workspace(workspace, {
+      let copy_output = run_shell_in_workspace(workspace, {
         "cmd": "python3 -c 'import shutil; shutil.copy(\"\{generated_file}\", \"pkg\")'",
         "cwd": workspace,
       })
-      guard copy_result is Respond(copy_output) else {
-        fail("expected Respond")
-      }
       assert_true(copy_output.is_error)
       assert_true(
         copy_output.content.contains("source tree operation is blocked"),
@@ -1218,11 +1173,10 @@ async test "shell sandbox blocks unrecognized incoming source directory renames"
     prefix="openseek-shell-sandbox-python-incoming-source-dir-",
     dir => {
       @fs.mkdir("\{dir}/_build")
-      let result = run_shell_in_workspace(dir, {
+      let output = run_shell_in_workspace(dir, {
         "cmd": "python3 -c 'import os; os.makedirs(\"_build/gen\", exist_ok=True); open(\"_build/gen/main.mbt\", \"w\").write(\"pub fn generated() -> Int { 1 }\\\\n\"); os.rename(\"_build/gen\", \"pkg\")'",
         "cwd": dir,
       })
-      guard result is Respond(output) else { fail("expected Respond") }
       assert_true(output.is_error)
       assert_true(output.content.contains("source tree operation is blocked"))
       assert_true(output.content.contains("line-anchored"))
@@ -1238,11 +1192,10 @@ async test "shell sandbox preblocks script rename of generated source directory"
   @vfs.with_tmpdir(
     prefix="openseek-shell-sandbox-python-generated-dir-rename-",
     dir => {
-      let result = run_shell_in_workspace(dir, {
+      let output = run_shell_in_workspace(dir, {
         "cmd": "mkdir -p _build/gen && printf 'pub fn generated() -> Int { 1 }\\n' > _build/gen/main.mbt && python3 -c 'import os; os.rename(\"_build/gen\", \"pkg\")'",
         "cwd": dir,
       })
-      guard result is Respond(output) else { fail("expected Respond") }
       assert_true(output.is_error)
       assert_true(output.content.contains("source tree operation is blocked"))
       assert_true(output.content.contains("line-anchored"))
@@ -1262,11 +1215,10 @@ async test "shell sandbox allows non-source directory moves" {
       "not MoonBit source\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "mv assets pkg",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_false(output.content.contains("source tree operation is blocked"))
     assert_true(@fs.exists("\{dir}/pkg/logo.txt"))
@@ -1284,11 +1236,10 @@ async test "shell sandbox preblocks source directory move after uncertain cd cha
       "pub fn answer() -> Int { 42 }\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "cd /definitely-missing-openseek 2>/dev/null && :; mv pkg pkg.bak",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("source tree operation is blocked"))
     assert_true(@fs.exists("\{dir}/pkg/main.mbt"))
@@ -1306,11 +1257,10 @@ async test "shell sandbox preblocks source directory move after entering workspa
       "pub fn answer() -> Int { 42 }\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "cd \{dir}; mv pkg pkg.bak",
       "cwd": "/tmp",
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("source tree operation is blocked"))
     assert_true(@fs.exists("\{dir}/pkg/main.mbt"))
@@ -1328,8 +1278,7 @@ async test "shell sandbox preblocks source directory removals" {
       "warnings = \"\"\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(dir, { "cmd": "rm -rf pkg", "cwd": dir })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_shell_in_workspace(dir, { "cmd": "rm -rf pkg", "cwd": dir })
     assert_true(output.is_error)
     assert_true(output.content.contains("source tree operation is blocked"))
     assert_true(@fs.exists("\{dir}/pkg/moon.pkg"))
@@ -1349,11 +1298,10 @@ async test "shell sandbox preblocks incoming source directory moves" {
       "pub fn generated() -> Int { 1 }\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(workspace, {
+    let output = run_shell_in_workspace(workspace, {
       "cmd": "mv \{generated} pkg",
       "cwd": workspace,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("source tree operation is blocked"))
     assert_true(output.content.contains("line-anchored"))
@@ -1367,11 +1315,10 @@ async test "shell sandbox preblocks incoming source directory moves" {
 async test "shell sandbox preblocks generated source directory moves from build output" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-mv-generated-dir-", workspace => {
     @fs.mkdir("\{workspace}/_build")
-    let result = run_shell_in_workspace(workspace, {
+    let output = run_shell_in_workspace(workspace, {
       "cmd": "mkdir -p _build/gen && printf 'pub fn generated() -> Int { 1 }\\n' > _build/gen/main.mbt && mv _build/gen pkg",
       "cwd": workspace,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("source tree operation is blocked"))
     assert_false(@fs.exists("\{workspace}/_build/gen/main.mbt"))
@@ -1384,11 +1331,10 @@ async test "shell sandbox preblocks generated source directory moves from build 
 async test "shell sandbox preblocks generated dotted source directory moves from build output" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-mv-generated-dot-dir-", workspace => {
     @fs.mkdir("\{workspace}/_build")
-    let result = run_shell_in_workspace(workspace, {
+    let output = run_shell_in_workspace(workspace, {
       "cmd": "mkdir -p _build/gen.v1 && printf 'pub fn generated() -> Int { 1 }\\n' > _build/gen.v1/main.mbt && mv _build/gen.v1 pkg",
       "cwd": workspace,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("source tree operation is blocked"))
     assert_false(@fs.exists("\{workspace}/_build/gen.v1/main.mbt"))
@@ -1404,11 +1350,10 @@ async test "shell sandbox preblocks generated dotted source directory moves into
     workspace => {
       @fs.mkdir("\{workspace}/_build")
       @fs.mkdir("\{workspace}/pkg")
-      let result = run_shell_in_workspace(workspace, {
+      let output = run_shell_in_workspace(workspace, {
         "cmd": "mkdir -p _build/gen.v1 && printf 'pub fn generated() -> Int { 1 }\\n' > _build/gen.v1/main.mbt && mv _build/gen.v1 pkg",
         "cwd": workspace,
       })
-      guard result is Respond(output) else { fail("expected Respond") }
       assert_true(output.is_error)
       assert_true(output.content.contains("source tree operation is blocked"))
       assert_false(@fs.exists("\{workspace}/_build/gen.v1/main.mbt"))
@@ -1422,11 +1367,10 @@ async test "shell sandbox preblocks generated dotted source directory moves into
 async test "shell sandbox preblocks generated source directory moves to dotted destinations" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-mv-generated-dir-dot-dest-", workspace => {
     @fs.mkdir("\{workspace}/_build")
-    let result = run_shell_in_workspace(workspace, {
+    let output = run_shell_in_workspace(workspace, {
       "cmd": "mkdir -p _build/gen && printf 'pub fn generated() -> Int { 1 }\\n' > _build/gen/main.mbt && mv _build/gen pkg.v1",
       "cwd": workspace,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("source tree operation is blocked"))
     assert_false(@fs.exists("\{workspace}/_build/gen/main.mbt"))
@@ -1441,11 +1385,10 @@ async test "shell sandbox preblocks generated file-like source directory moves t
     prefix="openseek-shell-sandbox-mv-generated-file-like-dir-",
     workspace => {
       @fs.mkdir("\{workspace}/_build")
-      let result = run_shell_in_workspace(workspace, {
+      let output = run_shell_in_workspace(workspace, {
         "cmd": "mkdir -p assets _build/gen.tmp && printf 'pub fn generated() -> Int { 1 }\\n' > _build/gen.tmp/main.mbt && mv _build/gen.tmp assets/pkg.tmp",
         "cwd": workspace,
       })
-      guard result is Respond(output) else { fail("expected Respond") }
       assert_true(output.is_error)
       assert_true(output.content.contains("source tree operation is blocked"))
       assert_false(@fs.exists("\{workspace}/_build/gen.tmp/main.mbt"))
@@ -1458,11 +1401,10 @@ async test "shell sandbox preblocks generated file-like source directory moves t
 #cfg(not(platform="windows"))
 async test "shell sandbox allows generated non-source file moves from build output" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-mv-generated-file-", workspace => {
-    let result = run_shell_in_workspace(workspace, {
+    let output = run_shell_in_workspace(workspace, {
       "cmd": "mkdir -p assets _build && printf data > _build/logo.txt && mv _build/logo.txt assets/logo.txt",
       "cwd": workspace,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_false(output.content.contains("source tree operation is blocked"))
     assert_eq(@fs.read_file("\{workspace}/assets/logo.txt").text(), "data")
@@ -1483,11 +1425,10 @@ async test "shell sandbox preblocks incoming source files moved into workspace d
       "pub fn generated() -> Int { 1 }\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(workspace, {
+    let output = run_shell_in_workspace(workspace, {
       "cmd": "mv -t pkg \{generated}",
       "cwd": workspace,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("source tree operation is blocked"))
     assert_true(@fs.exists(generated))
@@ -1507,11 +1448,10 @@ async test "shell sandbox blocks moon work writes" {
       "members = []\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "printf 'members = [\".\"]' > moon.work",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(
       output.content.contains("source file writes from shell are blocked"),
@@ -1533,8 +1473,7 @@ async test "shell sandbox still permits moon check build outputs" {
       create_mode=CreateOrTruncate,
     )
     write_answer_main(dir)
-    let result = run_shell_in_workspace(dir, { "cmd": "moon check", "cwd": dir })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_shell_in_workspace(dir, { "cmd": "moon check", "cwd": dir })
     assert_false(output.is_error)
     assert_true(output.content.contains("<system>exit=0</system>"))
     assert_false(output.content.contains("source file writes from shell"))
@@ -1566,8 +1505,7 @@ async test "shell allows moon check pre-build source outputs" {
       create_mode=CreateOrTruncate,
     )
     write_answer_main(dir, content="pub fn answer() -> Int { generated() }\n")
-    let result = run_shell_in_workspace(dir, { "cmd": "moon check", "cwd": dir })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_shell_in_workspace(dir, { "cmd": "moon check", "cwd": dir })
     assert_false(output.is_error)
     assert_true(output.content.contains("<system>exit=0</system>"))
     assert_true(@fs.exists("\{dir}/generated.mbt"))
@@ -1611,11 +1549,10 @@ async test "shell trusts guarded package cd before moon check pre-build output" 
       "pub fn answer() -> Int { generated() }\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "cd pkg && moon check",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     // `cd pkg && moon check` is a trusted source-write command, so the sandbox
     // must run it unsandboxed and let moon's pre-build write source. We assert
     // only that our guard did not interpose; whether moon's pre-build itself
@@ -1638,11 +1575,10 @@ async test "shell sandbox blocks too-complex sed source rewrites" {
   }
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-sed-glob-", dir => {
     write_answer_main(dir, content="pub fn answer() -> Int { old }\n")
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "sed -i '' 's/old/new/' *.mbt",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(
       output.content.contains("source file writes from shell are blocked"),
@@ -1661,11 +1597,10 @@ async test "shell sandbox blocks too-complex sed source rewrites" {
 async test "shell sandbox preblocks too-complex fd duplicate source redirect" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-fd-dup-source-", dir => {
     write_answer_main(dir)
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "printf changed >& main.mbt *.txt 2>/dev/null || true",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("source tree operation is blocked"))
     assert_answer_main_unchanged(dir)
@@ -1681,11 +1616,10 @@ async test "shell sandbox allows read-only grep of source text" {
       "let mv_marker = 1\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "grep mv *.mbt",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_true(output.content.contains("mv_marker"))
     assert_false(output.content.contains("source tree operation is blocked"))
@@ -1697,11 +1631,10 @@ async test "shell sandbox allows read-only grep of source text" {
 async test "shell preblocks env unset sed source rewrites" {
   @vfs.with_tmpdir(prefix="openseek-shell-env-sed-source-", dir => {
     write_answer_main(dir, content="pub fn answer() -> Int { old }\n")
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "env -u FOO sed -i '' 's/old/new/' *.mbt 2>/dev/null || true",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(
       output.content.contains("source file writes from shell are blocked"),
@@ -1720,11 +1653,10 @@ async test "shell preblocks env unset sed source rewrites" {
 async test "shell preblocks env assignment sed source rewrites" {
   @vfs.with_tmpdir(prefix="openseek-shell-env-assign-sed-source-", dir => {
     write_answer_main(dir, content="pub fn answer() -> Int { old }\n")
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "FOO=bar sed -i '' 's/old/new/' *.mbt 2>/dev/null || true",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(
       output.content.contains("source file writes from shell are blocked"),
@@ -1743,11 +1675,10 @@ async test "shell preblocks env assignment sed source rewrites" {
 async test "shell preblocks find exec sed source rewrites" {
   @vfs.with_tmpdir(prefix="openseek-shell-find-sed-source-", dir => {
     write_answer_main(dir, content="pub fn answer() -> Int { old }\n")
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "find \{dir} -name '*.mbt' -exec env FOO=bar sed -i '' 's/old/new/' {} + 2>/dev/null || true",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(
       output.content.contains("source file writes from shell are blocked"),
@@ -1771,11 +1702,10 @@ async test "shell preblocks looped sed source rewrites through path list" {
       "\{dir}/main.mbt\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "while IFS= read -r f; do sed -i '' 's/old/new/' \"$f\"; done < files.txt",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(
       output.content.contains("source file writes from shell are blocked"),
@@ -1796,22 +1726,20 @@ async test "shell allows recoverable git worktree rollback" {
     write_answer_main(dir)
     // Build a tiny repo with a committed main.mbt. init/config/add/commit only
     // touch `.git`, so they run (sandboxed) without being blocked.
-    let setup = run_shell_in_workspace(dir, {
+    let setup_output = run_shell_in_workspace(dir, {
       "cmd": "git init -q && git config user.email a@b.c && git config user.name t && git add main.mbt && git commit -q -m init",
       "cwd": dir,
     })
-    guard setup is Respond(setup_output) else { fail("expected Respond") }
     assert_false(
       setup_output.content.contains("source file writes from shell are blocked"),
     )
     // Dirty the tracked source, then discard the change with `git checkout` — a
     // trusted, recoverable worktree write that now runs unsandboxed and succeeds.
     write_answer_main(dir, content="pub fn answer() -> Int { 999 }\n")
-    let result = run_shell_in_workspace(dir, {
+    let output = run_shell_in_workspace(dir, {
       "cmd": "git checkout -- main.mbt",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_false(
       output.content.contains("source file writes from shell are blocked"),
@@ -1837,8 +1765,7 @@ async test "shell allows trusted moon fmt command" {
       "pub fn answer()->Int{42}\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell_in_workspace(dir, { "cmd": "moon fmt", "cwd": dir })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_shell_in_workspace(dir, { "cmd": "moon fmt", "cwd": dir })
     assert_false(output.is_error)
     assert_true(output.content.contains("<system>exit=0</system>"))
     assert_false(output.content.contains("source file writes from shell"))
@@ -1870,11 +1797,10 @@ async test "shell appends moon check after applied moon ide rename" {
       ),
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell({
+    let output = run_shell({
       "cmd": "moon ide rename old_name new_name --loc main.mbt:1:8 --apply",
       "cwd": dir,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_true(output.content.contains("<system>exit=0</system>"))
     assert_true(output.content.contains("Applied 2 edit(s)"))
@@ -1914,8 +1840,7 @@ async test "shell appends moon check from moon.work workspace root" {
       "pub fn broken()->Int{missing_from_workspace}\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_shell({ "cmd": "moon fmt", "cwd": dir })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_shell({ "cmd": "moon fmt", "cwd": dir })
     assert_false(output.is_error)
     assert_true(output.content.contains("<system>exit=0</system>"))
     assert_true(output.content.contains("\nmoon check:\nexit=255"))
@@ -1945,12 +1870,14 @@ async test "shell does not append moon check for non-mutating moon shapes" {
       create_mode=CreateOrTruncate,
     )
     for cmd in ["echo moon add", "true || moon fmt", "moon fmt --check"] {
-      let result = run_shell({ "cmd": cmd, "cwd": dir })
-      guard result is Respond(output) else { fail("expected Respond") }
+      let output = run_shell({ "cmd": cmd, "cwd": dir })
       assert_false(output.content.contains("moon check:"))
     }
-    let timed = run_shell({ "cmd": "moon fmt", "cwd": dir, "timeout_ms": 30000 })
-    guard timed is Respond(output) else { fail("expected Respond") }
+    let output = run_shell({
+      "cmd": "moon fmt",
+      "cwd": dir,
+      "timeout_ms": 30000,
+    })
     assert_false(output.is_error)
     assert_false(output.content.contains("moon check:"))
   })
@@ -1984,8 +1911,7 @@ async test "shell appends moon check from moon command target cwd" {
       cmd in [
         "moon -C project fmt", "moon -Cproject fmt", "moon -C=project fmt", "cd ./project && moon fmt",
       ] {
-      let result = run_shell({ "cmd": cmd, "cwd": dir })
-      guard result is Respond(output) else { fail("expected Respond") }
+      let output = run_shell({ "cmd": cmd, "cwd": dir })
       assert_false(output.is_error)
       assert_true(output.content.contains("<system>exit=0</system>"))
       assert_true(output.content.contains("\nmoon check:\nexit="))
@@ -1996,8 +1922,7 @@ async test "shell appends moon check from moon command target cwd" {
 
 ///|
 async test "shell rejects missing cmd" {
-  let result = run_shell({ "cwd": "unused" })
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell({ "cwd": "unused" })
   assert_true(output.is_error)
   assert_true(output.content.contains("error: shell requires"))
   assert_true(output.content.contains("arguments.cmd"))
@@ -2005,8 +1930,7 @@ async test "shell rejects missing cmd" {
 
 ///|
 async test "shell rejects non-object arguments" {
-  let result = run_shell(Json::null())
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_shell(Json::null())
   assert_true(output.is_error)
   assert_eq(output.content, "error: shell requires object arguments")
 }
@@ -2016,8 +1940,7 @@ async test "shell rejects non-existent cwd" {
   @vfs.with_tmpdir(prefix="openseek-shell-cwd-", dir => {
     let dir_path : @path.Path = dir
     let path = dir_path.join("does-not-exist").normalize().to_string()
-    let result = run_shell({ "cmd": "echo hello", "cwd": path })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_shell({ "cmd": "echo hello", "cwd": path })
     assert_true(output.is_error)
     assert_true(output.content.contains("cwd does not exist"))
   })
@@ -2029,8 +1952,7 @@ async test "shell rejects cwd that is a file not a directory" {
     let dir_path : @path.Path = dir
     let path = dir_path.join("file.txt").normalize().to_string()
     @fs.write_file(path, "not a directory", create_mode=CreateOrTruncate)
-    let result = run_shell({ "cmd": "echo hello", "cwd": path })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_shell({ "cmd": "echo hello", "cwd": path })
     assert_true(output.is_error)
     assert_true(output.content.contains("cwd is not a directory"))
   })

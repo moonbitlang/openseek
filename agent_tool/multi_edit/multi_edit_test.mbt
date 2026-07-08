@@ -1,20 +1,24 @@
 ///|
-async fn run_multi_edit(arguments : Json) -> @agent_tool.ToolAction {
-  match @multi_edit.definition().execute {
+async fn run_multi_edit(arguments : Json) -> @agent_tool.ToolOutput {
+  let action = match @multi_edit.definition().execute {
     Async(execute) => execute(arguments)
     Sync(_) => fail("multi_edit tool should be async")
   }
+  guard action is Respond(output) else { fail("expected Respond") }
+  output
 }
 
 ///|
 async fn run_multi_edit_in_workspace(
   workspace_root : String,
   arguments : Json,
-) -> @agent_tool.ToolAction {
-  match @multi_edit.definition(workspace_root~).execute {
+) -> @agent_tool.ToolOutput {
+  let action = match @multi_edit.definition(workspace_root~).execute {
     Async(execute) => execute(arguments)
     Sync(_) => fail("multi_edit tool should be async")
   }
+  guard action is Respond(output) else { fail("expected Respond") }
+  output
 }
 
 ///|
@@ -26,7 +30,7 @@ async test "multi_edit applies multiple line-anchored replacements" {
       "let a = old_a\nlet b = keep\nlet c = old_c\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_multi_edit({
+    let output = run_multi_edit({
       "edits": [
         {
           "file": path,
@@ -43,7 +47,6 @@ async test "multi_edit applies multiple line-anchored replacements" {
         },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_eq(
       output.content,
       "ok: applied 2 edit(s) across 1 file(s)\n\{path}: 2 edit(s)",
@@ -67,7 +70,7 @@ async test "multi_edit applies a batch spanning several files" {
       "let b = old_b\nlet c = old_c\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_multi_edit({
+    let output = run_multi_edit({
       "edits": [
         {
           "file": first,
@@ -89,7 +92,6 @@ async test "multi_edit applies a batch spanning several files" {
         },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_eq(
       output.content,
@@ -108,7 +110,7 @@ async test "multi_edit collapses aliased spellings of one file into a single gro
     // `note.txt` and `./note.txt` resolve to the same file. They must form one
     // group so both edits land; otherwise the second write would clobber the
     // first and silently drop an edit.
-    let result = run_multi_edit_in_workspace(dir, {
+    let output = run_multi_edit_in_workspace(dir, {
       "edits": [
         {
           "file": "note.txt",
@@ -124,7 +126,6 @@ async test "multi_edit collapses aliased spellings of one file into a single gro
         },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_eq(
       output.content,
@@ -144,7 +145,7 @@ async test "multi_edit rejects a file whose edits are not contiguous" {
     @fs.write_file(first, original_first, create_mode=CreateOrTruncate)
     @fs.write_file(second, original_second, create_mode=CreateOrTruncate)
     // first reappears at edit[2] after second's block — rejected before any write.
-    let result = run_multi_edit({
+    let output = run_multi_edit({
       "edits": [
         {
           "file": first,
@@ -166,7 +167,6 @@ async test "multi_edit rejects a file whose edits are not contiguous" {
         },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("must be contiguous"))
     assert_true(output.content.contains("edit[2]"))
@@ -184,7 +184,7 @@ async test "multi_edit inserts when old_string is empty, alongside a replacement
       "let a = old_a\nlet b = keep\nlet c = old_c\n",
       create_mode=CreateOrTruncate,
     )
-    let result = run_multi_edit({
+    let output = run_multi_edit({
       "edits": [
         {
           "file": path,
@@ -200,7 +200,6 @@ async test "multi_edit inserts when old_string is empty, alongside a replacement
         },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_eq(
       @fs.read_file(path).text(),
@@ -214,12 +213,11 @@ async test "multi_edit rejects an edit with empty old_string and new_string" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/empty.mbt"
     @fs.write_file(path, "let a = 1\n", create_mode=CreateOrTruncate)
-    let result = run_multi_edit({
+    let output = run_multi_edit({
       "edits": [
         { "file": path, "old_string": "", "new_string": "", "start_line": 1 },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("both empty"))
   })
@@ -237,7 +235,7 @@ async test "multi_edit applies edits against original offsets despite length cha
     // edit[0] grows line 1 and edit[1] shrinks line 3. A naive left-to-right
     // apply would shift the later span; planning against the original keeps both
     // anchored.
-    let result = run_multi_edit({
+    let output = run_multi_edit({
       "edits": [
         {
           "file": path,
@@ -255,7 +253,6 @@ async test "multi_edit applies edits against original offsets despite length cha
         },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_eq(
       @fs.read_file(path).text(),
@@ -272,7 +269,7 @@ async test "multi_edit matches the original file, not text introduced by earlier
     // edit[0] rewrites line 1 to "beta"; a sequential rewrite could then let
     // edit[1] match that introduced text. Validating against the original keeps
     // edit[1] anchored to line 2's real "beta".
-    let result = run_multi_edit({
+    let output = run_multi_edit({
       "edits": [
         {
           "file": path,
@@ -290,7 +287,6 @@ async test "multi_edit matches the original file, not text introduced by earlier
         },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_eq(@fs.read_file(path).text(), "beta\ngamma\n")
   })
@@ -307,7 +303,7 @@ async test "multi_edit uses line anchors to disambiguate duplicate spans" {
     )
     // The same span appears on three lines; each edit's anchor selects exactly
     // one, leaving the unanchored line 2 untouched.
-    let result = run_multi_edit({
+    let output = run_multi_edit({
       "edits": [
         {
           "file": path,
@@ -325,7 +321,6 @@ async test "multi_edit uses line anchors to disambiguate duplicate spans" {
         },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_eq(@fs.read_file(path).text(), "x = one\ny = dup\nz = three\n")
   })
@@ -336,7 +331,7 @@ async test "multi_edit resolves relative paths under the workspace root" {
   @vfs.with_tmpdir(prefix="openseek-multi-edit-workspace-", dir => {
     let path = "\{dir}/note.txt"
     @fs.write_file(path, "alpha\nbeta\n", create_mode=CreateOrTruncate)
-    let result = run_multi_edit_in_workspace(dir, {
+    let output = run_multi_edit_in_workspace(dir, {
       "edits": [
         {
           "file": "note.txt",
@@ -346,7 +341,6 @@ async test "multi_edit resolves relative paths under the workspace root" {
         },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_eq(
       output.content,
@@ -362,7 +356,7 @@ async test "multi_edit reports all failed edits and leaves file unchanged" {
     let path = "\{dir}/failures.txt"
     let original = "alpha\nbeta\nsame\nsame\n"
     @fs.write_file(path, original, create_mode=CreateOrTruncate)
-    let result = run_multi_edit({
+    let output = run_multi_edit({
       "edits": [
         {
           "file": path,
@@ -387,7 +381,6 @@ async test "multi_edit reports all failed edits and leaves file unchanged" {
         },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_eq(
       output.content,
@@ -403,7 +396,7 @@ async test "multi_edit rejects overlapping replacements and leaves file unchange
     let path = "\{dir}/overlap.txt"
     let original = "abcdef\n"
     @fs.write_file(path, original, create_mode=CreateOrTruncate)
-    let result = run_multi_edit({
+    let output = run_multi_edit({
       "edits": [
         {
           "file": path,
@@ -421,7 +414,6 @@ async test "multi_edit rejects overlapping replacements and leaves file unchange
         },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_eq(
       output.content,
@@ -437,7 +429,7 @@ async test "multi_edit rejects generated mbti files before writing" {
     let path = "\{dir}/pkg.generated.mbti"
     let original = "package old\n"
     @fs.write_file(path, original, create_mode=CreateOrTruncate)
-    let result = run_multi_edit({
+    let output = run_multi_edit({
       "edits": [
         {
           "file": path,
@@ -448,7 +440,6 @@ async test "multi_edit rejects generated mbti files before writing" {
         },
       ],
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("run moon info"))
     assert_eq(@fs.read_file(path).text(), original)
@@ -457,7 +448,7 @@ async test "multi_edit rejects generated mbti files before writing" {
 
 ///|
 async test "multi_edit rejects invalid arguments" {
-  let result = run_multi_edit({
+  let output = run_multi_edit({
     "edits": [
       {
         "file": "file.mbt",
@@ -468,7 +459,6 @@ async test "multi_edit rejects invalid arguments" {
       },
     ],
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_eq(
     output.content,
     "error: multi_edit requires arguments.edits[0].start_line to be an integer",
@@ -478,10 +468,9 @@ async test "multi_edit rejects invalid arguments" {
 
 ///|
 async test "multi_edit rejects an edit that omits its file" {
-  let result = run_multi_edit({
+  let output = run_multi_edit({
     "edits": [{ "old_string": "old", "new_string": "new", "start_line": 1 }],
   })
-  guard result is Respond(output) else { fail("expected Respond") }
   assert_eq(
     output.content,
     "error: multi_edit requires arguments.edits[0] to include file (present keys: new_string, old_string, start_line)",
@@ -514,8 +503,7 @@ async test "multi_edit applies a batch from a response file (edits_file)" {
       },
     ]
     @fs.write_file(spec_path, spec.stringify(), create_mode=CreateOrTruncate)
-    let result = run_multi_edit({ "edits_file": spec_path })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_multi_edit({ "edits_file": spec_path })
     assert_false(output.is_error)
     assert_eq(
       output.content,
@@ -545,7 +533,7 @@ async test "multi_edit concatenates inline edits with an edits_file" {
     ]
     @fs.write_file(spec_path, spec.stringify(), create_mode=CreateOrTruncate)
     // Inline edits and the file's edits are both applied (concatenated).
-    let result = run_multi_edit({
+    let output = run_multi_edit({
       "edits": [
         {
           "file": path,
@@ -556,7 +544,6 @@ async test "multi_edit concatenates inline edits with an edits_file" {
       ],
       "edits_file": spec_path,
     })
-    guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_eq(
       output.content,
@@ -568,13 +555,11 @@ async test "multi_edit concatenates inline edits with an edits_file" {
 
 ///|
 async test "multi_edit rejects a call with no edits at all" {
-  let result = run_multi_edit({})
-  guard result is Respond(output) else { fail("expected Respond") }
+  let output = run_multi_edit({})
   assert_true(output.is_error)
   assert_true(output.content.contains("edits and/or edits_file"))
   // An explicit empty array is the same combined-empty case.
-  let empty = run_multi_edit({ "edits": [] })
-  guard empty is Respond(empty_out) else { fail("expected Respond") }
+  let empty_out = run_multi_edit({ "edits": [] })
   assert_true(empty_out.is_error)
   assert_true(empty_out.content.contains("edits and/or edits_file"))
 }
@@ -582,8 +567,7 @@ async test "multi_edit rejects a call with no edits at all" {
 ///|
 async test "multi_edit reports an unreadable response file" {
   @vfs.with_tmpdir(dir => {
-    let result = run_multi_edit({ "edits_file": "\{dir}/missing.json" })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_multi_edit({ "edits_file": "\{dir}/missing.json" })
     assert_true(output.is_error)
     assert_true(output.content.contains("could not read edits file"))
   })
@@ -594,8 +578,7 @@ async test "multi_edit reports a response file that is not valid JSON" {
   @vfs.with_tmpdir(dir => {
     let spec_path = "\{dir}/broken.json"
     @fs.write_file(spec_path, "{ not json", create_mode=CreateOrTruncate)
-    let result = run_multi_edit({ "edits_file": spec_path })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_multi_edit({ "edits_file": spec_path })
     assert_true(output.is_error)
     assert_true(output.content.contains("is not valid JSON"))
   })
@@ -610,8 +593,7 @@ async test "multi_edit reports a malformed response file entry" {
       { "old_string": "a", "new_string": "b", "start_line": 1 },
     ]
     @fs.write_file(spec_path, spec.stringify(), create_mode=CreateOrTruncate)
-    let result = run_multi_edit({ "edits_file": spec_path })
-    guard result is Respond(output) else { fail("expected Respond") }
+    let output = run_multi_edit({ "edits_file": spec_path })
     assert_true(output.is_error)
     assert_true(output.content.contains("arguments.edits[0] to include file"))
     assert_true(output.content.contains("in edits file"))

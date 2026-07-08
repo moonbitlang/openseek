@@ -11,7 +11,7 @@ async test "multi_edit gates the whole batch through moonc before writing" {
     @fs.write_file("\{dir}/b.mbt", b_original, create_mode=CreateOrTruncate)
     // One clean edit (a.mbt) plus one that would break b.mbt: the WHOLE batch
     // is rejected and neither file changes.
-    let broken = run_multi_edit({
+    let out = run_multi_edit({
       "edits": [
         {
           "file": "\{dir}/a.mbt",
@@ -27,7 +27,6 @@ async test "multi_edit gates the whole batch through moonc before writing" {
         },
       ],
     })
-    guard broken is Respond(out) else { fail("expected Respond") }
     assert_true(out.is_error)
     assert_true(out.content.contains("rejected: the batch would introduce"))
     assert_true(out.content.contains("NO files were changed"))
@@ -35,7 +34,7 @@ async test "multi_edit gates the whole batch through moonc before writing" {
     assert_eq(@fs.read_file("\{dir}/a.mbt").text(), a_original)
     assert_eq(@fs.read_file("\{dir}/b.mbt").text(), b_original)
     // A clean batch applies to both files.
-    let clean = run_multi_edit({
+    let ok = run_multi_edit({
       "edits": [
         {
           "file": "\{dir}/a.mbt",
@@ -51,12 +50,11 @@ async test "multi_edit gates the whole batch through moonc before writing" {
         },
       ],
     })
-    guard clean is Respond(ok) else { fail("expected Respond") }
     assert_false(ok.is_error)
     assert_true(@fs.read_file("\{dir}/a.mbt").text().contains("  43"))
     assert_true(@fs.read_file("\{dir}/b.mbt").text().contains("  8"))
     // Opt-out: the breaking batch lands.
-    let fixture = run_multi_edit({
+    let fx = run_multi_edit({
       "edits": [
         {
           "file": "\{dir}/b.mbt",
@@ -67,7 +65,6 @@ async test "multi_edit gates the whole batch through moonc before writing" {
       ],
       "revert_on_parse_errors": false,
     })
-    guard fixture is Respond(fx) else { fail("expected Respond") }
     assert_false(fx.is_error)
     assert_true(@fs.read_file("\{dir}/b.mbt").text().contains("match 8 {"))
   })
