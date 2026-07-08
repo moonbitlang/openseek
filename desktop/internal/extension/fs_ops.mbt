@@ -25,10 +25,14 @@ async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
   if !@fs.exists(dir.to_string()) {
     return { entries: [] }
   }
-  let names = @fs.readdir(dir.to_string(), sort=true) catch {
+  let names = @fs.readdir(dir.to_string()) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to list directory: \{error}")
   }
+  // Plain lexicographic order, not `readdir(sort=true)`: that sorts with
+  // String's `Compare`, which is shortlex — length before content — and
+  // reads wrong in a file listing ("z.mbt" before "main.mbt").
+  names.sort_by((a, b) => a.lexical_compare(b))
   let entries : Array[DirEntry] = []
   for name in names {
     let child = dir.join((name : @path.Path)).to_string()
@@ -39,7 +43,7 @@ async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
       is Directory
     entries.push({ name, is_dir })
   }
-  // Directories first, then files; `readdir(sort=true)` already orders each
+  // Directories first, then files; the sort above already orders each
   // group by name, and the partition preserves that order.
   let dirs = entries.filter(entry => entry.is_dir)
   let files = entries.filter(entry => !entry.is_dir)
