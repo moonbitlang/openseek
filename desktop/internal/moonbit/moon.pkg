@@ -4,6 +4,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
+  "moonbitlang/async/semaphore",
   "moonbitlang/core/string",
   "moonbitlang/x/path",
   "tonyfettes/xlog",

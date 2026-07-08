@@ -175,6 +175,18 @@ async fn initialize_moonbit(
 }
 
 ///|
+/// Serializes bundled-toolchain preparation process-wide. The engine pump
+/// already serializes its own spawns and the LSP pool its own command
+/// resolution, but the two subsystems share this one payload directory with
+/// nothing ordering them against each other: on a fresh install or after a
+/// seed bump (no valid stamp yet), an LSP spawn and an engine spawn could
+/// interleave `remove_if_exists` with the other side's seed copy or `moon
+/// bundle`. Preparation runs for seconds across many suspension points, so
+/// the lock is load-bearing; the stamp check after acquiring turns the
+/// losing caller into a cheap reuse.
+let prepare_payload_lock : @semaphore.Semaphore = Semaphore(1, initial_value=1)
+
+///|
 async fn prepared_bundled_moonbit_payload(
   seed_dir~ : @path.Path,
   runtime_dir? : @path.Path,
@@ -182,6 +194,8 @@ async fn prepared_bundled_moonbit_payload(
   guard prepared_moonbit_payload_dir(seed_dir~, runtime_dir?) is Some(moon_home) else {
     return None
   }
+  prepare_payload_lock.acquire()
+  defer prepare_payload_lock.release()
   @xlog.debug() <?
     {
       "event": "desktop_moonbit_prepare_payload",
