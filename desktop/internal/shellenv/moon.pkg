@@ -1,0 +1,11 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/core/env" @sys,
+  "moonbitlang/core/json",
+  "tonyfettes/xlog",
+}
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"

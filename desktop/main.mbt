@@ -1,5 +1,12 @@
 ///|
 async fn main {
+  // Hidden probe target: the login-shell environment probe re-execs this
+  // binary through the user's shell; print the marker-wrapped JSON
+  // environment and quit before any logging or CEF setup.
+  if @env.args() is [_, "--print-env-json", mark, ..] {
+    @shellenv.print_env_json(mark)
+    return
+  }
   // Proton runs everything in one process; the executable path locates the
   // bundled frontend assets and the engine binary that ship alongside it.
   let executable = match @env.args().get(0) {
@@ -8,6 +15,10 @@ async fn main {
   }
   let log = launch_logger()
   log.info() <? { "message": "start" }
+  // A Finder/Dock launch inherits only launchd's minimal environment; graft
+  // the user's login-shell environment (PATH, custom variables) onto this
+  // process before anything downstream — engine, LSP, shell tool — spawns.
+  @shellenv.apply_login_shell_env(executable, log)
   let frontend_entry = @extension.frontend_entry_path(executable)
   let engine = @engine.engine_command(executable)
   log.info() <? { "message": "host process start" }

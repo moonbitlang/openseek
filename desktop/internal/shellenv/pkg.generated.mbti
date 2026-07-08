@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/shellenv"
+
+import {
+  "tonyfettes/xlog",
+}
+
+// Values
+pub async fn apply_login_shell_env(String, @xlog.Logger) -> Unit
+
+pub fn print_env_json(String) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+
