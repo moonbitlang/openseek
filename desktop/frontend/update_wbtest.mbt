@@ -427,7 +427,7 @@ test "session loaded swaps the active conversation onto the stored session" {
   inspect(once.active().streaming_response, content="")
   inspect(once.active().usage_tokens, content="0")
   inspect(once.active().watcher_status, content="")
-  inspect(once.active().cwd, content="")
+  assert_true(once.active().cwd is None)
   assert_true(once.display_status() is Ready)
   inspect(twice.active().messages.length(), content="2")
 }
@@ -471,11 +471,14 @@ test "started routes by session and records the host's workspace" {
       session="desktop-test",
       model="deepseek-v4-pro",
       max_steps=1000,
-      cwd="/home/u/Documents/OpenSeek/desktop-test",
+      cwd=Some(Absolute("/home/u/Documents/OpenSeek/desktop-test")),
     ),
     test_model(),
   )
-  inspect(next.active().cwd, content="/home/u/Documents/OpenSeek/desktop-test")
+  assert_true(
+    next.active().cwd
+    is Some(Absolute("/home/u/Documents/OpenSeek/desktop-test")),
+  )
   inspect(next.active().running, content="true")
   guard next.active().active_run_id is Some(7) else {
     fail("expected the run id to be recorded")
@@ -492,7 +495,7 @@ test "started for an unknown session leaves the model alone" {
       session="desktop-ghost",
       model="deepseek-v4-pro",
       max_steps=1000,
-      cwd="",
+      cwd=None,
     ),
     test_model(),
   )
@@ -1250,7 +1253,7 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
   assert_true(next.file_panel.open)
-  assert_true(next.file_panel.selected is Some("src/main.mbt"))
+  assert_true(next.file_panel.selected is Some(Relative("src/main.mbt")))
 }
 
 ///|
@@ -1267,14 +1270,14 @@ test "JumpToMention is a no-op for a chip without a resolved location" {
 }
 
 ///|
-test "EditorCommentAdded attaches a deduplicated annotation chip, relativized" {
+test "EditorCommentAdded attaches a deduplicated annotation chip" {
   let dispatch = test_dispatch()
-  let model = test_model().replace_conversation({
-    ..test_conversation(),
-    cwd: "/work/project",
-  })
+  let model = test_model()
+  // The chip path arrives workspace-relative from the panel (recorded when
+  // the file was shown); the resource URI only routes the bubble removal.
   let msg : Msg = EditorCommentAdded(
-    path="/work/project/src/main.mbt",
+    resource=ModelUri::of(Absolute("/work/project/src/main.mbt")),
+    file=Relative("src/main.mbt"),
     range=@common.Range::Range(5, 1, 6, 3),
     quote="fn parse_hover() {",
     comment="rename this",
@@ -1283,7 +1286,6 @@ test "EditorCommentAdded attaches a deduplicated annotation chip, relativized" {
   let (_, next) = update(dispatch, msg, model)
   let mentions = next.active().mentions
   assert_eq(mentions.length(), 1)
-  // The chip names the file the way the conversation does — workspace-relative.
   assert_true(
     mentions[0].ref_
     is Annotation(file="src/main.mbt", start_line=5, end_line=6, ..),
@@ -1291,22 +1293,54 @@ test "EditorCommentAdded attaches a deduplicated annotation chip, relativized" {
   // Submitting the identical comment again is a no-op, not a second chip.
   let (_, again) = update(dispatch, msg, next)
   assert_eq(again.active().mentions.length(), 1)
-  // A file outside the workspace keeps its absolute path.
+}
+
+///|
+test "chip jumps relativize legacy absolute paths against the roots" {
+  let dispatch = test_dispatch()
+  // Preferred root: the run-reported cwd.
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    cwd: Some(Absolute("/work/project")),
+  })
+  let (_, next) = update(
+    dispatch,
+    JumpToLocation(
+      path="/work/project/src/main.mbt",
+      range=Some(@common.Range::Range(5, 1, 5, 1)),
+      annotation=None,
+    ),
+    model,
+  )
+  assert_true(next.file_panel.selected is Some(Relative("src/main.mbt")))
+  // Before the first run reports cwd, the attached workspace serves as root.
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    workspace: Some(Absolute("/work/project")),
+  })
+  let (_, next) = update(
+    dispatch,
+    JumpToLocation(
+      path="/work/project/src/main.mbt",
+      range=Some(@common.Range::Range(5, 1, 5, 1)),
+      annotation=None,
+    ),
+    model,
+  )
+  assert_true(next.file_panel.selected is Some(Relative("src/main.mbt")))
+  // An absolute path outside every root cannot be opened; the panel says so
+  // instead of sending the host a bogus read.
   let (_, outside) = update(
     dispatch,
-    EditorCommentAdded(
+    JumpToLocation(
       path="/elsewhere/note.md",
-      range=@common.Range::Range(1, 1, 1, 1),
-      quote="",
-      comment="hm",
-      feedback_id="viewer-feedback-1",
+      range=Some(@common.Range::Range(1, 1, 1, 1)),
+      annotation=None,
     ),
-    next,
+    model,
   )
-  assert_true(
-    outside.active().mentions[1].ref_
-    is Annotation(file="/elsewhere/note.md", ..),
-  )
+  assert_true(outside.file_panel.selected is None)
+  assert_false(outside.file_panel.error.is_empty())
 }
 
 ///|
@@ -1317,10 +1351,10 @@ test "RevealDirectory(\"\") returns to the tree without a highlight" {
     ..model.file_panel,
     open: true,
     session: "desktop-test",
-    selected: Some("README.md"),
-    highlighted: Some("src"),
+    selected: Some(Relative("README.md")),
+    highlighted: Some(Relative("src")),
   }
-  let (_, next) = update(dispatch, RevealDirectory(""), {
+  let (_, next) = update(dispatch, RevealDirectory(@pathx.Relative::root()), {
     ..model,
     file_panel: panel,
   })
@@ -1333,46 +1367,48 @@ test "RevealDirectory expands an uncached ancestor and highlights the target" {
   let dispatch = test_dispatch()
   let model = test_model()
   let panel = { ..model.file_panel, open: true, session: "desktop-test" }
-  let (_, next) = update(dispatch, RevealDirectory("src/foo"), {
+  let (_, next) = update(dispatch, RevealDirectory(Relative("src/foo")), {
     ..model,
     file_panel: panel,
   })
-  assert_true(next.file_panel.expanded.contains("src"))
-  assert_true(next.file_panel.loading.contains("src"))
+  assert_true(next.file_panel.expanded.contains(Relative("src")))
+  assert_true(next.file_panel.loading.contains(Relative("src")))
   assert_true(next.file_panel.selected is None)
-  assert_true(next.file_panel.highlighted is Some("src/foo"))
+  assert_true(next.file_panel.highlighted is Some(Relative("src/foo")))
 }
 
 ///|
 test "RevealDirectory on an already-cached ancestor needs no reload" {
   let dispatch = test_dispatch()
   let model = test_model()
-  let children : Map[String, Array[FileEntry]] = { "src": [] }
+  let children : Map[@pathx.Relative, Array[FileEntry]] = Map([
+    (Relative("src"), []),
+  ])
   let panel = {
     ..model.file_panel,
     open: true,
     session: "desktop-test",
     children,
   }
-  let (_, next) = update(dispatch, RevealDirectory("src/foo"), {
+  let (_, next) = update(dispatch, RevealDirectory(Relative("src/foo")), {
     ..model,
     file_panel: panel,
   })
-  assert_true(next.file_panel.expanded.contains("src"))
-  assert_false(next.file_panel.loading.contains("src"))
+  assert_true(next.file_panel.expanded.contains(Relative("src")))
+  assert_false(next.file_panel.loading.contains(Relative("src")))
 }
 
 ///|
 test "HighlightCleared only clears a highlight that still matches" {
   let dispatch = test_dispatch()
   let model = test_model()
-  let panel = { ..model.file_panel, highlighted: Some("src") }
-  let (_, stale) = update(dispatch, HighlightCleared("old"), {
+  let panel = { ..model.file_panel, highlighted: Some(Relative("src")) }
+  let (_, stale) = update(dispatch, HighlightCleared(Relative("old")), {
     ..model,
     file_panel: panel,
   })
-  assert_true(stale.file_panel.highlighted is Some("src"))
-  let (_, cleared) = update(dispatch, HighlightCleared("src"), {
+  assert_true(stale.file_panel.highlighted is Some(Relative("src")))
+  let (_, cleared) = update(dispatch, HighlightCleared(Relative("src")), {
     ..model,
     file_panel: panel,
   })

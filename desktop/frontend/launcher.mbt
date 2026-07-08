@@ -29,14 +29,14 @@ fn fetch_apps(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 fn launch_app(
   dispatch : @cmd.Emit[Msg],
   session : String,
-  cwd : String,
+  cwd~ : @pathx.Absolute?,
   app : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session
-      payload["cwd"] = cwd
+      payload["cwd"] = workspace_token(cwd)
       payload["app"] = app
       let _ : @js.Value = bridge_request("launch_app", payload.to_value()) catch {
         error => {

@@ -12,6 +12,11 @@ pub fn relative_to(String, root~ : String) -> String?
 
 // Types and methods
 pub(all) struct Absolute(String) derive(Eq)
+pub fn Absolute::relative_to(Self, root~ : Self) -> Relative?
+
+pub(all) struct Relative(String) derive(Eq, Hash)
+pub fn Relative::is_root(Self) -> Bool
+pub fn Relative::root() -> Self
 
 // Type aliases
 

@@ -11,15 +11,15 @@
 fn read_directory(
   dispatch : @cmd.Emit[Msg],
   session : String,
-  path : String,
-  workspace~ : String,
+  path : @pathx.Relative,
+  workspace~ : @pathx.Absolute?,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session
-      payload["path"] = path
-      set_trimmed(payload, "workspace", workspace)
+      payload["path"] = path.0
+      set_workspace(payload, workspace)
       let reply = bridge_request("read_directory", payload.to_value()) catch {
         error => {
           scheduler.add(
@@ -48,21 +48,24 @@ fn read_directory(
 /// Read `path` and fold its contents back as `FileLoaded`. `name` is the
 /// entry's display name, forwarded for the viewer's title and language guess.
 /// `range`, when present (a symbol jump's target), is forwarded for the
-/// viewer to reveal and select once loaded.
+/// viewer to reveal and select once loaded; `annotation` (an annotation
+/// chip's comment) rides along the same way, re-shown as an editor bubble
+/// over that range.
 fn read_file(
   dispatch : @cmd.Emit[Msg],
   session : String,
-  path : String,
+  path : @pathx.Relative,
   name : String,
   range~ : @common.Range?,
-  workspace~ : String,
+  annotation? : String,
+  workspace~ : @pathx.Absolute?,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session
-      payload["path"] = path
-      set_trimmed(payload, "workspace", workspace)
+      payload["path"] = path.0
+      set_workspace(payload, workspace)
       let reply = bridge_request("read_file", payload.to_value()) catch {
         error => {
           scheduler.add(
@@ -74,7 +77,9 @@ fn read_file(
       match decode_file_content(reply_json_text(reply)) {
         Some(file) =>
           scheduler.add(
-            dispatch(FileLoaded(session~, path~, name~, file~, range~)),
+            dispatch(
+              FileLoaded(session~, path~, name~, file~, range~, annotation~),
+            ),
           )
         None =>
           scheduler.add(
@@ -86,11 +91,19 @@ fn read_file(
 }
 
 ///|
+/// Attach the workspace hint to an op payload, when the conversation has one.
+fn set_workspace(payload : @js.Object, workspace : @pathx.Absolute?) -> Unit {
+  if workspace is Some(workspace) {
+    set_trimmed(payload, "workspace", workspace.0)
+  }
+}
+
+///|
 /// A workspace-relative path's final `/`-segment, for a mention chip's jump
 /// target — it carries only the path, not a display name.
-fn basename(path : String) -> String {
-  match path.split("/").collect() {
-    [] => path
+fn basename(path : @pathx.Relative) -> String {
+  match path.0.split("/").collect() {
+    [] => path.0
     segments => segments[segments.length() - 1].to_owned()
   }
 }
@@ -98,18 +111,21 @@ fn basename(path : String) -> String {
 ///|
 /// An entry's workspace-relative path: the parent directory's path joined with
 /// the entry name ("" parent = workspace root, so the child path is `name`).
-fn child_path(parent : String, name : String) -> String {
-  if parent.is_empty() {
-    name
+fn child_path(parent : @pathx.Relative, name : String) -> @pathx.Relative {
+  if parent.is_root() {
+    Relative(name)
   } else {
-    parent + "/" + name
+    Relative(parent.0 + "/" + name)
   }
 }
 
 ///|
 /// Parse a `read_directory` reply into entries carrying full relative paths.
 /// `None` only for structurally unusable JSON; a malformed row is skipped.
-fn decode_dir_entries(text : String, parent : String) -> Array[FileEntry]? {
+fn decode_dir_entries(
+  text : String,
+  parent : @pathx.Relative,
+) -> Array[FileEntry]? {
   let json = @json.parse(text) catch { _ => return None }
   guard json is Object(reply) else { return None }
   guard reply.get("entries") is Some(Array(items)) else { return None }

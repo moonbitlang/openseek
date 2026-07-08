@@ -25,6 +25,27 @@ test "relative_to strips the root prefix with normalized separators" {
 }
 
 ///|
+test "Absolute::relative_to types the one blessed conversion" {
+  assert_true(
+    @pathx.Absolute("/ws/src/a.mbt").relative_to(root=Absolute("/ws"))
+    is Some(Relative("src/a.mbt")),
+  )
+  assert_true(
+    @pathx.Absolute("/ws").relative_to(root=Absolute("/ws")) is Some(rest) &&
+    rest.is_root(),
+  )
+  assert_true(
+    @pathx.Absolute("/other/a.mbt").relative_to(root=Absolute("/ws")) is None,
+  )
+}
+
+///|
+test "the root relative path is the zero-segment one" {
+  assert_true(@pathx.Relative::root().is_root())
+  assert_false(@pathx.Relative("src").is_root())
+}
+
+///|
 test "normalize is lexical only" {
   assert_eq(@pathx.normalize("C:\\a\\b"), "C:/a/b")
   assert_eq(@pathx.normalize("/already/fine"), "/already/fine")

@@ -9,13 +9,13 @@
 fn fetch_branch(
   dispatch : @cmd.Emit[Msg],
   session : String,
-  cwd : String,
+  cwd : @pathx.Absolute?,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session
-      payload["cwd"] = cwd
+      payload["cwd"] = workspace_token(cwd)
       let reply = bridge_request("workspace_branch", payload.to_value()) catch {
         _ => {
           scheduler.add(dispatch(BranchLoaded(session~, branch="")))

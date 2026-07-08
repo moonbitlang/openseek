@@ -89,13 +89,52 @@ fn accept_mention(
 }
 
 ///|
+/// A chip's raw jump path as the workspace-relative form the panel and the
+/// host's workspace-rooted ops speak. The steady state is the identity: chips
+/// minted since the panel started recording relative names are already
+/// relative. A legacy envelope can still carry an absolute path (minted
+/// before `cwd` was known); those are brought back inside against the
+/// conversation's roots, and `None` — an absolute path outside anything this
+/// conversation knows — means there is nothing the panel could open.
+fn conversation_relative(
+  conv : Conversation,
+  path : String,
+) -> @pathx.Relative? {
+  guard is_absolute_path(path) else { return Some(Relative(path)) }
+  let absolute : @pathx.Absolute = Absolute(path)
+  for root in [conv.cwd, conv.workspace] {
+    if root is Some(root) &&
+      absolute.relative_to(root~) is Some(rest) &&
+      !rest.is_root() {
+      return Some(rest)
+    }
+  }
+  None
+}
+
+///|
+/// Whether a chip path is lexically absolute (POSIX root or a Windows drive)
+/// rather than workspace-relative.
+fn is_absolute_path(path : String) -> Bool {
+  match path[:] {
+    ['/', ..] | ['\\', ..] => true
+    [drive, ':', ..] => drive.is_ascii_alphabetic()
+    _ => false
+  }
+}
+
+///|
 /// Open (or refocus) the editor side-panel on `path`, revealing `range` when
 /// given — the shared tail of a composer chip's and a transcript chip's jump.
+/// The raw path comes from a chip or envelope; a legacy absolute one that
+/// cannot be brought inside the workspace surfaces as a panel error instead
+/// of a bogus host read.
 fn open_editor_at(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   path : String,
   range : @common.Range?,
+  annotation? : String,
 ) -> (@cmd.Cmd, Model) {
   let conv = model.active()
   // Re-root only when the panel's cached tree belongs to another
@@ -106,6 +145,23 @@ fn open_editor_at(
   } else {
     { ..empty_file_panel(), session: conv.session_id }
   }
+  guard conversation_relative(conv, path) is Some(relative) else {
+    return (
+      @cmd.batch([
+        request_viewer_mount(dispatch),
+        request_resize_handle_mount(),
+        request_viewer_remeasure(),
+      ]),
+      {
+        ..model,
+        file_panel: {
+          ..panel,
+          open: true,
+          error: "\{path} is outside the conversation workspace",
+        },
+      },
+    )
+  }
   (
     @cmd.batch([
       request_viewer_mount(dispatch),
@@ -114,15 +170,16 @@ fn open_editor_at(
       read_file(
         dispatch,
         conv.session_id,
-        path,
-        basename(path),
+        relative,
+        basename(relative),
         range~,
+        annotation?,
         workspace=conv.workspace,
       ),
     ]),
     {
       ..model,
-      file_panel: { ..panel, open: true, selected: Some(path), error: "" },
+      file_panel: { ..panel, open: true, selected: Some(relative), error: "" },
     },
   )
 }
@@ -148,7 +205,7 @@ fn symbol_fetch_cmd(
     dispatch,
     session,
     query,
-    workspace=model.session_workspace(session),
+    workspace=workspace_root(model.session_workspace(session)),
   )
 }
 
@@ -419,7 +476,12 @@ fn sync_file_panel(
     { ..model, file_panel: { ..panel, loading, } },
     @cmd.batch([
       reroot_cmd,
-      read_directory(dispatch, conv.session_id, "", workspace=conv.workspace),
+      read_directory(
+        dispatch,
+        conv.session_id,
+        @pathx.Relative::root(),
+        workspace=conv.workspace,
+      ),
     ]),
   )
 }
@@ -556,35 +618,31 @@ fn update_msg(
       guard conv.mentions.get(index) is Some(mention) else {
         return (@cmd.none, model)
       }
-      let chip = mention_chip(mention.ref_)
-      guard !chip.file.is_empty() else { return (@cmd.none, model) }
-      open_editor_at(dispatch, model, chip.file, mention.range)
-    }
-    JumpToLocation(path~, line~) => {
-      // A transcript chip carries only the reference's line (the envelope
-      // stores `path:line`); an empty range still anchors the viewer there,
-      // it just selects nothing.
-      let range = if line >= 1 {
-        Some(@common.Range::Range(line, 1, line, 1))
-      } else {
-        None
+      guard mention_target(mention.ref_) is Some(target) else {
+        return (@cmd.none, model)
       }
-      open_editor_at(dispatch, model, path, range)
+      // A draft chip still holds the full resolved range (columns included);
+      // the envelope-shaped target range is the fallback.
+      let range = if mention.range is Some(_) {
+        mention.range
+      } else {
+        target.range
+      }
+      open_editor_at(
+        dispatch,
+        model,
+        target.file,
+        range,
+        annotation?=target.annotation,
+      )
     }
-    EditorCommentAdded(path~, range~, quote~, comment~, feedback_id~) => {
+    JumpToLocation(path~, range~, annotation~) =>
+      open_editor_at(dispatch, model, path, range, annotation?)
+    EditorCommentAdded(resource~, file~, range~, quote~, comment~, feedback_id~) => {
       let conv = model.active()
-      // The envelope (and the chip) name the file the way the rest of the
-      // conversation does: relative to the workspace when it lives inside,
-      // absolute otherwise.
-      let file = if !conv.cwd.is_empty() &&
-        path.strip_prefix(conv.cwd + "/") is Some(rest) {
-        rest.to_owned()
-      } else {
-        path
-      }
       let mentions = push_mention(conv.mentions, {
         ref_: Annotation(
-          file~,
+          file=file.0,
           start_line=range.start_line_number,
           end_line=range.end_line_number,
           quote~,
@@ -596,7 +654,7 @@ fn update_msg(
       // own bubble keeps the two from drifting apart (and from double-sending
       // if the user comments again).
       (
-        remove_editor_feedback(path, feedback_id),
+        remove_editor_feedback(resource, feedback_id),
         model.replace_conversation({ ..conv, mentions, }),
       )
     }
@@ -1034,7 +1092,7 @@ fn update_msg(
         if conv.session_id == session_id &&
           conv.messages.length() == 0 &&
           !conv.running {
-          { ..conv, workspace: model.active_workspace }
+          { ..conv, workspace: workspace_root(model.active_workspace) }
         } else {
           conv
         }
@@ -1057,8 +1115,8 @@ fn update_msg(
       // conversations attached to it fall back to the default store so their
       // next start does not error on an unregistered path.
       let conversations = model.conversations.map(conv => {
-        if !conv.workspace.is_empty() && !paths.contains(conv.workspace) {
-          { ..conv, workspace: "" }
+        if conv.workspace is Some(workspace) && !paths.contains(workspace.0) {
+          { ..conv, workspace: None }
         } else {
           conv
         }
@@ -1161,7 +1219,7 @@ fn update_msg(
             transcript_pinned: true,
             loading_session: "",
             completion: None,
-            active_workspace: conv.workspace,
+            active_workspace: workspace_token(conv.workspace),
           },
         )
       } else {
@@ -1192,7 +1250,7 @@ fn update_msg(
           // the branch probe sends no cwd.
           @cmd.batch([
             scroll_transcript_after_render(),
-            fetch_branch(dispatch, session_id, ""),
+            fetch_branch(dispatch, session_id, None),
           ]),
           {
             ..model
@@ -1229,7 +1287,7 @@ fn update_msg(
       // the directory the host derives from the session id. Absolute paths
       // open directly. No workspace containment — the agent surfaced it.
       let conv = model.active()
-      (open_file(dispatch, conv.session_id, conv.cwd, path), model)
+      (open_file(dispatch, conv.session_id, cwd=conv.cwd, path), model)
     }
     ToggleLauncher => {
       let opening = !model.launcher.open
@@ -1261,7 +1319,7 @@ fn update_msg(
     LaunchApp(app) => {
       let conv = model.active()
       (
-        launch_app(dispatch, conv.session_id, conv.cwd, app),
+        launch_app(dispatch, conv.session_id, cwd=conv.cwd, app),
         { ..model, launcher: { ..model.launcher, open: false } },
       )
     }
@@ -1273,7 +1331,14 @@ fn update_msg(
           active_run_id: Some(run_id),
           last_run_id: Some(run_id),
           status: Running,
-          cwd,
+          // A started run always reports its directory, but a malformed
+          // event decodes as `None`; keeping the previous root beats
+          // forgetting one we already knew.
+          cwd: if cwd is Some(_) {
+            cwd
+          } else {
+            conv.cwd
+          },
         })
         // The run's workspace directory now exists, so the branch chip can be
         // probed (and refreshed — a rerun may follow a checkout).
@@ -1335,7 +1400,7 @@ fn update_msg(
       )
     }
     RevealDirectory(path) =>
-      if path.is_empty() {
+      if path.is_root() {
         (
           @cmd.none,
           {
@@ -1492,7 +1557,7 @@ fn update_msg(
         { ..model, file_panel: { ..panel, selected: Some(path), error: "" } },
       )
     }
-    FileLoaded(session~, path~, name~, file~, range~) =>
+    FileLoaded(session~, path~, name~, file~, range~, annotation~) =>
       // A stale read — the conversation switched, or another file was clicked
       // first — must not replace what the viewer now shows.
       if model.file_panel.session != session ||
@@ -1506,7 +1571,14 @@ fn update_msg(
           // no server behind `lsp_open` — syncing a README or JSON file to
           // moon-lsp would surface bogus squiggles — so only the viewer shows.
           Content(content~, absolute~) => {
-            let show = show_file_in_viewer(name, content, absolute~, range~)
+            let show = show_file_in_viewer(
+              name,
+              content,
+              absolute~,
+              relative=path,
+              range~,
+              annotation?,
+            )
             if language_id(name) == "moonbit" {
               @cmd.batch([show, request_diagnostics(dispatch, absolute)])
             } else {

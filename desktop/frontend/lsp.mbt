@@ -11,8 +11,16 @@
 const ModelUriPrefix : String = "openseek://"
 
 ///|
-fn model_uri(absolute_path : @pathx.Absolute) -> String {
-  ModelUriPrefix + @uri.encode_path(absolute_path.0)
+/// A viewer model URI this app minted (`openseek://` + the file's
+/// percent-encoded absolute path) — the document key the viewer's services
+/// (feedback, markers) index by. The newtype keeps arbitrary strings and
+/// filesystem paths out of APIs that mean a viewer document; mint one with
+/// `ModelUri::of`, or wrap only a string that `parse_model_uri` just accepted.
+priv struct ModelUri(String)
+
+///|
+fn ModelUri::of(absolute_path : @pathx.Absolute) -> ModelUri {
+  ModelUri(ModelUriPrefix + @uri.encode_path(absolute_path.0))
 }
 
 ///|

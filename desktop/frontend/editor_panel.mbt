@@ -11,43 +11,59 @@
 const ViewerHostId = "viewer-host"
 
 ///|
-/// The single viewer instance. `None` until the first `request_viewer_mount`
-/// finds the host element in the DOM — the viewer API constructs attached
-/// (`Viewer::create`), so creation and mounting are one step. The host is
-/// rendered on every screen from the first paint, and every file read is
-/// batched behind a mount request whose after-render tick precedes the async
-/// reply, so by the time a document arrives the viewer exists.
-let viewer_cell : Ref[@viewer.Viewer?] = Ref(None)
-
-///|
-/// The viewer's services, built here rather than defaulted inside the viewer so
-/// we keep a handle on the `MarkerService` — the viewer holds them privately.
-/// The host pushes diagnostics through it (`apply_diagnostics`), and the viewer
-/// renders the squiggles for whichever resource its model currently shows.
-let services_cell : Ref[@viewer.ViewerServices?] = Ref(None)
-
-///|
-/// The absolute path of the file the viewer currently shows, so a diagnostics
-/// push that arrives for a different file (or after the panel cleared its
-/// document) is dropped rather than drawn over the wrong document. `None` when
-/// the viewer shows a notice or nothing.
-let current_absolute : Ref[@pathx.Absolute?] = Ref(None)
-
-///|
 /// The `MarkerService` owner for the language server's diagnostics — Monaco
 /// keys markers by owner so one source's set replaces cleanly.
 const DiagnosticsOwner = "moon-lsp"
 
 ///|
-/// Monotonic model version; the viewer treats a new version as a new document.
-let model_version : Ref[Int] = Ref(0)
+/// The viewer's imperative state — the attached widget, its services, and the
+/// document it currently shows. None of this may live in the Rabbita model
+/// (the virtual DOM must not own imperative DOM state), so it is collected
+/// into this one module-level instance instead of loose globals.
+priv struct ViewerHost {
+  // The single viewer instance. `None` until the first `request_viewer_mount`
+  // finds the host element in the DOM — the viewer API constructs attached
+  // (`Viewer::create`), so creation and mounting are one step. The host is
+  // rendered on every screen from the first paint, and every file read is
+  // batched behind a mount request whose after-render tick precedes the async
+  // reply, so by the time a document arrives the viewer exists.
+  mut viewer : @viewer.Viewer?
+  // The viewer's services, built here rather than defaulted inside the viewer
+  // so we keep a handle on the `MarkerService` — the viewer holds them
+  // privately. The host pushes diagnostics through it (`apply_diagnostics`),
+  // and the viewer renders the squiggles for whichever resource its model
+  // currently shows.
+  mut services : @viewer.ViewerServices?
+  // The absolute path of the file the viewer currently shows, so a
+  // diagnostics push that arrives for a different file (or after the panel
+  // cleared its document) is dropped rather than drawn over the wrong
+  // document. `None` when the viewer shows a notice or nothing.
+  mut absolute : @pathx.Absolute?
+  // The same file as the conversation names it — the workspace-relative path
+  // the panel read it by. A comment filed on the shown document takes this
+  // as its chip path, so the chip never has to reverse-engineer a relative
+  // name from the absolute one (which the frontend cannot do before the
+  // first run reports `cwd`). `None` when the viewer shows a notice or
+  // nothing.
+  mut relative : @pathx.Relative?
+  // Monotonic model version; the viewer treats a new version as a new
+  // document.
+  mut version : Int
+}
 
 ///|
-/// The mounted viewer, or `None` before the first mount. Held in a `Ref`
-/// rather than the model because it is imperative DOM state the virtual DOM
-/// must not own.
+let viewer_state : ViewerHost = {
+  viewer: None,
+  services: None,
+  absolute: None,
+  relative: None,
+  version: 0,
+}
+
+///|
+/// The mounted viewer, or `None` before the first mount.
 fn mounted_viewer() -> @viewer.Viewer? {
-  viewer_cell.val
+  viewer_state.viewer
 }
 
 ///|
@@ -83,13 +99,13 @@ fn register_tokenizers() -> Unit {
 fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
-      if viewer_cell.val is None &&
+      if viewer_state.viewer is None &&
         @dom.document().get_element_by_id(ViewerHostId).to_option()
         is Some(host) {
         register_tokenizers()
         register_hover_provider()
         let services = @viewer.ViewerServices::new()
-        services_cell.val = Some(services)
+        viewer_state.services = Some(services)
         let viewer = @viewer.Viewer::create(
           host,
           services~,
@@ -98,26 +114,32 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
             placeholder="Select a file to view",
           ),
         )
-        viewer_cell.val = Some(viewer)
+        viewer_state.viewer = Some(viewer)
         services.agent_feedback.on_did_add_feedback(event => {
           // Only user comments on a file this app put on screen (a URI it
           // minted) become chips; anything else is not ours to carry.
           guard event.feedback.kind is UserReview else { return }
-          guard parse_model_uri(event.feedback.resource.value) is Some(absolute) else {
+          guard parse_model_uri(event.feedback.resource.value) is Some(_) else {
             return
           }
-          let quote = if viewer.get_model() is Some(model) &&
-            model.uri.value == event.feedback.resource.value {
-            model.get_value_in_range(event.feedback.range)
-          } else {
-            ""
+          // Commenting happens through the viewer's own UI, so the feedback
+          // can only target the document on screen — the one whose
+          // workspace-relative name was recorded when it was shown. A
+          // mismatch would mean a stray event for a document already gone;
+          // there is nothing correct to attach it to.
+          guard viewer.get_model() is Some(model) &&
+            model.uri.value == event.feedback.resource.value &&
+            viewer_state.relative is Some(file) else {
+            return
           }
           scheduler.add(
             dispatch(
               EditorCommentAdded(
-                path=absolute.0,
+                // Just guarded as a URI this app minted.
+                resource=ModelUri(event.feedback.resource.value),
+                file~,
                 range=event.feedback.range,
-                quote~,
+                quote=model.get_value_in_range(event.feedback.range),
                 comment=event.feedback.text,
                 feedback_id=event.feedback.id,
               ),
@@ -136,13 +158,13 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 /// composer chip — the chip is the comment's carrier from then on. Routed by
 /// the same model URI the feedback was filed under.
 fn remove_editor_feedback(
-  absolute_path : String,
+  resource : ModelUri,
   feedback_id : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    if services_cell.val is Some(services) {
+    if viewer_state.services is Some(services) {
       services.agent_feedback.remove_feedback(
-        { value: model_uri(Absolute(absolute_path)) },
+        { value: resource.0 },
         feedback_id,
       )
     }
@@ -154,7 +176,7 @@ fn remove_editor_feedback(
 /// CSS, so the viewer cannot see the change on its own).
 fn request_viewer_remeasure() -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _after => if mounted_viewer() is Some(viewer) { viewer.layout() },
+    _after => if viewer_state.viewer is Some(viewer) { viewer.layout() },
     kind=@cmd.after_render,
   )
 }
@@ -163,30 +185,36 @@ fn request_viewer_remeasure() -> @cmd.Cmd {
 /// Show a file's contents in the viewer as a fresh read-only document. A
 /// symbol jump's `range`, when present, is revealed centered once the
 /// document is set and — unless empty (a symbol placed without a range) —
-/// selected, so the named code reads highlighted.
+/// selected, so the named code reads highlighted. `annotation`, when present
+/// (an annotation chip's jump), is re-shown as a comment bubble over `range`
+/// — the bubble the chip replaced when the comment was filed.
 fn show_file_in_viewer(
   name : String,
   content : String,
   absolute? : @pathx.Absolute,
+  relative? : @pathx.Relative,
   range? : @common.Range? = None,
+  annotation? : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     // Reads are always batched behind a mount request whose after-render tick
     // runs before this async reply, so the viewer exists here (see
-    // `viewer_cell`); the guard only drops a pathological stray.
-    guard mounted_viewer() is Some(viewer) else { return }
+    // `ViewerHost::viewer`); the guard only drops a pathological stray.
+    guard viewer_state.viewer is Some(viewer) else { return }
     // Gate incoming diagnostics to the file now on screen (a notice document,
-    // with no absolute path, takes no diagnostics).
-    current_absolute.val = absolute
-    model_version.val = model_version.val + 1
-    let version = model_version.val
+    // with no absolute path, takes no diagnostics). The relative name rides
+    // along for comments filed on this document (see `ViewerHost::relative`).
+    viewer_state.absolute = absolute
+    viewer_state.relative = relative
+    viewer_state.version = viewer_state.version + 1
+    let version = viewer_state.version
     // The URI is the file's absolute path — the whole address the hover
     // provider needs, travelling with the model itself. A notice document
     // (withheld binary/oversized file) has no file behind it, so its inert
     // URI never parses as a model path and hover stays off.
     let uri : @common.Uri = {
       value: match absolute {
-        Some(absolute) => model_uri(absolute)
+        Some(absolute) => ModelUri::of(absolute).0
         None => "openseek-notice://" + @uri.encode_path(name)
       },
     }
@@ -203,8 +231,27 @@ fn show_file_in_viewer(
     viewer.set_model(Some(text_model))
     // Commenting (select → inline input → composer chip) is for real files;
     // a notice document has nothing behind it to comment on.
-    if services_cell.val is Some(services) {
+    if viewer_state.services is Some(services) {
       services.agent_feedback.set_feedback_enabled(uri, absolute is Some(_))
+      if absolute is Some(_) {
+        // A fresh document view starts with no bubbles (comments become
+        // chips the moment they are filed, so anything lingering here is a
+        // previous jump's re-display); an annotation chip's jump then
+        // re-shows its comment over the commented range. `Submitted` keeps
+        // the display copy quiet: it fires no `did_add_feedback` (so the
+        // chip callback cannot mint a duplicate) and draws no Created-state
+        // button bar.
+        services.agent_feedback.clear_feedback(uri)
+        if annotation is Some(text) && range is Some(range) {
+          services.agent_feedback.add_feedback(
+            uri,
+            range,
+            text,
+            state=Submitted,
+          )
+          |> ignore
+        }
+      }
     }
     if range is Some(range) {
       if !range.is_empty() {
@@ -229,8 +276,9 @@ fn show_file_in_viewer(
 /// conversation's file. A no-op until the viewer has been attached.
 fn clear_viewer() -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    if mounted_viewer() is Some(viewer) {
-      current_absolute.val = None
+    if viewer_state.viewer is Some(viewer) {
+      viewer_state.absolute = None
+      viewer_state.relative = None
       viewer.set_model(None)
     }
   })
@@ -247,10 +295,10 @@ fn apply_diagnostics(
   diagnostics : Json,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    if current_absolute.val is Some(current) &&
+    if viewer_state.absolute is Some(current) &&
       current == absolute &&
-      services_cell.val is Some(services) {
-      let uri : @common.Uri = { value: model_uri(absolute) }
+      viewer_state.services is Some(services) {
+      let uri : @common.Uri = { value: ModelUri::of(absolute).0 }
       services.markers.set_diagnostics(
         DiagnosticsOwner,
         uri,

@@ -1,9 +1,9 @@
 ///|
 test "child_path joins entry names onto their parent directory" {
-  assert_eq(child_path("", "src"), "src")
-  assert_eq(child_path("", "moon.mod"), "moon.mod")
-  assert_eq(child_path("src", "main.mbt"), "src/main.mbt")
-  assert_eq(child_path("src/lib", "util.mbt"), "src/lib/util.mbt")
+  assert_eq(child_path(@pathx.Relative::root(), "src").0, "src")
+  assert_eq(child_path(@pathx.Relative::root(), "moon.mod").0, "moon.mod")
+  assert_eq(child_path(Relative("src"), "main.mbt").0, "src/main.mbt")
+  assert_eq(child_path(Relative("src/lib"), "util.mbt").0, "src/lib/util.mbt")
 }
 
 ///|
@@ -22,14 +22,14 @@ test "language_id maps known extensions and falls back to plain text" {
 test "decode_dir_entries builds full relative paths and skips bad rows" {
   let reply =
     #|{"entries":[{"name":"src","is_dir":true},{"name":"moon.mod","is_dir":false},{"is_dir":true}]}
-  let entries = decode_dir_entries(reply, "").unwrap()
+  let entries = decode_dir_entries(reply, @pathx.Relative::root()).unwrap()
   // The third row has no name and is dropped.
   assert_eq(entries.length(), 2)
   assert_eq(entries[0].name, "src")
-  assert_eq(entries[0].path, "src")
+  assert_eq(entries[0].path.0, "src")
   assert_true(entries[0].is_dir)
   assert_eq(entries[1].name, "moon.mod")
-  assert_eq(entries[1].path, "moon.mod")
+  assert_eq(entries[1].path.0, "moon.mod")
   assert_false(entries[1].is_dir)
 }
 
@@ -37,14 +37,16 @@ test "decode_dir_entries builds full relative paths and skips bad rows" {
 test "decode_dir_entries roots child paths at the parent directory" {
   let reply =
     #|{"entries":[{"name":"util.mbt","is_dir":false}]}
-  let entries = decode_dir_entries(reply, "src/lib").unwrap()
-  assert_eq(entries[0].path, "src/lib/util.mbt")
+  let entries = decode_dir_entries(reply, Relative("src/lib")).unwrap()
+  assert_eq(entries[0].path.0, "src/lib/util.mbt")
 }
 
 ///|
 test "decode_dir_entries rejects structurally unusable replies" {
-  assert_true(decode_dir_entries("not json", "") is None)
-  assert_true(decode_dir_entries("{\"entries\":42}", "") is None)
+  assert_true(decode_dir_entries("not json", @pathx.Relative::root()) is None)
+  assert_true(
+    decode_dir_entries("{\"entries\":42}", @pathx.Relative::root()) is None,
+  )
 }
 
 ///|

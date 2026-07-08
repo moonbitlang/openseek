@@ -19,7 +19,7 @@ test "a workspace new chat rotates into that workspace" {
   // The rotation lands like any other; the fresh conversation carries the
   // active workspace, and the next plain "New chat" stays there.
   let (_, rotated) = update(dispatch, SessionRotated("desktop-ws"), chosen)
-  inspect(rotated.active().workspace, content="/home/u/proj")
+  assert_true(rotated.active().workspace is Some(Absolute("/home/u/proj")))
   inspect(rotated.active_session, content="desktop-ws")
   inspect(rotated.active_workspace, content="/home/u/proj")
 }
@@ -28,7 +28,7 @@ test "a workspace new chat rotates into that workspace" {
 test "a scratch rotation leaves the conversation in the default store" {
   let dispatch = test_dispatch()
   let (_, next) = update(dispatch, SessionRotated("desktop-s"), test_model())
-  inspect(next.active().workspace, content="")
+  assert_true(next.active().workspace is None)
 }
 
 ///|
@@ -37,24 +37,24 @@ test "workspaces loaded resets placements the registry no longer has" {
   let model = {
     ..test_model().replace_conversation({
       ..test_conversation(),
-      workspace: "/gone",
+      workspace: Some(Absolute("/gone")),
     }),
     active_workspace: "/gone",
   }
   let (_, next) = update(dispatch, WorkspacesLoaded(["/kept"]), model)
   inspect(next.workspaces.length(), content="1")
-  inspect(next.active().workspace, content="")
+  assert_true(next.active().workspace is None)
   inspect(next.active_workspace, content="")
   // A still-registered placement survives the same reply.
   let attached = {
     ..test_model().replace_conversation({
       ..test_conversation(),
-      workspace: "/kept",
+      workspace: Some(Absolute("/kept")),
     }),
     active_workspace: "/kept",
   }
   let (_, kept) = update(dispatch, WorkspacesLoaded(["/kept"]), attached)
-  inspect(kept.active().workspace, content="/kept")
+  assert_true(kept.active().workspace is Some(Absolute("/kept")))
   inspect(kept.active_workspace, content="/kept")
 }
 
@@ -80,7 +80,7 @@ test "opening a stored session adopts its workspace" {
     SessionLoaded(session="desktop-w", items=[]),
     opening,
   )
-  inspect(loaded.active().workspace, content="/proj")
+  assert_true(loaded.active().workspace is Some(Absolute("/proj")))
 }
 
 ///|

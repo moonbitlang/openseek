@@ -290,7 +290,7 @@ fn push_group_rows(
   // "New chat" is already on screen, and a row for it is just noise until
   // its first send.
   for conv in model.conversations.rev_iter() {
-    if conv.workspace == workspace &&
+    if workspace_token(conv.workspace) == workspace &&
       conv.has_begun() &&
       !listed(conv.session_id) &&
       !archived(conv.session_id) {
@@ -833,29 +833,75 @@ fn inline_code_nodes(content : String) -> Array[@html.Html] {
 }
 
 ///|
-/// A transcript chip's display form: the trigger glyph the composer used, the
-/// label text, and the jump target (`file` empty when it has none). An
-/// annotation labels as its location — its texts live in the chip's tooltip
-/// and the message body the model read.
-priv struct MentionChip {
-  glyph : String
-  label : String
-  file : String
-  line : Int
+/// The trigger glyph a chip renders with — the composer affordance the
+/// mention came from.
+fn mention_glyph(mention : @mention_context.MentionRef) -> String {
+  match mention {
+    Skill(_) => "$"
+    Symbol(_) => "#"
+    Annotation(_) => "✎"
+  }
 }
 
 ///|
-fn mention_chip(mention : @mention_context.MentionRef) -> MentionChip {
+/// A chip's label text; an annotation labels as its location — its texts
+/// live in the chip's tooltip and the message body the model read.
+fn mention_label(mention : @mention_context.MentionRef) -> String {
   match mention {
-    Skill(name~) => { glyph: "$", label: name, file: "", line: 0 }
-    Symbol(name~, file~, line~) => { glyph: "#", label: name, file, line }
+    Skill(name~) => name
+    Symbol(name~, ..) => name
     Annotation(file~, start_line~, end_line~, ..) =>
-      {
-        glyph: "✎",
-        label: "\{file}:\{start_line}-\{end_line}",
-        file,
-        line: start_line,
+      "\{file}:\{start_line}-\{end_line}"
+  }
+}
+
+///|
+/// Where a mention chip's jump lands: the referenced file, the line span the
+/// envelope can rebuild (it stores no columns; `None` for a symbol placed
+/// without a line), and — for an annotation — the comment to re-show as an
+/// editor bubble over that range. `None` for a chip with nothing to jump to
+/// (a skill, or an unresolved symbol).
+priv struct MentionTarget {
+  file : String
+  range : @common.Range?
+  annotation : String?
+}
+
+///|
+fn mention_target(mention : @mention_context.MentionRef) -> MentionTarget? {
+  match mention {
+    Skill(_) => None
+    Symbol(file~, line~, ..) =>
+      if file.is_empty() {
+        None
+      } else {
+        Some({
+          file,
+          range: if line >= 1 {
+            Some(@common.Range::Range(line, 1, line, 1))
+          } else {
+            None
+          },
+          annotation: None,
+        })
       }
+    Annotation(file~, start_line~, end_line~, comment~, ..) =>
+      Some({
+        file,
+        range: Some(
+          @common.Range::Range(
+            start_line,
+            1,
+            if end_line >= start_line {
+              end_line
+            } else {
+              start_line
+            },
+            1,
+          ),
+        ),
+        annotation: Some(comment),
+      })
   }
 }
 
@@ -867,29 +913,34 @@ fn mention_chip(mention : @mention_context.MentionRef) -> MentionChip {
 /// the editor panel there via `on_jump`, when the caller wires one.
 fn user_message_view(
   content : String,
-  on_jump? : (String, Int) -> @cmd.Cmd,
+  on_jump? : (MentionTarget) -> @cmd.Cmd,
 ) -> @html.Html {
   let body : Array[@html.Html] = [@html.div(class="msg-role", "You")]
   match @mention_context.parse(content) {
     Some(parsed) => {
       let chips : Array[@html.Html] = []
       for mention in parsed.mentions {
-        let parts = mention_chip(mention)
-        let glyph = @html.span(class="mention-glyph", parts.glyph)
-        let label = @html.span(class="mention-label", parts.label)
+        let glyph = @html.span(class="mention-glyph", mention_glyph(mention))
+        let label_text = mention_label(mention)
+        let label = @html.span(class="mention-label", label_text)
+        let target = mention_target(mention)
         let title = if mention is Annotation(comment~, ..) {
           comment
-        } else if parts.file.is_empty() {
-          parts.label
+        } else if target is Some(target) {
+          if target.range is Some(range) {
+            "Jump to \{target.file}:\{range.start_line_number}"
+          } else {
+            "Jump to \{target.file}"
+          }
         } else {
-          "Jump to \{parts.file}:\{parts.line}"
+          label_text
         }
-        let chip = if !parts.file.is_empty() && on_jump is Some(jump) {
+        let chip = if target is Some(target) && on_jump is Some(jump) {
           @html.button(
             class="mention-jump",
             type_="button",
             title~,
-            on_click=jump(parts.file, parts.line),
+            on_click=jump(target),
             [glyph, label],
           )
         } else {
@@ -917,7 +968,7 @@ fn user_message_view(
 fn transcript_item_view(
   item : @transcript.TranscriptItem,
   on_open : (String) -> @cmd.Cmd,
-  on_jump? : (String, Int) -> @cmd.Cmd,
+  on_jump? : (MentionTarget) -> @cmd.Cmd,
 ) -> @html.Html {
   match item.kind {
     User => user_message_view(item.content, on_jump?)
@@ -1026,10 +1077,15 @@ fn transcript_view(
       guard conv.messages[index].kind
         is (Tool(..) | Reasoning | Assistant(false)) else {
         items.push(
-          transcript_item_view(conv.messages[index], on_open, on_jump=(
-            path,
-            line,
-          ) => dispatch(JumpToLocation(path~, line~))),
+          transcript_item_view(conv.messages[index], on_open, on_jump=target => {
+            dispatch(
+              JumpToLocation(
+                path=target.file,
+                range=target.range,
+                annotation=target.annotation,
+              ),
+            )
+          }),
         )
         index = index + 1
         continue
@@ -1111,8 +1167,7 @@ fn user_display_text(text : String) -> String {
     parts.push(parsed.task)
   }
   for mention in parsed.mentions {
-    let chip = mention_chip(mention)
-    parts.push(chip.glyph + chip.label)
+    parts.push(mention_glyph(mention) + mention_label(mention))
   }
   parts.join(" ")
 }
@@ -1220,17 +1275,16 @@ fn completion_popup(
 fn mention_tray(dispatch : @cmd.Emit[Msg], conv : Conversation) -> @html.Html {
   let chips : Array[@html.Html] = []
   for index, mention in conv.mentions {
-    let parts = mention_chip(mention.ref_)
-    let glyph = @html.span(class="mention-glyph", parts.glyph)
-    let label = @html.span(class="mention-label", parts.label)
-    let body = if !parts.file.is_empty() {
+    let glyph = @html.span(class="mention-glyph", mention_glyph(mention.ref_))
+    let label = @html.span(class="mention-label", mention_label(mention.ref_))
+    let body = if mention_target(mention.ref_) is Some(target) {
       @html.button(
         class="mention-jump",
         type_="button",
         title=if mention.ref_ is Annotation(comment~, ..) {
           comment
         } else {
-          "Jump to \{parts.file}"
+          "Jump to \{target.file}"
         },
         on_click=dispatch(JumpToMention(index)),
         [glyph, label],
@@ -1893,10 +1947,10 @@ fn run_indicator(model : Model) -> @html.Html {
 /// The workspace line appears once the host has reported it via `started`;
 /// before the conversation's first run only the session id is known.
 fn session_tooltip(conv : Conversation) -> String {
-  if conv.cwd.is_empty() {
-    "session \{conv.session_id}"
+  if conv.cwd is Some(cwd) {
+    "session \{conv.session_id}\nworkspace \{cwd.0}"
   } else {
-    "session \{conv.session_id}\nworkspace \{conv.cwd}"
+    "session \{conv.session_id}"
   }
 }
 
@@ -2024,11 +2078,11 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   )
   // The conversation's attached project; a scratch conversation has no chip.
   // The git branch is not shown here — it lives in the composer's status row.
-  if !conv.workspace.is_empty() {
+  if conv.workspace is Some(workspace) {
     items.push(
-      @html.span(class="topbar-workspace", title=conv.workspace, [
+      @html.span(class="topbar-workspace", title=workspace.0, [
         icon(icon_folder),
-        @html.text(workspace_label(conv.workspace)),
+        @html.text(workspace_label(workspace.0)),
       ]),
     )
   }
@@ -2146,9 +2200,9 @@ fn file_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 ///|
 /// Split a relative path into its non-empty segments, e.g.
 /// `"cef/runtime.mbt"` → `["cef", "runtime.mbt"]`.
-fn path_segments(path : String) -> Array[String] {
+fn path_segments(path : @pathx.Relative) -> Array[String] {
   let segments : Array[String] = []
-  let mut rest = path
+  let mut rest = path.0
   while rest.split_once("/") is Some((head, tail)) {
     if !head.is_empty() {
       segments.push(head.to_owned())
@@ -2166,8 +2220,8 @@ fn path_segments(path : String) -> Array[String] {
 /// `segments_prefix(["cef", "runtime.mbt"], 1)` → `"cef"`. The inverse of
 /// `path_segments`, used to recover an ancestor directory's path for a
 /// breadcrumb click.
-fn segments_prefix(segments : Array[String], count : Int) -> String {
-  let mut path = ""
+fn segments_prefix(segments : Array[String], count : Int) -> @pathx.Relative {
+  let mut path = @pathx.Relative::root()
   for index in 0..<count {
     path = child_path(path, segments[index])
   }
@@ -2177,10 +2231,10 @@ fn segments_prefix(segments : Array[String], count : Int) -> String {
 ///|
 /// The proper ancestors of `path`, nearest-root first, e.g.
 /// `ancestor_paths("src/foo/bar.mbt")` → `["src", "src/foo"]`. Excludes the
-/// workspace root (`""`) and `path` itself.
-fn ancestor_paths(path : String) -> Array[String] {
+/// workspace root and `path` itself.
+fn ancestor_paths(path : @pathx.Relative) -> Array[@pathx.Relative] {
   let segments = path_segments(path)
-  let paths : Array[String] = []
+  let paths : Array[@pathx.Relative] = []
   for count in 1..<segments.length() {
     paths.push(segments_prefix(segments, count))
   }
@@ -2192,7 +2246,7 @@ fn ancestor_paths(path : String) -> Array[String] {
 fn crumb_link(
   dispatch : @cmd.Emit[Msg],
   label : String,
-  path : String,
+  path : @pathx.Relative,
 ) -> @html.Html {
   @html.span(
     class="crumb",
@@ -2214,7 +2268,7 @@ fn viewer_breadcrumb(
   let crumbs : Array[@html.Html] = []
   match panel.selected {
     Some(path) => {
-      crumbs.push(crumb_link(dispatch, "Workspace", ""))
+      crumbs.push(crumb_link(dispatch, "Workspace", @pathx.Relative::root()))
       let segments = path_segments(path)
       for index, segment in segments {
         crumbs.push(@html.span(class="crumb-sep", "›"))
@@ -2248,7 +2302,7 @@ fn viewer_breadcrumb(
 fn file_tree_rows(
   dispatch : @cmd.Emit[Msg],
   model : Model,
-  dir_path : String,
+  dir_path : @pathx.Relative,
   depth : Int,
 ) -> Array[@html.Html] {
   guard model.file_panel.children.get(dir_path) is Some(entries) else {
@@ -2274,7 +2328,7 @@ fn file_tree_rows(
 fn filtered_file_rows(
   dispatch : @cmd.Emit[Msg],
   model : Model,
-  dir_path : String,
+  dir_path : @pathx.Relative,
   query : String,
   into : Array[@html.Html],
 ) -> Unit {
@@ -2313,7 +2367,7 @@ fn tree_row(
       },
       style=[pad],
       on_click=dispatch(DirToggle(entry.path)),
-      attrs=@html.Attrs::build().data_set("path", entry.path),
+      attrs=@html.Attrs::build().data_set("path", entry.path.0),
       [
         @html.span(class="tree-chevron", chevron),
         @html.span(class="tree-name", entry.name),

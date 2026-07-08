@@ -132,13 +132,16 @@ fn event_payload(event : @js.Value) -> Map[String, Json]? {
 
 ///|
 fn started_msg(payload : Map[String, Json]) -> Msg? {
+  // The host resolved the run's directory itself, so this is the decode
+  // boundary where its absolute provenance is collapsed into the type; a
+  // blank field reads as "not reported".
   Some(
     Started(
       run_id=@transcript.json_int(payload, "run_id", 0),
       session=@transcript.json_text(payload, "session"),
       model=@transcript.json_text(payload, "model"),
       max_steps=@transcript.json_int(payload, "max_steps", 0),
-      cwd=@transcript.json_text(payload, "cwd"),
+      cwd=workspace_root(@transcript.json_text(payload, "cwd")),
     ),
   )
 }
@@ -258,7 +261,7 @@ fn start_openseek(
   api_key : String,
   api_url : String,
   session : String,
-  workspace~ : String,
+  workspace~ : @pathx.Absolute?,
   wsl_enabled~ : Bool,
   wsl_distro~ : String,
   wsl_engine~ : String,
@@ -302,7 +305,7 @@ fn start_payload(
   api_key : String,
   api_url : String,
   session : String,
-  workspace~ : String,
+  workspace~ : @pathx.Absolute?,
   wsl_enabled~ : Bool,
   wsl_distro~ : String,
   wsl_engine~ : String,
@@ -313,7 +316,7 @@ fn start_payload(
   set_trimmed(payload, "api_key", api_key)
   set_trimmed(payload, "api_url", api_url)
   set_trimmed(payload, "session", session)
-  set_trimmed(payload, "workspace", workspace)
+  set_workspace(payload, workspace)
   if parsed_max_steps(max_steps) is Some(steps) {
     payload["max_steps"] = steps
   }
@@ -549,14 +552,14 @@ fn close_window() -> @cmd.Cmd {
 fn open_file(
   dispatch : @cmd.Emit[Msg],
   session : String,
-  cwd : String,
+  cwd~ : @pathx.Absolute?,
   path : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["session"] = session
-      payload["cwd"] = cwd
+      payload["cwd"] = workspace_token(cwd)
       payload["path"] = path
       let _ : @js.Value = bridge_request("open_path", payload.to_value()) catch {
         error => {

@@ -21,14 +21,14 @@ fn scroll_transcript() -> Unit {
 /// Scroll a `RevealDirectory` target's tree row into view once it exists in
 /// the DOM; a no-op while its ancestors are still loading (retried once they
 /// finish, see `DirLoaded`).
-fn reveal_row_after_render(path : String) -> @cmd.Cmd {
+fn reveal_row_after_render(path : @pathx.Relative) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => reveal_tree_row(path), kind=@cmd.after_render)
 }
 
 ///|
-fn reveal_tree_row(path : String) -> Unit {
+fn reveal_tree_row(path : @pathx.Relative) -> Unit {
   match
-    @dom.document().query_selector("[data-path=\"" + path + "\"]").to_option() {
+    @dom.document().query_selector("[data-path=\"" + path.0 + "\"]").to_option() {
     Some(element) => element.scroll_into_view(behavior="smooth")
     None => ()
   }

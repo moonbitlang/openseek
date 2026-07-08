@@ -87,10 +87,12 @@ priv struct Conversation {
   // Durable engine session backing this conversation; consecutive runs share
   // it so the agent keeps context between prompts.
   session_id : String
-  // The project directory this conversation is attached to, "" for a scratch
-  // conversation in the app-managed workspace. Sent with every start so the
-  // engine runs in the project and stores the session inside it.
-  workspace : String
+  // The project directory this conversation is attached to, `None` for a
+  // scratch conversation in the app-managed workspace. Sent with every start
+  // so the engine runs in the project and stores the session inside it. Also
+  // one of the two roots (`cwd` first) a legacy absolute chip path is
+  // relativized against before a jump.
+  workspace : @pathx.Absolute?
   // Composer draft, kept per conversation so switching away (and back)
   // neither loses the text nor sends it to the wrong session.
   task : String
@@ -118,9 +120,12 @@ priv struct Conversation {
   unseen_finish : Bool
   usage_tokens : Int
   // The conversation's workspace directory as reported by the host's
-  // `started` event — display only (topbar tooltip); the host derives it
-  // from the session id, so it is never sent back with a start request.
-  cwd : String
+  // `started` event — `None` until the first run reports it. Display
+  // (topbar tooltip), the working directory for `open_path`/`launch_app`,
+  // and the preferred root for relativizing a legacy absolute chip path;
+  // the host derives it from the session id, so it is never sent back with
+  // a start request.
+  cwd : @pathx.Absolute?
   // The git branch checked out in the workspace, reported by the host's
   // `workspace_branch` op — display only (topbar chip). Empty when the
   // workspace is not a repository (the chip hides). Refreshed when a run
@@ -234,7 +239,7 @@ fn empty_symbol_cache() -> SymbolCache {
 /// take.
 priv struct FileEntry {
   name : String
-  path : String
+  path : @pathx.Relative
   is_dir : Bool
 }
 
@@ -251,16 +256,16 @@ priv struct FilePanel {
   session : String
   // Directory paths the user has expanded, and those with a `read_directory`
   // in flight; plain arrays since a workspace tree is small.
-  expanded : Array[String]
-  loading : Array[String]
+  expanded : Array[@pathx.Relative]
+  loading : Array[@pathx.Relative]
   // Listed directories' entries, keyed by the directory's relative path.
-  children : Map[String, Array[FileEntry]]
+  children : Map[@pathx.Relative, Array[FileEntry]]
   // The file currently shown in the viewer, if any. `None` puts the panel in
   // browse mode, showing the workspace tree instead.
-  selected : String?
+  selected : @pathx.Relative?
   // The directory a breadcrumb click most recently revealed, flashed in the
   // tree until `HighlightCleared` fires.
-  highlighted : String?
+  highlighted : @pathx.Relative?
   // The file-tree filter query; a blank query lists everything, otherwise only
   // rows whose name contains it (case-insensitive) survive.
   filter : String
@@ -457,16 +462,27 @@ priv enum Msg {
   JumpToMention(Int)
   // Jump the editor side-panel to a transcript chip's resolved location — a
   // sent message's mention, parsed back out of its `<user_mentions>` envelope,
-  // so it carries the location itself rather than a draft index.
-  JumpToLocation(path~ : String, line~ : Int)
+  // so it carries the location itself rather than a draft index. The path is
+  // the envelope's raw text: workspace-relative for chips minted since the
+  // panel started recording relative names, possibly absolute in a legacy
+  // envelope — `open_editor_at` classifies and relativizes. `range` is the
+  // chip's line span (the envelope stores no columns); an annotation chip
+  // also carries its comment text, re-shown as an editor bubble over that
+  // range.
+  JumpToLocation(path~ : String, range~ : @common.Range?, annotation~ : String?)
   // The user commented on a selection in the editor viewer (the
   // agent-feedback inline input): the comment becomes an annotation chip on
-  // the active draft. `path` is the commented file's host-resolved absolute
-  // path (the update relativizes it against the conversation's cwd for the
-  // envelope); `quote` is the selected source; `feedback_id` lets the handler
-  // clear the editor's own bubble — the chip is the comment's carrier now.
+  // the active draft. `resource` is the viewer model URI the comment was
+  // filed under — only the key for clearing the editor's own bubble; `file`
+  // is the file as the conversation names it (workspace-relative, recorded
+  // when the panel opened the file), the form the chip and the
+  // `<user_mentions>` envelope store. Each side carries the form it is
+  // authoritative for, so neither is ever derived from the other. `quote` is
+  // the selected source; `feedback_id` addresses the bubble to clear — the
+  // chip is the comment's carrier from then on.
   EditorCommentAdded(
-    path~ : String,
+    resource~ : ModelUri,
+    file~ : @pathx.Relative,
     range~ : @common.Range,
     quote~ : String,
     comment~ : String,
@@ -623,7 +639,7 @@ priv enum Msg {
     session~ : String,
     model~ : String,
     max_steps~ : Int,
-    cwd~ : String
+    cwd~ : @pathx.Absolute?
   )
   Engine(Int, @transcript.EngineEvent)
   // Show or hide the editor side-panel. Opening it loads the active
@@ -633,33 +649,40 @@ priv enum Msg {
   // tree and reveal this directory — expanding whatever ancestors are
   // needed to show it, then scrolling to and flashing it. `""` (the leading
   // "Workspace" crumb) just returns to the plain tree with no highlight.
-  RevealDirectory(String)
+  RevealDirectory(@pathx.Relative)
   // A `RevealDirectory` highlight's flash delay elapsed; clears it unless a
   // newer reveal has since replaced it.
-  HighlightCleared(String)
+  HighlightCleared(@pathx.Relative)
   // Expand or collapse a directory row in the file tree; the first expansion
   // lazily lists the directory through the host.
-  DirToggle(String)
+  DirToggle(@pathx.Relative)
   // The file-tree filter query changed.
   FileFilterChanged(String)
   // A `read_directory` reply: `session`/`path` say which request it answers so
   // a reply that lost a conversation switch can be dropped.
-  DirLoaded(session~ : String, path~ : String, entries~ : Array[FileEntry])
-  DirFailed(session~ : String, path~ : String, message~ : String)
+  DirLoaded(
+    session~ : String,
+    path~ : @pathx.Relative,
+    entries~ : Array[FileEntry]
+  )
+  DirFailed(session~ : String, path~ : @pathx.Relative, message~ : String)
   // A file row was clicked: read it and show it in the viewer. `name` is the
   // entry's display name, kept for the viewer's title and language guess.
-  FileSelected(path~ : String, name~ : String)
+  FileSelected(path~ : @pathx.Relative, name~ : String)
   // `file` is the decoded reply (content + address, or a withheld-file
   // case). `range`, when present, is a jumped-to symbol's one-based range,
   // revealed in the viewer once the file loads and — unless empty —
-  // selected so the code it names reads highlighted. A plain tree click
-  // leaves it `None`.
+  // selected so the code it names reads highlighted. `annotation`, when
+  // present (an annotation chip's jump), is the user's comment text,
+  // re-shown as an editor bubble over `range`. A plain tree click leaves
+  // both `None`.
   FileLoaded(
     session~ : String,
-    path~ : String,
+    path~ : @pathx.Relative,
     name~ : String,
     file~ : FileContent,
-    range~ : @common.Range?
+    range~ : @common.Range?,
+    annotation~ : String?
   )
   FileFailed(session~ : String, message~ : String)
   // The language server's diagnostics for the file at `absolute`, either
@@ -675,13 +698,37 @@ priv enum Msg {
 }
 
 ///|
+/// A workspace registry token ("" = the default store) as a typed root. The
+/// tokens come from the host's registry and store replies, so a non-empty one
+/// is known-absolute — this is the one place that provenance is collapsed
+/// into the type.
+fn workspace_root(token : String) -> @pathx.Absolute? {
+  if token.is_empty() {
+    None
+  } else {
+    Some(Absolute(token))
+  }
+}
+
+///|
+/// A conversation's workspace back in registry-token form ("" = the default
+/// store), for sidebar grouping and store-addressed ops.
+fn workspace_token(root : @pathx.Absolute?) -> String {
+  if root is Some(root) {
+    root.0
+  } else {
+    ""
+  }
+}
+
+///|
 fn empty_conversation(
   session_id : String,
   workspace? : String = "",
 ) -> Conversation {
   {
     session_id,
-    workspace,
+    workspace: workspace_root(workspace),
     task: "",
     mentions: [],
     running: false,
@@ -691,7 +738,7 @@ fn empty_conversation(
     status: Idle,
     unseen_finish: false,
     usage_tokens: 0,
-    cwd: "",
+    cwd: None,
     branch: "",
     watcher_status: "",
     streaming_response: "",
@@ -857,7 +904,7 @@ fn Model::session_workspace(self : Model, session_id : String) -> String {
     }
   }
   match self.find_conversation(session_id) {
-    Some(conv) => conv.workspace
+    Some(conv) => workspace_token(conv.workspace)
     None => ""
   }
 }

@@ -2,7 +2,7 @@
 test "model uris round-trip the absolute path" {
   for path in ["/ws/my proj/src/a b.mbt", "/tmp/中文/x.mbt", "C:/ws/a.mbt"] {
     assert_true(
-      parse_model_uri(model_uri(Absolute(path))) == Some(Absolute(path)),
+      parse_model_uri(ModelUri::of(Absolute(path)).0) == Some(Absolute(path)),
     )
   }
 }
