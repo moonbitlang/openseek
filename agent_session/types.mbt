@@ -271,6 +271,13 @@ pub struct RuntimeNotice {
 } derive(Debug, ToJson, FromJson)
 
 ///|
+/// First line of the runtime notices the agent loop injects as plan-cadence
+/// reminders. The producer (`plan_reminder_text` in `agent`) stamps it and
+/// readers of the durable log (the viz card renderer, tests) key off it, so
+/// the tag lives here with `RuntimeNotice` where both sides can share it.
+pub const PlanReminderPrefix : String = "[plan reminder]"
+
+///|
 /// Wrap one runtime notice exactly as it should be replayed.
 pub fn RuntimeNotice::RuntimeNotice(content : String) -> RuntimeNotice {
   { content, }

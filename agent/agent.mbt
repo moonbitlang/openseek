@@ -22,7 +22,7 @@ fn plan_reminder_text(checklist : String?) -> String {
   match checklist {
     Some(lines) =>
       (
-        $|[plan reminder]
+        $|\{@agent_session.PlanReminderPrefix}
         $|The plan tool has not been called in a while. If progress was made,
         $|update step statuses; if the plan no longer matches the work,
         $|replace it or clear it with steps: []. Current plan:
@@ -30,10 +30,10 @@ fn plan_reminder_text(checklist : String?) -> String {
       )
     None =>
       (
-        #|[plan reminder]
-        #|The plan tool has not been used in this turn. If this task takes
-        #|several distinct steps, record a plan with the plan tool and keep
-        #|step statuses current. If not, ignore this reminder.
+        $|\{@agent_session.PlanReminderPrefix}
+        $|The plan tool has not been used in this turn. If this task takes
+        $|several distinct steps, record a plan with the plan tool and keep
+        $|step statuses current. If not, ignore this reminder.
       )
   }
 }

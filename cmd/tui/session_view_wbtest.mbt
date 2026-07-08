@@ -27,7 +27,9 @@ test "session items project to transcript items" {
   guard session_item(User(UserMessage(shell_context))) is Some(ToolCall(_)) else {
     fail("expected command user message to render as a tool")
   }
-  guard session_item(Runtime(RuntimeNotice("[plan reminder]\nrun tests")))
+  guard session_item(
+      Runtime(RuntimeNotice("\{@agent_session.PlanReminderPrefix}\nrun tests")),
+    )
     is Some(Notice(_)) else {
     fail("expected runtime notice")
   }

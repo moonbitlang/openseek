@@ -830,18 +830,18 @@ test "a dangling call pairs only in the model view, where it is healed" {
 /// card. The reminder bodies mirror `plan_reminder_text` in `agent`.
 test "plan reminder notices render a dedicated card with checklist rows" {
   let checklist_reminder =
-    #|[plan reminder]
-    #|The plan tool has not been called in a while. If progress was made,
-    #|update step statuses; if the plan no longer matches the work,
-    #|replace it or clear it with steps: []. Current plan:
-    #|1. [completed] read the failing test
-    #|2. [in_progress] fix the parser
-    #|3. [pending] run moon test
+    $|\{@agent_session.PlanReminderPrefix}
+    $|The plan tool has not been called in a while. If progress was made,
+    $|update step statuses; if the plan no longer matches the work,
+    $|replace it or clear it with steps: []. Current plan:
+    $|1. [completed] read the failing test
+    $|2. [in_progress] fix the parser
+    $|3. [pending] run moon test
   let no_plan_reminder =
-    #|[plan reminder]
-    #|The plan tool has not been used in this turn. If this task takes
-    #|several distinct steps, record a plan with the plan tool and keep
-    #|step statuses current. If not, ignore this reminder.
+    $|\{@agent_session.PlanReminderPrefix}
+    $|The plan tool has not been used in this turn. If this task takes
+    $|several distinct steps, record a plan with the plan tool and keep
+    $|step statuses current. If not, ignore this reminder.
   let session = @agent_session.Session(SessionId("plan"), system_prompt="")
     .append(User(UserMessage("do a long task")))
     .append(Runtime(RuntimeNotice(checklist_reminder)))

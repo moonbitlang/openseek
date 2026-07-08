@@ -9,6 +9,7 @@ import {
 }
 
 // Values
+pub const PlanReminderPrefix : String = "[plan reminder]"
 
 // Errors
 

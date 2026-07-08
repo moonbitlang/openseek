@@ -78,19 +78,21 @@ async test "a plan-silent turn gets one staleness reminder after ten requests" {
     assert_eq(bodies.length(), 12)
     for index in 0..<10 {
       assert_false(
-        bodies[index].contains("[plan reminder]"),
+        bodies[index].contains(@agent_session.PlanReminderPrefix),
         msg="request \{index + 1} must not carry the reminder yet",
       )
     }
     assert_true(
-      bodies[10].contains("[plan reminder]"),
+      bodies[10].contains(@agent_session.PlanReminderPrefix),
       msg="request 11 should carry the reminder",
     )
     assert_true(bodies[10].contains("has not been used in this turn"))
     // The reminder is durable exactly once, in its plan-free nag variant.
     let reminders = [
       for event in result.events() if event.item() is Runtime(notice) &&
-      notice.content().contains("[plan reminder]") => notice.content()
+      notice.content().contains(@agent_session.PlanReminderPrefix) => {
+        notice.content()
+      }
     ]
     assert_eq(reminders.length(), 1)
     assert_true(reminders[0].contains("has not been used in this turn"))
@@ -185,18 +187,20 @@ async test "a recorded plan delays the reminder and is re-surfaced by it" {
     // finishing answer.
     assert_eq(bodies.length(), 13)
     assert_false(
-      bodies[10].contains("[plan reminder]"),
+      bodies[10].contains(@agent_session.PlanReminderPrefix),
       msg="the successful plan write must delay the reminder past request 11",
     )
     assert_true(
-      bodies[11].contains("[plan reminder]"),
+      bodies[11].contains(@agent_session.PlanReminderPrefix),
       msg="request 12 should carry the reminder",
     )
     assert_true(bodies[11].contains("Current plan:"))
     assert_true(bodies[11].contains("1. [in_progress] fix the parser"))
     let reminders = [
       for event in result.events() if event.item() is Runtime(notice) &&
-      notice.content().contains("[plan reminder]") => notice.content()
+      notice.content().contains(@agent_session.PlanReminderPrefix) => {
+        notice.content()
+      }
     ]
     assert_eq(reminders.length(), 1)
     assert_true(reminders[0].contains("1. [in_progress] fix the parser"))
@@ -209,7 +213,7 @@ async test "a recorded plan delays the reminder and is re-surfaced by it" {
 /// later request — "did it fire again" is a count on the newest body, not an
 /// absence check on it.
 fn reminder_count(body : String) -> Int {
-  body.split("[plan reminder]").collect().length() - 1
+  body.split(@agent_session.PlanReminderPrefix).collect().length() - 1
 }
 
 ///|
@@ -264,7 +268,9 @@ async test "the no-plan nag fires at most once per turn" {
     )
     let reminders = [
       for event in result.events() if event.item() is Runtime(notice) &&
-      notice.content().contains("[plan reminder]") => notice.content()
+      notice.content().contains(@agent_session.PlanReminderPrefix) => {
+        notice.content()
+      }
     ]
     assert_eq(reminders.length(), 1)
     assert_true(reminders[0].contains("has not been used in this turn"))
@@ -325,7 +331,9 @@ async test "a stale recorded plan re-nags on the ten-request cadence" {
     )
     let reminders = [
       for event in result.events() if event.item() is Runtime(notice) &&
-      notice.content().contains("[plan reminder]") => notice.content()
+      notice.content().contains(@agent_session.PlanReminderPrefix) => {
+        notice.content()
+      }
     ]
     assert_eq(reminders.length(), 2)
     assert_true(reminders[0].contains("1. [in_progress] fix the parser"))

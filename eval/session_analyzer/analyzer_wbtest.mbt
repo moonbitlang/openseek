@@ -18,7 +18,9 @@ fn sample_session() -> @agent_session.Session {
       ToolResult(tool_call_id="call_1", tool_name="shell", content="exit=0\nok"),
     ),
   )
-  .append(Runtime(RuntimeNotice("[plan reminder]\nrun tests")))
+  .append(
+    Runtime(RuntimeNotice("\{@agent_session.PlanReminderPrefix}\nrun tests")),
+  )
   .append(Terminal(Finished("done")))
 }
 

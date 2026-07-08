@@ -302,19 +302,14 @@ fn event_card(
 }
 
 ///|
-/// The label prefix the agent loop's plan cadence stamps on its staleness
-/// reminders (see `plan_reminder_text` in `agent`); the card renderer keys off
-/// it to give those notices a dedicated look.
-const PlanReminderPrefix : String = "[plan reminder]"
-
-///|
-/// Render a `RuntimeNotice` card. A plan-cadence reminder — recognized by its
-/// `[plan reminder]` prefix — gets its own label and, when it re-surfaces a
-/// recorded checklist ("Current plan:" followed by `N. [status] title` lines),
-/// the steps render as a status-classed list instead of raw text. Any other
-/// runtime notice keeps the generic card.
+/// Render a `RuntimeNotice` card. A plan-cadence reminder — recognized by the
+/// `@agent_session.PlanReminderPrefix` first line the agent loop stamps on it
+/// — gets its own label and, when it re-surfaces a recorded checklist
+/// ("Current plan:" followed by `N. [status] title` lines), the steps render
+/// as a status-classed list instead of raw text. Any other runtime notice
+/// keeps the generic card.
 fn runtime_card(seq : Int, time : String, content : String) -> @html.Html {
-  if !content.has_prefix(PlanReminderPrefix) {
+  if !content.has_prefix(@agent_session.PlanReminderPrefix) {
     return card("runtime", "Runtime notice", seq, time~, [text_block(content)])
   }
   let body : Array[@html.Html] = []
