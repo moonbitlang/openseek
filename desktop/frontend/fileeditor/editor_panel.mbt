@@ -215,8 +215,10 @@ fn show_file_in_viewer(
     // `ViewerHost::viewer`); the guard only drops a pathological stray.
     guard viewer_state.viewer is Some(viewer) else { return }
     // Park the outgoing document's scroll position for its tab's return.
-    if viewer_state.relative is Some(prev) && viewer.has_model() {
-      viewer_state.view_states[prev.0] = viewer.save_view_state()
+    if viewer_state.relative is Some(prev) &&
+      viewer.has_model() &&
+      viewer.save_view_state() is Some(view_state) {
+      viewer_state.view_states[prev.0] = view_state
     }
     // Gate incoming diagnostics to the file now on screen (a notice document,
     // with no absolute path, takes no diagnostics). The relative name rides
@@ -250,7 +252,7 @@ fn show_file_in_viewer(
     if restore_scroll &&
       relative is Some(rel) &&
       viewer_state.view_states.get(rel.0) is Some(saved) {
-      viewer.restore_view_state(saved)
+      viewer.restore_view_state(Some(saved))
     }
     // Commenting (select → inline input → composer chip) is for real files;
     // a notice document has nothing behind it to comment on.
@@ -281,7 +283,7 @@ fn show_file_in_viewer(
         // `set_selection` never scrolls on its own (the Monaco contract), so
         // pair it with the reveal below.
         viewer.set_selection(
-          @view_model.Selection::from_positions(
+          @core.Selection::from_positions(
             range.get_start_position(),
             range.get_end_position(),
           ),

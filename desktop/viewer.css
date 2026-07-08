@@ -287,18 +287,6 @@
   font-size: 14px;
 }
 
-/* Hidden glyph probe measured after mount; its width / character count
-   feeds the mouse hit-test char width. */
-.char-probe {
-  position: absolute;
-  top: 0;
-  left: -9999px;
-  visibility: hidden;
-  font: var(--editor-font-size) / var(--editor-line-height)
-    var(--editor-font-family);
-  white-space: pre;
-}
-
 /* editor/viewer/ui/scrollbar/scrollable_element.css */
 /* Shared Monaco scrollbars driven by the ScrollbarState arithmetic. */
 .monaco-scrollable-element {
@@ -477,6 +465,15 @@
   pointer-events: none;
 }
 
+/* The per-line overlay rows (`ViewOverlayLine`), Monaco `editor.css`:
+   `.monaco-editor .view-overlays > div, .monaco-editor .margin-view-overlays
+   > div { position: absolute; width: 100%; }`. */
+.view-overlays > div,
+.margin-view-overlays > div {
+  position: absolute;
+  width: 100%;
+}
+
 /* editor/viewer/browser/view_parts/view_zones/view_zones.css */
 .view-zones {
   position: absolute;
@@ -526,23 +523,26 @@
 }
 
 /* editor/viewer/browser/view_parts/selections/selections.css */
+/* Ported from vscode/src/vs/editor/browser/viewParts/selections/selections.css
+   (cslr = core selections layer rendering) plus the .monaco-editor-background
+   piece color (Monaco's editor-wide background class, reused by the
+   reverse-corner white layer). Pieces sit inside the per-line overlay rows
+   and stretch to the row via inline `top:0;bottom:0`. */
+.lines-content .cslr {
+  position: absolute;
+}
+
 /* Monaco paints the selection opaque, behind the text (see .view-overlays
    z-index). No element opacity: overlapping/merged pieces never stack into
    darker patches, and the color matches the editor's selectionBackground. */
 .selected-text {
-  position: absolute;
-  box-sizing: border-box;
   background: var(--vscode-editor-selectionBackground);
-  pointer-events: none;
 }
 
 /* Inverse ("reverse rounded") corner pieces, painted in the editor background
    so a staircased selection edge reads as a smooth curve. */
-.selection-corner-piece {
-  position: absolute;
-  box-sizing: border-box;
+.monaco-editor-background {
   background: var(--vscode-editor-background);
-  pointer-events: none;
 }
 
 .top-left-radius {
@@ -573,8 +573,6 @@
    as static var() CSS (the viewer's theming design). Covers both the content
    overlay (this package) and the margin overlay (view_parts/margin), like the
    Monaco source file. Deviations:
-   - the flat overlays size their pieces inline, so Monaco's `height: 100%`
-     (of a per-line container) is dropped;
    - editor.inactiveLineHighlightBackground defaults to
      editor.lineHighlightBackground and both are null in the shipped themes,
      so the unfocused background rule is omitted;
@@ -588,6 +586,7 @@
   left: 0;
   top: 0;
   box-sizing: border-box;
+  height: 100%;
   pointer-events: none;
 }
 
@@ -597,6 +596,7 @@
   left: 0;
   top: 0;
   box-sizing: border-box;
+  height: 100%;
   pointer-events: none;
 }
 
@@ -625,11 +625,11 @@
 
 /* editor/viewer/browser/view_parts/decorations/decorations.css */
 /* Ported from vscode/src/vs/editor/browser/viewParts/decorations/decorations.css.
- * cdr = core decorations rendering (div). The flat-overlay pieces carry an
- * explicit top/height (see decorations_overlay.mbt) instead of Monaco's
- * per-line container, so height comes inline rather than `height: 100%`. */
-.moonbit-viewer .view-overlays .cdr {
+ * cdr = core decorations rendering (div); pieces sit inside the per-line
+ * overlay rows, so `height: 100%` is the row's line height. */
+.moonbit-viewer .lines-content .cdr {
   position: absolute;
+  height: 100%;
 }
 
 /* Stock classNames for the standard decoration colors (Monaco registers
@@ -674,7 +674,7 @@
 
 /* editor/viewer/browser/view_parts/margin/margin.css */
 /* Margin layer: viewport-fixed clip that occludes horizontally scrolled
-   content; the inner rail translates vertically only. */
+   content; the inner rows container translates vertically only. */
 .margin {
   position: absolute;
   top: 0;
@@ -685,46 +685,39 @@
   background: var(--vscode-editor-background);
 }
 
-.margin-view-overlays,
-.line-numbers {
+.margin-view-overlays {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-}
-
-.line-numbers {
   will-change: transform;
 }
 
-.line-number {
+/* Monaco `lineNumbers.css` (`.monaco-editor .margin-view-overlays
+   .line-numbers`) merged with the viewer's number styling (var()-based
+   theming): one absolutely positioned div per model-line-starting row,
+   sized inline (left/width) by `LineNumbersOverlay`. */
+.margin-view-overlays .line-numbers {
+  bottom: 0;
+  font-variant-numeric: tabular-nums;
   position: absolute;
-  left: 0;
-  right: 0;
-  box-sizing: border-box;
-  padding: 0 26px 0 8px;
-  color: var(--vscode-editorLineNumber-foreground);
   text-align: right;
+  display: inline-block;
+  vertical-align: middle;
+  box-sizing: border-box;
+  cursor: default;
+  color: var(--vscode-editorLineNumber-foreground);
   font: var(--editor-font-size) / var(--editor-line-height)
     var(--editor-font-family);
   user-select: none;
 }
 
 /* editor/viewer/browser/view_parts/margin/lines_decorations.css */
-/* The line-decorations gutter lane (Monaco `linesDecorations.css` +
-   `glyphMargin.css` `.cldr`): a margin layer of absolutely-positioned pieces
-   between the line numbers and the content. Each `.cldr` carries inline
-   left/width/top/height (see lines_decorations.mbt). */
-.lines-decorations {
+/* The line-decorations gutter lane pieces (Monaco `linesDecorations.css` +
+   `glyphMargin.css` `.cldr`), inside the margin overlay rows: inline
+   left/width from `LinesDecorationsOverlay`, height from the row. */
+.margin-view-overlays .cldr {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  will-change: transform;
-}
-
-.lines-decorations .cldr {
-  position: absolute;
+  height: 100%;
 }
 
 /* editor/viewer/browser/view_parts/view_lines/tokens.css */
@@ -894,8 +887,8 @@
 }
 
 /* Monaco-shaped editor hover, anchored as a content widget. Positioned by an
- * exact `top`/`left` computed in JS (`ContentWidget::style`, porting Monaco's
- * `_layoutBoxInViewport`: `aboveTop = aboveLineTop - height`), not a CSS
+ * exact `top`/`left` computed in JS (the content-widget layer's
+ * `_layoutBoxInViewport` port: `aboveTop = aboveLineTop - height`), not a CSS
  * transform — a transform-based "shift up by own height" trick was tried
  * here previously and reproducibly corrupted this element's background paint
  * in Chromium under the sizing cluster's synchronous style churn. */
@@ -912,8 +905,10 @@
   background-color: var(--vscode-editorHoverWidget-background);
 }
 
-.monaco-resizable-hover.measuring {
-  visibility: hidden;
+/* Monaco `hoverWidget.css`: a hidden hover keeps its DOM mounted; `fade-in`
+ * replays only on the hidden→shown transition. */
+.monaco-hover.hidden {
+  display: none;
 }
 
 .monaco-hover {
@@ -981,12 +976,11 @@
 
 .hover-contents {
   padding: 4px 8px;
-  overflow-wrap: break-word;
 }
 
 .monaco-hover .markdown-hover > .hover-contents:not(.code-hover-contents) {
-  width: max-content;
   max-width: var(--vscode-hover-maxWidth, 500px);
+  overflow-wrap: break-word;
 }
 
 .hover-plaintext {
@@ -1030,13 +1024,12 @@
   font-family: var(--monaco-monospace-font);
 }
 
+/* No box styling (background/padding/radius): the editor hover renders
+ * tokenized code directly on the widget background; `textCodeBlock-background`
+ * applies only to inline `code` above. The font-family stands in for Monaco's
+ * `applyFontInfo` on the code element (`editorMarkdownCodeBlockRenderer.ts`). */
 .monaco-tokenized-source {
-  padding: 6px 8px;
-  border-radius: 3px;
-  background: var(--vscode-textCodeBlock-background);
   font-family: var(--monaco-monospace-font);
-  overflow-wrap: normal;
-  word-break: normal;
   white-space: var(--vscode-hover-sourceWhiteSpace, pre-wrap);
 }
 
