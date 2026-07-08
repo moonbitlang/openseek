@@ -52,13 +52,19 @@ pub fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
     "reasoning_message" => Some(ReasoningMessage(content))
     "assistant_message" => Some(AssistantMessage(content))
     "runtime_update" => Some(RuntimeUpdate(content))
-    "usage" =>
+    "usage" => {
+      // The engine nests the counters under a `usage` object
+      // (`print_usage` serializes the DeepSeek `Usage` struct verbatim).
+      guard raw.get("usage") is Some(Object(usage)) else {
+        return Some(Usage(prompt_tokens=0, completion_tokens=0))
+      }
       Some(
         Usage(
-          prompt_tokens=json_int(raw, "prompt_tokens", 0),
-          completion_tokens=json_int(raw, "completion_tokens", 0),
+          prompt_tokens=json_int(usage, "prompt_tokens", 0),
+          completion_tokens=json_int(usage, "completion_tokens", 0),
         ),
       )
+    }
     "tool_result" =>
       Some(
         ToolResult(

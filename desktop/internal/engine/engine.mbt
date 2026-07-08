@@ -18,6 +18,11 @@ priv struct ServeEngine {
   mut latest_run : Int
   mut run_open : Bool
   mut cancel_requested : Bool
+  // A `/compact` was sent and its finished/failed event has not come back.
+  // Compaction runs between turns (`run_open` stays false), yet the engine
+  // is still appending the summary to the durable record — operations that
+  // move that record (archiving) must wait for this to clear.
+  mut compacting : Bool
   steer_runs : SteerRunTracker
 }
 
@@ -353,6 +358,51 @@ fn first_path_entry(path : String?) -> String {
 }
 
 ///|
+/// The environment block's path variable, whatever its spelling — Windows
+/// blocks commonly carry `Path`, which `@sys.get_env_vars` preserves.
+fn path_env_value(env : Map[String, String]) -> String? {
+  for name, value in env {
+    if name.to_upper() == "PATH" {
+      return Some(value)
+    }
+  }
+  None
+}
+
+///|
+/// Prepend `bin_dir` to the environment block's path variable, in place, and
+/// return the updated value. Windows blocks commonly spell the key `Path`
+/// (and `@sys.get_env_vars` preserves that spelling); the block is passed to
+/// the child with `inherit_env=false`, so writing a separate uppercase
+/// `PATH` beside it would leave two path variables and make which one the
+/// child observes a runtime coin toss. Update the spelling that already
+/// exists and drop any duplicates.
+fn prepend_path_env_entry(
+  env : Map[String, String],
+  bin_dir : String,
+) -> String {
+  let mut key = "PATH"
+  let mut current : String? = None
+  let duplicates : Array[String] = []
+  for name, value in env {
+    if name.to_upper() == "PATH" {
+      if current is None {
+        key = name
+        current = Some(value)
+      } else {
+        duplicates.push(name)
+      }
+    }
+  }
+  for name in duplicates {
+    env.remove(name)
+  }
+  let joined = prepend_to_path_env(bin_dir, current)
+  env[key] = joined
+  joined
+}
+
+///|
 async fn add_moonbit_path_for_native_engine(
   env : Map[String, String],
   config : RunConfig,
@@ -370,13 +420,14 @@ async fn add_moonbit_path_for_native_engine(
   let moon_bin_dir = moon_home.join("bin")
   let moon = moon_bin_dir.join("moon")
   let moon_exe = moon_bin_dir.join("moon.exe")
-  // The agent tools spawn `moon` by name, so prepend the bundled bin to PATH.
-  // Deliberately do not set `MOON_HOME` (it would redirect registry/cache
-  // lookup into the bundled payload) and drop any ambient `MOON_HOME` the
-  // launching shell exported: moon prefers it over the executable-relative
-  // home and would otherwise run the bundled binary against the user's
-  // (possibly missing or incompatible) MoonBit home.
-  env["PATH"] = prepend_to_path_env(moon_bin_dir.to_string(), env.get("PATH"))
+  // The agent tools spawn `moon` by name, so prepend the bundled bin to the
+  // path variable (updating `Path` in place on Windows — see
+  // `prepend_path_env_entry`). Deliberately do not set `MOON_HOME` (it would
+  // redirect registry/cache lookup into the bundled payload) and drop any
+  // ambient `MOON_HOME` the launching shell exported: moon prefers it over
+  // the executable-relative home and would otherwise run the bundled binary
+  // against the user's (possibly missing or incompatible) MoonBit home.
+  let path = prepend_path_env_entry(env, moon_bin_dir.to_string())
   env.remove("MOON_HOME")
   @xlog.debug() <?
     {
@@ -386,7 +437,7 @@ async fn add_moonbit_path_for_native_engine(
       "moon_bin_dir": moon_bin_dir.to_string(),
       "moon_exists": @fsx.exists(moon),
       "moon_exe_exists": @fsx.exists(moon_exe),
-      "path_prefix": first_path_entry(env.get("PATH")),
+      "path_prefix": first_path_entry(Some(path)),
     }
 }
 
@@ -464,7 +515,7 @@ async fn[G] start_serve_engine(
       "runtime_dir": manager.runtime_dir
       .map(dir => dir.to_string())
       .unwrap_or(""),
-      "path_prefix": first_path_entry(env.get("PATH")),
+      "path_prefix": first_path_entry(path_env_value(env)),
       "inherit_env": false,
     }
   let process = @process.spawn(
@@ -487,6 +538,7 @@ async fn[G] start_serve_engine(
     latest_run: 0,
     run_open: false,
     cancel_requested: false,
+    compacting: false,
     steer_runs: SteerRunTracker::new(),
   }
   manager.engines.set(engine.session_key, engine)
@@ -541,6 +593,11 @@ async fn serve_engine_consumer(
             // failure twice.
             if !host_reports_terminal_error(decoded) {
               emit(sink, StreamEvent({ run_id, event: raw }))
+            }
+            // Either way the engine is done writing the record's summary, so
+            // operations gated on compaction (archiving) may proceed.
+            if decoded is (CompactionFinished | CompactionFailed) {
+              engine.compacting = false
             }
             if handle_decoded_event(sink, run_id, decoded) {
               engine.run_open = false

@@ -116,7 +116,10 @@ async fn run_config(payload : StartRequest, engine : String) -> RunConfig {
     api_url,
     model: match payload.model {
       Some(model) => model
-      None => @env.get("DEEPSEEK_MODEL").unwrap_or(DefaultModel)
+      // The engine takes its model from OPENSEEK_MODEL (DEEPSEEK_MODEL is
+      // deliberately ignored — see `serve_engine_env`), so the host's
+      // fallback must read the same variable.
+      None => @env.get("OPENSEEK_MODEL").unwrap_or(DefaultModel)
     },
     max_steps: configured_max_steps(payload.max_steps),
     engine,

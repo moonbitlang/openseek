@@ -28,4 +28,10 @@ pub(all) enum AgentEvent {
   AgentAborted(String)
   MaxStepsExhausted
   AgentError(String)
+  // Compaction lifecycle: `started` is informational; finished/failed mean
+  // the engine is done touching the durable record (the host gates archiving
+  // on that). Not terminal for any run — compaction happens between turns.
+  CompactionStarted
+  CompactionFinished
+  CompactionFailed
 }

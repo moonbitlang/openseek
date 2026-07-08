@@ -50,11 +50,22 @@ test "decode normalizes legacy names, numbers, and unknown events" {
     decode_engine_event(
       event_fields({
         "event": "usage",
+        "usage": { "prompt_tokens": 5, "completion_tokens": 7 },
+      }),
+    )
+    is Some(Usage(prompt_tokens=5, completion_tokens=7)),
+  )
+  // Older top-level counters are no longer read; a shape mismatch reads as
+  // zero rather than being dropped.
+  assert_true(
+    decode_engine_event(
+      event_fields({
+        "event": "usage",
         "prompt_tokens": 5,
         "completion_tokens": 7,
       }),
     )
-    is Some(Usage(prompt_tokens=5, completion_tokens=7)),
+    is Some(Usage(prompt_tokens=0, completion_tokens=0)),
   )
   assert_true(
     decode_engine_event(

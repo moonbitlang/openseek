@@ -1,9 +1,10 @@
 ///|
 test "decode usage event" {
+  // The engine nests the counters under a `usage` object (`print_usage`
+  // serializes the DeepSeek `Usage` struct verbatim).
   let event = @event.decode_event({
     "event": "usage",
-    "prompt_tokens": 9,
-    "completion_tokens": 3,
+    "usage": { "prompt_tokens": 9, "completion_tokens": 3, "total_tokens": 12 },
   })
   match event {
     Some(Usage(info)) => assert_eq(info.total_tokens, 12)

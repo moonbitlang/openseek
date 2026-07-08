@@ -14,8 +14,14 @@ pub fn decode_event(object : Json) -> AgentEvent? {
     "steer_applied" => Some(SteerApplied(string_field(object, "content")))
     "steer_dropped" => Some(SteerDropped(string_field(object, "content")))
     "usage" => {
-      let prompt = int_field(object, "prompt_tokens")
-      let completion = int_field(object, "completion_tokens")
+      // The engine nests the counters under a `usage` object (`print_usage`
+      // serializes the DeepSeek `Usage` struct verbatim).
+      let usage = match object {
+        Object(fields) => fields.get("usage").unwrap_or(Json::null())
+        _ => Json::null()
+      }
+      let prompt = int_field(usage, "prompt_tokens")
+      let completion = int_field(usage, "completion_tokens")
       Some(Usage({ total_tokens: prompt + completion }))
     }
     "tool_result" =>
@@ -43,6 +49,9 @@ pub fn decode_event(object : Json) -> AgentEvent? {
     // the run even though the engine process lives on.
     "turn_failed" =>
       Some(AgentError("turn failed: " + string_field(object, "error")))
+    "compaction_started" => Some(CompactionStarted)
+    "compaction_finished" => Some(CompactionFinished)
+    "compaction_failed" => Some(CompactionFailed)
     _ => None
   }
 }

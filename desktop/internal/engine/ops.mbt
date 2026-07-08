@@ -152,6 +152,9 @@ pub async fn compact_run(
     error if @async.is_being_cancelled() => raise error
     error => raise EngineError("failed to request compaction: \{error}")
   }
+  // Cleared by the consumer when the engine reports compaction
+  // finished/failed; archiving is refused while this is set.
+  live.compacting = true
   { compacting: true }
 }
 
