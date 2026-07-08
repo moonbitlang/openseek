@@ -7,7 +7,10 @@
 /// conversation must be idle — other sessions' engines run their own turns
 /// concurrently. Returns as soon as the prompt is on the wire; the engine's
 /// consumer task reports progress and completion through events, exactly as
-/// the frontend already expects.
+/// the frontend already expects. The op only rejects for failures before the
+/// run's Started event goes out — once the run is public, a failure is
+/// reported through its error and finished events and the op returns
+/// normally (status "failed"), never both.
 pub async fn start_run(
   sink : EventSink,
   manager : EngineManager,
@@ -92,16 +95,19 @@ pub async fn start_run(
     error if @async.is_being_cancelled() => raise error
     error => {
       // The engine died between turns: close the run and drop the handle so
-      // the next prompt respawns on the same durable session.
+      // the next prompt respawns on the same durable session. The run is
+      // already public (Started went out above), so the error and finished
+      // events are its whole story — returning normally instead of raising
+      // keeps the frontend from appending the same failure a second time as
+      // a rejected start.
       live.phase = Idle
       if manager.engines.get(key) is Some(current) &&
         physical_equal(current, live) {
         manager.engines.remove(key)
       }
-      let message = "engine write failed: \{error}"
-      emit_error(sink, message, run_id~)
+      emit_error(sink, "engine write failed: \{error}", run_id~)
       emit_finished(sink, run_id, Failed)
-      raise EngineError(message)
+      return { run_id, status: "failed", exit_code: 1 }
     }
   }
   // A Stop pressed between the Started event above and this write reaches
