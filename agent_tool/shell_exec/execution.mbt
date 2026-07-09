@@ -107,7 +107,7 @@ pub async fn[X] ShellExecution::start(
     kill_when_full,
     kill_at_hard_cap,
     killed_by_output_limit: false,
-    started_at_ms: @async.now(),
+    started_at_ms: @env.now().reinterpret_as_int64(),
     killed_by_time_limit: false,
   }
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {

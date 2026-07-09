@@ -175,7 +175,7 @@ fn scheduler_maybe_fire(
       return
     }
   }
-  let run_id = state.start_run(@async.now())
+  let run_id = state.start_run(@env.now().reinterpret_as_int64())
   schedule.fired_run_id = Some(run_id)
   // Attribution lives in the notice; the prompt itself is echoed — and reaches
   // the engine — verbatim, so the model sees exactly what the user stored and

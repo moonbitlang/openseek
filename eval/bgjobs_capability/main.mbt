@@ -35,7 +35,7 @@ async fn main {
 /// measurement: does it background the slow command and overlap the quick work?
 async fn scenario_overlap(engine : Engine) -> Unit {
   println("== S1 overlap: slow command + quick questions, efficiency hint ==")
-  let started_ms = @async.now()
+  let started_ms = @env.now().reinterpret_as_int64()
   engine.prompt(
     (
       #|Please do all of the following, and be efficient with wall-clock time:
@@ -49,7 +49,7 @@ async fn scenario_overlap(engine : Engine) -> Unit {
   let finished = engine.wait_for(360_000, seen, event => {
     event is { "event": String("agent_finished"), .. }
   })
-  let wall_s = (@async.now() - started_ms) / 1000
+  let wall_s = (@env.now().reinterpret_as_int64() - started_ms) / 1000
   let backgrounded = first_index(seen, event => {
     event is { "event": String("tool_result"), "content": String(content), .. } &&
     content.contains("started background job")
@@ -114,7 +114,7 @@ async fn scenario_overlap(engine : Engine) -> Unit {
 /// fire the job and end the turn — do not hold the turn hostage for 45s.
 async fn scenario_fire_and_forget(engine : Engine) -> Unit {
   println("== S2 fire-and-forget: user says do not wait ==")
-  let started_ms = @async.now()
+  let started_ms = @env.now().reinterpret_as_int64()
   engine.prompt(
     (
       #|Kick off the long soak check: sh -c 'sleep 45; echo SOAK-DONE-555'.
@@ -127,7 +127,7 @@ async fn scenario_fire_and_forget(engine : Engine) -> Unit {
   let finished = engine.wait_for(240_000, seen, event => {
     event is { "event": String("agent_finished"), .. }
   })
-  let wall_s = (@async.now() - started_ms) / 1000
+  let wall_s = (@env.now().reinterpret_as_int64() - started_ms) / 1000
   let backgrounded = seen
     .iter()
     .any(event => {

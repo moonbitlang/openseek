@@ -212,7 +212,7 @@ fn format_activity_text(state : State, cols~ : Int) -> @doc.Text? {
     return Some(Text(spans + steer_segment))
   }
   let elapsed = format_elapsed_compact(
-    elapsed_seconds(started_ms, @async.now()),
+    elapsed_seconds(started_ms, @env.now().reinterpret_as_int64()),
   )
   let spans : Array[@doc.Span] = [
     @doc.Span::plain("Working"),

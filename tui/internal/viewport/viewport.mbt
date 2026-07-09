@@ -294,7 +294,7 @@ async fn apply_style(tty : @tty.Tty, style : @style.Style) -> Unit {
     tty.set_background(style.background)
   }
   if style.underline {
-    tty.underline()
+    tty.set_underline()
   }
 }
 

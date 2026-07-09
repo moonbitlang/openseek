@@ -348,7 +348,7 @@ fn BgJobRuntime::register(
   // against the same deadline. The trip marks the reason before cancelling,
   // and the exit watcher above surfaces it like an output-limit kill.
   let remaining = self.hard_timeout_ms.to_int64() -
-    (@async.now() - exec.started_at_ms())
+    (@env.now().reinterpret_as_int64() - exec.started_at_ms())
   (self.spawn_watcher)(() => {
     if remaining > 0L {
       @async.sleep(remaining.to_int())

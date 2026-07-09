@@ -533,7 +533,7 @@ fn handle_compact_command(
   // for many seconds, and a slash command never echoes itself into the
   // transcript, so the notice is the only sign work has begun until it lands.
   cmds.push(AppendItem(command_notice("compacting context…")))
-  let run_id = state.start_run(@async.now())
+  let run_id = state.start_run(@env.now().reinterpret_as_int64())
   // Mark the run non-steerable: a prompt typed while this is in flight must be
   // queued, not steered into a compaction the engine will refuse it from.
   state.run_is_compaction = true
@@ -751,7 +751,7 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
   // reach "idle with a non-empty queue", so this never fires spuriously.
   if state.run is Idle && state.queued.length() > 0 {
     let input = state.queued.remove(0)
-    let run_id = state.start_run(@async.now())
+    let run_id = state.start_run(@env.now().reinterpret_as_int64())
     match input {
       Prompt(text) => {
         cmds.push(AppendItem(Input(Prompt(text))))
