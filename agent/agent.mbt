@@ -8,13 +8,16 @@ pub let unbounded_max_steps : Int = 2147483647
 ///|
 /// Model requests since the last plan activity — a successful `plan` call or
 /// an injected reminder, whichever is more recent — before the loop injects a
-/// plan staleness reminder. Mirrors the 10-turn cadence Claude Code uses for
-/// its todo reminder: long enough that short tasks never see a nag. Re-nagging
-/// is variant-dependent: with a recorded checklist the reminder re-surfaces
-/// real state and may repeat once per ten requests, while the no-plan nudge
-/// fires at most once per turn — a model that ignored "consider recording a
-/// plan" once gains nothing from hearing it every ten steps.
-let plan_reminder_after_steps : Int = 10
+/// plan staleness reminder. Fifty is roughly one reminder per MILESTONE of
+/// work: the original ten mirrored Claude Code's 10-turn todo cadence, but an
+/// openseek request is far smaller than a CC turn, and live long-horizon runs
+/// showed the mismatch (40 nags against 14 actual plan calls in a 478-request
+/// build — every nag replayed in context forever; issue #422). Re-nagging is
+/// variant-dependent: with a recorded checklist the reminder re-surfaces real
+/// state and may repeat, while the no-plan nudge fires at most once per turn —
+/// a model that ignored "consider recording a plan" once gains nothing from
+/// hearing it again.
+pub let plan_reminder_after_steps : Int = 50
 
 ///|
 /// The staleness reminder injected when the `plan` tool has gone unused for

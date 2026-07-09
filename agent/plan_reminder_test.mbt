@@ -56,10 +56,12 @@ async fn stale_plan_test_server(
 }
 
 ///|
-async test "a plan-silent turn gets one staleness reminder after ten requests" {
+async test "a plan-silent turn gets one staleness reminder after the cadence" {
   @async.with_task_group() <| group => {
+    let cadence = @agent.plan_reminder_after_steps
     let bodies : Array[String] = []
-    guard stale_plan_test_server(group, bodies, plan_calls=11) is Some(url) else {
+    guard stale_plan_test_server(group, bodies, plan_calls=cadence + 1)
+      is Some(url) else {
       return
     }
     let runtime = @agent_runtime.AgentRuntime()
@@ -76,24 +78,24 @@ async test "a plan-silent turn gets one staleness reminder after ten requests" {
       session~,
       task="do a long task",
       append_item=(session, item) => session.append(item),
-      max_steps=20,
+      max_steps=cadence + 10,
       api_url=url,
     )
-    // Exactly 12 requests: 11 tool-call steps plus the finishing answer. A
-    // retry would inflate the count and fail here rather than skew the
-    // cadence assertions below.
-    assert_eq(bodies.length(), 12)
-    for index in 0..<10 {
+    // Exactly cadence+2 requests: cadence+1 tool-call steps plus the
+    // finishing answer. A retry would inflate the count and fail here
+    // rather than skew the cadence assertions below.
+    assert_eq(bodies.length(), cadence + 2)
+    for index in 0..<cadence {
       assert_false(
         bodies[index].contains(@agent_session.PlanReminderPrefix),
         msg="request \{index + 1} must not carry the reminder yet",
       )
     }
     assert_true(
-      bodies[10].contains(@agent_session.PlanReminderPrefix),
-      msg="request 11 should carry the reminder",
+      bodies[cadence].contains(@agent_session.PlanReminderPrefix),
+      msg="request \{cadence + 1} should carry the reminder",
     )
-    assert_true(bodies[10].contains("has not been used in this turn"))
+    assert_true(bodies[cadence].contains("has not been used in this turn"))
     // The reminder is durable exactly once, in its plan-free nag variant.
     let reminders = plan_reminders(result)
     assert_eq(reminders.length(), 1)
@@ -110,7 +112,7 @@ async test "a plan-silent turn gets one staleness reminder after ten requests" {
 /// A scripted stand-in where request 1 records a valid plan and requests
 /// 2..plan_calls keep the turn alive with invalid `plan` calls before the
 /// answer. The successful write resets the cadence, so the first reminder
-/// fires ten requests later — in request 12 — and re-surfaces the recorded
+/// fires a full cadence window later and re-surfaces the recorded
 /// checklist. Assertions live in the test body, as above.
 async fn recorded_plan_test_server(
   group : @async.TaskGroup[Unit],
@@ -160,8 +162,10 @@ async fn recorded_plan_test_server(
 ///|
 async test "a recorded plan delays the reminder and is re-surfaced by it" {
   @async.with_task_group() <| group => {
+    let cadence = @agent.plan_reminder_after_steps
     let bodies : Array[String] = []
-    guard recorded_plan_test_server(group, bodies, plan_calls=12) is Some(url) else {
+    guard recorded_plan_test_server(group, bodies, plan_calls=cadence + 2)
+      is Some(url) else {
       return
     }
     let runtime = @agent_runtime.AgentRuntime()
@@ -178,22 +182,22 @@ async test "a recorded plan delays the reminder and is re-surfaced by it" {
       session~,
       task="do a long task",
       append_item=(session, item) => session.append(item),
-      max_steps=20,
+      max_steps=cadence + 10,
       api_url=url,
     )
-    // Exactly 13 requests: the plan write, 11 more tool-call steps, the
-    // finishing answer.
-    assert_eq(bodies.length(), 13)
+    // Exactly cadence+3 requests: the plan write, cadence+1 more tool-call
+    // steps, the finishing answer.
+    assert_eq(bodies.length(), cadence + 3)
     assert_false(
-      bodies[10].contains(@agent_session.PlanReminderPrefix),
-      msg="the successful plan write must delay the reminder past request 11",
+      bodies[cadence].contains(@agent_session.PlanReminderPrefix),
+      msg="the successful plan write must delay the reminder one request further",
     )
     assert_true(
-      bodies[11].contains(@agent_session.PlanReminderPrefix),
-      msg="request 12 should carry the reminder",
+      bodies[cadence + 1].contains(@agent_session.PlanReminderPrefix),
+      msg="request \{cadence + 2} should carry the reminder",
     )
-    assert_true(bodies[11].contains("Current plan:"))
-    assert_true(bodies[11].contains("1. [in_progress] fix the parser"))
+    assert_true(bodies[cadence + 1].contains("Current plan:"))
+    assert_true(bodies[cadence + 1].contains("1. [in_progress] fix the parser"))
     let reminders = plan_reminders(result)
     assert_eq(reminders.length(), 1)
     assert_true(reminders[0].contains("1. [in_progress] fix the parser"))
@@ -211,13 +215,15 @@ fn reminder_count(body : String) -> Int {
 
 ///|
 /// The no-plan nudge is capped at once per turn: a turn that stays plan-silent
-/// long enough for a second window (request 21 would re-fire under a pure
-/// 10/10 cadence) still gets exactly one reminder — repeating "consider
-/// recording a plan" that the model already declined once is pure noise.
+/// long enough for a second window still gets exactly one reminder —
+/// repeating "consider recording a plan" that the model already declined
+/// once is pure noise.
 async test "the no-plan nag fires at most once per turn" {
   @async.with_task_group() <| group => {
+    let cadence = @agent.plan_reminder_after_steps
     let bodies : Array[String] = []
-    guard stale_plan_test_server(group, bodies, plan_calls=23) is Some(url) else {
+    guard stale_plan_test_server(group, bodies, plan_calls=2 * cadence + 3)
+      is Some(url) else {
       return
     }
     let runtime = @agent_runtime.AgentRuntime()
@@ -234,12 +240,13 @@ async test "the no-plan nag fires at most once per turn" {
       session~,
       task="do a long task",
       append_item=(session, item) => session.append(item),
-      max_steps=30,
+      max_steps=2 * cadence + 10,
       api_url=url,
     )
-    // Exactly 24 requests: 23 tool-call steps plus the finishing answer.
-    assert_eq(bodies.length(), 24)
-    for index in 0..<10 {
+    // Exactly 2*cadence+4 requests: 2*cadence+3 tool-call steps plus the
+    // finishing answer.
+    assert_eq(bodies.length(), 2 * cadence + 4)
+    for index in 0..<cadence {
       assert_eq(
         reminder_count(bodies[index]),
         0,
@@ -247,15 +254,15 @@ async test "the no-plan nag fires at most once per turn" {
       )
     }
     assert_eq(
-      reminder_count(bodies[10]),
+      reminder_count(bodies[cadence]),
       1,
-      msg="request 11 should carry the only reminder",
+      msg="request \{cadence + 1} should carry the only reminder",
     )
-    // A pure 10/10 cadence would inject a second nag in request 21; the
-    // once-per-turn cap suppresses it, so the final request still carries
-    // exactly one reminder in its history.
+    // A pure repeating cadence would inject a second nag one window later;
+    // the once-per-turn cap suppresses it, so the final request still
+    // carries exactly one reminder in its history.
     assert_eq(
-      reminder_count(bodies[23]),
+      reminder_count(bodies[2 * cadence + 3]),
       1,
       msg="no later request may gain a second no-plan nag",
     )
@@ -267,12 +274,14 @@ async test "the no-plan nag fires at most once per turn" {
 
 ///|
 /// The checklist variant is exempt from the once-per-turn cap: a recorded
-/// plan left stale keeps re-surfacing on the 10/10 cadence — request 12 and
-/// again request 22 — because it repeats real state, not declined advice.
-async test "a stale recorded plan re-nags on the ten-request cadence" {
+/// plan left stale keeps re-surfacing once per cadence window, because it
+/// repeats real state, not declined advice.
+async test "a stale recorded plan re-nags on the request cadence" {
   @async.with_task_group() <| group => {
+    let cadence = @agent.plan_reminder_after_steps
     let bodies : Array[String] = []
-    guard recorded_plan_test_server(group, bodies, plan_calls=22) is Some(url) else {
+    guard recorded_plan_test_server(group, bodies, plan_calls=2 * cadence + 2)
+      is Some(url) else {
       return
     }
     let runtime = @agent_runtime.AgentRuntime()
@@ -289,33 +298,33 @@ async test "a stale recorded plan re-nags on the ten-request cadence" {
       session~,
       task="do a long task",
       append_item=(session, item) => session.append(item),
-      max_steps=30,
+      max_steps=2 * cadence + 10,
       api_url=url,
     )
-    // Exactly 23 requests: the plan write, 21 more tool-call steps, the
-    // finishing answer.
-    assert_eq(bodies.length(), 23)
+    // Exactly 2*cadence+3 requests: the plan write, 2*cadence+1 more
+    // tool-call steps, the finishing answer.
+    assert_eq(bodies.length(), 2 * cadence + 3)
     assert_eq(
-      reminder_count(bodies[10]),
+      reminder_count(bodies[cadence]),
       0,
-      msg="the plan write must delay the first reminder past request 11",
+      msg="the plan write must delay the first reminder one request further",
     )
     assert_eq(
-      reminder_count(bodies[11]),
+      reminder_count(bodies[cadence + 1]),
       1,
-      msg="request 12 should carry the first checklist reminder",
+      msg="request \{cadence + 2} should carry the first checklist reminder",
     )
-    // The second re-nag lands exactly ten requests later: still one reminder
-    // in request 21's history, two from request 22 on.
+    // The second re-nag lands exactly one cadence window later: still one
+    // reminder just inside the window, two from the boundary on.
     assert_eq(
-      reminder_count(bodies[20]),
+      reminder_count(bodies[2 * cadence]),
       1,
-      msg="request 21 sits inside the ten-request window",
+      msg="request \{2 * cadence + 1} sits inside the cadence window",
     )
     assert_eq(
-      reminder_count(bodies[21]),
+      reminder_count(bodies[2 * cadence + 1]),
       2,
-      msg="request 22 should carry the second checklist reminder",
+      msg="request \{2 * cadence + 2} should carry the second checklist reminder",
     )
     let reminders = plan_reminders(result)
     assert_eq(reminders.length(), 2)

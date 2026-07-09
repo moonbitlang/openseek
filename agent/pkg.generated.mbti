@@ -11,6 +11,8 @@ import {
 // Values
 pub async fn[X] build_tools(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope[X], on_background_wake? : () -> Unit) -> @agent_tool.Tools
 
+pub let plan_reminder_after_steps : Int
+
 pub async fn run(api_key~ : String, model~ : @deepseek.Model, task~ : String, system_prompt_text~ : String, max_steps? : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, workspace_root? : String) -> Unit
 
 pub async fn[X] run_turn_in_scope(runtime~ : @agent_runtime.AgentRuntime, scope~ : @agent_runtime.AgentTaskScope[X], api_key~ : String, model~ : @deepseek.Model, session~ : @agent_session.Session, task~ : String, append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, max_steps? : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, tools? : @agent_tool.Tools) -> @agent_session.Session
