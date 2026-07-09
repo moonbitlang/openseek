@@ -264,22 +264,10 @@ async fn copy_regular(s : String, d : String) -> Unit {
   let data = @fs.read_file(s).binary()
   @fs.write_file(d, data, create_mode=CreateOrTruncate)
   if has_shebang(data) {
-    chmod_executable(d)
+    @fs.chmod(d, 0o755) catch {
+      _ => ()
+    }
   }
-}
-
-///|
-#cfg(not(platform="windows"))
-async fn chmod_executable(path : String) -> Unit {
-  @fs.chmod(path, 0o755) catch {
-    _ => ()
-  }
-}
-
-///|
-#cfg(platform="windows")
-fn chmod_executable(_ : String) -> Unit {
-  ()
 }
 
 ///|
