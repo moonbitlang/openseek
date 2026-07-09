@@ -17,15 +17,12 @@ import {
 
 readme = "README.md"
 
-license = "MIT"
+license = "Apache-2.0"
 
 description = "OpenSeek Desktop — a Proton + Rabbita desktop client for the OpenSeek agent."
 
-source = ""
-
 options(
   "--moonbit-unstable-prebuild": "native_link_config.mjs",
-  warn_list: "",
   preferred_target: "native",
   supported_targets: "native+js",
 )
