@@ -4,34 +4,58 @@
 // the front-end only marshals the position and decodes the reply.
 
 ///|
-/// The scheme prefixing viewer model URIs. The hover provider only ever
-/// receives the `TextModel`, never the app `Model`, so the URI carries the
-/// file's host-resolved absolute path (percent-encoded) — the whole address
-/// the path-routed `hover` op needs.
-const ModelUriPrefix : String = "openseek://"
+/// The scheme of viewer model URIs this app mints. The hover provider only
+/// ever receives the `TextModel`, never the app `Model`, so the URI carries
+/// the file's host-resolved absolute path as its path component — the whole
+/// address the path-routed `hover` op needs.
+const ModelUriScheme : String = "openseek"
 
 ///|
-/// A viewer model URI this app minted (`openseek://` + the file's
-/// percent-encoded absolute path) — the document key the viewer's services
-/// (feedback, markers) index by. The newtype keeps arbitrary strings and
-/// filesystem paths out of APIs that mean a viewer document; mint one with
-/// `ModelUri::of`, or wrap only a string that `parse_model_uri` just accepted.
-/// Read-only outside this package: the main package carries one in
-/// `EditorCommentAdded` and hands it back to `remove_editor_feedback`, but
-/// only this package mints them.
+/// A viewer model URI this app minted (the `to_string()` of an `openseek`-
+/// scheme `Uri` naming the file's absolute path) — the document key the
+/// viewer's services (feedback, markers) index by. The newtype keeps
+/// arbitrary strings and filesystem paths out of APIs that mean a viewer
+/// document; mint one with `ModelUri::of`, or wrap only the string form of a
+/// `Uri` that `model_uri_path` just accepted. Read-only outside this
+/// package: the main package carries one in `EditorCommentAdded` and hands
+/// it back to `remove_editor_feedback`, but only this package mints them.
 pub struct ModelUri(String)
 
 ///|
 pub fn ModelUri::of(absolute_path : @pathx.Absolute) -> ModelUri {
-  ModelUri(ModelUriPrefix + @uri.encode_path(absolute_path.0))
+  ModelUri(model_uri_of(absolute_path).to_string())
+}
+
+///|
+/// An app-scheme viewer `Uri` for `path`. `Uri::file` owns the platform
+/// path normalization (backslashes, UNC authorities, drive letters) and
+/// cannot fail; re-scheming its slash-rooted output cannot fail validation
+/// either, so the catch is unreachable and keeps the `file` scheme.
+fn app_uri(scheme : String, path : String) -> @common.Uri {
+  let file = @common.Uri::file(path)
+  file.with_(scheme~) catch {
+    _ => file
+  }
+}
+
+///|
+/// The viewer `Uri` for the file at `absolute_path`; the URI type owns the
+/// percent-encoding, so the path rides raw.
+fn model_uri_of(absolute_path : @pathx.Absolute) -> @common.Uri {
+  app_uri(ModelUriScheme, absolute_path.0)
 }
 
 ///|
 /// Decode a viewer model URI into the absolute path it names; `None` for a
 /// URI this app did not mint, which has no host op to route to anyway.
-fn parse_model_uri(uri : String) -> @pathx.Absolute? {
-  guard uri.strip_prefix(ModelUriPrefix) is Some(rest) else { return None }
-  let path = @uri.decode(rest)
+/// Undoes `app_uri` exactly: the conversion runs against a `file`-scheme
+/// twin (`uri_to_fs_path`'s UNC reconstruction is gated on that scheme) and
+/// keeps the Windows drive letter's casing, so the path the host op gets is
+/// byte-for-byte the one the model was minted with.
+fn model_uri_path(uri : @common.Uri) -> @pathx.Absolute? {
+  guard uri.scheme == ModelUriScheme else { return None }
+  let file = uri.with_(scheme="file") catch { _ => uri }
+  let path = @common.uri_to_fs_path(file, true)
   guard !path.is_empty() else { return None }
   Some(Absolute(path))
 }
@@ -49,7 +73,7 @@ impl @language.HoverProvider for LspHoverProvider with fn provide_hover(
   // v1 covers MoonBit only; other languages have no server behind the op.
   guard model.language_id == "moonbit" else { return None }
   guard !token.is_cancellation_requested() else { return None }
-  guard parse_model_uri(model.uri.value) is Some(path) else { return None }
+  guard model_uri_path(model.uri) is Some(path) else { return None }
   let reply = request_hover(
     path~,
     // The viewer's Position is 1-based; the host op speaks 0-based LSP coords.

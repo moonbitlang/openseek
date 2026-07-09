@@ -886,12 +886,15 @@
   background: var(--vscode-editor-hoverHighlightBackground);
 }
 
-/* Monaco-shaped editor hover, anchored as a content widget. Positioned by an
- * exact `top`/`left` computed in JS (the content-widget layer's
- * `_layoutBoxInViewport` port: `aboveTop = aboveLineTop - height`), not a CSS
- * transform — a transform-based "shift up by own height" trick was tried
- * here previously and reproducibly corrupted this element's background paint
- * in Chromium under the sizing cluster's synchronous style churn. */
+/* Monaco-shaped editor hover, anchored as an overflowing content widget.
+ * Positioned by an exact `top`/`left` computed in JS (the content-widget
+ * layer's `_layoutBoxInPage` port), not a CSS transform — a transform-based
+ * "shift up by own height" trick was tried here previously and reproducibly
+ * corrupted this element's background paint in Chromium under the sizing
+ * cluster's synchronous style churn.
+ * `min-width` transcribes the constructor's `minimumWidth = 150`
+ * (`contentHoverWidget.ts:67`); `z-index: 50` its
+ * `_resizableNode.domNode.style.zIndex = '50'`. */
 .monaco-resizable-hover {
   position: absolute;
   z-index: 50;
@@ -911,8 +914,12 @@
   display: none;
 }
 
+/* `position: absolute` per `hoverWidget.css:8` — the sizing pass measures
+ * the hover shrink-to-fit inside the editor-sized wrapper
+ * (`_removeConstraintsRenderNormally`); a relatively positioned block would
+ * stretch to the wrapper width instead. */
 .monaco-hover {
-  position: relative;
+  position: absolute;
   box-sizing: border-box;
   overflow: hidden;
   white-space: var(--vscode-hover-whiteSpace, normal);

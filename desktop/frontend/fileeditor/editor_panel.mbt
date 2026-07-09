@@ -125,7 +125,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           // Only user comments on a file this app put on screen (a URI it
           // minted) become chips; anything else is not ours to carry.
           guard event.feedback.kind is UserReview else { return }
-          guard parse_model_uri(event.feedback.resource.value) is Some(_) else {
+          guard model_uri_path(event.feedback.resource) is Some(_) else {
             return
           }
           // Commenting happens through the viewer's own UI, so the feedback
@@ -134,7 +134,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           // mismatch would mean a stray event for a document already gone;
           // there is nothing correct to attach it to.
           guard viewer.get_model() is Some(model) &&
-            model.uri.value == event.feedback.resource.value &&
+            model.uri.to_string() == event.feedback.resource.to_string() &&
             viewer_state.relative is Some(file) else {
             return
           }
@@ -142,7 +142,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
             dispatch(
               EditorCommentAdded(
                 // Just guarded as a URI this app minted.
-                resource=ModelUri(event.feedback.resource.value),
+                resource=ModelUri(event.feedback.resource.to_string()),
                 file~,
                 range=event.feedback.range,
                 quote=model.get_value_in_range(event.feedback.range),
@@ -169,12 +169,11 @@ pub fn remove_editor_feedback(
   feedback_id : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    if viewer_state.services is Some(services) {
-      services.agent_feedback.remove_feedback(
-        { value: resource.0 },
-        feedback_id,
-      )
-    }
+    guard viewer_state.services is Some(services) else { return }
+    // The string is the `to_string()` of a URI this package minted, so the
+    // re-parse cannot fail; a stray unparsable string has no bubble anyway.
+    let uri = @common.Uri::parse(resource.0) catch { _ => return }
+    services.agent_feedback.remove_feedback(uri, feedback_id)
   })
 }
 
@@ -230,12 +229,10 @@ fn show_file_in_viewer(
     // The URI is the file's absolute path — the whole address the hover
     // provider needs, travelling with the model itself. A notice document
     // (withheld binary/oversized file) has no file behind it, so its inert
-    // URI never parses as a model path and hover stays off.
-    let uri : @common.Uri = {
-      value: match absolute {
-        Some(absolute) => ModelUri::of(absolute).0
-        None => "openseek-notice://" + @uri.encode_path(name)
-      },
+    // scheme never parses as a model path and hover stays off.
+    let uri = match absolute {
+      Some(absolute) => model_uri_of(absolute)
+      None => app_uri("openseek-notice", "/" + name)
     }
     let text_model = @model.TextModel(
       uri,
@@ -348,7 +345,7 @@ fn apply_diagnostics(
     if viewer_state.absolute is Some(current) &&
       current == absolute &&
       viewer_state.services is Some(services) {
-      let uri : @common.Uri = { value: ModelUri::of(absolute).0 }
+      let uri = model_uri_of(absolute)
       services.markers.set_diagnostics(
         DiagnosticsOwner,
         uri,
