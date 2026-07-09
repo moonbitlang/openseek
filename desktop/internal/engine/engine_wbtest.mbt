@@ -135,3 +135,27 @@ async fn write_fake_file(path : @path.Path) -> Unit {
   @fsx.ensure_dir(path.dirname())
   @fs.write_file(path.to_string(), "", create_mode=CreateOrTruncate)
 }
+
+///|
+/// The slot claim is what closes the compact-preempts-starting-prompt race:
+/// whichever op (start, compact, archive) validated first holds the slot
+/// through its command hitting the wire, and every later claimant is refused
+/// with the holder's message — releasing reopens the slot.
+test "a claimed session slot refuses every other op until released" {
+  let slot : SessionSlot = { pending: None, engine: None }
+  slot.claim(StartPending)
+  let refused = try slot.claim(CompactPending) catch {
+    EngineError(message) => message
+  } noraise {
+    _ => ""
+  }
+  assert_true(refused.contains("already starting"))
+  slot.pending = None
+  slot.claim(CompactPending)
+  let refused = try slot.claim(ArchivePending) catch {
+    EngineError(message) => message
+  } noraise {
+    _ => ""
+  }
+  assert_true(refused.contains("compaction is already being requested"))
+}

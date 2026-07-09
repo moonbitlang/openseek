@@ -16,12 +16,11 @@ pub async fn start_run(
   manager : EngineManager,
   payload : StartRequest,
 ) -> StartReply {
-  guard manager.pump_running else {
-    raise EngineError("engine host is not connected; reload the app")
-  }
+  let sessions = manager.serving()
   let config = run_config(payload, manager.engine)
   let key = session_key(config)
-  if manager.engines.get(key) is Some(live) {
+  let slot = slot_for(sessions, key)
+  if slot.engine is Some(live) {
     match live.phase {
       Running(..) =>
         raise EngineError(
@@ -36,19 +35,13 @@ pub async fn start_run(
       Idle => ()
     }
   }
-  if manager.starts_in_flight.contains(key) {
-    raise EngineError(
-      "an OpenSeek run is already starting for this conversation",
-    )
+  slot.claim(StartPending)
+  defer {
+    slot.pending = None
+    manager.prune_slot(key)
   }
-  fn clear_start_flag() -> Unit {
-    manager.starts_in_flight.remove(key)
-  }
-
-  manager.starts_in_flight.add(key)
-  defer clear_start_flag()
   ensure_run_cwd(config)
-  let need_spawn = if manager.engines.get(key) is Some(live) {
+  let need_spawn = if slot.engine is Some(live) {
     live.spec_key != engine_fingerprint(config)
   } else {
     true
@@ -56,7 +49,7 @@ pub async fn start_run(
   if need_spawn {
     request_spawn(manager, config)
   }
-  guard manager.engines.get(key) is Some(live) else {
+  guard slot.engine is Some(live) else {
     raise EngineError("engine failed to start")
   }
   // The cwd/spawn waits above are suspension points: a compaction accepted
@@ -95,9 +88,8 @@ pub async fn start_run(
       // keeps the frontend from appending the same failure a second time as
       // a rejected start.
       live.phase = Idle
-      if manager.engines.get(key) is Some(current) &&
-        physical_equal(current, live) {
-        manager.engines.remove(key)
+      if slot.engine is Some(current) && physical_equal(current, live) {
+        slot.engine = None
       }
       emit_error(sink, "engine write failed: \{error}", run_id~)
       emit_finished(sink, run_id, Failed)
@@ -187,34 +179,28 @@ pub async fn compact_run(
   manager : EngineManager,
   payload : CompactRequest,
 ) -> CompactReply {
-  guard manager.pump_running else {
-    raise EngineError("engine host is not connected; reload the app")
+  let sessions = manager.serving()
+  let slot = slot_for(sessions, payload.session)
+  // Claim before anything else — even with a live engine. A start between
+  // its validation and the prompt hitting the wire has claimed the slot but
+  // not yet flipped the engine to Running; a compact accepted in that window
+  // would mark the engine Compacting under the starting prompt and preempt
+  // it at start_run's phase re-check.
+  slot.claim(CompactPending)
+  defer {
+    slot.pending = None
+    manager.prune_slot(payload.session)
   }
-  let live = match manager.engines.get(payload.session) {
-    Some(live) => live
-    None => {
-      let config = compact_config(payload, manager.engine)
-      let key = session_key(config)
-      // Reuse the start guard: a compact racing a start's spawn window would
-      // otherwise double-spawn the same conversation's engine.
-      if manager.starts_in_flight.contains(key) {
-        raise EngineError(
-          "an OpenSeek run is already starting for this conversation",
-        )
-      }
-      fn clear_start_flag() -> Unit {
-        manager.starts_in_flight.remove(key)
-      }
-
-      manager.starts_in_flight.add(key)
-      defer clear_start_flag()
-      ensure_run_cwd(config)
-      request_spawn(manager, config)
-      guard manager.engines.get(key) is Some(live) else {
-        raise EngineError("engine failed to start")
-      }
-      live
+  let live = if slot.engine is Some(live) {
+    live
+  } else {
+    let config = compact_config(payload, manager.engine)
+    ensure_run_cwd(config)
+    request_spawn(manager, config)
+    guard slot.engine is Some(live) else {
+      raise EngineError("engine failed to start")
     }
+    live
   }
   match live.phase {
     Compacting => raise EngineError("this conversation is already compacting")

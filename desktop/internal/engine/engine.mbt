@@ -160,6 +160,60 @@ priv enum PumpCommand {
 }
 
 ///|
+/// An operation holding a conversation's slot between config validation and
+/// its command hitting the wire. A second slot-holding op in that window is
+/// refused up front instead of racing the first one's spawn or preempting
+/// the phase it is about to enter.
+priv enum PendingOp {
+  StartPending
+  CompactPending
+  ArchivePending
+}
+
+///|
+/// Everything the host tracks for one conversation, in one place. Both
+/// fields are optional and every combination is legal — no engine yet, an
+/// op preparing to spawn one, a live engine idle or mid-turn, an op
+/// preparing on a live engine — but keeping them in a single slot means an
+/// op cannot look up the engine without the pending claim being in view:
+/// the compact-preempts-starting-prompt race came from exactly that split
+/// (a pending-starts set beside the engines map, one checked, one missed).
+priv struct SessionSlot {
+  mut pending : PendingOp?
+  mut engine : ServeEngine?
+}
+
+///|
+/// Claim the slot for `op`, refusing when another op already holds it.
+fn SessionSlot::claim(
+  self : SessionSlot,
+  op : PendingOp,
+) -> Unit raise EngineError {
+  if self.pending is Some(current) {
+    raise EngineError(
+      match current {
+        StartPending =>
+          "an OpenSeek run is already starting for this conversation"
+        CompactPending =>
+          "a compaction is already being requested for this conversation"
+        ArchivePending => "this conversation is being archived"
+      },
+    )
+  }
+  self.pending = Some(op)
+}
+
+///|
+/// Whether the pump is serving, and the per-conversation slots while it is.
+/// The slots live inside the state, so an engine cannot exist without a
+/// running pump — stopping the pump drops them wholesale, which is the old
+/// `reset()` without the by-hand invariant.
+priv enum PumpState {
+  Stopped
+  Serving(sessions~ : Map[String, SessionSlot])
+}
+
+///|
 /// Host-side state of the persistent-engine design: one serve process per
 /// conversation (all owned by the pump's task group, so different sessions
 /// can run turns concurrently) plus the command queue other ops use to ask
@@ -172,14 +226,49 @@ struct EngineManager {
   engine : String
   runtime_dir : @path.Path?
   commands : @async.Queue[PumpCommand]
-  engines : Map[String, ServeEngine]
+  mut pump : PumpState
   mut next_run_id : Int
-  mut pump_running : Bool
-  // Conversations with a `start` op between config validation and the prompt
-  // hitting the wire; a second start for the same conversation in that window
-  // is refused instead of racing the spawn.
-  starts_in_flight : Set[String]
 }
+
+///|
+/// The live sessions table; every op starts here, so a stopped pump answers
+/// with the same message everywhere.
+fn EngineManager::serving(
+  self : EngineManager,
+) -> Map[String, SessionSlot] raise EngineError {
+  guard self.pump is Serving(sessions~) else {
+    raise EngineError("engine host is not connected; reload the app")
+  }
+  sessions
+}
+
+///|
+/// This conversation's slot, created empty on first touch.
+fn slot_for(
+  sessions : Map[String, SessionSlot],
+  key : String,
+) -> SessionSlot {
+  if sessions.get(key) is Some(slot) {
+    slot
+  } else {
+    let slot : SessionSlot = { pending: None, engine: None }
+    sessions.set(key, slot)
+    slot
+  }
+}
+
+///|
+/// Drop a slot that carries nothing anymore, so abandoned conversations do
+/// not accumulate empty entries.
+fn EngineManager::prune_slot(self : EngineManager, key : String) -> Unit {
+  if self.pump is Serving(sessions~) &&
+    sessions.get(key) is Some(slot) &&
+    slot.pending is None &&
+    slot.engine is None {
+    sessions.remove(key)
+  }
+}
+
 
 ///|
 priv enum StreamMessage {
@@ -197,10 +286,8 @@ pub fn new_engine_manager(
     engine,
     runtime_dir,
     commands: Queue(kind=Unbounded),
-    engines: {},
+    pump: Stopped,
     next_run_id: 1,
-    pump_running: false,
-    starts_in_flight: Set([]),
   }
 }
 
@@ -209,17 +296,20 @@ pub fn new_engine_manager(
 /// only open run if exactly one exists (with several conversations running
 /// concurrently, an unaddressed cancel/steer would be a guess).
 fn open_run_engine(manager : EngineManager, run_id? : Int) -> ServeEngine? {
+  guard manager.pump is Serving(sessions~) else { return None }
   if run_id is Some(id) {
-    for _, engine in manager.engines {
-      if engine.phase is Running(..) && engine.latest_run == id {
+    for _, slot in sessions {
+      if slot.engine is Some(engine) &&
+        engine.phase is Running(..) &&
+        engine.latest_run == id {
         return Some(engine)
       }
     }
     return None
   }
   let mut found : ServeEngine? = None
-  for _, engine in manager.engines {
-    if engine.phase is Running(..) {
+  for _, slot in sessions {
+    if slot.engine is Some(engine) && engine.phase is Running(..) {
       if found is Some(_) {
         return None
       }
@@ -315,15 +405,15 @@ pub async fn run_engine_pump(
   sink : EventSink,
   manager : EngineManager,
 ) -> PumpReply {
-  guard !manager.pump_running else {
+  guard manager.pump is Stopped else {
     raise EngineError("engine host is already connected")
   }
+  let sessions : Map[String, SessionSlot] = {}
   fn reset() -> Unit {
-    manager.pump_running = false
-    manager.engines.clear()
+    manager.pump = Stopped
   }
 
-  manager.pump_running = true
+  manager.pump = Serving(sessions~)
   emit(sink, Connected({ ready: true }))
   defer reset()
   @async.with_task_group(group => {
@@ -332,15 +422,17 @@ pub async fn run_engine_pump(
         SpawnEngine(config, ack) => {
           // Only this conversation's previous process is replaced; engines
           // serving other sessions keep running their own turns.
-          if manager.engines.get(session_key(config)) is Some(old) {
+          let slot = slot_for(sessions, session_key(config))
+          if slot.engine is Some(old) {
             // Closing stdin is the serve protocol's EOF signal; an idle
             // engine drains and exits, and its own reader task cleans up.
             old.writer.close()
-            manager.engines.remove(session_key(config))
+            slot.engine = None
           }
-          start_serve_engine(sink, group, manager, config) catch {
+          start_serve_engine(sink~, group~, manager~, slot~, config~) catch {
             error if @async.is_being_cancelled() => raise error
             error => {
+              manager.prune_slot(session_key(config))
               ack.put(Some(EngineError("failed to start engine: \{error}")))
               continue
             }
@@ -527,10 +619,11 @@ async fn engine_process_env(
 /// the consumer that forwards events to the webview for the engine's
 /// lifetime.
 async fn[G] start_serve_engine(
-  sink : EventSink,
-  group : @async.TaskGroup[G],
-  manager : EngineManager,
-  config : RunConfig,
+  sink~ : EventSink,
+  group~ : @async.TaskGroup[G],
+  manager~ : EngineManager,
+  slot~ : SessionSlot,
+  config~ : RunConfig,
 ) -> Unit {
   let (child_stdin, writer) = @process.write_to_process()
   let (reader, child_stdout) = @process.read_from_process()
@@ -575,7 +668,7 @@ async fn[G] start_serve_engine(
     phase: Idle,
     steer_runs: SteerRunTracker::new(),
   }
-  manager.engines.set(engine.session_key, engine)
+  slot.engine = Some(engine)
   let messages : @async.Queue[StreamMessage] = Queue(kind=Unbounded)
   let stderr_task = group.spawn(no_wait=true) <| () => {
     stderr_reader.read_all().text() catch {
@@ -671,9 +764,12 @@ async fn serve_engine_consumer(
       StreamExited(code) => {
         // A respawn may already have replaced this engine in its slot; only
         // clear the slot if it is still ours.
-        if manager.engines.get(engine.session_key) is Some(current) &&
+        if manager.pump is Serving(sessions~) &&
+          sessions.get(engine.session_key) is Some(slot) &&
+          slot.engine is Some(current) &&
           physical_equal(current, engine) {
-          manager.engines.remove(engine.session_key)
+          slot.engine = None
+          manager.prune_slot(engine.session_key)
         }
         match engine.phase {
           // EOF with a run still open means the engine died mid-turn: close

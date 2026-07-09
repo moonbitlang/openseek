@@ -60,7 +60,26 @@ pub async fn archive_session(
   guard !session.is_empty() && safe_workspace_id(session) else {
     raise EngineError("invalid session id")
   }
-  if manager.engines.get(session) is Some(live) {
+  // A start or compact between validation and its command hitting the wire
+  // is about to write into the very record this op moves; claiming the slot
+  // makes that window visible here — and holds it through the move, so
+  // neither op can slip in under it. No slot (a conversation the host never
+  // touched this lifetime) means nothing to claim.
+  let slot = if manager.pump is Serving(sessions~) {
+    sessions.get(session)
+  } else {
+    None
+  }
+  if slot is Some(slot) {
+    slot.claim(ArchivePending)
+  }
+  defer {
+    if slot is Some(slot) {
+      slot.pending = None
+      manager.prune_slot(session)
+    }
+  }
+  if slot is Some(slot) && slot.engine is Some(live) {
     match live.phase {
       Running(..) =>
         raise EngineError("this conversation is still running; stop it first")
@@ -71,12 +90,12 @@ pub async fn archive_session(
           "this conversation is compacting; wait for it to finish",
         )
       // Closing stdin is the serve protocol's EOF signal: the idle engine
-      // drains and exits, and its reader task cleans up. Merely removing
-      // the map entry would leak the process until the app shuts down (the
+      // drains and exits, and its reader task cleans up. Merely dropping
+      // the handle would leak the process until the app shuts down (the
       // respawn path closes the same way).
       Idle => {
         live.writer.close()
-        manager.engines.remove(session)
+        slot.engine = None
       }
     }
   }
