@@ -1018,7 +1018,32 @@ fn transcript_item_view(
     // same one-item card.
     Reasoning => activity_view([item], on_open)
     Tool(..) => activity_view([item], on_open)
+    Summary => summary_card_view(item.content, on_open)
   }
+}
+
+///|
+/// A compaction checkpoint: the turns above it were summarized into this text
+/// and dropped from the context the next prompt carries. Deliberately not an
+/// ItemKind the transcript loop batches into a turn's activity fold — it
+/// stands alone between turns, labeled for what it is, with the summary prose
+/// behind the fold.
+fn summary_card_view(
+  content : String,
+  on_open : (String) -> @cmd.Cmd,
+) -> @html.Html {
+  @html.div(class="activity-row", [
+    @html.details(class="summary-card", [
+      @html.summary(class="summary-card-label", [
+        @html.span(class="summary-card-icon", icon(icon_fold)),
+        @html.span(class="summary-card-text", "Context compacted"),
+      ]),
+      @html.div(
+        class="msg-content markdown summary-card-body",
+        @markdown.markdown_nodes(content, open_file=on_open),
+      ),
+    ]),
+  ])
 }
 
 ///|
@@ -1337,7 +1362,10 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     conv.draft_sendable()
   // A compacting conversation cannot accept a prompt either: the serve
   // engine would queue it behind the compaction, where Stop cannot reach it.
-  let can_send = !conv.running && !conv.compacting && has_input
+  // Every unsettled phase — requested, queued, or running — holds the gate.
+  let can_send = !conv.running &&
+    conv.compaction is NotCompacting &&
+    has_input
   // The left status group: the model, plus the workspace's git branch (moved
   // out of the topbar; a workspace that is not a repository has no chip).
   let status : Array[@html.Html] = [
@@ -1399,13 +1427,27 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if conv.pending_steers.length() > 0 {
     children.push(pending_steers_panel(conv))
   }
-  if conv.compacting {
-    children.push(
-      @html.div(class="composer-notice", [
-        @html.span(class="composer-notice-icon", icon(icon_fold)),
-        @html.span(class="composer-notice-text", "Compacting context…"),
-      ]),
-    )
+  // The requested phase reads as compacting already: the distinction (the
+  // host may still be spawning the engine) is not the user's problem.
+  match conv.compaction {
+    Requested | Compacting =>
+      children.push(
+        @html.div(class="composer-notice", [
+          @html.span(class="composer-notice-icon", icon(icon_fold)),
+          @html.span(class="composer-notice-text", "Compacting context…"),
+        ]),
+      )
+    Queued =>
+      children.push(
+        @html.div(class="composer-notice", [
+          @html.span(class="composer-notice-icon", icon(icon_fold)),
+          @html.span(
+            class="composer-notice-text",
+            "Compaction queued — starts when the current turn ends",
+          ),
+        ]),
+      )
+    NotCompacting => ()
   }
   let inner : Array[@html.Html] = [
     // First child, always present, so the textarea's index never shifts (which

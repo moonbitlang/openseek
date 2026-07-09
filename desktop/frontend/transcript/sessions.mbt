@@ -130,10 +130,7 @@ fn append_session_item(
       if content is Some(content) {
         let content = content.trim().to_owned()
         if !content.is_empty() {
-          items.push({
-            kind: Tool(name="summary", is_error=false, brief=None),
-            content,
-          })
+          items.push({ kind: Summary, content })
         }
       }
     "terminal" => append_terminal_item(items, payload)

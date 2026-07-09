@@ -149,5 +149,7 @@ fn download_update(
 ///|
 /// Whether restarting now would cut a conversation off mid-run.
 fn Model::any_conversation_busy(self : Model) -> Bool {
-  self.conversations.iter().any(conv => conv.running || conv.compacting)
+  self.conversations
+  .iter()
+  .any(conv => conv.running || !(conv.compaction is NotCompacting))
 }

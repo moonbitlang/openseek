@@ -43,12 +43,12 @@ test "assistant deltas accumulate into the streaming response" {
   let dispatch = test_dispatch()
   let (_, first) = update(
     dispatch,
-    Engine(7, AssistantDelta("Hello")),
+    Engine(7, AssistantDelta("Hello"), session=None),
     running_model(),
   )
   let (_, second) = update(
     dispatch,
-    Engine(7, AssistantDelta(", world")),
+    Engine(7, AssistantDelta(", world"), session=None),
     first,
   )
   inspect(second.active().streaming_response, content="Hello, world")
@@ -62,8 +62,8 @@ test "update is pure: replaying a delta on the same model is idempotent" {
     ..running_conversation(),
     streaming_response: "partial",
   })
-  let (_, once) = update(dispatch, Engine(7, AssistantDelta("!")), model)
-  let (_, twice) = update(dispatch, Engine(7, AssistantDelta("!")), model)
+  let (_, once) = update(dispatch, Engine(7, AssistantDelta("!"), session=None), model)
+  let (_, twice) = update(dispatch, Engine(7, AssistantDelta("!"), session=None), model)
   inspect(once.active().streaming_response, content="partial!")
   inspect(twice.active().streaming_response, content="partial!")
 }
@@ -73,7 +73,7 @@ test "deltas from an unknown run are dropped" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
-    Engine(99, AssistantDelta("stale")),
+    Engine(99, AssistantDelta("stale"), session=None),
     running_model(),
   )
   inspect(next.active().streaming_response, content="")
@@ -88,7 +88,7 @@ test "reasoning message commits a thinking item and clears its stream" {
   })
   let (_, next) = update(
     dispatch,
-    Engine(7, ReasoningMessage("full thought")),
+    Engine(7, ReasoningMessage("full thought"), session=None),
     model,
   )
   inspect(next.active().streaming_reasoning, content="")
@@ -107,7 +107,7 @@ test "assistant message replaces the live stream with a committed item" {
     streaming_response: "answ",
     streaming_reasoning: "thought",
   })
-  let (_, next) = update(dispatch, Engine(7, AssistantMessage("answer")), model)
+  let (_, next) = update(dispatch, Engine(7, AssistantMessage("answer"), session=None), model)
   inspect(next.active().streaming_response, content="")
   inspect(next.active().streaming_reasoning, content="")
   inspect(next.active().messages.length(), content="1")
@@ -122,7 +122,7 @@ test "a new agent step clears both live streams" {
     streaming_response: "left",
     streaming_reasoning: "over",
   })
-  let (_, next) = update(dispatch, Engine(7, AgentStep(Some(2))), model)
+  let (_, next) = update(dispatch, Engine(7, AgentStep(Some(2)), session=None), model)
   inspect(next.active().streaming_response, content="")
   inspect(next.active().streaming_reasoning, content="")
 }
@@ -186,7 +186,7 @@ test "an idle background notice routes by the last run id" {
     last_run_id: Some(7),
   })
   let notice = "[moon_check update]\nstatus=failed\nmain.mbt:1 error"
-  let (_, next) = update(dispatch, Engine(7, RuntimeUpdate(notice)), model)
+  let (_, next) = update(dispatch, Engine(7, RuntimeUpdate(notice), session=None), model)
   inspect(next.active().watcher_status, content="failed")
   guard next.active().messages.get(0)
     is Some({ kind: Tool(name="moon_check failed", ..), .. }) else {
@@ -532,7 +532,7 @@ test "concurrent conversations keep their streams apart" {
     status: Running,
   }
   let model = running_model().replace_conversation(second)
-  let (_, next) = update(dispatch, Engine(8, AssistantDelta("for B")), model)
+  let (_, next) = update(dispatch, Engine(8, AssistantDelta("for B"), session=None), model)
   // Run 8 belongs to the background conversation; the active one is untouched.
   inspect(next.active().streaming_response, content="")
   guard next.find_conversation("desktop-second") is Some(bg) else {
@@ -623,7 +623,7 @@ test "steer_applied commits the pending steer as a user message" {
     ..running_conversation(),
     pending_steers: ["go left"],
   })
-  let (_, next) = update(dispatch, Engine(7, SteerApplied("go left")), model)
+  let (_, next) = update(dispatch, Engine(7, SteerApplied("go left"), session=None), model)
   inspect(next.active().pending_steers.length(), content="0")
   inspect(next.active().messages.length(), content="1")
   guard next.active().messages[0].kind is User else {
@@ -639,7 +639,7 @@ test "steer_dropped settles the pending steer with a visible notice" {
     ..running_conversation(),
     pending_steers: ["go left"],
   })
-  let (_, next) = update(dispatch, Engine(7, SteerDropped("go left")), model)
+  let (_, next) = update(dispatch, Engine(7, SteerDropped("go left"), session=None), model)
   inspect(next.active().pending_steers.length(), content="0")
   inspect(next.active().messages.length(), content="1")
   guard next.active().messages[0].kind is Assistant(true) else {
@@ -655,7 +655,7 @@ test "an identical-text settle removes exactly one pending entry" {
     ..running_conversation(),
     pending_steers: ["again", "again"],
   })
-  let (_, next) = update(dispatch, Engine(7, SteerApplied("again")), model)
+  let (_, next) = update(dispatch, Engine(7, SteerApplied("again"), session=None), model)
   inspect(next.active().pending_steers.length(), content="1")
   inspect(next.active().pending_steers[0], content="again")
   inspect(next.active().messages.length(), content="1")
@@ -1077,7 +1077,7 @@ test "an unpinned transcript stays unpinned while a stream grows" {
   // must not flip it back, or the next render would yank the reader down.
   let dispatch = test_dispatch()
   let model = { ..running_model(), transcript_pinned: false }
-  let (_, next) = update(dispatch, Engine(7, AssistantDelta("more")), model)
+  let (_, next) = update(dispatch, Engine(7, AssistantDelta("more"), session=None), model)
   inspect(next.transcript_pinned, content="false")
   inspect(next.active().streaming_response, content="more")
 }
@@ -1474,12 +1474,171 @@ test "a prompt submitted during compaction stays in the composer" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    compacting: true,
+    compaction: Compacting,
     task: "do the thing",
   })
   let (_, next) = update(dispatch, Send, model)
   inspect(next.active().task, content="do the thing")
   inspect(next.active().messages.length(), content="0")
+}
+
+///|
+/// A `/compact` sent mid-turn queues behind the open run in the engine. The
+/// composer must say so immediately, swallow a duplicate, and keep the send
+/// gate held through the gap between the turn's end and the engine's
+/// compaction_started.
+test "a mid-turn /compact stays visibly queued until compaction starts" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..running_conversation(),
+    last_run_id: Some(7),
+  })
+  let (_, queued) = run_slash_command(dispatch, model, "compact")
+  assert_true(queued.active().compaction is Queued)
+  // One compaction at a time: the repeat is swallowed, not re-sent.
+  let (_, again) = run_slash_command(dispatch, queued, "compact")
+  assert_true(again.active().compaction is Queued)
+  // The turn ends before compaction_started arrives; a prompt sent into
+  // that gap would queue behind the compaction, out of Stop's reach.
+  let (_, ended) = update(
+    dispatch,
+    Finished(run_id=7, status="completed", answer=None),
+    again,
+  )
+  assert_true(ended.active().compaction is Queued)
+  let drafted = ended.replace_conversation({
+    ..ended.active(),
+    task: "next prompt",
+  })
+  let (_, held) = update(dispatch, Send, drafted)
+  inspect(held.active().task, content="next prompt")
+  // The engine reaches the queued compaction: queued flips into compacting.
+  let (_, started) = update(dispatch, Engine(7, CompactionStarted, session=None), held)
+  assert_true(started.active().compaction is Compacting)
+}
+
+///|
+/// An idle `/compact` has no engine acknowledgment yet — the host may still
+/// be spawning a serve engine for it (a resumed conversation compacted
+/// before its first prompt) — but the request must hold the send gate
+/// immediately: a prompt sent into that window would be consumed and
+/// rejected by the host instead of held in the composer.
+test "an idle /compact holds the send gate until the engine confirms" {
+  let dispatch = test_dispatch()
+  let (_, requested) = run_slash_command(dispatch, test_model(), "compact")
+  assert_true(requested.active().compaction is Requested)
+  // A repeat while the request is in flight is swallowed, not re-sent.
+  let (_, again) = run_slash_command(dispatch, requested, "compact")
+  assert_true(again.active().compaction is Requested)
+  // A draft sent during the spawn/write window stays in the composer.
+  let drafted = again.replace_conversation({
+    ..again.active(),
+    task: "next prompt",
+  })
+  let (_, held) = update(dispatch, Send, drafted)
+  inspect(held.active().task, content="next prompt")
+  inspect(held.active().messages.length(), content="0")
+  // The engine confirms; the session stamp routes it (no run id exists yet).
+  let (_, started) = update(
+    dispatch,
+    Engine(0, CompactionStarted, session=Some("desktop-test")),
+    held,
+  )
+  assert_true(started.active().compaction is Compacting)
+}
+
+///|
+/// The compaction summary lands as its own Summary item — never a tool call
+/// the transcript loop would fold into the preceding turn's activity card
+/// (which would also swallow that turn's answer bubble into the fold).
+test "compaction_finished appends a standalone summary item" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    compaction: Compacting,
+    last_run_id: Some(7),
+  })
+  let (_, next) = update(
+    dispatch,
+    Engine(7, CompactionFinished("earlier turns compacted"), session=None),
+    model,
+  )
+  guard next.active().messages.last() is Some(item) && item.kind is Summary else {
+    fail("expected a summary item")
+  }
+  inspect(item.content, content="earlier turns compacted")
+  assert_true(next.active().compaction is NotCompacting)
+}
+
+///|
+/// A conversation resumed and compacted before its first prompt of this
+/// app-lifetime has no run id anywhere — the spawned engine stamps run 0 and
+/// the conversation's `last_run_id` is still `None` — so compaction events
+/// must route by the session the host stamps on them.
+test "compaction events route by session when no run id matches" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    last_run_id: None,
+  })
+  let (_, started) = update(
+    dispatch,
+    Engine(0, CompactionStarted, session=Some("desktop-test")),
+    model,
+  )
+  assert_true(started.active().compaction is Compacting)
+  let (_, next) = update(
+    dispatch,
+    Engine(
+      0,
+      CompactionFinished("earlier turns compacted"),
+      session=Some("desktop-test"),
+    ),
+    started,
+  )
+  guard next.active().messages.last() is Some(item) && item.kind is Summary else {
+    fail("expected a summary item")
+  }
+  assert_true(next.active().compaction is NotCompacting)
+}
+
+///|
+/// The host synthesizes compaction_failed when the engine dies with a
+/// compaction still queued behind the dead turn; that terminal event must
+/// settle the queued notice like any other compaction failure.
+test "compaction_failed settles a still-queued compaction" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    compaction: Queued,
+    last_run_id: Some(7),
+  })
+  let (_, next) = update(
+    dispatch,
+    Engine(7, CompactionFailed("engine exited"), session=None),
+    model,
+  )
+  assert_true(next.active().compaction is NotCompacting)
+  inspect(next.active().messages.length(), content="1")
+}
+
+///|
+/// A rejected compact request (no engine, host error) never produces
+/// compaction events, so the rejection itself clears the queued notice and
+/// lands the error in the transcript.
+test "CompactRejected clears the queued notice and reports the error" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    compaction: Queued,
+  })
+  let (_, next) = update(
+    dispatch,
+    CompactRejected(session="desktop-test", message="no engine"),
+    model,
+  )
+  assert_true(next.active().compaction is NotCompacting)
+  inspect(next.active().messages.length(), content="1")
 }
 
 ///|

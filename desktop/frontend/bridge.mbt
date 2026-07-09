@@ -152,7 +152,7 @@ fn engine_msg(payload : Map[String, Json]) -> Msg? {
     return None
   }
   guard @transcript.decode_engine_event(raw) is Some(event) else { return None }
-  Some(Engine(run_id, event))
+  Some(Engine(run_id, event, session=@jsonx.json_text(payload, "session")))
 }
 
 ///|
@@ -292,7 +292,37 @@ fn start_payload(
 ) -> @js.Value {
   let payload = @js.Object::new()
   payload["task"] = task
-  @interop.set_trimmed(payload, "model", selected_model)
+  set_engine_settings(
+    payload,
+    model=selected_model,
+    max_steps~,
+    api_key~,
+    api_url~,
+    session~,
+    workspace?,
+    wsl_enabled~,
+    wsl_distro~,
+    wsl_engine~,
+  )
+  payload.to_value()
+}
+
+///|
+/// Fill `payload` with the engine settings shared by `start` and `compact` —
+/// everything the host needs to spawn a serve engine, minus the task.
+fn set_engine_settings(
+  payload : @js.Object,
+  model~ : String,
+  max_steps~ : String,
+  api_key~ : String,
+  api_url~ : String,
+  session~ : String,
+  workspace? : @pathx.Absolute,
+  wsl_enabled~ : Bool,
+  wsl_distro~ : String,
+  wsl_engine~ : String,
+) -> Unit {
+  @interop.set_trimmed(payload, "model", model)
   @interop.set_trimmed(payload, "api_key", api_key)
   @interop.set_trimmed(payload, "api_url", api_url)
   @interop.set_trimmed(payload, "session", session)
@@ -309,7 +339,6 @@ fn start_payload(
     @interop.set_trimmed(wsl, "engine", wsl_engine)
     payload["wsl"] = wsl.to_value()
   }
-  payload.to_value()
 }
 
 ///|
@@ -437,24 +466,50 @@ async fn steer_delivered(text : String, run_id : Int) -> Bool {
 }
 
 ///|
-/// Ask a conversation's engine to compact (summarize and shrink) its history.
-/// The engine reports the real progress through `compaction_*` events; this
-/// command only surfaces the immediate failure — no live engine for the
-/// conversation, or the bridge call itself rejecting — as an error in the
+/// Ask a conversation's engine to compact (summarize and shrink) its history,
+/// carrying the same engine settings as a start: a conversation with no live
+/// serve process (resumed after a restart) gets one spawned on the durable
+/// session first. The engine reports the real progress through `compaction_*`
+/// events; this command only surfaces the immediate failure — the spawn
+/// failing, or the bridge call itself rejecting — as an error in the
 /// conversation on screen.
-fn compact_openseek(dispatch : @cmd.Emit[Msg], session : String) -> @cmd.Cmd {
+fn compact_openseek(
+  dispatch : @cmd.Emit[Msg],
+  session~ : String,
+  model~ : String,
+  max_steps~ : String,
+  api_key~ : String,
+  api_url~ : String,
+  workspace? : @pathx.Absolute,
+  wsl_enabled~ : Bool,
+  wsl_distro~ : String,
+  wsl_engine~ : String,
+) -> @cmd.Cmd {
+  let payload = @js.Object::new()
+  set_engine_settings(
+    payload,
+    model~,
+    max_steps~,
+    api_key~,
+    api_url~,
+    session~,
+    workspace?,
+    wsl_enabled~,
+    wsl_distro~,
+    wsl_engine~,
+  )
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["session"] = session
       let _ : @js.Value = @interop.bridge_request("compact", payload.to_value()) catch {
         error => {
+          // Routed by session, not as a generic Error: the rejection must
+          // also clear the conversation's queued/compacting notice, which
+          // no compaction event will ever settle now.
           scheduler.add(
             dispatch(
-              Error(
-                run_id=None,
+              CompactRejected(
+                session~,
                 message=@interop.bridge_error_text(error),
-                diagnostics=None,
               ),
             ),
           )

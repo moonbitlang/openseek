@@ -246,10 +246,47 @@ fn run_slash_command(
   match command {
     "compact" => {
       let conv = model.active()
-      (
-        compact_openseek(dispatch, conv.session_id),
-        { ..model.replace_conversation({ ..conv, task: "" }), completion: None },
-      )
+      // One compaction at a time: a repeat while one is queued or in flight
+      // would stack another behind it in the engine's pending queue (the
+      // host rejects it anyway) — swallow it like any settled command.
+      if !(conv.compaction is NotCompacting) {
+        (
+          @cmd.none,
+          {
+            ..model.replace_conversation({ ..conv, task: "" }),
+            completion: None,
+          },
+        )
+      } else {
+        (
+          compact_openseek(
+            dispatch,
+            session=conv.session_id,
+            model=model.selected_model,
+            max_steps=model.max_steps,
+            api_key=model.effective_api_key(),
+            api_url=model.effective_api_url(),
+            workspace?=conv.workspace,
+            wsl_enabled=model.wsl_active(),
+            wsl_distro=model.wsl_distro,
+            wsl_engine=model.wsl_engine,
+          ),
+          {
+            ..model.replace_conversation({
+              ..conv,
+              task: "",
+              // Hold the send gate before the host answers: mid-turn the
+              // command queues behind the open run, and an idle request may
+              // sit in the spawn/write window for seconds (a resumed
+              // conversation gets its engine spawned on demand) — a prompt
+              // sent into either gap would be consumed and rejected instead
+              // of held. compaction_started confirms; CompactRejected clears.
+              compaction: if conv.running { Queued } else { Requested },
+            }),
+            completion: None,
+          },
+        )
+      }
     }
     _ => (@cmd.none, { ..model, completion: None })
   }
@@ -397,23 +434,17 @@ fn apply_engine_event(
         .append_item(Assistant(true), steer_dropped_notice(content)),
       )
     // Compaction runs while the engine is idle and the next prompt will carry
-    // the shrunken context. The summary is appended as a `summary` item, the
+    // the shrunken context. The summary is appended as a `Summary` item, the
     // same shape a reloaded session shows for the checkpoint, so the live and
     // replayed transcripts agree.
-    CompactionStarted => (false, { ..conv, compacting: true })
+    CompactionStarted => (false, { ..conv, compaction: Compacting })
     CompactionFinished(summary) => {
-      let conv = { ..conv, compacting: false }
+      let conv = { ..conv, compaction: NotCompacting }
       let summary = summary.trim().to_owned()
       if summary.is_empty() {
         (false, conv)
       } else {
-        (
-          true,
-          conv.append_item(
-            Tool(name="summary", is_error=false, brief=None),
-            summary,
-          ),
-        )
+        (true, conv.append_item(Summary, summary))
       }
     }
     CompactionFailed(reason) => {
@@ -424,7 +455,10 @@ fn apply_engine_event(
       }
       (
         true,
-        { ..conv, compacting: false }.append_item(Assistant(true), content),
+        { ..conv, compaction: NotCompacting }.append_item(
+          Assistant(true),
+          content,
+        ),
       )
     }
   }
@@ -991,11 +1025,14 @@ fn update_msg(
         } else {
           (@cmd.none, model)
         }
-      } else if conv.compacting {
+      } else if !(conv.compaction is NotCompacting) {
         // A prompt submitted mid-compaction would sit in the serve engine's
         // queue behind it, where Stop (which cancels only the compaction)
         // cannot reach it — the user's cancel would not stop the submitted
-        // work. The draft stays in the composer until compaction settles.
+        // work. A queued or just-requested compaction is the same gap one
+        // step earlier: the command is on its way and compaction_started has
+        // not yet arrived. The draft stays in the composer until the
+        // compaction settles.
         (@cmd.none, model)
       } else {
         let next = conv.append_item(User, task)
@@ -1359,19 +1396,24 @@ fn update_msg(
       } else {
         (@cmd.none, model)
       }
-    Engine(run_id, event) => {
+    Engine(run_id, event, session~) => {
       // Compaction and background notices happen between turns, so their
       // events arrive after the run that owned `run_id` cleared
-      // `active_run_id`; fall back to the conversation that last held the id
-      // so the summary or notice still lands.
-      let conv = match model.conversation_by_run(run_id) {
-        Some(conv) => Some(conv)
-        None =>
-          if is_idle_event(event) {
-            model.conversation_by_last_run(run_id)
-          } else {
-            None
-          }
+      // `active_run_id`. The host stamps them with their session, which also
+      // covers a conversation compacted before its first prompt of this
+      // app-lifetime (its engine has no run id at all); the conversation
+      // that last held the id remains the fallback for unstamped events.
+      let conv = if model.conversation_by_run(run_id) is Some(conv) {
+        Some(conv)
+      } else if is_idle_event(event) {
+        if session is Some(session) &&
+          model.find_conversation(session) is Some(conv) {
+          Some(conv)
+        } else {
+          model.conversation_by_last_run(run_id)
+        }
+      } else {
+        None
       }
       if conv is Some(conv) {
         let (transcript_grew, next) = apply_engine_event(conv, event)
@@ -1462,6 +1504,18 @@ fn update_msg(
         (@cmd.none, model)
       }
     }
+    CompactRejected(session~, message~) =>
+      if model.find_conversation(session) is Some(conv) {
+        (
+          scroll_if_active(model, conv.session_id),
+          model.replace_conversation({
+            ..conv.append_item(Assistant(true), message),
+            compaction: NotCompacting,
+          }),
+        )
+      } else {
+        (@cmd.none, model)
+      }
     Finished(run_id~, status~, answer~) =>
       if model.conversation_by_run(run_id) is Some(conv) {
         // In the normal path the engine settled every steer before this

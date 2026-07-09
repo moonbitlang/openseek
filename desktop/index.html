@@ -1692,6 +1692,46 @@
         padding: 12px 0 4px;
       }
 
+      /* compaction checkpoint between turns: a quiet labeled fold with the
+         summary prose behind it */
+      .summary-card-label {
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--ink-3);
+        font-size: 12px;
+        letter-spacing: 0.02em;
+      }
+      .summary-card-label::-webkit-details-marker {
+        display: none;
+      }
+      .summary-card-label:hover {
+        color: var(--ink-2);
+      }
+      .summary-card-icon {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+      }
+      .summary-card-icon .icon {
+        width: 14px;
+        height: 14px;
+      }
+      .summary-card-text::after {
+        content: " ▸";
+      }
+      .summary-card[open] > .summary-card-label .summary-card-text::after {
+        content: " ▾";
+      }
+      .summary-card-body {
+        padding: 10px 0 4px;
+        font-size: 13px;
+        color: var(--ink-2);
+      }
+
       /* Reasoning inside the work log — and the live stream before it commits
          (`reasoning_view`): full-width muted prose, never a labelled
          "Thinking" row of its own. */
@@ -1945,9 +1985,8 @@
       }
       .composer-notice-icon {
         flex: none;
-      }
-      .composer-notice-text {
-        animation: caretBlink 1.4s steps(1) infinite;
+        display: inline-flex;
+        align-items: center;
       }
 
       /* steering input not yet folded into the running turn: a panel docked

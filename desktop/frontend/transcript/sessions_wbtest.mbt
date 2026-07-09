@@ -107,9 +107,7 @@ test "transcript mapping keeps summaries and meaningful runtime notices" {
     fail("expected transcript items")
   }
   inspect(items.length(), content="2")
-  guard items[0].kind is Tool(name="summary", is_error=false, ..) else {
-    fail("expected summary")
-  }
+  guard items[0].kind is Summary else { fail("expected summary") }
   guard items[1].kind is Tool(name="moon_check failed", is_error=false, ..) else {
     fail("expected runtime notice card")
   }

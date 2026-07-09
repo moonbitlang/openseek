@@ -12,6 +12,12 @@ pub(all) enum ItemKind {
   // optional one-line human-readable summary of what the call did (`None`
   // when the tool supplied none — display falls back to the name).
   Tool(name~ : String, is_error~ : Bool, brief~ : String?)
+  // A compaction checkpoint: the turns before it were summarized into the
+  // item's content and dropped from the context. Its own kind so the view
+  // renders it as a standalone card — folded into a turn's activity it
+  // would read as an anonymous tool call and swallow the preceding answer
+  // bubble into the fold.
+  Summary
 }
 
 ///|

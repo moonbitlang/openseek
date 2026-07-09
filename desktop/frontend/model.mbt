@@ -80,6 +80,31 @@ fn ApiProvider::parse(value : String) -> ApiProvider {
 }
 
 ///|
+/// The compaction lifecycle of one conversation, mirroring the host's
+/// `EnginePhase` design: one value instead of loose booleans, so a compact
+/// request that is in flight but not yet acknowledged still has a
+/// representation — every phase but `NotCompacting` holds the send gate and
+/// shows a composer notice, and a request the model forgot to track cannot
+/// exist. Settled by the engine's `compaction_*` events, or by
+/// `CompactRejected` when the request never reached one.
+priv enum CompactionPhase {
+  // Nothing pending; the only phase that accepts a `/compact`.
+  NotCompacting
+  // Requested while idle: the op is on the wire and the host may still be
+  // spawning a serve engine for it (a resumed conversation compacted before
+  // its first prompt — seconds, not milliseconds). `compaction_started`
+  // confirms it.
+  Requested
+  // Requested mid-turn: the engine queues it behind the open run, so this
+  // holds the gate through the gap between the turn's end and the queued
+  // compaction's start.
+  Queued
+  // The engine reported `compaction_started` and has not yet reported the
+  // summary or a failure.
+  Compacting
+}
+
+///|
 /// One conversation's full client-side state. Each conversation maps to a
 /// durable engine session and, while running, to its own `--serve` engine
 /// process in the host — several conversations can run turns concurrently,
@@ -108,10 +133,8 @@ priv struct Conversation {
   // engine events arrive stamped with this id once `active_run_id` is already
   // cleared; routing them needs the retained id.
   last_run_id : Int?
-  // A compaction (summarize-and-shrink) is in flight for this conversation:
-  // the engine acknowledged it and has not yet reported the summary or a
-  // failure. Display only — shown as a composer notice.
-  compacting : Bool
+  // Where this conversation's compaction stands; see `CompactionPhase`.
+  compaction : CompactionPhase
   // Run-scoped status only (Idle/Starting/Running/…); bridge and settings
   // states are derived at display time by `Model::display_status`.
   status : Status
@@ -576,7 +599,12 @@ priv enum Msg {
     max_steps~ : Int,
     cwd~ : @pathx.Absolute?
   )
-  Engine(Int, @transcript.EngineEvent)
+  // A stream event from `run_id`'s engine. `session` is the conversation the
+  // host stamped on it (`None` when the payload carries no stamp): idle
+  // events (the compaction lifecycle, background notices) route by it,
+  // because a conversation compacted before its first prompt of this
+  // app-lifetime has no run id to match.
+  Engine(Int, @transcript.EngineEvent, session~ : String?)
   // The editor side-panel's own messages (tree, viewer, diagnostics,
   // comments), routed to the `fileeditor` package's update. The one
   // exception is `EditorCommentAdded`, which this update intercepts: the
@@ -590,6 +618,10 @@ priv enum Msg {
   // belongs to whatever conversation the user is looking at; `diagnostics`
   // is stderr worth appending, when the host captured any.
   Error(run_id~ : Int?, message~ : String, diagnostics~ : String?)
+  // The `compact` bridge request itself was rejected (no engine, host error):
+  // nothing will report compaction events, so the conversation's queued /
+  // in-flight compaction notice must be cleared here, not by the stream.
+  CompactRejected(session~ : String, message~ : String)
   // `answer` only when the agent finished with one (other terminal statuses
   // carry none).
   Finished(run_id~ : Int, status~ : String, answer~ : String?)
@@ -632,7 +664,7 @@ fn empty_conversation(
     running: false,
     active_run_id: None,
     last_run_id: None,
-    compacting: false,
+    compaction: NotCompacting,
     status: Idle,
     unseen_finish: false,
     usage_tokens: 0,
