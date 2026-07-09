@@ -86,23 +86,74 @@ fn configured_max_steps(value : Int?) -> Int raise EngineError {
 async fn run_config(payload : StartRequest, engine : String) -> RunConfig {
   let task = payload.task.trim().to_owned()
   guard !task.is_empty() else { raise EngineError("task must not be empty") }
-  let api_url = payload.api_url
+  serve_config(
+    task,
+    engine,
+    api_key?=payload.api_key,
+    api_url?=payload.api_url,
+    model?=payload.model,
+    max_steps?=payload.max_steps,
+    session?=payload.session,
+    session_root?=payload.session_root,
+    workspace?=payload.workspace,
+    wsl?=payload.wsl,
+  )
+}
+
+///|
+/// The config a compaction spawns an engine with when its conversation has
+/// none live (resumed after a restart, or the process died between turns):
+/// the same settings a start carries, pinned to the compacted session. The
+/// blank task is never sent — `compact_run` writes only the compact command,
+/// and the fingerprint deliberately excludes the task.
+async fn compact_config(payload : CompactRequest, engine : String) -> RunConfig {
+  guard !payload.session.is_empty() else {
+    raise EngineError("session id must not be empty")
+  }
+  serve_config(
+    "",
+    engine,
+    api_key?=payload.api_key,
+    api_url?=payload.api_url,
+    model?=payload.model,
+    max_steps?=payload.max_steps,
+    session=payload.session,
+    session_root?=payload.session_root,
+    workspace?=payload.workspace,
+    wsl?=payload.wsl,
+  )
+}
+
+///|
+/// The validated configuration shared by every op that can spawn a serve
+/// engine.
+async fn serve_config(
+  task : String,
+  engine : String,
+  api_key? : String,
+  api_url? : String,
+  model? : String,
+  max_steps? : Int,
+  session? : String,
+  session_root? : String,
+  workspace? : String,
+  wsl? : WslRequest,
+) -> RunConfig {
   // Only the official endpoint strictly needs a key; a custom endpoint
   // decides for itself, so a missing key becomes a placeholder there. Do
   // not reuse the official DeepSeek env key for a custom/OpenSeek endpoint.
   let api_key = configured_api_key(
-    payload.api_key,
+    api_key,
     api_url,
     @env.get("DEEPSEEK"),
     client_token?=openseek_client_token(),
   )
-  let session = payload.session
-  let host = engine_host(payload.wsl, engine)
+  let host = engine_host(wsl, engine)
   // A workspace run happens in the project directory itself, with the
   // session's durable record in the in-project store. Only registered
   // workspaces qualify — the registry, not the payload, decides which
   // directories a run may work in.
-  let workspace : @path.Path? = if payload.workspace is Some(path) {
+  let workspace : @path.Path? = if workspace is Some(path) {
     match registered_workspace(path) {
       Some(dir) => Some(dir)
       None => raise EngineError("\{path} is not a registered workspace")
@@ -114,14 +165,14 @@ async fn run_config(payload : StartRequest, engine : String) -> RunConfig {
     task,
     api_key,
     api_url,
-    model: match payload.model {
+    model: match model {
       Some(model) => model
       // The engine takes its model from OPENSEEK_MODEL (DEEPSEEK_MODEL is
       // deliberately ignored — see `serve_engine_env`), so the host's
       // fallback must read the same variable.
       None => @env.get("OPENSEEK_MODEL").unwrap_or(DefaultModel)
     },
-    max_steps: configured_max_steps(payload.max_steps),
+    max_steps: configured_max_steps(max_steps),
     engine,
     host,
     cwd: if workspace is Some(dir) {
@@ -133,9 +184,7 @@ async fn run_config(payload : StartRequest, engine : String) -> RunConfig {
     session_root: if workspace is Some(dir) {
       Some(workspace_session_root(dir))
     } else if session is Some(_) {
-      resolved_session_root(
-        payload_root?=payload.session_root.map(root => Path(root)),
-      )
+      resolved_session_root(payload_root?=session_root.map(root => Path(root)))
     } else {
       None
     },

@@ -92,13 +92,32 @@ fn SteerPayload::to_request(self : SteerPayload) -> @engine.SteerRequest {
 }
 
 ///|
+/// A compact carries the same engine settings as a start (minus the task):
+/// a conversation resumed after a restart has no live serve process, and
+/// compacting it spawns one with these settings.
 priv struct CompactPayload {
   session : String
+  api_key : String?
+  api_url : String?
+  model : String?
+  max_steps : Int?
+  session_root : String?
+  workspace : String?
+  wsl : WslPayload?
 } derive(FromJson)
 
 ///|
 fn CompactPayload::to_request(self : CompactPayload) -> @engine.CompactRequest {
-  { session: self.session }
+  {
+    session: self.session,
+    api_key: self.api_key,
+    api_url: self.api_url,
+    model: self.model,
+    max_steps: self.max_steps,
+    session_root: self.session_root,
+    workspace: self.workspace,
+    wsl: self.wsl.map(wsl => wsl.to_request()),
+  }
 }
 
 ///|

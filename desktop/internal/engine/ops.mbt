@@ -47,35 +47,29 @@ pub async fn start_run(
 
   manager.starts_in_flight.add(key)
   defer clear_start_flag()
-  // A WSL run's Linux-path cwd lives inside the distro — the host cannot
-  // create it here; `wsl --cd` rejects a missing directory at spawn time.
-  if config.cwd is Some(cwd) &&
-    !(config.host is Wsl(..) && @path/posix.Path::is_absolute(cwd.0)) {
-    @fsx.ensure_dir(cwd) catch {
-      error if @async.is_being_cancelled() => raise error
-      error =>
-        raise EngineError("failed to create working directory \{cwd}: \{error}")
-    }
-  }
+  ensure_run_cwd(config)
   let need_spawn = if manager.engines.get(key) is Some(live) {
     live.spec_key != engine_fingerprint(config)
   } else {
     true
   }
   if need_spawn {
-    let ack : @async.Queue[EngineError?] = Queue(kind=Unbounded)
-    manager.commands.put(SpawnEngine(config, ack))
-    if ack.get() is Some(error) {
-      raise error
-    }
+    request_spawn(manager, config)
   }
   guard manager.engines.get(key) is Some(live) else {
     raise EngineError("engine failed to start")
   }
+  // The cwd/spawn waits above are suspension points: a compaction accepted
+  // during one of them holds the engine now, and the Running transition
+  // below would silently clobber it. Re-check on the engine this run will
+  // actually use.
+  if live.phase is Compacting {
+    raise EngineError("this conversation is compacting; wait for it to finish")
+  }
   let run_id = manager.next_run_id
   manager.next_run_id = manager.next_run_id + 1
   live.latest_run = run_id
-  live.phase = Running(cancel_requested=false)
+  live.phase = Running(cancel_requested=false, compact_queued=false)
   live.steer_runs.begin_run()
   emit(
     sink,
@@ -116,7 +110,7 @@ pub async fn start_run(
   // prompt is on the wire now, so re-send the cancel: serve is processing the
   // turn and will honor it. (Started stays before the write so it can never
   // arrive after a stream event.)
-  if live.phase is Running(cancel_requested=true) {
+  if live.phase is Running(cancel_requested=true, ..) {
     live.writer.write(@protocol.cancel().to_jsonl()) catch {
       error if @async.is_being_cancelled() => raise error
       // The engine died; its reader task closes the run.
@@ -138,8 +132,12 @@ pub async fn cancel_run(
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) else {
     return { cancelled: false, run_id: None }
   }
-  // `open_run_engine` only returns engines with an open run.
-  live.phase = Running(cancel_requested=true)
+  // `open_run_engine` only returns engines with an open run. A compaction
+  // queued behind the dying turn survives the cancel: the engine's pending
+  // queue keeps it (cancel only aborts the active turn), so the flag must
+  // ride along or the turn's terminal event would idle right past it.
+  let compact_queued = live.phase is Running(compact_queued=true, ..)
+  live.phase = Running(cancel_requested=true, compact_queued~)
   let command = @protocol.cancel()
   live.writer.write(command.to_jsonl()) catch {
     error if @async.is_being_cancelled() => raise error
@@ -150,25 +148,87 @@ pub async fn cancel_run(
 }
 
 ///|
+/// Create the run's working directory so the spawn cannot fail on a missing
+/// cwd. A WSL run's Linux-path cwd lives inside the distro — the host cannot
+/// create it here; `wsl --cd` rejects a missing directory at spawn time.
+async fn ensure_run_cwd(config : RunConfig) -> Unit {
+  if config.cwd is Some(cwd) &&
+    !(config.host is Wsl(..) && @path/posix.Path::is_absolute(cwd.0)) {
+    @fsx.ensure_dir(cwd) catch {
+      error if @async.is_being_cancelled() => raise error
+      error =>
+        raise EngineError("failed to create working directory \{cwd}: \{error}")
+    }
+  }
+}
+
+///|
+/// Ask the pump to spawn (or replace) this conversation's serve engine and
+/// wait for its ack; the spawn failure, if any, is re-raised here.
+async fn request_spawn(manager : EngineManager, config : RunConfig) -> Unit {
+  let ack : @async.Queue[EngineError?] = Queue(kind=Unbounded)
+  manager.commands.put(SpawnEngine(config, ack))
+  if ack.get() is Some(error) {
+    raise error
+  }
+}
+
+///|
 /// Ask a conversation's serve engine to compact its history: summarize the
 /// turns so far into a checkpoint and drop the raw events behind it, shrinking
 /// the context the next prompt carries. Addressed by session id, not run id —
 /// compaction is normally requested while the engine sits idle between turns.
-/// The engine reports the real progress (started/finished/failed) through its
-/// event stream; this op only confirms the command reached a live engine.
+/// A conversation with no live engine (resumed after a restart, or whose
+/// process died between turns) gets one spawned on the durable session first,
+/// exactly as the next prompt would. The engine reports the real progress
+/// (started/finished/failed) through its event stream; this op only confirms
+/// the command reached a live engine.
 pub async fn compact_run(
   manager : EngineManager,
   payload : CompactRequest,
 ) -> CompactReply {
-  guard manager.engines.get(payload.session) is Some(live) else {
-    raise EngineError("this conversation has no running engine to compact")
+  guard manager.pump_running else {
+    raise EngineError("engine host is not connected; reload the app")
+  }
+  let live = match manager.engines.get(payload.session) {
+    Some(live) => live
+    None => {
+      let config = compact_config(payload, manager.engine)
+      let key = session_key(config)
+      // Reuse the start guard: a compact racing a start's spawn window would
+      // otherwise double-spawn the same conversation's engine.
+      if manager.starts_in_flight.contains(key) {
+        raise EngineError(
+          "an OpenSeek run is already starting for this conversation",
+        )
+      }
+      fn clear_start_flag() -> Unit {
+        manager.starts_in_flight.remove(key)
+      }
+
+      manager.starts_in_flight.add(key)
+      defer clear_start_flag()
+      ensure_run_cwd(config)
+      request_spawn(manager, config)
+      guard manager.engines.get(key) is Some(live) else {
+        raise EngineError("engine failed to start")
+      }
+      live
+    }
   }
   match live.phase {
     Compacting => raise EngineError("this conversation is already compacting")
-    // Sent mid-turn, the command queues behind the open run; the engine's
-    // own compaction_started event flips the phase when it actually begins,
-    // so the run's state is left alone here.
-    Running(..) => ()
+    Running(compact_queued=true, ..) =>
+      raise EngineError(
+        "a compaction is already queued behind the running turn",
+      )
+    // Sent mid-turn, the command queues behind the open run; the flag makes
+    // the turn's terminal event land in Compacting so nothing slips into the
+    // gap before the engine's own compaction_started. Set BEFORE the write:
+    // the write can suspend, and the turn could end during that suspension —
+    // the consumer must already see the queued compaction then.
+    Running(cancel_requested~, compact_queued=false) =>
+      live.phase = Running(cancel_requested~, compact_queued=true)
     // Enter the phase BEFORE the write: the write can suspend, and a short
     // compaction could report finished during that suspension — the
     // consumer's Idle transition must land after ours, not before it.
@@ -179,9 +239,14 @@ pub async fn compact_run(
     error if @async.is_being_cancelled() => raise error
     error => {
       // The command never reached the engine; nothing will report a
-      // compaction, so leave the phase as the consumer sees it.
-      if live.phase is Compacting {
-        live.phase = Idle
+      // compaction, so undo whatever this op recorded — including a queued
+      // flag the consumer already promoted to Compacting while the failing
+      // write was suspended.
+      match live.phase {
+        Compacting => live.phase = Idle
+        Running(cancel_requested~, compact_queued=true) =>
+          live.phase = Running(cancel_requested~, compact_queued=false)
+        _ => ()
       }
       raise EngineError("failed to request compaction: \{error}")
     }
@@ -206,7 +271,7 @@ pub async fn steer_run(
     return { steered: false, run_id: None }
   }
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
-    live.phase is Running(cancel_requested=false) else {
+    live.phase is Running(cancel_requested=false, ..) else {
     return { steered: false, run_id: None }
   }
   let command = @protocol.steer(payload.text)

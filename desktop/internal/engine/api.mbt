@@ -49,6 +49,16 @@ pub(all) struct CompactRequest {
   // cancel/steer there is no open run to key on: compaction is normally asked
   // for once a turn has finished and the engine is idle.
   session : String
+  // The same engine settings a start carries (minus the task): a conversation
+  // resumed after a restart has no live serve process, and compacting it
+  // spawns one on the durable session with exactly these settings.
+  api_key : String?
+  api_url : String?
+  model : String?
+  max_steps : Int?
+  session_root : String?
+  workspace : String?
+  wsl : WslRequest?
 }
 
 ///|
@@ -140,6 +150,12 @@ struct StartedPayload {
 ///|
 struct EventPayload {
   run_id : Int
+  // The conversation the event belongs to (the engine's session key, "" for
+  // a session-less engine). Idle events — the compaction lifecycle and
+  // background notices — are routed by it: run-id routing needs a `Started`
+  // event this app-lifetime, which a conversation resumed and compacted
+  // before its first prompt never had.
+  session : String
   event : Json
 } derive(ToJson)
 

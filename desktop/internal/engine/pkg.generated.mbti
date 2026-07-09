@@ -68,6 +68,13 @@ type CompactReply derive(ToJson)
 
 pub(all) struct CompactRequest {
   session : String
+  api_key : String?
+  api_url : String?
+  model : String?
+  max_steps : Int?
+  session_root : String?
+  workspace : String?
+  wsl : WslRequest?
 }
 
 type ConnectedPayload derive(ToJson)

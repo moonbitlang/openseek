@@ -33,13 +33,33 @@ priv enum EnginePhase {
   Idle
   // A prompt's turn is open on the wire. `cancel_requested` marks that a
   // cancel was sent (or must be re-sent once the racing prompt lands).
-  Running(cancel_requested~ : Bool)
+  // `compact_queued` marks a `/compact` accepted mid-turn: the command sits
+  // in the serve engine's queue behind this run, so the turn's terminal
+  // event must land in `Compacting`, not `Idle` — otherwise a prompt or an
+  // archive slips into the gap before the engine's `compaction_started`
+  // and the eventual `compaction_finished` would blindly idle it away.
+  Running(cancel_requested~ : Bool, compact_queued~ : Bool)
   // A `/compact` is rewriting the durable record: no run is open, but
-  // starts and archiving must wait. Entered by `compact_run` (idle send)
-  // or the engine's own `compaction_started`, left on
+  // starts and archiving must wait. Entered by `compact_run` (idle send),
+  // a run's terminal event with a compaction queued behind it, or the
+  // engine's own `compaction_started`; left on
   // `compaction_finished`/`compaction_failed` — or on engine death, which
   // reports a synthetic failure so the frontend never sticks.
   Compacting
+}
+
+///|
+/// The phase after a run's terminal event: straight into the compaction the
+/// turn queued behind itself, otherwise back between turns. The engine starts
+/// a queued compaction the moment the turn ends, so entering Compacting here
+/// (rather than waiting for its `compaction_started`) closes the window where
+/// a prompt or an archive could slip in ahead of it.
+fn EnginePhase::after_run_close(self : EnginePhase) -> EnginePhase {
+  if self is Running(compact_queued=true, ..) {
+    Compacting
+  } else {
+    Idle
+  }
 }
 
 ///|
@@ -595,10 +615,10 @@ async fn serve_engine_consumer(
           // The abort the user asked for: report it as a cancellation, the
           // same wire status the pre-serve host used.
           Some(AgentAborted(_)) if engine.phase
-            is Running(cancel_requested=true) => {
+            is Running(cancel_requested=true, ..) => {
             emit_error(sink, "cancelled", run_id~)
             emit_finished(sink, run_id, Cancelled)
-            engine.phase = Idle
+            engine.phase = engine.phase.after_run_close()
             engine.steer_runs.record_terminal(run_id)
           }
           Some(decoded) => {
@@ -606,7 +626,10 @@ async fn serve_engine_consumer(
             // their raw event as well would make the frontend render the same
             // failure twice.
             if !host_reports_terminal_error(decoded) {
-              emit(sink, StreamEvent({ run_id, event: raw }))
+              emit(
+                sink,
+                StreamEvent({ run_id, session: engine.session_key, event: raw }),
+              )
             }
             match decoded {
               // A compaction queued behind an open turn begins only now, so
@@ -623,11 +646,15 @@ async fn serve_engine_consumer(
               _ => ()
             }
             if handle_decoded_event(sink, run_id, decoded) {
-              engine.phase = Idle
+              engine.phase = engine.phase.after_run_close()
               engine.steer_runs.record_terminal(run_id)
             }
           }
-          None => emit(sink, StreamEvent({ run_id, event: raw }))
+          None =>
+            emit(
+              sink,
+              StreamEvent({ run_id, session: engine.session_key, event: raw }),
+            )
         }
       }
       StreamReaderFailed(message) => {
@@ -638,7 +665,7 @@ async fn serve_engine_consumer(
         // left to report for it).
         if engine.phase is Compacting {
           engine.phase = Idle
-          emit_compaction_failed(sink, engine.latest_run, message)
+          emit_compaction_failed(sink, engine, message)
         }
       }
       StreamExited(code) => {
@@ -651,7 +678,7 @@ async fn serve_engine_consumer(
         match engine.phase {
           // EOF with a run still open means the engine died mid-turn: close
           // that run with its only available diagnostics.
-          Running(..) => {
+          Running(compact_queued~, ..) => {
             engine.phase = Idle
             let diagnostics = stderr_task.wait().trim().to_owned()
             if diagnostics.is_empty() {
@@ -671,6 +698,16 @@ async fn serve_engine_consumer(
               )
             }
             emit_finished(sink, engine.latest_run, Failed, exit_code=code)
+            // A compaction queued behind the dead turn died with the engine;
+            // only a terminal compaction event clears the frontend's queued
+            // notice, so synthesize the failure it can no longer send.
+            if compact_queued {
+              emit_compaction_failed(
+                sink,
+                engine,
+                "engine exited before the queued compaction started",
+              )
+            }
           }
           // EOF mid-compaction: no run is open, but the frontend set its
           // compacting notice on compaction_started and only a terminal
@@ -684,7 +721,7 @@ async fn serve_engine_consumer(
             } else {
               "engine exited during compaction:\n" + diagnostics
             }
-            emit_compaction_failed(sink, engine.latest_run, reason)
+            emit_compaction_failed(sink, engine, reason)
           }
           // A clean exit after a terminal event (session switch, app
           // shutdown) reports nothing.
@@ -700,17 +737,18 @@ async fn serve_engine_consumer(
 /// A synthetic `compaction_failed` stream event for a compaction whose
 /// engine died before reporting one itself — the same wire shape the engine
 /// emits, so the frontend's one decoder clears its compacting notice either
-/// way. Routed by the engine's latest run id: the frontend matches
-/// compaction events to the conversation that last held the id.
+/// way. Routed like every compaction event: by the engine's session, with
+/// the latest run id as the frontend's fallback.
 async fn emit_compaction_failed(
   sink : EventSink,
-  run_id : Int,
+  engine : ServeEngine,
   reason : String,
 ) -> Unit {
   emit(
     sink,
     StreamEvent({
-      run_id,
+      run_id: engine.latest_run,
+      session: engine.session_key,
       event: { "event": "compaction_failed", "reason": Json::string(reason) },
     }),
   )
