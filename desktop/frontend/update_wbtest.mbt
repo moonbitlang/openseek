@@ -16,9 +16,7 @@ fn test_conversation() -> Conversation {
 fn running_conversation() -> Conversation {
   {
     ..test_conversation(),
-    running: true,
-    active_run_id: Some(7),
-    status: Running,
+    run: Open(run_id=7, stage=Opened),
   }
 }
 
@@ -26,7 +24,7 @@ fn running_conversation() -> Conversation {
 fn test_model() -> Model {
   {
     ..initial_model(),
-    bridge_ready: true,
+    bridge: Connected,
     api_key: "sk-test",
     active_session: "desktop-test",
     conversations: [test_conversation()],
@@ -140,7 +138,7 @@ test "finished run clears any leftover stream" {
     model,
   )
   inspect(next.active().streaming_response, content="")
-  inspect(next.active().running, content="false")
+  inspect(next.active().is_running(), content="false")
 }
 
 ///|
@@ -182,7 +180,6 @@ test "an idle background notice routes by the last run id" {
   // memory ties the id back to its conversation.
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    active_run_id: None,
     last_run_id: Some(7),
   })
   let notice = "[moon_check update]\nstatus=failed\nmain.mbt:1 error"
@@ -199,7 +196,7 @@ test "new chat keeps the model intact until the rotation lands" {
   let dispatch = test_dispatch()
   let model = { ..running_model(), loading_session: "desktop-stale" }
   let (_, next) = update(dispatch, NewChat, model)
-  inspect(next.active().running, content="true")
+  inspect(next.active().is_running(), content="true")
   inspect(next.loading_session, content="")
 }
 
@@ -247,7 +244,7 @@ test "session rotation activates a fresh conversation, keeping the old one" {
   guard next.find_conversation("desktop-test") is Some(old) else {
     fail("expected the old conversation to survive")
   }
-  inspect(old.running, content="true")
+  inspect(old.is_running(), content="true")
   inspect(old.messages.length(), content="1")
 }
 
@@ -308,9 +305,7 @@ test "open session switches to a live conversation without reloading it" {
   let dispatch = test_dispatch()
   let background = {
     ..empty_conversation("desktop-bg"),
-    running: true,
-    active_run_id: Some(9),
-    status: Running,
+    run: Open(run_id=9, stage=Opened),
     streaming_response: "mid-stream",
     messages: [{ kind: User, content: "background task" }],
   }
@@ -320,12 +315,12 @@ test "open session switches to a live conversation without reloading it" {
   inspect(once.active_session, content="desktop-bg")
   // The live state survives the switch: no reload, nothing reset.
   inspect(once.active().streaming_response, content="mid-stream")
-  inspect(once.active().running, content="true")
+  inspect(once.active().is_running(), content="true")
   // The previous conversation is still running in the background.
   guard once.find_conversation("desktop-test") is Some(old) else {
     fail("expected the old conversation to survive")
   }
-  inspect(old.running, content="true")
+  inspect(old.is_running(), content="true")
   inspect(twice.active_session, content="desktop-bg")
 }
 
@@ -468,7 +463,7 @@ test "session loaded is dropped only when that conversation is running" {
   guard other.find_conversation("desktop-test") is Some(live) else {
     fail("expected the running conversation to survive")
   }
-  inspect(live.running, content="true")
+  inspect(live.is_running(), content="true")
   // A stale load reply for the running conversation itself is dropped.
   let model = { ..running_model(), loading_session: "desktop-test" }
   let (_, same) = update(
@@ -477,7 +472,7 @@ test "session loaded is dropped only when that conversation is running" {
     model,
   )
   inspect(same.active().messages.length(), content="0")
-  inspect(same.active().running, content="true")
+  inspect(same.active().is_running(), content="true")
 }
 
 ///|
@@ -498,8 +493,8 @@ test "started routes by session and records the host's workspace" {
     next.active().cwd
     is Some(Absolute("/home/u/Documents/OpenSeek/desktop-test")),
   )
-  inspect(next.active().running, content="true")
-  guard next.active().active_run_id is Some(7) else {
+  inspect(next.active().is_running(), content="true")
+  guard next.active().run is Open(run_id=7, ..) else {
     fail("expected the run id to be recorded")
   }
 }
@@ -518,7 +513,7 @@ test "started for an unknown session leaves the model alone" {
     ),
     test_model(),
   )
-  inspect(next.active().running, content="false")
+  inspect(next.active().is_running(), content="false")
   inspect(next.conversations.length(), content="1")
 }
 
@@ -527,9 +522,7 @@ test "concurrent conversations keep their streams apart" {
   let dispatch = test_dispatch()
   let second = {
     ..empty_conversation("desktop-second"),
-    running: true,
-    active_run_id: Some(8),
-    status: Running,
+    run: Open(run_id=8, stage=Opened),
   }
   let model = running_model().replace_conversation(second)
   let (_, next) = update(dispatch, Engine(8, AssistantDelta("for B"), session=None), model)
@@ -546,9 +539,7 @@ test "a background run finishes without disturbing the conversation on screen" {
   let dispatch = test_dispatch()
   let second = {
     ..empty_conversation("desktop-second"),
-    running: true,
-    active_run_id: Some(8),
-    status: Running,
+    run: Open(run_id=8, stage=Opened),
     messages: [{ kind: User, content: "background ask" }],
   }
   let model = running_model().replace_conversation(second)
@@ -560,11 +551,11 @@ test "a background run finishes without disturbing the conversation on screen" {
   guard next.find_conversation("desktop-second") is Some(bg) else {
     fail("expected the background conversation")
   }
-  inspect(bg.running, content="false")
-  assert_true(bg.status is Finished(_))
+  inspect(bg.is_running(), content="false")
+  assert_true(bg.run is NoRun(ended=Some(RunFinished(_))))
   inspect(bg.messages[1].content, content="done")
   // The conversation on screen is still running its own turn.
-  inspect(next.active().running, content="true")
+  inspect(next.active().is_running(), content="true")
   assert_true(next.display_status() is Running)
 }
 
@@ -582,7 +573,7 @@ test "send while running queues a steer instead of a prompt" {
   inspect(once.active().pending_steers[0], content="focus on the tests")
   // The steer is pending, not part of the transcript yet.
   inspect(once.active().messages.length(), content="0")
-  inspect(once.active().running, content="true")
+  inspect(once.active().is_running(), content="true")
   inspect(twice.active().pending_steers.length(), content="1")
   inspect(twice.active().pending_steers[0], content="focus on the tests")
 }
@@ -592,7 +583,7 @@ test "a cancelling turn cannot be steered; the text stays in the composer" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
-    status: Cancelling,
+    run: Open(run_id=7, stage=Cancelling),
     task: "too late",
   })
   let (_, next) = update(dispatch, Send, model)
@@ -694,7 +685,7 @@ test "a run that ends with steers in flight sweeps them into notices" {
     model,
   )
   inspect(next.active().pending_steers.length(), content="0")
-  inspect(next.active().running, content="false")
+  inspect(next.active().is_running(), content="false")
   guard next.active().messages[0].kind is Assistant(true) else {
     fail("expected an error bubble")
   }
@@ -1730,7 +1721,7 @@ test "clicking Update goes straight to download when nothing runs" {
 test "clicking Update asks first while a conversation runs" {
   let dispatch = test_dispatch()
   let busy = {
-    ..test_model().replace_conversation({ ..test_conversation(), running: true }),
+    ..test_model().replace_conversation({ ..test_conversation(), run: Starting }),
     update_ux: UpdateAvailable(version="0.2.0", installable=true),
   }
   let (_, asked) = update(dispatch, UpdateClicked, busy)

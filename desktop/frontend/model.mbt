@@ -105,6 +105,47 @@ priv enum CompactionPhase {
 }
 
 ///|
+/// The run lifecycle of one conversation, as a single value: the old
+/// `running`/`active_run_id`/`status` trio encoded the same facts three ways
+/// and let them drift ("running with no id yet" was Starting only by
+/// convention; a status of Running with the flag down was expressible).
+/// Every gate reads this one field, so a phase the model forgot to track
+/// cannot exist.
+priv enum RunPhase {
+  // Between runs; `ended` remembers how the last one closed (`None` before
+  // the first run of this app-lifetime).
+  NoRun(ended~ : RunEnd?)
+  // Send accepted: the start op is in flight and no run id exists yet.
+  Starting
+  // The host's `started` event opened run `run_id`.
+  Open(run_id~ : Int, stage~ : TurnStage)
+}
+
+///|
+/// How far an open turn has progressed — one axis, like the old status
+/// column: a Stop overwrites the step display with "Cancelling" and stays
+/// there (steering a dying turn is refused, so a later step must not flip
+/// the gate back open).
+priv enum TurnStage {
+  // `started` arrived, no step event yet.
+  Opened
+  // The engine's latest 1-based step counter (`None` from engines that do
+  // not number their steps).
+  AtStep(Int?)
+  // A Stop was sent and the engine has not yet honored it.
+  Cancelling
+}
+
+///|
+/// How a finished run closed, kept for the topbar/sidebar after the run
+/// phase returns to `NoRun`.
+priv enum RunEnd {
+  RunFailed
+  RunErrored
+  RunFinished(RunOutcome)
+}
+
+///|
 /// One conversation's full client-side state. Each conversation maps to a
 /// durable engine session and, while running, to its own `--serve` engine
 /// process in the host — several conversations can run turns concurrently,
@@ -126,18 +167,17 @@ priv struct Conversation {
   // draft and so likewise per conversation. Expanded into the prompt on send,
   // then cleared with the text.
   mentions : Array[Mention]
-  running : Bool
-  active_run_id : Int?
+  // Where this conversation's run stands; see `RunPhase`. Replaces the old
+  // `running`/`active_run_id`/`status` trio, whose redundant encodings could
+  // drift apart (running with no id was "starting" only by convention).
+  run : RunPhase
   // The most recent run id this conversation has owned, kept after the run
   // finishes. Compaction is requested while the engine is idle, so its
-  // engine events arrive stamped with this id once `active_run_id` is already
-  // cleared; routing them needs the retained id.
+  // engine events arrive stamped with this id once the run phase is already
+  // back to `NoRun`; routing them needs the retained id.
   last_run_id : Int?
   // Where this conversation's compaction stands; see `CompactionPhase`.
   compaction : CompactionPhase
-  // Run-scoped status only (Idle/Starting/Running/…); bridge and settings
-  // states are derived at display time by `Model::display_status`.
-  status : Status
   // A run finished while this conversation was off screen and the user has
   // not looked since: the sidebar's running pulse settles into a solid dot
   // (accent for success, warn otherwise) until the conversation is opened.
@@ -268,10 +308,19 @@ priv enum SkillsCatalog {
 }
 
 ///|
+/// Whether the host bridge is up — three states the old `bridge_ready` bool
+/// plus "why not" string encoded with an empty-string sentinel: still
+/// probing for the injected bridge, connected, or given up with a reason.
+priv enum BridgeState {
+  Connecting
+  Connected
+  BridgeLost(String)
+}
+
+///|
 priv struct Model {
-  bridge_ready : Bool
-  // Why the bridge is unavailable; empty while still waiting or once ready.
-  bridge_error : String
+  // Whether the host bridge is up; see `BridgeState`.
+  bridge : BridgeState
   selected_model : String
   max_steps : String
   api_key : String
@@ -387,13 +436,22 @@ priv struct Model {
 
 ///|
 /// The topbar app launcher's state: whether its menu is open, the detected
-/// apps, whether they have been fetched yet, and the last probe failure (so a
-/// reopen can retry).
+/// apps as a fetch lifecycle (the old `loaded` flag plus error-string
+/// sentinel let "loaded with an error" and "failed but loaded" be written).
 priv struct Launcher {
   open : Bool
-  apps : Array[@transcript.LauncherAppItem]
-  loaded : Bool
-  error : String
+  apps : LauncherApps
+}
+
+///|
+/// The launcher's probe of the host's installed apps. There is no separate
+/// "fetching" state: a fetch is triggered by opening the menu, and until the
+/// reply lands the menu renders `AppsNotFetched` as "Finding apps…" (or
+/// keeps the previous failure on a retry, exactly as before).
+priv enum LauncherApps {
+  AppsNotFetched
+  AppsFetched(Array[@transcript.LauncherAppItem])
+  AppsFailed(String)
 }
 
 ///|
@@ -661,11 +719,9 @@ fn empty_conversation(
     workspace: workspace_root(workspace),
     task: "",
     mentions: [],
-    running: false,
-    active_run_id: None,
+    run: NoRun(ended=None),
     last_run_id: None,
     compaction: NotCompacting,
-    status: Idle,
     unseen_finish: false,
     usage_tokens: 0,
     cwd: None,
@@ -681,8 +737,7 @@ fn empty_conversation(
 ///|
 fn initial_model() -> Model {
   {
-    bridge_ready: false,
-    bridge_error: "",
+    bridge: Connecting,
     selected_model: DefaultModel,
     max_steps: DefaultMaxSteps,
     api_key: "",
@@ -715,7 +770,7 @@ fn initial_model() -> Model {
     skills_notice: "",
     completion: None,
     symbol_cache: empty_symbol_cache(),
-    launcher: { open: false, apps: [], loaded: false, error: "" },
+    launcher: { open: false, apps: AppsNotFetched },
     file_panel: @fileeditor.State::empty(),
     notifications: [],
     notification_seq: 0,
@@ -801,16 +856,20 @@ fn Model::settings_status(self : Model) -> Status {
 /// the settings-derived readiness. Purely derived, so update handlers never
 /// have to keep a stored status in sync with settings changes.
 fn Model::display_status(self : Model) -> Status {
-  if !self.bridge_ready {
-    if self.bridge_error.is_empty() {
-      WaitingBridge
-    } else {
-      Unavailable(self.bridge_error)
+  match self.bridge {
+    Connecting => WaitingBridge
+    BridgeLost(message) => Unavailable(message)
+    Connected =>
+    match self.active().run {
+      NoRun(ended=None) => self.settings_status()
+      NoRun(ended=Some(RunFailed)) => Failed
+      NoRun(ended=Some(RunErrored)) => Errored
+      NoRun(ended=Some(RunFinished(outcome))) => Finished(outcome)
+      Starting => Starting
+      Open(stage=Opened, ..) => Running
+      Open(stage=AtStep(step), ..) => Step(step)
+      Open(stage=Cancelling, ..) => Cancelling
     }
-  } else if self.active().status is Idle {
-    self.settings_status()
-  } else {
-    self.active().status
   }
 }
 
@@ -890,7 +949,7 @@ fn Model::replace_conversation(self : Model, conv : Conversation) -> Model {
 /// so a backgrounded conversation keeps receiving its own stream.
 fn Model::conversation_by_run(self : Model, run_id : Int) -> Conversation? {
   for conv in self.conversations {
-    if conv.active_run_id is Some(active) && active == run_id {
+    if conv.run is Open(run_id=active, ..) && active == run_id {
       return Some(conv)
     }
   }
@@ -923,7 +982,7 @@ fn Model::activate(self : Model, session_id : String) -> Model {
       found = true
       // Opening the conversation is what "seen" means.
       conversations.push({ ..conv, unseen_finish: false })
-    } else if conv.running || conv.messages.length() > 0 || !conv.draft_empty() {
+    } else if conv.is_running() || conv.messages.length() > 0 || !conv.draft_empty() {
       conversations.push(conv)
     }
   }
@@ -955,7 +1014,14 @@ fn Conversation::draft_sendable(self : Conversation) -> Bool {
 /// or transcript items from one. A fresh "New chat" (even with a typed
 /// draft) has not, and stays out of the sidebar until its first send.
 fn Conversation::has_begun(self : Conversation) -> Bool {
-  self.running || self.messages.length() > 0
+  self.is_running() || self.messages.length() > 0
+}
+
+///|
+/// A run is in flight for this conversation — starting or open. The send
+/// composer, sidebar pulse, and self-update busy check all gate on this.
+fn Conversation::is_running(self : Conversation) -> Bool {
+  !(self.run is NoRun(..))
 }
 
 ///|
@@ -1083,13 +1149,11 @@ fn RunOutcome::label(self : RunOutcome) -> String {
 }
 
 ///|
-/// A single source of truth for run/setup state. The display label and its
-/// severity are both derived from the variant so they cannot drift. A
-/// conversation only ever stores the run-scoped variants (`Idle` through
-/// `Finished`); the bridge/settings variants exist for `display_status`,
-/// which substitutes them for `Idle` at render time.
+/// What the top bar shows, purely a display projection: `display_status`
+/// derives it per render from the bridge state, the active conversation's
+/// run phase, and the settings — nothing stores a `Status`, so the label and
+/// its severity cannot drift from the state they describe.
 priv enum Status {
-  Idle
   WaitingBridge
   Ready
   SetupRequired
@@ -1109,9 +1173,6 @@ priv enum Status {
 ///|
 fn Status::label(self : Status) -> String {
   match self {
-    // Never rendered: `display_status` replaces an idle conversation's
-    // status with the settings-derived one.
-    Idle => "Idle"
     WaitingBridge => "Waiting for bridge"
     Ready => "Ready"
     SetupRequired => "Setup required"
@@ -1130,7 +1191,7 @@ fn Status::label(self : Status) -> String {
 ///|
 fn Status::kind(self : Status) -> StatusKind {
   match self {
-    Idle | WaitingBridge => Neutral
+    WaitingBridge => Neutral
     Ready => Ok
     SetupRequired
     | ApiKeyRequired

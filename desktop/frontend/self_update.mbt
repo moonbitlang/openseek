@@ -151,5 +151,5 @@ fn download_update(
 fn Model::any_conversation_busy(self : Model) -> Bool {
   self.conversations
   .iter()
-  .any(conv => conv.running || !(conv.compaction is NotCompacting))
+  .any(conv => conv.is_running() || !(conv.compaction is NotCompacting))
 }

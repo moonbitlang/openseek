@@ -1,6 +1,6 @@
 ///|
 fn can_stop(conv : Conversation) -> Bool {
-  conv.running && conv.active_run_id is Some(_)
+  conv.run is Open(..)
 }
 
 ///|
@@ -117,17 +117,23 @@ fn session_row(
 ) -> @html.Html {
   let active = session_id == model.active_session
   let conv = model.find_conversation(session_id)
-  let running = conv is Some(conv) && conv.running
+  let running = conv is Some(conv) && conv.is_running()
   // The row's status dot: pulsing while a run is in flight, then — when the
   // run finished off screen — settling into a solid dot (accent for success,
   // warn otherwise) until the conversation is opened (`Model::activate`
   // clears the mark).
   let dot = match conv {
-    Some(conv) if conv.running => Some("accent pulse")
+    Some(conv) if conv.is_running() => Some("accent pulse")
     Some(conv) if conv.unseen_finish && !active =>
       // Success wears accent (continuity with the running pulse), any other
       // ending warn — the same success/other split `Status::kind` draws.
-      Some(if conv.status.kind() is Ok { "accent" } else { "warn" })
+      Some(
+        if conv.run is NoRun(ended=Some(RunFinished(Completed))) {
+          "accent"
+        } else {
+          "warn"
+        },
+      )
     _ => None
   }
   let mut class = "conversation-row"
@@ -1357,13 +1363,13 @@ fn mention_tray(dispatch : @cmd.Emit[Msg], conv : Conversation) -> @html.Html {
 ///|
 fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let conv = model.active()
-  let has_input = model.bridge_ready &&
+  let has_input = model.bridge is Connected &&
     model.api_ready() &&
     conv.draft_sendable()
   // A compacting conversation cannot accept a prompt either: the serve
   // engine would queue it behind the compaction, where Stop cannot reach it.
   // Every unsettled phase — requested, queued, or running — holds the gate.
-  let can_send = !conv.running &&
+  let can_send = !conv.is_running() &&
     conv.compaction is NotCompacting &&
     has_input
   // The left status group: the model, plus the workspace's git branch (moved
@@ -1381,7 +1387,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let controls : Array[@html.Html] = [
     @html.div(class="composer-status", status),
   ]
-  if conv.running {
+  if conv.is_running() {
     // One morphing button while this conversation's turn runs: a sendable
     // draft (typed text) turns it into a steer submit, anything else —
     // empty, or chips still waiting for their instruction — leaves it as the
@@ -1399,7 +1405,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ),
       )
     } else {
-      let can_steer = has_input && !(conv.status is Cancelling)
+      let can_steer = has_input && !(conv.run is Open(stage=Cancelling, ..))
       controls.push(
         @html.button(
           id="send",
@@ -1456,7 +1462,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     @html.textarea(
       id="task",
       value=conv.task,
-      placeholder=if conv.running {
+      placeholder=if conv.is_running() {
         "Steer the running task — your message joins it at the next step."
       } else {
         "Ask OpenSeek to inspect, edit, or explain this workspace."
@@ -2017,7 +2023,7 @@ fn skills_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 fn run_indicator(model : Model) -> @html.Html {
   let status = model.display_status()
   let label = status.label()
-  if model.active().running {
+  if model.active().is_running() {
     @html.div(class="run-status accent", [
       @html.span(class="run-dot accent pulse", ""),
       @html.span(class="run-text", label),
@@ -2058,14 +2064,14 @@ fn app_initial(name : String) -> String {
 /// loading / error / empty notice when there is nothing to list.
 fn launcher_menu(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let rows : Array[@html.Html] = []
-  if !model.launcher.error.is_empty() {
-    rows.push(@html.div(class="launcher-empty danger", model.launcher.error))
-  } else if !model.launcher.loaded {
-    rows.push(@html.div(class="launcher-empty", "Finding apps…"))
-  } else if model.launcher.apps.is_empty() {
-    rows.push(@html.div(class="launcher-empty", "No apps found"))
-  } else {
-    for app in model.launcher.apps {
+  match model.launcher.apps {
+    AppsFailed(message) =>
+      rows.push(@html.div(class="launcher-empty danger", message))
+    AppsNotFetched =>
+      rows.push(@html.div(class="launcher-empty", "Finding apps…"))
+    AppsFetched([]) => rows.push(@html.div(class="launcher-empty", "No apps found"))
+    AppsFetched(apps) =>
+      for app in apps {
       let icon = if app.icon.is_empty() {
         @html.span(class="launcher-icon letter", app_initial(app.name))
       } else {
@@ -2098,7 +2104,7 @@ fn launcher_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // A conversation's workspace exists only once it has run; a fresh chat with
   // no turn yet has nothing to open, so the launcher is disabled until then.
   let conv = model.active()
-  let ready = !conv.messages.is_empty() || conv.running
+  let ready = !conv.messages.is_empty() || conv.is_running()
   let children : Array[@html.Html] = [
     @html.button(
       class=if model.launcher.open {

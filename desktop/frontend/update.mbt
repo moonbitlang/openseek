@@ -281,7 +281,7 @@ fn run_slash_command(
               // conversation gets its engine spawned on demand) — a prompt
               // sent into either gap would be consumed and rejected instead
               // of held. compaction_started confirms; CompactRejected clears.
-              compaction: if conv.running { Queued } else { Requested },
+              compaction: if conv.is_running() { Queued } else { Requested },
             }),
             completion: None,
           },
@@ -301,7 +301,21 @@ fn apply_engine_event(
   event : @transcript.EngineEvent,
 ) -> (Bool, Conversation) {
   match event {
-    AgentStep(step) => (false, { ..conv.clear_streams(), status: Step(step) })
+    AgentStep(step) => {
+      let conv = conv.clear_streams()
+      (
+        false,
+        // A step can only advance an open, uncancelled turn: after a Stop the
+        // stage stays Cancelling (steering a dying turn is refused, so the
+        // display must not flip the gate back open), and a stray step for a
+        // closed run changes nothing.
+        if conv.run is Open(run_id~, stage~) && !(stage is Cancelling) {
+          { ..conv, run: Open(run_id~, stage=AtStep(step)) }
+        } else {
+          conv
+        },
+      )
+    }
     AssistantDelta(content) =>
       if content.is_empty() {
         (false, conv)
@@ -538,8 +552,7 @@ fn update_msg(
         ]),
         {
           ..model,
-          bridge_ready: true,
-          bridge_error: "",
+          bridge: Connected,
           // An unusable endpoint routes straight to Settings — the composer
           // could do nothing anyway.
           screen: if model.api_ready() {
@@ -550,7 +563,7 @@ fn update_msg(
         },
       )
     BridgeUnavailable(message) =>
-      (@cmd.none, { ..model, bridge_ready: false, bridge_error: message })
+      (@cmd.none, { ..model, bridge: BridgeLost(message) })
     SettingsLoaded(
       provider~,
       custom_url~,
@@ -994,16 +1007,18 @@ fn update_msg(
       // `<user_mentions>` envelope. Typed text is required — chips alone are
       // context without an instruction and stay in the composer.
       let task = compose_prompt(conv.mentions, conv.task).trim().to_owned()
-      if !conv.draft_sendable() || !model.bridge_ready || !model.api_ready() {
+      if !conv.draft_sendable() ||
+        !(model.bridge is Connected) ||
+        !model.api_ready() {
         (@cmd.none, model)
-      } else if conv.running {
+      } else if conv.is_running() {
         // Submitting while this conversation's turn runs steers it: the text
         // is folded into the running turn at its next step boundary and
         // echoed back as a `steer_applied` event. A turn being cancelled
         // cannot be steered — the steer could outlive the dying turn in the
         // engine's queue and contaminate a later prompt — so the text stays
         // in the composer.
-        if conv.active_run_id is Some(run_id) && !(conv.status is Cancelling) {
+        if conv.run is Open(run_id~, stage~) && !(stage is Cancelling) {
           let pending_steers = conv.pending_steers.copy()
           pending_steers.push(task)
           (
@@ -1040,9 +1055,7 @@ fn update_msg(
           ..next,
           task: "",
           mentions: [],
-          running: true,
-          active_run_id: None,
-          status: Starting,
+          run: Starting,
           usage_tokens: 0,
         }
         (
@@ -1092,10 +1105,13 @@ fn update_msg(
       }
     Stop => {
       let conv = model.active()
-      if conv.running && conv.active_run_id is Some(run_id) {
+      if conv.run is Open(run_id~, ..) {
         (
           cancel_openseek(dispatch, run_id),
-          model.replace_conversation({ ..conv, status: Cancelling }),
+          model.replace_conversation({
+            ..conv,
+            run: Open(run_id~, stage=Cancelling),
+          }),
         )
       } else {
         (@cmd.none, model)
@@ -1129,7 +1145,7 @@ fn update_msg(
       let conversations = activated.conversations.map(conv => {
         if conv.session_id == session_id &&
           conv.messages.length() == 0 &&
-          !conv.running {
+          !conv.is_running() {
           { ..conv, workspace: workspace_root(model.active_workspace) }
         } else {
           conv
@@ -1278,7 +1294,7 @@ fn update_msg(
       if model.loading_session != session_id {
         (@cmd.none, model)
       } else if model.find_conversation(session_id) is Some(conv) &&
-        conv.running {
+        conv.is_running() {
         // A run that started in this conversation while the load was in flight
         // wins; dropping the reply keeps the live state intact.
         (@cmd.none, { ..model, loading_session: "" })
@@ -1331,7 +1347,7 @@ fn update_msg(
       let opening = !model.launcher.open
       // Probe the host the first time the menu opens (and again after a
       // failure); the result is kept for the app run.
-      let cmd = if opening && !model.launcher.loaded {
+      let cmd = if opening && !(model.launcher.apps is AppsFetched(_)) {
         fetch_apps(dispatch)
       } else {
         @cmd.none
@@ -1343,7 +1359,7 @@ fn update_msg(
         @cmd.none,
         {
           ..model,
-          launcher: { ..model.launcher, apps, loaded: true, error: "" },
+          launcher: { ..model.launcher, apps: AppsFetched(apps) },
         },
       )
     LauncherFailed(message) =>
@@ -1351,7 +1367,7 @@ fn update_msg(
         @cmd.none,
         {
           ..model,
-          launcher: { ..model.launcher, loaded: false, error: message },
+          launcher: { ..model.launcher, apps: AppsFailed(message) },
         },
       )
     LaunchApp(app) => {
@@ -1365,10 +1381,8 @@ fn update_msg(
       if model.find_conversation(session) is Some(conv) {
         let updated = model.replace_conversation({
           ..conv,
-          running: true,
-          active_run_id: Some(run_id),
+          run: Open(run_id~, stage=Opened),
           last_run_id: Some(run_id),
-          status: Running,
           // A started run always reports its directory, but a malformed
           // event decodes as `None`; keeping the previous root beats
           // forgetting one we already knew.
@@ -1449,9 +1463,7 @@ fn update_msg(
           .clear_streams()
           .sweep_pending_steers()
           .append_item(Assistant(true), message),
-          running: false,
-          active_run_id: None,
-          status: Failed,
+          run: NoRun(ended=Some(RunFailed)),
         }
         (
           @cmd.batch([
@@ -1493,12 +1505,19 @@ fn update_msg(
         } else {
           message
         }
+        // Mid-run the error is transient — the host closes the run with its
+        // own finished event moments later, and that verdict wins; only an
+        // idle conversation keeps the error as how things stand.
+        let next = conv.append_item(Assistant(true), content)
         (
           scroll_if_active(model, conv.session_id),
-          model.replace_conversation({
-            ..conv.append_item(Assistant(true), content),
-            status: Errored,
-          }),
+          model.replace_conversation(
+            if next.run is NoRun(..) {
+              { ..next, run: NoRun(ended=Some(RunErrored)) }
+            } else {
+              next
+            },
+          ),
         )
       } else {
         (@cmd.none, model)
@@ -1523,9 +1542,7 @@ fn update_msg(
         // steers still in flight.
         let base = {
           ..conv.clear_streams().sweep_pending_steers(),
-          running: false,
-          active_run_id: None,
-          status: Finished(RunOutcome::parse(status)),
+          run: NoRun(ended=Some(RunFinished(RunOutcome::parse(status)))),
           // A finish the user watched happen needs no reminder; one landing
           // in a background conversation leaves a dot until they visit.
           unseen_finish: conv.session_id != model.active_session,
