@@ -9,7 +9,7 @@ import {
   "moonbit-community/fuzzy_match@0.2.5",
   "moonbit-community/rabbita@0.12.4",
   "moonbitlang/x@0.4.45",
-  "moonbitlang/async@0.19.4",
+  "moonbitlang/async@0.20.1",
   "justjavac/proton@0.1.6",
   "tonyfettes/platform@0.1.1",
   "tonyfettes/xlog@0.4.0",
