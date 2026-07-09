@@ -9,7 +9,12 @@ fn test_emit() -> @cmd.Emit[Msg] {
 
 ///|
 fn test_ctx() -> Ctx {
-  { session: "desktop-test", workspace: None, dark_mode: false }
+  {
+    session: "desktop-test",
+    workspace: None,
+    dark_mode: false,
+    tree_layout: BottomPanel,
+  }
 }
 
 ///|
@@ -220,6 +225,7 @@ test "sync parks the outgoing conversation's tabs and restores them later" {
     session: "other-session",
     workspace: None,
     dark_mode: false,
+    tree_layout: BottomPanel,
   }
   let (parked, _) = sync(emit, state, other)
   assert_eq(parked.session, "other-session")
@@ -255,6 +261,7 @@ test "a closed panel still re-roots when the conversation switches" {
     session: "other-session",
     workspace: None,
     dark_mode: false,
+    tree_layout: BottomPanel,
   }
   let (parked, _) = sync(emit, state, other)
   assert_eq(parked.session, "other-session")

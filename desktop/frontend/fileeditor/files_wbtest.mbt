@@ -50,6 +50,22 @@ test "decode_dir_entries rejects structurally unusable replies" {
 }
 
 ///|
+test "decode_file_index parses paths, truncation, and rejects garbage" {
+  let reply =
+    #|{"files":["moon.mod","src/lib.mbt",42,""],"truncated":true}
+  let (files, truncated) = decode_file_index(reply).unwrap()
+  // The non-string and empty rows are dropped.
+  assert_eq(files.length(), 2)
+  assert_eq(files[0].0, "moon.mod")
+  assert_eq(files[1].0, "src/lib.mbt")
+  assert_true(truncated)
+  assert_true(decode_file_index("{\"files\":[]}").unwrap().0.is_empty())
+  assert_false(decode_file_index("{\"files\":[]}").unwrap().1)
+  assert_true(decode_file_index("not json") is None)
+  assert_true(decode_file_index("{\"files\":42}") is None)
+}
+
+///|
 test "decode_file_content decodes each reply kind" {
   assert_true(
     decode_file_content(

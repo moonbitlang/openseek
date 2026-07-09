@@ -11,6 +11,7 @@ pub fn mount_cmds(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.batch([
     request_viewer_mount(dispatch),
     request_resize_handle_mount(),
+    request_tree_resize_mount(),
     request_viewer_remeasure(),
   ])
 }
@@ -100,18 +101,23 @@ fn open_or_activate(
     tabs.push({ path, name, state: TabLoading, stale: false })
     tabs
   }
-  (
-    read_file(
-      dispatch,
-      ctx.session,
-      path,
-      name,
-      range~,
-      annotation?,
-      workspace=ctx.workspace,
-    ),
-    { ..state, tabs, active: Some(path), error: "" },
+  let read = read_file(
+    dispatch,
+    ctx.session,
+    path,
+    name,
+    range~,
+    annotation?,
+    workspace=ctx.workspace,
   )
+  // Gaining the first active tab reveals the breadcrumb row, so the viewer
+  // must remeasure before the reply's document lands.
+  let cmd = if state.active is None {
+    @cmd.batch([read, request_viewer_remeasure()])
+  } else {
+    read
+  }
+  (cmd, { ..state, tabs, active: Some(path), error: "" })
 }
 
 ///|
@@ -291,10 +297,17 @@ pub fn update(
       }
       (@cmd.batch(cmds), { ..state, open: opening })
     }
-    ToggleTree =>
-      // The viewer's width changes with the pane, and it cannot see a CSS
-      // change on its own.
-      (request_viewer_remeasure(), { ..state, tree_open: !state.tree_open })
+    ToggleTree => {
+      // The docked panel takes its height from the viewer, and the viewer
+      // cannot see a CSS change on its own. Opening also puts the keyboard
+      // in the filter input, so the panel is drivable without the mouse.
+      let opening = !state.tree_open
+      let cmds = [request_viewer_remeasure()]
+      if opening {
+        cmds.push(focus_filter_after_render())
+      }
+      (@cmd.batch(cmds), { ..state, tree_open: opening })
+    }
     TabActivated(path) =>
       if state.active == Some(path) {
         (@cmd.none, state)
@@ -327,10 +340,15 @@ pub fn update(
                 { ..state, tabs, active: Some(tab.path) },
               )
             // The last tab: fall back to the placeholder and force the tree
-            // open so the panel is never a dead pane.
+            // open so the panel is never a dead pane. Losing the active tab
+            // also hides the breadcrumb row, so the viewer must remeasure.
             None =>
               (
-                @cmd.batch([clear_document(), forget_view_state(path)]),
+                @cmd.batch([
+                  clear_document(),
+                  forget_view_state(path),
+                  request_viewer_remeasure(),
+                ]),
                 { ..state, tabs, active: None, tree_open: true },
               )
           }
@@ -403,7 +421,72 @@ pub fn update(
           )
         }
       }
-    FileFilterChanged(query) => (@cmd.none, { ..state, filter: query })
+    FileFilterChanged(query) => {
+      // A new query re-flattens the rows, so the old cursor position is
+      // meaningless; the next ↑/↓ re-enters at an edge.
+      let state = { ..state, filter: query, cursor: None }
+      // The first non-blank query is what makes the workspace index worth
+      // building. Setting `IndexLoading` right away keeps the keystrokes
+      // that follow from stacking duplicate requests.
+      if !query.trim().is_empty() && state.index is IndexEmpty {
+        (
+          list_files(dispatch, ctx.session, workspace=ctx.workspace),
+          { ..state, index: IndexLoading },
+        )
+      } else {
+        (@cmd.none, state)
+      }
+    }
+    TreeKeyMove(delta~) => {
+      let entries = visible_entries(state)
+      guard entries.length() > 0 else { return (@cmd.none, state) }
+      let index = match cursor_index(state, entries) {
+        Some(index) => (index + delta).clamp(min=0, max=entries.length() - 1)
+        // First move (or the cursor's row vanished): enter the list at the
+        // edge the key points away from.
+        None => if delta > 0 { 0 } else { entries.length() - 1 }
+      }
+      let path = entries[index].0.path
+      (scroll_cursor_after_render(path), { ..state, cursor: Some(path) })
+    }
+    TreeKeyAccept => {
+      let entries = visible_entries(state)
+      // The cursor's row; without one, a non-blank filter acts on its top
+      // match, so "type then Enter" needs no arrow keys.
+      let target = match cursor_index(state, entries) {
+        Some(index) => Some(entries[index].0)
+        None =>
+          if !state.filter.trim().is_empty() && entries.length() > 0 {
+            Some(entries[0].0)
+          } else {
+            None
+          }
+      }
+      match target {
+        Some(entry) =>
+          if entry.is_dir {
+            update(dispatch, DirToggle(entry.path), state, ctx)
+          } else {
+            update(
+              dispatch,
+              FileSelected(path=entry.path, name=entry.name),
+              state,
+              ctx,
+            )
+          }
+        None => (@cmd.none, state)
+      }
+    }
+    TreeKeyDismiss =>
+      if !state.filter.trim().is_empty() {
+        (@cmd.none, { ..state, filter: "", cursor: None })
+      } else if state.active is Some(_) {
+        // Close the panel like ToggleTree; with no file open the tree is
+        // unconditional (see panel_view), so there is nothing to close into.
+        (request_viewer_remeasure(), { ..state, tree_open: false })
+      } else {
+        (@cmd.none, state)
+      }
     DirLoaded(session~, path~, entries~) =>
       // Drop a reply whose conversation is no longer the panel's.
       if state.session != session {
@@ -442,6 +525,20 @@ pub fn update(
             error: message,
           },
         )
+      }
+    FilesIndexed(session~, files~, truncated~) =>
+      if state.session != session {
+        (@cmd.none, state)
+      } else {
+        (@cmd.none, { ..state, index: IndexReady(files~, truncated~) })
+      }
+    FileIndexFailed(session~) =>
+      // Only a failed first fetch drops back to retry-on-keystroke; a failed
+      // refresh keeps serving the index it already has.
+      if state.session != session || !(state.index is IndexLoading) {
+        (@cmd.none, state)
+      } else {
+        (@cmd.none, { ..state, index: IndexEmpty })
       }
     FileSelected(path~, name~) =>
       open_or_activate(dispatch, state, ctx, path, name, range=None)
@@ -536,6 +633,12 @@ pub fn update(
         cmds.push(
           read_directory(dispatch, state.session, dir, workspace=ctx.workspace),
         )
+      }
+      // The fuzzy filter's index goes stale with the tree; rebuild it if
+      // anyone has ever needed it (the reply just replaces the old list, so
+      // the filter keeps showing the previous matches meanwhile).
+      if !(state.index is IndexEmpty) {
+        cmds.push(list_files(dispatch, state.session, workspace=ctx.workspace))
       }
       (@cmd.batch(cmds), { ..state, loading, })
     }

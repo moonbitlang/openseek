@@ -244,6 +244,26 @@ priv struct ReadDirReply {
 } derive(ToJson)
 
 ///|
+/// `list_files` enumerates every file under the conversation's workspace
+/// (recursively, pruning the same churn directories the watcher skips) for
+/// the editor panel's fuzzy file finder. One flat snapshot, not a live view —
+/// the panel re-requests it on `fs_changed`.
+priv struct ListFilesPayload {
+  session : String
+  // The conversation's workspace, when it has one (see `read_directory`).
+  workspace : String?
+} derive(FromJson)
+
+///|
+/// Reply to `list_files`: workspace-relative `/`-separated file paths, in
+/// depth-first lexicographic order. `truncated` is set when the walk hit the
+/// index cap and stopped, so the frontend knows the list is partial.
+priv struct ListFilesReply {
+  files : Array[String]
+  truncated : Bool
+} derive(ToJson)
+
+///|
 priv struct ReadFilePayload {
   session : String
   path : String

@@ -73,6 +73,7 @@ pub fn openseek_extension(
       @app.AppCommandApiDescriptor::new("list_apps"),
       @app.AppCommandApiDescriptor::new("launch_app"),
       @app.AppCommandApiDescriptor::new("read_directory"),
+      @app.AppCommandApiDescriptor::new("list_files"),
       @app.AppCommandApiDescriptor::new("read_file"),
       @app.AppCommandApiDescriptor::new("stat_files"),
       @app.AppCommandApiDescriptor::new("watch_workspace"),
@@ -230,6 +231,9 @@ pub fn openseek_extension(
       })
       context.op_async("read_directory", async fn(payload : ReadDirPayload) {
         read_directory_op(payload)
+      })
+      context.op_async("list_files", async fn(payload : ListFilesPayload) {
+        list_files_op(payload)
       })
       context.op_async("read_file", async fn(payload : ReadFilePayload) {
         read_file_op(payload)

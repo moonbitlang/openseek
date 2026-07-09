@@ -32,6 +32,10 @@ const WslEngineStorageKey : String = "openseek.wsl_engine"
 const NotificationCornerStorageKey : String = "openseek.notification_corner"
 
 ///|
+/// Where the editor panel's file tree docks (bottom panel / right sidebar).
+const TreeLayoutStorageKey : String = "openseek.tree_layout"
+
+///|
 /// Which release stream updates come from; stores "staging" for the staging
 /// server, anything else reads as production.
 const UpdateChannelStorageKey : String = "openseek.update_channel"
@@ -350,6 +354,8 @@ priv struct Model {
   notification_seq : Int
   // Which window corner toasts pop up in; a Settings choice, persisted.
   notification_corner : NotificationCorner
+  // Where the editor panel's file tree docks; a Settings choice, persisted.
+  tree_layout : @fileeditor.TreeLayout
   // Which release stream `check_update` asks; a Settings choice, persisted.
   update_channel : UpdateChannel
   // Where the self-update flow stands, from "never checked" through the
@@ -386,6 +392,7 @@ priv enum Msg {
     wsl_distro~ : String,
     wsl_engine~ : String,
     notification_corner~ : String,
+    tree_layout~ : String,
     update_channel~ : String
   )
   TaskChanged(String)
@@ -436,6 +443,8 @@ priv enum Msg {
   WslEngineChanged(String)
   // The Settings choice of which window corner error toasts pop up in.
   NotificationCornerChanged(String)
+  // The Settings choice of where the editor's file tree docks.
+  TreeLayoutChanged(String)
   // A toast's lifetime elapsed; drops it unless a click already did.
   NotificationExpired(Int)
   // A toast was clicked: dismiss it now.
@@ -675,6 +684,7 @@ fn initial_model() -> Model {
     notifications: [],
     notification_seq: 0,
     notification_corner: BottomRight,
+    tree_layout: RightSidebar,
     update_channel: Production,
     update_ux: UpdateUnknown,
   }

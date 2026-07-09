@@ -764,6 +764,7 @@ test "loaded settings open the popup only when incomplete" {
       wsl_distro="",
       wsl_engine="",
       notification_corner="",
+      tree_layout="",
       update_channel="",
     ),
     test_model(),
@@ -782,6 +783,7 @@ test "loaded settings open the popup only when incomplete" {
       wsl_distro="",
       wsl_engine="",
       notification_corner="",
+      tree_layout="",
       update_channel="",
     ),
     test_model(),
@@ -799,6 +801,7 @@ test "loaded settings open the popup only when incomplete" {
       wsl_distro=" Ubuntu ",
       wsl_engine="/usr/local/bin/openseek",
       notification_corner="top-left",
+      tree_layout="",
       update_channel="staging",
     ),
     test_model(),
@@ -825,6 +828,7 @@ test "loaded settings open the popup only when incomplete" {
       wsl_distro="",
       wsl_engine="",
       notification_corner="",
+      tree_layout="",
       update_channel="",
     ),
     test_model(),
@@ -848,6 +852,20 @@ test "the notification-corner setting parses its wire names" {
     moved,
   )
   assert_true(unknown.notification_corner is BottomRight)
+}
+
+///|
+test "the tree-layout setting parses its wire names" {
+  let dispatch = test_dispatch()
+  let (_, docked) = update(
+    dispatch,
+    TreeLayoutChanged("bottom-panel"),
+    test_model(),
+  )
+  assert_true(docked.tree_layout is BottomPanel)
+  // An unknown stored value falls back to the default right sidebar.
+  let (_, unknown) = update(dispatch, TreeLayoutChanged("floating"), docked)
+  assert_true(unknown.tree_layout is RightSidebar)
 }
 
 ///|

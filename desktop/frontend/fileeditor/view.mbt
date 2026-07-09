@@ -66,7 +66,21 @@ pub fn panel_view(
     attrs=@html.Attrs::build().id(ResizeHandleId).class("editor-resize-handle"),
     ([] : Array[@html.Html]),
   )
-  @html.div(class=if state.tree_open { "editor tree-open" } else { "editor" }, [
+  // With no file open the breadcrumb row hides (see `viewer_breadcrumb`) and
+  // takes the tree toggle with it, so the tree must show regardless of the
+  // toggle's state — the panel is otherwise a dead pane.
+  let tree_visible = state.tree_open || state.active is None
+  // The dock layout is a class, not structure: both layouts render the same
+  // children in the same order (CSS flips the body's flex direction), so
+  // switching in Settings never re-keys the viewer host.
+  let mut classes = "editor"
+  if tree_visible {
+    classes = classes + " tree-open"
+  }
+  if ctx.tree_layout is RightSidebar {
+    classes = classes + " tree-right"
+  }
+  @html.div(class=classes, [
     resize_handle,
     tabs_bar(dispatch, state),
     viewer_breadcrumb(dispatch, state),
@@ -154,45 +168,60 @@ fn viewer_notice(state : State) -> @html.Html {
 }
 
 ///|
-/// The toggleable file-tree pane on the viewer's right: the filter header,
-/// the last fs failure (blank and collapsed while there is none — rendered
-/// unconditionally so the rows below never shift index), and the tree rows.
+/// The toggleable file-tree panel, docked flat under the viewer like an
+/// Emacs bottom window: the tree rows, the last fs failure (blank and
+/// collapsed while there is none — rendered unconditionally so the rows
+/// never shift index), and the minibuffer-style filter line at the bottom
+/// edge.
 fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html {
-  let query = state.filter.trim().to_owned()
+  let entries = visible_entries(state)
+  // The filter's query, rebuilt here only to split each row's path into
+  // matched/unmatched sections for highlighting — the rows themselves were
+  // already ranked by `visible_entries`.
+  let fuzzy = if state.filter.trim().is_empty() {
+    None
+  } else {
+    Some(@fuzzy_match.Query::new(state.filter.trim().to_owned()))
+  }
   let tree_children = if ctx.session.is_empty() {
     [@html.div(class="file-panel-empty", "No conversation selected.")]
   } else if !state.children.contains("") {
     [@html.div(class="file-panel-empty", "Loading…")]
-  } else if !query.is_empty() {
-    // Filtering flattens the loaded tree to the matching rows.
-    let rows = []
-    filtered_file_rows(dispatch, state, "", query.to_lower(), rows)
-    if rows.is_empty() {
-      [@html.div(class="file-panel-empty", "No file matches the filter.")]
-    } else {
-      rows
-    }
-  } else {
-    let rows = file_tree_rows(dispatch, state, "", 0)
-    if rows.is_empty() {
+  } else if entries.is_empty() {
+    if fuzzy is None {
       // The workspace exists once the conversation runs; until then (or if the
       // agent has written nothing) it is simply empty.
       [@html.div(class="file-panel-empty", "This workspace is empty.")]
+    } else if state.index is IndexLoading {
+      [@html.div(class="file-panel-empty", "Indexing files…")]
     } else {
-      rows
+      [@html.div(class="file-panel-empty", "No file matches the filter.")]
     }
+  } else {
+    let rows = entries.map(pair => {
+      tree_row(dispatch, state, pair.0, pair.1, fuzzy~)
+    })
+    // Own up to a capped index: matches may simply be missing.
+    if fuzzy is Some(_) && state.index is IndexReady(truncated=true, ..) {
+      rows.push(
+        @html.div(
+          class="file-panel-empty",
+          "File index truncated; some matches may be missing.",
+        ),
+      )
+    }
+    rows
   }
   @html.div(class="file-tree-pane", [
-    // The filter box, in a header bar matching the topbar/breadcrumb height.
-    @html.div(class="file-tree-header", [
-      @html.input(
-        input_type=@html.InputType::Search,
-        value=state.filter,
-        placeholder="Filter files…",
-        on_input=dispatch.map(value => FileFilterChanged(value)),
-        attrs=@html.Attrs::build().class("file-filter"),
-      ),
-    ]),
+    // The grab strip on the panel's top seam for drag-to-resize; wired
+    // imperatively like the editor's left-edge handle (see tree_resize.mbt).
+    @html.div(
+      attrs=@html.Attrs::build()
+        .id(TreeResizeHandleId)
+        .class("tree-resize-handle"),
+      ([] : Array[@html.Html]),
+    ),
+    @html.div(class="file-tree", tree_children),
     @html.div(
       class=if state.error.is_empty() {
         "file-panel-error empty"
@@ -201,7 +230,44 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
       },
       state.error,
     ),
-    @html.div(class="file-tree", tree_children),
+    // The filter line rides the bottom edge, minibuffer-style, and is the
+    // keyboard's seat: ↑/↓ walk the rows, Enter acts on the cursor's row,
+    // Escape clears the filter and then closes the panel.
+    @html.div(class="file-tree-header", [
+      @html.input(
+        input_type=@html.InputType::Search,
+        value=state.filter,
+        placeholder="Filter files…",
+        on_input=dispatch.map(value => FileFilterChanged(value)),
+        attrs=@html.Attrs::build()
+          .class("file-filter")
+          .id(FilterInputId)
+          .on_keydown(event => {
+            match event.key() {
+              "ArrowDown" => {
+                event.prevent_default()
+                dispatch(TreeKeyMove(delta=1))
+              }
+              "ArrowUp" => {
+                event.prevent_default()
+                dispatch(TreeKeyMove(delta=-1))
+              }
+              "Enter" =>
+                if !event.is_composing() {
+                  event.prevent_default()
+                  dispatch(TreeKeyAccept)
+                } else {
+                  @cmd.none
+                }
+              "Escape" => {
+                event.prevent_default()
+                dispatch(TreeKeyDismiss)
+              }
+              _ => @cmd.none
+            }
+          }),
+      ),
+    ]),
   ])
 }
 
@@ -264,13 +330,14 @@ fn crumb_link(
 }
 
 ///|
-/// The breadcrumb row under the tab bar: with a tab active, its path as
+/// The breadcrumb row under the tab bar: the active tab's path as
 /// `dir › dir › file` (the file segment emphasized) behind a leading
-/// "Workspace" crumb; otherwise just the "Workspace" crumb, since the tree
-/// is always rooted there. Every crumb but the last reveals that ancestor
+/// "Workspace" crumb. Every crumb but the last reveals that ancestor
 /// directory in the tree pane when clicked (opening the pane if needed).
 /// The tree-pane toggle rides this row's right edge, directly under the tab
-/// bar's panel toggle.
+/// bar's panel toggle. With no file open the whole row hides (via CSS — it
+/// stays in the DOM so the editor's child order, and thus the viewer host,
+/// is never re-keyed) and the tree shows unconditionally in its place.
 fn viewer_breadcrumb(dispatch : @cmd.Emit[Msg], state : State) -> @html.Html {
   let crumbs : Array[@html.Html] = []
   match state.active {
@@ -290,84 +357,55 @@ fn viewer_breadcrumb(dispatch : @cmd.Emit[Msg], state : State) -> @html.Html {
     }
     None => crumbs.push(@html.span(class="crumb crumb-file", "Workspace"))
   }
-  @html.div(class="viewer-breadcrumb", [
-    @html.div(class="crumb-path", crumbs),
-    @html.button(
-      class="panel-toggle",
-      title=if state.tree_open { "Hide file tree" } else { "Show file tree" },
-      on_click=dispatch(ToggleTree),
-      icon(icon_folder),
-    ),
-  ])
+  @html.div(
+    class=if state.active is None {
+      "viewer-breadcrumb hidden"
+    } else {
+      "viewer-breadcrumb"
+    },
+    [
+      @html.div(class="crumb-path", crumbs),
+      @html.button(
+        class="panel-toggle",
+        title=if state.tree_open { "Hide file tree" } else { "Show file tree" },
+        on_click=dispatch(ToggleTree),
+        icon(icon_folder),
+      ),
+    ],
+  )
 }
 
 ///|
-/// The rows for the entries of one directory, with expanded directories'
-/// children spliced in beneath them, depth-first. `depth` drives indentation.
-fn file_tree_rows(
-  dispatch : @cmd.Emit[Msg],
-  state : State,
-  dir_path : @pathx.Relative,
-  depth : Int,
-) -> Array[@html.Html] {
-  guard state.children.get(dir_path) is Some(entries) else { return [] }
-  let rows : Array[@html.Html] = []
-  for entry in entries {
-    rows.push(tree_row(dispatch, state, entry, depth))
-    if entry.is_dir && state.expanded.contains(entry.path) {
-      for child in file_tree_rows(dispatch, state, entry.path, depth + 1) {
-        rows.push(child)
-      }
-    }
-  }
-  rows
-}
-
-///|
-/// Filter mode: walk the already-loaded tree depth-first and append every entry
-/// whose name contains `query` (already lower-cased) as a flat row. Only loaded
-/// directories are descended into, so the filter spans the root listing plus
-/// whatever the user has expanded.
-fn filtered_file_rows(
-  dispatch : @cmd.Emit[Msg],
-  state : State,
-  dir_path : @pathx.Relative,
-  query : String,
-  into : Array[@html.Html],
-) -> Unit {
-  guard state.children.get(dir_path) is Some(entries) else { return }
-  for entry in entries {
-    if entry.name.to_lower().contains(query) {
-      into.push(tree_row(dispatch, state, entry, 0))
-    }
-    if entry.is_dir {
-      filtered_file_rows(dispatch, state, entry.path, query, into)
-    }
-  }
-}
-
-///|
+/// One visible tree row. The rows themselves come from `visible_entries`
+/// (shared with the keyboard cursor, so the two can never disagree);
+/// `depth` drives indentation. The keyboard cursor's row wears `cursor` on
+/// top of whatever else applies. `fuzzy` present means filter mode: the row
+/// is a ranked match, labeled with its whole relative path and the matched
+/// characters highlighted.
 fn tree_row(
   dispatch : @cmd.Emit[Msg],
   state : State,
   entry : FileEntry,
   depth : Int,
+  fuzzy~ : @fuzzy_match.Query?,
 ) -> @html.Html {
   let pad = "padding-left: \{8 + depth * 14}px"
+  let cursor = if state.cursor == Some(entry.path) { " cursor" } else { "" }
   if entry.is_dir {
     let chevron = if state.expanded.contains(entry.path) {
       "▾"
     } else {
       "▸"
     }
-    // `data-path` is `reveal_tree_row`'s hook for scrolling a breadcrumb's
-    // `RevealDirectory` target into view.
+    // `data-path` is the hook `reveal_tree_row` / the keyboard cursor's
+    // scroll-into-view use to find the row in the DOM.
     @html.div(
-      class=if state.highlighted == Some(entry.path) {
-        "tree-row tree-dir highlighted"
-      } else {
-        "tree-row tree-dir"
-      },
+      class=(if state.highlighted == Some(entry.path) {
+          "tree-row tree-dir highlighted"
+        } else {
+          "tree-row tree-dir"
+        }) +
+        cursor,
       style=[pad],
       on_click=dispatch(DirToggle(entry.path)),
       attrs=@html.Attrs::build().data_set("path", entry.path.0),
@@ -377,15 +415,37 @@ fn tree_row(
       ],
     )
   } else {
+    let label = match fuzzy {
+      Some(query) =>
+        match query.split_by_matching_sections(item=entry.path.0) {
+          Some(sections) =>
+            @html.span(
+              class="tree-name tree-path",
+              sections.map(section => {
+                let (matched, text) = section
+                @html.span(
+                  class=if matched { "tree-hit" } else { "" },
+                  text.to_owned(),
+                )
+              }),
+            )
+          // Should not happen — the row is here because it matched — but a
+          // plain path label beats dropping the row.
+          None => @html.span(class="tree-name tree-path", entry.path.0)
+        }
+      None => @html.span(class="tree-name", entry.name)
+    }
     @html.div(
-      class=if state.active == Some(entry.path) {
-        "tree-row tree-file selected"
-      } else {
-        "tree-row tree-file"
-      },
+      class=(if state.active == Some(entry.path) {
+          "tree-row tree-file selected"
+        } else {
+          "tree-row tree-file"
+        }) +
+        cursor,
       style=[pad],
       on_click=dispatch(FileSelected(path=entry.path, name=entry.name)),
-      [@html.span(class="tree-name", entry.name)],
+      attrs=@html.Attrs::build().data_set("path", entry.path.0),
+      [label],
     )
   }
 }

@@ -1467,6 +1467,25 @@ fn corner_select(
 }
 
 ///|
+fn tree_layout_select(
+  dispatch : @cmd.Emit[Msg],
+  selected : @fileeditor.TreeLayout,
+) -> @html.Html {
+  @html.select(on_change=dispatch.map(value => TreeLayoutChanged(value)), [
+    @html.option(
+      value="right-sidebar",
+      selected=selected is RightSidebar,
+      "Right sidebar",
+    ),
+    @html.option(
+      value="bottom-panel",
+      selected=selected is BottomPanel,
+      "Bottom panel",
+    ),
+  ])
+}
+
+///|
 fn channel_select(
   dispatch : @cmd.Emit[Msg],
   selected : UpdateChannel,
@@ -1656,6 +1675,11 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         "Notification corner",
         [corner_select(dispatch, model.notification_corner)],
         desc="Where error notifications pop up.",
+      ),
+      setting_row(
+        "File tree layout",
+        [tree_layout_select(dispatch, model.tree_layout)],
+        desc="Where the editor panel docks its file tree.",
       ),
     ]),
     settings_group("Updates", [

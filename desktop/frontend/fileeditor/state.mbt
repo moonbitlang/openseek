@@ -89,6 +89,24 @@ pub(all) struct FileStat {
 }
 
 ///|
+/// The workspace file index behind the filter's fuzzy matching: every file
+/// under the workspace (the host walks it recursively, pruning churn
+/// directories and capping the count). Requested lazily on the first
+/// non-blank filter keystroke, refreshed on `FsChanged`, and reset by a
+/// conversation switch like the rest of the tree cache.
+pub(all) enum FileIndex {
+  // Never requested (or the last request failed) — the next filter
+  // keystroke asks for it. Until it arrives the filter falls back to
+  // matching whatever directories are already listed.
+  IndexEmpty
+  // The first request is in flight.
+  IndexLoading
+  // `truncated` set means the walk hit the host's cap, so matches may be
+  // missing; the filter footer says so.
+  IndexReady(files~ : Array[@pathx.Relative], truncated~ : Bool)
+}
+
+///|
 /// The editor side-panel's state: a lazily-loaded file tree of the active
 /// conversation's workspace and the files open in the embedded viewer's tab
 /// strip. Keyed entirely by workspace-relative paths; `session` records
@@ -124,9 +142,17 @@ pub(all) struct State {
   // The directory a breadcrumb click most recently revealed, flashed in the
   // tree until `HighlightCleared` fires.
   highlighted : @pathx.Relative?
-  // The file-tree filter query; a blank query lists everything, otherwise only
-  // rows whose name contains it (case-insensitive) survive.
+  // The file-tree filter query. Blank lists the tree; otherwise the rows are
+  // the workspace files fuzzy-matched against it (fzf-style: subsequence
+  // match on the whole relative path, best score first, smart-case).
   filter : String
+  // The workspace file list the fuzzy filter matches against.
+  index : FileIndex
+  // The keyboard cursor's row in the tree, moved from the filter input with
+  // ↑/↓ and acted on with Enter. Path-keyed (not an index) so it survives
+  // rows appearing and disappearing around it; None until the keyboard
+  // first moves.
+  cursor : @pathx.Relative?
   // The last directory/file failure, surfaced in the panel header.
   error : String
 }
@@ -146,19 +172,52 @@ pub fn State::empty() -> State {
     remembered: {},
     highlighted: None,
     filter: "",
+    index: IndexEmpty,
+    cursor: None,
     error: "",
+  }
+}
+
+///|
+/// Where the file tree docks inside the editor panel: flat along the bottom
+/// (Emacs-window style) or as a column on the viewer's right. A Settings
+/// choice owned by the main package and passed in through `Ctx`; the two
+/// layouts share one DOM order and differ only in CSS, so switching never
+/// re-keys the viewer host.
+pub(all) enum TreeLayout {
+  BottomPanel
+  RightSidebar
+}
+
+///|
+/// The stored wire name's inverse; an unknown value falls back to the
+/// default right sidebar, so a missing key and a stale value read the same.
+pub fn TreeLayout::parse(value : String) -> TreeLayout {
+  match value {
+    "bottom-panel" => BottomPanel
+    _ => RightSidebar
+  }
+}
+
+///|
+pub fn TreeLayout::wire(self : TreeLayout) -> String {
+  match self {
+    BottomPanel => "bottom-panel"
+    RightSidebar => "right-sidebar"
   }
 }
 
 ///|
 /// The active conversation's identity, passed in by the main package on every
 /// `update`/`sync`/`panel_view` call: which session the panel serves, the
-/// conversation's attached workspace (the hint fs ops carry), and whether the
-/// app is in dark mode (drives the embedded viewer's theme attribute).
+/// conversation's attached workspace (the hint fs ops carry), whether the
+/// app is in dark mode (drives the embedded viewer's theme attribute), and
+/// the Settings choice of where the file tree docks.
 pub(all) struct Ctx {
   session : String
   workspace : @pathx.Absolute?
   dark_mode : Bool
+  tree_layout : TreeLayout
 }
 
 ///|
@@ -188,6 +247,16 @@ pub(all) enum Msg {
   DirToggle(@pathx.Relative)
   // The file-tree filter query changed.
   FileFilterChanged(String)
+  // ↑/↓ in the filter input: move the keyboard cursor through the visible
+  // rows (`delta` is ±1); the first move enters at the top or bottom.
+  TreeKeyMove(delta~ : Int)
+  // Enter in the filter input: act on the cursor's row — toggle a
+  // directory, open a file. With no cursor yet, the first visible row of a
+  // non-blank filter is taken, so "type then Enter" opens the top match.
+  TreeKeyAccept
+  // Escape in the filter input: clear a non-blank filter first, then close
+  // the tree panel (when a file is open to fall back to).
+  TreeKeyDismiss
   // A `read_directory` reply: `session`/`path` say which request it answers so
   // a reply that lost a conversation switch can be dropped.
   DirLoaded(
@@ -196,6 +265,16 @@ pub(all) enum Msg {
     entries~ : Array[FileEntry]
   )
   DirFailed(session~ : String, path~ : @pathx.Relative, message~ : String)
+  // A `list_files` reply: the workspace's files for the fuzzy filter.
+  // `truncated` means the host's walk stopped at its cap.
+  FilesIndexed(
+    session~ : String,
+    files~ : Array[@pathx.Relative],
+    truncated~ : Bool
+  )
+  // A `list_files` request failed or returned garbage; drops the index back
+  // to `IndexEmpty` so the next filter keystroke retries.
+  FileIndexFailed(session~ : String)
   // A file row was clicked: read it and show it in the viewer. `name` is the
   // entry's display name, kept for the viewer's title and language guess.
   FileSelected(path~ : @pathx.Relative, name~ : String)

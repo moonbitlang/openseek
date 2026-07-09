@@ -51,6 +51,87 @@ async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
 }
 
 ///|
+/// Most files `list_files` will index before giving up — a guard against
+/// pathological workspaces (say, an untracked build tree the prune list
+/// misses), not a target. The reply says when the cap cut the walk short.
+const MaxIndexedFiles = 20000
+
+///|
+/// Enumerate every file under the conversation's workspace for the panel's
+/// fuzzy finder: depth-first, each directory's entries in lexicographic
+/// order, pruning the same churn directories the watcher skips.
+async fn list_files_op(payload : ListFilesPayload) -> ListFilesReply {
+  guard @engine.resolve_in_workspace(
+      payload.session,
+      "",
+      workspace?=payload.workspace,
+    )
+    is Some(root) else {
+    raise HostError("path is outside the conversation workspace")
+  }
+  let files : Array[String] = []
+  // A workspace directory that does not exist yet (created lazily on the
+  // first run) reads as empty, matching `read_directory`.
+  let truncated = if @fs.exists(root.to_string()) {
+    collect_files(root, "", files)
+  } else {
+    false
+  }
+  { files, truncated }
+}
+
+///|
+/// Append `dir`'s files (as `/`-separated paths relative to the walk root;
+/// `prefix` is `dir`'s own relative path, `""` at the root) to `into`,
+/// recursing into unpruned subdirectories. Returns whether the file cap
+/// stopped the walk. An unreadable directory skips itself — the rest of the
+/// workspace still gets indexed.
+async fn collect_files(
+  dir : @path.Path,
+  prefix : String,
+  into : Array[String],
+) -> Bool {
+  let listing = @fs.opendir(dir.to_string()) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return false
+  }
+  defer listing.close()
+  let entries : Array[@fs.DirectoryEntry] = []
+  for ;; {
+    let entry = listing.next() catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => None
+    }
+    guard entry is Some(entry) else { break }
+    entries.push(entry)
+  }
+  // Lexicographic like `read_directory` (see the shortlex note there), so
+  // the index's base order matches the tree's.
+  entries.sort_by((a, b) => a.name.lexical_compare(b.name))
+  for entry in entries {
+    let relative = if prefix.is_empty() {
+      entry.name
+    } else {
+      prefix + "/" + entry.name
+    }
+    if entry.is_dir {
+      if ignored_watch_path(relative) {
+        continue
+      }
+      if collect_files(dir.join((entry.name : @path.Path)), relative, into) {
+        return true
+      }
+    } else {
+      if into.length() >= MaxIndexedFiles {
+        return true
+      }
+      into.push(relative)
+    }
+  }
+  false
+}
+
+///|
 async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
   guard @engine.resolve_in_workspace(
       payload.session,

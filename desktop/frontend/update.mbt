@@ -432,6 +432,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     session: conv.session_id,
     workspace: conv.workspace,
     dark_mode: model.dark_mode,
+    tree_layout: model.tree_layout,
   }
 }
 
@@ -517,6 +518,7 @@ fn update_msg(
       wsl_distro~,
       wsl_engine~,
       notification_corner~,
+      tree_layout~,
       update_channel~
     ) => {
       let next = {
@@ -529,6 +531,7 @@ fn update_msg(
         wsl_distro: wsl_distro.trim().to_owned(),
         wsl_engine: wsl_engine.trim().to_owned(),
         notification_corner: NotificationCorner::parse(notification_corner),
+        tree_layout: @fileeditor.TreeLayout::parse(tree_layout),
         update_channel: UpdateChannel::parse(update_channel),
         setup_api_key: "",
       }
@@ -678,6 +681,19 @@ fn update_msg(
       (
         save_notification_corner(corner),
         { ..model, notification_corner: corner },
+      )
+    }
+    TreeLayoutChanged(value) => {
+      let layout = @fileeditor.TreeLayout::parse(value)
+      // The dock flips purely in CSS, but the viewer cannot see its host
+      // change size on its own — remeasure it (mount_cmds is idempotent and
+      // carries the remeasure).
+      (
+        @cmd.batch([
+          save_tree_layout(layout),
+          @fileeditor.mount_cmds(dispatch.map(msg => FileEditor(msg))),
+        ]),
+        { ..model, tree_layout: layout },
       )
     }
     NotificationExpired(id) | DismissNotification(id) =>

@@ -49,6 +49,51 @@ fn read_directory(
 }
 
 ///|
+/// Ask the host for the workspace's full file list (the fuzzy filter's
+/// index) and fold it back as `FilesIndexed`. Failures fold as
+/// `FileIndexFailed`, dropping the index so a later keystroke retries.
+fn list_files(
+  dispatch : @cmd.Emit[Msg],
+  session : String,
+  workspace~ : @pathx.Absolute?,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let payload = @js.Object::new()
+      payload["session"] = session
+      @interop.set_workspace(payload, workspace)
+      let reply = @interop.bridge_request("list_files", payload.to_value()) catch {
+        _ => {
+          scheduler.add(dispatch(FileIndexFailed(session~)))
+          return
+        }
+      }
+      match decode_file_index(@interop.reply_json_text(reply)) {
+        Some((files, truncated)) =>
+          scheduler.add(dispatch(FilesIndexed(session~, files~, truncated~)))
+        None => scheduler.add(dispatch(FileIndexFailed(session~)))
+      }
+    })
+  })
+}
+
+///|
+/// Parse a `list_files` reply into relative paths plus the truncation flag.
+fn decode_file_index(text : String) -> (Array[@pathx.Relative], Bool)? {
+  let json = @json.parse(text) catch { _ => return None }
+  guard json is Object(reply) else { return None }
+  guard reply.get("files") is Some(Array(items)) else { return None }
+  let files : Array[@pathx.Relative] = []
+  for item in items {
+    guard item is String(path) else { continue }
+    if !path.is_empty() {
+      files.push(Relative(path))
+    }
+  }
+  Some((files, reply.get("truncated") is Some(True)))
+}
+
+///|
 /// Read `path` and fold its contents back as `FileLoaded`. `name` is the
 /// entry's display name, forwarded for the viewer's title and language guess.
 /// `range`, when present (a symbol jump's target), is forwarded for the

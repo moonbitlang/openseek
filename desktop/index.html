@@ -391,12 +391,14 @@
         color: var(--accent-ink);
       }
 
-      /* The viewer and the toggleable file-tree pane share the row below the
-         breadcrumb. Both stay mounted (see panel_view) so the viewer host is
-         never re-keyed and the filter's state survives toggling; CSS alone
-         hides the tree pane. */
+      /* The viewer and the toggleable file-tree panel split the column below
+         the breadcrumb, Emacs-style: the tree docks flat along the bottom
+         and takes real layout height, the viewer keeps the rest. Both stay
+         mounted (see panel_view) so the viewer host is never re-keyed and
+         the filter's state survives toggling; CSS alone hides the panel. */
       .editor-body {
         display: flex;
+        flex-direction: column;
         flex: 1 1 auto;
         min-width: 0;
         min-height: 0;
@@ -431,16 +433,76 @@
       .viewer-notice.hidden {
         display: none;
       }
+      /* The file tree as a flat bottom panel, Emacs-window style: full
+         width, a 1px seam against the viewer, no chrome of its own, shown
+         and hidden instantly. Non-modal — the viewer above stays live.
+         The height is `--tree-height`, set as the user drags the handle on
+         the top seam (see tree_resize.mbt); it defaults to a third and is
+         clamped so the panel floors at 96px while the viewer keeps at
+         least 120px. The clamp also re-fits the panel on window resize
+         without any script. */
       .file-tree-pane {
+        position: relative;
         display: flex;
         flex-direction: column;
-        flex: 0 0 240px;
+        flex: 0 0 clamp(96px, var(--tree-height, 32%), calc(100% - 120px));
         min-height: 0;
         overflow: hidden;
-        border-left: 1px solid var(--line);
+        border-top: 1px solid var(--line);
+        background: var(--surface);
       }
       .editor:not(.tree-open) .file-tree-pane {
         display: none;
+      }
+
+      /* The right-sidebar layout (a Settings choice): same DOM, the body
+         flexes as a row and the tree becomes a column on the viewer's
+         right. The width is `--tree-width`, set by the same drag handle
+         (now on the pane's left seam), clamped so the tree floors at 180px
+         while the viewer keeps at least 240px. */
+      .editor.tree-right .editor-body {
+        flex-direction: row;
+      }
+      .editor.tree-right .file-tree-pane {
+        flex: 0 0 clamp(180px, var(--tree-width, 260px), calc(100% - 240px));
+        min-width: 0;
+        border-top: none;
+        border-left: 1px solid var(--line);
+      }
+
+      /* Drag-to-resize handle on the panel's viewer-facing seam — the
+         row-resize twin of .editor-resize-handle in the bottom layout, a
+         col-resize strip on the left seam in the sidebar layout. */
+      .tree-resize-handle {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        z-index: 2;
+        cursor: row-resize;
+      }
+      .editor.tree-right .tree-resize-handle {
+        right: auto;
+        bottom: 0;
+        width: 5px;
+        height: auto;
+        cursor: col-resize;
+      }
+      .tree-resize-handle:hover,
+      html.is-resizing-row .tree-resize-handle,
+      html.is-resizing-col .tree-resize-handle {
+        background: var(--accent-soft);
+      }
+      html.is-resizing-row {
+        cursor: row-resize;
+      }
+      html.is-resizing-col {
+        cursor: col-resize;
+      }
+      html.is-resizing-row *,
+      html.is-resizing-col * {
+        user-select: none !important;
       }
       .file-panel-error.empty {
         display: none;
@@ -475,23 +537,29 @@
         user-select: none !important;
       }
 
-      /* The filter sits in a header bar the same height as the topbar and
-         breadcrumb, so all three column headers align. */
+      /* The filter line rides the panel's bottom edge like an Emacs
+         minibuffer: one flat row, a hairline above it, a borderless input. */
       .file-tree-header {
         display: flex;
         align-items: center;
         flex: 0 0 auto;
-        height: 46px;
-        padding: 0 8px;
-        border-bottom: 1px solid var(--line);
+        height: 32px;
+        padding: 0 4px;
+        border-top: 1px solid var(--line);
       }
 
       .file-filter {
         flex: 1 1 auto;
         width: auto;
         min-width: 0;
-        padding: 6px 9px;
+        padding: 4px 8px;
         font-size: 12px;
+        border: 0;
+        background: transparent;
+        color: var(--ink);
+      }
+      .file-filter:focus {
+        outline: none;
       }
 
       .file-panel-error {
@@ -540,6 +608,17 @@
         color: var(--accent-ink);
       }
 
+      /* The keyboard cursor's row (↑/↓ from the filter input) — the hover
+         tint, held. */
+      .tree-row.cursor {
+        background: var(--surface-2);
+      }
+      .tree-row.selected.cursor {
+        background: var(--accent-soft);
+        outline: 1px solid var(--accent-ink);
+        outline-offset: -1px;
+      }
+
       /* A breadcrumb's `RevealDirectory` target, flashed until
          `HighlightCleared` removes the class; the transition above eases it
          back out. */
@@ -563,9 +642,27 @@
         text-overflow: ellipsis;
       }
 
+      /* A fuzzy-filter match row: the whole relative path, dimmed so the
+         highlighted query characters carry the row. */
+      .tree-path {
+        color: var(--ink-2);
+      }
+
+      /* The query characters inside a match. */
+      .tree-hit {
+        color: var(--accent-ink);
+        font-weight: 600;
+      }
+
       /* The slimmer second row under the tab bar: the active file's path,
          with the tree-pane toggle at the right edge — the same padding as
-         the tab bar above, so it sits directly under the panel toggle. */
+         the tab bar above, so it sits directly under the panel toggle.
+         Hidden while no file is open (the tree then shows unconditionally);
+         it stays in the DOM so the editor's child order never re-keys the
+         viewer host. */
+      .viewer-breadcrumb.hidden {
+        display: none;
+      }
       .viewer-breadcrumb {
         display: flex;
         align-items: center;

@@ -32,6 +32,7 @@ pub(all) struct Ctx {
   session : String
   workspace : @pathx.Absolute?
   dark_mode : Bool
+  tree_layout : TreeLayout
 }
 
 pub(all) enum FileContent {
@@ -44,6 +45,12 @@ pub(all) struct FileEntry {
   name : String
   path : @pathx.Relative
   is_dir : Bool
+}
+
+pub(all) enum FileIndex {
+  IndexEmpty
+  IndexLoading
+  IndexReady(files~ : Array[@pathx.Relative], truncated~ : Bool)
 }
 
 pub(all) struct FileStat {
@@ -63,8 +70,13 @@ pub(all) enum Msg {
   TabClosed(@pathx.Relative)
   DirToggle(@pathx.Relative)
   FileFilterChanged(String)
+  TreeKeyMove(delta~ : Int)
+  TreeKeyAccept
+  TreeKeyDismiss
   DirLoaded(session~ : String, path~ : @pathx.Relative, entries~ : Array[FileEntry])
   DirFailed(session~ : String, path~ : @pathx.Relative, message~ : String)
+  FilesIndexed(session~ : String, files~ : Array[@pathx.Relative], truncated~ : Bool)
+  FileIndexFailed(session~ : String)
   FileSelected(path~ : @pathx.Relative, name~ : String)
   FileLoaded(session~ : String, path~ : @pathx.Relative, name~ : String, file~ : FileContent, range~ : @common.Range?, annotation~ : String?)
   FileFailed(session~ : String, message~ : String)
@@ -97,6 +109,8 @@ pub(all) struct State {
   remembered : Map[String, RememberedTabs]
   highlighted : @pathx.Relative?
   filter : String
+  index : FileIndex
+  cursor : @pathx.Relative?
   error : String
 }
 pub fn State::empty() -> Self
@@ -115,6 +129,13 @@ pub(all) enum TabState {
   TabOversized
   TabDeleted
 }
+
+pub(all) enum TreeLayout {
+  BottomPanel
+  RightSidebar
+}
+pub fn TreeLayout::parse(String) -> Self
+pub fn TreeLayout::wire(Self) -> String
 
 // Type aliases
 

@@ -1,5 +1,6 @@
 import {
   "moonbitlang/core/json",
+  "moonbit-community/fuzzy_match",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",
@@ -14,7 +15,6 @@ import {
   "moonbit-community/editor/syntax/lang_javascript",
   "moonbit-community/editor/syntax/lang_json",
   "openseek_desktop/internal/pathx",
-  "openseek_desktop/internal/uri",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/transcript",
 }

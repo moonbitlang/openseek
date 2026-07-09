@@ -124,14 +124,52 @@ fn end_resize(_event : @dom.Event) -> Unit {
 }
 
 ///|
-/// Write the editor width as the `--editor-width` custom property on the
-/// document element, where the `.content` grid reads it. Set on the root, not
-/// on `.content`, so a rabbita re-render of the conversation tree never clears
-/// it.
-fn set_editor_width(width : Int) -> Unit {
-  if document_element() is Some(root) {
-    root.set_attribute("style", "--editor-width: \{width}px")
+/// The dragged sizes, kept so the resizers (editor width, tree height, tree
+/// width) can rewrite the shared root `style` attribute without erasing each
+/// other's property.
+let editor_width : Ref[Int?] = Ref(None)
+
+///|
+let tree_height : Ref[Int?] = Ref(None)
+
+///|
+let tree_width : Ref[Int?] = Ref(None)
+
+///|
+/// Write the dragged sizes as custom properties on the document element,
+/// where the CSS `clamp(...)`s read them. Set on the root, not on the panes
+/// themselves, so a rabbita re-render never clears them.
+fn sync_root_style() -> Unit {
+  guard document_element() is Some(root) else { return }
+  let style = StringBuilder::new()
+  if editor_width.val is Some(width) {
+    style.write_string("--editor-width: \{width}px;")
   }
+  if tree_height.val is Some(height) {
+    style.write_string("--tree-height: \{height}px;")
+  }
+  if tree_width.val is Some(width) {
+    style.write_string("--tree-width: \{width}px;")
+  }
+  root.set_attribute("style", style.to_string())
+}
+
+///|
+fn set_editor_width(width : Int) -> Unit {
+  editor_width.val = Some(width)
+  sync_root_style()
+}
+
+///|
+fn set_tree_height(height : Int) -> Unit {
+  tree_height.val = Some(height)
+  sync_root_style()
+}
+
+///|
+fn set_tree_width(width : Int) -> Unit {
+  tree_width.val = Some(width)
+  sync_root_style()
 }
 
 ///|
