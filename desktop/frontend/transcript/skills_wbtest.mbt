@@ -38,6 +38,8 @@ test "subpackage skills carry their package path in the source label" {
         "package_path": "cmd/run",
         "version": "0.2.0",
         "description": "Run alpha commands",
+        "author": "",
+        "repository": "",
       },
     ],
   }

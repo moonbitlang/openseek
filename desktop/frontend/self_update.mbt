@@ -63,33 +63,31 @@ priv enum UpdateCheck {
 
 ///|
 fn decode_update_check(text : String) -> UpdateCheck? {
+  // Every kind's fields are unconditional on the wire; a reply missing one
+  // is malformed and reads as `None` (the caller folds that into
+  // `CheckUnreachable`).
   let json = @json.parse(text) catch { _ => return None }
   guard json is Object(reply) else { return None }
-  match @transcript.json_text(reply, "kind") {
+  let reason = @jsonx.json_text(reply, "reason")
+  guard @jsonx.json_text(reply, "kind") is Some(kind) else { return None }
+  match kind {
     "up_to_date" => Some(CheckUpToDate)
-    "available" =>
-      match reply.get("version") {
-        Some(String(version)) =>
-          Some(
-            CheckFound(
-              version~,
-              installable=reply.get("installable") is Some(True),
-            ),
-          )
-        _ => None
+    "available" => {
+      guard @jsonx.json_text(reply, "version") is Some(version) &&
+        @jsonx.json_bool(reply, "installable") is Some(installable) else {
+        return None
       }
-    "unreachable" =>
-      Some(CheckUnreachable(reason=@transcript.json_text(reply, "reason")))
-    "malformed" =>
-      Some(CheckMalformed(reason=@transcript.json_text(reply, "reason")))
-    "broken" =>
-      match reply.get("version") {
-        Some(String(version)) =>
-          Some(
-            CheckBroken(version~, reason=@transcript.json_text(reply, "reason")),
-          )
-        _ => None
+      Some(CheckFound(version~, installable~))
+    }
+    "unreachable" => reason.map(reason => CheckUnreachable(reason~))
+    "malformed" => reason.map(reason => CheckMalformed(reason~))
+    "broken" => {
+      guard @jsonx.json_text(reply, "version") is Some(version) &&
+        reason is Some(reason) else {
+        return None
       }
+      Some(CheckBroken(version~, reason~))
+    }
     _ => None
   }
 }

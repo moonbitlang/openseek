@@ -175,9 +175,11 @@ fn decode_dir_entries(
   let entries : Array[FileEntry] = []
   for item in items {
     guard item is Object(fields) else { continue }
-    let name = @transcript.json_text(fields, "name")
-    guard !name.is_empty() else { continue }
-    let is_dir = fields.get("is_dir") is Some(True)
+    // The host writes both fields on every entry.
+    guard @jsonx.json_text(fields, "name") is Some(name) && !name.is_empty() else {
+      continue
+    }
+    guard @jsonx.json_bool(fields, "is_dir") is Some(is_dir) else { continue }
     entries.push({ name, path: child_path(parent, name), is_dir })
   }
   Some(entries)
@@ -187,20 +189,19 @@ fn decode_dir_entries(
 fn decode_file_content(text : String) -> FileContent? {
   let json = @json.parse(text) catch { _ => return None }
   guard json is Object(reply) else { return None }
-  match @transcript.json_text(reply, "kind") {
+  guard @jsonx.json_text(reply, "kind") is Some(kind) else { return None }
+  match kind {
     "binary" => Some(Binary)
     "oversized" => Some(Oversized)
     "content" => {
-      guard reply.get("content") is Some(String(content)) else { return None }
-      let absolute = @transcript.json_text(reply, "absolute")
+      // The `content` variant always carries all three fields.
+      guard @jsonx.json_text(reply, "content") is Some(content) &&
+        @jsonx.json_text(reply, "absolute") is Some(absolute) &&
+        @jsonx.json_text(reply, "sig") is Some(sig) else {
+        return None
+      }
       guard !absolute.is_empty() else { return None }
-      Some(
-        Content(
-          content~,
-          absolute=Absolute(absolute),
-          sig=@transcript.json_text(reply, "sig"),
-        ),
-      )
+      Some(Content(content~, absolute=Absolute(absolute), sig~))
     }
     _ => None
   }
@@ -240,12 +241,13 @@ fn decode_file_stats(text : String) -> Array[FileStat]? {
   let stats : Array[FileStat] = []
   for item in items {
     guard item is Object(fields) else { continue }
-    let path = @transcript.json_text(fields, "path")
-    guard !path.is_empty() else { continue }
-    stats.push({
-      path: Relative(path),
-      sig: @transcript.json_text(fields, "sig"),
-    })
+    // Both fields are always on the wire; `sig` is "" for a file the host
+    // could not stat.
+    guard @jsonx.json_text(fields, "path") is Some(path) && !path.is_empty() else {
+      continue
+    }
+    guard @jsonx.json_text(fields, "sig") is Some(sig) else { continue }
+    stats.push({ path: Relative(path), sig })
   }
   Some(stats)
 }

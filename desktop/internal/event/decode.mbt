@@ -4,91 +4,63 @@
 /// Map one decoded JSONL value from the engine into an `AgentEvent`.
 ///
 /// Unknown or malformed events return `None`, keeping the desktop UI tolerant
-/// of newer engine versions.
+/// of newer engine versions. Malformed means missing a field the engine
+/// emits unconditionally — the host forwards such an event raw rather than
+/// act on a fabricated placeholder.
 pub fn decode_event(object : Json) -> AgentEvent? {
-  match string_field(object, "event") {
+  guard object is Object(fields) else { return None }
+  guard @jsonx.json_text(fields, "event") is Some(event) else { return None }
+  let content = @jsonx.json_text(fields, "content")
+  match event {
     "agent_step" => Some(AgentStep)
-    "assistant_message" =>
-      Some(AssistantMessage(string_field(object, "content")))
-    "runtime_update" => Some(RuntimeUpdate(string_field(object, "content")))
-    "steer_applied" => Some(SteerApplied(string_field(object, "content")))
-    "steer_dropped" => Some(SteerDropped(string_field(object, "content")))
+    "assistant_message" => content.map(content => AssistantMessage(content))
+    "runtime_update" => content.map(content => RuntimeUpdate(content))
+    "steer_applied" => content.map(content => SteerApplied(content))
+    "steer_dropped" => content.map(content => SteerDropped(content))
     "usage" => {
       // The engine nests the counters under a `usage` object (`print_usage`
-      // serializes the DeepSeek `Usage` struct verbatim).
-      let usage = match object {
-        Object(fields) => fields.get("usage").unwrap_or(Json::null())
-        _ => Json::null()
+      // serializes the DeepSeek `Usage` struct verbatim, whose counters are
+      // plain always-present ints).
+      guard fields.get("usage") is Some(Object(usage)) &&
+        @jsonx.json_int(usage, "prompt_tokens") is Some(prompt) &&
+        @jsonx.json_int(usage, "completion_tokens") is Some(completion) else {
+        return None
       }
-      let prompt = int_field(usage, "prompt_tokens")
-      let completion = int_field(usage, "completion_tokens")
       Some(Usage({ total_tokens: prompt + completion }))
     }
-    "tool_result" =>
-      Some(
-        ToolResult({
-          name: string_field(object, "tool_name"),
-          content: string_field(object, "content"),
-          is_error: bool_field(object, "is_error"),
-        }),
-      )
-    "tool_call_decode_error" =>
-      Some(
-        ToolResult({
-          name: string_field(object, "tool_name"),
-          content: "error: \{string_field(object, "error")}",
-          is_error: true,
-        }),
-      )
-    "agent_finished" => Some(AgentFinished(string_field(object, "answer")))
-    "agent_aborted" => Some(AgentAborted(string_field(object, "reason")))
+    "tool_result" => {
+      guard @jsonx.json_text(fields, "tool_name") is Some(name) &&
+        @jsonx.json_text(fields, "content") is Some(content) &&
+        @jsonx.json_bool(fields, "is_error") is Some(is_error) else {
+        return None
+      }
+      Some(ToolResult({ name, content, is_error }))
+    }
+    "tool_call_decode_error" => {
+      guard @jsonx.json_text(fields, "tool_name") is Some(name) &&
+        @jsonx.json_text(fields, "error") is Some(error) else {
+        return None
+      }
+      Some(ToolResult({ name, content: "error: \{error}", is_error: true }))
+    }
+    "agent_finished" =>
+      @jsonx.json_text(fields, "answer").map(answer => AgentFinished(answer))
+    "agent_aborted" =>
+      @jsonx.json_text(fields, "reason").map(reason => AgentAborted(reason))
     "max_steps_exhausted" => Some(MaxStepsExhausted)
     "agent_setup_failed" =>
-      Some(AgentError("agent setup failed: " + string_field(object, "error")))
+      @jsonx.json_text(fields, "error").map(error => {
+        AgentError("agent setup failed: " + error)
+      })
     // A serve-mode turn that died with a non-cancellation error. Terminal for
     // the run even though the engine process lives on.
     "turn_failed" =>
-      Some(AgentError("turn failed: " + string_field(object, "error")))
+      @jsonx.json_text(fields, "error").map(error => {
+        AgentError("turn failed: " + error)
+      })
     "compaction_started" => Some(CompactionStarted)
     "compaction_finished" => Some(CompactionFinished)
     "compaction_failed" => Some(CompactionFailed)
     _ => None
-  }
-}
-
-///|
-fn string_field(object : Json, name : String) -> String {
-  match object {
-    Object(fields) =>
-      match fields.get(name) {
-        Some(String(value)) => value
-        _ => ""
-      }
-    _ => ""
-  }
-}
-
-///|
-fn int_field(object : Json, name : String) -> Int {
-  match object {
-    Object(fields) =>
-      match fields.get(name) {
-        Some(Number(value, ..)) => value.to_int()
-        _ => 0
-      }
-    _ => 0
-  }
-}
-
-///|
-fn bool_field(object : Json, name : String) -> Bool {
-  match object {
-    Object(fields) =>
-      match fields.get(name) {
-        Some(True) => true
-        Some(False) => false
-        _ => false
-      }
-    _ => false
   }
 }

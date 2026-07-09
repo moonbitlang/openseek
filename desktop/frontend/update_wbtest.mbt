@@ -122,7 +122,7 @@ test "a new agent step clears both live streams" {
     streaming_response: "left",
     streaming_reasoning: "over",
   })
-  let (_, next) = update(dispatch, Engine(7, AgentStep("2")), model)
+  let (_, next) = update(dispatch, Engine(7, AgentStep(Some(2))), model)
   inspect(next.active().streaming_response, content="")
   inspect(next.active().streaming_reasoning, content="")
 }
@@ -136,7 +136,7 @@ test "finished run clears any leftover stream" {
   })
   let (_, next) = update(
     dispatch,
-    Finished(run_id=7, status="finished", answer="done"),
+    Finished(run_id=7, status="finished", answer=Some("done")),
     model,
   )
   inspect(next.active().streaming_response, content="")
@@ -148,7 +148,7 @@ test "a finish the user watched leaves no unseen dot" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
-    Finished(run_id=7, status="finished", answer="done"),
+    Finished(run_id=7, status="finished", answer=Some("done")),
     running_model(),
   )
   inspect(next.active().unseen_finish, content="false")
@@ -161,7 +161,7 @@ test "a background finish marks its conversation until it is opened" {
   let model = { ..running_model(), active_session: "desktop-elsewhere" }
   let (_, next) = update(
     dispatch,
-    Finished(run_id=7, status="finished", answer="done"),
+    Finished(run_id=7, status="finished", answer=Some("done")),
     model,
   )
   guard next.find_conversation("desktop-test") is Some(conv) else {
@@ -248,7 +248,7 @@ test "sessions loaded replaces the sidebar list" {
   let items : Array[@transcript.SessionListItem] = [
     {
       id: "desktop-a",
-      title: "first question",
+      title: Some("first question"),
       workspace: "",
       workspace_name: "",
     },
@@ -535,7 +535,7 @@ test "a background run finishes without disturbing the conversation on screen" {
   let model = running_model().replace_conversation(second)
   let (_, next) = update(
     dispatch,
-    Finished(run_id=8, status="finished", answer="done"),
+    Finished(run_id=8, status="finished", answer=Some("done")),
     model,
   )
   guard next.find_conversation("desktop-second") is Some(bg) else {
@@ -671,7 +671,7 @@ test "a run that ends with steers in flight sweeps them into notices" {
   })
   let (_, next) = update(
     dispatch,
-    Finished(run_id=7, status="finished", answer=""),
+    Finished(run_id=7, status="finished", answer=Some("")),
     model,
   )
   inspect(next.active().pending_steers.length(), content="0")
@@ -691,7 +691,7 @@ test "late undelivered steer is dropped after run-end sweep" {
   })
   let (_, finished) = update(
     dispatch,
-    Finished(run_id=7, status="finished", answer=""),
+    Finished(run_id=7, status="finished", answer=Some("")),
     model,
   )
   let (_, next) = update(
@@ -948,28 +948,28 @@ test "a branch reply lands on its conversation and an empty one hides it" {
   let dispatch = test_dispatch()
   let (_, named) = update(
     dispatch,
-    BranchLoaded(session="desktop-test", branch="feature/x"),
+    BranchLoaded(session="desktop-test", branch=Some("feature/x")),
     test_model(),
   )
-  inspect(named.active().branch, content="feature/x")
+  assert_true(named.active().branch is Some("feature/x"))
   let (_, cleared) = update(
     dispatch,
-    BranchLoaded(session="desktop-test", branch=""),
+    BranchLoaded(session="desktop-test", branch=Some("")),
     named,
   )
-  inspect(cleared.active().branch, content="")
+  assert_true(cleared.active().branch is Some(""))
   // A reply for an unknown session is dropped.
   let (_, ignored) = update(
     dispatch,
-    BranchLoaded(session="desktop-gone", branch="main"),
+    BranchLoaded(session="desktop-gone", branch=Some("main")),
     test_model(),
   )
-  inspect(ignored.active().branch, content="")
+  assert_true(ignored.active().branch is None)
 }
 
 ///|
 fn archived_item(id : String) -> @transcript.SessionListItem {
-  { id, title: "", workspace: "", workspace_name: "" }
+  { id, title: Some(""), workspace: "", workspace_name: "" }
 }
 
 ///|
@@ -1627,9 +1627,11 @@ test "check_update replies decode by kind" {
     )
     is Some(CheckFound(version="0.2.0", installable=true)),
   )
+  // The host always writes `installable` on an `available` reply; one
+  // without it is malformed rather than "not installable".
   assert_true(
     decode_update_check("{\"kind\":\"available\",\"version\":\"0.2.0\"}")
-    is Some(CheckFound(version="0.2.0", installable=false)),
+    is None,
   )
   assert_true(
     decode_update_check("{\"kind\":\"unreachable\",\"reason\":\"offline\"}")

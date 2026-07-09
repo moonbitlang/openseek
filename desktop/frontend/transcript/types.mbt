@@ -9,9 +9,9 @@ pub(all) enum ItemKind {
   Assistant(Bool)
   Reasoning
   // A tool call's result: the tool name, whether it failed, and the tool's
-  // optional one-line human-readable summary of what the call did ("" when
-  // the tool supplied none — display falls back to the name).
-  Tool(name~ : String, is_error~ : Bool, brief~ : String)
+  // optional one-line human-readable summary of what the call did (`None`
+  // when the tool supplied none — display falls back to the name).
+  Tool(name~ : String, is_error~ : Bool, brief~ : String?)
 }
 
 ///|
@@ -31,23 +31,13 @@ pub struct RuntimeUpdateView {
 ///|
 /// One sidebar entry from the engine's durable session list: the session id
 /// and its display title (first user message, already truncated engine-side;
-/// empty for a session with no user message yet). `workspace` is the project
-/// directory whose store holds the session ("" for a scratch conversation)
-/// and `workspace_name` its display label, both from the host's grouping.
+/// blank or absent for a session with no user message yet). `workspace` is
+/// the project directory whose store holds the session ("" for a scratch
+/// conversation) and `workspace_name` its display label, both from the
+/// host's grouping.
 pub(all) struct SessionListItem {
   id : String
-  title : String
+  title : String?
   workspace : String
   workspace_name : String
-}
-
-///|
-/// `value`, unless it is blank — then `fallback`. The engine's wire fields
-/// are free text; this is the one normalization rule for display labels.
-pub fn non_empty_or(value : String, fallback : String) -> String {
-  if value.trim().is_empty() {
-    fallback
-  } else {
-    value
-  }
 }

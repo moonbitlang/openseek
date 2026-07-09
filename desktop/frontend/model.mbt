@@ -5,9 +5,6 @@ const DefaultModel : String = "deepseek-v4-pro"
 const DefaultMaxSteps : String = "1000"
 
 ///|
-const EmptyRunId : Int = -1
-
-///|
 const ApiKeyStorageKey : String = "openseek.deepseek_api_key"
 
 ///|
@@ -131,10 +128,11 @@ priv struct Conversation {
   // a start request.
   cwd : @pathx.Absolute?
   // The git branch checked out in the workspace, reported by the host's
-  // `workspace_branch` op — display only (topbar chip). Empty when the
-  // workspace is not a repository (the chip hides). Refreshed when a run
-  // starts, a stored session opens, and a run finishes.
-  branch : String
+  // `workspace_branch` op — display only (topbar chip). `None` until a probe
+  // answers (or when it fails); `Some("")` when the workspace is not a
+  // repository. Either way the chip hides. Refreshed when a run starts, a
+  // stored session opens, and a run finishes.
+  branch : String?
   watcher_status : String
   // Live text of the in-flight assistant turn, accumulated from
   // `assistant_delta` / `reasoning_delta` events and cleared once the engine
@@ -554,9 +552,10 @@ priv enum Msg {
   // The host's dark-mode preference changed (the user switched the OS theme).
   // Reported by the `matchMedia` watcher.
   ColorSchemeChanged(Bool)
-  // A `workspace_branch` reply: the git branch of `session`'s workspace, or
-  // `""` when it is not a repository (a failed probe also reads as `""`).
-  BranchLoaded(session~ : String, branch~ : String)
+  // A `workspace_branch` reply: the git branch of `session`'s workspace —
+  // `Some("")` when it is not a repository, `None` when the probe failed or
+  // answered unintelligibly.
+  BranchLoaded(session~ : String, branch~ : String?)
   // A file path in the transcript was clicked: open it in the system's
   // default app. The host resolves the path inside the active conversation's
   // workspace.
@@ -587,8 +586,13 @@ priv enum Msg {
   // The start request for that conversation never produced a run (the bridge
   // call failed or the host refused it).
   Failed(session~ : String, message~ : String)
-  Error(run_id~ : Int, message~ : String, diagnostics~ : String)
-  Finished(run_id~ : Int, status~ : String, answer~ : String)
+  // A host error without a run (`run_id` is `None` — a pre-run failure)
+  // belongs to whatever conversation the user is looking at; `diagnostics`
+  // is stderr worth appending, when the host captured any.
+  Error(run_id~ : Int?, message~ : String, diagnostics~ : String?)
+  // `answer` only when the agent finished with one (other terminal statuses
+  // carry none).
+  Finished(run_id~ : Int, status~ : String, answer~ : String?)
 }
 
 ///|
@@ -633,7 +637,7 @@ fn empty_conversation(
     unseen_finish: false,
     usage_tokens: 0,
     cwd: None,
-    branch: "",
+    branch: None,
     watcher_status: "",
     streaming_response: "",
     streaming_reasoning: "",
@@ -1061,7 +1065,9 @@ priv enum Status {
   Starting
   Running
   Cancelling
-  Step(String)
+  // The engine's 1-based step counter; `None` for an engine build that does
+  // not number its steps.
+  Step(Int?)
   Failed
   Errored
   Finished(RunOutcome)
@@ -1081,12 +1087,7 @@ fn Status::label(self : Status) -> String {
     Starting => "Starting"
     Running => "Running"
     Cancelling => "Cancelling"
-    Step(detail) =>
-      if detail.trim().is_empty() {
-        "Step"
-      } else {
-        "Step " + detail
-      }
+    Step(step) => if step is Some(step) { "Step \{step}" } else { "Step" }
     Failed => "Failed"
     Errored => "Error"
     Finished(outcome) => outcome.label()

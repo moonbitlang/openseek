@@ -20,10 +20,12 @@ test "session list decoding keeps well-formed entries and skips the rest" {
   }
   inspect(items.length(), content="2")
   inspect(items[0].id, content="desktop-b")
-  inspect(items[0].title, content="newest")
+  assert_true(items[0].title is Some("newest"))
   inspect(items[0].workspace, content="")
   inspect(items[1].id, content="tui-a")
-  inspect(items[1].title, content="")
+  // The engine always writes `title`; "" is its value for a session with no
+  // user message yet.
+  assert_true(items[1].title is Some(""))
   inspect(items[1].workspace, content="/home/user/proj")
   inspect(items[1].workspace_name, content="proj")
 }
@@ -57,7 +59,7 @@ test "transcript mapping replays a finished conversation" {
   inspect(items.length(), content="4")
   guard items[0].kind is User else { fail("expected user item") }
   inspect(items[0].content, content="question")
-  guard items[1].kind is Tool(name="shell", is_error=true, brief~) else {
+  guard items[1].kind is Tool(name="shell", is_error=true, brief=Some(brief)) else {
     fail("expected tool card")
   }
   inspect(brief, content="ran ls → exit 1")

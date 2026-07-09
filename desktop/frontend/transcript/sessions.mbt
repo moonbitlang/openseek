@@ -18,8 +18,12 @@ pub fn decode_sessions_reply(text : String) -> Array[SessionListItem]? {
   let items : Array[SessionListItem] = []
   for group in groups {
     guard group is Object(group_fields) else { continue }
-    let workspace = json_text(group_fields, "workspace")
-    let workspace_name = json_text(group_fields, "name")
+    // The host emits both group fields unconditionally ("" names the global
+    // scratch group); a group missing either is malformed and skipped whole.
+    guard @jsonx.json_text(group_fields, "workspace") is Some(workspace) &&
+      @jsonx.json_text(group_fields, "name") is Some(workspace_name) else {
+      continue
+    }
     guard group_fields.get("sessions") is Some(Array(entries)) else { continue }
     for entry in entries {
       guard entry is Object(fields) else { continue }
@@ -28,7 +32,7 @@ pub fn decode_sessions_reply(text : String) -> Array[SessionListItem]? {
       }
       items.push({
         id,
-        title: json_text(fields, "title"),
+        title: @jsonx.json_text(fields, "title"),
         workspace,
         workspace_name,
       })
@@ -59,100 +63,79 @@ pub fn transcript_from_session_json(text : String) -> Array[TranscriptItem]? {
 }
 
 ///|
-pub fn json_text(fields : Map[String, Json], key : String) -> String {
-  match fields.get(key) {
-    Some(String(value)) => value
-    _ => ""
-  }
-}
-
-///|
-pub fn json_int(
-  fields : Map[String, Json],
-  key : String,
-  fallback : Int,
-) -> Int {
-  match fields.get(key) {
-    Some(Number(value, ..)) => value.to_int()
-    _ => fallback
-  }
-}
-
-///|
-/// The field's text, falling back to a legacy field name when the current
-/// one is absent.
-fn json_first_text(
-  fields : Map[String, Json],
-  key : String,
-  legacy : String,
-) -> String {
-  match fields.get(key) {
-    Some(String(value)) => value
-    _ => json_text(fields, legacy)
-  }
-}
-
-///|
 fn append_session_item(
   items : Array[TranscriptItem],
   kind : String,
   payload : Map[String, Json],
 ) -> Unit {
+  // Every payload writes `content` unconditionally (the store's structs have
+  // no optional content); an item missing one is malformed and dropped.
+  // Whether *blank* content still earns a bubble is per-kind display policy.
+  let content = @jsonx.json_text(payload, "content")
   match kind {
-    "user" => {
-      let content = json_text(payload, "content").trim().to_owned()
-      if !content.is_empty() {
-        items.push({ kind: User, content })
+    "user" =>
+      if content is Some(content) {
+        let content = content.trim().to_owned()
+        if !content.is_empty() {
+          items.push({ kind: User, content })
+        }
       }
-    }
     "assistant" => {
-      // Thinking-mode turns store the reasoning alongside the answer; the
-      // live transcript showed it first, so replay does too.
-      let reasoning = json_text(payload, "reasoning_content").trim().to_owned()
-      if !reasoning.is_empty() {
-        items.push({ kind: Reasoning, content: reasoning })
+      // Thinking-mode turns store the reasoning alongside the answer (the
+      // store omits the field entirely otherwise); the live transcript
+      // showed it first, so replay does too.
+      if @jsonx.json_text(payload, "reasoning_content") is Some(reasoning) {
+        let reasoning = reasoning.trim().to_owned()
+        if !reasoning.is_empty() {
+          items.push({ kind: Reasoning, content: reasoning })
+        }
       }
-      let content = json_text(payload, "content").trim().to_owned()
-      if !content.is_empty() {
-        items.push({ kind: Assistant(false), content })
+      if content is Some(content) {
+        let content = content.trim().to_owned()
+        if !content.is_empty() {
+          items.push({ kind: Assistant(false), content })
+        }
       }
     }
     "tool_result" => {
-      let is_error = payload.get("is_error") is Some(True)
+      guard @jsonx.json_text(payload, "tool_name") is Some(tool_name) &&
+        @jsonx.json_bool(payload, "is_error") is Some(is_error) &&
+        content is Some(content) else {
+        return
+      }
       items.push({
         kind: Tool(
-          name=non_empty_or(json_text(payload, "tool_name"), "tool"),
+          name=if tool_name.trim().is_empty() { "tool" } else { tool_name },
           is_error~,
-          brief=json_text(payload, "brief"),
+          brief=@jsonx.json_text(payload, "brief"),
         ),
-        content: json_text(payload, "content"),
+        content,
       })
     }
-    "runtime_notice" => {
-      let content = json_text(payload, "content")
-      if !content.trim().is_empty() {
+    "runtime_notice" =>
+      if content is Some(content) && !content.trim().is_empty() {
         let update = parse_runtime_update(content)
         if !update.status.is_empty() || update.diagnostics.length() > 0 {
           items.push({
             kind: Tool(
               name=runtime_update_title(update),
               is_error=false,
-              brief="",
+              brief=None,
             ),
             content: update.diagnostics.join("\n"),
           })
         }
       }
-    }
-    "summary" => {
-      let content = json_text(payload, "content").trim().to_owned()
-      if !content.is_empty() {
-        items.push({
-          kind: Tool(name="summary", is_error=false, brief=""),
-          content,
-        })
+    "summary" =>
+      if content is Some(content) {
+        let content = content.trim().to_owned()
+        if !content.is_empty() {
+          items.push({
+            kind: Tool(name="summary", is_error=false, brief=None),
+            content,
+          })
+        }
       }
-    }
     "terminal" => append_terminal_item(items, payload)
     _ => ()
   }
@@ -163,8 +146,14 @@ fn append_terminal_item(
   items : Array[TranscriptItem],
   payload : Map[String, Json],
 ) -> Unit {
-  let message = json_text(payload, "message").trim().to_owned()
-  match json_text(payload, "kind") {
+  // The store's terminal item always carries both fields (`message` may be
+  // blank — a turn that finished without a distinct closing line).
+  guard @jsonx.json_text(payload, "kind") is Some(kind) &&
+    @jsonx.json_text(payload, "message") is Some(message) else {
+    return
+  }
+  let message = message.trim().to_owned()
+  match kind {
     // The final answer is usually already in the log as the last assistant
     // message; only a differing terminal message adds a bubble.
     "finished" =>
@@ -192,7 +181,11 @@ fn append_terminal_item(
     "failed" =>
       items.push({
         kind: Assistant(true),
-        content: non_empty_or(message, "failed"),
+        content: if message.is_empty() {
+          "failed"
+        } else {
+          message
+        },
       })
     _ => ()
   }

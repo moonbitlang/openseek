@@ -123,52 +123,69 @@ fn event_payload(event : @js.Value) -> Map[String, Json]? {
 
 ///|
 fn started_msg(payload : Map[String, Json]) -> Msg? {
-  // The host resolved the run's directory itself, so this is the decode
-  // boundary where its absolute provenance is collapsed into the type; a
-  // blank field reads as "not reported".
+  // `run_id`/`session`/`model`/`max_steps` are unconditional on this event
+  // (the app's own start op always names a session); a payload missing one
+  // is malformed and dropped. `cwd` is genuinely optional — omitted for a
+  // scratch conversation — and the host resolved it itself, so this is the
+  // decode boundary where its absolute provenance is collapsed into the type.
+  guard @jsonx.json_int(payload, "run_id") is Some(run_id) &&
+    @jsonx.json_text(payload, "session") is Some(session) &&
+    @jsonx.json_text(payload, "model") is Some(model) &&
+    @jsonx.json_int(payload, "max_steps") is Some(max_steps) else {
+    return None
+  }
   Some(
     Started(
-      run_id=@transcript.json_int(payload, "run_id", 0),
-      session=@transcript.json_text(payload, "session"),
-      model=@transcript.json_text(payload, "model"),
-      max_steps=@transcript.json_int(payload, "max_steps", 0),
-      cwd=workspace_root(@transcript.json_text(payload, "cwd")),
+      run_id~,
+      session~,
+      model~,
+      max_steps~,
+      cwd=@jsonx.json_text(payload, "cwd").map(path => Absolute(path)),
     ),
   )
 }
 
 ///|
 fn engine_msg(payload : Map[String, Json]) -> Msg? {
-  guard payload.get("event") is Some(Object(raw)) else { return None }
+  guard @jsonx.json_int(payload, "run_id") is Some(run_id) &&
+    payload.get("event") is Some(Object(raw)) else {
+    return None
+  }
   guard @transcript.decode_engine_event(raw) is Some(event) else { return None }
-  Some(Engine(@transcript.json_int(payload, "run_id", 0), event))
+  Some(Engine(run_id, event))
 }
 
 ///|
-/// A host error without a run (`run_id` absent) belongs to whatever
-/// conversation the user is looking at; the empty sentinel routes it there.
+/// A host error without a run (`run_id` omitted — a pre-run failure)
+/// belongs to whatever conversation the user is looking at; `None` routes
+/// it there. `diagnostics` rides along only when the host had stderr worth
+/// showing. Unlike other events, a malformed error is not dropped: an error
+/// must never vanish silently, so a missing or blank `message` still
+/// surfaces, labeled generically.
 fn error_msg(payload : Map[String, Json]) -> Msg? {
+  let message = if @jsonx.json_text(payload, "message") is Some(message) &&
+    !message.trim().is_empty() {
+    message
+  } else {
+    "error"
+  }
   Some(
     Error(
-      run_id=@transcript.json_int(payload, "run_id", EmptyRunId),
-      message=@transcript.non_empty_or(
-        @transcript.json_text(payload, "message"),
-        "error",
-      ),
-      diagnostics=@transcript.json_text(payload, "diagnostics"),
+      run_id=@jsonx.json_int(payload, "run_id"),
+      message~,
+      diagnostics=@jsonx.json_text(payload, "diagnostics"),
     ),
   )
 }
 
 ///|
 fn finished_msg(payload : Map[String, Json]) -> Msg? {
-  Some(
-    Finished(
-      run_id=@transcript.json_int(payload, "run_id", 0),
-      status=@transcript.json_text(payload, "status"),
-      answer=@transcript.json_text(payload, "answer"),
-    ),
-  )
+  // `answer` is present only when the agent finished with one.
+  guard @jsonx.json_int(payload, "run_id") is Some(run_id) &&
+    @jsonx.json_text(payload, "status") is Some(status) else {
+    return None
+  }
+  Some(Finished(run_id~, status~, answer=@jsonx.json_text(payload, "answer")))
 }
 
 ///|
@@ -181,8 +198,9 @@ fn connected_msg(_payload : Map[String, Json]) -> Msg? {
 /// carries the absolute `path` and the raw LSP `diagnostics` array; the update
 /// filters it to the file on screen.
 fn diagnostics_msg(payload : Map[String, Json]) -> Msg? {
-  let path = @transcript.json_text(payload, "path")
-  guard !path.is_empty() else { return None }
+  guard @jsonx.json_text(payload, "path") is Some(path) && !path.is_empty() else {
+    return None
+  }
   Some(
     FileEditor(
       DiagnosticsPublished(
@@ -207,9 +225,8 @@ fn fs_changed_msg(_payload : Map[String, Json]) -> Msg? {
 /// stamped on it; anything unparsable is dropped (a stale notification from
 /// an older build, or a payload another surface posted).
 fn notification_clicked_msg(payload : Map[String, Json]) -> Msg? {
-  let run_id = @string.parse_int(@transcript.json_text(payload, "payload")) catch {
-    _ => return None
-  }
+  guard @jsonx.json_text(payload, "payload") is Some(text) else { return None }
+  let run_id = @string.parse_int(text) catch { _ => return None }
   Some(NotificationClicked(run_id~))
 }
 
@@ -435,9 +452,9 @@ fn compact_openseek(dispatch : @cmd.Emit[Msg], session : String) -> @cmd.Cmd {
           scheduler.add(
             dispatch(
               Error(
-                run_id=EmptyRunId,
+                run_id=None,
                 message=@interop.bridge_error_text(error),
-                diagnostics="",
+                diagnostics=None,
               ),
             ),
           )
@@ -459,9 +476,9 @@ fn cancel_openseek(dispatch : @cmd.Emit[Msg], run_id : Int) -> @cmd.Cmd {
           scheduler.add(
             dispatch(
               Error(
-                run_id~,
+                run_id=Some(run_id),
                 message=@interop.bridge_error_text(error),
-                diagnostics="",
+                diagnostics=None,
               ),
             ),
           )

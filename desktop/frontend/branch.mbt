@@ -21,7 +21,7 @@ fn fetch_branch(
         payload.to_value(),
       ) catch {
         _ => {
-          scheduler.add(dispatch(BranchLoaded(session~, branch="")))
+          scheduler.add(dispatch(BranchLoaded(session~, branch=None)))
           return
         }
       }
@@ -38,9 +38,10 @@ fn fetch_branch(
 }
 
 ///|
-fn decode_branch(text : String) -> String {
-  let json = @json.parse(text) catch { _ => return "" }
-  guard json is Object(reply) else { return "" }
-  guard reply.get("branch") is Some(String(branch)) else { return "" }
-  branch
+/// The reply's `branch` — `Some("")` when the workspace is not a repository
+/// (the host's own wire value), `None` for a malformed reply.
+fn decode_branch(text : String) -> String? {
+  let json = @json.parse(text) catch { _ => return None }
+  guard json is Object(reply) else { return None }
+  @jsonx.json_text(reply, "branch")
 }

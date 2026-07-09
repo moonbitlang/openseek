@@ -117,8 +117,10 @@ async fn request_hover(
 fn decode_hover(text : String, model : @model.TextModel) -> @language.Hover? {
   let json = @json.parse(text) catch { _ => return None }
   guard json is Object(reply) else { return None }
-  let value = @transcript.json_text(reply, "value")
-  guard !value.is_empty() else { return None }
+  // `value` is always on the wire; the host says "no hover here" with "".
+  guard @jsonx.json_text(reply, "value") is Some(value) && !value.is_empty() else {
+    return None
+  }
   let content = if reply.get("markdown") is Some(True) {
     @language.HoverContent::Markdown(value)
   } else {
@@ -131,40 +133,30 @@ fn decode_hover(text : String, model : @model.TextModel) -> @language.Hover? {
 }
 
 ///|
-/// The offset range the tooltip highlights. Falls back to an empty range at the
-/// document start when the reply carries none.
+/// The offset range the tooltip highlights. An empty range at the document
+/// start when the reply carries none (`has_range` unset) — or when a
+/// position field is malformed, which reads the same way.
 fn hover_range(
   reply : Map[String, Json],
   model : @model.TextModel,
 ) -> @common.Range {
   let snapshot = model.snapshot()
-  guard reply.get("has_range") is Some(True) else {
+  guard reply.get("has_range") is Some(True) &&
+    @jsonx.json_int(reply, "start_line") is Some(start_line) &&
+    @jsonx.json_int(reply, "start_character") is Some(start_character) &&
+    @jsonx.json_int(reply, "end_line") is Some(end_line) &&
+    @jsonx.json_int(reply, "end_character") is Some(end_character) else {
     let origin = snapshot.get_position_at(0)
     return @common.Range::from_positions(origin, origin)
   }
   // The reply carries 0-based LSP positions; shift to the viewer's 1-based
   // line/column, then round-trip through offsets so the range stays clamped.
-  let start = snapshot.get_offset_at(
-    json_int(reply, "start_line") + 1,
-    json_int(reply, "start_character") + 1,
-  )
-  let end = snapshot.get_offset_at(
-    json_int(reply, "end_line") + 1,
-    json_int(reply, "end_character") + 1,
-  )
+  let start = snapshot.get_offset_at(start_line + 1, start_character + 1)
+  let end = snapshot.get_offset_at(end_line + 1, end_character + 1)
   @common.Range::from_positions(
     snapshot.get_position_at(start),
     snapshot.get_position_at(end),
   )
-}
-
-///|
-/// Read an integer field, defaulting to 0 when missing or non-numeric.
-fn json_int(fields : Map[String, Json], key : String) -> Int {
-  match fields.get(key) {
-    Some(Number(value, ..)) => value.to_int()
-    _ => 0
-  }
 }
 
 ///|
@@ -215,20 +207,28 @@ fn decode_diagnostics(diagnostics : Json) -> Array[@language.Diagnostic] {
   let result : Array[@language.Diagnostic] = []
   for item in items {
     guard item is Object(fields) else { continue }
+    // LSP requires `range` (with all four positions) and `message`; an item
+    // missing any is malformed and skipped. `severity` really is optional.
     guard fields.get("range")
-      is Some(Object({ "start": Object(start), "end": Object(end_), .. })) else {
+      is Some(Object({ "start": Object(start), "end": Object(end_), .. })) &&
+      @jsonx.json_int(start, "line") is Some(start_line) &&
+      @jsonx.json_int(start, "character") is Some(start_character) &&
+      @jsonx.json_int(end_, "line") is Some(end_line) &&
+      @jsonx.json_int(end_, "character") is Some(end_character) else {
       continue
     }
-    let message = @transcript.json_text(fields, "message")
-    guard !message.is_empty() else { continue }
+    guard @jsonx.json_text(fields, "message") is Some(message) &&
+      !message.is_empty() else {
+      continue
+    }
     result.push(@language.Diagnostic::{
       range: @common.Range::Range(
-        json_int(start, "line") + 1,
-        json_int(start, "character") + 1,
-        json_int(end_, "line") + 1,
-        json_int(end_, "character") + 1,
+        start_line + 1,
+        start_character + 1,
+        end_line + 1,
+        end_character + 1,
       ),
-      severity: diagnostic_severity(json_int(fields, "severity")),
+      severity: diagnostic_severity(@jsonx.json_int(fields, "severity")),
       message,
       tags: decode_diagnostic_tags(fields),
     })
@@ -237,13 +237,14 @@ fn decode_diagnostics(diagnostics : Json) -> Array[@language.Diagnostic] {
 }
 
 ///|
-/// Map an LSP `DiagnosticSeverity` (`Error=1 … Hint=4`) to the viewer's. An
-/// absent or unknown severity reads as `Error`, LSP's own fallback.
-fn diagnostic_severity(value : Int) -> @language.DiagnosticSeverity {
+/// Map an LSP `DiagnosticSeverity` (`Error=1 … Hint=4`) to the viewer's. The
+/// field is optional in LSP; an absent or unknown severity reads as `Error`,
+/// LSP's own documented client fallback.
+fn diagnostic_severity(value : Int?) -> @language.DiagnosticSeverity {
   match value {
-    2 => Warning
-    3 => Info
-    4 => Hint
+    Some(2) => Warning
+    Some(3) => Info
+    Some(4) => Hint
     _ => Error
   }
 }

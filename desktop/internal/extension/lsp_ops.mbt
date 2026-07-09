@@ -292,18 +292,10 @@ fn parse_symbols(raw : Json?, workspace_dir : String) -> WorkspaceSymbolsReply {
       location.get("uri") is Some(String(uri)) else {
       continue
     }
-    let kind = match fields.get("kind") {
-      Some(Number(value, ..)) => value.to_int()
-      _ => 0
-    }
-    let container = match fields.get("containerName") {
-      Some(String(value)) => value
-      _ => ""
-    }
     symbols.push({
       name,
-      kind,
-      container,
+      kind: @jsonx.json_int(fields, "kind"),
+      container: @jsonx.json_text(fields, "containerName"),
       path: workspace_relative(uri, workspace_dir),
       range: symbol_range(location),
     })

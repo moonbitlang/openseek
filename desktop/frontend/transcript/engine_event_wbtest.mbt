@@ -28,23 +28,29 @@ test "decode recognizes the streaming events" {
 
 ///|
 test "decode normalizes legacy names, numbers, and unknown events" {
-  // Older engines wrote `step`/`error` where current ones write
-  // `content`/`reason`; the current name wins when both are present.
+  // The engine numbers its steps; a build that does not still yields the
+  // event, just without a counter.
   assert_true(
-    decode_engine_event(event_fields({ "event": "agent_step", "step": "plan" }))
-    is Some(AgentStep("plan")),
+    decode_engine_event(event_fields({ "event": "agent_step", "step": 3 }))
+    is Some(AgentStep(Some(3))),
   )
   assert_true(
-    decode_engine_event(
-      event_fields({ "event": "agent_step", "content": "now", "step": "old" }),
-    )
-    is Some(AgentStep("now")),
+    decode_engine_event(event_fields({ "event": "agent_step" }))
+    is Some(AgentStep(None)),
   )
+  // Older engines wrote `error` where current ones write `reason`; the
+  // current name wins when both are present.
   assert_true(
     decode_engine_event(
       event_fields({ "event": "agent_aborted", "error": "boom" }),
     )
     is Some(AgentAborted("boom")),
+  )
+  assert_true(
+    decode_engine_event(
+      event_fields({ "event": "agent_aborted", "reason": "now", "error": "old" }),
+    )
+    is Some(AgentAborted("now")),
   )
   assert_true(
     decode_engine_event(
@@ -55,8 +61,8 @@ test "decode normalizes legacy names, numbers, and unknown events" {
     )
     is Some(Usage(prompt_tokens=5, completion_tokens=7)),
   )
-  // Older top-level counters are no longer read; a shape mismatch reads as
-  // zero rather than being dropped.
+  // A usage event whose counters are not where the engine writes them is
+  // malformed and dropped, never fabricated as zeros.
   assert_true(
     decode_engine_event(
       event_fields({
@@ -65,23 +71,40 @@ test "decode normalizes legacy names, numbers, and unknown events" {
         "completion_tokens": 7,
       }),
     )
-    is Some(Usage(prompt_tokens=0, completion_tokens=0)),
+    is None,
   )
+  // A tool_result missing fields the engine emits unconditionally is
+  // dropped too.
   assert_true(
     decode_engine_event(
       event_fields({ "event": "tool_result", "tool_name": "read" }),
     )
-    is Some(ToolResult(tool_name="read", is_error=false, content="", brief="")),
+    is None,
+  )
+  // `brief` is the one genuinely optional field: absent when the tool
+  // supplied none (or the call was skipped).
+  assert_true(
+    decode_engine_event(
+      event_fields({
+        "event": "tool_result",
+        "tool_name": "read",
+        "is_error": false,
+        "content": "…",
+        "brief": "read moon.mod",
+      }),
+    )
+    is Some(ToolResult(brief=Some("read moon.mod"), ..)),
   )
   assert_true(
     decode_engine_event(
       event_fields({
         "event": "tool_result",
         "tool_name": "read",
-        "brief": "read moon.mod",
+        "is_error": false,
+        "content": "…",
       }),
     )
-    is Some(ToolResult(brief="read moon.mod", ..)),
+    is Some(ToolResult(brief=None, ..)),
   )
   assert_true(decode_engine_event(event_fields({ "event": "novel" })) is None)
 }

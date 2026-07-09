@@ -416,12 +416,13 @@ priv struct WorkspaceSymbolsPayload {
 /// `range` is the symbol's zero-based `location.range` (the front-end shows
 /// it one-based) — all zeros when the server returned a location without a
 /// range; `kind` is the raw LSP `SymbolKind`, forwarded for the front-end to
-/// label or icon as it likes. `container` is the enclosing symbol's name, or
-/// empty.
+/// label or icon as it likes, and omitted when the server sent none.
+/// `container` is the enclosing symbol's name, omitted when the symbol has
+/// none.
 priv struct SymbolItem {
   name : String
-  kind : Int
-  container : String
+  kind : Int?
+  container : String?
   path : String
   range : SymbolRange
 } derive(ToJson)

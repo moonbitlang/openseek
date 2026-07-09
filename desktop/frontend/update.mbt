@@ -259,8 +259,7 @@ fn apply_engine_event(
   event : @transcript.EngineEvent,
 ) -> (Bool, Conversation) {
   match event {
-    AgentStep(detail) =>
-      (false, { ..conv.clear_streams(), status: Step(detail) })
+    AgentStep(step) => (false, { ..conv.clear_streams(), status: Step(step) })
     AssistantDelta(content) =>
       if content.is_empty() {
         (false, conv)
@@ -310,7 +309,7 @@ fn apply_engine_event(
             Tool(
               name=@transcript.runtime_update_title(update),
               is_error=false,
-              brief="",
+              brief=None,
             ),
             update.diagnostics.join("\n"),
           ),
@@ -326,7 +325,7 @@ fn apply_engine_event(
         true,
         conv.append_item(
           Tool(
-            name=@transcript.non_empty_or(tool_name, "tool"),
+            name=if tool_name.trim().is_empty() { "tool" } else { tool_name },
             is_error~,
             brief~,
           ),
@@ -338,11 +337,15 @@ fn apply_engine_event(
         true,
         conv.append_item(
           Tool(
-            name=@transcript.non_empty_or(tool_name, "tool"),
+            name=if tool_name.trim().is_empty() { "tool" } else { tool_name },
             is_error=true,
-            brief="",
+            brief=None,
           ),
-          @transcript.non_empty_or(reason, "tool call decode error"),
+          if reason.trim().is_empty() {
+            "tool call decode error"
+          } else {
+            reason
+          },
         ),
       )
     AgentFinished(answer) => {
@@ -402,7 +405,7 @@ fn apply_engine_event(
         (
           true,
           conv.append_item(
-            Tool(name="summary", is_error=false, brief=""),
+            Tool(name="summary", is_error=false, brief=None),
             summary,
           ),
         )
@@ -1428,18 +1431,19 @@ fn update_msg(
       }
     HostActionFailed(message) => model.notify_error(dispatch, message)
     Error(run_id~, message~, diagnostics~) => {
-      // A host error without a run (run_id is the empty sentinel) belongs to
-      // whatever conversation the user is looking at.
-      let conv = if run_id == EmptyRunId {
-        Some(model.active())
-      } else {
+      // A host error without a run belongs to whatever conversation the
+      // user is looking at.
+      let conv = if run_id is Some(run_id) {
         model.conversation_by_run(run_id)
+      } else {
+        Some(model.active())
       }
       if conv is Some(conv) {
-        let content = if diagnostics.trim().is_empty() {
-          message
-        } else {
+        let content = if diagnostics is Some(diagnostics) &&
+          !diagnostics.trim().is_empty() {
           message + "\n\n" + diagnostics
+        } else {
+          message
         }
         (
           scroll_if_active(model, conv.session_id),
@@ -1466,7 +1470,7 @@ fn update_msg(
           // in a background conversation leaves a dot until they visit.
           unseen_finish: conv.session_id != model.active_session,
         }
-        let answer = answer.trim().to_owned()
+        let answer = answer.map(answer => answer.trim().to_owned())
         // The finished run just appended to the durable store, so the
         // sidebar list (and this conversation's title) may have changed —
         // and the turn may have created the repository or switched branches.
@@ -1474,7 +1478,7 @@ fn update_msg(
           fetch_sessions(dispatch),
           fetch_branch(dispatch, conv.session_id, conv.cwd),
         ])
-        if should_append_answer(conv, answer) {
+        if answer is Some(answer) && should_append_answer(conv, answer) {
           (
             @cmd.batch([scroll_if_active(model, conv.session_id), refresh]),
             model.replace_conversation(

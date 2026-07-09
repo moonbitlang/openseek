@@ -51,17 +51,30 @@ pub fn decode_skills_catalog_reply(text : String) -> Array[MarketSkillItem]? {
   let items : Array[MarketSkillItem] = []
   for entry in entries {
     guard entry is Object(fields) else { continue }
-    let module_name = json_text(fields, "module_name")
-    let version = json_text(fields, "version")
+    // The host emits every field unconditionally (blank means "none", e.g. a
+    // root skill's package_path); an entry missing one is malformed.
+    guard @jsonx.json_text(fields, "module_name") is Some(module_name) &&
+      @jsonx.json_text(fields, "version") is Some(version) &&
+      @jsonx.json_text(fields, "name") is Some(name) &&
+      @jsonx.json_text(fields, "package_path") is Some(package_path) &&
+      @jsonx.json_text(fields, "description") is Some(description) &&
+      @jsonx.json_text(fields, "author") is Some(author) &&
+      @jsonx.json_text(fields, "repository") is Some(repository) else {
+      continue
+    }
     guard !module_name.is_empty() && !version.is_empty() else { continue }
     items.push({
-      name: non_empty_or(json_text(fields, "name"), module_name),
+      name: if name.trim().is_empty() {
+        module_name
+      } else {
+        name
+      },
       module_name,
-      package_path: json_text(fields, "package_path"),
+      package_path,
       version,
-      description: json_text(fields, "description"),
-      author: json_text(fields, "author"),
-      repository: json_text(fields, "repository"),
+      description,
+      author,
+      repository,
     })
   }
   Some(items)
@@ -78,13 +91,23 @@ pub fn decode_installed_skills_reply(
   let items : Array[InstalledSkillItem] = []
   for entry in entries {
     guard entry is Object(fields) else { continue }
-    let id = json_text(fields, "id")
-    guard !id.is_empty() else { continue }
+    guard @jsonx.json_text(fields, "id") is Some(id) && !id.is_empty() else {
+      continue
+    }
+    guard @jsonx.json_text(fields, "name") is Some(name) &&
+      @jsonx.json_text(fields, "description") is Some(description) &&
+      @jsonx.json_text(fields, "source") is Some(source) else {
+      continue
+    }
     items.push({
       id,
-      name: non_empty_or(json_text(fields, "name"), id),
-      description: json_text(fields, "description"),
-      source: json_text(fields, "source"),
+      name: if name.trim().is_empty() {
+        id
+      } else {
+        name
+      },
+      description,
+      source,
     })
   }
   Some(items)

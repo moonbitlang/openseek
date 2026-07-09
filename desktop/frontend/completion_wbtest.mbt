@@ -25,7 +25,7 @@ fn symbol_cache(
   let items = names.map(name => {
     symbol_item(
       name,
-      container="",
+      container=None,
       path="src/main.mbt",
       range=@common.Range::Range(1, 1, 1, 1),
     )
@@ -152,7 +152,7 @@ test "symbol_item resolves a jump target only when the symbol has a path" {
   let range = @common.Range::Range(5, 4, 5, 15)
   let placed = symbol_item(
     "parse_hover",
-    container="",
+    container=None,
     path="src/main.mbt",
     range~,
   )
@@ -162,7 +162,7 @@ test "symbol_item resolves a jump target only when the symbol has a path" {
   )
   // The reference anchors at the range's (one-based) start line.
   assert_eq(placed.detail, "src/main.mbt:5")
-  let unplaced = symbol_item("parse_hover", container="", path="", range~)
+  let unplaced = symbol_item("parse_hover", container=None, path="", range~)
   assert_true(unplaced.path is None)
   assert_true(unplaced.range is None)
 }

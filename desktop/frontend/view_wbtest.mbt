@@ -3,7 +3,7 @@ fn tool_item(
   name : String,
   is_error? : Bool = false,
 ) -> @transcript.TranscriptItem {
-  { kind: Tool(name~, is_error~, brief=""), content: "output" }
+  { kind: Tool(name~, is_error~, brief=None), content: "output" }
 }
 
 ///|

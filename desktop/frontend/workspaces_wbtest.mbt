@@ -66,7 +66,7 @@ test "opening a stored session adopts its workspace" {
     sessions: [
       {
         id: "desktop-w",
-        title: "in project",
+        title: Some("in project"),
         workspace: "/proj",
         workspace_name: "proj",
       },

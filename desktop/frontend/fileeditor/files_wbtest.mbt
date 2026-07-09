@@ -69,17 +69,29 @@ test "decode_file_index parses paths, truncation, and rejects garbage" {
 test "decode_file_content decodes each reply kind" {
   assert_true(
     decode_file_content(
-      "{\"kind\":\"content\",\"content\":\"hello\",\"absolute\":\"/ws/a.mbt\"}",
+      "{\"kind\":\"content\",\"content\":\"hello\",\"absolute\":\"/ws/a.mbt\",\"sig\":\"12:34\"}",
     )
-    is Some(Content(content="hello", absolute=Absolute("/ws/a.mbt"), ..)),
+    is Some(
+      Content(content="hello", absolute=Absolute("/ws/a.mbt"), sig="12:34")
+    ),
   )
   assert_true(decode_file_content("{\"kind\":\"binary\"}") is Some(Binary))
   assert_true(
     decode_file_content("{\"kind\":\"oversized\"}") is Some(Oversized),
   )
-  // A content reply without an address is unusable, as is anything else.
+  // The host writes all three fields on every content reply; one missing its
+  // address or signature is malformed and unusable, as is anything else.
   assert_true(
-    decode_file_content("{\"kind\":\"content\",\"content\":\"x\"}") is None,
+    decode_file_content(
+      "{\"kind\":\"content\",\"content\":\"x\",\"sig\":\"1:2\"}",
+    )
+    is None,
+  )
+  assert_true(
+    decode_file_content(
+      "{\"kind\":\"content\",\"content\":\"x\",\"absolute\":\"/ws/a.mbt\"}",
+    )
+    is None,
   )
   assert_true(decode_file_content("{\"truncated\":true}") is None)
   assert_true(decode_file_content("garbage") is None)

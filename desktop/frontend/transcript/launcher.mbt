@@ -20,12 +20,23 @@ pub fn decode_apps_reply(text : String) -> Array[LauncherAppItem]? {
   let items : Array[LauncherAppItem] = []
   for entry in entries {
     guard entry is Object(fields) else { continue }
-    let id = json_text(fields, "id")
-    guard !id.is_empty() else { continue }
+    guard @jsonx.json_text(fields, "id") is Some(id) && !id.is_empty() else {
+      continue
+    }
+    // Both are emitted unconditionally; `icon` is "" when the host could not
+    // extract one.
+    guard @jsonx.json_text(fields, "name") is Some(name) &&
+      @jsonx.json_text(fields, "icon") is Some(icon) else {
+      continue
+    }
     items.push({
       id,
-      name: non_empty_or(json_text(fields, "name"), id),
-      icon: json_text(fields, "icon"),
+      name: if name.trim().is_empty() {
+        id
+      } else {
+        name
+      },
+      icon,
     })
   }
   Some(items)

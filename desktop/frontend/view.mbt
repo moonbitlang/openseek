@@ -94,7 +94,12 @@ fn conversation_title(conv : Conversation) -> String {
       }
     }
   }
-  @transcript.non_empty_or(conv.task.trim().to_owned(), "OpenSeek Desktop")
+  let task = conv.task.trim().to_owned()
+  if task.is_empty() {
+    "OpenSeek Desktop"
+  } else {
+    task
+  }
 }
 
 ///|
@@ -313,7 +318,7 @@ fn push_group_rows(
       item.id == model.active_session {
       conversation_title(conv)
     } else {
-      @transcript.non_empty_or(item.title, item.id)
+      session_item_label(item)
     }
     rows.push(
       session_row(dispatch, model, item.id, label, archivable=true, nested~),
@@ -441,6 +446,18 @@ fn add_workspace_controls(
 }
 
 ///|
+/// A sidebar entry's display label: its engine-reported title, or the
+/// session id for a conversation with no user message yet (absent or blank
+/// title).
+fn session_item_label(item : @transcript.SessionListItem) -> String {
+  if item.title is Some(title) && !title.trim().is_empty() {
+    title
+  } else {
+    item.id
+  }
+}
+
+///|
 /// One row of the Archived group: the conversation's title and a
 /// hover-revealed restore button. The row is inert — an archived record is
 /// invisible to `load_session` until it is restored, so the click that
@@ -450,10 +467,7 @@ fn archived_row(
   item : @transcript.SessionListItem,
 ) -> @html.Html {
   @html.div(class="conversation-row archived", title=item.id, [
-    @html.span(
-      class="sidebar-label",
-      @transcript.non_empty_or(item.title, item.id),
-    ),
+    @html.span(class="sidebar-label", session_item_label(item)),
     @html.button(
       class="row-archive",
       type_="button",
@@ -768,7 +782,13 @@ fn tool_call_view(item : @transcript.TranscriptItem) -> @html.Html {
   guard item.kind is Tool(name~, is_error~, brief~) else {
     return @html.text("")
   }
-  let label = capitalize(@transcript.non_empty_or(brief, name))
+  let label = capitalize(
+    if brief is Some(brief) && !brief.trim().is_empty() {
+      brief
+    } else {
+      name
+    },
+  )
   let error_class = if is_error { " error" } else { "" }
   if item.content.trim().is_empty() {
     @html.div(class="tool-call-label" + error_class, label)
@@ -1327,8 +1347,8 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       model.selected_model,
     ),
   ]
-  if !conv.branch.is_empty() {
-    status.push(@html.span(class="composer-branch", conv.branch))
+  if conv.branch is Some(branch) && !branch.is_empty() {
+    status.push(@html.span(class="composer-branch", branch))
   }
   let controls : Array[@html.Html] = [
     @html.div(class="composer-status", status),

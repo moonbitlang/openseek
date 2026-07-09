@@ -47,14 +47,23 @@ fn decode_symbols(text : String) -> Array[CompletionItem]? {
   let rows : Array[CompletionItem] = []
   for item in items {
     guard item is Object(fields) else { continue }
-    let name = @transcript.json_text(fields, "name")
-    guard !name.is_empty() else { continue }
+    // `name`/`path`/`range` are unconditional on the wire (an all-zeros
+    // range stands in for a location without one) — a row missing any is
+    // malformed. `container` really is optional: omitted for a top-level
+    // symbol.
+    guard @jsonx.json_text(fields, "name") is Some(name) && !name.is_empty() else {
+      continue
+    }
+    guard @jsonx.json_text(fields, "path") is Some(path) &&
+      json_range(fields) is Some(range) else {
+      continue
+    }
     rows.push(
       symbol_item(
         name,
-        container=@transcript.json_text(fields, "container"),
-        path=@transcript.json_text(fields, "path"),
-        range=json_range(fields),
+        container=@jsonx.json_text(fields, "container"),
+        path~,
+        range~,
       ),
     )
   }
@@ -63,18 +72,25 @@ fn decode_symbols(text : String) -> Array[CompletionItem]? {
 
 ///|
 /// A symbol row's `range` (LSP-shaped, zero-based) as a one-based viewer
-/// range. A missing or malformed range collapses to the empty range at the
-/// document start — the same shape the host sends for a location without one.
-fn json_range(fields : Map[String, Json]) -> @common.Range {
+/// range; `None` for a malformed one. The host always sends a range — all
+/// zeros for a location without one, which lands as the empty range at the
+/// document start.
+fn json_range(fields : Map[String, Json]) -> @common.Range? {
   guard fields.get("range")
-    is Some(Object({ "start": Object(start), "end": Object(end_), .. })) else {
-    return @common.Range::Range(1, 1, 1, 1)
+    is Some(Object({ "start": Object(start), "end": Object(end_), .. })) &&
+    @jsonx.json_int(start, "line") is Some(start_line) &&
+    @jsonx.json_int(start, "col") is Some(start_col) &&
+    @jsonx.json_int(end_, "line") is Some(end_line) &&
+    @jsonx.json_int(end_, "col") is Some(end_col) else {
+    return None
   }
-  @common.Range::Range(
-    @transcript.json_int(start, "line", 0) + 1,
-    @transcript.json_int(start, "col", 0) + 1,
-    @transcript.json_int(end_, "line", 0) + 1,
-    @transcript.json_int(end_, "col", 0) + 1,
+  Some(
+    @common.Range::Range(
+      start_line + 1,
+      start_col + 1,
+      end_line + 1,
+      end_col + 1,
+    ),
   )
 }
 
@@ -87,7 +103,7 @@ fn json_range(fields : Map[String, Json]) -> @common.Range {
 /// it just gives the jump nothing to select.
 fn symbol_item(
   name : String,
-  container~ : String,
+  container~ : String?,
   path~ : String,
   range~ : @common.Range,
 ) -> CompletionItem {
@@ -96,10 +112,14 @@ fn symbol_item(
   } else {
     "\{path}:\{range.start_line_number}"
   }
-  let detail = match (container.is_empty(), location.is_empty()) {
-    (true, _) => location
-    (false, true) => container
-    (false, false) => "\{container} · \{location}"
+  let detail = if container is Some(container) && !container.is_empty() {
+    if location.is_empty() {
+      container
+    } else {
+      "\{container} · \{location}"
+    }
+  } else {
+    location
   }
   let reference = if location.is_empty() {
     "`\{name}`"

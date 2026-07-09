@@ -4,7 +4,9 @@
 /// each case carries only the fields that event actually uses and the match
 /// is exhaustive.
 pub(all) enum EngineEvent {
-  AgentStep(String)
+  // The 1-based step counter (`step`); `None` for an engine build that does
+  // not number its steps.
+  AgentStep(Int?)
   AssistantDelta(String)
   ReasoningDelta(String)
   ReasoningMessage(String)
@@ -15,7 +17,7 @@ pub(all) enum EngineEvent {
     tool_name~ : String,
     is_error~ : Bool,
     content~ : String,
-    brief~ : String
+    brief~ : String?
   )
   ToolCallDecodeError(tool_name~ : String, reason~ : String)
   AgentFinished(String)
@@ -37,53 +39,70 @@ pub(all) enum EngineEvent {
 
 ///|
 /// Normalize the raw engine-event JSON into a typed event. Unknown event
-/// names decode to `None` and are dropped at the bridge, so the
-/// stringly-typed tag never escapes into the update logic.
+/// names — and events missing a field the engine emits unconditionally —
+/// decode to `None` and are dropped at the bridge, so neither the
+/// stringly-typed tag nor a fabricated placeholder ever escapes into the
+/// update logic.
 pub fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
-  // Older engine builds wrote `step` and `error` where current ones write
-  // `content` and `reason`; the current name wins when both are present.
-  let content = json_first_text(raw, "content", "step")
-  let reason = json_first_text(raw, "reason", "error")
-  let tool_name = json_text(raw, "tool_name")
-  match json_text(raw, "event") {
-    "agent_step" => Some(AgentStep(content))
-    "assistant_delta" => Some(AssistantDelta(content))
-    "reasoning_delta" => Some(ReasoningDelta(content))
-    "reasoning_message" => Some(ReasoningMessage(content))
-    "assistant_message" => Some(AssistantMessage(content))
-    "runtime_update" => Some(RuntimeUpdate(content))
+  // Older engine builds wrote `error` where current ones write `reason`
+  // (the host's synthesized `compaction_failed` also says `reason`); the
+  // current name wins when both are present.
+  let content = @jsonx.json_text(raw, "content")
+  let reason = @jsonx.json_first_text(raw, "reason", "error")
+  guard @jsonx.json_text(raw, "event") is Some(event) else { return None }
+  match event {
+    "agent_step" => Some(AgentStep(@jsonx.json_int(raw, "step")))
+    "assistant_delta" => content.map(content => AssistantDelta(content))
+    "reasoning_delta" => content.map(content => ReasoningDelta(content))
+    "reasoning_message" => content.map(content => ReasoningMessage(content))
+    "assistant_message" => content.map(content => AssistantMessage(content))
+    "runtime_update" => content.map(content => RuntimeUpdate(content))
     "usage" => {
       // The engine nests the counters under a `usage` object
-      // (`print_usage` serializes the DeepSeek `Usage` struct verbatim).
-      guard raw.get("usage") is Some(Object(usage)) else {
-        return Some(Usage(prompt_tokens=0, completion_tokens=0))
+      // (`print_usage` serializes the DeepSeek `Usage` struct verbatim,
+      // whose counters are plain always-present ints).
+      guard raw.get("usage") is Some(Object(usage)) &&
+        @jsonx.json_int(usage, "prompt_tokens") is Some(prompt_tokens) &&
+        @jsonx.json_int(usage, "completion_tokens") is Some(completion_tokens) else {
+        return None
       }
-      Some(
-        Usage(
-          prompt_tokens=json_int(usage, "prompt_tokens", 0),
-          completion_tokens=json_int(usage, "completion_tokens", 0),
-        ),
-      )
+      Some(Usage(prompt_tokens~, completion_tokens~))
     }
-    "tool_result" =>
+    "tool_result" => {
+      guard @jsonx.json_text(raw, "tool_name") is Some(tool_name) &&
+        @jsonx.json_bool(raw, "is_error") is Some(is_error) &&
+        @jsonx.json_text(raw, "content") is Some(content) else {
+        return None
+      }
       Some(
         ToolResult(
           tool_name~,
-          is_error=raw.get("is_error") is Some(True),
+          is_error~,
           content~,
-          brief=json_text(raw, "brief"),
+          brief=@jsonx.json_text(raw, "brief"),
         ),
       )
-    "tool_call_decode_error" => Some(ToolCallDecodeError(tool_name~, reason~))
-    "agent_finished" => Some(AgentFinished(json_text(raw, "answer")))
-    "agent_aborted" => Some(AgentAborted(reason))
+    }
+    "tool_call_decode_error" => {
+      guard @jsonx.json_text(raw, "tool_name") is Some(tool_name) &&
+        reason is Some(reason) else {
+        return None
+      }
+      Some(ToolCallDecodeError(tool_name~, reason~))
+    }
+    "agent_finished" =>
+      @jsonx.json_text(raw, "answer").map(answer => AgentFinished(answer))
+    "agent_aborted" => reason.map(reason => AgentAborted(reason))
     "max_steps_exhausted" => Some(MaxStepsExhausted)
-    "agent_setup_failed" => Some(AgentSetupFailed(reason))
-    "steer_applied" => Some(SteerApplied(content))
-    "steer_dropped" => Some(SteerDropped(content))
+    "agent_setup_failed" => reason.map(reason => AgentSetupFailed(reason))
+    "steer_applied" => content.map(content => SteerApplied(content))
+    "steer_dropped" => content.map(content => SteerDropped(content))
     "compaction_started" => Some(CompactionStarted)
-    "compaction_finished" => Some(CompactionFinished(json_text(raw, "summary")))
-    "compaction_failed" => Some(CompactionFailed(reason))
+    "compaction_finished" =>
+      @jsonx.json_text(raw, "summary").map(summary => {
+        CompactionFinished(summary)
+      })
+    "compaction_failed" => reason.map(reason => CompactionFailed(reason))
     _ => None
   }
 }

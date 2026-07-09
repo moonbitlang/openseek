@@ -12,13 +12,7 @@ pub fn decode_sessions_reply(String) -> Array[SessionListItem]?
 
 pub fn decode_skills_catalog_reply(String) -> Array[MarketSkillItem]?
 
-pub fn json_int(Map[String, Json], String, Int) -> Int
-
-pub fn json_text(Map[String, Json], String) -> String
-
 pub fn market_source_label(MarketSkillItem) -> String
-
-pub fn non_empty_or(String, String) -> String
 
 pub fn parse_runtime_update(String) -> RuntimeUpdateView
 
@@ -30,14 +24,14 @@ pub fn transcript_from_session_json(String) -> Array[TranscriptItem]?
 
 // Types and methods
 pub(all) enum EngineEvent {
-  AgentStep(String)
+  AgentStep(Int?)
   AssistantDelta(String)
   ReasoningDelta(String)
   ReasoningMessage(String)
   AssistantMessage(String)
   RuntimeUpdate(String)
   Usage(prompt_tokens~ : Int, completion_tokens~ : Int)
-  ToolResult(tool_name~ : String, is_error~ : Bool, content~ : String, brief~ : String)
+  ToolResult(tool_name~ : String, is_error~ : Bool, content~ : String, brief~ : String?)
   ToolCallDecodeError(tool_name~ : String, reason~ : String)
   AgentFinished(String)
   AgentAborted(String)
@@ -61,7 +55,7 @@ pub(all) enum ItemKind {
   User
   Assistant(Bool)
   Reasoning
-  Tool(name~ : String, is_error~ : Bool, brief~ : String)
+  Tool(name~ : String, is_error~ : Bool, brief~ : String?)
 }
 
 pub(all) struct LauncherAppItem {
@@ -87,7 +81,7 @@ pub struct RuntimeUpdateView {
 
 pub(all) struct SessionListItem {
   id : String
-  title : String
+  title : String?
   workspace : String
   workspace_name : String
 }

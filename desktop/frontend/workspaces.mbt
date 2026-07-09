@@ -16,11 +16,13 @@ fn fetch_workspaces(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       ) catch {
         _ => return
       }
-      scheduler.add(
-        dispatch(
-          WorkspacesLoaded(decode_workspaces(@interop.reply_json_text(reply))),
-        ),
-      )
+      // A malformed reply is dropped like a failed op: the sidebar keeps
+      // whatever list it already shows.
+      guard decode_workspaces(@interop.reply_json_text(reply))
+        is Some(workspaces) else {
+        return
+      }
+      scheduler.add(dispatch(WorkspacesLoaded(workspaces)))
     })
   })
 }
@@ -92,28 +94,29 @@ async fn workspace_action_into(
       return
     }
   }
-  scheduler.add(
-    dispatch(
-      WorkspacesLoaded(decode_workspaces(@interop.reply_json_text(reply))),
-    ),
-  )
+  match decode_workspaces(@interop.reply_json_text(reply)) {
+    Some(workspaces) => scheduler.add(dispatch(WorkspacesLoaded(workspaces)))
+    None => scheduler.add(dispatch(WorkspaceFailed("malformed workspace list")))
+  }
   // The registry changed, so the sidebar has a session group to gain or
   // drop; refresh the list that carries them.
   refresh_sessions_into(scheduler, dispatch)
 }
 
 ///|
-fn decode_workspaces(text : String) -> Array[String] {
-  let json = @json.parse(text) catch { _ => return [] }
-  guard json is Object(reply) else { return [] }
-  guard reply.get("workspaces") is Some(Array(items)) else { return [] }
+/// The reply's registered workspace paths; `None` only for structurally
+/// unusable JSON.
+fn decode_workspaces(text : String) -> Array[String]? {
+  let json = @json.parse(text) catch { _ => return None }
+  guard json is Object(reply) else { return None }
+  guard reply.get("workspaces") is Some(Array(items)) else { return None }
   let paths : Array[String] = []
   for item in items {
     if item is String(path) && !path.is_empty() {
       paths.push(path)
     }
   }
-  paths
+  Some(paths)
 }
 
 ///|
