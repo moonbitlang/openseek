@@ -23,11 +23,16 @@ fn scroll_if_active(model : Model, session_id : String) -> @cmd.Cmd {
 }
 
 ///|
-/// Whether an event is part of the compaction lifecycle, which the engine
-/// emits while idle and the routing therefore matches by last run id.
-fn is_compaction_event(event : @transcript.EngineEvent) -> Bool {
+/// Whether an event the engine emits while idle (between turns) — the
+/// compaction lifecycle and background-job notices — so the routing must
+/// match by last run id: the run that owned the id has already cleared
+/// `active_run_id` by the time these arrive.
+fn is_idle_event(event : @transcript.EngineEvent) -> Bool {
   match event {
-    CompactionStarted | CompactionFinished(_) | CompactionFailed(_) => true
+    CompactionStarted
+    | CompactionFinished(_)
+    | CompactionFailed(_)
+    | RuntimeUpdate(_) => true
     _ => false
   }
 }
@@ -1355,13 +1360,14 @@ fn update_msg(
         (@cmd.none, model)
       }
     Engine(run_id, event) => {
-      // Compaction is requested between turns, so its events arrive after the
-      // run that owned `run_id` cleared `active_run_id`; fall back to the
-      // conversation that last held the id so the summary still lands.
+      // Compaction and background notices happen between turns, so their
+      // events arrive after the run that owned `run_id` cleared
+      // `active_run_id`; fall back to the conversation that last held the id
+      // so the summary or notice still lands.
       let conv = match model.conversation_by_run(run_id) {
         Some(conv) => Some(conv)
         None =>
-          if is_compaction_event(event) {
+          if is_idle_event(event) {
             model.conversation_by_last_run(run_id)
           } else {
             None

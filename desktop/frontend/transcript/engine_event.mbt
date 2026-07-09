@@ -56,6 +56,12 @@ pub fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
     "reasoning_delta" => content.map(content => ReasoningDelta(content))
     "reasoning_message" => content.map(content => ReasoningMessage(content))
     "assistant_message" => content.map(content => AssistantMessage(content))
+    // A background job's completion notice (the `moon_check --watch` stream),
+    // emitted while the engine is idle. `runtime_update` is the event's
+    // legacy name. The engine's `plan_reminder` is deliberately not decoded:
+    // it is model-directed text, not a notice for the user (the TUI drops it
+    // too).
+    "background_notice" => content.map(content => RuntimeUpdate(content))
     "runtime_update" => content.map(content => RuntimeUpdate(content))
     "usage" => {
       // The engine nests the counters under a `usage` object

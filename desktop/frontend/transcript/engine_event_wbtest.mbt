@@ -110,6 +110,34 @@ test "decode normalizes legacy names, numbers, and unknown events" {
 }
 
 ///|
+test "decode maps background notices onto the runtime-update path" {
+  // Current engines say `background_notice`; `runtime_update` is the same
+  // event's legacy name. Both carry the watcher text verbatim.
+  guard decode_engine_event(
+      event_fields({
+        "event": "background_notice",
+        "content": "[moon_check update]",
+      }),
+    )
+    is Some(RuntimeUpdate("[moon_check update]")) else {
+    fail("background_notice not decoded")
+  }
+  guard decode_engine_event(
+      event_fields({ "event": "runtime_update", "content": "notice" }),
+    )
+    is Some(RuntimeUpdate("notice")) else {
+    fail("runtime_update not decoded")
+  }
+  // The engine's plan reminder is model-directed text, not a user notice.
+  assert_true(
+    decode_engine_event(
+      event_fields({ "event": "plan_reminder", "content": "[plan reminder]" }),
+    )
+    is None,
+  )
+}
+
+///|
 test "decode recognizes the steer events" {
   guard decode_engine_event(
       event_fields({ "event": "steer_applied", "content": "left" }),

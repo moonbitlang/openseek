@@ -176,6 +176,25 @@ test "a background finish marks its conversation until it is opened" {
 }
 
 ///|
+test "an idle background notice routes by the last run id" {
+  let dispatch = test_dispatch()
+  // The run already finished: `active_run_id` is cleared, only the last-run
+  // memory ties the id back to its conversation.
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    active_run_id: None,
+    last_run_id: Some(7),
+  })
+  let notice = "[moon_check update]\nstatus=failed\nmain.mbt:1 error"
+  let (_, next) = update(dispatch, Engine(7, RuntimeUpdate(notice)), model)
+  inspect(next.active().watcher_status, content="failed")
+  guard next.active().messages.get(0)
+    is Some({ kind: Tool(name="moon_check failed", ..), .. }) else {
+    fail("expected a runtime notice card")
+  }
+}
+
+///|
 test "new chat keeps the model intact until the rotation lands" {
   let dispatch = test_dispatch()
   let model = { ..running_model(), loading_session: "desktop-stale" }
