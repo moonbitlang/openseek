@@ -281,7 +281,11 @@ fn run_slash_command(
               // conversation gets its engine spawned on demand) — a prompt
               // sent into either gap would be consumed and rejected instead
               // of held. compaction_started confirms; CompactRejected clears.
-              compaction: if conv.is_running() { Queued } else { Requested },
+              compaction: if conv.is_running() {
+                Queued
+              } else {
+                Requested
+              },
             }),
             completion: None,
           },
@@ -1357,18 +1361,12 @@ fn update_msg(
     LauncherLoaded(apps) =>
       (
         @cmd.none,
-        {
-          ..model,
-          launcher: { ..model.launcher, apps: AppsFetched(apps) },
-        },
+        { ..model, launcher: { ..model.launcher, apps: AppsFetched(apps) } },
       )
     LauncherFailed(message) =>
       (
         @cmd.none,
-        {
-          ..model,
-          launcher: { ..model.launcher, apps: AppsFailed(message) },
-        },
+        { ..model, launcher: { ..model.launcher, apps: AppsFailed(message) } },
       )
     LaunchApp(app) => {
       let conv = model.active()

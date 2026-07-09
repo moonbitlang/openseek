@@ -860,16 +860,16 @@ fn Model::display_status(self : Model) -> Status {
     Connecting => WaitingBridge
     BridgeLost(message) => Unavailable(message)
     Connected =>
-    match self.active().run {
-      NoRun(ended=None) => self.settings_status()
-      NoRun(ended=Some(RunFailed)) => Failed
-      NoRun(ended=Some(RunErrored)) => Errored
-      NoRun(ended=Some(RunFinished(outcome))) => Finished(outcome)
-      Starting => Starting
-      Open(stage=Opened, ..) => Running
-      Open(stage=AtStep(step), ..) => Step(step)
-      Open(stage=Cancelling, ..) => Cancelling
-    }
+      match self.active().run {
+        NoRun(ended=None) => self.settings_status()
+        NoRun(ended=Some(RunFailed)) => Failed
+        NoRun(ended=Some(RunErrored)) => Errored
+        NoRun(ended=Some(RunFinished(outcome))) => Finished(outcome)
+        Starting => Starting
+        Open(stage=Opened, ..) => Running
+        Open(stage=AtStep(step), ..) => Step(step)
+        Open(stage=Cancelling, ..) => Cancelling
+      }
   }
 }
 
@@ -982,7 +982,9 @@ fn Model::activate(self : Model, session_id : String) -> Model {
       found = true
       // Opening the conversation is what "seen" means.
       conversations.push({ ..conv, unseen_finish: false })
-    } else if conv.is_running() || conv.messages.length() > 0 || !conv.draft_empty() {
+    } else if conv.is_running() ||
+      conv.messages.length() > 0 ||
+      !conv.draft_empty() {
       conversations.push(conv)
     }
   }

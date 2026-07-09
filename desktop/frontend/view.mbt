@@ -2069,29 +2069,30 @@ fn launcher_menu(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       rows.push(@html.div(class="launcher-empty danger", message))
     AppsNotFetched =>
       rows.push(@html.div(class="launcher-empty", "Finding apps…"))
-    AppsFetched([]) => rows.push(@html.div(class="launcher-empty", "No apps found"))
+    AppsFetched([]) =>
+      rows.push(@html.div(class="launcher-empty", "No apps found"))
     AppsFetched(apps) =>
       for app in apps {
-      let icon = if app.icon.is_empty() {
-        @html.span(class="launcher-icon letter", app_initial(app.name))
-      } else {
-        @html.img(
-          class="launcher-icon",
-          src=app.icon,
-          alt=app.name,
-          width=24,
-          height=24,
+        let icon = if app.icon.is_empty() {
+          @html.span(class="launcher-icon letter", app_initial(app.name))
+        } else {
+          @html.img(
+            class="launcher-icon",
+            src=app.icon,
+            alt=app.name,
+            width=24,
+            height=24,
+          )
+        }
+        rows.push(
+          @html.button(
+            class="launcher-item",
+            type_="button",
+            on_click=dispatch(LaunchApp(app.id)),
+            [icon, @html.span(class="launcher-name", app.name)],
+          ),
         )
       }
-      rows.push(
-        @html.button(
-          class="launcher-item",
-          type_="button",
-          on_click=dispatch(LaunchApp(app.id)),
-          [icon, @html.span(class="launcher-name", app.name)],
-        ),
-      )
-    }
   }
   @html.div(class="launcher-menu", rows)
 }

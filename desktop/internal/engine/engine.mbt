@@ -251,10 +251,7 @@ fn EngineManager::serving(
 
 ///|
 /// This conversation's slot, created empty on first touch.
-fn slot_for(
-  sessions : Map[String, SessionSlot],
-  key : String,
-) -> SessionSlot {
+fn slot_for(sessions : Map[String, SessionSlot], key : String) -> SessionSlot {
   if sessions.get(key) is Some(slot) {
     slot
   } else {
@@ -275,7 +272,6 @@ fn EngineManager::prune_slot(self : EngineManager, key : String) -> Unit {
     sessions.remove(key)
   }
 }
-
 
 ///|
 priv enum StreamMessage {
@@ -814,9 +810,7 @@ async fn serve_engine_consumer(
             // notice, so synthesize the failure it can no longer send.
             if compact_queued {
               emit_compaction_failed(
-                sink,
-                engine,
-                "engine exited before the queued compaction started",
+                sink, engine, "engine exited before the queued compaction started",
               )
             }
           }

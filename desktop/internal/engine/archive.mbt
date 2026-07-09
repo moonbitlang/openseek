@@ -73,12 +73,10 @@ pub async fn archive_session(
   if slot is Some(slot) {
     slot.claim(ArchivePending)
   }
-  defer {
-    if slot is Some(slot) {
-      slot.pending = None
-      manager.prune_slot(session)
-    }
-  }
+  defer (if slot is Some(slot) {
+    slot.pending = None
+    manager.prune_slot(session)
+  })
   if slot is Some(slot) && slot.engine is Some(live) {
     match live.phase {
       Running(..) =>

@@ -14,10 +14,7 @@ fn test_conversation() -> Conversation {
 
 ///|
 fn running_conversation() -> Conversation {
-  {
-    ..test_conversation(),
-    run: Open(run_id=7, stage=Opened),
-  }
+  { ..test_conversation(), run: Open(run_id=7, stage=Opened) }
 }
 
 ///|
@@ -60,8 +57,16 @@ test "update is pure: replaying a delta on the same model is idempotent" {
     ..running_conversation(),
     streaming_response: "partial",
   })
-  let (_, once) = update(dispatch, Engine(7, AssistantDelta("!"), session=None), model)
-  let (_, twice) = update(dispatch, Engine(7, AssistantDelta("!"), session=None), model)
+  let (_, once) = update(
+    dispatch,
+    Engine(7, AssistantDelta("!"), session=None),
+    model,
+  )
+  let (_, twice) = update(
+    dispatch,
+    Engine(7, AssistantDelta("!"), session=None),
+    model,
+  )
   inspect(once.active().streaming_response, content="partial!")
   inspect(twice.active().streaming_response, content="partial!")
 }
@@ -105,7 +110,11 @@ test "assistant message replaces the live stream with a committed item" {
     streaming_response: "answ",
     streaming_reasoning: "thought",
   })
-  let (_, next) = update(dispatch, Engine(7, AssistantMessage("answer"), session=None), model)
+  let (_, next) = update(
+    dispatch,
+    Engine(7, AssistantMessage("answer"), session=None),
+    model,
+  )
   inspect(next.active().streaming_response, content="")
   inspect(next.active().streaming_reasoning, content="")
   inspect(next.active().messages.length(), content="1")
@@ -120,7 +129,11 @@ test "a new agent step clears both live streams" {
     streaming_response: "left",
     streaming_reasoning: "over",
   })
-  let (_, next) = update(dispatch, Engine(7, AgentStep(Some(2)), session=None), model)
+  let (_, next) = update(
+    dispatch,
+    Engine(7, AgentStep(Some(2)), session=None),
+    model,
+  )
   inspect(next.active().streaming_response, content="")
   inspect(next.active().streaming_reasoning, content="")
 }
@@ -183,7 +196,11 @@ test "an idle background notice routes by the last run id" {
     last_run_id: Some(7),
   })
   let notice = "[moon_check update]\nstatus=failed\nmain.mbt:1 error"
-  let (_, next) = update(dispatch, Engine(7, RuntimeUpdate(notice), session=None), model)
+  let (_, next) = update(
+    dispatch,
+    Engine(7, RuntimeUpdate(notice), session=None),
+    model,
+  )
   inspect(next.active().watcher_status, content="failed")
   guard next.active().messages.get(0)
     is Some({ kind: Tool(name="moon_check failed", ..), .. }) else {
@@ -525,7 +542,11 @@ test "concurrent conversations keep their streams apart" {
     run: Open(run_id=8, stage=Opened),
   }
   let model = running_model().replace_conversation(second)
-  let (_, next) = update(dispatch, Engine(8, AssistantDelta("for B"), session=None), model)
+  let (_, next) = update(
+    dispatch,
+    Engine(8, AssistantDelta("for B"), session=None),
+    model,
+  )
   // Run 8 belongs to the background conversation; the active one is untouched.
   inspect(next.active().streaming_response, content="")
   guard next.find_conversation("desktop-second") is Some(bg) else {
@@ -614,7 +635,11 @@ test "steer_applied commits the pending steer as a user message" {
     ..running_conversation(),
     pending_steers: ["go left"],
   })
-  let (_, next) = update(dispatch, Engine(7, SteerApplied("go left"), session=None), model)
+  let (_, next) = update(
+    dispatch,
+    Engine(7, SteerApplied("go left"), session=None),
+    model,
+  )
   inspect(next.active().pending_steers.length(), content="0")
   inspect(next.active().messages.length(), content="1")
   guard next.active().messages[0].kind is User else {
@@ -630,7 +655,11 @@ test "steer_dropped settles the pending steer with a visible notice" {
     ..running_conversation(),
     pending_steers: ["go left"],
   })
-  let (_, next) = update(dispatch, Engine(7, SteerDropped("go left"), session=None), model)
+  let (_, next) = update(
+    dispatch,
+    Engine(7, SteerDropped("go left"), session=None),
+    model,
+  )
   inspect(next.active().pending_steers.length(), content="0")
   inspect(next.active().messages.length(), content="1")
   guard next.active().messages[0].kind is Assistant(true) else {
@@ -646,7 +675,11 @@ test "an identical-text settle removes exactly one pending entry" {
     ..running_conversation(),
     pending_steers: ["again", "again"],
   })
-  let (_, next) = update(dispatch, Engine(7, SteerApplied("again"), session=None), model)
+  let (_, next) = update(
+    dispatch,
+    Engine(7, SteerApplied("again"), session=None),
+    model,
+  )
   inspect(next.active().pending_steers.length(), content="1")
   inspect(next.active().pending_steers[0], content="again")
   inspect(next.active().messages.length(), content="1")
@@ -1068,7 +1101,11 @@ test "an unpinned transcript stays unpinned while a stream grows" {
   // must not flip it back, or the next render would yank the reader down.
   let dispatch = test_dispatch()
   let model = { ..running_model(), transcript_pinned: false }
-  let (_, next) = update(dispatch, Engine(7, AssistantDelta("more"), session=None), model)
+  let (_, next) = update(
+    dispatch,
+    Engine(7, AssistantDelta("more"), session=None),
+    model,
+  )
   inspect(next.transcript_pinned, content="false")
   inspect(next.active().streaming_response, content="more")
 }
@@ -1504,7 +1541,11 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
   let (_, held) = update(dispatch, Send, drafted)
   inspect(held.active().task, content="next prompt")
   // The engine reaches the queued compaction: queued flips into compacting.
-  let (_, started) = update(dispatch, Engine(7, CompactionStarted, session=None), held)
+  let (_, started) = update(
+    dispatch,
+    Engine(7, CompactionStarted, session=None),
+    held,
+  )
   assert_true(started.active().compaction is Compacting)
 }
 
