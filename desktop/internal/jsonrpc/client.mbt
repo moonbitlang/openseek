@@ -74,6 +74,14 @@ pub fn Client::set_notification_handler(
 }
 
 ///|
+/// Whether the transport has ended. A closed client never answers again —
+/// every later request fails fast with `Closed` — so a pool holding one
+/// should discard it and connect afresh.
+pub fn Client::is_closed(self : Client) -> Bool {
+  self.closed
+}
+
+///|
 /// Issue a request and await its result. Concurrency-safe and order-independent:
 /// many requests may be outstanding at once, and each reply is routed to its
 /// request by id. Raises `ResponseError::Failed` on a JSON-RPC error reply, or

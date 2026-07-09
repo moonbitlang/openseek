@@ -16,6 +16,7 @@ type Session
 pub fn Session::diagnostics_for(Self, uri~ : String) -> Json?
 pub async fn Session::hover(Self, uri~ : String, line~ : Int, character~ : Int) -> Json?
 pub async fn Session::initialize(Self, root_uri~ : String) -> Unit
+pub fn Session::is_closed(Self) -> Bool
 pub fn Session::new(@jsonrpc.Client) -> Self
 pub fn Session::on_publish_diagnostics(Self, (String, Json) -> Unit) -> Unit
 pub async fn Session::sync_document(Self, uri~ : String, language_id~ : String, text~ : String) -> Unit

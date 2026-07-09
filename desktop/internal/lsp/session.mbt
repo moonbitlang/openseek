@@ -59,6 +59,14 @@ pub fn Session::on_publish_diagnostics(
 }
 
 ///|
+/// Whether the underlying transport has ended (the server exited or its pipe
+/// closed). A closed session answers nothing further; a pool holding one
+/// should retire it and start a fresh server.
+pub fn Session::is_closed(self : Session) -> Bool {
+  self.client.is_closed()
+}
+
+///|
 /// The server's latest diagnostics for `uri` (the raw LSP `diagnostics` array),
 /// or `None` if it has published none.
 pub fn Session::diagnostics_for(self : Session, uri~ : String) -> Json? {

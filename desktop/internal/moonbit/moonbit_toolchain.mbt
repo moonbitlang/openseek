@@ -264,6 +264,38 @@ pub async fn prepare_bundled_home(
 }
 
 ///|
+/// A complete child environment (pass with `inherit_env=false`) for spawning a
+/// binary out of the bundled toolchain: the current environment with `bin_dir`
+/// prepended to the path variable and any ambient `MOON_HOME` dropped — moon
+/// tools prefer `MOON_HOME` over their executable-relative home, so one
+/// exported by the launching shell would run the bundled binary against an
+/// unrelated toolchain home. Mirrors the engine's child environment. Windows
+/// blocks commonly spell the key `Path`; update the spelling that already
+/// exists and drop any duplicates, so the child sees exactly one path variable.
+pub fn bundled_tool_env(bin_dir : @path.Path) -> Map[String, String] {
+  let env = @sys.get_env_vars()
+  let mut key = "PATH"
+  let mut current : String? = None
+  let duplicates : Array[String] = []
+  for name, value in env {
+    if name.to_upper() == "PATH" {
+      if current is None {
+        key = name
+        current = Some(value)
+      } else {
+        duplicates.push(name)
+      }
+    }
+  }
+  for name in duplicates {
+    env.remove(name)
+  }
+  env[key] = prepend_to_path_env(bin_dir.to_string(), current)
+  env.remove("MOON_HOME")
+  env
+}
+
+///|
 /// Path to the `moon-lsp` shipped in the bundled MoonBit toolchain, or `None`
 /// when there is no bundled seed (a dev run of the bare host binary, where the
 /// caller falls back to `moon-lsp` on PATH). This shares the home the engine

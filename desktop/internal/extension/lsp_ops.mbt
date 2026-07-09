@@ -60,6 +60,11 @@ priv struct LspManager {
   runtime_dir : @path.Path?
   // The resolved `moon-lsp` to spawn, computed once on first use; "" until then.
   mut command : String
+  // The child environment for spawning `command`, resolved with it. Set (and
+  // passed with `inherit_env=false`) when the command is the bundled moon-lsp,
+  // which must not see a shell-exported `MOON_HOME`; `None` for the PATH
+  // fallback of a dev run, which inherits the environment as-is.
+  mut spawn_env : Map[String, String]?
   servers : Map[String, LspWorkspace]
   // Pool recency, freshest first — the MaxLspServers eviction order.
   order : Array[String]
@@ -93,6 +98,7 @@ fn new_lsp_manager(engine : String, runtime_dir? : @path.Path) -> LspManager {
     engine,
     runtime_dir,
     command: "",
+    spawn_env: None,
     servers: {},
     order: [],
     create_lock: Semaphore(1, initial_value=1),
@@ -142,6 +148,10 @@ async fn moon_lsp_command(manager : LspManager) -> String {
       runtime_dir?=manager.runtime_dir,
     )
     is Some(path) {
+    // The bundled binary must not run against a `MOON_HOME` the launching
+    // shell exported — sanitize the child environment the way the engine
+    // spawn does, with the bundled bin dir on the path variable.
+    manager.spawn_env = Some(@moonbit.bundled_tool_env(path.dirname()))
     path.to_string()
   } else {
     "moon-lsp"
@@ -346,10 +356,10 @@ fn workspace_relative(uri : String, workspace_dir : String) -> String {
 }
 
 ///|
-/// The pooled servers answering for `dir`'s module roots: a pooled root is
-/// reused (two conversations on the same project share one moon-lsp), a
-/// missing one spawns via the pump, a pooled server under `dir` whose module
-/// vanished retires, and the pool caps at MaxLspServers by retiring the
+/// The pooled servers answering for `dir`'s module roots: a live pooled root
+/// is reused (two conversations on the same project share one moon-lsp), a
+/// missing or dead one spawns via the pump, a pooled server under `dir` whose
+/// module vanished retires, and the pool caps at MaxLspServers by retiring the
 /// least recently used. Empty when the directory holds no module yet — the
 /// caller waits rather than rooting a server at a non-project directory.
 async fn ensure_servers(
@@ -381,9 +391,15 @@ async fn ensure_servers(
   for root in roots {
     let key = root.to_string()
     if manager.servers.get(key) is Some(server) {
-      touch_server(manager, key)
-      live.push(server)
-      continue
+      // A pooled server whose transport already ended (moon-lsp crashed or
+      // exited) would answer nothing forever — retire it and fall through to
+      // spawn a fresh one.
+      if !server.session.is_closed() {
+        touch_server(manager, key)
+        live.push(server)
+        continue
+      }
+      retire_server(manager, key)
     }
     guard manager.pump_running else { continue }
     let ack : @async.Queue[LspWorkspace?] = Queue(kind=Unbounded)
@@ -553,6 +569,8 @@ async fn[G] spawn_workspace(
     group,
     command,
     ["--stdio"],
+    extra_env?=manager.spawn_env,
+    inherit_env=manager.spawn_env is None,
     stdin=child_stdin,
     stdout=child_stdout,
     cwd=directory,
