@@ -140,7 +140,21 @@ async fn build_outputs(ws : @packaging.Workspace) -> Unit {
   let env = { "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion }
   // Assemble the CEF runtime first: native_link_config reads
   // `.proton/runtime.json` to link the host against libproton/CEF.
-  let _ = assemble_macos_cef_runtime(ws, env)
+  assemble_macos_cef_runtime(ws, env)
+  // Then replace the assembled dist's libproton with one built from the
+  // submodule's sources. The darwin prebuilt is usually fresh, but building
+  // here removes the dependency on that habit — and the deployment-target
+  // env reaches the compile, so the dylib's Mach-O version stamp matches the
+  // bundle's LSMinimumSystemVersion (prebuilt artifacts keep whatever stamp
+  // they were built with; see assemble_macos_cef_runtime's caveat).
+  @packaging.rebuild_libproton(
+    ws,
+    [
+      ("lib/libproton.dylib", "lib/libproton.dylib"),
+      ("bin/cef_process", "bin/cef_process"),
+    ],
+    extra_env=env,
+  )
   @packaging.build_frontend_bundle(ws)
   // Build the host without mimalloc: its static malloc/free override crashes
   // against CEF's PartitionAlloc default zone on the first `@fs.realpath`.
@@ -156,7 +170,7 @@ async fn build_outputs(ws : @packaging.Workspace) -> Unit {
 async fn assemble_macos_cef_runtime(
   ws : @packaging.Workspace,
   extra_env : Map[String, String],
-) -> String {
+) -> Unit {
   let cli = @packaging.posix_proton_cli()
   @packaging.ensure_proton_cli(ws, cli)
   @packaging.run_checked(
@@ -165,7 +179,6 @@ async fn assemble_macos_cef_runtime(
     dir=ws.dir(),
     extra_env~,
   )
-  @packaging.proton_runtime_dist(ws)
 }
 
 ///|

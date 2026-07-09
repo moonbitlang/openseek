@@ -21,7 +21,14 @@ const AppImageToolUrl : String = "https://github.com/AppImage/appimagetool/relea
 ///|
 async fn build_outputs(ws : @packaging.Workspace) -> Unit {
   // Assemble the CEF runtime first so the native host links against it.
-  let _ = @packaging.assemble_cef_runtime(ws, @packaging.posix_proton_cli())
+  @packaging.assemble_cef_runtime(ws, @packaging.posix_proton_cli())
+  // Then replace the assembled dist's libproton with one built from the
+  // submodule's sources: the checked-in linux prebuilt is not rebuilt on
+  // every proton C change and would otherwise fail the host link.
+  @packaging.rebuild_libproton(ws, [
+    ("lib/libproton.so", "lib/libproton.so"),
+    ("bin/cef_process", "bin/cef_process"),
+  ])
   @packaging.build_frontend_bundle(ws)
   @packaging.build_native_host(ws)
   @packaging.build_engine(ws)

@@ -220,14 +220,13 @@ pub async fn ensure_proton_cli(ws : Workspace, tool_path : String) -> Unit {
 
 ///|
 /// Assemble the Proton CEF runtime (`cef setup`) so the native host links
-/// against `libproton`/CEF and the runtime can be copied into the bundle.
-/// Returns the absolute path to the assembled runtime dist directory. The
-/// command downloads CEF on first run (large); a pre-populated `.cef-cache`
-/// lets it complete offline.
-pub async fn assemble_cef_runtime(ws : Workspace, tool_path : String) -> String {
+/// against `libproton`/CEF and the runtime can be copied into the bundle
+/// (`proton_runtime_dist` reads the assembled dist's path). The command
+/// downloads CEF on first run (large); a pre-populated `.cef-cache` lets it
+/// complete offline.
+pub async fn assemble_cef_runtime(ws : Workspace, tool_path : String) -> Unit {
   ensure_proton_cli(ws, tool_path)
   run_checked(ws.at(tool_path), ["-C", ws.dir(), "cef", "setup"], dir=ws.dir())
-  proton_runtime_dist(ws)
 }
 
 ///|
@@ -235,6 +234,13 @@ pub async fn assemble_cef_runtime(ws : Workspace, tool_path : String) -> String 
 /// the manifest `cef setup` writes. Raises when the manifest is missing or
 /// malformed.
 pub async fn proton_runtime_dist(ws : Workspace) -> String {
+  ws.at(proton_runtime_field(ws, "dist"))
+}
+
+///|
+/// Read a string field from `.proton/runtime.json`, the manifest `cef setup`
+/// writes. Raises when the manifest is missing, malformed, or lacks the field.
+async fn proton_runtime_field(ws : Workspace, field : String) -> String {
   let manifest = ws.at(".proton/runtime.json")
   if !@asyncfs.exists(manifest) {
     raise PackageError(
@@ -242,16 +248,83 @@ pub async fn proton_runtime_dist(ws : Workspace) -> String {
     )
   }
   let text = @asyncfs.read_file(manifest).text()
-  let dist = match @json.parse(text) {
+  match @json.parse(text) {
     Object(fields) =>
-      match fields.get("dist") {
+      match fields.get(field) {
         Some(String(value)) => value
         _ =>
-          raise PackageError("Proton runtime manifest has no \"dist\": \{text}")
+          raise PackageError(
+            "Proton runtime manifest has no \"\{field}\": \{text}",
+          )
       }
     _ => raise PackageError("Proton runtime manifest is not an object: \{text}")
   }
-  ws.at(dist)
+}
+
+///|
+/// Where `rebuild_libproton` configures and builds the lepus native tree,
+/// relative to the desktop workspace.
+const ProtonNativeBuildDir : String = "target/proton-native/build"
+
+///|
+/// Rebuild `libproton` (and its `cef_process` helper) from the lepus
+/// submodule's C sources and overwrite them inside the assembled runtime
+/// dist. The submodule checks in prebuilt binaries, but only the darwin one
+/// is routinely rebuilt alongside C-source changes; a stale prebuilt
+/// otherwise surfaces as undefined `proton_*` symbols when the host links.
+/// Building from source makes the bundle independent of prebuilt freshness.
+///
+/// Requires `cef setup` to have run first: the engine build compiles and
+/// links against the CEF distribution it cached, and the runtime dist it
+/// assembled is what gets refreshed. `artifacts` maps build-tree-relative
+/// outputs to dist-relative destinations (the build tree is single-config on
+/// POSIX but has a `Release/` subdirectory under MSVC's multi-config
+/// generator, so the caller owns the exact paths). The freshly built
+/// `include/proton_native.h` is refreshed unconditionally.
+pub async fn rebuild_libproton(
+  ws : Workspace,
+  artifacts : Array[(String, String)],
+  extra_env? : Map[String, String] = {},
+) -> Unit {
+  let platform = proton_runtime_field(ws, "platform")
+  let cef_version = proton_runtime_field(ws, "cef_version")
+  let cef_root = ws.at(".proton/cache/cef/\{platform}/\{cef_version}")
+  if !@asyncfs.exists(cef_root) {
+    raise PackageError(
+      "CEF distribution cache not found: \{cef_root} (run cef setup)",
+    )
+  }
+  let build_dir = ws.at(ProtonNativeBuildDir)
+  run_checked(
+    "cmake",
+    [
+      "-S",
+      ws.at("lepus/native"),
+      "-B",
+      build_dir,
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DBUILD_TESTING=OFF",
+      "-DPROTON_WITH_ENGINE=ON",
+      "-DPROTON_ENGINE_ROOT=" + cef_root,
+    ],
+    dir=ws.dir(),
+    extra_env~,
+  )
+  run_checked(
+    "cmake",
+    ["--build", build_dir, "--config", "Release"],
+    dir=ws.dir(),
+    extra_env~,
+  )
+  let dist = proton_runtime_dist(ws)
+  for artifact in artifacts {
+    let (built, shipped) = artifact
+    copy_file(join_path(build_dir, built), join_path(dist, shipped))
+  }
+  copy_file(
+    ws.at("lepus/native/include/proton_native.h"),
+    join_path(dist, "include/proton_native.h"),
+  )
 }
 
 ///|

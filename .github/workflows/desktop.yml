@@ -212,11 +212,13 @@ jobs:
           done
           exit 1
 
+      # libx11-dev: the packager rebuilds libproton from the lepus sources,
+      # whose CMake build pkg-config-checks gtk+-3.0 and x11.
       - name: Install GTK and WebKitGTK dev packages
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
+            pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libx11-dev
 
       # CI always builds an unstamped bundle: OPENSEEK_CLIENT_TOKEN (the
       # bearer credential the packaged host presents to the hosted OpenSeek
