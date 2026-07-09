@@ -83,8 +83,9 @@ fn show_tab(dispatch : @cmd.Emit[Msg], ctx : Ctx, tab : Tab) -> @cmd.Cmd {
 
 ///|
 /// Open `path` in a tab (appending one if it is not open yet) and make it
-/// active, re-reading the file so the viewer shows current content — and so
-/// a jump's `range`/`annotation` ride the reply to be revealed on arrival.
+/// active. A plain activation of an already-open tab shows what the tab has,
+/// exactly like a tab-strip click; everything else reads the file — so a
+/// jump's `range`/`annotation` ride the reply to be revealed on arrival.
 fn open_or_activate(
   dispatch : @cmd.Emit[Msg],
   state : State,
@@ -94,6 +95,24 @@ fn open_or_activate(
   range~ : @common.Range?,
   annotation? : String,
 ) -> (@cmd.Cmd, State) {
+  // The plain-activation case must not rely on the read's reply to switch
+  // the document: `FileLoaded`'s identical-content dedup assumes the reply's
+  // document is the one on screen, so a re-read of an unchanged file would
+  // skip the redraw and leave the previous tab's document showing. Withheld
+  // and deleted tabs still fall through to the read — a tree click is the
+  // explicit re-open that refreshes them (see `TabState`).
+  if range is None &&
+    annotation is None &&
+    tab_index(state, path) is Some(index) &&
+    !(state.tabs[index].state is (TabBinary | TabOversized | TabDeleted)) {
+    let show = show_tab(dispatch, ctx, state.tabs[index])
+    let cmd = if state.active is None {
+      @cmd.batch([show, request_viewer_remeasure()])
+    } else {
+      show
+    }
+    return (cmd, { ..state, active: Some(path), error: "" })
+  }
   let tabs = if tab_index(state, path) is Some(_) {
     state.tabs
   } else {
@@ -559,16 +578,13 @@ pub fn update(
         let tabs = state.tabs.copy()
         tabs[index] = { ..tabs[index], name, state: tab_state, stale: false }
         // Only the tab on screen touches the viewer; a background load just
-        // settles into its tab for the next activation.
+        // settles into its tab for the next activation. No content
+        // comparison happens here: whether anything actually needs redrawing
+        // is the show command's call, made against what the viewer really
+        // displays (see `show_file_in_viewer`) — this side would only be
+        // guessing from the tab cache.
         let cmd = if state.active == Some(path) {
           match file {
-            // A disk change that produced identical text (a touch, a
-            // rewrite-in-place) only refreshes the tab's signature; redrawing
-            // would pointlessly reset the selection and feedback bubbles. A
-            // jump (`range`) still redraws — its reveal is the point.
-            Content(content~, ..) if range is None &&
-              previous is TabLoaded(content=old, ..) &&
-              old == content => @cmd.none
             // A real MoonBit file also gets a diagnostics request: the host
             // opens it in the language server and returns its current
             // diagnostics, and future re-analysis arrives as `diagnostics`

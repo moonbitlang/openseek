@@ -63,6 +63,32 @@ test "FileSelected opens tabs in click order and activates the last" {
 }
 
 ///|
+/// The bug this guards against: re-selecting an already-loaded file from the
+/// tree used to only issue a re-read and leave the document switch to the
+/// `FileLoaded` reply — whose identical-content dedup then skipped the
+/// redraw, leaving the previous tab's document on screen. A plain tree click
+/// on an open tab now shows the cached content directly (like a tab-strip
+/// click), so the tab must keep its loaded state rather than dropping back
+/// to `TabLoading` for a read.
+test "re-selecting a loaded file switches to its cached content" {
+  let emit = test_emit()
+  let state = {
+    ..open_state(),
+    tabs: [loaded_tab("a.mbt", "a.mbt"), loaded_tab("b.mbt", "b.mbt")],
+    active: Some(Relative("b.mbt")),
+  }
+  let (_, next) = update(
+    emit,
+    FileSelected(path=Relative("a.mbt"), name="a.mbt"),
+    state,
+    test_ctx(),
+  )
+  assert_true(next.active is Some(Relative("a.mbt")))
+  assert_true(next.tabs[0].state is TabLoaded(..))
+  assert_eq(next.tabs.length(), 2)
+}
+
+///|
 test "TabActivated switches only to an existing tab" {
   let emit = test_emit()
   let state = {

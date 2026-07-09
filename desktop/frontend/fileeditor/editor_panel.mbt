@@ -213,19 +213,6 @@ fn show_file_in_viewer(
     // runs before this async reply, so the viewer exists here (see
     // `ViewerHost::viewer`); the guard only drops a pathological stray.
     guard viewer_state.viewer is Some(viewer) else { return }
-    // Park the outgoing document's scroll position for its tab's return.
-    if viewer_state.relative is Some(prev) &&
-      viewer.has_model() &&
-      viewer.save_view_state() is Some(view_state) {
-      viewer_state.view_states[prev.0] = view_state
-    }
-    // Gate incoming diagnostics to the file now on screen (a notice document,
-    // with no absolute path, takes no diagnostics). The relative name rides
-    // along for comments filed on this document (see `ViewerHost::relative`).
-    viewer_state.absolute = absolute
-    viewer_state.relative = relative
-    viewer_state.version = viewer_state.version + 1
-    let version = viewer_state.version
     // The URI is the file's absolute path — the whole address the hover
     // provider needs, travelling with the model itself. A notice document
     // (withheld binary/oversized file) has no file behind it, so its inert
@@ -234,23 +221,48 @@ fn show_file_in_viewer(
       Some(absolute) => model_uri_of(absolute)
       None => app_uri("openseek-notice", "/" + name)
     }
-    let text_model = @model.TextModel(
-      uri,
-      name,
-      language_id(name),
-      version,
-      "v" + version.to_string(),
-      content,
-    )
-    // `set_model` resets the view state itself (the Monaco contract), so a
-    // fresh document always opens at the top; a tab switch or reload then
-    // restores the saved position over that reset.
-    viewer.set_model(Some(text_model))
-    if restore_scroll &&
-      relative is Some(rel) &&
-      viewer_state.view_states.get(rel.0) is Some(saved) {
-      viewer.restore_view_state(Some(saved))
+    // Whether anything needs redrawing is decided here, against the document
+    // the viewer really shows — the update loop only says "show this", it
+    // does not guess at the screen from its tab cache. When the viewer
+    // already displays this exact text (a reload that found the disk
+    // unchanged, or a jump into the file on screen), the model is left
+    // untouched so the selection, scroll, and feedback bubbles survive; a
+    // jump's reveal and annotation still apply below, over the kept document.
+    let same_document = viewer.get_model() is Some(model) &&
+      model.uri.to_string() == uri.to_string() &&
+      model.get_value() == content
+    if !same_document {
+      // Park the outgoing document's scroll position for its tab's return.
+      if viewer_state.relative is Some(prev) &&
+        viewer.has_model() &&
+        viewer.save_view_state() is Some(view_state) {
+        viewer_state.view_states[prev.0] = view_state
+      }
+      viewer_state.version = viewer_state.version + 1
+      let version = viewer_state.version
+      let text_model = @model.TextModel(
+        uri,
+        name,
+        language_id(name),
+        version,
+        "v" + version.to_string(),
+        content,
+      )
+      // `set_model` resets the view state itself (the Monaco contract), so a
+      // fresh document always opens at the top; a tab switch or reload then
+      // restores the saved position over that reset.
+      viewer.set_model(Some(text_model))
+      if restore_scroll &&
+        relative is Some(rel) &&
+        viewer_state.view_states.get(rel.0) is Some(saved) {
+        viewer.restore_view_state(Some(saved))
+      }
     }
+    // Gate incoming diagnostics to the file now on screen (a notice document,
+    // with no absolute path, takes no diagnostics). The relative name rides
+    // along for comments filed on this document (see `ViewerHost::relative`).
+    viewer_state.absolute = absolute
+    viewer_state.relative = relative
     // Commenting (select → inline input → composer chip) is for real files;
     // a notice document has nothing behind it to comment on.
     if viewer_state.services is Some(services) {
@@ -262,16 +274,20 @@ fn show_file_in_viewer(
         // re-shows its comment over the commented range. `Submitted` keeps
         // the display copy quiet: it fires no `did_add_feedback` (so the
         // chip callback cannot mint a duplicate) and draws no Created-state
-        // button bar.
-        services.agent_feedback.clear_feedback(uri)
-        if annotation is Some(text) && range is Some(range) {
-          services.agent_feedback.add_feedback(
-            uri,
-            range,
-            text,
-            state=Submitted,
-          )
-          |> ignore
+        // button bar. A same-document show only re-stages bubbles for a
+        // jump that carries an annotation — a plain unchanged reload must
+        // not clear what the user is looking at (or typing into).
+        if !same_document || annotation is Some(_) {
+          services.agent_feedback.clear_feedback(uri)
+          if annotation is Some(text) && range is Some(range) {
+            services.agent_feedback.add_feedback(
+              uri,
+              range,
+              text,
+              state=Submitted,
+            )
+            |> ignore
+          }
         }
       }
     }
