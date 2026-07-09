@@ -8,6 +8,13 @@
 /// stdout event stream is consumed for the engine's lifetime. Turns are
 /// strictly sequential on the wire *per conversation*, so events are stamped
 /// with the run id of the prompt this engine saw most recently.
+///
+/// A handle's identity IS its process: a respawn puts a fresh ServeEngine in
+/// the same session slot, and a same-config successor is indistinguishable
+/// by value (same `session_key`, same `spec_key`). Cleanup paths that may
+/// run after a replacement — the reader's exit handler, a failed write —
+/// therefore compare with `physical_equal` before clearing the slot, so a
+/// dead engine's teardown can never evict its live successor.
 priv struct ServeEngine {
   // The conversation this process serves: its slot in the manager's map.
   session_key : String
@@ -762,8 +769,16 @@ async fn serve_engine_consumer(
         }
       }
       StreamExited(code) => {
-        // A respawn may already have replaced this engine in its slot; only
-        // clear the slot if it is still ours.
+        // Clear the slot only if the engine in it is still THIS one, by
+        // identity. This consumer outlives its process: by the time the EOF
+        // reaches here, the pump may already have replaced the dying engine
+        // with a respawned ServeEngine for the same session (a config-change
+        // respawn closes the old stdin and installs the successor in the
+        // same slot before the old reader drains). Any by-value comparison
+        // would confuse the two — a same-config respawn shares session_key
+        // AND spec_key — so `physical_equal` (reference identity) is load-
+        // bearing here: it is what stops a dead engine's cleanup from
+        // evicting its live successor.
         if manager.pump is Serving(sessions~) &&
           sessions.get(engine.session_key) is Some(slot) &&
           slot.engine is Some(current) &&

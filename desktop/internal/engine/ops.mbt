@@ -88,6 +88,13 @@ pub async fn start_run(
       // keeps the frontend from appending the same failure a second time as
       // a rejected start.
       live.phase = Idle
+      // Drop the handle only if the slot still holds THIS engine, by
+      // identity: the failed write suspended, and the dying engine's own
+      // reader task may have raced us — seen the EOF, cleared the slot, and
+      // (in principle) a later spawn may have installed a successor there.
+      // A same-config successor is indistinguishable by value (same
+      // session_key and spec_key), so `physical_equal` is what keeps this
+      // cleanup from evicting an engine that is not the one that failed.
       if slot.engine is Some(current) && physical_equal(current, live) {
         slot.engine = None
       }
