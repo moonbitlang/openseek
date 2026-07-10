@@ -161,15 +161,19 @@ toolchain seed. Development uses the same bundle flow — see
 ## Setup
 
 ```sh
-git clone --recurse-submodules <this-repo>
-# or, if already cloned:
-git submodule update --init --recursive
+git clone <this-repo>
+# From the repository root, initialize only the desktop's top-level submodules:
+git submodule update --init desktop/lepus desktop/editor
 ```
+
+Do not add `--recursive`: `desktop/editor` contains the reference-only `vscode`
+and `codemirror` submodules. The desktop build does not use them, and cloning
+them makes setup substantially slower.
 
 Why the bootstrap is a little involved:
 
-- `lepus/` is a git submodule, so a plain clone does not contain the framework
-  sources until submodules are initialized.
+- `lepus/` and `editor/` are git submodules, so a plain clone does not contain
+  their sources until those two top-level submodules are initialized.
 - The clipboard extension uses Lepus build-time codegen. A fresh checkout must
   build and stage the Lepus CLI before the native app can compile.
 - Windows native builds include WebView2 COM headers. The headers are not kept
@@ -226,7 +230,7 @@ rebuild the frontend bundle and re-run the package command; the engine and seed
 are rebuilt and re-staged from the same checkout, so the app never drifts out of
 version with them.
 
-## Bootstrap Lepus on Windows
+## Bootstrap desktop submodules on Windows
 
 The scripted Windows path is:
 
@@ -261,12 +265,13 @@ there, and passes the writable copy as `MOON_HOME` to the engine.
 
 The manual steps below are useful when debugging the package script.
 
-From the repository root, initialize the Lepus submodule. If Git for Windows
-cannot run `git submodule` from PowerShell because Unix helper tools are missing
-from `PATH`, run the command from Git Bash instead.
+From the repository root, initialize the two top-level desktop submodules
+without recursing into the editor's reference-only submodules. If Git for
+Windows cannot run `git submodule` from PowerShell because Unix helper tools are
+missing from `PATH`, run the command from Git Bash instead.
 
 ```powershell
-git submodule update --init --recursive desktop/lepus
+git submodule update --init desktop/lepus desktop/editor
 ```
 
 Install the Lepus codegen CLI:
