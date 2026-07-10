@@ -154,6 +154,28 @@ test "decode recognizes the steer events" {
 }
 
 ///|
+test "decode recognizes automatic checkpoint and context yield events" {
+  guard decode_engine_event(
+      event_fields({
+        "event": "auto_compaction_finished",
+        "summary": "checkpoint recap",
+      }),
+    )
+    is Some(AutoCompactionFinished("checkpoint recap")) else {
+    fail("auto_compaction_finished not decoded")
+  }
+  guard decode_engine_event(
+      event_fields({
+        "event": "context_yield",
+        "answer": "[context ceiling] continue in a new turn",
+      }),
+    )
+    is Some(ContextYield("[context ceiling] continue in a new turn")) else {
+    fail("context_yield not decoded")
+  }
+}
+
+///|
 test "decode recognizes the compaction lifecycle events" {
   guard decode_engine_event(event_fields({ "event": "compaction_started" }))
     is Some(CompactionStarted) else {

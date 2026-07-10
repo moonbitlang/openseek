@@ -1580,6 +1580,130 @@ test "an idle /compact holds the send gate until the engine confirms" {
 }
 
 ///|
+/// Rabbita purity: applying the automatic-checkpoint event twice to the same
+/// input produces the same transcript and never mutates the manual compaction
+/// lifecycle.
+test "update is pure: automatic checkpoint appends a summary" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    streaming_response: "partial",
+  })
+  let (_, once) = update(
+    dispatch,
+    Engine(7, AutoCompactionFinished("checkpoint recap"), session=None),
+    model,
+  )
+  let (_, twice) = update(
+    dispatch,
+    Engine(7, AutoCompactionFinished("checkpoint recap"), session=None),
+    model,
+  )
+  inspect(model.active().messages.length(), content="0")
+  inspect(once.active().messages.length(), content="1")
+  inspect(twice.active().messages.length(), content="1")
+  guard once.active().messages.last() is Some(once_item) &&
+    twice.active().messages.last() is Some(twice_item) else {
+    fail("expected checkpoint summaries")
+  }
+  assert_true(once_item.kind is Summary && twice_item.kind is Summary)
+  inspect(once_item.content, content="checkpoint recap")
+  inspect(twice_item.content, content="checkpoint recap")
+  inspect(once.active().streaming_response, content="partial")
+  inspect(twice.active().streaming_response, content="partial")
+  assert_true(
+    once.active().compaction is NotCompacting &&
+    twice.active().compaction is NotCompacting,
+  )
+}
+
+///|
+/// Rabbita purity: context-yield guidance is a deterministic model update.
+/// The raw stream event clears partial streams but does not close the run;
+/// the host's following Finished message owns that transition.
+test "update is pure: context yield appends continuation guidance" {
+  let dispatch = test_dispatch()
+  let answer = "[context ceiling] continue in a new turn"
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    streaming_response: "partial",
+    streaming_reasoning: "thinking",
+  })
+  let (_, once) = update(
+    dispatch,
+    Engine(7, ContextYield(answer), session=None),
+    model,
+  )
+  let (_, twice) = update(
+    dispatch,
+    Engine(7, ContextYield(answer), session=None),
+    model,
+  )
+  inspect(model.active().messages.length(), content="0")
+  inspect(once.active().messages.length(), content="1")
+  inspect(twice.active().messages.length(), content="1")
+  guard once.active().messages.last() is Some(once_item) &&
+    twice.active().messages.last() is Some(twice_item) else {
+    fail("expected context-yield guidance")
+  }
+  assert_true(
+    once_item.kind is Assistant(false) && twice_item.kind is Assistant(false),
+  )
+  inspect(once_item.content, content="[context ceiling] continue in a new turn")
+  inspect(
+    twice_item.content,
+    content="[context ceiling] continue in a new turn",
+  )
+  inspect(once.active().streaming_response, content="")
+  inspect(twice.active().streaming_response, content="")
+  inspect(once.active().streaming_reasoning, content="")
+  inspect(twice.active().streaming_reasoning, content="")
+  assert_true(once.active().is_running() && twice.active().is_running())
+}
+
+///|
+/// The successful ceiling path is one automatic Summary, one continuation
+/// notice, then a warning terminal that re-opens Send. It never enters the
+/// manual compaction lifecycle.
+test "context yield settles after its automatic checkpoint" {
+  let dispatch = test_dispatch()
+  let answer = "[context ceiling] continue in a new turn"
+  let (_, checkpointed) = update(
+    dispatch,
+    Engine(7, AutoCompactionFinished("checkpoint recap"), session=None),
+    running_model(),
+  )
+  let (_, yielded) = update(
+    dispatch,
+    Engine(7, ContextYield(answer), session=None),
+    checkpointed,
+  )
+  assert_true(yielded.active().is_running())
+  let (_, settled) = update(
+    dispatch,
+    Finished(run_id=7, status="context_yield", answer=Some(answer)),
+    yielded,
+  )
+  inspect(settled.active().messages.length(), content="2")
+  guard settled.active().messages.get(0) is Some(summary) &&
+    settled.active().messages.get(1) is Some(guidance) else {
+    fail("expected checkpoint and guidance")
+  }
+  assert_true(summary.kind is Summary)
+  inspect(summary.content, content="checkpoint recap")
+  assert_true(guidance.kind is Assistant(false))
+  inspect(guidance.content, content="[context ceiling] continue in a new turn")
+  assert_true(settled.active().compaction is NotCompacting)
+  assert_false(settled.active().is_running())
+  guard settled.display_status() is Finished(outcome) else {
+    fail("expected a finished status")
+  }
+  assert_true(outcome is ContextYield)
+  inspect(outcome.label(), content="Context limit reached")
+  assert_true(settled.display_status().kind() is Warn)
+}
+
+///|
 /// The compaction summary lands as its own Summary item — never a tool call
 /// the transcript loop would fold into the preceding turn's activity card
 /// (which would also swallow that turn's answer bubble into the fold).

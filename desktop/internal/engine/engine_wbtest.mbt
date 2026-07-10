@@ -2,9 +2,49 @@
 test "terminal failures are normalized by the host" {
   assert_false(host_reports_terminal_error(AgentStep))
   assert_false(host_reports_terminal_error(AgentFinished("done")))
+  assert_false(
+    host_reports_terminal_error(ContextYield("[context ceiling] checkpointed")),
+  )
   assert_true(host_reports_terminal_error(AgentAborted("interrupted")))
   assert_true(host_reports_terminal_error(MaxStepsExhausted))
   assert_true(host_reports_terminal_error(AgentError("boom")))
+}
+
+///|
+test "context yield has a distinct non-success wire status" {
+  let status : RunStatus = ContextYield
+  assert_eq(status.wire(), "context_yield")
+}
+
+///|
+async test "context yield reports a terminal finished event" {
+  let emitted : Array[EngineEvent] = []
+  let sink = EventSink(fn(event) { emitted.push(event) })
+  let answer = "[context ceiling] checkpointed"
+  assert_true(
+    handle_decoded_event(sink, 17, ContextYield(answer)),
+  )
+  guard emitted is [Finished(payload)] else {
+    fail("expected one finished event")
+  }
+  assert_eq(payload.run_id, 17)
+  assert_eq(payload.status, "context_yield")
+  guard payload.answer is Some(emitted_answer) else {
+    fail("expected continuation guidance")
+  }
+  assert_eq(emitted_answer, answer)
+}
+
+///|
+test "terminal closure preserves a queued compaction" {
+  assert_true(
+    Running(cancel_requested=false, compact_queued=false).after_run_close()
+    is Idle,
+  )
+  assert_true(
+    Running(cancel_requested=false, compact_queued=true).after_run_close()
+    is Compacting,
+  )
 }
 
 ///|

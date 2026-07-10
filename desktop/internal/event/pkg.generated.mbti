@@ -16,6 +16,7 @@ pub(all) enum AgentEvent {
   Usage(UsageInfo)
   ToolResult(ToolResultEvent)
   AgentFinished(String)
+  ContextYield(String)
   AgentAborted(String)
   MaxStepsExhausted
   AgentError(String)

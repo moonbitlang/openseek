@@ -34,11 +34,13 @@ pub(all) enum EngineEvent {
   ToolResult(tool_name~ : String, is_error~ : Bool, content~ : String, brief~ : String?)
   ToolCallDecodeError(tool_name~ : String, reason~ : String)
   AgentFinished(String)
+  ContextYield(String)
   AgentAborted(String)
   MaxStepsExhausted
   AgentSetupFailed(String)
   SteerApplied(String)
   SteerDropped(String)
+  AutoCompactionFinished(String)
   CompactionStarted
   CompactionFinished(String)
   CompactionFailed(String)

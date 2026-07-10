@@ -76,3 +76,17 @@ test "turn_failed is terminal for the run" {
     _ => fail("expected agent error")
   }
 }
+
+///|
+test "context_yield is its own run terminal" {
+  match
+    @event.decode_event({
+      "event": "context_yield",
+      "to_sequence": 41,
+      "answer": "[context ceiling] checkpointed",
+    }) {
+    Some(ContextYield(answer)) =>
+      assert_eq(answer, "[context ceiling] checkpointed")
+    _ => fail("expected context yield")
+  }
+}

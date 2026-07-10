@@ -680,8 +680,8 @@ priv enum Msg {
   // nothing will report compaction events, so the conversation's queued /
   // in-flight compaction notice must be cleared here, not by the stream.
   CompactRejected(session~ : String, message~ : String)
-  // `answer` only when the agent finished with one (other terminal statuses
-  // carry none).
+  // `answer` accompanies normal success and context yield (where it is
+  // continuation guidance); other terminal statuses carry none.
   Finished(run_id~ : Int, status~ : String, answer~ : String?)
 }
 
@@ -1118,6 +1118,7 @@ fn StatusKind::css(self : StatusKind) -> String {
 /// label, they just fall on the cautious side of every typed split.
 priv enum RunOutcome {
   Completed
+  ContextYield
   Aborted
   RunFailed
   Cancelled
@@ -1129,6 +1130,7 @@ priv enum RunOutcome {
 fn RunOutcome::parse(wire : String) -> RunOutcome {
   match wire {
     "finished" => Completed
+    "context_yield" => ContextYield
     "aborted" => Aborted
     "failed" => RunFailed
     "cancelled" => Cancelled
@@ -1141,6 +1143,7 @@ fn RunOutcome::parse(wire : String) -> RunOutcome {
 fn RunOutcome::label(self : RunOutcome) -> String {
   match self {
     Completed => "Finished"
+    ContextYield => "Context limit reached"
     Aborted => "Aborted"
     RunFailed => "Failed"
     Cancelled => "Cancelled"

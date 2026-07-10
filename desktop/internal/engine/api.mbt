@@ -190,6 +190,7 @@ pub(all) struct EventSink(async (EngineEvent) -> Unit)
 ///|
 priv enum RunStatus {
   Finished
+  ContextYield
   Aborted
   Failed
   Cancelled
@@ -200,6 +201,7 @@ priv enum RunStatus {
 fn RunStatus::wire(self : RunStatus) -> String {
   match self {
     Finished => "finished"
+    ContextYield => "context_yield"
     Aborted => "aborted"
     Failed => "failed"
     Cancelled => "cancelled"

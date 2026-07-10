@@ -25,6 +25,9 @@ pub(all) enum AgentEvent {
   Usage(UsageInfo)
   ToolResult(ToolResultEvent)
   AgentFinished(String)
+  // The turn stopped at the model's context ceiling after attempting an
+  // automatic checkpoint. Terminal for the run, but not task success.
+  ContextYield(String)
   AgentAborted(String)
   MaxStepsExhausted
   AgentError(String)

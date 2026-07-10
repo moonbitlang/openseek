@@ -115,6 +115,26 @@ test "transcript mapping keeps summaries and meaningful runtime notices" {
 }
 
 ///|
+test "transcript mapping replays a context checkpoint and yield guidance" {
+  let events =
+    #|{"sequence":1,"item":{"kind":"summary","payload":{"content":"checkpoint recap","from_sequence":1,"to_sequence":8}}},
+    #|{"sequence":2,"item":{"kind":"terminal","payload":{"kind":"finished","message":"[context ceiling] continue in a new turn"}}}
+  guard transcript_from_session_json(session_reply(events)) is Some(items) else {
+    fail("expected transcript items")
+  }
+  inspect(items.length(), content="2")
+  guard items[0].kind is Summary else { fail("expected checkpoint summary") }
+  inspect(items[0].content, content="checkpoint recap")
+  guard items[1].kind is Assistant(false) else {
+    fail("expected context-yield guidance")
+  }
+  inspect(
+    items[1].content,
+    content="[context ceiling] continue in a new turn",
+  )
+}
+
+///|
 test "transcript mapping rejects structurally unusable replies" {
   assert_true(transcript_from_session_json("not json") is None)
   assert_true(transcript_from_session_json("{\"other\":1}") is None)

@@ -417,6 +417,19 @@ fn apply_engine_event(
         (false, conv)
       }
     }
+    // The checkpoint notice is not a task answer, but keeping the engine's
+    // continuation guidance in the transcript makes the live view agree with
+    // durable-session replay. The separate host Finished message closes the
+    // run with the non-success `context_yield` outcome.
+    ContextYield(answer) => {
+      let conv = conv.clear_streams()
+      let answer = answer.trim().to_owned()
+      if should_append_answer(conv, answer) {
+        (true, conv.append_item(Assistant(false), answer))
+      } else {
+        (false, conv)
+      }
+    }
     AgentAborted(reason) => {
       let content = if reason.trim().is_empty() {
         "aborted"
@@ -451,6 +464,17 @@ fn apply_engine_event(
         .settle_pending_steer(content)
         .append_item(Assistant(true), steer_dropped_notice(content)),
       )
+    // Automatic compaction runs inside this open turn. Show the durable
+    // checkpoint with the same Summary card as manual compaction and replay,
+    // but leave the between-turn CompactionPhase untouched.
+    AutoCompactionFinished(summary) => {
+      let summary = summary.trim().to_owned()
+      if summary.is_empty() {
+        (false, conv)
+      } else {
+        (true, conv.append_item(Summary, summary))
+      }
+    }
     // Compaction runs while the engine is idle and the next prompt will carry
     // the shrunken context. The summary is appended as a `Summary` item, the
     // same shape a reloaded session shows for the checkpoint, so the live and

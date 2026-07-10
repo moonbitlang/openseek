@@ -21,6 +21,9 @@ pub(all) enum EngineEvent {
   )
   ToolCallDecodeError(tool_name~ : String, reason~ : String)
   AgentFinished(String)
+  // The current turn stopped at the model's context ceiling after attempting
+  // an automatic checkpoint. It is run-terminal, but not task success.
+  ContextYield(String)
   AgentAborted(String)
   MaxStepsExhausted
   AgentSetupFailed(String)
@@ -28,6 +31,10 @@ pub(all) enum EngineEvent {
   // dropped because it raced the turn's end. Both echo the original text.
   SteerApplied(String)
   SteerDropped(String)
+  // An automatic checkpoint completed inside the open turn. Unlike the
+  // manual lifecycle below, this does not put the conversation into an idle
+  // compaction phase.
+  AutoCompactionFinished(String)
   // Conversation compaction lifecycle: the engine started summarizing the
   // history, finished (carrying the checkpoint summary text), or failed
   // (carrying the reason). Requested while the engine is idle, so these arrive
@@ -98,11 +105,17 @@ pub fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
     }
     "agent_finished" =>
       @jsonx.json_text(raw, "answer").map(answer => AgentFinished(answer))
+    "context_yield" =>
+      @jsonx.json_text(raw, "answer").map(answer => ContextYield(answer))
     "agent_aborted" => reason.map(reason => AgentAborted(reason))
     "max_steps_exhausted" => Some(MaxStepsExhausted)
     "agent_setup_failed" => reason.map(reason => AgentSetupFailed(reason))
     "steer_applied" => content.map(content => SteerApplied(content))
     "steer_dropped" => content.map(content => SteerDropped(content))
+    "auto_compaction_finished" =>
+      @jsonx.json_text(raw, "summary").map(summary => {
+        AutoCompactionFinished(summary)
+      })
     "compaction_started" => Some(CompactionStarted)
     "compaction_finished" =>
       @jsonx.json_text(raw, "summary").map(summary => {

@@ -370,6 +370,10 @@ async fn handle_decoded_event(
       emit_finished(sink, run_id, Finished, answer~)
       true
     }
+    ContextYield(answer) => {
+      emit_finished(sink, run_id, ContextYield, answer~)
+      true
+    }
     AgentAborted(reason) => {
       emit_error(sink, "agent aborted: " + reason, run_id~)
       emit_finished(sink, run_id, Aborted)

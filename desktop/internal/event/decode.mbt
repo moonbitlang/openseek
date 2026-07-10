@@ -45,6 +45,8 @@ pub fn decode_event(object : Json) -> AgentEvent? {
     }
     "agent_finished" =>
       @jsonx.json_text(fields, "answer").map(answer => AgentFinished(answer))
+    "context_yield" =>
+      @jsonx.json_text(fields, "answer").map(answer => ContextYield(answer))
     "agent_aborted" =>
       @jsonx.json_text(fields, "reason").map(reason => AgentAborted(reason))
     "max_steps_exhausted" => Some(MaxStepsExhausted)
