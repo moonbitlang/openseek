@@ -55,6 +55,7 @@ pub fn Session::Session(SessionId, system_prompt~ : String, events? : @vector.Ve
 pub fn Session::append(Self, SessionItem, unix_ms? : Int64) -> Self
 pub fn Session::append_event(Self, SessionItem, unix_ms? : Int64) -> (Self, SessionEvent)
 pub fn Session::chat_messages(Self) -> Array[@deepseek.ChatMessage]
+pub fn Session::checkpoint_cut(Self, requested_to~ : Int) -> Int?
 pub fn Session::compact(Self, content~ : String, from_sequence~ : Int, to_sequence~ : Int, unix_ms? : Int64) -> Self raise
 pub fn Session::current_goal(Self) -> StandingGoal?
 pub fn Session::events(Self) -> @vector.Vector[SessionEvent]

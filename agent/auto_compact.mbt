@@ -121,6 +121,15 @@ async fn AgentLoop::checkpoint_at_ceiling(
   steers : ArrayView[@agent_runtime.SteerInput],
 ) -> (@agent_session.Session, Bool) {
   let to_sequence = session.last_sequence()
+  // Warn-only invariant probe: every checkpoint site runs with its batch
+  // closed, so the planner must confirm the full range as a boundary. A
+  // clamp here means a sequencing bug let a checkpoint start mid-batch —
+  // full-range coverage still swallows the batch whole, but the tail and
+  // eviction policies this planner feeds must never inherit that state.
+  if session.checkpoint_cut(requested_to=to_sequence) != Some(to_sequence) {
+    @xlog.warn() <?
+      { "event": "auto_compaction_cut_clamped", "to_sequence": to_sequence }
+  }
   let covered = session
   let session = self.apply_steer_inputs(session, steers)
   @xlog.info() <?

@@ -107,6 +107,14 @@ pub async fn compact_session(
   if to_sequence <= 0 {
     fail("session compaction requires at least one event")
   }
+  // Warn-only invariant probe: full-range coverage swallows batches whole,
+  // so this compaction proceeds either way — but a clamped planner result
+  // flags a crash-truncated log (a batch whose results never landed),
+  // which is worth surfacing next to the compaction it still allows.
+  if session.checkpoint_cut(requested_to=to_sequence) != Some(to_sequence) {
+    @xlog.warn() <?
+      { "event": "compaction_cut_clamped", "to_sequence": to_sequence }
+  }
   @xlog.info() <?
     {
       "event": "compaction_started",
