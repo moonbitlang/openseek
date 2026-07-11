@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn encode_chat_request(tools? : Array[ToolDefinition], thinking? : ThinkingMode, stream? : Bool, response_format? : ResponseFormat, model? : Model, Array[ChatMessage]) -> Json
+pub fn encode_chat_request(tools? : Array[ToolDefinition], thinking? : ThinkingMode, stream? : Bool, response_format? : ResponseFormat, max_tokens? : Int, model? : Model, Array[ChatMessage]) -> Json
 
 // Errors
 

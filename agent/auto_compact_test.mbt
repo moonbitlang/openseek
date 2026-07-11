@@ -1564,3 +1564,102 @@ async test "ceiling checkpoint logs summary usage and duration" {
     assert_true(duration_ms >= 0)
   }
 }
+
+///|
+/// The checkpoint request must cap its completion inside the loop's
+/// checkpoint reserve; the main streaming request must stay uncapped.
+async test "only the checkpoint request caps its completion" {
+  @async.with_task_group() <| group => {
+    let checkpoint_requests : Array[Json] = []
+    let main_requests : Array[Json] = []
+    let handle = request => {
+      if is_checkpoint_request(request) {
+        checkpoint_requests.push(request)
+        Body(checkpoint_body("CEILING-SUMMARY"))
+      } else {
+        main_requests.push(request)
+        Sse(sse_tool_call("call_1", "probe", 900_000))
+      }
+    }
+    guard auto_compact_test_server(group, handle) is Some(url) else { return }
+    let session = @agent_session.Session(
+      SessionId("checkpoint-max-tokens"),
+      system_prompt="system",
+    )
+    let result = @agent.run_turn_in_scope(
+      runtime=AgentRuntime(),
+      scope=AgentTaskScope(group),
+      api_key="test-key",
+      model=Deepseek(V4Flash),
+      session~,
+      task="keep grinding",
+      append_item=(session, item) => session.append(item),
+      api_url=url,
+      tools=probe_tools(["result-1"]),
+    )
+    assert_eq(summary_before_terminal(result).content(), "CEILING-SUMMARY")
+    guard checkpoint_requests is [{ "max_tokens": Number(max_tokens, ..), .. }] else {
+      fail("expected one capped checkpoint request")
+    }
+    assert_eq(max_tokens.to_int(), @compact.CompactionSummaryMaxTokens)
+    guard main_requests is [main_request] else {
+      fail("expected one main request")
+    }
+    assert_false(main_request.stringify().contains("max_tokens"))
+  }
+}
+
+///|
+/// A summarizer that answers with a native tool call produced no usable
+/// summary: generation fails exactly like an empty summary, and this
+/// compact-on-finish shape finishes fail-open — the real answer seals the
+/// turn and no summary event is appended.
+async test "a checkpoint answering with tool calls fails fail-open" {
+  @async.with_task_group() <| group => {
+    let checkpoint_requests : Array[Json] = []
+    let handle = request => {
+      if is_checkpoint_request(request) {
+        checkpoint_requests.push(request)
+        Body({
+          "choices": [
+            {
+              "message": {
+                "role": "assistant",
+                "content": "I will inspect the repository first.",
+                "tool_calls": [
+                  {
+                    "id": "call_x",
+                    "type": "function",
+                    "function": { "name": "read", "arguments": "{}" },
+                  },
+                ],
+              },
+            },
+          ],
+        })
+      } else {
+        Sse(sse_final("really done", 750_000))
+      }
+    }
+    guard auto_compact_test_server(group, handle) is Some(url) else { return }
+    let session = @agent_session.Session(
+      SessionId("checkpoint-tool-call-reply"),
+      system_prompt="system",
+    )
+    let result = @agent.run_turn_in_scope(
+      runtime=AgentRuntime(),
+      scope=AgentTaskScope(group),
+      api_key="test-key",
+      model=Deepseek(V4Flash),
+      session~,
+      task="answer briefly",
+      append_item=(session, item) => session.append(item),
+      api_url=url,
+    )
+    assert_eq(checkpoint_requests.length(), 1)
+    for event in result.events() {
+      assert_false(event.item() is Summary(_))
+    }
+    assert_eq(finished_answer(result), "really done")
+  }
+}

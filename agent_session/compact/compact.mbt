@@ -40,6 +40,15 @@ fn compaction_messages(
 }
 
 ///|
+/// Completion budget for the checkpoint summary request. A summary that
+/// rambles past this is not a better checkpoint — it is a bigger seed for
+/// every later request and a hole in the agent loop's checkpoint reserve,
+/// which must hold BOTH this completion and the request's prompt overhead
+/// (the loop pins that relation in its tests). Sized generously: real
+/// checkpoint summaries measure well under 1K tokens.
+pub const CompactionSummaryMaxTokens : Int = 8_192
+
+///|
 /// A checkpoint summary plus the telemetry of the request that generated it.
 /// The summary request resends the whole projected history, making it the
 /// most expensive single request an agent issues: `usage` carries the
@@ -55,19 +64,38 @@ pub struct CompactionSummary {
 
 ///|
 /// Generate a handoff summary of the session's projected history through one
-/// model call, failing when the endpoint returns an empty summary. Pass a
-/// `thinking=No` client where the model honors the control (Kimi models
-/// ignore it): a checkpoint summary needs no reasoning budget.
+/// model call, failing when the endpoint returns an empty summary or answers
+/// with native tool calls instead of one (the isolated system prompt makes
+/// that rare, not impossible). A completion that spent the entire
+/// `CompactionSummaryMaxTokens` budget was length-truncated by the cap; the
+/// summary is still returned — a truncated checkpoint beats none at the
+/// ceiling — with a warning for the log. Pass a `thinking=No` client where
+/// the model honors the control (Kimi models ignore it): a checkpoint
+/// summary needs no reasoning budget.
 pub async fn generate_compaction_summary(
   client~ : @client.Client,
   session : @agent_session.Session,
 ) -> CompactionSummary {
   let started_ms = @env.now()
-  let response = client.chat(compaction_messages(session))
+  let response = client.chat(
+    compaction_messages(session),
+    max_tokens=CompactionSummaryMaxTokens,
+  )
   let duration_ms = (@env.now() - started_ms).reinterpret_as_int64().to_int()
+  if !response.tool_calls.is_empty() {
+    fail("compaction summary answered with tool calls instead of a summary")
+  }
   let content = response.content.trim().to_owned()
   if content.is_empty() {
     fail("compaction summary was empty")
+  }
+  if response.usage.completion_tokens >= CompactionSummaryMaxTokens {
+    @xlog.warn() <?
+      {
+        "event": "compaction_summary_truncated",
+        "completion_tokens": response.usage.completion_tokens,
+        "max_tokens": CompactionSummaryMaxTokens,
+      }
   }
   { content, usage: response.usage, duration_ms }
 }

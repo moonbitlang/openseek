@@ -289,3 +289,43 @@ test "multiple tool definitions are all encoded" {
     ],
   })
 }
+
+///|
+test "max_tokens caps the completion only when passed" {
+  let capped = @deepseek.encode_chat_request(
+    model=Deepseek(V4Flash),
+    max_tokens=8192,
+  ) <| [
+    ChatMessage(User, content="ping"),
+  ]
+  json_inspect(capped, content={
+    "model": "deepseek-v4-flash",
+    "messages": [{ "role": "user", "content": "ping" }],
+    "stream": false,
+    "max_tokens": 8192,
+  })
+  let uncapped = @deepseek.encode_chat_request(model=Deepseek(V4Flash)) <| [
+    ChatMessage(User, content="ping"),
+  ]
+  assert_false(uncapped.stringify().contains("max_tokens"))
+}
+
+///|
+/// Kimi's legacy `max_tokens` budget is shared with reasoning_content (and
+/// Kimi ignores `thinking=No`), so a cap there can starve the visible
+/// completion to empty; the cap must go out as `max_completion_tokens`.
+test "kimi caps encode as max_completion_tokens" {
+  let capped = @deepseek.encode_chat_request(
+    model=Kimi(K27Code),
+    max_tokens=8192,
+  ) <| [
+    ChatMessage(User, content="ping"),
+  ]
+  json_inspect(capped, content={
+    "model": "kimi-k2.7-code",
+    "messages": [{ "role": "user", "content": "ping" }],
+    "stream": false,
+    "max_completion_tokens": 8192,
+  })
+  assert_false(capped.stringify().contains("\"max_tokens\""))
+}
