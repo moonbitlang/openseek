@@ -854,7 +854,11 @@ test "plan reminder notices render a dedicated card with checklist rows" {
   assert_true(html.contains("class=\"plan-step in_progress\""))
   assert_true(html.contains("class=\"plan-step pending\""))
   assert_true(html.contains("step-icon"))
-  assert_true(html.contains("fix the parser"))
+  assert_true(
+    html.contains(
+      "<span class=\"step-num\">2.</span><span class=\"step-title\">fix the parser</span>",
+    ),
+  )
   assert_true(html.contains("class=\"plan-progress\""))
   assert_true(html.contains("1/3"))
   // No-plan variant: the dedicated card without a checklist list.
@@ -988,6 +992,169 @@ test "a wholesale plan rewrite shows a note instead of per-step chips" {
   assert_true(html.contains("plan-rewrite-note"))
   assert_false(html.contains("step-delta"))
   assert_false(html.contains("plan-step dropped"))
+}
+
+///|
+/// A pure extension — every baseline step kept, new ones appended — is an
+/// evolution, not a rewrite: carried steps chip their status changes and no
+/// rewrite note appears even though fewer than half the NEW plan's steps
+/// existed before.
+test "extending a plan keeps delta chips instead of a rewrite note" {
+  let before = "{\"steps\":[{\"title\":\"step a\",\"status\":\"in_progress\"}]}"
+  let after = "{\"steps\":[{\"title\":\"step a\",\"status\":\"completed\"},{\"title\":\"step b\",\"status\":\"in_progress\"},{\"title\":\"step c\",\"status\":\"pending\"}]}"
+  let session = @agent_session.Session(SessionId("extend"), system_prompt="")
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(id="p1", name="plan", arguments=before),
+        ]),
+      ),
+    )
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(id="p2", name="plan", arguments=after),
+        ]),
+      ),
+    )
+  let html = render(@viz.render_session(session, RawLog))
+  assert_false(html.contains("plan-rewrite-note"))
+  assert_true(html.contains("step-delta-done"))
+  assert_true(html.contains("step-delta-new"))
+}
+
+///|
+/// Status regressions read honestly: a completed step coming back is
+/// "reopened" (even to in_progress, which used to masquerade as "started"),
+/// and an in_progress step set back to pending is "paused".
+test "delta chips distinguish reopened and paused from started" {
+  let before = "{\"steps\":[{\"title\":\"step a\",\"status\":\"completed\"},{\"title\":\"step b\",\"status\":\"in_progress\"}]}"
+  let after = "{\"steps\":[{\"title\":\"step a\",\"status\":\"in_progress\"},{\"title\":\"step b\",\"status\":\"pending\"}]}"
+  let session = @agent_session.Session(SessionId("regress"), system_prompt="")
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(id="p1", name="plan", arguments=before),
+        ]),
+      ),
+    )
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(id="p2", name="plan", arguments=after),
+        ]),
+      ),
+    )
+  let html = render(@viz.render_session(session, RawLog))
+  assert_true(html.contains("step-delta-reopened"))
+  assert_true(html.contains("step-delta-paused"))
+  assert_false(html.contains("step-delta-started"))
+}
+
+///|
+/// A plan call the tool rejected never changed the recorded plan, so it
+/// neither diffs against the plan before it nor becomes the baseline for the
+/// plan after it — the successful calls diff across it as if it were absent.
+test "a tool-rejected plan call is not a diff baseline" {
+  let plan_a = "{\"steps\":[{\"title\":\"step a\",\"status\":\"in_progress\"}]}"
+  // Well-formed for the lenient viewer decoder, but rejected by the tool
+  // (two in_progress steps) — recorded with an errored result.
+  let rejected = "{\"steps\":[{\"title\":\"step a\",\"status\":\"in_progress\"},{\"title\":\"phantom step\",\"status\":\"in_progress\"}]}"
+  let plan_c = "{\"steps\":[{\"title\":\"step a\",\"status\":\"completed\"}]}"
+  let session = @agent_session.Session(SessionId("reject"), system_prompt="")
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(id="p1", name="plan", arguments=plan_a),
+        ]),
+      ),
+    )
+    .append(Tool(ToolResult(tool_call_id="p1", tool_name="plan", content="ok")))
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(id="p2", name="plan", arguments=rejected),
+        ]),
+      ),
+    )
+    .append(
+      Tool(
+        ToolResult(
+          tool_call_id="p2",
+          tool_name="plan",
+          content="error: at most one in_progress step",
+          is_error=true,
+        ),
+      ),
+    )
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(id="p3", name="plan", arguments=plan_c),
+        ]),
+      ),
+    )
+    .append(Tool(ToolResult(tool_call_id="p3", tool_name="plan", content="ok")))
+  let html = render(@viz.render_session(session, RawLog))
+  // p3 diffs against p1 (step a: in_progress -> completed), not against the
+  // rejected p2 — no ghost row for the phantom step it tried to introduce.
+  assert_true(html.contains("step-delta-done"))
+  assert_false(html.contains("plan-step dropped"))
+  assert_false(html.contains("step-delta-dropped"))
+}
+
+///|
+/// Plan calls whose ids are empty or duplicated cannot be keyed to a
+/// baseline (mirroring `assign_pair_tags`), so their cards render the
+/// checklist without delta chips instead of diffing against the wrong call.
+test "duplicate and empty plan-call ids render without delta chips" {
+  let plan_a = "{\"steps\":[{\"title\":\"step a\",\"status\":\"in_progress\"}]}"
+  let plan_b = "{\"steps\":[{\"title\":\"step a\",\"status\":\"completed\"}]}"
+  let session = @agent_session.Session(SessionId("dupids"), system_prompt="")
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(id="dup", name="plan", arguments=plan_a),
+        ]),
+      ),
+    )
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(id="dup", name="plan", arguments=plan_b),
+        ]),
+      ),
+    )
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(id="", name="plan", arguments=plan_b),
+        ]),
+      ),
+    )
+  let html = render(@viz.render_session(session, RawLog))
+  assert_true(html.contains("plan-args"))
+  assert_false(html.contains("step-delta"))
+}
+
+///|
+/// The reminder meter parses each line's leading status bracket, so a title
+/// that mentions "[completed]" is not miscounted, and an unknown status word
+/// renders literally instead of being disguised as a pending ring.
+test "reminder meter parses statuses and unknown statuses stay visible" {
+  let reminder =
+    $|\{@agent_session.PlanReminderPrefix}
+    $|Current plan:
+    $|1. [pending] mark [completed] items in the tracker
+    $|2. [blocked] wait for CI
+  let session = @agent_session.Session(SessionId("odd"), system_prompt="").append(
+    Runtime(RuntimeNotice(reminder)),
+  )
+  let html = render(@viz.render_session(session, RawLog))
+  // Nothing is completed: the meter must say 0/2 despite the title text.
+  assert_true(html.contains("0/2"))
+  // The unknown status renders as its literal word, not a pending icon.
+  assert_true(html.contains("<span class=\"step-status\">blocked</span>"))
 }
 
 ///|

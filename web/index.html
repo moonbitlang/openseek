@@ -334,6 +334,12 @@
     .plan-step.completed .step-icon { color: var(--added); }
     .plan-step.in_progress .step-icon { color: var(--accent); }
     .plan-step.dropped .step-icon { color: var(--error); }
+    /* a status this build does not know renders as its literal word */
+    .plan-step .step-status {
+      flex: 0 0 auto; font-family: ui-monospace, monospace; font-size: 11px;
+      color: var(--muted); border: 1px solid var(--border);
+      border-radius: 4px; padding: 0 5px;
+    }
     .plan-step .step-num {
       flex: 0 0 auto; color: var(--muted);
       font-family: ui-monospace, monospace; font-size: 11.5px;
