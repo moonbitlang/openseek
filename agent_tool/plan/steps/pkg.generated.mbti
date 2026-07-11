@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/plan/internal/decode"
+package "bobzhang/openseek/agent_tool/plan/steps"
 
 import {
   "moonbitlang/core/debug",
@@ -24,6 +24,7 @@ pub enum PlanStatus {
   InProgress
   Completed
 } derive(Eq, @debug.Debug)
+pub fn PlanStatus::label(Self) -> String
 
 pub struct PlanStep {
   title : String

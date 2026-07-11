@@ -5,9 +5,9 @@
 /// ## Arguments
 /// - `steps` (array, required): the complete ordered plan. Each item is an
 ///   object with exactly a `title` (non-blank single line, at most
-///   `@decode.MAX_TITLE_CHARS` characters after trimming) and a `status` of
+///   `@steps.MAX_TITLE_CHARS` characters after trimming) and a `status` of
 ///   `"pending"`, `"in_progress"`, or `"completed"`. At most one step may be
-///   `in_progress`, the plan is capped at `@decode.MAX_STEPS` steps, and an
+///   `in_progress`, the plan is capped at `@steps.MAX_STEPS` steps, and an
 ///   empty array clears the plan.
 ///
 /// ## Result
@@ -41,7 +41,7 @@ pub fn definition() -> @agent_tool.AgentToolDefinition {
         "steps": {
           "type": "array",
           "description": "The complete ordered plan; replaces the previous plan. An empty array clears the plan.",
-          "maxItems": @decode.MAX_STEPS.to_json(),
+          "maxItems": @steps.MAX_STEPS.to_json(),
           "items": {
             "type": "object",
             "properties": {
@@ -49,7 +49,7 @@ pub fn definition() -> @agent_tool.AgentToolDefinition {
                 "type": "string",
                 "description": "Short imperative step title on a single line; non-blank after trimming.",
                 "minLength": 1,
-                "maxLength": @decode.MAX_TITLE_CHARS.to_json(),
+                "maxLength": @steps.MAX_TITLE_CHARS.to_json(),
               },
               "status": {
                 "type": "string",
@@ -75,19 +75,14 @@ pub fn definition() -> @agent_tool.AgentToolDefinition {
 /// callers fall back to a plan-free nudge. Lives here so the agent loop never
 /// grows its own copy of the plan argument syntax.
 pub fn reminder_checklist(arguments : Json) -> String? {
-  let input = @decode.decode(arguments) catch { _ => return None }
+  let input = @steps.decode(arguments) catch { _ => return None }
   if input.steps.is_empty() {
     return None
   }
   Some(
     [
       for index, step in input.steps => {
-        let status = match step.status {
-          Pending => "pending"
-          InProgress => "in_progress"
-          Completed => "completed"
-        }
-        "\{index + 1}. [\{status}] \{step.title}"
+        "\{index + 1}. [\{step.status.label()}] \{step.title}"
       }
     ].join("\n"),
   )
@@ -118,7 +113,7 @@ test "reminder_checklist renders numbered statuses and falls back to None" {
 
 ///|
 fn execute(arguments : Json) -> @agent_tool.ToolAction {
-  let input = @decode.decode(arguments) catch {
+  let input = @steps.decode(arguments) catch {
     error => {
       let message = @tool_error.failure_message("\{error}")
       return @agent_tool.ToolAction::respond(
@@ -149,7 +144,7 @@ fn is_verification_title(title : String) -> Bool {
 /// arguments that the session replays on every request, so the result adds
 /// only what the arguments do not state — the tally, and a verification
 /// reminder when a plan finishes without any verification-looking step.
-fn render(input : @decode.PlanInput) -> @agent_tool.ToolAction {
+fn render(input : @steps.PlanInput) -> @agent_tool.ToolAction {
   let total = input.steps.length()
   if total == 0 {
     return @agent_tool.ToolAction::respond(

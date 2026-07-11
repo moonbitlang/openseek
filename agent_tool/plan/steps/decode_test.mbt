@@ -1,7 +1,7 @@
 ///|
 test "decode a valid plan" {
   debug_inspect(
-    @decode.decode({
+    @steps.decode({
       "steps": [
         { "title": "read the failing test", "status": "completed" },
         { "title": "fix the parser", "status": "in_progress" },
@@ -23,7 +23,7 @@ test "decode a valid plan" {
 ///|
 test "decode a plan with no in_progress step" {
   debug_inspect(
-    @decode.decode({
+    @steps.decode({
       "steps": [
         { "title": "step one", "status": "completed" },
         { "title": "step two", "status": "completed" },
@@ -43,7 +43,7 @@ test "decode a plan with no in_progress step" {
 ///|
 test "decode trims surrounding title whitespace" {
   debug_inspect(
-    @decode.decode({
+    @steps.decode({
       "steps": [{ "title": "  fix parser\t", "status": "pending" }],
     }),
     content=(
@@ -56,7 +56,7 @@ test "decode trims surrounding title whitespace" {
 /// Asserts that decoding `arguments` fails and the error message names the
 /// offending field.
 fn assert_decode_error(arguments : Json, expected : String) -> Unit raise {
-  let _ = @decode.decode(arguments) catch {
+  let _ = @steps.decode(arguments) catch {
     error => {
       let message = "\{error}"
       assert_true(
@@ -82,7 +82,7 @@ test "decode rejects non-object arguments" {
 ///|
 test "decode accepts an empty plan as a clear" {
   debug_inspect(
-    @decode.decode({ "steps": [] }),
+    @steps.decode({ "steps": [] }),
     content=(
       #|{ steps: [] }
     ),
@@ -108,7 +108,7 @@ test "decode rejects unknown step fields" {
 ///|
 test "decode rejects more than MAX_STEPS steps" {
   let steps : Array[Json] = [
-    for i in 0..<(@decode.MAX_STEPS + 1) => {
+    for i in 0..<(@steps.MAX_STEPS + 1) => {
       { "title": "step \{i}", "status": "pending" }
     }
   ]
@@ -157,7 +157,7 @@ test "decode rejects a multi-line title" {
 
 ///|
 test "decode rejects an oversized title" {
-  let long_title = "x".repeat(@decode.MAX_TITLE_CHARS + 1)
+  let long_title = "x".repeat(@steps.MAX_TITLE_CHARS + 1)
   assert_decode_error(
     { "steps": [{ "title": long_title, "status": "pending" }] },
     "arguments.steps[0].title to be at most 120 chars, got 121",
@@ -166,11 +166,11 @@ test "decode rejects an oversized title" {
 
 ///|
 test "decode accepts a title at exactly MAX_TITLE_CHARS" {
-  let title = "x".repeat(@decode.MAX_TITLE_CHARS)
-  let input = @decode.decode({
+  let title = "x".repeat(@steps.MAX_TITLE_CHARS)
+  let input = @steps.decode({
     "steps": [{ "title": title, "status": "pending" }],
   })
-  assert_eq(input.steps[0].title.length(), @decode.MAX_TITLE_CHARS)
+  assert_eq(input.steps[0].title.length(), @steps.MAX_TITLE_CHARS)
 }
 
 ///|
@@ -178,7 +178,7 @@ test "decode counts title length in code points, matching the schema" {
   // 61 fire emoji are 122 UTF-16 code units but only 61 characters — well
   // inside the advertised maxLength, so the decoder must accept them.
   let title = "\u{1F525}".repeat(61)
-  let input = @decode.decode({
+  let input = @steps.decode({
     "steps": [{ "title": title, "status": "pending" }],
   })
   assert_eq(input.steps[0].title.char_length(), 61)

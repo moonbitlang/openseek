@@ -925,6 +925,12 @@ fn plan_calls_session() -> @agent_session.Session {
 /// available for the Original toggle.
 test "plan calls render a checklist with progress meter and status ribbon" {
   let html = render(@viz.render_session(plan_calls_session(), RawLog))
+  // A plan card is the task's live state: it starts unfolded (`open`, written
+  // after the attributes by the SSR), unlike every other tool call, which
+  // stays folded until clicked.
+  assert_true(
+    html.contains("<details class=\"tool-call\" id=\"tool-call-1\" open>"),
+  )
   assert_true(html.contains("class=\"tool-call-args-rendered plan-args\""))
   assert_true(html.contains("class=\"plan-ribbon\""))
   assert_true(html.contains("class=\"plan-ribbon-seg in_progress\""))

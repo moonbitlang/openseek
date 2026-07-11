@@ -1,6 +1,7 @@
 import {
   "bobzhang/openseek/agent_session",
   "bobzhang/openseek/agent_session/log" @session_log,
+  "bobzhang/openseek/agent_tool/plan/steps",
   "bobzhang/openseek/deepseek",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/immut/vector",

@@ -9,6 +9,29 @@ pub enum PlanStatus {
 } derive(Debug, Eq)
 
 ///|
+/// The wire spelling of a status — the exact strings `decode` accepts, so a
+/// decoded plan round-trips identically. Consumers also use it as a stable
+/// machine-readable tag (the plan reminder's `[status]` brackets, the
+/// viewer's CSS classes).
+pub fn PlanStatus::label(self : PlanStatus) -> String {
+  match self {
+    Pending => "pending"
+    InProgress => "in_progress"
+    Completed => "completed"
+  }
+}
+
+///|
+test "labels spell statuses exactly as the decoder accepts them" {
+  for status in [PlanStatus::Pending, InProgress, Completed] {
+    let decoded = decode({
+      "steps": [{ "title": "t", "status": status.label() }],
+    })
+    assert_true(decoded.steps[0].status == status)
+  }
+}
+
+///|
 /// One step of the agent's plan: a short imperative title plus its status.
 pub struct PlanStep {
   title : String
