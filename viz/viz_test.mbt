@@ -956,6 +956,41 @@ test "a plan rewrite chips what changed and keeps dropped steps visible" {
 }
 
 ///|
+/// A wholesale rewrite — fewer than half the steps carried over by title —
+/// gets a single rewrite note instead of drowning the checklist in
+/// "new"/"dropped" chips; reworded titles are indistinguishable from
+/// replacements, so the diff backs off entirely.
+test "a wholesale plan rewrite shows a note instead of per-step chips" {
+  let session = @agent_session.Session(SessionId("rewrite"), system_prompt="")
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(
+            id="p1",
+            name="plan",
+            arguments="{\"steps\":[{\"title\":\"old step one\",\"status\":\"in_progress\"},{\"title\":\"old step two\",\"status\":\"pending\"}]}",
+          ),
+        ]),
+      ),
+    )
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(
+            id="p2",
+            name="plan",
+            arguments="{\"steps\":[{\"title\":\"reworded step one\",\"status\":\"in_progress\"},{\"title\":\"reworded step two\",\"status\":\"pending\"}]}",
+          ),
+        ]),
+      ),
+    )
+  let html = render(@viz.render_session(session, RawLog))
+  assert_true(html.contains("plan-rewrite-note"))
+  assert_false(html.contains("step-delta"))
+  assert_false(html.contains("plan-step dropped"))
+}
+
+///|
 /// A cleared plan (`steps: []`) renders an explicit marker rather than an
 /// empty checklist, and malformed plan arguments keep the generic rendering —
 /// the viewer never guesses at a plan the tool would have rejected.

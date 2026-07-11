@@ -385,3 +385,29 @@ test "standalone exports default raw while the live viewer defaults model" {
   assert_true(initial_view_mode(false) == ModelView)
   assert_true(init_model().view_mode == ModelView)
 }
+
+///|
+/// Only a standalone export with exactly one session and an untouched pane
+/// auto-opens; a live server list, several sessions, an existing selection,
+/// or a dropped file all keep the explicit click.
+test "single-session standalone exports auto-open their session" {
+  let row : SessionRow = {
+    key: "k1",
+    id: "s1",
+    root_label: "",
+    last_active: None,
+    is_marker: false,
+    first_prompt: "",
+  }
+  let other = { ..row, key: "k2", id: "s2" }
+  assert_true(should_auto_open(true, [row], selected=None, dropped=None))
+  assert_false(should_auto_open(false, [row], selected=None, dropped=None))
+  assert_false(
+    should_auto_open(true, [row, other], selected=None, dropped=None),
+  )
+  assert_false(should_auto_open(true, [], selected=None, dropped=None))
+  assert_false(should_auto_open(true, [row], selected=Some("k1"), dropped=None))
+  assert_false(
+    should_auto_open(true, [row], selected=None, dropped=Some("f.jsonl")),
+  )
+}

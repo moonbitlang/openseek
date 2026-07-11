@@ -109,6 +109,19 @@ fn initial_view_mode(standalone : Bool) -> @viz.ViewMode {
 }
 
 ///|
+/// Whether the freshly fetched session list should auto-open its only entry:
+/// standalone exports only, exactly one session, and nothing already on
+/// screen (a selection in flight or a dropped file must not be clobbered).
+fn should_auto_open(
+  standalone : Bool,
+  sessions : Array[SessionRow],
+  selected~ : String?,
+  dropped~ : String?,
+) -> Bool {
+  standalone && sessions.length() == 1 && selected is None && dropped is None
+}
+
+///|
 fn init_model() -> Model {
   {
     sessions: [],
@@ -137,19 +150,31 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
   match msg {
     SessionsFetched(Ok(text)) =>
       match parse_session_rows(text) {
-        Some(sessions) =>
-          (
-            @cmd.none,
-            {
-              ..model,
+        Some(sessions) => {
+          let listed = {
+            ..model,
+            sessions,
+            collapsed_roots: prune_collapsed_roots(
+              model.collapsed_roots,
               sessions,
-              collapsed_roots: prune_collapsed_roots(
-                model.collapsed_roots,
-                sessions,
-              ),
-              status: list_status(model, "\{sessions.length()} session(s)"),
-            },
-          )
+            ),
+            status: list_status(model, "\{sessions.length()} session(s)"),
+          }
+          // A standalone export is a frozen archive; when it holds exactly one
+          // session, open it immediately so the reader lands on the log
+          // instead of an empty pane. Live servers keep the explicit click —
+          // their list refreshes must never yank the user off a session.
+          if should_auto_open(
+              embedded_has("/api/sessions"),
+              sessions,
+              selected=model.selected,
+              dropped=model.dropped,
+            ) {
+            update(emit, Select(sessions[0].key), listed)
+          } else {
+            (@cmd.none, listed)
+          }
+        }
         None =>
           (
             @cmd.none,

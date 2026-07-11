@@ -497,10 +497,12 @@ fn model_plan_baselines(
 
 ///|
 /// Dedicated rendering for `plan` tool-call arguments: a progress meter plus a
-/// status-classed checklist, replacing the generic key/value rows. Steps that
-/// changed against `baseline` (the previous plan call) carry a small delta
-/// chip, and steps the rewrite dropped stay visible as ghost rows — a silent
-/// scope cut is exactly what a log reader wants to notice. Carries
+/// status-classed checklist, replacing the generic key/value rows. When the
+/// call reads as an evolution of `baseline` (the previous plan call), steps
+/// that changed carry a small delta chip and steps the update dropped stay
+/// visible as ghost rows — a silent scope cut is exactly what a log reader
+/// wants to notice. A wholesale rewrite would chip nearly every row
+/// "new"/"dropped", so it gets a single rewrite note instead. Carries
 /// `tool-call-args-rendered` so the Original toggle still swaps to raw JSON.
 fn plan_args_view(
   steps : Array[PlanStep],
@@ -511,19 +513,39 @@ fn plan_args_view(
       @html.span(class="plan-cleared") <| "plan cleared",
     ]
   }
+  let diff_base = if plan_evolves(steps, baseline) { baseline } else { None }
   let rows : Array[@html.Html] = [
-    for index, step in steps => plan_call_step(index + 1, step, baseline)
+    for index, step in steps => plan_call_step(index + 1, step, diff_base)
   ]
-  for dropped in dropped_steps(steps, baseline) {
+  for dropped in dropped_steps(steps, diff_base) {
     rows.push(dropped_step_row(dropped))
   }
-  @html.div(class="tool-call-args-rendered plan-args") <| [
+  let body : Array[@html.Html] = [
     plan_progress_view(
       steps.count_if(step => step.status == "completed"),
       steps.length(),
     ),
-    @html.ul(class="plan-steps") <| rows,
   ]
+  if diff_base is None && baseline is Some(prev) && !prev.is_empty() {
+    body.push(
+      @html.div(class="plan-rewrite-note") <| "rewritten — replaces the previous plan",
+    )
+  }
+  body.push(@html.ul(class="plan-steps") <| rows)
+  @html.div(class="tool-call-args-rendered plan-args") <| body
+}
+
+///|
+/// Whether this plan update reads as an evolution of the baseline — at least
+/// half of its steps carried over by title — rather than a wholesale rewrite.
+/// Only an evolution gets per-step delta chips; diffing a rewrite (or reworded
+/// titles) against the old plan would drown the checklist in noise.
+fn plan_evolves(steps : Array[PlanStep], baseline : Array[PlanStep]?) -> Bool {
+  guard baseline is Some(prev) && !prev.is_empty() else { return false }
+  let carried = steps.count_if(step => {
+    prev.iter().any(old => old.title == step.title)
+  })
+  carried * 2 >= steps.length()
 }
 
 ///|
