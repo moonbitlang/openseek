@@ -375,6 +375,8 @@ test "theme values map to the data-theme attribute" {
   inspect(Theme::value(Light), content="light")
   inspect(Theme::value(Dark), content="dark")
   inspect(Theme::value(System), content="system")
+  // The viewer follows the OS by default.
+  assert_true(init_model().theme == System)
 }
 
 ///|

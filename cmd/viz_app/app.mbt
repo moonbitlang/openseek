@@ -47,7 +47,7 @@ struct Model {
 }
 
 ///|
-/// Colour theme. `Light` is the default; `System` follows the OS via a CSS
+/// Colour theme. `System` is the default and follows the OS via a CSS
 /// `prefers-color-scheme` media query (so it tracks live OS changes without any
 /// listener). The choice is applied by setting `data-theme` on `<html>`.
 enum Theme {
@@ -120,7 +120,7 @@ fn init_model() -> Model {
     header_present: false,
     log_bytes: 0L,
     view_mode: initial_view_mode(embedded_has("/api/sessions")),
-    theme: Light,
+    theme: System,
     sidebar_visible: true,
     collapsed_roots: [],
     loading: false,

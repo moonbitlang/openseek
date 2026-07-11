@@ -844,7 +844,8 @@ test "plan reminder notices render a dedicated card with checklist rows" {
     .append(Runtime(RuntimeNotice("unrelated runtime context")))
   let html = render(@viz.render_session(session, RawLog))
   // Checklist variant: dedicated card, prose kept, one status-classed row per
-  // step with the status chip split from the numbered title.
+  // step with a status icon before the numbered title, plus the shared
+  // progress meter above the list.
   assert_true(html.contains("class=\"card runtime plan-reminder\""))
   assert_true(html.contains("Plan reminder"))
   assert_true(html.contains("Current plan:"))
@@ -852,12 +853,138 @@ test "plan reminder notices render a dedicated card with checklist rows" {
   assert_true(html.contains("class=\"plan-step completed\""))
   assert_true(html.contains("class=\"plan-step in_progress\""))
   assert_true(html.contains("class=\"plan-step pending\""))
-  assert_true(html.contains("2. fix the parser"))
+  assert_true(html.contains("step-icon"))
+  assert_true(html.contains("fix the parser"))
+  assert_true(html.contains("class=\"plan-progress\""))
+  assert_true(html.contains("1/3"))
   // No-plan variant: the dedicated card without a checklist list.
   assert_true(html.contains("has not been used in this turn"))
   // Unrelated notices keep the generic runtime card.
   assert_true(html.contains("Runtime notice"))
   assert_true(html.contains("unrelated runtime context"))
+}
+
+///|
+/// Two plan calls in sequence: the second completes one step, starts the next,
+/// adds a new step, and silently drops one — exercising the dedicated plan
+/// checklist plus every delta chip against the previous call's baseline.
+fn plan_calls_session() -> @agent_session.Session {
+  @agent_session.Session(SessionId("plans"), system_prompt="")
+  .append(User(UserMessage("build the feature")))
+  .append(
+    Assistant(
+      AssistantMessage("", tool_calls=[
+        ToolCall(
+          id="p1",
+          name="plan",
+          arguments="{\"steps\":[{\"title\":\"read the failing test\",\"status\":\"in_progress\"},{\"title\":\"fix the parser\",\"status\":\"pending\"},{\"title\":\"run moon test\",\"status\":\"pending\"}]}",
+        ),
+      ]),
+    ),
+  )
+  .append(
+    Tool(
+      ToolResult(
+        tool_call_id="p1",
+        tool_name="plan",
+        content="Plan updated: 0/3 done · in progress: read the failing test.",
+      ),
+    ),
+  )
+  .append(
+    Assistant(
+      AssistantMessage("", tool_calls=[
+        ToolCall(
+          id="p2",
+          name="plan",
+          arguments="{\"steps\":[{\"title\":\"read the failing test\",\"status\":\"completed\"},{\"title\":\"fix the parser\",\"status\":\"in_progress\"},{\"title\":\"add a regression test\",\"status\":\"pending\"}]}",
+        ),
+      ]),
+    ),
+  )
+  .append(
+    Tool(
+      ToolResult(
+        tool_call_id="p2",
+        tool_name="plan",
+        content="Plan updated: 1/3 done · in progress: fix the parser.",
+      ),
+    ),
+  )
+  .append(Terminal(Finished("done")))
+}
+
+///|
+/// `plan` tool calls get a dedicated rendering in both views: a status ribbon
+/// on the folded summary line, and a progress meter plus status-classed
+/// checklist instead of the generic key/value rows — with the raw JSON still
+/// available for the Original toggle.
+test "plan calls render a checklist with progress meter and status ribbon" {
+  let html = render(@viz.render_session(plan_calls_session(), RawLog))
+  assert_true(html.contains("class=\"tool-call-args-rendered plan-args\""))
+  assert_true(html.contains("class=\"plan-ribbon\""))
+  assert_true(html.contains("class=\"plan-ribbon-seg in_progress\""))
+  assert_true(html.contains("class=\"plan-progress\""))
+  assert_true(html.contains("0/3"))
+  assert_true(html.contains("1/3"))
+  assert_true(html.contains("class=\"plan-step completed\""))
+  assert_true(html.contains("class=\"plan-step in_progress\""))
+  assert_true(html.contains("class=\"plan-step pending\""))
+  assert_true(html.contains("tool-call-args-original"))
+  // The model view shares the same call rendering.
+  let model = render(@viz.render_session(plan_calls_session(), ModelView))
+  assert_true(model.contains("class=\"tool-call-args-rendered plan-args\""))
+  assert_true(model.contains("class=\"plan-ribbon\""))
+}
+
+///|
+/// A plan rewrite diffs against the previous plan call: completed/started/new
+/// steps get delta chips, a dropped step stays visible as a ghost row, and the
+/// baseline-less first call carries no chips at all.
+test "a plan rewrite chips what changed and keeps dropped steps visible" {
+  let html = render(@viz.render_session(plan_calls_session(), RawLog))
+  assert_true(html.contains("step-delta-done"))
+  assert_true(html.contains("step-delta-started"))
+  assert_true(html.contains("step-delta-new"))
+  assert_true(html.contains("step-delta-dropped"))
+  assert_true(html.contains("class=\"plan-step dropped\""))
+  // The dropped step's title survives in the second card's ghost row (plus its
+  // own row in the first card).
+  assert_true(occurrences(html, "run moon test") >= 2)
+  // Only the second call diffs: done, started, new, dropped — four chips.
+  assert_eq(occurrences(html, "step-delta step-delta-"), 4)
+}
+
+///|
+/// A cleared plan (`steps: []`) renders an explicit marker rather than an
+/// empty checklist, and malformed plan arguments keep the generic rendering —
+/// the viewer never guesses at a plan the tool would have rejected.
+test "cleared and malformed plans degrade gracefully" {
+  let cleared = @agent_session.Session(SessionId("clear"), system_prompt="").append(
+    Assistant(
+      AssistantMessage("", tool_calls=[
+        ToolCall(id="p1", name="plan", arguments="{\"steps\":[]}"),
+      ]),
+    ),
+  )
+  let cleared_html = render(@viz.render_session(cleared, RawLog))
+  assert_true(cleared_html.contains("plan cleared"))
+  assert_false(cleared_html.contains("plan-ribbon"))
+  assert_false(cleared_html.contains("plan-progress"))
+  let malformed = @agent_session.Session(SessionId("bad"), system_prompt="").append(
+    Assistant(
+      AssistantMessage("", tool_calls=[
+        ToolCall(
+          id="p1",
+          name="plan",
+          arguments="{\"steps\":[{\"title\":\"x\",\"status\":\"doing\"}]}",
+        ),
+      ]),
+    ),
+  )
+  let malformed_html = render(@viz.render_session(malformed, RawLog))
+  assert_false(malformed_html.contains("plan-args"))
+  assert_true(malformed_html.contains("class=\"arg-key\""))
 }
 
 ///|

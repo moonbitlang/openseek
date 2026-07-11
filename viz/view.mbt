@@ -61,11 +61,12 @@ fn render_raw(session : @agent_session.Session) -> @html.Html {
   let briefs = tool_call_briefs(session)
   let failed = raw_failed_call_ids(session)
   let tags = raw_pair_tags(session)
+  let plans = raw_plan_baselines(session)
   let step_labels = agent_step_labels(session)
   let turns = group_turns(session.events())
   let blocks : Array[@html.Html] = [
     for index, turn in turns => {
-      turn_block(index + 1, turn, briefs, failed, tags, step_labels)
+      turn_block(index + 1, turn, briefs, failed, tags, plans, step_labels)
     }
   ]
   if blocks.is_empty() {
@@ -185,6 +186,7 @@ fn turn_block(
   briefs : Map[String, String],
   failed : Map[String, Unit],
   tags : Map[String, Int],
+  plans : Map[String, Array[PlanStep]],
   step_labels : Map[Int, String],
 ) -> @html.Html {
   // Offsets are relative to the turn's first stamped event: for reading a
@@ -199,6 +201,7 @@ fn turn_block(
         briefs,
         failed,
         tags,
+        plans,
         step_label=step_labels.get(event.sequence()).unwrap_or(""),
       )
     }
@@ -306,6 +309,7 @@ fn event_card(
   briefs : Map[String, String],
   failed : Map[String, Unit],
   tags : Map[String, Int],
+  plans : Map[String, Array[PlanStep]],
   step_label~ : String,
 ) -> @html.Html {
   let seq = event.sequence()
@@ -313,7 +317,16 @@ fn event_card(
     User(message) =>
       card("user", "User", seq, time~, [text_block(message.content())])
     Assistant(message) =>
-      assistant_card(seq, time, message, briefs, failed, tags, step_label~)
+      assistant_card(
+        seq,
+        time,
+        message,
+        briefs,
+        failed,
+        tags,
+        plans,
+        step_label~,
+      )
     Tool(result) => tool_card(seq, time, result, tags)
     Runtime(notice) => runtime_card(seq, time, notice.content())
     Summary(summary) => summary_card(seq, time, summary)
@@ -336,6 +349,12 @@ fn runtime_card(seq : Int, time : String, content : String) -> @html.Html {
   match split_plan_checklist(content) {
     Some((prose, steps)) => {
       body.push(text_block(prose))
+      body.push(
+        plan_progress_view(
+          steps.count_if(step => step.contains("[completed]")),
+          steps.length(),
+        ),
+      )
       body.push(
         @html.ul(class="plan-steps") <| [
           for step in steps => plan_step_item(step)
@@ -368,10 +387,11 @@ fn split_plan_checklist(content : String) -> (String, Array[String])? {
 }
 
 ///|
-/// One checklist row: `N. [status] title` renders as a status chip plus the
-/// numbered title, with the status doubling as a CSS class
-/// (pending/in_progress/completed). A line that does not match the shape falls
-/// back to plain text so the card never drops content.
+/// One checklist row: `N. [status] title` renders as a status icon plus the
+/// numbered title — the same row shape `plan` tool calls use — with the status
+/// doubling as a CSS class (pending/in_progress/completed). A line that does
+/// not match the shape falls back to plain text so the card never drops
+/// content.
 fn plan_step_item(line : String) -> @html.Html {
   guard line.find("[") is Some(open) &&
     line.find("]") is Some(close) &&
@@ -382,8 +402,231 @@ fn plan_step_item(line : String) -> @html.Html {
   let number = line[:open].trim_end().to_owned()
   let title = line[close + 1:].trim_start().to_owned()
   @html.li(class="plan-step \{status}") <| [
-    @html.span(class="step-status") <| status,
-    @html.text(" \{number} \{title}"),
+    @html.span(class="step-icon", title=status) <| status_icon(status),
+    @html.span(class="step-num") <| number,
+    @html.span(class="step-title") <| title,
+  ]
+}
+
+// ---- plan tool-call rendering -----------------------------------------------
+
+///|
+/// One decoded step of a `plan` tool call, held as view-ready strings. The
+/// status is one of pending/in_progress/completed and doubles as a CSS class.
+priv struct PlanStep {
+  title : String
+  status : String
+}
+
+///|
+/// Best-effort decode of `plan` tool-call arguments into view-ready steps.
+/// Any shape violation (missing field, unknown status, non-object step)
+/// returns `None` so the call keeps the generic arguments rendering — the
+/// viewer renders what is there rather than guess at a malformed plan.
+fn decode_plan_steps(raw : String) -> Array[PlanStep]? {
+  let json = @json.parse(raw) catch { _ => return None }
+  guard json is { "steps": Array(items), .. } else { return None }
+  let steps : Array[PlanStep] = []
+  for item in items {
+    guard item is { "title": String(title), "status": String(status), .. } &&
+      status is ("pending" | "in_progress" | "completed") else {
+      return None
+    }
+    steps.push({ title: title.trim().to_owned(), status })
+  }
+  Some(steps)
+}
+
+///|
+/// Decoded steps when `call` is a well-formed `plan` call; `None` otherwise.
+fn plan_call_steps(call : @deepseek.ToolCall) -> Array[PlanStep]? {
+  if call.name == "plan" {
+    decode_plan_steps(call.arguments)
+  } else {
+    None
+  }
+}
+
+///|
+/// For each well-formed `plan` call id, the decoded steps of the previous
+/// well-formed `plan` call among `calls` — the baseline its card diffs
+/// against. The first plan call has no entry, so it renders without change
+/// markers.
+fn plan_baselines(
+  calls : Array[@deepseek.ToolCall],
+) -> Map[String, Array[PlanStep]] {
+  let baselines : Map[String, Array[PlanStep]] = Map([])
+  let mut previous : Array[PlanStep]? = None
+  for call in calls {
+    guard plan_call_steps(call) is Some(steps) else { continue }
+    if previous is Some(prev) {
+      baselines.set(call.id, prev)
+    }
+    previous = Some(steps)
+  }
+  baselines
+}
+
+///|
+/// Plan baselines for the raw view, drawn from every durable assistant event.
+fn raw_plan_baselines(
+  session : @agent_session.Session,
+) -> Map[String, Array[PlanStep]] {
+  let calls : Array[@deepseek.ToolCall] = []
+  for event in session.events() {
+    if event.item() is Assistant(message) {
+      calls.append(message.tool_calls())
+    }
+  }
+  plan_baselines(calls)
+}
+
+///|
+/// Plan baselines for the model view, drawn from the projected messages it
+/// renders — so a plan call compacted away is not a baseline, mirroring what
+/// the model itself can still see.
+fn model_plan_baselines(
+  messages : Array[@deepseek.ChatMessage],
+) -> Map[String, Array[PlanStep]] {
+  let calls : Array[@deepseek.ToolCall] = []
+  for message in messages {
+    calls.append(message.tool_calls)
+  }
+  plan_baselines(calls)
+}
+
+///|
+/// Dedicated rendering for `plan` tool-call arguments: a progress meter plus a
+/// status-classed checklist, replacing the generic key/value rows. Steps that
+/// changed against `baseline` (the previous plan call) carry a small delta
+/// chip, and steps the rewrite dropped stay visible as ghost rows — a silent
+/// scope cut is exactly what a log reader wants to notice. Carries
+/// `tool-call-args-rendered` so the Original toggle still swaps to raw JSON.
+fn plan_args_view(
+  steps : Array[PlanStep],
+  baseline : Array[PlanStep]?,
+) -> @html.Html {
+  if steps.is_empty() {
+    return @html.div(class="tool-call-args-rendered plan-args") <| [
+      @html.span(class="plan-cleared") <| "plan cleared",
+    ]
+  }
+  let rows : Array[@html.Html] = [
+    for index, step in steps => plan_call_step(index + 1, step, baseline)
+  ]
+  for dropped in dropped_steps(steps, baseline) {
+    rows.push(dropped_step_row(dropped))
+  }
+  @html.div(class="tool-call-args-rendered plan-args") <| [
+    plan_progress_view(
+      steps.count_if(step => step.status == "completed"),
+      steps.length(),
+    ),
+    @html.ul(class="plan-steps") <| rows,
+  ]
+}
+
+///|
+/// A compact progress meter: a proportional fill plus a `completed/total`
+/// tally. The fill switches to the "added" green only when every step is
+/// completed, so a finished plan reads differently from one merely underway.
+fn plan_progress_view(completed : Int, total : Int) -> @html.Html {
+  let percent = if total == 0 { 0 } else { completed * 100 / total }
+  let fill_class = if completed == total {
+    "plan-progress-fill complete"
+  } else {
+    "plan-progress-fill"
+  }
+  @html.div(class="plan-progress") <| [
+    @html.div(class="plan-progress-track") <| [
+      @html.div(class=fill_class, style=["width: \{percent}%"]) <| "",
+    ],
+    @html.span(class="plan-progress-count") <| "\{completed}/\{total}",
+  ]
+}
+
+///|
+fn plan_call_step(
+  number : Int,
+  step : PlanStep,
+  baseline : Array[PlanStep]?,
+) -> @html.Html {
+  let row : Array[@html.Html] = [
+    @html.span(class="step-icon", title=step.status) <| status_icon(step.status),
+    @html.span(class="step-num") <| "\{number}.",
+    @html.span(class="step-title") <| step.title,
+  ]
+  if step_delta(step, baseline) is Some(delta) {
+    row.push(@html.span(class="step-delta step-delta-\{delta}") <| delta)
+  }
+  @html.li(class="plan-step \{step.status}") <| row
+}
+
+///|
+/// The checklist glyph for a step status; unknown statuses (possible in
+/// reminder lines, which are parsed from text) fall back to the pending ring.
+fn status_icon(status : String) -> String {
+  match status {
+    "completed" => "✓"
+    "in_progress" => "◐"
+    _ => "○"
+  }
+}
+
+///|
+/// What changed for `step` against the previous plan call, as chip text
+/// (doubling as a CSS class suffix); `None` when nothing changed or there is
+/// no usable baseline — the session's first plan, or one following a cleared
+/// plan, where chipping every step "new" would be noise.
+fn step_delta(step : PlanStep, baseline : Array[PlanStep]?) -> String? {
+  guard baseline is Some(prev) && !prev.is_empty() else { return None }
+  for old in prev {
+    if old.title == step.title {
+      return match (old.status, step.status) {
+        (before, after) if before == after => None
+        (_, "completed") => Some("done")
+        (_, "in_progress") => Some("started")
+        (_, _) => Some("reopened")
+      }
+    }
+  }
+  Some("new")
+}
+
+///|
+/// Steps present in the baseline plan but absent (by title) from the new one.
+fn dropped_steps(
+  steps : Array[PlanStep],
+  baseline : Array[PlanStep]?,
+) -> Array[PlanStep] {
+  guard baseline is Some(prev) else { return [] }
+  prev.filter(old => !steps.iter().any(step => step.title == old.title))
+}
+
+///|
+fn dropped_step_row(step : PlanStep) -> @html.Html {
+  @html.li(class="plan-step dropped") <| [
+    @html.span(class="step-icon", title="dropped in this update") <| "✕",
+    @html.span(class="step-title") <| step.title,
+    @html.span(class="step-delta step-delta-dropped") <| "dropped",
+  ]
+}
+
+///|
+/// The at-a-glance ribbon on a folded `plan` call: one fixed-width segment per
+/// step, colored by status, so scrolling a long session shows the plan filling
+/// up without unfolding a single card. Each segment names its step on hover.
+fn plan_ribbon(steps : Array[PlanStep]) -> @html.Html {
+  if steps.is_empty() {
+    return @html.nothing
+  }
+  @html.span(class="plan-ribbon") <| [
+    for index, step in steps => {
+      @html.span(
+        class="plan-ribbon-seg \{step.status}",
+        title="\{index + 1}. \{step.title} (\{step.status})",
+      ) <| ""
+    }
   ]
 }
 
@@ -395,6 +638,7 @@ fn assistant_card(
   briefs : Map[String, String],
   failed : Map[String, Unit],
   tags : Map[String, Int],
+  plans : Map[String, Array[PlanStep]],
   step_label~ : String,
 ) -> @html.Html {
   let body : Array[@html.Html] = []
@@ -413,7 +657,7 @@ fn assistant_card(
   let calls = message.tool_calls()
   if !calls.is_empty() {
     let call_views : Array[@html.Html] = [
-      for call in calls => tool_call_view(call, briefs, failed, tags)
+      for call in calls => tool_call_view(call, briefs, failed, tags, plans)
     ]
     body.push(@html.div(class="tool-calls") <| call_views)
   }
@@ -435,11 +679,16 @@ fn assistant_card(
 /// A call whose result failed is tagged `tool-call-failed`, which flags it in the
 /// full view and lets the "errors only" stylesheet keep its assistant card — so a
 /// failure shows the originating call cell alongside the error result cell.
+///
+/// A well-formed `plan` call swaps the friendly rendering for a dedicated
+/// checklist (see `plan_args_view`) and shows a per-step status ribbon while
+/// still folded.
 fn tool_call_view(
   call : @deepseek.ToolCall,
   briefs : Map[String, String],
   failed : Map[String, Unit],
   tags : Map[String, Int],
+  plans : Map[String, Array[PlanStep]],
 ) -> @html.Html {
   let name_row : Array[@html.Html] = [
     @html.text("→ "),
@@ -447,6 +696,10 @@ fn tool_call_view(
   ]
   if briefs.get(call.id) is Some(brief) && !brief.trim().is_empty() {
     name_row.push(@html.span(class="tool-call-brief") <| " · \{brief}")
+  }
+  let plan_steps = plan_call_steps(call)
+  if plan_steps is Some(steps) {
+    name_row.push(plan_ribbon(steps))
   }
   // When this call forms an unambiguous pair with a result, tag it `call N` and
   // link forward to that result's card; the same number labels the result.
@@ -472,9 +725,13 @@ fn tool_call_view(
       @html.div(class="tool-call-name") <| name_row,
     ]
   }
+  let rendered = match plan_steps {
+    Some(steps) => plan_args_view(steps, plans.get(call.id))
+    None => render_args_friendly(call.name, call.arguments)
+  }
   @html.details(id?=anchor, class=cls) <| [
     @html.summary(class="tool-call-name") <| name_row,
-    render_args_friendly(call.name, call.arguments),
+    rendered,
     @html.pre(class="tool-call-args tool-call-args-original") <| original,
   ]
 }
@@ -835,6 +1092,7 @@ fn render_model(session : @agent_session.Session) -> @html.Html {
   // saw. The raw view, which shows every event, uses all briefs.
   let briefs = model_tool_call_briefs(messages, tool_results)
   let tags = model_pair_tags(messages)
+  let plans = model_plan_baselines(messages)
   let cards : Array[@html.Html] = [
     for index, message in messages => {
       let time = time_labels.get(index).unwrap_or("")
@@ -845,6 +1103,7 @@ fn render_model(session : @agent_session.Session) -> @html.Html {
         failed,
         briefs,
         tags,
+        plans,
         time~,
         step_label~,
       )
@@ -1212,6 +1471,7 @@ fn message_card(
   failed : Map[String, Unit],
   briefs : Map[String, String],
   tags : Map[String, Int],
+  plans : Map[String, Array[PlanStep]],
   time~ : String,
   step_label~ : String,
 ) -> @html.Html {
@@ -1234,6 +1494,7 @@ fn message_card(
         briefs,
         failed,
         tags,
+        plans,
         time~,
         step_label~,
       )
@@ -1245,6 +1506,7 @@ fn message_card(
         briefs,
         failed,
         tags,
+        plans,
         time~,
         step_label~,
       )
@@ -1367,6 +1629,7 @@ fn model_card(
   briefs : Map[String, String],
   failed : Map[String, Unit],
   tags : Map[String, Int],
+  plans : Map[String, Array[PlanStep]],
   time~ : String,
   step_label~ : String,
 ) -> @html.Html {
@@ -1386,7 +1649,7 @@ fn model_card(
   if !message.tool_calls.is_empty() {
     let call_views : Array[@html.Html] = [
       for call in message.tool_calls => {
-        tool_call_view(call, briefs, failed, tags)
+        tool_call_view(call, briefs, failed, tags, plans)
       }
     ]
     body.push(@html.div(class="tool-calls") <| call_views)
