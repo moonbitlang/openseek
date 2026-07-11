@@ -25,6 +25,8 @@ eval/*
 !eval/tool_harness/**
 !eval/bgjobs_capability/
 !eval/bgjobs_capability/**
+!eval/compaction_fidelity/
+!eval/compaction_fidelity/**
 !eval/internal/
 !eval/internal/**
 !eval/swe_agi/

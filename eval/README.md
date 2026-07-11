@@ -13,11 +13,16 @@ The checked-in eval support packages are:
 - `eval/prompt_task`: nondeterministic model-facing prompt-task harness that
   runs repeated MoonBit prompt tasks concurrently and validates the final
   generated workspace independently.
+- `eval/compaction_fidelity`: nondeterministic model-facing checkpoint
+  fidelity eval that scores whether a compaction summary preserves planted
+  facts, answers scripted probes from the compacted projection, and survives
+  a summary-of-summary decay round; `eval/compaction_fidelity/fixture` holds
+  its deterministic fixtures and tests.
 
 Run deterministic harnesses with ordinary tests:
 
 ```bash
-moon test eval/report eval/tool_harness eval/file_edit/harness eval/prompt_task/harness
+moon test eval/report eval/tool_harness eval/file_edit/harness eval/prompt_task/harness eval/compaction_fidelity/fixture
 ```
 
 The design borrows the useful parts of SWE-AGI: each task should be a cold-start

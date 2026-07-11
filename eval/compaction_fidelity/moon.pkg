@@ -1,0 +1,13 @@
+import {
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_session/compact",
+  "bobzhang/openseek/deepseek",
+  "bobzhang/openseek/deepseek/client",
+  "bobzhang/openseek/eval/compaction_fidelity/fixture",
+  "moonbitlang/async",
+  "moonbitlang/core/env",
+}
+
+supported_targets = "+native"
+
+pkgtype(kind: "executable")

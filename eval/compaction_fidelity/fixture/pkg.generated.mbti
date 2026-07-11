@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/eval/compaction_fidelity/fixture"
+
+import {
+  "bobzhang/openseek/agent_session",
+}
+
+// Values
+pub fn all_fixtures() -> Array[Fixture]
+
+pub fn redirect_fixture() -> Fixture
+
+// Errors
+
+// Types and methods
+pub struct Fixture {
+  name : String
+  session : @agent_session.Session
+  facts : Array[PlantedFact]
+  probes : Array[Probe]
+  followup : Array[@agent_session.SessionItem]
+}
+
+pub struct PlantedFact {
+  label : String
+  needle : String
+}
+
+pub struct Probe {
+  question : String
+  accept : Array[String]
+}
+
+// Type aliases
+
+// Traits
+

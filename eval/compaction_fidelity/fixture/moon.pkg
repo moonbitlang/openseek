@@ -1,0 +1,11 @@
+import {
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/deepseek",
+}
+
+import {
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/deepseek",
+} for "test"
+
+supported_targets = "+native"
