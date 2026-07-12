@@ -1,9 +1,17 @@
 ///|
 /// How the agent has touched a file during this session, as recorded by the
-/// file-writing tools (`write`, `edit`, `multi_edit`). `remove` reads this to
-/// decide whether deleting a path is low-risk: a file the agent created this
-/// session can be removed with confidence, since doing so only undoes the
-/// agent's own work.
+/// file-writing tools (`write`, `edit`, `multi_edit`).
+///
+/// This is an ADVISORY provenance signal, keyed by path, not a capability. A
+/// consumer that gates deletion on `Created` must NOT treat it as sole
+/// authority: a path can be rebound after it is recorded (the sandboxed shell
+/// still permits `mv`/`rm` on non-source files, and a session spans many
+/// turns), so `Created` proves only that the agent once created *a* file at
+/// this path — not that the file there now is still that file. A safe consumer
+/// revalidates at delete time (the path still refers to the agent's file) and
+/// combines this with independent guards (e.g. only deleting git-tracked or
+/// recoverable/soft-deleted files), treating `Created` as necessary, not
+/// sufficient.
 pub(all) enum FileState {
   /// The agent created this file this session — a `write` to a path that did
   /// not exist. Editing it afterward keeps this state; it is still the agent's
@@ -22,6 +30,13 @@ pub(all) enum FileState {
 /// `remove`, which reads it. `Map` is a reference type, so the shared handle
 /// observes every tool's updates without a `Ref`.
 ///
+/// Keys are lexically normalized (`./a`, `a//b`, `x/../y` collapse) so a file
+/// recorded under one spelling is found under an equivalent one — the tools'
+/// `workspace_path.resolve` leaves paths unnormalized under the default `.`
+/// root, so `note.txt` and `./note.txt` would otherwise be distinct keys.
+/// Normalization is lexical only: symlink aliases still map to distinct keys, a
+/// gap a consumer closes by canonicalizing (realpath) at delete time.
+///
 /// In-memory only: it reflects what THIS process did this session, not history
 /// restored from a durable log. A file created in an earlier process (before a
 /// resume) is absent, so consumers must read "absent" as "unknown provenance",
@@ -37,10 +52,18 @@ pub fn FileStateMap::new() -> FileStateMap {
 }
 
 ///|
+/// The lexically normalized key for `path`, so equivalent spellings of one file
+/// (`a`, `./a`, `dir/../a`) share an entry. Lexical only — it does not touch the
+/// filesystem, so it does not resolve symlink aliases.
+fn normalize_key(path : String) -> String {
+  @path.Path(path).normalize().to_string()
+}
+
+///|
 /// Record that the agent created `path` this session. Creation always wins: a
 /// later `record_modified` will not downgrade a `Created` entry.
 pub fn FileStateMap::record_created(self : FileStateMap, path : String) -> Unit {
-  self.entries[path] = Created
+  self.entries[normalize_key(path)] = Created
 }
 
 ///|
@@ -51,10 +74,11 @@ pub fn FileStateMap::record_modified(
   self : FileStateMap,
   path : String,
 ) -> Unit {
-  if self.entries.get(path) is Some(Created) {
+  let key = normalize_key(path)
+  if self.entries.get(key) is Some(Created) {
     return
   }
-  self.entries[path] = Modified
+  self.entries[key] = Modified
 }
 
 ///|
@@ -62,7 +86,7 @@ pub fn FileStateMap::record_modified(
 /// tool has touched it (which a consumer must treat as "unknown", not
 /// "pre-existing").
 pub fn FileStateMap::get(self : FileStateMap, path : String) -> FileState? {
-  self.entries.get(path)
+  self.entries.get(normalize_key(path))
 }
 
 ///|
@@ -104,4 +128,16 @@ test "handles share one underlying map (no Ref needed)" {
   let b = a
   b.record_created("lib/shared.mbt")
   assert_true(a.get("lib/shared.mbt") is Some(Created))
+}
+
+///|
+test "equivalent path spellings resolve to the same entry" {
+  // resolve() leaves paths verbatim under the default `.` root, so without
+  // normalization these would be distinct keys for the same file.
+  let state = FileStateMap::new()
+  state.record_created("./lib/x.mbt")
+  assert_true(state.get("lib/x.mbt") is Some(Created))
+  // A later modify through a third spelling must still find the Created entry.
+  state.record_modified("lib/./x.mbt")
+  assert_true(state.get("lib/x.mbt") is Some(Created))
 }
