@@ -167,7 +167,7 @@ fn push_html_comment_ranges(
 fn find_html_comment_open(markdown : String, start~ : Int, stop~ : Int) -> Int? {
   let stop = stop.clamp(min=0, max=markdown.length())
   let start = start.clamp(min=0, max=stop)
-  for cursor = start; cursor + 3 < stop; cursor = cursor + 1 {
+  for cursor in start..<(stop - 3) {
     if markdown[cursor] == '<' &&
       markdown[cursor + 1] == '!' &&
       markdown[cursor + 2] == '-' &&
@@ -187,7 +187,7 @@ fn find_html_comment_close(
 ) -> Int? {
   let stop = stop.clamp(min=0, max=markdown.length())
   let start = start.clamp(min=0, max=stop)
-  for cursor = start; cursor + 2 < stop; cursor = cursor + 1 {
+  for cursor in start..<(stop - 2) {
     if markdown[cursor] == '-' &&
       markdown[cursor + 1] == '-' &&
       markdown[cursor + 2] == '>' {
@@ -200,13 +200,12 @@ fn find_html_comment_close(
 
 ///|
 fn line_start(markdown : String, offset : Int) -> Int {
-  for cursor = offset; cursor > 0; {
+  for cursor in offset>=..1 {
     if markdown[cursor - 1] == '\n' || markdown[cursor - 1] == '\r' {
       break cursor
     }
-    continue cursor - 1
   } nobreak {
-    cursor
+    0
   }
 }
 
