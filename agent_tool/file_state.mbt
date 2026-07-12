@@ -30,12 +30,14 @@ pub(all) enum FileState {
 /// `remove`, which reads it. `Map` is a reference type, so the shared handle
 /// observes every tool's updates without a `Ref`.
 ///
-/// Keys are lexically normalized (`./a`, `a//b`, `x/../y` collapse) so a file
+/// Keys drop `.` segments and redundant separators (`./a`, `a//b`) so a file
 /// recorded under one spelling is found under an equivalent one — the tools'
 /// `workspace_path.resolve` leaves paths unnormalized under the default `.`
-/// root, so `note.txt` and `./note.txt` would otherwise be distinct keys.
-/// Normalization is lexical only: symlink aliases still map to distinct keys, a
-/// gap a consumer closes by canonicalizing (realpath) at delete time.
+/// root, so `note.txt` and `./note.txt` would otherwise be distinct keys. A
+/// `..` is deliberately left unresolved: collapsing it lexically is unsound
+/// when a preceding component is a symlink (`link/../x` and `x` are different
+/// files), so it stays part of the key. Full symlink-aware canonicalization
+/// (realpath) is the deletion consumer's job at delete time.
 ///
 /// In-memory only: it reflects what THIS process did this session, not history
 /// restored from a durable log. A file created in an earlier process (before a
@@ -52,11 +54,18 @@ pub fn FileStateMap::new() -> FileStateMap {
 }
 
 ///|
-/// The lexically normalized key for `path`, so equivalent spellings of one file
-/// (`a`, `./a`, `dir/../a`) share an entry. Lexical only — it does not touch the
-/// filesystem, so it does not resolve symlink aliases.
+/// The lexical key for `path`, so equivalent spellings of one file (`a`, `./a`,
+/// `a//b`) share an entry. A `..` is NOT resolved: lexically dropping it is
+/// unsound when a preceding component is a symlink (`link/../x` and `x` are
+/// different files), which would let one path's provenance mask another's — so
+/// a path containing `..` is keyed verbatim, and full symlink-aware
+/// canonicalization is left to the deletion consumer (realpath at delete time).
 fn normalize_key(path : String) -> String {
-  @path.Path(path).normalize().to_string()
+  if path.contains("..") {
+    path
+  } else {
+    @path.Path(path).normalize().to_string()
+  }
 }
 
 ///|
@@ -140,4 +149,14 @@ test "equivalent path spellings resolve to the same entry" {
   // A later modify through a third spelling must still find the Created entry.
   state.record_modified("lib/./x.mbt")
   assert_true(state.get("lib/x.mbt") is Some(Created))
+}
+
+///|
+test "a `..` segment is kept verbatim, never resolved lexically" {
+  // `link/../victim` may traverse a symlink to a different directory, so its
+  // provenance must not leak onto a plain `victim` entry.
+  let state = FileStateMap::new()
+  state.record_created("link/../victim")
+  assert_true(state.get("victim") is None)
+  assert_true(state.get("link/../victim") is Some(Created))
 }
