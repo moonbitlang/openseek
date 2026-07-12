@@ -483,7 +483,7 @@ fn split_goal_notice(content : String, boilerplate~ : String) -> String? {
   guard lines.length() >= 3 && lines[1] == "The standing goal for this session:" else {
     return None
   }
-  for index = lines.length() - 1; index > 2; index = index - 1 {
+  for index in (lines.length() - 1)>=..3 {
     if lines[index].has_prefix(boilerplate) {
       return Some(lines[2:index].join("\n").trim().to_owned())
     }

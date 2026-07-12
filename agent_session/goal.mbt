@@ -122,7 +122,7 @@ pub fn Session::current_goal(self : Session) -> StandingGoal? {
   // `blocked_decided` freezes it so an older transition cannot override it.
   let mut blocked_decided = false
   let covered : Array[(Int, Int)] = []
-  for index = events.length() - 1; index >= 0; index = index - 1 {
+  for index in (events.length() - 1)>=..0 {
     let event = events[index]
     match event.item() {
       Assistant(_) | Terminal(_) => answered = true
