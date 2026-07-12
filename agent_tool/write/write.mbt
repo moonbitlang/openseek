@@ -29,6 +29,7 @@
 ///   invalid arguments.
 pub fn definition(
   workspace_root? : String = ".",
+  file_state? : @agent_tool.FileStateMap = @agent_tool.FileStateMap::new(),
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="write",
@@ -46,18 +47,21 @@ pub fn definition(
       },
       "required": ["path", "content"],
     }),
-    execute=Async(arguments => execute_with_workspace(workspace_root, arguments)),
+    execute=Async(arguments => {
+      execute_with_workspace(workspace_root, file_state, arguments)
+    }),
   )
 }
 
 ///|
 async fn execute(arguments : Json) -> @agent_tool.ToolAction {
-  execute_with_workspace(".", arguments)
+  execute_with_workspace(".", @agent_tool.FileStateMap::new(), arguments)
 }
 
 ///|
 async fn execute_with_workspace(
   workspace_root : String,
+  file_state : @agent_tool.FileStateMap,
   arguments : Json,
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
@@ -70,13 +74,14 @@ async fn execute_with_workspace(
     }
   }
   let path = @workspace_path.resolve(workspace_root, input.path)
-  write_file(input, path~)
+  write_file(input, path~, file_state~)
 }
 
 ///|
 async fn write_file(
   input : @decode.WriteInput,
   path~ : String,
+  file_state~ : @agent_tool.FileStateMap,
 ) -> @agent_tool.ToolAction {
   try {
     if @manifest_error.write_error(path, input.content) is Some(message) {
@@ -157,6 +162,13 @@ async fn write_file(
         CreateNew
       },
     )
+    // Record this write's provenance for the session so `remove` can later tell
+    // a file the agent created from one it merely overwrote.
+    if existed {
+      file_state.record_modified(path)
+    } else {
+      file_state.record_created(path)
+    }
     let chars = input.content.length()
     let summary = if existed {
       "ok: wrote \{chars} chars to \{path} (overwrote existing file)"
@@ -669,4 +681,38 @@ async test "write rejects non-object arguments" {
   guard result is Respond(output) else { fail("expected Respond") }
   assert_eq(output.content, "error: write requires object arguments")
   assert_true(output.is_error)
+}
+
+///|
+async test "write records a new file as Created and keeps it on overwrite" {
+  @vfs.with_tmpdir(dir => {
+    let state = @agent_tool.FileStateMap::new()
+    let run = match definition(file_state=state).execute {
+      Async(run) => run
+      Sync(_) => fail("write tool should be async")
+    }
+    let path = "\{dir}/note.txt"
+    // A brand-new file the agent wrote is recorded as its own creation.
+    let _ = run({ "path": path, "content": "v1" })
+    assert_true(state.get(path) is Some(Created))
+    // Overwriting that same non-source file keeps the stronger Created state.
+    let _ = run({ "path": path, "content": "v2" })
+    assert_true(state.get(path) is Some(Created))
+  })
+}
+
+///|
+async test "write records an overwrite of a pre-existing file as Modified" {
+  @vfs.with_tmpdir(dir => {
+    let state = @agent_tool.FileStateMap::new()
+    let path = "\{dir}/pre.txt"
+    // The file exists before the agent touches it this session.
+    @fs.write_file(path, "old", create_mode=CreateOrTruncate)
+    let run = match definition(file_state=state).execute {
+      Async(run) => run
+      Sync(_) => fail("write tool should be async")
+    }
+    let _ = run({ "path": path, "content": "new" })
+    assert_true(state.get(path) is Some(Modified))
+  })
 }

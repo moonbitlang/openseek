@@ -37,6 +37,19 @@ pub struct AgentToolDefinition {
 pub fn AgentToolDefinition::AgentToolDefinition(name~ : String, description~ : String, schema~ : JsonSchema, execute~ : ToolExecutor, control? : Bool) -> Self
 pub fn AgentToolDefinition::is_control(Self) -> Bool
 
+pub(all) enum FileState {
+  Created
+  Modified
+} derive(Eq, @debug.Debug)
+
+pub struct FileStateMap {
+  // private fields
+}
+pub fn FileStateMap::get(Self, String) -> FileState?
+pub fn FileStateMap::new() -> Self
+pub fn FileStateMap::record_created(Self, String) -> Unit
+pub fn FileStateMap::record_modified(Self, String) -> Unit
+
 pub(all) struct JsonSchema(Json) derive(@debug.Debug)
 
 pub(all) enum ToolAction {

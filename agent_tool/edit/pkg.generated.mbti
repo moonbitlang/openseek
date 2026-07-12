@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn definition(workspace_root? : String) -> @agent_tool.AgentToolDefinition
+pub fn definition(workspace_root? : String, file_state? : @agent_tool.FileStateMap) -> @agent_tool.AgentToolDefinition
 
 // Errors
 

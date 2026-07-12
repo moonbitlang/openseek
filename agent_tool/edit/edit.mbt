@@ -33,6 +33,7 @@
 ///   invalid arguments.
 pub fn definition(
   workspace_root? : String = ".",
+  file_state? : @agent_tool.FileStateMap = @agent_tool.FileStateMap::new(),
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="edit",
@@ -53,13 +54,16 @@ pub fn definition(
       },
       "required": ["path", "old_string", "new_string", "start_line"],
     }),
-    execute=Async(arguments => execute_with_workspace(workspace_root, arguments)),
+    execute=Async(arguments => {
+      execute_with_workspace(workspace_root, file_state, arguments)
+    }),
   )
 }
 
 ///|
 async fn execute_with_workspace(
   workspace_root : String,
+  file_state : @agent_tool.FileStateMap,
   arguments : Json,
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
@@ -72,13 +76,14 @@ async fn execute_with_workspace(
     }
   }
   let path = @workspace_path.resolve(workspace_root, input.path)
-  edit_file(input, path~)
+  edit_file(input, path~, file_state~)
 }
 
 ///|
 async fn edit_file(
   input : @decode.EditInput,
   path~ : String,
+  file_state~ : @agent_tool.FileStateMap,
 ) -> @agent_tool.ToolAction {
   // Every failure names the file it tried to edit so the viz can show
   // `→ edit · edit <file> 🚩` on the folded call line.
@@ -149,6 +154,7 @@ async fn edit_file(
       fail_brief~,
       summary~,
       ok_brief~,
+      file_state~,
     )
   }
   let region = select_edit_region(content, input)
@@ -170,6 +176,7 @@ async fn edit_file(
     fail_brief~,
     summary="ok: replaced 1 occurrence(s) at line \{match_line} in \{path}",
     ok_brief="edited \{@agent_tool.brief_basename(path)}:\{match_line} (1×)",
+    file_state~,
   )
 }
 
@@ -187,6 +194,7 @@ async fn commit_edit(
   fail_brief~ : String,
   summary~ : String,
   ok_brief~ : String,
+  file_state~ : @agent_tool.FileStateMap,
 ) -> @agent_tool.ToolAction {
   if @manifest_error.write_error(path, new_content) is Some(message) {
     return @agent_tool.ToolAction::respond(
@@ -206,6 +214,10 @@ async fn commit_edit(
   }
   try {
     @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
+    // An edit always changes a file that already existed (its content was read
+    // above), so record it as modified — record_modified preserves a stronger
+    // `Created` state if the agent created this file earlier this session.
+    file_state.record_modified(path)
     let response = @auto_check.append_summary(path, summary)
     @agent_tool.ToolAction::respond(response, brief=ok_brief)
   } catch {

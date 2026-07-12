@@ -18,6 +18,30 @@ async fn run_edit_in_workspace(
 }
 
 ///|
+async test "edit records the file it changed as Modified" {
+  @vfs.with_tmpdir(dir => {
+    let state = @agent_tool.FileStateMap::new()
+    let path = "\{dir}/lib.mbt"
+    @fs.write_file(
+      path,
+      "pub fn f() -> Int { 1 }\n",
+      create_mode=CreateOrTruncate,
+    )
+    let run = match @edit.definition(file_state=state).execute {
+      Async(execute) => execute
+      Sync(_) => fail("edit tool should be async")
+    }
+    let _ = run({
+      "path": path,
+      "old_string": "1",
+      "new_string": "2",
+      "start_line": 1,
+    })
+    assert_true(state.get(path) is Some(Modified))
+  })
+}
+
+///|
 async test "a failed edit names the file in its brief" {
   @vfs.with_tmpdir(dir => {
     // Editing a missing file fails; the error still briefs the target file so

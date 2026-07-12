@@ -10,6 +10,7 @@
 /// listed contiguously.
 pub fn definition(
   workspace_root? : String = ".",
+  file_state? : @agent_tool.FileStateMap = @agent_tool.FileStateMap::new(),
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="multi_edit",
@@ -59,13 +60,16 @@ pub fn definition(
         },
       },
     }),
-    execute=Async(arguments => execute_with_workspace(workspace_root, arguments)),
+    execute=Async(arguments => {
+      execute_with_workspace(workspace_root, file_state, arguments)
+    }),
   )
 }
 
 ///|
 async fn execute_with_workspace(
   workspace_root : String,
+  file_state : @agent_tool.FileStateMap,
   arguments : Json,
 ) -> @agent_tool.ToolAction {
   let args = @decode.decode_args(arguments) catch {
@@ -94,6 +98,7 @@ async fn execute_with_workspace(
     edits,
     args.revert_when_errors_above,
     revert_on_parse_errors=args.revert_on_parse_errors,
+    file_state~,
   )
 }
 
@@ -174,6 +179,7 @@ async fn multi_edit_files(
   edits : Array[@decode.MultiEditItem],
   revert_when_errors_above : Int?,
   revert_on_parse_errors~ : Bool,
+  file_state~ : @agent_tool.FileStateMap,
 ) -> @agent_tool.ToolAction {
   let brief = "multi_edit"
   // Resolve every edit's path up front and key contiguity and grouping on the
@@ -276,6 +282,11 @@ async fn multi_edit_files(
           brief~,
         )
     }
+    // multi_edit only rewrites files it read, so each is a modification (never
+    // a create). record_modified preserves a stronger `Created` state if the
+    // agent created this file earlier this session. A later auto-revert may
+    // restore the content, but the tool did write the path this session.
+    file_state.record_modified(write.path)
   }
   // The batch is on disk. Run the auto-revert guard from the first written
   // file's module: it appends `moon check` feedback and, if this batch

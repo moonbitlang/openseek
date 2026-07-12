@@ -121,13 +121,18 @@ pub async fn[X] build_tools(
   on_background_wake? : () -> Unit,
 ) -> @agent_tool.Tools {
   let workspace_root = runtime.workspace_root()
+  // One session-scoped file-state map, shared by the file-writing tools so they
+  // record which paths the agent created vs. modified this session — the record
+  // a future `remove` reads to tell an agent-created file (safe to delete) from
+  // a pre-existing one.
+  let file_state = @agent_tool.FileStateMap::new()
   Tools(
     shell_tools(runtime, scope, on_background_wake?) +
     [
       @read.definition(workspace_root~),
-      @edit.definition(workspace_root~),
-      @multi_edit.definition(workspace_root~),
-      @write.definition(workspace_root~),
+      @edit.definition(workspace_root~, file_state~),
+      @multi_edit.definition(workspace_root~, file_state~),
+      @write.definition(workspace_root~, file_state~),
       @plan.definition(),
       @goal.definition(),
       @finish.definition(),
