@@ -1085,10 +1085,7 @@ fn command_text_static_cwd_before_dynamic_source_write(
         None => ()
       }
     } else {
-      let segment : Array[String] = []
-      for segment_index in index..<end {
-        segment.push(words[segment_index])
-      }
+      let segment = [ for segment_index in index..<end => words[segment_index] ]
       if command_text_mentions_dynamic_source_tree_write(segment.join(" ")) {
         return cwd
       }
@@ -5264,10 +5261,9 @@ fn operands_with_optional_dest(
     Some(dest) => Some({ sources: operands, dest: Some(dest) })
     None =>
       if operands.length() >= 2 {
-        let sources : Array[String] = []
-        for index in 0..<(operands.length() - 1) {
-          sources.push(operands[index])
-        }
+        let sources = [
+          for index in 0..<(operands.length() - 1) => operands[index]
+        ]
         Some({ sources, dest: Some(operands[operands.length() - 1]) })
       } else {
         Some({ sources: [], dest: None })
