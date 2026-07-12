@@ -475,10 +475,7 @@ pub async fn analyze_suite(out_dir : String) -> SuiteReport {
     read_suite_manifest(out_dir),
     out_dir,
   )
-  let reports : Array[EvalReport] = []
-  for combo in manifest.combos {
-    reports.push(analyze_run(combo.out_dir))
-  }
+  let reports = [ for combo in manifest.combos => analyze_run(combo.out_dir) ]
   let report = SuiteReport(
     name=manifest.name,
     out_dir~,

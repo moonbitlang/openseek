@@ -159,10 +159,9 @@ pub async fn analyze_run(out_dir : String) -> EvalReport {
 ///|
 /// Analyze a prompt-task run manifest and write report artifacts.
 async fn analyze_manifest(manifest : RunManifest) -> EvalReport {
-  let results : Array[EvalResult] = []
-  for trial in manifest.trials {
-    results.push(analyze_trial(manifest, trial))
-  }
+  let results = [
+    for trial in manifest.trials => analyze_trial(manifest, trial)
+  ]
   let report = combine_results(manifest, results)
   write_report_files(report)
   report
@@ -440,10 +439,9 @@ async fn validate_workspace(
       probes: [],
     }
   }
-  let results : Array[ProbeResult] = []
-  for probe in probes {
-    results.push(run_validation_probe(workspace, probe))
-  }
+  let results = [
+    for probe in probes => run_validation_probe(workspace, probe)
+  ]
   let failures = [
     for result in results if !result.passed => {
       result.name + ": " + result.reason
