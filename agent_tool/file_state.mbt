@@ -30,14 +30,18 @@ pub(all) enum FileState {
 /// `remove`, which reads it. `Map` is a reference type, so the shared handle
 /// observes every tool's updates without a `Ref`.
 ///
-/// Keys drop `.` segments and redundant separators (`./a`, `a//b`) so a file
-/// recorded under one spelling is found under an equivalent one — the tools'
-/// `workspace_path.resolve` leaves paths unnormalized under the default `.`
-/// root, so `note.txt` and `./note.txt` would otherwise be distinct keys. A
-/// `..` is deliberately left unresolved: collapsing it lexically is unsound
-/// when a preceding component is a symlink (`link/../x` and `x` are different
-/// files), so it stays part of the key. Full symlink-aware canonicalization
-/// (realpath) is the deletion consumer's job at delete time.
+/// Keys are the exact resolved path each tool wrote to — deliberately NOT
+/// normalized or canonicalized. Unifying equivalent spellings (`note.txt` vs
+/// `./note.txt`) or symlink aliases correctly needs OS-level canonicalization
+/// (realpath); lexical normalization instead MISattributes provenance — it
+/// mishandles `..` across symlinks, native path separators, and the POSIX `//`
+/// root, any of which could report `Created` for a DIFFERENT file, strictly
+/// worse than failing to recognize an equivalent spelling. So this map
+/// under-approximates on purpose: an unrecognized spelling reads as `None`
+/// ("unknown"), which a consumer already treats conservatively. The deletion
+/// consumer canonicalizes with realpath at delete time — where the file is
+/// live — and pairs it with an identity revalidation, which is also where the
+/// map's provenance is confirmed rather than trusted.
 ///
 /// In-memory only: it reflects what THIS process did this session, not history
 /// restored from a durable log. A file created in an earlier process (before a
@@ -54,38 +58,10 @@ pub fn FileStateMap::new() -> FileStateMap {
 }
 
 ///|
-/// The lexical key for `path`: drop `.` and empty (`//`, trailing `/`)
-/// components so equivalent spellings of one file (`a`, `./a`, `a//b`) share an
-/// entry, while keeping every other component. A component that is exactly `..`
-/// is kept too, because lexically dropping it is unsound across symlinks
-/// (`link/../x` and `x` are different files) — only a real parent-directory
-/// segment is preserved this way, so an ordinary dotted name like `snap..bak`
-/// normalizes like any other. Full symlink-aware canonicalization is the
-/// deletion consumer's job (realpath at delete time).
-fn normalize_key(path : String) -> String {
-  let absolute = path.has_prefix("/")
-  let components = []
-  for component in path.split("/") {
-    match component {
-      "" | "." => ()
-      _ => components.push(component.to_owned())
-    }
-  }
-  let joined = components.join("/")
-  if absolute {
-    "/\{joined}"
-  } else if joined == "" {
-    "."
-  } else {
-    joined
-  }
-}
-
-///|
 /// Record that the agent created `path` this session. Creation always wins: a
 /// later `record_modified` will not downgrade a `Created` entry.
 pub fn FileStateMap::record_created(self : FileStateMap, path : String) -> Unit {
-  self.entries[normalize_key(path)] = Created
+  self.entries[path] = Created
 }
 
 ///|
@@ -96,11 +72,10 @@ pub fn FileStateMap::record_modified(
   self : FileStateMap,
   path : String,
 ) -> Unit {
-  let key = normalize_key(path)
-  if self.entries.get(key) is Some(Created) {
+  if self.entries.get(path) is Some(Created) {
     return
   }
-  self.entries[key] = Modified
+  self.entries[path] = Modified
 }
 
 ///|
@@ -108,7 +83,7 @@ pub fn FileStateMap::record_modified(
 /// tool has touched it (which a consumer must treat as "unknown", not
 /// "pre-existing").
 pub fn FileStateMap::get(self : FileStateMap, path : String) -> FileState? {
-  self.entries.get(normalize_key(path))
+  self.entries.get(path)
 }
 
 ///|
@@ -153,32 +128,14 @@ test "handles share one underlying map (no Ref needed)" {
 }
 
 ///|
-test "equivalent path spellings resolve to the same entry" {
-  // resolve() leaves paths verbatim under the default `.` root, so without
-  // normalization these would be distinct keys for the same file.
+test "distinct path spellings are distinct keys (a safe under-approximation)" {
+  // The map keys verbatim — it never canonicalizes — so an equivalent spelling
+  // reads as unknown rather than risk reporting a different file as
+  // agent-created. A miss is safe (the consumer falls back to its other
+  // guards); a false `Created` would not be. Canonicalization (realpath) is
+  // the deletion consumer's job at delete time.
   let state = FileStateMap::new()
-  state.record_created("./lib/x.mbt")
-  assert_true(state.get("lib/x.mbt") is Some(Created))
-  // A later modify through a third spelling must still find the Created entry.
-  state.record_modified("lib/./x.mbt")
-  assert_true(state.get("lib/x.mbt") is Some(Created))
-}
-
-///|
-test "a `..` segment is kept verbatim, never resolved lexically" {
-  // `link/../victim` may traverse a symlink to a different directory, so its
-  // provenance must not leak onto a plain `victim` entry.
-  let state = FileStateMap::new()
-  state.record_created("link/../victim")
-  assert_true(state.get("victim") is None)
-  assert_true(state.get("link/../victim") is Some(Created))
-}
-
-///|
-test "an ordinary dotted filename normalizes; only a `..` component is kept" {
-  // `snap..bak` has consecutive dots but no parent-directory segment, so it
-  // must normalize like any other name rather than being keyed verbatim.
-  let state = FileStateMap::new()
-  state.record_created("./snap..bak")
-  assert_true(state.get("snap..bak") is Some(Created))
+  state.record_created("./note.txt")
+  assert_true(state.get("./note.txt") is Some(Created))
+  assert_true(state.get("note.txt") is None)
 }
