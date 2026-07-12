@@ -66,7 +66,7 @@ test "a checkpoint between finish result and terminal keeps step attribution" {
       ),
     )
     .append(Terminal(Finished("done")))
-  let result = analyze_session(session)
+  let result = @session_analyzer.analyze_session(session)
   // The terminal belongs to the finish call: one model step, not two.
   assert_eq(result.steps, 1)
   assert_true(result.finished)
@@ -101,7 +101,7 @@ test "a context-yield terminal is not task success" {
         ),
       ),
     )
-  let result = analyze_session(session)
+  let result = @session_analyzer.analyze_session(session)
   assert_false(result.finished)
   assert_false(result.success)
   assert_eq(result.terminal_status, "context_yield")
@@ -111,7 +111,7 @@ test "a context-yield terminal is not task success" {
 
 ///|
 test "session analyzer counts typed events" {
-  let result = analyze_session(sample_session())
+  let result = @session_analyzer.analyze_session(sample_session())
   assert_true(result.success)
   assert_true(result.finished)
   assert_eq(result.reason, "ok")
@@ -133,7 +133,7 @@ test "latest non-finished terminal determines success" {
     .append(Terminal(Finished("done")))
     .append(User(UserMessage("second")))
     .append(Terminal(Failed("agent failed")))
-  let result = analyze_session(session)
+  let result = @session_analyzer.analyze_session(session)
   assert_false(result.success)
   assert_false(result.finished)
   assert_eq(result.terminal_status, "failed")
@@ -168,7 +168,7 @@ test "finish tool terminal does not double count a model step" {
       ),
     )
     .append(Terminal(Finished("done")))
-  let result = analyze_session(session)
+  let result = @session_analyzer.analyze_session(session)
   assert_eq(result.steps, 1)
   assert_eq(result.tool_results, 1)
   assert_true(result.finished)
@@ -202,7 +202,7 @@ test "shell failures count is_error shell results, not output text" {
         ),
       ),
     )
-  let result = analyze_session(session)
+  let result = @session_analyzer.analyze_session(session)
   assert_eq(result.shell_uses, 2)
   assert_eq(result.shell_failures, 1)
   assert_eq(result.tool_errors, 2)
@@ -228,7 +228,7 @@ test "transcript text ignores user prompts and summaries" {
     )
     .append(Assistant(AssistantMessage("I used @string.parse_int")))
     .append(Terminal(Finished("done")))
-  let text = transcript_text(session)
+  let text = @session_analyzer.transcript_text(session)
   assert_false(text.contains("@string.from_str"))
   assert_false(text.contains("@argparse.command"))
   assert_false(text.contains("moon test"))
@@ -238,7 +238,7 @@ test "transcript text ignores user prompts and summaries" {
 ///|
 async test "eval result renders and writes report files" {
   @vfs.with_tmpdir(prefix="openseek-session-analyzer-", dir => {
-    let result = analyze_session(sample_session())
+    let result = @session_analyzer.analyze_session(sample_session())
     assert_true(result.markdown().contains("Session Eval Result"))
     assert_true(result.html().contains("<html"))
     assert_true(result.to_json().stringify().contains("trial-01"))

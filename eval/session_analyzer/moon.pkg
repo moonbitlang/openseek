@@ -5,10 +5,11 @@ import {
 }
 
 import {
+  "bobzhang/openseek/agent_session",
   "bobzhang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/async",
   "moonbitlang/async/fs",
-} for "wbtest"
+} for "test"
 
 warnings = "+unnecessary_annotation"
 
