@@ -54,17 +54,30 @@ pub fn FileStateMap::new() -> FileStateMap {
 }
 
 ///|
-/// The lexical key for `path`, so equivalent spellings of one file (`a`, `./a`,
-/// `a//b`) share an entry. A `..` is NOT resolved: lexically dropping it is
-/// unsound when a preceding component is a symlink (`link/../x` and `x` are
-/// different files), which would let one path's provenance mask another's — so
-/// a path containing `..` is keyed verbatim, and full symlink-aware
-/// canonicalization is left to the deletion consumer (realpath at delete time).
+/// The lexical key for `path`: drop `.` and empty (`//`, trailing `/`)
+/// components so equivalent spellings of one file (`a`, `./a`, `a//b`) share an
+/// entry, while keeping every other component. A component that is exactly `..`
+/// is kept too, because lexically dropping it is unsound across symlinks
+/// (`link/../x` and `x` are different files) — only a real parent-directory
+/// segment is preserved this way, so an ordinary dotted name like `snap..bak`
+/// normalizes like any other. Full symlink-aware canonicalization is the
+/// deletion consumer's job (realpath at delete time).
 fn normalize_key(path : String) -> String {
-  if path.contains("..") {
-    path
+  let absolute = path.has_prefix("/")
+  let components = []
+  for component in path.split("/") {
+    match component {
+      "" | "." => ()
+      _ => components.push(component.to_owned())
+    }
+  }
+  let joined = components.join("/")
+  if absolute {
+    "/\{joined}"
+  } else if joined == "" {
+    "."
   } else {
-    @path.Path(path).normalize().to_string()
+    joined
   }
 }
 
@@ -159,4 +172,13 @@ test "a `..` segment is kept verbatim, never resolved lexically" {
   state.record_created("link/../victim")
   assert_true(state.get("victim") is None)
   assert_true(state.get("link/../victim") is Some(Created))
+}
+
+///|
+test "an ordinary dotted filename normalizes; only a `..` component is kept" {
+  // `snap..bak` has consecutive dots but no parent-directory segment, so it
+  // must normalize like any other name rather than being keyed verbatim.
+  let state = FileStateMap::new()
+  state.record_created("./snap..bak")
+  assert_true(state.get("snap..bak") is Some(Created))
 }

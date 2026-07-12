@@ -2,7 +2,6 @@ import {
   "bobzhang/openseek/deepseek",
   "moonbitlang/async",
   "moonbitlang/core/json",
-  "moonbitlang/x/path",
 }
 
 warnings = "+unnecessary_annotation"
