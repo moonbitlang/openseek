@@ -401,7 +401,7 @@ fn line_start_offset(content : String, line : Int) -> Int {
 fn line_end_offset(content : String, line : Int) -> Int {
   let len = content.length()
   let mut current_line = 1
-  for cursor = 0; cursor < len; cursor = cursor + 1 {
+  for cursor in 0..<len {
     if content[cursor] == '\n' {
       if current_line == line {
         break cursor + 1
@@ -436,7 +436,7 @@ fn inserted_line_span(new_string : String) -> Int {
 fn line_number_at_offset(content : String, offset : Int) -> Int {
   let bounded_offset = offset.clamp(min=0, max=content.length())
   let mut line = 1
-  for cursor = 0; cursor < bounded_offset; cursor = cursor + 1 {
+  for cursor in 0..<bounded_offset {
     if content[cursor] == '\n' {
       line = line + 1
     }

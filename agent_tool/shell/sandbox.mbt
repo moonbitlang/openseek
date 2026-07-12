@@ -1147,8 +1147,8 @@ fn command_text_redirects_to_source_path(text : String) -> Bool {
 ///|
 fn command_text_mentions_unsafe_in_place_sed(text : String) -> Bool {
   let words = command_text_words(text)
-  for index in 0..<words.length() {
-    if command_token_basename_is(words[index], "sed") &&
+  for index, word in words {
+    if command_token_basename_is(word, "sed") &&
       command_text_word_runs_as_command(words, index) {
       if command_text_sed_segment_has_in_place(words, index) {
         if !command_text_sed_is_safe_non_source_find_exec(words, index) {
@@ -1254,8 +1254,8 @@ fn command_text_xargs_option_consumes_next(arg : String) -> Bool {
 ///|
 fn command_text_mentions_unsafe_git_source_operation(text : String) -> Bool {
   let words = command_text_words(text)
-  for index in 0..<words.length() {
-    if command_token_basename_is(words[index], "git") &&
+  for index, word in words {
+    if command_token_basename_is(word, "git") &&
       command_text_word_runs_as_command(words, index) {
       let segment_end = command_text_segment_end(words, index)
       if @git_policy.text_should_preblock(words, index + 1, segment_end) {
