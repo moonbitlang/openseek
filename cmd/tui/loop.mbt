@@ -942,3 +942,1239 @@ async fn[G] run_message_loop(
     refresh_ui(ui, state)
   }
 }
+
+///|
+fn drain_test_state() -> State {
+  State::new({
+    api_key: "k",
+    api_url: Some("https://proxy.example/v1/chat/completions"),
+    model: Deepseek(V4Pro),
+    cwd: ".",
+    max_steps: Some(10),
+    thinking: Max,
+    session_id: SessionId("test"),
+    session_root: ".openseek",
+    engine: "openseek",
+    engine_args_prefix: [],
+    engine_mode: Serve,
+  })
+}
+
+///|
+fn drain_oneshot_test_state() -> State {
+  State::new({
+    ..drain_test_state().config,
+    engine: "./replayer",
+    engine_args_prefix: [],
+    engine_mode: OneShot,
+  })
+}
+
+///|
+fn start_agent_count(cmds : Array[Cmd]) -> Int {
+  cmds.count_if(cmd => cmd is StartAgent(_, ..))
+}
+
+///|
+fn error_item_count(cmds : Array[Cmd]) -> Int {
+  cmds.count_if(cmd => cmd is AppendItem(Error(_)))
+}
+
+///|
+/// Foreground `!` commands: those that own a run slot (run_id present).
+fn run_command_count(cmds : Array[Cmd]) -> Int {
+  cmds.count_if(cmd => cmd is RunCommand(run_id=Some(_), _))
+}
+
+///|
+/// Background `!` commands launched alongside a live turn (run_id absent).
+fn run_background_command_count(cmds : Array[Cmd]) -> Int {
+  cmds.count_if(cmd => cmd is RunCommand(run_id=None, _))
+}
+
+///|
+fn compact_session_count(cmds : Array[Cmd]) -> Int {
+  cmds.count_if(cmd => cmd is CompactSession(_))
+}
+
+///|
+test "engine configuration travels through the environment" {
+  let config = drain_test_state().config
+  let env = engine_extra_env(config)
+  guard env.get("OPENSEEK_SESSION") is Some(session_id) else {
+    fail("missing session id env")
+  }
+  guard env.get("OPENSEEK_SESSION_ROOT") is Some(session_root) else {
+    fail("missing session root env")
+  }
+  guard env.get("OPENSEEK_DIR") is Some(dir) else {
+    fail("missing workspace dir env")
+  }
+  assert_eq(session_id, "test")
+  assert_eq(session_root, ".openseek")
+  assert_eq(dir, ".")
+  assert_true(env.get("DEEPSEEK") == Some(config.api_key))
+  assert_true(env.get("OPENSEEK_THINKING") == Some("max"))
+  assert_true(
+    env.get("OPENSEEK_API_URL") ==
+    Some("https://proxy.example/v1/chat/completions"),
+  )
+  let kimi_env = engine_extra_env({ ..config, model: Kimi(K27CodeHighSpeed) })
+  assert_true(kimi_env.get("KIMI") == Some(config.api_key))
+  assert_true(kimi_env.get("DEEPSEEK") is None)
+}
+
+///|
+test "agent engine env overrides inherited session config" {
+  let inherited = {
+    "OPENSEEK_SESSION": "parent",
+    "OPENSEEK_SESSION_ROOT": "/tmp/parent",
+    "OPENSEEK_DIR": "/tmp/parent-workspace",
+    "OPENSEEK_API_URL": "https://parent.example/chat/completions",
+    "PATH": "/bin",
+  }
+  let env = engine_env(drain_test_state().config, inherited)
+  assert_true(env.get("PATH") == Some("/bin"))
+  assert_true(env.get("OPENSEEK_SESSION") == Some("test"))
+  assert_true(env.get("OPENSEEK_SESSION_ROOT") == Some(".openseek"))
+  assert_true(env.get("OPENSEEK_DIR") == Some("."))
+  assert_true(
+    env.get("OPENSEEK_API_URL") ==
+    Some("https://proxy.example/v1/chat/completions"),
+  )
+  assert_true(inherited.get("OPENSEEK_SESSION") == Some("parent"))
+}
+
+///|
+test "agent engine env clears inherited api url without override" {
+  let config = { ..drain_test_state().config, api_url: None }
+  let env = engine_env(config, {
+    "OPENSEEK_API_URL": "https://parent.example/chat/completions",
+  })
+  assert_true(env.get("OPENSEEK_API_URL") == Some(""))
+}
+
+///|
+test "exit slash command quits" {
+  let state = drain_test_state()
+  let cmds = update(state, UiInput(SlashCommand(name="exit", arguments="")))
+  assert_eq(quit_count(cmds), 1)
+
+  let rejected = update(
+    state,
+    UiInput(SlashCommand(name="exit", arguments="now")),
+  )
+  assert_eq(quit_count(rejected), 0)
+  assert_eq(error_item_count(rejected), 1)
+}
+
+///|
+test "compact slash command starts a compaction run when idle" {
+  let state = drain_test_state()
+  let cmds = update(state, UiInput(SlashCommand(name="compact", arguments="")))
+  assert_eq(compact_session_count(cmds), 1)
+  assert_eq(error_item_count(cmds), 0)
+  // The run is held busy so a concurrent prompt cannot interleave with the
+  // engine's compaction, and so the activity line shows work in progress.
+  assert_false(state.run is Idle)
+  // The start notice precedes the command, so the compaction is the tail.
+  guard cmds is [_, CompactSession(run_id~)] else {
+    fail("expected a compaction command")
+  }
+  assert_true(state.owns_run(run_id))
+
+  // A second compact while the first is still running is refused, not queued.
+  let busy = update(state, UiInput(SlashCommand(name="compact", arguments="")))
+  assert_eq(compact_session_count(busy), 0)
+  assert_eq(error_item_count(busy), 1)
+
+  // The engine's terminal event closes the run and previews the new context.
+  let done = update(
+    state,
+    AgentProgress(run_id~, CompactionFinished("- goal: ship /compact")),
+  )
+  assert_eq(compact_session_count(done), 0)
+  guard done is [AppendItem(Notice(_))] else {
+    fail("expected a compaction preview notice")
+  }
+  assert_true(state.run is Idle)
+}
+
+///|
+test "a prompt during compaction is rejected locally, not steered" {
+  let state = drain_test_state()
+  let started = update(
+    state,
+    UiInput(SlashCommand(name="compact", arguments="")),
+  )
+  guard started is [_, CompactSession(_)] else {
+    fail("expected compaction to start")
+  }
+  assert_true(state.run_is_compaction)
+
+  // Enter with a prompt must not steer (the engine drops steers during
+  // compaction); it is rejected locally so the text is not lost.
+  let steered = update(state, UiInput(Steer(Prompt("hello"))))
+  assert_eq(error_item_count(steered), 1)
+  assert_true(steered.all(cmd => !(cmd is SteerAgent(_))))
+  assert_eq(state.pending_steers.length(), 0)
+
+  // Tab queues it instead, to run once compaction lands.
+  let _ = update(state, UiInput(Queue(Prompt("hello"))))
+  assert_eq(state.queued.length(), 1)
+
+  // When compaction finishes the queued prompt drains and starts.
+  let done = update(
+    state,
+    AgentProgress(run_id=state.run_id, CompactionFinished("summary")),
+  )
+  assert_false(state.run_is_compaction)
+  assert_eq(start_agent_count(done), 1)
+}
+
+///|
+test "a rejected command surfaces an error without ending the run in flight" {
+  // A command_error carries no identity for which command was rejected (it is
+  // stamped with the mutable latest_run), so a delayed rejection of an earlier
+  // command must never end the run currently in flight — only surface it.
+  // During a /compact run: the rejection does not end it; the real terminal
+  // event still does.
+  let compacting = drain_test_state()
+  let started = update(
+    compacting,
+    UiInput(SlashCommand(name="compact", arguments="")),
+  )
+  guard started is [_, CompactSession(run_id~)] else {
+    fail("expected compaction to start")
+  }
+  let rejected = update(
+    compacting,
+    AgentProgress(run_id~, CommandRejected("unknown command: steer")),
+  )
+  assert_eq(error_item_count(rejected), 1)
+  assert_false(compacting.run is Idle)
+  let _ = update(
+    compacting,
+    AgentProgress(run_id~, CompactionFinished("summary")),
+  )
+  assert_true(compacting.run is Idle)
+
+  // During an ordinary prompt turn, a rejected command (e.g. the context sent
+  // after a `!` shell command) must not terminate the turn it has nothing to do
+  // with — surface it, but keep the run active so its real output still lands.
+  let prompting = drain_test_state()
+  let _ = update(prompting, UiInput(Steer(Prompt("work"))))
+  guard prompting.run is Running(_) else { fail("expected a running prompt") }
+  let run_id = prompting.run_id
+  let noise = update(
+    prompting,
+    AgentProgress(run_id~, CommandRejected("unknown command: steer")),
+  )
+  assert_eq(error_item_count(noise), 1)
+  assert_true(prompting.run is Running(_))
+}
+
+///|
+test "compact slash command rejects arguments and pending work" {
+  let with_args = drain_test_state()
+  let rejected = update(
+    with_args,
+    UiInput(SlashCommand(name="compact", arguments="now")),
+  )
+  assert_eq(error_item_count(rejected), 1)
+  assert_eq(compact_session_count(rejected), 0)
+  assert_true(with_args.run is Idle)
+
+  let queued_state = drain_test_state()
+  queued_state.queued.push(Prompt("later"))
+  let queued_cmds : Array[Cmd] = []
+  handle_compact_command(queued_state, "", queued_cmds)
+  assert_eq(error_item_count(queued_cmds), 1)
+  assert_eq(compact_session_count(queued_cmds), 0)
+}
+
+///|
+test "compact slash command is unavailable on a oneshot engine" {
+  let state = State::new({ ..drain_test_state().config, engine_mode: OneShot })
+  let cmds = update(state, UiInput(SlashCommand(name="compact", arguments="")))
+  assert_eq(error_item_count(cmds), 1)
+  assert_eq(compact_session_count(cmds), 0)
+  assert_true(state.run is Idle)
+}
+
+///|
+test "unknown slash command reports an error" {
+  let state = drain_test_state()
+  let cmds = update(state, UiInput(SlashCommand(name="unknown", arguments="")))
+  assert_eq(error_item_count(cmds), 1)
+  assert_true(state.run is Idle)
+}
+
+///|
+test "a submitted shell command runs locally, not via the agent" {
+  let state = drain_test_state()
+  // A `!` command submitted while idle drains to a local RunCommand, never to
+  // the agent engine.
+  let cmds = update(state, UiInput(Steer(Command("ls"))))
+  assert_true(state.run is Running(_))
+  assert_eq(run_command_count(cmds), 1)
+  assert_eq(start_agent_count(cmds), 0)
+}
+
+///|
+test "queued input drains exactly when the agent is idle" {
+  let state = drain_test_state()
+
+  // Submit while idle: starts immediately, nothing left queued.
+  let cmds = update(state, UiInput(Steer(Prompt("a"))))
+  assert_true(state.run is Running(_))
+  assert_eq(state.queued.length(), 0)
+  assert_eq(start_agent_count(cmds), 1)
+
+  // Submit while running: queues, no new agent started.
+  let cmds = update(state, UiInput(Queue(Prompt("b"))))
+  assert_true(state.run is Running(_))
+  assert_eq(state.queued.length(), 1)
+  assert_eq(start_agent_count(cmds), 0)
+
+  // A non-terminal progress event must not drain the queue.
+  let cmds = update(
+    state,
+    AgentProgress(run_id=state.run_id, AssistantMessage("thinking")),
+  )
+  assert_true(state.run is Running(_))
+  assert_eq(state.queued.length(), 1)
+  assert_eq(start_agent_count(cmds), 0)
+
+  // Agent finishes with one queued: drains "b" and starts it.
+  let cmds = update(
+    state,
+    AgentProgress(run_id=state.run_id, AgentFinished("done-a")),
+  )
+  assert_true(state.run is Running(_))
+  assert_eq(state.queued.length(), 0)
+  assert_eq(start_agent_count(cmds), 1)
+
+  // Agent finishes with empty queue: stays idle, nothing started.
+  let cmds = update(
+    state,
+    AgentProgress(run_id=state.run_id, AgentFinished("done-b")),
+  )
+  assert_true(state.run is Idle)
+  assert_eq(state.queued.length(), 0)
+  assert_eq(start_agent_count(cmds), 0)
+}
+
+///|
+test "a stale terminal event from a superseded run is ignored" {
+  let state = drain_test_state()
+
+  // Run A starts, and a second input B is queued behind it.
+  let _ = update(state, UiInput(Steer(Prompt("a"))))
+  let run_a = state.run_id
+  let _ = update(state, UiInput(Queue(Prompt("b"))))
+
+  // A finishes: the queue drains and B starts as a new run with a fresh id.
+  let _ = update(state, AgentProgress(run_id=run_a, AgentFinished("done-a")))
+  assert_true(state.run is Running(_))
+  let run_b = state.run_id
+  assert_true(run_b != run_a)
+
+  // A late terminal from the already-superseded run A (e.g. an `AgentCancelled`
+  // that races a natural finish) must be dropped: it neither finishes B nor
+  // drains the queue again.
+  let cmds = update(state, AgentCancelled(run_id=run_a))
+  assert_eq(cmds.length(), 0)
+  assert_true(state.run is Running(_))
+  assert_eq(state.run_id, run_b)
+}
+
+///|
+fn quit_count(cmds : Array[Cmd]) -> Int {
+  cmds.count_if(cmd => cmd is Quit)
+}
+
+///|
+test "Ctrl+C quits when idle and interrupts when a task is running" {
+  let state = drain_test_state()
+
+  // Idle: an interrupt quits the TUI rather than reporting a dead end.
+  let cmds = update(state, UiInput(Interrupt))
+  assert_eq(quit_count(cmds), 1)
+  assert_eq(error_item_count(cmds), 0)
+  assert_true(state.run is Idle)
+
+  // Running: the same interrupt cancels the task instead of quitting.
+  let _ = update(state, UiInput(Steer(Prompt("a"))))
+  assert_true(state.run is Running(_))
+  let cmds = update(state, UiInput(Interrupt))
+  assert_eq(quit_count(cmds), 0)
+  assert_true(cmds.any(cmd => cmd is CancelAgent))
+  assert_true(state.run is Interrupting(_))
+
+  // A second interrupt escalates from the polite cancel command to killing
+  // the engine process.
+  let cmds = update(state, UiInput(Interrupt))
+  assert_true(cmds.any(cmd => cmd is KillEngine))
+  assert_eq(quit_count(cmds), 0)
+
+  // Steering a turn that is being cancelled is refused: the text could
+  // outlive the dying turn in the engine's queue and contaminate a later
+  // prompt.
+  let cmds = update(state, UiInput(Steer(Prompt("late idea"))))
+  assert_eq(error_item_count(cmds), 1)
+  assert_true(cmds.all(cmd => !(cmd is SteerAgent(_))))
+}
+
+///|
+test "a tick while idle never starts an agent" {
+  let state = drain_test_state()
+  let cmds = update(state, Tick)
+  assert_true(state.run is Idle)
+  assert_eq(start_agent_count(cmds), 0)
+}
+
+///|
+test "steering a running agent sends a steer command" {
+  let state = drain_test_state()
+
+  // Idle Steer submits and starts a task.
+  let _ = update(state, UiInput(Steer(Prompt("a"))))
+  assert_true(state.run is Running(_))
+  assert_eq(state.queued.length(), 0)
+
+  // Steer while running: a steer command for the engine — no queueing, no
+  // new run, no error. The transcript echo comes later, from the engine's
+  // steer_applied event at the boundary where the model actually saw it.
+  let cmds = update(state, UiInput(Steer(Prompt("b"))))
+  assert_eq(state.queued.length(), 0)
+  assert_eq(start_agent_count(cmds), 0)
+  assert_eq(error_item_count(cmds), 0)
+  guard cmds is [SteerAgent(Prompt(text))] else {
+    fail("expected a steer command")
+  }
+  assert_eq(text, "b")
+  assert_true(state.run is Running(_))
+
+  // A shell command runs locally in the background; its output is sent as
+  // command context after the command finishes.
+  let cmds = update(state, UiInput(Steer(Command("ls"))))
+  assert_eq(error_item_count(cmds), 0)
+  assert_eq(run_background_command_count(cmds), 1)
+  assert_eq(run_command_count(cmds), 0)
+  assert_true(cmds.all(cmd => !(cmd is SteerAgent(_))))
+  assert_true(state.run is Running(_))
+
+  // Queue while running still queues without error.
+  let cmds = update(state, UiInput(Queue(Prompt("c"))))
+  assert_eq(state.queued.length(), 1)
+  assert_eq(error_item_count(cmds), 0)
+}
+
+///|
+test "a background shell command result sends command context" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  assert_true(state.run is Running(_))
+
+  let cmds = update(
+    state,
+    CommandResult(command="ls", run_id=None, Err(Failure::Failure("boom"))),
+  )
+  guard cmds is [AppendItem(_), SteerAgent(Command(text))] else {
+    fail("expected command transcript item and command steer")
+  }
+  assert_true(text.contains("<user_shell_command>"))
+  assert_true(text.contains("<command>\nls\n</command>"))
+  assert_true(text.contains("error running shell:"))
+  assert_eq(state.pending_steers.length(), 0)
+  assert_true(state.run is Running(_))
+}
+
+///|
+test "oneshot engines reject steering" {
+  let state = drain_oneshot_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("a"))))
+  assert_true(state.run is Running(_))
+  // No command channel into a one-shot process: steering errors instead of
+  // emitting a steer command.
+  let cmds = update(state, UiInput(Steer(Prompt("b"))))
+  assert_eq(error_item_count(cmds), 1)
+  assert_true(cmds.all(cmd => !(cmd is SteerAgent(_))))
+  let _ = update(
+    state,
+    AgentProgress(run_id=state.run_id, AgentFinished("done")),
+  )
+}
+
+///|
+test "a running shell command is never steered and never kills the engine" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Command("sleep 5"))))
+  assert_true(state.run is Running(_))
+  assert_true(state.run_is_command)
+
+  // Steering a local command run errors instead of poking the idle engine.
+  let cmds = update(state, UiInput(Steer(Prompt("change of plan"))))
+  assert_eq(error_item_count(cmds), 1)
+  assert_true(cmds.all(cmd => !(cmd is SteerAgent(_))))
+
+  // Interrupt escalation stays on the local task: a second Ctrl-C cancels
+  // again rather than killing the bystander engine process.
+  let _ = update(state, UiInput(Interrupt))
+  assert_true(state.run is Interrupting(_))
+  let cmds = update(state, UiInput(Interrupt))
+  assert_true(cmds.any(cmd => cmd is CancelAgent))
+  assert_true(cmds.all(cmd => !(cmd is KillEngine)))
+
+  // Finishing the command clears the flag.
+  let _ = update(
+    state,
+    CommandResult(
+      run_id=Some(state.run_id),
+      command="sleep 5",
+      Err(Failure::Failure("interrupted")),
+    ),
+  )
+  assert_false(state.run_is_command)
+}
+
+///|
+test "a cancelled foreground shell command survives as a card, not a lost line" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Command("sleep 100"))))
+  let command_run = state.run_id
+  assert_true(state.run_is_command)
+
+  // Ctrl-C moves the command into Interrupting and cancels its local task.
+  let _ = update(state, UiInput(Interrupt))
+  assert_true(state.run is Interrupting(_))
+
+  // The cancelled task reports back with no result. The command line must still
+  // appear — as a "(cancelled)" card, since the live input echo was dropped —
+  // and the run settles without handing anything to the engine.
+  let cmds = update(
+    state,
+    CommandCancelled(command="sleep 100", run_id=command_run),
+  )
+  guard cmds is [AppendItem(ToolCall(_))] else {
+    fail("expected exactly one cancelled command card, not a lost line")
+  }
+  assert_true(cmds.all(cmd => !(cmd is SteerAgent(_))))
+  assert_true(state.run is Idle)
+  assert_false(state.run_is_command)
+}
+
+///|
+test "a completed shell command is persisted as an idle user message" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Command("ls"))))
+  let command_run = state.run_id
+  let cmds = update(
+    state,
+    CommandResult(
+      run_id=Some(command_run),
+      command="ls",
+      Err(Failure::Failure("boom")),
+    ),
+  )
+  // A spawn failure still renders a command card (not a bare error), so the
+  // `$ ls` line survives now that the live input echo is gone — matching the
+  // `$ ls (failed)` card resume reconstructs from the persisted context.
+  guard cmds is [AppendItem(ToolCall(_)), SteerAgent(Command(text))] else {
+    fail("expected a command card and command steer")
+  }
+  assert_true(text.contains("<user_shell_command>"))
+  assert_true(text.contains("<command>\nls\n</command>"))
+  assert_true(text.contains("error running shell:"))
+  assert_true(state.run is Idle)
+  assert_true(cmds.all(cmd => !(cmd is StartAgent(_, ..))))
+  assert_false(state.run_is_command)
+
+  let cmds = update(state, UiInput(Steer(Prompt("what changed?"))))
+  guard cmds
+    is [AppendItem(Input(Prompt("what changed?"))), StartAgent(run_id~, text)] else {
+    fail("expected prompt transcript item and agent start")
+  }
+  assert_true(run_id != command_run)
+  assert_eq(text, "what changed?")
+  assert_true(state.run is Running(_))
+  assert_false(state.run_is_command)
+}
+
+///|
+test "a command context delivery failure reports without prompt fallback" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Command("ls"))))
+  let command_run = state.run_id
+  let cmds = update(
+    state,
+    CommandResult(
+      run_id=Some(command_run),
+      command="ls",
+      Err(Failure::Failure("boom")),
+    ),
+  )
+  guard cmds is [AppendItem(_), SteerAgent(Command(_))] else {
+    fail("expected command steer")
+  }
+  let cmds = update(state, EngineSessionError("store unavailable"))
+  assert_eq(error_item_count(cmds), 1)
+
+  let cmds = update(state, UiInput(Steer(Prompt("what changed?"))))
+  guard cmds
+    is [AppendItem(Input(Prompt("what changed?"))), StartAgent(run_id=_, text)] else {
+    fail("expected prompt transcript item and agent start")
+  }
+  assert_eq(text, "what changed?")
+}
+
+///|
+test "oneshot shell commands run locally but hand nothing to the model" {
+  let state = drain_oneshot_test_state()
+  let _ = update(state, UiInput(Steer(Command("ls"))))
+  let command_run = state.run_id
+  // The command runs and renders, but OneShot delivers no context: no steer is
+  // emitted and the output is not folded into any later prompt.
+  let cmds = update(
+    state,
+    CommandResult(
+      run_id=Some(command_run),
+      command="ls",
+      Err(Failure::Failure("boom")),
+    ),
+  )
+  guard cmds is [AppendItem(_)] else {
+    fail("expected only the command transcript item")
+  }
+  assert_true(cmds.all(cmd => !(cmd is SteerAgent(_))))
+  assert_true(state.run is Idle)
+
+  let cmds = update(state, UiInput(Steer(Prompt("summarize"))))
+  guard cmds
+    is [AppendItem(Input(Prompt("summarize"))), StartAgent(run_id=_, text)] else {
+    fail("expected prompt transcript item and agent start")
+  }
+  assert_eq(text, "summarize")
+}
+
+///|
+test "a sent steer is acknowledged until the engine settles it" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  assert_eq(state.pending_steers.length(), 0)
+
+  // Enter mid-run: acknowledged immediately, before any engine round trip —
+  // this is the only feedback between the keypress and the transcript echo.
+  let _ = update(state, UiInput(Steer(Prompt("make it rhyme"))))
+  assert_eq(state.pending_steers.length(), 1)
+  guard pending_steer_segment(state.pending_steers) is [_, _] else {
+    fail("expected an activity-line acknowledgment")
+  }
+
+  // The engine confirms: acknowledgment clears, transcript echo appends.
+  let _ = update(
+    state,
+    AgentProgress(run_id=state.run_id, SteerApplied(Prompt("make it rhyme"))),
+  )
+  assert_eq(state.pending_steers.length(), 0)
+  assert_eq(pending_steer_segment(state.pending_steers).length(), 0)
+
+  // A dropped steer also clears the acknowledgment (and shows its notice).
+  let _ = update(state, UiInput(Steer(Prompt("too late"))))
+  assert_eq(state.pending_steers.length(), 1)
+  let _ = update(state, SteerDropped("too late"))
+  assert_eq(state.pending_steers.length(), 0)
+
+  // A turn ending sweeps anything still unconfirmed.
+  let _ = update(state, UiInput(Steer(Prompt("orphaned"))))
+  assert_eq(state.pending_steers.length(), 1)
+  let _ = update(
+    state,
+    AgentProgress(run_id=state.run_id, AgentFinished("done")),
+  )
+  assert_eq(state.pending_steers.length(), 0)
+}
+
+///|
+test "a trailing drop from a dead turn never steals a fresh acknowledgment" {
+  let state = drain_test_state()
+  // Turn A is steered, then ends (sweeping its pending entry).
+  let _ = update(state, UiInput(Steer(Prompt("task a"))))
+  let _ = update(state, UiInput(Steer(Prompt("old steer"))))
+  let _ = update(
+    state,
+    AgentProgress(run_id=state.run_id, AgentFinished("done-a")),
+  )
+  assert_eq(state.pending_steers.length(), 0)
+  // Turn B starts and is steered before A's untagged drop arrives.
+  let _ = update(state, UiInput(Steer(Prompt("task b"))))
+  let _ = update(state, UiInput(Steer(Prompt("fresh steer"))))
+  assert_eq(state.pending_steers.length(), 1)
+  // The old turn's wire drop settles nothing of B's — even with identical
+  // text, a wire drop's own entries are swept before it is processed.
+  let _ = update(state, EngineSteerDropped("old steer"))
+  assert_eq(state.pending_steers.length(), 1)
+  let _ = update(state, EngineSteerDropped("fresh steer"))
+  assert_eq(state.pending_steers.length(), 1)
+  assert_eq(state.pending_steers[0], "fresh steer")
+}
+
+///|
+test "blank steers are neither sent nor acknowledged" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("task"))))
+  let cmds = update(state, UiInput(Steer(Prompt("   "))))
+  // The engine would filter it without any settling event, so the TUI must
+  // not create an acknowledgment that can never clear.
+  assert_eq(state.pending_steers.length(), 0)
+  assert_true(cmds.all(cmd => !(cmd is SteerAgent(_))))
+}
+
+///|
+test "a steer_applied event echoes the input into the transcript" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let cmds = update(
+    state,
+    AgentProgress(run_id=state.run_id, SteerApplied(Prompt("make it rhyme"))),
+  )
+  guard cmds is [AppendItem(Input(Prompt(text)))] else {
+    fail("expected the steered input echoed as a transcript item")
+  }
+  assert_eq(text, "make it rhyme")
+  // The run keeps going: a steer is not a terminal event.
+  assert_true(state.run is Running(_))
+}
+
+///|
+test "a command steer_applied event is only a delivery acknowledgment" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let cmds = update(
+    state,
+    AgentProgress(
+      run_id=state.run_id,
+      SteerApplied(Command("<user_shell_command>")),
+    ),
+  )
+  assert_eq(cmds.length(), 0)
+  assert_true(state.run is Running(_))
+}
+
+///|
+test "compact_lines strips CRLF so tool output has no stray carriage returns" {
+  inspect(compact_lines("a\r\nb\r\nc", 6).join("|"), content="a|b|c")
+  // Truncation still works and the kept lines carry no `\r`.
+  inspect(
+    compact_lines("a\r\nb\r\nc\r\nd\r\ne", 3).join("|"),
+    content="a|... +3 lines|e",
+  )
+}
+
+///|
+/// Decode one engine event and run it through `update`, appending any resulting
+/// transcript items to `items`. Accumulating into a caller-owned array lets a
+/// test replay a whole session and snapshot the rendered transcript at the end.
+fn append_items(
+  state : State,
+  value : Json,
+  items : Array[@ui.TranscriptItem],
+) -> Unit {
+  guard @event.decode_event(value) is Some(event) else { return }
+  for cmd in update(state, AgentProgress(run_id=state.run_id, event)) {
+    if cmd is AppendItem(item) {
+      items.push(item)
+    }
+  }
+}
+
+///|
+async test "a shell command runs locally and posts its output" {
+  let messages = @async.Queue(kind=Unbounded)
+  // `echo` is the same on POSIX `sh` and Windows `pwsh`, so the platform shell
+  // `@shell.collect_shell_output` picks runs this on either.
+  run_shell_command("echo hello", messages, run_id=1)
+  // The only message is the local command result: a completed tool item titled
+  // with the command, its stdout as a dimmed detail line. Nothing is sent to the
+  // engine.
+  let item = match messages.get() {
+    CommandResult(command~, result, ..) => {
+      assert_eq(command, "echo hello")
+      command_item(command, result)
+    }
+    _ => fail("expected a CommandResult")
+  }
+  debug_inspect(
+    item,
+    content=(
+      #|ToolCall(
+      #|  {
+      #|    title: {
+      #|      spans: [
+      #|        {
+      #|          display: {
+      #|            text: "$ echo hello",
+      #|            units: [
+      #|              {
+      #|                text: <StringView: "$">,
+      #|                width: 1,
+      #|                textual_end: TextualPosition(1),
+      #|                display_end: DisplayPosition(1),
+      #|              },
+      #|              {
+      #|                text: <StringView: " ">,
+      #|                width: 1,
+      #|                textual_end: TextualPosition(2),
+      #|                display_end: DisplayPosition(2),
+      #|              },
+      #|              {
+      #|                text: <StringView: "e">,
+      #|                width: 1,
+      #|                textual_end: TextualPosition(3),
+      #|                display_end: DisplayPosition(3),
+      #|              },
+      #|              {
+      #|                text: <StringView: "c">,
+      #|                width: 1,
+      #|                textual_end: TextualPosition(4),
+      #|                display_end: DisplayPosition(4),
+      #|              },
+      #|              {
+      #|                text: <StringView: "h">,
+      #|                width: 1,
+      #|                textual_end: TextualPosition(5),
+      #|                display_end: DisplayPosition(5),
+      #|              },
+      #|              {
+      #|                text: <StringView: "o">,
+      #|                width: 1,
+      #|                textual_end: TextualPosition(6),
+      #|                display_end: DisplayPosition(6),
+      #|              },
+      #|              {
+      #|                text: <StringView: " ">,
+      #|                width: 1,
+      #|                textual_end: TextualPosition(7),
+      #|                display_end: DisplayPosition(7),
+      #|              },
+      #|              {
+      #|                text: <StringView: "h">,
+      #|                width: 1,
+      #|                textual_end: TextualPosition(8),
+      #|                display_end: DisplayPosition(8),
+      #|              },
+      #|              {
+      #|                text: <StringView: "e">,
+      #|                width: 1,
+      #|                textual_end: TextualPosition(9),
+      #|                display_end: DisplayPosition(9),
+      #|              },
+      #|              {
+      #|                text: <StringView: "l">,
+      #|                width: 1,
+      #|                textual_end: TextualPosition(10),
+      #|                display_end: DisplayPosition(10),
+      #|              },
+      #|              {
+      #|                text: <StringView: "l">,
+      #|                width: 1,
+      #|                textual_end: TextualPosition(11),
+      #|                display_end: DisplayPosition(11),
+      #|              },
+      #|              {
+      #|                text: <StringView: "o">,
+      #|                width: 1,
+      #|                textual_end: TextualPosition(12),
+      #|                display_end: DisplayPosition(12),
+      #|              },
+      #|            ],
+      #|            width: 12,
+      #|            cjk: false,
+      #|          },
+      #|          style: { foreground: Default, background: Default, underline: false },
+      #|        },
+      #|      ],
+      #|    },
+      #|    status: Some(Completed),
+      #|    details: [
+      #|      {
+      #|        spans: [
+      #|          {
+      #|            display: {
+      #|              text: "hello",
+      #|              units: [
+      #|                {
+      #|                  text: <StringView: "h">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(1),
+      #|                  display_end: DisplayPosition(1),
+      #|                },
+      #|                {
+      #|                  text: <StringView: "e">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(2),
+      #|                  display_end: DisplayPosition(2),
+      #|                },
+      #|                {
+      #|                  text: <StringView: "l">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(3),
+      #|                  display_end: DisplayPosition(3),
+      #|                },
+      #|                {
+      #|                  text: <StringView: "l">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(4),
+      #|                  display_end: DisplayPosition(4),
+      #|                },
+      #|                {
+      #|                  text: <StringView: "o">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(5),
+      #|                  display_end: DisplayPosition(5),
+      #|                },
+      #|              ],
+      #|              width: 5,
+      #|              cjk: false,
+      #|            },
+      #|            style: {
+      #|              foreground: Basic(BrightBlack),
+      #|              background: Default,
+      #|              underline: false,
+      #|            },
+      #|          },
+      #|        ],
+      #|      },
+      #|    ],
+      #|  },
+      #|)
+    ),
+  )
+}
+
+///|
+test "assistant_delta accumulates live text and commits only the final message" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let items : Array[@ui.TranscriptItem] = []
+  append_items(state, { "event": "assistant_delta", "content": "Hel" }, items)
+  append_items(state, { "event": "assistant_delta", "content": "lo" }, items)
+  assert_eq(items.length(), 0)
+  assert_true(state.streaming_response is Some("Hello"))
+  assert_true(state.step_response is None)
+  append_items(
+    state,
+    { "event": "assistant_message", "content": "Hello" },
+    items,
+  )
+  assert_true(state.streaming_response is None)
+  assert_true(state.step_response is Some("Hello"))
+  append_items(state, { "event": "agent_finished", "answer": "Hello" }, items)
+  debug_inspect(items, content="[Response(\"Hello\")]")
+}
+
+///|
+test "assistant_message clears live streaming text while tools continue" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let items : Array[@ui.TranscriptItem] = []
+  append_items(
+    state,
+    { "event": "assistant_delta", "content": "Need tool" },
+    items,
+  )
+  assert_true(state.streaming_response is Some("Need tool"))
+  append_items(
+    state,
+    { "event": "assistant_message", "content": "Need tool" },
+    items,
+  )
+  assert_true(state.run is Running(_))
+  assert_true(state.streaming_response is None)
+  assert_true(state.step_response is Some("Need tool"))
+  assert_eq(items.length(), 1)
+}
+
+///|
+test "assistant_delta live preview keeps the newest tail within the cap" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let items : Array[@ui.TranscriptItem] = []
+  append_items(
+    state,
+    {
+      "event": "assistant_delta",
+      "content": String::make(StreamingPreviewMaxColumns * 4, 'x'),
+    },
+    items,
+  )
+  guard state.streaming_response is Some(first) else {
+    fail("expected streaming preview")
+  }
+  assert_true(
+    @displaytext.DisplayText(first).width() <= StreamingPreviewMaxColumns,
+  )
+  assert_true(first.has_prefix("…"))
+  // The preview is a tail window: new deltas keep showing up at its end
+  // (instead of freezing once the cap is reached, as a head truncation would).
+  append_items(state, { "event": "assistant_delta", "content": "more" }, items)
+  guard state.streaming_response is Some(second) else {
+    fail("expected streaming preview")
+  }
+  assert_true(second.has_suffix("more"))
+  assert_true(
+    @displaytext.DisplayText(second).width() <= StreamingPreviewMaxColumns,
+  )
+  assert_eq(items.length(), 0)
+}
+
+///|
+test "streamed newlines collapse so the preview stays one line" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let items : Array[@ui.TranscriptItem] = []
+  append_items(
+    state,
+    { "event": "assistant_delta", "content": "fn main {\n" },
+    items,
+  )
+  append_items(
+    state,
+    { "event": "assistant_delta", "content": "  println(1)\n}" },
+    items,
+  )
+  // The run of newline + indentation spanning the two deltas collapses to a
+  // single space; the preview holds no control characters.
+  assert_true(state.streaming_response is Some("fn main { println(1) }"))
+}
+
+///|
+test "reasoning_message commits a thought item and clears the preview" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let items : Array[@ui.TranscriptItem] = []
+  append_items(
+    state,
+    { "event": "reasoning_delta", "content": "Let me think" },
+    items,
+  )
+  assert_true(state.streaming_reasoning is Some("Let me think"))
+  // The full reasoning lands as one `✻` thought item, and the live preview
+  // is finished with.
+  append_items(
+    state,
+    {
+      "event": "reasoning_message",
+      "content": "Let me think about names.\nThe user said Hongbo.",
+    },
+    items,
+  )
+  assert_true(state.streaming_reasoning is None)
+  guard items is [Thought(_)] else { fail("expected a single Thought item") }
+  // Blank reasoning never appends an empty aside.
+  append_items(state, { "event": "reasoning_message", "content": "  " }, items)
+  assert_eq(items.length(), 1)
+}
+
+///|
+test "reasoning_delta drives the thinking preview until content arrives" {
+  let state = drain_test_state()
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  let items : Array[@ui.TranscriptItem] = []
+  append_items(
+    state,
+    { "event": "reasoning_delta", "content": "Let me think" },
+    items,
+  )
+  assert_true(state.streaming_reasoning is Some("Let me think"))
+  assert_true(state.streaming_response is None)
+  assert_eq(items.length(), 0)
+  // The first content delta ends the thinking phase: the content preview
+  // replaces the reasoning one.
+  append_items(
+    state,
+    { "event": "assistant_delta", "content": "Answer" },
+    items,
+  )
+  assert_true(state.streaming_reasoning is None)
+  assert_true(state.streaming_response is Some("Answer"))
+  // The committed message clears both previews.
+  append_items(
+    state,
+    { "event": "assistant_message", "content": "Answer" },
+    items,
+  )
+  assert_true(state.streaming_response is None)
+  assert_true(state.streaming_reasoning is None)
+}
+
+///|
+test "replaying a recorded engine session renders the transcript" {
+  let state = drain_test_state()
+  // Submit a task so the agent is running before progress arrives.
+  let _ = update(state, UiInput(Steer(Prompt("do it"))))
+  assert_true(state.run is Running(_))
+
+  // A realistic one-step session: think, report usage, run a tool, finish.
+  let items : Array[@ui.TranscriptItem] = []
+  append_items(state, { "event": "agent_step", "step": 1 }, items)
+  append_items(
+    state,
+    { "event": "assistant_message", "content": "Let me check the project." },
+    items,
+  )
+  append_items(
+    state,
+    {
+      "event": "usage",
+      "usage": {
+        "prompt_tokens": 100,
+        "completion_tokens": 20,
+        "total_tokens": 120,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 100,
+      },
+    },
+    items,
+  )
+  append_items(
+    state,
+    {
+      "event": "tool_result",
+      "tool_call_id": "c1",
+      "tool_name": "bash",
+      "is_error": false,
+      "content": "ok",
+    },
+    items,
+  )
+  append_items(
+    state,
+    { "event": "agent_finished", "answer": "all done" },
+    items,
+  )
+
+  // The rendered transcript: the assistant message, the tool result, and the
+  // final answer. `agent_step` and `usage` update state without emitting items.
+  debug_inspect(
+    items,
+    content=(
+      #|[
+      #|  Response("Let me check the project."),
+      #|  ToolCall(
+      #|    {
+      #|      title: {
+      #|        spans: [
+      #|          {
+      #|            display: {
+      #|              text: "Tool bash",
+      #|              units: [
+      #|                {
+      #|                  text: <StringView: "T">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(1),
+      #|                  display_end: DisplayPosition(1),
+      #|                },
+      #|                {
+      #|                  text: <StringView: "o">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(2),
+      #|                  display_end: DisplayPosition(2),
+      #|                },
+      #|                {
+      #|                  text: <StringView: "o">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(3),
+      #|                  display_end: DisplayPosition(3),
+      #|                },
+      #|                {
+      #|                  text: <StringView: "l">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(4),
+      #|                  display_end: DisplayPosition(4),
+      #|                },
+      #|                {
+      #|                  text: <StringView: " ">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(5),
+      #|                  display_end: DisplayPosition(5),
+      #|                },
+      #|                {
+      #|                  text: <StringView: "b">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(6),
+      #|                  display_end: DisplayPosition(6),
+      #|                },
+      #|                {
+      #|                  text: <StringView: "a">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(7),
+      #|                  display_end: DisplayPosition(7),
+      #|                },
+      #|                {
+      #|                  text: <StringView: "s">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(8),
+      #|                  display_end: DisplayPosition(8),
+      #|                },
+      #|                {
+      #|                  text: <StringView: "h">,
+      #|                  width: 1,
+      #|                  textual_end: TextualPosition(9),
+      #|                  display_end: DisplayPosition(9),
+      #|                },
+      #|              ],
+      #|              width: 9,
+      #|              cjk: false,
+      #|            },
+      #|            style: { foreground: Default, background: Default, underline: false },
+      #|          },
+      #|        ],
+      #|      },
+      #|      status: Some(Completed),
+      #|      details: [
+      #|        {
+      #|          spans: [
+      #|            {
+      #|              display: {
+      #|                text: "ok",
+      #|                units: [
+      #|                  {
+      #|                    text: <StringView: "o">,
+      #|                    width: 1,
+      #|                    textual_end: TextualPosition(1),
+      #|                    display_end: DisplayPosition(1),
+      #|                  },
+      #|                  {
+      #|                    text: <StringView: "k">,
+      #|                    width: 1,
+      #|                    textual_end: TextualPosition(2),
+      #|                    display_end: DisplayPosition(2),
+      #|                  },
+      #|                ],
+      #|                width: 2,
+      #|                cjk: false,
+      #|              },
+      #|              style: {
+      #|                foreground: Basic(BrightBlack),
+      #|                background: Default,
+      #|                underline: false,
+      #|              },
+      #|            },
+      #|          ],
+      #|        },
+      #|      ],
+      #|    },
+      #|  ),
+      #|  Response("all done"),
+      #|]
+    ),
+  )
+  match state.usage {
+    Some(usage) => assert_eq(usage.total_tokens, 120)
+    None => fail("usage not recorded")
+  }
+  // The terminal event left the agent idle.
+  assert_true(state.run is Idle)
+}
