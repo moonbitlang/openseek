@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/jsonrpc"
+
+// Values
+
+// Errors
+pub(all) suberror ResponseError {
+  Failed(code~ : Int, message~ : String)
+  Closed
+}
+pub impl Show for ResponseError
+
+// Types and methods
+type Client
+pub fn Client::is_closed(Self) -> Bool
+pub fn[T : Transport] Client::new(T) -> Self
+pub async fn Client::notify(Self, method_~ : String, params~ : Json) -> Unit
+pub async fn Client::request(Self, method_~ : String, params~ : Json) -> Json
+pub async fn Client::run_message_pump(Self) -> Unit
+pub async fn Client::run_writer(Self) -> Unit
+pub fn Client::set_notification_handler(Self, (String, Json) -> Unit) -> Unit
+
+// Type aliases
+
+// Traits
+pub(open) trait Transport {
+  async fn send(Self, Json) -> Unit
+  async fn recv(Self) -> Json?
+  fn close(Self) -> Unit
+}
+
