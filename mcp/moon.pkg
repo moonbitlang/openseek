@@ -1,0 +1,10 @@
+import {
+  "bobzhang/openseek/jsonrpc",
+}
+
+import {
+  "bobzhang/openseek/jsonrpc",
+  "moonbitlang/async",
+} for "test"
+
+supported_targets = "+native"

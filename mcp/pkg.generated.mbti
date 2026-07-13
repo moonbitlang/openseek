@@ -1,0 +1,54 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/mcp"
+
+import {
+  "bobzhang/openseek/jsonrpc",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub const ProtocolVersion : String = "2025-11-25"
+
+// Errors
+pub(all) suberror McpError {
+  Protocol(String)
+}
+
+// Types and methods
+pub struct CallToolResult {
+  content : Array[ContentBlock]
+  structured_content : Json?
+  is_error : Bool
+} derive(Eq, @debug.Debug)
+pub fn CallToolResult::render_text(Self) -> String
+
+pub(all) enum ContentBlock {
+  Text(String)
+  Image(mime_type~ : String)
+  Resource(uri~ : String, text~ : String?)
+  Other(kind~ : String)
+} derive(Eq, @debug.Debug)
+
+pub struct InitializeResult {
+  protocol_version : String
+  server_name : String
+  server_version : String
+  instructions : String?
+} derive(Eq, @debug.Debug)
+
+type McpClient
+pub async fn McpClient::call_tool(Self, name~ : String, arguments~ : Json) -> CallToolResult
+pub async fn McpClient::initialize(Self, client_name~ : String, client_version~ : String) -> InitializeResult
+pub async fn McpClient::list_tools(Self) -> Array[McpTool]
+pub fn McpClient::new(@jsonrpc.Client) -> Self
+
+pub struct McpTool {
+  name : String
+  description : String
+  input_schema : Json
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
+
