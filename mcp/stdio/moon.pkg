@@ -1,0 +1,10 @@
+import {
+  "bobzhang/openseek/jsonrpc",
+  "bobzhang/openseek/mcp",
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/async/io",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "+native"

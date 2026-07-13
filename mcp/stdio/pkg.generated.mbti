@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/mcp/stdio"
+
+import {
+  "bobzhang/openseek/jsonrpc",
+  "bobzhang/openseek/mcp",
+  "moonbitlang/async",
+  "moonbitlang/async/io",
+}
+
+// Values
+pub const DefaultHandshakeTimeoutMs : Int = 30000
+
+pub async fn[X] connect(@async.TaskGroup[X], command~ : String, args~ : Array[String], env? : Map[String, String], cwd? : String, client_name~ : String, client_version~ : String, handshake_timeout_ms? : Int) -> StdioConnection?
+
+// Errors
+
+// Types and methods
+type NdjsonTransport
+pub fn NdjsonTransport::new(&@io.Reader, &@io.Writer, on_close~ : () -> Unit) -> Self
+pub impl @jsonrpc.Transport for NdjsonTransport
+
+type StdioConnection
+pub fn StdioConnection::client(Self) -> @mcp.McpClient
+pub fn StdioConnection::init(Self) -> @mcp.InitializeResult
+pub fn StdioConnection::shutdown(Self) -> Unit
+
+// Type aliases
+
+// Traits
+
