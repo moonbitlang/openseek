@@ -32,14 +32,7 @@ fn command_is_mutating_moon(command : @shell_parse.SimpleCommand) -> Bool {
 /// is not worth crippling the review's ability to investigate.
 fn review_read_only_blocks(parsed : @shell_parse.ParseResult) -> Bool {
   match parsed {
-    Simple(commands) => {
-      for command in commands {
-        if command_is_mutating_moon(command) {
-          return true
-        }
-      }
-      false
-    }
+    Simple(commands) => commands.any(command_is_mutating_moon)
     _ => false
   }
 }

@@ -124,15 +124,10 @@ async fn edit_file(
     )
     let first_line = line_number_at_offset(content, at)
     let last_line = first_line + inserted_line_span(input.new_string) - 1
-    let span = if last_line > first_line {
-      "lines \{first_line}-\{last_line}"
+    let (span, brief_span) = if last_line > first_line {
+      ("lines \{first_line}-\{last_line}", "\{first_line}-\{last_line}")
     } else {
-      "line \{first_line}"
-    }
-    let brief_span = if last_line > first_line {
-      "\{first_line}-\{last_line}"
-    } else {
-      "\{first_line}"
+      ("line \{first_line}", "\{first_line}")
     }
     let (summary, ok_brief) = if at == content.length() {
       (
