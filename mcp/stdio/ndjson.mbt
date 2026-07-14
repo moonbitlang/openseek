@@ -48,7 +48,7 @@ pub impl @jsonrpc.Transport for NdjsonTransport with fn recv(self) {
       _ => None
     }
     guard line is Some(line) else { return None }
-    let trimmed = line.trim(chars="\r\n").to_owned()
+    let trimmed = line.trim(chars="\r\n")
     if trimmed == "" {
       continue
     }

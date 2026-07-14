@@ -199,10 +199,7 @@ pub async fn Client::run_writer(self : Client) -> Unit {
 /// transport error, or cancellation — so `is_closed` is always truthful and no
 /// request is left hanging.
 pub async fn Client::run_message_pump(self : Client) -> Unit {
-  for ;; {
-    if self.closed {
-      break
-    }
+  while !self.closed {
     let ended = self.route_next() catch {
       error => {
         self.close()
