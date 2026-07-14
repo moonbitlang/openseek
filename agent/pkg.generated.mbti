@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub async fn[X] build_tools(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope[X], on_background_wake? : () -> Unit) -> @agent_tool.Tools
+pub async fn[X] build_tools(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope[X], on_background_wake? : () -> Unit, extra_tools? : Array[@agent_tool.AgentToolDefinition]) -> @agent_tool.Tools
 
 pub let plan_reminder_after_steps : Int
 

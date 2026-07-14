@@ -35,3 +35,6 @@ eval/swe_agi/**/.openseek/
 
 # Generated from *.mbt.md by moon dev_build and kept in release archives so
 # published packages can be checked without the nested scripts module.
+
+# Local session state from dogfooding the CLI in-repo.
+.openseek/

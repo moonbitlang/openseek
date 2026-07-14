@@ -127,6 +127,15 @@ async fn run_task_command(matches : @argparse.Matches) -> Unit {
       concurrency_input, "--concurrency",
     )
     if fleet_mode(matches, concurrency) {
+      // Fleet members own separate materialized workspaces; per-member MCP
+      // connections are not wired, so say so instead of silently ignoring.
+      if mcp_config_path(matches) != "" {
+        @xlog.warn() <?
+          {
+            "event": "mcp_config_ignored",
+            "reason": "fleet mode does not support MCP servers",
+          }
+      }
       run_fleet(matches, concurrency~)
       return
     }
@@ -142,12 +151,18 @@ async fn run_task_command(matches : @argparse.Matches) -> Unit {
           model,
           workspace_root~,
         )
-        @agent.run(
+        let session = @agent_session.Session(
+          SessionId("one-shot"),
+          system_prompt=system_prompt_text,
+        )
+        run_task_turn(
+          matches,
+          session,
+          append_item=(session, item) => session.append(item),
           api_key~,
           model~,
           task~,
           max_steps?,
-          system_prompt_text~,
           thinking~,
           api_url?,
           workspace_root~,
@@ -172,22 +187,61 @@ async fn run_task_command(matches : @argparse.Matches) -> Unit {
           model,
           workspace_root~,
         )
-        ignore(
-          @agent.run_turn_with_append(
-            api_key~,
-            model~,
-            session~,
-            task~,
-            append_item=(session, item) => store.append(session, item),
-            max_steps?,
-            thinking~,
-            api_url?,
-            workspace_root~,
-          ),
+        run_task_turn(
+          matches,
+          session,
+          append_item=(session, item) => store.append(session, item),
+          api_key~,
+          model~,
+          task~,
+          max_steps?,
+          thinking~,
+          api_url?,
+          workspace_root~,
         )
       }
     }
   })
+}
+
+///|
+/// One headless turn with its own runtime, task group, and tool registry —
+/// including any configured MCP servers' tools, exactly as `serve` wires them.
+/// The MCP connections live on the turn's task group and are torn down when the
+/// turn's `with_task_group` ends.
+async fn run_task_turn(
+  matches : @argparse.Matches,
+  session : @agent_session.Session,
+  append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
+  api_key~ : String,
+  model~ : @deepseek.Model,
+  task~ : String,
+  max_steps? : Int,
+  thinking~ : @deepseek.ThinkingMode,
+  api_url? : String,
+  workspace_root~ : String,
+) -> Unit {
+  @async.with_task_group() <| group => {
+    let runtime = @agent_runtime.AgentRuntime(workspace_root~)
+    let scope = @agent_runtime.AgentTaskScope(group)
+    let extra_tools = resolve_mcp_tools(matches, scope, workspace_root~)
+    let tools = @agent.build_tools(runtime, scope, extra_tools~)
+    ignore(
+      @agent.run_turn_in_scope(
+        runtime~,
+        scope~,
+        api_key~,
+        model~,
+        session~,
+        task~,
+        append_item~,
+        max_steps?,
+        thinking~,
+        api_url?,
+        tools~,
+      ),
+    )
+  }
 }
 
 ///|
@@ -209,6 +263,16 @@ async fn run_serve_command(matches : @argparse.Matches) -> Unit {
 /// is discarded rather than drained.
 async fn run_review_command(matches : @argparse.Matches) -> Unit {
   @xlog.global().set_handler(DiscardLog::{  })
+  // Review runs a fixed built-in tool set; say so rather than silently ignoring
+  // an accepted option. Straight to stderr: review's stdout carries exactly one
+  // JSON ReviewReport, and the discarded log would swallow a warning.
+  if mcp_config_path(matches) != "" {
+    @stdio.stderr.write(
+      "warning: --mcp-config is ignored in review mode (fixed built-in tool set)\n",
+    ) catch {
+      _ => ()
+    }
+  }
   let workspace_root = prepare_workspace_root(matches, log_created=false)
   run_review_cli(matches, workspace_root~)
 }
@@ -465,6 +529,13 @@ fn agent_options() -> Array[@argparse.OptionArg] {
       env="OPENSEEK_GLOBAL_SKILLS_DIR",
       default_values=[""],
       about="User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills, or %USERPROFILE%/.openseek/skills on Windows.",
+    ),
+    OptionArg(
+      "mcp-config",
+      long="mcp-config",
+      env="OPENSEEK_MCP_CONFIG",
+      default_values=[""],
+      about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"}}}); each stdio server's tools are exposed to the agent, namespaced mcp__<server>__<tool>. Empty disables MCP.",
     ),
   ]
 }

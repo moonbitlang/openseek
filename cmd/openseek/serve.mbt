@@ -590,9 +590,17 @@ async fn run_serve(
     // @agent.build_tools). A background job finishing wakes this loop with a
     // `BackgroundNotice` step, so even a fully idle engine surfaces the
     // completion instead of leaving it queued until the next prompt.
-    let tools = @agent.build_tools(runtime, scope, on_background_wake=() => {
-      ignore(steps.try_put(BackgroundNotice) catch { _ => false })
-    })
+    // Tools from any configured MCP servers, connected once per engine (their
+    // reader/writer tasks live on this group) and reused across turns.
+    let extra_tools = resolve_mcp_tools(matches, scope, workspace_root~)
+    let tools = @agent.build_tools(
+      runtime,
+      scope,
+      on_background_wake=() => {
+        ignore(steps.try_put(BackgroundNotice) catch { _ => false })
+      },
+      extra_tools~,
+    )
     group.spawn_bg(no_wait=true) <| () => {
       @jsonl.each(@stdio.stdin, json => {
         match decode_serve_command(json) {

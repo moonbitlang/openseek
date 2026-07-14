@@ -116,10 +116,16 @@ async fn[X] shell_tools(
 ///
 /// `on_background_wake`, when supplied, is called each time a background job
 /// exits, so an idle controller can wake to surface the completion notice.
+///
+/// `extra_tools` are appended to the registry after the built-ins — the seam for
+/// dynamically discovered tools (e.g. MCP servers' tools, namespaced so they do
+/// not collide with the built-ins). The caller builds them (keeping this package
+/// free of MCP dependencies); `Tools` still raises on any duplicate name.
 pub async fn[X] build_tools(
   runtime : @agent_runtime.AgentRuntime,
   scope : @agent_runtime.AgentTaskScope[X],
   on_background_wake? : () -> Unit,
+  extra_tools? : Array[@agent_tool.AgentToolDefinition] = [],
 ) -> @agent_tool.Tools {
   let workspace_root = runtime.workspace_root()
   // One session-scoped file-state map, shared by the file-writing tools so they
@@ -138,7 +144,8 @@ pub async fn[X] build_tools(
       @plan.definition(),
       @goal.definition(),
       @finish.definition(),
-    ],
+    ] +
+    extra_tools,
   )
 }
 

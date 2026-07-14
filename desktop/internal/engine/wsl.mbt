@@ -178,7 +178,7 @@ fn EngineHost::fingerprint(self : EngineHost) -> String {
 /// direction; host-side paths add `/p` so wsl.exe rewrites the Windows path
 /// to its `/mnt/...` mount. The WSL engine then reads the same session store
 /// and global skills library that the desktop host manages.
-const WslEnvPassthrough : String = "DEEPSEEK/u:OPENSEEK_MODEL/u:OPENSEEK_MAX_STEPS/u:OPENSEEK_DIR/u:OPENSEEK_API_URL/u:OPENSEEK_SESSION/u:OPENSEEK_SESSION_ROOT/up:OPENSEEK_GLOBAL_SKILLS_DIR/up"
+const WslEnvPassthrough : String = "DEEPSEEK/u:OPENSEEK_MODEL/u:OPENSEEK_MAX_STEPS/u:OPENSEEK_DIR/u:OPENSEEK_API_URL/u:OPENSEEK_SESSION/u:OPENSEEK_SESSION_ROOT/up:OPENSEEK_GLOBAL_SKILLS_DIR/up:OPENSEEK_MCP_CONFIG/up"
 
 ///|
 /// The WSLENV value for an engine spawn: the user's own sharing list (WSLENV
@@ -236,7 +236,7 @@ test "engine host fingerprints distinguish native, distro, and engine" {
 
 ///|
 test "wslenv extends the user's own sharing list" {
-  assert_true(WslEnvPassthrough.contains("OPENSEEK_GLOBAL_SKILLS_DIR/up"))
+  assert_true(WslEnvPassthrough.contains("OPENSEEK_GLOBAL_SKILLS_DIR/up:OPENSEEK_MCP_CONFIG/up"))
   assert_eq(wslenv_with_passthrough(None), WslEnvPassthrough)
   assert_eq(wslenv_with_passthrough(Some("  ")), WslEnvPassthrough)
   assert_eq(

@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/mcp/config"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn decode(Json) -> Array[McpServer] raise
+
+// Errors
+pub(all) suberror ConfigError {
+  Invalid(String)
+}
+
+// Types and methods
+pub(all) enum McpServer {
+  Stdio(name~ : String, command~ : String, args~ : Array[String], env~ : Map[String, String])
+} derive(Eq, @debug.Debug)
+pub fn McpServer::name(Self) -> String
+
+// Type aliases
+
+// Traits
+
