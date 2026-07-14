@@ -11,11 +11,16 @@ import {
 // Values
 pub async fn compact_session(store? : @store.SessionStore, @agent_session.Session, api_key~ : String, model~ : @deepseek.Model, api_url? : String) -> @agent_session.Session
 
-pub async fn generate_compaction_summary(client~ : @client.Client, @agent_session.Session) -> String
+pub async fn generate_compaction_summary(client~ : @client.Client, @agent_session.Session) -> CompactionSummary
 
 // Errors
 
 // Types and methods
+pub struct CompactionSummary {
+  content : String
+  usage : @deepseek.Usage
+  duration_ms : Int
+}
 
 // Type aliases
 

@@ -40,6 +40,20 @@ fn compaction_messages(
 }
 
 ///|
+/// A checkpoint summary plus the telemetry of the request that generated it.
+/// The summary request resends the whole projected history, making it the
+/// most expensive single request an agent issues: `usage` carries the
+/// provider's token counts including prompt-cache hit/miss (zero when the
+/// provider omits them) and `duration_ms` the request's wall-clock latency,
+/// so callers log what a checkpoint actually cost instead of discarding the
+/// response metadata.
+pub struct CompactionSummary {
+  content : String
+  usage : @deepseek.Usage
+  duration_ms : Int
+}
+
+///|
 /// Generate a handoff summary of the session's projected history through one
 /// model call, failing when the endpoint returns an empty summary. Pass a
 /// `thinking=No` client where the model honors the control (Kimi models
@@ -47,13 +61,15 @@ fn compaction_messages(
 pub async fn generate_compaction_summary(
   client~ : @client.Client,
   session : @agent_session.Session,
-) -> String {
+) -> CompactionSummary {
+  let started_ms = @env.now()
   let response = client.chat(compaction_messages(session))
-  let summary = response.content.trim().to_owned()
-  if summary.is_empty() {
+  let duration_ms = (@env.now() - started_ms).reinterpret_as_int64().to_int()
+  let content = response.content.trim().to_owned()
+  if content.is_empty() {
     fail("compaction summary was empty")
   }
-  summary
+  { content, usage: response.usage, duration_ms }
 }
 
 ///|
@@ -102,7 +118,7 @@ pub async fn compact_session(
   let next = append_compaction_summary(
     store?,
     session,
-    summary~,
+    summary=summary.content,
     from_sequence~,
     to_sequence~,
   )
@@ -111,7 +127,9 @@ pub async fn compact_session(
       "event": "compaction_finished",
       "from_sequence": from_sequence,
       "to_sequence": to_sequence,
-      "summary": summary,
+      "summary": summary.content,
+      "usage": summary.usage,
+      "duration_ms": summary.duration_ms,
     }
   next
 }

@@ -142,7 +142,7 @@ async fn AgentLoop::checkpoint_at_ceiling(
     }
   }
   let item = session.summary_item(
-    content=summary,
+    content=summary.content,
     from_sequence=1,
     to_sequence~,
   )
@@ -152,7 +152,9 @@ async fn AgentLoop::checkpoint_at_ceiling(
       "event": "auto_compaction_finished",
       "from_sequence": 1,
       "to_sequence": to_sequence,
-      "summary": summary,
+      "summary": summary.content,
+      "usage": summary.usage,
+      "duration_ms": summary.duration_ms,
     }
   (compacted, true)
 }

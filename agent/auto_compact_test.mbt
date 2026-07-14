@@ -108,8 +108,18 @@ fn sse_final_with_reasoning(
 }
 
 ///|
-fn checkpoint_body(summary : String) -> Json {
-  { "choices": [{ "message": { "role": "assistant", "content": summary } }] }
+fn checkpoint_body(summary : String, usage? : Json) -> Json {
+  match usage {
+    Some(usage) =>
+      {
+        "choices": [{ "message": { "role": "assistant", "content": summary } }],
+        "usage": usage,
+      }
+    None =>
+      {
+        "choices": [{ "message": { "role": "assistant", "content": summary } }],
+      }
+  }
 }
 
 ///|
@@ -1476,5 +1486,81 @@ async test "an oversized tool result is clamped at the loop" {
       }
     }
     assert_true(clamped)
+  }
+}
+
+///|
+/// The checkpoint request is the most expensive call the loop makes, so its
+/// response telemetry must reach the `auto_compaction_finished` log: token
+/// usage with the provider's prompt-cache hit/miss counters, plus the
+/// request's wall-clock duration.
+async test "ceiling checkpoint logs summary usage and duration" {
+  @async.with_task_group() <| group => {
+    let checkpoint_requests : Array[Json] = []
+    let handle = request => {
+      if is_checkpoint_request(request) {
+        checkpoint_requests.push(request)
+        Body(
+          checkpoint_body("CEILING-SUMMARY", usage={
+            "prompt_tokens": 700_123,
+            "completion_tokens": 456,
+            "total_tokens": 700_579,
+            "prompt_cache_hit_tokens": 690_000,
+            "prompt_cache_miss_tokens": 10_123,
+          }),
+        )
+      } else {
+        Sse(sse_tool_call("call_1", "probe", 900_000))
+      }
+    }
+    guard auto_compact_test_server(group, handle) is Some(url) else { return }
+    let entries : Array[Json] = []
+    let logger = @xlog.global()
+    defer {
+      logger.set_handler(@xlog.Stdout())
+      logger.set_config(Config())
+    }
+    logger.set_handler(MemoryLogHandler::{ entries, })
+    logger.set_level(Info)
+    let session = @agent_session.Session(
+      SessionId("checkpoint-telemetry"),
+      system_prompt="system",
+    )
+    let result = @agent.run_turn_in_scope(
+      runtime=AgentRuntime(),
+      scope=AgentTaskScope(group),
+      api_key="test-key",
+      model=Deepseek(V4Flash),
+      session~,
+      task="keep grinding",
+      append_item=(session, item) => session.append(item),
+      api_url=url,
+      tools=probe_tools(["result-1"]),
+    )
+    assert_eq(checkpoint_requests.length(), 1)
+    assert_eq(summary_before_terminal(result).content(), "CEILING-SUMMARY")
+    guard entries.filter(entry => log_event(entry) == "auto_compaction_finished")
+      is [finished] else {
+      fail("expected exactly one auto_compaction_finished log")
+    }
+    guard finished
+      is {
+        "usage": {
+          "prompt_tokens": Number(prompt_tokens, ..),
+          "prompt_cache_hit_tokens": Number(cache_hit, ..),
+          "prompt_cache_miss_tokens": Number(cache_miss, ..),
+          ..
+        },
+        "duration_ms": Number(duration_ms, ..),
+        ..
+      } else {
+      fail(
+        "expected usage telemetry on auto_compaction_finished: \{finished.stringify()}",
+      )
+    }
+    assert_eq(prompt_tokens.to_int(), 700_123)
+    assert_eq(cache_hit.to_int(), 690_000)
+    assert_eq(cache_miss.to_int(), 10_123)
+    assert_true(duration_ms >= 0)
   }
 }
