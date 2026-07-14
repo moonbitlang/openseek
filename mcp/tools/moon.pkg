@@ -3,6 +3,7 @@ import {
   "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/mcp",
   "bobzhang/openseek/mcp/stdio",
+  "bobzhang/openseek/mcp/streamhttp",
   "bobzhang/openseek/mcp/config",
   "moonbitlang/async",
   "tonyfettes/xlog",
@@ -15,6 +16,9 @@ import {
   "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/mcp/config",
   "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/json",
 } for "test"
 
 supported_targets = "+native"

@@ -101,3 +101,69 @@ test "McpServer::name returns the configured key" {
   let servers = decode({ "mcpServers": { "srv": { "command": "run" } } })
   assert_eq(servers[0].name(), "srv")
 }
+
+///|
+test "decode parses an http server with headers" {
+  let servers = decode({
+    "mcpServers": {
+      "remote": {
+        "url": "https://example.com/mcp",
+        "headers": { "Authorization": "Bearer tok" },
+      },
+    },
+  })
+  guard servers[0] is Http(name~, url~, headers~) else {
+    fail("expected an http server")
+  }
+  assert_eq(name, "remote")
+  assert_eq(url, "https://example.com/mcp")
+  assert_eq(headers.get("Authorization"), Some("Bearer tok"))
+  assert_eq(servers[0].name(), "remote")
+}
+
+///|
+test "decode defaults missing http headers" {
+  let servers = decode({
+    "mcpServers": { "r": { "url": "http://127.0.0.1:9/mcp" } },
+  })
+  guard servers[0] is Http(headers~, ..) else {
+    fail("expected an http server")
+  }
+  assert_eq(headers.length(), 0)
+}
+
+///|
+test "decode rejects a server with both command and url" {
+  let outcome = try {
+    decode({
+      "mcpServers": { "x": { "command": "run", "url": "http://h/mcp" } },
+    })
+    |> ignore
+    "no error"
+  } catch {
+    Invalid(_) => "invalid"
+    _ => "other"
+  }
+  assert_eq(outcome, "invalid")
+}
+
+///|
+test "decode rejects mistyped http fields" {
+  let bad_url = try {
+    decode({ "mcpServers": { "x": { "url": 7 } } }) |> ignore
+    "no error"
+  } catch {
+    Invalid(_) => "invalid"
+    _ => "other"
+  }
+  assert_eq(bad_url, "invalid")
+  let bad_headers = try {
+    decode({ "mcpServers": { "x": { "url": "http://h/mcp", "headers": [] } } })
+    |> ignore
+    "no error"
+  } catch {
+    Invalid(_) => "invalid"
+    _ => "other"
+  }
+  assert_eq(bad_headers, "invalid")
+}

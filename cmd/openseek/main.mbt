@@ -535,7 +535,7 @@ fn agent_options() -> Array[@argparse.OptionArg] {
       long="mcp-config",
       env="OPENSEEK_MCP_CONFIG",
       default_values=[""],
-      about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"}}}); each stdio server's tools are exposed to the agent, namespaced mcp__<server>__<tool>. Empty disables MCP.",
+      about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"} | {\"url\", \"headers\"}}}); each server's tools (stdio subprocess or Streamable HTTP) are exposed to the agent, namespaced mcp__<server>__<tool>. Empty disables MCP.",
     ),
   ]
 }

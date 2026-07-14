@@ -1,12 +1,13 @@
 // Decode openseek's MCP server configuration — the de-facto standard
-// `{ "mcpServers": { "<name>": { "command", "args"?, "env"? } } }` shape, so an
-// existing Claude/Cursor-style `mcp.json` can be pointed at directly. File
-// reading and JSON parsing are the caller's; this layer is pure and decodes a
-// parsed `Json`.
+// `{ "mcpServers": { "<name>": { … } } }` shape, so an existing
+// Claude/Cursor-style `mcp.json` can be pointed at directly. A server entry is
+// either a stdio server (`"command"` + optional `"args"`/`"env"`) or a
+// Streamable HTTP server (`"url"` + optional `"headers"`). File reading and
+// JSON parsing are the caller's; this layer is pure and decodes a parsed `Json`.
 
 ///|
-/// A configured MCP server. Only stdio servers exist today (launched as a
-/// subprocess); an HTTP variant is added when that transport lands.
+/// A configured MCP server: launched as a subprocess (stdio) or reached at a
+/// Streamable HTTP endpoint.
 pub(all) enum McpServer {
   Stdio(
     name~ : String,
@@ -14,13 +15,14 @@ pub(all) enum McpServer {
     args~ : Array[String],
     env~ : Map[String, String]
   )
+  Http(name~ : String, url~ : String, headers~ : Map[String, String])
 } derive(Eq, Debug)
 
 ///|
 /// The configured server's name (the key under `mcpServers`).
 pub fn McpServer::name(self : McpServer) -> String {
   match self {
-    Stdio(name~, ..) => name
+    Stdio(name~, ..) | Http(name~, ..) => name
   }
 }
 
@@ -53,10 +55,16 @@ pub fn decode(json : Json) -> Array[McpServer] raise {
 }
 
 ///|
-/// Decode one server entry keyed by `name`.
+/// Decode one server entry keyed by `name`: `"url"` marks a Streamable HTTP
+/// server, `"command"` a stdio one; exactly one of the two must be present.
 fn decode_server(name : String, entry : Json) -> McpServer raise {
+  if entry is { "url": _, .. } {
+    return decode_http_server(name, entry)
+  }
   guard entry is { "command": String(command), .. } else {
-    raise Invalid("server `\{name}` is missing a string `command`")
+    raise Invalid(
+      "server `\{name}` needs a string `command` (stdio) or `url` (http)",
+    )
   }
   // A present-but-mistyped optional field is a config mistake, not an omission:
   // silently treating `"args": "--flag"` as no args would launch the server
@@ -86,4 +94,33 @@ fn decode_server(name : String, entry : Json) -> McpServer raise {
     }
   }
   Stdio(name~, command~, args~, env~)
+}
+
+///|
+/// Decode a Streamable HTTP server entry (its `url` key is already known to be
+/// present).
+fn decode_http_server(name : String, entry : Json) -> McpServer raise {
+  guard entry is { "url": String(url), .. } else {
+    raise Invalid("server `\{name}`: `url` must be a string")
+  }
+  if entry is { "command": _, .. } {
+    raise Invalid(
+      "server `\{name}`: give `command` (stdio) or `url` (http), not both",
+    )
+  }
+  let headers : Map[String, String] = Map([])
+  if entry is { "headers": headers_value, .. } {
+    guard headers_value is Object(vars) else {
+      raise Invalid("server `\{name}`: `headers` must be an object of strings")
+    }
+    for key, value in vars {
+      guard value is String(text) else {
+        raise Invalid(
+          "server `\{name}`: every `headers` value must be a string",
+        )
+      }
+      headers[key] = text
+    }
+  }
+  Http(name~, url~, headers~)
 }

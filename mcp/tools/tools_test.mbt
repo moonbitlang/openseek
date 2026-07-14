@@ -234,3 +234,93 @@ async test "build skips a server that cannot start" {
     assert_eq(tools.length(), 0)
   })
 }
+
+///|
+/// Answer one mock-endpoint request with a JSON-RPC success body.
+async fn respond_json(
+  conn : @http.ServerConnection,
+  id : Json,
+  result : Json,
+) -> Unit {
+  let reply : Json = { "jsonrpc": "2.0", "id": id, "result": result }
+  conn.send_response(200, "OK", extra_headers={
+    "Content-Type": "application/json",
+  })
+  conn.write(reply.stringify())
+}
+
+///|
+/// End-to-end over HTTP: `build` connects a configured Http server (a local
+/// mock MCP endpoint), discovers its tool, and the bridged executor proxies a
+/// live tools/call through the Streamable HTTP transport.
+async test "build bridges and dispatches tools from an http server" {
+  @async.with_task_group() <| group => {
+    let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
+      error => {
+        let message = "\{error}"
+        if message.contains("Operation not permitted") {
+          println("local TCP bind unavailable; skipping http bridge test")
+          return
+        }
+        raise error
+      }
+    }
+    group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
+      server.run_forever(
+        (_request, body, conn) => {
+          let message = @json.parse(body.read_all().text()) catch {
+            _ => Json::null()
+          }
+          let id = match message {
+            { "id": id, .. } => id
+            _ => Json::null()
+          }
+          match message {
+            { "method": String("initialize"), .. } =>
+              respond_json(conn, id, { "protocolVersion": "2025-11-25" })
+            { "method": String("tools/list"), .. } =>
+              respond_json(conn, id, {
+                "tools": [
+                  {
+                    "name": "ping",
+                    "description": "Ping",
+                    "inputSchema": { "type": "object" },
+                  },
+                ],
+              })
+            { "method": String("tools/call"), .. } =>
+              respond_json(conn, id, {
+                "content": [{ "type": "text", "text": "pong" }],
+              })
+            _ => conn.send_response(202, "Accepted")
+          }
+        },
+        max_connections=8,
+      )
+    }
+    let scope = @agent_runtime.AgentTaskScope(group)
+    let servers = [
+      @config.Http(
+        name="remote",
+        url="http://127.0.0.1:\{server.addr.port()}/mcp",
+        headers=Map([]),
+      ),
+    ]
+    let tools = @tools.build(
+      scope,
+      servers,
+      client_name="openseek",
+      client_version="0.1",
+    )
+    assert_eq(tools.length(), 1)
+    assert_eq(tools[0].name, "mcp__remote__ping")
+    guard tools[0].execute is @agent_tool.Async(exec) else {
+      fail("expected an async executor")
+    }
+    guard exec(Json::empty_object()) is @agent_tool.Respond(output) else {
+      fail("expected a respond action")
+    }
+    assert_false(output.is_error)
+    assert_eq(output.content, "pong")
+  }
+}

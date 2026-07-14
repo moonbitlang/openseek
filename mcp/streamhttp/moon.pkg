@@ -1,0 +1,17 @@
+import {
+  "bobzhang/openseek/jsonrpc",
+  "bobzhang/openseek/mcp",
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/json",
+} for "test"
+
+supported_targets = "+native"

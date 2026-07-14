@@ -1,0 +1,30 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/mcp/streamhttp"
+
+import {
+  "bobzhang/openseek/jsonrpc",
+  "bobzhang/openseek/mcp",
+  "moonbitlang/async",
+}
+
+// Values
+pub const DefaultHandshakeTimeoutMs : Int = 30000
+
+pub async fn[X] connect(@async.TaskGroup[X], url~ : String, headers? : Map[String, String], client_name~ : String, client_version~ : String, handshake_timeout_ms? : Int) -> HttpConnection?
+
+// Errors
+
+// Types and methods
+type HttpConnection
+pub fn HttpConnection::client(Self) -> @mcp.McpClient
+pub fn HttpConnection::init(Self) -> @mcp.InitializeResult
+pub fn HttpConnection::shutdown(Self) -> Unit
+
+type HttpTransport
+pub fn HttpTransport::new(String, spawn~ : (async () -> Unit) -> @async.Task[Unit], extra_headers? : Map[String, String]) -> Self
+pub impl @jsonrpc.Transport for HttpTransport
+
+// Type aliases
+
+// Traits
+
