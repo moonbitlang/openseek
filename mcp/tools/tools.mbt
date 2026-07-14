@@ -136,10 +136,45 @@ pub async fn[X] build(
   discovery_timeout_ms? : Int = DefaultDiscoveryTimeoutMs,
 ) -> Array[@agent_tool.AgentToolDefinition] {
   let tools = []
+  for
+    entry in build_grouped(
+      scope,
+      servers,
+      client_name~,
+      client_version~,
+      workspace_root?,
+      discovery_timeout_ms~,
+    ) {
+    let (_, contributed) = entry
+    for tool in contributed {
+      tools.push(tool)
+    }
+  }
+  tools
+}
+
+///|
+/// Like `build`, grouped by server in config order — each entry pairs the
+/// server's name with the tools it contributed after cross-server
+/// uniquification and the global budget, so a diagnostic can attribute the
+/// registry without reconstructing ownership from names. Flattening the groups
+/// yields exactly `build`'s registry.
+pub async fn[X] build_grouped(
+  scope : @agent_runtime.AgentTaskScope[X],
+  servers : Array[@config.McpServer],
+  client_name~ : String,
+  client_version~ : String,
+  workspace_root? : String,
+  discovery_timeout_ms? : Int = DefaultDiscoveryTimeoutMs,
+) -> Array[(String, Array[@agent_tool.AgentToolDefinition])] {
+  let groups : Array[(String, Array[@agent_tool.AgentToolDefinition])] = []
+  let mut total = 0
   let seen : Map[String, Unit] = Map([])
   for server in servers {
+    let mine : Array[@agent_tool.AgentToolDefinition] = []
+    groups.push((server.name(), mine))
     // Budget exhausted: don't launch servers whose tools could not register.
-    if tools.length() >= MaxTotalMcpTools {
+    if total >= MaxTotalMcpTools {
       @xlog.warn() <?
         { "event": "mcp_server_skipped_over_cap", "server": server.name() }
       continue
@@ -155,7 +190,7 @@ pub async fn[X] build(
     for tool in discovered {
       // The provider accepts at most 128 function definitions per request; the
       // MCP budget leaves room for the built-ins. Beyond it, drop with a log.
-      if tools.length() >= MaxTotalMcpTools {
+      if total >= MaxTotalMcpTools {
         @xlog.warn() <?
           {
             "event": "mcp_tools_capped",
@@ -172,7 +207,8 @@ pub async fn[X] build(
           { "event": "mcp_tool_renamed", "from": tool.name, "to": name }
       }
       seen[name] = ()
-      tools.push(
+      total = total + 1
+      mine.push(
         @agent_tool.AgentToolDefinition(
           name~,
           description=tool.description,
@@ -182,7 +218,7 @@ pub async fn[X] build(
       )
     }
   }
-  tools
+  groups
 }
 
 ///|

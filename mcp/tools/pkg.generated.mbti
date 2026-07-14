@@ -15,6 +15,8 @@ pub const DefaultDiscoveryTimeoutMs : Int = 30000
 
 pub async fn[X] build(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int) -> Array[@agent_tool.AgentToolDefinition]
 
+pub async fn[X] build_grouped(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int) -> Array[(String, Array[@agent_tool.AgentToolDefinition])]
+
 pub fn tool_name(String, String) -> String
 
 pub async fn tools_for_client(String, @mcp.McpClient) -> Array[@agent_tool.AgentToolDefinition]

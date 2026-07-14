@@ -91,6 +91,68 @@ pub fn decode_event(object : Json) -> AgentEvent? {
     "goal_budget_exhausted" => Some(GoalBudgetExhausted)
     // A turn that ended at the context ceiling: run-terminal, not success.
     "context_yield" => Some(ContextYield(@jsonx.string(object, "answer")))
+    // MCP lifecycle diagnostics, surfaced as notices so a typo'd config or a
+    // dead server is visible in the UI instead of silently yielding no tools.
+    "mcp_tools_registered" => {
+      let tools = @jsonx.int(object, "tools")
+      let servers = @jsonx.int(object, "servers")
+      // `servers` counts the configuration's entries, not successful
+      // contributors — say so, since some may have failed or been skipped.
+      Some(
+        BackgroundNotice(
+          "MCP: registered \{tools} tool(s) from \{servers} configured server(s)",
+        ),
+      )
+    }
+    "mcp_connect_failed" =>
+      Some(
+        BackgroundNotice(
+          "MCP: server `\{mcp_safe(object, "server")}` failed to connect",
+        ),
+      )
+    "mcp_list_tools_failed" | "mcp_list_tools_timeout" =>
+      Some(
+        BackgroundNotice(
+          "MCP: server `\{mcp_safe(object, "server")}` did not list its tools",
+        ),
+      )
+    "mcp_config_unreadable" | "mcp_config_invalid" =>
+      Some(
+        BackgroundNotice(
+          "MCP config error (\{mcp_safe(object, "path")}): \{mcp_safe(object, "error")}",
+        ),
+      )
     _ => None
   }
+}
+
+///|
+/// A field of an MCP diagnostic, made terminal-safe for a notice: whitespace
+/// runs collapse to one space, C0/C1 controls and DEL are dropped (the
+/// transcript layout strips C0 but not C1, and these strings carry
+/// configuration metadata), and anything past 120 characters is elided.
+fn mcp_safe(object : Json, key : String) -> String {
+  let text = @jsonx.string(object, key)
+  let out = StringBuilder()
+  for ch in text.trim(); last_was_space = false, count = 0 {
+    if count >= 120 {
+      out.write_char('…')
+      break
+    }
+    if ch is (' ' | '\t' | '\n' | '\r') {
+      if !last_was_space {
+        out.write_char(' ')
+        continue true, count + 1
+      }
+      continue true, count
+    } else if ch.to_int() < 0x20 ||
+      ch.to_int() == 0x7F ||
+      (ch.to_int() >= 0x80 && ch.to_int() <= 0x9F) {
+      continue last_was_space, count
+    } else {
+      out.write_char(ch)
+      continue false, count + 1
+    }
+  }
+  out.to_string()
 }

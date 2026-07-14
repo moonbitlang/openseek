@@ -91,6 +91,40 @@ another workspace while still launching from the current shell. The default is
 `.`; if the final directory component is missing and its parent exists,
 OpenSeek creates it and logs `workspace_created`.
 
+## MCP Servers
+
+OpenSeek can use tools from [MCP](https://modelcontextprotocol.io) servers.
+Point `--mcp-config` (or `OPENSEEK_MCP_CONFIG`) at a JSON file in the de-facto
+standard shape — an existing Claude/Cursor-style `mcp.json` works as-is:
+
+```json
+{
+  "mcpServers": {
+    "codex": { "command": "codex", "args": ["mcp-server"] },
+    "remote": { "url": "https://example.com/mcp", "headers": { "Authorization": "Bearer …" } }
+  }
+}
+```
+
+A `command` entry is launched as a stdio subprocess (in the agent's workspace,
+inheriting the environment plus any `env` overrides); a `url` entry speaks the
+Streamable HTTP transport. Each server's tools join the agent's registry as
+`mcp__<server>__<tool>` for `run`, `serve`, and the TUI (which forwards
+`OPENSEEK_MCP_CONFIG` to its engine). A server that fails to start, handshake,
+or list its tools is logged and skipped — MCP never breaks a session. Tool
+results are size-capped, calls are bounded by a timeout, and tool names are
+sanitized to the provider's function-name rules.
+
+Validate a configuration without starting a session:
+
+```bash
+moon run cmd/openseek -- mcp --mcp-config mcp.json
+```
+
+Resources and prompts (the other MCP capabilities) are not consumed: openseek's
+agent is tool-driven, and a server that wants to feed it context can expose a
+tool. This keeps the surface small; revisit if a concrete need appears.
+
 ## Terminal UI
 
 The terminal UI is the **default** mode of the single `openseek` binary (the

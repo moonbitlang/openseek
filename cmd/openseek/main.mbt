@@ -30,6 +30,7 @@ async fn dispatch() -> Unit {
     Some(("run", m)) => run_task_command(m)
     Some(("serve", m)) => run_serve_command(m)
     Some(("review", m)) => run_review_command(m)
+    Some(("mcp", m)) => run_mcp_command(m)
     Some(("sessions", m)) => run_sessions_command(m)
     // argparse rejects unknown subcommands during parse, so this is unreachable.
     Some((name, _)) => fail("unhandled subcommand: \{name}")
@@ -608,6 +609,11 @@ fn root_command() -> @argparse.Command {
             about="Run ephemerally: do not record this server's conversation to a durable session.",
           ),
         ],
+      ),
+      Command(
+        "mcp",
+        about="List configured MCP servers and the tools they expose.",
+        options=agent_options(),
       ),
       Command(
         "review",

@@ -207,3 +207,38 @@ test "a context yield decodes as its own run terminal" {
     is Some(ContextYield("[context ceiling] checkpointed")),
   )
 }
+
+///|
+test "decode_event surfaces MCP diagnostics as notices" {
+  guard @event.decode_event({
+      "event": "mcp_tools_registered",
+      "servers": 2,
+      "tools": 5,
+    })
+    is Some(BackgroundNotice(registered)) else {
+    fail("expected a notice")
+  }
+  assert_eq(registered, "MCP: registered 5 tool(s) from 2 configured server(s)")
+  guard @event.decode_event({ "event": "mcp_connect_failed", "server": "fs" })
+    is Some(BackgroundNotice(failed)) else {
+    fail("expected a notice")
+  }
+  assert_eq(failed, "MCP: server `fs` failed to connect")
+  guard @event.decode_event({
+      "event": "mcp_config_invalid",
+      "path": "/x/mcp.json",
+      "error": "boom",
+    })
+    is Some(BackgroundNotice(config)) else {
+    fail("expected a notice")
+  }
+  assert_eq(config, "MCP config error (/x/mcp.json): boom")
+  guard @event.decode_event({
+      "event": "mcp_list_tools_timeout",
+      "server": "slow",
+    })
+    is Some(BackgroundNotice(timeout)) else {
+    fail("expected a notice")
+  }
+  assert_eq(timeout, "MCP: server `slow` did not list its tools")
+}
