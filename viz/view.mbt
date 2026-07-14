@@ -949,11 +949,7 @@ fn tool_call_view(
   }
   // A plan is the task's live state, not noisy arguments: its card starts
   // unfolded (still collapsible), where every other call folds by default.
-  let open_by_default : Bool? = if plan_steps is Some(_) {
-    Some(true)
-  } else {
-    None
-  }
+  let open_by_default = plan_steps.map(_ => true)
   @html.details(open?=open_by_default, id?=anchor, class=cls) <| [
     @html.summary(class="tool-call-name") <| name_row,
     rendered,
@@ -1354,7 +1350,7 @@ fn steps_with_errors(
   let flagged : Map[Int, Unit] = Map([])
   for event in session.events() {
     guard event.item() is Tool(result) && result.is_error() else { continue }
-    for index = seqs.length() - 1; index >= 0; index = index - 1 {
+    for index in (seqs.length() - 1)>=..0 {
       if seqs[index] <= event.sequence() {
         flagged.set(index, ())
         break
