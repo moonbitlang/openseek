@@ -73,9 +73,10 @@ jobs:
       - name: Test
         run: moon test
 
-      # The default target never compiles the js-only packages (viz,
-      # cmd/viz_app), so without these steps a regression there would not
-      # fail CI.
+      # The js-only packages (viz, cmd/viz_app) already compile via
+      # per-package target fallback, but the default target never builds
+      # their test drivers — viz's unit tests only run under --target js,
+      # which also checks the rest of the workspace on the js backend.
       - name: Check (js target, deny warnings)
         run: moon check --deny-warn --target js
 
