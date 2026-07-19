@@ -74,9 +74,9 @@ jobs:
         run: moon test
 
       # The js-only packages (viz, cmd/viz_app) already compile via
-      # per-package target fallback, but the default target never builds
-      # their test drivers — viz's unit tests only run under --target js,
-      # which also checks the rest of the workspace on the js backend.
+      # per-package target fallback, and viz_app's tests run by default —
+      # but viz's test driver is only built under --target js, which also
+      # checks the other js-capable packages on that backend.
       - name: Check (js target, deny warnings)
         run: moon check --deny-warn --target js
 
