@@ -73,5 +73,14 @@ jobs:
       - name: Test
         run: moon test
 
+      # The default target never compiles the js-only packages (viz,
+      # cmd/viz_app), so without these steps a regression there would not
+      # fail CI.
+      - name: Check (js target, deny warnings)
+        run: moon check --deny-warn --target js
+
+      - name: Test (js target)
+        run: moon test --target js
+
       - name: Cram (offline CLI docs)
         run: moon cram test tests/cram
