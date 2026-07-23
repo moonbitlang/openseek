@@ -5,7 +5,7 @@ version = "0.2.2"
 import {
   "moonbit-community/tty@0.3.0",
   "moonbitlang/async@0.20.1",
-  "moonbitlang/x@0.4.45",
+  "moonbitlang/x@0.4.46",
   "moonbit-community/displaytext@0.1.5",
   "tonyfettes/xlog@0.4.0",
   "bobzhang/jsonl@0.2.0",
