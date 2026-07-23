@@ -1481,6 +1481,14 @@ async test "moon new is a trusted scaffold only for a new or empty target" {
         root,
       ),
     )
+    // The same non-empty target expressed relative to the command cwd must be
+    // classified the same way.
+    assert_true(
+      parse_scaffolds_unsafe_target(
+        @shell_parse.parse_for_policy("moon new pkg"),
+        root,
+      ),
+    )
     // no target at all -> undeterminable -> treated as unsafe
     assert_true(
       parse_scaffolds_unsafe_target(

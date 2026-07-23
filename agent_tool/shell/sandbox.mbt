@@ -268,11 +268,12 @@ fn is_moon_scaffold_subcommand(
 }
 
 ///|
-/// The `<PATH>` positional of a `moon new` invocation, resolved against the
-/// command's cwd. Grammar is `moon new [OPTIONS] <PATH>`: `--user`/`--name`/
-/// `--target-dir` take a value, the rest are boolean flags, and every token
-/// after `--` is positional. Returns the first positional as a normalized path,
-/// or None when none is present.
+/// The `<PATH>` positional of a `moon new` invocation. Absolute paths are
+/// normalized directly; relative paths are resolved against the command's cwd.
+/// Grammar is `moon new [OPTIONS] <PATH>`: `--user`/`--name`/`--target-dir`
+/// take a value, the rest are boolean flags, and every token after `--` is
+/// positional. Returns the first positional as a normalized path, or None when
+/// none is present.
 fn moon_new_target(
   argv : Array[String],
   new_index : Int,
@@ -296,7 +297,13 @@ fn moon_new_target(
       index += 1
       continue
     }
-    return Some(@path.Path(cwd).join(Path(arg)).normalize().to_string())
+    let target = @path.Path(arg)
+    let resolved_target = if target.is_absolute() {
+      target
+    } else {
+      @path.Path(cwd).join(target)
+    }
+    return Some(resolved_target.normalize().to_string())
   }
   None
 }
