@@ -40,8 +40,10 @@ pub fn cancel() -> @wire.Command {
 /// product gap rather than a protocol one — `@wire.Command` carries `GoalSet`
 /// and `GoalClear`, and this package gains a constructor the day the UI does.
 test "the host's commands are the protocol's" {
-  assert_true(prompt("hello").to_json()
-    is { "command": String("prompt"), "text": String("hello"), .. })
+  assert_true(
+    prompt("hello").to_json()
+    is { "command": String("prompt"), "text": String("hello"), .. },
+  )
   assert_true(
     steer("go left").to_json()
     is {

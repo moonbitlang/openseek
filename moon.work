@@ -3,4 +3,6 @@ members = [
   "./protocol",
   "./cmd/viz_app",
   "./editor",
+  "./desktop",
+  "./desktop/lepus/proton",
 ]

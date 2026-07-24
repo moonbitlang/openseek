@@ -275,8 +275,12 @@ async test "concurrent requests each get their own reply even when answered out 
       inbound.put(reply_for(second_seen))
       inbound.put(reply_for(first_seen))
     })
-    let first = group.spawn(() => client.request(method_="first", params=Json::empty_object()))
-    let second = group.spawn(() => client.request(method_="second", params=Json::empty_object()))
+    let first = group.spawn(() => {
+      client.request(method_="first", params=Json::empty_object())
+    })
+    let second = group.spawn(() => {
+      client.request(method_="second", params=Json::empty_object())
+    })
     assert_true(first.wait() is { "method": String("first"), .. })
     assert_true(second.wait() is { "method": String("second"), .. })
   })

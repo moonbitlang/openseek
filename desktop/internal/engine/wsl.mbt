@@ -236,7 +236,11 @@ test "engine host fingerprints distinguish native, distro, and engine" {
 
 ///|
 test "wslenv extends the user's own sharing list" {
-  assert_true(WslEnvPassthrough.contains("OPENSEEK_GLOBAL_SKILLS_DIR/up:OPENSEEK_MCP_CONFIG/up"))
+  assert_true(
+    WslEnvPassthrough.contains(
+      "OPENSEEK_GLOBAL_SKILLS_DIR/up:OPENSEEK_MCP_CONFIG/up",
+    ),
+  )
   assert_eq(wslenv_with_passthrough(None), WslEnvPassthrough)
   assert_eq(wslenv_with_passthrough(Some("  ")), WslEnvPassthrough)
   assert_eq(

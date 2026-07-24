@@ -79,7 +79,8 @@ pub fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
     AgentSetupFailed(error~) => Some(AgentSetupFailed(error))
     SteerApplied(content~, ..) => Some(SteerApplied(content))
     SteerDropped(content~) => Some(SteerDropped(content))
-    AutoCompactionFinished(summary~, ..) => Some(AutoCompactionFinished(summary))
+    AutoCompactionFinished(summary~, ..) =>
+      Some(AutoCompactionFinished(summary))
     CompactionStarted(..) => Some(CompactionStarted)
     CompactionFinished(summary~, ..) => Some(CompactionFinished(summary))
     CompactionFailed(error~) => Some(CompactionFailed(error))
