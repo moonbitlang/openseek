@@ -26,6 +26,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      - name: Checkout proton submodule
+        run: |
+          git submodule update --init ./desktop/lepus
+
       - name: Set up MoonBit (${{ matrix.moonbit-channel }})
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "${{ matrix.moonbit-version }}"
@@ -50,6 +54,53 @@ jobs:
           done
           exit 1
 
+      # The desktop and Proton workspace members are tested together with the
+      # root module (single moon.work), and their native test binaries link
+      # libproton.so, which on Linux hard-links libcef.so: without an assembled
+      # CEF runtime the executables cannot even load. `cef setup` downloads the
+      # pinned CEF distribution (cached below), builds libproton from the
+      # submodule sources (needs pkg-config, GTK3 and X11 headers), and writes
+      # desktop/.proton/runtime.json, which Proton's link config prefers over
+      # the incomplete checked-in prebuilt.
+      - name: Install Proton native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libgtk-3-dev libx11-dev xvfb
+
+      - name: Cache CEF distribution
+        uses: actions/cache@v4
+        with:
+          path: desktop/.proton/cache
+          key: cef-linux-x64-${{ hashFiles('desktop/lepus/cli/cef/cef_platform.mbt') }}
+
+      - name: Assemble Proton CEF runtime
+        # Proton's link config discovers the assembled runtime by walking up
+        # from the proton module root, so once runtime.json exists every moon
+        # invocation links it instead of the incomplete checked-in prebuilt.
+        run: |
+          moon -C desktop/lepus install ./cli --bin target/proton-tools
+          ./desktop/lepus/target/proton-tools/proton_cli -C "$PWD/desktop" cef setup
+          test -f desktop/.proton/runtime.json
+          # `cef setup` stages the checked-in linux prebuilt libproton.so into
+          # the runtime dist, but that prebuilt predates the menu, notification
+          # and directory-dialog APIs (darwin's was rebuilt, linux's was not),
+          # so the full desktop app fails to link. Rebuild libproton from the
+          # submodule sources against the downloaded CEF — the same build the
+          # AppImage packager runs — and replace the staged library.
+          dist=$(jq -r .dist desktop/.proton/runtime.json)
+          case "$dist" in
+            /*) ;;
+            *) dist="$PWD/desktop/$dist" ;;
+          esac
+          cef_root="$PWD/desktop/.proton/cache/cef/linux-x64/$(jq -r .cef_version desktop/.proton/runtime.json)"
+          cmake -S desktop/lepus/native -B desktop/target/proton-native/build \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+            -DPROTON_WITH_ENGINE=ON -DPROTON_ENGINE_ROOT="$cef_root"
+          cmake --build desktop/target/proton-native/build --config Release
+          cp desktop/target/proton-native/build/lib/libproton.so "$dist/lib/libproton.so"
+          nm -D "$dist/lib/libproton.so" | grep -q proton_runtime_set_menu_json
+
       - name: Check formatting
         run: moon fmt --check
 
@@ -71,7 +122,9 @@ jobs:
           fi
 
       - name: Test
-        run: moon test
+        # xvfb: the desktop/Proton windowed tests create real CEF windows (the
+        # Linux engine is compiled with CEF_X11), and the runner is headless.
+        run: xvfb-run -a moon test
 
       - name: Cram (offline CLI docs)
         run: moon cram test tests/cram
