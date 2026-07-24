@@ -2,7 +2,9 @@
 const FrontendPackage : String = "frontend"
 
 ///|
-/// The JS bundle `moon build frontend --target js --release` emits.
+/// The JS bundle `moon build frontend --target js --release` emits. Build
+/// output lands in the monorepo root's `_build` (the single root moon.work
+/// owns the build directory), so this resolves via `repo_at`, not `at`.
 const FrontendBundleArtifact : String = "_build/js/release/build/openseek_desktop/frontend/frontend.js"
 
 ///|
@@ -15,9 +17,10 @@ const FrontendBundleOutput : String = "frontend.js"
 const ViewerStyleOutput : String = "viewer.css"
 
 ///|
-/// Where `moon install` materializes the `moonbit-community/editor` registry
-/// dependency inside the desktop workspace; the viewer's CSS and font assets
-/// are read from this checkout.
+/// Where moon materializes the `moonbit-community/editor` registry dependency
+/// — `.mooncakes` under the monorepo root, where the single root moon.work
+/// resolves all registry checkouts; the viewer's CSS and font assets are read
+/// from this checkout (resolve via `repo_at`, not `at`).
 const EditorDepRoot : String = ".mooncakes/moonbit-community/editor"
 
 ///|
@@ -166,10 +169,10 @@ fn join_path(base : String, relative : String) -> String {
 }
 
 ///|
-/// Return the release-mode native desktop host binary path under the desktop
-/// workspace.
+/// Return the release-mode native desktop host binary path under the monorepo
+/// root, where the single root moon.work places all build output.
 pub fn Workspace::native_binary(self : Workspace) -> String {
-  self.at(NativeBinary)
+  self.repo_at(NativeBinary)
 }
 
 ///|
@@ -383,7 +386,7 @@ pub async fn build_frontend_bundle(ws : Workspace) -> Unit {
     ["build", FrontendPackage, "--target", "js", "--release"],
     dir=ws.dir(),
   )
-  copy_file(ws.at(FrontendBundleArtifact), ws.at(FrontendBundleOutput))
+  copy_file(ws.repo_at(FrontendBundleArtifact), ws.at(FrontendBundleOutput))
   build_viewer_stylesheet(ws)
 }
 
@@ -396,7 +399,7 @@ pub async fn build_frontend_bundle(ws : Workspace) -> Unit {
 pub async fn build_viewer_stylesheet(ws : Workspace) -> Unit {
   let css = StringBuilder::new()
   for source in viewer_css_sources() {
-    let absolute = ws.at("\{EditorDepRoot}/\{source}")
+    let absolute = ws.repo_at("\{EditorDepRoot}/\{source}")
     if !@asyncfs.exists(absolute) {
       raise PackageError("viewer stylesheet not found: \{absolute}")
     }
@@ -410,7 +413,7 @@ pub async fn build_viewer_stylesheet(ws : Workspace) -> Unit {
   }
   write_text(ws.at(ViewerStyleOutput), css.to_string())
   copy_file(
-    ws.at("\{EditorDepRoot}/\{CodiconFontSource}"),
+    ws.repo_at("\{EditorDepRoot}/\{CodiconFontSource}"),
     ws.at(CodiconFontOutput),
   )
 }
