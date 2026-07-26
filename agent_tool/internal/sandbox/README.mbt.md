@@ -19,19 +19,27 @@ in `agent_tool/internal/platform_shell`.
 
 Prepare, run, classify:
 
-```mbt nocheck
-let command = @sandbox.Shell(cmd)
-match @sandbox.SandboxedCommand::create_if_available(workspace_root, command) {
-  None =>
-    // Enforcement unavailable here (not macOS, or a nested sandbox).
-    // The fallback is the CALLER's decision, made explicitly.
-    run_unsandboxed(cmd)
-  Some(prepared) => {
-    let output = run(prepared.program(), prepared.args())
-    if prepared.output_reports_denial(output) {
-      // The kernel denied a protected source write: explain it rather than
-      // letting the model debug a bare "Operation not permitted".
-    }
+```mbt check
+///|
+async test "prepare, run, and classify a shell command" {
+  let shell_text = "echo sandbox-ready"
+  let prepared = @sandbox.SandboxedCommand::create_if_available(
+    ".",
+    Shell(shell_text),
+  )
+  let (program, args) = match prepared {
+    Some(command) => (command.program(), command.args())
+    // Enforcement is unavailable outside macOS and inside some nested
+    // sandboxes. Running without it is an explicit caller policy decision.
+    None => (@platform_shell.program, @platform_shell.args(shell_text))
+  }
+  let (exit_code, output) = @process.collect_output_merged(program, args)
+  let output = output.text()
+  assert_eq(exit_code, 0)
+  assert_eq(output.trim(), "sandbox-ready")
+  if prepared is Some(command) {
+    // Classify with the same value that supplied the executed program/argv.
+    assert_false(command.output_reports_denial(output))
   }
 }
 ```
