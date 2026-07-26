@@ -1,14 +1,10 @@
 ///|
-/// The exhaustive line-level pins for denial classification. The docstring on
-/// `SourceWriteDenialClassifier::output_reports_denial` carries the teaching
-/// subset; this is the spec.
-///
-/// Black-box on purpose: detection is entirely a property of the public API, so
-/// these exercise it exactly as `shell`, `shell_output`, and `run_moonbit` do.
+/// The exhaustive line-level pins for the private denial-classification engine.
+/// Keeping these white-box lets the public API expose only a prepared
+/// `SandboxedCommand`, while this platform-independent behavior remains fully
+/// covered without requiring a live sandbox.
 fn reports(subjects : Array[String], text : String) -> Bool {
-  @sandbox.SourceWriteDenialClassifier::with_subjects(subjects).output_reports_denial(
-    text,
-  )
+  source_write_denied_in_text(text, subjects)
 }
 
 ///|

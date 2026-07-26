@@ -86,9 +86,9 @@ priv struct BgJob {
   command : String
   cwd : String?
   exec : @shell_exec.ShellExecution
-  // Sandbox metadata carried from the launch (opaque to bgjobs) so a reader can
-  // apply the same source-write-denial detection the foreground path does.
-  denial_classifier : @sandbox.SourceWriteDenialClassifier?
+  // The opaque prepared command is carried from launch so a reader can apply
+  // the same source-write-denial detection the foreground path does.
+  sandboxed_command : @sandbox.SandboxedCommand?
 }
 
 ///|
@@ -109,7 +109,7 @@ pub struct BgJobSnapshot {
   // Preserved so a reader can match the foreground path's error semantics: mark
   // binary output as an error, and detect a sandboxed source-write denial.
   had_invalid_utf8 : Bool
-  denial_classifier : @sandbox.SourceWriteDenialClassifier?
+  sandboxed_command : @sandbox.SandboxedCommand?
   // The job was killed by the output-limit watchdog (flooded past the hard cap),
   // not stopped on request — surfaced so the kill is never silent.
   killed_by_output_limit : Bool
@@ -224,14 +224,14 @@ pub async fn BgJobRuntime::start(
   command~ : String,
   cwd? : String,
   max_output_chars? : Int = default_max_output_chars,
-  denial_classifier? : @sandbox.SourceWriteDenialClassifier,
+  sandboxed_command? : @sandbox.SandboxedCommand,
 ) -> String {
   // Reserve one id and use it for both the spill file and the registry entry, so
   // the job id and its `<id>.out` file never diverge.
   let id = self.next_id()
   let spill_path = self.spill_dir.map(dir => "\{dir}/\{id}.out")
   let exec = (self.spawn_exec)(program, args, cwd, max_output_chars, spill_path)
-  self.register(id, exec, command~, cwd?, denial_classifier?)
+  self.register(id, exec, command~, cwd?, sandboxed_command?)
   id
 }
 
@@ -245,10 +245,10 @@ pub fn BgJobRuntime::adopt(
   exec : @shell_exec.ShellExecution,
   command~ : String,
   cwd? : String,
-  denial_classifier? : @sandbox.SourceWriteDenialClassifier,
+  sandboxed_command? : @sandbox.SandboxedCommand,
 ) -> String {
   let id = self.next_id()
-  self.register(id, exec, command~, cwd?, denial_classifier?)
+  self.register(id, exec, command~, cwd?, sandboxed_command?)
   id
 }
 
@@ -260,9 +260,9 @@ fn BgJobRuntime::register(
   exec : @shell_exec.ShellExecution,
   command~ : String,
   cwd? : String,
-  denial_classifier? : @sandbox.SourceWriteDenialClassifier,
+  sandboxed_command? : @sandbox.SandboxedCommand,
 ) -> Unit {
-  self.jobs[id] = { id, command, cwd, exec, denial_classifier }
+  self.jobs[id] = { id, command, cwd, exec, sandboxed_command }
   // Watch for the job ending on its own and fire `on_job_exit` once: a natural
   // exit, or the output-limit watchdog killing a flooding job — both must be
   // surfaced (a watchdog kill silently eating an unwatched job would look like
@@ -320,7 +320,7 @@ fn BgJob::to_snapshot(self : BgJob) -> BgJobSnapshot {
     seq: self.exec.seq(),
     exit_code: self.exec.exit_code(),
     had_invalid_utf8: self.exec.had_invalid_utf8(),
-    denial_classifier: self.denial_classifier,
+    sandboxed_command: self.sandboxed_command,
     killed_by_output_limit: self.exec.killed_by_output_limit(),
     killed_by_time_limit: self.exec.killed_by_time_limit(),
   }

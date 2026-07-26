@@ -397,18 +397,19 @@ async fn execute(
     // preflights the command) an arbitrary snippet can still smuggle sources via
     // directory renames; full containment is the wasm backend's job. Elsewhere
     // (or in a nested sandbox where it cannot enforce) run moon directly.
-    // The wrapped command carries its denial classifier, so a denial showing
-    // up in the program's output can be recognized and explained below. The
+    // The prepared command carries its denial subjects, so a denial showing up
+    // in the program's output can be recognized and explained below. The
     // throwaway build dir is the writable subtree: if it falls INSIDE the
     // workspace root (e.g. `workspace_root=/tmp`, where `@fs.tmpdir` lands
     // under it) the shared deny would otherwise block moon's own generated
     // `snippet.mbt`.
-    let wrapped = @sandbox.SourceWriteSandbox::create_if_available(
+    let sandboxed_command = @sandbox.SandboxedCommand::create_if_available(
       workspace_root,
+      Exec("moon", moon_argv),
       writable_subtree=dir,
-    ).map(sandbox => sandbox.wrap_program("moon", moon_argv))
-    let (prog, argv) = match wrapped {
-      Some(wrapped) => (wrapped.command.program, wrapped.command.args)
+    )
+    let (prog, argv) = match sandboxed_command {
+      Some(command) => (command.program(), command.args())
       None => ("moon", moon_argv)
     }
     let result = @async.with_timeout_opt(RunTimeoutMs, () => {
@@ -432,8 +433,10 @@ async fn execute(
     // head+tail byte budget), and runs for the timeout arm too: a snippet can
     // flood past the cap before hitting the denial, or print a caught denial
     // and then hang.
-    let sandbox_denied = wrapped is Some(wrapped) &&
-      log_shows_source_write_denial(log, wrapped.denial_classifier)
+    let sandbox_denied = sandboxed_command is Some(command) &&
+      log_shows_source_write_denial(log, output => {
+        command.output_reports_denial(output)
+      })
     let action = match result {
       Some((exit_code, raw)) => {
         // Rewrite the throwaway temp path to `source` so the model reads
@@ -543,7 +546,7 @@ const DenialScanBudgetBytes : Int = 16_777_216
 /// tests only.
 async fn log_shows_source_write_denial(
   path : String,
-  classifier : @sandbox.SourceWriteDenialClassifier,
+  reports_denial : (String) -> Bool,
   budget_bytes? : Int = DenialScanBudgetBytes,
 ) -> Bool {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return false }
@@ -554,10 +557,10 @@ async fn log_shows_source_write_denial(
   }
   let budget = budget_bytes.to_int64()
   if size <= budget * 2 {
-    denial_scan_region(file, 0, size, classifier)
+    denial_scan_region(file, 0, size, reports_denial)
   } else {
-    denial_scan_region(file, 0, budget, classifier) ||
-    denial_scan_region(file, size - budget, budget, classifier)
+    denial_scan_region(file, 0, budget, reports_denial) ||
+    denial_scan_region(file, size - budget, budget, reports_denial)
   }
 }
 
@@ -571,7 +574,7 @@ async fn denial_scan_region(
   file : @fs.File,
   start : Int64,
   len : Int64,
-  classifier : @sandbox.SourceWriteDenialClassifier,
+  reports_denial : (String) -> Bool,
 ) -> Bool {
   let buf = FixedArray::make(DenialScanChunkBytes, b'\x00')
   let mut carry = ""
@@ -597,7 +600,7 @@ async fn denial_scan_region(
     // detector can judge now, everything after is the partial line to carry.
     match text.rev_split_once("\n") {
       Some((whole_lines, partial_line)) => {
-        if classifier.output_reports_denial(whole_lines.to_owned()) {
+        if reports_denial(whole_lines.to_owned()) {
           return true
         }
         carry = partial_line.to_owned()
@@ -607,13 +610,13 @@ async fn denial_scan_region(
     // A single line larger than a chunk must not grow the carry unboundedly:
     // scan what accumulated, keep only a pattern-sized tail.
     if carry.length() > DenialScanChunkBytes {
-      if classifier.output_reports_denial(carry) {
+      if reports_denial(carry) {
         return true
       }
       carry = carry[carry.length() - DenialScanCarryTailChars:].to_owned()
     }
   }
-  classifier.output_reports_denial(carry)
+  reports_denial(carry)
 }
 
 ///|

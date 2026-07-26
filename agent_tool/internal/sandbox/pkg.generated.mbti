@@ -6,24 +6,16 @@ package "bobzhang/openseek/agent_tool/internal/sandbox"
 // Errors
 
 // Types and methods
-pub(all) struct ProcessCommand {
-  program : String
-  args : Array[String]
+pub(all) enum Command {
+  Shell(String)
+  Exec(String, Array[String])
 }
 
-pub struct SandboxedCommand {
-  command : ProcessCommand
-  denial_classifier : SourceWriteDenialClassifier
-}
-
-type SourceWriteDenialClassifier
-pub fn SourceWriteDenialClassifier::output_reports_denial(Self, String) -> Bool
-pub fn SourceWriteDenialClassifier::with_subjects(Array[String]) -> Self
-
-type SourceWriteSandbox
-pub async fn SourceWriteSandbox::create_if_available(String, writable_subtree? : String) -> Self?
-pub fn SourceWriteSandbox::wrap_program(Self, String, Array[String]) -> SandboxedCommand
-pub fn SourceWriteSandbox::wrap_shell_command(Self, String) -> SandboxedCommand
+type SandboxedCommand
+pub fn SandboxedCommand::args(Self) -> Array[String]
+pub async fn SandboxedCommand::create_if_available(String, Command, writable_subtree? : String) -> Self?
+pub fn SandboxedCommand::output_reports_denial(Self, String) -> Bool
+pub fn SandboxedCommand::program(Self) -> String
 
 // Type aliases
 

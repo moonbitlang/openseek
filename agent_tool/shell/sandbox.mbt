@@ -16,17 +16,23 @@ priv enum SourceWriteMode {
 }
 
 ///|
+priv struct ProcessCommand {
+  program : String
+  args : Array[String]
+}
+
+///|
 priv struct AgentShellLaunch {
-  command : @sandbox.ProcessCommand
-  // `Some` exactly when the command runs under the source-write sandbox; the
-  // classifier judges that command's output for kernel denials.
-  denial_classifier : @sandbox.SourceWriteDenialClassifier?
+  command : ProcessCommand
+  // `Some` exactly when `command` was prepared under the source-write sandbox.
+  // It stays intact so output is judged against the profile that produced it.
+  sandboxed_command : @sandbox.SandboxedCommand?
 }
 
 ///|
 priv struct AgentShellOutput {
   output : ShellOutput
-  denial_classifier : @sandbox.SourceWriteDenialClassifier?
+  sandboxed_command : @sandbox.SandboxedCommand?
 }
 
 ///|
@@ -83,13 +89,14 @@ async fn agent_shell_launch(
     mode
   }
   // A trusted command with no scratch lab can never end up sandboxed, so
-  // skip acquisition entirely — a process that only ever runs trusted
+  // skip preparation entirely — a process that only ever runs trusted
   // commands never pays the profile's workspace scan.
-  let sandbox = match (mode, scratch_dir) {
+  let sandboxed_command = match (mode, scratch_dir) {
     (TrustedSourceWrite, None) => None
     _ =>
-      @sandbox.SourceWriteSandbox::create_if_available(
+      @sandbox.SandboxedCommand::create_if_available(
         real_workspace_root,
+        Shell(cmd),
         writable_subtree?=scratch_dir,
       )
   }
@@ -101,27 +108,25 @@ async fn agent_shell_launch(
   // denies any workspace-source write regardless of guard precision.
   let mode = if scratch_dir is Some(_) &&
     mode is TrustedSourceWrite &&
-    sandbox is Some(_) {
+    sandboxed_command is Some(_) {
     SourceReadOnly
   } else {
     mode
   }
-  match (mode, sandbox) {
+  match (mode, sandboxed_command) {
     (TrustedSourceWrite, _) | (_, None) =>
       {
         command: {
           program: @platform_shell.program,
           args: @platform_shell.args(cmd),
         },
-        denial_classifier: None,
+        sandboxed_command: None,
       }
-    (SourceReadOnly, Some(sandbox)) => {
-      let wrapped = sandbox.wrap_shell_command(cmd)
+    (SourceReadOnly, Some(command)) =>
       {
-        command: wrapped.command,
-        denial_classifier: Some(wrapped.denial_classifier),
+        command: { program: command.program(), args: command.args() },
+        sandboxed_command: Some(command),
       }
-    }
   }
 }
 
@@ -5377,8 +5382,8 @@ fn append_shell_sandbox_feedback_if_needed(
 fn agent_output_has_shell_sandbox_denial(
   agent_output : AgentShellOutput,
 ) -> Bool {
-  agent_output.denial_classifier is Some(classifier) &&
-  classifier.output_reports_denial(agent_output.output.text)
+  agent_output.sandboxed_command is Some(command) &&
+  command.output_reports_denial(agent_output.output.text)
 }
 
 ///|

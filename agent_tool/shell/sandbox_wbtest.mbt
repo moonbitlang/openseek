@@ -1183,62 +1183,40 @@ fn is_some_path(value : String?, expected : String) -> Bool {
 }
 
 ///|
-test "sandbox denial detection ignores masked exit code" {
+async test "sandbox denial detection ignores masked exit code" {
   // Line-level classification pins live in `agent_tool/internal/sandbox`
-  // (`denial_output_test.mbt`); here only the shell-side gate is covered:
+  // (`denial_output_wbtest.mbt`); here only the shell-side gate is covered:
   // the denial fires despite exit_code 0, and only for a sandboxed command.
-  let output = {
-    exit_code: Some(0),
-    text: "sh: main.mbt: Operation not permitted\n",
-    output_limit_reached: false,
-  }
-  assert_true(
-    agent_output_has_shell_sandbox_denial({
-      output,
-      denial_classifier: Some(
-        @sandbox.SourceWriteDenialClassifier::with_subjects([]),
-      ),
-    }),
-  )
-  assert_false(
-    agent_output_has_shell_sandbox_denial({ output, denial_classifier: None }),
-  )
-  assert_true(
-    agent_output_has_shell_sandbox_denial({
-      output: {
-        exit_code: Some(0),
-        text: "PermissionError: [Errno 1] Operation not permitted: 'pkg'\n",
-        output_limit_reached: false,
-      },
-      denial_classifier: Some(
-        @sandbox.SourceWriteDenialClassifier::with_subjects(["pkg"]),
-      ),
-    }),
-  )
-  assert_false(
-    agent_output_has_shell_sandbox_denial({
-      output: {
-        exit_code: Some(0),
-        text: "foo: Operation not permitted\n",
-        output_limit_reached: false,
-      },
-      denial_classifier: Some(
-        @sandbox.SourceWriteDenialClassifier::with_subjects(["pkg"]),
-      ),
-    }),
-  )
-  assert_false(
-    agent_output_has_shell_sandbox_denial({
-      output: {
-        exit_code: Some(0),
-        text: "Permission denied\n",
-        output_limit_reached: false,
-      },
-      denial_classifier: Some(
-        @sandbox.SourceWriteDenialClassifier::with_subjects([]),
-      ),
-    }),
-  )
+  @vfs.with_tmpdir(prefix="openseek-shell-denial-gate-", dir => {
+    guard @sandbox.SandboxedCommand::create_if_available(dir, Shell(":"))
+      is Some(command) else {
+      return
+    }
+    let output = {
+      exit_code: Some(0),
+      text: "sh: main.mbt: Operation not permitted\n",
+      output_limit_reached: false,
+    }
+    assert_true(
+      agent_output_has_shell_sandbox_denial({
+        output,
+        sandboxed_command: Some(command),
+      }),
+    )
+    assert_false(
+      agent_output_has_shell_sandbox_denial({ output, sandboxed_command: None }),
+    )
+    assert_false(
+      agent_output_has_shell_sandbox_denial({
+        output: {
+          exit_code: Some(0),
+          text: "Permission denied\n",
+          output_limit_reached: false,
+        },
+        sandboxed_command: Some(command),
+      }),
+    )
+  })
 }
 
 ///|
@@ -1514,7 +1492,8 @@ async test "moon new is a trusted scaffold only for a new or empty target" {
 /// lab the same command stays trusted/unsandboxed.
 async test "a scratch lab forces trusted source-writes onto the sandbox" {
   let ws = @fs.tmpdir(prefix="openseek-lab-ws-")
-  guard @sandbox.SourceWriteSandbox::create_if_available(ws) is Some(_) else {
+  guard @sandbox.SandboxedCommand::create_if_available(ws, Shell(":"))
+    is Some(_) else {
     println("sandbox-exec unavailable; skipping")
     @fs.rmdir(ws, recursive=true) catch {
       _ => ()
@@ -1529,7 +1508,7 @@ async test "a scratch lab forces trusted source-writes onto the sandbox" {
     @shell_parse.parse_for_policy("moon new \{lab}/probe"),
     cwd=lab,
   )
-  assert_true(without.denial_classifier is None)
+  assert_true(without.sandboxed_command is None)
   // With the lab wired, the same command is sandboxed instead — the
   // profile allows lab writes, the kernel denies workspace writes.
   let with_lab = agent_shell_launch(
@@ -1539,7 +1518,7 @@ async test "a scratch lab forces trusted source-writes onto the sandbox" {
     cwd=lab,
     scratch_dir=lab,
   )
-  assert_true(with_lab.denial_classifier is Some(_))
+  assert_true(with_lab.sandboxed_command is Some(_))
   @fs.rmdir(ws, recursive=true)
   @fs.rmdir(lab, recursive=true)
 }

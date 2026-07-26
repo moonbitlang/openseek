@@ -357,7 +357,7 @@ async fn shell(
           exec,
           command=input.cmd,
           cwd?,
-          denial_classifier?=launch.denial_classifier,
+          sandboxed_command?=launch.sandboxed_command,
         )
       }
     },
@@ -556,7 +556,7 @@ async fn run_agent_shell_with_tree_precheck(
       match collected {
         None => ShellTimedOut
         Some(output) =>
-          ShellExecuted({ output, denial_classifier: launch.denial_classifier })
+          ShellExecuted({ output, sandboxed_command: launch.sandboxed_command })
       }
     }
   }
@@ -580,7 +580,7 @@ fn agent_shell_output_from_exec(
       // memory-only one was killed at it (truncated, hard cap == inline cap).
       output_limit_reached: exec.over_inline_cap() || exec.output_truncated(),
     },
-    denial_classifier: launch.denial_classifier,
+    sandboxed_command: launch.sandboxed_command,
   }
 }
 
@@ -636,7 +636,7 @@ async fn start_background(
     command=input.cmd,
     cwd?,
     max_output_chars=input.max_output_chars,
-    denial_classifier?=launch.denial_classifier,
+    sandboxed_command?=launch.sandboxed_command,
   )
   @agent_tool.ToolAction::respond(
     "started background job \{id}: `\{input.cmd}`. Read its output with shell_output (job_id=\"\{id}\") and stop it with shell_stop (job_id=\"\{id}\").",

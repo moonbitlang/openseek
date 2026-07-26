@@ -1,63 +1,47 @@
 ///|
-/// A program-plus-arguments pair ready to hand to `@process.spawn`/`run`.
-/// Plain data — `pub(all)` so an unsandboxed launcher can build the same
-/// shape this package's wrappers produce.
-pub(all) struct ProcessCommand {
+/// The command to prepare for source-write-sandboxed execution.
+///
+/// `Shell` runs command text through the platform shell. `Exec` runs a program
+/// with an already-tokenized argument vector and introduces no shell.
+pub(all) enum Command {
+  Shell(String)
+  Exec(String, Array[String])
+}
+
+///|
+/// One prepared source-write-sandboxed invocation. Its process command and
+/// denial subjects stay together so output is always classified against the
+/// profile that produced it.
+struct SandboxedCommand {
   program : String
   args : Array[String]
-}
-
-///|
-/// The source-write sandbox for one workspace: an opaque capability that wraps
-/// commands in a kernel-enforced deny of MoonBit source writes. Obtain one
-/// with `SourceWriteSandbox::create_if_available`; everything SBPL-specific
-/// stays behind it.
-struct SourceWriteSandbox {
-  profile : String
-  classifier : SourceWriteDenialClassifier
-}
-
-///|
-/// Recognizes source-write denials in the output of a sandboxed command. It
-/// carries the denial subjects of the profile that command ran under, so a
-/// caller that judges output later — background jobs, streamed scans — needs
-/// no other sandbox state.
-struct SourceWriteDenialClassifier {
   denial_subjects : Array[String]
 }
 
 ///|
-/// A wrapped invocation: the command line to spawn, and the classifier for
-/// its output. The pair travels together because the classifier is only
-/// meaningful for output produced under this command's profile.
-pub struct SandboxedCommand {
-  command : ProcessCommand
-  denial_classifier : SourceWriteDenialClassifier
-}
-
-///|
-/// Acquire the source-write sandbox for `workspace_root`, or `None` when this
-/// process cannot enforce one — `sandbox-exec` missing, the availability probe
-/// failing, or a nested sandbox that forbids re-sandboxing. `None` means
-/// exactly "enforcement unavailable"; the fallback decision stays with the
-/// caller, explicit at the call site. Invalid input — an unresolvable
-/// `workspace_root`, or a `writable_subtree` that covers the root — raises
-/// instead, so misconfiguration cannot silently disable protection.
+/// Prepare `command` under the source-write sandbox for `workspace_root`, or
+/// return `None` when this process cannot enforce one — `sandbox-exec` missing,
+/// the availability probe failing, or a nested sandbox that forbids
+/// re-sandboxing. `None` means exactly "enforcement unavailable"; the fallback
+/// decision stays with the caller, explicit at the call site. Invalid input —
+/// an unresolvable `workspace_root`, or a `writable_subtree` that covers the
+/// root — raises instead, so misconfiguration cannot silently disable
+/// protection.
 ///
 /// The root is resolved to its real path here, because the kernel matches
-/// profile rules against realpaths; callers no longer pre-resolve. The rules
-/// are built from the tree as it exists now — renaming the root or the
-/// subtree afterwards makes them stale (they deny the old paths), so acquire
-/// the sandbox close to where the command runs.
+/// profile rules against realpaths. The rules are built from the tree as it
+/// exists now — renaming the root or subtree afterwards makes them stale, so
+/// prepare the command close to where it runs.
 ///
-/// `writable_subtree` re-allows writes below one directory — a scratch lab, a
-/// throwaway build dir — via a last-match-wins allow rule. It is resolved
+/// `writable_subtree` re-allows writes below one directory — a scratch lab or
+/// throwaway build directory — via a last-match-wins allow rule. It is resolved
 /// too; when resolution fails the unresolved path is used, which can only
-/// under-allow (writes in the subtree denied), never over-allow.
-pub async fn SourceWriteSandbox::create_if_available(
+/// under-allow, never over-allow.
+pub async fn SandboxedCommand::create_if_available(
   workspace_root : String,
+  command : Command,
   writable_subtree? : String,
-) -> SourceWriteSandbox? {
+) -> SandboxedCommand? {
   // Inputs are validated BEFORE the availability probe, so a caller bug is
   // reported identically on every platform instead of hiding behind `None`
   // wherever enforcement happens to be unavailable.
@@ -86,140 +70,37 @@ pub async fn SourceWriteSandbox::create_if_available(
     real_root,
     writable_lab?=subtree,
   )
+  let args = match command {
+    Shell(cmd) => sandbox_exec_args(data.profile, cmd)
+    Exec(program, args) => ["-p", data.profile, program, ..args]
+  }
   Some({
-    profile: data.profile,
-    // Copied: the profile cache hands out its own array, and a classifier
-    // must keep classifying with the subjects its command actually ran under.
-    classifier: { denial_subjects: data.denial_subjects.copy() },
+    program: SandboxExecPath,
+    args,
+    // Copied: the profile cache hands out its own array, and this command must
+    // keep classifying with the subjects of the profile it actually runs under.
+    denial_subjects: data.denial_subjects.copy(),
   })
 }
 
 ///|
-/// Wrap shell command text: the platform shell runs `cmd` under this
-/// sandbox's profile.
-pub fn SourceWriteSandbox::wrap_shell_command(
-  self : SourceWriteSandbox,
-  cmd : String,
-) -> SandboxedCommand {
-  {
-    command: {
-      program: SandboxExecPath,
-      args: sandbox_exec_args(self.profile, cmd),
-    },
-    denial_classifier: self.classifier,
-  }
+/// The executable of this prepared invocation.
+pub fn SandboxedCommand::program(self : SandboxedCommand) -> String {
+  self.program
 }
 
 ///|
-/// Wrap a program and pre-tokenized argument vector — no shell involved — so
-/// runners that build their own argv (e.g. `moon` invocations) get the same
-/// profile as shell text does.
-pub fn SourceWriteSandbox::wrap_program(
-  self : SourceWriteSandbox,
-  program : String,
-  args : Array[String],
-) -> SandboxedCommand {
-  {
-    command: {
-      program: SandboxExecPath,
-      args: ["-p", self.profile, program, ..args],
-    },
-    denial_classifier: self.classifier,
-  }
+/// A copy of this prepared invocation's argument vector.
+pub fn SandboxedCommand::args(self : SandboxedCommand) -> Array[String] {
+  self.args.copy()
 }
 
 ///|
-/// Build a classifier directly from denial subjects. This exists for tests
-/// and fixtures that exercise denial detection without a live sandbox (the
-/// wiring must stay covered on platforms where the probe cannot pass);
-/// production code receives its classifier from a `SandboxedCommand`.
-pub fn SourceWriteDenialClassifier::with_subjects(
-  denial_subjects : Array[String],
-) -> SourceWriteDenialClassifier {
-  { denial_subjects, }
-}
-
-///|
-/// Whether `output` contains a likely source-write denial from the command
-/// this classifier was issued for. Heuristic line-oriented recognition — a
-/// `true` is strong evidence, not proof, and unrelated permission errors are
-/// deliberately ignored.
-///
-/// A protected source name is recognized on its own, in every denial shape
-/// the tools actually produce — including MoonBit's own runtime error, where
-/// the path arrives wrapped in escaped quotes:
-///
-/// ```mbt check
-/// test "denials that name a protected source file" {
-///   let classifier = @sandbox.SourceWriteDenialClassifier::with_subjects([])
-///   inspect(
-///     classifier.output_reports_denial("sh: main.mbt: Operation not permitted\n"),
-///     content="true",
-///   )
-///   // run_moonbit's shape: a MoonBit runtime error for a denied source write.
-///   inspect(
-///     classifier.output_reports_denial(
-///       "OSError(\"@fs.open(): \\\"keep.mbt\\\": Operation not permitted\")",
-///     ),
-///     content="true",
-///   )
-///   // The subject may also follow the denial (python's errno shape).
-///   inspect(
-///     classifier.output_reports_denial(
-///       "PermissionError: [Errno 1] Operation not permitted: 'main.mbt'\n",
-///     ),
-///     content="true",
-///   )
-/// }
-/// ```
-///
-/// Both halves — a denial form AND a protected name — must hold on the same
-/// line, which is what keeps an unrelated permission error, or a build log
-/// that merely mentions a source file, from reading as a sandbox denial:
-///
-/// ```mbt check
-/// test "a denial alone, or a source name alone, is not a denial report" {
-///   let classifier = @sandbox.SourceWriteDenialClassifier::with_subjects([])
-///   inspect(
-///     classifier.output_reports_denial("Permission denied\n"),
-///     content="false",
-///   )
-///   inspect(
-///     classifier.output_reports_denial(
-///       "Permission denied while reading main.mbt\n",
-///     ),
-///     content="false",
-///   )
-///   inspect(
-///     classifier.output_reports_denial("compiled keep.mbt: ok\n"),
-///     content="false",
-///   )
-/// }
-/// ```
-///
-/// A denied *directory* carries no protected suffix, so it is recognized only
-/// through the profile's own subjects — which is why the classifier travels
-/// with the command it was issued for:
-///
-/// ```mbt check
-/// test "a directory denial is recognized only through its subject" {
-///   let denial = "PermissionError: [Errno 1] Operation not permitted: 'pkg'\n"
-///   inspect(
-///     @sandbox.SourceWriteDenialClassifier::with_subjects([]).output_reports_denial(
-///       denial,
-///     ),
-///     content="false",
-///   )
-///   inspect(
-///     @sandbox.SourceWriteDenialClassifier::with_subjects(["pkg"]).output_reports_denial(
-///       denial,
-///     ),
-///     content="true",
-///   )
-/// }
-/// ```
-pub fn SourceWriteDenialClassifier::output_reports_denial(
-  self : SourceWriteDenialClassifier,
+/// Whether `output` contains a likely protected-source write denial from this
+/// command. Recognition is heuristic and line-oriented: `true` is strong
+/// evidence, not proof, and unrelated permission errors are ignored.
+pub fn SandboxedCommand::output_reports_denial(
+  self : SandboxedCommand,
   output : String,
 ) -> Bool {
   source_write_denied_in_text(output, self.denial_subjects)

@@ -9,10 +9,9 @@ let protected_source_subjects : ReadOnlyArray[String] = [
 
 ///|
 /// Return whether child-process output contains a likely protected-source
-/// write denial. The engine behind
-/// `SourceWriteDenialClassifier::output_reports_denial`, whose docstring
-/// carries the worked examples; `denial_output_test.mbt` holds the exhaustive
-/// line-level pins.
+/// write denial. This is the private engine behind
+/// `SandboxedCommand::output_reports_denial`; `denial_output_wbtest.mbt` holds
+/// the exhaustive line-level pins.
 ///
 /// Matching is line-oriented. A line must contain a recognized
 /// "Operation not permitted" or "Permission denied" form and name either a
@@ -69,4 +68,3 @@ fn source_write_denied_in_text(
     )
   })
 }
-

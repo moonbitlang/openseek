@@ -94,7 +94,7 @@ async test "a non-existent cwd is reported, not run" {
 }
 
 ///|
-/// Gate on the same acquisition `execute` performs — skip where enforcement is
+/// Gate on the same preparation `execute` performs — skip where enforcement is
 /// unavailable (not macOS, or a nested sandbox). Probed against a throwaway
 /// root so no real workspace is scanned.
 async fn sandbox_enforcement_available() -> Bool {
@@ -102,7 +102,10 @@ async fn sandbox_enforcement_available() -> Bool {
   let dir = @fs.tmpdir(prefix="openseek-run-moonbit-gate-") catch {
     _ => return false
   }
-  let available = @sandbox.SourceWriteSandbox::create_if_available(dir)
+  let available = @sandbox.SandboxedCommand::create_if_available(
+      dir,
+      Shell(":"),
+    )
     is Some(_)
   @fs.rmdir(dir, recursive=true) catch {
     _ => ()

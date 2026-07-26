@@ -96,9 +96,9 @@ async fn execute(
   // when the command exited 0. Scan the *full* retained output for a denial (the
   // denial line can be earlier than the displayed tail), but only for a sandboxed
   // job — so a full read is done only in that rare case.
-  let sandbox_denied = if snapshot.denial_classifier is Some(classifier) {
+  let sandbox_denied = if snapshot.sandboxed_command is Some(command) {
     let full = bg_runtime.read_output(job_id).unwrap_or(output)
-    classifier.output_reports_denial(full)
+    command.output_reports_denial(full)
   } else {
     false
   }

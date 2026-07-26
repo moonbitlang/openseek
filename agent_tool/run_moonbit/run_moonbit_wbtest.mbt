@@ -21,7 +21,7 @@ async test "denial scan is bounded to the log's head and tail" {
       @fs.write_file(path, content, create_mode=CreateOrTruncate)
       log_shows_source_write_denial(
         path,
-        @sandbox.SourceWriteDenialClassifier::with_subjects([]),
+        text => text.contains("main.mbt: Operation not permitted"),
         budget_bytes=1024,
       )
     }

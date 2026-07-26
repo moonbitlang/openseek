@@ -272,13 +272,7 @@ fn should_prune_profile_scan_path(root : String, path : String) -> Bool {
   relative
   .replace_all(old="\\", new="/")
   .split("/")
-  .any(part => {
-    part == ".git" ||
-    part == ".hg" ||
-    part == ".svn" ||
-    part == ".jj" ||
-    part == "node_modules"
-  })
+  .any(part => part is (".git" | ".hg" | ".svn" | ".jj" | "node_modules"))
 }
 
 ///|
@@ -300,11 +294,8 @@ fn regex_escape(text : String) -> String {
       | '{'
       | '}'
       | '|'
-      | '/' => {
-        escaped.write_char('\\')
-        escaped.write_char(ch)
-      }
-      _ => escaped.write_char(ch)
+      | '/' => escaped <+ "\\\{ch}"
+      _ => escaped <+ "\{ch}"
     }
   }
   escaped.to_string()
@@ -320,14 +311,11 @@ fn sbpl_string_escape(text : String) -> String {
   let escaped = StringBuilder()
   for ch in text {
     match ch {
-      '"' | '\\' => {
-        escaped.write_char('\\')
-        escaped.write_char(ch)
-      }
-      '\n' => escaped.write_string("\\n")
-      '\r' => escaped.write_string("\\r")
-      '\t' => escaped.write_string("\\t")
-      _ => escaped.write_char(ch)
+      '"' | '\\' => escaped <+ "\\\{ch}"
+      '\n' => escaped <+ "\\n"
+      '\r' => escaped <+ "\\r"
+      '\t' => escaped <+ "\\t"
+      _ => escaped <+ "\{ch}"
     }
   }
   escaped.to_string()
