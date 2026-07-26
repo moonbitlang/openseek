@@ -24,6 +24,32 @@ fn source_write_denied_in_text(
   output_text : String,
   denial_subjects : Array[String],
 ) -> Bool {
+
+  // Whether `line` names `subject` as the object of an error rather than merely
+  // containing it as a substring: the tool's own punctuation or quoting follows
+  // it, or the line ends with it after a denial's colon.
+  //
+  // Shared by the protected-suffix scan and the profile's denial subjects, which
+  // need the identical notion of "names".
+  fn line_names_subject(line : StringView, subject : String) -> Bool {
+    line.contains("\{subject}:") ||
+    line.contains("\{subject}'") ||
+    line.contains("\{subject}\"") ||
+    // MoonBit's own OSError Show output escapes the quotes around the path
+    // (`@fs.open(): \"keep.mbt\": Operation not permitted`), so the subject is
+    // followed by `\"`, not a bare quote — run_moonbit's denial shape.
+    line.contains("\{subject}\\\"") ||
+    line.contains("\{subject}`") ||
+    (
+      (
+        line.contains("Operation not permitted:") ||
+        line.contains("operation not permitted:") ||
+        line.contains("Permission denied:")
+      ) &&
+      line.has_suffix(subject)
+    )
+  }
+
   output_text
   .split("\n")
   .any(line => {
@@ -44,28 +70,3 @@ fn source_write_denied_in_text(
   })
 }
 
-///|
-/// Whether `line` names `subject` as the object of an error rather than merely
-/// containing it as a substring: the tool's own punctuation or quoting follows
-/// it, or the line ends with it after a denial's colon.
-///
-/// Shared by the protected-suffix scan and the profile's denial subjects, which
-/// need the identical notion of "names".
-fn line_names_subject(line : StringView, subject : String) -> Bool {
-  line.contains("\{subject}:") ||
-  line.contains("\{subject}'") ||
-  line.contains("\{subject}\"") ||
-  // MoonBit's own OSError Show output escapes the quotes around the path
-  // (`@fs.open(): \"keep.mbt\": Operation not permitted`), so the subject is
-  // followed by `\"`, not a bare quote — run_moonbit's denial shape.
-  line.contains("\{subject}\\\"") ||
-  line.contains("\{subject}`") ||
-  (
-    (
-      line.contains("Operation not permitted:") ||
-      line.contains("operation not permitted:") ||
-      line.contains("Permission denied:")
-    ) &&
-    line.has_suffix(subject)
-  )
-}
