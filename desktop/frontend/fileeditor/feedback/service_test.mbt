@@ -1,6 +1,6 @@
 ///|
 test "Desktop feedback backing connects host controls to the Viewer handle" {
-  let service = DesktopFeedbackService()
+  let service = @feedback.DesktopFeedbackService()
   let resource = @common.Uri::parse("file:///workspace/main.mbt")
   let added : Ref[String?] = Ref(None)
   let changes = Ref(0)
@@ -24,7 +24,7 @@ test "Desktop feedback backing connects host controls to the Viewer handle" {
 
 ///|
 test "Desktop feedback backing implements every stateful handle mutation" {
-  let service = DesktopFeedbackService()
+  let service = @feedback.DesktopFeedbackService()
   let resource = @common.Uri::parse("file:///workspace/lib.mbt")
   let handle = service.agent_feedback_handle()
   let item = handle.add_feedback(

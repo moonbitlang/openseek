@@ -19,6 +19,7 @@ import {
   "moonbitlang/editor/syntax/lang_json",
   "openseek_desktop/internal/jsonx",
   "openseek_desktop/internal/pathx",
+  "openseek_desktop/frontend/fileeditor/feedback",
   "openseek_desktop/frontend/interop",
 }
 

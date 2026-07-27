@@ -8,7 +8,7 @@
 /// by the Viewer. The Viewer sees only `AgentFeedbackHandle`; Desktop keeps the
 /// concrete store so it can enable comments and turn accepted user feedback
 /// into composer chips.
-priv struct DesktopFeedbackService {
+struct DesktopFeedbackService {
   did_change_feedback : @common.Emitter[
     @agent_feedback_api.AgentFeedbackChangeEvent,
   ]
@@ -23,7 +23,7 @@ priv struct DesktopFeedbackService {
 }
 
 ///|
-fn DesktopFeedbackService::DesktopFeedbackService() -> DesktopFeedbackService {
+pub fn DesktopFeedbackService::DesktopFeedbackService() -> DesktopFeedbackService {
   {
     did_change_feedback: @common.Emitter(),
     did_change_navigation: @common.Emitter(),
@@ -37,7 +37,7 @@ fn DesktopFeedbackService::DesktopFeedbackService() -> DesktopFeedbackService {
 
 ///|
 /// Projects this store into the callback-only contract used by the Viewer.
-fn DesktopFeedbackService::agent_feedback_handle(
+pub fn DesktopFeedbackService::agent_feedback_handle(
   self : DesktopFeedbackService,
 ) -> @agent_feedback_api.AgentFeedbackHandle {
   @agent_feedback_api.AgentFeedbackHandle(
@@ -76,7 +76,7 @@ fn DesktopFeedbackService::agent_feedback_handle(
 /// Subscribes to newly accepted feedback. This host-only event is intentionally
 /// separate from `AgentFeedbackHandle`: the Viewer consumes the handle while
 /// Desktop turns the accepted item into a composer chip.
-fn DesktopFeedbackService::on_did_add_feedback(
+pub fn DesktopFeedbackService::on_did_add_feedback(
   self : DesktopFeedbackService,
   listener : (@agent_feedback_api.AgentFeedbackAddedEvent) -> Unit,
 ) -> @common.Disposable {
@@ -128,7 +128,7 @@ fn DesktopFeedbackService::replace_item(
 
 ///|
 /// Enables or disables feedback controls for one document.
-fn DesktopFeedbackService::set_feedback_enabled(
+pub fn DesktopFeedbackService::set_feedback_enabled(
   self : DesktopFeedbackService,
   resource : @common.Uri,
   enabled : Bool,
@@ -163,7 +163,7 @@ fn DesktopFeedbackService::get_feedback(
 
 ///|
 /// Removes every displayed item and navigation anchor for one document.
-fn DesktopFeedbackService::clear_feedback(
+pub fn DesktopFeedbackService::clear_feedback(
   self : DesktopFeedbackService,
   resource : @common.Uri,
 ) -> Unit {
@@ -176,7 +176,7 @@ fn DesktopFeedbackService::clear_feedback(
 ///|
 /// Adds one feedback item. Accepted user feedback fires the Desktop-only event
 /// that creates a composer chip; staged annotations use `Submitted` and do not.
-fn DesktopFeedbackService::add_feedback(
+pub fn DesktopFeedbackService::add_feedback(
   self : DesktopFeedbackService,
   resource : @common.Uri,
   range : @common.Range,
@@ -227,7 +227,7 @@ fn DesktopFeedbackService::accept_feedback(
 
 ///|
 /// Removes one feedback item and any navigation anchor that points to it.
-fn DesktopFeedbackService::remove_feedback(
+pub fn DesktopFeedbackService::remove_feedback(
   self : DesktopFeedbackService,
   resource : @common.Uri,
   feedback_id : String,
@@ -335,25 +335,4 @@ fn DesktopFeedbackService::get_navigation_bearing(
     .map(anchor => item_ids.search_by(id => id == anchor).unwrap_or(-1))
     .unwrap_or(-1)
   { active_idx, total_count: item_ids.length() }
-}
-
-///|
-/// All concrete services Desktop owns for its embedded Viewer. Keeping them
-/// together makes their shared lifetime explicit without changing editor's
-/// public API.
-priv struct DesktopViewerServices {
-  viewer_services : @viewer.ViewerServices
-  markers : @markers.MarkerService
-  feedback : DesktopFeedbackService
-}
-
-///|
-fn DesktopViewerServices::DesktopViewerServices() -> DesktopViewerServices {
-  let markers = @markers.MarkerService(schedule=@base_browser.queue_microtask)
-  let feedback = DesktopFeedbackService()
-  let viewer_services = @viewer.ViewerServices(
-    markers=@markers.MarkerStore(markers.marker_service_handle()),
-    agent_feedback=feedback.agent_feedback_handle(),
-  )
-  { viewer_services, markers, feedback }
 }
