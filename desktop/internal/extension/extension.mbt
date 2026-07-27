@@ -169,7 +169,7 @@ pub fn openseek_extension(
           error => raise error
         }
       })
-      context.op_async_result_with_context("pick_workspace", async fn(
+      context.op_async_with_context("pick_workspace", async fn(
         request_context : @app.AppCommandRequestContext,
         _ : Json,
       ) {
@@ -257,7 +257,6 @@ pub fn openseek_extension(
       ) {
         workspace_symbols_op(lsp, payload)
       })
-      Ok(())
     },
   )
 }

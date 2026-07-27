@@ -15,30 +15,47 @@ priv struct PickFolderReply {
 #cfg(not(platform="windows"))
 async fn pick_workspace_op(
   request_context : @app.AppCommandRequestContext,
-) -> Result[PickFolderReply, String] {
+) -> PickFolderReply {
   guard @platform.is_darwin() else {
-    return Err("no system folder picker on this platform")
+    raise HostError("no system folder picker on this platform")
   }
   let window = @proton_native.WindowRef::unsafe_from_handle(
     request_context.window(),
   )
-  match
-    @proton_native.choose_directory_dialog_async(
-      window,
-      Some("Choose a project folder"),
-      None,
-    ) {
-    Err(error) => Err("could not open the folder picker: \{error.message}")
-    Ok(None) => Ok({ path: None })
-    Ok(Some(text)) => Ok({ path: normalized_folder(text) })
+  let dialog = window.begin_choose_directory_dialog(
+    Some("Choose a project folder"),
+    None,
+  ) catch {
+    error =>
+      raise HostError("could not open the folder picker: " + error.message())
   }
+  // Proton's managed runner reports native callbacks through the request
+  // context wake signal. Poll before waiting so a callback delivered between
+  // revisions cannot be lost.
+  let mut selected = ""
+  let mut waiting = true
+  while waiting {
+    let revision = request_context.wake_revision()
+    let result = window.poll_dialog_result(dialog) catch {
+      error =>
+        raise HostError("could not open the folder picker: " + error.message())
+    }
+    match result {
+      Ready(text) => {
+        selected = text
+        waiting = false
+      }
+      Pending => request_context.wait_for_wake(revision)
+    }
+  }
+  { path: normalized_folder(selected) }
 }
 
 ///|
 #cfg(platform="windows")
 async fn pick_workspace_op(
   request_context : @app.AppCommandRequestContext,
-) -> Result[PickFolderReply, String] {
+) -> PickFolderReply {
   ignore(request_context)
   // -STA: FolderBrowserDialog needs a single-threaded apartment.
   let script = "Add-Type -AssemblyName System.Windows.Forms; " +
@@ -49,13 +66,13 @@ async fn pick_workspace_op(
     "-NoProfile", "-STA", "-Command", script,
   ]) catch {
     error if @async.is_being_cancelled() => raise error
-    error => return Err("could not open the folder picker: \{error}")
+    error => raise HostError("could not open the folder picker: \{error}")
   }
-  guard code == 0 else { return Ok({ path: None }) }
-  let text = (stdout.text() catch { _ => return Ok({ path: None }) })
+  guard code == 0 else { return { path: None } }
+  let text = (stdout.text() catch { _ => return { path: None } })
     .trim()
     .to_owned()
-  Ok({ path: normalized_folder(text) })
+  { path: normalized_folder(text) }
 }
 
 ///|

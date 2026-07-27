@@ -582,9 +582,9 @@ priv enum Msg {
   SessionsLoaded(Array[@transcript.SessionListItem])
   SessionsFailed(String)
   OpenSession(String)
-  // The user clicked the system notification a finished run posted: jump to
-  // the conversation that owned that run (the window itself is already
-  // brought forward natively).
+  // The user clicked the system notification posted through Proton's
+  // notification extension: jump to the conversation that owned that run.
+  // The native extension brings the window forward before emitting the click.
   NotificationClicked(run_id~ : Int)
   SessionLoaded(session~ : String, items~ : Array[@transcript.TranscriptItem])
   // Loading a stored session failed before its conversation ever existed

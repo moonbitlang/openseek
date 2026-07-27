@@ -481,9 +481,6 @@ async fn emit_engine_event(
     Started(payload) => context.emit("started", payload)
     StreamEvent(payload) => context.emit("event", payload)
     Error(payload) => context.emit("error", payload)
-    Finished(payload) => {
-      notify_run_finished(payload)
-      context.emit("finished", payload)
-    }
+    Finished(payload) => context.emit("finished", payload)
   }
 }

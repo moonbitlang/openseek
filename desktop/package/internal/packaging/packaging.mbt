@@ -191,9 +191,25 @@ pub fn engine_package() -> String {
 const ProtonCliSource : String = "./lepus/cli"
 
 ///|
-/// Marker for the installed Proton CLI source, so a registry-installed binary
-/// is replaced by the CLI from the checked-out Lepus submodule.
-const ProtonCliSourceMarker : String = "target/proton-tools/.proton_cli_source"
+/// Keep CLI installation out of the submodule's default `_build`, which may
+/// be locked by a Moon LSP check running Proton's code generators.
+const ProtonCliBuildDir : String = "target/proton-cli-build"
+
+///|
+/// The checked-out Proton project supplies both the CLI source and its
+/// platform prebuilt runtime. Running `cef setup` from this root lets a clean
+/// worktree find those artifacts without relying on an old registry cache.
+const ProtonProjectRoot : String = "lepus"
+
+///|
+fn Workspace::proton_project_dir(self : Workspace) -> String {
+  self.at(ProtonProjectRoot)
+}
+
+///|
+fn Workspace::proton_project_at(self : Workspace, relative : String) -> String {
+  join_path(self.proton_project_dir(), relative)
+}
 
 ///|
 /// Return the POSIX Proton CLI path relative to the desktop workspace.
@@ -208,23 +224,25 @@ pub fn windows_proton_cli() -> String {
 }
 
 ///|
-/// Install the Proton CLI to `target/proton-tools` if the requested
-/// workspace-relative tool path does not already exist.
+/// Install the Proton CLI from the current gitlink to `target/proton-tools`.
+/// Reinstalling is deliberate: a path-only cache marker cannot distinguish
+/// two commits of the same `./lepus/cli` source tree.
 pub async fn ensure_proton_cli(ws : Workspace, tool_path : String) -> Unit {
-  let marker = ws.at(ProtonCliSourceMarker)
-  if @asyncfs.exists(ws.at(tool_path)) {
-    if @asyncfs.exists(marker) {
-      if @asyncfs.read_file(marker).text() == ProtonCliSource {
-        return
-      }
-    }
-  }
   run_checked(
     "moon",
-    ["install", ProtonCliSource, "--bin", "target/proton-tools"],
+    [
+      "install",
+      "--target-dir",
+      ProtonCliBuildDir,
+      ProtonCliSource,
+      "--bin",
+      "target/proton-tools",
+    ],
     dir=ws.dir(),
   )
-  @asyncfs.write_file(marker, ProtonCliSource, create_mode=CreateOrTruncate)
+  guard @asyncfs.exists(ws.at(tool_path)) else {
+    raise PackageError("Proton CLI was not installed at \{ws.at(tool_path)}")
+  }
 }
 
 ///|
@@ -233,9 +251,18 @@ pub async fn ensure_proton_cli(ws : Workspace, tool_path : String) -> Unit {
 /// (`proton_runtime_dist` reads the assembled dist's path). The command
 /// downloads CEF on first run (large); a pre-populated `.cef-cache` lets it
 /// complete offline.
-pub async fn assemble_cef_runtime(ws : Workspace, tool_path : String) -> Unit {
+pub async fn assemble_cef_runtime(
+  ws : Workspace,
+  tool_path : String,
+  extra_env? : Map[String, String] = Map([]),
+) -> Unit {
   ensure_proton_cli(ws, tool_path)
-  run_checked(ws.at(tool_path), ["-C", ws.dir(), "cef", "setup"], dir=ws.dir())
+  run_checked(
+    ws.at(tool_path),
+    ["-C", ws.proton_project_dir(), "cef", "setup"],
+    dir=ws.dir(),
+    extra_env~,
+  )
 }
 
 ///|
@@ -243,14 +270,14 @@ pub async fn assemble_cef_runtime(ws : Workspace, tool_path : String) -> Unit {
 /// the manifest `cef setup` writes. Raises when the manifest is missing or
 /// malformed.
 pub async fn proton_runtime_dist(ws : Workspace) -> String {
-  ws.at(proton_runtime_field(ws, "dist"))
+  ws.proton_project_at(proton_runtime_field(ws, "dist"))
 }
 
 ///|
 /// Read a string field from `.proton/runtime.json`, the manifest `cef setup`
 /// writes. Raises when the manifest is missing, malformed, or lacks the field.
 async fn proton_runtime_field(ws : Workspace, field : String) -> String {
-  let manifest = ws.at(".proton/runtime.json")
+  let manifest = ws.proton_project_at(".proton/runtime.json")
   if !@asyncfs.exists(manifest) {
     raise PackageError(
       "Proton runtime manifest not found: \{manifest} (run cef setup)",
@@ -297,7 +324,9 @@ pub async fn rebuild_libproton(
 ) -> Unit {
   let platform = proton_runtime_field(ws, "platform")
   let cef_version = proton_runtime_field(ws, "cef_version")
-  let cef_root = ws.at(".proton/cache/cef/\{platform}/\{cef_version}")
+  let cef_root = ws.proton_project_at(
+    ".proton/cache/cef/\{platform}/\{cef_version}",
+  )
   if !@asyncfs.exists(cef_root) {
     raise PackageError(
       "CEF distribution cache not found: \{cef_root} (run cef setup)",
@@ -533,11 +562,19 @@ pub async fn build_native_host(
   } else {
     None
   }
+  // The assembled runtime lives under the checked-out Proton project, not
+  // necessarily above Moon's process cwd. Pass it explicitly so the prebuild
+  // linker config cannot fall back to a stale checked-in runtime.
+  let build_env : Map[String, String] = Map([])
+  for name, value in extra_env {
+    build_env[name] = value
+  }
+  build_env["PROTON_NATIVE_DIST"] = proton_runtime_dist(ws)
   run_checked(
     "moon",
     ["build", NativePackage, "--target", "native", "--release"] + extra_args,
     dir=ws.dir(),
-    extra_env~,
+    extra_env=build_env,
   ) catch {
     error => {
       restore_client_token(ws, original)

@@ -4,7 +4,7 @@ package "openseek_desktop/package/internal/packaging"
 // Values
 pub fn absolute_path(String) -> String
 
-pub async fn assemble_cef_runtime(Workspace, String) -> Unit
+pub async fn assemble_cef_runtime(Workspace, String, extra_env? : Map[String, String]) -> Unit
 
 pub async fn build_engine(Workspace, extra_env? : Map[String, String]) -> Unit
 

@@ -104,10 +104,9 @@ fn wire_engine_events(
   on("openseek.connected", connected_msg)
   on("openseek.diagnostics", diagnostics_msg)
   on("openseek.fs_changed", fs_changed_msg)
-  // Emitted by proton itself (not the openseek extension) when the user
-  // clicks a system notification; the payload is the run id the host stamped
-  // on the notification.
-  on("proton.notification_clicked", notification_clicked_msg)
+  // Emitted by the notification extension when the user clicks a system
+  // notification; the payload is the run id this frontend stamped on it.
+  on("notification.click", notification_clicked_msg)
 }
 
 ///|
@@ -221,9 +220,9 @@ fn fs_changed_msg(_payload : Map[String, Json]) -> Msg? {
 }
 
 ///|
-/// A clicked notification's payload is the decimal run id `notify.mbt`
-/// stamped on it; anything unparsable is dropped (a stale notification from
-/// an older build, or a payload another surface posted).
+/// A clicked notification's payload is the decimal run id
+/// `system_notification.mbt` stamped on it; anything unparsable is dropped
+/// (a stale notification from an older build, or another extension's payload).
 fn notification_clicked_msg(payload : Map[String, Json]) -> Msg? {
   guard @jsonx.json_text(payload, "payload") is Some(text) else { return None }
   let run_id = @string.parse_int(text) catch { _ => return None }

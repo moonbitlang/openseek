@@ -1563,12 +1563,13 @@ fn update_msg(
       }
     Finished(run_id~, status~, answer~) =>
       if model.conversation_by_run(run_id) is Some(conv) {
+        let outcome = RunOutcome::parse(status)
         // In the normal path the engine settled every steer before this
         // terminal event; sweeping here only matters when the run died with
         // steers still in flight.
         let base = {
           ..conv.clear_streams().sweep_pending_steers(),
-          run: NoRun(ended=Some(RunFinished(RunOutcome::parse(status)))),
+          run: NoRun(ended=Some(RunFinished(outcome))),
           // A finish the user watched happen needs no reminder; one landing
           // in a background conversation leaves a dot until they visit.
           unseen_finish: conv.session_id != model.active_session,
@@ -1580,6 +1581,7 @@ fn update_msg(
         let refresh = @cmd.batch([
           fetch_sessions(dispatch),
           fetch_branch(dispatch, conv.session_id, conv.cwd),
+          notify_run_finished(run_id, outcome, answer),
         ])
         if answer is Some(answer) && should_append_answer(conv, answer) {
           (
