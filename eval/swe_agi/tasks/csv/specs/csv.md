@@ -258,8 +258,7 @@ Text after a quoted field:
 
 Must be rejected (`"a"` must be followed by comma/terminator/EOF).
 
-## Test suite mapping
+## Project files
 
-- `csv_pub_test.mbt`: public coverage for core valid and invalid cases.
-- `csv_priv_test.mbt`: private coverage for quoting, CRLF/CR, unicode, multiline, and invalid edge cases.
+- `csv_pub_test.mbt`: provided coverage for core valid and invalid cases.
 - `csv_spec.mbt`: JSON encoding contract for `Csv::to_test_json`

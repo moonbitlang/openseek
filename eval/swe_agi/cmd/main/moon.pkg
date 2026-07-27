@@ -1,0 +1,12 @@
+import {
+  "bobzhang/openseek/eval/swe_agi/harness",
+  "bobzhang/openseek/internal/cli",
+  "moonbitlang/async",
+  "moonbitlang/core/argparse",
+}
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+native"
+
+pkgtype(kind: "executable")

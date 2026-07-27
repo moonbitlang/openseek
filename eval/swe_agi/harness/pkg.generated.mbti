@@ -1,0 +1,41 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/eval/swe_agi/harness"
+
+import {
+  "bobzhang/openseek_protocol",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type BenchmarkResult
+pub fn BenchmarkResult::markdown(Self) -> String
+pub fn BenchmarkResult::passed(Self) -> Bool
+
+type Config
+pub fn Config::Config(task_dir~ : String, out_dir~ : String, repo_root~ : String, engine? : String, model~ : String, max_steps~ : Int, timeout_ms~ : Int, grade_timeout_ms~ : Int, goal_text~ : String) -> Self
+pub async fn Config::run(Self) -> BenchmarkResult
+
+type GoalTrialState
+pub fn GoalTrialState::GoalTrialState(String) -> Self
+pub fn GoalTrialState::acknowledged(Self) -> Bool
+pub fn GoalTrialState::completion_tokens(Self) -> Int
+pub fn GoalTrialState::observe(Self, @openseek_protocol.Event) -> TrialStop?
+pub fn GoalTrialState::prompt_tokens(Self) -> Int
+pub fn GoalTrialState::record_transport_retry(Self) -> Unit
+pub fn GoalTrialState::steps(Self) -> Int
+pub fn GoalTrialState::total_tokens(Self) -> Int
+pub fn GoalTrialState::transport_retries(Self) -> Int
+pub fn GoalTrialState::turns(Self) -> Int
+
+type TrialStop derive(Eq, @debug.Debug)
+pub fn TrialStop::detail(Self) -> String
+pub fn TrialStop::label(Self) -> String
+
+// Type aliases
+
+// Traits
+

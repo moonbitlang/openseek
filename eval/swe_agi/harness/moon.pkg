@@ -1,0 +1,18 @@
+import {
+  "bobzhang/openseek/eval/report",
+  "bobzhang/openseek_protocol" @protocol,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/io",
+  "moonbitlang/async/process",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async/os_error",
+} for "wbtest"
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+native"

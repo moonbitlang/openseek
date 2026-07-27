@@ -73,8 +73,7 @@ Implementation notes:
 - Do **not** modify the following files:
   - `csv_spec.mbt` - API specification
   - `specs/` folder - Reference documents
-  - `*_pub_test.mbt` - Public test files (`csv_valid_pub_test.mbt`, `csv_invalid_pub_test.mbt`)
-  - `*_priv_test.mbt` - Private test files (`csv_valid_priv_test.mbt`, `csv_invalid_priv_test.mbt`)
+  - Provided `*_test.mbt` files - Test fixtures
 - Implement the required declarations by adding new `.mbt` files as needed.
 - **You may add additional test files** (e.g., xxx_test.mbt) if needed for testing and maintenance purposes
   - Create additional test files (e.g., `xxx_test.mbt`) to validate edge cases
@@ -111,35 +110,11 @@ Use `moon test --update` only if you intentionally change snapshots.
 
 ### 1. Test Requirements
 
-**All tests must pass for task completion**:
-
-The model should keep running until all tests pass.
-
-- **Public tests** (`*_pub_test.mbt`): 10 cases, visible in this repository for development and debugging
-- **Private tests** (`*_priv_test.mbt`): 88 additional cases, vendored as ordinary files in this local task and run by `moon test`
-
-**CRITICAL - Full Suite Evaluation**:
-
-Passing only the public tests is **INSUFFICIENT** and will result in task failure. The task is complete **only when both public and private test suites in this directory pass**.
-
-**Why Private Tests Matter**:
-- **Coverage**: Private tests represent 90% of the total evaluation - they are the primary measure of success
-- **Comprehensiveness**: Validate full CSV behavior compliance, including edge cases, corner cases, and subtle semantic rules not exposed in public tests
-- **Real-world scenarios**: Test combinations and patterns that occur in actual CSV files but may not be obvious from the spec
-- **Implementation integrity**: Even though these tests are visible here, the goal is a genuine parser, not a lookup table for fixture outputs
-
-**Evaluation Process**:
-
-Make all tests pass locally by running `moon test` in this directory. Iterate
-until they pass, then `finish`.
-
-There is **no submission step and no evaluation server** in this environment.
-`moon test` is the grading command for this vendored native workflow.
-
-Because the private tests (~90% of the suite) decide success, a genuine,
-general implementation is essential: do **not** hardcode or memorize responses
-to the fixtures — build a real parser/state machine that works for arbitrary
-inputs within the supported dialect.
+Implement the complete documented CSV behavior, not only the examples exercised
+by the provided tests. Run `moon test` frequently and keep iterating until it
+passes. Do not hardcode fixture inputs or expected outputs; build a general
+parser/state machine for arbitrary inputs within the supported dialect. When
+the implementation and verification are complete, finish the task.
 
 ### 2. Code Quality Requirements
 
