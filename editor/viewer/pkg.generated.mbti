@@ -5,7 +5,6 @@ import {
   "moonbit-community/rabbita/dom",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
-  "moonbitlang/editor/language",
   "moonbitlang/editor/platform/log",
   "moonbitlang/editor/viewer/browser",
   "moonbitlang/editor/viewer/common/agent_feedback_api",
@@ -35,20 +34,6 @@ pub fn EditorDecorationsCollection::get_range(Self, Int) -> @common.Range?
 pub fn EditorDecorationsCollection::get_ranges(Self) -> Array[@common.Range]
 pub fn EditorDecorationsCollection::length(Self) -> Int
 pub fn EditorDecorationsCollection::set(Self, Array[@model.ModelDeltaDecoration]) -> Array[String]
-
-pub struct EmbeddedViewerServices {
-  // private fields
-}
-#alias(new, deprecated)
-pub fn EmbeddedViewerServices::EmbeddedViewerServices() -> Self
-pub fn EmbeddedViewerServices::add_feedback(Self, @common.Uri, @common.Range, String, kind? : @agent_feedback_api.AgentFeedbackKind, state? : @agent_feedback_api.AgentFeedbackState) -> @agent_feedback_api.AgentFeedback
-pub fn EmbeddedViewerServices::clear_feedback(Self, @common.Uri) -> Unit
-pub fn EmbeddedViewerServices::dispose(Self) -> Unit
-pub fn EmbeddedViewerServices::on_did_add_feedback(Self, (@agent_feedback_api.AgentFeedbackAddedEvent) -> Unit) -> @common.Disposable
-pub fn EmbeddedViewerServices::remove_feedback(Self, @common.Uri, String) -> Unit
-pub fn EmbeddedViewerServices::set_diagnostics(Self, String, @common.Uri, Array[@language.Diagnostic]) -> Unit
-pub fn EmbeddedViewerServices::set_feedback_enabled(Self, @common.Uri, Bool) -> Unit
-pub fn EmbeddedViewerServices::viewer_services(Self) -> ViewerServices
 
 pub struct Viewer {
   // private fields

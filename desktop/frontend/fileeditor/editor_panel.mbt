@@ -28,9 +28,10 @@ priv struct ViewerHost {
   // batched behind a mount request whose after-render tick precedes the async
   // reply, so by the time a document arrives the viewer exists.
   mut viewer : @viewer.Viewer?
-  // The application-owned service set receives language-server diagnostics
-  // and turns an inline review into a composer chip.
-  mut services : @viewer.EmbeddedViewerServices?
+  // Desktop owns the concrete marker and feedback stores passed through the
+  // Viewer's public handle API. They receive language-server diagnostics and
+  // turn inline reviews into composer chips without requiring editor internals.
+  mut services : DesktopViewerServices?
   // The absolute path of the file the viewer currently shows, so a
   // diagnostics push that arrives for a different file (or after the panel
   // cleared its document) is dropped rather than drawn over the wrong
@@ -104,18 +105,18 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         is Some(host) {
         register_tokenizers()
         register_hover_provider()
-        let services = @viewer.EmbeddedViewerServices()
+        let services = DesktopViewerServices()
         viewer_state.services = Some(services)
         let viewer = @viewer.Viewer::create(
           host,
-          services=services.viewer_services(),
+          services=services.viewer_services,
           options=@viewer.ViewerOptions(
             theme="light",
             placeholder="Select a file to view",
           ),
         )
         viewer_state.viewer = Some(viewer)
-        services.on_did_add_feedback(event => {
+        services.feedback.on_did_add_feedback(event => {
           // Only user comments on a file this app put on screen (a URI it
           // minted) become chips; anything else is not ours to carry.
           guard event.feedback.kind is @agent_feedback_api.UserReview else {
@@ -169,7 +170,7 @@ pub fn remove_editor_feedback(
     // The string is the `to_string()` of a URI this package minted, so the
     // re-parse cannot fail; a stray unparsable string has no bubble anyway.
     let uri = @common.Uri::parse(resource.0) catch { _ => return }
-    services.remove_feedback(uri, feedback_id)
+    services.feedback.remove_feedback(uri, feedback_id)
   })
 }
 
@@ -262,7 +263,7 @@ fn show_file_in_viewer(
     // Commenting (select → inline input → composer chip) is for real files;
     // a notice document has nothing behind it to comment on.
     if viewer_state.services is Some(services) {
-      services.set_feedback_enabled(uri, absolute is Some(_))
+      services.feedback.set_feedback_enabled(uri, absolute is Some(_))
       if absolute is Some(_) {
         // A fresh document view starts with no bubbles (comments become
         // chips the moment they are filed, so anything lingering here is a
@@ -274,9 +275,9 @@ fn show_file_in_viewer(
         // jump that carries an annotation — a plain unchanged reload must
         // not clear what the user is looking at (or typing into).
         if !same_document || annotation is Some(_) {
-          services.clear_feedback(uri)
+          services.feedback.clear_feedback(uri)
           if annotation is Some(text) && range is Some(range) {
-            services.add_feedback(
+            services.feedback.add_feedback(
               uri,
               range,
               text,
@@ -358,7 +359,7 @@ fn apply_diagnostics(
       current == absolute &&
       viewer_state.services is Some(services) {
       let uri = model_uri_of(absolute)
-      services.set_diagnostics(
+      services.markers.set_diagnostics(
         DiagnosticsOwner,
         uri,
         decode_diagnostics(diagnostics),
