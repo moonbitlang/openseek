@@ -74,8 +74,8 @@ jobs:
       # CEF runtime the executables cannot even load. `cef setup` downloads the
       # pinned CEF distribution (cached below), builds libproton from the
       # submodule sources (needs pkg-config, GTK3 and X11 headers), and writes
-      # desktop/.proton/runtime.json, which Proton's link config prefers over
-      # the incomplete checked-in prebuilt.
+      # desktop/lepus/.proton/runtime.json, which Proton's link config prefers
+      # over the incomplete checked-in prebuilt.
       - name: Install Proton native build dependencies
         if: matrix.target == 'native'
         run: |
@@ -87,30 +87,31 @@ jobs:
         if: matrix.target == 'native'
         uses: actions/cache@v4
         with:
-          path: desktop/.proton/cache
-          key: cef-linux-x64-${{ hashFiles('desktop/lepus/cli/cef/cef_platform.mbt') }}
+          path: desktop/lepus/.proton/cache
+          key: cef-lepus-linux-x64-${{ hashFiles('desktop/lepus/cli/cef/cef_platform.mbt') }}
 
       - name: Assemble Proton CEF runtime
         if: matrix.target == 'native'
         # Proton's link config discovers the assembled runtime by walking up
-        # from the proton module root, so once runtime.json exists every moon
-        # invocation links it instead of the incomplete checked-in prebuilt.
+        # from the local proton module root. Run setup at that same project
+        # root so it finds the submodule's checked-in prebuilt and writes the
+        # runtime where the link config looks for it.
         run: |
           moon -C desktop/lepus install ./cli --bin target/proton-tools
-          ./desktop/lepus/target/proton-tools/proton_cli -C "$PWD/desktop" cef setup
-          test -f desktop/.proton/runtime.json
+          ./desktop/lepus/target/proton-tools/proton_cli -C "$PWD/desktop/lepus" cef setup
+          test -f desktop/lepus/.proton/runtime.json
           # `cef setup` stages the checked-in linux prebuilt libproton.so into
           # the runtime dist, but that prebuilt predates the menu, notification
           # and directory-dialog APIs (darwin's was rebuilt, linux's was not),
           # so the full desktop app fails to link. Rebuild libproton from the
           # submodule sources against the downloaded CEF — the same build the
           # AppImage packager runs — and replace the staged library.
-          dist=$(jq -r .dist desktop/.proton/runtime.json)
+          dist=$(jq -r .dist desktop/lepus/.proton/runtime.json)
           case "$dist" in
             /*) ;;
-            *) dist="$PWD/desktop/$dist" ;;
+            *) dist="$PWD/desktop/lepus/$dist" ;;
           esac
-          cef_root="$PWD/desktop/.proton/cache/cef/linux-x64/$(jq -r .cef_version desktop/.proton/runtime.json)"
+          cef_root="$PWD/desktop/lepus/.proton/cache/cef/linux-x64/$(jq -r .cef_version desktop/lepus/.proton/runtime.json)"
           cmake -S desktop/lepus/native -B desktop/target/proton-native/build \
             -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
             -DPROTON_WITH_ENGINE=ON -DPROTON_ENGINE_ROOT="$cef_root"
