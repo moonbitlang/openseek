@@ -147,8 +147,7 @@ fn TokenizerSyntaxTokenBackend::reset_tokenization(
     match (self.resolve_support)(self.model_state.language_id) {
       Some(candidate) =>
         try candidate.initial_state() catch {
-          error =>
-            (self.model_state.report_unexpected_error)("\{to_repr(error)}")
+          error => (self.model_state.report_unexpected_error)("\{Repr(error)}")
         } noraise {
           _ => support = Some(candidate)
         }
@@ -166,7 +165,7 @@ fn TokenizerSyntaxTokenBackend::reset_tokenization(
         )
       catch {
         error => {
-          (self.model_state.report_unexpected_error)("\{to_repr(error)}")
+          (self.model_state.report_unexpected_error)("\{Repr(error)}")
           None
         }
       } noraise {

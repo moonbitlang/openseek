@@ -465,7 +465,7 @@ fn assert_relative_path(
   let util = if ignore_case { ext_uri_ignore_path_case } else { ext_uri }
   assert_true(
     util.relative_path(u1, u2) == expected_path,
-    msg="from \{u1.to_string()} to \{u2.to_string()}: got \{to_repr(util.relative_path(u1, u2))}, want \{to_repr(expected_path)}",
+    msg="from \{u1.to_string()} to \{u2.to_string()}: got \{Repr(util.relative_path(u1, u2))}, want \{Repr(expected_path)}",
   )
   if expected_path is Some(path) && !ignore_join {
     assert_equal_uri(

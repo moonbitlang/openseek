@@ -124,7 +124,7 @@ fn assert_indent_ranges(
     )
   }
   if actual_ranges != expected {
-    fail("\{to_repr(actual_ranges)} != \{to_repr(expected)}")
+    fail("\{Repr(actual_ranges)} != \{Repr(expected)}")
   }
 }
 
@@ -532,7 +532,7 @@ test "Limit by indent" {
       )
     }
     if actual != expected_ranges {
-      fail("\{message}: \{to_repr(actual)} != \{to_repr(expected_ranges)}")
+      fail("\{message}: \{Repr(actual)} != \{Repr(expected_ranges)}")
     }
     let expected_reported : Int? = if 9 <= max_entries {
       None

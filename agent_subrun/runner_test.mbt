@@ -59,7 +59,7 @@ async test "a spawn failure folds into Failed" {
     emit_event=bracket_collector(events),
   )
   guard events is [SubrunStarted(..), SubrunFinished(status=bracket_status, ..)] else {
-    fail("expected one bracket pair, got \{to_repr(events)}")
+    fail("expected one bracket pair, got \{Repr(events)}")
   }
   guard result.terminal() is Failed(reason) else {
     // Some sandboxes surface spawn refusal as an immediate empty exit:
@@ -108,7 +108,7 @@ async test "a clean exit without a report is NoReport" {
   assert_true(result.value() is None)
   debug_inspect(result.terminal(), content="NoReport")
   guard events is [SubrunStarted(..), SubrunFinished(status="no_report", ..)] else {
-    fail("expected a no_report pair, got \{to_repr(events)}")
+    fail("expected a no_report pair, got \{Repr(events)}")
   }
 }
 
@@ -125,7 +125,7 @@ async test "an observed step exhaustion without a report is MaxSteps" {
   let result = run_script(script, emit_event=bracket_collector(events))
   debug_inspect(result.terminal(), content="MaxSteps")
   guard events is [SubrunStarted(..), SubrunFinished(status="max_steps", ..)] else {
-    fail("expected a max_steps pair, got \{to_repr(events)}")
+    fail("expected a max_steps pair, got \{Repr(events)}")
   }
 }
 
@@ -283,7 +283,7 @@ async test "a run emits a matched started/finished bracket pair" {
         completion_tokens=10
       ),
     ] else {
-    fail("expected exactly one started/finished pair, got \{to_repr(events)}")
+    fail("expected exactly one started/finished pair, got \{Repr(events)}")
   }
   assert_eq(started_id, finished_id)
 }
@@ -305,7 +305,7 @@ async test "a timed-out run still closes its bracket" {
   )
   debug_inspect(result.terminal(), content="TimedOut")
   guard events is [SubrunStarted(..), SubrunFinished(status="timed_out", ..)] else {
-    fail("expected a timed_out pair, got \{to_repr(events)}")
+    fail("expected a timed_out pair, got \{Repr(events)}")
   }
 }
 
@@ -334,7 +334,7 @@ async test "external cancellation closes the bracket before re-raising" {
     let _ = Some(task.wait()) catch { _ => None }
   }
   guard events is [SubrunStarted(..), SubrunFinished(status="cancelled", ..)] else {
-    fail("expected a cancelled pair, got \{to_repr(events)}")
+    fail("expected a cancelled pair, got \{Repr(events)}")
   }
 }
 
@@ -357,7 +357,7 @@ async test "sub-run ids are unique across runs" {
       SubrunStarted(id=second, ..),
       SubrunFinished(id=second_done, ..),
     ] else {
-    fail("expected two pairs, got \{to_repr(events)}")
+    fail("expected two pairs, got \{Repr(events)}")
   }
   assert_true(first != second)
   assert_eq(first, first_done)
@@ -378,7 +378,7 @@ async test "an observed context yield closes with its status" {
   debug_inspect(result.terminal(), content="ContextYield")
   guard events
     is [SubrunStarted(..), SubrunFinished(status="context_yield", ..)] else {
-    fail("expected a context_yield pair, got \{to_repr(events)}")
+    fail("expected a context_yield pair, got \{Repr(events)}")
   }
 }
 
@@ -406,7 +406,7 @@ async test "child_session appends session argv derived from the sub-run id" {
     child_session=ChildSession(root="/tmp/subrun-root", parent="parent-id"),
   )
   guard result.value() is Some(argv) else {
-    fail("expected a captured report, got \{to_repr(result.terminal())}")
+    fail("expected a captured report, got \{Repr(result.terminal())}")
   }
   assert_eq(
     argv,
@@ -442,7 +442,7 @@ async test "child_session's ordinal floor skips persisted ids" {
     ),
   )
   guard result.value() is Some(session_arg) else {
-    fail("expected a captured report, got \{to_repr(result.terminal())}")
+    fail("expected a captured report, got \{Repr(result.terminal())}")
   }
   // $1 is the --session value: parent + the allocated id, at or past the floor.
   assert_eq(session_arg, "resumed-\{result.subrun_id()}")

@@ -56,7 +56,7 @@ fn main {
         log.error() <?
           {
             "message": "host process error",
-            "error": @debug.render(@debug.to_repr(error)),
+            "error": @debug.render(Repr(error)),
           }
     }
     // A successful `apply_update` swapped the bundle on disk and left a

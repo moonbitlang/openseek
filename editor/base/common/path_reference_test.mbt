@@ -121,7 +121,7 @@ test "join" {
     let actual = Posix::join(args)
     if actual != expected {
       failures.push(
-        "posix.join(\{to_repr(args)}) expect=\{expected} actual=\{actual}",
+        "posix.join(\{Repr(args)}) expect=\{expected} actual=\{actual}",
       )
     }
     // For non-Windows specific tests with the Windows join(), we need to try
@@ -131,7 +131,7 @@ test "join" {
     let win_actual_alt = win_actual.replace_all(old="\\", new="/")
     if win_actual != expected && win_actual_alt != expected {
       failures.push(
-        "win32.join(\{to_repr(args)}) expect=\{expected} actual=\{win_actual}",
+        "win32.join(\{Repr(args)}) expect=\{expected} actual=\{win_actual}",
       )
     }
   }
@@ -141,7 +141,7 @@ test "join" {
     let actual_alt = actual.replace_all(old="\\", new="/")
     if actual != expected && actual_alt != expected {
       failures.push(
-        "win32.join(\{to_repr(args)}) expect=\{expected} actual=\{actual}",
+        "win32.join(\{Repr(args)}) expect=\{expected} actual=\{actual}",
       )
     }
   }
@@ -361,7 +361,7 @@ test "resolve" {
     let actual_alt = actual.replace_all(old="\\", new="/")
     if actual != expected && actual_alt != expected {
       failures.push(
-        "win32.resolve(\{to_repr(args)}) expect=\{expected} actual=\{actual}",
+        "win32.resolve(\{Repr(args)}) expect=\{expected} actual=\{actual}",
       )
     }
   }
@@ -376,7 +376,7 @@ test "resolve" {
     let actual = Posix::resolve(args)
     if actual != expected {
       failures.push(
-        "posix.resolve(\{to_repr(args)}) expect=\{expected} actual=\{actual}",
+        "posix.resolve(\{Repr(args)}) expect=\{expected} actual=\{actual}",
       )
     }
   }

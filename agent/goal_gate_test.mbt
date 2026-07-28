@@ -66,7 +66,7 @@ async test "a met goal runs the gate once before the next request" {
       api_url=url,
       tools=Tools([@goal.definition()]),
       on_goal_met=(goal, baseline) => {
-        calls.push((goal, "\{to_repr(baseline)}"))
+        calls.push((goal, "\{Repr(baseline)}"))
         Some("[review] goal-met audit: 0 finding(s) — clean")
       },
     )

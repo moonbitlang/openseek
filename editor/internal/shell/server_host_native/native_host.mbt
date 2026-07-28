@@ -282,7 +282,7 @@ priv struct ProtocolSessions {
 
 ///|
 fn ProtocolSessions::new() -> ProtocolSessions {
-  { next_session_id: Ref(0), outboxes: Map::default() }
+  { next_session_id: Ref(0), outboxes: Default::default() }
 }
 
 ///|

@@ -165,7 +165,7 @@ pub impl ToJson for Session with fn to_json(session : Session) -> Json {
     "version": 1,
     "id": session.id(),
     "system_prompt": session.system_prompt(),
-    "events": session.events().to_json(),
+    "events": @json.to_json(session.events()),
   }
 }
 

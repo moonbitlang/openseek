@@ -171,7 +171,7 @@ async fn execute(
       )
     None =>
       @agent_tool.ToolAction::respond(
-        "explore produced no report (\{to_repr(result.terminal())}) — fall back to reading directly.",
+        "explore produced no report (\{Repr(result.terminal())}) — fall back to reading directly.",
         is_error=true,
         brief="explore \{result.subrun_id()} (no report)",
       )

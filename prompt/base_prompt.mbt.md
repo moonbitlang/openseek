@@ -1194,9 +1194,9 @@ fn g(
   let _ : Int = required
   let _ : Int? = optional
   let _ : Int = optional_with_default
-  // `to_repr` (from the prelude `Debug` trait) renders Option via the
+  // `Repr(x)` (from the prelude `Debug` trait) renders Option via the
   // non-deprecated `Show for Repr`, avoiding the deprecated `Show for Option`.
-  "\{positional},\{required},\{to_repr(optional)},\{optional_with_default}"
+  "\{positional},\{required},\{Repr(optional)},\{optional_with_default}"
 }
 
 ///|
@@ -1213,7 +1213,7 @@ Callers still must pass it (as `None`/`Some(...)`).
 ```mbt check
 ///|
 fn with_config(a : Int?, b : Int?, c : Int) -> String {
-  "\{to_repr(a)},\{to_repr(b)},\{c}"
+  "\{Repr(a)},\{Repr(b)},\{c}"
 }
 
 ///|

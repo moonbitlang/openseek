@@ -518,7 +518,7 @@ test "decoration queries are scoped by editor id like Monaco" {
   )
   let names = viewer.get_line_decorations(1).map(d => d.options.class_name)
   if names != ["model-level"] {
-    fail("got \{to_repr(names)}")
+    fail("got \{Repr(names)}")
   }
 }
 

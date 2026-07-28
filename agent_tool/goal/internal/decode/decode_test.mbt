@@ -57,6 +57,6 @@ fn decode_error(arguments : Json) -> String {
   try @decode.decode(arguments) catch {
     error => @tool_error.failure_message("\{error}")
   } noraise {
-    status => "unexpected success: \{to_repr(status)}"
+    status => "unexpected success: \{Repr(status)}"
   }
 }

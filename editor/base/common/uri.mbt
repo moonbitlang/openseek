@@ -86,7 +86,7 @@ pub impl Hash for Uri with fn hash_combine(self, hasher) {
 /// Mirrors the `debug.description` label `URI(${this.toString()})`
 /// (uri.ts:421) without touching the `_formatted` cache.
 pub impl Debug for Uri with fn to_repr(self) {
-  to_repr("URI(\{as_formatted(self, false)})")
+  Repr("URI(\{as_formatted(self, false)})")
 }
 
 ///|

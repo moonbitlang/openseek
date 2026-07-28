@@ -462,7 +462,7 @@ fn TokenizerWithStateStoreAndTextModel::guess_start_state(
     None =>
       self.base.tokenization_support.initial_state() catch {
         error => {
-          (self.model_state.report_unexpected_error)("\{to_repr(error)}")
+          (self.model_state.report_unexpected_error)("\{Repr(error)}")
           self.base.initial_state_value
         }
       }
@@ -544,7 +544,7 @@ fn safe_tokenize(
   match support {
     Some(tokenization_support) =>
       try tokenization_support.tokenize(text, has_eol, state) catch {
-        error => (model_state.report_unexpected_error)("\{to_repr(error)}")
+        error => (model_state.report_unexpected_error)("\{Repr(error)}")
       } noraise {
         value => result = Some(value)
       }

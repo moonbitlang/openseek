@@ -121,7 +121,7 @@ async fn execute_review(
       )
     None =>
       @agent_tool.ToolAction::respond(
-        "review produced no report (\{@agent_tool.brief_line("\{to_repr(result.terminal())}", limit=200)}) — validate directly instead.",
+        "review produced no report (\{@agent_tool.brief_line("\{Repr(result.terminal())}", limit=200)}) — validate directly instead.",
         is_error=true,
         brief="review \{result.subrun_id()} (no report)",
       )

@@ -86,8 +86,8 @@ pub fn RemoteServer::with_language_providers(
     definition_provider,
     references_provider,
     document_symbol_provider,
-    documents: Map::default(),
-    watches: Map::default(),
+    documents: Default::default(),
+    watches: Default::default(),
     document_sync_listener: Ref(None),
   }
 }
@@ -104,8 +104,8 @@ pub fn RemoteServer::new_session(self : RemoteServer) -> RemoteServer {
     definition_provider: self.definition_provider,
     references_provider: self.references_provider,
     document_symbol_provider: self.document_symbol_provider,
-    documents: Map::default(),
-    watches: Map::default(),
+    documents: Default::default(),
+    watches: Default::default(),
     document_sync_listener: self.document_sync_listener,
   }
 }

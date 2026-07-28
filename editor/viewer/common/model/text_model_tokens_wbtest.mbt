@@ -39,7 +39,7 @@ fn logging_support(
       TokenizerState("initial")
     },
     tokenize_encoded=(text, has_eol, state) => {
-      calls.push("\{text}:\{has_eol}:\{to_repr(state)}")
+      calls.push("\{text}:\{has_eol}:\{Repr(state)}")
       { tokens: [0, tag_to_metadata(Plain)], end_state: TokenizerState(text) }
     },
   )

@@ -151,7 +151,7 @@ fn assert_model_ranges(
     )
   }
   if actual_ranges != expected {
-    fail("\{message}: \{to_repr(actual_ranges)} != \{to_repr(expected)}")
+    fail("\{message}: \{Repr(actual_ranges)} != \{Repr(expected)}")
   }
 }
 
@@ -173,7 +173,7 @@ fn assert_folded_ranges(
     }
   }
   if actual_ranges != expected {
-    fail("\{message}: \{to_repr(actual_ranges)} != \{to_repr(expected)}")
+    fail("\{message}: \{Repr(actual_ranges)} != \{Repr(expected)}")
   }
 }
 
@@ -188,7 +188,7 @@ fn assert_regions_list(
     (r.start_line_number(), r.end_line_number(), r.is_collapsed())
   })
   if mapped != expected {
-    fail("\{message}: \{to_repr(mapped)} != \{to_repr(expected)}")
+    fail("\{message}: \{Repr(mapped)} != \{Repr(expected)}")
   }
 }
 
@@ -208,7 +208,7 @@ fn assert_region_opt(
         region.is_collapsed(),
       )
       if got != expected {
-        fail("\{message}: \{to_repr(got)} != \{to_repr(expected)}")
+        fail("\{message}: \{Repr(got)} != \{Repr(expected)}")
       }
     }
     _ => fail("\{message}: presence mismatch")

@@ -267,7 +267,7 @@ fn assert_pairs_eq(
   expected : Array[(Int, Int)],
 ) -> Unit raise {
   if actual != expected {
-    fail("got \{to_repr(actual)}, expected \{to_repr(expected)}")
+    fail("got \{Repr(actual)}, expected \{Repr(expected)}")
   }
 }
 

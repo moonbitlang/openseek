@@ -11,7 +11,7 @@ fn assert_hidden_ranges(
 ) -> Unit raise {
   let mapped = actual.map(r => (r.start_line_number, r.end_line_number))
   if mapped != expected {
-    fail("\{message}: \{to_repr(mapped)} != \{to_repr(expected)}")
+    fail("\{message}: \{Repr(mapped)} != \{Repr(expected)}")
   }
 }
 

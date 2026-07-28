@@ -108,7 +108,7 @@ fn model_has_decorations(
     )
   })
   if actual != decorations {
-    fail("got \{to_repr(actual)}, expected \{to_repr(decorations)}")
+    fail("got \{Repr(actual)}, expected \{Repr(decorations)}")
   }
 }
 
@@ -142,9 +142,7 @@ fn line_has_decorations(
     .get_line_decorations(line_number)
     .map(d => (d.range.start_column, d.range.end_column, d.options.class_name))
   if actual != decorations {
-    fail(
-      "Line decorations: got \{to_repr(actual)}, expected \{to_repr(decorations)}",
-    )
+    fail("Line decorations: got \{Repr(actual)}, expected \{Repr(decorations)}")
   }
 }
 
@@ -383,7 +381,7 @@ fn assert_range_opt_eq(
   expected : @base_common.Range?,
 ) -> Unit raise {
   if actual != expected {
-    fail("got \{to_repr(actual)}, expected \{to_repr(expected)}")
+    fail("got \{Repr(actual)}, expected \{Repr(expected)}")
   }
 }
 
@@ -393,7 +391,7 @@ fn assert_delta_rows_eq(
   expected : Array[(String, @base_common.Range)],
 ) -> Unit raise {
   if actual != expected {
-    fail("got \{to_repr(actual)}, expected \{to_repr(expected)}")
+    fail("got \{Repr(actual)}, expected \{Repr(expected)}")
   }
 }
 
@@ -608,7 +606,7 @@ test "issue #16922: Clicking on link doesn't seem to do anything" {
   let in_range_class_names = in_range.map(d => d.options.class_name)
   in_range_class_names.sort()
   if in_range_class_names != ["x1", "x2", "x3", "x4"] {
-    fail("got \{to_repr(in_range_class_names)}")
+    fail("got \{Repr(in_range_class_names)}")
   }
 }
 

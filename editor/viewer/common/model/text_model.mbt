@@ -57,7 +57,7 @@ pub struct TextModel {
 
 ///|
 pub impl Debug for TextModel with fn to_repr(self) {
-  to_repr(
+  Repr(
     "<TextModel \{self.uri.to_string()} v\{self.version} decorations: \{self.decorations.length()}>",
   )
 }
