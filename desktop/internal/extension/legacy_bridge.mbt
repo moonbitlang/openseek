@@ -238,6 +238,30 @@ fn DesktopBridgeActor::legacy_reply(
 }
 
 ///|
+/// The bundled frontend requires every engine event to carry an integer
+/// `run_id` before it can decode the event. A resumed conversation compacted
+/// before its first run has no real run id, but the frontend routes idle events
+/// by `session` after decoding them. Zero is reserved for that decode-only
+/// placeholder; page-local ids assigned from real catalog ids start at one.
+fn DesktopBridgeActor::legacy_event_reply(
+  self : DesktopBridgeActor,
+  event : Json,
+) -> Json {
+  let reply = self.legacy_reply(event)
+  guard reply is Object(source) else { return reply }
+  if source.get("run_id") is Some(_) ||
+    !(source.get("session") is Some(String(session)) && !session.is_empty()) {
+    return reply
+  }
+  let fields : Map[String, Json] = Map([])
+  for key, value in source {
+    fields[key] = value
+  }
+  fields["run_id"] = Json::number(0.0)
+  Json::object(fields)
+}
+
+///|
 async fn DesktopBridgeActor::legacy_dispatch(
   self : DesktopBridgeActor,
   method_ : String,
@@ -334,7 +358,12 @@ fn DesktopBridgeActor::legacy_notification(
     "fs.changed" => "fs_changed"
     _ => return None
   }
-  Some({ method_, params: self.legacy_reply(notification.params) })
+  let params = if notification.method_ == "agent.event" {
+    self.legacy_event_reply(notification.params)
+  } else {
+    self.legacy_reply(notification.params)
+  }
+  Some({ method_, params })
 }
 
 ///|
@@ -365,6 +394,27 @@ test "legacy desktop assigns stable local ids without changing remote ids" {
     request_fields.get("run_id"),
     Some(Json::string("7f9d6fd4c6760da5")),
   )
+}
+
+///|
+test "legacy desktop routes pre-run engine events by session" {
+  let bridge = DesktopBridgeActor::new(@api.ApiState::new(engine="openseek"))
+  guard bridge.legacy_notification({
+      method_: "agent.event",
+      params: {
+        "session": "desktop-session",
+        "event": { "event": "compaction_started" },
+      },
+    })
+    is Some(notification) else {
+    fail("legacy bridge dropped a pre-run engine event")
+  }
+  assert_eq(notification.method_, "event")
+  guard notification.params is Object(fields) else {
+    fail("legacy engine event did not remain an object")
+  }
+  assert_eq(fields.get("run_id"), Some(Json::number(0.0)))
+  assert_eq(fields.get("session"), Some(Json::string("desktop-session")))
 }
 
 ///|

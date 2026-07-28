@@ -1,8 +1,9 @@
 // The wire types of the host ops: payloads the client sends with each
 // method and the replies it gets back, per docs/remote-protocol.md.
 // Engine/session/workspace payloads live with the API dispatcher; these are
-// the host-side methods' shapes. Optional fields are genuinely absent when
-// unset — no in-band "" sentinels cross the wire.
+// the host-side methods' shapes. Optional fields are absent when unset except
+// where the bundled legacy desktop has an established sentinel contract,
+// documented at that response type.
 
 ///|
 priv struct InstallSkillPayload {
@@ -208,14 +209,33 @@ priv struct StatFilesPayload {
 } derive(FromJson)
 
 ///|
-/// One file's signature: `"{seconds}:{nanos}"` of its mtime, absent when
-/// the file is missing (deleted, or the path stopped resolving). The
-/// frontend only ever compares signatures for equality, so the shape stays
+/// One file's signature: `"{seconds}:{nanos}"` of its mtime, absent internally
+/// when the file is missing (deleted, or the path stopped resolving). The
+/// bundled desktop predates optional signatures and recognizes `""` as its
+/// deleted-file sentinel, so the manual encoder preserves that wire contract.
+/// The frontend only ever compares signatures for equality, so the shape stays
 /// opaque text — no Int64 crossing JSON.
 priv struct FileStat {
   path : String
   sig : String?
-} derive(ToJson)
+}
+
+///|
+impl ToJson for FileStat with fn to_json(self) {
+  { "path": self.path, "sig": self.sig.unwrap_or("") }
+}
+
+///|
+test "file stat keeps the legacy missing-file sentinel on the wire" {
+  assert_eq(ToJson::to_json(({ path: "deleted.mbt", sig: None } : FileStat)), {
+    "path": "deleted.mbt",
+    "sig": "",
+  })
+  assert_eq(
+    ToJson::to_json(({ path: "present.mbt", sig: Some("12:34") } : FileStat)),
+    { "path": "present.mbt", "sig": "12:34" },
+  )
+}
 
 ///|
 priv struct StatFilesReply {

@@ -53,7 +53,9 @@ Catalog method names use dotted namespaces:
 - `host.open_path`, `host.meta`
 
 Method parameters are always JSON objects. Optional fields are omitted rather
-than encoded as empty sentinel values.
+than encoded as empty sentinel values, except `fs.stat_files` keeps
+`stats[].sig: ""` for a missing file while the bundled desktop still relies on
+that legacy deletion marker.
 
 The host owns engine endpoint credentials and WSL settings. They are persisted
 in `engine-settings.json`; clients edit them through `settings.get` and
