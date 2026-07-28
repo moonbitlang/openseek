@@ -1,0 +1,1 @@
+https://www.w3.org/TR/2025/CRD-wasm-core-2-20250616/
