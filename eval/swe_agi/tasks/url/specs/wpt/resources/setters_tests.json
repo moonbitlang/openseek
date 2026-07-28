@@ -1,0 +1,234 @@
+{
+  "href": [
+    {
+      "href": "file:///var/log/system.log",
+      "new_value": "http://0300.168.0xF0",
+      "expected": {
+        "href": "http://192.168.0.240/",
+        "protocol": "http:"
+      }
+    }
+  ],
+  "protocol": [
+    {
+      "comment": "The empty string is not a valid scheme. Setter leaves the URL unchanged.",
+      "href": "a://example.net",
+      "new_value": "",
+      "expected": {
+        "href": "a://example.net",
+        "protocol": "a:"
+      }
+    },
+    {
+      "href": "a://example.net",
+      "new_value": "b",
+      "expected": {
+        "href": "b://example.net",
+        "protocol": "b:"
+      }
+    },
+    {
+      "href": "javascript:alert(1)",
+      "new_value": "defuse",
+      "expected": {
+        "href": "defuse:alert(1)",
+        "protocol": "defuse:"
+      }
+    },
+    {
+      "comment": "Upper-case ASCII is lower-cased",
+      "href": "a://example.net",
+      "new_value": "B",
+      "expected": {
+        "href": "b://example.net",
+        "protocol": "b:"
+      }
+    },
+    {
+      "comment": "Non-ASCII is rejected",
+      "href": "a://example.net",
+      "new_value": "é",
+      "expected": {
+        "href": "a://example.net",
+        "protocol": "a:"
+      }
+    },
+    {
+      "comment": "No leading digit",
+      "href": "a://example.net",
+      "new_value": "0b",
+      "expected": {
+        "href": "a://example.net",
+        "protocol": "a:"
+      }
+    },
+    {
+      "comment": "No leading punctuation",
+      "href": "a://example.net",
+      "new_value": "+b",
+      "expected": {
+        "href": "a://example.net",
+        "protocol": "a:"
+      }
+    },
+    {
+      "href": "a://example.net",
+      "new_value": "bC0+-.",
+      "expected": {
+        "href": "bc0+-.://example.net",
+        "protocol": "bc0+-.:"
+      }
+    },
+    {
+      "comment": "Only some punctuation is acceptable",
+      "href": "a://example.net",
+      "new_value": "b,c",
+      "expected": {
+        "href": "a://example.net",
+        "protocol": "a:"
+      }
+    },
+    {
+      "comment": "Non-ASCII is rejected",
+      "href": "a://example.net",
+      "new_value": "bé",
+      "expected": {
+        "href": "a://example.net",
+        "protocol": "a:"
+      }
+    },
+    {
+      "comment": "Can’t switch from URL containing username/password/port to file",
+      "href": "http://test@example.net",
+      "new_value": "file",
+      "expected": {
+        "href": "http://test@example.net/",
+        "protocol": "http:"
+      }
+    },
+    {
+      "href": "https://example.net:1234",
+      "new_value": "file",
+      "expected": {
+        "href": "https://example.net:1234/",
+        "protocol": "https:"
+      }
+    },
+    {
+      "href": "wss://x:x@example.net:1234",
+      "new_value": "file",
+      "expected": {
+        "href": "wss://x:x@example.net:1234/",
+        "protocol": "wss:"
+      }
+    },
+    {
+      "comment": "Can’t switch from file URL with no host",
+      "href": "file://localhost/",
+      "new_value": "http",
+      "expected": {
+        "href": "file:///",
+        "protocol": "file:"
+      }
+    },
+    {
+      "href": "file:///test",
+      "new_value": "https",
+      "expected": {
+        "href": "file:///test",
+        "protocol": "file:"
+      }
+    },
+    {
+      "href": "file:",
+      "new_value": "wss",
+      "expected": {
+        "href": "file:///",
+        "protocol": "file:"
+      }
+    },
+    {
+      "comment": "Can’t switch from special scheme to non-special",
+      "href": "http://example.net",
+      "new_value": "b",
+      "expected": {
+        "href": "http://example.net/",
+        "protocol": "http:"
+      }
+    },
+    {
+      "href": "file://hi/path",
+      "new_value": "s",
+      "expected": {
+        "href": "file://hi/path",
+        "protocol": "file:"
+      }
+    },
+    {
+      "href": "https://example.net",
+      "new_value": "s",
+      "expected": {
+        "href": "https://example.net/",
+        "protocol": "https:"
+      }
+    },
+    {
+      "href": "ftp://example.net",
+      "new_value": "test",
+      "expected": {
+        "href": "ftp://example.net/",
+        "protocol": "ftp:"
+      }
+    },
+    {
+      "comment": "Cannot-be-a-base URL doesn’t have a host, but URL in a special scheme must.",
+      "href": "mailto:me@example.net",
+      "new_value": "http",
+      "expected": {
+        "href": "mailto:me@example.net",
+        "protocol": "mailto:"
+      }
+    },
+    {
+      "comment": "Can’t switch from non-special scheme to special",
+      "href": "ssh://me@example.net",
+      "new_value": "http",
+      "expected": {
+        "href": "ssh://me@example.net",
+        "protocol": "ssh:"
+      }
+    },
+    {
+      "href": "ssh://me@example.net",
+      "new_value": "https",
+      "expected": {
+        "href": "ssh://me@example.net",
+        "protocol": "ssh:"
+      }
+    },
+    {
+      "href": "ssh://me@example.net",
+      "new_value": "file",
+      "expected": {
+        "href": "ssh://me@example.net",
+        "protocol": "ssh:"
+      }
+    },
+    {
+      "href": "ssh://example.net",
+      "new_value": "file",
+      "expected": {
+        "href": "ssh://example.net",
+        "protocol": "ssh:"
+      }
+    },
+    {
+      "href": "nonsense:///test",
+      "new_value": "https",
+      "expected": {
+        "href": "nonsense:///test",
+        "protocol": "nonsense:"
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "benchmark_source": {
+    "repository": "https://github.com/moonbitlang/SWE-AGI",
+    "commit": "b456f867a151ae8ddc9936c807b8daaf30983582"
+  },
+  "urltestdata.json": {
+    "upstream": "https://raw.githubusercontent.com/web-platform-tests/wpt/master/url/resources/urltestdata.json",
+    "sha256": "57831d60ec4ff9c17b7b579fb60a52df25a95e07208ca19e33db5f6e68d7a6e7",
+    "public_output_sha256": "16ffa86aad80fa7c42ce16bc16c40e7a52217d8339f196deb29f559851a36fc6",
+    "public_selection": {
+      "entry_type": "object",
+      "start": 0,
+      "end_exclusive": 87
+    }
+  },
+  "setters_tests.json": {
+    "upstream": "https://raw.githubusercontent.com/web-platform-tests/wpt/master/url/resources/setters_tests.json",
+    "sha256": "9fc7e0f3c1da19a6c3b9a5fc5a4a1860ff4f25e35f1b958a38863da23cf2c5e3",
+    "public_output_sha256": "658b8044529a5a402639680db991b1468512939e54504d0a040c590d12788ef0",
+    "public_selection": {
+      "href": {
+        "start": 0,
+        "end_exclusive": 1
+      },
+      "protocol": {
+        "start": 0,
+        "end_exclusive": 26
+      }
+    }
+  }
+}

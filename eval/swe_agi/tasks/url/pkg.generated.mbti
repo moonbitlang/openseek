@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "url"
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) type Url
+pub fn Url::hash(Self) -> String
+pub fn Url::host(Self) -> String
+pub fn Url::hostname(Self) -> String
+pub fn Url::href(Self) -> String
+pub fn Url::origin(Self) -> String
+pub fn Url::parse(String, base? : Self, validation_errors? : Array[ValidationError]) -> Self?
+pub fn Url::password(Self) -> String
+pub fn Url::pathname(Self) -> String
+pub fn Url::port(Self) -> String
+pub fn Url::protocol(Self) -> String
+pub fn Url::search(Self) -> String
+pub fn Url::set_hash(Self, String) -> Unit
+pub fn Url::set_host(Self, String) -> Unit
+pub fn Url::set_hostname(Self, String) -> Unit
+pub fn Url::set_href(Self, String) -> Unit
+pub fn Url::set_password(Self, String) -> Unit
+pub fn Url::set_pathname(Self, String) -> Unit
+pub fn Url::set_port(Self, String) -> Unit
+pub fn Url::set_protocol(Self, String) -> Unit
+pub fn Url::set_search(Self, String) -> Unit
+pub fn Url::set_username(Self, String) -> Unit
+pub fn Url::to_string(Self) -> String
+pub fn Url::username(Self) -> String
+
+pub type ValidationError
+
+// Type aliases
+
+// Traits
