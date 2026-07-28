@@ -11,6 +11,8 @@ priv enum Outgoing {
   // A complete JSON-RPC response envelope, built where the request ran.
   Response(Json)
   Notify(@api.Notification)
+  // Protocol-level keepalive, serialized with every text frame.
+  Ping
 }
 
 ///|
@@ -29,12 +31,13 @@ priv struct ClientSubscription {
 /// pinger, and request tasks cannot outlive that run.
 priv struct WsClientActor {
   state : @api.ApiState
+  host_connection : @host.HostConnection
   url : String
 }
 
 ///|
 fn WsClientActor::new(state : @api.ApiState, url : String) -> WsClientActor {
-  { state, url }
+  { state, host_connection: @host.HostConnection::new(), url }
 }
 
 ///|
@@ -144,9 +147,16 @@ async fn WsClientActor::serve(
   @async.with_task_group(group => {
     group.spawn_bg(() => {
       for ;; {
-        let item = out.get()
-        conn.send_text(encode_outgoing(item))
+        out.get().write(conn)
       }
+    })
+    group.spawn_bg(() => {
+      // Filesystem watch events belong to this WebSocket connection. They
+      // bypass the shared hub so other desktop and remote clients never
+      // receive this connection's `fs.changed` notifications.
+      self.host_connection.run((method_, params) => {
+        enqueue_outgoing(out, Notify({ method_, params }))
+      })
     })
     group.spawn_bg(() => {
       // Tears the connection down either way it ends — the client
@@ -167,7 +177,7 @@ async fn WsClientActor::serve(
       // failed ping write instead of lingering forever.
       for ;; {
         @async.sleep(PingIntervalMs)
-        conn.ping()
+        enqueue_outgoing(out, Ping)
       }
     })
     for ;; {
@@ -185,7 +195,15 @@ async fn WsClientActor::serve(
           group.spawn_bg(() => {
             enqueue_outgoing(
               out,
-              Response(run_request(self.state, id, method_, params)),
+              Response(
+                run_request(
+                  self.state,
+                  self.host_connection,
+                  id,
+                  method_,
+                  params,
+                ),
+              ),
             )
           })
         ClientNotification => ()
@@ -213,8 +231,14 @@ async fn WsClientActor::serve(
 }
 
 ///|
-fn encode_outgoing(item : Outgoing) -> String {
-  let envelope : Json = match item {
+/// The socket's only write boundary. Even keepalive frames pass through this
+/// method, so the WebSocket implementation never sees interleaved sends.
+async fn Outgoing::write(self : Outgoing, conn : @websocket.Conn) -> Unit {
+  let envelope : Json = match self {
+    Ping => {
+      conn.ping()
+      return
+    }
     Response(envelope) => envelope
     Notify(notification) =>
       {
@@ -223,7 +247,7 @@ fn encode_outgoing(item : Outgoing) -> String {
         "params": notification.params,
       }
   }
-  envelope.stringify()
+  conn.send_text(envelope.stringify())
 }
 
 ///|
@@ -310,11 +334,12 @@ fn notification_for_client(
 /// JSON-RPC response, mapping each typed failure to its protocol code.
 async fn run_request(
   state : @api.ApiState,
+  connection : @host.HostConnection,
   id : Json,
   method_ : String,
   params : Json,
 ) -> Json {
-  let result = @api.dispatch(state, method_, params) catch {
+  let result = @api.dispatch(state, connection, method_, params) catch {
     error if @async.is_being_cancelled() => raise error
     @api.UnknownMethod(name) =>
       return error_envelope(id, CodeMethodNotFound, "unknown method '\{name}'")

@@ -506,6 +506,7 @@ test "duplicate finish and durable boundaries never downgrade a settlement" {
 ///|
 async test "agent.runs keeps old requests compatible and decodes known selectors" {
   let state = ApiState::new(engine="unused")
+  let connection = @host.HostConnection::new()
   state.hub.publish("agent.started", {
     "run_id": "r-api",
     "session": "s-api",
@@ -515,13 +516,13 @@ async test "agent.runs keeps old requests compatible and decodes known selectors
     "run_id": "r-api",
     "status": "finished",
   })
-  let legacy = dispatch(state, "agent.runs", Json::empty_object())
+  let legacy = dispatch(state, connection, "agent.runs", Json::empty_object())
   guard legacy is Object(legacy_reply) &&
     legacy_reply.get("runs") is Some(Array([])) &&
     legacy_reply.get("settled") is Some(Array([])) else {
     fail("legacy agent.runs request changed shape")
   }
-  let replay = dispatch(state, "agent.runs", {
+  let replay = dispatch(state, connection, "agent.runs", {
     "known": [
       { "session": "s-api", "run_id": "r-api", "submission_id": "sub-api" },
     ],

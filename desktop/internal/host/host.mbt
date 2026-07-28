@@ -36,13 +36,25 @@ impl Show for PayloadError with fn output(self, logger) {
 }
 
 ///|
-/// The host ops' shared state: the language-server pool, the self-update
-/// staging state, and the workspace watcher actor. One per host process,
-/// created beside the engine manager.
+/// The host ops' process-wide state: the language-server pool and the
+/// self-update staging state. Filesystem watches are connection-owned below,
+/// because two clients may watch different workspaces at the same time.
 struct HostState {
   lsp : LspPoolActor
   updates : UpdateState
+}
+
+///|
+/// State owned by one client connection. A desktop page and each remote
+/// WebSocket create separate values, so `fs.watch` and `fs.unwatch` can only
+/// replace or stop that client's watcher.
+struct HostConnection {
   fs_watch : FsWatchActor
+}
+
+///|
+pub fn HostConnection::new() -> HostConnection {
+  { fs_watch: FsWatchActor::new() }
 }
 
 ///|
@@ -62,21 +74,16 @@ pub fn new_host_state(
   if runtime_dir is Some(dir) {
     @lsp.enable_traffic_log(dir.join("lsp.log").to_string())
   }
-  {
-    lsp,
-    updates: new_update_state(runtime_dir, executable),
-    fs_watch: FsWatchActor::new(),
-  }
+  { lsp, updates: new_update_state(runtime_dir, executable) }
 }
 
 ///|
 /// The background tasks behind the host ops, spawned into the caller's
-/// app-lifetime task group: the LSP pool actor, the diagnostics forwarder, the
-/// workspace watcher, and the one-shot update-leftover sweep. `emit` pushes
-/// a notification (method, params) to the client channel — `lsp.diagnostics`
-/// and `fs.changed`, the catalog's names. Every pump is best-effort: a
-/// language-service or watcher hiccup degrades that feature, never the
-/// connection.
+/// app-lifetime task group: the LSP pool actor, diagnostics forwarder, and
+/// one-shot update-leftover sweep. These are shared by every connection;
+/// connection-owned filesystem watcher tasks start in `HostConnection::run`.
+/// Every pump is best-effort: a language-service hiccup degrades that feature,
+/// never the connection.
 pub fn[G] spawn_host_pumps(
   group : @async.TaskGroup[G],
   state : HostState,
@@ -88,12 +95,18 @@ pub fn[G] spawn_host_pumps(
       emit("lsp.diagnostics", ToJson::to_json(push))
     })
   })
-  group.spawn_bg(allow_failure=true, () => {
-    state.fs_watch.run(async fn(push) {
-      emit("fs.changed", ToJson::to_json(push))
-    })
-  })
   group.spawn_bg(allow_failure=true, () => cleanup_updates(state.updates))
+}
+
+///|
+/// Run the filesystem watcher owned by this connection. The caller routes
+/// `fs.changed` directly back to the same connection instead of publishing it
+/// through the process-wide notification hub.
+pub async fn HostConnection::run(
+  self : HostConnection,
+  emit : async (String, Json) -> Unit,
+) -> Unit {
+  self.fs_watch.run(async fn(push) { emit("fs.changed", ToJson::to_json(push)) })
 }
 
 ///|
@@ -107,7 +120,12 @@ fn[T : @json.FromJson] decode_payload(payload : Json) -> T raise {
 /// Dispatch one host method by its catalog name, returning its JSON reply —
 /// or None for a name this host does not know, which the transport reports
 /// as an unknown method rather than a failed op.
-pub async fn host_op(state : HostState, op : String, payload : Json) -> Json? {
+pub async fn host_op(
+  state : HostState,
+  connection : HostConnection,
+  op : String,
+  payload : Json,
+) -> Json? {
   match op {
     "skills.catalog" => Some(ToJson::to_json(skills_catalog_op()))
     "skills.install" =>
@@ -142,11 +160,11 @@ pub async fn host_op(state : HostState, op : String, payload : Json) -> Json? {
     "fs.stat_files" =>
       Some(ToJson::to_json(stat_files_op(decode_payload(payload))))
     "fs.watch" => {
-      state.fs_watch.watch(decode_payload(payload))
+      connection.fs_watch.watch(decode_payload(payload))
       Some(Json::empty_object())
     }
     "fs.unwatch" => {
-      state.fs_watch.unwatch()
+      connection.fs_watch.unwatch()
       Some(Json::empty_object())
     }
     "lsp.hover" =>

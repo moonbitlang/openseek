@@ -53,6 +53,9 @@ priv enum BridgeInput {
 /// it messages and never retain resource-owning request tasks.
 struct DesktopBridgeActor {
   state : @api.ApiState
+  // The desktop page owns one filesystem watcher independently of every
+  // remote WebSocket connection.
+  host_connection : @host.HostConnection
   attachments : @async.Queue[BridgeAttachment]
   // The legacy desktop model keys turns by Int. Remote protocol ids are
   // opaque host-wide strings, so this adapter assigns page-local Int ids
@@ -66,6 +69,7 @@ struct DesktopBridgeActor {
 pub fn DesktopBridgeActor::new(state : @api.ApiState) -> DesktopBridgeActor {
   {
     state,
+    host_connection: @host.HostConnection::new(),
     // A page normally attaches once. A small bounded queue still permits a
     // reload to overlap the old page without allowing abandoned requests to
     // accumulate forever.
@@ -95,7 +99,7 @@ pub fn openseek_extension(
     context => {
       for name in @api.method_names() {
         context.op_async(name, (params : Json) => {
-          @api.dispatch(state, name, params)
+          @api.dispatch(state, bridge.host_connection, name, params)
         })
       }
       context.op_async(ConnectMethod, (_ : Json) => {
@@ -124,6 +128,7 @@ async fn DesktopBridgeActor::attach(
 async fn DesktopBridgeActor::next_input(
   self : DesktopBridgeActor,
   notifications : @async.Queue[@api.Notification],
+  host_notifications : @async.Queue[@api.Notification],
 ) -> BridgeInput {
   if (self.attachments.try_get() catch { _ => None }) is Some(attachment) {
     return Attach(attachment)
@@ -131,6 +136,7 @@ async fn DesktopBridgeActor::next_input(
   @async.any([
     () => Attach(self.attachments.get()),
     () => Deliver(notifications.get()),
+    () => Deliver(host_notifications.get()),
   ])
 }
 
@@ -142,34 +148,47 @@ async fn DesktopBridgeActor::next_input(
 pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
   let notifications = self.state.subscribe()
   defer self.state.unsubscribe(notifications)
-  let mut attached : (@app.AppCommandExtensionContext, BridgeProfile)? = None
-  for ;; {
-    match self.next_input(notifications) {
-      Attach({ context, profile, reply }) => {
-        // Managed Proton contexts queue events without raising. Publishing
-        // readiness before acknowledging the attachment preserves the
-        // connect handshake while avoiding request-task ownership.
-        match profile {
-          Catalog => context.emit("agent.connected", Json::empty_object())
-          LegacyDesktop => context.emit("connected", Json::empty_object())
-        }
-        attached = Some((context, profile))
-        reply.put(())
-      }
-      Deliver(notification) =>
-        if attached is Some((context, profile)) {
+  let host_notifications : @async.Queue[@api.Notification] = Queue(
+    kind=Blocking(64),
+  )
+  @async.with_task_group(group => {
+    // The watcher and its queue belong to this bridge connection. Its events
+    // never enter the process-wide hub, so a remote client's watch cannot
+    // trigger desktop file refreshes (or vice versa).
+    group.spawn_bg(allow_failure=true, () => {
+      self.host_connection.run((method_, params) => {
+        host_notifications.put({ method_, params })
+      })
+    })
+    let mut attached : (@app.AppCommandExtensionContext, BridgeProfile)? = None
+    for ;; {
+      match self.next_input(notifications, host_notifications) {
+        Attach({ context, profile, reply }) => {
+          // Managed Proton contexts queue events without raising. Publishing
+          // readiness before acknowledging the attachment preserves the
+          // connect handshake while avoiding request-task ownership.
           match profile {
-            Catalog => context.emit(notification.method_, notification.params)
-            LegacyDesktop =>
-              if self.legacy_notification(notification)
-                is Some(legacy_notification) {
-                context.emit(
-                  legacy_notification.method_,
-                  legacy_notification.params,
-                )
-              }
+            Catalog => context.emit("agent.connected", Json::empty_object())
+            LegacyDesktop => context.emit("connected", Json::empty_object())
           }
+          attached = Some((context, profile))
+          reply.put(())
         }
+        Deliver(notification) =>
+          if attached is Some((context, profile)) {
+            match profile {
+              Catalog => context.emit(notification.method_, notification.params)
+              LegacyDesktop =>
+                if self.legacy_notification(notification)
+                  is Some(legacy_notification) {
+                  context.emit(
+                    legacy_notification.method_,
+                    legacy_notification.params,
+                  )
+                }
+            }
+          }
+      }
     }
-  }
+  })
 }

@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub async fn dispatch(ApiState, String, Json) -> Json
+pub async fn dispatch(ApiState, @host.HostConnection, String, Json) -> Json
 
 pub fn method_names() -> Array[String]
 

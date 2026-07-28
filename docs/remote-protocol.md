@@ -26,12 +26,18 @@ The actors are:
 
 - `DesktopBridgeActor`: the current Proton page attachment;
 - `EngineActor`: serve processes and durable session followers;
-- `FsWatchActor`: the requested root and active watcher;
+- one `FsWatchActor` per desktop or WebSocket connection: that client's
+  requested root and active watcher;
 - `LspPoolActor` plus `LspServerActor`: language-server processes;
 - `RelayActor` plus one `WsClientActor` per relayed client.
 
 Closing the Proton application returns from `app.run`; the enclosing task group
 then cancels these actors together.
+
+Filesystem watch ownership follows the transport connection. A client's
+`fs.watch` and `fs.unwatch` only affect its own actor, and the resulting
+`fs.changed` notification returns only to that client. LSP diagnostics and
+engine lifecycle notifications still use the shared notification hub.
 
 ## Shared method catalog
 

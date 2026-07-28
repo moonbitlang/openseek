@@ -243,10 +243,10 @@ priv struct StatFilesReply {
 } derive(ToJson)
 
 ///|
-/// `fs.watch` points the host's single workspace watcher at the
-/// conversation's workspace root (the panel shows one conversation at a
-/// time, so one watcher suffices). Stopping is its own method, `fs.unwatch`
-/// — sent when the panel closes with no tabs open.
+/// `fs.watch` points this client connection's workspace watcher at the
+/// conversation's workspace root. Other desktop or remote connections keep
+/// their own watchers. Stopping is its own method, `fs.unwatch` — sent when
+/// this client's panel closes with no tabs open.
 priv struct WatchWorkspacePayload {
   session : String
   // The conversation's workspace, when it has one (see `fs.read_directory`).

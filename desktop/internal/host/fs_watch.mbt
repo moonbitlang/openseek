@@ -1,11 +1,12 @@
 // The workspace file watcher behind the editor panel's live updates. The
-// frontend points it at the active conversation's workspace through the
-// `fs.watch` method (and parks it with `fs.unwatch`); a background actor runs
-// one recursive `@fs.Watcher` on that root and pushes a coarse `fs.changed`
-// notification on every change. `FsWatchActor` owns both the desired-root
-// mailbox and the active watcher resource. The watcher reports no paths —
-// the frontend re-stats its open tabs (`fs.stat_files`) and re-lists its
-// expanded directories to find out what moved.
+// Each client connection points its own actor at the active conversation's
+// workspace through `fs.watch` (and parks it with `fs.unwatch`); the actor
+// runs one recursive `@fs.Watcher` on that root and pushes a coarse
+// `fs.changed` notification back to that connection on every change.
+// `FsWatchActor` owns both the desired-root mailbox and the active watcher
+// resource. The watcher reports no paths — the frontend re-stats its open
+// tabs (`fs.stat_files`) and re-lists its expanded directories to find out
+// what moved.
 
 ///|
 /// The actor handle and its mailbox: the latest requested watch root (None = stop
@@ -142,6 +143,15 @@ test "ignored_watch_path prunes cache and build subtrees at any depth" {
   assert_false(ignored_watch_path("src/main.mbt"))
   assert_false(ignored_watch_path("git/notes.md"))
   assert_false(ignored_watch_path(""))
+}
+
+///|
+async test "host connections keep filesystem watch requests isolated" {
+  let first = HostConnection::new()
+  let second = HostConnection::new()
+  first.fs_watch.unwatch()
+  assert_true(first.fs_watch.requests.try_get() is Some(None))
+  assert_true(second.fs_watch.requests.try_get() is None)
 }
 
 ///|

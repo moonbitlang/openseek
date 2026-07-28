@@ -274,7 +274,12 @@ async fn DesktopBridgeActor::legacy_dispatch(
       }
       payload.settings().apply(self.state)
       self.legacy_reply(
-        @api.dispatch(self.state, "agent.start", payload.catalog_params()),
+        @api.dispatch(
+          self.state,
+          self.host_connection,
+          "agent.start",
+          payload.catalog_params(),
+        ),
       )
     }
     "compact" => {
@@ -282,12 +287,18 @@ async fn DesktopBridgeActor::legacy_dispatch(
         _ => raise @host.PayloadError("malformed request payload")
       }
       payload.settings().apply(self.state)
-      @api.dispatch(self.state, "agent.compact", payload.catalog_params())
+      @api.dispatch(
+        self.state,
+        self.host_connection,
+        "agent.compact",
+        payload.catalog_params(),
+      )
     }
     "cancel" =>
       self.legacy_reply(
         @api.dispatch(
           self.state,
+          self.host_connection,
           "agent.cancel",
           self.legacy_request_params(params),
         ),
@@ -296,6 +307,7 @@ async fn DesktopBridgeActor::legacy_dispatch(
       self.legacy_reply(
         @api.dispatch(
           self.state,
+          self.host_connection,
           "agent.steer",
           self.legacy_request_params(params),
         ),
@@ -304,9 +316,14 @@ async fn DesktopBridgeActor::legacy_dispatch(
       if params is Object(fields) &&
         fields.get("session") is Some(String(session)) &&
         session.is_empty() {
-        @api.dispatch(self.state, "fs.unwatch", Json::empty_object())
+        @api.dispatch(
+          self.state,
+          self.host_connection,
+          "fs.unwatch",
+          Json::empty_object(),
+        )
       } else {
-        @api.dispatch(self.state, "fs.watch", params)
+        @api.dispatch(self.state, self.host_connection, "fs.watch", params)
       }
     _ => {
       let catalog_method = match method_ {
@@ -338,7 +355,7 @@ async fn DesktopBridgeActor::legacy_dispatch(
         "workspace_symbols" => "lsp.workspace_symbols"
         _ => raise @api.UnknownMethod(method_)
       }
-      @api.dispatch(self.state, catalog_method, params)
+      @api.dispatch(self.state, self.host_connection, catalog_method, params)
     }
   }
 }

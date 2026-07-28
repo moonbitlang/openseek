@@ -21,8 +21,9 @@ impl Show for UnknownMethod with fn output(self, logger) {
 ///|
 /// Everything the methods operate on: the app-lifetime engine actor and its
 /// request-side manager (one serve process per conversation), the host-op
-/// state (LSP pool, updates, watcher), and the notification hub. One per host
-/// process.
+/// state (LSP pool and updates), and the notification hub. One per host
+/// process; each transport connection supplies its own `HostConnection` when
+/// dispatching filesystem watch methods.
 struct ApiState {
   engine : @engine.EngineActor
   manager : @engine.EngineManager
@@ -87,8 +88,9 @@ pub fn ApiState::unsubscribe(
 }
 
 ///|
-/// Publish one notification to every subscriber — the host pumps
-/// (`lsp.diagnostics`, `fs.changed`) go through here.
+/// Publish one notification to every subscriber — shared host pumps such as
+/// `lsp.diagnostics` go through here. Connection-owned `fs.changed` events
+/// bypass the hub and return only to their owning connection.
 pub fn ApiState::publish(
   self : ApiState,
   method_ : String,
@@ -120,6 +122,7 @@ fn[T : @json.FromJson] decode(params : Json) -> T raise {
 /// Serve one method call. Every transport funnels through here.
 pub async fn dispatch(
   state : ApiState,
+  connection : @host.HostConnection,
   method_ : String,
   params : Json,
 ) -> Json {
@@ -214,7 +217,7 @@ pub async fn dispatch(
         "wsl": Json::boolean(HostWslCapable),
       }
     _ =>
-      match @host.host_op(state.host, method_, params) {
+      match @host.host_op(state.host, connection, method_, params) {
         Some(reply) => reply
         None => raise UnknownMethod(method_)
       }

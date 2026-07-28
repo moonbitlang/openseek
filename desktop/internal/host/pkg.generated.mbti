@@ -17,7 +17,7 @@ pub async fn frontend_entry_path(String) -> String
 
 pub fn host_method_names() -> Array[String]
 
-pub async fn host_op(HostState, String, Json) -> Json?
+pub async fn host_op(HostState, HostConnection, String, Json) -> Json?
 
 pub fn new_host_state(String, runtime_dir? : @path.Path, executable? : String) -> HostState
 
@@ -35,6 +35,10 @@ pub(all) suberror PayloadError {
 }
 
 // Types and methods
+type HostConnection
+pub fn HostConnection::new() -> Self
+pub async fn HostConnection::run(Self, async (String, Json) -> Unit) -> Unit
+
 type HostState
 
 // Type aliases
