@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 57851a755916acbe05be6400b73e8e89e69cfb02",
+      "parent bfb5f57bb33c864c162c13667b2d02b573a179f3",
+      "author Linus Arver <linusa@google.com> 1686797623 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1686804139 -0700"
+    ],
+    "message": "doc: trailer: swap verb order\n\nThis matches the order already used in the NAME section.\n\nSigned-off-by: Linus Arver <linusa@google.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00432a36e20f86338774e5daf8c7fb2eff0beda8",
+  "sha1_ok": true,
+  "size": 399
+}

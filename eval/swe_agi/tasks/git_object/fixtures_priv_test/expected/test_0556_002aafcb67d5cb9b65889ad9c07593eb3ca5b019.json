@@ -1,0 +1,113 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "README",
+        "oid": "05f291c1f1d3d1018f390618816f94d0cd58951b"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "blameview",
+        "oid": "cee1697b8658edca98be6b829ec243187e40cfd4"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "completion",
+        "oid": "ce3ea6789f2dd796486eb70e171a8c186834e968"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "continuous",
+        "oid": "02bee8d9956fbe0f26d7da5a7df53598d118d676"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "convert-objects",
+        "oid": "53facbf0728aa08e46f245026e8261ee6cb5d731"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "emacs",
+        "oid": "4d393963cfb8989b529bc01618b3e71155467166"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "examples",
+        "oid": "f7907524c703b8583ca1a242556e314499bb57f8"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "fast-import",
+        "oid": "1407fbf57153033a572cc45f4d62f1dcb5c8ab48"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "gitview",
+        "oid": "fe3b02884be7aabab2b553fe46b85e1b812303ab"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "hg-to-git",
+        "oid": "afa7e660278de3b302bbec206137acce1018cd35"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "hooks",
+        "oid": "1dfb33017ac55c76c7a439576f2d84fe6c3b576e"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "p4import",
+        "oid": "7ced6812fc3d317ff55b5602365562f6e5b9c097"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "patches",
+        "oid": "bb0bded78d41afa2a1131e188220a4800fd14286"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "remotes2config.sh",
+        "oid": "1cda19f66af96fa828de81cbb21817abca0c06ea"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "stats",
+        "oid": "2105609310f454abc522c87307f48a8fc25afe9d"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "vim",
+        "oid": "c1e90866be2039a61d5a6d0c0da8d288ecb8757b"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "workdir",
+        "oid": "29d6998403797cf2187fad3f99807329206b9229"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "002aafcb67d5cb9b65889ad9c07593eb3ca5b019",
+  "sha1_ok": true,
+  "size": 603
+}

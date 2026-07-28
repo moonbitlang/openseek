@@ -1,0 +1,71 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitattributes",
+        "oid": "59cd41dbff72e3073f5ef0380350ec9ea3c4af5b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitignore",
+        "oid": "6483b21cbfc73601602d628a2c609d3ca84f9e53"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "GIT-VERSION-GEN",
+        "oid": "92373d251a84f448bd673bbb8dd888a64fd2f777"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Makefile",
+        "oid": "f10caedaa7a3970628148258ed8dc9f6a5e8c827"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-gui--askpass",
+        "oid": "4277f30c4116faf2788243af4ec23f1d077698e8"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-gui.sh",
+        "oid": "0d21f5688b37195f5d71eaaab2bc3aea054fdfe8"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "lib",
+        "oid": "6d36908521336df248e28d67ce0ca46a0800fb75"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "macosx",
+        "oid": "452280d7fa4a155bd311a7cce7e327964267b792"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "po",
+        "oid": "a968c3889dbb56eaf235b3321d4a98431a47e471"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "windows",
+        "oid": "ae99a38593d127e47f956d96abf3d6a40d3aff66"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "006cff6a346a28bf0c63231bde445490de8ab5fe",
+  "sha1_ok": true,
+  "size": 367
+}

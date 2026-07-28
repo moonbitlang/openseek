@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree bb7e3eef976686f2fcf1d0d8330be8b68c283036",
+      "parent 8d552258f45ba3886e8d508ece8585b509a04677",
+      "author Elijah Newren <newren@gmail.com> 1596480080 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1596480495 -0700"
+    ],
+    "message": "checkout: support renormalization with checkout -m <paths>\n\nSigned-off-by: Elijah Newren <newren@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00906d6f227b259ac7c8cebd07bbea0ba4792185",
+  "sha1_ok": true,
+  "size": 372
+}

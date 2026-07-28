@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 2defa4151a8aa9df407dd0f79dfece06bf02aaa0",
+      "parent ae3caf4c912429c8e9755f2e10d2f0a7f6279c36",
+      "author Adam Spiers <git@adamspiers.org> 1365681911 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1365703318 -0700"
+    ],
+    "message": "check-ignore: move setup into cmd_check_ignore()\n\nInitialisation of the dir_struct and path_exclude_check structs was\npreviously done within check_ignore().  This was acceptable since\ncheck_ignore() was only called once per check-ignore invocation;\nhowever the next commit will convert it into an inner loop which is\ncalled once per line of STDIN when --stdin is given.  Therefore moving\nthe initialisation code out into cmd_check_ignore() ensures that\ninitialisation is still only performed once per check-ignore\ninvocation, and consequently that the output is identical whether\npathspecs are provided as CLI arguments or via STDIN.\n\nSigned-off-by: Adam Spiers <git@adamspiers.org>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0006d85c3a2fcbd803ed46cf283fab4e4fae3a7f",
+  "sha1_ok": true,
+  "size": 947
+}

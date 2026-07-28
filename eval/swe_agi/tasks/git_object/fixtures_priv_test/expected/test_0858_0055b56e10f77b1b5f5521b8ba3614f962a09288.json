@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree a4fcc09ebbc5c714f9bb9eca89072370c679550c",
+      "parent 0577849d2b2bf21b0faedd30938d663389db7926",
+      "author Pete Wyckoff <pw@padd.com> 1390346203 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1390406727 -0800"
+    ],
+    "message": "git p4 test: run as user \"author\"\n\nThe tests use author@example.com as the canonical submitter,\nbut he does not have an entry in the p4 users database.\nThis causes the generated change description to complain\nthat the git and p4 users disagree.  The complaint message\nis still valid, but isn't useful in tests.  It was introduced\nin 848de9c (git-p4: warn if git authorship won't be retained,\n2011-05-13).\n\nFix t9813 to use @example.com instead of @localhost due to\nchange in p4_add_user().  Move the function into the git p4\ntest library so author can be added at initialization time.\n\nSigned-off-by: Pete Wyckoff <pw@padd.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0055b56e10f77b1b5f5521b8ba3614f962a09288",
+  "sha1_ok": true,
+  "size": 886
+}

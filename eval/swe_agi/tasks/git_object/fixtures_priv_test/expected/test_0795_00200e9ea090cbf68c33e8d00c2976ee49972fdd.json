@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 938c01397c6a6d88be315025edef8368351eafd0",
+      "parent 21a40b90e9189aa3f3fbae1ca7a4bad55028ed03",
+      "author Ramkumar Ramachandra <artagnon@gmail.com> 1366608629 +0530",
+      "committer Junio C Hamano <gitster@pobox.com> 1366611051 -0700"
+    ],
+    "message": "git-log.txt: rewrite note on why \"--\" may be required\n\nIn its current form, the note talks about separating options from\n\"branch names\" and \"refnames\" in the same sentence.  This is entirely\ninaccurate, as <revision range> need not be a set of branch names or\nref names.  Rewrite it to use the word \"revision range\", to be\nconsistent with the SYNOPSIS.\n\nSigned-off-by: Ramkumar Ramachandra <artagnon@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00200e9ea090cbf68c33e8d00c2976ee49972fdd",
+  "sha1_ok": true,
+  "size": 684
+}

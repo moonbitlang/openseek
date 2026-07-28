@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "SGVsbG8gV29ybGQ=",
+    "text": "Hello World",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "5e1c309dae7f45e0f39b1bf3ac3cd9db12e7d689",
+  "sha1_ok": true,
+  "size": 11
+}

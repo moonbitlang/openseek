@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 194851817aa4c293a628add066b59aeab0072ce6",
+      "parent 1b840a56629c8c0620c261672cc5d4d35ba253fa",
+      "parent 8cb5775b2b9885708c3f646a1e273de1ac778a88",
+      "author Junio C Hamano <gitster@pobox.com> 1317843353 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1317843353 -0700"
+    ],
+    "message": "Merge branch 'nm/grep-object-sha1-lock'\n\n* nm/grep-object-sha1-lock:\n  grep: Fix race condition in delta_base_cache\n\nConflicts:\n\tbuiltin/grep.c\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00723b02912cc9dae1ee5601ab4b942fdd42ff52",
+  "sha1_ok": true,
+  "size": 408
+}

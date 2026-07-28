@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree c799f75e3ce3919695f4adec731dbab1a77bf8f2",
+      "parent f7fbc357f863ecc5323f3fcf2fc9cbf2aa2a8587",
+      "author Alex Henrie <alexhenrie24@gmail.com> 1408759822 -0600",
+      "committer Alex Henrie <alexhenrie24@gmail.com> 1408759822 -0600"
+    ],
+    "message": "l10n: Add Catalan translation\n\nSigned-off-by: Alex Henrie <alexhenrie24@gmail.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0082d82183b42c19fe7db1531279ff6d3f86c3fe",
+  "sha1_ok": true,
+  "size": 303
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree e3c93cd6a1a15bd68d3c8c2f2d4712be275ebcf7",
+      "parent 949197420e3da13c06c6a15fd4b4ed3120753c42",
+      "author Derrick Stolee <dstolee@microsoft.com> 1593610044 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1593638263 -0700"
+    ],
+    "message": "commit-graph: persist existence of changed-paths\n\nThe changed-path Bloom filters were released in v2.27.0, but have a\nsignificant drawback. A user can opt-in to writing the changed-path\nfilters using the \"--changed-paths\" option to \"git commit-graph write\"\nbut the next write will drop the filters unless that option is\nspecified.\n\nThis becomes even more important when considering the interaction with\ngc.writeCommitGraph (on by default) or fetch.writeCommitGraph (part of\nfeatures.experimental). These config options trigger commit-graph writes\nthat the user did not signal, and hence there is no --changed-paths\noption available.\n\nAllow a user that opts-in to the changed-path filters to persist the\nproperty of \"my commit-graph has changed-path filters\" automatically. A\nuser can drop filters using the --no-changed-paths option.\n\nIn the process, we need to be extremely careful to match the Bloom\nfilter settings as specified by the commit-graph. This will allow future\nversions of Git to customize these settings, and the version with this\nchange will persist those settings as commit-graphs are rewritten on\ntop.\n\nUse the trace2 API to signal the settings used during the write, and\ncheck that output in a test after manually adjusting the correct bytes\nin the commit-graph file.\n\nSigned-off-by: Derrick Stolee <dstolee@microsoft.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0087a87ba8fc69b27dde0183ec24ade367a4aa5b",
+  "sha1_ok": true,
+  "size": 1612
+}

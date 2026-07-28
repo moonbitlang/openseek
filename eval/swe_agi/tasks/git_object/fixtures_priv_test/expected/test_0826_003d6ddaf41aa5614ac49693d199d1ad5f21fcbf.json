@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 589b2d092c644911929479d4a52ada0e74f69d98",
+      "parent fa0f02dfa15d0d95f8b6d27688bbf8ac940e3354",
+      "author Eric Wong <normalperson@yhbt.net> 1148609175 -0700",
+      "committer Junio C Hamano <junkio@cox.net> 1148626411 -0700"
+    ],
+    "message": "t3300-funny-names: shell portability fixes\n\necho isn't remotely standardized for handling backslashes,\nso cat + heredoc seems better\n\nSigned-off-by: Eric Wong <normalperson@yhbt.net>\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "003d6ddaf41aa5614ac49693d199d1ad5f21fcbf",
+  "sha1_ok": true,
+  "size": 442
+}

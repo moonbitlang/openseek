@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree a4fb990bc62930d859f8343c41f5a3162aca6449",
+      "parent e1c068869216c8c231c1585bbfa9fda42b4756f8",
+      "author David Aguilar <davvid@gmail.com> 1243758952 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1243817879 -0700"
+    ],
+    "message": "diff: generate pretty filenames in prep_temp_blob()\n\nNaturally, prep_temp_blob() did not care about filenames.\nAs a result, GIT_EXTERNAL_DIFF and textconv generated\nfilenames such as \".diff_XXXXXX\".\n\nThis modifies prep_temp_blob() to generate user-friendly\nfilenames when creating temporary files.\n\nDiffing \"name.ext\" now generates \"XXXXXX_name.ext\".\n\nSigned-off-by: David Aguilar <davvid@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "003b33a8ad686ee4a0d0b36635bfd6aba940b24a",
+  "sha1_ok": true,
+  "size": 664
+}

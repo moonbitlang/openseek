@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 86e8655feb857625be07536731a4dc8045313ed8",
+      "parent 9807b3d65d3789ed7916ffc98dbdf7ed89634ca3",
+      "author Jeff Smith <whydoubt@gmail.com> 1495602914 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1495608111 +0900"
+    ],
+    "message": "blame: rename origin-related functions\n\nFunctions related to blame_origin that will be publicly exposed should\nhave names that better reflect what they are a part of.\n\nSigned-off-by: Jeff Smith <whydoubt@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "006a0744998804d43a02034bf44b97a163027bb5",
+  "sha1_ok": true,
+  "size": 478
+}

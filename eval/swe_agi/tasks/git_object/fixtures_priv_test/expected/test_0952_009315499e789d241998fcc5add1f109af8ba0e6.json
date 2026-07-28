@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree e01a69b993b62d09a2ca80cb1ba2142ea1379c7b",
+      "parent 7c3ecb65eec9ff2c39c781958bf50ed6541e1332",
+      "author Martin Langhoff <martin@catalyst.net.nz> 1141273470 +1300",
+      "committer Junio C Hamano <junkio@cox.net> 1141277607 -0800"
+    ],
+    "message": "annotate: fix -S parameter to take a string\n\nIn the conversion to Getopt::Long, the -S / --rev-list parameter stopped\nworking. We need to tell Getopt::Long that it is a string.\n\nAs a bonus, the open() now does some useful error handling.\n\nSigned-off-by: Martin Langhoff <martin@catalyst.net.nz>\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "009315499e789d241998fcc5add1f109af8ba0e6",
+  "sha1_ok": true,
+  "size": 561
+}

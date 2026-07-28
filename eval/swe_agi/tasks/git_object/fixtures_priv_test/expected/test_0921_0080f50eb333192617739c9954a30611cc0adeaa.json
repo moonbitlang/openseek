@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 2ef11b32d4fd117d60be87157b17651b418f4f49",
+      "parent a4d0cced53facb17d777a396aa6b388e97f1d909",
+      "parent 6a74642c500118164ec331da93ef29b1163301bc",
+      "author Junio C Hamano <junkio@cox.net> 1145526724 -0700",
+      "committer Junio C Hamano <junkio@cox.net> 1145526724 -0700"
+    ],
+    "message": "Merge branch 'fix'\n\n* fix:\n  git-commit --amend: two fixes.\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0080f50eb333192617739c9954a30611cc0adeaa",
+  "sha1_ok": true,
+  "size": 318
+}

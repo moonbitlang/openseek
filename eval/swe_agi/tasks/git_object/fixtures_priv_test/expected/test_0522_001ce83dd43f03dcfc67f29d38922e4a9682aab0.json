@@ -1,0 +1,95 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitignore",
+        "oid": "6759ecbf98f8a90d96b4918c130babdd87889f69"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Makefile",
+        "oid": "d22a71a3999b3dc0e99f5e36053447b33f967bd7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "branches--",
+        "oid": "fae88709a636f3a06cc813dd64b28bfee7fa2073"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "hooks--applypatch-msg.sample",
+        "oid": "8b2a2fe84feaeaba56953d6d4d0d649b3cf755eb"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "hooks--commit-msg.sample",
+        "oid": "b58d1184a9d43a39c0d95f32453efc78581877d6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "hooks--post-update.sample",
+        "oid": "ec17ec1939b7c3e86b7cb6c0c4de6b0818a7e75e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "hooks--pre-applypatch.sample",
+        "oid": "b1f187c2e9acaba942639bca90a63c5b4f058967"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "hooks--pre-commit.sample",
+        "oid": "5558caa7bb62f420102454219eb96ce4212a8daa"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "hooks--pre-push.sample",
+        "oid": "15ab6d8e7ea05ca54f0b755828e166fafe9bc28c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "hooks--pre-rebase.sample",
+        "oid": "053f1111c0d734c057e895cdc992188104cc4f84"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "hooks--prepare-commit-msg.sample",
+        "oid": "86b8f227ecab874a4af98bc5ba3164d370e5e4b5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "hooks--update.sample",
+        "oid": "d84758373da1d3121ec907435ae5d598c5c14b26"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "info--exclude",
+        "oid": "a5196d1be8fb59edf8062bef36d3a602e0812139"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "this--description",
+        "oid": "498b267a8c7812490d6479839c5577eaaec79d62"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "001ce83dd43f03dcfc67f29d38922e4a9682aab0",
+  "sha1_ok": true,
+  "size": 677
+}

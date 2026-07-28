@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree d6150fda4d263277a35112da28f6b93ac45a2ab6",
+      "parent 7db316bcbef06025b8254a4d5ae3fe2c6237ec18",
+      "author Stefan Beller <sbeller@google.com> 1498868911 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1499287992 -0700"
+    ],
+    "message": "builtin/describe: drop hashmap_cmp_fn cast\n\nSigned-off-by: Stefan Beller <sbeller@google.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0068cede4a753cec0ec5f290bacb1fb22a8f9e58",
+  "sha1_ok": true,
+  "size": 360
+}

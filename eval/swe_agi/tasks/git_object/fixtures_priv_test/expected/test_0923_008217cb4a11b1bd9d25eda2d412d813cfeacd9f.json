@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 8670413512eec0c40113296997fd34664494f191",
+      "parent 5cc9858f1b470844dea5c5d3e936af183fdf2c68",
+      "author Derrick Stolee <derrickstolee@github.com> 1674849961 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1674851906 -0800"
+    ],
+    "message": "t: allow 'scalar' in test_must_fail\n\nThis will enable scalar tests to use the test_must_fail helper, when\nnecessary.\n\nSigned-off-by: Derrick Stolee <derrickstolee@github.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008217cb4a11b1bd9d25eda2d412d813cfeacd9f",
+  "sha1_ok": true,
+  "size": 448
+}

@@ -1,0 +1,275 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitignore",
+        "oid": "8aa891daee050f03cf265a6ea991ff9ebb60815e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-allocation-growing.txt",
+        "oid": "542946b1ba701069837b702cbd8fe8079cecf56d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-argv-array.txt",
+        "oid": "a6b7d83a8eb05086cb88a9168117aa54cf018551"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-builtin.txt",
+        "oid": "e3d6e7a79a6c2136a796c5409d16feb8058e96d2"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-config.txt",
+        "oid": "230b3a0f60c870f0df4a8a15dcbb5a5612eab1df"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-credentials.txt",
+        "oid": "c1b42a40d3c0c297994cd2966b60cd48629e57fa"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-decorate.txt",
+        "oid": "1d52a6ce14416c7308f6c2c5d6a3dd2a43184e91"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-diff.txt",
+        "oid": "8b001de0db3628d4f02c2890d5614e067e701ed4"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-directory-listing.txt",
+        "oid": "7f8e78d916c0b38ed6757aee6578a53cab30d9d0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-gitattributes.txt",
+        "oid": "260266867768a549e58e540eaa95d3bbe422e5c0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-grep.txt",
+        "oid": "a69cc8964d585db41b1907a8ce7cb8d0a9511ef2"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-hashmap.txt",
+        "oid": "b977ae8bbb1f46ebb40d1d315e79262fe344f1c2"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-history-graph.txt",
+        "oid": "18142b6d29283bbf6e325ce71d50761a3f50a227"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-in-core-index.txt",
+        "oid": "adbdbf5d75d8e17e38e1ba0e3694b4ff210f5799"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-index-skel.txt",
+        "oid": "eda8c195c19629dfe836b36d9baaa21ec06199d6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "api-index.sh",
+        "oid": "9c3f4131b8586408acd81d1e60912b51688575ed"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-lockfile.txt",
+        "oid": "dd894043ae8b04269b3aa2108f96cb935217181d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-merge.txt",
+        "oid": "9dc1bed768a473317dd77c4d1ed93f65b2c4d483"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-object-access.txt",
+        "oid": "03bb0e950dd1616b00f950f83263835c57bfa70a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-parse-options.txt",
+        "oid": "1f2db313122ccb18223f3be429620fa3385cec51"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-quote.txt",
+        "oid": "e8a1bce94e05f06c5b2aa51d2b610fb9da15d0bb"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-ref-iteration.txt",
+        "oid": "02adfd45d3a82466627bea702f9b04dfff5e2cc8"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-remote.txt",
+        "oid": "5d245aa9d1b1654749ee51495e9eebda261c3681"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-revision-walking.txt",
+        "oid": "55b878ade81e2b3b265032e281f82ab86016d5ae"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-run-command.txt",
+        "oid": "5d7d7f2d32f58f8682ca5efb2fd98fe7e74247dd"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-setup.txt",
+        "oid": "540e45568990f89fceb50ad619ca8402e9925983"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-sha1-array.txt",
+        "oid": "3e75497a37d696d534c16ff0270a808b57ac9180"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-sigchain.txt",
+        "oid": "9e1189ef01dff889447c1bf92802c9792f267b9b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-strbuf.txt",
+        "oid": "9d28b034ad9a35108f8069557e194992f8e36b0f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-string-list.txt",
+        "oid": "20be3488349c2ddbafbd90c0200f2a7d3862a12f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-tree-walking.txt",
+        "oid": "14af37c3f14854e87d9d28f60b5ff72eb189c37f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-xdiff-interface.txt",
+        "oid": "6296ecad1d65511f943fcd82ded188954a33b052"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "bitmap-format.txt",
+        "oid": "f8c18a0f7aec2b1a6d1a9eeb336c080f1b397479"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "http-protocol.txt",
+        "oid": "20525d98bb67cd3710c9738f99020c01f2d1d885"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "index-format.txt",
+        "oid": "f352a9b22e3138fa674c393d99d420de4f2ff144"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-format.txt",
+        "oid": "8e5bf60be3f0689d61feb8ce43cb379b2417fd8f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-heuristics.txt",
+        "oid": "95a07db6e82b5f5f3261d75e5e97fb4b674580a8"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-protocol.txt",
+        "oid": "18dea8d15fa159b719a38588a0a346e58120ac61"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "protocol-capabilities.txt",
+        "oid": "e17434384724662aabb60d7fceed40a433207608"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "protocol-common.txt",
+        "oid": "889985f7076da80f94c02b4a7e2760633d500980"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "racy-git.txt",
+        "oid": "242a044db978b8bd7cf9dabcbc31a2eb51056da6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "send-pack-pipeline.txt",
+        "oid": "9b5a0bc186674d8bce4e32bbbff24a203020b943"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "shallow.txt",
+        "oid": "5183b154229d7c25f0feab3d0afcd1d52ca652e0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "trivial-merge.txt",
+        "oid": "c79d4a7c476da2c57c117529150de77646ed116e"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "0009d5604c1c79d098303adfe580bdbe7f4a3b41",
+  "sha1_ok": true,
+  "size": 1999
+}

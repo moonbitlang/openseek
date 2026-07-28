@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 871d20189f5aa5d210debf5dda852aa883b2eb38",
+      "parent 564d0252ca632e0264ed670534a51d18a689ef5d",
+      "author Junio C Hamano <gitster@pobox.com> 1706130631 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1706208953 -0800"
+    ],
+    "message": "ls-files: avoid the verb \"deprecate\" for individual options\n\nWhen e750951e (ls-files: guide folks to --exclude-standard over\nother --exclude* options, 2023-01-13) updated the documentation to\ngive greater visibility to the `--exclude-standard` option, it marked\nthe `--exclude-per-directory` option as \"deprecated\".\n\nWhile it is technically correct that being deprecated does not\nnecessarily mean it is planned to be removed later, it seems to\ncause confusion to readers, especially when we merely mean\n\n    The option Y can be used to achieve the same thing as the option\n    X much simpler. To those of you who aren't familiar with either\n    X or Y, we would recommend to use Y when appropriate.\n\nThis is especially true for `--exclude-standard` vs the combination\nof more granular `--exclude-from` and `--exclude-per-directory`\noptions.  It is true that one common combination of the granular\noptions can be obtained by just giving the former, but that does not\nnecessarily mean a more granular control is not necessary.\n\nState the reason why we recommend readers `--exclude-standard` in\nthe description of `--exclude-per-directory`, instead of saying that\nthe option is deprecated.  Also, spell out the recipe to emulate\nwhat `--exclude-standard` does, so that the users can give it minute\ntweaks (like \"do the same as Git Porcelain, except I do not want to\nread the global exclusion file from core.excludes\").\n\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0009542cabb808f558605f0faa8c57d3b97ed055",
+  "sha1_ok": true,
+  "size": 1683
+}

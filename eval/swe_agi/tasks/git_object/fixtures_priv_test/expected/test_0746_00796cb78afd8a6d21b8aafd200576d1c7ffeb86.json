@@ -1,0 +1,35 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "README",
+        "oid": "8d672762eab427f3b732626d6b3f8e05a7e8f8c9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "gitweb.cgi",
+        "oid": "0953b8cd564dd8243d76ad9443c1dd51ebc37c18"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "gitweb.css",
+        "oid": "460e7287187e2eab166be12c9f540f578ba7eaca"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "test",
+        "oid": "241fde75e4eab667d6954b2ff03918429357d4b3"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "00796cb78afd8a6d21b8aafd200576d1c7ffeb86",
+  "sha1_ok": true,
+  "size": 141
+}

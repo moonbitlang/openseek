@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree da07bf621f6455a0cb825cde3ff7246fbedd39a7",
+      "parent 7c2ef319c52c4997256f5807564523dfd4acdfc7",
+      "author Seija Kijin <doremylover123@gmail.com> 1671932510 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1671953643 +0900"
+    ],
+    "message": "win32: use _endthreadex to terminate threads, not ExitThread\n\nBecause we use the C runtime and\nuse _beginthreadex to create pthreads,\npthread_exit MUST use _endthreadex.\n\nOtherwise, according to Microsoft:\n\"Failure to do so results in small\nmemory leaks when the thread\ncalls ExitThread.\"\n\nSimply put, this is not the same as ExitThread.\n\nSigned-off-by: Seija Kijin <doremylover123@gmail.com>\nAcked-by: Johannes Sixt <j6t@kdbg.org>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0006e2e3f1de6a3a5351da298ee52b5d936addfd",
+  "sha1_ok": true,
+  "size": 702
+}

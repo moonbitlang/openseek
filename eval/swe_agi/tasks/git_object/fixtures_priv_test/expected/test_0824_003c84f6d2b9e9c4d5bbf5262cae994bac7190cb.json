@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 90c8c22f9d376aa92f46d42f7f4b9d74017ce9b9",
+      "parent c142616fb2152d7887f9c38ff20e07167d31b0c8",
+      "author Junio C Hamano <gitster@pobox.com> 1304368756 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1345757869 -0700"
+    ],
+    "message": "specifying ranges: we did not mean to make \"..\" an empty set\n\nEither end of revision range operator can be omitted to default to HEAD,\nas in \"origin..\" (what did I do since I forked) or \"..origin\" (what did\nthey do since I forked).  But the current parser interprets \"..\"  as an\nempty range \"HEAD..HEAD\", and worse yet, because \"..\" does exist on the\nfilesystem, we get this annoying output:\n\n  $ cd Documentation/howto\n  $ git log .. ;# give me recent commits that touch Documentation/ area.\n  fatal: ambiguous argument '..': both revision and filename\n  Use '--' to separate filenames from revisions\n\nSurely we could say \"git log ../\" or even \"git log -- ..\" to disambiguate,\nbut we shouldn't have to.\n\nHelped-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "003c84f6d2b9e9c4d5bbf5262cae994bac7190cb",
+  "sha1_ok": true,
+  "size": 1008
+}

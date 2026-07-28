@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "R2l0IHYyLjIxLjQgUmVsZWFzZSBOb3Rlcwo9PT09PT09PT09PT09PT09PT09PT09PT09CgpUaGlzIHJlbGVhc2UgbWVyZ2VzIHVwIHRoZSBmaXhlcyB0aGF0IGFwcGVhciBpbiB2Mi4xNy42LCB2Mi4xOC41LAp2Mi4xOS42IGFuZCB2Mi4yMC41IHRvIGFkZHJlc3MgdGhlIHNlY3VyaXR5IGlzc3VlIENWRS0yMDIxLTIxMzAwOwpzZWUgdGhlIHJlbGVhc2Ugbm90ZXMgZm9yIHRoZXNlIHZlcnNpb25zIGZvciBkZXRhaWxzLgo=",
+    "text": "Git v2.21.4 Release Notes\n=========================\n\nThis release merges up the fixes that appear in v2.17.6, v2.18.5,\nv2.19.6 and v2.20.5 to address the security issue CVE-2021-21300;\nsee the release notes for these versions for details.\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "0089dd6702f7a09ba6e091a302a146bc16884989",
+  "sha1_ok": true,
+  "size": 239
+}

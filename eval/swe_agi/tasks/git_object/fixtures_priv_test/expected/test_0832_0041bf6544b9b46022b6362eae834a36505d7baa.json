@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree d6a89a7da27a0ffd8a84006c1b81322e9ea79128",
+      "parent 7d5a38b61fad51b765117ae6dae9117db74dac3d",
+      "author Junio C Hamano <gitster@pobox.com> 1490798355 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1490810010 -0700"
+    ],
+    "message": "name-rev: refactor logic to see if a new candidate is a better name\n\nWhen we encounter a new ref that could describe the commit we are\nlooking at, we compare the name that is formed using that ref and\nthe name we found so far and pick a better one.\n\nFactor the comparison logic out to a separate helper function, while\nkeeping the current logic the same (i.e. a name that is based on an\nolder tag is better, and if two tags of the same age can reach the\ncommit, the one with fewer number of hops to reach the commit is\nbetter).\n\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\nSigned-off-by: Michael J Gruber <git@grubix.eu>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0041bf6544b9b46022b6362eae834a36505d7baa",
+  "sha1_ok": true,
+  "size": 893
+}

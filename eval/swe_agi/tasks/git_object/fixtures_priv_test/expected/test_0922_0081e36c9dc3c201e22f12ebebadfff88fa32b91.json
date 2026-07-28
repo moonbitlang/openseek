@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 5723eac1ee37bf3ae95e7d970b54ac7a6f2644ce",
+      "parent edd5cc242820f3eec26329a263e4016a039adee1",
+      "parent fcc387db9bc453dc7e07a262873481af2ee9e5c8",
+      "author Junio C Hamano <junkio@cox.net> 1148083342 -0700",
+      "committer Junio C Hamano <junkio@cox.net> 1148083342 -0700"
+    ],
+    "message": "Merge branch 'jc/read-tree-safety'\n\n* jc/read-tree-safety:\n  read-tree -m -u: do not overwrite or remove untracked working tree files.\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0081e36c9dc3c201e22f12ebebadfff88fa32b91",
+  "sha1_ok": true,
+  "size": 393
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree b35d7bcc6e319b07d27b10e04c9307cc5deea489",
+      "parent 84069fcc140480fb76dc204ebce7819c2c87ec7c",
+      "author Atharva Raykar <raykar.ath@gmail.com> 1625903279 +0530",
+      "committer Junio C Hamano <gitster@pobox.com> 1626116781 -0700"
+    ],
+    "message": "submodule: prefix die messages with 'fatal'\n\nThe standard `die()` function that is used in C code prefixes all the\nmessages passed to it with 'fatal: '. This does not happen with the\n`die` used in 'git-submodule.sh'.\n\nLet's prefix each of the shell die messages with 'fatal: ' so that when\nthey are converted to C code, the error messages stay the same as before\nthe conversion.\n\nNote that the shell version of `die` exits with error code 1, while the\nC version exits with error code 128. In practice, this does not change\nany behaviour, as no functionality in 'submodule add' and 'submodule\nupdate' relies on the value of the exit code.\n\nSigned-off-by: Atharva Raykar <raykar.ath@gmail.com>\nMentored-by: Christian Couder <christian.couder@gmail.com>\nMentored-by: Shourya Shukla <periperidip@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0008d12284ef916b53341c2aadccdc017ff07c7a",
+  "sha1_ok": true,
+  "size": 1072
+}

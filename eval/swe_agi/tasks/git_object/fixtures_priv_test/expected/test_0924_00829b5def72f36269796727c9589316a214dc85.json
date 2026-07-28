@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 55256581c61fa13142e42317364f56f70e7156f6",
+      "parent e3b4be7f6c31d85b5f6abc42bd24d61bce5027b4",
+      "author Linus Torvalds <torvalds@ppc970.osdl.org> 1113861708 -0700",
+      "committer Linus Torvalds <torvalds@ppc970.osdl.org> 1113861708 -0700"
+    ],
+    "message": "Add \"update-cache --refresh\" to git-pull-script to make sure\nout index is all ready to go after a pull.\n\nNoted by Russell King\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00829b5def72f36269796727c9589316a214dc85",
+  "sha1_ok": true,
+  "size": 357
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree ea4ccff30a1bd8081885d78d933729a77bfa0759",
+      "parent 60f487ac0ef1165932211ede29ea661c79984b16",
+      "author Nguy\u1ec5n Th\u00e1i Ng\u1ecdc Duy <pclouds@gmail.com> 1526841597 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1526876593 +0900"
+    ],
+    "message": "git.c: convert --list-* to --list-cmds=*\n\nEven if these are hidden options, let's make them a bit more generic\nsince we're introducing more listing types shortly. The code is\nstructured to allow combining multiple listing types together because\nwe will soon add more types the 'builtins'.\n\n'parseopt' remains separate because it has separate (SPC) to match\ngit-completion.bash needs and will not combine with others.\n\nSigned-off-by: Nguy\u1ec5n Th\u00e1i Ng\u1ecdc Duy <pclouds@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0089521cacd99db8018b7a31e205dad0bf0738c7",
+  "sha1_ok": true,
+  "size": 756
+}

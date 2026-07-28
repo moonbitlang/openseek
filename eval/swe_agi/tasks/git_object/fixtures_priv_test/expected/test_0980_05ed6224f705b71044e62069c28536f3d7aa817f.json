@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "object 8a383db4b28059becc3ebfd1b402299e34c3151f",
+      "type commit",
+      "tag gitgui-0.18.0",
+      "tagger Pat Thoyts <patthoyts@users.sourceforge.net> 1371336840 +0100"
+    ],
+    "message": "git-gui 0.18.0\n-----BEGIN PGP SIGNATURE-----\nVersion: GnuPG v1.4.13 (MingW32)\n\niQCVAwUAUbzwiGB90JXwhOSJAQKxtAP/TYTpKWzKiDwzu/2P6ecIWcS/4vaKlj1M\nWSyvp4t4stTXhRXntId7psQO7nYTb+Pb3VlY+WPr9J3xL39IjU2qHLsrQJEqtsWI\nFcE7SNxB0BvNreAqkdYNaKqSfGqQJPdV8K5WKaySZMpMkq/ZOT7WiOQq6wynDLuR\nsDopx39hLDI=\n=Az9M\n-----END PGP SIGNATURE-----\n",
+    "type": "tag"
+  },
+  "kind": "tag",
+  "oid": "05ed6224f705b71044e62069c28536f3d7aa817f",
+  "sha1_ok": true,
+  "size": 469
+}

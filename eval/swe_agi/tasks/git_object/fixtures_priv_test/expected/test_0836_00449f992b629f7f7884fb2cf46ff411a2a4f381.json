@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree bf2c1d7230f6f1ef0f50a4da123b5e06d986a0bf",
+      "parent 280242d1cc1fe2847f649d2f16b273e168fcbc48",
+      "author Johannes Schindelin <Johannes.Schindelin@gmx.de> 1151939923 +0200",
+      "committer Junio C Hamano <junkio@cox.net> 1151980961 -0700"
+    ],
+    "message": "Make git-fmt-merge-msg a builtin\n\nSigned-off-by: Johannes Schindelin <Johannes.Schindelin@gmx.de>\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00449f992b629f7f7884fb2cf46ff411a2a4f381",
+  "sha1_ok": true,
+  "size": 372
+}

@@ -1,0 +1,17 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "fast-import",
+        "oid": "c806de0f03ee254c38167c5952ec7fd6e4df0c42"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "006e58dc4da399f6e2458025b401acf0406946fd",
+  "sha1_ok": true,
+  "size": 38
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 63ea182100e203439986ac8cb6e5cd4ae20cf59d",
+      "parent 0eafba1405bf4db29bca0b535477beb3046441bf",
+      "author Paul Mackerras <paulus@samba.org> 1185453399 +1000",
+      "committer Paul Mackerras <paulus@samba.org> 1185453399 +1000"
+    ],
+    "message": "gitk: Fix bugs in the Find function\n\nThis fixes the problem reported by Brian Downing where searching for\na string that doesn't exist would give a Tcl error.  The basic problem\nwas that we weren't reading the data for the last commit since it\nwasn't terminated with a null.  This effectively adds a null on the end\n(if there isn't one already) to make sure we process the last commit.\n\nThis also makes the yellow background behind instances of the search\nstring appear more consistently, and fixes a bug where the \"/\" key\nwould just find the same commit again and again instead of advancing.\n\nSigned-off-by: Paul Mackerras <paulus@samba.org>",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "005a2f4e6df7060561817828d4fa4245f87ccadf",
+  "sha1_ok": true,
+  "size": 855
+}

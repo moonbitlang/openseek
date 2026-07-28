@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 85d855657c9a8a94ab39a82773362e5b1abd66f6",
+      "parent ee228024933069b93ce23a1bd5eeb7ae12c792f2",
+      "author Ren\u00e9 Scharfe <rene.scharfe@lsrfire.ath.cx> 1324116948 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1324174897 -0800"
+    ],
+    "message": "use struct sha1_array in diff_tree_combined()\n\nMaintaining an array of hashes is easier using sha1_array than\nopen-coding it.  This patch also fixes a leak of the SHA1 array\nin  diff_tree_combined_merge().\n\nSigned-off-by: Ren\u00e9 Scharfe <rene.scharfe@lsrfire.ath.cx>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0041f09de6e62efc31c860487f04e8b08bce68c8",
+  "sha1_ok": true,
+  "size": 541
+}

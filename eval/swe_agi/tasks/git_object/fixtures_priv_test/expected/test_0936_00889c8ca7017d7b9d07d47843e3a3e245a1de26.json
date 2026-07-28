@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 470a77c19b8fb9b721151c51b75399e88430a50b",
+      "parent 77ba30585213ee8e2be21841ba38786fd5bb26a5",
+      "author Avery Pennarun <apenwarr@gmail.com> 1265676135 -0500",
+      "committer Avery Pennarun <apenwarr@gmail.com> 1265676135 -0500"
+    ],
+    "message": "Oops.  Apparently I didn't run 'make test' after most recent change.\n\nThanks to Dan Sabath for pointing that out.\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00889c8ca7017d7b9d07d47843e3a3e245a1de26",
+  "sha1_ok": true,
+  "size": 332
+}

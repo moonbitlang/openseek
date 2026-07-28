@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree f54877ee15a2c2478fe1f2fa8c651644aaf21dce",
+      "parent 7aba6185d55e06db3f3ef18daa63baf3821e5030",
+      "author Matthieu Moy <Matthieu.Moy@imag.fr> 1266877932 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1266881085 -0800"
+    ],
+    "message": "Move gitmkstemps to path.c\n\nThis function used to be only a compatibility function, but we're\ngoing to extend it and actually use it, so make it part of Git.\n\nSigned-off-by: Matthieu Moy <Matthieu.Moy@imag.fr>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00787ed55adbc2350efa911bf0bdebf6ca08c095",
+  "sha1_ok": true,
+  "size": 477
+}

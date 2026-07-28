@@ -1,0 +1,29 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "example",
+        "oid": "ddd3f836d3e3fbb7ae289aa9ae83536f76956399"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "hello",
+        "oid": "5e1c309dae7f45e0f39b1bf3ac3cd9db12e7d689"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "path with spaces",
+        "oid": "5e1c309dae7f45e0f39b1bf3ac3cd9db12e7d689"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "84063ce786964fa55723ee8c011cac81f88d6bc3",
+  "sha1_ok": true,
+  "size": 112
+}

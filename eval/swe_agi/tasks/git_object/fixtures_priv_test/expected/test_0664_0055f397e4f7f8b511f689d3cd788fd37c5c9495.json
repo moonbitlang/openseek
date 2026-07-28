@@ -1,0 +1,17 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "gitk",
+        "oid": "8aff933e43146980795ae75c3a8c0578800ff9c3"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "0055f397e4f7f8b511f689d3cd788fd37c5c9495",
+  "sha1_ok": true,
+  "size": 32
+}

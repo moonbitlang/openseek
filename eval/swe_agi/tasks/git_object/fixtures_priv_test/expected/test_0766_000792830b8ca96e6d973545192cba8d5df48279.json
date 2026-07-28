@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree b33b2184b6d5893960f287cd1eae9a256dc7af9f",
+      "parent 4b46e22d48271d1a220133a925dc5009048eb577",
+      "author Junio C Hamano <junkio@cox.net> 1167474914 -0800",
+      "committer Junio C Hamano <junkio@cox.net> 1167474962 -0800"
+    ],
+    "message": "t3900: test log --encoding=none\n\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "000792830b8ca96e6d973545192cba8d5df48279",
+  "sha1_ok": true,
+  "size": 290
+}

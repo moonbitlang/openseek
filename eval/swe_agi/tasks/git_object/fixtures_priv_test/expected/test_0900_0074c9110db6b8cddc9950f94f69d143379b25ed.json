@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree f1119b2d39440b2b5c55394b837b6fab5c341561",
+      "parent 7c61e25fbf1a4a65208be1197940a383f220a1b7",
+      "author Jeff King <peff@peff.net> 1541140700 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1541391275 +0900"
+    ],
+    "message": "combine-diff: use an xdiff hunk callback\n\nA combined diff has to line up the hunks for all of the individual\npairwise diffs, and thus needs to know their line numbers and sizes. We\nget that now by parsing the hunk header line that xdiff generates.\nHowever, now that xdiff supports a hunk callback, we can just use the\nvalues directly.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0074c9110db6b8cddc9950f94f69d143379b25ed",
+  "sha1_ok": true,
+  "size": 634
+}

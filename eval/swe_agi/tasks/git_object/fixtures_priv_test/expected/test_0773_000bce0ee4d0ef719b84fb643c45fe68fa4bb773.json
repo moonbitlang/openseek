@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 10840f2b1f53f5549db2eafb4493443fcefe3303",
+      "parent ed7f8acbaa3d986a8b4e8d625b2f54355ce15ef0",
+      "parent 105df73e71a9eb901d7ca96f12ce3645729ae486",
+      "author Junio C Hamano <gitster@pobox.com> 1560457181 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1560457181 -0700"
+    ],
+    "message": "Merge branch 'nd/corrupt-worktrees'\n\n\"git worktree add\" used to fail when another worktree connected to\nthe same repository was corrupt, which has been corrected.\n\n* nd/corrupt-worktrees:\n  worktree add: be tolerant of corrupt worktrees\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "000bce0ee4d0ef719b84fb643c45fe68fa4bb773",
+  "sha1_ok": true,
+  "size": 501
+}

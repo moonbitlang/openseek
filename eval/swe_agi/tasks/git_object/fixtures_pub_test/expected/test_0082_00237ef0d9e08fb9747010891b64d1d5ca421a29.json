@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "I2luY2x1ZGUgInJlZnRhYmxlL3N5c3RlbS5oIgojaW5jbHVkZSAicmVmdGFibGUvcmVmdGFibGUtdGVzdHMuaCIKI2luY2x1ZGUgInRlc3QtdG9vbC5oIgoKaW50IGNtZF9fcmVmdGFibGUoaW50IGFyZ2MsIGNvbnN0IGNoYXIgKiphcmd2KQp7CgkvKiB0ZXN0IGZyb20gc2ltcGxlIHRvIGNvbXBsZXguICovCgliYXNpY3NfdGVzdF9tYWluKGFyZ2MsIGFyZ3YpOwoJcmVjb3JkX3Rlc3RfbWFpbihhcmdjLCBhcmd2KTsKCWJsb2NrX3Rlc3RfbWFpbihhcmdjLCBhcmd2KTsKCXRyZWVfdGVzdF9tYWluKGFyZ2MsIGFyZ3YpOwoJcHFfdGVzdF9tYWluKGFyZ2MsIGFyZ3YpOwoJcmVhZHdyaXRlX3Rlc3RfbWFpbihhcmdjLCBhcmd2KTsKCW1lcmdlZF90ZXN0X21haW4oYXJnYywgYXJndik7CglzdGFja190ZXN0X21haW4oYXJnYywgYXJndik7CglyZWZuYW1lX3Rlc3RfbWFpbihhcmdjLCBhcmd2KTsKCXJldHVybiAwOwp9CgppbnQgY21kX19kdW1wX3JlZnRhYmxlKGludCBhcmdjLCBjb25zdCBjaGFyICoqYXJndikKewoJcmV0dXJuIHJlZnRhYmxlX2R1bXBfbWFpbihhcmdjLCAoY2hhciAqY29uc3QgKilhcmd2KTsKfQo=",
+    "text": "#include \"reftable/system.h\"\n#include \"reftable/reftable-tests.h\"\n#include \"test-tool.h\"\n\nint cmd__reftable(int argc, const char **argv)\n{\n\t/* test from simple to complex. */\n\tbasics_test_main(argc, argv);\n\trecord_test_main(argc, argv);\n\tblock_test_main(argc, argv);\n\ttree_test_main(argc, argv);\n\tpq_test_main(argc, argv);\n\treadwrite_test_main(argc, argv);\n\tmerged_test_main(argc, argv);\n\tstack_test_main(argc, argv);\n\trefname_test_main(argc, argv);\n\treturn 0;\n}\n\nint cmd__dump_reftable(int argc, const char **argv)\n{\n\treturn reftable_dump_main(argc, (char *const *)argv);\n}\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "00237ef0d9e08fb9747010891b64d1d5ca421a29",
+  "sha1_ok": true,
+  "size": 575
+}

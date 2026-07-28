@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 24511ba1d8a1420678bd92c73e302f67ab732063",
+      "parent 8a19aaab6394df2c6138d5b8b1411eb00bfcf442",
+      "author Steffen Prohaska <prohaska@zib.de> 1210828794 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1211017406 -0700"
+    ],
+    "message": "t0050: Fix merge test on case sensitive file systems\n\nOn a case sensitive filesystem, \"git reset --hard\" might refuse to\noverwrite a file whose name differs only by case, even if\ncore.ignorecase is set.  It is not clear which circumstances cause this\nbehavior.  This commit simply works around the problem by removing\nthe case changing file before running \"git reset --hard\".\n\nSigned-off-by: Steffen Prohaska <prohaska@zib.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0047dd2fd1fc1980913901c5fa098357482c2842",
+  "sha1_ok": true,
+  "size": 693
+}

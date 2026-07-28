@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree aa731e8d54303307bff336dceb8216134f25e379",
+      "parent 473b8bb3aa01fb214c9905456f1f33c9c7def6b3",
+      "parent b9dbddf6dace2094061d5093743f29c100cfd534",
+      "author Junio C Hamano <gitster@pobox.com> 1531941627 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1531941628 -0700"
+    ],
+    "message": "Merge branch 'sb/object-store-grafts'\n\nThe conversion to pass \"the_repository\" and then \"a_repository\"\nthroughout the object access API continues.\n\n* sb/object-store-grafts:\n  commit: allow lookup_commit_graft to handle arbitrary repositories\n  commit: allow prepare_commit_graft to handle arbitrary repositories\n  shallow: migrate shallow information into the object parser\n  path.c: migrate global git_path_* to take a repository argument\n  cache: convert get_graft_file to handle arbitrary repositories\n  commit: convert read_graft_file to handle arbitrary repositories\n  commit: convert register_commit_graft to handle arbitrary repositories\n  commit: convert commit_graft_pos() to handle arbitrary repositories\n  shallow: add repository argument to is_repository_shallow\n  shallow: add repository argument to check_shallow_file_for_update\n  shallow: add repository argument to register_shallow\n  shallow: add repository argument to set_alternate_shallow_file\n  commit: add repository argument to lookup_commit_graft\n  commit: add repository argument to prepare_commit_graft\n  commit: add repository argument to read_graft_file\n  commit: add repository argument to register_commit_graft\n  commit: add repository argument to commit_graft_pos\n  object: move grafts to object parser\n  object-store: move object access functions to object-store.h\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00624d608cc69bd62801c93e74d1ea7a7ddd6598",
+  "sha1_ok": true,
+  "size": 1611
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 751821e1d91ecd4c8579fe581d57ebd0d99b1e4e",
+      "parent b78281f7215c0236da6bd5c04ec5e500c83fd101",
+      "author Linus Torvalds <torvalds@linux-foundation.org> 1189791588 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1189797177 -0700"
+    ],
+    "message": "Fix the rename detection limit checking\n\nThis adds more proper rename detection limits. Instead of just checking\nthe limit against the number of potential rename destinations, we verify\nthat the rename matrix (which is what really matters) doesn't grow\nridiculously large, and we also make sure that we don't overflow when\ndoing the matrix size calculation.\n\nThis also changes the default limits from unlimited, to a rename matrix\nthat is limited to 100 entries on a side. You can raise it with the config\nentry, or by using the \"-l<n>\" command line flag, but at least the default\nis now a sane number that avoids spending lots of time (and memory) in\nsituations that likely don't merit it.\n\nThe choice of default value is of course very debatable. Limiting the\nrename matrix to a 100x100 size will mean that even if you have just one\nobvious rename, but you also create (or delete) 10,000 files, the rename\nmatrix will be so big that we disable the heuristics. Sounds reasonable to\nme, but let's see if people hit this (and, perhaps more importantly,\nactually *care*) in real life.\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0024a54923a12f8c05ce4290f5ebefab0cce4336",
+  "sha1_ok": true,
+  "size": 1424
+}

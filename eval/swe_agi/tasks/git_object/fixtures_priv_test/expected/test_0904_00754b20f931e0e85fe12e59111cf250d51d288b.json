@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 5b5d0f5befb6b8ffed07af82faeb49e67d0c437d",
+      "parent b42e81afe2d98faee7728ef02a558847fd08cf90",
+      "parent d577cd216e0adb9cbc726dddd1a0858b4ab4e6e3",
+      "author Junio C Hamano <gitster@pobox.com> 1325101371 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1325101371 -0800"
+    ],
+    "message": "Merge branch 'tr/doc-sh-setup' into maint\n\n* tr/doc-sh-setup:\n  git-sh-setup: make require_clean_work_tree part of the interface\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00754b20f931e0e85fe12e59111cf250d51d288b",
+  "sha1_ok": true,
+  "size": 393
+}

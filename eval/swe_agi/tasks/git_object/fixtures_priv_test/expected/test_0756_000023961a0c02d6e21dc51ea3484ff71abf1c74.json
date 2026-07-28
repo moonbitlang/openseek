@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 3841d0ea5869f5aa6472279e25dcde48fb454aaf",
+      "parent fdbdb64f49959f9c83329554080934895f02ae59",
+      "author Jeff King <peff@peff.net> 1502792609 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1502820838 -0700"
+    ],
+    "message": "interpret-trailers: add an option to unfold values\n\nThe point of \"--only-trailers\" is to give a caller an output\nthat's easy for them to parse. Getting rid of the\nnon-trailer material helps, but we still may see more\ncomplicated syntax like whitespace continuation. Let's add\nan option to unfold any continuation, giving the output as a\nsingle \"key: value\" line per trailer.\n\nAs a bonus, this could be used even without --only-trailers\nto clean up unusual formatting in the incoming data.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "000023961a0c02d6e21dc51ea3484ff71abf1c74",
+  "sha1_ok": true,
+  "size": 788
+}

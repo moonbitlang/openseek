@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 10285f625b46d407ababdb6be13e8c9ef0693528",
+      "parent 2b7460d16719b751f025094ba9c8d10c81a6c4b1",
+      "author Alexandr Miloslavskiy <alexandr.miloslavskiy@syntevo.com> 1581960318 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1582138609 -0800"
+    ],
+    "message": "doc: stash: split options from description (2)\n\nTogether with the previous patch, this brings docs for `git stash` to\nthe common layout used for most other commands (see for example docs\nfor `git add`, `git commit`, `git checkout`, `git reset`) where all\noptions are documented in a separate list.\n\nAfter some thinking and having a look at docs for `git svn` and\n`git `submodule`, I have arrived at following conclusions:\n  * Options should be described in a list rather then text to\n    facilitate lookup for user.\n  * Single list is better then multiple lists because it avoids\n    copy&pasting descriptions between subcommands (or, without\n    copy&pasting, user will have to look up missing options in other\n    subcommands).\n  * As a consequence, commands section should only give brief info and\n    list possible options. Since options have good enough names, user\n\twill only need to look up the \"interesting\" options.\n  * Every option should list which subcommands support it.\n\nI have decided to use alphabetical sorting in the list of options to\nfacilitate lookup for user.\n\nThere is some text editing done to make old descriptions better fit\ninto the list-style format.\n\nSigned-off-by: Alexandr Miloslavskiy <alexandr.miloslavskiy@syntevo.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0093abc286fe3f195f702de28c6d9af009dda8e0",
+  "sha1_ok": true,
+  "size": 1542
+}

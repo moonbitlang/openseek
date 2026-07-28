@@ -1,0 +1,17 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "contrib",
+        "oid": "af75e3448783632005ec32b12bcf21747e0daacc"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "0072decca072386b72b01239d7a8d3abd5364823",
+  "sha1_ok": true,
+  "size": 34
+}

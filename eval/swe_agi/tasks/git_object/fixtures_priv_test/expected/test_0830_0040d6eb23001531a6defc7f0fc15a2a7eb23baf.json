@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree f9050b8fc610271b33f0e86dab8fd5b73ccdbe0c",
+      "parent 832ee79ab89d5908bcfd6fda89eacb0e665de2ef",
+      "parent 744db23c2d4399ff345a0ef6f2407c9a494d91dd",
+      "author Junio C Hamano <gitster@pobox.com> 1383160250 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1383160250 -0700"
+    ],
+    "message": "Merge branch 'tr/gitk-doc-update'\n\n* tr/gitk-doc-update:\n  Documentation: revamp gitk(1)\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0040d6eb23001531a6defc7f0fc15a2a7eb23baf",
+  "sha1_ok": true,
+  "size": 353
+}

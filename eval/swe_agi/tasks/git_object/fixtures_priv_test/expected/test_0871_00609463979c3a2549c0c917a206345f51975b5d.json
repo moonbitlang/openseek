@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 1c8c0d1fe5bbb20ce5b3f6ee256c985f08d4976d",
+      "parent 43c25074381dea404518318dacd360ed4f2abf3d",
+      "author Paul Mackerras <paulus@samba.org> 1182064115 +1000",
+      "committer Paul Mackerras <paulus@samba.org> 1182596147 +1000"
+    ],
+    "message": "gitk: Disable the head context menu entries for the checked-out branch\n\nNeither the \"check out this branch\" nor the \"remove this branch\"\nmenu item can be used on the currently-checked out branch, so disable\nthem.\n\nSigned-off-by: Paul Mackerras <paulus@samba.org>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00609463979c3a2549c0c917a206345f51975b5d",
+  "sha1_ok": true,
+  "size": 477
+}

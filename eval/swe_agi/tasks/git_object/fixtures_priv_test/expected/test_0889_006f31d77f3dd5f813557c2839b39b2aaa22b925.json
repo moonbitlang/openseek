@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 6f0f0a7b60f148a38d86431b83d7c9a98b267048",
+      "parent 53b22a9e45161004ff3260782abc4ee2a5b3e730",
+      "author Junio C Hamano <gitster@pobox.com> 1214525810 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1214528391 -0700"
+    ],
+    "message": "GIT 1.5.5.5\n\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "006f31d77f3dd5f813557c2839b39b2aaa22b925",
+  "sha1_ok": true,
+  "size": 279
+}

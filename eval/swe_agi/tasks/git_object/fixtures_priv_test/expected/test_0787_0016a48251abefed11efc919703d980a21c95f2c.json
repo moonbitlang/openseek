@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 226a1afc2ed4677580b75762855239b5a7c5e2ff",
+      "parent bda324cf6158672b91a478036731d332c1a14cac",
+      "author Lars Hjemli <hjemli@gmail.com> 1167855010 +0100",
+      "committer Junio C Hamano <junkio@cox.net> 1168254131 -0800"
+    ],
+    "message": "git-branch: show detached HEAD\n\nThis makes git-branch show a detached HEAD as '* (no branch)'.\n\nSigned-off-by: Lars Hjemli <hjemli@gmail.com>\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0016a48251abefed11efc919703d980a21c95f2c",
+  "sha1_ok": true,
+  "size": 398
+}

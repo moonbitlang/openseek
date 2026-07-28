@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 62636cb6beb740a77744b0b299825d39163d363e",
+      "parent 9c3c367b265d0844c5d3c03c7d0b737b92db731c",
+      "author Eric Sunshine <sunshine@sunshineco.com> 1373933436 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1374091116 -0700"
+    ],
+    "message": "git-log.txt: fix typesetting of example \"git-log -L\" invocation\n\nAll surrounding examples are typeset as monospaced text. Follow suit.\n\nSigned-off-by: Eric Sunshine <sunshine@sunshineco.com>\nAcked-by: Thomas Rast <trast@inf.ethz.ch>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "001b0976afe6f41bff46aa3eaad0285b641a50ea",
+  "sha1_ok": true,
+  "size": 504
+}

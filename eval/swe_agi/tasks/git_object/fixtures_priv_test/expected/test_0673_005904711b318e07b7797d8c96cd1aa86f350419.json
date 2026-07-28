@@ -1,0 +1,1991 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitattributes",
+        "oid": "6b9c715d21d5486e59083fb6071566aa6ecd4d42"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitignore",
+        "oid": "a213e8e25bb2442326e86cbfb9ef56319f482869"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".mailmap",
+        "oid": "373476bdc03f718b4c01471dd9996ee4497f43a8"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "COPYING",
+        "oid": "6ff87c4664981e4397625791c8ea3bbb5f2279a3"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "Documentation",
+        "oid": "ab0785489d6202ab02f2ca324bc41e967654ba74"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "GIT-VERSION-GEN",
+        "oid": "6c7465c75865577a87260c7936cb286ab84c6db6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "INSTALL",
+        "oid": "2bae53fcbb990eded5626c2c47ebce8684d081cf"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Makefile",
+        "oid": "7fad9f7ff6df54435659ec96f9611008b21fe27f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "README",
+        "oid": "548142c327a6790ff8821d67c2ee1eff7a656b52"
+      },
+      {
+        "kind": "blob",
+        "mode": "120000",
+        "name": "RelNotes",
+        "oid": "a677737b90d7f1cc550d632a8e983e6e7df109fb"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "abspath.c",
+        "oid": "0d561246e0a958d9a7284409b1900a82876eebf3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "alias.c",
+        "oid": "ccb1108c94436035d0da8b1d6f08f859b68294a3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "alloc.c",
+        "oid": "216c23a6f854c614d38c743cd7687a37f304161b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "archive-tar.c",
+        "oid": "13029619e5ec34bac4ba61a6fc08800ab36f4a1b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "archive-zip.c",
+        "oid": "cf285044e3576d0127c3215cb1253443d67517dc"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "archive.c",
+        "oid": "e2280df56723809c5af1d566f0721e2639fff10c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "archive.h",
+        "oid": "0b15b35143fffcc13764e4e668ee452b191cc609"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "arm",
+        "oid": "36753f6455e2308e746447cde2c2113285bc9b02"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "attr.c",
+        "oid": "17f6a4dca521d9690377f2e93a0192d8a874d2ad"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "attr.h",
+        "oid": "f1c2038b0923d3130937eef965667204a8634e6d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "base85.c",
+        "oid": "b88270f90844095b3d352cc4213cbebd95a7f420"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "blob.c",
+        "oid": "bd7d078e1ae5fe4ce0a16fda62a2c1743237941b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "blob.h",
+        "oid": "ea5d9e9f8b63be2c7048d19ee53feb06b0795c80"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "branch.c",
+        "oid": "b1e59f2196b933ab7169a30efc5d1d340f8f9c5c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "branch.h",
+        "oid": "9f0c2a2c1fab9a312f436880956da0973c68ead8"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-add.c",
+        "oid": "fc3f96eaefff91e4e85adb92162716939f0ecd72"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-annotate.c",
+        "oid": "fc43eed36b55e4966796490b8c0a02fae790229c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-apply.c",
+        "oid": "70c9f93554c9bc97e5adbd924fd197973bb7d30d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-archive.c",
+        "oid": "432ce2acc6bb687b35f3e9663f3058ebef2354e7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-blame.c",
+        "oid": "9bc901c2922403dcf73c8275da73d6d37d220729"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-branch.c",
+        "oid": "b1a2ad7a6b3b150cda8d031a87352a4daedc40ea"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-bundle.c",
+        "oid": "9b58152047baebfdd6f26ffab31d49347e0cb069"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-cat-file.c",
+        "oid": "3fba6b9e743545868368a0e554466fca3814316a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-check-attr.c",
+        "oid": "cb783fc77e75515a02ed2268dfb37ee3bbd03749"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-check-ref-format.c",
+        "oid": "701de439ae0f508f3a8ab41559230357be60637e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-checkout-index.c",
+        "oid": "55b7aafe06680fa51729ddb7fa97f9cd319a470e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-checkout.c",
+        "oid": "c4fc2b2c562725018789dead3b86ccfbc4e2925f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-clean.c",
+        "oid": "48bf29f40a5e06fd588b34c468535e04abcf206b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-clone.c",
+        "oid": "5b40e07ba7f13950078d36a48c2cb3f6e6c3c2c4"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-commit-tree.c",
+        "oid": "9b84c48dce0938f4f2884565dc25308d51c7a423"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-commit.c",
+        "oid": "e2a7e48b1ce97a74ef73a1feb53a9b9248cf8668"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-config.c",
+        "oid": "91fdc4985d8e64fae12209174dd4aa2d887793e5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-count-objects.c",
+        "oid": "91b5487478998e39bb8ae4a5cb667360cff82c9a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-describe.c",
+        "oid": "ec404c839b6542deb4e15ca342fd3c0afbbedd2e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-diff-files.c",
+        "oid": "2b578c714d36c600107f03b454ed8241dc2d4f19"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-diff-index.c",
+        "oid": "04837494feba401c7f689eab5574768d3fd126de"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-diff-tree.c",
+        "oid": "415cb1612f5322da89850874ba81885e41808678"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-diff.c",
+        "oid": "d5fe775fc135c0905cabec6731104009ca3bfef3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-fast-export.c",
+        "oid": "7c93eb878d7da87b39959fb9599e4b7b6b81570b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-fetch--tool.c",
+        "oid": "7460ab7fce2a4e6a7e014f448819140e2204ccb7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-fetch-pack.c",
+        "oid": "85509f5ee5884589980c9a1c5f96b66a3d49d5dd"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-fetch.c",
+        "oid": "ee93d3a93da0267caa485fa552c29d779aecfdf7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-fmt-merge-msg.c",
+        "oid": "df02ba7afdd615492361a1897a9dedd6ab233c96"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-for-each-ref.c",
+        "oid": "72c087840c39bc03b142ba620f94800d40264eb9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-fsck.c",
+        "oid": "d3f3de9446a9184e9457fe4b743c4e43a9256597"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-gc.c",
+        "oid": "fac200e0b08360625afc81b02913128c9b87f486"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-grep.c",
+        "oid": "3a51662a35878ae6b5965c90abb747b5b27c5493"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-http-fetch.c",
+        "oid": "03f34d767ddfc3c7bc9b18d28ec7350d47564679"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-init-db.c",
+        "oid": "8140c1299afe368266de1153f3bb891f000fe5f5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-log.c",
+        "oid": "2efe5937346ee7c0a4d85e4087a4ea49a9806005"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-ls-files.c",
+        "oid": "068f424696864f3db1c1b78ef25a92a197ff5474"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-ls-remote.c",
+        "oid": "c21b841e7c5e8d27a6e66e7f70786d77aa4653b5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-ls-tree.c",
+        "oid": "cb61717685b09a2e409440206e27fce68831e04d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-mailinfo.c",
+        "oid": "e890f7a6d1ff7248aed4f03ebbcdfafd7e472dad"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-mailsplit.c",
+        "oid": "71f3b3b8741e505fc652e6c74c75972f19211f71"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-merge-base.c",
+        "oid": "3382b1382a7dcbd525126a35209072da4b4d8041"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-merge-file.c",
+        "oid": "3605960c2d9692514a6df0f344f3c3269cf1de3c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-merge-ours.c",
+        "oid": "8f5bbaf402e020e308e7af9cedb7df1b2ec5a2b7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-merge-recursive.c",
+        "oid": "b9738655adc66386e55eccafa9ab891bdcf30960"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-merge.c",
+        "oid": "dcaf3681dc4433a0a258010f2b0a06fc26dc2212"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-mv.c",
+        "oid": "4f65b5ae9baf66953e79886fd93fe31786b24d36"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-name-rev.c",
+        "oid": "08c8aabf9428447abad7def693d7b22c5330e180"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-pack-objects.c",
+        "oid": "4004e73e40db210334fa3ef69b49d07b929f2c99"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-pack-refs.c",
+        "oid": "34246df4ec946273d9f42e6f0848b02d8510beea"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-prune-packed.c",
+        "oid": "10cb8df8457fd5f2ba9be62ecd0f9384e21c3e63"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-prune.c",
+        "oid": "1663f8bdb1e27713bab6cf7a16ca15cfcfc1abef"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-push.c",
+        "oid": "c1ed68d938f67343c6938cfef54d5ff69a522a63"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-read-tree.c",
+        "oid": "0706c958181c54aeb18d91f6e3dbe7c9f572b94d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-reflog.c",
+        "oid": "196fa03b7fac795475a0e12f0fa3b443cb34bd1d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-remote.c",
+        "oid": "90a4e35828697f349a38ba3486c40813db32cee0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-rerere.c",
+        "oid": "dd4573fe8dcd9dc8edd5a7d41bc8daa83034ee7e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-reset.c",
+        "oid": "c24c21909194014b467c86fd3598796e7db576b3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-rev-list.c",
+        "oid": "facaff288dba2789f0637c4554bd130440e2a3da"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-rev-parse.c",
+        "oid": "9aa049ec170b0125fddde29adda3c720c8a7b8ee"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-revert.c",
+        "oid": "27881e94937dd79b9a0524eb2d9770427ec4f4fb"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-rm.c",
+        "oid": "50ae6d54011fad89387f0d56ce7a4591d07874f3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-send-pack.c",
+        "oid": "2af9f2934142f55858f4b5c76deb6397ac74b9f8"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-shortlog.c",
+        "oid": "d03f14fdad3d17dde06734d78ddb4aade6ed4f2b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-show-branch.c",
+        "oid": "233eed499d0b8790781326ff0455bdc7f09fe4d4"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-show-ref.c",
+        "oid": "572b114119db15f5f42dd79e3bc15e6d219f71db"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-stripspace.c",
+        "oid": "c0b21301ba4c126a49ed38b6983756b99a25aae0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-symbolic-ref.c",
+        "oid": "bfc78bb3f6eff2f8e39649b9649ae7263f143ad9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-tag.c",
+        "oid": "f2853d08c77368b37b40c7ea51f5a124208d385f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-tar-tree.c",
+        "oid": "0713bca778e7be18b58ec5d207dc7c8cd7e982ed"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-unpack-objects.c",
+        "oid": "40b20f26e86acca2ee37b34519e84a1ce79689c3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-update-index.c",
+        "oid": "9d19c51e8e68d5d4c92465699c58ef0acec70209"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-update-ref.c",
+        "oid": "56a0b1b39cf4c4fc51dbbff256240655bc36a038"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-upload-archive.c",
+        "oid": "a9b02fa32f372a6810867c10560a20d58b5b2a91"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-verify-pack.c",
+        "oid": "25a29f11a4b9642c1bd367b81779d8f09ae04604"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-verify-tag.c",
+        "oid": "729a1593e61d87ad4596f07e7faedac81de64e81"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin-write-tree.c",
+        "oid": "52a3c015ff8e4611522bd41078bdb2934d288d35"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "builtin.h",
+        "oid": "f3502d305e4f65e9707fe8b738f64be6e49f7f84"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "bundle.c",
+        "oid": "00b2aabefca49b634f49143523ee31556baa7777"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "bundle.h",
+        "oid": "e2aedd60d6ad1482bb6da173c853e6ba4805c8d7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "cache-tree.c",
+        "oid": "5f8ee87bb1c446341b640c2f978a658d6bfcfcd0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "cache-tree.h",
+        "oid": "cf8b790874c4a4f5890b360c237ccdd4a5a03de4"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "cache.h",
+        "oid": "884fae826cb8c296520aecbc8c23d9848dacb606"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "check-builtins.sh",
+        "oid": "d6fe6cf1749ebcd6189fa36cbb4e14a532d2d17b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "check-racy.c",
+        "oid": "00d92a16631a80ff8ec4e995dafcd3e55434fad5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "check_bindir",
+        "oid": "a1c4c3e8d845e8e791d7df0c1387e1b2262b5ecf"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "color.c",
+        "oid": "fc0b72ad59b13e4bd86372e5e81b4f400c99d26e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "color.h",
+        "oid": "6cf5c88aaf8d0e38e2853e6fd212e3cdd6c180cb"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "combine-diff.c",
+        "oid": "aa9d79ea0bf011ea45ef629ef713e6c977781431"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "command-list.txt",
+        "oid": "3583a33ee90647d8e6ded02643eb75753760d94f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "commit.c",
+        "oid": "dc0c5bfdab7296bf7febb6f1b1aad64550838c15"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "commit.h",
+        "oid": "ecdd5733f989f5931a0af05b387321da7068e9f9"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "compat",
+        "oid": "34cb6af7fc14090ed2f17423bf41af5f1e548704"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "config.c",
+        "oid": "53f04a076a7275965090edd4ca2a34652c4f5679"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "config.mak.in",
+        "oid": "b776149531025c85f5665d971e6e072f0cc64893"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "configure.ac",
+        "oid": "7c2856efc92ca55e3cf03fcf1c72ffb70318f7c3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "connect.c",
+        "oid": "dd96f8e0435ded892001783b69fba6a6fb3be288"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "contrib",
+        "oid": "59174a752640491ccc1f23a87b4b903e132012e9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "convert.c",
+        "oid": "78efed800d4d64898d438d9590b01be008cfcd36"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "copy.c",
+        "oid": "e54d15aced7595ccb11423b0de121db9051ad1f3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "csum-file.c",
+        "oid": "28389541a32454f2d988bb02e4268ffe12755bbc"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "csum-file.h",
+        "oid": "72c9487f4fd9fcab5e02fc2dc6afd3cb7f9c036a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "ctype.c",
+        "oid": "d2bd38e9013cdf5c4ab15dbb1770e94e5d6ed2cb"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "daemon.c",
+        "oid": "8dcde73200d1ddbc0dec0dbfdc2f4ff15047abd9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "date.c",
+        "oid": "35a52576c53e5e1406d40ed4402b8834a29b9f0e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "decorate.c",
+        "oid": "82d9e221eabab53acc418d0db6327e480836a5ed"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "decorate.h",
+        "oid": "e7328044ff84a4acaaa7f5f4bc5f85375dc7a07a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "delta.h",
+        "oid": "40ccf5a1e95f62d840a006274f7024fa43208b1c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "diff-delta.c",
+        "oid": "a4e28df714b4834e5efe42fa3abb647711913d71"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "diff-lib.c",
+        "oid": "e7eaff9a68ccbcc692522c9956f0dae9af45f3f1"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "diff-no-index.c",
+        "oid": "7d68b7f1bef1039b4996e662fb17968c4e3e3e79"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "diff.c",
+        "oid": "781fa15ac13ce11f8b77b95665659cfcbcab5836"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "diff.h",
+        "oid": "7f53bebf335148a5f623b5fcbe6142e6c4b53282"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "diffcore-break.c",
+        "oid": "31cdcfe8bcdae7df65b0387071846299a14bb7be"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "diffcore-delta.c",
+        "oid": "e670f8512558c38d9a9d6e754cfc609b042b1195"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "diffcore-order.c",
+        "oid": "23e93852d8c701760d56e7e728dba7c08367fbe8"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "diffcore-pickaxe.c",
+        "oid": "af9fffe6e8e145b066157da8791c749257e7c8e9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "diffcore-rename.c",
+        "oid": "1b2ebb40014d820fe4fb679509ab694d453be7b4"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "diffcore.h",
+        "oid": "8ae35785fd4439f466620ab9186838e7cb20fa36"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "dir.c",
+        "oid": "cfaa28ff23acb462aa0cfd54a405316320ec3bc8"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "dir.h",
+        "oid": "278ee42295ed3724801d56eb65c86b29002486aa"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "dump-cache-tree.c",
+        "oid": "1f73f1ea7dfa6a14dedf384c99751e86c8121ff4"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "editor.c",
+        "oid": "eebc3e95fe0c7e61f7c29fa5412ea9d4a5900f92"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "entry.c",
+        "oid": "aa2ee46a84033585d8e07a585610c5a697af82c2"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "environment.c",
+        "oid": "0c6d11f6a0c6fa5dbab2f36c4b4ad4de5aba4ac9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "exec_cmd.c",
+        "oid": "ce6741eb682b59ad638c7bee6ca31e2fcd53f281"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "exec_cmd.h",
+        "oid": "594f961387240c221020c9ea0bccd8a39ff69595"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "fast-import.c",
+        "oid": "5473cd4d626c1260cf1a192ab05cc63c37a8fbcb"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "fetch-pack.h",
+        "oid": "8bd9c32561e79d194d27fa10cc98a26aa2cb673c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "fixup-builtins",
+        "oid": "63dfa4c475ae3632fc5cfd093d949a41683a5458"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "fsck.c",
+        "oid": "797e3178ae279f444d2efa7e3758652ad0898dd7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "fsck.h",
+        "oid": "990ee02335a2e2693e32baa82b259c23843f2aa0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "generate-cmdlist.sh",
+        "oid": "a2913c2a2cd1ec158157ada3e2deb666892b734b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-add--interactive.perl",
+        "oid": "da768ee7acc22e6480f0a067e109239561d43927"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-am.sh",
+        "oid": "aa602618e6caedbfdd2d54ad4bb8375356cc55f6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-archimport.perl",
+        "oid": "98f3ede566a6cb0c902ce84795f7de8f8afbe633"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-bisect.sh",
+        "oid": "97ac600873ebd0dff6310071343403a41a867b8a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "git-compat-util.h",
+        "oid": "cf89cdf4598b3796724a85aa707f740245155cdc"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-cvsexportcommit.perl",
+        "oid": "6d9f0ef0f989133422cf8c0302e63dab15a999d5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-cvsimport.perl",
+        "oid": "e43920296182f320dac31b5832a30844ffaef38f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-cvsserver.perl",
+        "oid": "b0a805c688f59af29e1f25b514d73f3991285dee"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-filter-branch.sh",
+        "oid": "a324cf0596ee0f05831190ce724fe9134bc7f568"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "git-gui",
+        "oid": "ba6c889548b63cff874ab08332070e502b49a313"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-instaweb.sh",
+        "oid": "0843372b57371b62cd68f2818f634209f55d5395"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-lost-found.sh",
+        "oid": "9cedaf80ceac1d4100adf3cfb152c76c7f945e4d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-merge-octopus.sh",
+        "oid": "645e1147dc886f2b1ca6d2020b44db746b082bf0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-merge-one-file.sh",
+        "oid": "e1eb9632660146396a0b5f3f2a410d8cb027ff9d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-merge-resolve.sh",
+        "oid": "93bcfc2f5dce418d00f26257788932d5c738785c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-mergetool.sh",
+        "oid": "94187c306ccb05d977f2bb35e81828130ab49a61"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-parse-remote.sh",
+        "oid": "695a4094bb4230341618bd6f16d0bea9bff2e826"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-pull.sh",
+        "oid": "75c36100a2f858bcf2663d2b4560654787963175"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-quiltimport.sh",
+        "oid": "cebaee1cc9dfc28d80173583b144a480be2f9bfd"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-rebase--interactive.sh",
+        "oid": "edb6ec6ed00b74764764802d0ebae56d223a2ac6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-rebase.sh",
+        "oid": "528b604cd57a774030c5f5830d3d78b5a04454cf"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-relink.perl",
+        "oid": "937c69a74858a8a3c63bb41a23705b579df1b3a3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-repack.sh",
+        "oid": "d39eb6cea6174ac65f1cc13c98e4abeab3a90903"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-request-pull.sh",
+        "oid": "073a314c8043e0ff30afde65e012e356ff0d186f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-send-email.perl",
+        "oid": "d2fd89907688a044ffe0d2520744e00a9b33c942"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-sh-setup.sh",
+        "oid": "dbdf209ec0e7d6468c199d1905c3e7788a9cd246"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-stash.sh",
+        "oid": "42f626f9d555f26f3e50441c0ab27de5cac19bf4"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-submodule.sh",
+        "oid": "5888735e4f2dac852f43c31195f430a1a6d23446"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-svn.perl",
+        "oid": "33e1b503c4d58f5f0a0c109a37968419710fbd11"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-web--browse.sh",
+        "oid": "384148a59fc492d8fb1d6ea4fc4532aa1e5ffc22"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "git.c",
+        "oid": "5582c515ac04609a338de1d2d5e510e7e7c4914d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "git.spec.in",
+        "oid": "c6492e5be2763eab81358424ff625a34a5ff2fba"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "gitk-git",
+        "oid": "e332138eb5e151d13034254f15ca0d672679fe49"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "gitweb",
+        "oid": "019bf8aef1f61d020e0914c0aebff67fd0cf4058"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "graph.c",
+        "oid": "e2633f8376eb7b12706dcd4c698e2b3f6be2b433"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "graph.h",
+        "oid": "eab4e3daba9812293d4e005c3ebe28f9a97744ce"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "grep.c",
+        "oid": "706351197fc26efa10c4666d38433f8fbdf1d6b5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "grep.h",
+        "oid": "59b3f871ea63619f8d3caae74c41b4da1e9a2b9f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "hash-object.c",
+        "oid": "46c06a9552dac5475afc607c3fe2bf00801eb055"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "hash.c",
+        "oid": "1cd4c9d5c0945994b84bb25edd6e4685cf76b5c5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "hash.h",
+        "oid": "69e33a47b9861df9ac12c354eae180b4f8fea857"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "help.c",
+        "oid": "dc0786d8002ef633cae4485eb5b25cdb6cf17df4"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "http-push.c",
+        "oid": "68052888570af7d09535db8831b8cf3ef2881589"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "http-walker.c",
+        "oid": "9dc6b27b457a2979a95018679a0b885e6fb62d9a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "http.c",
+        "oid": "a97fdf51173cf73d883c024d85109cbd4e607db9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "http.h",
+        "oid": "905b4629a47789705c13745fd56ce0c91adea41b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "ident.c",
+        "oid": "09cf0c95c9bfc24fa3e4a8f9e212ec42b8a55eba"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "imap-send.c",
+        "oid": "1ec131092109aa3fbed3cd20f10b56a864584a94"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "index-pack.c",
+        "oid": "530d820370fb2b02a443873b8b9ddd0bcffcb5ec"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "interpolate.c",
+        "oid": "7f03bd99c5b66afa6cc7fa11a2430301a3042656"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "interpolate.h",
+        "oid": "77407e67dca97eb85274c69e2e7469e1d4d40b3b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "list-objects.c",
+        "oid": "c8b8375e4983794e601ba69a1c217a3c711835e9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "list-objects.h",
+        "oid": "0f41391ecc00eac324ea76de7654781c4fce094e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "ll-merge.c",
+        "oid": "9837c842a3f215ebee7cbe9690e42e216fb5c76c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "ll-merge.h",
+        "oid": "5388422d091ede134d42406291989c49553f7428"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "lockfile.c",
+        "oid": "4023797b00fe21ecbabe3407ef8a12fca0690607"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "log-tree.c",
+        "oid": "bd8b9e45ab46b8664c8b7016b33bee22f86c9e0d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "log-tree.h",
+        "oid": "59ba4c48b7966db34c6345a445ab0b10e235ac83"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "mailmap.c",
+        "oid": "88fc6f394684436967002ca477eac1e084537348"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "mailmap.h",
+        "oid": "6e48f83cedd13e24d50cddf47f037791ddc5ad4b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "match-trees.c",
+        "oid": "0fd6df7d6ed839eaed536bc332312c2688a6bbad"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "merge-file.c",
+        "oid": "2a939c9dd835a7e7946eb1548e4cf637ae3ca329"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "merge-index.c",
+        "oid": "7827e87a928586226570132fc8922991b1cb6c8a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "merge-recursive.h",
+        "oid": "f37630a8ad07709ae106ddde44a34daf6bad8b16"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "merge-tree.c",
+        "oid": "02fc10f7e622ba1c53065e7cf4563ff10af0c41f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "mktag.c",
+        "oid": "0b34341f711a903d4a12fe96dc6ef63e55fb2f5b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "mktree.c",
+        "oid": "e0da110a98d3a7376dc78df71fabc10fc5664296"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "mozilla-sha1",
+        "oid": "930c4b2743737c3dd8a58309fd66f019f08ab12f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "name-hash.c",
+        "oid": "0031d78e8c98a32d61cd0dc0f939a033e24ed890"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "object.c",
+        "oid": "50b6528001fe4bafdfe70126dc2078860c3d1969"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "object.h",
+        "oid": "036bd66fe9b6591e959e6df51160e636ab1a682e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-check.c",
+        "oid": "f596bf2db5e0a0065e6856b8caa3ded8a134f74d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-redundant.c",
+        "oid": "25b81a445c8fafe0c00ce30082b7d9a7c22ccf1e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-refs.c",
+        "oid": "848d311c2b2c651dbb14893c260584f00c639357"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-refs.h",
+        "oid": "518acfb370ad72be18399a3ac5e8ca17880281c9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-revindex.c",
+        "oid": "6096b6224ad551086afa346617eb714c15a51f78"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-revindex.h",
+        "oid": "8d5027ad917224f689e786e9a0b4e9a387e59dfe"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-write.c",
+        "oid": "3621f1dd3258d9dcd63bf5a6738e5d54940ffbbb"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack.h",
+        "oid": "a883334b269c76d8de1395adf2b8f3d0d7e8564f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pager.c",
+        "oid": "6b5c9e44b4ded338ddb344ae454d83a685b7569a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "parse-options.c",
+        "oid": "fd08bb425c241a0861588ec0aedd15041095a95f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "parse-options.h",
+        "oid": "5199950c006df4625355ce227970cc3e8a72ed41"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "patch-delta.c",
+        "oid": "ed9db81fa82c812c9ffa07f5a40540dbb15da0d3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "patch-id.c",
+        "oid": "9349bc5580456b378d41da7cc2518e4fa9a7e81a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "patch-ids.c",
+        "oid": "3be5d3165e0009761a0ca69e15e4a9132c6cfaff"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "patch-ids.h",
+        "oid": "c8c7ca110ad34def12a3594a1560b3c3052eb701"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "path.c",
+        "oid": "76e8872622e435b050f77198ef6eef6e6ff6869e"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "perl",
+        "oid": "d2a273e1d87d6f184439583fb24c2a51f3f6fa09"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pkt-line.c",
+        "oid": "f5d00863a6234c16db33637d19fefd2014780e87"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pkt-line.h",
+        "oid": "9df653f6f5afe720870658d7093bddbf3e66beaf"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "ppc",
+        "oid": "6f6159f0245784352414ff38ffb68bae80f30bd6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pretty.c",
+        "oid": "a29c290009587a12cdc6aec335d508d29481e697"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "progress.c",
+        "oid": "55a8687ad15788f8ea5a5beb463d216908f618b2"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "progress.h",
+        "oid": "611e4c4d42d8d1164add09f926ad5b2ce088db5e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "quote.c",
+        "oid": "6a520855d6c418ecb1384ef9571b122b134af1af"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "quote.h",
+        "oid": "c5eea6f18e2dfabd071b73e6507c34c2b7b5e39f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "reachable.c",
+        "oid": "3b1c18ff9b9060d0dd437ce89aedb8871c66c54c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "reachable.h",
+        "oid": "40751810b64f8bbf9c0a633472a0ef27d23ed1a5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "read-cache.c",
+        "oid": "8f96fd17226e26c4b8a1497aace5b9fffb664bbe"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "receive-pack.c",
+        "oid": "d44c19e6b577023dcbaa188a0e67130ff4e5bd9a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "reflog-walk.c",
+        "oid": "f751fdc8d832cae54647c1a70d888e979d324fd8"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "reflog-walk.h",
+        "oid": "7ca1438f4d74b652f962c6bdfddd08fe0d75802d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "refs.c",
+        "oid": "39a3b23804d2da715c564459bf320be23d41c1bf"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "refs.h",
+        "oid": "06ad26055661a9b9e475d0f8a7bd6d1cfb42e792"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "remote.c",
+        "oid": "105668f8a3cf13c2a759e9da4d0acc50ef781de9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "remote.h",
+        "oid": "091b1d041f8a4d255f59bfc001e098e692dbc15c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "rerere.c",
+        "oid": "323e493dafee46c0d3f95e3c4cd9c4c9b463bbef"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "rerere.h",
+        "oid": "f9b03862fe78b560ee606637be3b1ce972a2cc14"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "revision.c",
+        "oid": "270294af8321c0b81f720db0f36e8f7f9eddbc88"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "revision.h",
+        "oid": "91f194478bb91d381ab2b2440215144d8bb8d18d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "run-command.c",
+        "oid": "bbb9c777e583c345d25a6651f9ddf7725c10f6af"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "run-command.h",
+        "oid": "5203a9ebb10b14bd06862abafed0ab73d7514a3d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "send-pack.h",
+        "oid": "8ff1dc35390083c3648c4ee5790f35633d956069"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "server-info.c",
+        "oid": "c1c073b2f05a48772a45602cdc711eef6e211695"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "setup.c",
+        "oid": "2e3248a0c4958f31001213470a88d1154b5947fc"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "sha1-lookup.c",
+        "oid": "da357479cf19aad4bebc64f874c76fdf8566712b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "sha1-lookup.h",
+        "oid": "3249a81b3d664afc89c98e6d9dd6b512092a82f9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "sha1_file.c",
+        "oid": "e2cb342a32f31be2b9ffc1867fbfd671fe63cef1"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "sha1_name.c",
+        "oid": "4fb77f8863ec075de38b84171d3ef039a00cee4c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "shallow.c",
+        "oid": "4d90eda19efe0a80c1cb39e8897ab3ed5e6fcf56"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "shell.c",
+        "oid": "e3393690dd3b79af80e6b95710583e744fd574d4"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "shortlog.h",
+        "oid": "bc02cc29ef0d5f640ab390614def995f30fe4691"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "show-index.c",
+        "oid": "45bb535773fd9c36f73502df9462f7de800009c8"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "sideband.c",
+        "oid": "cca3360546dabf9f018b882f690bd1dea9de534d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "sideband.h",
+        "oid": "a84b6917c7a17b5f8a922540801e98d46aa24431"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "strbuf.c",
+        "oid": "720737d856b694bc5239f0c18af372959c99e744"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "strbuf.h",
+        "oid": "eba7ba423a2d3a383ef93f663c95695438269edf"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "string-list.c",
+        "oid": "ddd83c8c76112cecd5d23668aaca467601855a72"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "string-list.h",
+        "oid": "4d6a7051fe5bccf04a0d0c32a90e5cf9c00dba3c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "symlinks.c",
+        "oid": "5a5e781a15d7d9cb60797958433eca896b31ec85"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "t",
+        "oid": "d94ca8fb56431ae9bb3d064bc12ed67e1c3b8f78"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "tag.c",
+        "oid": "4470d2bf78e1fbb00d00e487f41daa4373cf48e1"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "tag.h",
+        "oid": "7a0cb0070d46ba8c49d71029dc0704188805ea62"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "tar.h",
+        "oid": "3467705e9b0e14a0230473186079e83a582e4345"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "templates",
+        "oid": "db4c5cb1ad8ef61c0fc002fe53bd4679d4021cec"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "test-chmtime.c",
+        "oid": "90da448ebec3e5375b7725ba7f297c1c74199b87"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "test-date.c",
+        "oid": "62e8f2387a1cab97ec1c71d1993d082274e17bf5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "test-delta.c",
+        "oid": "3d885ff37ee7fc43dec05dd827679d68cee5516b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "test-genrandom.c",
+        "oid": "8cefe6cfed87c8fe0c11d1263dae01639d2bd0f0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "test-match-trees.c",
+        "oid": "a3c4688778d9db28c83c9149c9cff1609b69b93f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "test-parse-options.c",
+        "oid": "61d2c39814529bd0264e4c9e40241131d51d819c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "test-path-utils.c",
+        "oid": "a0bcb0e210523124fa977c8bf46667cf25d0335f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "test-sha1.c",
+        "oid": "78d7e983a7a05ba0652132425a66477ef5773304"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "test-sha1.sh",
+        "oid": "0f0bc5d02f4dcbd67c6d405350e5aaeb39f44bfb"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "thread-utils.c",
+        "oid": "55e7e2904eb5f95cedaec2520ddd1d158ee93c7a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "thread-utils.h",
+        "oid": "cce4b77bd6452e2ec589d8c0dc0e8156352dd67b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "trace.c",
+        "oid": "4713f9165c54405d51e81c3e90847120ee907e5d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "transport.c",
+        "oid": "71433d99978ddcc53c80fd6de4aee98871c6d8cf"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "transport.h",
+        "oid": "d0b52053fff9bc463438674232bffb6024f3b1fc"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "tree-diff.c",
+        "oid": "9f67af6c1fbb9130962cd373d8e2ebecf543c640"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "tree-walk.c",
+        "oid": "02e2aed7737207225f1b96eed774a1b75dd6d8d9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "tree-walk.h",
+        "oid": "42110a465f9a8c91d1bc643dfae7a9b9c32e3719"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "tree.c",
+        "oid": "03e782a9cabc0a12ed5baec0ef59c99f19dbc843"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "tree.h",
+        "oid": "2ff01a4f839ecc2206fcc1c13fee9d5d202b1128"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "unpack-file.c",
+        "oid": "bcdc8bbb3b44a43aa43db6035a31478158e070af"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "unpack-trees.c",
+        "oid": "e59d144d28164f2451784513105f6269f0e9167c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "unpack-trees.h",
+        "oid": "0d26f3d73e773230972db86f34a5147ada881e8b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "update-server-info.c",
+        "oid": "7e8209ea4b43995737b36bc58db47e7dd6eadb19"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "upload-pack.c",
+        "oid": "e5adbc011e0ab71eeb06a42c4bd40cbea0bf3fa2"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "usage.c",
+        "oid": "a5fc4ec5fae66823266862fa0254474696c220e6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "utf8.c",
+        "oid": "dc3735364f85273c2a119b994ddb405c09dc395c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "utf8.h",
+        "oid": "98cce1b038a908bec51ccd2f7e1c1f648cb429a1"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "var.c",
+        "oid": "f1eb314e899c518b8dea54b4ff8f3923da7b12cf"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "walker.c",
+        "oid": "0e68ee6d2e2fb1b866ecec00c5f6446af366a62e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "walker.h",
+        "oid": "8a149e11084eeec4501b5b2c5d22e5266f4852e7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "wrapper.c",
+        "oid": "93562f03eef21b26945d2d9bbdc96818f4de6567"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "write_or_die.c",
+        "oid": "4c29255df1b637f93ab3d59e0dcab1fa3b40e10b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "ws.c",
+        "oid": "7a7ff130a34942506e6068105ac5946c9404bf18"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "wt-status.c",
+        "oid": "889e50f89fc24984f700d14f7033600fa9fdf642"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "wt-status.h",
+        "oid": "78add09bd67c727babb61cd1eaa773bcd0c6e55e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "xdiff-interface.c",
+        "oid": "2c81f40cb657f6e49bc6a7431f830a037713ab38"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "xdiff-interface.h",
+        "oid": "33cab9dd59336fabe8cdd484953544b505c1ba94"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "xdiff",
+        "oid": "88b6f65753131f1f2c0dbceb1f37950e3494833a"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "005904711b318e07b7797d8c96cd1aa86f350419",
+  "sha1_ok": true,
+  "size": 13379
+}

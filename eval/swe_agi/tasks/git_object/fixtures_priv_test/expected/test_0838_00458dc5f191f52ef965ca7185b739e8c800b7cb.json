@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree adc489b48b9dce01a18c39678c29d5977b529d16",
+      "parent 65c63a005434306e7c064eb463ff1f61de56d38e",
+      "author Felipe Contreras <felipe.contreras@gmail.com> 1622490677 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1622596321 +0900"
+    ],
+    "message": "push: make setup_push_* return the dst\n\nAll of the setup_push_* functions are appending a refspec. Do this only\nonce on the parent function.\n\nSigned-off-by: Felipe Contreras <felipe.contreras@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00458dc5f191f52ef965ca7185b739e8c800b7cb",
+  "sha1_ok": true,
+  "size": 480
+}

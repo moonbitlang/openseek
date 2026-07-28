@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 39b28e6863a17274972a08d19f99b232fd29e766",
+      "parent 2ae7f90f263760abd242501471f123632395d7b3",
+      "author Ren\u00e9 Scharfe <l.s.r@web.de> 1424548288 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1424635297 -0800"
+    ],
+    "message": "for-each-ref: use skip_prefix() to avoid duplicate string comparison\n\nUse skip_prefix() to get the part after \"color:\" (if present) and only\ncompare it with \"reset\" instead of comparing the whole string again.\nThis gets rid of the duplicate \"color:\" part of the string constant.\n\nSigned-off-by: Rene Scharfe <l.s.r@web.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008d5d005d862d9b0309af94dfc266e3b06bdf6d",
+  "sha1_ok": true,
+  "size": 583
+}

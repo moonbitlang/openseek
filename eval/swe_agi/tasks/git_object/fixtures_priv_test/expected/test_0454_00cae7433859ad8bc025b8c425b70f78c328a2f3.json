@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "bGFuZ3VhZ2VzID0gWwogICdiZycsCiAgJ2RlJywKICAnZWwnLAogICdmcicsCiAgJ2h1JywKICAnaXQnLAogICdqYScsCiAgJ25iJywKICAncHRfYnInLAogICdwdF9wdCcsCiAgJ3J1JywKICAnc3YnLAogICd2aScsCiAgJ3poX2NuJywKXQoKbXNnZm10ID0gZmluZF9wcm9ncmFtKCdtc2dmbXQnLCByZXF1aXJlZDogZmFsc2UpCmlmIG5vdCBtc2dmbXQuZm91bmQoKQogIHN1YmRpcl9kb25lKCkKZW5kaWYKCmZvcmVhY2ggbGFuZ3VhZ2UgOiBsYW5ndWFnZXMKICBjdXN0b21fdGFyZ2V0KAogICAgaW5wdXQ6IGxhbmd1YWdlICsgJy5wbycsCiAgICBvdXRwdXQ6IGxhbmd1YWdlICsgJy5tc2cnLAogICAgY29tbWFuZDogWwogICAgICBtc2dmbXQsCiAgICAgICctLXN0YXRpc3RpY3MnLAogICAgICAnLS10Y2wnLAogICAgICAnLS1sb2NhbGU9JyArIGxhbmd1YWdlLAogICAgICAnLWQnLCBtZXNvbi5jdXJyZW50X2J1aWxkX2RpcigpLAogICAgICAnQElOUFVUQCcsCiAgICBdLAogICAgaW5zdGFsbDogdHJ1ZSwKICAgIGluc3RhbGxfZGlyOiBnZXRfb3B0aW9uKCdkYXRhZGlyJykgLyAnZ2l0LWd1aS9saWIvbXNncycsCiAgKQplbmRmb3JlYWNoCg==",
+    "text": "languages = [\n  'bg',\n  'de',\n  'el',\n  'fr',\n  'hu',\n  'it',\n  'ja',\n  'nb',\n  'pt_br',\n  'pt_pt',\n  'ru',\n  'sv',\n  'vi',\n  'zh_cn',\n]\n\nmsgfmt = find_program('msgfmt', required: false)\nif not msgfmt.found()\n  subdir_done()\nendif\n\nforeach language : languages\n  custom_target(\n    input: language + '.po',\n    output: language + '.msg',\n    command: [\n      msgfmt,\n      '--statistics',\n      '--tcl',\n      '--locale=' + language,\n      '-d', meson.current_build_dir(),\n      '@INPUT@',\n    ],\n    install: true,\n    install_dir: get_option('datadir') / 'git-gui/lib/msgs',\n  )\nendforeach\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "00cae7433859ad8bc025b8c425b70f78c328a2f3",
+  "sha1_ok": true,
+  "size": 592
+}

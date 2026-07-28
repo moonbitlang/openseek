@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 548180e1aaf2d920fd18e5ea7c1c08e59523e93d",
+      "parent ee32abda28299bfb03e1c3239b95182579569012",
+      "author \u00c6var Arnfj\u00f6r\u00f0 Bjarmason <avarab@gmail.com> 1647511990 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1647531626 -0700"
+    ],
+    "message": "bugreport tests: tighten up \"git bugreport -s hooks\" test\n\nAmend a test added in 788a776069b (bugreport: collect list of\npopulated hooks, 2020-05-07) to \"test_cmp\" for the expected output,\ninstead of selectively using \"grep\" to check for specific things we\neither expect or don't expect in the output.\n\nAs noted in a preceding commit our .git/hooks directory already\ncontains *.sample hooks, so we have no need to clobber the\nprepare-commit-msg.sample hook in particular.\n\nInstead we should assert that those *.sample hooks are not included in\nthe output, and for good measure let's add a new \"unknown-hook\", to\ncheck that we only look through our own known hooks. See\ncfe853e66be (hook-list.h: add a generated list of hooks, like\nconfig-list.h, 2021-09-26) for how we generate that data.\n\nWe're intentionally not piping the \"actual\" output through \"sort\" or\nsimilar, we'd also like to check that our reported hooks are sorted.\n\nSigned-off-by: \u00c6var Arnfj\u00f6r\u00f0 Bjarmason <avarab@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "003cdf8882fe9a57a056ab91d2dd9088624c01a2",
+  "sha1_ok": true,
+  "size": 1267
+}

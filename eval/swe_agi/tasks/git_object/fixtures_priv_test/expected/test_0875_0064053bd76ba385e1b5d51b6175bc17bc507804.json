@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 50da5cf8b850762e6219618292a14941fd163e2f",
+      "parent 7059dccc6c60a872a314b19ac17702065a71d6bd",
+      "author Jeff King <peff@peff.net> 1382604781 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1382654630 -0700"
+    ],
+    "message": "assume parse_commit checks commit->object.parsed\n\nThe parse_commit function will check the \"parsed\" flag of\nthe object and do nothing if it is set. There is no need\nfor callers to check the flag themselves, and doing so only\nclutters the code.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0064053bd76ba385e1b5d51b6175bc17bc507804",
+  "sha1_ok": true,
+  "size": 543
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 8f3f765a55cd88bf7cd34158daca1e67220690ae",
+      "parent 985cb9cc5851ae2f65acf74a8db5077b69cc2a9b",
+      "author Fredrik Kuivinen <freku045@student.liu.se> 1138880600 +0100",
+      "committer Junio C Hamano <junkio@cox.net> 1138912251 -0800"
+    ],
+    "message": "merge-recursive: Make use of provided bases\n\nThis makes some cases faster as we don't have to build the commit graph.\n\nSigned-off-by: Fredrik Kuivinen <freku045@student.liu.se>\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008bb6ea695e14740bfd14bec805cde6219b336e",
+  "sha1_ok": true,
+  "size": 445
+}

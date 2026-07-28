@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 1f96ade3c238a797b7f681ec64c5d59d98cbaa5d",
+      "parent 5ca4461728adadf22b5b8833693702ab09e556db",
+      "author Simon Hausmann <simon@lst.de> 1187970376 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1188006877 -0700"
+    ],
+    "message": "git-p4: Fix warnings about non-existant refs/remotes/p4/HEAD ref when running git-p4 sync the first time after a git clone.\n\nDon't create the p4/HEAD symbolic ref if p4/master doesn't exist yet.\n\nSigned-off-by: Simon Hausmann <simon@lst.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0058a33a8eb5a8bfcfc5f5e769a2517cff4b73f1",
+  "sha1_ok": true,
+  "size": 502
+}

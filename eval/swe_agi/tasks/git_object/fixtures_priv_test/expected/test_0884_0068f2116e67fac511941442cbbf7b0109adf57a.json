@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 58bce9855ba5bf57faa352e44a54486cdef7b521",
+      "parent a471214bd610bb415a37d5b2c3506b83549acd57",
+      "author Johannes Schindelin <johannes.schindelin@gmx.de> 1593009996 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1593015261 -0700"
+    ],
+    "message": "testsvn: respect `init.defaultBranch`\n\nThe default name of the initial branch in new repositories can now be\nconfigured. The `testsvn` remote helper translates the remote Subversion\nrepository's branch name `trunk` to the hard-coded name `master`.\nClearly, the intention was to make the name align with Git's defaults.\n\nSo while we are not talking about a newly-created repository in the\n`testsvn` context, it is a newly-created _Git_ repository, si it _still_\nmakes sense to use the overridden default name for the initial branch\nwhenever users configured it.\n\nSigned-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0068f2116e67fac511941442cbbf7b0109adf57a",
+  "sha1_ok": true,
+  "size": 906
+}

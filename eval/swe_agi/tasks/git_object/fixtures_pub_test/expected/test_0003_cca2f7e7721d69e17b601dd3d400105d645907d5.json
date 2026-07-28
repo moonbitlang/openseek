@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "object 5e1c309dae7f45e0f39b1bf3ac3cd9db12e7d689",
+      "type blob",
+      "tag hellotag",
+      "tagger Spec Tester <spec@example.com> 1234567890 +0000"
+    ],
+    "message": "This is a tag",
+    "type": "tag"
+  },
+  "kind": "tag",
+  "oid": "cca2f7e7721d69e17b601dd3d400105d645907d5",
+  "sha1_ok": true,
+  "size": 140
+}

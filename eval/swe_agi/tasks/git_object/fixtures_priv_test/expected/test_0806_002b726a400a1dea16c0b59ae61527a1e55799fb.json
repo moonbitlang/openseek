@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree e5bed46986772b67079e5d5a46d92698447f876c",
+      "parent 65f98358c0ca5917604d3eb59b80ce14f72c2c7c",
+      "author Philip Oakley <philipoakley@iee.org> 1364942391 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1364951370 -0700"
+    ],
+    "message": "builtin/help.c: add list_common_guides_help() function\n\nThis implements what \"help -g\" introduced in the previous step does.\n\nSigned-off-by: Philip Oakley <philipoakley@iee.org>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "002b726a400a1dea16c0b59ae61527a1e55799fb",
+  "sha1_ok": true,
+  "size": 446
+}

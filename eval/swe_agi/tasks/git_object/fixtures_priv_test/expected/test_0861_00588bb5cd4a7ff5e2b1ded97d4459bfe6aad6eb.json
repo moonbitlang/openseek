@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree f3f638046ed38c6e0ad5ebc6f48a8e7973fc9e9d",
+      "parent 55f638bdc6507b3a2ce03290741f592934afaee7",
+      "author Mark Lodato <lodatom@gmail.com> 1267980767 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1268037059 -0800"
+    ],
+    "message": "grep: Colorize selected, context, and function lines\n\nColorize non-matching text of selected lines, context lines, and\nfunction name lines.  The default for all three is no color, but they\ncan be configured using color.grep.<slot>.  The first two are similar\nto the corresponding options in GNU grep, except that GNU grep applies\nthe color to the entire line, not just non-matching text.\n\nSigned-off-by: Mark Lodato <lodatom@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00588bb5cd4a7ff5e2b1ded97d4459bfe6aad6eb",
+  "sha1_ok": true,
+  "size": 699
+}

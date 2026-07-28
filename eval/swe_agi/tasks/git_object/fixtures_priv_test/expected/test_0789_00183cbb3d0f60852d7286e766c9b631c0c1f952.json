@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree a31935e519b6102f6cbf3abaf831340993b4ee31",
+      "parent 7435982102093179474a128648179a44042d8a1c",
+      "author Daniel Barkalow <barkalow@iabervon.org> 1204215051 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1204272029 -0800"
+    ],
+    "message": "Always use the current connection's remote ref list in git protocol\n\nWe always report to the user the list of refs we got from the first\nconnection, even if we do multiple connections. But we should always\nuse each connection's own list of refs in the communication with the\nserver, in case we got a different server out of DNS rotation or the\ntiming was surprising or something.\n\nSigned-off-by: Daniel Barkalow <barkalow@iabervon.org>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00183cbb3d0f60852d7286e766c9b631c0c1f952",
+  "sha1_ok": true,
+  "size": 707
+}

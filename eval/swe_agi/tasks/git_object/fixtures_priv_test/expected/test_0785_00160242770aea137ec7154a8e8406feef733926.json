@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 59ebef96058c8fa938e7d2506aa8dba9b176e680",
+      "parent 2f666581bbc1895cf66a7007fb222026b299deb9",
+      "author Jeff King <peff@peff.net> 1378629602 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1378750349 -0700"
+    ],
+    "message": "git-config: always treat --int as 64-bit internally\n\nWhen you run \"git config --int\", the maximum size of integer\nyou get depends on how git was compiled, and what it\nconsiders to be an \"int\".\n\nThis is almost useful, because your scripts calling \"git\nconfig\" will behave similarly to git internally. But relying\non this is dubious; you have to actually know how git treats\neach value internally (e.g., int versus unsigned long),\nwhich is not documented and is subject to change. And even\nif you know it is \"unsigned long\", we do not have a\ngit-config option to match that behavior.\n\nFurthermore, you may simply be asking git to store a value\non your behalf (e.g., configuration for a hook). In that\ncase, the relevant range check has nothing at all to do with\ngit, but rather with whatever scripting tools you are using\n(and git has no way of knowing what the appropriate range is\nthere).\n\nNot only is the range check useless, but it is actively\nharmful, as there is no way at all for scripts to look\nat config variables with large values. For instance, one\ncannot reliably get the value of pack.packSizeLimit via\ngit-config. On an LP64 system, git happily uses a 64-bit\n\"unsigned long\" internally to represent the value, but the\nscript cannot read any value over 2G.\n\nIdeally, the \"--int\" option would simply represent an\narbitrarily large integer. For practical purposes, however,\na 64-bit integer is large enough, and is much easier to\nimplement (and if somebody overflows it, we will still\nnotice the problem, and not simply return garbage).\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00160242770aea137ec7154a8e8406feef733926",
+  "sha1_ok": true,
+  "size": 1845
+}

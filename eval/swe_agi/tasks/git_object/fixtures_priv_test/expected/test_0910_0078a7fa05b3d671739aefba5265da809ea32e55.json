@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 6655668814b361d1303787948c72f213b4482566",
+      "parent 07a263b9056ac7135ed84d64cabf80c5a6b1972e",
+      "author Benoit Person <benoit.person@ensimag.fr> 1372970340 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1373298974 -0700"
+    ],
+    "message": "git-remote-mediawiki: add preview subcommand into git mw\n\nIn the current state, a user of git-remote-mediawiki can edit the markup text\nlocally, but has to push to the remote wiki to see how the page is rendererd.\nAdd a new 'git mw preview' command that allows rendering the markup text on\nthe remote wiki without actually pushing any change on the wiki.\n\nThis uses Mediawiki's API to render the markup and inserts it in an actual\nHTML page from the wiki so that CSS can be rendered properly. Most links\nshould work when the page exists on the remote.\n\nSigned-off-by: Benoit Person <benoit.person@ensimag.fr>\nSigned-off-by: Matthieu Moy <matthieu.moy@grenoble-inp.fr>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0078a7fa05b3d671739aefba5265da809ea32e55",
+  "sha1_ok": true,
+  "size": 940
+}

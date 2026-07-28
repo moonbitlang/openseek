@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 4cc388911d3a2e414ea48e6b52e489efa792c9ac",
+      "parent 934c042c9cf09a14762b3fa094f1ba15ec721161",
+      "parent 76fd28283f7eeea246a06994edd43ab60e59d853",
+      "author Junio C Hamano <gitster@pobox.com> 1258332089 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1258332089 -0800"
+    ],
+    "message": "Merge branch 'js/maint-diff-color-words'\n\n* js/maint-diff-color-words:\n  diff --color-words: bit of clean-up\n  diff --color-words -U0: fix the location of hunk headers\n  t4034-diff-words: add a test for word diff without context\n\nConflicts:\n\tdiff.c\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "002a9ec005cd3d4273e3c6b7dbe7a2fb9e70c1bc",
+  "sha1_ok": true,
+  "size": 513
+}

@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree b91b59d5a1801109fba5281d5846d086eb3561d2",
+      "parent e3172d80d5c527048d67310692a8a62efc2c01e5",
+      "parent 05e934bb9f7767e13e8a658b0e429a40076a6b35",
+      "author Junio C Hamano <gitster@pobox.com> 1204957807 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1204957807 -0800"
+    ],
+    "message": "Merge branch 'cb/mergetool'\n\n* cb/mergetool:\n  Add a very basic test script for git mergetool\n  Teach git mergetool to use custom commands defined at config time\n  Changed an internal variable of mergetool to support custom commands\n  Tidy up git mergetool's backup file behaviour\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "003b93cfb3f588284b89dc4e4c89e1046913ff59",
+  "sha1_ok": true,
+  "size": 545
+}

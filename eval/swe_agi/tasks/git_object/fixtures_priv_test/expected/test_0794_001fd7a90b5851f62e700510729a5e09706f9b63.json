@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 125503b4986b65ef3da657d506a4adb2ec1add8c",
+      "parent 3bc72fde3f35b988c902abf5a0bc027f2e54d0c1",
+      "author Atousa Pahlevan Duprat <apahlevan@ieee.org> 1446705522 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1446748511 -0800"
+    ],
+    "message": "sha1: allow limiting the size of the data passed to SHA1_Update()\n\nUsing the previous commit's inredirection mechanism for SHA1,\nsupport a chunked implementation of SHA1_Update() that limits the\namount of data in the chunk passed to SHA1_Update().\n\nThis is enabled by using the Makefile variable SHA1_MAX_BLOCK_SIZE\nto specify chunk size.  When using Apple's CommonCrypto library this\nis set to 1GiB (the implementation cannot handle more 4GiB).\n\nSigned-off-by: Atousa Pahlevan Duprat <apahlevan@ieee.org>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "001fd7a90b5851f62e700510729a5e09706f9b63",
+  "sha1_ok": true,
+  "size": 781
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree fd335dc8d73d0f86e025856bb4e1a9aa421a5949",
+      "parent fe86abd7511a9a6862d5706c6fa1d9b57a63ba09",
+      "author Rub\u00e9n Justo <rjusto@gmail.com> 1686509368 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1686607456 -0700"
+    ],
+    "message": "config: fix a leak in git_config_copy_or_rename_section_in_file\n\nIn 52d59cc645 (branch: add a --copy (-c) option to go with --move (-m),\n2017-06-18) a new strbuf variable was introduced, but not released.\n\nThus, when copying a branch that has any configuration, we have a\nleak.\n\n   $ git branch foo\n   $ git config branch.foo.some-key some_value\n   $ git branch -c foo bar\n\n   Direct leak of 65 byte(s) in 1 object(s) allocated from:\n       ... in xrealloc wrapper.c\n       ... in strbuf_grow strbuf.c\n       ... in strbuf_vaddf strbuf.c\n       ... in strbuf_addf strbuf.c\n       ... in store_create_section config.c\n       ... in git_config_copy_or_rename_section_in_file config.c\n       ... in git_config_copy_section_in_file config.c\n       ... in git_config_copy_section config.c\n       ... in copy_or_rename_branch builtin/branch.c\n       ... in cmd_branch builtin/branch.c\n       ... in run_builtin git.c\n\nLet's fix that leak.\n\nSigned-off-by: Rub\u00e9n Justo <rjusto@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "003c1f1171f12678fe7994b3e6b3f6b2f2b88de3",
+  "sha1_ok": true,
+  "size": 1244
+}

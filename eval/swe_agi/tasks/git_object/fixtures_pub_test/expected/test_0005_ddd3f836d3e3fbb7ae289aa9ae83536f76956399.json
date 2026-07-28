@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "VGhpcyBpcyBhbiBleGFtcGxl",
+    "text": "This is an example",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "ddd3f836d3e3fbb7ae289aa9ae83536f76956399",
+  "sha1_ok": true,
+  "size": 18
+}

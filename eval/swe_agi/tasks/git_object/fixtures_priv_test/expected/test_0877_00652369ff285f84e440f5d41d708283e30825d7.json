@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree c44993a3591efc6b8156bf8d956f3131d906708f",
+      "parent 4bf1f68ee7a894e7e4936217eec7e6ae5fa4db77",
+      "author Stephen Boyd <bebarino@gmail.com> 1241832212 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1242244746 -0700"
+    ],
+    "message": "bash completion: complete variable names for \"git config\" with options\n\nThis makes it easier for users to get and unset their configuration\nvariables without having to open documentation or dig through their\nconfiguration file.\n\n__git_config_get_set_variables() retrieves the set configuration\nvariables from the appropriate configuration file. For example, if\nthe user has previously specified --global only the global variables\nare returned. The same applies for --system, and --file. If no\nlocation has been specified, all set variables are returned.\n\nSigned-off-by: Stephen Boyd <bebarino@gmail.com>\nAcked-by: Shawn O. Pearce <spearce@spearce.org>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00652369ff285f84e440f5d41d708283e30825d7",
+  "sha1_ok": true,
+  "size": 917
+}

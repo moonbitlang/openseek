@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "IyEvYmluL3NoCiMKIyBDb3B5cmlnaHQgKGMpIDIwMTAgUGV0ZXIgQ29sbGluZ2JvdXJuZQojCgp0ZXN0X2Rlc2NyaXB0aW9uPSdnaXQgYXBwbHkgc3VibW9kdWxlIHRlc3RzJwoKLiAuL3Rlc3QtbGliLnNoCgp0ZXN0X2V4cGVjdF9zdWNjZXNzIHNldHVwICcKCWNhdCA+IGNyZWF0ZS1zbS5wYXRjaCA8PEVPRiAmJgpkaWZmIC0tZ2l0IGEvZGlyL3NtIGIvZGlyL3NtCm5ldyBmaWxlIG1vZGUgMTYwMDAwCmluZGV4IDAwMDAwMDAuLjAxMjM0NTYKLS0tIC9kZXYvbnVsbAorKysgYi9kaXIvc20KQEAgLTAsMCArMSBAQAorU3VicHJvamVjdCBjb21taXQgMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2NwpFT0YKCWNhdCA+IHJlbW92ZS1zbS5wYXRjaCA8PEVPRgpkaWZmIC0tZ2l0IGEvZGlyL3NtIGIvZGlyL3NtCmRlbGV0ZWQgZmlsZSBtb2RlIDE2MDAwMAppbmRleCAwMTIzNDU2Li4wMDAwMDAwCi0tLSBhL2Rpci9zbQorKysgL2Rldi9udWxsCkBAIC0xICswLDAgQEAKLVN1YnByb2plY3QgY29tbWl0IDAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1NjcKRU9GCicKCnRlc3RfZXhwZWN0X3N1Y2Nlc3MgJ3JlbW92aW5nIGEgc3VibW9kdWxlIGFsc28gcmVtb3ZlcyBhbGwgbGVhZGluZyBzdWJkaXJlY3RvcmllcycgJwoJZ2l0IGFwcGx5IC0taW5kZXggY3JlYXRlLXNtLnBhdGNoICYmCgl0ZXN0IC1kIGRpci9zbSAmJgoJZ2l0IGFwcGx5IC0taW5kZXggcmVtb3ZlLXNtLnBhdGNoICYmCgl0ZXN0IFwhIC1kIGRpcgonCgp0ZXN0X2RvbmUK",
+    "text": "#!/bin/sh\n#\n# Copyright (c) 2010 Peter Collingbourne\n#\n\ntest_description='git apply submodule tests'\n\n. ./test-lib.sh\n\ntest_expect_success setup '\n\tcat > create-sm.patch <<EOF &&\ndiff --git a/dir/sm b/dir/sm\nnew file mode 160000\nindex 0000000..0123456\n--- /dev/null\n+++ b/dir/sm\n@@ -0,0 +1 @@\n+Subproject commit 0123456789abcdef0123456789abcdef01234567\nEOF\n\tcat > remove-sm.patch <<EOF\ndiff --git a/dir/sm b/dir/sm\ndeleted file mode 160000\nindex 0123456..0000000\n--- a/dir/sm\n+++ /dev/null\n@@ -1 +0,0 @@\n-Subproject commit 0123456789abcdef0123456789abcdef01234567\nEOF\n'\n\ntest_expect_success 'removing a submodule also removes all leading subdirectories' '\n\tgit apply --index create-sm.patch &&\n\ttest -d dir/sm &&\n\tgit apply --index remove-sm.patch &&\n\ttest \\! -d dir\n'\n\ntest_done\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "0043930ca6ab31f6cd6a0bf6464ceb281663f9e8",
+  "sha1_ok": true,
+  "size": 780
+}

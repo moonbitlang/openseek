@@ -1,0 +1,23 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitattributes",
+        "oid": "1f78c5d1bd306a190d202450eb721b6e32a5b92e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-new-workdir",
+        "oid": "888c34a5215258ad7d5715771f92ab58f3efd363"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "004451970eaf52760d143e7788e9f5f11517113c",
+  "sha1_ok": true,
+  "size": 85
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree b2157ead5624e27e0c6963ace42ee5ac6ae35f1f",
+      "parent 803527f1d9b284fa848d4a4bad23158c162a5d54",
+      "author Junio C Hamano <junkio@cox.net> 1173776242 -0700",
+      "committer Junio C Hamano <junkio@cox.net> 1173914538 -0700"
+    ],
+    "message": "git-log --first-parent: show only the first parent log\n\nIf your development history does not have fast-forward merges,\ni.e. the \"first parent\" of commits in your history are special\nthan other parents, this option gives a better overview of the\nevolution of a particular branch.\n\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0053e902b4f777ba454b62263d3695e5292b1559",
+  "sha1_ok": true,
+  "size": 537
+}

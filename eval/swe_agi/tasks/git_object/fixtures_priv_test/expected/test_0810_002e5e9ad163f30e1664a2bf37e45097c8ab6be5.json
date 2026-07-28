@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree c05b2aa8c6b5987503ffe38655a558df47c8a69e",
+      "parent a56b6230d0b1901c01e355320c7afdbf5a6ae01b",
+      "author Johannes Schindelin <johannes.schindelin@gmx.de> 1695642658 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1695661968 -0700"
+    ],
+    "message": "coverity: cache the Coverity Build Tool\n\nIt would add a 1GB+ download for every run, better cache it.\n\nThis is inspired by the GitHub Action `vapier/coverity-scan-action`,\nhowever, it uses the finer-grained `restore`/`save` method to be able to\ncache the Coverity Build Tool even if an unrelated step in the GitHub\nworkflow fails later on.\n\nSigned-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "002e5e9ad163f30e1664a2bf37e45097c8ab6be5",
+  "sha1_ok": true,
+  "size": 685
+}

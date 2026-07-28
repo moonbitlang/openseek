@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree b91beb5925cd585a0d0c8cd4ba65d7da34786cc6",
+      "parent 61f7a383d3b9a7306f1fd44a8dfa070deacc0752",
+      "author Derrick Stolee <dstolee@microsoft.com> 1602782524 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1602862602 -0700"
+    ],
+    "message": "maintenance: add troubleshooting guide to docs\n\nThe 'git maintenance run' subcommand takes a lock on the object database\nto prevent concurrent processes from competing for resources. This is an\nimportant safety measure to prevent possible repository corruption and\ndata loss.\n\nThis feature can lead to confusing behavior if a user is not aware of\nit. Add a TROUBLESHOOTING section to the 'git maintenance' builtin\ndocumentation that discusses these tradeoffs. The short version of this\nsection is that Git will not corrupt your repository, but if the list of\nscheduled tasks takes longer than an hour then some scheduled tasks may\nbe dropped due to this object database collision. For example, a\nlong-running \"daily\" task at midnight might prevent an \"hourly\" task\nfrom running at 1AM.\n\nThe opposite is also possible, but less likely as long as the \"hourly\"\ntasks are much faster than the \"daily\" and \"weekly\" tasks.\n\nHelped-by: Junio C Hamano <gitster@pobox.com>\nSigned-off-by: Derrick Stolee <dstolee@microsoft.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0016b618182f642771dc589cf0090289f9fe1b4f",
+  "sha1_ok": true,
+  "size": 1288
+}

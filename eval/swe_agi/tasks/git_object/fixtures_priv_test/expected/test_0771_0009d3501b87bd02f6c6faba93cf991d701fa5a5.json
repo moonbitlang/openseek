@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 8b0108e0376336b3c6a6f31a357e5562503daa14",
+      "parent a4b8ab5363a32f283a61ef3a962853556d136c0e",
+      "author Ramsay Jones <ramsay@ramsayjones.plus.com> 1539814406 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1539837575 +0900"
+    ],
+    "message": "headers: normalize the spelling of some header guards\n\nSigned-off-by: Ramsay Jones <ramsay@ramsayjones.plus.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0009d3501b87bd02f6c6faba93cf991d701fa5a5",
+  "sha1_ok": true,
+  "size": 387
+}

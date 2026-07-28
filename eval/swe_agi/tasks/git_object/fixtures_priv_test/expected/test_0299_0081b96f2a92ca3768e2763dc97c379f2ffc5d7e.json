@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "RnJvbTogQSBVIFRob3IgPGF1LnRob3JAZXhhbXBsZS5jb20+CkRhdGU6IFRodSBEZWMgNCAxNjowMDowMCAyMDA4IC0wODAwClN1YmplY3Q6IFNpeAoKQXBwbHlpbmcgdGhpcyBwYXRjaCB3aXRoIC1wMiBzaG91bGQgYmUgc3VjY2Vzc2Z1bCBldmVuIHRob3VnaAp0aGUgcGF0Y2ggaXMgYWdhaW5zdCBhIHdyb25nIGxldmVsLgoKZGlmZiAtLWdpdCBpL2p1bmsvZmlsZS0yIHcvanVuay9maWxlLTIKaW5kZXggMDZlNTY3Yi4uYjZmM2ExNiAxMDA2NDQKLS0tIGkvanVuay9maWxlLTIKKysrIHcvanVuay9maWxlLTIKQEAgLTEsNyArMSw3IEBACiAxCiAyCi0zCitUaHJlZQogNAogNQotNgorU2l4CiA3Cg==",
+    "text": "From: A U Thor <au.thor@example.com>\nDate: Thu Dec 4 16:00:00 2008 -0800\nSubject: Six\n\nApplying this patch with -p2 should be successful even though\nthe patch is against a wrong level.\n\ndiff --git i/junk/file-2 w/junk/file-2\nindex 06e567b..b6f3a16 100644\n--- i/junk/file-2\n+++ w/junk/file-2\n@@ -1,7 +1,7 @@\n 1\n 2\n-3\n+Three\n 4\n 5\n-6\n+Six\n 7\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "0081b96f2a92ca3768e2763dc97c379f2ffc5d7e",
+  "sha1_ok": true,
+  "size": 340
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 69a45316f567395396b428214ceade2e9e151744",
+      "parent d9c04ba3ddd0945ef18657a2a373c5edfe86ef7c",
+      "author Jakub Narebski <jnareb@gmail.com> 1161834289 +0200",
+      "committer Junio C Hamano <junkio@cox.net> 1161846901 -0700"
+    ],
+    "message": "diff-format.txt: Combined diff format documentation supplement\n\nUpdate example combined diff format to the current version\n$ git diff-tree -p -c fec9ebf16c948bcb4a8b88d0173ee63584bcde76\nand provide complete first chunk in example.\n\nDocument combined diff format headers: how \"diff header\" look like,\nwhich of \"extended diff headers\" are used with combined diff and how\nthey look like, differences in two-line from-file/to-file header from\nnon-combined diff format, chunk header format.\n\nIt should be noted that combined diff format was designed for quick\n_content_ inspection and renames would work correctly to pick which\nblobs from each tree to compare but otherwise not reflected in the\noutput (the pathnames are not shown).\n\n[jc: with minimum copyediting]\n\nSigned-off-by: Jakub Narebski <jnareb@gmail.com>\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0074aba1c0d3b073c635fdc1d5754dc6a6b6b7b9",
+  "sha1_ok": true,
+  "size": 1069
+}

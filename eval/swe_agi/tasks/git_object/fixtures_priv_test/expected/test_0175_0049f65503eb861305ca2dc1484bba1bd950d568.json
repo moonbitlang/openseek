@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "R2l0IHYyLjI0LjIgUmVsZWFzZSBOb3Rlcwo9PT09PT09PT09PT09PT09PT09PT09PT09CgpUaGlzIHJlbGVhc2UgbWVyZ2VzIHRoZSBzZWN1cml0eSBmaXggdGhhdCBhcHBlYXJzIGluIHYyLjE3LjQ7IHNlZQp0aGUgcmVsZWFzZSBub3RlcyBmb3IgdGhhdCB2ZXJzaW9uIGZvciBkZXRhaWxzLgo=",
+    "text": "Git v2.24.2 Release Notes\n=========================\n\nThis release merges the security fix that appears in v2.17.4; see\nthe release notes for that version for details.\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "0049f65503eb861305ca2dc1484bba1bd950d568",
+  "sha1_ok": true,
+  "size": 167
+}

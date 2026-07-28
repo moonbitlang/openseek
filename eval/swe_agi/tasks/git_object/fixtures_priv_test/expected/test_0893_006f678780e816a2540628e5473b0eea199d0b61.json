@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 4c04de7d0d430e586935ad9f54656740227c27d9",
+      "parent da2e0579adad88136b8a0a850d7325c398a401ac",
+      "parent 50546b15ed1df25837f8b291e6fa5bbcdb84635e",
+      "author Junio C Hamano <gitster@pobox.com> 1395175864 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1395175865 -0700"
+    ],
+    "message": "Merge branch 'sh/use-hashcpy'\n\n* sh/use-hashcpy:\n  Use hashcpy() when copying object names\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "006f678780e816a2540628e5473b0eea199d0b61",
+  "sha1_ok": true,
+  "size": 355
+}

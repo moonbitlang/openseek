@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 3172ec171c483c3b073565c66649952cc39e33f0",
+      "parent 2dbd00a7a1d625fd5763ea1e774ad62e5de8d7b3",
+      "author Johannes Schindelin <johannes.schindelin@gmx.de> 1608167229 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1608169301 -0800"
+    ],
+    "message": "t9902: use `main` as initial branch name\n\nIn 8164360fc86 (t9902: prepare a test for the upcoming default branch\nname, 2020-10-23), we started adjusting this test script for the default\ninitial branch name changing to `main`.\n\nHowever, there is no need to wait for that: let's adjust the test script\nto stop relying on a specific initial branch name by setting it\nexplicitly. This allows us to drop the `PREPARE_FOR_MAIN_BRANCH` prereq\nfrom one test case.\n\nSigned-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0007618107627eb5bd616427132424e3bf9642bb",
+  "sha1_ok": true,
+  "size": 800
+}

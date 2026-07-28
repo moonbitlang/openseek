@@ -1,0 +1,35 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Makefile",
+        "oid": "e3e871f7c4e84d81f4280d40a46c549fa56749e9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "TODO",
+        "oid": "d27227c376d88a1886aa096adbf1b98363f57303"
+      },
+      {
+        "kind": "blob",
+        "mode": "120000",
+        "name": "git-citool",
+        "oid": "b5f620fd097485791ca31267432de0f27ad4c024"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-gui",
+        "oid": "75d1640c0fbd2c74c0b7a523f37658ed313531ec"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "00608898fc3cc37980eedfd695fa22a9c2b0fd0e",
+  "sha1_ok": true,
+  "size": 141
+}

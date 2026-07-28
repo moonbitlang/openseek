@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 466a3bbb6ff3c13198bf303df28df227bc23e98e",
+      "parent f814da676ae46aac5be0a98b99373a76dee6cedb",
+      "author Paulo Casaretto <pcasaretto@gmail.com> 1756483374 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1756485967 -0700"
+    ],
+    "message": "range-diff: add configurable memory limit for cost matrix\n\nWhen comparing large commit ranges (e.g., 250,000+ commits), range-diff\nattempts to allocate an n\u00d7n cost matrix that can exhaust available\nmemory. For example, with 256,784 commits (n = 513,568), the matrix\nwould require approximately 256GB of memory (513,568\u00b2 \u00d7 4 bytes),\ncausing either immediate segmentation faults due to integer overflow or\nsystem hangs.\n\nAdd a memory limit check in get_correspondences() before allocating the\ncost matrix. This check uses the total size in bytes (n\u00b2 \u00d7 sizeof(int))\nand compares it against a configurable maximum, preventing both\nexcessive memory usage and integer overflow issues.\n\nThe limit is configurable via a new --max-memory option that accepts\nhuman-readable sizes (e.g., \"1G\", \"500M\"). The default is 4GB for 64 bit\nsystems and 2GB for 32 bit systems. This allows comparing ranges of\napproximately 32,000 (16,000) commits - generous for real-world use cases\nwhile preventing impractical operations.\n\nWhen the limit is exceeded, range-diff now displays a clear error\nmessage showing both the requested memory size and the maximum allowed,\nformatted in human-readable units for better user experience.\n\nExample usage:\n  git range-diff --max-memory=1G branch1...branch2\n  git range-diff --max-memory=500M base..topic1 base..topic2\n\nThis approach was chosen over alternatives:\n- Pre-counting commits: Would require spawning additional git processes\n  and reading all commits twice\n- Limiting by commit count: Less precise than actual memory usage\n- Streaming approach: Would require significant refactoring of the\n  current algorithm\n\nThis issue was previously discussed in:\nhttps://lore.kernel.org/git/RFC-cover-v2-0.5-00000000000-20211210T122901Z-avarab@gmail.com/\n\nAcked-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Paulo Casaretto <pcasaretto@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00727249ec8404c68391ec58e9c9f0d8a88d5ca0",
+  "sha1_ok": true,
+  "size": 2158
+}

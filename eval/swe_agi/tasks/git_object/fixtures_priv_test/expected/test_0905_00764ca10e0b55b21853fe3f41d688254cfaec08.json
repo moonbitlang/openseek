@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 65599053c9b6e8564c0cf1db46eb540707dde836",
+      "parent 7bbc4e8fdb33e0a8e42e77cc05460d4c4f615f4d",
+      "author Kyle J. McKay <mackyle@gmail.com> 1397204642 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1397247540 -0700"
+    ],
+    "message": "test: fix t7001 cp to use POSIX options\n\nSince 11502468 and 04c1ee57 (both first appearing in v1.8.5), the\nt7001-mv test has used \"cp -a\" to perform a copy in several of the\ntests.\n\nHowever, the \"-a\" option is not required for a POSIX cp utility and\nsome platforms' cp utilities do not support it.\n\nThe POSIX equivalent of -a is -R -P -p.\n\nChange \"cp -a\" to \"cp -R -P -p\" so that the t7001-mv test works\non systems with a cp utility that only implements the POSIX\nrequired set of options and not the \"-a\" option.\n\nSigned-off-by: Kyle J. McKay <mackyle@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00764ca10e0b55b21853fe3f41d688254cfaec08",
+  "sha1_ok": true,
+  "size": 828
+}

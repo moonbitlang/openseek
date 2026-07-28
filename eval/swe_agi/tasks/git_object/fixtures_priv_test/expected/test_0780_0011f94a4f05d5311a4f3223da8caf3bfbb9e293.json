@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 283be7fb1b232c99aa031fc21f2ea326bf870189",
+      "parent 559c2c3d2a34c4d8c24265e118175f55771112a2",
+      "author Derrick Stolee <derrickstolee@github.com> 1658255536 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1658259931 -0700"
+    ],
+    "message": "t: avoid \"whitelist\"\n\nThe word \"whitelist\" has cultural implications that are not inclusive.\nThankfully, it is not difficult to reword and avoid its use.\n\nFocus on changes in the test scripts, since most of the changes are in\ncomments and test names. The renamed test_allow_var helper is only used\nonce inside the widely-used test_proto helper.\n\nSigned-off-by: Derrick Stolee <derrickstolee@github.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0011f94a4f05d5311a4f3223da8caf3bfbb9e293",
+  "sha1_ok": true,
+  "size": 676
+}

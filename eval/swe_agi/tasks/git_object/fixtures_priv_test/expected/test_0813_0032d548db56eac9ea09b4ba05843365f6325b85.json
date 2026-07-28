@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 377f077bd19d5f3cecbf25c018dd9a807ef178dd",
+      "parent 24735cfc500feb2a8dba9f140080ab3476363d28",
+      "author Serge E. Hallyn <serue@us.ibm.com> 1145365866 -0500",
+      "committer Junio C Hamano <junkio@cox.net> 1145396368 -0700"
+    ],
+    "message": "socksetup: don't return on set_reuse_addr() error\n\nThe set_reuse_addr() error case was the only error case in\nsocklist() where we returned rather than continued.  Not sure\nwhy.  Either we must free the socklist, or continue.  This patch\ncontinues on error.\n\nSigned-off-by: Serge E. Hallyn <serue@us.ibm.com>\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0032d548db56eac9ea09b4ba05843365f6325b85",
+  "sha1_ok": true,
+  "size": 568
+}

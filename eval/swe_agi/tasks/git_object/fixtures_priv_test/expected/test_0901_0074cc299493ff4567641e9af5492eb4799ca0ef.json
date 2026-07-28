@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree aee7bf9d54f1ee07441b3aa4a08f2719b5a47005",
+      "parent 862f88cfafefdf8767637f2bdd14cb8cfc00107b",
+      "author Taylor Blau <me@ttaylorr.com> 1716499570 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1716576041 -0700"
+    ],
+    "message": "Documentation/gitpacking.txt: initial commit\n\nIntroduce a new manual page, gitpacking(7) to collect useful information\nabout advanced packing concepts in Git.\n\nIn future commits in this series, this manual page will expand to\ndescribe the new pseudo-merge bitmaps feature, as well as include\nexamples, relevant configuration bits, use-cases, and so on.\n\nOutside of this series, this manual page may absorb similar pieces from\nother parts of Git's documentation about packing.\n\nSigned-off-by: Taylor Blau <me@ttaylorr.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0074cc299493ff4567641e9af5492eb4799ca0ef",
+  "sha1_ok": true,
+  "size": 783
+}

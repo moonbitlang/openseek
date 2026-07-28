@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 9b5c948f46b646dfc6bd628ac4ad2408f3c1a641",
+      "parent 7d71be242d7fc8bd2eaef90e1848d71609c5c577",
+      "parent a2fc8d65368a23a8a5f708b36c761c2d0d133ea6",
+      "author Junio C Hamano <gitster@pobox.com> 1241388166 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1241388166 -0700"
+    ],
+    "message": "Merge branch 'mm/maint-add-p-quit' into maint\n\n* mm/maint-add-p-quit:\n  git add -p: add missing \"q\" to patch prompt\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00473fd1968ee887093dc66c616112f9dd2891ab",
+  "sha1_ok": true,
+  "size": 380
+}

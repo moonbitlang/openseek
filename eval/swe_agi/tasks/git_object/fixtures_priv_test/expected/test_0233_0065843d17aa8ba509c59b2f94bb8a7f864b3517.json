@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "bmFtZTogQ0kKCm9uOgogIHB1c2g6CiAgICBicmFuY2hlczogWyBtYWluIF0KICBwdWxsX3JlcXVlc3Q6CiAgICBicmFuY2hlczogWyBtYWluIF0KCmpvYnM6CiAgYnVpbGQ6CiAgICBzdHJhdGVneToKICAgICAgbWF0cml4OgogICAgICAgIHBsYXRmb3JtOgogICAgICAgICAgLSBvczogdWJ1bnR1LWxhdGVzdAogICAgICAgICAgICBnZW5lcmF0b3I6IFVuaXggTWFrZWZpbGVzCiAgICAgICAgICAtIG9zOiBtYWNvcy1sYXRlc3QKICAgICAgICAgICAgZ2VuZXJhdG9yOiBVbml4IE1ha2VmaWxlcwogICAgICAgICAgLSBvczogd2luZG93cy1sYXRlc3QKICAgICAgICAgICAgZ2VuZXJhdG9yOiBWaXN1YWwgU3R1ZGlvIDE3IDIwMjIKICAgICAgICAgIC0gb3M6IHdpbmRvd3MtbGF0ZXN0CiAgICAgICAgICAgIGdlbmVyYXRvcjogTVNZUyBNYWtlZmlsZXMKICAgICAgICAgIC0gb3M6IHdpbmRvd3MtbGF0ZXN0CiAgICAgICAgICAgIGdlbmVyYXRvcjogTWluR1cgTWFrZWZpbGVzCgogICAgcnVucy1vbjogJHt7IG1hdHJpeC5wbGF0Zm9ybS5vcyB9fQoKICAgIHN0ZXBzOgogICAgLSBuYW1lOiBDaGVjayBvdXQKICAgICAgdXNlczogYWN0aW9ucy9jaGVja291dEB2MgogICAgLSBuYW1lOiBCdWlsZAogICAgICBydW46IHwKICAgICAgICBta2RpciBidWlsZAogICAgICAgIGNkIGJ1aWxkCiAgICAgICAgY21ha2UgLi4gLUcgIiR7e21hdHJpeC5wbGF0Zm9ybS5nZW5lcmF0b3J9fSIKICAgICAgICBjbWFrZSAtLWJ1aWxkIC4K",
+    "text": "name: CI\n\non:\n  push:\n    branches: [ main ]\n  pull_request:\n    branches: [ main ]\n\njobs:\n  build:\n    strategy:\n      matrix:\n        platform:\n          - os: ubuntu-latest\n            generator: Unix Makefiles\n          - os: macos-latest\n            generator: Unix Makefiles\n          - os: windows-latest\n            generator: Visual Studio 17 2022\n          - os: windows-latest\n            generator: MSYS Makefiles\n          - os: windows-latest\n            generator: MinGW Makefiles\n\n    runs-on: ${{ matrix.platform.os }}\n\n    steps:\n    - name: Check out\n      uses: actions/checkout@v2\n    - name: Build\n      run: |\n        mkdir build\n        cd build\n        cmake .. -G \"${{matrix.platform.generator}}\"\n        cmake --build .\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "0065843d17aa8ba509c59b2f94bb8a7f864b3517",
+  "sha1_ok": true,
+  "size": 747
+}

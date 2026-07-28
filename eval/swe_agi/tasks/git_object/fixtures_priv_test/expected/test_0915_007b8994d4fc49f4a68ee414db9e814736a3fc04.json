@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree a7a4a90b6492378001723eb48e5f454532790776",
+      "parent 9a2fb147f2c61d0cab52c883e7e26f5b7948e3ed",
+      "author Ren\u00e9 Scharfe <l.s.r@web.de> 1765618842 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1765695044 +0900"
+    ],
+    "message": "t4014: support Git version strings with spaces\n\ngit --version reports its version with the prefix \"git version \".\nRemove precisely this string instead of everything up to and including\nthe rightmost space to avoid butchering version strings that contain\nspaces.  This helps Apple's release of Git, which reports its version\nlike this: \"git version 2.50.1 (Apple Git-155)\".\n\nSigned-off-by: Ren\u00e9 Scharfe <l.s.r@web.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "007b8994d4fc49f4a68ee414db9e814736a3fc04",
+  "sha1_ok": true,
+  "size": 678
+}

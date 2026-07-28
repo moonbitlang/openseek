@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree d13a9339236d7fb1114bdec8f835021e945a9fc8",
+      "parent 53b29442a86f9d89308a223ce03efae5374d2d11",
+      "parent 8bb19c14fb38645ad708d97b06664bf1a736c02f",
+      "author Junio C Hamano <gitster@pobox.com> 1683675946 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1683675946 -0700"
+    ],
+    "message": "Merge branch 'ob/t3501-retitle'\n\nRetitle a test script with an overly narrow name.\n\n* ob/t3501-retitle:\n  t/t3501-revert-cherry-pick.sh: clarify scope of the file\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0004d97099b78987ad143a5e797cc972621cdbe0",
+  "sha1_ok": true,
+  "size": 427
+}

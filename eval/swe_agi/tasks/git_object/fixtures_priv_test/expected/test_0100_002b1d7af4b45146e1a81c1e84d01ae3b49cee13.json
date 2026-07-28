@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "IyEvYmluL3NoCgpHVkY9R0lULVZFUlNJT04tRklMRQpERUZfVkVSPXYyLjM1LjMKCkxGPScKJwoKIyBGaXJzdCBzZWUgaWYgdGhlcmUgaXMgYSB2ZXJzaW9uIGZpbGUgKGluY2x1ZGVkIGluIHJlbGVhc2UgdGFyYmFsbHMpLAojIHRoZW4gdHJ5IGdpdC1kZXNjcmliZSwgdGhlbiBkZWZhdWx0LgppZiB0ZXN0IC1mIHZlcnNpb24KdGhlbgoJVk49JChjYXQgdmVyc2lvbikgfHwgVk49IiRERUZfVkVSIgplbGlmIHRlc3QgLWQgJHtHSVRfRElSOi0uZ2l0fSAtbyAtZiAuZ2l0ICYmCglWTj0kKGdpdCBkZXNjcmliZSAtLW1hdGNoICJ2WzAtOV0qIiBIRUFEIDI+L2Rldi9udWxsKSAmJgoJY2FzZSAiJFZOIiBpbgoJKiRMRiopIChleGl0IDEpIDs7Cgl2WzAtOV0qKQoJCWdpdCB1cGRhdGUtaW5kZXggLXEgLS1yZWZyZXNoCgkJdGVzdCAteiAiJChnaXQgZGlmZi1pbmRleCAtLW5hbWUtb25seSBIRUFEIC0tKSIgfHwKCQlWTj0iJFZOLWRpcnR5IiA7OwoJZXNhYwp0aGVuCglWTj0kKGVjaG8gIiRWTiIgfCBzZWQgLWUgJ3MvLS8uL2cnKTsKZWxzZQoJVk49IiRERUZfVkVSIgpmaQoKVk49JChleHByICIkVk4iIDogdionXCguKlwpJykKCmlmIHRlc3QgLXIgJEdWRgp0aGVuCglWQz0kKHNlZCAtZSAncy9eR0lUX1ZFUlNJT04gPSAvLycgPCRHVkYpCmVsc2UKCVZDPXVuc2V0CmZpCnRlc3QgIiRWTiIgPSAiJFZDIiB8fCB7CgllY2hvID4mMiAiR0lUX1ZFUlNJT04gPSAkVk4iCgllY2hvICJHSVRfVkVSU0lPTiA9ICRWTiIgPiRHVkYKfQo=",
+    "text": "#!/bin/sh\n\nGVF=GIT-VERSION-FILE\nDEF_VER=v2.35.3\n\nLF='\n'\n\n# First see if there is a version file (included in release tarballs),\n# then try git-describe, then default.\nif test -f version\nthen\n\tVN=$(cat version) || VN=\"$DEF_VER\"\nelif test -d ${GIT_DIR:-.git} -o -f .git &&\n\tVN=$(git describe --match \"v[0-9]*\" HEAD 2>/dev/null) &&\n\tcase \"$VN\" in\n\t*$LF*) (exit 1) ;;\n\tv[0-9]*)\n\t\tgit update-index -q --refresh\n\t\ttest -z \"$(git diff-index --name-only HEAD --)\" ||\n\t\tVN=\"$VN-dirty\" ;;\n\tesac\nthen\n\tVN=$(echo \"$VN\" | sed -e 's/-/./g');\nelse\n\tVN=\"$DEF_VER\"\nfi\n\nVN=$(expr \"$VN\" : v*'\\(.*\\)')\n\nif test -r $GVF\nthen\n\tVC=$(sed -e 's/^GIT_VERSION = //' <$GVF)\nelse\n\tVC=unset\nfi\ntest \"$VN\" = \"$VC\" || {\n\techo >&2 \"GIT_VERSION = $VN\"\n\techo \"GIT_VERSION = $VN\" >$GVF\n}\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "002b1d7af4b45146e1a81c1e84d01ae3b49cee13",
+  "sha1_ok": true,
+  "size": 752
+}

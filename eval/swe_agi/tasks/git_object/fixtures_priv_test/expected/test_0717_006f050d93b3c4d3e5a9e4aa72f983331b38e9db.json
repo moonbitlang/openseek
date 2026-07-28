@@ -1,0 +1,29 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Makefile",
+        "oid": "e1b6045605865cbfc4ae0d57039111d5df825649"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "gitk",
+        "oid": "3864d3826de6ea24fb807cc2346d74d84c39db42"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "po",
+        "oid": "a285e5cac59f5ce43705bf1dd482db329fd5beee"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "006f050d93b3c4d3e5a9e4aa72f983331b38e9db",
+  "sha1_ok": true,
+  "size": 97
+}

@@ -1,0 +1,41 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "INSTALL",
+        "oid": "6d4540679731bdfd33af61635c59b798b19a8888"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Makefile",
+        "oid": "cd194d057f9231ed77f57f05b22a226cd1210f6d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "README",
+        "oid": "6da4778b73e3ef1d098fce7655bf4ca5bb2443e5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "gitweb.perl",
+        "oid": "20ace61b6d158934068bb1e25408336f2058781f"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "static",
+        "oid": "6f06f990b3f777175d1bfe4b7f0a574385667641"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "0004f21e1f485869fe42fcc5296b3cee0d603bcb",
+  "sha1_ok": true,
+  "size": 177
+}

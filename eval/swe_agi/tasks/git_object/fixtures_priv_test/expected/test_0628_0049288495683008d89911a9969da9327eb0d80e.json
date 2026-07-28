@@ -1,0 +1,53 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "files-backend.c",
+        "oid": "fec77744b40179b1454093bd37cf0815f3b755ae"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "iterator.c",
+        "oid": "4cf449ef660e2bc9ee5b6ddb4efd8662d27e12b3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "packed-backend.c",
+        "oid": "3bc47ffd5ea4e82f2505a8649b162d18ebf11a21"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "packed-backend.h",
+        "oid": "61687e408ad4b83d111531f9d5b10a058abcf673"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "ref-cache.c",
+        "oid": "76bb723c8674c3022b271c93b587d941c8e6d397"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "ref-cache.h",
+        "oid": "794f000fd31ebad3ce340ffd9af3fc843b089479"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "refs-internal.h",
+        "oid": "d7d344de73e6f85fed1e8460bce246a894eab6da"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "0049288495683008d89911a9969da9327eb0d80e",
+  "sha1_ok": true,
+  "size": 290
+}

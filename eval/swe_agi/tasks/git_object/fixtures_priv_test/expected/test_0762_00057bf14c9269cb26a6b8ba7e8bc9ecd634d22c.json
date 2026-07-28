@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree d7a430a618aa3cc4a1d6a66f92e1f897c4a954b2",
+      "parent a0feb8611d4c0b2b5d954efe4e98207f62223436",
+      "author Jonathan Tan <jonathantanmy@google.com> 1664918020 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1664993212 -0700"
+    ],
+    "message": "promisor-remote: remove a return value\n\nNo caller of promisor_remote_get_direct() is checking its return value,\nso remove it.\n\nNot checking the return value means that the user would not know\nwhether the failure of reading an object is due to the promisor remote\nnot supplying the object or because of local repository corruption, but\nthis will be fixed in a subsequent patch.\n\nSigned-off-by: Jonathan Tan <jonathantanmy@google.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00057bf14c9269cb26a6b8ba7e8bc9ecd634d22c",
+  "sha1_ok": true,
+  "size": 704
+}

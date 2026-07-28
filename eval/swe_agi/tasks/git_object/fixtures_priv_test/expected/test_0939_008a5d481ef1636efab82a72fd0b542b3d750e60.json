@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree fb5d752c6173f0efc0515b257dcc0a2433d3cc6c",
+      "parent e13da2db28904ef70c15228fe16e25888820927c",
+      "author Jordi Mas <jmas@softcatala.org> 1601976975 +0200",
+      "committer Jordi Mas <jmas@softcatala.org> 1601976975 +0200"
+    ],
+    "message": "l10n: Update Catalan translation\n\nSigned-off-by: Jordi Mas <jmas@softcatala.org>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008a5d481ef1636efab82a72fd0b542b3d750e60",
+  "sha1_ok": true,
+  "size": 291
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree cb3ffeeaf3ed9b6a14ed266a2c66fe5dbb21a4ef",
+      "parent 284098f13fd1c378883ed844fc2966e0b78bbbe7",
+      "author Michael Haggerty <mhagger@alum.mit.edu> 1439200068 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1439416211 -0700"
+    ],
+    "message": "lock_repo_for_gc(): compute the path to \"gc.pid\" only once\n\nSigned-off-by: Michael Haggerty <mhagger@alum.mit.edu>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00539cef390dc860d9eda399dc99d14f6f258a5b",
+  "sha1_ok": true,
+  "size": 386
+}

@@ -1,0 +1,41 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitignore",
+        "oid": "ff3d47e84d04364f2c4c9c7e269fd36b167badac"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Makefile",
+        "oid": "37f283f35d74d6f3879c9719f810dd5798fd0933"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "scalar.c",
+        "oid": "68571ce195f7ba37fe4a001f8b33854c322abea4"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "scalar.txt",
+        "oid": "1a12dc450774c2e1aa8b5142c624b5e7704eb61c"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "t",
+        "oid": "b7e5ed43c76ad271cce30cf145dd9ea37f691583"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "000e2239bd6b2e9d4c16408b75fe63183494bfbf",
+  "sha1_ok": true,
+  "size": 176
+}

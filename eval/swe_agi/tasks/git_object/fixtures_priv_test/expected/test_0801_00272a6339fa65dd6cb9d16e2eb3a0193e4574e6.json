@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree c290974fc25459d1c79a76e2093ff596ef71b4bf",
+      "parent 076c8278583b70547c1c5a65941a661f08210252",
+      "parent 1f5f3907117021961545e42097829001b58288db",
+      "author Junio C Hamano <gitster@pobox.com> 1444949014 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1444949014 -0700"
+    ],
+    "message": "Merge branch 'ls/p4-translation-failure'\n\nWork around \"git p4\" failing when the P4 depot records the contents\nin UTF-16 without UTF-16 BOM.\n\n* ls/p4-translation-failure:\n  git-p4: handle \"Translation of file content failed\"\n  git-p4: add test case for \"Translation of file content failed\" error\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00272a6339fa65dd6cb9d16e2eb3a0193e4574e6",
+  "sha1_ok": true,
+  "size": 559
+}

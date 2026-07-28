@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "LyoKICogQ29weXJpZ2h0IDIwMDYgSm9uIExvZWxpZ2VyCiAqLwoKI2lmbmRlZiBJTlRFUlBPTEFURV9ICiNkZWZpbmUgSU5URVJQT0xBVEVfSAoKCnN0cnVjdCBpbnRlcnAgewoJY2hhciAqbmFtZTsKCWNoYXIgKnZhbHVlOwp9OwoKZXh0ZXJuIGludCBpbnRlcnBvbGF0ZShjaGFyICpyZXN1bHQsIGludCByZXNsZW4sCgkJICAgICAgIGNoYXIgKm9yaWcsCgkJICAgICAgIHN0cnVjdCBpbnRlcnAgKmludGVycHMsIGludCBuaW50ZXJwcyk7CgojZW5kaWYgLyogSU5URVJQT0xBVEVfSCAqLwo=",
+    "text": "/*\n * Copyright 2006 Jon Loeliger\n */\n\n#ifndef INTERPOLATE_H\n#define INTERPOLATE_H\n\n\nstruct interp {\n\tchar *name;\n\tchar *value;\n};\n\nextern int interpolate(char *result, int reslen,\n\t\t       char *orig,\n\t\t       struct interp *interps, int ninterps);\n\n#endif /* INTERPOLATE_H */\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "00c63a5622da8545f46fb6b170951b224679bc73",
+  "sha1_ok": true,
+  "size": 278
+}

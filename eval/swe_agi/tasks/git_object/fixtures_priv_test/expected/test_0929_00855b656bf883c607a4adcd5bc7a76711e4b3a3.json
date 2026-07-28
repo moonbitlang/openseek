@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree ce61ead201227851454d76c42be965bb9a37d682",
+      "parent 6a10b6aa1e7b9bb114e525edb67b7650b46f333e",
+      "author Luke Diamand <luke@diamand.org> 1335341814 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1335367166 -0700"
+    ],
+    "message": "git p4: fix unit tests\n\nThe submit-edit tests relied on P4EDITOR being unset. Set it\nexplicitly to an empty string.\n\nSigned-off-by: Luke Diamand <luke@diamand.org>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00855b656bf883c607a4adcd5bc7a76711e4b3a3",
+  "sha1_ok": true,
+  "size": 427
+}

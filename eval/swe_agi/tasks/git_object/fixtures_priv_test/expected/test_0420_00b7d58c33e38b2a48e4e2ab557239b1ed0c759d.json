@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "I2lmbmRlZiBVUkxfSAojZGVmaW5lIFVSTF9ICgpzdHJ1Y3Qgc3RyYnVmOwoKaW50IGlzX3VybChjb25zdCBjaGFyICp1cmwpOwppbnQgaXNfdXJsc2NoZW1lY2hhcihpbnQgZmlyc3RfZmxhZywgaW50IGNoKTsKY2hhciAqdXJsX2RlY29kZShjb25zdCBjaGFyICp1cmwpOwpjaGFyICp1cmxfZGVjb2RlX21lbShjb25zdCBjaGFyICp1cmwsIGludCBsZW4pOwpjaGFyICp1cmxfZGVjb2RlX3BhcmFtZXRlcl9uYW1lKGNvbnN0IGNoYXIgKipxdWVyeSk7CmNoYXIgKnVybF9kZWNvZGVfcGFyYW1ldGVyX3ZhbHVlKGNvbnN0IGNoYXIgKipxdWVyeSk7Cgp2b2lkIGVuZF91cmxfd2l0aF9zbGFzaChzdHJ1Y3Qgc3RyYnVmICpidWYsIGNvbnN0IGNoYXIgKnVybCk7CnZvaWQgc3RyX2VuZF91cmxfd2l0aF9zbGFzaChjb25zdCBjaGFyICp1cmwsIGNoYXIgKipkZXN0KTsKCiNlbmRpZiAvKiBVUkxfSCAqLwo=",
+    "text": "#ifndef URL_H\n#define URL_H\n\nstruct strbuf;\n\nint is_url(const char *url);\nint is_urlschemechar(int first_flag, int ch);\nchar *url_decode(const char *url);\nchar *url_decode_mem(const char *url, int len);\nchar *url_decode_parameter_name(const char **query);\nchar *url_decode_parameter_value(const char **query);\n\nvoid end_url_with_slash(struct strbuf *buf, const char *url);\nvoid str_end_url_with_slash(const char *url, char **dest);\n\n#endif /* URL_H */\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "00b7d58c33e38b2a48e4e2ab557239b1ed0c759d",
+  "sha1_ok": true,
+  "size": 452
+}

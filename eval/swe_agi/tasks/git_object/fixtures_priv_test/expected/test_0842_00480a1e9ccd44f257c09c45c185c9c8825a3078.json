@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 092f9134bfdc05a8bb6d5c36ccb9852971087dcf",
+      "parent d4f6b5f51ce2c974c7630b5491562a21821c8fe4",
+      "parent 2f0aaaf9dabd846061a759b53ff4759ec886df62",
+      "author Junio C Hamano <gitster@pobox.com> 1370546346 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1370546346 -0700"
+    ],
+    "message": "Merge branch 'rj/mingw-compat-st-mode-bits'\n\n* rj/mingw-compat-st-mode-bits:\n  path: Fix a sparse warning\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00480a1e9ccd44f257c09c45c185c9c8825a3078",
+  "sha1_ok": true,
+  "size": 370
+}

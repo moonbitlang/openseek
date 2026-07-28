@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "object 3849bfba84fb5b0e9d46920f62105b4e1dd97e63",
+      "type commit",
+      "tag gitgui-0.8.3",
+      "tagger Shawn O. Pearce <spearce@spearce.org> 1190084717 -0400"
+    ],
+    "message": "git-gui 0.8.3\n-----BEGIN PGP SIGNATURE-----\nVersion: GnuPG v1.4.6 (Darwin)\n\niD8DBQBG70BwUNGUoZnrPF0RAsvgAJ4/4LyRKBvqa+lqoJ1/zN1HFzVDEwCgnqyN\niLxNOi+316YScHKwGZZqF+c=\n=+kSR\n-----END PGP SIGNATURE-----\n",
+    "type": "tag"
+  },
+  "kind": "tag",
+  "oid": "072c71817c179b9e45d8639ca5326c5c5f66a91e",
+  "sha1_ok": true,
+  "size": 340
+}

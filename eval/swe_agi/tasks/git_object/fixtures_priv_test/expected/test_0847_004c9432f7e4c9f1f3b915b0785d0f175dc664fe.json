@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 51d909c2f2c76b64e96f8d1dffa57000a54c3f3b",
+      "parent 37e8a341ea7719cd91d1b6172c171d2ffe2d6374",
+      "author Jeff King <peff@peff.net> 1701933991 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1702077982 +0900"
+    ],
+    "message": "gpg-interface: drop pointless config_error_nonbool() checks\n\nConfig callbacks which use git_config_string() or git_config_pathname()\nhave no need to check for a NULL value. This is handled automatically\nby those helpers.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "004c9432f7e4c9f1f3b915b0785d0f175dc664fe",
+  "sha1_ok": true,
+  "size": 520
+}

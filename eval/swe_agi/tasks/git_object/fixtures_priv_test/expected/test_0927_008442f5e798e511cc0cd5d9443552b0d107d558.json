@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree e390298df6995f791998f08b2a269b8f61389d45",
+      "parent e4d594c6bdcb25b996120fe21c901af7a08a7f6d",
+      "parent e77b0b5d0fdac411607dbae11ccad87dccd332d3",
+      "author Junio C Hamano <gitster@pobox.com> 1211405279 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1211405279 -0700"
+    ],
+    "message": "Merge branch 'maint-1.5.4' into maint\n\n* maint-1.5.4:\n  git-am: fix typo in usage message\n  doc/git-daemon: s/uploadarchive/uploadarch/\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008442f5e798e511cc0cd5d9443552b0d107d558",
+  "sha1_ok": true,
+  "size": 400
+}

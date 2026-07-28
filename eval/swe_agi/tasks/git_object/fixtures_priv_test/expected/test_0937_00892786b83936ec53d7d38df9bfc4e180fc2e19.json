@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree d00ca77b310b620b1a1747a5b54c0953dd4cd4d3",
+      "parent c1026b9d7dd627d014afd1ddc0c1d17044eb4785",
+      "author Patrick Steinhardt <ps@pks.im> 1715933969 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1715967220 -0700"
+    ],
+    "message": "refs/packed: remove references to `the_hash_algo`\n\nRemove references to `the_hash_algo` in favor of the hash algo specified\nby the repository associated with the packed ref store.\n\nSigned-off-by: Patrick Steinhardt <ps@pks.im>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00892786b83936ec53d7d38df9bfc4e180fc2e19",
+  "sha1_ok": true,
+  "size": 489
+}

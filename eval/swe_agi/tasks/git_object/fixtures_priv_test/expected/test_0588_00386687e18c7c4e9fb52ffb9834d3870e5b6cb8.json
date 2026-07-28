@@ -1,0 +1,101 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "keep-canonical-history-correct.txt",
+        "oid": "35d48ef714e9b2cddbbff68b63a14901844ded90"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "maintain-git.txt",
+        "oid": "73be8b49f8495a04dbbba0813638abefe4c6b2b0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "new-command.txt",
+        "oid": "15a4c8031f1f3bee61ca77d4d37b7ae443d98d9c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "rebase-from-internal-branch.txt",
+        "oid": "02cb5f758d6f65c61e216c89fa758f7345526f96"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "rebuild-from-update-hook.txt",
+        "oid": "db219f5c0745dc7b331361ea1237f8e5c102e452"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "recover-corrupted-blob-object.txt",
+        "oid": "1b3b188d3c1579ac6cac7c4dcefcff1024249206"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "recover-corrupted-object-harder.txt",
+        "oid": "8994e2559eac0c5746ca898b0bad1946a7b83298"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "revert-a-faulty-merge.txt",
+        "oid": "19f59cc88808a1751296af80a0b9700ccec54396"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "revert-branch-rebase.txt",
+        "oid": "149508e13bdacf70488b1a7049bf6aef502c36e3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "separating-topic-branches.txt",
+        "oid": "81be0d611501a07aa0e92047fa476070afc5b586"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "setup-git-server-over-http.txt",
+        "oid": "bfe6f9b5006335e96ecb4def4872ec119f3a3b0f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "update-hook-example.txt",
+        "oid": "89821ec74fe1d71764bcb320d1ac1021bd06201f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "use-git-daemon.txt",
+        "oid": "7af2e52cf312c474d5888855fb86b7456a2d82db"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "using-merge-subtree.txt",
+        "oid": "a499a94ac2289ac6664035d339e37914748757d2"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "using-signed-tag-in-pull-request.txt",
+        "oid": "bbf040eda8aff01e4fd064b3008d8565462898d9"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "00386687e18c7c4e9fb52ffb9834d3870e5b6cb8",
+  "sha1_ok": true,
+  "size": 820
+}

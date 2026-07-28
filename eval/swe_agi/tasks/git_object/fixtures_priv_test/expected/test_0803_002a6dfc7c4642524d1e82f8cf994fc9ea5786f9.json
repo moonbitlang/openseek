@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 9b244d002f6d5e536ec673a0d20d09d248fa4fd2",
+      "parent 510415ecc9d6ff4a99991dc1b70a1ac50818a539",
+      "author Elijah Newren <newren@gmail.com> 1628121049 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1628179060 -0700"
+    ],
+    "message": "merge-strategies.txt: do not imply using copy detection is desired\n\nStating that the recursive strategy \"currently cannot make use of\ndetected copies\" implies that this is a technical shortcoming of the\ncurrent algorithm.  I disagree with that.  I don't see how copies could\npossibly be used in a sane fashion in a merge algorithm -- would we\npropagate changes in one file on one side of history to each copy of\nthat file when merging?  That makes no sense to me.  I cannot think of\nanything else that would make sense either.  Change the wording to\nsimply state that we ignore any copies.\n\nAcked-by: Derrick Stolee <dstolee@microsoft.com>\nAcked-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Elijah Newren <newren@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "002a6dfc7c4642524d1e82f8cf994fc9ea5786f9",
+  "sha1_ok": true,
+  "size": 1011
+}

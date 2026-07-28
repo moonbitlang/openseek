@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 80be0e691b1c6a2fa1c2d671e00a16c42e8312c0",
+      "parent 809aeedb0efed3fe6f3e201b43bf916b4aa70f69",
+      "author \u00c6var Arnfj\u00f6r\u00f0 Bjarmason <avarab@gmail.com> 1634047000 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1634088204 -0700"
+    ],
+    "message": "leak tests: mark all trace2 tests as passing with SANITIZE=leak\n\nMark all tests that match \"*trace2*\" as passing when git is compiled\nwith SANITIZE=leak. They'll now be listed as running under the\n\"GIT_TEST_PASSING_SANITIZE_LEAK=true\" test mode (the \"linux-leaks\" CI\ntarget).\n\nSigned-off-by: \u00c6var Arnfj\u00f6r\u00f0 Bjarmason <avarab@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0033ab3f599c565c27ef5850a0d3c75c2c8b2024",
+  "sha1_ok": true,
+  "size": 615
+}

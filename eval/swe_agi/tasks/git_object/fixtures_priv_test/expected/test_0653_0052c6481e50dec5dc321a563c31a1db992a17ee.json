@@ -1,0 +1,17 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-completion.bash",
+        "oid": "9c4d23a23c899798613978c1766d08a80ced6f2e"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "0052c6481e50dec5dc321a563c31a1db992a17ee",
+  "sha1_ok": true,
+  "size": 47
+}

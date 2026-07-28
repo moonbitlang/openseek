@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 070243d7f87b4c4ac9f93006f2c40c7138bee83b",
+      "parent 5d5def2aa56dc9b6d4eccfb333fd08aa713733e7",
+      "author Jeff King <peff@peff.net> 1474891204 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1474915599 -0700"
+    ],
+    "message": "get_short_sha1: refactor init of disambiguation code\n\nThe disambiguation machinery has two callers: get_short_sha1\nand for_each_abbrev. Both need to repeat much of the same\nsetup: declaring buffers, sanity-checking lengths, preparing\nthe prefixes, etc.  Let's pull that into a single init\nfunction so we can avoid repeating ourselves.\n\nPulling the buffers into the \"struct disambiguate_state\"\nisn't strictly necessary, but it does make things simpler\nfor the callers, who no longer have to worry about sizing\nthem correctly (i.e., it's an implicit requirement that\nthe caller provide 20- and 40-byte buffers).\n\nAnd while we're touching this code, we can convert any\nmagic-number sizes to the more modern GIT_SHA1_* constants.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0016043bf46f4b85054c61f9000ccc58d0ef4ad7",
+  "sha1_ok": true,
+  "size": 1025
+}

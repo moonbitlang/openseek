@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 0c0a82aa7e34a61697f146f9024a4e4624ea409e",
+      "parent 4b8a2717bb5ea6b787e0037174dcbf53ccf4985c",
+      "author Johannes Schindelin <johannes.schindelin@gmx.de> 1691600087 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1691614695 -0700"
+    ],
+    "message": "git maintenance: avoid console window in scheduled tasks on Windows\n\nWe just introduced a helper to avoid showing a console window when the\nscheduled task runs `git.exe`. Let's actually use it.\n\nSigned-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Derrick Stolee <dstolee@microsoft.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0050f8e401a70b1eda9e7358b04e6d6ef3d64ab1",
+  "sha1_ok": true,
+  "size": 593
+}

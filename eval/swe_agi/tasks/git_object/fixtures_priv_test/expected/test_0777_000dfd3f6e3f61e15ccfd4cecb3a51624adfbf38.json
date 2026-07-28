@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree e10a41b5c23d95603755aa0e968e98292d3eb1da",
+      "parent d4bb43ee273528064192848165f93f8fc3512be1",
+      "author Junio C Hamano <gitster@pobox.com> 1190009719 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1190057126 -0700"
+    ],
+    "message": "Export matches_pack_name() and fix its return value\n\nThe function sounds boolean; make it behave as one, not \"0 for\nsuccess, non-zero for failure\".\n\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "000dfd3f6e3f61e15ccfd4cecb3a51624adfbf38",
+  "sha1_ok": true,
+  "size": 415
+}

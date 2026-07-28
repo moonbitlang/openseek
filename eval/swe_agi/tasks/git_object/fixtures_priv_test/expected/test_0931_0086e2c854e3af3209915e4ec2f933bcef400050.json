@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 57701ab66d75e8f02c9db9b2e6e1bdfc11fccf11",
+      "parent abacbe4166bcf9d62f430a4a75de2e82df3799b1",
+      "author Junio C Hamano <junkio@cox.net> 1131876422 -0800",
+      "committer Junio C Hamano <junkio@cox.net> 1131876422 -0800"
+    ],
+    "message": "Rename lost+found to lost-found.\n\nBecause we use \"lost-found\" as the directory name to hold\ndangling object names, it is confusing to call the command\ngit-lost+found, although it makes sense and is even cute ;-).\n\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0086e2c854e3af3209915e4ec2f933bcef400050",
+  "sha1_ok": true,
+  "size": 471
+}

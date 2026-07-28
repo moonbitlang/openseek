@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 5b6a69a5dedba99739ecee0c2f9c617ab4cac157",
+      "parent ecbdaf0899161c067986e9d9d564586d4b045d62",
+      "author Ren\u00e9 Scharfe <l.s.r@web.de> 1546793130 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1546969219 -0800"
+    ],
+    "message": "object-store: factor out odb_loose_cache()\n\nAdd and use a function for loading the entries of a loose object\nsubdirectory for a given object ID.  It frees callers from deriving the\nfanout key; they can use the returned oid_array reference for lookups or\nforward range scans.\n\nSuggested-by: Jeff King <peff@peff.net>\nSigned-off-by: Rene Scharfe <l.s.r@web.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0000d6543f1c2ceea017161a2807167cdfbf8c0b",
+  "sha1_ok": true,
+  "size": 619
+}

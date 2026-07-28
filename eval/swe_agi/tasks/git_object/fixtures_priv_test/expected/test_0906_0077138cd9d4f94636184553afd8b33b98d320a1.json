@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree c2bca49295ed40948af4f7750986ffd71b61d111",
+      "parent e169b974593c27ba7a0d7f63ec0ec40373cb64bb",
+      "author Johannes Sixt <j6t@kdbg.org> 1244493269 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1244531757 -0700"
+    ],
+    "message": "Simplify some instances of run_command() by using run_command_v_opt().\n\nSigned-off-by: Johannes Sixt <j6t@kdbg.org>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0077138cd9d4f94636184553afd8b33b98d320a1",
+  "sha1_ok": true,
+  "size": 376
+}

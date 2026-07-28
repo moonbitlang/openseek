@@ -1,0 +1,95 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "alloca.h",
+        "oid": "c0d7985b7eddcfd47fe943ed6a24412191b1531b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "dirent.c",
+        "oid": "52420ec7d4dad7b8e984bd7f5a36330f1fa88e24"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "dirent.h",
+        "oid": "058207e4bfed628376d94f8002278317b5c65074"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "flush.c",
+        "oid": "291f90ea9406ba655456d0d5f50b05adb3a96404"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "git.manifest",
+        "oid": "771e3cce431598a0f01153731b31d6004da546e1"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "headless.c",
+        "oid": "8b00dfe3bd5d00d20459cc1473a304a5b24a2e73"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "lazyload.h",
+        "oid": "f2bb96c89c735c67ab9915e6ced1e9feabb043b4"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "path-utils.c",
+        "oid": "b658ca3f811717fcdf5910af02163a29103e2891"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "path-utils.h",
+        "oid": "a561c700e7571313320476a82a37ea9254667f1e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pthread.c",
+        "oid": "85f8f7920ce48d418f4c77896004d17715582840"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pthread.h",
+        "oid": "cc3221cb2c8a84a454784c7fa0dc287dbad83983"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "syslog.c",
+        "oid": "0af18d88825915dec4d3a8c3cd1cfe3e6ad36a0a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "syslog.h",
+        "oid": "70daa7c08b8d7acb46a1633f30961faef9ab50f3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "trace2_win32_process_info.c",
+        "oid": "f147da706a240e0a39f53f717e27b0fe594fb555"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "0058258c0925976b8f913f3ff4b3f7b0a9faae9d",
+  "sha1_ok": true,
+  "size": 540
+}

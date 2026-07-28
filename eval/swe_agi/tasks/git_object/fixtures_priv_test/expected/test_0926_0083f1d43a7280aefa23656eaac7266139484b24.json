@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 6689832fb25b753e1328ca7f8eea5e6d9089b06d",
+      "parent 13670c5f9c21db55c2d8ab8db9d1da2b5c236ae0",
+      "parent f350df429fc664129c3a600f0142287ed13a48f7",
+      "author Junio C Hamano <gitster@pobox.com> 1347388522 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1347388522 -0700"
+    ],
+    "message": "Merge branch 'nd/i18n-index-pack'\n\n* nd/i18n-index-pack:\n  i18n: mark more index-pack strings for translation\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0083f1d43a7280aefa23656eaac7266139484b24",
+  "sha1_ok": true,
+  "size": 374
+}

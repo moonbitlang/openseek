@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 0a11397f7d97b7c8358fcecec250863eb9e54041",
+      "parent 6e4fb00156a3651ff84d19d2a16d69e87d29b68b",
+      "author Jacob Keller <jacob.keller@gmail.com> 1747870156 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1747948811 -0700"
+    ],
+    "message": "pathspec: add flag to indicate operation without repository\n\nA following change will add support for pathspecs to the git diff\n--no-index command. This mode of git diff does not load any repository.\n\nAdd a new PATHSPEC_NO_REPOSITORY flag indicating that we're parsing\npathspecs without a repository.\n\nBoth PATHSPEC_ATTR and PATHSPEC_FROMTOP require a repository to\nfunction. Thus, verify that both of these are set in magic_mask to\nensure they won't be accepted when PATHSPEC_NO_REPOSITORY is set.\n\nCheck PATHSPEC_NO_REPOSITORY when warning about paths outside the\ndirectory tree. When the flag is set, do not look for a git repository\nwhen generating the warning message.\n\nFinally, add a BUG in match_pathspec_item if the istate is NULL but the\npathspec has PATHSPEC_ATTR set. Callers which support PATHSPEC_ATTR\nshould always pass a valid istate, and callers which don't pass a valid\nistate should have set PATHSPEC_ATTR in the magic_mask field to disable\nsupport for attribute-based pathspecs.\n\nSigned-off-by: Jacob Keller <jacob.keller@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00466c162082c4c5f2ea96384a9f51147e1c874b",
+  "sha1_ok": true,
+  "size": 1320
+}

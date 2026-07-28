@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "object d8cf053dacb4f78920c112d10c7be21e4f5a5817",
+      "type commit",
+      "tag v1.7.12.2",
+      "tagger Junio C Hamano <gitster@pobox.com> 1348987817 -0700"
+    ],
+    "message": "Git 1.7.12.2\n-----BEGIN PGP SIGNATURE-----\nVersion: GnuPG v1.4.10 (GNU/Linux)\n\niQIcBAABAgAGBQJQZ+upAAoJELC16IaWr+bLjD0QANaXTPWIxIUSgvGSqQLadWnD\no16I7fucyF+XMA+jOisSgkHJOnsQyEp/8HxoLl9ir8yFhUX+nhvMKrajSbwa/MPI\nrgPcsdfWsvjwGAFjRDwyQUt0au/A/zUiIcvVlxDgdXeK5nzVCkDnHlPloWEpCTvo\nYOdYoSOIjrsT0LzhDz2gzTrnOxj8J5MXe0yapILs5pq1STUZSUfGS2j1SuONODtt\nMg5fU4JtYkHyV1Ksi84FcxNUBt5+5KO7vqlAyNKJ1NSqMv5IjtnBQSZ2LYSx3QA8\n5e7ybhMCxSh8f4lD2wv+a0Ec3bb4DOimaIP/umTfdIHZFX7PLryN4DjN0DnauA/m\n3iF0c/EAH7cTyQGj68hGhmoZQys1AK/jOAUjqHoc0AWjZj98whaaROZwbqFiYbb+\n5es0ptVKQqBsUi1z7YAhby9u+xkwbFbauJFynCN9xQAvXnrato6jC90kRnwptVw5\nwNVXGNIWAiR6z8q83SzLG1McrzEsfFAAti0ED3CB0iZZ3XuYrXEmRoP+S3trObTh\n47fWtEm/bBxkBakL+6G4H1Kz3h4yPmomGu+mgKcIhTnbAbP7vY7CiHFS1tsQyS9e\nUkuP+ccXI8CI63KuQ6n3oyrIW7+kl43KOrqfxcYnUQXGJ3/80394WRyLTb7aRH9a\nl1UPpD79JXgfB0eVMElz\n=M3lI\n-----END PGP SIGNATURE-----\n",
+    "type": "tag"
+  },
+  "kind": "tag",
+  "oid": "04043f4d1ae42bddee67d354a2e6fd2464592a1e",
+  "sha1_ok": true,
+  "size": 983
+}

@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 2036a014edb5dbe27f1caa33366cf2eeadd23c43",
+      "parent 87912fd617fb24ebcaa1c3ec57178821db9d2980",
+      "parent aa0945701e39cf099ca9c28f79e239359781e4f6",
+      "author Junio C Hamano <gitster@pobox.com> 1267994835 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1267994835 -0800"
+    ],
+    "message": "Merge branch 'js/runtime-prefix-trace-not-warn'\n\n* js/runtime-prefix-trace-not-warn:\n  Print RUNTIME_PREFIX warning only when GIT_TRACE is set\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "000d2c07ef65b19bd9cf30ef44a3018b8f110b2c",
+  "sha1_ok": true,
+  "size": 407
+}

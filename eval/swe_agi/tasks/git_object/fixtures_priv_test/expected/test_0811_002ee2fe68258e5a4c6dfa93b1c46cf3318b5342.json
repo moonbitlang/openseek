@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 77e2477e507fabf8b1158dc130c3605a3b3e9c81",
+      "parent 53f9e5be94e64e10114e521dd2389495baaeb00d",
+      "author Pratik Karki <predatoramigo@gmail.com> 1536098397 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1536260180 -0700"
+    ],
+    "message": "builtin rebase: support `keep-empty` option\n\nThe `--keep-empty` option can be used to keep the commits that do not\nchange anything from its parents in the result.\n\nWhile the scripted version uses `interactive_rebase=implied` to indicate\nthat the rebase needs to use the `git-rebase--interactive` backend in\nnon-interactive mode as fallback when figuring out which backend to use,\nthe C version needs to use a different route because the backend will\nalready be chosen during the `parse_options()` call.\n\nSigned-off-by: Pratik Karki <predatoramigo@gmail.com>\nSigned-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "002ee2fe68258e5a4c6dfa93b1c46cf3318b5342",
+  "sha1_ok": true,
+  "size": 892
+}

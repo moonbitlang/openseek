@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree b7b89d84be5025133535999f9c3644996ba6520a",
+      "parent 972d1bb067d0cea6334da081f6a3e2a6bad6f20b",
+      "author Linus Torvalds <torvalds@ppc970.osdl.org> 1118179426 -0700",
+      "committer Linus Torvalds <torvalds@ppc970.osdl.org> 1118179426 -0700"
+    ],
+    "message": "git-ssh-push/pull: usability improvements\n\nAllow traditional ssh path specifiers (host:path), and let the user\noverride the command name on the other end.\n\nWith this, I can push to kernel.org with this script\n\n\texport GIT_SSH_PULL=/home/torvalds/bin/git-ssh-pull\n\tgit-ssh-push -a -v -w heads/master heads/master master.kernel.org:/pub/scm/linux/kernel/git/torvalds/linux-2.6.git\n\nwhich while not pretty is at least workable.\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "001d4a27dbfaaa59c25dc35dafc69bd9b9bc21d3",
+  "sha1_ok": true,
+  "size": 655
+}

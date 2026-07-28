@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree bd5fcbc5c62e50373c9726107de1208a008a0ab3",
+      "parent f5d9ae2413bdb50657da07a7645884cb645d06d5",
+      "author Junio C Hamano <gitster@pobox.com> 1252371166 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1252371166 -0700"
+    ],
+    "message": "cook.sh: compare the series title line as well\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0051b441b38ee2312499f46d78c6c9b29ee09234",
+  "sha1_ok": true,
+  "size": 263
+}

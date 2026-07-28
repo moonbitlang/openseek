@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree bf35a1f9ac9be44976dd4e97d4450f98daceb286",
+      "parent 869577e5fe8d4307dd39d2751cf3c5a1896d3426",
+      "parent b95e66f507967fdfbf7275a94729fe09aa4b20ca",
+      "author Junio C Hamano <gitster@pobox.com> 1372106937 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1372106937 -0700"
+    ],
+    "message": "Merge branch 'rt/cherry-pick-continue-advice-in-status'\n\n* rt/cherry-pick-continue-advice-in-status:\n  wt-status: give better advice when cherry-pick is in progress\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "001d1160541a6dcfceb82a0a900478e315a129eb",
+  "sha1_ok": true,
+  "size": 429
+}

@@ -1,0 +1,137 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitignore",
+        "oid": "1d45c0a40c81ee6f8501cac7a204a0b9cdca376b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "README",
+        "oid": "d1daa1f62639a1bbd37e4aedf6f51c1d8d831b63"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "array.cocci",
+        "oid": "27a3b479c94e5cb42817c3d2bd1fff6f270ef583"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "commit.cocci",
+        "oid": "af6dd4c20cae87d3364b59cedac80936f8ff3355"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "equals-null.cocci",
+        "oid": "92c70540130135686a8a3c40001c84f56ed48561"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "flex_alloc.cocci",
+        "oid": "e9f7f6d861a4a39c4fa18ae147df98eb95918b1d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "free.cocci",
+        "oid": "6fb9eb6e88379a8897ca65057af3291e90a15be3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "hashmap.cocci",
+        "oid": "c5dbb4557b56b130d1ed518af1ccdff6c112d7a6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "index-compatibility.cocci",
+        "oid": "31e36cf3c4167e77a9b1d21154b39d6f31209411"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "object_id.cocci",
+        "oid": "01f8d6935b203feebeb421d2899622bce25a2f02"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "preincr.cocci",
+        "oid": "ae42cb07302d5e4e480f85b1a1bac9e05474966f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "qsort.cocci",
+        "oid": "22b93a99664d2745aa74c6566be0225f6842e882"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "spatchcache",
+        "oid": "29e9352d8a278a98406d653c05ec768f84e9719e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "strbuf.cocci",
+        "oid": "5f06105df6db7b790a89d3af8633c511d68bc85b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "swap.cocci",
+        "oid": "522177afb66354110b6a63a044d183c512ed1662"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "tests",
+        "oid": "895bde05d182327375eb9c50927e27dfa432b822"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "the_repository.pending.cocci",
+        "oid": "747d382ff5f1ba82a3c967483850cfd5a139cb2f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "unused.cocci",
+        "oid": "d84046f82ea8f2c55b8a3d0ac2d112394703215d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "xcalloc.cocci",
+        "oid": "c291011607ee34618205c13d337d4ce9f040e16d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "xopen.cocci",
+        "oid": "b71db670194c8025d5cb4c9c52a2c1faa90e342e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "xstrdup_or_null.cocci",
+        "oid": "9c1d2939b61f0a588f6b611084b68c1cc7a0cef8"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "0024fb369d967587fd3d01bb06adffa4104d4e40",
+  "sha1_ok": true,
+  "size": 869
+}

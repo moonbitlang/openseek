@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 5a23a1947a0956b9a3672968d8d072ca3c87c88b",
+      "parent c2b9ae43303342a33b2632939f319a3554f3a70c",
+      "author Junio C Hamano <junkio@cox.net> 1146697845 -0700",
+      "committer Junio C Hamano <junkio@cox.net> 1146697845 -0700"
+    ],
+    "message": "cache-tree: a bit more debugging support.\n\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00703e6d6822f81e7b22d079b7e6d9d044f46cf0",
+  "sha1_ok": true,
+  "size": 300
+}

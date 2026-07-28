@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "R2l0IHYxLjcuMy4xIFJlbGVhc2UgTm90ZXMKPT09PT09PT09PT09PT09PT09PT09PT09PT0KCkZpeGVzIHNpbmNlIHYxLjcuMwotLS0tLS0tLS0tLS0tLS0tLS0KCiAqICJnaXQgc3Rhc2ggc2hvdyBzdGFzaEB7JG59IiB3YXMgYWNjaWRlbnRhbGx5IGJyb2tlbiBpbiAxLjcuMyAoImdpdAogICBzdGFzaCBzaG93IiB3aXRob3V0IGFueSBhcmd1bWVudCBzdGlsbCB3b3JrZWQsIHRob3VnaCkuCgogKiAiZ2l0IHN0YXNoIGJyYW5jaCAkYnJhbmNoIHN0YXNoQHskbn0iIHdhcyBhY2NpZGVudGFsbHkgYnJva2VuIGluCiAgIDEuNy4zIGFuZCBzdGFydGVkIGRyb3BwaW5nIHRoZSBuYW1lZCBzdGFzaCBldmVuIHdoZW4gYnJhbmNoIGNyZWF0aW9uCiAgIGZhaWxlZC4KCkFuZCBvdGhlciBtaW5vciBmaXhlcyBhbmQgZG9jdW1lbnRhdGlvbiB1cGRhdGVzLgo=",
+    "text": "Git v1.7.3.1 Release Notes\n==========================\n\nFixes since v1.7.3\n------------------\n\n * \"git stash show stash@{$n}\" was accidentally broken in 1.7.3 (\"git\n   stash show\" without any argument still worked, though).\n\n * \"git stash branch $branch stash@{$n}\" was accidentally broken in\n   1.7.3 and started dropping the named stash even when branch creation\n   failed.\n\nAnd other minor fixes and documentation updates.\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "002c93b9612df51f09a657e737f0a54371e4ef9d",
+  "sha1_ok": true,
+  "size": 425
+}

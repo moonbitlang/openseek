@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree c2b7aeaa45767e1c4e6359381b2bd99bd77dbebc",
+      "parent 457bb452919887ff5e8007d02e93f443fdb6f1e9",
+      "author Ren\u00e9 Scharfe <rene.scharfe@lsrfire.ath.cx> 1212943353 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1213048426 -0700"
+    ],
+    "message": "Teach new attribute 'export-ignore' to git-archive\n\nPaths marked with this attribute are not output to git-archive\noutput.\n\nSigned-off-by: Rene Scharfe <rene.scharfe@lsrfire.ath.cx>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008d896df5deaa967d4d86306b408333e8ef34c3",
+  "sha1_ok": true,
+  "size": 457
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 235e819f4fef6a537184e44faa87dd0fdb4d1282",
+      "parent 7e2010537e96d0a1144520222f20ba1dc3d61441",
+      "author Torsten B\u00f6gershausen <tboegi@web.de> 1358786743 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1358817196 -0800"
+    ],
+    "message": "t0050: known breakage vanished in merge (case change)\n\nThis test case has passed since this commit:\n\n  commit 0047dd2fd1fc1980913901c5fa098357482c2842\n  Author: Steffen Prohaska <prohaska@zib.de>\n  Date:   Thu May 15 07:19:54 2008 +0200\n\n    t0050: Fix merge test on case sensitive file systems\n\nRemove the known breakage by using test_expect_success\n\nSigned-off-by: Torsten B\u00f6gershausen <tboegi@web.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "004c0be766f57ffbf5538aeb3edfd3c650f6ceae",
+  "sha1_ok": true,
+  "size": 674
+}

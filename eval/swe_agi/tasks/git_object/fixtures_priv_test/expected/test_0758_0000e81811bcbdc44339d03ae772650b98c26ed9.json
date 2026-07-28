@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree b002d4347338784fddb31b5c35ed1699343e7dab",
+      "parent 0bc7787ca9ea123e28769f728d77261cad1f1557",
+      "author \u00c6var Arnfj\u00f6r\u00f0 Bjarmason <avarab@gmail.com> 1633084055 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1633123371 -0700"
+    ],
+    "message": "builtin/remote.c: add and use SHOW_INFO_INIT\n\nIn the preceding commit we introduced REF_STATES_INIT, but did not\nchange the \"struct show_info\" to have a corresponding\ninitializer. Let's do that, and make it use \"REF_STATES_INIT\" and\n\"STRING_LIST_INIT_DUP\", doing that requires changing \"list\" and\n\"states\" away from being pointers.\n\nThe resulting end-state is simpler since we omit the local \"info_list\"\nand \"states\" variables in show() as well as the memset().\n\nSigned-off-by: \u00c6var Arnfj\u00f6r\u00f0 Bjarmason <avarab@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0000e81811bcbdc44339d03ae772650b98c26ed9",
+  "sha1_ok": true,
+  "size": 801
+}

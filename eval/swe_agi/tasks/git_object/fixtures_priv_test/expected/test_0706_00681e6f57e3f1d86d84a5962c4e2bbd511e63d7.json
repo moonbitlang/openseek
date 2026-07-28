@@ -1,0 +1,35 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "libsecret",
+        "oid": "d2a320a1d8bdda886fcdade7c68045473ba9a6d2"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "netrc",
+        "oid": "22db2d59885ff7af548edeec26ce3348753e31c2"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "osxkeychain",
+        "oid": "5eb3f01fe03e0b2e9b3ac9ac6062ae08f8098c02"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "wincred",
+        "oid": "cb8763cb97d70e6c5fa2e64525d2ead67c7c16dc"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "00681e6f57e3f1d86d84a5962c4e2bbd511e63d7",
+  "sha1_ok": true,
+  "size": 140
+}

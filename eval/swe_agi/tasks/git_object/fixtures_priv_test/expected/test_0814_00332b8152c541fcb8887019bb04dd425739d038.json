@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 6ffee64e761615848fa4c1eb6fd9a3e598ad9e36",
+      "parent 734a6ffafb754323a4cde51b61a6099b46d03466",
+      "author Pierre Habouzit <madcoder@debian.org> 1216664159 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1217657798 -0700"
+    ],
+    "message": "git-submodule: move ill placed shift.\n\nWhen running git submodule update -i, the \"-i\" is shifted before recursing\ninto cmd_init and then again outside of the loop. This causes some /bin/sh\nto complain about shifting when there are no arguments left (and would\ndiscard anything written after -i too).\n\nSigned-off-by: Pierre Habouzit <madcoder@debian.org>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00332b8152c541fcb8887019bb04dd425739d038",
+  "sha1_ok": true,
+  "size": 623
+}

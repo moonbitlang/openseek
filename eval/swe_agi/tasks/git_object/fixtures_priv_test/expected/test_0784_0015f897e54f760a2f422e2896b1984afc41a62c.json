@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 25be5ebe5c74d48e564089f6cbc775e25d5567ec",
+      "parent 305136b4ff7b4f9c8955bf427daa94a3b2874278",
+      "parent 84189f4d151eda23ab318b63721238d864fc411d",
+      "author Jiang Xin <worldhello.net@gmail.com> 1656126080 +0800",
+      "committer Jiang Xin <worldhello.net@gmail.com> 1656126080 +0800"
+    ],
+    "message": "Merge branch 'master' of github.com:vnwildman/git\n\n* 'master' of github.com:vnwildman/git:\n  l10n: vi(5367t): Updated translation\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0015f897e54f760a2f422e2896b1984afc41a62c",
+  "sha1_ok": true,
+  "size": 398
+}

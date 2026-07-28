@@ -1,0 +1,95 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitignore",
+        "oid": "796b96d1c402326528b4ba3c12ee9d92d0e212e9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "README",
+        "oid": "d8c9111c82a541a39d71465c9b18a626d2dea94e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "TEAMS",
+        "oid": "a33a38e7d058823cc462e66288e6e940b5af81e5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "bg.po",
+        "oid": "ef97185321e4050a5bb42028389ed5440343f63a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "ca.po",
+        "oid": "ee77dca7b9d109c0c0476e7d55fb66042208d29d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "de.po",
+        "oid": "c807967cfcc4da737e8f142dab262534fb240734"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "fr.po",
+        "oid": "6652be8a3c50b95902f90941215060fff178da65"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "git.pot",
+        "oid": "2d4608f6e084bf3400a3660f970363b79ecf991e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "is.po",
+        "oid": "8692a8b5b274b9e3d3cf6ab8df74c8460c875d88"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "it.po",
+        "oid": "9080219446b4361018e2fb4349d7dac667403fbc"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pt_PT.po",
+        "oid": "689ad1b0fee552e64dc2b3cf3f7eb1da89fd65ac"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "sv.po",
+        "oid": "443f00b0842d3f8d11f9243f4f08ac940413c6fa"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "vi.po",
+        "oid": "f4a7468b707b3f5eac67e60d31e275de108277f7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "zh_CN.po",
+        "oid": "abe5f9f2818f4f17f3f944ae06c5494c45537e87"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "004935cfde776d78f8e1ee17d8e79cce0d55282a",
+  "sha1_ok": true,
+  "size": 476
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree ff543b5032c1dadf71e39dbe8f5d8b0e3eac5921",
+      "parent 89ea799ffcc5c8a0547d3c9075eb979256ee95b8",
+      "author Beat Bolli <dev+git@drbeat.li> 1511132736 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1511229627 +0900"
+    ],
+    "message": "contrib/git-jump: allow to configure the grep command\n\nAdd the configuration option \"jump.grepCmd\" that allows to configure the\ncommand that is used to search in grep mode. This allows the users of\ngit-jump to use ag(1) or ack(1) as search engines.\n\nSigned-off-by: Beat Bolli <dev+git@drbeat.li>\nReviewed-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "007d06aa57e673c95da583d2afa30bb14fb69e28",
+  "sha1_ok": true,
+  "size": 597
+}

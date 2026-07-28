@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree b35821d380ef2830fee1a4f2bea3305a5389159e",
+      "parent 140cd84593d8aa794ef9c31b4128cb295cbb04e2",
+      "author Felipe Contreras <felipe.contreras@gmail.com> 1377923509 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1378235668 -0700"
+    ],
+    "message": "t: branch: fix typo\n\nSigned-off-by: Felipe Contreras <felipe.contreras@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "002ba0376b0836ff36f3ba1d079258ca94e66aca",
+  "sha1_ok": true,
+  "size": 359
+}

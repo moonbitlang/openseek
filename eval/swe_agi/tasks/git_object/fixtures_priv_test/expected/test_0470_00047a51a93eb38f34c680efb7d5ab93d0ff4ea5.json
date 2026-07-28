@@ -1,0 +1,113 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitattributes",
+        "oid": "889d58257fb3c8ba1835f088daa94aaec1a3d80f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitignore",
+        "oid": "ff6e0be4b4126cf804dde11d37d762a4d1d1a817"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "GIT-GUI-BUILD-OPTIONS.in",
+        "oid": "5fd885c2bf73e93988285d9bfa47c8444b702b1f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "GIT-VERSION-GEN",
+        "oid": "c2767b4136cbbf85fa2c70a558030d7fd47c176a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Makefile",
+        "oid": "8672dd2d6bd7f78514afaa90815b97af61be4a37"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "README.md",
+        "oid": "948e9250d5a3967faf99792239ba189b4368b75a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "generate-git-gui.sh",
+        "oid": "39dfafdc4adc141355aa9f59fb533ea6ec9afce6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "generate-macos-app.sh",
+        "oid": "71b9fa67a4be7f7011c8e45dd03570f5dd03812e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "generate-macos-wrapper.sh",
+        "oid": "0304937f41e169b947539c2a80dcfec955e4be61"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "generate-tclindex.sh",
+        "oid": "0b031d8339c44398bfa310e9f631bd37afcf6190"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-gui--askpass",
+        "oid": "71a536d232d32253639b163f0122d52f944e55e0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-gui.sh",
+        "oid": "28572c889c0e2bac8f1c944015e6ebe4ab4800f3"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "lib",
+        "oid": "1bc3590da80fda96ae0873053dc7879eae37d8ab"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "macosx",
+        "oid": "452280d7fa4a155bd311a7cce7e327964267b792"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "meson.build",
+        "oid": "cdae85e4b9dce71bbc8bfa2437af4aa47eca419d"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "po",
+        "oid": "fa36958235b27c89272b7ae004c8e6f0f80f7733"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "windows",
+        "oid": "ae99a38593d127e47f956d96abf3d6a40d3aff66"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "00047a51a93eb38f34c680efb7d5ab93d0ff4ea5",
+  "sha1_ok": true,
+  "size": 692
+}

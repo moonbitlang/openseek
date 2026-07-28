@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 7e5fc9be65d54b8f55d970493cc45b935a341586",
+      "parent d66b37bb19ff7a347ba4ccbcdc11b00772518b57",
+      "author Junio C Hamano <junkio@cox.net> 1170654545 -0800",
+      "committer Junio C Hamano <junkio@cox.net> 1170716111 -0800"
+    ],
+    "message": "Use pretend_sha1_file() in git-blame and git-merge-recursive.\n\ngit-merge-recursive wants an null tree as the fake merge base\nwhile producing the merge result tree.  The null tree does not\nhave to be written out in the object store as it won't be part\nof the result, and it is a prime example for using the new\npretend_sha1_file() function.\n\ngit-blame needs to register an arbitrary data to in-core index\nwhile annotating a working tree file (or standard input), but\ngit-blame is a read-only application and the user of it could\neven lack the privilege to write into the object store; it is\nanother good example for pretend_sha1_file().\n\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "005f85d9ae95c44d8c6ecf61364642fbcaf49dd2",
+  "sha1_ok": true,
+  "size": 894
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 2621f24f5c391d9e38368f3067af7cd437ec52c3",
+      "parent 3157c880f6afab26af4f3e4eaceee68fc1b482a8",
+      "author Jeff King <peff@peff.net> 1469765219 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1469815507 -0700"
+    ],
+    "message": "add generic most-recently-used list\n\nThere are a few places in Git that would benefit from a fast\nmost-recently-used cache (e.g., the list of packs, which we\nsearch linearly but would like to order based on locality).\nThis patch introduces a generic list that can be used to\nstore arbitrary pointers in most-recently-used order.\n\nThe implementation is just a doubly-linked list, where\n\"marking\" an item as used moves it to the front of the list.\nInsertion and marking are O(1), and iteration is O(n).\n\nThere's no lookup support provided; if you need fast\nlookups, you are better off with a different data structure\nin the first place.\n\nThere is also no deletion support. This would not be hard to\ndo, but it's not necessary for handling pack structs, which\nare created and never removed.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "002f206faf09d39abee80f916cabaf3ab342b74f",
+  "sha1_ok": true,
+  "size": 1087
+}

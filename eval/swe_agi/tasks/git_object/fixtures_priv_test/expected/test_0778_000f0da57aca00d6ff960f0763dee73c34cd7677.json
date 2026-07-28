@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree e11157be8cc4f1653cd369d36b9c99ae66520ebd",
+      "parent 33ffc176d65e1e98e1eea262dc7827830c33c56d",
+      "author Michael Haggerty <mhagger@alum.mit.edu> 1432337696 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1432767522 -0700"
+    ],
+    "message": "verify_lock(): do not capitalize error messages\n\nOur convention is for error messages to start with a lower-case\nletter.\n\nSigned-off-by: Michael Haggerty <mhagger@alum.mit.edu>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "000f0da57aca00d6ff960f0763dee73c34cd7677",
+  "sha1_ok": true,
+  "size": 448
+}

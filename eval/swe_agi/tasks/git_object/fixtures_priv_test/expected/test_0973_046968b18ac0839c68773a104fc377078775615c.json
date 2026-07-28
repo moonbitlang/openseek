@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "object ca182053c7710a286d72102f4576cf32e0dafcfb",
+      "type commit",
+      "tag v1.0.13",
+      "tagger Junio C Hamano <junkio@cox.net> 1138402276 -0800"
+    ],
+    "message": "GIT 1.0.13\n-----BEGIN PGP SIGNATURE-----\nVersion: GnuPG v1.4.2 (GNU/Linux)\n\niD8DBQBD2qPnwMbZpPMRm5oRAuwfAJ9/ddjbQAIZ05RhqijBk6iFnVJ3JQCbB7qh\nq1Mo1qK23HJrN4oMnscS1+E=\n=NjTa\n-----END PGP SIGNATURE-----\n",
+    "type": "tag"
+  },
+  "kind": "tag",
+  "oid": "046968b18ac0839c68773a104fc377078775615c",
+  "sha1_ok": true,
+  "size": 329
+}

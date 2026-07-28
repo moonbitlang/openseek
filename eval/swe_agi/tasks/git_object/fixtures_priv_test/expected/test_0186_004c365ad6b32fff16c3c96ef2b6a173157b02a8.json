@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "IyEvYmluL3NoCgp0ZXN0X2Rlc2NyaXB0aW9uPSdyZWN1cnNpdmUgbWVyZ2UgY29ybmVyIGNhc2VzJwoKLiAuL3Rlc3QtbGliLnNoCgojCiMgIEwxICBMMgojICAgby0tLW8KIyAgLyBcIC8gXAojIG8gICBYICAgPwojICBcIC8gXCAvCiMgICBvLS0tbwojICBSMSAgUjIKIwoKdGVzdF9leHBlY3Rfc3VjY2VzcyBzZXR1cCAnCgl0ZW49IjAgMSAyIDMgNCA1IDYgNyA4IDkiICYmCglmb3IgaSBpbiAkdGVuCglkbwoJCWVjaG8gbGluZSAkaSBpbiBhIHNhbXBsZSBmaWxlCglkb25lID5vbmUgJiYKCWZvciBpIGluICR0ZW4KCWRvCgkJZWNobyBsaW5lICRpIGluIGFub3RoZXIgc2FtcGxlIGZpbGUKCWRvbmUgPnR3byAmJgoJZ2l0IGFkZCBvbmUgdHdvICYmCgl0ZXN0X3RpY2sgJiYgZ2l0IGNvbW1pdCAtbSBpbml0aWFsICYmCgoJZ2l0IGJyYW5jaCBMMSAmJgoJZ2l0IGNoZWNrb3V0IC1iIFIxICYmCglnaXQgbXYgb25lIHRocmVlICYmCgl0ZXN0X3RpY2sgJiYgZ2l0IGNvbW1pdCAtbSBSMSAmJgoKCWdpdCBjaGVja291dCBMMSAmJgoJZ2l0IG12IHR3byB0aHJlZSAmJgoJdGVzdF90aWNrICYmIGdpdCBjb21taXQgLW0gTDEgJiYKCglnaXQgY2hlY2tvdXQgTDFeMCAmJgoJdGVzdF90aWNrICYmIGdpdCBtZXJnZSAtcyBvdXJzIFIxICYmCglnaXQgdGFnIEwyICYmCgoJZ2l0IGNoZWNrb3V0IFIxXjAgJiYKCXRlc3RfdGljayAmJiBnaXQgbWVyZ2UgLXMgb3VycyBMMSAmJgoJZ2l0IHRhZyBSMgonCgp0ZXN0X2V4cGVjdF9zdWNjZXNzIG1lcmdlICcKCWdpdCByZXNldCAtLWhhcmQgJiYKCWdpdCBjaGVja291dCBMMl4wICYmCgoJdGVzdF9tdXN0X2ZhaWwgZ2l0IG1lcmdlIC1zIHJlY3Vyc2l2ZSBSMl4wCicKCnRlc3RfZG9uZQo=",
+    "text": "#!/bin/sh\n\ntest_description='recursive merge corner cases'\n\n. ./test-lib.sh\n\n#\n#  L1  L2\n#   o---o\n#  / \\ / \\\n# o   X   ?\n#  \\ / \\ /\n#   o---o\n#  R1  R2\n#\n\ntest_expect_success setup '\n\tten=\"0 1 2 3 4 5 6 7 8 9\" &&\n\tfor i in $ten\n\tdo\n\t\techo line $i in a sample file\n\tdone >one &&\n\tfor i in $ten\n\tdo\n\t\techo line $i in another sample file\n\tdone >two &&\n\tgit add one two &&\n\ttest_tick && git commit -m initial &&\n\n\tgit branch L1 &&\n\tgit checkout -b R1 &&\n\tgit mv one three &&\n\ttest_tick && git commit -m R1 &&\n\n\tgit checkout L1 &&\n\tgit mv two three &&\n\ttest_tick && git commit -m L1 &&\n\n\tgit checkout L1^0 &&\n\ttest_tick && git merge -s ours R1 &&\n\tgit tag L2 &&\n\n\tgit checkout R1^0 &&\n\ttest_tick && git merge -s ours L1 &&\n\tgit tag R2\n'\n\ntest_expect_success merge '\n\tgit reset --hard &&\n\tgit checkout L2^0 &&\n\n\ttest_must_fail git merge -s recursive R2^0\n'\n\ntest_done\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "004c365ad6b32fff16c3c96ef2b6a173157b02a8",
+  "sha1_ok": true,
+  "size": 863
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree b66c76e0b0659ee797a7616ef823cd95f0aac195",
+      "parent f01e51a7cfd75131b7266131b1f7540ce0a8e5c1",
+      "author Fernando Ramos <greenfoo@u92.eu> 1648667946 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1648671342 -0700"
+    ],
+    "message": "vimdiff: new implementation with layout support\n\nWhen running 'git mergetool -t vimdiff', a new configuration option\n('mergetool.vimdiff.layout') can now be used to select how the user\nwants the different windows, tabs and buffers to be displayed.\n\nIf the option is not provided, the layout will be the same one that was\nbeing used before this commit (ie. two rows with LOCAL, BASE and COMMIT\nin the top one and MERGED in the bottom one).\n\nThe 'vimdiff' variants ('vimdiff{1,2,3}') still work but, because they\nrepresented nothing else than different layouts, are now internally\nimplemented as a subcase of 'vimdiff' with the corresponding\npre-configured 'layout'.\n\nAgain, if you don't set \"mergetool.vimdiff.layout\" everything will work\nthe same as before *but* the arguments used to call {n,g,}vim will be\nothers (even if you don't/shouldn't notice it):\n\n  - git mergetool -t vimdiff\n\n    > Before this commit:\n      {n,g,}vim -f -d -c '4wincmd w | wincmd J' $LOCAL $BASE $REMOTE $MERGED\n\n    > After this commit:\n      {n,g,}vim -f -c \"echo | split | vertical split | 1b | wincmd l | vertical split | 2b | wincmd l | 3b | wincmd j | 4b | tabdo windo diffthis\" -c \"tabfirst\" $LOCAL $BASE $REMOTE $MERGED\n\n  - git mergetool -t vimdiff1\n\n    > Before this commit:\n      {n,g,}vim -f -d -c 'echon \"...\"' $LOCAL $REMOTE\n\n    > After this commit:\n      {n,g,}vim -f -c \"echo | vertical split | 1b | wincmd l | 3b | tabdo windo diffthis\" -c \"tabfirst\" $LOCAL $BASE $REMOTE $MERGED\n\n  - git mergetool -t vimdiff2\n\n    > Before this commit:\n      {n,g,}vim -f -d -c 'wincmd l' $LOCAL $MERGED $REMOTE\n\n    > After this commit:\n      {n,g,}vim -f -c \"echo | vertical split | 1b | wincmd l | vertical split | 4b | wincmd l | 3b | tabdo windo diffthis\" -c \"tabfirst\" $LOCAL $BASE $REMOTE $MERGED\n\n  - git mergetool -t vimdiff3\n\n    > Before this commit:\n      {n,g,}vim -f -d -c 'hid | hid | hid' $LOCAL $REMOTE $BASE $MERGED\n\n    > After this commit:\n      {n,g,}vim -f -c \"echo | 4b | bufdo diffthis\" -c \"tabfirst\" $LOCAL $BASE $REMOTE $MERGED\n\nDespite being different, I have manually verified that they generate the same\nlayout as before.\n\nSigned-off-by: Fernando Ramos <greenfoo@u92.eu>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0041797449da61f4131bb1673fa5d4c3af48240d",
+  "sha1_ok": true,
+  "size": 2446
+}

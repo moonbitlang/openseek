@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 4bcc0fe984fd1bc2be4793611d90fbcc9bf7d0cd",
+      "parent aaf0a421e2c8a71e2d804f359f4005320ed6d916",
+      "parent 20a0bd45fa26c36472057393453bcafdda13e1d5",
+      "author Junio C Hamano <gitster@pobox.com> 1692894754 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1692894754 -0700"
+    ],
+    "message": "Merge branch 'ob/test-lib-rebase-fake-editor-updates'\n\nTest updates.\n\n* ob/test-lib-rebase-fake-editor-updates:\n  t/lib-rebase: improve documentation of set_fake_editor()\n  t/lib-rebase: set_fake_editor(): handle FAKE_LINES more consistently\n  t/lib-rebase: set_fake_editor(): fix recognition of reset's short command\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "004a3830918a2b20e53ad817a68e75f46c3fe41a",
+  "sha1_ok": true,
+  "size": 582
+}

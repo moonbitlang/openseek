@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 6aa04ca951ae0fef99ce3260e2b3e97398ad5852",
+      "parent af67e91c39aff2d955e9c325c6c4e843d5faef60",
+      "author Jason Riedy <ejr@EECS.Berkeley.EDU> 1169759500 -0800",
+      "committer Junio C Hamano <junkio@cox.net> 1169798603 -0800"
+    ],
+    "message": "Use inttypes.h rather than stdint.h.\n\nOlder Solaris machines lack stdint.h but have inttypes.h.\nThe standard has inttypes.h including stdint.h, so at worst\nthis pollutes the namespace a bit.\n\nSigned-off-by: Jason Riedy <ejr@cs.berkeley.edu>\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "007e2ba65902b484fc65a313e54594a009841740",
+  "sha1_ok": true,
+  "size": 502
+}

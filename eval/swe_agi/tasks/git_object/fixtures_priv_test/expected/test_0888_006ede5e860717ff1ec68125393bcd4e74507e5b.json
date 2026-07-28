@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree c5dd45e0d9e5b0aef646d12d246d599b36bafd5b",
+      "parent db9819a40a56b4747931e637c1c22a104dcab902",
+      "author Eric Wong <normalperson@yhbt.net> 1165571719 -0800",
+      "committer Junio C Hamano <junkio@cox.net> 1165572421 -0800"
+    ],
+    "message": "git-svn: extra error check to ensure we open a file correctly\n\nThis may be an issue with repositories imported with commit\n27a1a8014b842c0d70fdc91c68dd361ca2dfb34c or later, but before\ncommit dad73c0bb9f33323ec1aacf560a6263f1d85f81a.\n\nSigned-off-by: Eric Wong <normalperson@yhbt.net>\nSigned-off-by: Junio C Hamano <junkio@cox.net>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "006ede5e860717ff1ec68125393bcd4e74507e5b",
+  "sha1_ok": true,
+  "size": 543
+}

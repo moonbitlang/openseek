@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "dGVzdF9leHBlY3Rfc3VjY2VzcyAnb25lLWxpbmVyLWZvci1sb29wJyAnCmdpdCBpbml0IGRpci1yZW5hbWUtYW5kLWNvbnRlbnQgJiYKKAoJY2QgZGlyLXJlbmFtZS1hbmQtY29udGVudCAmJgoJdGVzdF93cml0ZV9saW5lcyAxIDIgMyA0IDUgPmZvbyAmJgoJbWtkaXIgb2xkZGlyICYmCiMgTElOVDogb25lLWxpbmVyIGZvci1sb29wIG1pc3NpbmcgInx8IGV4aXQiOyBhbHNvIGJyb2tlbiAmJi1jaGFpbgoJZm9yIGkgaW4gYSBiIGM7IGRvIGVjaG8gJGkgPm9sZGRpci8kaTsgZG9uZQoJZ2l0IGFkZCBmb28gb2xkZGlyICYmCglnaXQgY29tbWl0IC1tICJvcmlnaW5hbCIgJiYKKQonCg==",
+    "text": "test_expect_success 'one-liner-for-loop' '\ngit init dir-rename-and-content &&\n(\n\tcd dir-rename-and-content &&\n\ttest_write_lines 1 2 3 4 5 >foo &&\n\tmkdir olddir &&\n# LINT: one-liner for-loop missing \"|| exit\"; also broken &&-chain\n\tfor i in a b c; do echo $i >olddir/$i; done\n\tgit add foo olddir &&\n\tgit commit -m \"original\" &&\n)\n'\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "00afd7ef76ee8c1284f46cf9f6b67299c85dc760",
+  "sha1_ok": true,
+  "size": 331
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree c20d9824d3b3b8b7fcbfead2e49df7204203503b",
+      "parent 2dd625d022074bb677bdd5caa5146cabaf726123",
+      "author Johannes Schindelin <Johannes.Schindelin@gmx.de> 1229774763 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1231730268 -0800"
+    ],
+    "message": "Add an expensive test for git-notes\n\ngit-notes have the potential of being pretty expensive, so test with\na lot of commits.  A lot.  So to make things cheaper, you have to\nopt-in explicitely, by setting the environment variable\nGIT_NOTES_TIMING_TESTS.\n\nSigned-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "009318b1f1db24588d93bc658ea6c6a5324c9c3c",
+  "sha1_ok": true,
+  "size": 597
+}

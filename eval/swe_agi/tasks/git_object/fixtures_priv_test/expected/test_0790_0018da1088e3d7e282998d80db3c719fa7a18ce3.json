@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 68f5adf91842c3aabd6db45afaa29e989be885b5",
+      "parent 21b4ae74b4c6094f5aabcafe4fc01bd2d8cfd054",
+      "parent 77085a616b0fe0eaba99dfe27247ae733f1570e9",
+      "author Junio C Hamano <gitster@pobox.com> 1462571146 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1462571146 -0700"
+    ],
+    "message": "Merge branch 'jk/diff-compact-heuristic'\n\nPatch output from \"git diff\" and friends has been tweaked to be\nmore readable by using a blank line as a strong hint that the\ncontents before and after it belong to a logically separate unit.\n\n* jk/diff-compact-heuristic:\n  diff: undocument the compaction heuristic knobs for experimentation\n  xdiff: implement empty line chunk heuristic\n  xdiff: add recs_match helper function\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0018da1088e3d7e282998d80db3c719fa7a18ce3",
+  "sha1_ok": true,
+  "size": 684
+}

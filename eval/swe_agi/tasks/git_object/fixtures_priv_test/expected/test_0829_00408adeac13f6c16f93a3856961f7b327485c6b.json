@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree dd891792337892fed0dc5c9065b2c18f65a52f45",
+      "parent 24fc2cde6448233dbbe1f6695577a49679ccc98b",
+      "author William Sprent <williams@unity3d.com> 1679903703 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1679939472 -0700"
+    ],
+    "message": "builtin/sparse-checkout: add check-rules command\n\nThere exists no direct way to interrogate git about which paths are\nmatched by a given set of sparsity rules. It is possible to get this\ninformation from git, but it includes checking out the commit that\ncontains the paths, applying the sparse checkout patterns and then using\nsomething like 'git ls-files -t' to check if the skip worktree bit is\nset. This works in some case, but there are cases where it is awkward or\ninfeasible to generate a checkout for this purpose.\n\nExposing the pattern matching of sparse checkout enables more tooling to\nbe built and avoids a situation where tools that want to reason about\nsparse checkouts start containing parallel implementation of the rules.\nTo accommodate this, add a 'check-rules' subcommand to the\n'sparse-checkout' builtin along the lines of the 'git check-ignore' and\n'git check-attr' commands. The new command accepts a list of paths on\nstdin and outputs just the ones the match the sparse checkout.\n\nTo allow for use in a bare repository and to allow for interrogating\nabout other patterns than the current ones, include a '--rules-file'\noption which allows the caller to explicitly pass sparse checkout rules\nin the format accepted by 'sparse-checkout set --stdin'.\n\nTo allow for reuse of the handling of input patterns for the\n'--rules-file' flag, modify 'add_patterns_from_input()' to be able to\nread from a 'FILE' instead of just stdin.\n\nTo allow for reuse of the logic which decides whether or not rules\nshould be interpreted as cone-mode patterns, split that part out of\n'update_modes()' such that can be called without modifying the config.\n\nAn alternative could have been to create a new 'check-sparsity' command.\nHowever, placing it under 'sparse-checkout' allows for a) more easily\nre-using the sparse checkout pattern matching and cone/non-code mode\nhandling, and b) keeps the documentation for the command next to the\nexperimental warning and the cone-mode discussion.\n\nSigned-off-by: William Sprent <williams@unity3d.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00408adeac13f6c16f93a3856961f7b327485c6b",
+  "sha1_ok": true,
+  "size": 2307
+}

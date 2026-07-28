@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 795d8b58fb5fbfbc1cab3ea9082c5d9ed4ce1115",
+      "parent d1b3a6c23aeed5bd66bded1e270bc8388430c008",
+      "author Junio C Hamano <gitster@pobox.com> 1335749556 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1335749575 -0700"
+    ],
+    "message": "Meta/Make: allow --noprove to decline use of prove in tests\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "007cb03102c5e596bfce0f8e4d86d23eb41ff003",
+  "sha1_ok": true,
+  "size": 276
+}

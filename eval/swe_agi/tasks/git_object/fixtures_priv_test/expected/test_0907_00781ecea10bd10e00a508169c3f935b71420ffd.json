@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree fc467f150cb89524f4b9e9bf97508569bfd1d804",
+      "parent 7406f660987023a79b802db92499c3f46f2e391f",
+      "author Junio C Hamano <gitster@pobox.com> 1219016995 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1219016995 -0700"
+    ],
+    "message": "MaintNotes: Post 1.6.0 update\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00781ecea10bd10e00a508169c3f935b71420ffd",
+  "sha1_ok": true,
+  "size": 246
+}

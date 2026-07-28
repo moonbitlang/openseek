@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree dbb514a26c1dfd2d0f9b88fa12abfb808380ca9e",
+      "parent fe99a52225d56af16d283c769f14957d3c002471",
+      "author Philippe Blain <levraiphilippeblain@gmail.com> 1732305019 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1732503559 +0900"
+    ],
+    "message": "git-mergetool--lib.sh: use TOOL_MODE when erroring about unknown tool\n\nIn git-mergetool--lib.sh::get_merge_tool_path, we check if the chosen\ntool is valid via valid_tool and exit with an error message if not. This\nerror message mentions \"Unknown merge tool\", even if the command the\nuser tried was 'git difftool --tool=unknown'. Use the global 'TOOL_MODE'\nvariable for a more correct error message.\n\nSigned-off-by: Philippe Blain <levraiphilippeblain@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00536761df113c8ad935c78bf407e427fce2f040",
+  "sha1_ok": true,
+  "size": 740
+}

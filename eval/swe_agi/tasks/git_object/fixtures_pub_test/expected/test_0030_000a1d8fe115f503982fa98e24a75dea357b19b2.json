@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "IyEvYmluL3NoCgpmb3IgdiBpbiBtYWludCBtYXN0ZXIgbmV4dCBwdQpkbwoJaW5zdGFsbGVkPSQoJEhPTUUvZ2l0LSR2L2Jpbi9naXQgdmVyc2lvbikKCWlmIHZlcnNpb249JChleHByICIkaW5zdGFsbGVkIiA6ICcuKlwuZ1woWzAtOWEtZl0qXCkkJykKCXRoZW4KCQk6CgllbGlmIHZlcnNpb249diQoZXhwciAiJGluc3RhbGxlZCIgOiBcCgkJCSdnaXQgdmVyc2lvbiBcKC4qXClcLnJjWzAtOV0qJCcpCgl0aGVuCgkJdmVyc2lvbj0iJHZlcnNpb24iLSQoZXhwciAiJGluc3RhbGxlZCIgOiBcCgkJCSdnaXQgdmVyc2lvbiAuKlwuXChyY1swLTldKlwpJCcpCgllbHNlCgkJdmVyc2lvbj12JChleHByICIkaW5zdGFsbGVkIiA6ICdnaXQgdmVyc2lvbiBcKC4qXCknKQoJZmkKCgl2ZXJzaW9uPSQoZ2l0IHJldi1wYXJzZSAtLXZlcmlmeSAiJHZlcnNpb25eMCIgMj4vZGV2L251bGwpCglyZXZpc2lvbj0kKGdpdCBzaG93LXJlZiAtcyAtLXZlcmlmeSAicmVmcy9oZWFkcy8kdiIpCglpZiB0ZXN0ICJ6JHZlcnNpb24iID0gInokcmV2aXNpb24iCgl0aGVuCgkJaW49IG91dD0gaW5zdGFsbGVkPQoJZWxzZQoJCWluc3RhbGxlZD0kKGdpdCBkZXNjcmliZSAkdmVyc2lvbikKCQlpbj0iG1s0MTszN20iIG91dD0iG1ttIiBpbnN0YWxsZWQ9IgkkaW5zdGFsbGVkIgoJZmkKCWVjaG8gIiRpbiR2JG91dAkkKGdpdC1kZXNjcmliZSByZWZzL2hlYWRzLyR2KSRpbnN0YWxsZWQiCmRvbmUK",
+    "text": "#!/bin/sh\n\nfor v in maint master next pu\ndo\n\tinstalled=$($HOME/git-$v/bin/git version)\n\tif version=$(expr \"$installed\" : '.*\\.g\\([0-9a-f]*\\)$')\n\tthen\n\t\t:\n\telif version=v$(expr \"$installed\" : \\\n\t\t\t'git version \\(.*\\)\\.rc[0-9]*$')\n\tthen\n\t\tversion=\"$version\"-$(expr \"$installed\" : \\\n\t\t\t'git version .*\\.\\(rc[0-9]*\\)$')\n\telse\n\t\tversion=v$(expr \"$installed\" : 'git version \\(.*\\)')\n\tfi\n\n\tversion=$(git rev-parse --verify \"$version^0\" 2>/dev/null)\n\trevision=$(git show-ref -s --verify \"refs/heads/$v\")\n\tif test \"z$version\" = \"z$revision\"\n\tthen\n\t\tin= out= installed=\n\telse\n\t\tinstalled=$(git describe $version)\n\t\tin=\"\u001b[41;37m\" out=\"\u001b[m\" installed=\"\t$installed\"\n\tfi\n\techo \"$in$v$out\t$(git-describe refs/heads/$v)$installed\"\ndone\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "000a1d8fe115f503982fa98e24a75dea357b19b2",
+  "sha1_ok": true,
+  "size": 720
+}

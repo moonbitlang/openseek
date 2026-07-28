@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "object 630fc7878b6fd1bc188d4916b64f4df37658df96",
+      "type commit",
+      "tag v1.7.4-rc3",
+      "tagger Junio C Hamano <gitster@pobox.com> 1295896071 -0800"
+    ],
+    "message": "Git 1.7.4-rc3\n-----BEGIN PGP SIGNATURE-----\nVersion: GnuPG v1.4.9 (GNU/Linux)\n\niEYEABECAAYFAk09zgcACgkQwMbZpPMRm5pUqgCfUfjKi/Q1iHtjiDNvRyaLup/W\naC8An2AbSlw7FF+b/L02xnMBgyNiTKcp\n=g7iE\n-----END PGP SIGNATURE-----\n",
+    "type": "tag"
+  },
+  "kind": "tag",
+  "oid": "01cde9d884eb7e88c8a79d68804395a89b0013be",
+  "sha1_ok": true,
+  "size": 346
+}

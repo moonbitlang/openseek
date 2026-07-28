@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "IyEvYmluL3NoCiMKIyBDb3B5cmlnaHQgKGMpIDIwMDggU2FudGhvc2ggS3VtYXIgTWFuaQoKCnRlc3RfZGVzY3JpcHRpb249J2dpdCBzdm4gY2FuIGZldGNoIHJlbmFtZWQgZGlyZWN0b3JpZXMnCgouIC4vbGliLWdpdC1zdm4uc2gKCnRlc3RfZXhwZWN0X3N1Y2Nlc3MgJ2xvYWQgcmVwb3NpdG9yeSB3aXRoIHJlbmFtZWQgZGlyZWN0b3J5JyAnCglzdm5hZG1pbiBsb2FkIC1xICIkcmF3c3ZucmVwbyIgPCAiJFRFU1RfRElSRUNUT1JZIi90OTEyMS9yZW5hbWVkLWRpci5kdW1wCgknCgp0ZXN0X2V4cGVjdF9zdWNjZXNzICdpbml0IGFuZCBmZXRjaCByZXBvc2l0b3J5JyAnCglnaXQgc3ZuIGluaXQgIiRzdm5yZXBvL25ld25hbWUiICYmCglnaXQgc3ZuIGZldGNoCgknCgp0ZXN0X2RvbmUKCg==",
+    "text": "#!/bin/sh\n#\n# Copyright (c) 2008 Santhosh Kumar Mani\n\n\ntest_description='git svn can fetch renamed directories'\n\n. ./lib-git-svn.sh\n\ntest_expect_success 'load repository with renamed directory' '\n\tsvnadmin load -q \"$rawsvnrepo\" < \"$TEST_DIRECTORY\"/t9121/renamed-dir.dump\n\t'\n\ntest_expect_success 'init and fetch repository' '\n\tgit svn init \"$svnrepo/newname\" &&\n\tgit svn fetch\n\t'\n\ntest_done\n\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "000cad37c63d4d14756deab92a486e96612bce5d",
+  "sha1_ok": true,
+  "size": 391
+}

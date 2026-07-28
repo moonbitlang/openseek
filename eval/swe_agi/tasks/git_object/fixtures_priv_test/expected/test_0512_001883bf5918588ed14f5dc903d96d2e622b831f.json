@@ -1,0 +1,35 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitignore",
+        "oid": "d7ebcaf366f6a8cf403f04dd0582182181b69e51"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Makefile",
+        "oid": "5acdc900abdfb3ccc1ad7616fecb098ce6f060e2"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "gitk",
+        "oid": "fcc606eab7353e67f82de873c3532cefc137a9e5"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "po",
+        "oid": "907d0b24247071e6a2674229197f454ac3c2720c"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "001883bf5918588ed14f5dc903d96d2e622b831f",
+  "sha1_ok": true,
+  "size": 135
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 07a349e5ec0d269c06c1b67d4b803fa085e5d688",
+      "parent 9f36d61e7b63618cc7931f948b7b57cdcd11bd7a",
+      "author Felipe Contreras <felipe.contreras@gmail.com> 1369448976 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1369753171 -0700"
+    ],
+    "message": "remote-bzr: simplify test checks\n\nSigned-off-by: Felipe Contreras <felipe.contreras@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0067ecc82b2dbef64d3768484eb6a1b4ca2c27d2",
+  "sha1_ok": true,
+  "size": 372
+}

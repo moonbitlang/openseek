@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 0ed05e99fd451ae595d4eb4c4fd4513db677561f",
+      "parent 4156b6a741c7fb15a4eccb320612fb6e453f439c",
+      "parent 34d3f2a984eed5c31384e384f391293d38478036",
+      "author Junio C Hamano <gitster@pobox.com> 1734975132 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1734975132 -0800"
+    ],
+    "message": "Merge branch 'as/show-index-uninitialized-hash'\n\nRegression fix for 'show-index' when run outside of a repository.\n\n* as/show-index-uninitialized-hash:\n  t5300: add test for 'show-index --object-format'\n  show-index: fix uninitialized hash function\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "002a8a9d3697866aec32cc9293e4d9b436bb028f",
+  "sha1_ok": true,
+  "size": 513
+}

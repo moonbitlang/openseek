@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 36c768c617ceaaa6828e2ce1d39b394a8cd9536c",
+      "parent 455ade659823ab01e7c1c5ec91be65c622319b01",
+      "author Michael Haggerty <mhagger@alum.mit.edu> 1432579142 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1432581575 -0700"
+    ],
+    "message": "register_replace_ref(): rewrite to take an object_id argument\n\nSigned-off-by: Michael Haggerty <mhagger@alum.mit.edu>\nSigned-off-by: brian m. carlson <sandals@crustytoothpaste.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00530834fb17f0ec070018270d0fb3e97e5dba07",
+  "sha1_ok": true,
+  "size": 452
+}

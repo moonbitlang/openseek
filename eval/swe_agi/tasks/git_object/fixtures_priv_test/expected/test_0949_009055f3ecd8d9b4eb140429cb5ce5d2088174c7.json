@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 20b94ea336a2cd7435a937b253f9527761e062cb",
+      "parent 6ab4ae2b415c375170309c2b7ace0e4daa8d0215",
+      "parent b2ed944af79041b4da151a432064c3b1c1b82fc5",
+      "author Junio C Hamano <gitster@pobox.com> 1394233995 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1394233995 -0800"
+    ],
+    "message": "Merge branch 'jc/push-2.0-default-to-simple'\n\nFinally update the \"git push\" default behaviour to \"simple\".\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "009055f3ecd8d9b4eb140429cb5ce5d2088174c7",
+  "sha1_ok": true,
+  "size": 371
+}

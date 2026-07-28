@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 05fda2033612df29f0c2b4de6ee2190a50183d43",
+      "parent 328c10930387d301560f7cbcd3351cc485a13381",
+      "author Jeff King <peff@peff.net> 1613486662 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1613497292 -0800"
+    ],
+    "message": "add open_nofollow() helper\n\nSome callers of open() would like to use O_NOFOLLOW, but it is not\navailable on all platforms. Let's abstract this into a helper function\nso we can provide system-specific implementations.\n\nSome light web-searching reveals that we might be able to get something\nsimilar on Windows using FILE_FLAG_OPEN_REPARSE_POINT. I didn't dig into\nthis further.\n\nFor other systems without O_NOFOLLOW or any equivalent, we have two\noptions for fallback:\n\n  - we can just open anyway, following symlinks; this may have security\n    implications (e.g., following untrusted in-tree symlinks)\n\n  - we can determine whether the path is a symlink with lstat().\n\n    This is slower (two syscalls instead of one), but that may be\n    acceptable for infrequent uses like looking up .gitattributes files\n    (especially because we can get away with a single syscall for the\n    common case of ENOENT).\n\n    It's also racy, but should be sufficient for our needs (we are\n    worried about in-tree symlinks that we ourselves would have\n    previously created). We could make it non-racy at the cost of making\n    it even slower, by doing an fstat() on the opened descriptor and\n    comparing the dev/ino fields to the original lstat().\n\nThis patch implements the lstat() option in its slightly-faster racy\nform.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00611d8440ecb64f2c252def017e90c87e55526a",
+  "sha1_ok": true,
+  "size": 1613
+}

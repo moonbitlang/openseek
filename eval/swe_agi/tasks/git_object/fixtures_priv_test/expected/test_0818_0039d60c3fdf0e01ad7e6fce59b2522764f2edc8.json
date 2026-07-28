@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 11143cf0c8a162e943ee44e31232adb228c2e4f8",
+      "parent 908a0e6b98e5a7c4b299b3643823bdefb4fa512e",
+      "parent 706728a37c53c3d1c3fc38aa9c9842060d03e9cc",
+      "author Junio C Hamano <gitster@pobox.com> 1372106908 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1372106908 -0700"
+    ],
+    "message": "Merge branch 'fc/sequencer-plug-leak'\n\nPlug a small leak in an error codepath.\n\n* fc/sequencer-plug-leak:\n  sequencer: avoid leaking message buffer when refusing to create an empty commit\n  sequencer: remove useless indentation\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0039d60c3fdf0e01ad7e6fce59b2522764f2edc8",
+  "sha1_ok": true,
+  "size": 492
+}

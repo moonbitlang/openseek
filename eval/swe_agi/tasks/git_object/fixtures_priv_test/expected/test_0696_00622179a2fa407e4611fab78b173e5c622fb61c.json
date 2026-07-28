@@ -1,0 +1,23 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "01.txt",
+        "oid": "75f23dd4e5ffb83a087e36801c3aa1e7464ea4e5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "02.txt",
+        "oid": "bb02e1ccd02a984f5d2fed2cfd4e3af723de4dcc"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "00622179a2fa407e4611fab78b173e5c622fb61c",
+  "sha1_ok": true,
+  "size": 68
+}

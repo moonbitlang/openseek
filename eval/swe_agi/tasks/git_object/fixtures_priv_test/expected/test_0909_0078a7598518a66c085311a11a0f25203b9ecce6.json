@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 899b4ab69e3658f2f8b88739e0b0e29d650c2120",
+      "parent 5a98255dec1578cc6dc3f25e85d7ea96028687b7",
+      "parent ec6cd14c7a869b32776c1d3387afc93f369aea62",
+      "author Junio C Hamano <gitster@pobox.com> 1487285113 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1487285113 -0800"
+    ],
+    "message": "Merge branch 'rs/cocci-check-free-only-null'\n\nA new coccinelle rule that catches a check of !pointer before the\npointer is free(3)d, which most likely is a bug.\n\n* rs/cocci-check-free-only-null:\n  cocci: detect useless free(3) calls\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0078a7598518a66c085311a11a0f25203b9ecce6",
+  "sha1_ok": true,
+  "size": 497
+}

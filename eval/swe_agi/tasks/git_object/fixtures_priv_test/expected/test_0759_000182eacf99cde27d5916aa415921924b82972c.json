@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 327229c4f38080e07424e752fa16dd2c8a915973",
+      "parent 848b292e835f10b0f859b22415be6e3fa951c55e",
+      "author Linus Torvalds <torvalds@ppc970.osdl.org> 1117987323 -0700",
+      "committer Linus Torvalds <torvalds@ppc970.osdl.org> 1117987323 -0700"
+    ],
+    "message": "pretty_print_commit: add different formats\n\nYou can ask to print out \"raw\" format (full headers, full body),\n\"medium\" format (author and date, full body) or \"short\" format\n(author only, condensed body).\n\nUse \"git-rev-list --pretty=short HEAD | less -S\" for an example.\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "000182eacf99cde27d5916aa415921924b82972c",
+  "sha1_ok": true,
+  "size": 499
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 0b36ce03712e350ffdd5cb120c1cb33ef549e3cc",
+      "parent 110e91150ddb8caa75be8e1ffb937047dbd2752f",
+      "author Johannes Schindelin <johannes.schindelin@gmx.de> 1653171534 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1653175556 -0700"
+    ],
+    "message": "ci: use `--github-workflow-markup` in the GitHub workflow\n\nThis makes the output easier to digest.\n\nNote: since workflow output currently cannot contain any nested groups\n(see https://github.com/actions/runner/issues/802 for details), we need\nto remove the explicit grouping that would span the entirety of each\nfailed test script.\n\nSigned-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0068c82a13d321b567cade0309eff8421bb2358d",
+  "sha1_ok": true,
+  "size": 677
+}

@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 327f0503a8f7b65906d1b847166bdbee1afa616c",
+      "parent c7f352f31ad0593f7772a155980b16cbbaac3dec",
+      "parent 2d81c48fa7f7679a92c9fe674b53656166ade4f8",
+      "author Junio C Hamano <gitster@pobox.com> 1484781135 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1484781135 -0800"
+    ],
+    "message": "Merge branch 'sb/pathspec-errors'\n\nRunning \"git add a/b\" when \"a\" is a submodule correctly errored\nout, but without a meaningful error message.\n\n* sb/pathspec-errors:\n  pathspec: give better message for submodule related pathspec error\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00880a17dd1ccad44150c425d5709b767c9326bc",
+  "sha1_ok": true,
+  "size": 500
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 76b8d6dc3122da75cdb659d8fe454514b4d15750",
+      "parent 157c8e3ddfd3d44805bb5ed02805bc484edc8670",
+      "author Paul Mackerras <paulus@samba.org> 1430564016 +1000",
+      "committer Paul Mackerras <paulus@samba.org> 1430564016 +1000"
+    ],
+    "message": "gitk: Replace catch {unset foo} with unset -nocomplain foo\n\nThis generates better bytecode in Tcl 8.6 according to\nhttp://wiki.tcl.tk/1506.\n\nSigned-off-by: Paul Mackerras <paulus@samba.org>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "009409fe72e53ce5a3c7cf6802d7e068632e68e8",
+  "sha1_ok": true,
+  "size": 404
+}

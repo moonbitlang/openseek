@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree b1fbe9a95349dec4f14f42bc95b7de613e74a40b",
+      "parent e6c3e349458ec2ad36addc6004cffcfa6d663c38",
+      "author Roy Eldar <royeldar0@gmail.com> 1733898750 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1733917607 +0900"
+    ],
+    "message": "git-submodule.sh: get rid of isnumber\n\nIt's entirely unnecessary to check whether the argument given to an\noption (i.e. --summary-limit) is valid in the shell wrapper, since it's\nalready done when parsing the various options in git-submodule--helper.\n\nRemove this check from the script; this both improves consistency\nthroughout the script, and the error message shown to the user in case\nsome invalid non-numeric argument was passed to \"--summary-limit\" is\nmore informative as well.\n\nSigned-off-by: Roy Eldar <royeldar0@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "006f546bc30bd42de6ba569ab70ec80441f54430",
+  "sha1_ok": true,
+  "size": 795
+}

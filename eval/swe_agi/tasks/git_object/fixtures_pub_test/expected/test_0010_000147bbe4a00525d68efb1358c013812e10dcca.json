@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "YXBwcC5zaCBpcyBhIHNjcmlwdCB0aGF0IGlzIHN1cHBvc2VkIHRvIGJlIHVzZWQgdG9nZXRoZXIgd2l0aCBFeHRlcm5hbEVkaXRvcgpmb3IgTW96aWxsYSBUaHVuZGVyYmlyZC4gSXQgd2lsbCBsZXQgeW91IGluY2x1ZGUgcGF0Y2hlcyBpbmxpbmUgaW4gZS1tYWlscwppbiBhbiBlYXN5IHdheS4KClVzYWdlOgotIEdlbmVyYXRlIHRoZSBwYXRjaCB3aXRoIGdpdCBmb3JtYXQtcGF0Y2guCi0gU3RhcnQgd3JpdGluZyBhIG5ldyBlLW1haWwgaW4gVGh1bmRlcmJpcmQuCi0gUHJlc3MgdGhlIGV4dGVybmFsIGVkaXRvciBidXR0b24gKG9yIEN0cmwtRSkgdG8gcnVuIGFwcHAuc2gKLSBTZWxlY3QgdGhlIHByZXZpb3VzbHkgZ2VuZXJhdGVkIHBhdGNoIGZpbGUuCi0gRmluaXNoIGVkaXRpbmcgdGhlIGUtbWFpbC4KCkFueSB0ZXh0IHRoYXQgaXMgZW50ZXJlZCBpbnRvIHRoZSBtZXNzYWdlIGVkaXRvciBiZWZvcmUgYXBwcC5zaCBpcyBjYWxsZWQKd2lsbCBiZSBtb3ZlZCB0byB0aGUgc2VjdGlvbiBiZXR3ZWVuIHRoZSAtLS0gYW5kIHRoZSBkaWZmc3RhdC4KCkFsbCBTLU8tQjpzIGFuZCBDYzpzIGluIHRoZSBwYXRjaCB3aWxsIGJlIGFkZGVkIHRvIHRoZSBDQyBsaXN0LgoKVG8gc2V0IGl0IHVwLCBqdXN0IGluc3RhbGwgRXh0ZXJuYWwgRWRpdG9yIGFuZCB0ZWxsIGl0IHRvIHVzZSBhcHBwLnNoIGFzIHRoZQplZGl0b3IuCgpaZW5pdHkgaXMgYSByZXF1aXJlZCBkZXBlbmRlbmN5Lgo=",
+    "text": "appp.sh is a script that is supposed to be used together with ExternalEditor\nfor Mozilla Thunderbird. It will let you include patches inline in e-mails\nin an easy way.\n\nUsage:\n- Generate the patch with git format-patch.\n- Start writing a new e-mail in Thunderbird.\n- Press the external editor button (or Ctrl-E) to run appp.sh\n- Select the previously generated patch file.\n- Finish editing the e-mail.\n\nAny text that is entered into the message editor before appp.sh is called\nwill be moved to the section between the --- and the diffstat.\n\nAll S-O-B:s and Cc:s in the patch will be added to the CC list.\n\nTo set it up, just install External Editor and tell it to use appp.sh as the\neditor.\n\nZenity is a required dependency.\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "000147bbe4a00525d68efb1358c013812e10dcca",
+  "sha1_ok": false,
+  "size": 725
+}

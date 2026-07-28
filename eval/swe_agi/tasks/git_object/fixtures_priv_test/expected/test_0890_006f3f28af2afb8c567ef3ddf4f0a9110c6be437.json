@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 97d82789224c02b047491ce2b71c03963e048777",
+      "parent 3c96aa97232367a24eef8b3b387f5ddae5b0c10f",
+      "author Stefan Beller <sbeller@google.com> 1505237500 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1505369154 +0900"
+    ],
+    "message": "replace-objects: evaluate replacement refs without using the object store\n\nPass DO_FOR_EACH_INCLUDE_BROKEN when iterating over replacement refs\nso that the iteration does not require opening the named objects from\nthe object store. This avoids a dependency cycle between object access\nand replace ref iteration.\n\nMoreover the ref subsystem has not been migrated yet to access the\nobject store via passed in repository objects.  As a result, without\nthis patch, iterating over replace refs in a repository other than\nthe_repository it produces errors:\n\n   error: refs/replace/3afabef75c627b894cccc3bcae86837abc7c32fe does not point to a valid object!\n\nNoticed while adapting the object store (and in particular its\nevaluation of replace refs) to handle arbitrary repositories.\n\nSigned-off-by: Stefan Beller <sbeller@google.com>\nSigned-off-by: Jonathan Nieder <jrnieder@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "006f3f28af2afb8c567ef3ddf4f0a9110c6be437",
+  "sha1_ok": true,
+  "size": 1145
+}

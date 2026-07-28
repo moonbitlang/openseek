@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 16d8b71bca9dd50d0c46b14948920b374f88c634",
+      "parent b4980c63acad8457fb3606b9bd8b74d5e7cba8dd",
+      "parent 8231fa6ae1ef92be73bec5cf0a533a4d8b71d536",
+      "author Junio C Hamano <gitster@pobox.com> 1379705852 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1379705852 -0700"
+    ],
+    "message": "Merge branch 'dw/check-ignore-sans-index'\n\n\"git check-ignore\" follows the same rule as \"git add\" and \"git\nstatus\" in that the ignore/exclude mechanism does not take effect\non paths that are already tracked.  With \"--no-index\" option, it\ncan be used to diagnose which paths that should have been ignored\nhave been mistakenly added to the index.\n\n* dw/check-ignore-sans-index:\n  check-ignore: Add option to ignore index contents\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "005a1de380733477382c50e2e44ed8042c401fed",
+  "sha1_ok": true,
+  "size": 691
+}

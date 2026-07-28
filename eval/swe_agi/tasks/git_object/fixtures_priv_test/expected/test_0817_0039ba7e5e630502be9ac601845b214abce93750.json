@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 8e01cb139c766643f18e296c21e688b03621bc8c",
+      "parent 20f3749977c0ea48538553dcd85b7cd445d43415",
+      "author Brandon Casey <casey@nrlssc.navy.mil> 1247245843 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1247295029 -0700"
+    ],
+    "message": "unpack-trees.c: work around run-time array initialization flaw on IRIX 6.5\n\nThe c99 MIPSpro Compiler version 7.4.4m on IRIX 6.5 does not properly\ninitialize run-time initialized arrays.  An array which is initialized with\nfewer elements than the length of the array should have the unitialized\nelements initialized to zero.  This compiler only initializes the remaining\nelements when the last element is a static parameter.  So work around it\nby adding a \"NULL\" initialization parameter.\n\nSigned-off-by: Brandon Casey <casey@nrlssc.navy.mil>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0039ba7e5e630502be9ac601845b214abce93750",
+  "sha1_ok": true,
+  "size": 811
+}

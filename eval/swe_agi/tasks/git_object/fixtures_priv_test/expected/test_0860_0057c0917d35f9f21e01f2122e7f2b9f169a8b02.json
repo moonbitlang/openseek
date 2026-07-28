@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 01dac83b7a460550aca8c883756c063b5a5b095f",
+      "parent 23123aecf8418a6b0ec23378555ed78c438ae894",
+      "author Johan Herland <johan@herland.net> 1255083728 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1256004024 -0700"
+    ],
+    "message": "Add selftests verifying that we can parse notes trees with various fanouts\n\nSigned-off-by: Johan Herland <johan@herland.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0057c0917d35f9f21e01f2122e7f2b9f169a8b02",
+  "sha1_ok": true,
+  "size": 390
+}

@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree d84fbe6b6f5a8126fe6b5c7fd868ff243fa8d14b",
+      "parent 8d3661d5b1c7ca698a863625a05888c66004d3c1",
+      "parent c12c9df5275add49b7b47cad82879a84c6bea469",
+      "author Junio C Hamano <gitster@pobox.com> 1530215612 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1530215612 -0700"
+    ],
+    "message": "Merge branch 'jk/fetch-all-peeled-fix'\n\n\"git fetch-pack --all\" used to unnecessarily fail upon seeing an\nannotated tag that points at an object other than a commit.\n\n* jk/fetch-all-peeled-fix:\n  fetch-pack: test explicitly that --all can fetch tag references pointing to non-commits\n  fetch-pack: don't try to fetch peel values with --all\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0079732e960dc20ab2a68043d5593de358f1377f",
+  "sha1_ok": true,
+  "size": 603
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree a65a572c581f00418229920f40868af9b8c8a344",
+      "parent c9bb5d101ca657fa466afa8c4368c43ea7b7aca8",
+      "author Jeff King <peff@peff.net> 1483941612 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1483954190 -0800"
+    ],
+    "message": "git_exec_path: do not return the result of getenv()\n\nThe result of getenv() is not guaranteed by POSIX to last\nbeyond another call to getenv(), or setenv(), etc.  We\nshould duplicate the string before returning to the caller\nto avoid any surprises.\n\nWe already keep a cached pointer to avoid repeatedly leaking\nthe result of system_path(). We can use the same pointer\nhere to avoid allocating and leaking for each call.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "007ac544011213045e3905983b4350ffec8f41f7",
+  "sha1_ok": true,
+  "size": 719
+}

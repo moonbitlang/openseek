@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree f05d9109c3bd8776149b61c8db61c7d95dfa5ff3",
+      "parent 197a80d7d97e5c84e6b8889397aea1cd1d896be5",
+      "author Sebastian Leske <Sebastian.Leske@sleske.name> 1353655778 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1356651506 -0800"
+    ],
+    "message": "git-svn: Note about tags.\n\nDocument that 'git svn' will import SVN tags as branches.\n\nSigned-off-by: Sebastian Leske <sebastian.leske@sleske.name>\nAcked-by: Eric Wong <normalperson@yhbt.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008c208c2c54f7bb97bfb7bc5dc606a4eb0d6837",
+  "sha1_ok": true,
+  "size": 468
+}

@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 9a1462ffc0d8cb8a222fa00e01111c7245c9a580",
+      "parent 8813596531c08ed7488f85805cd0ec974a9c7c96",
+      "parent 332acc248dd5213cb1d61be5538bb47ad26770e5",
+      "author Junio C Hamano <gitster@pobox.com> 1645664284 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1645664284 -0800"
+    ],
+    "message": "Merge branch 'ds/mailmap'\n\nUpdate mailmap entries.\n\n* ds/mailmap:\n  mailmap: change primary address for Derrick Stolee\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008adee2087e8e78f767bbfdfd49d1d1eabf9469",
+  "sha1_ok": true,
+  "size": 383
+}

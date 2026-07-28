@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 1fab21bbd724c80da0e7da3ca624e287a0e916ea",
+      "parent 30ae764b1e11f10b5fca723a876a0f3de3ca11ab",
+      "author Daniel Barkalow <barkalow@iabervon.org> 1189479771 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1190197350 -0700"
+    ],
+    "message": "Add uploadpack configuration info to remote.\n\nSigned-off-by: Daniel Barkalow <barkalow@iabervon.org>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0012ba2108aa42947dedf19f3db2de73a67cc4f5",
+  "sha1_ok": true,
+  "size": 372
+}

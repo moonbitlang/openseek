@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree a6bd5229da9fd44b8f29be12cb900d3ef8500868",
+      "parent bc0f35ca238ff88829cd9839641a316e859348a2",
+      "author Elijah Newren <newren@gmail.com> 1286136014 -0600",
+      "committer Junio C Hamano <gitster@pobox.com> 1286396793 -0700"
+    ],
+    "message": "Introduce sane_unset and use it to ensure proper && chaining\n\nReviewed-by: Jonathan Nieder <jrnieder@gmail.com>\nSigned-off-by: Elijah Newren <newren@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00648ba0505bbe1999bb6ae2f1d02a0ef923b191",
+  "sha1_ok": true,
+  "size": 424
+}

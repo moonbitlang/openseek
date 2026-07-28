@@ -1,0 +1,47 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "CMakeLists.txt",
+        "oid": "671c7ead75381dfb0ef84a97091404b18e388ff5"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Generators.pm",
+        "oid": "aa4cbaa2adacb12616a3150b5735ad4634c93124"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "Generators",
+        "oid": "dd3c9ec8d9f2aca58d3eb1816b41ee898f526134"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "engine.pl",
+        "oid": "ed6c45988a38b0f45a2b67a15cb18a221ad911c7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "generate",
+        "oid": "bc10f25ff24a74268c2995e5fa9e8d878c66bf14"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "parse.pl",
+        "oid": "c9656ece9931c46d686c609bbbcef38d74aea04a"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "0009e29800fdea42f03573ab231c4b91f0e84bc4",
+  "sha1_ok": true,
+  "size": 229
+}

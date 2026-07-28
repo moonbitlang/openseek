@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 84de6855072eed35c362dbc9509e5bd4fd7f1e09",
+      "parent e2f4e7e8c0f77e45c51ac937fb870351517437c8",
+      "author \u00c6var Arnfj\u00f6r\u00f0 Bjarmason <avarab@gmail.com> 1665675547 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1665678775 -0700"
+    ],
+    "message": "stash doc SYNOPSIS & -h: correct padding around \"[]()\"\n\nThe whitespace padding of alternatives should be of the form \"[-f |\n--force]\" not \"[-f|--force]\". Likewise we should not have padding\nbefore the first option, so \"(--all | <pack-filename>...)\" is correct,\nnot \"( --all | <pack-filename>... )\".\n\nSigned-off-by: \u00c6var Arnfj\u00f6r\u00f0 Bjarmason <avarab@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "007512152e1c8cf64dbb12d8bbc86f5a2514b78d",
+  "sha1_ok": true,
+  "size": 638
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 4cae038d73aed4ac46a9beab4384347825c676a1",
+      "parent c1166ca0e23d60629e0e7babd4eb4be64f578286",
+      "author Jeff King <peff@peff.net> 1670929929 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1670937382 +0900"
+    ],
+    "message": "list-objects: drop process_gitlink() function\n\nOur object graph traversal code has a process_gitlink() function which\nwe call when we see a gitlink entry. The function does nothing; it was\nadded in the early days of gitlinks by 6e2f441bd4 (Teach git\nlist-objects logic to not follow gitlinks, 2007-04-13).\n\nThe comment above the function talks about some things we _could_ do.\nBut in the intervening 15 years, nobody has touched the function, and\nthe submodule code usually makes its own decisions about when and how to\nexamine the links. At the generic traversal layer, we can't assume that\nthe pointed-to commit is available.\n\nLet's drop this placeholder that isn't really helping anything. This\nsilences some -Wunused-parameter warnings, and also gets rid of a crufty\nuse of \"const unsigned char *\" to pass a raw hash value.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00271485d4acefda7ff054a1db5d5a39735e28b9",
+  "sha1_ok": true,
+  "size": 1127
+}

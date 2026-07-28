@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 9e029cca6012e74ca30d8a0b0d5f1c8a2a9cc011",
+      "parent 829ef383a2b03a614d7d23e575270f2b10a805c1",
+      "author Dan McGee <dpmcgee@gmail.com> 1285600749 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1285790988 -0700"
+    ],
+    "message": "mergetool-lib: make the three-way diff the default for vim/gvim\n\nThe original vimdiff/gvimdiff configuration is now available by using\n'vimdiff2' or 'gvimdiff2' as the preferred merge tool.\n\nSigned-off-by: Dan McGee <dpmcgee@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "000866909a5d9233c89d8fcc33a8125cc84f24d6",
+  "sha1_ok": true,
+  "size": 497
+}

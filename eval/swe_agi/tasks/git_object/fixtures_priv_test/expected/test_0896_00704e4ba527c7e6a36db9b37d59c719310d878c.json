@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 3d213f563ed1d399ed7991b9fe95619cb421f196",
+      "parent 5a2c11b6dbecff69336324d73e73b7315053734f",
+      "author Junio C Hamano <gitster@pobox.com> 1354922159 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1354922159 -0800"
+    ],
+    "message": "Documentation/diff-config: work around AsciiDoc misfortune\n\nThe line that happens to begin with indent followed by \"3. \" was\ninterpreted as if it was an enumerated list; just wrap the lines\ndifferently to work it around for now.\n\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00704e4ba527c7e6a36db9b37d59c719310d878c",
+  "sha1_ok": true,
+  "size": 496
+}

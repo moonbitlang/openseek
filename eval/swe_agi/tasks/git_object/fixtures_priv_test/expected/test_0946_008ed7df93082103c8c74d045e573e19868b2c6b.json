@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree a5b16f7e071f8566f39f23e072760bbc50e5d1cc",
+      "parent 5242860f548d1869ac2779726ad496f0ae8ab5ca",
+      "author Karthik Nayak <karthik.188@gmail.com> 1445163904 +0530",
+      "committer Junio C Hamano <gitster@pobox.com> 1445209656 -0700"
+    ],
+    "message": "tag.c: use the correct algorithm for the '--contains' option\n\nIn b7cc53e9 (tag.c: use 'ref-filter' APIs, 2015-09-11) we port tag.c\nto use the ref-filter APIs for filtering and printing refs.  In\nref-filter we have two implementations for filtering refs when the\n'--contains' option is used.\n\nAlthough they do the same thing, one is optimized for filtering\nbranches and the other for tags (borrowed from branch.c and tag.c\nrespectively) and the 'filter->with_commit_tag_algo' bit decides\nwhich algorithm must be used.  We should unify these.\n\nWhen we ported tag.c to use ref-filter APIs we missed out on setting\nthe 'filter->with_commit_tag_algo' bit.  As reported by Jerry\nSnitselaar, this causes \"git tag --contains\" to work way slower than\nexpected, fix this by setting 'filter->with_commit_tag_algo' in\ntag.c before calling 'filter_refs()'.\n\nMentored-by: Matthieu Moy <matthieu.moy@grenoble-inp.fr>\nTested-by: Jerry Snitselaar <jsnitsel@redhat.com>\nSigned-off-by: Karthik Nayak <karthik.188@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008ed7df93082103c8c74d045e573e19868b2c6b",
+  "sha1_ok": true,
+  "size": 1274
+}

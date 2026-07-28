@@ -1,0 +1,65 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Editor.pm",
+        "oid": "755092fdffce322b88959a97b08d796460b41ffe"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Fetcher.pm",
+        "oid": "046a7a2f31cf923f634bd8b516b3da38ff989a46"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "GlobSpec.pm",
+        "oid": "96cfd9896e99f7060ab69e76675f976a1f8ffdc7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Log.pm",
+        "oid": "3cc1c6f0817fe307390852c54a07cb2a07404f7e"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "Memoize",
+        "oid": "a3a6276bba360af74985afa8d79cfb4dfc33e337"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Migration.pm",
+        "oid": "75d74298ea5e39ed846254ac4d95f88d0be6ed7b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Prompt.pm",
+        "oid": "3a6f8af0d9849c5f2fc886f8fc3ac9a8575e271e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Ra.pm",
+        "oid": "9234bf99e80796b0095ccdc5d1c32e1b3ef30367"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Utils.pm",
+        "oid": "496006bc7b3b9492f2747f689a8cdda411eb5806"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "0077a4dc5762677513734b8c0cc03c7e46014e25",
+  "sha1_ok": true,
+  "size": 328
+}

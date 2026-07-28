@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 1493983432d0bd283322892e9638e211b93d3d72",
+      "parent b328e8d105fd55bc9361a14d831401fb59183802",
+      "author Junio C Hamano <gitster@pobox.com> 1686615535 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1686615535 -0700"
+    ],
+    "message": "What's cooking (2023/06 #03)\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "003b19693bfcf08d1685a415f77963a93621b232",
+  "sha1_ok": true,
+  "size": 245
+}

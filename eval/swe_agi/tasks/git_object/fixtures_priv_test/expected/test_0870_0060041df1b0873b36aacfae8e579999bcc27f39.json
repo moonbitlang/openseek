@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree a17188b62c451d4311b5a71f2886e8169d715dc1",
+      "parent a5a959d9a8481f46f89be437d7b336c70b473d9b",
+      "author Elijah Newren <newren@gmail.com> 1530114484 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1530127512 -0700"
+    ],
+    "message": "Fix use of strategy options with interactive rebases\n\ngit-rebase.sh wrote strategy options to .git/rebase/merge/strategy_opts\nin the following format:\n  '--ours'  '--renormalize'\nNote the double spaces.\n\ngit-rebase--interactive uses sequencer.c to parse that file, and\nsequencer.c used split_cmdline() to get the individual strategy options.\nAfter splitting, sequencer.c prefixed each \"option\" with a double dash,\nso, concatenating all its options would result in:\n  -- --ours -- --renormalize\n\nSo, when it ended up calling try_merge_strategy(), that in turn would run\n  git merge-$strategy -- --ours -- --renormalize $merge_base -- $head $remote\n\ninstead of the expected/desired\n  git merge-$strategy --ours --renormalize $merge_base -- $head $remote\n\nRemove the extra spaces so that when it goes through split_cmdline() we end\nup with the desired command line.\n\nSigned-off-by: Elijah Newren <newren@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0060041df1b0873b36aacfae8e579999bcc27f39",
+  "sha1_ok": true,
+  "size": 1176
+}

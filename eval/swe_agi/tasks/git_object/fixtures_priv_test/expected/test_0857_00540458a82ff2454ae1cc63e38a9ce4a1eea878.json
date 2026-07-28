@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 4582a0ee4e7fab32af5d1b3afb683d2d46f9745e",
+      "parent a08595f76159b09d57553e37a5123f1091bb13e7",
+      "author Shawn Pearce <spearce@spearce.org> 1455413974 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1455571303 -0800"
+    ],
+    "message": "remote-curl: include curl_errorstr on SSL setup failures\n\nFor curl error 35 (CURLE_SSL_CONNECT_ERROR) users need the\nadditional text stored in CURLOPT_ERRORBUFFER to debug why\nthe connection did not start. This is curl_errorstr inside\nof http.c, so include that in the message if it is non-empty.\n\nSometimes HTTP response codes aren't yet available, such as\nwhen the SSL setup fails. Don't include HTTP 0 in the message.\n\nSigned-off-by: Shawn Pearce <spearce@spearce.org>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00540458a82ff2454ae1cc63e38a9ce4a1eea878",
+  "sha1_ok": true,
+  "size": 738
+}

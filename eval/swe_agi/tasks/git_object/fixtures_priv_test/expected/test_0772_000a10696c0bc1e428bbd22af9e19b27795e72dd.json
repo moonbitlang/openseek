@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree c2278575b1d1f125d470b616591b0f81305e4751",
+      "parent 063257076d8ea2bbf185ca33192583e03099e955",
+      "author Shawn O. Pearce <spearce@spearce.org> 1180809061 -0400",
+      "committer Shawn O. Pearce <spearce@spearce.org> 1181107609 -0400"
+    ],
+    "message": "git-gui: Use lighter colors in blame view\n\nThe colors I originally picked out on a Mac OS X system look a\ntad too dark on a Windows 2000 system; the greys are dark enough\nto make it difficult to read some lines of text and the green used\nto highlight the current commit was also difficult to read text on.\n\nI also added a third grey to the mix, to try and help some files\nthat wind up with a number of neighboring chunks getting the same\ncolors.\n\nSigned-off-by: Shawn O. Pearce <spearce@spearce.org>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "000a10696c0bc1e428bbd22af9e19b27795e72dd",
+  "sha1_ok": true,
+  "size": 722
+}

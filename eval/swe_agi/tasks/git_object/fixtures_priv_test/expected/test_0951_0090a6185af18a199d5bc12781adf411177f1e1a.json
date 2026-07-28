@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree f99d47506786f72214e9ed2be219ac366493cfc2",
+      "parent 25f6f325d7a8f7cb686a9ffd9fa2c00b3aa85a60",
+      "author Matthias Urlichs <smurf@smurf.noris.de> 1129052547 +0200",
+      "committer Matthias Urlichs <smurf@smurf.noris.de> 1129052547 +0200"
+    ],
+    "message": "svn import: copy directories\n\nImport SVN-copied and -referenced directories correctly.\n\nSigned-Off-By: Matthias Urlichs <smurf@smurf.noris.de>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0090a6185af18a199d5bc12781adf411177f1e1a",
+  "sha1_ok": true,
+  "size": 369
+}

@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 2d714cef7cf638a389124bfa75e526bed7697cb9",
+      "parent e5be3c632af4ea1ec6d9406d30f7f8cf54f5e9e7",
+      "parent aa1df8146d70bb85c63b0999868fe29aebc1173e",
+      "author Taylor Blau <me@ttaylorr.com> 1667178282 -0400",
+      "committer Taylor Blau <me@ttaylorr.com> 1667178282 -0400"
+    ],
+    "message": "Merge branch 'pw/rebase-keep-base-fixes'\n\n\"git rebase --keep-base\" used to discard the commits that are\nalready cherry-picked to the upstream, even when \"keep-base\" meant\nthat the base, on top of which the history is being rebuilt, does\nnot yet include these cherry-picked commits.  The --keep-base\noption now implies --reapply-cherry-picks and --no-fork-point\noptions.\n\n* pw/rebase-keep-base-fixes:\n  rebase --keep-base: imply --no-fork-point\n  rebase --keep-base: imply --reapply-cherry-picks\n  rebase: factor out branch_base calculation\n  rebase: rename merge_base to branch_base\n  rebase: store orig_head as a commit\n  rebase: be stricter when reading state files containing oids\n  t3416: set $EDITOR in subshell\n  t3416: tighten two tests\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "003f815dd9f42b1bb893338b32d9cce33a8926c1",
+  "sha1_ok": true,
+  "size": 998
+}

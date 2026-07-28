@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 7611999b91c2b8bb74070f205cf1095340febd7d",
+      "parent 07a454027b92605887fd09c1426fa6067f5f84cb",
+      "parent a75910602a7367281409c4f13b5b87f350a0dc43",
+      "author Junio C Hamano <gitster@pobox.com> 1654636257 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1654636257 -0700"
+    ],
+    "message": "Merge branch 'rs/document-archive-prefix'\n\nThe documentation on the interaction between \"--add-file\" and\n\"--prefix\" options of \"git archive\" has been improved.\n\n* rs/document-archive-prefix:\n  archive: improve documentation of --prefix\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "006fd83e0389a42b766cb1acd8796c15f69b02b5",
+  "sha1_ok": true,
+  "size": 500
+}

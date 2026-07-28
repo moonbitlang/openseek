@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree acf241fb9e1739d2066155f366c08fb88f1fea84",
+      "parent a14d49ca846df43f706691b6219140673a65500b",
+      "author Jeff King <peff@peff.net> 1717496012 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1717606303 -0700"
+    ],
+    "message": "sparse-checkout: free sparse_filename after use\n\nWe allocate a heap buffer via get_sparse_checkout_filename(). Most calls\nremember to free it, but sparse_checkout_init() forgets to, causing a\nleak. Ironically, it remembers to do so in the error return paths, but\nnot in the path that makes it all the way to the function end!\n\nFixing this clears up 6 leaks from t1091.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008f59d2d6b3be1017d8d321985b89d85659df04",
+  "sha1_ok": true,
+  "size": 668
+}

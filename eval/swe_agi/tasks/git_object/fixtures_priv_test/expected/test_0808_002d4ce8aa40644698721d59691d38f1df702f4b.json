@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 85976b4fab6eaa2c07461dee355c040a979bfee2",
+      "parent 38b074de80759c95fec20b0dbc30614caccdfd24",
+      "author Jeff King <peff@peff.net> 1365968301 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1366007457 -0700"
+    ],
+    "message": "t/test-lib.sh: drop \"$test\" variable\n\nThe $test variable is used as an interim buffer for\nconstructing $TRASH_DIRECTORY, and is almost compatible with\nit (the exception being that $test has not been converted to\nan absolute path). Let's get rid of it entirely so that\nlater code does not accidentally use it, thinking the two\nare interchangeable.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "002d4ce8aa40644698721d59691d38f1df702f4b",
+  "sha1_ok": true,
+  "size": 646
+}

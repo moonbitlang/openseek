@@ -1,0 +1,173 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "README",
+        "oid": "05f291c1f1d3d1018f390618816f94d0cd58951b"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "buildsystems",
+        "oid": "874b8bc53e276fba77c828d176abfc5c99610931"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "completion",
+        "oid": "bbfb8f01caab2fe9fd3f44725f67850a46dd998e"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "contacts",
+        "oid": "7ec3c98005e537b6ac25babb9e71237d025866d0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "convert-grafts-to-replace-refs.sh",
+        "oid": "0cbc917b8cf5d63668eb562cda2d32b721d3b01a"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "convert-objects",
+        "oid": "1f9f73f393a3cf2929ad07fafd9aa3c40a041664"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "credential",
+        "oid": "1b9c12a934912f03fcfdb3de80e719c118043877"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "diff-highlight",
+        "oid": "55098c07943f77691d75a77c2e1137dc0ecb5605"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "emacs",
+        "oid": "59953aa1fa84c64fdf5d3fccf466156bbe8377fe"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "examples",
+        "oid": "a48a673251d3001387654e89bd09a27d7c2faa54"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "fast-import",
+        "oid": "b19e5da8d254420b96ce4b97e46b3eaf4d6eca6e"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "git-jump",
+        "oid": "2bdef2efed8a5b40181bde9b2044d56fa5d54143"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-resurrect.sh",
+        "oid": "d7e97bbc76c27f61e83a5328831fd6889b22e662"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "git-shell-commands",
+        "oid": "dd32b36b53cefc1833244c2989018caaeb814316"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "gitview",
+        "oid": "a575bc7c8f6d8ba55c1ab83a4c67ed20f9f2a8dd"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "hg-to-git",
+        "oid": "5e977a10fdb6ded0aff223c16845b17b3bfffbd7"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "hooks",
+        "oid": "8ccaf1efdaab5a335337e2726e0fef308a4bc0d6"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "mw-to-git",
+        "oid": "993278b444911e4bbf9899c47fb363a8a213770d"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "persistent-https",
+        "oid": "57110cb5d64ab728aff62cf4e61dac287d8fd5cd"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "remote-helpers",
+        "oid": "e3026f166de1362c0a84e121df3ddad941b5891a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "remotes2config.sh",
+        "oid": "1cda19f66af96fa828de81cbb21817abca0c06ea"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "rerere-train.sh",
+        "oid": "52ad9e41fb7aba37abf71dad2bf5a0015b01dca7"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "stats",
+        "oid": "0d0d84bbb9885d5098fd37203e1856be3879496d"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "subtree",
+        "oid": "5fddff6062b7753aae5ca104ab58edc693d93a5a"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "svn-fe",
+        "oid": "0af8c486d0ac2a0aa1306b8ca8830846863797ce"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "thunderbird-patch-inline",
+        "oid": "fd2da8cc0dfc9d0a17765077663797ef386f2a67"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "workdir",
+        "oid": "83d45b747820e31d4e5fc029396c77cb23dc7a6d"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "003272b2af7b09237311f2c40e10883d0e3a6520",
+  "sha1_ok": true,
+  "size": 1049
+}

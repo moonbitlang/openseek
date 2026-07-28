@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 31aa195fc15170994979b4a4f347f5c28d73a26a",
+      "parent 03af0870a0e6d551a31eb830d5c2682b82ae0ac6",
+      "author Johannes Schindelin <johannes.schindelin@gmx.de> 1233095688 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1233202597 -0800"
+    ],
+    "message": "test-lib.sh: introduce test_commit() and test_merge() helpers\n\nOften we just need to add a commit with a given (short) name, that will\nbe tagged with the same name.  Now, relatively complicated graphs can be\nconstructed easily and in a clear fashion:\n\n\ttest_commit A &&\n\ttest_commit B &&\n\tgit checkout A &&\n\ttest_commit C &&\n\ttest_merge D B\n\nwill construct this graph:\n\n\tA - B\n\t  \\   \\\n\t    C - D\n\nFor simplicity, files whose name is the lower case version of the commit\nmessage (to avoid a warning about ambiguous names) will be committed, with\nthe corresponding commit messages as contents.\n\nIf you need to provide a different file/different contents, you can use\nthe more explicit form\n\n\ttest_commit $MESSAGE $FILENAME $CONTENTS\n\nSigned-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008849689e04e774aa7b194cd690405761e2383a",
+  "sha1_ok": true,
+  "size": 1077
+}

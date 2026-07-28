@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 91eb65cff85816185981ef45f929de83af0b96cd",
+      "parent ce735bf7fd66c6404e86e5a313f35abc0394b838",
+      "author Junio C Hamano <gitster@pobox.com> 1361144133 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1361144133 -0800"
+    ],
+    "message": "Git 1.8.2-rc0\n\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "004825d314db4ba3f34ef499e3522ef72792d896",
+  "sha1_ok": true,
+  "size": 281
+}

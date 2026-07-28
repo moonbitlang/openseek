@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "cmVxdWlyZSAnYXNjaWlkb2N0b3InCnJlcXVpcmUgJ2FzY2lpZG9jdG9yL2V4dGVuc2lvbnMnCgptb2R1bGUgR2l0CiAgbW9kdWxlIERvY3VtZW50YXRpb24KICAgIGNsYXNzIExpbmtHaXRQcm9jZXNzb3IgPCBBc2NpaWRvY3Rvcjo6RXh0ZW5zaW9uczo6SW5saW5lTWFjcm9Qcm9jZXNzb3IKICAgICAgdXNlX2RzbAoKICAgICAgbmFtZWQgOmNocm9tZQoKICAgICAgZGVmIHByb2Nlc3MocGFyZW50LCB0YXJnZXQsIGF0dHJzKQogICAgICAgIGlmIHBhcmVudC5kb2N1bWVudC5iYXNlYmFja2VuZD8gJ2h0bWwnCiAgICAgICAgICBwcmVmaXggPSBwYXJlbnQuZG9jdW1lbnQuYXR0cignZ2l0LXJlbGF0aXZlLWh0bWwtcHJlZml4JykKICAgICAgICAgICUoPGEgaHJlZj0iI3twcmVmaXh9I3t0YXJnZXR9Lmh0bWwiPiN7dGFyZ2V0fSgje2F0dHJzWzFdfSk8L2E+KQogICAgICAgIGVsc2lmIHBhcmVudC5kb2N1bWVudC5iYXNlYmFja2VuZD8gJ2RvY2Jvb2snCiAgICAgICAgICAiPGNpdGVyZWZlbnRyeT5cbiIgXAogICAgICAgICAgICAiPHJlZmVudHJ5dGl0bGU+I3t0YXJnZXR9PC9yZWZlbnRyeXRpdGxlPiIgXAogICAgICAgICAgICAiPG1hbnZvbG51bT4je2F0dHJzWzFdfTwvbWFudm9sbnVtPlxuIiBcCiAgICAgICAgICAiPC9jaXRlcmVmZW50cnk+IgogICAgICAgIGVuZAogICAgICBlbmQKICAgIGVuZAogIGVuZAplbmQKCkFzY2lpZG9jdG9yOjpFeHRlbnNpb25zLnJlZ2lzdGVyIGRvCiAgaW5saW5lX21hY3JvIEdpdDo6RG9jdW1lbnRhdGlvbjo6TGlua0dpdFByb2Nlc3NvciwgOmxpbmtnaXQKZW5kCg==",
+    "text": "require 'asciidoctor'\nrequire 'asciidoctor/extensions'\n\nmodule Git\n  module Documentation\n    class LinkGitProcessor < Asciidoctor::Extensions::InlineMacroProcessor\n      use_dsl\n\n      named :chrome\n\n      def process(parent, target, attrs)\n        if parent.document.basebackend? 'html'\n          prefix = parent.document.attr('git-relative-html-prefix')\n          %(<a href=\"#{prefix}#{target}.html\">#{target}(#{attrs[1]})</a>)\n        elsif parent.document.basebackend? 'docbook'\n          \"<citerefentry>\\n\" \\\n            \"<refentrytitle>#{target}</refentrytitle>\" \\\n            \"<manvolnum>#{attrs[1]}</manvolnum>\\n\" \\\n          \"</citerefentry>\"\n        end\n      end\n    end\n  end\nend\n\nAsciidoctor::Extensions.register do\n  inline_macro Git::Documentation::LinkGitProcessor, :linkgit\nend\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "0089e0cfb80df9a283b220ba4187e38f5612557d",
+  "sha1_ok": true,
+  "size": 796
+}

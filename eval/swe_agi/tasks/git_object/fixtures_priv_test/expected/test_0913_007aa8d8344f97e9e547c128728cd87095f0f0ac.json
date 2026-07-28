@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree e2068a587557c6851f7a73b652684c2ea3670952",
+      "parent b60e88cc780ea54de65b62437afbeb9c857110f2",
+      "author Nguy\u1ec5n Th\u00e1i Ng\u1ecdc Duy <pclouds@gmail.com> 1521923718 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1521995436 -0700"
+    ],
+    "message": "git.c: move cmd_struct declaration up\n\nIn a later patch we need access to one of these command option\nconstants near the top of this file. Move this block up so we will be\nable to access the command options.\n\nSigned-off-by: Nguy\u1ec5n Th\u00e1i Ng\u1ecdc Duy <pclouds@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "007aa8d8344f97e9e547c128728cd87095f0f0ac",
+  "sha1_ok": true,
+  "size": 547
+}

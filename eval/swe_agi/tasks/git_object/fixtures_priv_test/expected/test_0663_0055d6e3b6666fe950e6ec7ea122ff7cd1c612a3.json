@@ -1,0 +1,35 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitattributes",
+        "oid": "3d84236f41901664649184447fe75232ba13e3f9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "README.cooking",
+        "oid": "c234166c517cb8aa35cd9e16042ec2f3e4c02a73"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "compare-cooking.perl",
+        "oid": "2ec6c959154e7b9ef04d62755e5e493eb62c32c7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "whats-cooking.txt",
+        "oid": "b977e9db4df64902a22b7c41e9313dce3def7255"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "0055d6e3b6666fe950e6ec7ea122ff7cd1c612a3",
+  "sha1_ok": true,
+  "size": 177
+}

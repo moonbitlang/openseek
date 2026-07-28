@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree b56cd2c625128f3628ca8c9509d9315cdf95929c",
+      "parent 568950388be2e47af8bcb0b4a5f02017570b2f33",
+      "author John Keeping <john@keeping.me.uk> 1380827852 +0100",
+      "committer Jonathan Nieder <jrnieder@gmail.com> 1380828079 -0700"
+    ],
+    "message": "Documentation/Makefile: make AsciiDoc dblatex dir configurable\n\nOn my system this is in /usr/share/asciidoc/dblatex not\n/etc/asciidoc/dblatex.  Extract this portion of the path to a variable\nso that is can be set in config.mak.\n\nSigned-off-by: John Keeping <john@keeping.me.uk>\nSigned-off-by: Jonathan Nieder <jrnieder@gmail.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0079d6ebd76f4e3fa261b367b0ec2679c47a479a",
+  "sha1_ok": true,
+  "size": 547
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "object d5bc7eecbbb0b9f6122708bf5cd62f78ebdaafd8",
+      "type commit",
+      "tag v0.99.7d",
+      "tagger Junio C Hamano <junkio@cox.net> 1127634086 -0700"
+    ],
+    "message": "GIT v0.99.7d\n\nContains the following changes:\n\n - Fix show-branch output that named commits incorrectly.\n - Fix git-grep -e not passing -e to underlying grep.\n-----BEGIN PGP SIGNATURE-----\nVersion: GnuPG v1.4.1 (GNU/Linux)\n\niD8DBQBDNlTXwMbZpPMRm5oRAkIOAJ41sOn1+TG93Jm7xfbpNnZb4wH6OwCfTQLe\n8AAVTsq29+4mWbXNJhNQ5Ms=\n=0rpt\n-----END PGP SIGNATURE-----\n",
+    "type": "tag"
+  },
+  "kind": "tag",
+  "oid": "02b2acff8bafb6d73c6513469cdda0c6c18c4138",
+  "sha1_ok": true,
+  "size": 478
+}

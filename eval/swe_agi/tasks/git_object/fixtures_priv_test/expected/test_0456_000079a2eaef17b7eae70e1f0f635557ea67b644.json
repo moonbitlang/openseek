@@ -1,0 +1,53 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Makefile",
+        "oid": "99986829f8ea1d52044da5f33d1201b268df7a63"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "applypatch",
+        "oid": "9c191ae746621b5a2a0387516f0ba7c4525df87b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "cvs2git.c",
+        "oid": "2ac53ea828333dfffd7f23dd97688120c2d76255"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "dotest",
+        "oid": "ccc1f0304f10b58975705de256d8e23df82ec535"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "mailinfo.c",
+        "oid": "13c1e951ac2d24cb9ecaeb743406a5318ccd5d9c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "mailsplit.c",
+        "oid": "9379fbc5e84983e5ea0754a6587cc3490c696c69"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "stripspace.c",
+        "oid": "96cd0a88f0ba0c06da81d4cdb83a482d82ecdd23"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "000079a2eaef17b7eae70e1f0f635557ea67b644",
+  "sha1_ok": true,
+  "size": 262
+}

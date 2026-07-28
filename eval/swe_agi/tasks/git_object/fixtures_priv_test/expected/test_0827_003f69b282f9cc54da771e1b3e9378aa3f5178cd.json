@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 5d49e931cdcd1eb49413cd5daa0b8edd89602a6c",
+      "parent c2e9364a06df55e70d7652d37bb4d712f6b3bb3e",
+      "author Jeff King <peff@peff.net> 1236446044 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1236454133 -0800"
+    ],
+    "message": "t1300: use test_must_fail as appropriate\n\nSome of the tests checked the exit code manually, even going\nso far as to run git outside of the test_expect harness.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "003f69b282f9cc54da771e1b3e9378aa3f5178cd",
+  "sha1_ok": true,
+  "size": 459
+}

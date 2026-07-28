@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree e26ea41812a2455282021b64cbce525993d7eab8",
+      "parent f11c95805495fcb588f767ffab193f2aed328eab",
+      "author Nguy\u1ec5n Th\u00e1i Ng\u1ecdc Duy <pclouds@gmail.com> 1541828937 +0100",
+      "committer Junio C Hamano <gitster@pobox.com> 1542001805 +0900"
+    ],
+    "message": "sequencer.c: remove implicit dependency on the_repository\n\nNote that the_hash_algo stays, even if we can easily replace it with\nrepo->hash_algo. My reason is I still believe tying hash_algo to a\nstruct repository is a wrong move. But if I'm wrong, we can always go\nfor another round of conversion.\n\nSigned-off-by: Nguy\u1ec5n Th\u00e1i Ng\u1ecdc Duy <pclouds@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "005af339c9ad292f9ae2fe3555d8d362a225ca45",
+  "sha1_ok": true,
+  "size": 637
+}

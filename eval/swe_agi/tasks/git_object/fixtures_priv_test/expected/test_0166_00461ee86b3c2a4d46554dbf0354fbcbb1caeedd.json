@@ -1,0 +1,11 @@
+{
+  "content": {
+    "base64": "Ly8gVGhpcyBmaWxlIGlzIHVzZWQgZm9yIHRoZSBvbmdvaW5nIHJlZmFjdG9yaW5nIG9mCi8vIGJyaW5naW5nIHRoZSBpbmRleCBvciByZXBvc2l0b3J5IHN0cnVjdCBpbiBhbGwgb2YKLy8gb3VyIGNvZGUgYmFzZS4KCkBACkBACigKLy8gb2JqZWN0LXN0b3JlLmgKLSByZWFkX29iamVjdF9maWxlCisgcmVwb19yZWFkX29iamVjdF9maWxlCnwKLSBoYXNfb2JqZWN0X2ZpbGUKKyByZXBvX2hhc19vYmplY3RfZmlsZQp8Ci0gaGFzX29iamVjdF9maWxlX3dpdGhfZmxhZ3MKKyByZXBvX2hhc19vYmplY3RfZmlsZV93aXRoX2ZsYWdzCi8vIHByZXR0eS5oCnwKLSBmb3JtYXRfY29tbWl0X21lc3NhZ2UKKyByZXBvX2Zvcm1hdF9jb21taXRfbWVzc2FnZQovLyBwYWNrZmlsZS5oCnwKLSBhcHByb3hpbWF0ZV9vYmplY3RfY291bnQKKyByZXBvX2FwcHJveGltYXRlX29iamVjdF9jb3VudAovLyBwcm9taXNvci1yZW1vdGUuaAp8Ci0gcHJvbWlzb3JfcmVtb3RlX3JlaW5pdAorIHJlcG9fcHJvbWlzb3JfcmVtb3RlX3JlaW5pdAp8Ci0gcHJvbWlzb3JfcmVtb3RlX2ZpbmQKKyByZXBvX3Byb21pc29yX3JlbW90ZV9maW5kCnwKLSBoYXNfcHJvbWlzb3JfcmVtb3RlCisgcmVwb19oYXNfcHJvbWlzb3JfcmVtb3RlCi8vIHJlZnMuaAp8Ci0gZHdpbV9yZWYKKyByZXBvX2R3aW1fcmVmCi8vIHJlcmVyZS5oCnwKLSByZXJlcmUKKyByZXBvX3JlcmVyZQovLyByZXZpc2lvbi5oCnwKLSBpbml0X3JldmlzaW9ucworIHJlcG9faW5pdF9yZXZpc2lvbnMKKQogICgKKyB0aGVfcmVwb3NpdG9yeSwKICAuLi4pCg==",
+    "text": "// This file is used for the ongoing refactoring of\n// bringing the index or repository struct in all of\n// our code base.\n\n@@\n@@\n(\n// object-store.h\n- read_object_file\n+ repo_read_object_file\n|\n- has_object_file\n+ repo_has_object_file\n|\n- has_object_file_with_flags\n+ repo_has_object_file_with_flags\n// pretty.h\n|\n- format_commit_message\n+ repo_format_commit_message\n// packfile.h\n|\n- approximate_object_count\n+ repo_approximate_object_count\n// promisor-remote.h\n|\n- promisor_remote_reinit\n+ repo_promisor_remote_reinit\n|\n- promisor_remote_find\n+ repo_promisor_remote_find\n|\n- has_promisor_remote\n+ repo_has_promisor_remote\n// refs.h\n|\n- dwim_ref\n+ repo_dwim_ref\n// rerere.h\n|\n- rerere\n+ repo_rerere\n// revision.h\n|\n- init_revisions\n+ repo_init_revisions\n)\n  (\n+ the_repository,\n  ...)\n",
+    "type": "blob"
+  },
+  "kind": "blob",
+  "oid": "00461ee86b3c2a4d46554dbf0354fbcbb1caeedd",
+  "sha1_ok": true,
+  "size": 787
+}

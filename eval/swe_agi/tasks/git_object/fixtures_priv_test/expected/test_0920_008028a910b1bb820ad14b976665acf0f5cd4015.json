@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 1c71dffb14a12743c5e9d01d98b9780e1894e455",
+      "parent 66775d210960f82ff0d4f69480df51bf44ea718b",
+      "parent 5fb249021cfd1cf937a608610c330152936887e1",
+      "author Junio C Hamano <gitster@pobox.com> 1644082951 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1644082951 -0800"
+    ],
+    "message": "Merge branch 'ab/cat-file'\n\nAssorted updates to \"git cat-file\", especially \"-h\".\n\n* ab/cat-file:\n  cat-file: s/_/-/ in typo'd usage_msg_optf() message\n  cat-file: don't whitespace-pad \"(...)\" in SYNOPSIS and usage output\n  cat-file: use GET_OID_ONLY_TO_DIE in --(textconv|filters)\n  object-name.c: don't have GET_OID_ONLY_TO_DIE imply *_QUIETLY\n  cat-file: correct and improve usage information\n  cat-file: fix remaining usage bugs\n  cat-file: make --batch-all-objects a CMDMODE\n  cat-file: move \"usage\" variable to cmd_cat_file()\n  cat-file docs: fix SYNOPSIS and \"-h\" output\n  parse-options API: add a usage_msg_optf()\n  cat-file tests: test messaging on bad objects/paths\n  cat-file tests: test bad usage\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008028a910b1bb820ad14b976665acf0f5cd4015",
+  "sha1_ok": true,
+  "size": 972
+}

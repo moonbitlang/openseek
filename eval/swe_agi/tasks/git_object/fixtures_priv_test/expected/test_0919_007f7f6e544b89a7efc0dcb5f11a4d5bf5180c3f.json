@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree da36c8771d43dbf6c04a74eafaa7916a49ffdee7",
+      "parent 33367575b85a115900deac600cc4f8f03ec4754b",
+      "parent e60059276b26db5760e36aa85cf1091f662430fb",
+      "author Junio C Hamano <gitster@pobox.com> 1425589992 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1425589992 -0800"
+    ],
+    "message": "Merge branch 'es/blame-commit-info-fix' into maint\n\n\"git blame\" died, trying to free an uninitialized piece of memory.\n\n* es/blame-commit-info-fix:\n  builtin/blame: destroy initialized commit_info only\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "007f7f6e544b89a7efc0dcb5f11a4d5bf5180c3f",
+  "sha1_ok": true,
+  "size": 466
+}

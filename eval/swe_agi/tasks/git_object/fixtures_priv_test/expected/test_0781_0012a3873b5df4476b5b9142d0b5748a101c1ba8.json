@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 40ba077342072bb25dee77ef2cf88737ecf7f703",
+      "parent a054e049121dcf51b33082e7828abc0b598fef42",
+      "author Nguy\u1ec5n Th\u00e1i Ng\u1ecdc Duy <pclouds@gmail.com> 1345465911 +0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1345490595 -0700"
+    ],
+    "message": "i18n: archive: mark parseopt strings for translation\n\nSigned-off-by: Nguy\u1ec5n Th\u00e1i Ng\u1ecdc Duy <pclouds@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0012a3873b5df4476b5b9142d0b5748a101c1ba8",
+  "sha1_ok": true,
+  "size": 392
+}

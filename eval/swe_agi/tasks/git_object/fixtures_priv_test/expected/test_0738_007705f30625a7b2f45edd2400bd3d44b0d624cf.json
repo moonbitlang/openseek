@@ -1,0 +1,47 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitignore",
+        "oid": "b9196555e56ba9d0e522cfe8d2964662248a0b78"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".perlcriticrc",
+        "oid": "5a9955d757fe163a6ac46ad331a6bb629398b1f6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Makefile",
+        "oid": "1fb24244817b7b61d91316ced5f583605ff72f36"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-remote-mediawiki.perl",
+        "oid": "2246c84483be14d7abe9dce818024a545a0c685e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "git-remote-mediawiki.txt",
+        "oid": "23b7ef9f6208720310d2a8d93812cbe6fb3a42ca"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "t",
+        "oid": "5eddfed60793aa4708ba95ebbacf0bfd74088f63"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "007705f30625a7b2f45edd2400bd3d44b0d624cf",
+  "sha1_ok": true,
+  "size": 248
+}

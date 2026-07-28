@@ -1,0 +1,161 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "README",
+        "oid": "05f291c1f1d3d1018f390618816f94d0cd58951b"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "blameview",
+        "oid": "cee1697b8658edca98be6b829ec243187e40cfd4"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "buildsystems",
+        "oid": "ea56ae8af8117c246f222181f2e353f3d2be47d9"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "ciabot",
+        "oid": "0c1156f1518da49b237a3d92dd802b1765ddbbf9"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "completion",
+        "oid": "a797f5733748172e310ac831cebabb6379953f0c"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "continuous",
+        "oid": "02bee8d9956fbe0f26d7da5a7df53598d118d676"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "convert-objects",
+        "oid": "2a0da7bad95f51fd729f386a8f6e01ae0b11efc0"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "emacs",
+        "oid": "dedabc5837913365e8b14c0995fe1c64193a610f"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "examples",
+        "oid": "87f6dbd98329444b7b7621456133778e3543ccc0"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "fast-import",
+        "oid": "ce52292c81e3d20d73262a826b0d8b0f88c8c68f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-resurrect.sh",
+        "oid": "a4ed4c3c62f0d5abcee36000a6c3a8f43dc02112"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "git-shell-commands",
+        "oid": "dd32b36b53cefc1833244c2989018caaeb814316"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "gitview",
+        "oid": "341292fee55190d923c2a05c94a806efde400343"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "hg-to-git",
+        "oid": "9ac9662ec782e260c641e7707c8fc960d597a71c"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "hooks",
+        "oid": "8aaa2db7964805c9bbf58f17b9971197a6369746"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "mw-to-git",
+        "oid": "0da5daa4ade0b24946a9a832e61f05abff69bbcb"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "p4import",
+        "oid": "38f996ff2c3f7ab8a42298c51ca197ce4c02a18f"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "patches",
+        "oid": "bb0bded78d41afa2a1131e188220a4800fd14286"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "remotes2config.sh",
+        "oid": "1cda19f66af96fa828de81cbb21817abca0c06ea"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "rerere-train.sh",
+        "oid": "2cfe1b936b0feef1bd40947ce6ab249f62a6ad55"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "stats",
+        "oid": "0718857959973cfa94075cf28c4e4c9fe30aff10"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "svn-fe",
+        "oid": "2c3713edc7369eb98005e6ea8ca7136fa530d867"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "thunderbird-patch-inline",
+        "oid": "a3b4e4760d2129a3ff9992ed5cc94a9fdd28dad3"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "vim",
+        "oid": "1320cf12c52e60dec5dee16f735c517bae35e429"
+      },
+      {
+        "kind": "tree",
+        "mode": "040000",
+        "name": "workdir",
+        "oid": "c18b47c76903d16eda3d874abb24ea356f4478d4"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "003f73b5c9cf4bb14b617c935d9c50a0c917a758",
+  "sha1_ok": true,
+  "size": 927
+}

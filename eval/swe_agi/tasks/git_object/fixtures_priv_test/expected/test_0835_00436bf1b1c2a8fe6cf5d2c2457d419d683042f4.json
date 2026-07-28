@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 8ebc2b31bba3bec7673287db8b4b96257df8635f",
+      "parent c4df23f7927d8d00e666a3c8d1b3375f1dc8a3c1",
+      "author Josh Steadmon <steadmon@google.com> 1540499534 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1540516679 +0900"
+    ],
+    "message": "archive: initialize archivers earlier\n\nInitialize archivers as soon as possible when running git-archive.\nVarious non-obvious behavior depends on having the archivers\ninitialized, such as determining the desired archival format from the\nprovided filename.\n\nSince 08716b3c11 (\"archive: refactor file extension format-guessing\",\n2011-06-21), archive_format_from_filename() has used the registered\narchivers to match filenames (provided via --output) to archival\nformats. However, when git-archive is executed with --remote, format\ndetection happens before the archivers have been registered. This causes\narchives from remotes to always be generated as TAR files, regardless of\nthe actual filename (unless an explicit --format is provided).\n\nThis patch fixes that behavior; archival format is determined properly\nfrom the output filename, even when --remote is used.\n\nHelped-by: Jeff King <peff@peff.net>\nSigned-off-by: Josh Steadmon <steadmon@google.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "00436bf1b1c2a8fe6cf5d2c2457d419d683042f4",
+  "sha1_ok": true,
+  "size": 1220
+}

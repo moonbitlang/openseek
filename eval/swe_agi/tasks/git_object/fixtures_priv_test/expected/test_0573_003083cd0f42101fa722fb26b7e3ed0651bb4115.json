@@ -1,0 +1,41 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "Makefile",
+        "oid": "9a76575f78f7c2cc6154c0a0d57f732de1e7f5d9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "git-remote-hg",
+        "oid": "7929eec30b39280985a9d2b7147699d99e211817"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "test-hg-bidi.sh",
+        "oid": "a94eb28092503c060cc725b720715d611d54527a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "test-hg-hg-git.sh",
+        "oid": "3e76d9fb60bff8b25f5b2751c6e11cfabb6c9dc6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "test-hg.sh",
+        "oid": "5f81dfae6c4a31f11ed766dd467fdd4a542afdf3"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "003083cd0f42101fa722fb26b7e3ed0651bb4115",
+  "sha1_ok": true,
+  "size": 203
+}

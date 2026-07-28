@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 20c3dd972b1310f4e5b47476fc18f1ae3d53efa3",
+      "parent caae319e49e236205d463de2ecf24ce5aae642ab",
+      "author Junio C Hamano <gitster@pobox.com> 1347306458 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1347307142 -0700"
+    ],
+    "message": "gitcli: formatting fix\n\nThe paragraph to encourage use of \"--\" in scripts belongs to the\nbullet point that describes the behaviour for a command line without\nthe explicit \"--\" disambiguation; it is not a supporting explanation\nfor the entire bulletted list, and it is wrong to make it a separate\nparagraph outside the list.\n\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008566e0f8ef9751c43197f40ac08d3bdfce78a7",
+  "sha1_ok": true,
+  "size": 591
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree a3c2d7dc6e8b94315e1a66dcda38d5a08ef3adef",
+      "parent fc5273b75c32b84dd173236d232bf53a079d5c0a",
+      "author Junio C Hamano <gitster@pobox.com> 1213859717 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1213859717 -0700"
+    ],
+    "message": "MaintNotes update post 1.5.6\n\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0003692409f153dd725b3455dfc2e128276cfbe2",
+  "sha1_ok": true,
+  "size": 296
+}

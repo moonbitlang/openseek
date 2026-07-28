@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree dff66cf6450b7607d378e69bc04f9dc26b710c0c",
+      "parent d775365db321c9f05c12809438d3c801d7e445af",
+      "author Jeff King <peff@peff.net> 1693516940 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1693950497 -0700"
+    ],
+    "message": "parse-options: mark unused parameters in noop callback\n\nUnsurprisingly, the noop options callback doesn't bother to look at any\nof its parameters. Let's mark them so that -Wunused-parameter does not\ncomplain.\n\nAnother option would be to drop the callback and have parse-options\nitself recognize OPT_NOOP_NOARG. But that seems like extra work for no\nreal benefit.\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0058b3d5eedcf5777712e872e01f74bf8d933be7",
+  "sha1_ok": true,
+  "size": 662
+}

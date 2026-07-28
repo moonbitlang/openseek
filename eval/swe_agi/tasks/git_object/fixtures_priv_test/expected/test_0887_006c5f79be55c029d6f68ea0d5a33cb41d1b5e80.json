@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 79a0fbcf86b3d25dc2480893b764194358fb3c01",
+      "parent 60f81219403d708ab6271f68d8e4e42a39f7459b",
+      "parent 27dc071b9a11e953ea7d73bfdf6103940d039215",
+      "author Junio C Hamano <gitster@pobox.com> 1613168464 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1613168464 -0800"
+    ],
+    "message": "Merge branch 'jk/complete-branch-force-delete'\n\nThe command line completion (in contrib/) completed \"git branch -d\"\nwith branch names, but \"git branch -D\" offered tagnames in addition,\nwhich has been corrected.  \"git branch -M\" had the same problem.\n\n* jk/complete-branch-force-delete:\n  doc/git-branch: fix awkward wording for \"-c\"\n  completion: handle other variants of \"branch -m\"\n  completion: treat \"branch -D\" the same way as \"branch -d\"\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "006c5f79be55c029d6f68ea0d5a33cb41d1b5e80",
+  "sha1_ok": true,
+  "size": 708
+}

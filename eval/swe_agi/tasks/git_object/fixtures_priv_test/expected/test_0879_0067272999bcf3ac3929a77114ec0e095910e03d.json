@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 2d8d4a705c8d58c2e8d49c98658883253419ac49",
+      "parent 4d1826d1d96a4284ef268c6febeaa9fabfa75e9e",
+      "parent c5665000327388832fa8be0b3bf17669f672481b",
+      "author Junio C Hamano <gitster@pobox.com> 1387309620 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1387309621 -0800"
+    ],
+    "message": "Merge branch 'bc/doc-merge-no-op-revert'\n\n* bc/doc-merge-no-op-revert:\n  Documentation: document pitfalls with 3-way merge\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0067272999bcf3ac3929a77114ec0e095910e03d",
+  "sha1_ok": true,
+  "size": 387
+}

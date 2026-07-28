@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree e940ac6eff3809dfe3864c3861dfb66dfb3640de",
+      "parent 37ad7ca7dbb0bef2b902f6bc7d3346ddff1667a5",
+      "parent ffa1eeaeea38f6d667e304f9b12c890b7c14d088",
+      "author Junio C Hamano <gitster@pobox.com> 1292340950 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1292340950 -0800"
+    ],
+    "message": "Merge branch 'jk/maint-reflog-bottom' into maint\n\n* jk/maint-reflog-bottom:\n  reflogs: clear flags properly in corner case\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "006f424b2d014b8a7c4887b7ddbb57256dd6b8c7",
+  "sha1_ok": true,
+  "size": 387
+}

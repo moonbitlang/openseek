@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree f47a79e8b17ebded5e95b4e8ede837e2b917838d",
+      "parent 7ed863a85a6ce2c4ac4476848310b8f917ab41f9",
+      "author Matthieu Moy <Matthieu.Moy@imag.fr> 1318251291 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1318275284 -0700"
+    ],
+    "message": "config: display key_delim for config --bool --get-regexp\n\nThe previous logic in show_config was to print the delimiter when the\nvalue was set, but Boolean variables have an implicit value \"true\" when\nthey appear with no value in the config file. As a result, we got:\n\ngit_Config        --get-regexp '.*\\.Boolean'\t#1. Ok: example.boolean\ngit_Config --bool --get-regexp '.*\\.Boolean'\t#2. NO: example.booleantrue\n\nFix this by defering the display of the separator until after the value\nto display has been computed.\n\nReported-by: Brian Foster <brian.foster@maxim-ic.com>\nSigned-off-by: Matthieu Moy <Matthieu.Moy@imag.fr>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "008e3cc5d781273053c79d1ccf8cc3bf36086a07",
+  "sha1_ok": true,
+  "size": 886
+}

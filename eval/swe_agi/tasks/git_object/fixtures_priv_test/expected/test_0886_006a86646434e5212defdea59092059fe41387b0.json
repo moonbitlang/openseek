@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 771975b5e2f5a93388df01994e25ca9753f12b17",
+      "parent aaca4914e9074f5f5b51c8966688a75e7fe132d7",
+      "author Jeff King <peff@peff.net> 1183350034 -0400",
+      "committer Junio C Hamano <gitster@pobox.com> 1183351107 -0700"
+    ],
+    "message": "git-stash: fix \"can't shift that many\" with no arguments\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "006a86646434e5212defdea59092059fe41387b0",
+  "sha1_ok": true,
+  "size": 356
+}

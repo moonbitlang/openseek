@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 3339b9854663d0e7ff70bcf51dc989167d3eda4d",
+      "parent 7398243260f2f0342d9d6e7ce25a194c77741ce0",
+      "author Jiang Xin <worldhello.net@gmail.com> 1515282631 +0800",
+      "committer Jiang Xin <worldhello.net@gmail.com> 1515282631 +0800"
+    ],
+    "message": "l10n: git.pot: v2.16.0 round 2 (8 new, 4 removed)\n\nGenerate po/git.pot from v2.16.0-rc1 for git v2.16.0 l10n round 2.\n\nSigned-off-by: Jiang Xin <worldhello.net@gmail.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "005c62fe4639117a355d933288d74fcee49fbc45",
+  "sha1_ok": true,
+  "size": 391
+}

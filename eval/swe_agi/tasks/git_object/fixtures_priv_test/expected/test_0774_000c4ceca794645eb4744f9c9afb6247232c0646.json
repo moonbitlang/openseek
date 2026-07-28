@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree d6c9f4ca4b1ed0d652bcb99812d1bc14dab5ff4e",
+      "parent 7556e5d737b917d31ac3729b0f5e2391da7e132a",
+      "author Elijah Newren <newren@gmail.com> 1682194930 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1682370247 -0700"
+    ],
+    "message": "merge-ort: fix calling merge_finalize() with no intermediate merge\n\nIf some code sets up the data structures for a merge, but then never\nactually performs one before calling merge_finalize(), then\nmerge_finalize() wouldn't notice that result->priv was NULL and\nreturn early, resulting in following that NULL pointer and getting\na segfault.  There is currently no code in the git codebase that does\nthis, but this issue was found during testing of some proposed patches\nthat had the following structure:\n\n    struct merge_options merge_opt;\n    struct merge_result result;\n\n    init_merge_options(&merge_opt, the_repository);\n    memset(&result, 0, sizeof(result));\n\n    <do N merges, for some value of N>\n\n    merge_finalize(&merge_opt, &result);\n\nwhere some flags could cause the code to have N=0, i.e. doing no merges.\nAdd a check for result->priv being NULL and return early to avoid a\nsegfault in these kinds of cases.\n\nWhile at it, ensure the FREE_AND_NULL() in the function does something\nuseful with the nulling aspect, namely sets result->priv to NULL rather\nthan a mere temporary.\n\nReported-by: Derrick Stolee <derrickstolee@github.com>\nSigned-off-by: Elijah Newren <newren@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "000c4ceca794645eb4744f9c9afb6247232c0646",
+  "sha1_ok": true,
+  "size": 1458
+}

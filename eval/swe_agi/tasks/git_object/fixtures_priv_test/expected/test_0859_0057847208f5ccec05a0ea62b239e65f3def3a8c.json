@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 5ae1f6f3b082560a9f663171c123f5a4b5543ebc",
+      "parent 8b7c11b8668b4e774f81a9f0b4c30144b818f1d1",
+      "parent 98e2d9d6f7dc1aff61e99a1daed98e18c7c8526b",
+      "author Junio C Hamano <gitster@pobox.com> 1631642165 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1631642165 -0700"
+    ],
+    "message": "Merge branch 'ab/serve-cleanup' into jk/reduce-malloc-in-v2-servers\n\n* ab/serve-cleanup:\n  upload-pack: document and rename --advertise-refs\n  serve.[ch]: remove \"serve_options\", split up --advertise-refs code\n  {upload,receive}-pack tests: add --advertise-refs tests\n  serve.c: move version line to advertise_capabilities()\n  serve: move transfer.advertiseSID check into session_id_advertise()\n  serve.[ch]: don't pass \"struct strvec *keys\" to commands\n  serve: use designated initializers\n  transport: use designated initializers\n  transport: rename \"fetch\" in transport_vtable to \"fetch_refs\"\n  serve: mark has_capability() as static\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0057847208f5ccec05a0ea62b239e65f3def3a8c",
+  "sha1_ok": true,
+  "size": 901
+}

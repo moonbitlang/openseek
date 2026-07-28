@@ -1,0 +1,15 @@
+{
+  "content": {
+    "headers": [
+      "tree 84063ce786964fa55723ee8c011cac81f88d6bc3",
+      "author Spec Tester <spec@example.com> 1234567890 +0000",
+      "committer Spec Tester <spec@example.com> 1234567890 +0000"
+    ],
+    "message": "Initial commit\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "5788e9aa9ddc8f878e8cadb167467fa8186855ce",
+  "sha1_ok": true,
+  "size": 175
+}

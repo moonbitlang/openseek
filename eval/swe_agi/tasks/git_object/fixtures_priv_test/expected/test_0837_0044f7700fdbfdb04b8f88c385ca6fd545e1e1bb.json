@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree a365459b8b9835bf65f312aa1840868cd773cd7c",
+      "parent daecbf2261f595935c999a00a1f9bc433df80e2c",
+      "author \u00c6var Arnfj\u00f6r\u00f0 Bjarmason <avarab@gmail.com> 1554666737 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1554710470 +0900"
+    ],
+    "message": "gc docs: remove incorrect reference to gc.auto=0\n\nThe chance of a repository being corrupted due to a \"gc\" has nothing\nto do with whether or not that \"gc\" was invoked via \"gc --auto\", but\nwhether there's other concurrent operations happening.\n\nThis is already noted earlier in the paragraph, so there's no reason\nto suggest this here. The user can infer from the rest of the\ndocumentation that \"gc\" will run automatically unless gc.auto=0 is\nset, and we shouldn't confuse the issue by implying that \"gc --auto\"\nis somehow more prone to produce corruption than a normal \"gc\".\n\nWell, it is in the sense that a blocking \"gc\" would stop you from\ndoing anything else in *that* particular terminal window, but users\nare likely to have another window, or to be worried about how\nconcurrent \"gc\" on a server might cause corruption.\n\nSigned-off-by: \u00c6var Arnfj\u00f6r\u00f0 Bjarmason <avarab@gmail.com>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0044f7700fdbfdb04b8f88c385ca6fd545e1e1bb",
+  "sha1_ok": true,
+  "size": 1163
+}

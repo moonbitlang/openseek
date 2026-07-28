@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree fa89f7b632bb5633631663af4015a6777fd6007e",
+      "parent 9559910cac77526a95dd5dca93a2e3e6d290c5b9",
+      "parent 0adc6a3d49a46436780b2dd636918c9840d82236",
+      "author Junio C Hamano <gitster@pobox.com> 1276453329 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1276453329 -0700"
+    ],
+    "message": "Merge branch 'jn/fsck-ident'\n\n* jn/fsck-ident:\n  fsck: fix bogus commit header check\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "004ae6cbd01fce6968baa99ecac775e9f4153bca",
+  "sha1_ok": true,
+  "size": 349
+}

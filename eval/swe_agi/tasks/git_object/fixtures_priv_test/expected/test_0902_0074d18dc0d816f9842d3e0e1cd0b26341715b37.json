@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree af52ae3077c10d8d6940b10af46bf47a25cdf6e6",
+      "parent 96b8d93a539f3a9f43f0fc38214db8753cac3c2e",
+      "author Junio C Hamano <gitster@pobox.com> 1324416056 -0800",
+      "committer Junio C Hamano <gitster@pobox.com> 1324416161 -0800"
+    ],
+    "message": "commit: do not lose mergetag header when not amending\n\nThe earlier ed7a42a (commit: teach --amend to carry forward extra headers,\n2011-11-08) broke \"git merge/pull; edit to fix conflict; git commit\"\nworkflow by forgetting that commit_tree_extended() takes the whole extra\nheader list.\n\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0074d18dc0d816f9842d3e0e1cd0b26341715b37",
+  "sha1_ok": true,
+  "size": 552
+}

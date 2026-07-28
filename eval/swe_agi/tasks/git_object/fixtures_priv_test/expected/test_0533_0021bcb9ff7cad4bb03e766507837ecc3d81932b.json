@@ -1,0 +1,269 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": ".gitignore",
+        "oid": "8aa891daee050f03cf265a6ea991ff9ebb60815e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-allocation-growing.txt",
+        "oid": "43dbe09f735525b0a1549ccfb4de2f2ca87252a0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-argv-array.txt",
+        "oid": "a959517b2339847e92464c86a73f9c472bfdb2d0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-builtin.txt",
+        "oid": "b0cafe87bee046dc9b2d4e61e0d057e787a6f1f6"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-command.txt",
+        "oid": "ea9b2eda31f8c5c9b3a30a1f202a55445180ee97"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-config.txt",
+        "oid": "edf8dfb99b0accf1c3cbe870bdc332783a344dc9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-credentials.txt",
+        "oid": "5977b58e57344e60bd683553d9b1b9a44b3c31a7"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-decorate.txt",
+        "oid": "1d52a6ce14416c7308f6c2c5d6a3dd2a43184e91"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-diff.txt",
+        "oid": "2d2ebc04b74ef2b1bf39df892d303d37076325d1"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-directory-listing.txt",
+        "oid": "add6f435b59e3df095e507d8a5d4f911cee9d3b2"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-gitattributes.txt",
+        "oid": "ce363b6305ec117810d66308b0066814871f54e1"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-grep.txt",
+        "oid": "a69cc8964d585db41b1907a8ce7cb8d0a9511ef2"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-hash.txt",
+        "oid": "e5061e0677e05f8127b0808104269961ee21f830"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-history-graph.txt",
+        "oid": "d6fc90ac7eb210bd492057422748817a59cfc2a3"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-in-core-index.txt",
+        "oid": "adbdbf5d75d8e17e38e1ba0e3694b4ff210f5799"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-index-skel.txt",
+        "oid": "af7cc2e395f1399830f9eacc52468376b216fb86"
+      },
+      {
+        "kind": "blob",
+        "mode": "100755",
+        "name": "api-index.sh",
+        "oid": "9c3f4131b8586408acd81d1e60912b51688575ed"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-lockfile.txt",
+        "oid": "dd894043ae8b04269b3aa2108f96cb935217181d"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-merge.txt",
+        "oid": "9dc1bed768a473317dd77c4d1ed93f65b2c4d483"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-object-access.txt",
+        "oid": "03bb0e950dd1616b00f950f83263835c57bfa70a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-parse-options.txt",
+        "oid": "3062389404e2d4b5f45fa7f5a324e65f933e08b0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-quote.txt",
+        "oid": "e8a1bce94e05f06c5b2aa51d2b610fb9da15d0bb"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-ref-iteration.txt",
+        "oid": "dbbea95db7a8104dcd5de4b1ac59235f2eadaaa8"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-remote.txt",
+        "oid": "c54b17db69b8420bdec7c6ee0f424a5216957add"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-revision-walking.txt",
+        "oid": "b7d0d9a8a7b45f4988c0ee8170fec25c415cc918"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-run-command.txt",
+        "oid": "f18b4f4817448530a5adbe2c8835bb7791add42a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-setup.txt",
+        "oid": "4f63a04d7db0e7b578c5034c2856ba95a7ef5739"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-sha1-array.txt",
+        "oid": "45d1c517cd862878198db6023d5fdbd35f9fbb6c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-sigchain.txt",
+        "oid": "9e1189ef01dff889447c1bf92802c9792f267b9b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-strbuf.txt",
+        "oid": "84686b5c69348ef67819818b7223c77f501965d0"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-string-list.txt",
+        "oid": "7386bcab3ec30a06f4663c953fa46e78ed26c07b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-tree-walking.txt",
+        "oid": "14af37c3f14854e87d9d28f60b5ff72eb189c37f"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "api-xdiff-interface.txt",
+        "oid": "6296ecad1d65511f943fcd82ded188954a33b052"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "index-format.txt",
+        "oid": "57d6f915b143765b9e58b3793f14795ddab71200"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-format.txt",
+        "oid": "a7871fb865d9c41f26011d6fd06c531538c2379e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-heuristics.txt",
+        "oid": "103eb5d989349c8e7e0147920b2e218caba9daf9"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "pack-protocol.txt",
+        "oid": "f1a51edf47f94f45ce916f7800924e6f135800e2"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "protocol-capabilities.txt",
+        "oid": "b15517fa06bd782fb757e6b0836f9bceea8b7c05"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "protocol-common.txt",
+        "oid": "fb7ff084f8e55a06b349db6f7e47c3f64a886a0e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "racy-git.txt",
+        "oid": "53aa0c82c22c687db1e16041fe9f4a97b1fe064e"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "send-pack-pipeline.txt",
+        "oid": "9b5a0bc186674d8bce4e32bbbff24a203020b943"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "shallow.txt",
+        "oid": "0502a5471e699aac572abd5ab82c71a03f07e9f1"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "trivial-merge.txt",
+        "oid": "c79d4a7c476da2c57c117529150de77646ed116e"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "0021bcb9ff7cad4bb03e766507837ecc3d81932b",
+  "sha1_ok": true,
+  "size": 1949
+}

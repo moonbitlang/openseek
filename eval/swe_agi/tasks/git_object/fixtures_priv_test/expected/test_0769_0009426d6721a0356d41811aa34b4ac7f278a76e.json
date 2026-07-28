@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 5cd8229a0d4ad1a60a04a5bbc5938eccd29c4cc0",
+      "parent 9240beda621dc0b4eec66f5ad9a8258c0f614e4c",
+      "author Johannes Schindelin <johannes.schindelin@gmx.de> 1477052728 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1477067554 -0700"
+    ],
+    "message": "sequencer: support cleaning up commit messages\n\nThe run_git_commit() function already knows how to amend commits, and\nwith this new option, it can also clean up commit messages (i.e. strip\nout commented lines). This is needed to implement rebase -i's 'fixup'\nand 'squash' commands as sequencer commands.\n\nSigned-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0009426d6721a0356d41811aa34b4ac7f278a76e",
+  "sha1_ok": true,
+  "size": 649
+}

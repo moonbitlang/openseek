@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 7f7e10b6184a0bbf7aa106deb295365e64a5d5f1",
+      "parent 3975596482b15defec2b7aff19207df18493475e",
+      "author Johannes Schindelin <johannes.schindelin@gmx.de> 1477052681 +0200",
+      "committer Junio C Hamano <gitster@pobox.com> 1477067554 -0700"
+    ],
+    "message": "sequencer: completely revamp the \"todo\" script parsing\n\nWhen we came up with the \"sequencer\" idea, we really wanted to have\nkind of a plumbing equivalent of the interactive rebase. Hence the\nchoice of words: the \"todo\" script, a \"pick\", etc.\n\nHowever, when it came time to implement the entire shebang, somehow this\nidea got lost and the sequencer was used as working horse for\ncherry-pick and revert instead. So as not to interfere with the\ninteractive rebase, it even uses a separate directory to store its\nstate.\n\nFurthermore, it also is stupidly strict about the \"todo\" script it\naccepts: while it parses commands in a way that was *designed* to be\nsimilar to the interactive rebase, it then goes on to *error out* if the\ncommands disagree with the overall action (cherry-pick or revert).\n\nFinally, the sequencer code chose to deviate from the interactive rebase\ncode insofar that when it comes to writing the file with the remaining\ncommands, it *reformats* the \"todo\" script instead of just writing the\npart of the parsed script that were not yet processed. This is not only\nunnecessary churn, but might well lose information that is valuable to\nthe user (i.e. comments after the commands).\n\nLet's just bite the bullet and rewrite the entire parser; the code now\nbecomes not only more elegant: it allows us to go on and teach the\nsequencer how to parse *true* \"todo\" scripts as used by the interactive\nrebase itself. In a way, the sequencer is about to grow up to do its\nolder brother's job. Better.\n\nIn particular, we choose to maintain the list of commands in an array\ninstead of a linked list: this is flexible enough to allow us later on to\neven implement rebase -i's reordering of fixup!/squash! commits very\neasily (and with a very nice speed bonus, at least on Windows).\n\nWhile at it, do not stop at the first problem, but list *all* of the\nproblems. This will help the user when the sequencer will do `rebase\n-i`'s work by allowing to address all issues in one go rather than going\nback and forth until the todo list is valid.\n\nSigned-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "004fefa754a4aa3a99a5954da9fb805dbba8dbeb",
+  "sha1_ok": true,
+  "size": 2386
+}

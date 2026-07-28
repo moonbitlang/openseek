@@ -1,0 +1,17 @@
+{
+  "content": {
+    "headers": [
+      "tree 1e37d9e1e84fba91dc89cf722d0b92e920990653",
+      "parent 18c554b2720a869f1203a776cadd515fc6f3f840",
+      "parent a08feb8ef0b66c3e7d398ee6169c607b8efb7c80",
+      "author Junio C Hamano <gitster@pobox.com> 1461964558 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1461964558 -0700"
+    ],
+    "message": "Merge branch 'tb/blame-force-read-cache-to-workaround-safe-crlf' into maint\n\nWhen running \"git blame $path\" with unnormalized data in the index\nfor the path, the data in the working tree was blamed, even though\n\"git add\" would not have changed what is already in the index, due\nto \"safe crlf\" that disables the line-end conversion.  It has been\ncorrected.\n\n* tb/blame-force-read-cache-to-workaround-safe-crlf:\n  correct blame for files commited with CRLF\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "002dd773b0b2ff2e28a335fb879a321056c0f6e2",
+  "sha1_ok": true,
+  "size": 719
+}

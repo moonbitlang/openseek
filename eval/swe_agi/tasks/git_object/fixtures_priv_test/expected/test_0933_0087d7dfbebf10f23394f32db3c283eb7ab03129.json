@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree 8ac7f36f2ba746af517f24013c967d96cd38ebbd",
+      "parent edd6a31f46096824f792f0fad5532c8d444c4c05",
+      "author Johannes Schindelin <johannes.schindelin@gmx.de> 1661506769 +0000",
+      "committer Junio C Hamano <gitster@pobox.com> 1661532565 -0700"
+    ],
+    "message": "range-diff: consistently validate the arguments\n\nThis patch lets `range-diff` validate the arguments not only when\ninvoked with one or two arguments, but also in the code path where three\narguments are handled.\n\nWhile at it, we now use `usage_msg_opt*()` consistently.\n\nSigned-off-by: Johannes Schindelin <johannes.schindelin@gmx.de>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "0087d7dfbebf10f23394f32db3c283eb7ab03129",
+  "sha1_ok": true,
+  "size": 614
+}

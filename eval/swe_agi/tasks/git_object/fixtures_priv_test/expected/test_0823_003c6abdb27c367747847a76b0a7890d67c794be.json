@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree c4410379462761a7cac69246521f806d31deac0c",
+      "parent 460ccd0e19774fd5e4f69de5a454068c686ac5a6",
+      "author Jeff King <peff@peff.net> 1266303796 -0500",
+      "committer Junio C Hamano <gitster@pobox.com> 1266339838 -0800"
+    ],
+    "message": "dwim_ref: fix dangling symref warning\n\nIf we encounter a symref that is dangling, in most cases we will warn\nabout it. The one exception is a dangling HEAD, as that indicates a\nbranch yet to be born.\n\nHowever, the check in dwim_ref was not quite right. If we were fed\nsomething like \"HEAD^0\" we would try to resolve \"HEAD\", see that it is\ndangling, and then check whether the _original_ string we got was\n\"HEAD\" (which it wasn't in this case). And that makes no sense; the\ndangling thing we found was not \"HEAD^0\" but rather \"HEAD\".\n\nFixing this squelches a scary warning from \"submodule summary HEAD\" (and\nconsequently \"git status\" with status.submodulesummary set) in an empty\nrepo, as the submodule script calls \"git rev-parse -q --verify HEAD^0\".\n\nSigned-off-by: Jeff King <peff@peff.net>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "003c6abdb27c367747847a76b0a7890d67c794be",
+  "sha1_ok": true,
+  "size": 1050
+}

@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "object a5fa49ff0a8f3252c6bff49f92b85e7683868f8a",
+      "type commit",
+      "tag v2.29.0-rc2",
+      "tagger Junio C Hamano <gitster@pobox.com> 1602788338 -0700"
+    ],
+    "message": "Git 2.29-rc2\n-----BEGIN PGP SIGNATURE-----\n\niQIzBAABCAAdFiEE4fA2sf7nIh/HeOzvsLXohpav5ssFAl+Im/IACgkQsLXohpav\n5ssR3w/9Hy8IijiAt2SMnDt11YXVQUTYxh2CMA2mlKxYS6kyFYPya0GSd0B+IYuu\nsx1j2cRP12fTIzM3/cRJBschDFcWluRxXMMdaeW6kk47aDgnWtv1RHt1WbOLWJrm\n8N5DPjJdYrVDjQ8XF/ow9oqKnaRMIykjdhXZg9s5MadMjKuWUjKuBo0suE6IfrhE\nKvSCV5Oh55BYJ5Cl6LLHhYe2ESgYbIwGZkU/Il8UkgIjcjWWfiJ5Cb07Quwi/SGk\n2JB38oB34pxnH/IooC8qP95g5+uFVGDJtPKDuhn6R83iFzKv2vi0uVMVO0Vx/aRJ\nCwfaO5YgcthGTD9gsfYbZZqAd2WG9XT9CPNajbPCb0LVJgNBU2UFy8tuQKyaSqSB\ngfUTeZIx4vC6WfA1zGAszUCBx+ZRVb2nnzJdQrgyxvhdM51SqxZVcSjMVSOeL19s\nc6HUSFQeTGlYSZ4E6dCgZoicSSN5nz/4So9t+keYci2gZPON27+MIy69dc6h0dkz\nHlBJyTad+eEUvuZZz6TqfVDFvuYn5PUOZJGeoyEurA43hFMQYIPgUaXW/s0nzlvX\nbS9ZfPJ25J9cPrF0kWmbzg7xHdCrymdN8JrIxFR6Lmk2zgnM/ft7DGUs8T9gruda\nZC6zI0crHnaw8vLkDT+jwh+h8pgKNlZ2/lPGdedKRFy+dMm0/yA=\n=u3CJ\n-----END PGP SIGNATURE-----\n",
+    "type": "tag"
+  },
+  "kind": "tag",
+  "oid": "0675c6702155753b8e354e83c45d9c980bbccdff",
+  "sha1_ok": true,
+  "size": 982
+}

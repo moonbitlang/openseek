@@ -1,0 +1,16 @@
+{
+  "content": {
+    "headers": [
+      "tree e38c37f3bb280af092b5c34072cb51f39dbc7061",
+      "parent 95b9f9f927a7d9ea2bc2849b6ae624335e98362f",
+      "author Brandon Casey <drafnel@gmail.com> 1306442601 -0700",
+      "committer Junio C Hamano <gitster@pobox.com> 1306699210 -0700"
+    ],
+    "message": "builtin/commit.c: set status_format _after_ option parsing\n\n'git status' should use --porcelain output format when -z is given.\nIt was not doing so since the _effect_ of using -z, namely that\nnull_termination would be set, was being checked _before_ option parsing\nwas performed.\n\nSo, move the check so that it is performed after option parsing.\n\nSigned-off-by: Brandon Casey <casey@nrlssc.navy.mil>\nSigned-off-by: Junio C Hamano <gitster@pobox.com>\n",
+    "type": "commit"
+  },
+  "kind": "commit",
+  "oid": "000f97bd11e94fa8ede7fcdb43f5633997fed672",
+  "sha1_ok": true,
+  "size": 665
+}

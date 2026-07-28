@@ -1,0 +1,59 @@
+{
+  "content": {
+    "entries": [
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "debug.c",
+        "oid": "adc34c836fce48f34e811af27c04e79aa50e617b"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "files-backend.c",
+        "oid": "6f257c700540063f5565202c5a69f676fcad33af"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "iterator.c",
+        "oid": "c9fd0bcaf90c753031a1624f593c607a4549bf5a"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "packed-backend.c",
+        "oid": "b665d0f7d9b2792a05d79d8613b17b684dd7f318"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "packed-backend.h",
+        "oid": "9dd8a344c34dd7ae078f8226abf044219d5f3a3c"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "ref-cache.c",
+        "oid": "dc1ca49c85f7cd4be86d88dda0ba31f3f965e6bb"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "ref-cache.h",
+        "oid": "850d9d3744e94270fb5cd445b4f6b7b18aac8128"
+      },
+      {
+        "kind": "blob",
+        "mode": "100644",
+        "name": "refs-internal.h",
+        "oid": "a85d113123c99b55e1e7047d334c7608843eb2d6"
+      }
+    ],
+    "type": "tree"
+  },
+  "kind": "tree",
+  "oid": "004d05ed16ef33adf3385a94022ed4dfd0d2a918",
+  "sha1_ok": true,
+  "size": 325
+}
