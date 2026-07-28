@@ -1,0 +1,7 @@
+import {
+  "moonbitlang/x/fs",
+}
+
+options(
+  targets: { "pug_pub_test.mbt": [ "js" ] },
+)
