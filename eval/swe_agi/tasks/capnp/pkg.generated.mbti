@@ -1,0 +1,141 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "capnp"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub suberror CapnpError {
+  Message(String)
+  PointerOutOfBounds(Int, Int)
+  InvalidPointerKind(UInt)
+  InvalidData(String)
+  InvalidPointer(String)
+  InvalidList(String)
+  InvalidText(String)
+  TraversalLimitExceeded(Int)
+}
+pub fn CapnpError::to_string(Self) -> String
+
+// Types and methods
+type Decoder
+pub fn Decoder::from_bytes(BytesView, traversal_limit? : Int) -> Self raise CapnpError
+pub fn Decoder::root(Self) -> Pointer raise CapnpError
+
+type ListDecoder
+pub fn ListDecoder::element_kind(Self) -> ListElementKind
+pub fn ListDecoder::get_bool(Self, Int) -> Bool raise CapnpError
+pub fn ListDecoder::get_data(Self, Int) -> Bytes raise CapnpError
+pub fn ListDecoder::get_float32(Self, Int) -> Float raise CapnpError
+pub fn ListDecoder::get_float64(Self, Int) -> Double raise CapnpError
+pub fn ListDecoder::get_int16(Self, Int) -> Int16 raise CapnpError
+pub fn ListDecoder::get_int32(Self, Int) -> Int raise CapnpError
+pub fn ListDecoder::get_int64(Self, Int) -> Int64 raise CapnpError
+pub fn ListDecoder::get_int8(Self, Int) -> Int raise CapnpError
+pub fn ListDecoder::get_pointer(Self, Int) -> Pointer raise CapnpError
+pub fn ListDecoder::get_struct(Self, Int) -> StructDecoder raise CapnpError
+pub fn ListDecoder::get_text(Self, Int) -> String raise CapnpError
+pub fn ListDecoder::get_uint16(Self, Int) -> UInt16 raise CapnpError
+pub fn ListDecoder::get_uint32(Self, Int) -> UInt raise CapnpError
+pub fn ListDecoder::get_uint64(Self, Int) -> UInt64 raise CapnpError
+pub fn ListDecoder::get_uint8(Self, Int) -> Byte raise CapnpError
+pub fn ListDecoder::length(Self) -> Int
+pub fn ListDecoder::to_bytes(Self) -> Bytes raise CapnpError
+pub fn ListDecoder::to_text(Self) -> String raise CapnpError
+
+pub(all) enum ListElementKind {
+  Void
+  Bit1
+  Byte1
+  Byte2
+  Byte4
+  Byte8
+  Pointer
+  Composite
+} derive(Eq, Show, ToJson, @debug.Debug)
+
+type ListWriter
+pub fn ListWriter::element_kind(Self) -> ListElementKind
+pub fn ListWriter::init_composite_list(Self, Int, Int, Int, Int) -> Self raise CapnpError
+pub fn ListWriter::init_list(Self, Int, ListElementKind, Int) -> Self raise CapnpError
+pub fn ListWriter::init_struct(Self, Int, Int, Int) -> StructWriter raise CapnpError
+pub fn ListWriter::length(Self) -> Int
+pub fn ListWriter::set_bool(Self, Int, Bool) -> Unit raise CapnpError
+pub fn ListWriter::set_data(Self, Int, BytesView) -> Unit raise CapnpError
+pub fn ListWriter::set_float32(Self, Int, Float) -> Unit raise CapnpError
+pub fn ListWriter::set_float64(Self, Int, Double) -> Unit raise CapnpError
+pub fn ListWriter::set_int16(Self, Int, Int16) -> Unit raise CapnpError
+pub fn ListWriter::set_int32(Self, Int, Int) -> Unit raise CapnpError
+pub fn ListWriter::set_int64(Self, Int, Int64) -> Unit raise CapnpError
+pub fn ListWriter::set_int8(Self, Int, Int) -> Unit raise CapnpError
+pub fn ListWriter::set_null(Self, Int) -> Unit raise CapnpError
+pub fn ListWriter::set_text(Self, Int, String) -> Unit raise CapnpError
+pub fn ListWriter::set_uint16(Self, Int, UInt16) -> Unit raise CapnpError
+pub fn ListWriter::set_uint32(Self, Int, UInt) -> Unit raise CapnpError
+pub fn ListWriter::set_uint64(Self, Int, UInt64) -> Unit raise CapnpError
+pub fn ListWriter::set_uint8(Self, Int, Byte) -> Unit raise CapnpError
+pub fn ListWriter::struct_at(Self, Int) -> StructWriter raise CapnpError
+
+type Message
+pub fn Message::encode(Self) -> Bytes
+pub fn Message::parse(BytesView) -> Self raise CapnpError
+
+type MessageWriter
+pub fn MessageWriter::init_root_list(Self, ListElementKind, Int) -> ListWriter raise CapnpError
+pub fn MessageWriter::init_root_struct(Self, Int, Int) -> StructWriter
+pub fn MessageWriter::new() -> Self
+pub fn MessageWriter::to_bytes(Self) -> Bytes
+
+pub enum Pointer {
+  Null
+  Struct(StructDecoder)
+  List(ListDecoder)
+  Capability(UInt)
+}
+pub fn Pointer::as_list(Self) -> ListDecoder raise CapnpError
+pub fn Pointer::as_struct(Self) -> StructDecoder raise CapnpError
+
+type StructDecoder
+pub fn StructDecoder::data_size_bytes(Self) -> Int
+pub fn StructDecoder::ptr_count(Self) -> Int
+pub fn StructDecoder::read_bool(Self, Int) -> Bool raise CapnpError
+pub fn StructDecoder::read_data(Self, Int) -> Bytes raise CapnpError
+pub fn StructDecoder::read_float32(Self, Int) -> Float raise CapnpError
+pub fn StructDecoder::read_float64(Self, Int) -> Double raise CapnpError
+pub fn StructDecoder::read_int16(Self, Int) -> Int16 raise CapnpError
+pub fn StructDecoder::read_int32(Self, Int) -> Int raise CapnpError
+pub fn StructDecoder::read_int64(Self, Int) -> Int64 raise CapnpError
+pub fn StructDecoder::read_int8(Self, Int) -> Int raise CapnpError
+pub fn StructDecoder::read_list(Self, Int) -> ListDecoder raise CapnpError
+pub fn StructDecoder::read_pointer(Self, Int) -> Pointer raise CapnpError
+pub fn StructDecoder::read_text(Self, Int) -> String raise CapnpError
+pub fn StructDecoder::read_uint16(Self, Int) -> UInt16 raise CapnpError
+pub fn StructDecoder::read_uint32(Self, Int) -> UInt raise CapnpError
+pub fn StructDecoder::read_uint64(Self, Int) -> UInt64 raise CapnpError
+pub fn StructDecoder::read_uint8(Self, Int) -> Byte raise CapnpError
+
+type StructWriter
+pub fn StructWriter::init_composite_list(Self, Int, Int, Int, Int) -> ListWriter raise CapnpError
+pub fn StructWriter::init_list(Self, Int, ListElementKind, Int) -> ListWriter raise CapnpError
+pub fn StructWriter::init_struct(Self, Int, Int, Int) -> Self raise CapnpError
+pub fn StructWriter::set_bool(Self, Int, Bool) -> Unit raise CapnpError
+pub fn StructWriter::set_data(Self, Int, BytesView) -> Unit raise CapnpError
+pub fn StructWriter::set_float32(Self, Int, Float) -> Unit raise CapnpError
+pub fn StructWriter::set_float64(Self, Int, Double) -> Unit raise CapnpError
+pub fn StructWriter::set_int16(Self, Int, Int16) -> Unit raise CapnpError
+pub fn StructWriter::set_int32(Self, Int, Int) -> Unit raise CapnpError
+pub fn StructWriter::set_int64(Self, Int, Int64) -> Unit raise CapnpError
+pub fn StructWriter::set_int8(Self, Int, Int) -> Unit raise CapnpError
+pub fn StructWriter::set_null(Self, Int) -> Unit raise CapnpError
+pub fn StructWriter::set_text(Self, Int, String) -> Unit raise CapnpError
+pub fn StructWriter::set_uint16(Self, Int, UInt16) -> Unit raise CapnpError
+pub fn StructWriter::set_uint32(Self, Int, UInt) -> Unit raise CapnpError
+pub fn StructWriter::set_uint64(Self, Int, UInt64) -> Unit raise CapnpError
+pub fn StructWriter::set_uint8(Self, Int, Byte) -> Unit raise CapnpError
+
+// Type aliases
+
+// Traits
