@@ -538,6 +538,10 @@ pub async fn build_native_host(
   extra_env? : Map[String, String] = Map([]),
   disable_mimalloc? : Bool = false,
 ) -> Unit {
+  // Resolve the read-only runtime prerequisite before stamping the token or
+  // replacing the global MoonBit runtime object. A missing/malformed manifest
+  // or a cancelled read then leaves no build state to restore.
+  let runtime_dist = proton_runtime_dist(ws)
   // Stamp before any global state is swapped: a malformed token (or a
   // drifted stamp needle) raises here, while there is nothing to restore
   // yet. Every later raise restores whatever has been swapped so far — the
@@ -569,7 +573,7 @@ pub async fn build_native_host(
   for name, value in extra_env {
     build_env[name] = value
   }
-  build_env["PROTON_NATIVE_DIST"] = proton_runtime_dist(ws)
+  build_env["PROTON_NATIVE_DIST"] = runtime_dist
   run_checked(
     "moon",
     ["build", NativePackage, "--target", "native", "--release"] + extra_args,
