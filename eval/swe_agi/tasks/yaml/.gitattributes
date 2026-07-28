@@ -1,0 +1,3 @@
+yaml_pub_test.mbt -whitespace
+yaml_priv_test.mbt -whitespace
+specs/1.2.2/spec.md -whitespace
