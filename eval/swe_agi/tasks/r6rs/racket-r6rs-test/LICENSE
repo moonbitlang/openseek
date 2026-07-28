@@ -1,0 +1,20 @@
+This component of Racket is distributed under the under the Apache 2.0
+and MIT licenses. The user can choose the license under which they
+will be using the software. There may be other licenses within the
+distribution with which the user must also comply.
+
+See the files
+  https://github.com/racket/racket/blob/master/racket/src/LICENSE-APACHE.txt
+and
+  https://github.com/racket/racket/blob/master/racket/src/LICENSE-MIT.txt
+for the full text of the licenses.
+
+This repository contains the text of the R6RS standard, in
+r6rs-doc/r6rs/scribblings/r6rs-{lib-std,std}/. That document is
+distributed under the SchemeReport license:
+
+    We intend this report to belong to the entire Scheme community,
+    and so we grant permission to copy it in whole or in part without
+    fee. In particular, we encourage implementors of Scheme to use
+    this report as a starting point for manuals and other
+    documentation, modifying it as necessary.

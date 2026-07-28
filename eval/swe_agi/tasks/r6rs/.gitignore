@@ -1,0 +1,7 @@
+target/
+target
+_build
+_build/
+.mooncakes/
+.moonagent/
+.claude/
