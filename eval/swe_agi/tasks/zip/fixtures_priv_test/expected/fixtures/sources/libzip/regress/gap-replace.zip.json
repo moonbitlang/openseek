@@ -1,0 +1,49 @@
+{
+  "archive": "fixtures/sources/libzip/regress/gap-replace.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 17,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "17-Dec-11",
+      "mod_time": "13:11",
+      "mode": "-rw-rw-rw-",
+      "name": "gap",
+      "uncompressed_size": 17,
+      "version": "6.3"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 24,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "17-Dec-11",
+      "mod_time": "13:12",
+      "mode": "-rw-rw-rw-",
+      "name": "second",
+      "uncompressed_size": 24,
+      "version": "6.3"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 15,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "17-Dec-11",
+      "mod_time": "13:14",
+      "mode": "-rw-rw-rw-",
+      "name": "third",
+      "uncompressed_size": 15,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 56,
+    "compression_ratio": "0.0%",
+    "entries": 3,
+    "file_size": 351,
+    "uncompressed_size": 56
+  }
+}

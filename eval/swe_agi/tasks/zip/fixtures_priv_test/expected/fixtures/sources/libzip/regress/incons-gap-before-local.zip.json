@@ -1,0 +1,37 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-gap-before-local.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 3,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "24-Jul-27",
+      "mod_time": "20:26",
+      "mode": "-rw-rw-rw-",
+      "name": "test1",
+      "uncompressed_size": 3,
+      "version": "6.3"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 4,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "24-Jul-27",
+      "mod_time": "20:26",
+      "mode": "-rw-rw-rw-",
+      "name": "test2",
+      "uncompressed_size": 4,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 7,
+    "compression_ratio": "0.0%",
+    "entries": 2,
+    "file_size": 202,
+    "uncompressed_size": 7
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "archive": "fixtures/sources/maven/org/apache/commons/commons-jci-groovy/1.0/commons-jci-groovy-1.0-sources.jar",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "03:30",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 95,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "03:30",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/MANIFEST.MF",
+      "uncompressed_size": 110,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/jci/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/jci/compilers/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1035,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/GroovyCompilationProblem.java",
+      "uncompressed_size": 3399,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1638,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/GroovyJavaCompiler.java",
+      "uncompressed_size": 5624,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 648,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/GroovyJavaCompilerSettings.java",
+      "uncompressed_size": 1327,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 3948,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "LICENSE.txt",
+      "uncompressed_size": 11357,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 152,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "NOTICE.txt",
+      "uncompressed_size": 213,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 7516,
+    "compression_ratio": "65.9%",
+    "entries": 12,
+    "file_size": 9094,
+    "uncompressed_size": 22030
+  }
+}

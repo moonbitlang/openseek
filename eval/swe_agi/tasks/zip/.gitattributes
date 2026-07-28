@@ -1,0 +1,4 @@
+*.zip binary
+*.jar binary
+*.bin binary
+specs/appnote_iz.txt -text -whitespace

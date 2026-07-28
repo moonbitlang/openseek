@@ -1,0 +1,37 @@
+{
+  "archive": "fixtures/sources/libzip/regress/fileorder.zip",
+  "entries": [
+    {
+      "attrs": "t-",
+      "compressed_size": 5,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Apr-27",
+      "mod_time": "23:21",
+      "mode": "-rw-rw-r--",
+      "name": "file1",
+      "uncompressed_size": 5,
+      "version": "3.0"
+    },
+    {
+      "attrs": "t-",
+      "compressed_size": 5,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Apr-27",
+      "mod_time": "23:21",
+      "mode": "-rw-rw-r--",
+      "name": "file2",
+      "uncompressed_size": 5,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 10,
+    "compression_ratio": "0.0%",
+    "entries": 2,
+    "file_size": 204,
+    "uncompressed_size": 10
+  }
+}

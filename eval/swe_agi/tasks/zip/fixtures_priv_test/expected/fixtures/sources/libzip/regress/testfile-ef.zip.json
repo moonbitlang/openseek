@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/testfile-ef.zip",
+  "entries": [
+    {
+      "attrs": "tx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "18-Feb-01",
+      "mod_time": "01:08",
+      "mode": "?---------",
+      "name": "testfile.txt",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 0,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 174,
+    "uncompressed_size": 0
+  }
+}

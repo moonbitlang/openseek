@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/extra_field_align_2-0.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 4,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "16-Jan-20",
+      "mod_time": "21:09",
+      "mode": "-rw-rw-r--",
+      "name": "12",
+      "uncompressed_size": 4,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 4,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 110,
+    "uncompressed_size": 4
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/comment-truncated.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 1,
+      "compression_method": "stor",
+      "host_os": "fat",
+      "mod_date": "80-000-00",
+      "mod_time": "00:00",
+      "mode": "-rw----",
+      "name": "FILE",
+      "uncompressed_size": 1,
+      "version": "0.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 1,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 216,
+    "uncompressed_size": 1
+  }
+}

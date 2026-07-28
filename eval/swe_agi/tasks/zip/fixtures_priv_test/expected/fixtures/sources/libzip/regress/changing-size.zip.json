@@ -1,0 +1,37 @@
+{
+  "archive": "fixtures/sources/libzip/regress/changing-size.zip",
+  "entries": [
+    {
+      "attrs": "t-",
+      "compressed_size": 6,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "23-Jun-29",
+      "mod_time": "13:14",
+      "mode": "-rw-rw-r--",
+      "name": "short",
+      "uncompressed_size": 6,
+      "version": "3.0"
+    },
+    {
+      "attrs": "t-",
+      "compressed_size": 11,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "23-Jun-29",
+      "mod_time": "13:14",
+      "mode": "-rw-rw-r--",
+      "name": "muchlonger",
+      "uncompressed_size": 11,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 17,
+    "compression_ratio": "0.0%",
+    "entries": 2,
+    "file_size": 221,
+    "uncompressed_size": 17
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "archive": "fixtures/sources/libzip/regress/cm-default.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 5,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "22-Apr-06",
+      "mod_time": "14:02",
+      "mode": "-rw-rw-rw-",
+      "name": "compressible",
+      "uncompressed_size": 14,
+      "version": "6.3"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 14,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "22-Apr-06",
+      "mod_time": "14:02",
+      "mode": "-rw-rw-rw-",
+      "name": "uncompressible",
+      "uncompressed_size": 14,
+      "version": "6.3"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 24,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "22-Apr-06",
+      "mod_time": "14:02",
+      "mode": "-rw-rw-rw-",
+      "name": "large-compressible",
+      "uncompressed_size": 8200,
+      "version": "6.3"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 8205,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "22-Apr-06",
+      "mod_time": "14:02",
+      "mode": "-rw-r--r--",
+      "name": "large-uncompressible",
+      "uncompressed_size": 8200,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 8248,
+    "compression_ratio": "49.8%",
+    "entries": 4,
+    "file_size": 8702,
+    "uncompressed_size": 16428
+  }
+}

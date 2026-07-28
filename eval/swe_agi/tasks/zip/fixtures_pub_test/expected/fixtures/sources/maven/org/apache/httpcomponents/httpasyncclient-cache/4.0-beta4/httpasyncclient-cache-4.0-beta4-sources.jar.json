@@ -1,0 +1,169 @@
+{
+  "archive": "fixtures/sources/maven/org/apache/httpcomponents/httpasyncclient-cache/4.0-beta4/httpasyncclient-cache-4.0-beta4-sources.jar",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:52",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 217,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:52",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/MANIFEST.MF",
+      "uncompressed_size": 443,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:42",
+      "mode": "drwxrwxr-x",
+      "name": "org/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:42",
+      "mode": "drwxrwxr-x",
+      "name": "org/apache/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:42",
+      "mode": "drwxrwxr-x",
+      "name": "org/apache/http/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:42",
+      "mode": "drwxrwxr-x",
+      "name": "org/apache/http/impl/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:42",
+      "mode": "drwxrwxr-x",
+      "name": "org/apache/http/impl/client/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:42",
+      "mode": "drwxrwxr-x",
+      "name": "org/apache/http/impl/client/cache/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1307,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:42",
+      "mode": "-rw-rw-r--",
+      "name": "org/apache/http/impl/client/cache/AsynchronousAsyncValidationRequest.java",
+      "uncompressed_size": 4003,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 7082,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:42",
+      "mode": "-rw-rw-r--",
+      "name": "org/apache/http/impl/client/cache/CachingHttpAsyncClient.java",
+      "uncompressed_size": 43060,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1817,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:42",
+      "mode": "-rw-rw-r--",
+      "name": "org/apache/http/impl/client/cache/AsynchronousAsyncValidator.java",
+      "uncompressed_size": 5711,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 3676,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:42",
+      "mode": "-rw-rw-r--",
+      "name": "META-INF/LICENSE.txt",
+      "uncompressed_size": 10405,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 145,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-May-09",
+      "mod_time": "17:52",
+      "mode": "-rw-rw-r--",
+      "name": "META-INF/NOTICE.txt",
+      "uncompressed_size": 202,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 14244,
+    "compression_ratio": "77.7%",
+    "entries": 13,
+    "file_size": 16016,
+    "uncompressed_size": 63824
+  }
+}

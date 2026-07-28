@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/hmac-error.zip",
+  "entries": [
+    {
+      "attrs": "Bx",
+      "compressed_size": 72,
+      "compression_method": "u099",
+      "host_os": "unx",
+      "mod_date": "25-Jan-13",
+      "mod_time": "14:06",
+      "mode": "-rw-rw-rw-",
+      "name": "test.txt",
+      "uncompressed_size": 43,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 1,
+    "file_size": 208,
+    "uncompressed_size": null
+  }
+}

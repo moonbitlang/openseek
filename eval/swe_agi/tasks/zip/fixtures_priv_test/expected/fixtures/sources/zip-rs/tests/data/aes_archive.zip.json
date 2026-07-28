@@ -1,0 +1,61 @@
+{
+  "archive": "fixtures/sources/zip-rs/tests/data/aes_archive.zip",
+  "entries": [
+    {
+      "attrs": "Bx",
+      "compressed_size": 46,
+      "compression_method": "u099",
+      "host_os": "unx",
+      "mod_date": "22-Jan-25",
+      "mod_time": "22:03",
+      "mode": "-rw-r--r--",
+      "name": "secret_data_128",
+      "uncompressed_size": 26,
+      "version": "6.3"
+    },
+    {
+      "attrs": "Bx",
+      "compressed_size": 50,
+      "compression_method": "u099",
+      "host_os": "unx",
+      "mod_date": "22-Jan-25",
+      "mod_time": "22:03",
+      "mode": "-rw-r--r--",
+      "name": "secret_data_192",
+      "uncompressed_size": 26,
+      "version": "6.3"
+    },
+    {
+      "attrs": "Bx",
+      "compressed_size": 54,
+      "compression_method": "u099",
+      "host_os": "unx",
+      "mod_date": "22-Jan-25",
+      "mod_time": "22:03",
+      "mode": "-rw-r--r--",
+      "name": "secret_data_256",
+      "uncompressed_size": 26,
+      "version": "6.3"
+    },
+    {
+      "attrs": "Bx",
+      "compressed_size": 54,
+      "compression_method": "u099",
+      "host_os": "unx",
+      "mod_date": "22-Jan-25",
+      "mod_time": "22:03",
+      "mode": "-rw-r--r--",
+      "name": "secret_data_256_uncompressed",
+      "uncompressed_size": 26,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 4,
+    "file_size": 908,
+    "uncompressed_size": null
+  }
+}

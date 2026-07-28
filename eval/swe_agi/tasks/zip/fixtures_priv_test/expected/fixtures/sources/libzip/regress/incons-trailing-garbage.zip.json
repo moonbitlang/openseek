@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-trailing-garbage.zip",
+  "entries": [
+    {
+      "attrs": "bX",
+      "compressed_size": 23,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "03-Oct-06",
+      "mod_time": "21:46",
+      "mode": "-rw-rw-r--",
+      "name": "test",
+      "uncompressed_size": 5,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 1,
+    "file_size": 193,
+    "uncompressed_size": null
+  }
+}

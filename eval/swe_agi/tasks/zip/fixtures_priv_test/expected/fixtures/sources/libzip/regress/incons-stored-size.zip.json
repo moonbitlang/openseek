@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-stored-size.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 4,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "24-Jul-28",
+      "mod_time": "10:31",
+      "mode": "-rw-rw-rw-",
+      "name": "test",
+      "uncompressed_size": 3,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 1,
+    "file_size": 110,
+    "uncompressed_size": null
+  }
+}

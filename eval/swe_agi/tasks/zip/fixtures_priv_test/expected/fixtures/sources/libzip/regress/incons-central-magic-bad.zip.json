@@ -1,0 +1,12 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-central-magic-bad.zip",
+  "entries": [],
+  "invalid": true,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 1,
+    "file_size": 153,
+    "uncompressed_size": null
+  }
+}

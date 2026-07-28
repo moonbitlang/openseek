@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/zip-rs/tests/data/zip64_demo.zip",
+  "entries": [
+    {
+      "attrs": "t-",
+      "compressed_size": 14,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "17-Aug-12",
+      "mod_time": "14:13",
+      "mode": "prw-------",
+      "name": "-",
+      "uncompressed_size": 14,
+      "version": "3.0"
+    }
+  ],
+  "invalid": true,
+  "summary": {
+    "compressed_size": 14,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 224,
+    "uncompressed_size": 14
+  }
+}

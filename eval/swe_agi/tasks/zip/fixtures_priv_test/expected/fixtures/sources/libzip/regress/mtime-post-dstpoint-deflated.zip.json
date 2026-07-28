@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/mtime-post-dstpoint-deflated.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 17,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "23-Mar-12",
+      "mod_time": "03:30",
+      "mode": "-rwxrwxr-x",
+      "name": "abac-repeat.txt",
+      "uncompressed_size": 60,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 17,
+    "compression_ratio": "71.7%",
+    "entries": 1,
+    "file_size": 145,
+    "uncompressed_size": 60
+  }
+}

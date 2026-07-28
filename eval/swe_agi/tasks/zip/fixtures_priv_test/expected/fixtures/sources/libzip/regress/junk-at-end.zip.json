@@ -1,0 +1,49 @@
+{
+  "archive": "fixtures/sources/libzip/regress/junk-at-end.zip",
+  "entries": [
+    {
+      "attrs": "tx",
+      "compressed_size": 5,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "03-Oct-06",
+      "mod_time": "21:46",
+      "mode": "-rw-rw-r--",
+      "name": "test",
+      "uncompressed_size": 5,
+      "version": "2.3"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "05-Jan-12",
+      "mod_time": "02:03",
+      "mode": "drwxr-xr-x",
+      "name": "testdir/",
+      "uncompressed_size": 0,
+      "version": "2.3"
+    },
+    {
+      "attrs": "tx",
+      "compressed_size": 5,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "03-Oct-06",
+      "mod_time": "21:46",
+      "mode": "-rw-rw-r--",
+      "name": "testdir/test2",
+      "uncompressed_size": 5,
+      "version": "2.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 10,
+    "compression_ratio": "0.0%",
+    "entries": 3,
+    "file_size": 416,
+    "uncompressed_size": 10
+  }
+}

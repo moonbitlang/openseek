@@ -1,0 +1,37 @@
+{
+  "archive": "fixtures/sources/libzip/regress/gap-delete.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 17,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "17-Dec-11",
+      "mod_time": "13:11",
+      "mode": "-rw-rw-rw-",
+      "name": "gap",
+      "uncompressed_size": 17,
+      "version": "6.3"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 24,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "17-Dec-11",
+      "mod_time": "13:12",
+      "mode": "-rw-rw-rw-",
+      "name": "second",
+      "uncompressed_size": 24,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 41,
+    "compression_ratio": "0.0%",
+    "entries": 2,
+    "file_size": 250,
+    "uncompressed_size": 41
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "archive": "fixtures/sources/maven/org/apache/httpcomponents/hc-stylecheck/1/hc-stylecheck-1.jar",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:56",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 203,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:56",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/MANIFEST.MF",
+      "uncompressed_size": 417,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:55",
+      "mode": "drwxrwxr-x",
+      "name": "hc-stylecheck/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 109,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:56",
+      "mode": "-rw-rw-r--",
+      "name": "META-INF/DEPENDENCIES",
+      "uncompressed_size": 263,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 120,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:56",
+      "mode": "-rw-rw-r--",
+      "name": "META-INF/NOTICE",
+      "uncompressed_size": 165,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 3949,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:56",
+      "mode": "-rw-rw-r--",
+      "name": "META-INF/LICENSE",
+      "uncompressed_size": 11358,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 552,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:55",
+      "mode": "-rw-rw-r--",
+      "name": "hc-stylecheck/asl2.header",
+      "uncompressed_size": 1184,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 780,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:55",
+      "mode": "-rw-rw-r--",
+      "name": "hc-stylecheck/minimal.xml",
+      "uncompressed_size": 1599,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 807,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:55",
+      "mode": "-rw-rw-r--",
+      "name": "hc-stylecheck/default.xml",
+      "uncompressed_size": 1676,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:56",
+      "mode": "?rwsrwsrwt",
+      "name": "META-INF/maven/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:56",
+      "mode": "?rwsrwsrwt",
+      "name": "META-INF/maven/org.apache.httpcomponents/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:56",
+      "mode": "?rwsrwsrwt",
+      "name": "META-INF/maven/org.apache.httpcomponents/hc-stylecheck/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1150,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:48",
+      "mode": "-rw-rw-r--",
+      "name": "META-INF/maven/org.apache.httpcomponents/hc-stylecheck/pom.xml",
+      "uncompressed_size": 3043,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 115,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Jun-12",
+      "mod_time": "15:55",
+      "mode": "-rw-rw-r--",
+      "name": "META-INF/maven/org.apache.httpcomponents/hc-stylecheck/pom.properties",
+      "uncompressed_size": 120,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 7785,
+    "compression_ratio": "60.7%",
+    "entries": 14,
+    "file_size": 9695,
+    "uncompressed_size": 19825
+  }
+}

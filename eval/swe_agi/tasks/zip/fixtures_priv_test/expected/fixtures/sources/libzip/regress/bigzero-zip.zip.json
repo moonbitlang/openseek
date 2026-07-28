@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/bigzero-zip.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 10318,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "14-Dec-04",
+      "mod_time": "22:06",
+      "mode": "-rw-rw-r--",
+      "name": "bigzero.zip",
+      "uncompressed_size": 4168377,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 10318,
+    "compression_ratio": "99.8%",
+    "entries": 1,
+    "file_size": 10490,
+    "uncompressed_size": 4168377
+  }
+}

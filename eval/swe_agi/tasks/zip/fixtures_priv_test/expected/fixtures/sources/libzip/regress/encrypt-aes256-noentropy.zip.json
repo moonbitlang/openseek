@@ -1,0 +1,37 @@
+{
+  "archive": "fixtures/sources/libzip/regress/encrypt-aes256-noentropy.zip",
+  "entries": [
+    {
+      "attrs": "t-",
+      "compressed_size": 6,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "17-Jan-14",
+      "mod_time": "21:27",
+      "mode": "-rw-rw-r--",
+      "name": "plain",
+      "uncompressed_size": 6,
+      "version": "3.0"
+    },
+    {
+      "attrs": "Bx",
+      "compressed_size": 38,
+      "compression_method": "u099",
+      "host_os": "unx",
+      "mod_date": "17-Jan-14",
+      "mod_time": "21:27",
+      "mode": "-rw-rw-rw-",
+      "name": "encrypted",
+      "uncompressed_size": 10,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 2,
+    "file_size": 268,
+    "uncompressed_size": null
+  }
+}

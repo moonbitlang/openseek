@@ -1,0 +1,12 @@
+{
+  "archive": "fixtures/sources/manual/nonzip/data.json",
+  "entries": [],
+  "invalid": true,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": null,
+    "file_size": null,
+    "uncompressed_size": null
+  }
+}

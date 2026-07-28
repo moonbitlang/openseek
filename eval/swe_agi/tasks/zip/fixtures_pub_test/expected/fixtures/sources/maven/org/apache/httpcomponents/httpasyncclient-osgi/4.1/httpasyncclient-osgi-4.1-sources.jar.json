@@ -1,0 +1,73 @@
+{
+  "archive": "fixtures/sources/maven/org/apache/httpcomponents/httpasyncclient-osgi/4.1/httpasyncclient-osgi-4.1-sources.jar",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "15-Apr-16",
+      "mod_time": "17:07",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 218,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "15-Apr-16",
+      "mod_time": "17:07",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/MANIFEST.MF",
+      "uncompressed_size": 457,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 371,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "15-Apr-16",
+      "mod_time": "17:07",
+      "mode": "-rw-rw-r--",
+      "name": "META-INF/DEPENDENCIES",
+      "uncompressed_size": 1587,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 138,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "15-Apr-16",
+      "mod_time": "17:07",
+      "mode": "-rw-rw-r--",
+      "name": "META-INF/NOTICE",
+      "uncompressed_size": 191,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 3949,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "15-Apr-16",
+      "mod_time": "17:07",
+      "mode": "-rw-rw-r--",
+      "name": "META-INF/LICENSE",
+      "uncompressed_size": 11358,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 4676,
+    "compression_ratio": "65.6%",
+    "entries": 5,
+    "file_size": 5240,
+    "uncompressed_size": 13593
+  }
+}

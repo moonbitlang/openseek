@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-ef-local-id.zip",
+  "entries": [
+    {
+      "attrs": "tx",
+      "compressed_size": 1,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Apr-24",
+      "mod_time": "20:38",
+      "mode": "-rw-rw-r--",
+      "name": "a",
+      "uncompressed_size": 1,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 1,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 153,
+    "uncompressed_size": 1
+  }
+}

@@ -1,0 +1,193 @@
+{
+  "archive": "fixtures/sources/maven/org/apache/commons/commons-fileupload2-portlet/2.0.0-M4/commons-fileupload2-portlet-2.0.0-M4-sources.jar",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 169,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/MANIFEST.MF",
+      "uncompressed_size": 348,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "drwxr-xr-x",
+      "name": "org/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/fileupload2/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/fileupload2/portlet/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/maven/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/maven/org.apache.commons/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/maven/org.apache.commons/commons-fileupload2-portlet/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1657,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/fileupload2/portlet/JavaxPortletFileUpload.java",
+      "uncompressed_size": 5303,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 879,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/fileupload2/portlet/JavaxPortletRequestContext.java",
+      "uncompressed_size": 2248,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 891,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/fileupload2/portlet/package-info.java",
+      "uncompressed_size": 1849,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1668,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/maven/org.apache.commons/commons-fileupload2-portlet/pom.xml",
+      "uncompressed_size": 5510,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 77,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "25-Jun-13",
+      "mod_time": "19:22",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/maven/org.apache.commons/commons-fileupload2-portlet/pom.properties",
+      "uncompressed_size": 83,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 5341,
+    "compression_ratio": "65.2%",
+    "entries": 15,
+    "file_size": 7665,
+    "uncompressed_size": 15341
+  }
+}

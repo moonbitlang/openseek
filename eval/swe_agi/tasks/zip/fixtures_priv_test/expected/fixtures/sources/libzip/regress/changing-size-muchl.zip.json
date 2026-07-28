@@ -1,0 +1,49 @@
+{
+  "archive": "fixtures/sources/libzip/regress/changing-size-muchl.zip",
+  "entries": [
+    {
+      "attrs": "t-",
+      "compressed_size": 6,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "23-Jun-29",
+      "mod_time": "13:14",
+      "mode": "-rw-rw-r--",
+      "name": "short",
+      "uncompressed_size": 6,
+      "version": "3.0"
+    },
+    {
+      "attrs": "t-",
+      "compressed_size": 11,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "23-Jun-29",
+      "mod_time": "13:14",
+      "mode": "-rw-rw-r--",
+      "name": "muchlonger",
+      "uncompressed_size": 11,
+      "version": "3.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 5,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "23-Jul-19",
+      "mod_time": "14:43",
+      "mode": "-rw-r--r--",
+      "name": "new",
+      "uncompressed_size": 5,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 22,
+    "compression_ratio": "0.0%",
+    "entries": 3,
+    "file_size": 308,
+    "uncompressed_size": 22
+  }
+}

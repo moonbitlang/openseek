@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/foo-stored.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 3,
+      "compression_method": "stor",
+      "host_os": "fat",
+      "mod_date": "13-Apr-15",
+      "mod_time": "20:21",
+      "mode": "-rw----",
+      "name": "foo",
+      "uncompressed_size": 3,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 3,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 107,
+    "uncompressed_size": 3
+  }
+}

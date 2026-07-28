@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/readme.zip",
+  "entries": [
+    {
+      "attrs": "tx",
+      "compressed_size": 598,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "10-Sep-02",
+      "mod_time": "23:56",
+      "mode": "-rw-r--r--",
+      "name": "README",
+      "uncompressed_size": 1096,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 598,
+    "compression_ratio": "45.4%",
+    "entries": 1,
+    "file_size": 1886,
+    "uncompressed_size": 1096
+  }
+}

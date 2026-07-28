@@ -1,0 +1,193 @@
+{
+  "archive": "fixtures/sources/maven/org/apache/commons/commons-jci-javac/1.0/commons-jci-javac-1.0-sources.jar",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "03:38",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 95,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "03:38",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/MANIFEST.MF",
+      "uncompressed_size": 110,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/jci/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/jci/compilers/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1062,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/FileInputStreamProxy.java",
+      "uncompressed_size": 3030,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 996,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/FileOutputStreamProxy.java",
+      "uncompressed_size": 2828,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1837,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/JavacClassLoader.java",
+      "uncompressed_size": 5353,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 868,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/JavacCompilationProblem.java",
+      "uncompressed_size": 2533,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 2877,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/JavacJavaCompiler.java",
+      "uncompressed_size": 10282,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 717,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/JavacJavaCompilerSettings.java",
+      "uncompressed_size": 1785,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 3948,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "LICENSE.txt",
+      "uncompressed_size": 11357,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 151,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "NOTICE.txt",
+      "uncompressed_size": 212,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 12551,
+    "compression_ratio": "66.5%",
+    "entries": 15,
+    "file_size": 14693,
+    "uncompressed_size": 37490
+  }
+}

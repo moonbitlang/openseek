@@ -1,0 +1,37 @@
+{
+  "archive": "fixtures/sources/libzip/regress/testdir.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Apr-24",
+      "mod_time": "17:12",
+      "mode": "drwxrwxr-x",
+      "name": "testdir/",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Apr-24",
+      "mod_time": "17:12",
+      "mode": "drwxrwxr-x",
+      "name": "testdir-noslash/",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 0,
+    "compression_ratio": "0.0%",
+    "entries": 2,
+    "file_size": 222,
+    "uncompressed_size": 0
+  }
+}

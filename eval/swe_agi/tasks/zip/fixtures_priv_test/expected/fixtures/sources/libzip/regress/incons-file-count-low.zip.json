@@ -1,0 +1,49 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-file-count-low.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 8,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "15-Apr-22",
+      "mod_time": "10:45",
+      "mode": "-rw-rw-rw-",
+      "name": "file1",
+      "uncompressed_size": 8,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 8,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "15-Apr-22",
+      "mod_time": "10:45",
+      "mode": "-rw-rw-rw-",
+      "name": "file2",
+      "uncompressed_size": 8,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 8,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "15-Apr-22",
+      "mod_time": "10:45",
+      "mode": "-rw-rw-rw-",
+      "name": "file3",
+      "uncompressed_size": 8,
+      "version": "2.0"
+    }
+  ],
+  "invalid": true,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 2,
+    "file_size": 304,
+    "uncompressed_size": null
+  }
+}

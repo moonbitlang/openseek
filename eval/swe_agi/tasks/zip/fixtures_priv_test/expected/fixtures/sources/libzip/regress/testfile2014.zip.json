@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/testfile2014.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "14-Aug-05",
+      "mod_time": "20:56",
+      "mode": "-rwxrwxr-x",
+      "name": "testfile.txt",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 0,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 122,
+    "uncompressed_size": 0
+  }
+}

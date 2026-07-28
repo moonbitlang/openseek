@@ -1,0 +1,61 @@
+{
+  "archive": "fixtures/sources/maven/org/apache/commons/commons-build-plugin/1.5/commons-build-plugin-1.5-javadoc.jar",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "15-Nov-25",
+      "mod_time": "17:13",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "bl",
+      "compressed_size": 214,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "15-Nov-25",
+      "mod_time": "17:13",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/MANIFEST.MF",
+      "uncompressed_size": 464,
+      "version": "2.0"
+    },
+    {
+      "attrs": "bl",
+      "compressed_size": 3949,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "15-Nov-25",
+      "mod_time": "16:44",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/LICENSE.txt",
+      "uncompressed_size": 11358,
+      "version": "2.0"
+    },
+    {
+      "attrs": "bl",
+      "compressed_size": 131,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "15-Nov-25",
+      "mod_time": "16:44",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/NOTICE.txt",
+      "uncompressed_size": 181,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 4294,
+    "compression_ratio": "64.2%",
+    "entries": 4,
+    "file_size": 4804,
+    "uncompressed_size": 12003
+  }
+}

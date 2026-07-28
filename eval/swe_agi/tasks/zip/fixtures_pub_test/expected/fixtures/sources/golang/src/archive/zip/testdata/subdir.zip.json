@@ -1,0 +1,49 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/subdir.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "21-Apr-20",
+      "mod_time": "03:29",
+      "mode": "drwxr-x---",
+      "name": "a/",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "21-Apr-20",
+      "mod_time": "03:29",
+      "mode": "drwxr-x---",
+      "name": "a/b/",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "21-Apr-20",
+      "mod_time": "03:29",
+      "mode": "-rw-r-----",
+      "name": "a/b/c",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 0,
+    "compression_ratio": "0.0%",
+    "entries": 3,
+    "file_size": 428,
+    "uncompressed_size": 0
+  }
+}

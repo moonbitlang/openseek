@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/utf8-infozip.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "17-Nov-07",
+      "mod_time": "05:09",
+      "mode": "-rw-r--r--",
+      "name": "\u4e16\u754c",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 0,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 162,
+    "uncompressed_size": 0
+  }
+}

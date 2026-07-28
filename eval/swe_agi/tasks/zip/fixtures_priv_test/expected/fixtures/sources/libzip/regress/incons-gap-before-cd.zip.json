@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-gap-before-cd.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 3,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "24-Jul-27",
+      "mod_time": "20:18",
+      "mode": "-rw-rw-rw-",
+      "name": "test",
+      "uncompressed_size": 3,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 3,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 110,
+    "uncompressed_size": 3
+  }
+}

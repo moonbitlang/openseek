@@ -1,0 +1,37 @@
+{
+  "archive": "fixtures/sources/libzip/regress/firstsecond-split-deflated.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 11,
+      "compression_method": "defN",
+      "host_os": "fat",
+      "mod_date": "12-Apr-28",
+      "mod_time": "11:50",
+      "mode": "-rw----",
+      "name": "first",
+      "uncompressed_size": 9,
+      "version": "0.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 12,
+      "compression_method": "defN",
+      "host_os": "fat",
+      "mod_date": "12-Apr-28",
+      "mod_time": "11:50",
+      "mode": "-rw----",
+      "name": "second",
+      "uncompressed_size": 10,
+      "version": "0.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 2,
+    "file_size": 219,
+    "uncompressed_size": null
+  }
+}

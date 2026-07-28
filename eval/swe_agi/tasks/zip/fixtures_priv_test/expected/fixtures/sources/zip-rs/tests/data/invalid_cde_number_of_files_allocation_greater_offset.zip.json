@@ -1,0 +1,12 @@
+{
+  "archive": "fixtures/sources/zip-rs/tests/data/invalid_cde_number_of_files_allocation_greater_offset.zip",
+  "entries": [],
+  "invalid": true,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 12,
+    "file_size": 124,
+    "uncompressed_size": null
+  }
+}

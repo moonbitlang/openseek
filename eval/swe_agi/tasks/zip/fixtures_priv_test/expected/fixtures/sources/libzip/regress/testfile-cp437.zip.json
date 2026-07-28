@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/testfile-cp437.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "05-Jul-15",
+      "mod_time": "16:37",
+      "mode": "-rwxrwxr-x",
+      "name": "\u00fc\u00e9\u00e2\u00e4\u00e0\u00e5\u00e7\u00ea\u00eb\u00e8\u00ef\u00ee\u00ec\u00c4\u00c5\u00c9",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 0,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 130,
+    "uncompressed_size": 0
+  }
+}

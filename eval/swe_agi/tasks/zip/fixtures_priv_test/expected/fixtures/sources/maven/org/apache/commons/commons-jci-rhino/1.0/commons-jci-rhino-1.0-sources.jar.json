@@ -1,0 +1,157 @@
+{
+  "archive": "fixtures/sources/maven/org/apache/commons/commons-jci-rhino/1.0/commons-jci-rhino-1.0-sources.jar",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "03:46",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 95,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "03:46",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/MANIFEST.MF",
+      "uncompressed_size": 110,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/jci/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/jci/compilers/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 766,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/RhinoCompilationProblem.java",
+      "uncompressed_size": 1913,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 2602,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/RhinoJavaCompiler.java",
+      "uncompressed_size": 9970,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 552,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/RhinoJavaCompilerSettings.java",
+      "uncompressed_size": 987,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 3948,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "LICENSE.txt",
+      "uncompressed_size": 11357,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 151,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Jun-13",
+      "mod_time": "02:46",
+      "mode": "-rw-r--r--",
+      "name": "NOTICE.txt",
+      "uncompressed_size": 212,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 8114,
+    "compression_ratio": "66.9%",
+    "entries": 12,
+    "file_size": 9686,
+    "uncompressed_size": 24549
+  }
+}

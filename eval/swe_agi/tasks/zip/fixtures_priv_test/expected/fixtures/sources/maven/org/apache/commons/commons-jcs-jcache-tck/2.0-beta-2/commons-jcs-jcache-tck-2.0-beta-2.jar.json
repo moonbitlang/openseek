@@ -1,0 +1,133 @@
+{
+  "archive": "fixtures/sources/maven/org/apache/commons/commons-jcs-jcache-tck/2.0-beta-2/commons-jcs-jcache-tck-2.0-beta-2.jar",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "16-Nov-01",
+      "mod_time": "08:26",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "bl",
+      "compressed_size": 647,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "16-Nov-01",
+      "mod_time": "08:26",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/MANIFEST.MF",
+      "uncompressed_size": 1650,
+      "version": "2.0"
+    },
+    {
+      "attrs": "bl",
+      "compressed_size": 518,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "16-Nov-01",
+      "mod_time": "08:26",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/DEPENDENCIES",
+      "uncompressed_size": 1812,
+      "version": "2.0"
+    },
+    {
+      "attrs": "bl",
+      "compressed_size": 3949,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "16-Nov-01",
+      "mod_time": "08:26",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/LICENSE",
+      "uncompressed_size": 11358,
+      "version": "2.0"
+    },
+    {
+      "attrs": "bl",
+      "compressed_size": 136,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "16-Nov-01",
+      "mod_time": "08:26",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/NOTICE",
+      "uncompressed_size": 189,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "16-Nov-01",
+      "mod_time": "08:26",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/maven/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "16-Nov-01",
+      "mod_time": "08:26",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/maven/org.apache.commons/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "16-Nov-01",
+      "mod_time": "08:26",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/maven/org.apache.commons/commons-jcs-jcache-tck/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "bl",
+      "compressed_size": 2003,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "16-Nov-01",
+      "mod_time": "08:20",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/maven/org.apache.commons/commons-jcs-jcache-tck/pom.xml",
+      "uncompressed_size": 8690,
+      "version": "2.0"
+    },
+    {
+      "attrs": "bl",
+      "compressed_size": 125,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "16-Nov-01",
+      "mod_time": "08:26",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/maven/org.apache.commons/commons-jcs-jcache-tck/pom.properties",
+      "uncompressed_size": 137,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 7378,
+    "compression_ratio": "69.0%",
+    "entries": 10,
+    "file_size": 8900,
+    "uncompressed_size": 23836
+  }
+}

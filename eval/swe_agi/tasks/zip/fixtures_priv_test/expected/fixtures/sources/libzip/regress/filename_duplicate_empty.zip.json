@@ -1,0 +1,12 @@
+{
+  "archive": "fixtures/sources/libzip/regress/filename_duplicate_empty.zip",
+  "entries": [],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 12,
+    "compression_ratio": "0.0%",
+    "entries": 2,
+    "file_size": 186,
+    "uncompressed_size": 12
+  }
+}

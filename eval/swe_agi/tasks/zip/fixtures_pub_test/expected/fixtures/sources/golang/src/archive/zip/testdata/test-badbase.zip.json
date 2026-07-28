@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/test-badbase.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 785,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "10-Sep-05",
+      "mod_time": "13:52",
+      "mode": "-rw-r--r--",
+      "name": "gophercolor16x16.png",
+      "uncompressed_size": 785,
+      "version": "3.0"
+    }
+  ],
+  "invalid": true,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 2,
+    "file_size": 1170,
+    "uncompressed_size": null
+  }
+}

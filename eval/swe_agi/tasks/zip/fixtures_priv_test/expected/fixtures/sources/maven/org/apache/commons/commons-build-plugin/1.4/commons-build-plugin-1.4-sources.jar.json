@@ -1,0 +1,169 @@
+{
+  "archive": "fixtures/sources/maven/org/apache/commons/commons-build-plugin/1.4/commons-build-plugin-1.4-sources.jar",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:12",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 208,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:12",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/MANIFEST.MF",
+      "uncompressed_size": 448,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:12",
+      "mode": "?rwsrwsrwt",
+      "name": "resources/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:10",
+      "mode": "drwxr-xr-x",
+      "name": "resources/commons-xdoc-templates/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 300,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:10",
+      "mode": "-rw-r--r--",
+      "name": "resources/commons-xdoc-templates/download-page-body.xml",
+      "uncompressed_size": 1863,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 206,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:10",
+      "mode": "-rw-r--r--",
+      "name": "resources/commons-xdoc-templates/download-page-foot.xml",
+      "uncompressed_size": 377,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1657,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:10",
+      "mode": "-rw-r--r--",
+      "name": "resources/commons-xdoc-templates/download-page-head.xml",
+      "uncompressed_size": 4752,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1818,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:10",
+      "mode": "-rw-r--r--",
+      "name": "resources/commons-xdoc-templates/issue-tracking-template.xml",
+      "uncompressed_size": 5842,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 2151,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:10",
+      "mode": "-rw-r--r--",
+      "name": "resources/commons-xdoc-templates/mail-lists-template.xml",
+      "uncompressed_size": 9647,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1142,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:10",
+      "mode": "-rw-r--r--",
+      "name": "resources/commons-xdoc-templates/no-download-page-template.xml",
+      "uncompressed_size": 3395,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1819,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:10",
+      "mode": "-rw-r--r--",
+      "name": "resources/commons-xdoc-templates/sandbox-issue-tracking-template.xml",
+      "uncompressed_size": 5879,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 3963,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:10",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/LICENSE.txt",
+      "uncompressed_size": 11560,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 135,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Mar-03",
+      "mod_time": "11:10",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/NOTICE.txt",
+      "uncompressed_size": 186,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 13399,
+    "compression_ratio": "69.5%",
+    "entries": 13,
+    "file_size": 15453,
+    "uncompressed_size": 43949
+  }
+}

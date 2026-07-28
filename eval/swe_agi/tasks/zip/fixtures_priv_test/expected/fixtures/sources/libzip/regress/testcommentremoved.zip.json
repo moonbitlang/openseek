@@ -1,0 +1,61 @@
+{
+  "archive": "fixtures/sources/libzip/regress/testcommentremoved.zip",
+  "entries": [
+    {
+      "attrs": "tx",
+      "compressed_size": 24,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "06-Apr-10",
+      "mod_time": "02:42",
+      "mode": "-rw-r--r--",
+      "name": "file1",
+      "uncompressed_size": 24,
+      "version": "2.3"
+    },
+    {
+      "attrs": "tx",
+      "compressed_size": 25,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "06-Apr-10",
+      "mod_time": "02:42",
+      "mode": "-rw-r--r--",
+      "name": "file2",
+      "uncompressed_size": 25,
+      "version": "2.3"
+    },
+    {
+      "attrs": "tx",
+      "compressed_size": 24,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "06-Apr-10",
+      "mod_time": "02:42",
+      "mode": "-rw-r--r--",
+      "name": "file3",
+      "uncompressed_size": 24,
+      "version": "2.3"
+    },
+    {
+      "attrs": "tx",
+      "compressed_size": 25,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "06-Apr-10",
+      "mod_time": "02:42",
+      "mode": "-rw-r--r--",
+      "name": "file4",
+      "uncompressed_size": 25,
+      "version": "2.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 98,
+    "compression_ratio": "0.0%",
+    "entries": 4,
+    "file_size": 640,
+    "uncompressed_size": 98
+  }
+}

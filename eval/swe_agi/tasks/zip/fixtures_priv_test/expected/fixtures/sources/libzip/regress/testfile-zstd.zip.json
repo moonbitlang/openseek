@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/testfile-zstd.zip",
+  "entries": [
+    {
+      "attrs": "t-",
+      "compressed_size": 32,
+      "compression_method": "u093",
+      "host_os": "fat",
+      "mod_date": "20-Jul-18",
+      "mod_time": "13:13",
+      "mode": "-rw-a--",
+      "name": "abac-repeat.txt",
+      "uncompressed_size": 64,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 32,
+    "compression_ratio": "50.0%",
+    "entries": 1,
+    "file_size": 160,
+    "uncompressed_size": 64
+  }
+}

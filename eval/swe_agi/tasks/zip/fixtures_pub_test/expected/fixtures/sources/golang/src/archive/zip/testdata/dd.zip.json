@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/dd.zip",
+  "entries": [
+    {
+      "attrs": "bl",
+      "compressed_size": 24,
+      "compression_method": "defN",
+      "host_os": "fat",
+      "mod_date": "11-Feb-02",
+      "mod_time": "13:06",
+      "mode": "-rw----",
+      "name": "filename",
+      "uncompressed_size": 25,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 24,
+    "compression_ratio": "4.0%",
+    "entries": 1,
+    "file_size": 154,
+    "uncompressed_size": 25
+  }
+}

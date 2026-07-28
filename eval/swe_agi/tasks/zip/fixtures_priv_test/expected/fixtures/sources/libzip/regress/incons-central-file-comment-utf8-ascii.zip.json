@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-central-file-comment-utf8-ascii.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 4,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "24-Aug-03",
+      "mod_time": "07:38",
+      "mode": "-rw-rw-rw-",
+      "name": "test",
+      "uncompressed_size": 4,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 4,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 145,
+    "uncompressed_size": 4
+  }
+}

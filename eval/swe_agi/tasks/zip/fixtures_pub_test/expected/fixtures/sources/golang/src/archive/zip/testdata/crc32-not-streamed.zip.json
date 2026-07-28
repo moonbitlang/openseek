@@ -1,0 +1,37 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/crc32-not-streamed.zip",
+  "entries": [
+    {
+      "attrs": "tx",
+      "compressed_size": 4,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Mar-09",
+      "mod_time": "08:59",
+      "mode": "-rw-r--r--",
+      "name": "foo.txt",
+      "uncompressed_size": 4,
+      "version": "3.0"
+    },
+    {
+      "attrs": "tx",
+      "compressed_size": 4,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Mar-09",
+      "mod_time": "08:59",
+      "mode": "-rw-r--r--",
+      "name": "bar.txt",
+      "uncompressed_size": 4,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 8,
+    "compression_ratio": "0.0%",
+    "entries": 2,
+    "file_size": 314,
+    "uncompressed_size": 8
+  }
+}

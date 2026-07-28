@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-ef-local-dupe-utf8name.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 4,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "24-Jul-28",
+      "mod_time": "10:49",
+      "mode": "-rw-rw-rw-",
+      "name": "test",
+      "uncompressed_size": 4,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 4,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 140,
+    "uncompressed_size": 4
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-local-compsize-smaller.zip",
+  "entries": [
+    {
+      "attrs": "tx",
+      "compressed_size": 5,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Apr-24",
+      "mod_time": "20:42",
+      "mode": "-rw-rw-r--",
+      "name": "aaaaaaaaa",
+      "uncompressed_size": 8,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 5,
+    "compression_ratio": "37.5%",
+    "entries": 1,
+    "file_size": 173,
+    "uncompressed_size": 8
+  }
+}

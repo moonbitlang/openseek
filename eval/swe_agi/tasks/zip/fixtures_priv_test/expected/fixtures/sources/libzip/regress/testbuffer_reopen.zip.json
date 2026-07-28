@@ -1,0 +1,37 @@
+{
+  "archive": "fixtures/sources/libzip/regress/testbuffer_reopen.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 12,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "22-Mar-21",
+      "mod_time": "11:45",
+      "mode": "-rw-rw-r--",
+      "name": "teststring.txt",
+      "uncompressed_size": 12,
+      "version": "6.3"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 11,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "22-Mar-21",
+      "mod_time": "11:45",
+      "mode": "-rw-rw-r--",
+      "name": "newfile.txt",
+      "uncompressed_size": 11,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 23,
+    "compression_ratio": "0.0%",
+    "entries": 2,
+    "file_size": 247,
+    "uncompressed_size": 23
+  }
+}

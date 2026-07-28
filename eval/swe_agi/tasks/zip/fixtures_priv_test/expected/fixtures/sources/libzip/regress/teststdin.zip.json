@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/teststdin.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 54,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "14-Dec-04",
+      "mod_time": "12:33",
+      "mode": "-rw-rw-rw-",
+      "name": "teststring.txt",
+      "uncompressed_size": 54,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 54,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 200,
+    "uncompressed_size": 54
+  }
+}

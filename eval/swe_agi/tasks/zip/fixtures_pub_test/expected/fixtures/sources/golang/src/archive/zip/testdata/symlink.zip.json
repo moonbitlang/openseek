@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/symlink.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 9,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Feb-04",
+      "mod_time": "05:56",
+      "mode": "lrwxrwxrwx",
+      "name": "symlink",
+      "uncompressed_size": 9,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 9,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 173,
+    "uncompressed_size": 9
+  }
+}

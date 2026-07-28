@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/time-winrar.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "fat",
+      "mod_date": "17-Oct-31",
+      "mod_time": "21:11",
+      "mode": "-rw----",
+      "name": "test.txt",
+      "uncompressed_size": 0,
+      "version": "3.1"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 0,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 150,
+    "uncompressed_size": 0
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/test-utf8.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Feb-18",
+      "mod_time": "07:15",
+      "mode": "-rw-rw-r--",
+      "name": "\u00c4\u00d6\u00dc\u00e4\u00f6\u00fc\u00df\u0107\u00e7\u0109\u00e9\u00e8\u00ea\u00eb\u0113",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 0,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 210,
+    "uncompressed_size": 0
+  }
+}

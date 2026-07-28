@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/time-22738.zip",
+  "entries": [
+    {
+      "attrs": "bX",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "fat",
+      "mod_date": "00-Jan-01",
+      "mod_time": "08:00",
+      "mode": "-rw----",
+      "name": "file",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 0,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 140,
+    "uncompressed_size": 0
+  }
+}

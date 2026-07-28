@@ -1,0 +1,12 @@
+{
+  "archive": "fixtures/sources/zip-rs/tests/data/invalid_offset2.zip",
+  "entries": [],
+  "invalid": true,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 10576,
+    "file_size": 117,
+    "uncompressed_size": null
+  }
+}

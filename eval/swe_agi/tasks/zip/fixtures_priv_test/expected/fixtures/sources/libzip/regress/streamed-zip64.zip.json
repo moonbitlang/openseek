@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/streamed-zip64.zip",
+  "entries": [
+    {
+      "attrs": "tl",
+      "compressed_size": 4,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Apr-25",
+      "mod_time": "10:20",
+      "mode": "prw-------",
+      "name": "-",
+      "uncompressed_size": 2,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 1,
+    "file_size": 148,
+    "uncompressed_size": null
+  }
+}

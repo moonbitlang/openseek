@@ -1,0 +1,37 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/test.zip",
+  "entries": [
+    {
+      "attrs": "tx",
+      "compressed_size": 25,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "10-Sep-05",
+      "mod_time": "10:12",
+      "mode": "-rw-r--r--",
+      "name": "test.txt",
+      "uncompressed_size": 26,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 785,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "10-Sep-05",
+      "mod_time": "13:52",
+      "mode": "-rw-r--r--",
+      "name": "gophercolor16x16.png",
+      "uncompressed_size": 785,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 810,
+    "compression_ratio": "0.1%",
+    "entries": 2,
+    "file_size": 1170,
+    "uncompressed_size": 811
+  }
+}

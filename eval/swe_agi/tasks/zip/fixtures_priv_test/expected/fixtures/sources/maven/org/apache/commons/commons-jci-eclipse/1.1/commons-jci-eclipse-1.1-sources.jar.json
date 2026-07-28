@@ -1,0 +1,157 @@
+{
+  "archive": "fixtures/sources/maven/org/apache/commons/commons-jci-eclipse/1.1/commons-jci-eclipse-1.1-sources.jar",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-Oct-09",
+      "mod_time": "16:24",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 212,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Oct-09",
+      "mod_time": "16:24",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/MANIFEST.MF",
+      "uncompressed_size": 454,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Dec-08",
+      "mod_time": "19:00",
+      "mode": "drwxr-xr-x",
+      "name": "org/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Dec-08",
+      "mod_time": "19:00",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Dec-08",
+      "mod_time": "19:00",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Dec-08",
+      "mod_time": "19:00",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/jci/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "13-Oct-08",
+      "mod_time": "11:51",
+      "mode": "drwxr-xr-x",
+      "name": "org/apache/commons/jci/compilers/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 849,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Aug-18",
+      "mod_time": "23:14",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/EclipseCompilationProblem.java",
+      "uncompressed_size": 2287,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 3483,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Aug-21",
+      "mod_time": "14:06",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/EclipseJavaCompiler.java",
+      "uncompressed_size": 16375,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 1197,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Aug-18",
+      "mod_time": "23:14",
+      "mode": "-rw-r--r--",
+      "name": "org/apache/commons/jci/compilers/EclipseJavaCompilerSettings.java",
+      "uncompressed_size": 3724,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 3963,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "07-Apr-13",
+      "mod_time": "06:19",
+      "mode": "-rw-r--r--",
+      "name": "LICENSE.txt",
+      "uncompressed_size": 11558,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 151,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "13-Oct-09",
+      "mod_time": "16:08",
+      "mode": "-rw-r--r--",
+      "name": "NOTICE.txt",
+      "uncompressed_size": 211,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 9855,
+    "compression_ratio": "71.5%",
+    "entries": 12,
+    "file_size": 11439,
+    "uncompressed_size": 34609
+  }
+}

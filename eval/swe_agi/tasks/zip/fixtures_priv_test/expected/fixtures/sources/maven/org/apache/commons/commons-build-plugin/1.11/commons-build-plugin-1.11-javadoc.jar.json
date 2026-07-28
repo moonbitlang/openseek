@@ -1,0 +1,121 @@
+{
+  "archive": "fixtures/sources/maven/org/apache/commons/commons-build-plugin/1.11/commons-build-plugin-1.11-javadoc.jar",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 242,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "19-Aug-30",
+      "mod_time": "10:30",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/MANIFEST.MF",
+      "uncompressed_size": 516,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "19-Aug-30",
+      "mod_time": "10:30",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "19-Aug-30",
+      "mod_time": "10:30",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/maven/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "19-Aug-30",
+      "mod_time": "10:30",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/maven/org.apache.commons/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "19-Aug-30",
+      "mod_time": "10:30",
+      "mode": "drwxr-xr-x",
+      "name": "META-INF/maven/org.apache.commons/commons-build-plugin/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 139,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "19-Aug-30",
+      "mod_time": "10:30",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/NOTICE.txt",
+      "uncompressed_size": 192,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 3949,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "19-Aug-30",
+      "mod_time": "10:30",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/LICENSE.txt",
+      "uncompressed_size": 11358,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 95,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "19-Aug-30",
+      "mod_time": "10:30",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/maven/org.apache.commons/commons-build-plugin/pom.properties",
+      "uncompressed_size": 103,
+      "version": "2.0"
+    },
+    {
+      "attrs": "b-",
+      "compressed_size": 2673,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "19-Aug-30",
+      "mod_time": "08:53",
+      "mode": "-rw-r--r--",
+      "name": "META-INF/maven/org.apache.commons/commons-build-plugin/pom.xml",
+      "uncompressed_size": 9923,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 7098,
+    "compression_ratio": "67.9%",
+    "entries": 9,
+    "file_size": 8410,
+    "uncompressed_size": 22092
+  }
+}

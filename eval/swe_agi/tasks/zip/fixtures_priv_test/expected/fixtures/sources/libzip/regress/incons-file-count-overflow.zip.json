@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-file-count-overflow.zip",
+  "entries": [
+    {
+      "attrs": "t-",
+      "compressed_size": 2,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Feb-27",
+      "mod_time": "14:18",
+      "mode": "prw-------",
+      "name": "-",
+      "uncompressed_size": 2,
+      "version": "3.0"
+    }
+  ],
+  "invalid": true,
+  "summary": {
+    "compressed_size": 2,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 198,
+    "uncompressed_size": 2
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "archive": "fixtures/sources/libzip/regress/manyfiles-zip.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 424771,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "16-Aug-25",
+      "mod_time": "18:39",
+      "mode": "-rw-rw-r--",
+      "name": "manyfiles.zip",
+      "uncompressed_size": 6067810,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 873775,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "16-Aug-25",
+      "mod_time": "19:27",
+      "mode": "-rw-rw-r--",
+      "name": "manyfiles-133000.zip",
+      "uncompressed_size": 11614812,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 435297,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "16-Aug-25",
+      "mod_time": "19:13",
+      "mode": "-rw-rw-r--",
+      "name": "manyfiles-65536.zip",
+      "uncompressed_size": 5744978,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 424814,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "16-Aug-25",
+      "mod_time": "19:31",
+      "mode": "-rw-rw-r--",
+      "name": "manyfiles-zip64-modulo.zip",
+      "uncompressed_size": 6067886,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 424815,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "16-Aug-25",
+      "mod_time": "18:37",
+      "mode": "-rw-rw-r--",
+      "name": "manyfiles-zip64.zip",
+      "uncompressed_size": 6067886,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 424772,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "16-Aug-25",
+      "mod_time": "19:49",
+      "mode": "-rw-rw-r--",
+      "name": "manyfiles-fewer.zip",
+      "uncompressed_size": 6067810,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 424771,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "16-Aug-25",
+      "mod_time": "19:49",
+      "mode": "-rw-rw-r--",
+      "name": "manyfiles-more.zip",
+      "uncompressed_size": 6067810,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 3433015,
+    "compression_ratio": "92.8%",
+    "entries": 7,
+    "file_size": 3434201,
+    "uncompressed_size": 47698992
+  }
+}

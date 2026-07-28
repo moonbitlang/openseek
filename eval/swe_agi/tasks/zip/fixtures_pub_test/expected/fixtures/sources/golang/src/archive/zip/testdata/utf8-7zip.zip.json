@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/utf8-7zip.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "fat",
+      "mod_date": "17-Nov-06",
+      "mod_time": "13:09",
+      "mode": "-rw----",
+      "name": "\u4e16\u754c",
+      "uncompressed_size": 0,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 0,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 146,
+    "uncompressed_size": 0
+  }
+}

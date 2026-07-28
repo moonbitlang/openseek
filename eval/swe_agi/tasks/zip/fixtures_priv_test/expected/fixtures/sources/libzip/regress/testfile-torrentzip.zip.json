@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/testfile-torrentzip.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 2,
+      "compression_method": "defX",
+      "host_os": "fat",
+      "mod_date": "96-Dec-24",
+      "mod_time": "23:32",
+      "mode": "-rw----",
+      "name": "testfile.txt",
+      "uncompressed_size": 0,
+      "version": "0.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 2,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 146,
+    "uncompressed_size": 0
+  }
+}

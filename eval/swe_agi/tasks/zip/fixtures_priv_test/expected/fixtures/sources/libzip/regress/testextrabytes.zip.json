@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/testextrabytes.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "05-Jul-15",
+      "mod_time": "22:37",
+      "mode": "-rw-r--r--",
+      "name": "testfile.txt",
+      "uncompressed_size": 0,
+      "version": "2.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 0,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 160,
+    "uncompressed_size": 0
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/unix.zip",
+  "entries": [
+    {
+      "attrs": "tx",
+      "compressed_size": 8,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "11-Dec-08",
+      "mod_time": "18:04",
+      "mode": "-rw-rw-rw-",
+      "name": "hello",
+      "uncompressed_size": 8,
+      "version": "3.0"
+    },
+    {
+      "attrs": "tx",
+      "compressed_size": 6,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "11-Dec-08",
+      "mod_time": "18:04",
+      "mode": "-rw-rw-rw-",
+      "name": "dir/bar",
+      "uncompressed_size": 6,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "11-Dec-08",
+      "mod_time": "18:08",
+      "mode": "drwxrwxrwx",
+      "name": "dir/empty/",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    },
+    {
+      "attrs": "tx",
+      "compressed_size": 12,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "11-Dec-08",
+      "mod_time": "18:06",
+      "mode": "-r--r--r--",
+      "name": "readonly",
+      "uncompressed_size": 12,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 26,
+    "compression_ratio": "0.0%",
+    "entries": 4,
+    "file_size": 620,
+    "uncompressed_size": 26
+  }
+}

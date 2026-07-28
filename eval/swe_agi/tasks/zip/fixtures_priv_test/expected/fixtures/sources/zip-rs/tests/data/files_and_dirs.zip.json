@@ -1,0 +1,49 @@
+{
+  "archive": "fixtures/sources/zip-rs/tests/data/files_and_dirs.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 18,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "19-Jan-27",
+      "mod_time": "22:07",
+      "mode": "-rw-r--r--",
+      "name": "file0.txt",
+      "uncompressed_size": 18,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "19-Jan-27",
+      "mod_time": "22:07",
+      "mode": "drwxr-xr-x",
+      "name": "dir1/",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "19-Jan-27",
+      "mod_time": "22:06",
+      "mode": "drwxr-xr-x",
+      "name": "dir2/",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 18,
+    "compression_ratio": "0.0%",
+    "entries": 3,
+    "file_size": 462,
+    "uncompressed_size": 18
+  }
+}

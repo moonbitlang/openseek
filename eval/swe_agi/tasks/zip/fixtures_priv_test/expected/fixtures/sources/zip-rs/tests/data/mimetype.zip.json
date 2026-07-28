@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/zip-rs/tests/data/mimetype.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 39,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "80-Jan-01",
+      "mod_time": "00:00",
+      "mode": "-rw-r--r--",
+      "name": "mimetype",
+      "uncompressed_size": 39,
+      "version": "4.6"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 39,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 153,
+    "uncompressed_size": 39
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "archive": "fixtures/sources/golang/src/archive/zip/testdata/dupdir.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "fat",
+      "mod_date": "21-Dec-29",
+      "mod_time": "08:00",
+      "mode": "-rw----",
+      "name": "a/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "bX",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "fat",
+      "mod_date": "21-Dec-29",
+      "mod_time": "08:00",
+      "mode": "-rw----",
+      "name": "a/b",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "fat",
+      "mod_date": "21-Dec-29",
+      "mod_time": "08:00",
+      "mode": "-rw----",
+      "name": "a/b/",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    },
+    {
+      "attrs": "bX",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "fat",
+      "mod_date": "21-Dec-29",
+      "mod_time": "08:00",
+      "mode": "-rw----",
+      "name": "a/b/c",
+      "uncompressed_size": 0,
+      "version": "2.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 0,
+    "compression_ratio": "0.0%",
+    "entries": 4,
+    "file_size": 458,
+    "uncompressed_size": 0
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/utf-8-standardization-output.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 30,
+      "compression_method": "stor",
+      "host_os": "fat",
+      "mod_date": "14-Aug-01",
+      "mod_time": "09:26",
+      "mode": "-rw-a--",
+      "name": "ibm437-\u00fc\u00e9\u00e2\u00e4\u00e0\u00e5\u00e7\u00ea\u00eb\u00e8.txt",
+      "uncompressed_size": 30,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 30,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 190,
+    "uncompressed_size": 30
+  }
+}

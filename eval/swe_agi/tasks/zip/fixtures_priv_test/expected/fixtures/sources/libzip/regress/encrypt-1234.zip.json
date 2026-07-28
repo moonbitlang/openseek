@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/encrypt-1234.zip",
+  "entries": [
+    {
+      "attrs": "TX",
+      "compressed_size": 194,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "20-Apr-08",
+      "mod_time": "15:17",
+      "mode": "-rw-r--r--",
+      "name": "sample.txt",
+      "uncompressed_size": 282,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 182,
+    "compression_ratio": "35.5%",
+    "entries": 1,
+    "file_size": 380,
+    "uncompressed_size": 282
+  }
+}

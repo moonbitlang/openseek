@@ -1,0 +1,49 @@
+{
+  "archive": "fixtures/sources/libzip/regress/zipcmp_zip_dir.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "21-Jan-14",
+      "mod_time": "18:18",
+      "mode": "drwxrwxr-x",
+      "name": "empty-dir/",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    },
+    {
+      "attrs": "tx",
+      "compressed_size": 1,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "21-Jan-14",
+      "mod_time": "18:18",
+      "mode": "-rw-rw-r--",
+      "name": "dir-with-file/a",
+      "uncompressed_size": 1,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 0,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "21-Jan-14",
+      "mod_time": "19:11",
+      "mode": "drwxrwxr-x",
+      "name": "00-empty-dir/",
+      "uncompressed_size": 0,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 1,
+    "compression_ratio": "0.0%",
+    "entries": 3,
+    "file_size": 483,
+    "uncompressed_size": 1
+  }
+}

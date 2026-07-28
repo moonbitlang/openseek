@@ -1,0 +1,15 @@
+This zip task includes third-party fixtures collected from multiple upstream sources.
+
+The fixture sources include CPython zipfile regression data, Go archive/zip testdata,
+libzip regression files, libarchive tests, zip-rs test data, and Maven Central JAR
+artifacts. Source lists are documented in the fixture README and manifest files.
+
+Local license files for key fixture source projects are available under:
+- zip/licenses/LICENSE_GOLANG_GO
+- zip/licenses/LICENSE_LIBZIP
+- zip/licenses/COPYING_LIBARCHIVE
+- zip/licenses/LICENSE_ZIP_RS
+- python/LICENSE (for CPython-derived fixture sources)
+
+Maven Central fixture artifacts may carry per-artifact licenses in upstream metadata
+or embedded files. See THIRD_PARTY_LICENSES for current inventory status and TODOs.

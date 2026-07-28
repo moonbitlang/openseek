@@ -1,0 +1,37 @@
+{
+  "archive": "fixtures/sources/libzip/regress/firstsecond.zip",
+  "entries": [
+    {
+      "attrs": "t-",
+      "compressed_size": 18,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "12-Apr-28",
+      "mod_time": "11:50",
+      "mode": "-rw-rw-r--",
+      "name": "firstsecond",
+      "uncompressed_size": 19,
+      "version": "3.0"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 19,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "12-Apr-28",
+      "mod_time": "17:50",
+      "mode": "-rw-rw-r--",
+      "name": "firstsecondstored",
+      "uncompressed_size": 19,
+      "version": "3.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 37,
+    "compression_ratio": "2.6%",
+    "entries": 2,
+    "file_size": 319,
+    "uncompressed_size": 38
+  }
+}

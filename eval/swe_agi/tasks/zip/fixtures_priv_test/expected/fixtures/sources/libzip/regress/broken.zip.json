@@ -1,0 +1,85 @@
+{
+  "archive": "fixtures/sources/libzip/regress/broken.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 10240,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "05-Jan-12",
+      "mod_time": "05:01",
+      "mode": "-rw-r--r--",
+      "name": "storedok",
+      "uncompressed_size": 10240,
+      "version": "2.3"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 10240,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "05-Jan-12",
+      "mod_time": "05:01",
+      "mode": "-rw-r--r--",
+      "name": "storedcrcerror",
+      "uncompressed_size": 10240,
+      "version": "2.3"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 13436,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "05-Jan-12",
+      "mod_time": "05:02",
+      "mode": "-rw-r--r--",
+      "name": "deflateok",
+      "uncompressed_size": 43133,
+      "version": "2.3"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 13436,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "05-Jan-12",
+      "mod_time": "05:02",
+      "mode": "-rw-r--r--",
+      "name": "deflatecrcerror",
+      "uncompressed_size": 43133,
+      "version": "2.3"
+    },
+    {
+      "attrs": "bx",
+      "compressed_size": 13436,
+      "compression_method": "defX",
+      "host_os": "unx",
+      "mod_date": "05-Jan-12",
+      "mod_time": "05:02",
+      "mode": "-rw-r--r--",
+      "name": "deflatezliberror",
+      "uncompressed_size": 43133,
+      "version": "2.3"
+    },
+    {
+      "attrs": "BX",
+      "compressed_size": 13467,
+      "compression_method": "defN",
+      "host_os": "unx",
+      "mod_date": "05-Jan-12",
+      "mod_time": "05:02",
+      "mode": "-rw-r--r--",
+      "name": "cryptok",
+      "uncompressed_size": 43133,
+      "version": "2.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 74243,
+    "compression_ratio": "61.5%",
+    "entries": 6,
+    "file_size": 75091,
+    "uncompressed_size": 193012
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-ef-central-size-wrong.zip",
+  "entries": [
+    {
+      "attrs": "bx",
+      "compressed_size": 6,
+      "compression_method": "defN",
+      "host_os": "fat",
+      "mod_date": "12-Apr-26",
+      "mod_time": "16:29",
+      "mode": "-rw----",
+      "name": "testfile.txt",
+      "uncompressed_size": 4,
+      "version": "0.0"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": 1,
+    "file_size": 151,
+    "uncompressed_size": null
+  }
+}

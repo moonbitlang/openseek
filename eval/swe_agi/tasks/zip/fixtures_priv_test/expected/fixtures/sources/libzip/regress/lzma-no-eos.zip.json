@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/lzma-no-eos.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 201,
+      "compression_method": "lzma",
+      "host_os": "fat",
+      "mod_date": "17-Jul-28",
+      "mod_time": "18:38",
+      "mode": "-rw-a--",
+      "name": "testfile-with-eos.data",
+      "uncompressed_size": 206,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 201,
+    "compression_ratio": "2.4%",
+    "entries": 1,
+    "file_size": 343,
+    "uncompressed_size": 206
+  }
+}

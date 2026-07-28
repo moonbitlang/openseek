@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/aaaaaaaa-stored.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 8,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "25-Mar-01",
+      "mod_time": "14:35",
+      "mode": "-rw-rw-rw-",
+      "name": "aaaaaaaa.txt",
+      "uncompressed_size": 8,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 8,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 130,
+    "uncompressed_size": 8
+  }
+}

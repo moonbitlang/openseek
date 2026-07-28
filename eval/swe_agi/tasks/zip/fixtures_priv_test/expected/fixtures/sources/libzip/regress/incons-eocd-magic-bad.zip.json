@@ -1,0 +1,12 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-eocd-magic-bad.zip",
+  "entries": [],
+  "invalid": true,
+  "summary": {
+    "compressed_size": null,
+    "compression_ratio": null,
+    "entries": null,
+    "file_size": null,
+    "uncompressed_size": null
+  }
+}

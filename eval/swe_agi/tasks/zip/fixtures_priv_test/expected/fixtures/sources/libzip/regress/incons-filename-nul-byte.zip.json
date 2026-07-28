@@ -1,0 +1,25 @@
+{
+  "archive": "fixtures/sources/libzip/regress/incons-filename-nul-byte.zip",
+  "entries": [
+    {
+      "attrs": "b-",
+      "compressed_size": 4,
+      "compression_method": "stor",
+      "host_os": "unx",
+      "mod_date": "24-Jul-28",
+      "mod_time": "10:36",
+      "mode": "-rw-rw-rw-",
+      "name": "te\u0000t",
+      "uncompressed_size": 4,
+      "version": "6.3"
+    }
+  ],
+  "invalid": false,
+  "summary": {
+    "compressed_size": 4,
+    "compression_ratio": "0.0%",
+    "entries": 1,
+    "file_size": 110,
+    "uncompressed_size": 4
+  }
+}
