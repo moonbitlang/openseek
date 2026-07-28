@@ -11,36 +11,75 @@ impl Show for EngineError with fn output(self, logger) {
 }
 
 ///|
-pub(all) struct WslRequest {
+/// The engine-host input `settings_wsl_request` builds from the stored
+/// settings; requests no longer carry it.
+priv struct WslRequest {
   distro : String?
   engine : String?
 }
 
 ///|
+const SubmissionIdMaxBytes = 128
+
+///|
+/// Keep client correlation bounded before it enters live-run state or an
+/// outbound notification. Valid ids remain opaque — whitespace around a
+/// non-blank id is significant and therefore echoed unchanged.
+fn normalize_submission_id(submission_id : String?) -> String? {
+  guard submission_id is Some(submission_id) && !submission_id.trim().is_empty() else {
+    return None
+  }
+  let mut byte_length = 0
+  for char in submission_id {
+    let codepoint = char.to_int()
+    let width = if codepoint <= 127 {
+      1
+    } else if codepoint <= 2047 {
+      2
+    } else if codepoint <= 65535 {
+      3
+    } else {
+      4
+    }
+    byte_length = byte_length + width
+    if byte_length > SubmissionIdMaxBytes {
+      return None
+    }
+  }
+  Some(submission_id)
+}
+
+///|
+/// The endpoint (provider, credentials) and the WSL preference are the
+/// host-owned settings' business — a start names only the work and where it
+/// runs.
 pub(all) struct StartRequest {
   task : String
-  api_key : String?
-  api_url : String?
+  // Optional client-minted lifecycle identity echoed with `agent.started`.
+  // The host ignores blank ids and ids longer than 128 UTF-8 bytes; accepted
+  // values are opaque and echoed unchanged.
+  submission_id : String?
   model : String?
   max_steps : Int?
   session : String?
-  session_root : String?
   // A registered workspace directory to run in: the engine works in the
   // project itself and the session's durable record lands in its in-project
-  // store. Overrides the derived scratch cwd and `session_root`.
+  // store. Overrides the derived scratch cwd and store lookup.
   workspace : String?
-  wsl : WslRequest?
 }
 
 ///|
 pub(all) struct CancelRequest {
-  run_id : Int?
+  run_id : String?
 }
 
 ///|
 pub(all) struct SteerRequest {
   text : String
-  run_id : Int?
+  run_id : String?
+  // Optional client-minted lifecycle identity echoed on the matching steer
+  // receipt. The same 128-byte, non-blank boundary as StartRequest applies.
+  submission_id : String?
 }
 
 ///|
@@ -52,13 +91,9 @@ pub(all) struct CompactRequest {
   // The same engine settings a start carries (minus the task): a conversation
   // resumed after a restart has no live serve process, and compacting it
   // spawns one on the durable session with exactly these settings.
-  api_key : String?
-  api_url : String?
   model : String?
   max_steps : Int?
-  session_root : String?
   workspace : String?
-  wsl : WslRequest?
 }
 
 ///|
@@ -71,7 +106,7 @@ pub(all) struct LoadSessionRequest {
 
 ///|
 struct StartReply {
-  run_id : Int
+  run_id : String
   status : String
   exit_code : Int
 } derive(ToJson)
@@ -79,13 +114,13 @@ struct StartReply {
 ///|
 struct CancelReply {
   cancelled : Bool
-  run_id : Int?
+  run_id : String?
 } derive(ToJson)
 
 ///|
 struct SteerReply {
   steered : Bool
-  run_id : Int?
+  run_id : String?
 } derive(ToJson)
 
 ///|
@@ -93,11 +128,6 @@ struct CompactReply {
   // Whether the compaction command reached a live engine for this
   // conversation; the engine reports the actual progress through events.
   compacting : Bool
-} derive(ToJson)
-
-///|
-struct PumpReply {
-  disconnected : Bool
 } derive(ToJson)
 
 ///|
@@ -128,6 +158,10 @@ struct WorkspacesReply {
 ///|
 struct LoadSessionReply {
   session : Json
+  // The highest event sequence contained in `session` — the client's
+  // starting watermark: `session.event` commits at or below it are already
+  // in the snapshot, and the first fresh commit is watermark + 1.
+  watermark : Int
 } derive(ToJson)
 
 ///|
@@ -137,8 +171,9 @@ struct ConnectedPayload {
 
 ///|
 struct StartedPayload {
-  run_id : Int
+  run_id : String
   task : String
+  submission_id : String?
   engine : String
   model : String
   max_steps : Int
@@ -149,7 +184,9 @@ struct StartedPayload {
 
 ///|
 struct EventPayload {
-  run_id : Int
+  // The run this event belongs to — absent for events the engine emits
+  // before any run of this process's lifetime (a spawn for compaction).
+  run_id : String?
   // The conversation the event belongs to (the engine's session key, "" for
   // a session-less engine). Idle events — the compaction lifecycle and
   // background notices — are routed by it: run-id routing needs a `Started`
@@ -161,18 +198,48 @@ struct EventPayload {
 
 ///|
 pub struct FinishedPayload {
-  run_id : Int
+  run_id : String
   status : String
   answer : String?
   exit_code : Int?
+  // Present only after the host's follower completed its final durable scan.
+  // An abnormal process exit may have no Terminal item; this sequence is the
+  // exact chronology boundary clients can safely attach local notices to.
+  durable_sequence : Int?
 } derive(ToJson)
 
 ///|
 struct ErrorPayload {
-  run_id : Int?
+  run_id : String?
   message : String
   exit_code : Int?
   diagnostics : String?
+} derive(ToJson)
+
+///|
+/// One durably committed session event, broadcast as `session.event`. The
+/// canonical transcript channel: a commit exists if and only if its item is
+/// in the session's store file, and `sequence` is the item's one-based
+/// position there — contiguous per session, so a client can apply commits
+/// with a plain watermark (drop ≤ W, apply W+1, anything later is a gap and
+/// means reload). `event` is the store's event JSON verbatim
+/// (`{"sequence", "ts", "item"}`), exactly what a `session.load` snapshot
+/// carries in its `events` array.
+struct SessionCommitPayload {
+  session : String
+  sequence : Int
+  event : Json
+} derive(ToJson)
+
+///|
+/// A lifecycle finish emitted before a stubborn child could be reaped is
+/// later strengthened by this non-lifecycle boundary notification. Keeping it
+/// distinct avoids a second Finished (and duplicate system/client terminal
+/// side effects) for the same run.
+struct DurableBoundaryPayload {
+  run_id : String
+  session : String
+  sequence : Int
 } derive(ToJson)
 
 ///|
@@ -182,6 +249,8 @@ pub(all) enum EngineEvent {
   StreamEvent(EventPayload)
   Error(ErrorPayload)
   Finished(FinishedPayload)
+  SessionCommit(SessionCommitPayload)
+  DurableBoundary(DurableBoundaryPayload)
 }
 
 ///|
@@ -218,7 +287,7 @@ async fn emit(sink : EventSink, event : EngineEvent) -> Unit {
 async fn emit_error(
   sink : EventSink,
   message : String,
-  run_id? : Int,
+  run_id? : String,
   exit_code? : Int,
   diagnostics? : String,
 ) -> Unit {
@@ -228,10 +297,30 @@ async fn emit_error(
 ///|
 async fn emit_finished(
   sink : EventSink,
-  run_id : Int,
+  run_id : String,
   status : RunStatus,
   answer? : String,
   exit_code? : Int,
+  durable_sequence? : Int,
 ) -> Unit {
-  emit(sink, Finished({ run_id, status: status.wire(), answer, exit_code }))
+  emit(
+    sink,
+    Finished({
+      run_id,
+      status: status.wire(),
+      answer,
+      exit_code,
+      durable_sequence,
+    }),
+  )
+}
+
+///|
+async fn emit_durable_boundary(
+  sink : EventSink,
+  run_id : String,
+  session : String,
+  sequence : Int,
+) -> Unit {
+  emit(sink, DurableBoundary({ run_id, session, sequence }))
 }

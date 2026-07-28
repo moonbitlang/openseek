@@ -6,13 +6,13 @@ import {
 }
 
 // Values
-pub async fn add_workspace(String) -> Array[String]
+pub async fn add_workspace(String, (Array[String]) -> Unit) -> Array[String]
 
-pub async fn archive_session(EngineManager, String) -> SessionsReply
+pub async fn archive_session(EngineManager, String, () -> Unit) -> SessionsReply
 
-pub async fn archived_sessions(EngineManager) -> SessionsReply
+pub async fn archived_sessions(EngineManager, (String) -> Unit) -> SessionsReply
 
-pub async fn attach_workspace(String) -> WorkspacesReply
+pub async fn attach_workspace(String, (Array[String]) -> Unit) -> WorkspacesReply
 
 pub async fn attached_workspace_dir(String) -> @path.Path?
 
@@ -20,7 +20,7 @@ pub async fn cancel_run(EngineManager, CancelRequest) -> CancelReply
 
 pub async fn compact_run(EngineManager, CompactRequest) -> CompactReply
 
-pub async fn detach_workspace(String) -> WorkspacesReply
+pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) -> WorkspacesReply
 
 pub async fn engine_command(String) -> String
 
@@ -30,25 +30,29 @@ pub async fn list_workspaces() -> WorkspacesReply
 
 pub async fn load_session(EngineManager, LoadSessionRequest) -> LoadSessionReply
 
-pub fn new_engine_manager(String, runtime_dir? : @path.Path) -> EngineManager
+pub fn new_engine_actor(String, runtime_dir? : @path.Path) -> EngineActor
 
 pub fn open_target(String, String) -> String
 
 pub async fn registered_workspaces() -> Array[String]
 
-pub async fn remove_workspace(String) -> Array[String]
+pub async fn remote_server_base(EngineManager) -> String?
+
+pub async fn remove_workspace(String, (Array[String]) -> Unit) -> Array[String]
 
 pub async fn resolve_in_workspace(String, String, workspace? : String) -> @path.Path?
 
-pub async fn run_engine_pump(EventSink, EngineManager) -> PumpReply
-
 pub async fn session_cwd(String) -> String
+
+pub async fn settings_status(EngineManager) -> Json
 
 pub async fn start_run(EventSink, EngineManager, StartRequest) -> StartReply
 
 pub async fn steer_run(EngineManager, SteerRequest) -> SteerReply
 
-pub async fn unarchive_session(EngineManager, String) -> SessionsReply
+pub async fn unarchive_session(EngineManager, String, () -> Unit) -> SessionsReply
+
+pub async fn update_settings(EngineManager, SettingsPatch, on_committed? : (Json) -> Unit) -> Json
 
 pub fn workspace_session_root(@path.Path) -> @path.Path
 
@@ -61,23 +65,25 @@ pub(all) suberror EngineError {
 type CancelReply derive(ToJson)
 
 pub(all) struct CancelRequest {
-  run_id : Int?
+  run_id : String?
 }
 
 type CompactReply derive(ToJson)
 
 pub(all) struct CompactRequest {
   session : String
-  api_key : String?
-  api_url : String?
   model : String?
   max_steps : Int?
-  session_root : String?
   workspace : String?
-  wsl : WslRequest?
 }
 
 type ConnectedPayload derive(ToJson)
+
+type DurableBoundaryPayload derive(ToJson)
+
+type EngineActor
+pub fn EngineActor::manager(Self) -> EngineManager
+pub async fn EngineActor::run(Self, EventSink, (String) -> Unit) -> Unit
 
 pub(all) enum EngineEvent {
   Connected(ConnectedPayload)
@@ -85,6 +91,8 @@ pub(all) enum EngineEvent {
   StreamEvent(EventPayload)
   Error(ErrorPayload)
   Finished(FinishedPayload)
+  SessionCommit(SessionCommitPayload)
+  DurableBoundary(DurableBoundaryPayload)
 }
 
 type EngineManager
@@ -96,10 +104,11 @@ type EventPayload derive(ToJson)
 pub(all) struct EventSink(async (EngineEvent) -> Unit)
 
 pub struct FinishedPayload {
-  run_id : Int
+  run_id : String
   status : String
   answer : String?
   exit_code : Int?
+  durable_sequence : Int?
 } derive(ToJson)
 
 type LoadSessionReply derive(ToJson)
@@ -109,24 +118,29 @@ pub(all) struct LoadSessionRequest {
   workspace : String?
 }
 
-type PumpReply derive(ToJson)
+type SessionCommitPayload derive(ToJson)
 
 type SessionGroup derive(ToJson)
 
 type SessionsReply derive(ToJson)
 
+pub(all) struct SettingsPatch {
+  provider : String?
+  custom_api_url : String?
+  deepseek_api_key : String?
+  custom_api_key : String?
+  wsl : WslPatch?
+}
+
 type StartReply derive(ToJson)
 
 pub(all) struct StartRequest {
   task : String
-  api_key : String?
-  api_url : String?
+  submission_id : String?
   model : String?
   max_steps : Int?
   session : String?
-  session_root : String?
   workspace : String?
-  wsl : WslRequest?
 }
 
 type StartedPayload derive(ToJson)
@@ -135,12 +149,14 @@ type SteerReply derive(ToJson)
 
 pub(all) struct SteerRequest {
   text : String
-  run_id : Int?
+  run_id : String?
+  submission_id : String?
 }
 
 type WorkspacesReply derive(ToJson)
 
-pub(all) struct WslRequest {
+pub(all) struct WslPatch {
+  enabled : Bool
   distro : String?
   engine : String?
 }

@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/tunnel"
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum Frame {
+  Register(token~ : String, name~ : String)
+  Registered(device~ : String)
+  Open(stream~ : String)
+  Fail(message~ : String)
+}
+pub fn Frame::decode(String) -> Self?
+pub fn Frame::encode(Self) -> String
+
+// Type aliases
+
+// Traits
+

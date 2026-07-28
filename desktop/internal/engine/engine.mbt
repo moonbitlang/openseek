@@ -18,13 +18,231 @@
 priv struct ServeEngine {
   // The conversation this process serves: its slot in the manager's map.
   session_key : String
+  // Canonical durable store selected from host-owned workspace state when
+  // this process was spawned. Workspace detach uses this placement to close
+  // idle writers before hiding their store, and to refuse while one is busy.
+  session_root : @path.Path?
   // Fingerprint of the config this process was spawned with; a prompt whose
   // config differs cannot reuse it.
   spec_key : String
   writer : @process.WriteToProcess
-  mut latest_run : Int
+  // Every JSONL command shares one byte stream. Requests run concurrently,
+  // so the lock covers a complete write (and steer bookkeeping tied to that
+  // write) to keep commands whole and define their receipt order.
+  command_lock : @async.Mutex
+  process : @process.Process
+  sink : EventSink
+  // Exact follower generation established for this writer. Cleanup never
+  // performs a session-key lookup that could stop a successor generation.
+  follower : SessionFollower?
+  // Level-triggered process-exit latch. Closing stdin only asks `serve` to
+  // finish; replacement and archive wait on this state before they drain
+  // the follower or touch the durable record. The stdout consumer publishes
+  // it only after the child has really exited and its slot has been cleared.
+  exit : EngineExit
+  // The id of the run this engine saw most recently; None before the first
+  // prompt of this process's lifetime (a spawn for compaction, or events
+  // arriving before any turn opened).
+  mut latest_run : String?
   mut phase : EnginePhase
+  // False as soon as a command write is interrupted/fails or shutdown begins.
+  // The handle remains in its slot until EOF proves the child is gone, but no
+  // request may reuse its potentially partial JSONL stream in that interval.
+  mut accepts_commands : Bool
   steer_runs : SteerRunTracker
+}
+
+///|
+/// Grace period for serve to honor stdin EOF, followed by the deadline for
+/// its configured cancellation handler (SIGTERM, then a hard kill) and the
+/// stdout consumer to observe/reap that exit.
+const ServeCloseGraceMs = 2000
+
+///|
+const ServeCancelWaitMs = 3000
+
+///|
+/// A level-triggered EOF latch: any number of current or late waiters see
+/// the same completed state. A consumable queue token would let the first
+/// waiter strand every later lifecycle operation.
+priv struct EngineExit {
+  mut process_done : Bool
+  mut done : Bool
+}
+
+///|
+async fn EngineExit::wait(self : EngineExit) -> Unit {
+  while !self.done {
+    @async.sleep(10)
+  }
+}
+
+///|
+async fn EngineExit::wait_process(self : EngineExit) -> Unit {
+  while !self.process_done {
+    @async.sleep(10)
+  }
+}
+
+///|
+/// Ask a serve process to drain normally, but never let a wedged child pin
+/// the pump or an archive forever. `exit` is published by the stdout
+/// consumer only after `Process::wait`, the owned follower's final scan, and
+/// the engine's terminal lifecycle notifications, so returning from here is
+/// the hard writer-and-event-lifetime barrier.
+async fn ServeEngine::close_and_wait(self : ServeEngine) -> Unit {
+  self.accepts_commands = false
+  // The grace deadline includes waiting for an in-flight command to release
+  // the lock. Otherwise a backpressured write could pin archive/replacement
+  // before their existing process-cancellation fallback is even armed.
+  if @async.with_timeout_opt(ServeCloseGraceMs, () => {
+      self.with_command_lock(() => self.writer.close())
+      self.exit.wait_process()
+    })
+    is Some(_) {
+    // The process deadline must not include the follower's O(history) final
+    // scan. Once EOF is proved, wait for that correctness barrier without
+    // misclassifying a long durable log as a wedged child.
+    self.exit.wait()
+    return
+  }
+  @xlog.warn() <?
+    {
+      "event": "desktop_engine_cancel",
+      "reason": "graceful close timeout",
+      "session": self.session_key,
+      "pid": self.process.pid,
+    }
+  self.process.cancel()
+  guard @async.with_timeout_opt(ServeCancelWaitMs, () => {
+      self.exit.wait_process()
+    })
+    is Some(_) else {
+    raise EngineError("serve engine did not exit after cancellation")
+  }
+  self.exit.wait()
+}
+
+///|
+const FailedCommandFollowerWaitMs = 3000
+
+///|
+/// A command failed or its caller was cancelled after mutating public state or
+/// entering a stdin write. The stream may now contain a partial JSONL frame,
+/// so this handle is made permanently unusable before cleanup can suspend.
+/// Cleanup is cancellation-protected and bounded. It settles the public
+/// lifecycle exactly once through the phase shared with the EOF consumer, but
+/// retires the follower only after `exit` proves the old child is gone; on a
+/// close timeout the slot and follower stay in place so every successor must
+/// first retry the old child's close barrier rather than overlap or reuse it.
+async fn retire_failed_command(
+  manager : EngineManager,
+  engine : ServeEngine,
+  reason : String,
+) -> Unit {
+  // Synchronous and outside the shield on purpose: even a cancellation already
+  // pending at this call boundary can never expose the writer as reusable.
+  engine.accepts_commands = false
+  @async.protect_from_cancel(() => {
+    let exited = try {
+      engine.close_and_wait()
+      true
+    } catch {
+      error => {
+        @xlog.warn() <?
+          {
+            "event": "desktop_engine_cancel",
+            "reason": "failed command shutdown error",
+            "session": engine.session_key,
+            "pid": engine.process.pid,
+          }
+        engine.process.cancel()
+        @xlog.debug() <?
+          {
+            "event": "desktop_failed_command_shutdown_failed",
+            "session": engine.session_key,
+            "error": "\{error}",
+          }
+        false
+      }
+    }
+    match engine.phase {
+      Running(compact_queued~, ..) => {
+        engine.phase = Idle
+        engine.steer_runs.abandon()
+        if engine.latest_run is Some(run_id) {
+          if engine.follower is Some(follower) {
+            follower.expect_durable_finish(run_id)
+          }
+          emit_error(engine.sink, reason, run_id~, exit_code=1)
+          emit_finished(engine.sink, run_id, Failed, exit_code=1)
+        }
+        if compact_queued {
+          emit_compaction_failed(engine.sink, engine, reason)
+        }
+      }
+      Compacting => {
+        engine.phase = Idle
+        emit_compaction_failed(engine.sink, engine, reason)
+      }
+      Idle => ()
+    }
+    // A timed-out child may still emit old terminal events. With no current
+    // run id they remain diagnostics only and cannot settle the lifecycle a
+    // second time after the synthetic terminal above.
+    engine.latest_run = None
+    if exited && engine.exit.done && engine.follower is Some(follower) {
+      let stopped = @async.with_timeout_opt(FailedCommandFollowerWaitMs, () => {
+        stop_follower_instance(manager, follower, writer_exited=true)
+      }) catch {
+        error => {
+          @xlog.debug() <?
+            {
+              "event": "desktop_failed_command_follower_failed",
+              "session": engine.session_key,
+              "error": "\{error}",
+            }
+          Some(())
+        }
+      }
+      if stopped is None {
+        @xlog.debug() <?
+          {
+            "event": "desktop_failed_command_follower_timeout",
+            "session": engine.session_key,
+          }
+      }
+    }
+  })
+}
+
+///|
+/// Serialize one complete stdin action for this serve process. Besides
+/// preventing JSONL byte interleaving, keeping this as the single lock helper
+/// makes cancellation release the lock before callers enter their shutdown or
+/// rollback paths.
+async fn[T] ServeEngine::with_command_lock(
+  self : ServeEngine,
+  action : async () -> T,
+) -> T {
+  self.command_lock.acquire()
+  defer self.command_lock.release()
+  action()
+}
+
+///|
+/// Whether this exact writer still owns its slot in the current pump epoch.
+/// A request can find an engine, suspend on its command lock, and resume after
+/// the pump has installed a successor under the same session key; identity is
+/// the only safe commit-time check in that window.
+fn ServeEngine::is_current(self : ServeEngine, manager : EngineManager) -> Bool {
+  guard self.accepts_commands &&
+    manager.pump is Serving(sessions~) &&
+    sessions.get(self.session_key) is Some(slot) &&
+    slot.engine is Some(current) else {
+    return false
+  }
+  physical_equal(current, self)
 }
 
 ///|
@@ -70,10 +288,16 @@ fn EnginePhase::after_run_close(self : EnginePhase) -> EnginePhase {
 }
 
 ///|
+priv struct TrackedSteer {
+  text : String
+  submission_id : String?
+}
+
+///|
 priv struct SteerRunTracker {
-  mut settling_run : Int?
-  open_steers : Array[String]
-  settling_steers : Array[String]
+  mut settling_run : String?
+  open_steers : Array[TrackedSteer]
+  settling_steers : Array[TrackedSteer]
 }
 
 ///|
@@ -87,28 +311,27 @@ fn SteerRunTracker::begin_run(self : SteerRunTracker) -> Unit {
 }
 
 ///|
-fn SteerRunTracker::record_sent(self : SteerRunTracker, text : String) -> Unit {
-  self.open_steers.push(text)
+fn SteerRunTracker::abandon(self : SteerRunTracker) -> Unit {
+  self.settling_run = None
+  self.open_steers.clear()
+  self.settling_steers.clear()
 }
 
 ///|
-/// Undo a `record_sent` whose write never reached the engine. The steer may
-/// already have been swept into the settling set by a terminal event that
-/// raced the write, so look there first (mirroring `run_id_for_event`).
-fn SteerRunTracker::discard_sent(self : SteerRunTracker, text : String) -> Unit {
-  if remove_first_text(self.settling_steers, text) {
-    if self.settling_steers.is_empty() {
-      self.settling_run = None
-    }
-  } else {
-    ignore(remove_first_text(self.open_steers, text))
-  }
+fn SteerRunTracker::record_sent(
+  self : SteerRunTracker,
+  text : String,
+  submission_id : String?,
+) -> TrackedSteer {
+  let entry : TrackedSteer = { text, submission_id }
+  self.open_steers.push(entry)
+  entry
 }
 
 ///|
 fn SteerRunTracker::record_terminal(
   self : SteerRunTracker,
-  run_id : Int,
+  run_id : String,
 ) -> Unit {
   self.settling_steers.clear()
   if self.open_steers.length() > 0 {
@@ -123,48 +346,129 @@ fn SteerRunTracker::record_terminal(
 }
 
 ///|
-fn SteerRunTracker::run_id_for_event(
+fn SteerRunTracker::route_event(
   self : SteerRunTracker,
   decoded : @event.AgentEvent?,
-  latest_run : Int,
-) -> Int {
+  raw : Json,
+  latest_run : String?,
+) -> (String?, String?) {
   match decoded {
-    Some(SteerApplied(content)) | Some(SteerDropped(content)) => {
-      if remove_first_text(self.settling_steers, content) &&
-        self.settling_run is Some(run_id) {
-        if self.settling_steers.is_empty() {
-          self.settling_run = None
-        }
-        return run_id
-      }
-      ignore(remove_first_text(self.open_steers, content))
-    }
-    _ => {
+    Some(SteerApplied(content)) if is_prompt_steer_applied(raw) =>
+      self.route_receipt(content, latest_run)
+    Some(SteerDropped(content)) => self.route_receipt(content, latest_run)
+    // serve drains every old prompt receipt before beginning the next step.
+    // AgentStep is therefore the explicit boundary after which an absent old
+    // receipt must not steal an equal-text steer from the new run.
+    Some(AgentStep) => {
       self.settling_run = None
       self.settling_steers.clear()
+      (latest_run, None)
     }
+    // Command/notice steer_applied events and unrelated background events may
+    // be interleaved between prompt receipts while serve drains its old input
+    // queue. They neither consume nor clear prompt correlation state.
+    _ => (latest_run, None)
   }
-  latest_run
 }
 
 ///|
-fn remove_first_text(items : Array[String], text : String) -> Bool {
-  for index, item in items {
-    if item == text {
-      ignore(items.remove(index))
-      return true
+fn SteerRunTracker::route_receipt(
+  self : SteerRunTracker,
+  content : String,
+  latest_run : String?,
+) -> (String?, String?) {
+  if take_first_tracked_steer(self.settling_steers, content) is Some(entry) {
+    let run_id = self.settling_run
+    if self.settling_steers.is_empty() {
+      self.settling_run = None
+    }
+    if run_id is Some(_) {
+      return (run_id, entry.submission_id)
     }
   }
-  false
+  if take_first_tracked_steer(self.open_steers, content) is Some(entry) {
+    return (latest_run, entry.submission_id)
+  }
+  (latest_run, None)
 }
 
 ///|
-priv enum PumpCommand {
+/// Older serve peers omitted `kind`, where steer_applied was necessarily a
+/// prompt receipt. New peers also emit command/notice applications with the
+/// same decoded shape; only `kind: "prompt"` owns a desktop steer submission.
+fn is_prompt_steer_applied(raw : Json) -> Bool {
+  guard raw is Object(fields) else { return false }
+  match fields.get("kind") {
+    None | Some(String("prompt")) => true
+    _ => false
+  }
+}
+
+///|
+/// Failure/abort logs whose matching Terminal append is not proven by the
+/// event itself. Setup logs before appending; turn failure and cancellation
+/// catches log even when their best-effort Terminal append also failed. Close
+/// this serve writer and use the follower's EOF scan as the exact boundary
+/// before admitting a successor.
+fn needs_durable_finish_scan(raw : Json) -> Bool {
+  guard raw is Object(fields) else { return false }
+  guard fields.get("event") is Some(String(name)) else { return false }
+  name == "agent_setup_failed" ||
+  name == "turn_failed" ||
+  name == "agent_aborted"
+}
+
+///|
+fn take_first_tracked_steer(
+  items : Array[TrackedSteer],
+  text : String,
+) -> TrackedSteer? {
+  for index, entry in items {
+    if entry.text == text {
+      return Some(items.remove(index))
+    }
+  }
+  None
+}
+
+///|
+/// Add the client correlation id to a matched steer receipt without mutating
+/// the engine-owned JSON object. A legacy submission has no id, so its event
+/// is returned byte-for-shape unchanged.
+fn event_with_submission_id(raw : Json, submission_id : String?) -> Json {
+  guard submission_id is Some(submission_id) && raw is Object(fields) else {
+    return raw
+  }
+  let correlated = fields.copy()
+  correlated["submission_id"] = Json::string(submission_id)
+  Json::object(correlated)
+}
+
+///|
+priv enum EngineActorCommand {
   // Replace the conversation's engine (if any) with one spawned for this
   // config; the queue carries the spawn failure — or None for success —
-  // back to the requesting `start` op.
-  SpawnEngine(RunConfig, @async.Queue[EngineError?])
+  // back to the requesting `start` op. The identity-bearing claim carries
+  // both the pump epoch and exact slot ownership across every suspension.
+  SpawnEngine(PendingClaim, RunConfig, @async.Queue[EngineError?])
 }
+
+///|
+/// Lifecycle commands are rare (only a missing or incompatible per-session
+/// engine spawns one), but the mailbox is bounded so stalled process teardown
+/// can backpressure request tasks instead of growing the host indefinitely.
+const EngineActorQueueSize = 64
+
+///|
+/// A serve process may briefly produce events faster than its sink can publish
+/// them. Backpressure the process stdout at this bound; engine events are
+/// lossless and therefore must never use a discard queue.
+const EngineStreamQueueSize = 256
+
+///|
+/// Delay before starting a fresh process-owning generation after an
+/// unexpected actor failure.
+const EngineActorRestartDelayMs = 1000
 
 ///|
 /// An operation holding a conversation's slot between config validation and
@@ -178,6 +482,17 @@ priv enum PendingOp {
 }
 
 ///|
+/// Identity-bearing ownership of one per-pump slot. The sessions map is the
+/// pump generation; a claim from an old map cannot authorize work in a new
+/// host generation, and identity-scoped release cannot clear another op.
+priv struct PendingClaim {
+  epoch : Map[String, SessionSlot]
+  session_key : String
+  op : PendingOp
+  mut active : Bool
+}
+
+///|
 /// Everything the host tracks for one conversation, in one place. Both
 /// fields are optional and every combination is legal — no engine yet, an
 /// op preparing to spawn one, a live engine idle or mid-turn, an op
@@ -186,7 +501,7 @@ priv enum PendingOp {
 /// the compact-preempts-starting-prompt race came from exactly that split
 /// (a pending-starts set beside the engines map, one checked, one missed).
 priv struct SessionSlot {
-  mut pending : PendingOp?
+  mut pending : PendingClaim?
   mut engine : ServeEngine?
 }
 
@@ -194,20 +509,73 @@ priv struct SessionSlot {
 /// Claim the slot for `op`, refusing when another op already holds it.
 fn SessionSlot::claim(
   self : SessionSlot,
+  epoch : Map[String, SessionSlot],
+  session_key : String,
   op : PendingOp,
-) -> Unit raise EngineError {
+) -> PendingClaim raise EngineError {
   if self.pending is Some(current) {
     raise EngineError(
-      match current {
+      match current.op {
         StartPending =>
           "an OpenSeek run is already starting for this conversation"
         CompactPending =>
           "a compaction is already being requested for this conversation"
-        ArchivePending => "this conversation is being archived"
+        ArchivePending =>
+          "this conversation is moving between live and archived stores"
       },
     )
   }
-  self.pending = Some(op)
+  let claim : PendingClaim = { epoch, session_key, op, active: true }
+  self.pending = Some(claim)
+  claim
+}
+
+///|
+fn PendingClaim::is_current(
+  self : PendingClaim,
+  manager : EngineManager,
+) -> Bool {
+  guard self.active &&
+    manager.pump is Serving(sessions=current_epoch) &&
+    physical_equal(current_epoch, self.epoch) &&
+    self.epoch.get(self.session_key) is Some(slot) &&
+    slot.pending is Some(current) else {
+    return false
+  }
+  physical_equal(current, self)
+}
+
+///|
+fn PendingClaim::require_current(
+  self : PendingClaim,
+  manager : EngineManager,
+) -> Unit raise EngineError {
+  guard self.is_current(manager) else {
+    raise EngineError("engine host restarted while the operation was pending")
+  }
+}
+
+///|
+fn PendingClaim::release(self : PendingClaim, manager : EngineManager) -> Unit {
+  self.active = false
+  if self.epoch.get(self.session_key) is Some(slot) &&
+    slot.pending is Some(current) &&
+    physical_equal(current, self) {
+    slot.pending = None
+  }
+  manager.prune_slot(self.session_key)
+}
+
+///|
+/// Persistent record arbitration lives outside PumpState, so readers and
+/// mutations remain mutually visible while the process pump is restarting.
+/// Loads share the reader side; start/compact hold `active_ops`; a record move
+/// sets `moving` first, blocking newcomers, then waits for both counts to
+/// reach zero.
+priv struct SessionRecordGuard {
+  mut readers : Int
+  mut active_ops : Int
+  mut moving : Bool
 }
 
 ///|
@@ -232,9 +600,166 @@ priv enum PumpState {
 struct EngineManager {
   engine : String
   runtime_dir : @path.Path?
-  commands : @async.Queue[PumpCommand]
+  // Serializes the short placement/slot-claim phase of every operation that
+  // can create or move a workspace-backed record with workspace detach.
+  // Once a claim is visible, detach refuses it; once a run/compaction is
+  // visible in the engine phase, detach refuses that instead. This closes the
+  // gap where the registry could disappear after validation but before the
+  // writer became observable, without serializing whole turns or sessions.
+  workspace_lifecycle_lock : @async.Mutex
+  // Host-owned endpoint settings are a read-modify-write store shared by
+  // every client. The lock covers reads too: on Windows the atomic-save
+  // fallback briefly removes the target before renaming the complete temp
+  // file into place, and a concurrent run configuration must not mistake
+  // that internal window for an empty settings store.
+  settings_lock : @async.Mutex
+  // Connection-visible ordering for successful settings mutations. This is
+  // deliberately process-local: BridgeReady starts a fresh revision epoch
+  // after a host restart, while the credential file's v1 format stays
+  // unchanged.
+  mut settings_revision : Int
+  commands : @async.Queue[EngineActorCommand]
   mut pump : PumpState
-  mut next_run_id : Int
+  // Record arbitration must survive pump replacement: a load started under
+  // generation A is still a reader that generation B's archive must await.
+  record_guards : Map[String, SessionRecordGuard]
+  // One session follower per conversation with a live desktop-managed
+  // writer, keyed by session id — the canonical `session.event` broadcaster
+  // (see follower.mbt). Entries are installed by the spawn path and remove
+  // themselves when their actor retires; stopping the pump clears the map
+  // wholesale (the group's cancellation kills the actors without their
+  // self-removal running).
+  followers : Map[String, SessionFollower]
+}
+
+///|
+/// App-lifetime owner of every desktop-managed engine process. Request tasks
+/// collaborate through `manager`; only `run` creates the structured task
+/// group that owns serve processes and their follower actors.
+struct EngineActor {
+  manager : EngineManager
+}
+
+///|
+fn EngineManager::record_guard(
+  self : EngineManager,
+  session : String,
+) -> SessionRecordGuard {
+  if self.record_guards.get(session) is Some(state) {
+    state
+  } else {
+    let state : SessionRecordGuard = {
+      readers: 0,
+      active_ops: 0,
+      moving: false,
+    }
+    self.record_guards[session] = state
+    state
+  }
+}
+
+///|
+fn EngineManager::prune_record_guard(
+  self : EngineManager,
+  session : String,
+  state : SessionRecordGuard,
+) -> Unit {
+  if state.readers == 0 &&
+    state.active_ops == 0 &&
+    !state.moving &&
+    self.record_guards.get(session) is Some(current) &&
+    physical_equal(current, state) {
+    self.record_guards.remove(session)
+  }
+}
+
+///|
+fn EngineManager::begin_record_read(
+  self : EngineManager,
+  session : String,
+) -> SessionRecordGuard raise EngineError {
+  let state = self.record_guard(session)
+  if state.moving {
+    self.prune_record_guard(session, state)
+    raise EngineError(
+      "this conversation is moving between live and archived stores",
+    )
+  }
+  state.readers = state.readers + 1
+  state
+}
+
+///|
+fn EngineManager::end_record_read(
+  self : EngineManager,
+  session : String,
+  state : SessionRecordGuard,
+) -> Unit {
+  state.readers = state.readers - 1
+  self.prune_record_guard(session, state)
+}
+
+///|
+fn EngineManager::begin_record_op(
+  self : EngineManager,
+  session : String,
+) -> SessionRecordGuard raise EngineError {
+  let state = self.record_guard(session)
+  if state.moving || state.active_ops > 0 {
+    self.prune_record_guard(session, state)
+    raise EngineError(
+      if state.moving {
+        "this conversation is moving between live and archived stores"
+      } else {
+        "another operation is already preparing this conversation"
+      },
+    )
+  }
+  state.active_ops = state.active_ops + 1
+  state
+}
+
+///|
+fn EngineManager::end_record_op(
+  self : EngineManager,
+  session : String,
+  state : SessionRecordGuard,
+) -> Unit {
+  state.active_ops = state.active_ops - 1
+  self.prune_record_guard(session, state)
+}
+
+///|
+fn EngineManager::claim_record_move(
+  self : EngineManager,
+  session : String,
+) -> SessionRecordGuard raise EngineError {
+  let state = self.record_guard(session)
+  if state.moving {
+    self.prune_record_guard(session, state)
+    raise EngineError(
+      "this conversation is already moving between live and archived stores",
+    )
+  }
+  state.moving = true
+  state
+}
+
+///|
+async fn SessionRecordGuard::wait_until_idle(self : SessionRecordGuard) -> Unit {
+  while self.readers > 0 || self.active_ops > 0 {
+    @async.sleep(10)
+  }
+}
+
+///|
+fn EngineManager::release_record_move(
+  self : EngineManager,
+  session : String,
+  state : SessionRecordGuard,
+) -> Unit {
+  state.moving = false
+  self.prune_record_guard(session, state)
 }
 
 ///|
@@ -274,6 +799,71 @@ fn EngineManager::prune_slot(self : EngineManager, key : String) -> Unit {
 }
 
 ///|
+/// Make a workspace safe to remove from the host registry. Callers hold
+/// `workspace_lifecycle_lock`, so no new start/compact/archive claim can
+/// appear between this scan and the registry commit. A pending operation is
+/// refused conservatively even when its record belongs elsewhere: a new
+/// session has no durable path to classify until that operation commits its
+/// host-validated configuration. Busy writers are never detached; idle ones
+/// receive EOF and join their follower's final durable scan first.
+async fn EngineManager::close_engines_for_workspace(
+  self : EngineManager,
+  workspace : @path.Path,
+) -> Unit {
+  guard self.pump is Serving(sessions~) else { return }
+  let root = workspace_session_root(workspace).to_string()
+  let idle : Array[ServeEngine] = []
+  for _, slot in sessions {
+    if slot.pending is Some(_) {
+      raise EngineError(
+        "another conversation operation is still being prepared; wait for it to finish",
+      )
+    }
+    if slot.engine is Some(engine) &&
+      engine.session_root is Some(session_root) &&
+      session_root.to_string() == root {
+      match engine.phase {
+        Running(..) =>
+          raise EngineError(
+            "a conversation in this workspace is still running; stop it first",
+          )
+        Compacting =>
+          raise EngineError(
+            "a conversation in this workspace is compacting; wait for it to finish",
+          )
+        Idle => idle.push(engine)
+      }
+    }
+  }
+  for engine in idle {
+    engine.close_and_wait()
+    // EOF cleanup deliberately keeps a follower alive when its final scan
+    // fails, so another lifecycle operation can retry instead of pretending
+    // the durable tail was drained. Join that exact generation once more and
+    // propagate a repeated failure: hiding the workspace while its actor is
+    // still rooted there would leave a permanent orphan watcher.
+    if engine.follower is Some(follower) {
+      stop_follower_instance(self, follower, writer_exited=true)
+    }
+  }
+  // An abrupt EOF removes its dead ServeEngine after publishing lifecycle,
+  // even when the final durable scan failed. The retryable follower then has
+  // no slot owner for the idle-engine pass above to discover. Drain every
+  // exact follower still rooted in this workspace before the registry commit;
+  // replacement/start cannot install another one while the lifecycle lock is
+  // held, and identity checks make already-retired captures harmless.
+  let retained : Array[SessionFollower] = []
+  for _, follower in self.followers {
+    if follower.root.to_string() == root {
+      retained.push(follower)
+    }
+  }
+  for follower in retained {
+    stop_follower_instance(self, follower, writer_exited=true)
+  }
+}
+
+///|
 priv enum StreamMessage {
   StreamEvent(Json)
   StreamReaderFailed(String)
@@ -281,30 +871,50 @@ priv enum StreamMessage {
 }
 
 ///|
-pub fn new_engine_manager(
+fn new_engine_manager(
   engine : String,
   runtime_dir? : @path.Path,
 ) -> EngineManager {
   {
     engine,
     runtime_dir,
-    commands: Queue(kind=Unbounded),
+    workspace_lifecycle_lock: Mutex(),
+    settings_lock: Mutex(),
+    settings_revision: 0,
+    commands: Queue(kind=Blocking(EngineActorQueueSize)),
     pump: Stopped,
-    next_run_id: 1,
+    record_guards: Map([]),
+    followers: Map([]),
   }
+}
+
+///|
+pub fn new_engine_actor(
+  engine : String,
+  runtime_dir? : @path.Path,
+) -> EngineActor {
+  { manager: new_engine_manager(engine, runtime_dir?) }
+}
+
+///|
+/// The request-side coordination handle belonging to this actor.
+pub fn EngineActor::manager(self : EngineActor) -> EngineManager {
+  self.manager
 }
 
 ///|
 /// The engine that owns the open run `run_id` — or, when no id is given, the
 /// only open run if exactly one exists (with several conversations running
 /// concurrently, an unaddressed cancel/steer would be a guess).
-fn open_run_engine(manager : EngineManager, run_id? : Int) -> ServeEngine? {
+fn open_run_engine(manager : EngineManager, run_id? : String) -> ServeEngine? {
   guard manager.pump is Serving(sessions~) else { return None }
   if run_id is Some(id) {
     for _, slot in sessions {
       if slot.engine is Some(engine) &&
+        engine.accepts_commands &&
         engine.phase is Running(..) &&
-        engine.latest_run == id {
+        engine.latest_run is Some(latest) &&
+        latest == id {
         return Some(engine)
       }
     }
@@ -312,7 +922,9 @@ fn open_run_engine(manager : EngineManager, run_id? : Int) -> ServeEngine? {
   }
   let mut found : ServeEngine? = None
   for _, slot in sessions {
-    if slot.engine is Some(engine) && engine.phase is Running(..) {
+    if slot.engine is Some(engine) &&
+      engine.accepts_commands &&
+      engine.phase is Running(..) {
       if found is Some(_) {
         return None
       }
@@ -347,22 +959,42 @@ async fn read_engine_stdout(
   process : @process.Process,
   messages : @async.Queue[StreamMessage],
 ) -> Unit {
-  @jsonl.each(reader, json => ignore(messages.try_put(StreamEvent(json)))) catch {
+  try {
+    for ;; {
+      guard reader.read_until("\n") is Some(line) else { break }
+      for json in @jsonl.parse(line) {
+        messages.put(StreamEvent(json))
+      }
+    }
+  } catch {
     error if @async.is_being_cancelled() => raise error
     _ => {
       messages.put(StreamReaderFailed("engine wrote malformed JSONL"))
+      @xlog.warn() <?
+        {
+          "event": "desktop_engine_cancel",
+          "reason": "malformed stdout JSONL",
+          "pid": process.pid,
+        }
       process.cancel()
     }
   }
   reader.close()
-  let code = process.wait()
+  // A lifecycle timeout cancels the Process task. Its cancellation handler
+  // does not finish until the child has actually terminated, but the task's
+  // result is `Cancelled` rather than an exit code; normalize that reaped
+  // outcome to -1 so the consumer can still publish the EOF latch.
+  let code = process.wait() catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => -1
+  }
   messages.put(StreamExited(code))
 }
 
 ///|
 async fn handle_decoded_event(
   sink : EventSink,
-  run_id : Int,
+  run_id : String,
   decoded : @event.AgentEvent,
 ) -> Bool {
   match decoded {
@@ -402,54 +1034,172 @@ fn host_reports_terminal_error(decoded : @event.AgentEvent) -> Bool {
 }
 
 ///|
-/// The `connect` op: the long-lived host half of the persistent-engine
-/// design. Lepus runs each IPC request as its own task, so this op's task
-/// group is the only context in which a serve process can outlive individual
-/// `start`/`cancel` calls — the frontend invokes it once at startup and the
-/// call stays open for the app's lifetime. When the webview connection drops
-/// the task group is torn down, taking the engine with it.
-pub async fn run_engine_pump(
+/// Run the engine actor for the app lifetime. A failed process-owning
+/// generation is reported through `on_failed`, then restarted after a short
+/// delay. Closing the app cancels this task, which tears down every child
+/// serve process and follower before the actor returns.
+pub async fn EngineActor::run(
+  self : EngineActor,
   sink : EventSink,
-  manager : EngineManager,
-) -> PumpReply {
+  on_failed : (String) -> Unit,
+) -> Unit {
+  defer {
+    // Refuse a producer that was backpressured on the bounded lifecycle
+    // mailbox, then settle every command that was accepted before closure.
+    self.manager.commands.close()
+    reset_engine_generation(self.manager, Ref(None))
+  }
+  for ;; {
+    let _ = self.run_generation(sink) catch {
+      error if @async.is_being_cancelled() => raise error
+      error => {
+        on_failed("engine host failed: \{error}")
+        @async.sleep(EngineActorRestartDelayMs)
+        continue
+      }
+    }
+    @async.sleep(EngineActorRestartDelayMs)
+  }
+}
+
+///|
+/// One process-owning generation of the engine actor. All children are scoped
+/// to this task group; reset publishes `Stopped` only after they have unwound.
+async fn EngineActor::run_generation(
+  self : EngineActor,
+  sink : EventSink,
+) -> Unit {
+  let manager = self.manager
   guard manager.pump is Stopped else {
     raise EngineError("engine host is already connected")
   }
   let sessions : Map[String, SessionSlot] = Map([])
+  // The pump handles one spawn command at a time. If teardown cancels the
+  // current handler, its ack stays here until the process task group has
+  // completely unwound; only then may the requesting op release its slot
+  // claim. Queued commands are failed by the same reset path.
+  let active_spawn : Ref[@async.Queue[EngineError?]?] = Ref(None)
   fn reset() -> Unit {
-    manager.pump = Stopped
+    reset_engine_generation(manager, active_spawn)
   }
 
   manager.pump = Serving(sessions~)
-  emit(sink, Connected({ ready: true }))
   defer reset()
+  emit(sink, Connected({ ready: true }))
   @async.with_task_group(group => {
     for ;; {
       match manager.commands.get() {
-        SpawnEngine(config, ack) => {
-          // Only this conversation's previous process is replaced; engines
-          // serving other sessions keep running their own turns.
-          let slot = slot_for(sessions, session_key(config))
-          if slot.engine is Some(old) {
-            // Closing stdin is the serve protocol's EOF signal; an idle
-            // engine drains and exits, and its own reader task cleans up.
-            old.writer.close()
-            slot.engine = None
-          }
-          start_serve_engine(sink~, group~, manager~, slot~, config~) catch {
-            error if @async.is_being_cancelled() => raise error
-            error => {
-              manager.prune_slot(session_key(config))
-              ack.put(Some(EngineError("failed to start engine: \{error}")))
-              continue
-            }
-          }
-          ack.put(None)
+        SpawnEngine(claim, config, ack) => {
+          active_spawn.val = Some(ack)
+          let reply = handle_spawn_command(
+            sink~,
+            group~,
+            manager~,
+            sessions~,
+            claim~,
+            config~,
+          )
+          // Clearing ownership and waking the requester are synchronous: a
+          // cancellation cannot land between them and make reset reply twice.
+          active_spawn.val = None
+          ignore(try! ack.try_put(reply))
         }
       }
     }
   })
-  { disconnected: true }
+}
+
+///|
+/// Reset is called only after the pump task group (serve processes and
+/// followers included) has fully terminated. Publish Stopped first, then wake
+/// the shielded current requester and every queued requester with an error;
+/// draining the cross-reconnect queue also prevents a successor pump from
+/// executing commands prepared against the departed sessions map.
+fn reset_engine_generation(
+  manager : EngineManager,
+  active_spawn : Ref[@async.Queue[EngineError?]?],
+) -> Unit {
+  manager.pump = Stopped
+  let stopped = Some(EngineError("engine host stopped before spawn completed"))
+  if active_spawn.val is Some(ack) {
+    ignore(try! ack.try_put(stopped))
+    active_spawn.val = None
+  }
+  while (manager.commands.try_get() catch { _ => None })
+        is Some(SpawnEngine(_, _, ack)) {
+    ignore(try! ack.try_put(stopped))
+  }
+  // Actor defers normally retire themselves. Defensively retire any identity
+  // still present so queued/in-flight load callers are answered and both
+  // control queues close before a successor pump starts.
+  let followers : Array[SessionFollower] = []
+  for _, follower in manager.followers {
+    followers.push(follower)
+  }
+  for follower in followers {
+    retire_follower_actor(manager, follower)
+  }
+}
+
+///|
+/// Install one spawn request without touching its ack. The caller owns ack
+/// completion so cancellation can defer it until the entire pump task group
+/// has unwound; ordinary success/failure replies immediately.
+async fn[G] handle_spawn_command(
+  sink~ : EventSink,
+  group~ : @async.TaskGroup[G],
+  manager~ : EngineManager,
+  sessions~ : Map[String, SessionSlot],
+  claim~ : PendingClaim,
+  config~ : RunConfig,
+) -> EngineError? {
+  guard claim.is_current(manager) && physical_equal(claim.epoch, sessions) else {
+    return Some(EngineError("spawn request belongs to a departed engine host"))
+  }
+  // Only this conversation's previous process is replaced; engines serving
+  // other sessions keep running their own turns.
+  let slot = slot_for(sessions, session_key(config))
+  if slot.engine is Some(old) {
+    // Closing stdin requests EOF; do not overlap the old writer with its
+    // replacement. Its consumer clears the slot before publishing `exited`.
+    old.close_and_wait() catch {
+      error if @async.is_being_cancelled() => raise error
+      error => {
+        manager.prune_slot(session_key(config))
+        return Some(EngineError("failed to stop old engine: \{error}"))
+      }
+    }
+    guard claim.is_current(manager) else {
+      return Some(EngineError("engine host restarted while replacing engine"))
+    }
+  }
+  // The EOF consumer starts follower retirement independently, but
+  // replacement must join that exact drain before initializing the successor,
+  // even when both roots match. This makes one writer plus one follower
+  // generation the indivisible lifecycle unit.
+  stop_follower(manager, session_key(config), writer_exited=true) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => {
+      manager.prune_slot(session_key(config))
+      return Some(EngineError("failed to start engine: \{error}"))
+    }
+  }
+  guard claim.is_current(manager) else {
+    return Some(EngineError("engine host restarted while starting engine"))
+  }
+  start_serve_engine(sink~, group~, manager~, slot~, config~) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => {
+      manager.prune_slot(session_key(config))
+      return Some(EngineError("failed to start engine: \{error}"))
+    }
+  }
+  guard claim.is_current(manager) &&
+    slot.engine is Some(engine) &&
+    engine.accepts_commands else {
+    return Some(EngineError("engine host restarted before engine commit"))
+  }
+  None
 }
 
 ///|
@@ -582,6 +1332,41 @@ async fn[G] start_serve_engine(
   slot~ : SessionSlot,
   config~ : RunConfig,
 ) -> Unit {
+  // Establish and baseline the follower before a child can exist. If this
+  // fails (including a wrong-root predecessor whose final drain failed),
+  // there is no process to leak and no new writer can overlap the old root.
+  let startup_follower = ensure_follower(sink~, group~, manager~, config~)
+  let engine_follower = if config.session is Some(session) {
+    manager.followers.get(session)
+  } else {
+    None
+  }
+  let mut startup_engine : ServeEngine? = None
+  let mut startup_committed = false
+  // Everything through scheduling both stream tasks is one initialization
+  // transaction. This synchronous identity-scoped rollback also runs when
+  // cancellation lands in environment preparation or process spawn; it
+  // never waits on an actor in the task group being cancelled.
+  defer (if !startup_committed {
+    if startup_engine is Some(engine) {
+      engine.writer.close()
+      @xlog.debug() <?
+        {
+          "event": "desktop_engine_cancel",
+          "reason": "startup rollback",
+          "session": engine.session_key,
+          "pid": engine.process.pid,
+        }
+      engine.process.cancel()
+      if slot.engine is Some(current) && physical_equal(current, engine) {
+        slot.engine = None
+        manager.prune_slot(engine.session_key)
+      }
+    }
+    if startup_follower is Some(follower) {
+      discard_follower_startup(manager, follower)
+    }
+  })
   let (child_stdin, writer) = @process.write_to_process()
   let (reader, child_stdout) = @process.read_from_process()
   let (stderr_reader, child_stderr) = @process.read_from_process()
@@ -591,6 +1376,7 @@ async fn[G] start_serve_engine(
   // does not exist on the Windows side, so chdir'ing wsl.exe into it would
   // fail the spawn.
   let spawn_cwd = if config.host is Wsl(..) { None } else { config.cwd }
+  let graceful_cancel = @process.graceful_cancel(timeout=1000)
   @xlog.debug() <?
     {
       "event": "desktop_engine_spawn",
@@ -614,19 +1400,45 @@ async fn[G] start_serve_engine(
     stdout=child_stdout,
     stderr=child_stderr,
     cwd?=spawn_cwd.map(cwd => cwd.to_string().view()),
-    cancel_handler=@process.graceful_cancel(timeout=1000),
+    cancel_handler=CancellationHandler(pid => {
+      @xlog.warn() <?
+        {
+          "event": "desktop_engine_process_task_cancelled",
+          "session_key": session_key(config),
+          "pid": pid,
+        }
+      graceful_cancel(pid)
+    }),
     no_wait=true,
   )
+  @xlog.info() <?
+    {
+      "event": "desktop_engine_spawned",
+      "host": config.host.fingerprint(),
+      "program": program,
+      "session_key": session_key(config),
+      "pid": process.pid,
+    }
   let engine : ServeEngine = {
     session_key: session_key(config),
+    session_root: config.session_root,
     spec_key: engine_fingerprint(config),
     writer,
-    latest_run: 0,
+    command_lock: Mutex(),
+    process,
+    sink,
+    follower: engine_follower,
+    exit: { process_done: false, done: false },
+    latest_run: None,
     phase: Idle,
+    accepts_commands: true,
     steer_runs: SteerRunTracker::new(),
   }
+  startup_engine = Some(engine)
   slot.engine = Some(engine)
-  let messages : @async.Queue[StreamMessage] = Queue(kind=Unbounded)
+  let messages : @async.Queue[StreamMessage] = Queue(
+    kind=Blocking(EngineStreamQueueSize),
+  )
   let stderr_task = group.spawn(no_wait=true) <| () => {
     stderr_reader.read_all().text() catch {
       error if @async.is_being_cancelled() => raise error
@@ -637,8 +1449,9 @@ async fn[G] start_serve_engine(
     read_engine_stdout(reader, process, messages)
   })
   group.spawn_bg(no_wait=true, allow_failure=true, () => {
-    serve_engine_consumer(sink, manager, engine, messages, stderr_task)
+    engine.run(manager, messages, stderr_task)
   })
+  startup_committed = true
 }
 
 ///|
@@ -646,36 +1459,68 @@ async fn[G] start_serve_engine(
 /// raw event to the webview stamped with the engine's current run, close
 /// runs on terminal events, and report a mid-turn death as that run's
 /// failure. Runs until the engine's stdout reader sees EOF.
-async fn serve_engine_consumer(
-  sink : EventSink,
+async fn ServeEngine::run(
+  self : ServeEngine,
   manager : EngineManager,
-  engine : ServeEngine,
   messages : @async.Queue[StreamMessage],
   stderr_task : @async.Task[String],
 ) -> Unit {
+  let engine = self
+  let sink = self.sink
   for ;; {
     match messages.get() {
       StreamEvent(raw) => {
+        // Every stdout event is a hint that the engine may just have
+        // appended to the durable record — the follower's low-latency
+        // wakeup (its poll only backstops this).
+        manager.kick_follower(engine.session_key)
         let decoded = @event.decode_event(raw)
-        let run_id = engine.steer_runs.run_id_for_event(
+        let needs_durable_scan = needs_durable_finish_scan(raw)
+        // These events do not prove their matching Terminal append succeeded.
+        // Synchronously close admission and stdin before the first sink
+        // suspension; the current turn can finish its append/TurnDone, while
+        // the next start is forced through the old child's close/reap barrier
+        // and cancel cannot hit stale active_work.
+        // Deliberately do not wait for command_lock: an in-flight cancel/steer
+        // is exactly what must be cut off. WriteToProcess::close is an
+        // infallible synchronous handle close; a racing write observes its
+        // failure in the command's shielded retirement path.
+        if needs_durable_scan {
+          engine.accepts_commands = false
+          engine.writer.close()
+        }
+        let (run_id, submission_id) = engine.steer_runs.route_event(
           decoded,
+          raw,
           engine.latest_run,
         )
+        // These normalized Finished events cannot carry an exact sequence
+        // yet. The EOF final scan publishes the existing `agent.durable`
+        // boundary before a successor is admitted.
+        if needs_durable_scan &&
+          run_id is Some(id) &&
+          engine.follower is Some(follower) {
+          follower.expect_durable_finish(id)
+        }
+        let raw = event_with_submission_id(raw, submission_id)
         match decoded {
           // The abort the user asked for: report it as a cancellation, the
-          // same wire status the pre-serve host used.
+          // same wire status the pre-serve host used. A Running phase is
+          // only entered after a run id is recorded, so the id is present.
           Some(AgentAborted(_)) if engine.phase
-            is Running(cancel_requested=true, ..) => {
-            emit_error(sink, "cancelled", run_id~)
-            emit_finished(sink, run_id, Cancelled)
+            is Running(cancel_requested=true, ..) &&
+            run_id is Some(id) => {
+            emit_error(sink, "cancelled", run_id=id)
+            emit_finished(sink, id, Cancelled)
             engine.phase = engine.phase.after_run_close()
-            engine.steer_runs.record_terminal(run_id)
+            engine.steer_runs.record_terminal(id)
           }
           Some(decoded) => {
             // Terminal failures are immediately normalized below; forwarding
             // their raw event as well would make the frontend render the same
-            // failure twice.
-            if !host_reports_terminal_error(decoded) {
+            // failure twice. With no run to close (no id recorded yet) the
+            // normalization cannot happen, so the raw event is the report.
+            if !host_reports_terminal_error(decoded) || run_id is None {
               emit(
                 sink,
                 StreamEvent({ run_id, session: engine.session_key, event: raw }),
@@ -695,9 +1540,16 @@ async fn serve_engine_consumer(
               CompactionFinished | CompactionFailed => engine.phase = Idle
               _ => ()
             }
-            if handle_decoded_event(sink, run_id, decoded) {
+            // Terminal normalization is a state transition, not merely a raw
+            // event shape. In particular agent_setup_failed may be followed by
+            // turn_failed when its delayed Terminal append itself fails; once
+            // the first event idled the run, the second is diagnostic only and
+            // must not emit a duplicate Finished for the old run id.
+            if engine.phase is Running(..) &&
+              run_id is Some(id) &&
+              handle_decoded_event(sink, id, decoded) {
               engine.phase = engine.phase.after_run_close()
-              engine.steer_runs.record_terminal(run_id)
+              engine.steer_runs.record_terminal(id)
             }
           }
           None =>
@@ -708,7 +1560,8 @@ async fn serve_engine_consumer(
         }
       }
       StreamReaderFailed(message) => {
-        emit_error(sink, message, run_id=engine.latest_run)
+        engine.accepts_commands = false
+        emit_error(sink, message, run_id?=engine.latest_run)
         // A broken stream can no longer deliver compaction_finished/failed;
         // report the compaction as failed now so the frontend does not stay
         // stuck with Send disabled (the exit branch below then has nothing
@@ -719,22 +1572,62 @@ async fn serve_engine_consumer(
         }
       }
       StreamExited(code) => {
-        // Clear the slot only if the engine in it is still THIS one, by
-        // identity. This consumer outlives its process: by the time the EOF
-        // reaches here, the pump may already have replaced the dying engine
-        // with a respawned ServeEngine for the same session (a config-change
-        // respawn closes the old stdin and installs the successor in the
-        // same slot before the old reader drains). Any by-value comparison
-        // would confuse the two — a same-config respawn shares session_key
-        // AND spec_key — so `physical_equal` (reference identity) is load-
-        // bearing here: it is what stops a dead engine's cleanup from
-        // evicting its live successor.
+        @xlog.info() <?
+          {
+            "event": "desktop_engine_exited",
+            "session": engine.session_key,
+            "pid": engine.process.pid,
+            "exit_code": code,
+            "run_id": engine.latest_run.unwrap_or(""),
+          }
+        engine.accepts_commands = false
+        // Capture ownership only if the slot still contains THIS engine by
+        // identity. Correct replacement waits on this handle through final
+        // drain, but pump teardown and defensive cleanup can still detach it;
+        // a by-value comparison would confuse a same-config successor.
+        let mut owns_slot = false
+        let mut owned_follower : SessionFollower? = None
         if manager.pump is Serving(sessions~) &&
           sessions.get(engine.session_key) is Some(slot) &&
           slot.engine is Some(current) &&
           physical_equal(current, engine) {
-          slot.engine = None
-          manager.prune_slot(engine.session_key)
+          owns_slot = true
+          owned_follower = manager.followers.get(engine.session_key)
+        }
+        // Publish raw process exit before the potentially O(history) follower
+        // scan. Close deadlines cover only child termination; successor and
+        // archive callers still wait on `done` below for the full event and
+        // durable-drain barrier.
+        engine.exit.process_done = true
+        // EOF cleanup always owns an independent retirement attempt. Pending
+        // replacement/archive operations join this same generation when they
+        // need the drain as a barrier; if one of those callers is cancelled,
+        // this consumer still closes the writer/follower lifecycle. Use the
+        // identity captured before clearing the slot, so a delayed cleanup
+        // cannot stop a successor.
+        let mut durable_sequence : Int? = None
+        if owns_slot && owned_follower is Some(follower) {
+          try {
+            stop_follower_instance(manager, follower, writer_exited=true)
+            durable_sequence = Some(follower.watermark)
+          } catch {
+            error if @async.is_being_cancelled() => raise error
+            error => {
+              // This abrupt EOF will emit a Failed without an exact sequence.
+              // Move its durable obligation onto the follower before the
+              // lifecycle event; a later archive/detach Stop can then finish
+              // the failed drain after this dead serve handle leaves its slot.
+              if engine.phase is Running(..) && engine.latest_run is Some(run) {
+                follower.expect_durable_finish(run)
+              }
+              @xlog.debug() <?
+                {
+                  "event": "desktop_follower_final_scan_failed",
+                  "session": engine.session_key,
+                  "error": "\{error}",
+                }
+            }
+          }
         }
         match engine.phase {
           // EOF with a run still open means the engine died mid-turn: close
@@ -746,19 +1639,29 @@ async fn serve_engine_consumer(
               emit_error(
                 sink,
                 "engine exited without a result",
-                run_id=engine.latest_run,
+                run_id?=engine.latest_run,
                 exit_code=code,
               )
             } else {
               emit_error(
                 sink,
                 "engine exited without a result:\n\{diagnostics}",
-                run_id=engine.latest_run,
+                run_id?=engine.latest_run,
                 exit_code=code,
                 diagnostics~,
               )
             }
-            emit_finished(sink, engine.latest_run, Failed, exit_code=code)
+            // A Running phase is only entered after a run id is recorded,
+            // so the id is present here.
+            if engine.latest_run is Some(run) {
+              emit_finished(
+                sink,
+                run,
+                Failed,
+                exit_code=code,
+                durable_sequence?,
+              )
+            }
             // A compaction queued behind the dead turn died with the engine;
             // only a terminal compaction event clears the frontend's queued
             // notice, so synthesize the failure it can no longer send.
@@ -783,9 +1686,28 @@ async fn serve_engine_consumer(
             emit_compaction_failed(sink, engine, reason)
           }
           // A clean exit after a terminal event (session switch, app
-          // shutdown) reports nothing.
+          // shutdown) reports nothing here. A pending exact boundary is
+          // published below for every closed phase, including a setup failure
+          // that had a compaction queued behind it.
           Idle => ()
         }
+        // Keep this exact dead handle in its slot through the final scan and
+        // lifecycle publish. A concurrent start then joins `close_and_wait`
+        // instead of racing the follower stop and announcing its successor
+        // before this run's Finished/boundary. Clear by identity in case an
+        // older host generation already replaced it defensively.
+        if owns_slot &&
+          manager.pump is Serving(sessions~) &&
+          sessions.get(engine.session_key) is Some(slot) &&
+          slot.engine is Some(current) &&
+          physical_equal(current, engine) {
+          slot.engine = None
+          manager.prune_slot(engine.session_key)
+        }
+        // This is the successor-admission barrier, not merely a process-exit
+        // flag. Publish it only after the owned slot is clear, the final
+        // follower scan, and every lifecycle event from this engine.
+        engine.exit.done = true
         break
       }
     }
@@ -834,9 +1756,25 @@ test "terminal failures are normalized by the host" {
 }
 
 ///|
+test "unproven terminal logs require an EOF durable scan" {
+  assert_true(needs_durable_finish_scan({ "event": "agent_setup_failed" }))
+  assert_true(needs_durable_finish_scan({ "event": "turn_failed" }))
+  assert_true(needs_durable_finish_scan({ "event": "agent_aborted" }))
+  assert_false(needs_durable_finish_scan({ "event": "agent_finished" }))
+  assert_false(needs_durable_finish_scan({ "event": "max_steps_exhausted" }))
+}
+
+///|
 test "context yield has a distinct non-success wire status" {
   let status : RunStatus = ContextYield
   assert_eq(status.wire(), "context_yield")
+}
+
+///|
+test "run ids carry 128 bits of cross-host entropy" {
+  let id = mint_run_id()
+  assert_true(id.has_prefix("r"))
+  assert_eq(id.length(), 33)
 }
 
 ///|
@@ -844,12 +1782,13 @@ async test "context yield reports a terminal finished event" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(fn(event) { emitted.push(event) })
   let answer = "[context ceiling] checkpointed"
-  assert_true(handle_decoded_event(sink, 17, ContextYield(answer)))
+  assert_true(handle_decoded_event(sink, "r17", ContextYield(answer)))
   guard emitted is [Finished(payload)] else {
     fail("expected one finished event")
   }
-  assert_eq(payload.run_id, 17)
+  assert_eq(payload.run_id, "r17")
   assert_eq(payload.status, "context_yield")
+  assert_true(payload.durable_sequence is None)
   guard payload.answer is Some(emitted_answer) else {
     fail("expected continuation guidance")
   }
@@ -872,25 +1811,213 @@ test "terminal closure preserves a queued compaction" {
 test "trailing steer settle events keep the terminal run id" {
   let tracker = SteerRunTracker::new()
   tracker.begin_run()
-  tracker.record_sent("old steer")
-  tracker.record_terminal(41)
+  ignore(tracker.record_sent("old steer", Some("submission-old")))
+  tracker.record_terminal("r41")
   tracker.begin_run()
-  tracker.record_sent("fresh steer")
+  ignore(tracker.record_sent("fresh steer", Some("submission-fresh")))
   let old_drop : @event.AgentEvent? = Some(SteerDropped("old steer"))
   let fresh_apply : @event.AgentEvent? = Some(SteerApplied("fresh steer"))
-  assert_eq(tracker.run_id_for_event(old_drop, 42), 41)
-  assert_eq(tracker.run_id_for_event(fresh_apply, 42), 42)
+  assert_eq(
+    tracker.route_event(
+      old_drop,
+      { "event": "steer_dropped", "content": "old steer" },
+      Some("r42"),
+    ),
+    (Some("r41"), Some("submission-old")),
+  )
+  assert_eq(
+    tracker.route_event(
+      fresh_apply,
+      { "event": "steer_applied", "content": "fresh steer" },
+      Some("r42"),
+    ),
+    (Some("r42"), Some("submission-fresh")),
+  )
+}
+
+///|
+test "equal steer text receipts retain writer-order submission ids" {
+  let tracker = SteerRunTracker::new()
+  tracker.begin_run()
+  ignore(tracker.record_sent("same", Some("submission-a")))
+  ignore(tracker.record_sent("same", Some("submission-b")))
+  let receipt : @event.AgentEvent? = Some(SteerApplied("same"))
+  let raw : Json = { "event": "steer_applied", "content": "same" }
+  let (first_run, first_submission) = tracker.route_event(
+    receipt,
+    raw,
+    Some("r9"),
+  )
+  assert_eq(first_run, Some("r9"))
+  guard event_with_submission_id(
+      { "event": "steer_applied", "content": "same" },
+      first_submission,
+    )
+    is Object(first_fields) &&
+    first_fields.get("submission_id") is Some(String(first_id)) else {
+    fail("first receipt did not carry a submission id")
+  }
+  assert_eq(first_id, "submission-a")
+  let (second_run, second_submission) = tracker.route_event(
+    receipt,
+    raw,
+    Some("r9"),
+  )
+  assert_eq(second_run, Some("r9"))
+  guard event_with_submission_id(
+      { "event": "steer_applied", "content": "same" },
+      second_submission,
+    )
+    is Object(second_fields) &&
+    second_fields.get("submission_id") is Some(String(second_id)) else {
+    fail("second receipt did not carry a submission id")
+  }
+  assert_eq(second_id, "submission-b")
+}
+
+///|
+test "legacy steer receipt does not gain a submission field" {
+  let tracker = SteerRunTracker::new()
+  tracker.begin_run()
+  ignore(tracker.record_sent("legacy", None))
+  let decoded : @event.AgentEvent? = Some(SteerApplied("legacy"))
+  let raw : Json = { "event": "steer_applied", "content": "legacy" }
+  let (_, submission_id) = tracker.route_event(decoded, raw, Some("r11"))
+  guard event_with_submission_id(raw, submission_id) is Object(fields) else {
+    fail("expected receipt object")
+  }
+  assert_true(fields.get("submission_id") is None)
+}
+
+///|
+test "submission ids are non-blank and bounded by UTF-8 bytes" {
+  assert_true(normalize_submission_id(None) is None)
+  assert_true(normalize_submission_id(Some(" \t\n")) is None)
+  assert_eq(
+    normalize_submission_id(Some("x".repeat(128))),
+    Some("x".repeat(128)),
+  )
+  assert_true(normalize_submission_id(Some("x".repeat(129))) is None)
+  // U+754C occupies three UTF-8 bytes: count wire bytes, not UTF-16 units.
+  assert_eq(
+    normalize_submission_id(Some("界".repeat(42))),
+    Some("界".repeat(42)),
+  )
+  assert_true(normalize_submission_id(Some("界".repeat(43))) is None)
+  // Accepted ids stay opaque rather than being trimmed before the echo.
+  assert_eq(normalize_submission_id(Some(" id ")), Some(" id "))
+}
+
+///|
+test "started payload omits a missing submission id" {
+  let payload : StartedPayload = {
+    run_id: "r1",
+    task: "hello",
+    submission_id: None,
+    engine: "openseek",
+    model: "model",
+    max_steps: 10,
+    cwd: None,
+    session: None,
+    session_root: None,
+  }
+  guard payload.to_json() is Object(fields) else {
+    fail("expected started payload object")
+  }
+  assert_true(fields.get("submission_id") is None)
 }
 
 ///|
 test "new turn events clear stale settling state" {
   let tracker = SteerRunTracker::new()
   tracker.begin_run()
-  tracker.record_sent("old steer")
-  tracker.record_terminal(7)
-  assert_eq(tracker.run_id_for_event(Some(AgentStep), 8), 8)
+  ignore(tracker.record_sent("old steer", Some("submission-old")))
+  tracker.record_terminal("r7")
+  assert_eq(
+    tracker.route_event(Some(AgentStep), { "event": "agent_step" }, Some("r8")),
+    (Some("r8"), None),
+  )
   let old_drop : @event.AgentEvent? = Some(SteerDropped("old steer"))
-  assert_eq(tracker.run_id_for_event(old_drop, 8), 8)
+  assert_eq(
+    tracker.route_event(
+      old_drop,
+      { "event": "steer_dropped", "content": "old steer" },
+      Some("r8"),
+    ),
+    (Some("r8"), None),
+  )
+}
+
+///|
+test "background events do not clear trailing steer receipts" {
+  let tracker = SteerRunTracker::new()
+  tracker.begin_run()
+  ignore(tracker.record_sent("first", Some("submission-first")))
+  ignore(tracker.record_sent("second", Some("submission-second")))
+  tracker.record_terminal("r-old")
+  tracker.begin_run()
+  assert_eq(
+    tracker.route_event(
+      None,
+      { "event": "notice", "content": "background" },
+      Some("r-new"),
+    ),
+    (Some("r-new"), None),
+  )
+  assert_eq(
+    tracker.route_event(
+      Some(SteerApplied("first")),
+      { "event": "steer_applied", "kind": "prompt", "content": "first" },
+      Some("r-new"),
+    ),
+    (Some("r-old"), Some("submission-first")),
+  )
+  assert_eq(
+    tracker.route_event(
+      Some(SteerDropped("second")),
+      { "event": "steer_dropped", "content": "second" },
+      Some("r-new"),
+    ),
+    (Some("r-old"), Some("submission-second")),
+  )
+}
+
+///|
+test "only prompt steer_applied consumes a desktop steer" {
+  let tracker = SteerRunTracker::new()
+  tracker.begin_run()
+  ignore(tracker.record_sent("same", Some("submission-prompt")))
+  let decoded : @event.AgentEvent? = Some(SteerApplied("same"))
+  for kind in ["command", "notice"] {
+    assert_eq(
+      tracker.route_event(
+        decoded,
+        { "event": "steer_applied", "kind": kind, "content": "same" },
+        Some("r1"),
+      ),
+      (Some("r1"), None),
+    )
+  }
+  assert_eq(
+    tracker.route_event(
+      decoded,
+      { "event": "steer_applied", "kind": "prompt", "content": "same" },
+      Some("r1"),
+    ),
+    (Some("r1"), Some("submission-prompt")),
+  )
+}
+
+///|
+async test "timed out command-lock waiter is removed" {
+  let lock : @async.Mutex = Mutex()
+  lock.acquire()
+  assert_true(@async.with_timeout_opt(10, () => lock.acquire()) is None)
+  lock.release()
+  // The timed-out waiter must not consume the later release; close_and_wait's
+  // cancellation fallback depends on the mutex queue removing it cleanly.
+  assert_true(@async.with_timeout_opt(100, () => lock.acquire()) is Some(_))
+  lock.release()
 }
 
 ///|
@@ -988,25 +2115,226 @@ async fn write_fake_file(path : @path.Path) -> Unit {
 }
 
 ///|
+#cfg(not(platform="windows"))
+async test "engine startup rolls back follower on pre-spawn failure" {
+  let dir = @fs.tmpdir(prefix="openseek-engine-startup-")
+  let baseline_engine = dir + "/baseline.sh"
+  @fs.write_file(
+    baseline_engine,
+    "#!/bin/sh\nprintf '%s' '{\"events\":[]}'\n",
+    create_mode=CreateOrTruncate,
+  )
+  assert_eq(@process.run("chmod", ["+x", baseline_engine]), 0)
+  let manager = new_engine_manager(baseline_engine)
+  let sink = EventSink(fn(_) { () })
+  let slot : SessionSlot = { pending: None, engine: None }
+  let config : RunConfig = {
+    task: "test",
+    api_key: "test",
+    api_url: None,
+    model: "test",
+    max_steps: 1,
+    engine: dir + "/missing/openseek",
+    host: Native,
+    cwd: None,
+    session: Some("s-startup-failure"),
+    session_root: Some(Path(dir + "/root")),
+  }
+  @async.with_task_group(group => {
+    let failed = try {
+      start_serve_engine(sink~, group~, manager~, slot~, config~)
+      false
+    } catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => true
+    }
+    assert_true(failed)
+    assert_true(manager.followers.get("s-startup-failure") is None)
+    assert_true(slot.engine is None)
+  })
+  @fs.rmdir(dir, recursive=true)
+}
+
+///|
 /// The slot claim is what closes the compact-preempts-starting-prompt race:
 /// whichever op (start, compact, archive) validated first holds the slot
 /// through its command hitting the wire, and every later claimant is refused
 /// with the holder's message — releasing reopens the slot.
 test "a claimed session slot refuses every other op until released" {
-  let slot : SessionSlot = { pending: None, engine: None }
-  slot.claim(StartPending)
-  let refused = try slot.claim(CompactPending) catch {
+  let manager = new_engine_manager("unused")
+  let sessions : Map[String, SessionSlot] = Map([])
+  manager.pump = Serving(sessions~)
+  let slot = slot_for(sessions, "s")
+  let start_claim = slot.claim(sessions, "s", StartPending)
+  let refused = try slot.claim(sessions, "s", CompactPending) catch {
     EngineError(message) => message
   } noraise {
     _ => ""
   }
   assert_true(refused.contains("already starting"))
-  slot.pending = None
-  slot.claim(CompactPending)
-  let refused = try slot.claim(ArchivePending) catch {
+  start_claim.release(manager)
+  let compact_claim = slot.claim(sessions, "s", CompactPending)
+  let refused = try slot.claim(sessions, "s", ArchivePending) catch {
     EngineError(message) => message
   } noraise {
     _ => ""
   }
   assert_true(refused.contains("compaction is already being requested"))
+  compact_claim.release(manager)
+}
+
+///|
+test "loads coexist with start and compact but not archive" {
+  let manager = new_engine_manager("unused")
+  let read_guard = manager.begin_record_read("s")
+  let op_guard = manager.begin_record_op("s")
+  let second_op = try manager.begin_record_op("s") catch {
+    EngineError(message) => message
+  } noraise {
+    _ => ""
+  }
+  assert_true(second_op.contains("already preparing"))
+  manager.end_record_op("s", op_guard)
+  manager.end_record_read("s", read_guard)
+  let move_guard = manager.claim_record_move("s")
+  let refused = try manager.begin_record_read("s") catch {
+    EngineError(message) => message
+  } noraise {
+    _ => ""
+  }
+  assert_true(refused.contains("moving between live and archived"))
+  manager.release_record_move("s", move_guard)
+}
+
+///|
+test "a slot claim cannot cross an engine pump generation" {
+  let manager = new_engine_manager("unused")
+  let departed : Map[String, SessionSlot] = Map([])
+  manager.pump = Serving(sessions=departed)
+  let claim = slot_for(departed, "s").claim(departed, "s", StartPending)
+  let successor : Map[String, SessionSlot] = Map([])
+  manager.pump = Serving(sessions=successor)
+  assert_false(claim.is_current(manager))
+  let refused = try claim.require_current(manager) catch {
+    EngineError(message) => message
+  } noraise {
+    _ => ""
+  }
+  assert_true(refused.contains("restarted"))
+  claim.release(manager)
+  assert_true(successor.get("s") is None)
+}
+
+///|
+async test "record move waits for readers across pump replacement" {
+  let manager = new_engine_manager("unused")
+  let reader = manager.begin_record_read("s")
+  let moving = manager.claim_record_move("s")
+  manager.pump = Serving(sessions=Map([]))
+  @async.with_task_group(group => {
+    let waiter = group.spawn(() => moving.wait_until_idle())
+    @async.pause()
+    assert_true(waiter.try_wait() is None)
+    manager.pump = Serving(sessions=Map([]))
+    manager.end_record_read("s", reader)
+    waiter.wait()
+  })
+  manager.release_record_move("s", moving)
+}
+
+///|
+fn pump_test_config(session : String) -> RunConfig {
+  {
+    task: "test",
+    api_key: "test",
+    api_url: None,
+    model: "test",
+    max_steps: 1,
+    engine: "unused",
+    host: Native,
+    cwd: None,
+    session: Some(session),
+    session_root: Some(Path("/tmp/openseek-pump-test")),
+  }
+}
+
+///|
+async test "pump reset acks active and queued spawn requests" {
+  let manager = new_engine_manager("unused")
+  let sessions : Map[String, SessionSlot] = Map([])
+  manager.pump = Serving(sessions~)
+  let active_claim = slot_for(sessions, "active").claim(
+    sessions,
+    "active",
+    StartPending,
+  )
+  let queued_claim = slot_for(sessions, "queued").claim(
+    sessions,
+    "queued",
+    StartPending,
+  )
+  let active_ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
+  let queued_ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
+  manager.commands.put(
+    SpawnEngine(queued_claim, pump_test_config("queued"), queued_ack),
+  )
+  let active = Ref(Some(active_ack))
+  reset_engine_generation(manager, active)
+  assert_true(manager.pump is Stopped)
+  assert_true(active_ack.try_get() is Some(Some(EngineError(_))))
+  assert_true(queued_ack.try_get() is Some(Some(EngineError(_))))
+  assert_true(manager.commands.try_get() is None)
+  // Ack completion, not reset itself, lets each requester release its claim.
+  assert_true(active_claim.is_current(manager) == false)
+  assert_true(queued_claim.active)
+  active_claim.release(manager)
+  queued_claim.release(manager)
+}
+
+///|
+async test "cancelled spawn requester holds its claim until pump ack" {
+  let manager = new_engine_manager("unused")
+  let sessions : Map[String, SessionSlot] = Map([])
+  manager.pump = Serving(sessions~)
+  let claim = slot_for(sessions, "s").claim(sessions, "s", StartPending)
+  @async.with_task_group(group => {
+    let requester = group.spawn(() => {
+      defer claim.release(manager)
+      request_spawn(manager, claim, pump_test_config("s"))
+    })
+    guard manager.commands.get() is SpawnEngine(queued, _, ack) else {
+      fail("expected spawn command")
+    }
+    assert_true(physical_equal(queued, claim))
+    requester.cancel()
+    @async.pause()
+    assert_true(claim.is_current(manager))
+    assert_true(ack.try_get() is None)
+    ack.put(None)
+    let cancelled = try {
+      requester.wait()
+      false
+    } catch {
+      error if @async.is_cancellation_error(error) => true
+      _ => false
+    }
+    assert_true(cancelled)
+    assert_false(claim.active)
+  })
+}
+
+///|
+async test "engine exit latch wakes multiple and late waiters" {
+  let exit : EngineExit = { process_done: false, done: false }
+  @async.with_task_group(group => {
+    let first = group.spawn(() => exit.wait())
+    let second = group.spawn(() => exit.wait())
+    @async.pause()
+    exit.process_done = true
+    exit.done = true
+    first.wait()
+    second.wait()
+    // Level-triggered: completion is state, not a token consumed above.
+    exit.wait()
+  })
 }

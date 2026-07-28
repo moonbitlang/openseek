@@ -11,11 +11,10 @@ async fn list_apps_op() -> ListAppsReply {
 ///|
 async fn launch_app_op(payload : LaunchAppPayload) -> LaunchAppReply {
   // A live run hands us its cwd; a resumed conversation has none, so fall back
-  // to the directory the session's engine runs in (same as `open_path`).
-  let dir = if payload.cwd.is_empty() {
-    @engine.session_cwd(payload.session)
-  } else {
-    payload.cwd
+  // to the directory the session's engine runs in (same as `host.open_path`).
+  let dir = match payload.cwd {
+    Some(cwd) => cwd
+    None => @engine.session_cwd(payload.session)
   }
   guard !dir.is_empty() else {
     raise HostError("This conversation has no working directory yet")

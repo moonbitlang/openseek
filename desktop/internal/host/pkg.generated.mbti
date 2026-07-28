@@ -1,0 +1,43 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/host"
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/x/path",
+}
+
+// Values
+pub fn app_bundle_path(String) -> String?
+
+pub fn frontend_asset_dir(String) -> String
+
+pub async fn frontend_document(String) -> String
+
+pub async fn frontend_entry_path(String) -> String
+
+pub fn host_method_names() -> Array[String]
+
+pub async fn host_op(HostState, String, Json) -> Json?
+
+pub fn new_host_state(String, runtime_dir? : @path.Path, executable? : String) -> HostState
+
+pub async fn prepared_runtime_dir() -> @path.Path?
+
+pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (String, Json) -> Unit) -> Unit
+
+// Errors
+pub(all) suberror HostError {
+  HostError(String)
+}
+
+pub(all) suberror PayloadError {
+  PayloadError(String)
+}
+
+// Types and methods
+type HostState
+
+// Type aliases
+
+// Traits
+

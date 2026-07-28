@@ -10,6 +10,13 @@
 const WorkspacesFile = "workspaces.json"
 
 ///|
+/// Registry reads and read-modify-write mutations share one process-wide
+/// lock. Remote requests run in independent tasks; without this serialization
+/// two concurrent add/remove operations can both read the same old list and
+/// let the later write silently erase the earlier one.
+let workspace_registry_lock : @async.Mutex = Mutex()
+
+///|
 /// The registry file: `<global session root>/workspaces.json`, beside the
 /// scratch conversations' session store.
 fn workspaces_file() -> @path.Path? {
@@ -19,7 +26,7 @@ fn workspaces_file() -> @path.Path? {
 ///|
 /// The registered workspace directories, in registration order. A missing or
 /// malformed registry reads as "no workspaces".
-pub async fn registered_workspaces() -> Array[String] {
+async fn read_registry_unlocked() -> Array[String] {
   guard workspaces_file() is Some(file) else { return [] }
   let text = @fsx.try_read_text(file) catch {
     error if @async.is_being_cancelled() => raise error
@@ -37,6 +44,13 @@ pub async fn registered_workspaces() -> Array[String] {
     }
   }
   paths
+}
+
+///|
+pub async fn registered_workspaces() -> Array[String] {
+  workspace_registry_lock.acquire()
+  defer workspace_registry_lock.release()
+  read_registry_unlocked()
 }
 
 ///|
@@ -63,7 +77,10 @@ async fn write_registry(paths : Array[String]) -> Unit {
 /// an already-registered directory is a no-op. A git repository gets the
 /// in-project session store added to `.git/info/exclude`, so attaching a
 /// project never dirties its status.
-pub async fn add_workspace(path : String) -> Array[String] {
+pub async fn add_workspace(
+  path : String,
+  on_committed : (Array[String]) -> Unit,
+) -> Array[String] {
   // A real directory pick never contains control characters. A NUL-padded
   // dialog buffer once slipped through the is_dir check below — C-level
   // filesystem calls truncate at the first NUL while the MoonBit string
@@ -74,12 +91,23 @@ pub async fn add_workspace(path : String) -> Array[String] {
   let dir = expanded_workspace_path(path)
   guard @fsx.is_dir(dir) else { raise EngineError("\{dir} is not a directory") }
   let canonical = dir.to_string()
-  let paths = registered_workspaces()
-  if !paths.contains(canonical) {
-    paths.push(canonical)
-    write_registry(paths)
-  }
+  // Best-effort ancillary work is deliberately before the durable commit:
+  // cancellation here changes no registry state and needs no invalidation.
   exclude_store_from_git(dir)
+  workspace_registry_lock.acquire()
+  defer workspace_registry_lock.release()
+  let paths = read_registry_unlocked()
+  // The write and broadcast callback are one finite, cancellation-shielded
+  // linearization point while the lock is held. Once disk changes, every
+  // client is therefore notified in that same total order even if the
+  // requester disconnects before its RPC response.
+  @async.protect_from_cancel(() => {
+    if !paths.contains(canonical) {
+      paths.push(canonical)
+      write_registry(paths)
+    }
+    on_committed(paths)
+  })
   paths
 }
 
@@ -87,10 +115,18 @@ pub async fn add_workspace(path : String) -> Array[String] {
 /// Drop `path` from the registry and return the updated list. Only the
 /// registry entry goes away — the directory and any sessions inside it are
 /// untouched, so re-adding the workspace brings its conversations back.
-pub async fn remove_workspace(path : String) -> Array[String] {
+pub async fn remove_workspace(
+  path : String,
+  on_committed : (Array[String]) -> Unit,
+) -> Array[String] {
   let target = expanded_workspace_path(path).to_string()
-  let paths = registered_workspaces().filter(p => p != target)
-  write_registry(paths)
+  workspace_registry_lock.acquire()
+  defer workspace_registry_lock.release()
+  let paths = read_registry_unlocked().filter(p => p != target)
+  @async.protect_from_cancel(() => {
+    write_registry(paths)
+    on_committed(paths)
+  })
   paths
 }
 

@@ -3,27 +3,20 @@ package "openseek_desktop/internal/extension"
 
 import {
   "justjavac/proton/command",
-  "moonbitlang/x/path",
+  "openseek_desktop/internal/api",
 }
 
 // Values
 pub const ExtensionId : String = "openseek-desktop"
 
-pub fn app_bundle_path(String) -> String?
-
-pub fn frontend_asset_dir(String) -> String
-
-pub async fn frontend_document(String) -> String
-
-pub async fn frontend_entry_path(String) -> String
-
-pub fn openseek_extension(String, runtime_dir? : @path.Path, executable? : String) -> @command.AppCommandExtensionSpec
-
-pub async fn prepared_runtime_dir() -> @path.Path?
+pub fn openseek_extension(@api.ApiState, DesktopBridgeActor) -> @command.AppCommandExtensionSpec
 
 // Errors
 
 // Types and methods
+type DesktopBridgeActor
+pub fn DesktopBridgeActor::new(@api.ApiState) -> Self
+pub async fn DesktopBridgeActor::run(Self) -> Unit
 
 // Type aliases
 

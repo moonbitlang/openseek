@@ -183,7 +183,7 @@ async fn stat_files_op(payload : StatFilesPayload) -> StatFilesReply {
         workspace?=payload.workspace,
       ) {
       Some(file) => file_signature(file.to_string())
-      None => ""
+      None => None
     }
     stats.push({ path, sig })
   }
@@ -191,14 +191,14 @@ async fn stat_files_op(payload : StatFilesPayload) -> StatFilesReply {
 }
 
 ///|
-/// `"{seconds}:{nanos}"` of the file's mtime, or `""` when it cannot be
+/// `"{seconds}:{nanos}"` of the file's mtime, or None when it cannot be
 /// stat'ed — a missing file, by far the common case; any other stat failure
 /// reads the same way, and the panel's read-on-change then surfaces the real
 /// error if the file actually exists.
-async fn file_signature(absolute : String) -> String {
+async fn file_signature(absolute : String) -> String? {
   let (seconds, nanos) = @fs.mtime(absolute) catch {
     error if @async.is_being_cancelled() => raise error
-    _ => return ""
+    _ => return None
   }
-  "\{seconds}:\{nanos}"
+  Some("\{seconds}:\{nanos}")
 }

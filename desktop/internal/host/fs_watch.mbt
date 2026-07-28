@@ -1,36 +1,32 @@
 // The workspace file watcher behind the editor panel's live updates. The
 // frontend points it at the active conversation's workspace through the
-// `watch_workspace` op; a background pump (spawned in the `connect` task
-// group, like the LSP pumps) runs one recursive `@fs.Watcher` on that root
-// and pushes a coarse `fs_changed` event on every change. The watcher
-// reports no paths — the frontend re-stats its open tabs (`stat_files`) and
-// re-lists its expanded directories to find out what moved.
+// `fs.watch` method (and parks it with `fs.unwatch`); a background actor runs
+// one recursive `@fs.Watcher` on that root and pushes a coarse `fs.changed`
+// notification on every change. `FsWatchActor` owns both the desired-root
+// mailbox and the active watcher resource. The watcher reports no paths —
+// the frontend re-stats its open tabs (`fs.stat_files`) and re-lists its
+// expanded directories to find out what moved.
 
 ///|
-/// The pump's mailbox: the latest requested watch root (`""` = stop
+/// The actor handle and its mailbox: the latest requested watch root (None = stop
 /// watching). `DiscardOldest(1)` because only the newest target matters — a
 /// burst of conversation switches must not queue up stale watches.
-priv struct WatchState {
-  requests : @async.Queue[String]
+priv struct FsWatchActor {
+  requests : @async.Queue[String?]
 }
 
 ///|
-fn new_watch_state() -> WatchState {
+fn FsWatchActor::new() -> FsWatchActor {
   { requests: Queue(kind=DiscardOldest(1)) }
 }
 
 ///|
-/// Point the watcher at `payload.session`'s workspace root (or park it, for
-/// an empty session). Resolution only — the pump swaps watchers on its own
-/// schedule.
-async fn watch_workspace_op(
-  watches : WatchState,
+/// Point the watcher at `payload.session`'s workspace root. Resolution only
+/// — the actor swaps watchers on its own schedule.
+async fn FsWatchActor::watch(
+  self : FsWatchActor,
   payload : WatchWorkspacePayload,
 ) -> Unit {
-  if payload.session.is_empty() {
-    watches.requests.put("")
-    return
-  }
   guard @engine.resolve_in_workspace(
       payload.session,
       "",
@@ -39,7 +35,13 @@ async fn watch_workspace_op(
     is Some(root) else {
     raise HostError("path is outside the conversation workspace")
   }
-  watches.requests.put(root.to_string())
+  self.requests.put(Some(root.to_string()))
+}
+
+///|
+/// Park the watcher — the editor panel closed with no tabs open.
+async fn FsWatchActor::unwatch(self : FsWatchActor) -> Unit {
+  self.requests.put(None)
 }
 
 ///|
@@ -81,7 +83,7 @@ async fn watch_root(
 }
 
 ///|
-/// The pump: hold one watcher on the latest requested root, swapping when a
+/// The actor loop: hold one watcher on the latest requested root, swapping when a
 /// new request arrives. Each watcher runs in a child task group whose body
 /// blocks on the next request — `return_immediately` then cancels the
 /// blocked `wait_any` deterministically (`Watcher::close` alone is not
@@ -91,17 +93,16 @@ async fn watch_root(
 /// watcher task is `allow_failure` so a watcher error (say, fd exhaustion
 /// on a huge tree) degrades to "no live updates" instead of tearing down
 /// the connection.
-async fn run_watch_pump(
-  watches : WatchState,
+async fn FsWatchActor::run(
+  self : FsWatchActor,
   emit : async (FsChangedPayload) -> Unit,
 ) -> Unit {
-  let mut root = watches.requests.get()
+  let mut root = self.requests.get()
   for ;; {
-    if root.is_empty() {
-      root = watches.requests.get()
+    guard root is Some(target) else {
+      root = self.requests.get()
       continue
     }
-    let target = root
     root = @async.with_task_group(group => {
       group.spawn_bg(allow_failure=true, () => {
         if !@fs.exists(target) {
@@ -118,7 +119,7 @@ async fn run_watch_pump(
         }
         watch_root(target, emit)
       })
-      let next = watches.requests.get()
+      let next = self.requests.get()
       group.return_immediately(next)
       next
     })
@@ -153,12 +154,12 @@ test "stat_files payload decodes with and without a workspace hint" {
   assert_eq(payload.session, "s-1")
   assert_true(payload.paths == ["a.mbt", "src/b.mbt"])
   assert_true(payload.workspace is Some("/work/project"))
-  let bare : WatchWorkspacePayload = @json.from_json({ "session": "" })
-  assert_eq(bare.session, "")
+  let bare : WatchWorkspacePayload = @json.from_json({ "session": "s-2" })
+  assert_eq(bare.session, "s-2")
   assert_true(bare.workspace is None)
 }
 
 ///|
-async test "file_signature reads a missing file as blank" {
-  assert_eq(file_signature("/nonexistent/openseek-fs-watch-test"), "")
+async test "file_signature reads a missing file as absent" {
+  assert_true(file_signature("/nonexistent/openseek-fs-watch-test") is None)
 }

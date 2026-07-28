@@ -1,13 +1,13 @@
 import {
-  "justjavac/proton/command" @app,
-  "justjavac/proton/native" @proton_native,
   "openseek_desktop/internal/api",
   "openseek_desktop/internal/engine",
   "openseek_desktop/internal/host",
-  "openseek_desktop/internal/platform",
+  "openseek_desktop/tunnel",
   "moonbitlang/async",
-  "moonbitlang/async/process",
+  "moonbitlang/async/io",
+  "moonbitlang/async/websocket",
   "moonbitlang/core/json",
+  "tonyfettes/xlog",
 }
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

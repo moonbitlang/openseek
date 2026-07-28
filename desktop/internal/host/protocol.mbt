@@ -1,124 +1,8 @@
-// The wire types of the `openseek` IPC namespace: payloads the webview sends
-// with each op, the replies it gets back, and the events the host pushes.
-
-///|
-/// Optional fields are normalized by the frontend bridge — values arrive
-/// trimmed, and blank fields are omitted entirely — so `Some` here always
-/// carries a non-blank string and the host does not re-normalize.
-priv struct StartPayload {
-  task : String
-  api_key : String?
-  api_url : String?
-  model : String?
-  max_steps : Int?
-  session : String?
-  session_root : String?
-  // A registered workspace directory to run in; absent = scratch workspace.
-  workspace : String?
-  // Present = run the engine inside WSL (Windows only); absent = native.
-  wsl : WslPayload?
-} derive(FromJson)
-
-///|
-/// The WSL half of a start payload: which distro hosts the engine (absent =
-/// the user's default distro) and the engine command inside it (absent =
-/// `openseek` on the distro's PATH).
-priv struct WslPayload {
-  distro : String?
-  engine : String?
-} derive(FromJson)
-
-///|
-fn WslPayload::to_request(self : WslPayload) -> @engine.WslRequest {
-  { distro: self.distro, engine: self.engine }
-}
-
-///|
-fn StartPayload::to_request(self : StartPayload) -> @engine.StartRequest {
-  {
-    task: self.task,
-    api_key: self.api_key,
-    api_url: self.api_url,
-    model: self.model,
-    max_steps: self.max_steps,
-    session: self.session,
-    session_root: self.session_root,
-    workspace: self.workspace,
-    wsl: self.wsl.map(wsl => wsl.to_request()),
-  }
-}
-
-///|
-priv struct CancelPayload {
-  run_id : Int?
-} derive(FromJson)
-
-///|
-fn CancelPayload::to_request(self : CancelPayload) -> @engine.CancelRequest {
-  { run_id: self.run_id }
-}
-
-///|
-priv struct LoadSessionPayload {
-  session : String
-  // The workspace whose store holds the session, when the client knows it.
-  workspace : String?
-} derive(FromJson)
-
-///|
-fn LoadSessionPayload::to_request(
-  self : LoadSessionPayload,
-) -> @engine.LoadSessionRequest {
-  { session: self.session, workspace: self.workspace }
-}
-
-///|
-/// `add_workspace` / `remove_workspace` name the project directory to attach
-/// or detach; the reply (shared with `list_workspaces`) is the updated
-/// registry.
-priv struct WorkspacePayload {
-  path : String
-} derive(FromJson)
-
-///|
-priv struct SteerPayload {
-  text : String
-  run_id : Int?
-} derive(FromJson)
-
-///|
-fn SteerPayload::to_request(self : SteerPayload) -> @engine.SteerRequest {
-  { text: self.text, run_id: self.run_id }
-}
-
-///|
-/// A compact carries the same engine settings as a start (minus the task):
-/// a conversation resumed after a restart has no live serve process, and
-/// compacting it spawns one with these settings.
-priv struct CompactPayload {
-  session : String
-  api_key : String?
-  api_url : String?
-  model : String?
-  max_steps : Int?
-  session_root : String?
-  workspace : String?
-  wsl : WslPayload?
-} derive(FromJson)
-
-///|
-fn CompactPayload::to_request(self : CompactPayload) -> @engine.CompactRequest {
-  {
-    session: self.session,
-    api_key: self.api_key,
-    api_url: self.api_url,
-    model: self.model,
-    max_steps: self.max_steps,
-    session_root: self.session_root,
-    workspace: self.workspace,
-    wsl: self.wsl.map(wsl => wsl.to_request()),
-  }
-}
+// The wire types of the host ops: payloads the client sends with each
+// method and the replies it gets back, per docs/remote-protocol.md.
+// Engine/session/workspace payloads live with the API dispatcher; these are
+// the host-side methods' shapes. Optional fields are genuinely absent when
+// unset — no in-band "" sentinels cross the wire.
 
 ///|
 priv struct InstallSkillPayload {
@@ -141,7 +25,7 @@ priv struct UninstallSkillPayload {
 /// surfaced.
 priv struct OpenPathPayload {
   session : String
-  cwd : String
+  cwd : String?
   path : String
 } derive(FromJson)
 
@@ -173,12 +57,12 @@ priv struct AppEntry {
 } derive(ToJson)
 
 ///|
-/// Launch one detected app (`app` = the `id` from `list_apps`) with the
+/// Launch one detected app (`app` = the `id` from `app.list`) with the
 /// conversation's working directory — `cwd` when the frontend has it, otherwise
-/// derived by the host from `session`, mirroring `open_path`.
+/// derived by the host from `session`, mirroring `host.open_path`.
 priv struct LaunchAppPayload {
   session : String
-  cwd : String
+  cwd : String?
   app : String
 } derive(FromJson)
 
@@ -212,31 +96,21 @@ priv struct UninstallSkillReply {
 } derive(ToJson)
 
 ///|
-/// `workspace_branch` reports the git branch of the conversation's working
+/// `git.branch` reports the git branch of the conversation's working
 /// directory — `cwd` when the frontend has it (a live run), otherwise derived
-/// from `session`, mirroring `open_path`.
-priv struct WorkspaceBranchPayload {
+/// from `session`, mirroring `host.open_path`.
+priv struct GitBranchPayload {
   session : String
-  cwd : String
+  cwd : String?
 } derive(FromJson)
 
 ///|
-/// Reply to `workspace_branch`. `branch` is the checked-out branch (a
-/// detached HEAD reads as its short hash); empty when the directory is not a
-/// git repository or git is unavailable.
-priv struct WorkspaceBranchReply {
-  branch : String
+/// Reply to `git.branch`. `branch` is the checked-out branch (a detached
+/// HEAD reads as its short hash); absent when the directory is not a git
+/// repository or git is unavailable.
+priv struct GitBranchReply {
+  branch : String?
 } derive(ToJson)
-
-///|
-/// `archive_session` / `unarchive_session` move the conversation's durable
-/// record into (out of) its session store's `archived` twin, hiding it from
-/// (restoring it to) the live list. The reply — shared with
-/// `archived_sessions` — is the archived conversations, grouped per store
-/// exactly like `list_sessions`.
-priv struct ArchiveSessionPayload {
-  session : String
-} derive(FromJson)
 
 ///|
 /// `read_directory` lists `path`, resolved relative to the conversation's
@@ -334,13 +208,13 @@ priv struct StatFilesPayload {
 } derive(FromJson)
 
 ///|
-/// One file's signature: `"{seconds}:{nanos}"` of its mtime, or `""` when
+/// One file's signature: `"{seconds}:{nanos}"` of its mtime, absent when
 /// the file is missing (deleted, or the path stopped resolving). The
 /// frontend only ever compares signatures for equality, so the shape stays
 /// opaque text — no Int64 crossing JSON.
 priv struct FileStat {
   path : String
-  sig : String
+  sig : String?
 } derive(ToJson)
 
 ///|
@@ -349,13 +223,13 @@ priv struct StatFilesReply {
 } derive(ToJson)
 
 ///|
-/// `watch_workspace` points the host's single workspace watcher at the
+/// `fs.watch` points the host's single workspace watcher at the
 /// conversation's workspace root (the panel shows one conversation at a
-/// time, so one watcher suffices). An empty `session` stops watching —
-/// sent when the panel closes with no tabs open.
+/// time, so one watcher suffices). Stopping is its own method, `fs.unwatch`
+/// — sent when the panel closes with no tabs open.
 priv struct WatchWorkspacePayload {
   session : String
-  // The conversation's workspace, when it has one (see `read_directory`).
+  // The conversation's workspace, when it has one (see `fs.read_directory`).
   workspace : String?
 } derive(FromJson)
 
@@ -465,22 +339,3 @@ priv struct SymbolPosition {
 priv struct WorkspaceSymbolsReply {
   symbols : Array[SymbolItem]
 } derive(ToJson)
-
-///|
-fn event_sink(context : @app.AppCommandExtensionContext) -> @engine.EventSink {
-  EventSink(async fn(event) { emit_engine_event(context, event) })
-}
-
-///|
-async fn emit_engine_event(
-  context : @app.AppCommandExtensionContext,
-  event : @engine.EngineEvent,
-) -> Unit {
-  match event {
-    Connected(payload) => context.emit("connected", payload)
-    Started(payload) => context.emit("started", payload)
-    StreamEvent(payload) => context.emit("event", payload)
-    Error(payload) => context.emit("error", payload)
-    Finished(payload) => context.emit("finished", payload)
-  }
-}

@@ -8,7 +8,7 @@
 
 ///|
 async fn launch_logger() -> @xlog.Logger {
-  guard @extension.prepared_runtime_dir() is Some(dir) else {
+  guard @host.prepared_runtime_dir() is Some(dir) else {
     fail("cannot determine the per-user runtime directory")
   }
   @xlog.global().set_handler(
