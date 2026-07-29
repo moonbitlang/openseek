@@ -66,6 +66,8 @@ priv enum Inbound {
   Unparsable
   // JSON, but not a JSON-RPC request (-32600).
   Invalid
+  // A valid request envelope whose catalog params are not an object (-32602).
+  InvalidParams(Json)
 }
 
 ///|
@@ -225,6 +227,17 @@ async fn WsClientActor::serve(
               ),
             ),
           )
+        InvalidParams(id) =>
+          enqueue_outgoing(
+            out,
+            Response(
+              error_envelope(
+                id,
+                CodeInvalidParams,
+                "method parameters must be an object",
+              ),
+            ),
+          )
       }
     }
   })
@@ -254,12 +267,28 @@ async fn Outgoing::write(self : Outgoing, conn : @websocket.Conn) -> Unit {
 fn classify(text : String) -> Inbound {
   let message = @json.parse(text) catch { _ => return Unparsable }
   guard message is Object(fields) else { return Invalid }
+  // Reject protocol lookalikes before any catalog method can run.
+  guard fields.get("jsonrpc") is Some(String("2.0")) else { return Invalid }
   guard fields.get("method") is Some(String(method_)) else { return Invalid }
+  let id = fields.get("id")
+  // JSON-RPC request ids may only be strings, numbers, or null. They remain
+  // opaque here and are echoed unchanged in the response.
+  match id {
+    None | Some(String(_)) | Some(Number(_, ..)) | Some(Null) => ()
+    Some(_) => return Invalid
+  }
   let params = match fields.get("params") {
-    Some(params) => params
+    Some(Object(_) as params) => params
+    // This catalog uses named object parameters rather than positional
+    // arrays. A malformed notification still receives no response.
+    Some(_) =>
+      match id {
+        Some(id) => return InvalidParams(id)
+        None => return ClientNotification
+      }
     None => Json::empty_object()
   }
-  match fields.get("id") {
+  match id {
     Some(id) => Request(id, method_, params)
     None => ClientNotification
   }
@@ -405,6 +434,60 @@ test "classify accepts client notifications" {
     ClientNotification => ()
     _ => fail("expected a client notification")
   }
+}
+
+///|
+test "classify enforces the JSON-RPC 2.0 request envelope" {
+  for
+    message in [
+      Json::object({
+        "id": Json::number(1),
+        "method": Json::string("session.list"),
+      }),
+      { "jsonrpc": "1.0", "id": 1, "method": "session.list" },
+      { "jsonrpc": "2.0", "id": true, "method": "session.list" },
+      { "jsonrpc": "2.0", "id": {}, "method": "session.list" },
+      { "jsonrpc": "2.0", "id": [], "method": "session.list" },
+    ] {
+    assert_true(classify(message.stringify()) is Invalid)
+  }
+  for id in [Json::string("request-1"), Json::number(1), Json::null()] {
+    let message : Json = {
+      "jsonrpc": "2.0",
+      "id": id,
+      "method": "session.list",
+    }
+    match classify(message.stringify()) {
+      Request(actual_id, method_, Object(params)) => {
+        assert_eq(actual_id, id)
+        assert_eq(method_, "session.list")
+        assert_eq(params.length(), 0)
+      }
+      _ => fail("expected a valid request")
+    }
+  }
+}
+
+///|
+test "classify rejects non-object catalog parameters" {
+  let request : Json = {
+    "jsonrpc": "2.0",
+    "id": "request-1",
+    "method": "update.apply",
+    "params": [],
+  }
+  match classify(request.stringify()) {
+    InvalidParams(id) => assert_eq(id, Json::string("request-1"))
+    _ => fail("expected invalid method parameters")
+  }
+  let notification : Json = {
+    "jsonrpc": "2.0",
+    "method": "client.notice",
+    "params": [],
+  }
+  // Notifications never receive responses, including when this catalog
+  // cannot consume their parameters.
+  assert_true(classify(notification.stringify()) is ClientNotification)
 }
 
 ///|

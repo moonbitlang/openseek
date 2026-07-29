@@ -104,6 +104,13 @@ Request ids belong to one client connection and are echoed unchanged.
 Requests may complete out of order. Batch requests and client notifications
 have no catalog behavior.
 
+Every inbound request or notification must carry `"jsonrpc":"2.0"` exactly.
+When present, an id must be a string, number, or null. Catalog parameters must
+be a JSON object; an omitted `params` member is treated as an empty object.
+Invalid versions or id shapes receive `-32600`, while a valid request envelope
+with non-object parameters receives `-32602`. As required by JSON-RPC,
+client notifications never receive a response.
+
 Errors use these codes:
 
 | Code | Meaning |
