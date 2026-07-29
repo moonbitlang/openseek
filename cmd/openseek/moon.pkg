@@ -11,6 +11,7 @@ import {
   "bobzhang/openseek/mcp/config" @mcpconfig,
   "bobzhang/openseek/mcp/tools" @mcptools,
   "moonbitlang/core/json",
+  "moonbitlang/core/string",
   "bobzhang/openseek/agent_skill",
   "bobzhang/openseek/agent_session",
   "bobzhang/openseek/agent_session/store",

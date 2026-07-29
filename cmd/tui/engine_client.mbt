@@ -132,13 +132,17 @@ async fn[G] EngineClient::start(
           // Auto-continue lifecycle from a headless-armed goal: surfaced as
           // plain notices — the TUI never arms auto itself, and engine-
           // initiated turns are invisible to run tracking by design.
-          GoalContinue(remaining) =>
+          GoalContinue(remaining) => {
+            let budget = if remaining < 0 {
+              "unlimited auto turns"
+            } else {
+              "\{remaining} auto turns left"
+            }
             self.messages.try_put(
-              EngineBackgroundNotice(
-                "goal: engine continuing (\{remaining} auto turns left)",
-              ),
+              EngineBackgroundNotice("goal: engine continuing (\{budget})"),
             )
             |> ignore
+          }
           GoalBudgetExhausted =>
             self.messages.try_put(
               EngineBackgroundNotice(

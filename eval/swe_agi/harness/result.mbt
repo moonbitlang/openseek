@@ -5,7 +5,7 @@ struct BenchmarkResult {
   out_dir : String
   workspace : String
   model : String
-  max_steps : Int
+  max_steps : Int?
   timeout_ms : Int
   grade_timeout_ms : Int
   session_id : String
@@ -21,6 +21,7 @@ struct BenchmarkResult {
   completion_tokens : Int
   total_tokens : Int
   transport_retries : Int
+  engine_restarts : Int
   grade_passed : Bool
   grade_exit_code : Int
   grade_stop : GradeStop
@@ -33,7 +34,7 @@ fn BenchmarkResult::BenchmarkResult(
   out_dir~ : String,
   workspace~ : String,
   model~ : String,
-  max_steps~ : Int,
+  max_steps~ : Int?,
   timeout_ms~ : Int,
   grade_timeout_ms~ : Int,
   session_id~ : String,
@@ -49,6 +50,7 @@ fn BenchmarkResult::BenchmarkResult(
   completion_tokens~ : Int,
   total_tokens~ : Int,
   transport_retries~ : Int,
+  engine_restarts~ : Int,
   grade_passed~ : Bool,
   grade_exit_code~ : Int,
   grade_stop~ : GradeStop,
@@ -74,6 +76,7 @@ fn BenchmarkResult::BenchmarkResult(
     completion_tokens,
     total_tokens,
     transport_retries,
+    engine_restarts,
     grade_passed,
     grade_exit_code,
     grade_stop,
@@ -101,9 +104,15 @@ fn BenchmarkResult::report(self : BenchmarkResult) -> @report.Report {
     summary=[
       Metric(name="Task", value=self.task_dir),
       Metric(name="Model", value=self.model),
-      Metric(name="Max Steps Per Turn", value=self.max_steps.to_string()),
+      Metric(
+        name="Max Steps Per Turn",
+        value=match self.max_steps {
+          Some(max_steps) => max_steps.to_string()
+          None => "context window"
+        },
+      ),
       Metric(name="Agent Deadline", value="\{self.timeout_ms / 1000}s"),
-      Metric(name="Grade Deadline", value="\{self.grade_timeout_ms / 1000}s"),
+      Metric(name="Suite Deadline", value="\{self.grade_timeout_ms / 1000}s"),
       Metric(name="Engine Duration", value="\{self.elapsed_ms / 1000L}s"),
       Metric(
         name="Verdict",
@@ -111,7 +120,7 @@ fn BenchmarkResult::report(self : BenchmarkResult) -> @report.Report {
       ),
     ],
     metric_columns=[
-      "Goal Stop", "Turns", "Retries", "Steps", "Tokens", "Test Exit",
+      "Goal Stop", "Turns", "Retries", "Restarts", "Steps", "Tokens", "Test Exit",
     ],
     rows=[
       ReportRow(
@@ -120,11 +129,13 @@ fn BenchmarkResult::report(self : BenchmarkResult) -> @report.Report {
         success=self.grade_passed,
         reason=match (self.grade_passed, self.grade_stop) {
           (true, _) => "ok"
-          (false, TimedOut) =>
-            "restored original test suite exceeded grading deadline"
+          (false, BuildTimedOut) =>
+            "pristine evaluator build exceeded its 120-second deadline"
+          (false, SuiteTimedOut) =>
+            "pristine evaluator suite exceeded its configured deadline"
           (false, OutputLimit) =>
-            "restored original test suite exceeded the 64 MiB output limit"
-          (false, _) => "restored original test suite did not pass"
+            "one pristine evaluator stream exceeded the 64 MiB output limit"
+          (false, _) => "pristine evaluator did not pass"
         },
         warnings=if self.stop is GoalMet {
           ""
@@ -135,12 +146,14 @@ fn BenchmarkResult::report(self : BenchmarkResult) -> @report.Report {
           Metric(name="Goal Stop", value=self.stop.label()),
           Metric(name="Turns", value=self.turns.to_string()),
           Metric(name="Retries", value=self.transport_retries.to_string()),
+          Metric(name="Restarts", value=self.engine_restarts.to_string()),
           Metric(name="Steps", value=self.steps.to_string()),
           Metric(name="Tokens", value=self.total_tokens.to_string()),
           Metric(name="Test Exit", value=self.grade_exit_code.to_string()),
         ],
         details=[
           Metric(name="Workspace", value=self.workspace),
+          Metric(name="Grade Workspace", value="\{self.workspace}.grade"),
           Metric(name="Session", value=self.session_id),
           Metric(name="Goal Detail", value=self.stop.detail()),
           Metric(name="Engine Exit", value=self.engine_exit_code.to_string()),
@@ -153,7 +166,8 @@ fn BenchmarkResult::report(self : BenchmarkResult) -> @report.Report {
             name="Grade Stop",
             value=match self.grade_stop {
               Completed => "completed"
-              TimedOut => "timed_out"
+              BuildTimedOut => "build_timed_out"
+              SuiteTimedOut => "suite_timed_out"
               OutputLimit => "output_limit"
             },
           ),

@@ -6,7 +6,7 @@ struct Config {
   repo_root : String
   engine : String
   model : String
-  max_steps : Int
+  max_steps : Int?
   timeout_ms : Int
   grade_timeout_ms : Int
   goal_text : String
@@ -21,7 +21,7 @@ pub fn Config::Config(
   repo_root~ : String,
   engine? : String = "",
   model~ : String,
-  max_steps~ : Int,
+  max_steps~ : Int?,
   timeout_ms~ : Int,
   grade_timeout_ms~ : Int,
   goal_text~ : String,
@@ -40,15 +40,18 @@ pub fn Config::Config(
 }
 
 ///|
-/// Run one isolated trial, restore protected inputs, grade with `moon test`,
-/// and write the shared Markdown/JSON/HTML report artifacts under `out_dir`.
+/// Run one isolated trial, prepare a fresh sibling grading workspace, invoke
+/// the pristine task evaluator, and write the shared Markdown/JSON/HTML report
+/// artifacts under `out_dir`.
 pub async fn Config::run(self : Config) -> BenchmarkResult {
   guard ProcessGroupCommand::supported() else {
     fail(
       "SWE-AGI serve eval currently requires a POSIX host with rsync, find, and process-group signals",
     )
   }
-  guard self.max_steps > 0 else { fail("max_steps must be positive") }
+  if self.max_steps is Some(max_steps) && max_steps <= 0 {
+    fail("max_steps must be positive when set")
+  }
   guard self.timeout_ms > 0 else { fail("timeout_ms must be positive") }
   guard self.grade_timeout_ms > 0 else {
     fail("grade_timeout_ms must be positive")
@@ -103,9 +106,12 @@ pub async fn Config::run(self : Config) -> BenchmarkResult {
         completion_tokens: 0,
         total_tokens: 0,
         transport_retries: 0,
+        engine_restarts: 0,
       }
   }
-  workspace.restore_protected()
+  // The agent process is gone before protected inputs enter this separate
+  // sibling. Its trial repository remains private-test-free.
+  workspace.prepare_grade_workspace()
   let grade_log = "\{self.out_dir}/logs/01.grade.log"
   let grade = workspace.grade(grade_log~, timeout_ms=self.grade_timeout_ms)
   let result = BenchmarkResult(
@@ -129,6 +135,7 @@ pub async fn Config::run(self : Config) -> BenchmarkResult {
     completion_tokens=outcome.completion_tokens,
     total_tokens=outcome.total_tokens,
     transport_retries=outcome.transport_retries,
+    engine_restarts=outcome.engine_restarts,
     grade_passed=grade.passed,
     grade_exit_code=grade.exit_code,
     grade_stop=grade.stop,

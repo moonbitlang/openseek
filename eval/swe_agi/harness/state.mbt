@@ -81,6 +81,9 @@ struct GoalTrialState {
   mut completion_tokens : Int
   mut total_tokens : Int
   mut transport_retries : Int
+  mut consecutive_transport_failures : Int
+  mut engine_restarts : Int
+  mut consecutive_engine_restarts : Int
 }
 
 ///|
@@ -98,7 +101,20 @@ pub fn GoalTrialState::GoalTrialState(expected_goal : String) -> GoalTrialState 
     completion_tokens: 0,
     total_tokens: 0,
     transport_retries: 0,
+    consecutive_transport_failures: 0,
+    engine_restarts: 0,
+    consecutive_engine_restarts: 0,
   }
+}
+
+///|
+/// Require the next serve process to acknowledge the standing goal. A process
+/// restart reuses this state, so the acknowledgement from the old connection
+/// must not satisfy the new connection.
+pub fn GoalTrialState::expect_goal_acknowledgement(
+  self : GoalTrialState,
+) -> Unit {
+  self.goal_acknowledged = false
 }
 
 ///|
@@ -113,6 +129,10 @@ pub fn GoalTrialState::observe(
     GoalUpdated(goal=Some(text)) => {
       if text == self.expected_goal {
         self.goal_acknowledged = true
+        // A newly acknowledged set supersedes any clear/block marker emitted
+        // by a process that died before its finishing terminal.
+        self.goal_cleared = false
+        self.blocked_reason = None
       }
       None
     }
@@ -133,6 +153,11 @@ pub fn GoalTrialState::observe(
       None
     }
     Usage(usage~) => {
+      // AgentStep is emitted before the provider request starts. Usage is the
+      // first event that proves a complete provider response arrived, so only
+      // it resets consecutive network/process recovery limits.
+      self.consecutive_transport_failures = 0
+      self.consecutive_engine_restarts = 0
       self.prompt_tokens += usage.prompt_tokens
       self.completion_tokens += usage.completion_tokens
       self.total_tokens += usage.total_tokens
@@ -164,12 +189,57 @@ pub fn GoalTrialState::observe(
 /// interruption. This is reported separately from cleanly finished turns.
 pub fn GoalTrialState::record_transport_retry(self : GoalTrialState) -> Unit {
   self.transport_retries += 1
+  self.consecutive_transport_failures += 1
 }
 
 ///|
 /// Number of recoverable model-stream interruptions resubmitted so far.
 pub fn GoalTrialState::transport_retries(self : GoalTrialState) -> Int {
   self.transport_retries
+}
+
+///|
+/// Number of transport retries since the most recent completed provider
+/// response.
+pub fn GoalTrialState::consecutive_transport_failures(
+  self : GoalTrialState,
+) -> Int {
+  self.consecutive_transport_failures
+}
+
+///|
+/// Delay for the current transport-failure streak: 5, 10, 20, 40, then 60
+/// seconds for every later retry. The trial's absolute deadline includes it.
+pub fn GoalTrialState::transport_retry_delay_ms(self : GoalTrialState) -> Int {
+  match self.consecutive_transport_failures {
+    1 => 5_000
+    2 => 10_000
+    3 => 20_000
+    4 => 40_000
+    _ => 60_000
+  }
+}
+
+///|
+/// Record a serve-process restart that will reconnect to the same durable
+/// session and workspace.
+pub fn GoalTrialState::record_engine_restart(self : GoalTrialState) -> Unit {
+  self.engine_restarts += 1
+  self.consecutive_engine_restarts += 1
+}
+
+///|
+/// Total serve-process restarts during the trial.
+pub fn GoalTrialState::engine_restarts(self : GoalTrialState) -> Int {
+  self.engine_restarts
+}
+
+///|
+/// Number of restarts since the most recent completed provider response.
+pub fn GoalTrialState::consecutive_engine_restarts(
+  self : GoalTrialState,
+) -> Int {
+  self.consecutive_engine_restarts
 }
 
 ///|

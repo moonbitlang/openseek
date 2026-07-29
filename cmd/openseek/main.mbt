@@ -558,6 +558,26 @@ test "tui is an explicit subcommand" {
 }
 
 ///|
+test "serve goal auto turns default to twenty and accept unlimited" {
+  guard root_command().parse(argv=["serve"], env=Map([])).subcommand
+    is Some(("serve", defaults)) else {
+    fail("expected serve subcommand")
+  }
+  assert_eq(
+    @cli.value(defaults, "goal-auto-turns"),
+    "\{GoalAutoContinueDefaultTurns}",
+  )
+  guard root_command().parse(
+      argv=["serve", "--goal-auto-turns", "0"],
+      env=Map([]),
+    ).subcommand
+    is Some(("serve", unlimited)) else {
+    fail("expected serve subcommand with an unlimited goal budget")
+  }
+  assert_eq(@cli.value(unlimited, "goal-auto-turns"), "0")
+}
+
+///|
 fn dir_option() -> @argparse.OptionArg {
   OptionArg(
     "dir",
@@ -668,7 +688,15 @@ fn root_command() -> @argparse.Command {
       Command(
         "serve",
         about="Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.",
-        options=agent_options(),
+        options=[
+          ..agent_options(),
+          OptionArg(
+            "goal-auto-turns",
+            long="goal-auto-turns",
+            default_values=["\{GoalAutoContinueDefaultTurns}"],
+            about="Maximum automatic continuation turns for an armed standing goal; 0 means unlimited.",
+          ),
+        ],
         flags=[
           FlagArg(
             "no-session",

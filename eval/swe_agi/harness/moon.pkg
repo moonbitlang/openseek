@@ -1,4 +1,6 @@
 import {
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_session/store",
   "bobzhang/openseek/eval/report",
   "bobzhang/openseek_protocol" @protocol,
   "moonbitlang/async",

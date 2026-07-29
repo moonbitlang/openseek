@@ -67,5 +67,62 @@ test "transport retries are counted independently of finished turns" {
   let state = @harness.GoalTrialState("ship it")
   state.record_transport_retry()
   assert_eq(state.transport_retries(), 1)
+  assert_eq(state.consecutive_transport_failures(), 1)
+  assert_eq(state.transport_retry_delay_ms(), 5_000)
   assert_eq(state.turns(), 0)
+}
+
+///|
+test "a completed model response resets consecutive recovery limits" {
+  let state = @harness.GoalTrialState("ship it")
+  state.record_transport_retry()
+  state.record_transport_retry()
+  state.record_engine_restart()
+  assert_eq(state.transport_retry_delay_ms(), 10_000)
+  assert_eq(state.consecutive_engine_restarts(), 1)
+  state.observe(AgentStep(step=1)) |> ignore
+  assert_eq(state.consecutive_transport_failures(), 2)
+  assert_eq(state.consecutive_engine_restarts(), 1)
+  state.observe(
+    Usage(usage={
+      prompt_tokens: 1,
+      completion_tokens: 1,
+      total_tokens: 2,
+      prompt_cache_hit_tokens: 0,
+      prompt_cache_miss_tokens: 1,
+    }),
+  )
+  |> ignore
+  assert_eq(state.transport_retries(), 2)
+  assert_eq(state.engine_restarts(), 1)
+  assert_eq(state.consecutive_transport_failures(), 0)
+  assert_eq(state.consecutive_engine_restarts(), 0)
+}
+
+///|
+test "transport retry delay caps at one minute" {
+  let state = @harness.GoalTrialState("ship it")
+  for i = 0; i < 8; i = i + 1 {
+    state.record_transport_retry()
+  }
+  assert_eq(state.transport_retry_delay_ms(), 60_000)
+}
+
+///|
+test "a restarted connection must acknowledge the goal again" {
+  let state = @harness.GoalTrialState("ship it")
+  state.observe(GoalUpdated(goal=Some("ship it"))) |> ignore
+  assert_true(state.acknowledged())
+  state.expect_goal_acknowledgement()
+  assert_false(state.acknowledged())
+}
+
+///|
+test "a new goal acknowledgement clears stale terminal markers" {
+  let state = @harness.GoalTrialState("ship it")
+  state.observe(GoalUpdated(goal=None)) |> ignore
+  state.observe(GoalBlocked(reason="old process")) |> ignore
+  state.expect_goal_acknowledgement()
+  state.observe(GoalUpdated(goal=Some("ship it"))) |> ignore
+  assert_true(state.observe(AgentFinished(answer="keep working")) is None)
 }

@@ -21,10 +21,72 @@ priv enum GoalAction {
 }
 
 ///|
-/// Turns the engine will start on its own toward one standing goal before
-/// pausing for input — the same order as /loop's default fire budget. Reset
-/// whenever a goal is set with auto continuation.
-const GoalAutoContinueMaxTurns : Int = 20
+/// Default number of turns the engine will start on its own toward one
+/// standing goal before pausing for input — the same order as /loop's default
+/// fire budget. `openseek serve --goal-auto-turns` may override it; zero removes
+/// this turn limit, leaving the controller's process deadline to stop the loop.
+const GoalAutoContinueDefaultTurns : Int = 20
+
+///|
+/// One armed goal's auto-continuation budget. `limit == 0` is unlimited, with
+/// `remaining == 0` kept as a stable sentinel so consuming an unlimited budget
+/// never decrements below zero.
+priv struct GoalAutoContinueBudget {
+  limit : Int
+  remaining : Int
+}
+
+///|
+/// Parse the CLI value. Zero deliberately differs from the positive-only
+/// options: it selects an unlimited turn count, still bounded by the
+/// controller's process deadline.
+fn GoalAutoContinueBudget::parse(
+  input : String,
+) -> GoalAutoContinueBudget raise {
+  let limit = @string.parse_int(input) catch {
+    _ => fail("--goal-auto-turns must be a non-negative integer, got: \{input}")
+  }
+  if limit < 0 {
+    fail("--goal-auto-turns must be a non-negative integer, got: \{input}")
+  }
+  { limit, remaining: limit }
+}
+
+///|
+fn GoalAutoContinueBudget::allows_turn(self : GoalAutoContinueBudget) -> Bool {
+  self.limit == 0 || self.remaining > 0
+}
+
+///|
+/// Consume one finite turn. Unlimited and already exhausted budgets remain at
+/// zero, so callers cannot accidentally manufacture a negative remainder.
+fn GoalAutoContinueBudget::consume(
+  self : GoalAutoContinueBudget,
+) -> GoalAutoContinueBudget {
+  if self.limit == 0 || self.remaining <= 0 {
+    { ..self, remaining: 0 }
+  } else {
+    { ..self, remaining: self.remaining - 1 }
+  }
+}
+
+///|
+fn GoalAutoContinueBudget::exhausted(self : GoalAutoContinueBudget) -> Bool {
+  self.limit > 0 && self.remaining == 0
+}
+
+///|
+/// Report an unambiguous protocol value: `-1` means unlimited, while a finite
+/// budget may legitimately report `0` after consuming its final turn.
+fn GoalAutoContinueBudget::reported_remaining(
+  self : GoalAutoContinueBudget,
+) -> Int {
+  if self.limit == 0 {
+    -1
+  } else {
+    self.remaining
+  }
+}
 
 ///|
 const GoalContinuePrompt : String =
@@ -69,14 +131,14 @@ fn should_auto_continue(
   idle~ : Bool,
   shutting_down~ : Bool,
   goal_standing~ : Bool,
-  turns_remaining~ : Int,
+  budget~ : GoalAutoContinueBudget,
 ) -> Bool {
   auto &&
   finished &&
   idle &&
   !shutting_down &&
   goal_standing &&
-  turns_remaining > 0
+  budget.allows_turn()
 }
 
 ///|
@@ -393,7 +455,7 @@ test "a context-yield turn chains: finished derivation and standing goal" {
       idle=true,
       shutting_down=false,
       goal_standing=true,
-      turns_remaining=1,
+      budget=GoalAutoContinueBudget::parse("1"),
     ),
   )
 }
@@ -423,7 +485,7 @@ test "an unblocked goal resumes auto-continuation at the boundary" {
       idle=true,
       shutting_down=false,
       goal_standing=goal_standing(base),
-      turns_remaining=1,
+      budget=GoalAutoContinueBudget::parse("1"),
     ),
   )
   // After the unblock marker lands, the same boundary resumes.
@@ -438,7 +500,7 @@ test "an unblocked goal resumes auto-continuation at the boundary" {
       idle=true,
       shutting_down=false,
       goal_standing=goal_standing(resumed),
-      turns_remaining=1,
+      budget=GoalAutoContinueBudget::parse("1"),
     ),
   )
 }
@@ -452,7 +514,7 @@ test "auto-continue requires a finished idle serving turn with budget" {
       idle=true,
       shutting_down=false,
       goal_standing=true,
-      turns_remaining=1,
+      budget=GoalAutoContinueBudget::parse("1"),
     ),
   )
   // Any single condition failing pauses for the controller.
@@ -463,7 +525,7 @@ test "auto-continue requires a finished idle serving turn with budget" {
       idle=true,
       shutting_down=false,
       goal_standing=true,
-      turns_remaining=1,
+      budget=GoalAutoContinueBudget::parse("1"),
     ),
   )
   assert_false(
@@ -473,7 +535,7 @@ test "auto-continue requires a finished idle serving turn with budget" {
       idle=true,
       shutting_down=false,
       goal_standing=true,
-      turns_remaining=1,
+      budget=GoalAutoContinueBudget::parse("1"),
     ),
   )
   assert_false(
@@ -483,7 +545,7 @@ test "auto-continue requires a finished idle serving turn with budget" {
       idle=false,
       shutting_down=false,
       goal_standing=true,
-      turns_remaining=1,
+      budget=GoalAutoContinueBudget::parse("1"),
     ),
   )
   assert_false(
@@ -493,7 +555,7 @@ test "auto-continue requires a finished idle serving turn with budget" {
       idle=true,
       shutting_down=true,
       goal_standing=true,
-      turns_remaining=1,
+      budget=GoalAutoContinueBudget::parse("1"),
     ),
   )
   assert_false(
@@ -503,7 +565,7 @@ test "auto-continue requires a finished idle serving turn with budget" {
       idle=true,
       shutting_down=false,
       goal_standing=false,
-      turns_remaining=1,
+      budget=GoalAutoContinueBudget::parse("1"),
     ),
   )
   assert_false(
@@ -513,9 +575,56 @@ test "auto-continue requires a finished idle serving turn with budget" {
       idle=true,
       shutting_down=false,
       goal_standing=true,
-      turns_remaining=0,
+      budget=GoalAutoContinueBudget::parse("1").consume(),
     ),
   )
+}
+
+///|
+test "zero auto-turn budget is unlimited and is never exhausted" {
+  let unlimited = GoalAutoContinueBudget::parse("0")
+    .consume()
+    .consume()
+    .consume()
+  assert_eq(unlimited.remaining, 0)
+  assert_eq(unlimited.reported_remaining(), -1)
+  assert_true(unlimited.allows_turn())
+  assert_false(unlimited.exhausted())
+  assert_true(
+    should_auto_continue(
+      auto=true,
+      finished=true,
+      idle=true,
+      shutting_down=false,
+      goal_standing=true,
+      budget=unlimited,
+    ),
+  )
+}
+
+///|
+test "finite auto-turn budget stops at zero without becoming negative" {
+  let exhausted = GoalAutoContinueBudget::parse("1").consume().consume()
+  assert_eq(exhausted.remaining, 0)
+  assert_eq(exhausted.reported_remaining(), 0)
+  assert_false(exhausted.allows_turn())
+  assert_true(exhausted.exhausted())
+}
+
+///|
+test "auto-turn budget rejects negative and non-integer values" {
+  for bad in ["-1", "", "many"] {
+    try ignore(GoalAutoContinueBudget::parse(bad)) catch {
+      error =>
+        assert_true(
+          "\{error}".contains(
+            "--goal-auto-turns must be a non-negative integer",
+          ),
+        )
+    } noraise {
+      _ => fail("expected \{bad} to be rejected")
+    }
+  }
 }
 
 ///|
@@ -561,6 +670,12 @@ async fn run_serve(
     fail("an API key is required for \{model}: pass --api-key")
   }
   let max_steps = max_steps(matches)
+  let configured_goal_auto_budget = GoalAutoContinueBudget::parse(
+    match matches {
+      { values: { "goal-auto-turns": [input, ..], .. }, .. } => input
+      _ => fail("missing parsed argument: goal-auto-turns")
+    },
+  )
   let session_id = match matches {
     {
       values: {
@@ -726,7 +841,7 @@ async fn run_serve(
     // identical-text goal that was already standing can arm the loop.
     let mut goal_auto_pending : (String, Int)? = None
     let mut goal_auto_target : String? = None
-    let mut goal_turns_remaining = 0
+    let mut goal_auto_budget = configured_goal_auto_budget
     let mut goal_promoted_this_boundary = false
     // Monotonic serial over goal-affecting commands (set/clear/cancel): a
     // queued auto entry arms only if NO later command superseded it.
@@ -739,7 +854,7 @@ async fn run_serve(
     // was already worked under — continue it.
     fn arm_goal_auto(text : String, defer_continue : Bool) -> Unit {
       goal_auto_target = Some(text)
-      goal_turns_remaining = GoalAutoContinueMaxTurns
+      goal_auto_budget = configured_goal_auto_budget
       goal_auto_pending = None
       if defer_continue {
         goal_promoted_this_boundary = true
@@ -1066,7 +1181,6 @@ async fn run_serve(
           goal_command_serial += 1
           goal_auto_pending = None
           goal_auto_target = None
-          goal_turns_remaining = 0
           match active_work {
             Some(ActiveTurn(task)) => task.cancel()
             Some(ActiveCompact(task)) => task.cancel()
@@ -1095,7 +1209,6 @@ async fn run_serve(
             SetGoal(_, ..) | ClearGoal => None
           }
           goal_auto_target = None
-          goal_turns_remaining = 0
           let marker = match action {
             SetGoal(text, ..) => "\{@agent_session.GoalPrefix}\n\{text}"
             ClearGoal => @agent_session.GoalClearedNotice
@@ -1180,21 +1293,23 @@ async fn run_serve(
               // A durably blocked goal stands for the user but must not
               // relaunch declared-impossible work.
               goal_standing=standing is Some(goal) && !goal.blocked(),
-              turns_remaining=goal_turns_remaining,
+              budget=goal_auto_budget,
             ) {
-            goal_turns_remaining -= 1
-            @emit.emit(GoalContinue(remaining=goal_turns_remaining))
+            goal_auto_budget = goal_auto_budget.consume()
+            @emit.emit(
+              GoalContinue(remaining=goal_auto_budget.reported_remaining()),
+            )
             active_work = Some(ActiveTurn(start_turn(GoalContinuePrompt)))
           } else if armed &&
             finished &&
             !shutting_down &&
             active_work is None &&
             pending.length() == 0 &&
-            goal_turns_remaining == 0 {
+            goal_auto_budget.exhausted() {
             // The loop ran its full budget without the goal being met:
             // disarm and tell the controller, once.
             goal_auto_target = None
-            @emit.emit(GoalBudgetExhausted(turns=GoalAutoContinueMaxTurns))
+            @emit.emit(GoalBudgetExhausted(turns=goal_auto_budget.limit))
           }
           if active_work is None && pending.length() == 0 && shutting_down {
             break serve~

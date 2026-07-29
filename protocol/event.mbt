@@ -50,6 +50,7 @@ pub(all) enum Event {
   GoalUnblocked
   GoalCheck(content~ : String)
   GoalReminder(content~ : String)
+  // `remaining = -1` means that automatic goal turns are unlimited.
   GoalContinue(remaining~ : Int)
   GoalBudgetExhausted(turns~ : Int)
 

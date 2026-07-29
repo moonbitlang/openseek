@@ -6,7 +6,7 @@ priv struct Cli {
   repo_root : String
   engine : String
   model : String
-  max_steps : Int
+  max_steps : Int?
   timeout_seconds : Int
   grade_timeout_seconds : Int
 }
@@ -48,20 +48,19 @@ fn Cli::command() -> @argparse.Command {
     OptionArg(
       "max-steps",
       long="max-steps",
-      default_values=["160"],
-      about="Maximum steps per agent turn.",
+      about="Optional maximum steps per agent turn; unset uses the context window.",
     ),
     OptionArg(
       "timeout-seconds",
       long="timeout-seconds",
-      default_values=["1800"],
+      default_values=["172800"],
       about="Agent-work deadline; bounded process cleanup follows.",
     ),
     OptionArg(
       "grade-timeout-seconds",
       long="grade-timeout-seconds",
-      default_values=["300"],
-      about="Grader-work deadline; bounded process cleanup follows.",
+      default_values=["10800"],
+      about="Restored-suite deadline; the build has a separate 120-second deadline.",
     ),
   ])
 }
@@ -77,7 +76,6 @@ fn Cli::Cli(matches : @argparse.Matches) -> Cli raise {
         "repo-root": [repo_root, ..],
         "engine": [engine, ..],
         "model": [model, ..],
-        "max-steps": [max_steps, ..],
         "timeout-seconds": [timeout_seconds, ..],
         "grade-timeout-seconds": [grade_timeout_seconds, ..],
         ..
@@ -86,13 +84,17 @@ fn Cli::Cli(matches : @argparse.Matches) -> Cli raise {
     } else {
     fail("missing parsed benchmark defaults")
   }
+  let max_steps = match matches.values.get("max-steps") {
+    Some([value, ..]) => Some(@cli.parse_positive_int(value, "--max-steps"))
+    _ => None
+  }
   {
     task_dir,
     out_dir,
     repo_root,
     engine,
     model,
-    max_steps: @cli.parse_positive_int(max_steps, "--max-steps"),
+    max_steps,
     timeout_seconds: @cli.parse_positive_int(
       timeout_seconds, "--timeout-seconds",
     ),
@@ -123,6 +125,20 @@ fn Cli::config(self : Cli) -> @harness.Config {
       #|or specs/. When verified, call the goal tool with status "met".
     ),
   )
+}
+
+///|
+test "formal benchmark defaults use wall and suite deadlines without steps" {
+  let cli = Cli(Cli::command().parse(argv=[], env=Map([])))
+  assert_true(cli.max_steps is None)
+  assert_eq(cli.timeout_seconds, 172800)
+  assert_eq(cli.grade_timeout_seconds, 10800)
+}
+
+///|
+test "short smoke runs may opt into a step cap" {
+  let cli = Cli(Cli::command().parse(argv=["--max-steps", "160"], env=Map([])))
+  assert_eq(cli.max_steps, Some(160))
 }
 
 ///|

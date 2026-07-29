@@ -2,53 +2,84 @@
 
 Vendored [SWE-AGI](https://swe-agi.com) task suites for running the OpenSeek
 agent directly — no Docker, no bespoke harness. You point the agent at a task
-directory, it implements the frozen API against the tests, and you grade with a
-plain `moon test`.
+directory, it implements the frozen API, and the runner grades it with the
+task's pristine SWE-AGI evaluator.
 
 ## Benchmark runner
 
 The checked-in runner drives `openseek serve` as a persistent JSONL process. It
 sets a short durable goal with automatic continuation, waits for the engine to
 confirm it, then sends the complete `TASK.md` as the first prompt. The process
-stdin stays open until the goal is met, blocked, exhausts its continuation
-budget, fails, or reaches the agent-work deadline. A `ConnectionClosed` turn
-waits five seconds and resumes in the same serve session, up to ten times
-within that unchanged deadline. Bounded process cleanup follows the work
-deadline and is reported in the engine duration.
+stdin stays open until the goal is met, blocked, fails, or reaches the
+agent-work deadline. Benchmark runs set the goal continuation count to
+unlimited; the wall deadline remains the final bound. A `ConnectionClosed`
+turn resumes in the same serve session with 5, 10, 20, 40, then 60 second
+backoff, up to ten consecutive failures. A completed provider response resets
+that consecutive-failure count. If the serve process itself exits
+unexpectedly, the runner reconnects the same durable session up to three
+consecutive times.
+Retries, restarts, and their waits all consume the same wall deadline. Bounded
+process cleanup follows and is reported in the engine duration.
 
-Run one CSV trial:
+Run one formal CSV trial. The defaults shown here are 48 hours of agent work, a
+three-hour suite deadline, no fixed per-turn step count, and an unlimited goal
+continuation count:
 
 ```bash
 export DEEPSEEK=sk-...
 moon run --target native eval/swe_agi/cmd/main -- \
   --task-dir eval/swe_agi/tasks/csv \
   --model deepseek-v4-pro \
-  --max-steps 160 \
-  --timeout-seconds 1800 \
-  --grade-timeout-seconds 300 \
+  --timeout-seconds 172800 \
+  --grade-timeout-seconds 10800 \
   --out .moonagent/eval_runs/swe_agi_csv
 ```
 
+For a short harness smoke test, explicitly pass a smaller deadline and, if
+desired, `--max-steps 160`. Such a constrained run is not a formal performance
+result.
+
 The runner currently requires a POSIX host with `rsync`, `find`, Python 3, and
-process-group signals. It creates an isolated workspace under `--out` without
-copying `*_priv_test.mbt` files or `*_priv_test/` fixture directories,
-initializes that workspace as an independent Git repository, and commits the
-public task as its initial state. It preserves the raw engine JSONL and stderr,
-restores the shipped tests and fixtures after `openseek serve` exits, and
-finally runs `moon test` against those restored test files explicitly.
+process-group signals. It creates an isolated trial workspace under `--out`
+without copying `*_priv_test.mbt` files or `*_priv_test/` fixture directories,
+initializes that trial as an independent Git repository, and commits the public
+task as its initial state. It preserves the raw engine JSONL and stderr. Only
+after `openseek serve` exits, it creates an inspectable sibling `<trial>.grade`
+workspace: the agent implementation is copied without tests, specs, evaluators,
+Git data, or caches, then pristine protected inputs are overlaid from the
+vendored source. The agent's trial remains private-test-free.
+
 Agent-authored test files and test blocks embedded in implementation files
 therefore do not change the score. Source-tree build outputs and dependency
-caches are excluded from both restoration and test selection, so their own
-tests cannot enter the grade. A `setsid()` supervisor terminates ordinary
-descendant commands left by the engine or grader before protected inputs are
-restored. Grader output is drained through a 64 MiB-capped log instead of
-accumulating in runner memory or limiting files created by the tests.
-`--grade-timeout-seconds` independently bounds a hung restored-test run and
-reports exit status 124.
+caches are excluded from both the grading workspace and test selection, so
+their own tests cannot enter the grade. The runner pins the complete vendored
+task digest before materializing the trial and rejects source drift throughout
+preparation and grading. Changed or new agent manifests may add imports,
+dependencies, and subpackages, but executable build hooks are rejected; the
+root task target remains the pristine value (`js` for Pug and `native` for the
+other current tasks).
 
-Reports are written as Markdown, JSON, and HTML. The restored test result is the
-benchmark verdict; the model's `goal(met)` claim is recorded only as diagnostic
-state.
+Before building, the runner compares the exact `moon test --outline` identities
+from the pristine source and grading workspace under that fixed target. Both
+build and suite commands receive only the pristine test-file paths. Tasks that
+ship `try.py` run the pristine evaluator copied into the grading workspace
+under Python isolated mode, with a ten-second deadline for each case, and every
+JSONL result identity must match the verified outline. Other tasks require the
+final Moon summary total to equal the same outline count. Compilation has its
+own 120-second deadline, matching the upstream evaluator.
+
+A `setsid()` supervisor terminates ordinary descendant commands left by the
+engine or grader. The trusted evaluator wrapper also tracks child process groups
+created with Python's `start_new_session` and kills them when the suite deadline
+expires. Grader output is drained through bounded logs instead of accumulating
+in runner memory or limiting files created by the tests. `try.py` stdout and
+stderr are kept separately and each stream is capped at 64 MiB; only stdout is
+parsed as evaluator JSONL. `--grade-timeout-seconds` independently bounds the
+suite phase and reports exit status 124.
+
+Reports are written as Markdown, JSON, and HTML. The pristine evaluator result
+is the benchmark verdict; the model's `goal(met)` claim is recorded only as
+diagnostic state.
 
 `--out` must not already exist. Pass `--engine /path/to/openseek` to skip the
 nested `moon run` launcher and benchmark a prebuilt binary.
@@ -94,12 +125,12 @@ Notes:
 
 ## Private-test visibility
 
-The serve benchmark runner holds out `*_priv_test.mbt` files and
-`*_priv_test/` fixture directories from its trial workspace until
-`openseek serve` has exited, then restores the pristine tests and fixtures for
-grading. The trial's own Git repository also prevents Git commands in goal
-review from walking into the surrounding OpenSeek repository and discovering
-the vendored source task.
+The serve benchmark runner never copies `*_priv_test.mbt` files or
+`*_priv_test/` fixture directories into its trial workspace. After
+`openseek serve` has exited, it creates a separate sibling grading workspace
+containing the agent implementation and pristine tests. The trial's own Git
+repository also prevents Git commands in goal review from walking into the
+surrounding OpenSeek repository and discovering the vendored source task.
 
 The one-shot `openseek run --concurrency N` workflow above still copies private
 tests into every run, so those scores measure "can implement with the tests in
@@ -157,10 +188,10 @@ package `import`/`targets`) — do not hand-convert. Tasks with `deps` may need
 `moon install` before `moon fmt` can resolve them.
 
 Ensure the task's `moon.mod` declares its target with `preferred_target`
-(`"native"`, `"js"`, etc.). Grading runs a bare `moon test`, which honors
-`preferred_target`; without it `moon test` defaults to wasm-gc, and an agent that
-pins `supported_targets = "+native"` in `moon.pkg` then produces "no test entry
-found" — a bogus zero-test grade.
+(`"native"`, `"js"`, etc.). The runner treats that value as the trusted target
+and passes an explicit `--target` to outline, build, and suite commands. This
+avoids grading the wrong backend or accepting a bogus zero-test result after an
+agent retargets package manifests.
 
 Then normalize `TASK.md` — it is fed to the agent **verbatim**, so it must be
 self-consistent with running in place. Remove anything that assumes otherwise:

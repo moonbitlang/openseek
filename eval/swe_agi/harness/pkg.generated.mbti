@@ -16,19 +16,25 @@ pub fn BenchmarkResult::markdown(Self) -> String
 pub fn BenchmarkResult::passed(Self) -> Bool
 
 type Config
-pub fn Config::Config(task_dir~ : String, out_dir~ : String, repo_root~ : String, engine? : String, model~ : String, max_steps~ : Int, timeout_ms~ : Int, grade_timeout_ms~ : Int, goal_text~ : String) -> Self
+pub fn Config::Config(task_dir~ : String, out_dir~ : String, repo_root~ : String, engine? : String, model~ : String, max_steps~ : Int?, timeout_ms~ : Int, grade_timeout_ms~ : Int, goal_text~ : String) -> Self
 pub async fn Config::run(Self) -> BenchmarkResult
 
 type GoalTrialState
 pub fn GoalTrialState::GoalTrialState(String) -> Self
 pub fn GoalTrialState::acknowledged(Self) -> Bool
 pub fn GoalTrialState::completion_tokens(Self) -> Int
+pub fn GoalTrialState::consecutive_engine_restarts(Self) -> Int
+pub fn GoalTrialState::consecutive_transport_failures(Self) -> Int
+pub fn GoalTrialState::engine_restarts(Self) -> Int
+pub fn GoalTrialState::expect_goal_acknowledgement(Self) -> Unit
 pub fn GoalTrialState::observe(Self, @openseek_protocol.Event) -> TrialStop?
 pub fn GoalTrialState::prompt_tokens(Self) -> Int
+pub fn GoalTrialState::record_engine_restart(Self) -> Unit
 pub fn GoalTrialState::record_transport_retry(Self) -> Unit
 pub fn GoalTrialState::steps(Self) -> Int
 pub fn GoalTrialState::total_tokens(Self) -> Int
 pub fn GoalTrialState::transport_retries(Self) -> Int
+pub fn GoalTrialState::transport_retry_delay_ms(Self) -> Int
 pub fn GoalTrialState::turns(Self) -> Int
 
 type TrialStop derive(Eq, @debug.Debug)
