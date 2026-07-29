@@ -16,6 +16,10 @@ priv struct UpdateState {
   mut staged : @update.StagedUpdate?
   work_dir : String?
   bundle_path : String?
+  // Cleanup, staging, and bundle replacement all touch the same fixed paths.
+  // One host-wide mutex keeps those mutations from overlapping across desktop
+  // and remote request tasks. Read-only update checks do not take it.
+  mutation_lock : @async.Mutex
 }
 
 ///|
@@ -35,6 +39,7 @@ fn new_update_state(
     } else {
       None
     },
+    mutation_lock: Mutex(),
   }
 }
 
@@ -42,6 +47,8 @@ fn new_update_state(
 /// Sweep debris a previous update may have left behind (a staging dir, the
 /// old bundle parked aside) — the host's only unprompted update work.
 async fn cleanup_updates(state : UpdateState) -> Unit {
+  state.mutation_lock.acquire()
+  defer state.mutation_lock.release()
   if state.work_dir is Some(dir) && state.bundle_path is Some(bundle) {
     @update.cleanup_leftovers(work_dir=dir, bundle_path=bundle)
   }
@@ -170,6 +177,8 @@ async fn download_update_op(
   state : UpdateState,
   payload : UpdateChannelPayload,
 ) -> DownloadUpdateReply {
+  state.mutation_lock.acquire()
+  defer state.mutation_lock.release()
   guard state.work_dir is Some(dir) && state.bundle_path is Some(bundle) else {
     raise HostError("this build cannot install updates")
   }
@@ -209,6 +218,8 @@ async fn download_update_op(
 /// tells the frontend to close the window; the actual reopen happens in
 /// `main` once the run loop has exited.
 async fn apply_update_op(state : UpdateState) -> ApplyUpdateReply {
+  state.mutation_lock.acquire()
+  defer state.mutation_lock.release()
   guard state.staged is Some(staged) &&
     state.work_dir is Some(dir) &&
     state.bundle_path is Some(bundle) else {
@@ -221,4 +232,27 @@ async fn apply_update_op(state : UpdateState) -> ApplyUpdateReply {
   state.staged = None
   @update.write_relaunch_marker(work_dir=dir, bundle_path=bundle)
   { applied: true }
+}
+
+///|
+async test "update apply waits for the host-wide mutation lock" {
+  let state = new_update_state(None, None)
+  let started : @async.Queue[Unit] = Queue(kind=Blocking(1))
+  let result : @async.Queue[Bool] = Queue(kind=Blocking(1))
+  state.mutation_lock.acquire()
+  @async.with_task_group(group => {
+    group.spawn_bg(() => {
+      started.put(())
+      try apply_update_op(state) catch {
+        HostError(_) => result.put(true)
+        error => raise error
+      } noraise {
+        _ => result.put(false)
+      }
+    })
+    started.get()
+    assert_true(@async.with_timeout_opt(10, () => result.get()) is None)
+    state.mutation_lock.release()
+    assert_true(result.get())
+  })
 }
