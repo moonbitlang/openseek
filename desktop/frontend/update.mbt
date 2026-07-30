@@ -961,7 +961,7 @@ fn update_msg(
         None =>
           (
             @cmd.batch([
-              install_bridge(dispatch, model.focused),
+              install_bridge(dispatch, model.focused, 0),
               load_saved_settings(dispatch),
               watch_transcript_scroll(dispatch),
               watch_color_scheme(dispatch),
@@ -2187,10 +2187,16 @@ fn update_device_msg(
     }
     BridgeUnavailable(message) =>
       (@cmd.none, model.replace_device({ ..dev, bridge: BridgeLost(message) }))
-    ChannelDown => {
+    ChannelDown(websocket_epoch~) => {
+      // A close callback may already be queued when sign-out retires a
+      // device. If the same relay id is later re-added, it owns a new epoch
+      // and must not inherit the retired connection's failure or timer.
+      guard websocket_epoch == dev.websocket_epoch else {
+        return (@cmd.none, model)
+      }
       // Count the loss and schedule the next attempt. Because the attempt
-      // comes back through this function, a device removed meanwhile fails
-      // the `device_state` guard above and its loop simply ends.
+      // comes back through this function, a removed or re-added device fails
+      // the state/epoch guards and its old loop simply ends.
       let failures = dev.reconnect_failures + 1
       let bridge = if failures == WsLostAfter {
         BridgeLost(
@@ -2201,15 +2207,18 @@ fn update_device_msg(
       }
       (
         @cmd.delay(
-          dispatch(FromDevice(channel, ReconnectDue)),
+          dispatch(FromDevice(channel, ReconnectDue(websocket_epoch~))),
           reconnect_delay(failures),
         ),
         model.replace_device({ ..dev, bridge, reconnect_failures: failures }),
       )
     }
-    ReconnectDue => {
+    ReconnectDue(websocket_epoch~) => {
+      guard websocket_epoch == dev.websocket_epoch else {
+        return (@cmd.none, model)
+      }
       guard channel is Remote(device) else { return (@cmd.none, model) }
-      (connect_ws(dispatch, device), model)
+      (connect_ws(dispatch, device, websocket_epoch), model)
     }
     FilePanel(msg) => {
       // The file panel serves the focused conversation; a background
@@ -4947,11 +4956,23 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
     devices: [{ ..empty_device_state(channel), bridge: Connected }],
     focused: channel,
   }
-  let (_, one) = update(dispatch, FromDevice(channel, ChannelDown), model)
-  let (_, two) = update(dispatch, FromDevice(channel, ChannelDown), one)
+  let (_, one) = update(
+    dispatch,
+    FromDevice(channel, ChannelDown(websocket_epoch=0)),
+    model,
+  )
+  let (_, two) = update(
+    dispatch,
+    FromDevice(channel, ChannelDown(websocket_epoch=0)),
+    one,
+  )
   inspect(two.dev().reconnect_failures, content="2")
   assert_true(two.bridge_state() is Connected)
-  let (_, three) = update(dispatch, FromDevice(channel, ChannelDown), two)
+  let (_, three) = update(
+    dispatch,
+    FromDevice(channel, ChannelDown(websocket_epoch=0)),
+    two,
+  )
   assert_true(three.bridge_state() is BridgeLost(_))
 }
 
@@ -4976,13 +4997,60 @@ test "BridgeReady resets the reconnect failure count" {
 }
 
 ///|
-test "a late reconnect tick for a removed device changes nothing" {
+test "late reconnect ticks cannot act on removed or re-added devices" {
   let dispatch = test_dispatch()
   let channel : @interop.ChannelId = Remote("gone")
   let model = test_model()
-  let (_, next) = update(dispatch, FromDevice(channel, ReconnectDue), model)
+  let (_, next) = update(
+    dispatch,
+    FromDevice(channel, ReconnectDue(websocket_epoch=1)),
+    model,
+  )
   inspect(next.devices.length(), content="1")
   assert_true(next.device_state(channel) is None)
+  // Reusing the relay id after sign-out is not reusing the connection. The
+  // page-wide epoch survives account teardown and advances when the roster
+  // adopts the same id again.
+  let roster : Array[DeviceMeta] = [
+    { id: "same", name: "Mac", hostname: None, online: true },
+  ]
+  let (_, signed) = update(
+    dispatch,
+    Console(MeLoaded(login="o", avatar="")),
+    console_test_model(),
+  )
+  let (_, first) = update(
+    dispatch,
+    Console(RosterLoaded(roster, generation=1)),
+    signed,
+  )
+  let same : @interop.ChannelId = Remote("same")
+  guard first.device_state(same) is Some(first_dev) else {
+    fail("first device connection missing")
+  }
+  inspect(first_dev.websocket_epoch, content="1")
+  let (_, out) = update(dispatch, Console(MeUnauthorized), first)
+  let (_, signed_again) = update(
+    dispatch,
+    Console(MeLoaded(login="o", avatar="")),
+    out,
+  )
+  let (_, current) = update(
+    dispatch,
+    Console(RosterLoaded(roster, generation=2)),
+    signed_again,
+  )
+  guard current.device_state(same) is Some(current_dev) else {
+    fail("re-added device connection missing")
+  }
+  inspect(current_dev.websocket_epoch, content="2")
+  let (_, stale) = update(
+    dispatch,
+    FromDevice(same, ReconnectDue(websocket_epoch=1)),
+    current,
+  )
+  assert_true(stale.devices == current.devices)
+  inspect(stale.websocket_epoch, content="2")
 }
 
 ///|

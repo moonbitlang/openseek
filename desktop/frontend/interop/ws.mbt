@@ -79,6 +79,10 @@ pub fn ws_connect(
     return
   }
   let channel = Remote(device)
+  // Replacing the registry entry alone leaves the previous socket's
+  // `onmessage` callback alive. Retire it first so at most one connection can
+  // forward notifications or hold pending requests for this device.
+  ws_close(channel)
   let ctor : @js.Value = @js.globalThis.get_with_string("WebSocket")
   let socket : @js.Value = ctor.new([url])
   let session : RpcSession = {

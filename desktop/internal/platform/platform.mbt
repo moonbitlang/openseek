@@ -9,15 +9,21 @@ pub fn is_darwin() -> Bool {
 }
 
 ///|
+/// Hand one UTF-16 target directly to the Windows shell. MoonBit strings are
+/// NUL-terminated UTF-16 on the native backend, which is exactly what
+/// `ShellExecuteW` consumes; no command interpreter sees the target.
+#cfg(platform="windows")
+#borrow(target)
+extern "C" fn windows_open(target : String) -> Int = "moonbit_openseek_desktop_platform_open"
+
+///|
 /// Hand `path` to the platform's default opener, returning its exit code. The
 /// opener returns as soon as it has handed the file off (LaunchServices on
 /// macOS, the desktop portal on Linux), so the code reports the hand-off, not
 /// the opened app's lifetime. `path` should already be absolute.
 #cfg(platform="windows")
 pub async fn open_path(path : String) -> Int {
-  // `start` is a `cmd` builtin, so it cannot be spawned directly; the empty
-  // "" is its (otherwise required) window-title argument.
-  @process.run("cmd", ["/c", "start", "", path])
+  windows_open(path)
 }
 
 ///|
@@ -45,7 +51,7 @@ pub async fn open_path(path : String) -> Int {
 /// the opener rejects should fail, not land in an editor.
 #cfg(platform="windows")
 pub async fn open_url(url : String) -> Int {
-  @process.run("cmd", ["/c", "start", "", url])
+  windows_open(url)
 }
 
 ///|

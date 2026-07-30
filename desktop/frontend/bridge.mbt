@@ -11,10 +11,11 @@
 fn install_bridge(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
+  websocket_epoch : Int,
 ) -> @cmd.Cmd {
   match channel {
     Local => install_proton_bridge(dispatch, 0)
-    Remote(device) => connect_ws(dispatch, device)
+    Remote(device) => connect_ws(dispatch, device, websocket_epoch)
   }
 }
 
@@ -271,7 +272,11 @@ const WsLostAfter = 3
 /// schedules `ReconnectDue` with backoff — so a device dropped from the
 /// model (revoked, signed out) stops reconnecting by itself, and a
 /// successful connection (the host's `agent.connected`) resets the count.
-fn connect_ws(dispatch : @cmd.Emit[Msg], device : String) -> @cmd.Cmd {
+fn connect_ws(
+  dispatch : @cmd.Emit[Msg],
+  device : String,
+  websocket_epoch : Int,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     let channel : @interop.ChannelId = Remote(device)
     @interop.ws_connect(
@@ -281,7 +286,11 @@ fn connect_ws(dispatch : @cmd.Emit[Msg], device : String) -> @cmd.Cmd {
           scheduler.add(dispatch(msg))
         }
       },
-      on_down=() => scheduler.add(dispatch(FromDevice(channel, ChannelDown))),
+      on_down=() => {
+        scheduler.add(
+          dispatch(FromDevice(channel, ChannelDown(websocket_epoch~))),
+        )
+      },
     )
   })
 }

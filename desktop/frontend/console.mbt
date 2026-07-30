@@ -312,8 +312,9 @@ fn update_console_msg(
 /// Fold one `/v1/devices` reply into the model: retire channels the relay
 /// no longer grants, connect newly listed online devices, and (re)place
 /// focus. The roster is the authority on which reconnect loops keep
-/// running — a retired channel loses its `DeviceState` here, so its next
-/// `ReconnectDue` finds nothing to act on.
+/// running. A retired channel loses its state here; if the same relay id is
+/// later re-added, its fresh WebSocket epoch also rejects the retired
+/// connection's delayed callbacks and reconnect timer.
 fn apply_roster(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -321,6 +322,7 @@ fn apply_roster(
   metas : Array[DeviceMeta],
 ) -> (@cmd.Cmd, Model) {
   let commands : Array[@cmd.Cmd] = []
+  let mut websocket_epoch = model.websocket_epoch
   // Retire first: revoked or unshared devices close their socket (a
   // command — update stays pure) and drop their state and conversations.
   let devices : Array[DeviceState] = []
@@ -341,8 +343,9 @@ fn apply_roster(
   for meta in metas {
     let channel : @interop.ChannelId = Remote(meta.id)
     if meta.online && !devices.iter().any(dev => dev.channel == channel) {
-      devices.push(empty_device_state(channel))
-      commands.push(install_bridge(dispatch, channel))
+      websocket_epoch += 1
+      devices.push({ ..empty_device_state(channel), websocket_epoch, })
+      commands.push(install_bridge(dispatch, channel, websocket_epoch))
     }
   }
   // Focus: keep a focus the page still holds; otherwise prefer the deep
@@ -397,6 +400,7 @@ fn apply_roster(
   let reconciled = {
     ..model,
     devices,
+    websocket_epoch,
     conversations,
     console: Some({
       ..console,

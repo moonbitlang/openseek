@@ -556,6 +556,11 @@ priv struct DeviceState {
   channel : @interop.ChannelId
   // Whether the channel's host bridge is up; see `BridgeState`.
   bridge : BridgeState
+  // Page-unique identity of this remote device connection lifecycle. A
+  // removed device may later return with the same relay id; delayed socket
+  // callbacks and reconnect timers carry the old value and are ignored.
+  // The desktop's non-WebSocket Local channel always uses 0.
+  websocket_epoch : Int
   // Consecutive WebSocket losses since the last successful connection.
   // Drives the reconnect backoff and the BridgeLost threshold; always 0 for
   // the proton channel, whose bridge never reconnects.
@@ -596,6 +601,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
   {
     channel,
     bridge: Connecting,
+    websocket_epoch: 0,
     reconnect_failures: 0,
     connection_generation: 0,
     sessions_request_generation: 0,
@@ -615,6 +621,10 @@ priv struct Model {
   // Local host, or a browser console's roster devices — empty there until
   // the roster loads (`apply_roster`).
   devices : Array[DeviceState]
+  // Last WebSocket lifecycle identity issued by this page. It deliberately
+  // survives sign-out, so re-adding the same relay device cannot collide with
+  // a reconnect timer queued by its retired connection.
+  websocket_epoch : Int
   // The device channel every UI action targets — the Settings/Skills
   // screens, the composer, and the active conversation. The desktop window
   // is born with `Local`; a browser console starts on an inert `Local`
@@ -1095,11 +1105,12 @@ priv enum DeviceMsg {
   BridgeUnavailable(String)
   // The channel's WebSocket closed (or failed to open). The handler counts
   // the loss and schedules `ReconnectDue`, making the model's device list
-  // the single authority over which reconnect loops keep running.
-  ChannelDown
+  // the single authority over which reconnect loops keep running. The epoch
+  // rejects a callback queued by an earlier occupant of the same device id.
+  ChannelDown(websocket_epoch~ : Int)
   // A scheduled reconnect attempt came due. Dropped harmlessly when the
-  // device was removed in the meantime — no `DeviceState`, no handler.
-  ReconnectDue
+  // device was removed or re-added in the meantime.
+  ReconnectDue(websocket_epoch~ : Int)
   // A file-panel-scoped host push (`fs.changed`, `lsp.diagnostics`),
   // stamped with its channel: the panel serves the focused conversation,
   // so a background device's filesystem noise is dropped at the arm.
@@ -1382,6 +1393,7 @@ fn initial_model() -> Model {
         ]
       None => []
     },
+    websocket_epoch: 0,
     focused: @interop.page_channel().unwrap_or(@interop.ChannelId::Local),
     selected_model: DefaultModel,
     max_steps: DefaultMaxSteps,
