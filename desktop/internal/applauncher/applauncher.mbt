@@ -180,15 +180,9 @@ fn mac_candidates() -> Array[AppCandidate] {
 }
 
 ///|
-#cfg(platform="windows")
-async fn build_app_catalog() -> Array[LauncherApp] {
-  []
-}
-
-///|
-/// macOS (and Linux, where the probe simply finds nothing). On Linux the
-/// catalog is empty, so the launcher button stays hidden.
-#cfg(not(platform="windows"))
+/// Build the catalog on macOS. The implementation is compiled everywhere so
+/// its packages and private types have one coherent shape; the runtime platform
+/// check keeps Linux and Windows from running macOS commands.
 async fn build_app_catalog() -> Array[LauncherApp] {
   guard @platform.is_darwin() else { return [] }
   let result : Array[LauncherApp] = []
@@ -216,7 +210,6 @@ async fn build_app_catalog() -> Array[LauncherApp] {
 
 ///|
 /// The standard locations an app bundle can live in.
-#cfg(not(platform="windows"))
 fn app_search_dirs() -> Array[String] {
   let dirs = [
     "/Applications", "/System/Applications", "/System/Applications/Utilities", "/System/Library/CoreServices",
@@ -231,7 +224,6 @@ fn app_search_dirs() -> Array[String] {
 /// Find an installed app: scan the standard bundle locations for one of its
 /// `.app` basenames, then fall back to a Spotlight lookup by bundle id (catches
 /// nonstandard install locations).
-#cfg(not(platform="windows"))
 async fn locate_app(candidate : AppCandidate) -> String? {
   for dir in app_search_dirs() {
     for name in candidate.app_names {
@@ -251,7 +243,6 @@ async fn locate_app(candidate : AppCandidate) -> String? {
 
 ///|
 /// Resolve an app bundle's path from its bundle id via Spotlight.
-#cfg(not(platform="windows"))
 async fn mdfind_bundle(bundle_id : String) -> String? {
   let (code, stdout, _) = @process.collect_output("mdfind", [
     "kMDItemCFBundleIdentifier == '\{bundle_id}'",
@@ -274,7 +265,6 @@ async fn mdfind_bundle(bundle_id : String) -> String? {
 /// Extract an app's icon as a `data:image/png` URL: locate its `.icns`, resize
 /// it to a PNG with `sips`, and base64-encode the result. Returns empty on any
 /// failure — the caller falls back to a letter avatar.
-#cfg(not(platform="windows"))
 async fn app_icon_data_url(id : String, app_path : String) -> String {
   guard find_app_icns(app_path) is Some(icns) else { return "" }
   guard icon_cache_dir() is Some(cache_dir) else { return "" }
@@ -292,7 +282,6 @@ async fn app_icon_data_url(id : String, app_path : String) -> String {
 }
 
 ///|
-#cfg(not(platform="windows"))
 fn icon_cache_dir() -> String? {
   if @home.dir() is Some(home) {
     Some("\{home}/Library/Caches/OpenSeek/app-icons")
@@ -305,7 +294,6 @@ fn icon_cache_dir() -> String? {
 /// Find an app's `.icns`: prefer the `CFBundleIconFile` named in Info.plist,
 /// then any `.icns` in Resources (apps that ship their icon in an asset catalog
 /// have neither and return `None`).
-#cfg(not(platform="windows"))
 async fn find_app_icns(app_path : String) -> String? {
   let resources = "\{app_path}/Contents/Resources"
   let named = read_icon_name("\{app_path}/Contents/Info")
@@ -337,7 +325,6 @@ async fn find_app_icns(app_path : String) -> String? {
 ///|
 /// Read `CFBundleIconFile` from an app's Info.plist (handles binary plists,
 /// which `defaults` decodes); empty when the key is absent.
-#cfg(not(platform="windows"))
 async fn read_icon_name(info_path : String) -> String {
   let (code, stdout, _) = @process.collect_output("defaults", [
     "read", info_path, "CFBundleIconFile",
@@ -354,7 +341,6 @@ async fn read_icon_name(info_path : String) -> String {
 /// `open` reported (its stderr) when it fails. `reveal_only` apps (Finder) take
 /// the directory through the platform default; everything else opens it with the
 /// resolved bundle.
-#cfg(not(platform="windows"))
 async fn run_app_open(app : LauncherApp, dir : String) -> Unit {
   let args = if app.reveal_only { [dir] } else { ["-a", app.app_path, dir] }
   let (code, _, stderr) = @process.collect_output("open", args) catch {
@@ -371,11 +357,4 @@ async fn run_app_open(app : LauncherApp, dir : String) -> Unit {
     }
     raise LauncherError("Could not open \{app.name} (\{dir}): \{reason}")
   }
-}
-
-///|
-#cfg(platform="windows")
-async fn run_app_open(app : LauncherApp, dir : String) -> Unit {
-  let _ = app
-  raise LauncherError("The app launcher is not supported on Windows: \{dir}")
 }

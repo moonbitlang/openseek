@@ -340,21 +340,18 @@ pub async fn rebuild_libproton(
     )
   }
   let build_dir = ws.at(ProtonNativeBuildDir)
-  run_checked(
-    "cmake",
-    [
-      "-S",
-      ws.at("lepus/native"),
-      "-B",
-      build_dir,
-      "-DCMAKE_BUILD_TYPE=Release",
-      "-DBUILD_TESTING=OFF",
-      "-DPROTON_WITH_ENGINE=ON",
-      "-DPROTON_ENGINE_ROOT=" + cef_root,
-    ],
-    dir=ws.dir(),
-    extra_env~,
-  )
+  let configure_args = ["-S", ws.at("lepus/native"), "-B", build_dir]
+  // CMAKE_BUILD_TYPE selects the release configuration for single-config
+  // generators. Visual Studio is multi-config and receives the selection from
+  // `cmake --build --config Release`; passing the cache variable there only
+  // produces CMake's unused-cli warning.
+  if !(@platform.win32 || @platform.win64) {
+    configure_args.push("-DCMAKE_BUILD_TYPE=Release")
+  }
+  configure_args.push("-DBUILD_TESTING=OFF")
+  configure_args.push("-DPROTON_WITH_ENGINE=ON")
+  configure_args.push("-DPROTON_ENGINE_ROOT=" + cef_root)
+  run_checked("cmake", configure_args, dir=ws.dir(), extra_env~)
   run_checked(
     "cmake",
     ["--build", build_dir, "--config", "Release"],

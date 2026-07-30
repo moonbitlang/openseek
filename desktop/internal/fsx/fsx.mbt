@@ -60,15 +60,14 @@ pub async fn copy_file(source : @path.Path, destination : @path.Path) -> Unit {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async fn chmod(path : StringView, permission : Int) -> Unit {
-  @fs.chmod(path, permission)
-}
-
-///|
-#cfg(platform="windows")
-async fn chmod(_ : StringView, _ : Int) -> Unit {
-  ()
+  // Windows has no Unix execute bit and async/fs deliberately reports chmod
+  // as unsupported there. Keep the operation in this shared implementation so
+  // every platform type-checks the real copy path without issuing an async
+  // warning for a platform-only no-op.
+  if !(@platform.win32 || @platform.win64) {
+    @fs.chmod(path, permission)
+  }
 }
 
 ///|

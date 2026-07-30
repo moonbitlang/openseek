@@ -30,26 +30,19 @@ pub fn print_env_json(mark : String) -> Unit {
 }
 
 ///|
-/// Windows GUI processes inherit the user's registry environment, so there
-/// is nothing to resolve.
-#cfg(platform="windows")
-pub async fn apply_login_shell_env(
-  _executable : String,
-  _log : @xlog.Logger,
-) -> Unit {
-
-}
-
-///|
 /// Probe the user's interactive login shell for the environment it builds
 /// up and graft the result onto this process. Best-effort: any failure —
 /// timeout, nonzero exit, unparsable output — keeps the inherited
-/// environment and only leaves a log line behind.
-#cfg(not(platform="windows"))
+/// environment and only leaves a log line behind. Windows GUI processes
+/// already inherit the user's registry environment, so they return before
+/// starting a probe.
 pub async fn apply_login_shell_env(
   executable : String,
   log : @xlog.Logger,
 ) -> Unit {
+  if @platform.win32 || @platform.win64 {
+    return
+  }
   guard @sys.get_env_var(ResolvingGuardVar) is None else { return }
   let shell = match @sys.get_env_var("SHELL") {
     Some(shell) if !shell.trim().is_empty() => shell

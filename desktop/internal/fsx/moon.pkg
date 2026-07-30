@@ -3,6 +3,7 @@ import {
   "moonbitlang/async/os_error",
   "moonbitlang/async/fs",
   "moonbitlang/x/path",
+  "tonyfettes/platform",
 }
 
 supported_targets = "+native"

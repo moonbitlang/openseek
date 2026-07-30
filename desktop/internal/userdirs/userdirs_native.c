@@ -2,8 +2,7 @@
  * The user's Documents folder as the platform knows it. Only Windows has a
  * native authority worth asking (the Documents known folder, which OneDrive's
  * folder move or group policy may relocate). Everywhere else the MoonBit side
- * resolves the answer itself, so this file exports the FFI symbol only on
- * Windows.
+ * resolves the answer itself, and this stub returns empty bytes.
  */
 
 #include <string.h>
@@ -21,8 +20,11 @@
 #pragma comment(lib, "ole32.lib")
 #endif
 
+#endif
+
 /* The known-folder path as UTF-8, or empty bytes when the lookup fails. */
 MOONBIT_FFI_EXPORT moonbit_bytes_t openseek_desktop_documents_dir(void) {
+#if defined(_WIN32)
   moonbit_bytes_t result = NULL;
   PWSTR wide = NULL;
   if (SHGetKnownFolderPath(&FOLDERID_Documents, KF_FLAG_DONT_VERIFY, NULL,
@@ -42,6 +44,7 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t openseek_desktop_documents_dir(void) {
     result = moonbit_make_bytes(0, 0);
   }
   return result;
-}
-
+#else
+  return moonbit_make_bytes(0, 0);
 #endif
+}

@@ -9,10 +9,11 @@ pub fn is_darwin() -> Bool {
 }
 
 ///|
-/// Hand one UTF-16 target directly to the Windows shell. MoonBit strings are
-/// NUL-terminated UTF-16 on the native backend, which is exactly what
-/// `ShellExecuteW` consumes; no command interpreter sees the target.
-#cfg(platform="windows")
+/// Hand one UTF-16 target to the native opener. The C stub calls
+/// `ShellExecuteW` on Windows and returns failure elsewhere; the public
+/// wrappers only select it on Windows. MoonBit strings are NUL-terminated
+/// UTF-16 on the native backend, which is exactly what `ShellExecuteW`
+/// consumes, so no command interpreter sees the target.
 #borrow(target)
 extern "C" fn windows_open(target : String) -> Int = "moonbit_openseek_desktop_platform_open"
 
@@ -21,15 +22,10 @@ extern "C" fn windows_open(target : String) -> Int = "moonbit_openseek_desktop_p
 /// opener returns as soon as it has handed the file off (LaunchServices on
 /// macOS, the desktop portal on Linux), so the code reports the hand-off, not
 /// the opened app's lifetime. `path` should already be absolute.
-#cfg(platform="windows")
 pub async fn open_path(path : String) -> Int {
-  windows_open(path)
-}
-
-///|
-#cfg(not(platform="windows"))
-pub async fn open_path(path : String) -> Int {
-  if is_darwin() {
+  if @sys.win32 || @sys.win64 {
+    windows_open(path)
+  } else if is_darwin() {
     // Respect the file's app association, but fall back to the default text
     // editor for types with none — source files like `.mbt` have no associated
     // app, and plain `open` rejects them with "no application knows how to
@@ -49,15 +45,10 @@ pub async fn open_path(path : String) -> Int {
 /// Open a URL in the system's default browser, returning the opener's exit
 /// code. Unlike `open_path` there is no text-editor fallback — a URL that
 /// the opener rejects should fail, not land in an editor.
-#cfg(platform="windows")
 pub async fn open_url(url : String) -> Int {
-  windows_open(url)
-}
-
-///|
-#cfg(not(platform="windows"))
-pub async fn open_url(url : String) -> Int {
-  if is_darwin() {
+  if @sys.win32 || @sys.win64 {
+    windows_open(url)
+  } else if is_darwin() {
     @process.run("open", [url])
   } else {
     @process.run("xdg-open", [url])

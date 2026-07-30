@@ -2,7 +2,6 @@
 // Only Documents is consulted today.
 
 ///|
-#cfg(platform="windows")
 extern "C" fn known_folder_documents() -> Bytes = "openseek_desktop_documents_dir"
 
 ///|
@@ -15,21 +14,18 @@ extern "C" fn known_folder_documents() -> Bytes = "openseek_desktop_documents_di
 /// On Windows, we use `SHGetKnownFolderPath(FOLDERID_Documents)`, the
 /// authority on Windows. `None` when the lookup fails — and always off
 /// Windows, where the native stub returns empty bytes.
-#cfg(platform="windows")
 pub async fn documents_dir() -> @path.Path? {
-  let path = known_folder_documents()
-  guard path.length() > 0 else { return None }
-  Some(@utf8.decode_lossy(path))
-}
-
-///|
-#cfg(not(platform="windows"))
-pub async fn documents_dir() -> @path.Path? {
-  guard @home.dir() is Some(home) else { return None }
-  if xdg_documents_override(home) is Some(dir) {
-    return Some(dir)
+  if @platform.win32 || @platform.win64 {
+    let path = known_folder_documents()
+    guard path.length() > 0 else { return None }
+    Some(@utf8.decode_lossy(path))
+  } else {
+    guard @home.dir() is Some(home) else { return None }
+    if xdg_documents_override(home) is Some(dir) {
+      return Some(dir)
+    }
+    Some(home.join("Documents").normalize().to_string())
   }
-  Some(home.join("Documents").normalize().to_string())
 }
 
 ///|

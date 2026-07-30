@@ -726,6 +726,7 @@ test "session_store_file follows the store layout" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 fn follower_test_config(
   engine : String,
   session : String,

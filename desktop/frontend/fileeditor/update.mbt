@@ -619,10 +619,9 @@ pub fn update(
     FileLoaded(owner~, path~, name~, file~, range~, annotation~) =>
       // A stale read — the conversation switched, or the tab was closed
       // while the read was in flight — must not resurrect state.
-      if state.owner != Some(owner) || tab_index(state, path) is None {
+      if state.owner != Some(owner) {
         (@cmd.none, state)
-      } else {
-        guard tab_index(state, path) is Some(index)
+      } else if tab_index(state, path) is Some(index) {
         let previous = state.tabs[index].state
         let tab_state = match file {
           Content(content~, absolute~, sig~) =>
@@ -676,6 +675,8 @@ pub fn update(
           @cmd.none
         }
         (cmd, { ..state, tabs, })
+      } else {
+        (@cmd.none, state)
       }
     FsChanged => {
       guard state.owner is Some(owner) else { return (@cmd.none, state) }

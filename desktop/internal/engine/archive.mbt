@@ -369,6 +369,7 @@ async fn migrate_legacy_session(
 let archive_env_test_lock : @async.Mutex = Mutex()
 
 ///|
+#cfg(not(platform="windows"))
 fn restore_session_root_env(previous : String?) -> Unit {
   if previous is Some(value) {
     @sys.set_env_var("OPENSEEK_SESSION_ROOT", value)

@@ -2302,9 +2302,7 @@ async test "cancelled spawn requester holds its claim until pump ack" {
       defer claim.release(manager)
       request_spawn(manager, claim, pump_test_config("s"))
     })
-    guard manager.commands.get() is SpawnEngine(queued, _, ack) else {
-      fail("expected spawn command")
-    }
+    let SpawnEngine(queued, _, ack) = manager.commands.get()
     assert_true(physical_equal(queued, claim))
     requester.cancel()
     @async.pause()

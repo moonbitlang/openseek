@@ -4,6 +4,7 @@ import {
   "openseek_desktop/internal/fsx",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/x/path",
+  "tonyfettes/platform",
 }
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

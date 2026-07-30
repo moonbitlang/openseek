@@ -705,6 +705,7 @@ async test "one-shot session engine overrides ambient OPENSEEK_DIR" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 fn restore_openseek_dir(previous : String?) -> Unit {
   if previous is Some(value) {
     @sys.set_env_var("OPENSEEK_DIR", value)
@@ -714,6 +715,7 @@ fn restore_openseek_dir(previous : String?) -> Unit {
 }
 
 ///|
+#cfg(not(platform="windows"))
 fn has_finished_run(events : Array[EngineEvent], run_id : String) -> Bool {
   for event in events {
     if event is Finished(payload) && payload.run_id == run_id {
