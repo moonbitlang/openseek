@@ -2442,7 +2442,9 @@ fn launcher_menu(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.button(
             class="launcher-item",
             type_="button",
-            on_click=dispatch(LaunchApp(app.id)),
+            on_click=dispatch(
+              LaunchApp(model.launcher.channel.unwrap_or(model.focused), app.id),
+            ),
             [icon, @html.span(class="launcher-name", app.name)],
           ),
         )

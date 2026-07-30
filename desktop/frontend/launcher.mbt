@@ -3,8 +3,9 @@
 // request/reply calls on the engine-host bridge.
 
 ///|
-/// Fetch the apps the host detects as installed. Settles into `LauncherLoaded`
-/// on success or `LauncherFailed` on a bridge/decoding error.
+/// Fetch the apps the host detects as installed. Replies retain `channel`, so
+/// changing focus while the request is in flight cannot replace the new
+/// device's launcher cache.
 fn fetch_apps(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -18,14 +19,22 @@ fn fetch_apps(
       ) catch {
         error => {
           scheduler.add(
-            dispatch(LauncherFailed(@interop.bridge_error_text(error))),
+            dispatch(
+              LauncherFailed(
+                channel~,
+                message=@interop.bridge_error_text(error),
+              ),
+            ),
           )
           return
         }
       }
       match @transcript.decode_apps_reply(@interop.reply_json_text(reply)) {
-        Some(items) => scheduler.add(dispatch(LauncherLoaded(items)))
-        None => scheduler.add(dispatch(LauncherFailed("malformed app list")))
+        Some(apps) => scheduler.add(dispatch(LauncherLoaded(channel~, apps~)))
+        None =>
+          scheduler.add(
+            dispatch(LauncherFailed(channel~, message="malformed app list")),
+          )
       }
     })
   })
@@ -62,4 +71,49 @@ fn launch_app(
       }
     })
   })
+}
+
+///|
+test "launcher replies stay scoped to the device that requested them" {
+  let dispatch = test_dispatch()
+  let first : @interop.ChannelId = Remote("d_a")
+  let second : @interop.ChannelId = Remote("d_b")
+  let model = {
+    ..test_model(),
+    devices: [
+      { ..empty_device_state(first), bridge: Connected },
+      { ..empty_device_state(second), bridge: Connected },
+    ],
+    focused: first,
+  }
+  let (_, first_open) = update(dispatch, ToggleLauncher, model)
+  assert_true(first_open.launcher.channel == Some(first))
+  let (_, first_loaded) = update(
+    dispatch,
+    LauncherLoaded(channel=first, apps=[{ id: "a", name: "A", icon: "" }]),
+    first_open,
+  )
+  assert_true(first_loaded.launcher.apps is AppsFetched([_]))
+  let (_, refocused) = focus_channel(dispatch, first_loaded, second)
+  assert_true(refocused.launcher.channel is None)
+  assert_true(refocused.launcher.apps is AppsNotFetched)
+  let (_, second_open) = update(dispatch, ToggleLauncher, refocused)
+  assert_true(second_open.launcher.channel == Some(second))
+  let (_, stale) = update(
+    dispatch,
+    LauncherLoaded(channel=first, apps=[
+      { id: "stale", name: "Stale", icon: "" },
+    ]),
+    second_open,
+  )
+  assert_true(stale.launcher.apps is AppsNotFetched)
+  let (_, current) = update(
+    dispatch,
+    LauncherLoaded(channel=second, apps=[{ id: "b", name: "B", icon: "" }]),
+    stale,
+  )
+  guard current.launcher.apps is AppsFetched(apps) else {
+    fail("current device's apps were not accepted")
+  }
+  inspect(apps[0].id, content="b")
 }

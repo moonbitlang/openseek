@@ -789,10 +789,12 @@ priv struct RemoteAccess {
 
 ///|
 /// The topbar app launcher's state: whether its menu is open, the detected
-/// apps as a fetch lifecycle (the old `loaded` flag plus error-string
-/// sentinel let "loaded with an error" and "failed but loaded" be written).
+/// apps as a fetch lifecycle, and the device that owns both the cache and any
+/// request in flight. Replies from a previously focused device are discarded
+/// instead of replacing the current host's applications.
 priv struct Launcher {
   open : Bool
+  channel : @interop.ChannelId?
   apps : LauncherApps
 } derive(Eq)
 
@@ -801,11 +803,12 @@ priv struct Launcher {
 /// its parent (None at the filesystem root), its subdirectories, and the
 /// editable path field. `loading` marks a browse in flight; `error` keeps a
 /// failed navigation's message beside the previous listing, which stays
-/// usable. `generation` numbers the latest browse request — against a
-/// remote gateway replies can finish out of order, and only the newest
-/// one's reply may land, or a slow older listing would move the picker
-/// back and Confirm would register the wrong directory.
+/// usable. `channel` owns every browse and the eventual workspace mutation;
+/// `generation` numbers that picker's latest request. Both ride on replies,
+/// so neither a superseded navigation nor a closed picker from another
+/// device can replace the current listing.
 priv struct WorkspacePicker {
+  channel : @interop.ChannelId
   path : String
   entries : Array[String]
   input : String
@@ -819,8 +822,9 @@ priv struct WorkspacePicker {
 ///|
 /// A picker that just opened: nothing browsed yet, first listing (the home
 /// directory) on its way.
-fn opening_workspace_picker() -> WorkspacePicker {
+fn opening_workspace_picker(channel : @interop.ChannelId) -> WorkspacePicker {
   {
+    channel,
     path: "",
     entries: [],
     input: "",
@@ -1020,13 +1024,18 @@ priv enum Msg {
   // One directory's listing came back from the host; `generation` names
   // the browse request it answers, so a stale reply is dropped.
   WorkspacePickerLoaded(
+    channel~ : @interop.ChannelId,
     path~ : String,
     entries~ : Array[String],
     generation~ : Int
   )
   // A navigation failed; the message shows in the picker and the previous
   // listing stays usable.
-  WorkspacePickerFailed(message~ : String, generation~ : Int)
+  WorkspacePickerFailed(
+    channel~ : @interop.ChannelId,
+    message~ : String,
+    generation~ : Int
+  )
   // The picker's path field changed.
   WorkspacePickerInput(String)
   // Register the picker's current directory and close it.
@@ -1061,10 +1070,13 @@ priv enum Msg {
   // Open or close the topbar app launcher; opening it fetches the installed-app
   // list the first time.
   ToggleLauncher
-  LauncherLoaded(Array[@transcript.LauncherAppItem])
-  LauncherFailed(String)
+  LauncherLoaded(
+    channel~ : @interop.ChannelId,
+    apps~ : Array[@transcript.LauncherAppItem]
+  )
+  LauncherFailed(channel~ : @interop.ChannelId, message~ : String)
   // Launch one detected app (by its id) on the active conversation's workspace.
-  LaunchApp(String)
+  LaunchApp(@interop.ChannelId, String)
   // The editor side-panel's own messages (tree, viewer, diagnostics,
   // comments), routed to the `fileeditor` package's update. The one
   // exception is `EditorCommentAdded`, which this update intercepts: the
@@ -1425,7 +1437,7 @@ fn initial_model() -> Model {
     skills_notice: "",
     completion: None,
     symbol_cache: empty_symbol_cache(),
-    launcher: { open: false, apps: AppsNotFetched },
+    launcher: { open: false, channel: None, apps: AppsNotFetched },
     file_panel: @fileeditor.State::empty(),
     notifications: [],
     notification_seq: 0,

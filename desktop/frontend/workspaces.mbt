@@ -62,7 +62,8 @@ fn remove_workspace(
 ///|
 /// Ask the host to list one directory — the in-app picker's data source.
 /// `path` "" starts at the host's home directory. `generation` rides along
-/// on the reply so the update can drop answers to superseded navigations.
+/// on the reply with `channel`, so the update can drop answers to superseded
+/// navigations and to a picker that was reopened for another device.
 fn browse_directory(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -82,6 +83,7 @@ fn browse_directory(
           scheduler.add(
             dispatch(
               WorkspacePickerFailed(
+                channel~,
                 message=@interop.bridge_error_text(error),
                 generation~,
               ),
@@ -93,12 +95,15 @@ fn browse_directory(
       match decode_browse(@interop.reply_json_text(reply)) {
         Some((path, entries)) =>
           scheduler.add(
-            dispatch(WorkspacePickerLoaded(path~, entries~, generation~)),
+            dispatch(
+              WorkspacePickerLoaded(channel~, path~, entries~, generation~),
+            ),
           )
         None =>
           scheduler.add(
             dispatch(
               WorkspacePickerFailed(
+                channel~,
                 message="malformed directory listing",
                 generation~,
               ),
@@ -438,7 +443,12 @@ test "the picker opens loading and adopts the first listing" {
   assert_true(opening.loading)
   let (_, loaded) = update(
     dispatch,
-    WorkspacePickerLoaded(path="/home/u", entries=["proj"], generation=1),
+    WorkspacePickerLoaded(
+      channel=Local,
+      path="/home/u",
+      entries=["proj"],
+      generation=1,
+    ),
     opened,
   )
   guard loaded.workspace_picker is Some(picker) else {
@@ -455,10 +465,66 @@ test "a listing for a closed picker is dropped" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
-    WorkspacePickerLoaded(path="/home/u", entries=[], generation=1),
+    WorkspacePickerLoaded(
+      channel=Local,
+      path="/home/u",
+      entries=[],
+      generation=1,
+    ),
     test_model(),
   )
   assert_true(next.workspace_picker is None)
+}
+
+///|
+test "a listing from the previous device cannot replace a reopened picker" {
+  let dispatch = test_dispatch()
+  let first : @interop.ChannelId = Remote("d_a")
+  let second : @interop.ChannelId = Remote("d_b")
+  let model = {
+    ..test_model(),
+    devices: [
+      { ..empty_device_state(first), bridge: Connected },
+      { ..empty_device_state(second), bridge: Connected },
+    ],
+    focused: first,
+  }
+  let (_, first_open) = update(dispatch, PickWorkspace(first), model)
+  let (_, closed) = update(dispatch, WorkspacePickerClose, first_open)
+  let (_, second_open) = update(dispatch, PickWorkspace(second), closed)
+  // Both opens use generation 1. The channel is the other half of the reply
+  // identity, so the first device's late home listing is still stale.
+  let (_, stale) = update(
+    dispatch,
+    WorkspacePickerLoaded(
+      channel=first,
+      path="/from-a",
+      entries=["wrong"],
+      generation=1,
+    ),
+    second_open,
+  )
+  guard stale.workspace_picker is Some(picker) else {
+    fail("current picker closed by a stale listing")
+  }
+  assert_true(picker.channel == second)
+  assert_true(picker.loading)
+  inspect(picker.path, content="")
+  let (_, current) = update(
+    dispatch,
+    WorkspacePickerLoaded(
+      channel=second,
+      path="/from-b",
+      entries=[],
+      generation=1,
+    ),
+    stale,
+  )
+  guard current.workspace_picker is Some(picker) else {
+    fail("current picker closed by its own listing")
+  }
+  assert_true(picker.channel == second)
+  inspect(picker.path, content="/from-b")
 }
 
 ///|
@@ -471,12 +537,21 @@ test "a failed navigation keeps the listing and shows the error" {
   )
   let (_, loaded) = update(
     dispatch,
-    WorkspacePickerLoaded(path="/home/u", entries=["proj"], generation=1),
+    WorkspacePickerLoaded(
+      channel=Local,
+      path="/home/u",
+      entries=["proj"],
+      generation=1,
+    ),
     opened,
   )
   let (_, failed) = update(
     dispatch,
-    WorkspacePickerFailed(message="no such directory", generation=1),
+    WorkspacePickerFailed(
+      channel=Local,
+      message="no such directory",
+      generation=1,
+    ),
     loaded,
   )
   guard failed.workspace_picker is Some(picker) else {
@@ -497,7 +572,12 @@ test "confirming registers the browsed directory and closes the picker" {
   )
   let (_, loaded) = update(
     dispatch,
-    WorkspacePickerLoaded(path="/home/u/proj", entries=[], generation=1),
+    WorkspacePickerLoaded(
+      channel=Local,
+      path="/home/u/proj",
+      entries=[],
+      generation=1,
+    ),
     opened,
   )
   let (_, confirmed) = update(dispatch, WorkspacePickerConfirm, loaded)
@@ -541,7 +621,12 @@ test "typing in the picker's path field only changes the field" {
   )
   let (_, loaded) = update(
     dispatch,
-    WorkspacePickerLoaded(path="/home/u", entries=[], generation=1),
+    WorkspacePickerLoaded(
+      channel=Local,
+      path="/home/u",
+      entries=[],
+      generation=1,
+    ),
     opened,
   )
   let (_, typed) = update(dispatch, WorkspacePickerInput("~/proj"), loaded)
@@ -569,7 +654,12 @@ test "a listing for a superseded navigation is dropped" {
   // bumped the picker to generation 2: it must not move the picker back.
   let (_, stale) = update(
     dispatch,
-    WorkspacePickerLoaded(path="/home/u", entries=["proj"], generation=1),
+    WorkspacePickerLoaded(
+      channel=Local,
+      path="/home/u",
+      entries=["proj"],
+      generation=1,
+    ),
     navigated,
   )
   guard stale.workspace_picker is Some(picker) else {
@@ -579,7 +669,12 @@ test "a listing for a superseded navigation is dropped" {
   inspect(picker.path, content="")
   let (_, current) = update(
     dispatch,
-    WorkspacePickerLoaded(path="/home/u/proj", entries=[], generation=2),
+    WorkspacePickerLoaded(
+      channel=Local,
+      path="/home/u/proj",
+      entries=[],
+      generation=2,
+    ),
     stale,
   )
   guard current.workspace_picker is Some(picker) else {

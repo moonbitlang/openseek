@@ -42,6 +42,9 @@ priv struct ConsoleState {
   // The account's devices in the relay's order — the sidebar's group order.
   roster : Array[DeviceMeta]
   roster_sync : RosterSync
+  // The newest `/v1/devices` request. Replies carry this generation so a
+  // slower pre-mutation snapshot cannot overwrite a newer roster.
+  roster_request_generation : Int
   // `?device=` / `?workspace=` from the page's own query (the relay mints
   // them redirecting the retired `/d/<id>/` deep links): where focus and
   // the first conversation land. Consumed by the first roster application.
@@ -78,6 +81,7 @@ fn empty_console_state(
     auth: AuthChecking,
     roster: [],
     roster_sync: RosterLoading,
+    roster_request_generation: 0,
     preselect_device,
     preselect_workspace,
     booted: false,
@@ -97,8 +101,8 @@ priv enum ConsoleMsg {
   MeUnauthorized
   MeFailed(String)
   // `/v1/devices` settled.
-  RosterLoaded(Array[DeviceMeta])
-  RosterFailed(String)
+  RosterLoaded(Array[DeviceMeta], generation~ : Int)
+  RosterFailed(message~ : String, generation~ : Int)
   // The gate card's retry / the account row's refresh — re-runs the load.
   RefreshClicked
   // A device group's "⋯" actions menu was toggled.
@@ -128,32 +132,42 @@ fn update_console_msg(
 ) -> (@cmd.Cmd, Model) {
   guard model.console is Some(console) else { return (@cmd.none, model) }
   match msg {
-    MeLoaded(login~, avatar~) =>
+    MeLoaded(login~, avatar~) => {
+      let generation = console.roster_request_generation + 1
       (
-        fetch_console_roster(dispatch),
+        fetch_console_roster(dispatch, generation),
         {
           ..model,
           console: Some({
             ..console,
             auth: AuthSignedIn(login~, avatar~),
             roster_sync: RosterLoading,
+            roster_request_generation: generation,
             notice: None,
           }),
         },
       )
+    }
     MeUnauthorized => console_signed_out(model, console)
     MeFailed(message) =>
       (
         @cmd.none,
         { ..model, console: Some({ ..console, notice: Some(message) }) },
       )
-    RosterLoaded(metas) => {
-      // A reply that outlived the session (a refresh raced a sign-out) must
-      // not resurrect device channels.
-      guard console.auth is AuthSignedIn(..) else { return (@cmd.none, model) }
+    RosterLoaded(metas, generation~) => {
+      // A reply that outlived the session, or was overtaken by a later roster
+      // request, must not resurrect stale device channels.
+      guard console.auth is AuthSignedIn(..) &&
+        generation == console.roster_request_generation else {
+        return (@cmd.none, model)
+      }
       apply_roster(dispatch, model, console, metas)
     }
-    RosterFailed(message) =>
+    RosterFailed(message~, generation~) => {
+      guard console.auth is AuthSignedIn(..) &&
+        generation == console.roster_request_generation else {
+        return (@cmd.none, model)
+      }
       (
         @cmd.none,
         {
@@ -161,6 +175,7 @@ fn update_console_msg(
           console: Some({ ..console, roster_sync: RosterFailed(message) }),
         },
       )
+    }
     RefreshClicked =>
       (
         fetch_console_me(dispatch),
@@ -255,11 +270,12 @@ fn update_console_msg(
         },
       )
     }
-    MutationDone =>
+    MutationDone => {
       // The refetched roster's application reconciles a revoke: it closes
       // the channel, drops its state, and refocuses a survivor.
+      let generation = console.roster_request_generation + 1
       (
-        fetch_console_roster(dispatch),
+        fetch_console_roster(dispatch, generation),
         {
           ..model,
           console: Some({
@@ -268,9 +284,11 @@ fn update_console_msg(
             rename: None,
             menu_open: None,
             confirm_delete: None,
+            roster_request_generation: generation,
           }),
         },
       )
+    }
     MutationFailed(message) =>
       (
         @cmd.none,
@@ -434,7 +452,7 @@ test "sign-in loads the roster and connects only the online devices" {
   assert_true(console.auth is AuthSignedIn(login="octocat", avatar="a.png"))
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster())),
+    Console(RosterLoaded(console_test_roster(), generation=1)),
     signed,
   )
   // The online device gets a channel and focus; the offline one renders
@@ -461,7 +479,7 @@ test "a 401 anywhere signs the console out and drops every channel" {
   )
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster())),
+    Console(RosterLoaded(console_test_roster(), generation=1)),
     signed,
   )
   let (_, out) = update(dispatch, Console(MeUnauthorized), listed)
@@ -473,7 +491,7 @@ test "a 401 anywhere signs the console out and drops every channel" {
   // A roster reply that outlived the session must not resurrect channels.
   let (_, stale) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster())),
+    Console(RosterLoaded(console_test_roster(), generation=1)),
     out,
   )
   inspect(stale.devices.length(), content="0")
@@ -495,7 +513,11 @@ test "the deep link's device and workspace preselect the first focus" {
     { id: "d_one", name: "One", hostname: None, online: true },
     { id: "d_two", name: "Two", hostname: None, online: true },
   ]
-  let (_, listed) = update(dispatch, Console(RosterLoaded(metas)), signed)
+  let (_, listed) = update(
+    dispatch,
+    Console(RosterLoaded(metas, generation=1)),
+    signed,
+  )
   assert_true(listed.focused == Remote("d_two"))
   guard listed.device_state(Remote("d_two")) is Some(dev) else {
     fail("preselected device not held")
@@ -518,7 +540,11 @@ test "a refreshed roster retires revoked devices and refocuses a survivor" {
     { id: "d_a", name: "A", hostname: None, online: true },
     { id: "d_b", name: "B", hostname: None, online: true },
   ]
-  let (_, listed) = update(dispatch, Console(RosterLoaded(metas)), signed)
+  let (_, listed) = update(
+    dispatch,
+    Console(RosterLoaded(metas, generation=1)),
+    signed,
+  )
   assert_true(listed.focused == Remote("d_a"))
   let seeded = {
     ..listed.replace_conversation(
@@ -537,7 +563,11 @@ test "a refreshed roster retires revoked devices and refocuses a survivor" {
   let survivor : Array[DeviceMeta] = [
     { id: "d_b", name: "B", hostname: None, online: true },
   ]
-  let (_, refreshed) = update(dispatch, Console(RosterLoaded(survivor)), seeded)
+  let (_, refreshed) = update(
+    dispatch,
+    Console(RosterLoaded(survivor, generation=1)),
+    seeded,
+  )
   assert_true(refreshed.focused == Remote("d_b"))
   assert_true(refreshed.device_state(Remote("d_a")) is None)
   assert_false(refreshed.host_wsl)
@@ -552,6 +582,45 @@ test "a refreshed roster retires revoked devices and refocuses a survivor" {
 }
 
 ///|
+test "an older roster reply cannot restore a device removed by a newer one" {
+  let dispatch = test_dispatch()
+  let (_, signed) = update(
+    dispatch,
+    Console(MeLoaded(login="o", avatar="")),
+    console_test_model(),
+  )
+  let original : Array[DeviceMeta] = [
+    { id: "d_a", name: "A", hostname: None, online: true },
+    { id: "d_b", name: "B", hostname: None, online: true },
+  ]
+  let (_, listed) = update(
+    dispatch,
+    Console(RosterLoaded(original, generation=1)),
+    signed,
+  )
+  // A mutation starts generation 2. Its authoritative reply removes A.
+  let (_, refreshing) = update(dispatch, Console(MutationDone), listed)
+  let survivor : Array[DeviceMeta] = [
+    { id: "d_b", name: "B", hostname: None, online: true },
+  ]
+  let (_, current) = update(
+    dispatch,
+    Console(RosterLoaded(survivor, generation=2)),
+    refreshing,
+  )
+  let (_, stale) = update(
+    dispatch,
+    Console(RosterLoaded(original, generation=1)),
+    current,
+  )
+  guard stale.console is Some(console) else { fail("console lost") }
+  inspect(console.roster.length(), content="1")
+  inspect(console.roster[0].id, content="d_b")
+  assert_true(stale.device_state(Remote("d_a")) is None)
+  assert_true(stale.device_state(Remote("d_b")) is Some(_))
+}
+
+///|
 test "opening another device's session moves focus and resets the mirrors" {
   let dispatch = test_dispatch()
   let (_, signed) = update(
@@ -563,7 +632,11 @@ test "opening another device's session moves focus and resets the mirrors" {
     { id: "d_a", name: "A", hostname: None, online: true },
     { id: "d_b", name: "B", hostname: None, online: true },
   ]
-  let (_, listed) = update(dispatch, Console(RosterLoaded(metas)), signed)
+  let (_, listed) = update(
+    dispatch,
+    Console(RosterLoaded(metas, generation=1)),
+    signed,
+  )
   assert_true(listed.focused == Remote("d_a"))
   let seeded = {
     ..listed.replace_conversation(
@@ -595,7 +668,11 @@ test "a row click that raced its device's removal is dropped" {
   let metas : Array[DeviceMeta] = [
     { id: "d_a", name: "A", hostname: None, online: true },
   ]
-  let (_, listed) = update(dispatch, Console(RosterLoaded(metas)), signed)
+  let (_, listed) = update(
+    dispatch,
+    Console(RosterLoaded(metas, generation=1)),
+    signed,
+  )
   let (_, next) = update(dispatch, OpenSession(Remote("gone"), "s-x"), listed)
   assert_true(next.focused == Remote("d_a"))
   inspect(
@@ -617,7 +694,7 @@ test "the actions menu toggles per device and disarms a pending remove" {
   )
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster())),
+    Console(RosterLoaded(console_test_roster(), generation=1)),
     signed,
   )
   let (_, opened) = update(dispatch, Console(MenuToggled("d_on")), listed)
@@ -658,7 +735,7 @@ test "rename commits only a non-blank name and clears on done" {
   )
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster())),
+    Console(RosterLoaded(console_test_roster(), generation=1)),
     signed,
   )
   let (_, editing) = update(
@@ -687,7 +764,7 @@ test "delete needs its confirming second click" {
   )
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster())),
+    Console(RosterLoaded(console_test_roster(), generation=1)),
     signed,
   )
   let (_, armed) = update(dispatch, Console(DeleteAsked("d_off")), listed)
@@ -708,7 +785,7 @@ test "sign-out tears every channel down and returns to the gate" {
   )
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster())),
+    Console(RosterLoaded(console_test_roster(), generation=1)),
     signed,
   )
   let (_, out) = update(dispatch, Console(SignOutDone), listed)
@@ -729,7 +806,11 @@ test "a roster failure reports without leaving the signed-in frame" {
     Console(MeLoaded(login="o", avatar="")),
     console_test_model(),
   )
-  let (_, failed) = update(dispatch, Console(RosterFailed("boom")), signed)
+  let (_, failed) = update(
+    dispatch,
+    Console(RosterFailed(message="boom", generation=1)),
+    signed,
+  )
   guard failed.console is Some(console) else { fail("console lost") }
   assert_true(console.auth is AuthSignedIn(..))
   assert_true(console.roster_sync is RosterFailed("boom"))

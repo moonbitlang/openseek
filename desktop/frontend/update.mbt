@@ -58,6 +58,7 @@ fn focus_channel(
       host_wsl: false,
       installed_skills: [],
       completion: None,
+      launcher: { open: false, channel: None, apps: AppsNotFetched },
       // Forgetting what was watched makes the post-dispatch panel sync
       // re-root `fs.watch` against the newly focused host.
       file_panel: { ..model.file_panel, watching: None },
@@ -1734,10 +1735,10 @@ fn update_msg(
       )
     }
     PickWorkspace(channel) => {
-      // The picker registers its pick on the focused device, so focus moves
-      // first; the later navigate/confirm messages then follow `focused`.
+      // Focus moves for the surrounding UI, while the picker itself keeps
+      // `channel` as its owner through every later navigation and confirm.
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
-      let picker = opening_workspace_picker()
+      let picker = opening_workspace_picker(channel)
       (
         @cmd.batch([
           focus_cmd,
@@ -1751,7 +1752,7 @@ fn update_msg(
         Some(picker) => {
           let generation = picker.generation + 1
           (
-            browse_directory(dispatch, model.focused, path, generation~),
+            browse_directory(dispatch, picker.channel, path, generation~),
             {
               ..model,
               workspace_picker: Some({ ..picker, loading: true, generation }),
@@ -1760,18 +1761,20 @@ fn update_msg(
         }
         None => (@cmd.none, model)
       }
-    WorkspacePickerLoaded(path~, entries~, generation~) =>
+    WorkspacePickerLoaded(channel~, path~, entries~, generation~) =>
       // A listing for a picker the user already closed — or one answering
       // a navigation that has since been superseded — is dropped. The
       // go-to field clears on arrival: the breadcrumb shows the location,
       // and the field is for typing the next jump.
       match model.workspace_picker {
-        Some(picker) if picker.generation == generation =>
+        Some(picker) if picker.channel == channel &&
+          picker.generation == generation =>
           (
             @cmd.none,
             {
               ..model,
               workspace_picker: Some({
+                channel,
                 path,
                 entries,
                 input: "",
@@ -1783,9 +1786,10 @@ fn update_msg(
           )
         _ => (@cmd.none, model)
       }
-    WorkspacePickerFailed(message~, generation~) =>
+    WorkspacePickerFailed(channel~, message~, generation~) =>
       match model.workspace_picker {
-        Some(picker) if picker.generation == generation =>
+        Some(picker) if picker.channel == channel &&
+          picker.generation == generation =>
           (
             @cmd.none,
             {
@@ -1815,7 +1819,7 @@ fn update_msg(
         // the field navigates (and validates) first.
         Some(picker) if !picker.path.is_empty() =>
           (
-            add_workspace(dispatch, model.focused, picker.path),
+            add_workspace(dispatch, picker.channel, picker.path),
             { ..model, workspace_picker: None },
           )
         _ => (@cmd.none, model)
@@ -1920,26 +1924,44 @@ fn update_msg(
     }
     ToggleLauncher => {
       let opening = !model.launcher.open
-      // Probe the host the first time the menu opens (and again after a
-      // failure); the result is kept for the app run.
-      let cmd = if opening && !(model.launcher.apps is AppsFetched(_)) {
+      let changed_host = model.launcher.channel != Some(model.focused)
+      let launcher = if opening && changed_host {
+        { open: true, channel: Some(model.focused), apps: AppsNotFetched }
+      } else {
+        { ..model.launcher, open: opening }
+      }
+      // Probe once per focused host (and again after a failure). A focus
+      // transition starts an empty cache instead of displaying the old host.
+      let cmd = if opening &&
+        (changed_host || !(launcher.apps is AppsFetched(_))) {
         fetch_apps(dispatch, model.focused)
       } else {
         @cmd.none
       }
-      (cmd, { ..model, launcher: { ..model.launcher, open: opening } })
+      (cmd, { ..model, launcher, })
     }
-    LauncherLoaded(apps) =>
+    LauncherLoaded(channel~, apps~) => {
+      guard channel == model.focused && model.launcher.channel == Some(channel) else {
+        return (@cmd.none, model)
+      }
       (
         @cmd.none,
         { ..model, launcher: { ..model.launcher, apps: AppsFetched(apps) } },
       )
-    LauncherFailed(message) =>
+    }
+    LauncherFailed(channel~, message~) => {
+      guard channel == model.focused && model.launcher.channel == Some(channel) else {
+        return (@cmd.none, model)
+      }
       (
         @cmd.none,
         { ..model, launcher: { ..model.launcher, apps: AppsFailed(message) } },
       )
-    LaunchApp(app) => {
+    }
+    LaunchApp(channel, app) => {
+      guard channel == model.focused && model.launcher.channel == Some(channel) else {
+        return (@cmd.none, model)
+      }
       let conv = model.active()
       (
         launch_app(dispatch, model.focused, conv.session_id, cwd=conv.cwd, app),

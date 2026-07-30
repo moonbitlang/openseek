@@ -77,7 +77,10 @@ fn parse_console_me(body : String) -> ConsoleMsg? {
 ///|
 /// GET `/v1/devices`. A 401 here means the session expired between
 /// requests — fold it into the signed-out state rather than an error.
-fn fetch_console_roster(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+fn fetch_console_roster(
+  dispatch : @cmd.Emit[Msg],
+  generation : Int,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     js_fetch(
       "/v1/devices",
@@ -91,12 +94,19 @@ fn fetch_console_roster(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
               match status {
                 200 =>
                   match parse_console_roster(body) {
-                    Some(metas) => RosterLoaded(metas)
+                    Some(metas) => RosterLoaded(metas, generation~)
                     None =>
-                      RosterFailed("the device list answered malformed JSON")
+                      RosterFailed(
+                        message="the device list answered malformed JSON",
+                        generation~,
+                      )
                   }
                 401 => MeUnauthorized
-                _ => RosterFailed("the device list answered HTTP \{status}")
+                _ =>
+                  RosterFailed(
+                    message="the device list answered HTTP \{status}",
+                    generation~,
+                  )
               },
             ),
           ),
@@ -104,7 +114,14 @@ fn fetch_console_roster(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       },
       detail => {
         scheduler.add(
-          dispatch(Console(RosterFailed("the relay is unreachable: \{detail}"))),
+          dispatch(
+            Console(
+              RosterFailed(
+                message="the relay is unreachable: \{detail}",
+                generation~,
+              ),
+            ),
+          ),
         )
       },
     )
@@ -140,10 +157,10 @@ fn rename_device(
         scheduler.add(
           dispatch(
             Console(
-              if status is (200 | 204) {
-                MutationDone
-              } else {
-                MutationFailed(mutation_error(status, body))
+              match status {
+                200 | 204 => MutationDone
+                401 => MeUnauthorized
+                _ => MutationFailed(mutation_error(status, body))
               },
             ),
           ),
@@ -174,10 +191,10 @@ fn delete_device(dispatch : @cmd.Emit[Msg], device : String) -> @cmd.Cmd {
         scheduler.add(
           dispatch(
             Console(
-              if status is (200 | 204) {
-                MutationDone
-              } else {
-                MutationFailed(mutation_error(status, body))
+              match status {
+                200 | 204 => MutationDone
+                401 => MeUnauthorized
+                _ => MutationFailed(mutation_error(status, body))
               },
             ),
           ),
@@ -207,10 +224,10 @@ fn sign_out(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         scheduler.add(
           dispatch(
             Console(
-              if status is (200 | 204) {
-                SignOutDone
-              } else {
-                MutationFailed(mutation_error(status, body))
+              match status {
+                200 | 204 => SignOutDone
+                401 => MeUnauthorized
+                _ => MutationFailed(mutation_error(status, body))
               },
             ),
           ),
