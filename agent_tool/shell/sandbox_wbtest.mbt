@@ -1393,8 +1393,8 @@ test "sandbox trusts recoverable git, sandboxes patch and reconfiguring git" {
   // reconfigured or custom-environment invocation is demoted like any git.
   for
     cmd in [
-      "git worktree remove --force ../wt", "git worktree remove -f ../wt", "git worktree list",
-      "git worktree move ../wt ../wt2", "git worktree", "git -C /tmp/x worktree add ../wt",
+      "git worktree remove --force ../wt", "git worktree remove -f ../wt", "git worktree remove --fo ../wt",
+      "git worktree list", "git worktree move ../wt ../wt2", "git worktree", "git -C /tmp/x worktree add ../wt",
       "GIT_DIR=/tmp/x git worktree add ../wt",
     ] {
     assert_true(mode_for(cmd) is SourceReadOnly)

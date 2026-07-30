@@ -125,10 +125,17 @@ test "worktree args: add and prune recoverable, remove only without force" {
   assert_true(recoverable(["remove", "--", "../wt"]))
   assert_true(recoverable(["prune"]))
   assert_true(recoverable(["prune", "-n", "--expire", "1.day"]))
-  // Force remove permanently deletes modified or untracked files.
+  // Force remove permanently deletes modified or untracked files. Any option
+  // fails closed: git accepts unambiguous long-option abbreviations, so
+  // `--fo`/`--for` force the removal too.
   assert_false(recoverable(["remove", "--force", "../wt"]))
   assert_false(recoverable(["remove", "-f", "../wt"]))
   assert_false(recoverable(["remove", "-ff", "../wt"]))
+  assert_false(recoverable(["remove", "--fo", "../wt"]))
+  assert_false(recoverable(["remove", "--quiet", "../wt"]))
+  // After `--` every word is a path: a worktree named `-f` is a plain,
+  // non-force removal.
+  assert_true(recoverable(["remove", "--", "-f"]))
   // Everything else fails closed, including a missing verb.
   assert_false(recoverable(["list"]))
   assert_false(recoverable(["lock", "../wt"]))

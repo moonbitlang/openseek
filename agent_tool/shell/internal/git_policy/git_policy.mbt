@@ -81,12 +81,16 @@ pub fn subcommand_writes_from_object_store(subcommand : String) -> Bool {
 /// only relaxes the branch-checked-out-elsewhere and registered-but-missing-path
 /// safeguards — so it only creates new paths whose content comes from the object
 /// store, and a `-B` branch reset is reflog-recoverable like trusted `reset`.
-/// `remove` qualifies only without force: git then refuses a worktree containing
+/// `remove` qualifies only bare: git then refuses a worktree containing
 /// modified or untracked files, so everything deleted is tracked and clean
 /// (ignored files go silently — the same exposure as trusted `checkout`).
-/// `prune` touches only `$GIT_DIR/worktrees` admin data. Everything else fails
-/// closed: `list` is read-only and runs fine sandboxed, `move` relocates
-/// arbitrary worktree bytes like the excluded `mv`.
+/// Any option before `--` fails closed, not just `-f`/`--force`: git's option
+/// parser accepts unambiguous long-option abbreviations, so `--fo` forces the
+/// removal too (empirically, git 2.51 destroys a dirty worktree on
+/// `remove --fo`). After `--` every word is a path, so a worktree literally
+/// named `-f` stays removable. `prune` touches only `$GIT_DIR/worktrees` admin
+/// data. Everything else fails closed: `list` is read-only and runs fine
+/// sandboxed, `move` relocates arbitrary worktree bytes like the excluded `mv`.
 pub fn worktree_args_are_recoverable(
   words : Array[String],
   start : Int,
@@ -98,10 +102,10 @@ pub fn worktree_args_are_recoverable(
     "remove" => {
       for index in (start + 1)..<end {
         let arg = words[index]
-        // `--force`, or `-f` possibly clustered (`-ff`). A path named `-f`
-        // after `--` also matches — a conservative false positive that only
-        // drops the command back into the sandbox.
-        if arg == "--force" || short_cluster_has(arg, "f") {
+        if arg == "--" {
+          break
+        }
+        if arg.has_prefix("-") {
           return false
         }
       }
