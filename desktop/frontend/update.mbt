@@ -47,14 +47,10 @@ fn focus_channel(
       fetch_installed_skills(dispatch, channel),
     ]),
     {
-      ..model,
+      ..model.clear_host_settings(),
       focused: channel,
       active_session: "",
       loading_conversation: None,
-      settings_saves: 0,
-      host_settings_revision: -1,
-      deferred_host_settings: None,
-      legacy_cleanup_pending: false,
       host_wsl: false,
       installed_skills: [],
       completion: None,
@@ -1146,8 +1142,12 @@ fn update_msg(
     SymbolsFailed(owner~, query~) => apply_symbol_reply(model, owner, query, [])
     ModelChanged(value) => (@cmd.none, { ..model, selected_model: value })
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value })
-    SetupApiKeyChanged(value) => (@cmd.none, { ..model, setup_api_key: value })
+    SetupApiKeyChanged(value) => {
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      (@cmd.none, { ..model, setup_api_key: value })
+    }
     ProviderChanged(value) => {
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
       let provider = ApiProvider::parse(value)
       // A server switch can move the update channel with it; whatever the
       // old channel's check said no longer applies.
@@ -1173,7 +1173,8 @@ fn update_msg(
         },
       )
     }
-    CustomApiUrlChanged(value) =>
+    CustomApiUrlChanged(value) => {
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
       (
         push_host_settings(
           dispatch,
@@ -1187,12 +1188,19 @@ fn update_msg(
           settings_saves: model.settings_saves + 1,
         },
       )
-    WslModeChanged(value) =>
+    }
+    WslModeChanged(value) => {
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
       push_wsl_settings(dispatch, { ..model, wsl_enabled: value == "wsl" })
-    WslDistroChanged(value) =>
+    }
+    WslDistroChanged(value) => {
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
       push_wsl_settings(dispatch, { ..model, wsl_distro: value })
-    WslEngineChanged(value) =>
+    }
+    WslEngineChanged(value) => {
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
       push_wsl_settings(dispatch, { ..model, wsl_engine: value })
+    }
     NotificationCornerChanged(value) => {
       let corner = NotificationCorner::parse(value)
       (
@@ -1440,6 +1448,7 @@ fn update_msg(
         { ..model, workspaces_collapsed: !model.workspaces_collapsed },
       )
     SaveApiKey => {
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
       let api_key = model.setup_api_key.trim().to_owned()
       if api_key.is_empty() {
         (@cmd.none, model)
@@ -2107,14 +2116,7 @@ fn update_device_msg(
       // starts a fresh monotonic round. Focused-scoped, like the fetches
       // that repopulate the mirror.
       let model = if channel == model.focused {
-        {
-          ..model,
-          conversations,
-          settings_saves: 0,
-          host_settings_revision: -1,
-          deferred_host_settings: None,
-          legacy_cleanup_pending: false,
-        }
+        { ..model.clear_host_settings(), conversations, }
       } else {
         { ..model, conversations, }
       }
@@ -3865,6 +3867,9 @@ fn test_model() -> Model {
     ],
     focused: @interop.ChannelId::Local,
     console: None,
+    // The shared fixture represents a connected desktop after its initial
+    // settings snapshot. Loading-state tests opt back into revision -1.
+    host_settings_revision: 0,
     active_session: "desktop-test",
     conversations: [test_conversation()],
   }
@@ -4910,6 +4915,31 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
     inspect(conv.streaming_response, content="")
     assert_true(conv.compaction is NotCompacting)
   }
+}
+
+///|
+test "BridgeReady clears focused host settings until the refetch lands" {
+  let dispatch = test_dispatch()
+  let model = {
+    ..test_model(),
+    api_provider: Custom,
+    custom_api_url: "https://old.example/chat",
+    custom_key_saved: true,
+    setup_api_key: "old-key",
+    host_settings_revision: 7,
+    wsl_enabled: true,
+    wsl_distro: "OldDistro",
+    wsl_engine: "/old/openseek",
+  }
+  let (_, next) = update_dev(dispatch, BridgeReady, model)
+  assert_false(next.host_settings_loaded())
+  assert_true(next.api_provider is Openseek)
+  inspect(next.custom_api_url, content="")
+  assert_false(next.custom_key_saved)
+  inspect(next.setup_api_key, content="")
+  assert_false(next.wsl_enabled)
+  inspect(next.wsl_distro, content="")
+  inspect(next.wsl_engine, content="")
 }
 
 ///|
@@ -9434,6 +9464,52 @@ fn host_settings(
     wsl_enabled,
     wsl_distro,
     wsl_engine,
+  }
+}
+
+///|
+test "host settings edits wait for the focused host snapshot" {
+  let dispatch = test_dispatch()
+  // Model a queued DOM message from the old Settings page after focus already
+  // moved. The negative revision is authoritative: none of these stale values
+  // or events may be applied to the replacement host.
+  let loading = {
+    ..test_model(),
+    api_provider: Deepseek,
+    custom_api_url: "https://old.example/chat",
+    deepseek_key_saved: true,
+    setup_api_key: "old-device-key",
+    host_settings_revision: -1,
+    wsl_enabled: true,
+    wsl_distro: "OldDistro",
+    wsl_engine: "/old/openseek",
+  }
+  let messages : Array[Msg] = [
+    SetupApiKeyChanged("queued-key"),
+    ProviderChanged("custom"),
+    CustomApiUrlChanged("https://new.example/chat"),
+    WslModeChanged("native"),
+    WslDistroChanged("NewDistro"),
+    WslEngineChanged("/new/openseek"),
+    SaveApiKey,
+  ]
+  for message in messages {
+    let (_, once) = update(dispatch, message, loading)
+    let (_, twice) = update(dispatch, message, loading)
+    assert_true(once.api_provider == loading.api_provider)
+    assert_eq(once.custom_api_url, loading.custom_api_url)
+    assert_eq(once.setup_api_key, loading.setup_api_key)
+    assert_eq(once.settings_saves, 0)
+    assert_eq(once.wsl_enabled, loading.wsl_enabled)
+    assert_eq(once.wsl_distro, loading.wsl_distro)
+    assert_eq(once.wsl_engine, loading.wsl_engine)
+    assert_true(twice.api_provider == loading.api_provider)
+    assert_eq(twice.custom_api_url, loading.custom_api_url)
+    assert_eq(twice.setup_api_key, loading.setup_api_key)
+    assert_eq(twice.settings_saves, 0)
+    assert_eq(twice.wsl_enabled, loading.wsl_enabled)
+    assert_eq(twice.wsl_distro, loading.wsl_distro)
+    assert_eq(twice.wsl_engine, loading.wsl_engine)
   }
 }
 

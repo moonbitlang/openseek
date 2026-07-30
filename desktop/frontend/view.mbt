@@ -1715,8 +1715,10 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 fn provider_select(
   dispatch : @cmd.Emit[Msg],
   selected : ApiProvider,
+  disabled~ : Bool,
 ) -> @html.Html {
   @html.select(
+    disabled~,
     on_change=dispatch.map(value => ProviderChanged(value)),
     attrs=@html.Attrs::build().aria_label("API endpoint"),
     [
@@ -1957,8 +1959,13 @@ fn update_check_controls(
 ///|
 
 ///|
-fn wsl_select(dispatch : @cmd.Emit[Msg], enabled : Bool) -> @html.Html {
+fn wsl_select(
+  dispatch : @cmd.Emit[Msg],
+  enabled : Bool,
+  disabled~ : Bool,
+) -> @html.Html {
   @html.select(
+    disabled~,
     on_change=dispatch.map(value => WslModeChanged(value)),
     attrs=@html.Attrs::build().aria_label("Engine environment"),
     [
@@ -1985,6 +1992,7 @@ fn provider_hint(provider : ApiProvider) -> String {
 /// While the configured endpoint is unusable the page takes over on its own,
 /// and the composer keeps Send disabled until a usable endpoint is saved.
 fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  let settings_loaded = model.host_settings_loaded()
   let ready = model.api_ready()
   let model_rows : Array[@html.Html] = [
     setting_row(
@@ -2009,7 +2017,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let api_rows : Array[@html.Html] = [
     setting_row(
       "API endpoint",
-      [provider_select(dispatch, model.api_provider)],
+      [provider_select(dispatch, model.api_provider, disabled=!settings_loaded)],
       desc=provider_hint(model.api_provider),
     ),
   ]
@@ -2023,7 +2031,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             value=model.custom_api_url,
             placeholder="https://host/chat/completions",
             on_input=dispatch.map(value => CustomApiUrlChanged(value)),
-            attrs=@html.Attrs::build().aria_label("Endpoint URL"),
+            attrs=@html.Attrs::build()
+              .aria_label("Endpoint URL")
+              .disabled(!settings_loaded),
           ),
         ],
         stack=true,
@@ -2057,14 +2067,16 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               "sk-..."
             },
             on_input=dispatch.map(value => SetupApiKeyChanged(value)),
-            attrs=@html.Attrs::build().aria_label("API key"),
+            attrs=@html.Attrs::build()
+              .aria_label("API key")
+              .disabled(!settings_loaded),
           ),
           @html.button(
             // The id is layout only (grid placement); the fill is the
             // shared primary style.
             id="saveApiKey",
             class="primary",
-            disabled=model.setup_api_key.trim().is_empty(),
+            disabled=!settings_loaded || model.setup_api_key.trim().is_empty(),
             on_click=dispatch(SaveApiKey),
             "Save API key",
           ),
@@ -2118,7 +2130,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     let engine_rows : Array[@html.Html] = [
       setting_row(
         "Engine environment",
-        [wsl_select(dispatch, model.wsl_enabled)],
+        [wsl_select(dispatch, model.wsl_enabled, disabled=!settings_loaded)],
         desc="WSL runs the agent engine inside the distro, so its shell and tools see the Linux environment. Conversations stay in the shared session store either way.",
       ),
     ]
@@ -2132,7 +2144,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               value=model.wsl_distro,
               placeholder="default distro",
               on_input=dispatch.map(value => WslDistroChanged(value)),
-              attrs=@html.Attrs::build().aria_label("WSL distro"),
+              attrs=@html.Attrs::build()
+                .aria_label("WSL distro")
+                .disabled(!settings_loaded),
             ),
           ],
           desc="Blank uses the default distro.",
@@ -2147,7 +2161,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               value=model.wsl_engine,
               placeholder="bundled engine",
               on_input=dispatch.map(value => WslEngineChanged(value)),
-              attrs=@html.Attrs::build().aria_label("Engine command in WSL"),
+              attrs=@html.Attrs::build()
+                .aria_label("Engine command in WSL")
+                .disabled(!settings_loaded),
             ),
           ],
           desc="Blank runs the Linux engine bundled with the app, falling back to openseek on the distro's PATH.",
@@ -2163,7 +2179,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.h1("Settings"),
         @html.div(
           class="settings-subtitle",
-          if ready {
+          if !settings_loaded {
+            "Loading runtime settings…"
+          } else if ready {
             "Runtime settings for the OpenSeek engine."
           } else if model.api_provider is Custom {
             "Enter a chat-completions endpoint URL to start."

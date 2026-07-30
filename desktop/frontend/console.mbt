@@ -555,6 +555,27 @@ test "a refreshed roster retires revoked devices and refocuses a survivor" {
       empty_conversation(@interop.ChannelId::Remote("d_a"), "s1"),
     ),
     host_wsl: true,
+    api_provider: Custom,
+    custom_api_url: "https://old.example/chat",
+    deepseek_key_saved: true,
+    custom_key_saved: true,
+    setup_api_key: "old-device-key",
+    settings_saves: 2,
+    host_settings_revision: 7,
+    deferred_host_settings: Some({
+      revision: 8,
+      provider: "deepseek",
+      custom_api_url: "",
+      has_deepseek_key: true,
+      has_custom_key: false,
+      wsl_enabled: false,
+      wsl_distro: "",
+      wsl_engine: "",
+    }),
+    legacy_cleanup_pending: true,
+    wsl_enabled: true,
+    wsl_distro: "OldDistro",
+    wsl_engine: "/old/openseek",
     installed_skills: [
       {
         id: "old-host",
@@ -576,6 +597,18 @@ test "a refreshed roster retires revoked devices and refocuses a survivor" {
   assert_true(refreshed.device_state(Remote("d_a")) is None)
   assert_false(refreshed.host_wsl)
   assert_eq(refreshed.installed_skills.length(), 0)
+  assert_true(refreshed.api_provider is Openseek)
+  inspect(refreshed.custom_api_url, content="")
+  assert_false(refreshed.deepseek_key_saved)
+  assert_false(refreshed.custom_key_saved)
+  inspect(refreshed.setup_api_key, content="")
+  inspect(refreshed.settings_saves, content="0")
+  inspect(refreshed.host_settings_revision, content="-1")
+  assert_true(refreshed.deferred_host_settings is None)
+  assert_false(refreshed.legacy_cleanup_pending)
+  assert_false(refreshed.wsl_enabled)
+  inspect(refreshed.wsl_distro, content="")
+  inspect(refreshed.wsl_engine, content="")
   inspect(
     refreshed.conversations
     .iter()

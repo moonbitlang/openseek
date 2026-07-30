@@ -1552,6 +1552,37 @@ fn Model::skill_installed(self : Model, source : String) -> Bool {
 }
 
 ///|
+/// Whether the focused host has supplied an authoritative settings snapshot
+/// for the current bridge generation. A negative revision is the loading
+/// sentinel installed on startup, focus changes, and reconnects.
+fn Model::host_settings_loaded(self : Model) -> Bool {
+  self.host_settings_revision >= 0
+}
+
+///|
+/// Forget every value owned by the focused host before fetching another
+/// snapshot. The neutral values are deliberately not actionable while the
+/// revision remains negative; this prevents a failed or delayed `settings.get`
+/// from exposing one device's configuration on another device.
+fn Model::clear_host_settings(self : Model) -> Model {
+  {
+    ..self,
+    api_provider: Openseek,
+    custom_api_url: "",
+    deepseek_key_saved: false,
+    custom_key_saved: false,
+    setup_api_key: "",
+    settings_saves: 0,
+    host_settings_revision: -1,
+    deferred_host_settings: None,
+    legacy_cleanup_pending: false,
+    wsl_enabled: false,
+    wsl_distro: "",
+    wsl_engine: "",
+  }
+}
+
+///|
 /// Fold one host settings payload into the mirror. The default provider
 /// needs no setup, so the Settings page only takes over when the settings
 /// are incomplete (official endpoint without a key, custom endpoint without
