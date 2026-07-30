@@ -58,7 +58,6 @@ fn focus_channel(
       host_wsl: false,
       installed_skills: [],
       completion: None,
-      launcher: { open: false, channel: None, apps: AppsNotFetched },
       // Forgetting what was watched makes the post-dispatch panel sync
       // re-root `fs.watch` against the newly focused host.
       file_panel: { ..model.file_panel, watching: None },
@@ -1924,24 +1923,23 @@ fn update_msg(
     }
     ToggleLauncher => {
       let opening = !model.launcher.open
-      let changed_host = model.launcher.channel != Some(model.focused)
-      let launcher = if opening && changed_host {
-        { open: true, channel: Some(model.focused), apps: AppsNotFetched }
+      // The launcher exists only in the desktop window, whose one native
+      // host is Local. Installed apps are host-global, while the workspace
+      // is supplied later to app.launch.
+      let (cmd, apps) = if opening {
+        match model.launcher.apps {
+          AppsNotFetched | AppsFailed(_) => (fetch_apps(dispatch), AppsLoading)
+          AppsLoading | AppsFetched(_) => (@cmd.none, model.launcher.apps)
+        }
       } else {
-        { ..model.launcher, open: opening }
+        (@cmd.none, model.launcher.apps)
       }
-      // Probe once per focused host (and again after a failure). A focus
-      // transition starts an empty cache instead of displaying the old host.
-      let cmd = if opening &&
-        (changed_host || !(launcher.apps is AppsFetched(_))) {
-        fetch_apps(dispatch, model.focused)
-      } else {
-        @cmd.none
-      }
-      (cmd, { ..model, launcher, })
+      (cmd, { ..model, launcher: { open: opening, apps } })
     }
-    LauncherLoaded(channel~, apps~) => {
-      guard channel == model.focused && model.launcher.channel == Some(channel) else {
+    LauncherLoaded(apps) => {
+      // Only the one outstanding Local probe may settle the catalog. A
+      // duplicate or delayed reply after it settled cannot overwrite it.
+      guard model.launcher.apps is AppsLoading else {
         return (@cmd.none, model)
       }
       (
@@ -1949,8 +1947,8 @@ fn update_msg(
         { ..model, launcher: { ..model.launcher, apps: AppsFetched(apps) } },
       )
     }
-    LauncherFailed(channel~, message~) => {
-      guard channel == model.focused && model.launcher.channel == Some(channel) else {
+    LauncherFailed(message) => {
+      guard model.launcher.apps is AppsLoading else {
         return (@cmd.none, model)
       }
       (
@@ -1958,13 +1956,10 @@ fn update_msg(
         { ..model, launcher: { ..model.launcher, apps: AppsFailed(message) } },
       )
     }
-    LaunchApp(channel, app) => {
-      guard channel == model.focused && model.launcher.channel == Some(channel) else {
-        return (@cmd.none, model)
-      }
+    LaunchApp(app) => {
       let conv = model.active()
       (
-        launch_app(dispatch, model.focused, conv.session_id, cwd=conv.cwd, app),
+        launch_app(dispatch, conv.session_id, cwd=conv.cwd, app),
         { ..model, launcher: { ..model.launcher, open: false } },
       )
     }

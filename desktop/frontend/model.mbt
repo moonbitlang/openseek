@@ -742,8 +742,9 @@ priv struct Model {
   // while the query is unchanged. Recomputed on every keystroke and refetched
   // when the query or conversation changes.
   symbol_cache : SymbolCache
-  // The topbar app launcher. The app list is probed by the host once (the
-  // first time the menu opens) and kept for the app run.
+  // The desktop topbar's app launcher. Installed apps belong to the native
+  // host, not a conversation or workspace, so this catalog is probed once
+  // and kept while the frontend runs.
   launcher : Launcher
   // The editor side-panel: the active conversation's file tree and the file
   // shown in the embedded viewer. Rooted at `active().cwd`; rebuilt when the
@@ -788,13 +789,10 @@ priv struct RemoteAccess {
 } derive(Eq)
 
 ///|
-/// The topbar app launcher's state: whether its menu is open, the detected
-/// apps as a fetch lifecycle, and the device that owns both the cache and any
-/// request in flight. Replies from a previously focused device are discarded
-/// instead of replacing the current host's applications.
+/// The desktop topbar app launcher's state: whether its menu is open and the
+/// Local native host's process-wide installed-app catalog.
 priv struct Launcher {
   open : Bool
-  channel : @interop.ChannelId?
   apps : LauncherApps
 } derive(Eq)
 
@@ -835,12 +833,12 @@ fn opening_workspace_picker(channel : @interop.ChannelId) -> WorkspacePicker {
 }
 
 ///|
-/// The launcher's probe of the host's installed apps. There is no separate
-/// "fetching" state: a fetch is triggered by opening the menu, and until the
-/// reply lands the menu renders `AppsNotFetched` as "Finding apps…" (or
-/// keeps the previous failure on a retry, exactly as before).
+/// The Local native host's installed-app catalog. `AppsLoading` makes the
+/// probe single-flight: closing and reopening the menu cannot start another
+/// request while the first is still running.
 priv enum LauncherApps {
   AppsNotFetched
+  AppsLoading
   AppsFetched(Array[@transcript.LauncherAppItem])
   AppsFailed(String)
 } derive(Eq)
@@ -1070,13 +1068,10 @@ priv enum Msg {
   // Open or close the topbar app launcher; opening it fetches the installed-app
   // list the first time.
   ToggleLauncher
-  LauncherLoaded(
-    channel~ : @interop.ChannelId,
-    apps~ : Array[@transcript.LauncherAppItem]
-  )
-  LauncherFailed(channel~ : @interop.ChannelId, message~ : String)
+  LauncherLoaded(Array[@transcript.LauncherAppItem])
+  LauncherFailed(String)
   // Launch one detected app (by its id) on the active conversation's workspace.
-  LaunchApp(@interop.ChannelId, String)
+  LaunchApp(String)
   // The editor side-panel's own messages (tree, viewer, diagnostics,
   // comments), routed to the `fileeditor` package's update. The one
   // exception is `EditorCommentAdded`, which this update intercepts: the
@@ -1437,7 +1432,7 @@ fn initial_model() -> Model {
     skills_notice: "",
     completion: None,
     symbol_cache: empty_symbol_cache(),
-    launcher: { open: false, channel: None, apps: AppsNotFetched },
+    launcher: { open: false, apps: AppsNotFetched },
     file_panel: @fileeditor.State::empty(),
     notifications: [],
     notification_seq: 0,
