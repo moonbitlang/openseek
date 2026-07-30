@@ -218,6 +218,12 @@ fn DesktopBridgeActor::legacy_request_params(
     }
     fields["run_id"] = Json::string(remote_id)
   }
+  // The bundled page represents an absent working directory as an empty
+  // string. Catalog payloads use omission, so remove that sentinel before
+  // host.open_path, app.launch, or git.branch can mistake it for a real path.
+  if fields.get("cwd") is Some(String(cwd)) && cwd.is_empty() {
+    fields.remove("cwd")
+  }
   Json::object(fields)
 }
 
@@ -355,7 +361,12 @@ async fn DesktopBridgeActor::legacy_dispatch(
         "workspace_symbols" => "lsp.workspace_symbols"
         _ => raise @api.UnknownMethod(method_)
       }
-      @api.dispatch(self.state, self.host_connection, catalog_method, params)
+      @api.dispatch(
+        self.state,
+        self.host_connection,
+        catalog_method,
+        self.legacy_request_params(params),
+      )
     }
   }
 }
@@ -381,6 +392,32 @@ fn DesktopBridgeActor::legacy_notification(
     self.legacy_reply(notification.params)
   }
   Some({ method_, params })
+}
+
+///|
+/// Snapshot the starts a reloaded legacy page missed and translate their
+/// host-wide run ids before that page receives its readiness event. The shared
+/// `agent.runs` catalog method remains the single source of active-run truth.
+async fn DesktopBridgeActor::legacy_active_starts(
+  self : DesktopBridgeActor,
+) -> Array[@api.Notification] {
+  let reply = @api.dispatch(
+    self.state,
+    self.host_connection,
+    "agent.runs",
+    Json::empty_object(),
+  )
+  guard reply is Object(fields) && fields.get("runs") is Some(Array(runs)) else {
+    return []
+  }
+  let notifications : Array[@api.Notification] = []
+  for params in runs {
+    if self.legacy_notification({ method_: "agent.started", params })
+      is Some(notification) {
+      notifications.push(notification)
+    }
+  }
+  notifications
 }
 
 ///|
@@ -411,6 +448,49 @@ test "legacy desktop assigns stable local ids without changing remote ids" {
     request_fields.get("run_id"),
     Some(Json::string("7f9d6fd4c6760da5")),
   )
+}
+
+///|
+test "legacy desktop removes only the empty cwd sentinel" {
+  let bridge = DesktopBridgeActor::new(@api.ApiState::new(engine="openseek"))
+  let resumed = bridge.legacy_request_params({
+    "session": "desktop-session",
+    "cwd": "",
+    "path": "src/main.mbt",
+  })
+  guard resumed is Object(resumed_fields) else {
+    fail("legacy params did not remain an object")
+  }
+  assert_eq(resumed_fields.get("cwd"), None)
+  let running = bridge.legacy_request_params({
+    "session": "desktop-session",
+    "cwd": "/home/u/project",
+    "path": "src/main.mbt",
+  })
+  guard running is Object(running_fields) else {
+    fail("legacy params did not remain an object")
+  }
+  assert_eq(running_fields.get("cwd"), Some(Json::string("/home/u/project")))
+}
+
+///|
+async test "legacy desktop snapshots active starts for page reload" {
+  let state = @api.ApiState::new(engine="openseek")
+  let bridge = DesktopBridgeActor::new(state)
+  state.publish("agent.started", {
+    "run_id": "r-reload",
+    "session": "desktop-session",
+    "model": "deepseek-v4-pro",
+    "max_steps": 1000,
+  })
+  let starts = bridge.legacy_active_starts()
+  guard starts is [{ method_: "started", params: Object(fields) }] else {
+    fail("legacy active start was not replayed")
+  }
+  assert_eq(fields.get("run_id"), Some(Json::number(1)))
+  assert_eq(fields.get("session"), Some(Json::string("desktop-session")))
+  state.publish("agent.finished", { "run_id": "r-reload", "status": "finished" })
+  assert_true(bridge.legacy_active_starts().is_empty())
 }
 
 ///|

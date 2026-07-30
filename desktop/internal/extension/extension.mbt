@@ -165,11 +165,21 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
       match self.next_input(notifications, host_notifications) {
         Attach({ context, profile, reply }) => {
           // Managed Proton contexts queue events without raising. Publishing
-          // readiness before acknowledging the attachment preserves the
-          // connect handshake while avoiding request-task ownership.
+          // resynchronization and then readiness before acknowledging the
+          // attachment preserves the connect handshake while avoiding
+          // request-task ownership.
           match profile {
             Catalog => context.emit("agent.connected", Json::empty_object())
-            LegacyDesktop => context.emit("connected", Json::empty_object())
+            LegacyDesktop => {
+              // A full page reload did not observe the original Started event,
+              // but later stream and finish events still use that run id.
+              // Re-establish every active route before BridgeReady reaches the
+              // fresh frontend model.
+              for notification in self.legacy_active_starts() {
+                context.emit(notification.method_, notification.params)
+              }
+              context.emit("connected", Json::empty_object())
+            }
           }
           attached = Some((context, profile))
           reply.put(())

@@ -1195,7 +1195,26 @@ fn update_msg(
         },
       )
     }
-    SessionsLoaded(items) => (@cmd.none, { ..model, sessions: items })
+    SessionsLoaded(items) => {
+      // A page reload can rediscover an active run before its session list
+      // arrives. Reconcile that background conversation with the store's
+      // workspace grouping once the list catches up.
+      let conversations = model.conversations.map(conv => {
+        if conv.workspace is Some(_) {
+          conv
+        } else {
+          let mut workspace : @pathx.Absolute? = None
+          for item in items {
+            if item.id == conv.session_id {
+              workspace = workspace_root(item.workspace)
+              break
+            }
+          }
+          { ..conv, workspace, }
+        }
+      })
+      (@cmd.none, { ..model, sessions: items, conversations })
+    }
     WorkspacesLoaded(paths) => {
       // A workspace that vanished from the registry cannot host runs anymore;
       // conversations attached to it fall back to the default store so their
@@ -1403,39 +1422,48 @@ fn update_msg(
         { ..model, launcher: { ..model.launcher, open: false } },
       )
     }
-    Started(run_id~, session~, model=selected_model, max_steps~, cwd~) =>
-      if model.find_conversation(session) is Some(conv) {
-        let updated = model.replace_conversation({
-          ..conv,
-          run: Open(run_id~, stage=Opened),
-          last_run_id: Some(run_id),
-          // A started run always reports its directory, but a malformed
-          // event decodes as `None`; keeping the previous root beats
-          // forgetting one we already knew.
-          cwd: if cwd is Some(_) {
-            cwd
-          } else {
-            conv.cwd
-          },
-        })
-        // The run's workspace directory now exists, so the branch chip can be
-        // probed (and refreshed — a rerun may follow a checkout).
-        let branch_cmd = fetch_branch(dispatch, session, cwd)
-        // Sync the global model/step settings only when this start belongs to
-        // the conversation on screen. A slow background start (the user switched
-        // chats mid-spawn) must not overwrite settings the user has since
-        // changed for the now-active conversation.
-        if session == model.active_session {
-          (
-            branch_cmd,
-            { ..updated, selected_model, max_steps: max_steps.to_string() },
-          )
+    Started(run_id~, session~, model=selected_model, max_steps~, cwd~) => {
+      // A normal start already has a local conversation. A replay after a full
+      // page reload does not: recreate it as a background conversation so the
+      // run id can route subsequent stream and finish events without stealing
+      // focus from the fresh chat currently on screen.
+      let conv = model
+        .find_conversation(session)
+        .unwrap_or(
+          empty_conversation(
+            session,
+            workspace=model.session_workspace(session),
+          ),
+        )
+      let updated = model.replace_conversation({
+        ..conv,
+        run: Open(run_id~, stage=Opened),
+        last_run_id: Some(run_id),
+        // A started run always reports its directory, but a malformed
+        // event decodes as `None`; keeping the previous root beats
+        // forgetting one we already knew.
+        cwd: if cwd is Some(_) {
+          cwd
         } else {
-          (branch_cmd, updated)
-        }
+          conv.cwd
+        },
+      })
+      // The run's workspace directory now exists, so the branch chip can be
+      // probed (and refreshed — a rerun may follow a checkout).
+      let branch_cmd = fetch_branch(dispatch, session, cwd)
+      // Sync the global model/step settings only when this start belongs to
+      // the conversation on screen. A slow background start (the user switched
+      // chats mid-spawn) must not overwrite settings the user has since
+      // changed for the now-active conversation.
+      if session == model.active_session {
+        (
+          branch_cmd,
+          { ..updated, selected_model, max_steps: max_steps.to_string() },
+        )
       } else {
-        (@cmd.none, model)
+        (branch_cmd, updated)
       }
+    }
     Engine(run_id, event, session~) => {
       // Compaction and background notices happen between turns, so their
       // events arrive after the run that owned `run_id` cleared
@@ -1884,6 +1912,29 @@ test "sessions loaded replaces the sidebar list" {
 }
 
 ///|
+test "sessions loaded restores a replayed run's workspace" {
+  let dispatch = test_dispatch()
+  let replayed = {
+    ..empty_conversation("desktop-running"),
+    run: Open(run_id=7, stage=Opened),
+  }
+  let model = test_model().replace_conversation(replayed)
+  let items : Array[@transcript.SessionListItem] = [
+    {
+      id: "desktop-running",
+      title: Some("running question"),
+      workspace: "/home/u/project",
+      workspace_name: "project",
+    },
+  ]
+  let (_, next) = update(dispatch, SessionsLoaded(items), model)
+  guard next.find_conversation("desktop-running") is Some(running) else {
+    fail("expected the replayed conversation")
+  }
+  assert_true(running.workspace is Some(Absolute("/home/u/project")))
+}
+
+///|
 test "sessions failure pops a toast without touching the transcript" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
@@ -2107,7 +2158,7 @@ test "started routes by session and records the host's workspace" {
 }
 
 ///|
-test "started for an unknown session leaves the model alone" {
+test "a replayed start restores an unknown session without changing focus" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
@@ -2121,7 +2172,38 @@ test "started for an unknown session leaves the model alone" {
     test_model(),
   )
   inspect(next.active().is_running(), content="false")
-  inspect(next.conversations.length(), content="1")
+  inspect(next.active_session, content="desktop-test")
+  inspect(next.conversations.length(), content="2")
+  guard next.find_conversation("desktop-ghost") is Some(replayed) else {
+    fail("expected the replayed conversation")
+  }
+  inspect(replayed.is_running(), content="true")
+  guard replayed.run is Open(run_id=7, ..) else {
+    fail("expected the replayed run id")
+  }
+  let (_, streamed) = update(
+    dispatch,
+    Engine(
+      7,
+      AssistantDelta("continued after reload"),
+      session=Some("desktop-ghost"),
+    ),
+    next,
+  )
+  guard streamed.find_conversation("desktop-ghost") is Some(streaming) else {
+    fail("expected the replayed conversation to receive output")
+  }
+  inspect(streaming.streaming_response, content="continued after reload")
+  let (_, finished) = update(
+    dispatch,
+    Finished(run_id=7, status="finished", answer=Some("done")),
+    streamed,
+  )
+  guard finished.find_conversation("desktop-ghost") is Some(settled) else {
+    fail("expected the replayed conversation to finish")
+  }
+  inspect(settled.is_running(), content="false")
+  inspect(finished.active_session, content="desktop-test")
 }
 
 ///|
