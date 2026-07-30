@@ -71,13 +71,13 @@ fn CompletionTrigger::parse(text : String) -> CompletionTrigger? {
 ///
 /// Symbols differ from the other two: their rows are fetched asynchronously and
 /// arrive via `SymbolsLoaded`, so they come from `symbols` (cached against
-/// `session`) rather than being computed here. The menu still opens immediately
+/// conversation owner) rather than being computed here. The menu still opens immediately
 /// for a `#` query — empty and `loading` until the cache catches up.
 fn compute_completion(
   text : String,
   installed : Array[@transcript.InstalledSkillItem],
   symbols : SymbolCache,
-  session : String,
+  owner : @interop.ConversationKey,
 ) -> Completion? {
   guard CompletionTrigger::parse(text) is Some(trigger) else { return None }
   match trigger.kind {
@@ -132,7 +132,8 @@ fn compute_completion(
       // The cache answers this exact query for this conversation only when both
       // match; otherwise a fetch is in flight (or about to be) and the menu
       // shows whatever the cache narrows to meanwhile, marked loading.
-      let loading = symbols.session != session || symbols.query != trigger.query
+      let loading = symbols.owner != Some(owner) ||
+        symbols.query != trigger.query
       Some({
         kind: Symbols,
         items,
@@ -221,12 +222,15 @@ fn menu_for(
   text : String,
   installed : Array[@transcript.InstalledSkillItem],
 ) -> Completion? {
-  compute_completion(text, installed, empty_symbol_cache(), "")
+  compute_completion(text, installed, empty_symbol_cache(), {
+    channel: Local,
+    session: "",
+  })
 }
 
 ///|
 fn symbol_cache(
-  session : String,
+  owner : @interop.ConversationKey,
   query : String,
   names : Array[String],
 ) -> SymbolCache {
@@ -238,7 +242,7 @@ fn symbol_cache(
       range=@common.Range::Range(1, 1, 1, 1),
     )
   })
-  { session, query, items }
+  { owner: Some(owner), query, items }
 }
 
 ///|
@@ -336,10 +340,11 @@ test "highlight movement wraps at both ends" {
 
 ///|
 test "hash trigger lists cached symbols, filtered, marked not loading on match" {
-  let cache = symbol_cache("s1", "parse", [
+  let owner : @interop.ConversationKey = { channel: Local, session: "s1" }
+  let cache = symbol_cache(owner, "parse", [
     "parse_hover", "parse_range", "render",
   ])
-  guard compute_completion("#parse", [], cache, "s1") is Some(menu) else {
+  guard compute_completion("#parse", [], cache, owner) is Some(menu) else {
     fail("a # query should open the symbol menu")
   }
   assert_true(menu.kind is Symbols)
@@ -354,8 +359,9 @@ test "hash trigger lists cached symbols, filtered, marked not loading on match" 
 
 ///|
 test "symbol completion follows prompt text and preserves that text" {
-  let cache = symbol_cache("s1", "parse", ["parse_hover"])
-  guard compute_completion("Inspect #parse", [], cache, "s1") is Some(menu) else {
+  let owner : @interop.ConversationKey = { channel: Local, session: "s1" }
+  let cache = symbol_cache(owner, "parse", ["parse_hover"])
+  guard compute_completion("Inspect #parse", [], cache, owner) is Some(menu) else {
     fail("a symbol token after prompt text should open the menu")
   }
   assert_true(menu.kind is Symbols)
@@ -366,29 +372,34 @@ test "symbol completion follows prompt text and preserves that text" {
 
 ///|
 test "hash menu is loading until the cache catches up to the query" {
+  let owner : @interop.ConversationKey = { channel: Local, session: "s1" }
   // A bare # opens the menu (it lists everything), empty and loading until the
   // first results arrive.
-  guard compute_completion("#", [], empty_symbol_cache(), "s1") is Some(bare) else {
+  guard compute_completion("#", [], empty_symbol_cache(), owner) is Some(bare) else {
     fail("a bare # should open the symbol menu")
   }
   assert_true(bare.loading)
   assert_eq(bare.items.length(), 0)
   // A query with no cached results yet: the menu opens empty and loading.
-  guard compute_completion("#parse", [], empty_symbol_cache(), "s1")
+  guard compute_completion("#parse", [], empty_symbol_cache(), owner)
     is Some(fresh) else {
     fail("a # query should open even before results arrive")
   }
   assert_true(fresh.loading)
   assert_eq(fresh.items.length(), 0)
   // A cache from another conversation does not answer this one.
-  let other = symbol_cache("s2", "parse", ["parse_hover"])
-  guard compute_completion("#parse", [], other, "s1") is Some(stale) else {
+  let other = symbol_cache(
+    { channel: Remote("other"), session: "s1" },
+    "parse",
+    ["parse_hover"],
+  )
+  guard compute_completion("#parse", [], other, owner) is Some(stale) else {
     fail("menu still opens")
   }
   assert_true(stale.loading)
   // Once the empty-query results are cached, a bare # lists them all, settled.
-  let full = symbol_cache("s1", "", ["alpha", "beta"])
-  guard compute_completion("#", [], full, "s1") is Some(menu) else {
+  let full = symbol_cache(owner, "", ["alpha", "beta"])
+  guard compute_completion("#", [], full, owner) is Some(menu) else {
     fail("bare # lists the cached symbols")
   }
   assert_false(menu.loading)
@@ -482,7 +493,7 @@ test "compose_prompt folds the chips into a parseable envelope after the text" {
 ///|
 test "a draft of chips alone is not sendable" {
   let conv = {
-    ..empty_conversation("s"),
+    ..empty_conversation(@interop.ChannelId::Local, "s"),
     mentions: [{ ref_: Skill(name="review-pr"), range: None }],
   }
   // Chips are context for an instruction; without typed text the draft is

@@ -1,11 +1,14 @@
 import {
   "openseek_desktop/internal/api",
+  "openseek_desktop/internal/auth",
   "openseek_desktop/internal/engine",
   "openseek_desktop/internal/host",
   "openseek_desktop/tunnel",
   "moonbitlang/async",
   "moonbitlang/async/io",
+  "moonbitlang/async/semaphore",
   "moonbitlang/async/websocket",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "tonyfettes/xlog",
 }

@@ -1,37 +1,39 @@
 // The composer's `#` symbol completion: search the active conversation's
 // workspace symbol index through the host's `workspace_symbols` op (which
 // proxies the workspace's moon-lsp) and fold the matches into completion rows.
-// Each reply carries the `session` and `query` it answers, so a reply that lost
-// a conversation switch or was overtaken by a later keystroke is discarded.
+// Each reply carries the conversation owner and query it answers, so a reply
+// that lost a device/session switch or was overtaken by a later keystroke is
+// discarded.
 
 ///|
 /// Search `query` against the conversation's workspace symbols and fold the
 /// matches back as `SymbolsLoaded`.
 fn read_workspace_symbols(
   dispatch : @cmd.Emit[Msg],
-  session : String,
+  owner : @interop.ConversationKey,
   query : String,
   workspace~ : @pathx.Absolute?,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
-      payload["session"] = session
+      payload["session"] = owner.session
       payload["query"] = query
       @interop.set_workspace(payload, workspace)
       let reply = @interop.bridge_request(
-        "workspace_symbols",
+        owner.channel,
+        "lsp.workspace_symbols",
         payload.to_value(),
       ) catch {
         _ => {
-          scheduler.add(dispatch(SymbolsFailed(session~, query~)))
+          scheduler.add(dispatch(SymbolsFailed(owner~, query~)))
           return
         }
       }
       match decode_symbols(@interop.reply_json_text(reply)) {
         Some(items) =>
-          scheduler.add(dispatch(SymbolsLoaded(session~, query~, items~)))
-        None => scheduler.add(dispatch(SymbolsFailed(session~, query~)))
+          scheduler.add(dispatch(SymbolsLoaded(owner~, query~, items~)))
+        None => scheduler.add(dispatch(SymbolsFailed(owner~, query~)))
       }
     })
   })

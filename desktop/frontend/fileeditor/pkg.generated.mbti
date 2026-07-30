@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/interop",
   "openseek_desktop/internal/pathx",
 }
 
@@ -17,9 +18,11 @@ pub fn open_file(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, range~ : @common.R
 
 pub fn panel_view(@cmd.Emit[Msg], State, Ctx) -> @html.Html
 
-pub fn read_file(@cmd.Emit[Msg], String, @pathx.Relative, String, range~ : @common.Range?, annotation? : String, workspace~ : @pathx.Absolute?) -> @cmd.Cmd
+pub fn read_file(@cmd.Emit[Msg], @interop.ConversationKey, @pathx.Relative, String, range~ : @common.Range?, annotation? : String, workspace~ : @pathx.Absolute?) -> @cmd.Cmd
 
 pub fn remove_editor_feedback(ModelUri, String) -> @cmd.Cmd
+
+pub fn request_viewer_remeasure() -> @cmd.Cmd
 
 pub fn sync(@cmd.Emit[Msg], State, Ctx) -> (State, @cmd.Cmd)
 
@@ -29,10 +32,11 @@ pub fn update(@cmd.Emit[Msg], Msg, State, Ctx) -> (@cmd.Cmd, State)
 
 // Types and methods
 pub(all) struct Ctx {
-  session : String
+  owner : @interop.ConversationKey
   workspace : @pathx.Absolute?
   dark_mode : Bool
   tree_layout : TreeLayout
+  narrow : Bool
 }
 
 pub(all) enum FileContent {
@@ -55,11 +59,11 @@ pub(all) enum FileIndex {
 
 pub(all) struct FileStat {
   path : @pathx.Relative
-  sig : String
+  sig : String?
 }
 
 pub struct ModelUri(String)
-pub fn ModelUri::of(@pathx.Absolute) -> Self
+pub fn ModelUri::of(@interop.ChannelId, @pathx.Absolute) -> Self
 
 pub(all) enum Msg {
   ToggleFilePanel
@@ -73,16 +77,17 @@ pub(all) enum Msg {
   TreeKeyMove(delta~ : Int)
   TreeKeyAccept
   TreeKeyDismiss
-  DirLoaded(session~ : String, path~ : @pathx.Relative, entries~ : Array[FileEntry])
-  DirFailed(session~ : String, path~ : @pathx.Relative, message~ : String)
-  FilesIndexed(session~ : String, files~ : Array[@pathx.Relative], truncated~ : Bool)
-  FileIndexFailed(session~ : String)
+  DirLoaded(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, entries~ : Array[FileEntry])
+  DirFailed(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, message~ : String)
+  FilesIndexed(owner~ : @interop.ConversationKey, files~ : Array[@pathx.Relative], truncated~ : Bool)
+  FileIndexFailed(owner~ : @interop.ConversationKey)
   FileSelected(path~ : @pathx.Relative, name~ : String)
-  FileLoaded(session~ : String, path~ : @pathx.Relative, name~ : String, file~ : FileContent, range~ : @common.Range?, annotation~ : String?)
-  FileFailed(session~ : String, message~ : String)
+  FileLoaded(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, name~ : String, file~ : FileContent, range~ : @common.Range?, annotation~ : String?)
+  FileFailed(owner~ : @interop.ConversationKey, message~ : String)
   FsChanged
-  StatsLoaded(session~ : String, stats~ : Array[FileStat])
-  DiagnosticsPublished(absolute~ : @pathx.Absolute, diagnostics~ : Json)
+  StatsLoaded(owner~ : @interop.ConversationKey, stats~ : Array[FileStat])
+  DiagnosticsLoaded(owner~ : @interop.ConversationKey, absolute~ : @pathx.Absolute, diagnostics~ : Json)
+  DiagnosticsPublished(channel~ : @interop.ChannelId, absolute~ : @pathx.Absolute, diagnostics~ : Json)
   EditorCommentAdded(resource~ : ModelUri, file~ : @pathx.Relative, range~ : @common.Range, quote~ : String, comment~ : String, feedback_id~ : String)
 }
 
@@ -98,20 +103,20 @@ pub(all) struct RememberedTabs {
 
 pub(all) struct State {
   open : Bool
-  session : String
+  owner : @interop.ConversationKey?
   tree_open : Bool
-  watching : String
+  watching : @interop.ConversationKey?
   expanded : Array[@pathx.Relative]
   loading : Array[@pathx.Relative]
   children : Map[@pathx.Relative, Array[FileEntry]]
   tabs : Array[Tab]
   active : @pathx.Relative?
-  remembered : Map[String, RememberedTabs]
+  remembered : Map[@interop.ConversationKey, RememberedTabs]
   highlighted : @pathx.Relative?
   filter : String
   index : FileIndex
   cursor : @pathx.Relative?
-  error : String
+  error : String?
 } derive(Eq)
 pub fn State::empty() -> Self
 
@@ -140,4 +145,3 @@ pub fn TreeLayout::wire(Self) -> String
 // Type aliases
 
 // Traits
-

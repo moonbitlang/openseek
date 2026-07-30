@@ -22,8 +22,11 @@ const ModelUriScheme : String = "openseek"
 pub struct ModelUri(String)
 
 ///|
-pub fn ModelUri::of(absolute_path : @pathx.Absolute) -> ModelUri {
-  ModelUri(model_uri_of(absolute_path).to_string())
+pub fn ModelUri::of(
+  channel : @interop.ChannelId,
+  absolute_path : @pathx.Absolute,
+) -> ModelUri {
+  ModelUri(model_uri_of(channel, absolute_path).to_string())
 }
 
 ///|
@@ -39,10 +42,27 @@ fn app_uri(scheme : String, path : String) -> @common.Uri {
 }
 
 ///|
-/// The viewer `Uri` for the file at `absolute_path`; the URI type owns the
-/// percent-encoding, so the path rides raw.
-fn model_uri_of(absolute_path : @pathx.Absolute) -> @common.Uri {
-  app_uri(ModelUriScheme, absolute_path.0)
+/// The viewer `Uri` for the file at `absolute_path` on `channel`. The
+/// authority carries the channel identity (`local`, `remote.<id>`), so a
+/// registry-global service handed only the document — the hover provider —
+/// still knows which host to ask; the URI type owns the percent-encoding,
+/// so the path rides raw.
+fn model_uri_of(
+  channel : @interop.ChannelId,
+  absolute_path : @pathx.Absolute,
+) -> @common.Uri {
+  let uri = app_uri(ModelUriScheme, absolute_path.0)
+  uri.with_(authority=channel.uri_authority()) catch {
+    _ => uri
+  }
+}
+
+///|
+/// The channel a viewer model URI belongs to; `None` for a URI this app did
+/// not mint. A foreign or authority-less URI never falls back to a host.
+fn model_uri_channel(uri : @common.Uri) -> @interop.ChannelId? {
+  guard uri.scheme == ModelUriScheme else { return None }
+  @interop.ChannelId::from_uri_authority(uri.authority)
 }
 
 ///|
@@ -54,7 +74,9 @@ fn model_uri_of(absolute_path : @pathx.Absolute) -> @common.Uri {
 /// byte-for-byte the one the model was minted with.
 fn model_uri_path(uri : @common.Uri) -> @pathx.Absolute? {
   guard uri.scheme == ModelUriScheme else { return None }
-  let file = uri.with_(scheme="file") catch { _ => uri }
+  // The authority is the channel, not a UNC host — strip it before the
+  // `file`-scheme conversion or it would be rebuilt into the path.
+  let file = uri.with_(scheme="file", authority="") catch { _ => uri }
   let path = @common.uri_to_fs_path(file, true)
   guard !path.is_empty() else { return None }
   Some(Absolute(path))
@@ -74,7 +96,11 @@ impl @language.HoverProvider for LspHoverProvider with fn provide_hover(
   guard model.language_id == "moonbit" else { return None }
   guard !token.is_cancellation_requested() else { return None }
   guard model_uri_path(model.uri) is Some(path) else { return None }
+  // A registry-global provider has no Ctx; the document's own URI carries
+  // its channel in the authority, so the ask routes to the right host.
+  guard model_uri_channel(model.uri) is Some(channel) else { return None }
   let reply = request_hover(
+    channel~,
     path~,
     // The viewer's Position is 1-based; the host op speaks 0-based LSP coords.
     line=position.line_number - 1,
@@ -99,6 +125,7 @@ fn register_hover_provider() -> Unit {
 /// Call the host `hover` op for the absolute `path` at a zero-based
 /// `line`/`character`.
 async fn request_hover(
+  channel~ : @interop.ChannelId,
   path~ : @pathx.Absolute,
   line~ : Int,
   character~ : Int,
@@ -107,7 +134,7 @@ async fn request_hover(
   payload["path"] = path.0
   payload["line"] = line
   payload["character"] = character
-  @interop.bridge_request("hover", payload.to_value())
+  @interop.bridge_request(channel, "lsp.hover", payload.to_value())
 }
 
 ///|
@@ -168,23 +195,31 @@ fn hover_range(
 /// with a server behind the op.
 fn request_diagnostics(
   dispatch : @cmd.Emit[Msg],
+  owner : @interop.ConversationKey,
   absolute : @pathx.Absolute,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = request_lsp_open(path=absolute) catch { _ => return }
+      let reply = request_lsp_open(channel=owner.channel, path=absolute) catch {
+        _ => return
+      }
       let diagnostics = reply_diagnostics(@interop.reply_json_text(reply))
-      scheduler.add(dispatch(DiagnosticsPublished(absolute~, diagnostics~)))
+      scheduler.add(
+        dispatch(DiagnosticsLoaded(owner~, absolute~, diagnostics~)),
+      )
     })
   })
 }
 
 ///|
 /// Call the host `lsp_open` op for the absolute `path`.
-async fn request_lsp_open(path~ : @pathx.Absolute) -> @js.Value {
+async fn request_lsp_open(
+  channel~ : @interop.ChannelId,
+  path~ : @pathx.Absolute,
+) -> @js.Value {
   let payload = @js.Object::new()
   payload["path"] = path.0
-  @interop.bridge_request("lsp_open", payload.to_value())
+  @interop.bridge_request(channel, "lsp.open", payload.to_value())
 }
 
 ///|
@@ -273,23 +308,29 @@ fn decode_diagnostic_tags(
 }
 
 ///|
-test "model uris round-trip the absolute path" {
-  for path in ["/ws/my proj/src/a b.mbt", "/tmp/中文/x.mbt", "C:/ws/a.mbt"] {
-    let minted = model_uri_of(Absolute(path))
-    assert_true(model_uri_path(minted) == Some(Absolute(path)))
-    // The ModelUri string form re-parses to the same document key — the
-    // `remove_editor_feedback` path. Monaco's string form normalizes the
-    // Windows drive letter's case, so the key, not the path bytes, is what
-    // must survive this leg.
-    let reparsed = @common.Uri::parse(ModelUri::of(Absolute(path)).0)
-    assert_eq(reparsed.to_string(), minted.to_string())
-    assert_true(model_uri_path(reparsed) is Some(_))
+test "model uris round-trip the absolute path and the channel" {
+  let channels : Array[@interop.ChannelId] = [Local, Remote("d_abc")]
+  for channel in channels {
+    for path in ["/ws/my proj/src/a b.mbt", "/tmp/中文/x.mbt", "C:/ws/a.mbt"] {
+      let minted = model_uri_of(channel, Absolute(path))
+      assert_true(model_uri_path(minted) == Some(Absolute(path)))
+      assert_true(model_uri_channel(minted) == Some(channel))
+      // The ModelUri string form re-parses to the same document key — the
+      // `remove_editor_feedback` path. Monaco's string form normalizes the
+      // Windows drive letter's case, so the key, not the path bytes, is what
+      // must survive this leg.
+      let reparsed = @common.Uri::parse(ModelUri::of(channel, Absolute(path)).0)
+      assert_eq(reparsed.to_string(), minted.to_string())
+      assert_true(model_uri_path(reparsed) is Some(_))
+    }
   }
 }
 
 ///|
-test "foreign uris do not parse as model paths" {
+test "foreign uris do not parse as model paths or channels" {
   assert_true(model_uri_path(@common.Uri::parse("untitled:one")) is None)
   assert_true(model_uri_path(@common.Uri::file("/a.bin")) is None)
   assert_true(model_uri_path(app_uri("openseek-notice", "/a.bin")) is None)
+  assert_true(model_uri_channel(@common.Uri::file("/a.bin")) is None)
+  assert_true(model_uri_channel(app_uri(ModelUriScheme, "/a.bin")) is None)
 }

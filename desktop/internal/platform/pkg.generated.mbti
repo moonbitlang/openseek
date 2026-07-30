@@ -4,7 +4,11 @@ package "openseek_desktop/internal/platform"
 // Values
 pub fn is_darwin() -> Bool
 
+pub async fn machine_hostname() -> String?
+
 pub async fn open_path(String) -> Int
+
+pub async fn open_url(String) -> Int
 
 // Errors
 

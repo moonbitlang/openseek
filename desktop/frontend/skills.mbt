@@ -4,11 +4,15 @@
 
 ///|
 /// Fetch the registry's catalog of installable skills.
-fn fetch_skills_catalog(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+fn fetch_skills_catalog(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply = @interop.bridge_request(
-        "skills_catalog",
+        channel,
+        "skills.catalog",
         @js.Object::new().to_value(),
       ) catch {
         error => {
@@ -32,16 +36,21 @@ fn fetch_skills_catalog(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 
 ///|
 /// Refresh the local skills library's contents.
-fn fetch_installed_skills(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+fn fetch_installed_skills(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+) -> @cmd.Cmd {
+  let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply = @interop.bridge_request(
-        "skills_installed",
+        channel,
+        "skills.installed",
         @js.Object::new().to_value(),
       ) catch {
         error => {
           scheduler.add(
-            dispatch(SkillsNotice(@interop.bridge_error_text(error))),
+            dispatch(InstalledSkillsFailed(@interop.bridge_error_text(error))),
           )
           return
         }
@@ -53,7 +62,7 @@ fn fetch_installed_skills(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         Some(items) => scheduler.add(dispatch(InstalledSkillsLoaded(items)))
         None =>
           scheduler.add(
-            dispatch(SkillsNotice("malformed installed-skill list")),
+            dispatch(InstalledSkillsFailed("malformed installed-skill list")),
           )
       }
     })
@@ -65,6 +74,7 @@ fn fetch_installed_skills(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 /// `SkillActionDone` either way; the busy key is the entry's source label.
 fn install_skill(
   dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
   item : @transcript.MarketSkillItem,
 ) -> @cmd.Cmd {
   let key = @transcript.market_source_label(item)
@@ -77,19 +87,24 @@ fn install_skill(
         payload["package_path"] = item.package_path
       }
       let _ : @js.Value = @interop.bridge_request(
-        "skill_install",
+        channel,
+        "skills.install",
         payload.to_value(),
       ) catch {
         error => {
           scheduler.add(
             dispatch(
-              SkillActionDone(key~, error=@interop.bridge_error_text(error)),
+              SkillActionDone(
+                channel~,
+                key~,
+                error=@interop.bridge_error_text(error),
+              ),
             ),
           )
           return
         }
       }
-      scheduler.add(dispatch(SkillActionDone(key~, error="")))
+      scheduler.add(dispatch(SkillActionDone(channel~, key~, error="")))
     })
   })
 }
@@ -97,25 +112,34 @@ fn install_skill(
 ///|
 /// Remove one registry-installed skill from the library; the busy key is
 /// the library entry's id.
-fn uninstall_skill(dispatch : @cmd.Emit[Msg], id : String) -> @cmd.Cmd {
+fn uninstall_skill(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  id : String,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
       payload["id"] = id
       let _ : @js.Value = @interop.bridge_request(
-        "skill_uninstall",
+        channel,
+        "skills.uninstall",
         payload.to_value(),
       ) catch {
         error => {
           scheduler.add(
             dispatch(
-              SkillActionDone(key=id, error=@interop.bridge_error_text(error)),
+              SkillActionDone(
+                channel~,
+                key=id,
+                error=@interop.bridge_error_text(error),
+              ),
             ),
           )
           return
         }
       }
-      scheduler.add(dispatch(SkillActionDone(key=id, error="")))
+      scheduler.add(dispatch(SkillActionDone(channel~, key=id, error="")))
     })
   })
 }

@@ -52,7 +52,7 @@ pub async fn steer_run(EngineManager, SteerRequest) -> SteerReply
 
 pub async fn unarchive_session(EngineManager, String, () -> Unit) -> SessionsReply
 
-pub async fn update_settings(EngineManager, SettingsPatch, on_committed? : (Json) -> Unit) -> Json
+pub async fn update_settings(EngineManager, SettingsPatch, legacy_migration? : Bool, on_committed? : (Json) -> Unit) -> Json
 
 pub fn workspace_session_root(@path.Path) -> @path.Path
 

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- interactive-widget makes Chrome shrink the layout viewport when the
+         on-screen keyboard opens, so the flex shell compresses (topbar stays,
+         composer sits above the keyboard) instead of the whole page panning
+         up. Safari ignores the key. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
+    />
+    <title>OpenSeek Console</title>
+    <!-- The embedded code viewer's styles, assembled from the editor
+         dependency by the packager (see build_viewer_stylesheet). -->
+    <link rel="stylesheet" href="viewer.css" />
+    <!-- The app's own stylesheet, shared with the desktop window
+         (desktop/index.html). -->
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="./browser.js"></script>
+  </body>
+</html>

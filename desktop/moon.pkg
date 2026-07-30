@@ -4,6 +4,7 @@ import {
   "justjavac/proton_ext/notification",
   "justjavac/proton/extension" @proton_extension,
   "openseek_desktop/internal/api",
+  "openseek_desktop/internal/auth",
   "openseek_desktop/internal/engine",
   "openseek_desktop/internal/env" @envx,
   "openseek_desktop/internal/extension",

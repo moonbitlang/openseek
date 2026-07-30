@@ -171,7 +171,7 @@ fn nav_state() -> State {
   {
     ..State::empty(),
     open: true,
-    session: "desktop-test",
+    owner: Some(test_ctx().owner),
     children: Map::from_array([
       (
         Relative(""),
@@ -299,14 +299,17 @@ test "Enter opens the index's top match even when unlisted" {
 test "an index reply lands only for its own conversation" {
   let emit = test_emit()
   let stale = FilesIndexed(
-    session="someone-else",
+    owner={
+      channel: @interop.ChannelId::Remote("other"),
+      session: "desktop-test",
+    },
     files=[Relative("a.txt")],
     truncated=false,
   )
   let (_, dropped) = update(emit, stale, nav_state(), test_ctx())
   assert_true(dropped.index is IndexEmpty)
   let fresh = FilesIndexed(
-    session="desktop-test",
+    owner=test_ctx().owner,
     files=[Relative("a.txt")],
     truncated=true,
   )
@@ -320,7 +323,7 @@ test "a failed fetch retries later, a failed refresh keeps the index" {
   let loading = { ..nav_state(), index: IndexLoading }
   let (_, reset) = update(
     emit,
-    FileIndexFailed(session="desktop-test"),
+    FileIndexFailed(owner=test_ctx().owner),
     loading,
     test_ctx(),
   )
@@ -331,7 +334,7 @@ test "a failed fetch retries later, a failed refresh keeps the index" {
   }
   let (_, kept) = update(
     emit,
-    FileIndexFailed(session="desktop-test"),
+    FileIndexFailed(owner=test_ctx().owner),
     ready,
     test_ctx(),
   )

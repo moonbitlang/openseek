@@ -38,3 +38,39 @@ pub async fn open_path(path : String) -> Int {
     @process.run("xdg-open", [path])
   }
 }
+
+///|
+/// Open a URL in the system's default browser, returning the opener's exit
+/// code. Unlike `open_path` there is no text-editor fallback — a URL that
+/// the opener rejects should fail, not land in an editor.
+#cfg(platform="windows")
+pub async fn open_url(url : String) -> Int {
+  @process.run("cmd", ["/c", "start", "", url])
+}
+
+///|
+#cfg(not(platform="windows"))
+pub async fn open_url(url : String) -> Int {
+  if is_darwin() {
+    @process.run("open", [url])
+  } else {
+    @process.run("xdg-open", [url])
+  }
+}
+
+///|
+/// The machine's hostname, for labeling this device on a relay; `None` when
+/// the probe fails. `hostname` ships with macOS, Linux, and Windows alike.
+pub async fn machine_hostname() -> String? {
+  let (code, output) = @process.collect_stdout("hostname", []) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return None
+  }
+  guard code == 0 else { return None }
+  let name = output.text().trim().to_owned() catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => return None
+    }
+  guard !name.is_empty() else { return None }
+  Some(name)
+}

@@ -81,11 +81,11 @@ pub(all) struct RememberedTabs {
 } derive(Eq)
 
 ///|
-/// One file's decoded `stat_files` result: its current mtime signature, or
-/// `""` when the file is missing.
+/// One file's decoded `fs.stat_files` result: its current mtime signature,
+/// absent when the file is missing.
 pub(all) struct FileStat {
   path : @pathx.Relative
-  sig : String
+  sig : String?
 }
 
 ///|
@@ -109,23 +109,23 @@ pub(all) enum FileIndex {
 ///|
 /// The editor side-panel's state: a lazily-loaded file tree of the active
 /// conversation's workspace and the files open in the embedded viewer's tab
-/// strip. Keyed entirely by workspace-relative paths; `session` records
-/// which conversation the cached tree belongs to, so switching conversations
-/// swaps it (parking the open tabs in `remembered`) rather than showing
-/// another workspace's files.
+/// strip. Keyed entirely by workspace-relative paths; `owner` records which
+/// channel's conversation the cached tree belongs to, so switching either
+/// channel or session swaps it (parking the open tabs in `remembered`) rather
+/// than showing another host's files.
 pub(all) struct State {
   // Whether the panel column is expanded; the column is always rendered (so
   // the viewer host element stays put) and merely hidden by CSS when closed.
   open : Bool
-  session : String
+  owner : @interop.ConversationKey?
   // Whether the file-tree pane (the toggleable column right of the viewer)
   // is shown. A panel preference, not per-conversation state, so it
   // survives conversation switches.
   tree_open : Bool
-  // The session whose workspace the host's file watcher currently follows
-  // ("" = parked). `sync` reconciles it with what the panel needs, so the
-  // watcher follows conversation switches and stops when nothing is open.
-  watching : String
+  // The conversation whose workspace the host's file watcher currently
+  // follows (`None` = parked). Keeping the channel here lets `sync` explicitly
+  // retire the previous host's watcher before placing the next one.
+  watching : @interop.ConversationKey?
   // Directory paths the user has expanded, and those with a `read_directory`
   // in flight; plain arrays since a workspace tree is small.
   expanded : Array[@pathx.Relative]
@@ -136,9 +136,9 @@ pub(all) struct State {
   // `active: None` leaves the viewer on its placeholder.
   tabs : Array[Tab]
   active : @pathx.Relative?
-  // Tab sets parked by conversation switches, keyed by session id, restored
-  // when that conversation returns to the screen.
-  remembered : Map[String, RememberedTabs]
+  // Tab sets parked by conversation switches, keyed by their full host-local
+  // identity, restored when that conversation returns to the screen.
+  remembered : Map[@interop.ConversationKey, RememberedTabs]
   // The directory a breadcrumb click most recently revealed, flashed in the
   // tree until `HighlightCleared` fires.
   highlighted : @pathx.Relative?
@@ -153,17 +153,18 @@ pub(all) struct State {
   // rows appearing and disappearing around it; None until the keyboard
   // first moves.
   cursor : @pathx.Relative?
-  // The last directory/file failure, surfaced in the panel header.
-  error : String
+  // The last directory/file failure, surfaced in the panel header;
+  // `None` while nothing has failed.
+  error : String?
 } derive(Eq)
 
 ///|
 pub fn State::empty() -> State {
   {
     open: false,
-    session: "",
+    owner: None,
     tree_open: true,
-    watching: "",
+    watching: None,
     expanded: [],
     loading: [],
     children: Map([]),
@@ -174,7 +175,7 @@ pub fn State::empty() -> State {
     filter: "",
     index: IndexEmpty,
     cursor: None,
-    error: "",
+    error: None,
   }
 }
 
@@ -209,15 +210,19 @@ pub fn TreeLayout::wire(self : TreeLayout) -> String {
 
 ///|
 /// The active conversation's identity, passed in by the main package on every
-/// `update`/`sync`/`panel_view` call: which session the panel serves, the
-/// conversation's attached workspace (the hint fs ops carry), whether the
+/// `update`/`sync`/`panel_view` call: which conversation the panel serves, its
+/// attached workspace (the hint fs ops carry), whether the
 /// app is in dark mode (drives the embedded viewer's theme attribute), and
 /// the Settings choice of where the file tree docks.
 pub(all) struct Ctx {
-  session : String
+  owner : @interop.ConversationKey
   workspace : @pathx.Absolute?
   dark_mode : Bool
   tree_layout : TreeLayout
+  // The app's phone-narrow layout flag. Narrow, the tree and the viewer
+  // share one full-width pane (CSS shows exactly one), so opening a file
+  // closes the tree — a drill-down — instead of showing both side by side.
+  narrow : Bool
 }
 
 ///|
@@ -257,24 +262,28 @@ pub(all) enum Msg {
   // Escape in the filter input: clear a non-blank filter first, then close
   // the tree panel (when a file is open to fall back to).
   TreeKeyDismiss
-  // A `read_directory` reply: `session`/`path` say which request it answers so
-  // a reply that lost a conversation switch can be dropped.
+  // A `read_directory` reply: `owner`/`path` say which request it answers so a
+  // reply that lost a conversation switch can be dropped.
   DirLoaded(
-    session~ : String,
+    owner~ : @interop.ConversationKey,
     path~ : @pathx.Relative,
     entries~ : Array[FileEntry]
   )
-  DirFailed(session~ : String, path~ : @pathx.Relative, message~ : String)
+  DirFailed(
+    owner~ : @interop.ConversationKey,
+    path~ : @pathx.Relative,
+    message~ : String
+  )
   // A `list_files` reply: the workspace's files for the fuzzy filter.
   // `truncated` means the host's walk stopped at its cap.
   FilesIndexed(
-    session~ : String,
+    owner~ : @interop.ConversationKey,
     files~ : Array[@pathx.Relative],
     truncated~ : Bool
   )
   // A `list_files` request failed or returned garbage; drops the index back
   // to `IndexEmpty` so the next filter keystroke retries.
-  FileIndexFailed(session~ : String)
+  FileIndexFailed(owner~ : @interop.ConversationKey)
   // A file row was clicked: read it and show it in the viewer. `name` is the
   // entry's display name, kept for the viewer's title and language guess.
   FileSelected(path~ : @pathx.Relative, name~ : String)
@@ -286,28 +295,37 @@ pub(all) enum Msg {
   // re-shown as an editor bubble over `range`. A plain tree click leaves
   // both `None`.
   FileLoaded(
-    session~ : String,
+    owner~ : @interop.ConversationKey,
     path~ : @pathx.Relative,
     name~ : String,
     file~ : FileContent,
     range~ : @common.Range?,
     annotation~ : String?
   )
-  FileFailed(session~ : String, message~ : String)
+  FileFailed(owner~ : @interop.ConversationKey, message~ : String)
   // The host's coarse "something changed under the watched workspace" push.
   // Carries no paths — the handler re-stats the open tabs and re-lists the
   // expanded directories to find out what moved.
   FsChanged
   // A `stat_files` reply: each open tab's current mtime signature (`""` =
-  // the file is gone). `session` says which conversation it answers, like
+  // the file is gone). `owner` says which conversation it answers, like
   // every other reply.
-  StatsLoaded(session~ : String, stats~ : Array[FileStat])
-  // The language server's diagnostics for the file at `absolute`, either
-  // returned by `lsp_open` when the file is shown or pushed later as the server
-  // re-analyzes (the main package forwards the host's `diagnostics` events
-  // here). `diagnostics` is the raw LSP array (0-based ranges). Applied to
-  // the viewer only while it still shows that file; a stale one is dropped.
-  DiagnosticsPublished(absolute~ : @pathx.Absolute, diagnostics~ : Json)
+  StatsLoaded(owner~ : @interop.ConversationKey, stats~ : Array[FileStat])
+  // The language server's diagnostics returned by `lsp_open`. The full owner
+  // fences a reply that lost a device/session switch while the request ran.
+  DiagnosticsLoaded(
+    owner~ : @interop.ConversationKey,
+    absolute~ : @pathx.Absolute,
+    diagnostics~ : Json
+  )
+  // A later diagnostics push from the host. The wire event is channel-scoped
+  // but carries no session, so the main package first rejects background
+  // channels and this handler then verifies the panel still serves it.
+  DiagnosticsPublished(
+    channel~ : @interop.ChannelId,
+    absolute~ : @pathx.Absolute,
+    diagnostics~ : Json
+  )
   // The user commented on a selection in the editor viewer (the
   // agent-feedback inline input). NOT handled by this package's `update`:
   // the comment becomes a chip on the main package's composer draft, so the

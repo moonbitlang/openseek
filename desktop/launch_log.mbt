@@ -11,9 +11,12 @@ async fn launch_logger() -> @xlog.Logger {
   guard @host.prepared_runtime_dir() is Some(dir) else {
     fail("cannot determine the per-user runtime directory")
   }
-  @xlog.global().set_handler(
-    @xlog.File(dir.join("openseek-desktop.log").to_string()),
-  )
+  let path = dir.join("openseek-desktop.log").to_string()
+  // Proton's native shutdown path can run from `atexit`, after MoonBit has
+  // already left the app pump. Give it the same append-only JSONL sink so a
+  // missing MoonBit "end" record and the native CEF state can be correlated.
+  @env.set_env_var("OPENSEEK_DESKTOP_LOG", path)
+  @xlog.global().set_handler(@xlog.File(path))
   @xlog.global().set_level(Debug)
   @xlog.global()
 }

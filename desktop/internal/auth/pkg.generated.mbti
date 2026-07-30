@@ -1,0 +1,48 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/auth"
+
+import {
+  "moonbitlang/async/aqueue",
+  "moonbitlang/x/path",
+}
+
+// Values
+pub fn device_url(String, String) -> String
+
+pub fn origin_from_relay_url(String) -> String
+
+pub fn tunnel_url(String) -> String
+
+// Errors
+pub(all) suberror AuthError {
+  AuthError(String)
+}
+pub impl Show for AuthError
+
+// Types and methods
+type AuthStore
+pub fn AuthStore::cancel_sign_in(Self) -> Bool
+pub fn AuthStore::desired_connector(Self) -> ConnectorConfig?
+pub fn AuthStore::empty() -> Self
+pub async fn AuthStore::handle_refusal(Self) -> Unit
+pub async fn AuthStore::load(runtime_dir? : @path.Path, env_override? : ConnectorConfig) -> Self
+pub fn AuthStore::managed_by_env(Self) -> Bool
+pub fn AuthStore::mark_dropped(Self) -> Bool
+pub fn AuthStore::mark_registered(Self, String) -> Bool
+pub fn AuthStore::poke(Self) -> Unit
+pub fn AuthStore::session_server(Self) -> String?
+pub async fn AuthStore::sign_in(Self, server_url~ : String) -> Unit
+pub async fn AuthStore::sign_out(Self) -> Unit
+pub fn AuthStore::signed_in(Self) -> Bool
+pub fn AuthStore::status_json(Self, server_url? : String) -> Json
+pub fn AuthStore::wakeups(Self) -> @aqueue.Queue[Unit]
+
+pub(all) struct ConnectorConfig {
+  relay_url : String
+  device_token : String
+  device_name : String
+} derive(Eq)
+
+// Type aliases
+
+// Traits

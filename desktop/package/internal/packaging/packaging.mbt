@@ -1,11 +1,14 @@
 ///|
-const FrontendPackage : String = "frontend"
+/// The desktop shell entry. Its `frontend/browser` sibling is the console
+/// bundle served by openseek-api and is not shipped inside the desktop app.
+const FrontendPackage : String = "frontend/desktop"
 
 ///|
-/// The JS bundle `moon build frontend --target js --release` emits. Build
+/// The JS bundle `moon build frontend/desktop --target js --release` emits.
+/// Build
 /// output lands in the monorepo root's `_build` (the single root moon.work
 /// owns the build directory), so this resolves via `repo_at`, not `at`.
-const FrontendBundleArtifact : String = "_build/js/release/build/openseek_desktop/frontend/frontend.js"
+const FrontendBundleArtifact : String = "_build/js/release/build/openseek_desktop/frontend/desktop/desktop.js"
 
 ///|
 /// The stable path the host and packagers read the frontend bundle from.

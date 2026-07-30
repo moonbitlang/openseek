@@ -29,6 +29,8 @@ struct ApiState {
   manager : @engine.EngineManager
   host : @host.HostState
   hub : Hub
+  // The host's relay sign-in state, shared with the relay actor.
+  auth : @auth.AuthStore
   // Called for every finished run, alongside the notification fan-out — the
   // desktop posts its system notification here.
   on_finished : ((@engine.FinishedPayload) -> Unit)?
@@ -43,6 +45,7 @@ pub fn ApiState::new(
   engine~ : String,
   runtime_dir? : @path.Path,
   executable? : String,
+  auth? : @auth.AuthStore,
   on_finished? : (@engine.FinishedPayload) -> Unit,
 ) -> ApiState {
   let engine_actor = @engine.new_engine_actor(engine, runtime_dir?)
@@ -51,6 +54,10 @@ pub fn ApiState::new(
     manager: engine_actor.manager(),
     host: @host.new_host_state(engine, runtime_dir?, executable?),
     hub: Hub::new(),
+    auth: match auth {
+      Some(store) => store
+      None => @auth.AuthStore::empty()
+    },
     on_finished,
   }
 }
@@ -60,6 +67,12 @@ pub fn ApiState::new(
 /// per-session follower children.
 pub fn ApiState::engine_actor(self : ApiState) -> @engine.EngineActor {
   self.engine
+}
+
+///|
+/// The sign-in store used by the relay actor running beside this dispatcher.
+pub fn ApiState::auth_store(self : ApiState) -> @auth.AuthStore {
+  self.auth
 }
 
 ///|
@@ -180,15 +193,24 @@ pub async fn dispatch(
       // shielded linearization point. `update_settings` invokes the callback
       // while its manager-owned lock is still held, preserving revision order
       // across concurrent clients even if the requester disconnects.
-      @async.protect_from_cancel(() => {
-        @engine.update_settings(state.manager, payload.to_patch(), on_committed=fn(
-          status,
-        ) {
-          // Every client renders these settings (the Settings page, the
-          // composer's ready gate); clients that did not ask must learn too.
-          state.hub.publish("settings.changed", status)
-        })
+      let status = @async.protect_from_cancel(() => {
+        let status = @engine.update_settings(
+          state.manager,
+          payload.to_patch(),
+          legacy_migration=payload.legacy_migration == Some(true),
+          on_committed=fn(status) {
+            // Every client renders these settings (the Settings page, the
+            // composer's ready gate); clients that did not ask must learn too.
+            state.hub.publish("settings.changed", status)
+          },
+        )
+        // Device credentials belong to the server that issued them. If this
+        // commit switched servers, clear the old credentials before the
+        // settings request can complete or be cancelled.
+        sign_out_after_server_switch(state)
+        status
       })
+      status
     }
     "workspace.list" => @engine.list_workspaces().to_json()
     "workspace.add" => {
@@ -216,6 +238,10 @@ pub async fn dispatch(
         "name": "openseek-host",
         "wsl": Json::boolean(HostWslCapable),
       }
+    "auth.status" => auth_status(state)
+    "auth.connect" => auth_connect(state)
+    "auth.disconnect" => auth_disconnect(state)
+    "auth.cancel" => auth_cancel(state)
     _ =>
       match
         @host.host_op(state.host, connection, method_, params, (method_, params) => {
@@ -259,7 +285,7 @@ pub fn method_names() -> Array[String] {
     "agent.start", "agent.cancel", "agent.steer", "agent.compact", "agent.runs",
     "session.list", "session.load", "session.list_archived", "session.archive", "session.unarchive",
     "settings.get", "settings.set", "workspace.list", "workspace.add", "workspace.remove",
-    "host.meta",
+    "host.meta", "auth.status", "auth.connect", "auth.disconnect", "auth.cancel",
   ] +
   @host.host_method_names()
 }

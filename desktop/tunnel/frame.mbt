@@ -20,7 +20,7 @@ pub(all) enum Frame {
   /// open the matching `/v1/tunnel/<stream>` data WebSocket.
   Open(stream~ : String)
   /// Service → desktop: registration was rejected. The desktop stops using
-  /// these credentials instead of retrying the same token forever.
+  /// these credentials and waits for a new sign-in instead of retrying them.
   Fail(message~ : String)
 }
 

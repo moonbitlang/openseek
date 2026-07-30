@@ -1,209 +1,601 @@
-# OpenSeek native host protocol
+# OpenSeek Remote Protocol (v2)
 
-This document describes the protocol owned by the OpenSeek Desktop native
-process. It covers the shared method catalog, JSON-RPC WebSocket transport,
-durable session delivery, and the outbound relay connection.
+The wire protocol between a browser client and an OpenSeek **host process**
+— the desktop app's native process, which owns the engine and the host ops.
+The host runs no server: at startup it dials out to a **relay** and
+registers; browsers reach it through the relay, which serves the frontend
+bundle and splices WebSockets without understanding a byte of the protocol.
 
-It does not add the browser transport to the frontend, mobile layout, sign-in,
-or Remote access product UI. The desktop page continues to use Proton's
-in-process command extension through a temporary compatibility profile.
+The desktop window itself does not use this protocol. It talks to the host
+over proton's in-process `__MoonBit__` bridge — same method catalog, same
+payloads, no wire. The frontend picks its transport by origin: a `proton://`
+page uses the bridge, anything else opens the WebSocket below.
 
-## Process boundary
+This document is the contract. The implementation follows it, not the other
+way around.
 
-The native process owns:
+## Host process ownership
 
-- engine processes and their durable session followers;
-- filesystem watchers and language servers;
-- the Proton command-extension connection;
-- the relay control WebSocket and every relayed client WebSocket;
-- one notification hub shared by the Proton and WebSocket transports.
+The native process owns every engine process, language server, relay socket,
+and filesystem watcher. Long-lived work is attached to an app- or
+connection-lifetime actor rather than to the request that happened to create
+it:
 
-The process runs these owners as actors for the application lifetime. Request
-callbacks post work or call the shared dispatcher; they do not own long-lived
-connections, subprocesses, language servers, or filesystem watchers.
+- `EngineActor` owns serve processes and durable-session followers.
+- `LspPoolActor` owns the language-server actors shared by the host.
+- `RelayActor` owns the control connection and creates one `WsClientActor`
+  for each relayed client.
+- Every Proton or WebSocket client owns a separate `HostConnection`, whose
+  `FsWatchActor` serves only that client's `fs.watch` state and sends
+  `fs.changed` only to that client.
+- `DesktopBridgeActor` owns the current Proton page attachment and forwards
+  the shared catalog notifications to it.
 
-The actors are:
+Closing the Proton application cancels these owners together. A request may
+post work to them, but cancelling or reloading that request cannot orphan a
+socket, subprocess, or watcher.
 
-- `DesktopBridgeActor`: the current Proton page attachment;
-- `EngineActor`: serve processes and durable session followers;
-- one `FsWatchActor` per desktop or WebSocket connection: that client's
-  requested root and active watcher;
-- `LspPoolActor` plus `LspServerActor`: language-server processes;
-- `RelayActor` plus one `WsClientActor` per relayed client.
+## Transport
 
-Closing the Proton application returns from `app.run`; the enclosing task group
-then cancels these actors together.
+All HTTP lives at the relay. Pages and assets are unversioned; JSON/WS
+APIs live under `/v1`:
 
-Filesystem watch ownership follows the transport connection. A client's
-`fs.watch` and `fs.unwatch` only affect its own actor, and the resulting
-`fs.changed` notification returns only to that client. LSP diagnostics and
-engine lifecycle notifications still use the shared notification hub.
+| Route | What |
+|---|---|
+| `GET /` | The frontend bundle: sign-in, then the multi-device console — one sidebar group per device, one WebSocket per online device. `?device=<id>` preselects the focused device, `?workspace=<path>` the workspace its first conversation lands in |
+| `GET /d/<device>/…` | Retired: `302` to `/?device=<device>` with the original query appended, so old deep links keep their preselection |
+| `GET /healthz` | Relay liveness probe, `200 ok` |
+| `/v1/auth/*`, `/v1/devices…` | The relay's own auth and device APIs (see Authentication) |
 
-## Shared method catalog
+Everything else — commands, queries, and host-pushed events — travels over
+**one WebSocket per device**: `GET /v1/devices/<device>/ws`, upgraded from
+the same origin the bundle was served from and spliced through to the host.
+The frontend takes each `<device>` from the roster it fetches at
+`GET /v1/devices` (or the `?device=` preselect). Frames are JSON text,
+shaped as **JSON-RPC 2.0**:
 
-The Proton extension and every client WebSocket call the same dispatcher.
-Catalog method names use dotted namespaces:
+```jsonc
+// client → host: request
+{"jsonrpc": "2.0", "id": 1, "method": "agent.start", "params": {…}}
 
-- `agent.start`, `agent.cancel`, `agent.steer`, `agent.compact`, `agent.runs`
-- `session.list`, `session.load`, `session.list_archived`,
-  `session.archive`, `session.unarchive`
-- `settings.get`, `settings.set`
-- `workspace.list`, `workspace.add`, `workspace.remove`
-- `git.branch`
-- `fs.read_file`, `fs.read_directory`, `fs.list_files`, `fs.stat_files`,
-  `fs.watch`, `fs.unwatch`, `fs.browse`
-- `lsp.open`, `lsp.hover`, `lsp.workspace_symbols`
-- `skills.catalog`, `skills.install`, `skills.installed`, `skills.uninstall`
-- `update.check`, `update.download`, `update.apply`
-- `app.list`, `app.launch`
-- `host.open_path`, `host.meta`
+// host → client: response (exactly one per request, either form)
+{"jsonrpc": "2.0", "id": 1, "result": {…}}
+{"jsonrpc": "2.0", "id": 1, "error": {"code": -32000, "message": "…"}}
 
-Method parameters are always JSON objects. Optional fields are omitted rather
-than encoded as empty sentinel values, except `fs.stat_files` keeps
-`stats[].sig: ""` for a missing file while the bundled desktop still relies on
-that legacy deletion marker.
-
-The host owns engine endpoint credentials and WSL settings. They are persisted
-in `engine-settings.json`; clients edit them through `settings.get` and
-`settings.set`. Secret values are never returned—status replies only report
-whether a key is present.
-
-After `skills.install` or `skills.uninstall` switches the local library
-successfully, the host publishes `skills.changed` with empty parameters.
-Every client, including one that did not make the request, should then call
-`skills.installed` again.
-
-## Proton compatibility profile
-
-The frontend currently on `main` still calls the original names such as
-`connect`, `start`, `list_sessions`, and `read_file`. The native extension
-registers those names only for the Proton window and maps them to the catalog.
-
-The old page also models a run id as an integer. Catalog run ids are opaque
-host-wide strings. `DesktopBridgeActor` therefore keeps a page-local
-integer-to-string table:
-
-- Proton requests translate their integer id before dispatch;
-- catalog replies and notifications translate the opaque id back;
-- WebSocket clients always see the opaque string unchanged.
-
-Legacy endpoint fields sent by the desktop page are written into the
-host-owned settings store immediately before `start` or `compact`. This keeps
-the existing Settings page functional until the frontend migration lands.
-
-The local `pick_workspace` operation remains outside the shared catalog
-because a remote browser must not open a native folder dialog.
-
-## JSON-RPC WebSocket
-
-After the relay pairs a browser socket with a host data socket, the host reads
-JSON text frames using JSON-RPC 2.0:
-
-```json
-{"jsonrpc":"2.0","id":1,"method":"session.list","params":{}}
-{"jsonrpc":"2.0","id":1,"result":{"groups":[]}}
-{"jsonrpc":"2.0","method":"agent.connected","params":{}}
+// host → client: notification (no id, no reply expected)
+{"jsonrpc": "2.0", "method": "agent.event", "params": {…}}
 ```
 
-Request ids belong to one client connection and are echoed unchanged.
-Requests may complete out of order. Batch requests and client notifications
-have no catalog behavior.
+Request `id`s are client-assigned and client-scoped (a monotonic counter is
+fine). Responses may arrive out of order relative to other requests — the
+`id` is the correlation. Batch requests are not supported. A request frame
+larger than 1 MiB is closed with WebSocket code 1009; operation payloads carry
+prompts, paths, and settings, never transcript snapshots or file contents.
 
-Every inbound request or notification must carry `"jsonrpc":"2.0"` exactly.
-When present, an id must be a string, number, or null. Catalog parameters must
-be a JSON object; an omitted `params` member is treated as an empty object.
-Invalid versions or id shapes receive `-32600`, while a valid request envelope
-with non-object parameters receives `-32602`. As required by JSON-RPC,
-client notifications never receive a response.
+Remote delivery trims high-volume transcript objects whose canonical form is
+delivered by `session.event`. This is the protocol baseline and applies only to
+named durable sessions. Session-less runs retain the complete legacy stream
+because they have no `session.event` source. For a durable run, the pushed
+`agent.started` remains with `task: ""`;
+`reasoning_message` and `assistant_message` remain as stream-settlement signals
+with `content: ""`; `tool_result`, `auto_compaction_finished`, `agent_finished`,
+and `context_yield` are omitted. The separate `agent.finished` lifecycle
+notification remains, including its optional `answer`;
+`compaction_finished` remains with an empty `summary` so it still closes the
+lifecycle state. Deltas, usage, step progress, tool-decode errors, runtime
+status, steer receipts, and all other run/compaction lifecycle and error events
+are unchanged. The desktop's in-process bridge continues to receive the hub's
+complete stream; this trimming is specific to remote WebSocket delivery.
 
-Errors use these codes:
+## Authentication
 
-| Code | Meaning |
-|---:|---|
-| `-32700` | Unparsable JSON text |
-| `-32600` | Invalid JSON-RPC request |
-| `-32601` | Unknown method |
-| `-32602` | Malformed method parameters |
-| `-32603` | Unexpected internal error |
-| `-32000` | Engine operation failed |
-| `-32001` | Host operation failed |
+Auth terminates **at the relay**; the JSON-RPC wire above carries no
+credentials and is unchanged by it. Device ids are stable database ids,
+not secrets — the barrier is ownership:
 
-One writer task owns each socket. Request tasks and notification forwarding
-enqueue complete envelopes into a bounded queue. A client that stops draining
-is disconnected after the queue fills; notifications are never silently
-dropped while the connection stays open.
+- **Browsers** sign in with GitHub OAuth at the relay (`/v1/auth/login` →
+  callback → `session` cookie, HttpOnly/SameSite=Lax, 7-day sliding).
+  The data WebSocket upgrade on `/v1/devices/<device>/ws` requires a
+  session whose user **owns** that device; anything else is 401/404.
+- **Hosts** register over the control WebSocket with an `odt_` **device
+  token** issued by the relay at sign-in time. The relay stores only a
+  keyed hash; revoking a device invalidates the token and disconnects any
+  live tunnel.
+- **Desktop sign-in** is loopback OAuth with PKCE (RFC 8252 shape): the
+  host starts a one-shot listener on `127.0.0.1:<random>`, opens the
+  system browser at `<server>/v1/auth/desktop/start?state&code_challenge&
+  port&name`, the signed-in user clicks **Allow** once, the browser
+  bounces a one-time code to the listener, and the host swaps it (plus
+  its PKCE verifier; the challenge is standard S256 — the unpadded
+  base64url of `sha256(verifier)`, RFC 7636) at
+  `POST /v1/auth/desktop/exchange` for `{device_token, device, user}` —
+  the exchange **is** device registration. The host persists the token
+  (`auth.json` in its runtime dir, 0600). Development overrides:
+  `OPENSEEK_DEVICE_TOKEN` + `OPENSEEK_RELAY_URL` pin the connector config
+  directly (bypassing sign-in), and `OPENSEEK_SERVER_URL` points the
+  sign-in flow at an ad-hoc server regardless of the settings' selection.
 
-`agent.connected` is the first notification placed into a new connection's
-queue. The client treats it as a readiness and resynchronization boundary.
+The relay's server implementation and HTTP surface (OAuth routes, the devices
+API, and schema) live in the openseek-api repository; its
+`docs/relay-auth-design.md` specifies that account layer. This repository keeps
+only the desktop-side connection code in `desktop/internal/remote` and the four
+control-frame definitions in `desktop/tunnel`.
 
-## Reconnect and durable delivery
+## Errors
 
-The WebSocket does not replay transient frames. After reconnecting, a client
-rebuilds state with `session.list`, `session.load`, and `agent.runs`.
+| code | meaning | v1 equivalent |
+|---|---|---|
+| `-32700` | unparsable frame | — |
+| `-32600` | not a valid JSON-RPC request | — |
+| `-32601` | unknown method | 404 unknown op |
+| `-32602` | params failed to decode | 400 `PayloadError` |
+| `-32000` | engine error (`EngineError` — busy conversation, spawn failure, …) | 409 |
+| `-32001` | host error (`HostError` — bad path, LSP failure, …) | 409 |
+| `-32603` | internal error | 500 |
 
-A named session's canonical transcript comes from:
+`error.message` is the user-facing text. `error.data` is unused for now.
 
-1. the `session.load` snapshot and its `watermark`;
-2. later `session.event` notifications.
+## Connection lifecycle: reconnect = resync
 
-A session event has this shape:
+There is no stream-resume machinery: no connection cursor and no replay of
+transient notifications. (The one sequence that exists is per-session and
+durable, not per-connection:
+`session.event` carries the store's own event sequence — see *The durable
+transcript* below — and a reconnect recovers missed commits by re-reading,
+never by replay.) The sole lifecycle exception is `agent.runs`'s targeted,
+process-lifetime settlement state for owners the reconnecting client names;
+it is a state query, not an event log. A connection delivers events from the
+moment it exists; whatever a client missed while disconnected it recovers by
+re-reading state:
 
-```json
+1. Connect the WebSocket. The host sends `agent.connected` as the connection's
+   first notification, then starts forwarding the remote delivery stream.
+2. Resync: `session.list` + `agent.runs` (and reload whatever conversation
+   is open via `session.load`). The client gives `agent.runs` the exact owners
+   from its request-time frontier: `{session, run_id}` after Started, or
+   `{session, submission_id}` while a start is in flight or delivery became
+   unconfirmed before its run id arrived. The reply contains the **complete**
+   in-flight set plus matching completed settlements retained by this host
+   process. The in-flight set introduces runs the client has
+   never seen, and any run the client still shows that the reply lacks
+   ended while it was away (its terminal notification will never be
+   replayed) and must be closed client-side. That negative-set decision is
+   limited to the exact per-session lifecycle state the client captured before
+   issuing this `agent.runs` request (idle/last run, starting `submission_id`,
+   or open run id). Any local steer reconciliation caused by that negative row
+   is likewise limited to the exact submission ids present at the request's
+   frontier; a steer submitted while the reply is in flight keeps its own
+   receipt path. Positive rows use the same frontier: a row is replayed only if
+   that session still has its captured state. A new `agent.started`,
+   `agent.finished`, or Send while the request is in flight therefore wins over
+   both stale presence and stale absence in the older reply. A settlement is
+   accepted under the same owner gate; an abnormal settlement is returned only
+   once its exact durable frontier is known (including sequence zero). One
+   atomic reply may contain a predecessor settlement and that session's active
+   successor, and clients apply both. The whole reply is also tagged with the
+   connection generation, so no row from a pre-reconnect request crosses a
+   later readiness boundary.
+3. Race note: notifications may arrive before the resync replies. This is
+   harmless by construction — streaming deltas are ephemeral display state,
+   and every completed step is delivered durably by `session.event` (legacy
+   clients also receive the full `agent.event` message). A client buffers
+   commits while loading and reconciles them against the snapshot watermark.
+
+What this costs, deliberately: transient events that occurred while
+disconnected (`usage` ticks, steer receipts, background notices) are gone —
+none of them carry state a resync cannot rebuild or safely ignore. A run
+that *finished* while the client was away is visible through `session.load`;
+its targeted `agent.runs` settlement supplies lifecycle outcome and the exact
+zero-durable case where no record exists to load. Settlements live only for the
+host process lifetime. After a host process restart there is no durable
+submission-id index, so a pre-restart unconfirmed input remains conservatively
+unresolved rather than being guessed.
+
+Slow clients are disconnected, not throttled and not silently dropped
+frame-by-frame: when a connection's outbound queue overflows, the host
+closes it, and the client reconnects into the resync path above.
+
+The in-process bridge does not use WebSocket reconnect or capability
+negotiation. It can still be recreated across a host restart: each
+`BridgeReady` transition makes the desktop rebuild host-derived state, so that
+readiness resync follows the same idempotent, race-tolerant rules.
+
+## Method catalog
+
+`params` is always a JSON object; `{}` when a method takes nothing.
+Optional fields (`?`) are absent when unset — the protocol never encodes
+request-side absence as `""`, `0`, or another in-band sentinel. The one
+reply-side compatibility exception is a missing file's
+`fs.stat_files.stats[].sig: ""`.
+
+### agent.* — runs
+
+Run ids are opaque strings minted by the host, one per accepted prompt.
+They use 128 bits of OS randomness and are not intentionally reused across
+host restarts, so a client may safely retain a pre-restart run id. Clients
+compare them for equality only.
+
+`submission_id` is a separate, optional opaque string minted by the client.
+It must contain non-whitespace content and be at most 128 UTF-8 bytes; the host
+treats a blank or overlong value as absent rather than retaining or echoing it.
+On `agent.start` the host echoes it unchanged in the corresponding
+`agent.started`; on `agent.steer` it is echoed in that submission's eventual
+`steer_applied` or `steer_dropped` event. This identifies the exact live
+submission that owns the returned run or receipt, even when two steers have
+identical text. The `agent.started` echo establishes run ownership but not
+durability—it is emitted before the host writes the prompt. An `agent.start`
+result of `accepted` proves the complete stdin command was written, not that
+the User item reached the store. Clients therefore retain a recovery copy
+until a normal Terminal-backed finish proves the User append, or an abnormal
+exact durable frontier reconciles it (sequence zero restores it for
+resubmission). This is lifecycle correlation only; durable transcript items
+still come from `session.event`. Old clients omit it, and old hosts omit the
+echoes.
+
+| method | params | result |
+|---|---|---|
+| `agent.start` | `{task, submission_id?, model?, max_steps?, session?, workspace?}` — no credentials, WSL preference, or store path: the host resolves settings and durable placement; `workspace` is honored only when registered | `{run_id, status, …}` — `accepted` after the complete prompt command is written; a post-`started` write failure returns `failed`, while pre-`started` failures use the error response |
+| `agent.cancel` | `{run_id?}` (absent = the latest run) | cancel outcome |
+| `agent.steer` | `{text, run_id?, submission_id?}` | steer outcome |
+| `agent.compact` | `{session, model?, max_steps?, workspace?}` — `agent.start` minus `task`: a conversation resumed after a restart has no live process, and compacting spawns one with these settings | compaction outcome |
+| `agent.runs` | `{known?: [{session, run_id?, submission_id?}]}` — each selector must carry a run or submission id; `{}` remains valid | `{runs: […], settled: […]}` — every in-flight run's `agent.started` params plus selector-matched `{run_id, session, submission_id?, status, exit_code?, durable_sequence?}` lifecycle settlements. Normal Terminal-backed statuses are immediately replayable; abnormal statuses appear only with an exact durable sequence. Active and settled state are captured atomically |
+
+Notifications:
+
+| method | params |
+|---|---|
+| `agent.started` | `{run_id, task, submission_id?, session, engine, model, max_steps, cwd?, session_root?}` — `cwd` and `session_root` are host-derived placement facts, never client-selected paths. `task` is kept for old clients that synthesize the prompt bubble from it; current clients take the bubble from the prompt's own `session.event` commit |
+| `agent.event` | `{run_id?, session, event: {…}}` — the engine's event object (`assistant_delta`, `tool_result`, `agent_finished`, …); for a correlated steer receipt the host adds its optional `submission_id`. `run_id` is absent for events emitted before any run of the engine process's lifetime (a compaction on a freshly spawned engine), which route by `session` |
+| `agent.error` | `{message, run_id?, exit_code?, diagnostics?}` |
+| `agent.finished` | `{run_id, status, answer?, exit_code?, durable_sequence?}` — `durable_sequence` is present when an abnormal process exit's follower final scan completed before lifecycle publication; it is the exact stored boundary even when the dead turn appended no Terminal |
+| `agent.durable` | `{run_id, session, sequence}` — strengthens an already-emitted failure/abort result after the host retires that serve process and its follower final scan succeeds. In particular, `agent_setup_failed`, `turn_failed`, and `agent_aborted` do not by themselves prove their best-effort Terminal append succeeded. This is a boundary update, not a second finish |
+
+### session.*
+
+| method | params | result |
+|---|---|---|
+| `session.list` | `{}` | the session index |
+| `session.load` | `{session, workspace?}` — a non-blank workspace must still be registered; omitted/blank locates the session across registered stores, then the global store | `{session: <the durable session JSON>, watermark?}` — current hosts include `watermark`, the highest event `sequence` the snapshot contains (0 for an empty record); older hosts omit it, and clients derive the same value from the stored events' own sequences |
+| `session.list_archived` | `{}` | the archived index |
+| `session.archive` | `{session}` | outcome |
+| `session.unarchive` | `{session}` | outcome |
+
+Notifications:
+
+| method | params |
+|---|---|
+| `session.event` | `{session, sequence, event: {sequence, ts, item}}` — one durably **committed** store event, `event` verbatim as `session.load` carries it in `events`; see *The durable transcript* below |
+| `session.changed` | `{change: "archived" \| "unarchived", session}` — broadcast to every client (the requester included) when a conversation moves between the live and archived stores; recipients apply this per-session fact immediately, keep it authoritative over already-in-flight unversioned list replies, and re-read both lists. A new connection starts a fresh list round. |
+
+#### The durable transcript: snapshots + commits
+
+A conversation's durable transcript has exactly two sources: the
+`session.load` snapshot and the `session.event` commits that follow it. A
+commit exists **if and only if** its item is in the session's durable
+record, and `sequence` is the item's one-based position there — contiguous
+per session. Everything else on the wire is transient stream or lifecycle
+state: commit-aware clients may show deltas live, but full semantic messages,
+`agent.started`'s `task`, and steer receipts never append transcript items —
+their durable form arrives as a commit. A remote WebSocket receives the
+lightweight forms described above instead of duplicate full semantic payloads.
+
+Client algorithm, per session: keep a watermark `W`, starting at the
+snapshot's. For each `session.event`: `sequence ≤ W` → drop (re-broadcasts
+and load/commit races are harmless by construction); `sequence == W + 1` →
+apply and advance; `sequence > W + 1` → a gap (missed broadcasts — a slow
+client kicked, a host restart, an external CLI writer): re-read via
+`session.load`, buffering commits that arrive meanwhile, and reconcile them
+against the new snapshot's watermark.
+
+The host broadcasts commits while it manages a live writer for the session
+(an engine process, spawn to exit — the exit is preceded by a final sweep of
+whatever the engine persisted last). Between engines nothing writes on the
+host's behalf, so there is nothing to broadcast; anything an *external*
+writer (the CLI sharing the session) appends meanwhile surfaces as a gap on
+the next commit, which the reload answers. Compaction appends its durable
+summary to the log; existing sequences never renumber, so the summary's
+commit still applies contiguously.
+
+The final sweep also closes the lifecycle proof for an abnormal exit. If the
+sweep itself fails, the host keeps that run's pending durable boundary with
+the retryable follower generation; a later lifecycle drain publishes the
+same `agent.durable` boundary before retiring it. The targeted `agent.runs`
+settlement then lets a reconnecting owner distinguish “some commits exist”
+from the exact-zero case, where its recovery copy of the input is restored
+for resubmission.
+
+Old clients ignore `session.event` and keep building the transcript from
+`agent.event` as before. Old hosts never send `session.event`, ignore the
+capability notification, and omit the top-level `session.load.watermark`.
+A new client derives the watermark from the snapshot events' own `sequence`
+fields and performs one generation-tagged background `session.load` when a
+named run reaches `agent.finished`. That post-terminal snapshot is the
+compatibility/final-consistency path for the full semantic items the new
+client deliberately does not append from `agent.event`. If an older snapshot
+is already in flight, the client keeps reads single-flight and schedules one
+fresh generation after it settles; commits received from a new host remain
+buffered and are filtered against the resulting watermark as usual.
+Only completion, context-yield, and max-step statuses prove that the semantic
+log followed a successful Terminal append. Failure and abort statuses remain
+unanchored until an exact durable boundary arrives, either live through
+`agent.durable` or in the matching `agent.runs` settlement, so a later run's
+anonymous Terminal cannot be mistaken for theirs.
+
+Likewise, an old host's `agent.started` has no `submission_id`. The exact
+`agent.start` response still carries the request's run id, so a client may use
+that response to settle its local submission after the id-less Started push
+has opened the same run.
+
+### settings.* — the host-owned engine endpoint settings
+
+The server selection, its credentials, and the WSL preference live on the
+**host** (`engine-settings.json` in its runtime dir, versioned, 0600) —
+never in a client. Clients edit them here and consume them as status; key
+material never travels down the wire, only presence. Runs read the store
+at config time, so a change replaces the conversation's engine process on
+its next start.
+
+`provider` is the one **server selection**: it decides the
+chat-completions endpoint, the update channel `update.check` should be
+asked with (`openseek-staging` → `"staging"`, everything else →
+`"production"`), and which relay `auth.connect` signs in to (only the
+OpenSeek servers have one). Committing a switch away from a signed-in
+session's server signs that session out (`auth.changed` follows).
+
+| method | params | result |
+|---|---|---|
+| `settings.get` | `{}` | the status shape below |
+| `settings.set` | `{provider?, custom_api_url?, deepseek_api_key?, custom_api_key?, wsl?: {enabled, distro?, engine?}, legacy_migration?}` — absent fields stay unchanged; a present string field is trimmed and, when empty, **clears** the stored value; a present `wsl` replaces the whole group; an unknown `provider` is refused. `legacy_migration:true` is reserved for the bundled desktop's one-time import: once any settings write has claimed the durable store, a replay is acknowledged without changing it. | the status shape below, post-write |
+
+The status shape, also the params of every `settings.changed` notification:
+
+```jsonc
 {
-  "session": "session-id",
-  "sequence": 8,
-  "event": {
-    "sequence": 8,
-    "ts": 1785200000,
-    "item": {}
-  }
+  "revision": 7,                    // host-process monotonic revision
+  "provider": "openseek" | "openseek-staging" | "deepseek" | "custom",
+  "custom_api_url": "https://…",   // absent when unset
+  "has_deepseek_key": false,       // presence only — the key text never leaves the host
+  "has_custom_key": false,
+  "wsl": {"enabled": false, "distro": "…", "engine": "…"}  // distro/engine absent when unset
 }
 ```
 
-The sequence is the item's one-based position in the durable record. The host
-publishes `session.event` only after that item has been committed.
+Successful writes are serialized and increment `revision` before the status
+is returned and broadcast. Clients ignore a lower revision within one host
+connection generation. `BridgeReady` starts a new generation and resets that
+comparison because the host process may have restarted its counter.
 
-For a client watermark `W`:
+Notification:
 
-- sequence `<= W`: already present, ignore it;
-- sequence `== W + 1`: apply it and advance;
-- sequence `> W + 1`: a gap exists, reload the session and reconcile buffered
-  commits against the new watermark.
+| method | params |
+|---|---|
+| `settings.changed` | the status shape — broadcast to every client (the requester included) after each successful `settings.set`, so every page renders the same configuration |
 
-Each live engine has one follower reading the durable log. The follower owns
-its file cursor, publishes commits in order, and performs a final scan after
-the engine exits. Engine lifecycle publication waits for the follower boundary
-needed to distinguish a complete durable turn from a failed write.
+### workspace.*
 
-`agent.runs` returns the currently active starts. When supplied with exact
-known run or submission identities, it also returns matching process-lifetime
-settlements. This lets a reconnecting client close a run whose terminal
-notification was missed without exposing unrelated completion history.
+| method | params | result |
+|---|---|---|
+| `workspace.list` | `{}` | `{workspaces: […]}` |
+| `workspace.add` | `{path}` | the updated list |
+| `workspace.remove` | `{path}` | the updated list — refused while any conversation operation is still being prepared, or while a run/compaction in that workspace is active; idle engines and their final follower scan are drained before the registry entry is committed |
+
+Notifications:
+
+| method | params |
+|---|---|
+| `workspace.changed` | `{workspaces: […]}` — the canonical post-commit registry list, broadcast to every client while the host still holds its registry serialization lock; recipients invalidate older `workspace.list` replies before adopting it |
+
+Removing a workspace only hides its registry entry; it does not delete the
+directory or sessions. Clients keep the workspace attached to already-open
+conversation state, so a stale attempt names that now-unregistered path and
+is rejected instead of silently relocating the session into the global store.
+
+That workspace hint is part of a client's resume state. A protocol client
+that persists a workspace session across a host restart must persist and send
+its `workspace` too: once the workspace is no longer registered, an omitted
+hint leaves a missing id indistinguishable from a brand-new scratch session.
+The current wire has no persistent detached-session tombstone; the bundled
+client retains the hint and therefore gets the intended rejection.
+
+### git.*
+
+| method | params | result |
+|---|---|---|
+| `git.branch` | `{session, cwd?}` | `{branch?}` — the checked-out branch of the conversation's working directory (detached HEAD reads as its short hash); absent when the directory is not a git repository or git is unavailable |
+
+### fs.* — conversation-scoped file access
+
+Paths in `fs.read_file` / `fs.read_directory` / `fs.stat_files` are relative
+to the conversation's workspace; the host derives the root from `session`
+(`workspace?` is the hint that lets a fresh conversation browse before its
+durable record exists). `fs.browse` is the exception: it lists the **host**
+filesystem for the workspace picker.
+
+| method | params | result |
+|---|---|---|
+| `fs.read_file` | `{session, path, workspace?}` | `{kind: "content", content, absolute, sig}` \| `{kind: "binary"}` \| `{kind: "oversized"}` |
+| `fs.read_directory` | `{session, path, workspace?}` (`""` = workspace root) | `{entries: [{name, is_dir}]}`, directories first |
+| `fs.list_files` | `{session, workspace?}` | `{files: […], truncated}` — recursive snapshot for the fuzzy finder |
+| `fs.stat_files` | `{session, paths, workspace?}` | `{stats: [{path, sig}]}` — `sig` is the opaque mtime signature `"{seconds}:{nanos}"`; `""` means the file is missing, retained for client compatibility |
+| `fs.watch` | `{session, workspace?}` | `{}` — points the single workspace watcher at this conversation |
+| `fs.unwatch` | `{}` | `{}` — stops watching (the panel closed) |
+| `fs.browse` | `{path?}` (absent = home; leading `~` expands) | `{path, parent?, entries}` — subdirectory names, sorted, dotfiles skipped |
+
+Notification:
+
+| method | params |
+|---|---|
+| `fs.changed` | `{root}` — coarse by design; the client re-stats its open tabs and re-lists expanded directories |
+
+### lsp.*
+
+| method | params | result |
+|---|---|---|
+| `lsp.open` | `{path}` (absolute) | `{diagnostics}` — the server's current diagnostics for the file; later changes push as `lsp.diagnostics` |
+| `lsp.hover` | `{path, line, character}` (0-based) | `{value, markdown, has_range, start_line, start_character, end_line, end_character}` — empty `value` = no hover |
+| `lsp.workspace_symbols` | `{session, query, workspace?}` | `{symbols: [{name, kind?, container?, path, range}]}` |
+
+Notification:
+
+| method | params |
+|---|---|
+| `lsp.diagnostics` | `{path, diagnostics}` — same array shape as `lsp.open`'s reply |
+
+### skills.*
+
+| method | params | result |
+|---|---|---|
+| `skills.catalog` | `{}` | `{skills: […]}` — the registry's installable skills |
+| `skills.installed` | `{}` | `{skills: […]}` — the global library's contents |
+| `skills.install` | `{module_name, version, package_path?}` | `{installed}` |
+| `skills.uninstall` | `{id}` | `{removed}` |
+
+Notification:
+
+| method | params |
+|---|---|
+| `skills.changed` | `{}` — broadcast after an install or uninstall commits; every client re-reads `skills.installed`, including clients that did not make the request |
+
+### auth.* — remote-access sign-in
+
+Desktop-window-only by client convention (same footing as `update.*`):
+these drive the host's own relay registration, which a remote client has
+no business operating. A browser signs in with the relay directly
+(cookie), never through these ops.
+
+| method | params | result |
+|---|---|---|
+| `auth.status` | `{}` | the status shape below |
+| `auth.connect` | `{}` | the status shape — resolves only when the loopback flow finishes (browser round-trip included), so it can take minutes; errors are the JSON-RPC error response. While signed in it runs no browser flow (an exchange mints a new device row) and only makes sure the connector runs. Refused when the selected server has no relay (`deepseek`/`custom`) or when the environment override manages the connector |
+| `auth.disconnect` | `{}` | the status shape — deletes the local token, best-effort revokes the device at the relay, and stops the connector. Refused in override mode |
+| `auth.cancel` | `{}` | the status shape — aborts an in-flight `auth.connect` (whose own call then fails with "the sign-in was cancelled"); a no-op when nothing is in flight |
+
+The status shape, also the params of every `auth.changed` notification:
+
+```jsonc
+{
+  "server_url": "https://openseek-api.moonbitlang.cn",
+                                 // signed in: the token's issuer; signed out: the
+                                 // selection's server — absent when that server has
+                                 // no relay (deepseek/custom) or in a supervisor push
+  "connected": false,            // control WS currently registered
+  "managed_by_env": true,        // present only under the OPENSEEK_RELAY_URL override
+  "user":   {"login": "…", "avatar_url": "…"},   // absent when signed out
+  "device": {"id": "d_…", "name": "…", "url": "…/?device=d_…"}  // absent when signed out
+}
+```
+
+Notification:
+
+| method | params |
+|---|---|
+| `auth.changed` | the status shape — pushed whenever registration state moves (connector registered, dropped, token revoked, signed out) |
+
+### update.*
+
+Desktop-window-only by client convention: applying an update swaps the
+bundle under the running process and relaunches through the window's close
+path, which only exists on the in-process bridge. The host serves these on
+both transports (it cannot tell clients apart), but the browser frontend
+never calls them and shows no update UI.
+
+| method | params | result |
+|---|---|---|
+| `update.check` | `{channel?}` (anything but `"staging"` reads as production) | `{kind: "up_to_date" \| "available" \| "unreachable" \| "malformed" \| "broken", …}` |
+| `update.download` | `{channel?}` | staging outcome |
+| `update.apply` | `{}` | `{applied}` — the bundle swap succeeded and the window may close |
+
+### app.* / host.*
+
+| method | params | result |
+|---|---|---|
+| `app.list` | `{}` | `{apps: [{id, name, icon}]}` — `icon` is a `data:image/png` URL, empty when extraction failed |
+| `app.launch` | `{session, cwd?, app}` | `{launched}` |
+| `host.open_path` | `{session, cwd?, path}` | `{opened}` — hand a transcript-referenced path to the system opener; relative paths resolve against the conversation's working directory (`cwd` when the client has it, else derived from `session`); deliberately no workspace containment — the user clicked a path the agent itself surfaced |
+| `host.meta` | `{}` | `{protocol: 2, name, wsl}` — `wsl` is whether the **host** can run the engine inside WSL (a Windows host); clients must consume this rather than sniff their own user agent, since the page may run on any device |
+
+Reserved notification (not yet emitted over the wire):
+`host.notification_clicked` `{session}` — a system notification was clicked.
+On the desktop this arrives through the proton bridge; it appears here once
+remote clients need it.
 
 ## Relay tunnel
 
-The host does not listen on a local HTTP port. Remote access is outbound:
+The host reaches its clients by dialing out — it can live behind NAT with
+nothing exposed. The relay is a **WebSocket splicer**: it pairs sockets and
+forwards frames verbatim, with zero knowledge of the protocol above.
 
-1. `RelayActor` connects to `/v1/tunnel`;
-2. it sends `register` with a device token and name;
-3. the service replies with `registered`, or rejects it with `fail`;
-4. each `open` control frame asks the host to connect to
-   `/v1/tunnel/<stream>`;
-5. a `WsClientActor` serves JSON-RPC on that data connection.
+```
+browser                    relay (public)                  host (desktop app)
+  │                           │                                │
+  │                           │◄─── ① control WS: /v1/tunnel ──┤ outbound, long-lived
+  │                           │   register{device_token,name}  │
+  │                           ├── registered{device:"d_…"} ───►│
+  │                           │                                │
+  ├─② wss://relay/v1/devices─►│                                │
+  │        /d_…/ws            ├──── ③ open{stream:"s1"} ──────►│
+  │   (session cookie)        │                                │
+  │                           │◄── ④ data WS: /v1/tunnel/s1 ───┤ one per browser client
+  │                           │                                │
+  │◄════ ⑤ relay splices ② and ④ frame-for-frame ════════════►│
+```
 
-The `desktop/tunnel` package owns only the four control-frame JSON shapes.
-Socket ownership and retry behavior live in `desktop/internal/remote`; the
-public service, authentication, device ownership, and stream pairing live in
-the `openseek-api` repository.
+Control-channel frames (JSON text over the `/v1/tunnel` WebSocket):
 
-For development and protocol testing, the desktop connector is enabled only
-when both variables are present:
+| frame | direction | fields |
+|---|---|---|
+| `register` | host → relay | `{device_token, name}` — sent once after connecting |
+| `registered` | relay → host | `{device}` — the stable public id; reconnects with the same token reuse it |
+| `fail` | relay → host | `{message}` — registration rejected. A bad or revoked token is terminal: the host stops retrying, surfaces it (`auth.changed`), and waits for a new sign-in |
+| `open` | relay → host | `{stream}` — a client connected to `/v1/devices/<device>/ws`; the host dials `GET /v1/tunnel/<stream>` (upgrade) back |
 
-- `OPENSEEK_RELAY_URL`
-- `OPENSEEK_DEVICE_TOKEN`
+The data WebSocket (④) carries client protocol frames untouched. On the
+host side each data connection is served by the same JSON-RPC dispatch the
+bridge feeds — the host has no tunnel-specific protocol handling beyond the
+four control frames. Either side closing a spliced socket closes its twin;
+a dropped control connection closes every stream of that device.
 
-`OPENSEEK_DEVICE_NAME` is optional and defaults to `desktop`.
+The relay serves the frontend bundle itself, at `/` (sign-in + the
+multi-device console; the bundle never crosses the tunnel). Nothing else
+is tunneled: the client protocol has exactly one entry point, the
+WebSocket.
 
-Ordinary network failures reconnect after three seconds. A `fail` frame stops
-the actor because retrying the same fixed credentials cannot recover. Persisted
-sign-in and live configuration changes belong to the later product change.
+## Changes from v1
+
+The retired v1 design embedded an HTTP + SSE gateway in the desktop. What
+changed and why:
+
+- **The host process runs no server.** v1 embedded an HTTP gateway in the
+  desktop and pointed the window at `http://127.0.0.1:<port>/`. v2 keeps
+  the original desktop architecture — window on `proton://app/`, in-process
+  bridge — and adds remote access as a pure outbound feature: dial the
+  relay, register, serve each spliced WebSocket. No port, no static file
+  server, no CORS, and the window regains bridge-only capabilities
+  (notification-click focus).
+- **One transport for the wire instead of three.** v1 ran fetch for
+  commands, SSE for events, and a bespoke HTTP-over-WebSocket frame
+  protocol (`req`/`resp`/`chunk`/`end`/`abort`) inside the tunnel. v2 is
+  one JSON-RPC WebSocket, and the tunnel forwards it blind.
+- **No connection seq / replay ring / sticky starts.** v1 resumed event streams by
+  cursor (`?since=`) against a 4096-frame ring, with in-flight runs'
+  `started` frames pinned. v2 reconnects by resyncing state: the serve
+  engine appends every completed item to the session store as it runs, so
+  `session.load` rebuilds the durable transcript, while `agent.runs` returns
+  current starts plus selector-targeted process-lifetime settlements needed
+  to close exact reconnect ownership (including a zero-commit abnormal exit).
+  Full-message events overwrite partial deltas within one step.
+- **Route/op names unified** under dotted namespaces (`agent.*`,
+  `session.*`, `workspace.*`, `git.*`, `fs.*`, `lsp.*`, `skills.*`,
+  `update.*`, `app.*`, `host.*`), shared verbatim by the bridge and the
+  WebSocket.
+- **Most in-band sentinels were removed from the wire**: request `cwd` and
+  reply `branch` are optional fields instead of `""`; the missing-file
+  `sig: ""` reply remains for client compatibility. Stopping the watcher is `fs.unwatch`
+  instead of `fs.watch` with an empty session; `host.meta` carries no
+  `capabilities` list (the method catalog is the capability surface).
+- **Device ids stopped being capabilities** (v2.1): originally the
+  unguessable device id was the only barrier, minted per token by the
+  relay. With the user system (see Authentication) the id is a stable
+  public identifier, ownership is enforced at the relay, APIs moved under
+  `/v1`, and the browser WS left the page namespace
+  (`/d/<device>/api/v1/ws` → `/v1/devices/<device>/ws`).

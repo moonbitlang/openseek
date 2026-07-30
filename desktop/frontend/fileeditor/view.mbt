@@ -183,7 +183,7 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
   } else {
     Some(@fuzzy_match.Query::new(state.filter.trim().to_owned()))
   }
-  let tree_children = if ctx.session.is_empty() {
+  let tree_children = if ctx.owner.session.is_empty() {
     [@html.div(class="file-panel-empty", "No conversation selected.")]
   } else if !state.children.contains("") {
     [@html.div(class="file-panel-empty", "Loading…")]
@@ -222,13 +222,17 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
       ([] : Array[@html.Html]),
     ),
     @html.div(class="file-tree", tree_children),
+    // Rendered even while empty so the row's slot in the pane is stable.
     @html.div(
-      class=if state.error.is_empty() {
-        "file-panel-error empty"
-      } else {
+      class=if state.error is Some(_) {
         "file-panel-error"
+      } else {
+        "file-panel-error empty"
       },
-      state.error,
+      match state.error {
+        Some(message) => message
+        None => ""
+      },
     ),
     // The filter line rides the bottom edge, minibuffer-style, and is the
     // keyboard's seat: ↑/↓ walk the rows, Enter acts on the cursor's row,

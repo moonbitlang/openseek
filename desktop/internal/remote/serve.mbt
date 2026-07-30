@@ -88,6 +88,20 @@ const PingIntervalMs = 30_000
 const OutboundQueueCapacity = 64
 
 ///|
+/// Maximum request bodies and operation tasks retained by one remote client.
+/// The reader acquires before spawning, so the socket itself supplies
+/// backpressure instead of creating an unbounded crowd of tasks waiting on
+/// slower engine, filesystem, or registry work.
+const InflightRequestCapacity = 32
+
+///|
+/// JSON-RPC requests carry prompts and small operation payloads, never
+/// transcripts or file contents. Reading one extra byte distinguishes the
+/// allowed exact limit from an oversized message without letting
+/// `Reader::read_all` grow until a peer-provided 64-bit frame length.
+const InboundFrameMaxBytes : Int = 1024 * 1024
+
+///|
 /// Enforce one outbound bound for notifications and responses. A producer
 /// must never park behind a stalled socket: raising from any request task or
 /// the notification pump tears down the task group and reconnects cleanly.
@@ -145,6 +159,10 @@ async fn WsClientActor::serve(
   let subscription = self.open_subscription()
   let out = subscription.out
   let notifications = subscription.notifications
+  let request_permits : @semaphore.Semaphore = Semaphore(
+    InflightRequestCapacity,
+    initial_value=InflightRequestCapacity,
+  )
   defer self.state.unsubscribe(notifications)
   @async.with_task_group(group => {
     group.spawn_bg(() => {
@@ -188,13 +206,37 @@ async fn WsClientActor::serve(
         // The protocol is JSON text; a binary frame is a peer bug.
         continue
       }
-      let text = message.read_all().text()
+      let frame = FixedArray::make(InboundFrameMaxBytes + 1, b'\x00')
+      let mut received = 0
+      for ;; {
+        let count = message.read(
+          frame,
+          offset=received,
+          max_len=frame.length() - received,
+        )
+        if count == 0 {
+          break
+        }
+        received += count
+        if received > InboundFrameMaxBytes {
+          conn.send_close(
+            code=MessageTooBig,
+            reason="JSON-RPC request exceeds 1 MiB",
+          )
+          return
+        }
+      }
+      let text = @utf8.decode(frame.unsafe_reinterpret_as_bytes()[:received])
       match classify(text) {
         Request(id, method_, params) =>
-          // Each request runs in its own task so a slow op (an engine
-          // start, a big file read) never blocks the reader; replies are
-          // correlated by id, not order.
-          group.spawn_bg(() => {
+          if method_ == "fs.watch" || method_ == "fs.unwatch" {
+            // Watch ownership is ordered by the client's request stream. Run
+            // these two operations at the reader boundary: spawning first
+            // would let task scheduling enqueue a later unwatch before an
+            // earlier watch (or vice versa), despite the actor's FIFO
+            // mailbox. Resolution is rare and only delays later inbound
+            // requests; outbound notifications and pings have their own
+            // tasks.
             enqueue_outgoing(
               out,
               Response(
@@ -207,7 +249,29 @@ async fn WsClientActor::serve(
                 ),
               ),
             )
-          })
+          } else {
+            // Each other request runs in its own task so a slow op (an engine
+            // start, a big file read) does not block other admitted requests;
+            // acquiring before spawn bounds retained tasks and lets TCP
+            // backpressure slow a client that exceeds this connection's
+            // concurrency budget. Replies are correlated by id, not order.
+            request_permits.acquire()
+            group.spawn_bg(() => {
+              defer request_permits.release()
+              enqueue_outgoing(
+                out,
+                Response(
+                  run_request(
+                    self.state,
+                    self.host_connection,
+                    id,
+                    method_,
+                    params,
+                  ),
+                ),
+              )
+            })
+          }
         ClientNotification => ()
         Unparsable =>
           enqueue_outgoing(

@@ -2,30 +2,35 @@
 // under the active conversation's workspace, through the host's
 // `read_directory` / `read_file` ops. The host resolves every path against
 // the session's workspace and rejects escapes, so the panel only ever sees
-// that one conversation's tree. Each reply carries the `session` and `path`
-// it answers so a reply that lost a conversation switch can be discarded.
+// that one conversation's tree. Each reply carries the full conversation
+// owner and path it answers so a reply that lost a device/session switch can
+// be discarded.
 
 ///|
 /// List `path` (relative to the conversation workspace; "" is the root) and
 /// fold the entries back as `DirLoaded`.
 fn read_directory(
   dispatch : @cmd.Emit[Msg],
-  session : String,
+  owner : @interop.ConversationKey,
   path : @pathx.Relative,
   workspace~ : @pathx.Absolute?,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
-      payload["session"] = session
+      payload["session"] = owner.session
       payload["path"] = path.0
       @interop.set_workspace(payload, workspace)
-      let reply = @interop.bridge_request("read_directory", payload.to_value()) catch {
+      let reply = @interop.bridge_request(
+        owner.channel,
+        "fs.read_directory",
+        payload.to_value(),
+      ) catch {
         error => {
           scheduler.add(
             dispatch(
               DirFailed(
-                session~,
+                owner~,
                 path~,
                 message=@interop.bridge_error_text(error),
               ),
@@ -36,11 +41,11 @@ fn read_directory(
       }
       match decode_dir_entries(@interop.reply_json_text(reply), path) {
         Some(entries) =>
-          scheduler.add(dispatch(DirLoaded(session~, path~, entries~)))
+          scheduler.add(dispatch(DirLoaded(owner~, path~, entries~)))
         None =>
           scheduler.add(
             dispatch(
-              DirFailed(session~, path~, message="could not read directory"),
+              DirFailed(owner~, path~, message="could not read directory"),
             ),
           )
       }
@@ -54,24 +59,28 @@ fn read_directory(
 /// `FileIndexFailed`, dropping the index so a later keystroke retries.
 fn list_files(
   dispatch : @cmd.Emit[Msg],
-  session : String,
+  owner : @interop.ConversationKey,
   workspace~ : @pathx.Absolute?,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
-      payload["session"] = session
+      payload["session"] = owner.session
       @interop.set_workspace(payload, workspace)
-      let reply = @interop.bridge_request("list_files", payload.to_value()) catch {
+      let reply = @interop.bridge_request(
+        owner.channel,
+        "fs.list_files",
+        payload.to_value(),
+      ) catch {
         _ => {
-          scheduler.add(dispatch(FileIndexFailed(session~)))
+          scheduler.add(dispatch(FileIndexFailed(owner~)))
           return
         }
       }
       match decode_file_index(@interop.reply_json_text(reply)) {
         Some((files, truncated)) =>
-          scheduler.add(dispatch(FilesIndexed(session~, files~, truncated~)))
-        None => scheduler.add(dispatch(FileIndexFailed(session~)))
+          scheduler.add(dispatch(FilesIndexed(owner~, files~, truncated~)))
+        None => scheduler.add(dispatch(FileIndexFailed(owner~)))
       }
     })
   })
@@ -102,7 +111,7 @@ fn decode_file_index(text : String) -> (Array[@pathx.Relative], Bool)? {
 /// over that range.
 pub fn read_file(
   dispatch : @cmd.Emit[Msg],
-  session : String,
+  owner : @interop.ConversationKey,
   path : @pathx.Relative,
   name : String,
   range~ : @common.Range?,
@@ -112,14 +121,18 @@ pub fn read_file(
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
-      payload["session"] = session
+      payload["session"] = owner.session
       payload["path"] = path.0
       @interop.set_workspace(payload, workspace)
-      let reply = @interop.bridge_request("read_file", payload.to_value()) catch {
+      let reply = @interop.bridge_request(
+        owner.channel,
+        "fs.read_file",
+        payload.to_value(),
+      ) catch {
         error => {
           scheduler.add(
             dispatch(
-              FileFailed(session~, message=@interop.bridge_error_text(error)),
+              FileFailed(owner~, message=@interop.bridge_error_text(error)),
             ),
           )
           return
@@ -129,12 +142,12 @@ pub fn read_file(
         Some(file) =>
           scheduler.add(
             dispatch(
-              FileLoaded(session~, path~, name~, file~, range~, annotation~),
+              FileLoaded(owner~, path~, name~, file~, range~, annotation~),
             ),
           )
         None =>
           scheduler.add(
-            dispatch(FileFailed(session~, message="could not read file")),
+            dispatch(FileFailed(owner~, message="could not read file")),
           )
       }
     })
@@ -212,23 +225,27 @@ fn decode_file_content(text : String) -> FileContent? {
 /// Best-effort: a failed call is dropped — the next change push retries.
 fn stat_files(
   dispatch : @cmd.Emit[Msg],
-  session : String,
+  owner : @interop.ConversationKey,
   paths : Array[@pathx.Relative],
   workspace~ : @pathx.Absolute?,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let payload = @js.Object::new()
-      payload["session"] = session
+      payload["session"] = owner.session
       payload["paths"] = paths.map(path => path.0)
       @interop.set_workspace(payload, workspace)
-      let reply = @interop.bridge_request("stat_files", payload.to_value()) catch {
+      let reply = @interop.bridge_request(
+        owner.channel,
+        "fs.stat_files",
+        payload.to_value(),
+      ) catch {
         _ => return
       }
       guard decode_file_stats(@interop.reply_json_text(reply)) is Some(stats) else {
         return
       }
-      scheduler.add(dispatch(StatsLoaded(session~, stats~)))
+      scheduler.add(dispatch(StatsLoaded(owner~, stats~)))
     })
   })
 }
@@ -241,32 +258,46 @@ fn decode_file_stats(text : String) -> Array[FileStat]? {
   let stats : Array[FileStat] = []
   for item in items {
     guard item is Object(fields) else { continue }
-    // Both fields are always on the wire; `sig` is "" for a file the host
-    // could not stat.
     guard @jsonx.json_text(fields, "path") is Some(path) && !path.is_empty() else {
       continue
     }
-    guard @jsonx.json_text(fields, "sig") is Some(sig) else { continue }
-    stats.push({ path: Relative(path), sig })
+    // `sig` is absent for a file the host could not stat — a deleted file.
+    stats.push({ path: Relative(path), sig: @jsonx.json_text(fields, "sig") })
   }
   Some(stats)
 }
 
 ///|
-/// Point the host's workspace watcher at `session`'s workspace (`""` parks
-/// it). Fire-and-forget: there is no reply worth folding, and a failure just
-/// means no live updates until the next reconciliation re-sends.
-fn watch_workspace(session : String, workspace~ : @pathx.Absolute?) -> @cmd.Cmd {
+/// Point the host's workspace watcher at `session`'s workspace, or park it
+/// (`fs.unwatch`) when the panel no longer needs one. Fire-and-forget:
+/// there is no reply worth folding, and a failure just means no live
+/// updates until the next reconciliation re-sends.
+fn watch_workspace(
+  channel~ : @interop.ChannelId,
+  session : String,
+  workspace~ : @pathx.Absolute?,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["session"] = session
-      @interop.set_workspace(payload, workspace)
-      let _ : @js.Value = @interop.bridge_request(
-        "watch_workspace",
-        payload.to_value(),
-      ) catch {
-        _ => return
+      if session.is_empty() {
+        let _ : @js.Value = @interop.bridge_request_in_order(
+          channel,
+          "fs.unwatch",
+          @js.Object::new().to_value(),
+        ) catch {
+          _ => return
+        }
+      } else {
+        let payload = @js.Object::new()
+        payload["session"] = session
+        @interop.set_workspace(payload, workspace)
+        let _ : @js.Value = @interop.bridge_request_in_order(
+          channel,
+          "fs.watch",
+          payload.to_value(),
+        ) catch {
+          _ => return
+        }
       }
     })
   })

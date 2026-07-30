@@ -88,23 +88,29 @@ test "DeepSeek models display as product tiers" {
 
 ///|
 fn model_select(dispatch : @cmd.Emit[Msg], selected : String) -> @html.Html {
-  @html.select(on_change=dispatch.map(value => ModelChanged(value)), [
-    @html.option(
-      value="deepseek-v4-pro",
-      selected=selected == "deepseek-v4-pro",
-      model_label("deepseek-v4-pro"),
-    ),
-    @html.option(
-      value="deepseek-v4-flash",
-      selected=selected == "deepseek-v4-flash",
-      model_label("deepseek-v4-flash"),
-    ),
-  ])
+  @html.select(
+    on_change=dispatch.map(value => ModelChanged(value)),
+    attrs=@html.Attrs::build().aria_label("Model"),
+    [
+      @html.option(
+        value="deepseek-v4-pro",
+        selected=selected == "deepseek-v4-pro",
+        "deepseek-v4-pro",
+      ),
+      @html.option(
+        value="deepseek-v4-flash",
+        selected=selected == "deepseek-v4-flash",
+        "deepseek-v4-flash",
+      ),
+    ],
+  )
 }
 
 ///|
 fn conversation_title(conv : Conversation) -> String {
-  for item in conv.messages {
+  // Titles follow the committed user transcript. Client-local failure notices
+  // are visible too but never qualify as a title.
+  for item in conv.visible_items() {
     if item.kind is User {
       // A prompt sent with chips titles by what was typed (or, chips alone,
       // by their labels) — never by the raw `<user_mentions>` envelope.
@@ -130,13 +136,16 @@ fn conversation_title(conv : Conversation) -> String {
 fn session_row(
   dispatch : @cmd.Emit[Msg],
   model : Model,
+  channel : @interop.ChannelId,
   session_id : String,
   label : String,
   archivable? : Bool = false,
   nested? : Bool = false,
 ) -> @html.Html {
-  let active = session_id == model.active_session
-  let conv = model.find_conversation(session_id)
+  // Session ids can collide across devices, so the accent pill needs the
+  // channel to agree too.
+  let active = channel == model.focused && session_id == model.active_session
+  let conv = model.find_conversation(channel, session_id)
   let running = conv is Some(conv) && conv.is_running()
   // The row's status dot: pulsing while a run is in flight, then — when the
   // run finished off screen — settling into a solid dot (accent for success,
@@ -186,7 +195,7 @@ fn session_row(
         attrs=@html.Attrs::build().on_click(event => {
           // The row itself opens the session; the archive click must not.
           event.stop_propagation()
-          dispatch(ArchiveSession(session_id))
+          dispatch(ArchiveSession(channel, session_id))
         }),
         icon(icon_archive),
       ),
@@ -198,20 +207,224 @@ fn session_row(
   @html.div(
     class~,
     title=session_id,
-    on_click=dispatch(OpenSession(session_id)),
+    on_click=dispatch(OpenSession(channel, session_id)),
     children,
   )
 }
 
 ///|
-/// Sidebar rows: conversations that only exist in this app run (no turn has
-/// reached the store yet) first, then the engine's durable sessions, newest
-/// first. Rows stay clickable while runs are active — switching between
-/// conversations mid-run is the point of keeping them concurrent.
+/// Sidebar rows. The desktop window lists its one Local device with no
+/// group chrome; the console renders one group per roster device — header,
+/// then that device's sections — in the roster's order.
 fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
+  match model.console {
+    None => {
+      let dev = model
+        .focused_device()
+        .unwrap_or(empty_device_state(model.focused))
+      device_section_rows(dispatch, model, dev)
+    }
+    Some(console) => console_session_rows(dispatch, model, console)
+  }
+}
+
+///|
+/// The console sidebar: the roster's device groups, with the load/failure
+/// and no-devices states as plain rows in their place.
+fn console_session_rows(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  console : ConsoleState,
+) -> Array[@html.Html] {
+  let rows : Array[@html.Html] = []
+  match console.roster_sync {
+    RosterLoading =>
+      if console.roster.is_empty() {
+        rows.push(dim_row("Loading devices…"))
+      }
+    RosterFailed(message) => rows.push(dim_row(message))
+    RosterReady =>
+      if console.roster.is_empty() {
+        rows.push(
+          dim_row(
+            "No devices yet — open OpenSeek Desktop and sign in under Settings → Remote access.",
+          ),
+        )
+      }
+  }
+  for meta in console.roster {
+    rows.push(device_group_header(dispatch, model, console, meta))
+    if console.menu_open == Some(meta.id) && console.rename is None {
+      rows.push(device_menu(dispatch, console, meta))
+    }
+    match model.device_state(Remote(meta.id)) {
+      Some(dev) =>
+        for row in device_section_rows(dispatch, model, dev) {
+          rows.push(row)
+        }
+      None =>
+        // No channel: the device is offline (or just came online and its
+        // state lands with the next refresh) — the header dot says which.
+        rows.push(
+          dim_row("Offline — its chats will list again when it reconnects."),
+        )
+    }
+  }
+  rows
+}
+
+///|
+fn dim_row(text : String) -> @html.Html {
+  @html.div(class="conversation-row placeholder", [
+    @html.span(class="sidebar-label", text),
+  ])
+}
+
+///|
+/// One roster device's group header: the online/bridge dot, the name, the
+/// connection state, and the "⋯" actions menu. Focus follows session and
+/// new-chat clicks inside the group, so the header itself is inert chrome.
+/// While renaming, the field replaces the identity block after the stable
+/// leading dot — the header's position in the list does not move, so the
+/// input keeps focus across re-renders.
+fn device_group_header(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  console : ConsoleState,
+  meta : DeviceMeta,
+) -> @html.Html {
+  let dev = model.device_state(Remote(meta.id))
+  let connected = dev is Some(dev) && dev.bridge is Connected
+  let dot = if meta.online && connected {
+    "device-dot online"
+  } else {
+    "device-dot"
+  }
+  let children : Array[@html.Html] = [@html.span(class=dot, "")]
+  if console.rename is Some(rename) && rename.device == meta.id {
+    children.push(
+      @html.input(
+        class="device-rename",
+        value=rename.input,
+        autofocus=true,
+        on_input=dispatch.map(value => Console(RenameEdited(value))),
+        attrs=@html.Attrs::build().aria_label("Device name"),
+      ),
+    )
+    children.push(
+      @html.button(
+        class="device-menu-item",
+        disabled=console.busy || rename.input.trim().is_empty(),
+        on_click=dispatch(Console(RenameSubmitted)),
+        "Save",
+      ),
+    )
+    children.push(
+      @html.button(
+        class="device-menu-item",
+        on_click=dispatch(Console(RenameCancelled)),
+        "Cancel",
+      ),
+    )
+  } else {
+    children.push(@html.span(class="sidebar-label device-name", meta.name))
+    let status : String? = if !meta.online {
+      Some("offline")
+    } else {
+      match dev {
+        Some(dev) =>
+          match dev.bridge {
+            Connected => None
+            Connecting => Some("connecting…")
+            BridgeLost(_) => Some("reconnecting…")
+          }
+        None => Some("connecting…")
+      }
+    }
+    if status is Some(text) {
+      children.push(@html.span(class="device-status", text))
+    }
+    children.push(
+      @html.button(
+        class="row-archive device-menu-button",
+        type_="button",
+        disabled=console.busy,
+        title="Device actions",
+        attrs=@html.Attrs::build().aria_label("Actions for \{meta.name}"),
+        on_click=dispatch(Console(MenuToggled(meta.id))),
+        "⋯",
+      ),
+    )
+  }
+  let title = match meta.hostname {
+    Some(hostname) => "\{meta.name} — \{hostname}"
+    None => meta.name
+  }
+  @html.div(class="sidebar-heading device-heading", title~, children)
+}
+
+///|
+/// The "⋯" menu: Rename, and the two-click Remove — the confirmation
+/// replaces the Remove item in place.
+fn device_menu(
+  dispatch : @cmd.Emit[Msg],
+  console : ConsoleState,
+  meta : DeviceMeta,
+) -> @html.Html {
+  let items : Array[@html.Html] = [
+    @html.button(
+      class="device-menu-item",
+      disabled=console.busy,
+      on_click=dispatch(
+        Console(RenameStarted(device=meta.id, current=meta.name)),
+      ),
+      "Rename",
+    ),
+  ]
+  if console.confirm_delete is Some(pending) && pending == meta.id {
+    items.push(
+      @html.button(
+        class="device-menu-item danger",
+        disabled=console.busy,
+        on_click=dispatch(Console(DeleteConfirmed(meta.id))),
+        "Really remove?",
+      ),
+    )
+    items.push(
+      @html.button(
+        class="device-menu-item",
+        on_click=dispatch(Console(DeleteCancelled)),
+        "Keep",
+      ),
+    )
+  } else {
+    items.push(
+      @html.button(
+        class="device-menu-item danger",
+        disabled=console.busy,
+        on_click=dispatch(Console(DeleteAsked(meta.id))),
+        "Remove",
+      ),
+    )
+  }
+  @html.div(class="device-menu", items)
+}
+
+///|
+/// One device's sections: conversations that only exist in this app run (no
+/// turn has reached the store yet) first, then the engine's durable
+/// sessions, newest first. Rows stay clickable while runs are active —
+/// switching between conversations mid-run is the point of keeping them
+/// concurrent. The section-collapse flags are page-global, shared by every
+/// group on the console (a per-device fold is a possible follow-up).
+fn device_section_rows(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  dev : DeviceState,
+) -> Array[@html.Html] {
   let rows : Array[@html.Html] = []
   let listed = (id : String) => {
-    for item in model.sessions {
+    for item in dev.sessions {
       if item.id == id {
         return true
       }
@@ -222,7 +435,7 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
   // normally cannot contain it; the filter covers the moment between the
   // archive reply and the list refetch that follows it.
   let archived = (id : String) => {
-    for item in model.archived {
+    for item in dev.archived {
       if item.id == id {
         return true
       }
@@ -238,23 +451,21 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
     section_heading(
       dispatch,
       "Workspaces",
-      PickWorkspace,
+      PickWorkspace(dev.channel),
       action_title="Add a workspace",
       toggle=ToggleWorkspacesSection,
       collapsed=model.workspaces_collapsed,
     ),
   )
   if !model.workspaces_collapsed {
-    for control in add_workspace_controls(dispatch, model) {
-      rows.push(control)
-    }
-    for path in model.workspaces {
-      rows.push(workspace_row(dispatch, model, path))
+    for path in dev.workspaces {
+      rows.push(workspace_row(dispatch, model, dev, path))
       let before = rows.length()
       push_group_rows(
         rows,
         dispatch,
         model,
+        dev,
         path,
         listed~,
         archived~,
@@ -273,22 +484,22 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
     section_heading(
       dispatch,
       "Chats",
-      NewChatIn(""),
+      NewChatIn(dev.channel, ""),
       action_title="New chat outside any workspace",
       toggle=ToggleChatsSection,
       collapsed=model.chats_collapsed,
     ),
   )
   if !model.chats_collapsed {
-    push_group_rows(rows, dispatch, model, "", listed~, archived~)
+    push_group_rows(rows, dispatch, model, dev, "", listed~, archived~)
   }
   // Archived conversations fold behind a collapsed group at the end of the
   // list. Their records live in the store's `archived` twin, so they come
   // from the host's archived reply, not the live list; each row carries a
   // restore control instead of the archive one.
   let archived_rows : Array[@html.Html] = []
-  for item in model.archived {
-    archived_rows.push(archived_row(dispatch, item))
+  for item in dev.archived {
+    archived_rows.push(archived_row(dispatch, dev.channel, item))
   }
   if archived_rows.length() > 0 {
     rows.push(
@@ -312,42 +523,72 @@ fn push_group_rows(
   rows : Array[@html.Html],
   dispatch : @cmd.Emit[Msg],
   model : Model,
+  dev : DeviceState,
   workspace : String,
   listed~ : (String) -> Bool,
   archived~ : (String) -> Bool,
   nested? : Bool = false,
 ) -> Unit {
-  // Only conversations that have gotten under way get a row — a fresh
-  // "New chat" is already on screen, and a row for it is just noise until
-  // its first send.
+  // Conversations that have gotten under way get a row, plus the one fresh
+  // "New chat" on screen: it owns a row from the moment its ＋ was clicked,
+  // so the rotation has visible feedback in the list; the row takes the real
+  // title at the first send. Stale husks (a fresh chat the user navigated
+  // away from) stay hidden.
+  let composing = model.composing_new_chat()
   for conv in model.conversations.rev_iter() {
-    if workspace_token(conv.workspace) == workspace &&
-      conv.has_begun() &&
-      !listed(conv.session_id) &&
-      !archived(conv.session_id) {
+    if conv.device != dev.channel ||
+      workspace_token(conv.workspace) != workspace ||
+      listed(conv.session_id) ||
+      archived(conv.session_id) {
+      continue
+    }
+    if conv.has_begun() {
       rows.push(
         session_row(
           dispatch,
           model,
+          dev.channel,
           conv.session_id,
           conversation_title(conv),
           nested~,
         ),
       )
+    } else if composing &&
+      conv.device == model.focused &&
+      conv.session_id == model.active_session {
+      rows.push(
+        session_row(
+          dispatch,
+          model,
+          dev.channel,
+          conv.session_id,
+          "New chat",
+          nested~,
+        ),
+      )
     }
   }
-  for item in model.sessions {
+  for item in dev.sessions {
     if item.workspace != workspace || archived(item.id) {
       continue
     }
-    let label = if model.find_conversation(item.id) is Some(conv) &&
+    let label = if model.find_conversation(dev.channel, item.id) is Some(conv) &&
+      dev.channel == model.focused &&
       item.id == model.active_session {
       conversation_title(conv)
     } else {
       session_item_label(item)
     }
     rows.push(
-      session_row(dispatch, model, item.id, label, archivable=true, nested~),
+      session_row(
+        dispatch,
+        model,
+        dev.channel,
+        item.id,
+        label,
+        archivable=true,
+        nested~,
+      ),
     )
   }
 }
@@ -396,20 +637,16 @@ fn section_heading(
 /// conversations nested beneath it. Hover controls start a new chat in the
 /// project or detach it (registry only; the folder and its sessions stay).
 /// The active workspace — where a plain "New chat" lands — reads as the
-/// darker label; while a fresh "New chat" is on screen there (no sidebar row
-/// of its own yet) the workspace row wears the selected conversation's
-/// accent pill in its place.
+/// darker label.
 fn workspace_row(
   dispatch : @cmd.Emit[Msg],
   model : Model,
+  dev : DeviceState,
   path : String,
 ) -> @html.Html {
   let mut class = "workspace-row"
-  if path == model.active_workspace {
+  if dev.channel == model.focused && path == dev.active_workspace {
     class = class + " active"
-    if model.composing_new_chat() {
-      class = class + " composing"
-    }
   }
   @html.div(class~, title=path, [
     @html.span(class="sidebar-icon", icon(icon_folder)),
@@ -420,7 +657,7 @@ fn workspace_row(
       title="Detach this workspace — its files and sessions stay",
       attrs=@html.Attrs::build().on_click(event => {
         event.stop_propagation()
-        dispatch(RemoveWorkspace(path))
+        dispatch(RemoveWorkspace(dev.channel, path))
       }),
       icon(icon_close),
     ),
@@ -430,45 +667,11 @@ fn workspace_row(
       title="New chat in this workspace",
       attrs=@html.Attrs::build().on_click(event => {
         event.stop_propagation()
-        dispatch(NewChatIn(path))
+        dispatch(NewChatIn(dev.channel, path))
       }),
       icon(icon_add),
     ),
   ])
-}
-
-///|
-/// The rows under the "Workspaces" heading that back its ＋ control: the ＋
-/// asks the host for the system folder chooser; on platforms without one it
-/// opens this manual path input instead (Enter submits, Escape closes).
-/// Either way the host validates the directory and the updated registry
-/// comes back through `WorkspacesLoaded`.
-fn add_workspace_controls(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-) -> Array[@html.Html] {
-  let controls : Array[@html.Html] = []
-  if model.workspace_input is Some(text) {
-    controls.push(
-      @html.div(class="workspace-add", [
-        @html.input(
-          input_type=@html.InputType::Text,
-          value=text,
-          placeholder="/path/to/project",
-          autofocus=true,
-          on_input=dispatch.map(value => WorkspaceInput(value)),
-          attrs=@html.Attrs::build().on_keydown(event => {
-            match event.key() {
-              "Enter" => dispatch(AddWorkspace)
-              "Escape" => dispatch(ToggleWorkspaceInput)
-              _ => @cmd.none
-            }
-          }),
-        ),
-      ]),
-    )
-  }
-  controls
 }
 
 ///|
@@ -490,6 +693,7 @@ fn session_item_label(item : @transcript.SessionListItem) -> String {
 /// brings it back is the unarchive control.
 fn archived_row(
   dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
   item : @transcript.SessionListItem,
 ) -> @html.Html {
   @html.div(class="conversation-row archived", title=item.id, [
@@ -500,7 +704,7 @@ fn archived_row(
       title="Restore this conversation to the sidebar",
       attrs=@html.Attrs::build().on_click(event => {
         event.stop_propagation()
-        dispatch(UnarchiveSession(item.id))
+        dispatch(UnarchiveSession(channel, item.id))
       }),
       icon(icon_arrow_up),
     ),
@@ -602,6 +806,37 @@ fn sidebar_footer_buttons(
       ],
     ),
   )
+  // The console's account row: who is signed in, a roster refresh, and the
+  // sign-out — with the last account-level failure inline beneath it.
+  if model.console is Some(console) &&
+    console.auth is AuthSignedIn(login~, avatar~) {
+    let account : Array[@html.Html] = []
+    if !avatar.is_empty() {
+      account.push(@html.img(class="console-avatar", src=avatar, alt=login))
+    }
+    account.push(@html.span(class="console-login", "@\{login}"))
+    account.push(
+      @html.button(
+        class="console-account-action",
+        disabled=console.busy,
+        title="Refresh the device list",
+        on_click=dispatch(Console(RefreshClicked)),
+        "Refresh",
+      ),
+    )
+    account.push(
+      @html.button(
+        class="console-account-action",
+        disabled=console.busy,
+        on_click=dispatch(Console(SignOutClicked)),
+        "Sign out",
+      ),
+    )
+    buttons.push(@html.div(class="console-account", account))
+    if console.notice is Some(notice) {
+      buttons.push(@html.div(class="console-notice", notice))
+    }
+  }
   buttons
 }
 
@@ -698,16 +933,19 @@ fn failed_badge(failed : Int) -> @html.Html {
 }
 
 ///|
-/// One turn's work — reasoning, tool results, and any interim assistant
-/// narration between tool calls — folded behind a single summary line ("Read
-/// 3 files, ran 1 command"), the way Codex folds a turn behind "Worked for
-/// 46s". Expanding shows the work log in order: reasoning as muted prose —
-/// never a labelled "Thinking" row of its own — narration as plain prose,
-/// each burst of tool calls as a one-line sublist. A turn that only thought
-/// folds behind a plain "Thought" line. Failures never force the fold open;
-/// they badge the summary instead. The open state is the browser's
+/// A stretch of a turn's work — reasoning and tool results — folded behind a
+/// single summary line ("Read 3 files, ran 1 command"), the way Codex folds a
+/// turn behind "Worked for 46s". Expanding shows the work log in order:
+/// reasoning as muted prose — never a labelled "Thinking" row of its own —
+/// each burst of tool calls as a one-line sublist. A stretch that only
+/// thought folds behind a plain "Thought" line. Failures never force the fold
+/// open; they badge the summary instead. The open state is the browser's
 /// (`<details>`), so a reader's toggle survives re-renders and the run
 /// growing while live.
+///
+/// Assistant prose is never in here: every assistant message is its own
+/// visible bubble, so a turn reads as narration, work, narration, work,
+/// answer — the agent's own words are never behind a fold.
 fn activity_view(
   items : Array[@transcript.TranscriptItem],
   on_open : (String) -> @cmd.Cmd,
@@ -723,16 +961,11 @@ fn activity_view(
       }
       log.push(tool_line_view(tools))
     } else {
-      // Reasoning or interim assistant narration; callers never pass user
-      // messages or error bubbles.
-      let prose_class = if items[index].kind is Assistant(_) {
-        "msg-content markdown activity-response"
-      } else {
-        "msg-content markdown activity-thinking"
-      }
+      // Reasoning; callers never pass user messages, assistant prose, or
+      // error bubbles.
       log.push(
         @html.div(
-          class=prose_class,
+          class="msg-content markdown activity-thinking",
           @markdown.markdown_nodes(items[index].content, open_file=on_open),
         ),
       )
@@ -760,29 +993,6 @@ fn activity_view(
       @html.div(class="activity-body", log),
     ]),
   ])
-}
-
-///|
-/// A turn's work folded behind one collapsed activity card, rendered the same
-/// whether the turn is still streaming or long settled; only the run's
-/// trailing assistant message (the answer) pops out as a visible bubble.
-/// Folding identically in both states is deliberate: the transcript never
-/// shows anything live that would vanish or restyle once the turn lands.
-fn push_run(
-  items : Array[@html.Html],
-  run : Array[@transcript.TranscriptItem],
-  on_open : (String) -> @cmd.Cmd,
-) -> Unit {
-  let mut work_end = run.length()
-  if run[work_end - 1].kind is Assistant(_) {
-    work_end = work_end - 1
-  }
-  if work_end > 0 {
-    items.push(activity_view(run[0:work_end].to_owned(), on_open))
-  }
-  if work_end < run.length() {
-    items.push(transcript_item_view(run[work_end], on_open))
-  }
 }
 
 ///|
@@ -1021,7 +1231,7 @@ fn transcript_item_view(
 ) -> @html.Html {
   match item.kind {
     User => user_message_view(item.content, on_jump?)
-    Assistant(is_danger) => {
+    Assistant(is_danger~) => {
       // Errors and abort notices are plain text; only real assistant replies
       // are markdown.
       let content = if is_danger {
@@ -1041,9 +1251,8 @@ fn transcript_item_view(
       ])
     }
     // Unreachable in practice — the transcript loop batches every reasoning
-    // and tool item into a run and `push_run` folds those into the activity
-    // card itself — but the match must cover them, so a stray item gets the
-    // same one-item card.
+    // and tool item into a run and builds the activity card itself — but the
+    // match must cover them, so a stray item gets the same one-item card.
     Reasoning => activity_view([item], on_open)
     Tool(..) => activity_view([item], on_open)
     Summary => summary_card_view(item.content, on_open)
@@ -1104,7 +1313,11 @@ fn transcript_view(
   on_open : (String) -> @cmd.Cmd,
 ) -> @html.Html {
   let items : Array[@html.Html] = []
-  if conv.messages.is_empty() {
+  // The durable transcript plus client-local notices, rendered through one
+  // folding pass. Live semantic events never synthesize durable-looking
+  // items here; their store commits populate the transcript.
+  let visible = conv.visible_items()
+  if visible.is_empty() {
     items.push(
       @html.div(class="empty", [
         @html.div(class="empty-badge", [icon(icon_logo)]),
@@ -1116,19 +1329,18 @@ fn transcript_view(
       ]),
     )
   } else {
-    // A turn's work — reasoning, tool results, and any interim assistant
-    // narration between tool calls — folds behind one collapsed activity
-    // card; only the run's trailing assistant message (the answer) stays
-    // out. The same fold renders whether the turn is still streaming or long
-    // settled, so nothing shown live vanishes or restyles when the turn
-    // lands. User messages and error bubbles always break the run and stay
-    // visible.
+    // Reasoning and tool results fold behind collapsed activity cards;
+    // everything the agent says stays out. Assistant messages break the run
+    // like user messages and error bubbles do, so a turn reads as narration,
+    // work, narration, work, answer rather than hiding the interim narration
+    // inside the fold above the final answer. The same fold renders whether
+    // the turn is still streaming or long settled, so nothing shown live
+    // vanishes or restyles when the turn lands.
     let mut index = 0
-    while index < conv.messages.length() {
-      guard conv.messages[index].kind
-        is (Tool(..) | Reasoning | Assistant(false)) else {
+    while index < visible.length() {
+      guard visible[index].kind is (Tool(..) | Reasoning) else {
         items.push(
-          transcript_item_view(conv.messages[index], on_open, on_jump=target => {
+          transcript_item_view(visible[index], on_open, on_jump=target => {
             dispatch(
               JumpToLocation(
                 path=target.file,
@@ -1142,13 +1354,12 @@ fn transcript_view(
         continue
       }
       let run : Array[@transcript.TranscriptItem] = []
-      while index < conv.messages.length() &&
-            conv.messages[index].kind
-            is (Tool(..) | Reasoning | Assistant(false)) {
-        run.push(conv.messages[index])
+      while index < visible.length() &&
+            visible[index].kind is (Tool(..) | Reasoning) {
+        run.push(visible[index])
         index = index + 1
       }
-      push_run(items, run, on_open)
+      items.push(activity_view(run, on_open))
     }
   }
   if !conv.streaming_response.is_empty() {
@@ -1181,7 +1392,7 @@ fn transcript_view(
 /// (`steer_applied` commits it as a real user message).
 fn pending_steers_panel(conv : Conversation) -> @html.Html {
   let rows : Array[@html.Html] = []
-  for text in conv.pending_steers {
+  for text in conv.pending_steers() {
     let shown = user_display_text(text)
     rows.push(
       @html.div(class="pending-steer-row", title=shown, [
@@ -1348,10 +1559,34 @@ fn mention_tray(dispatch : @cmd.Emit[Msg], conv : Conversation) -> @html.Html {
 }
 
 ///|
+
+///|
+/// The console's connection banner: a permanent first child of the composer
+/// whose class flips visibility — inserting it conditionally would shift
+/// the composer-inner index and rebuild the textarea, dropping focus the
+/// moment the connection hiccups mid-typing. Desktop keeps the full-screen
+/// overlay instead and renders this hidden.
+fn connection_banner(model : Model) -> @html.Html {
+  let visible = model.console is Some(_) &&
+    model.bridge_state() is BridgeLost(_)
+  if visible {
+    @html.div(
+      class="composer-banner",
+      "Can't reach \{model.focused_device_name()} — reconnecting…",
+    )
+  } else {
+    @html.div(class="composer-banner hidden", "")
+  }
+}
+
+///|
 fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let conv = model.active()
-  let has_input = model.bridge is Connected &&
+  let transcript_ready = conv.sync is Synced &&
+    !conv.has_unresolved_run_tail_notice()
+  let has_input = model.bridge_state() is Connected &&
     model.api_ready() &&
+    transcript_ready &&
     conv.draft_sendable()
   // A compacting conversation cannot accept a prompt either: the serve
   // engine would queue it behind the compaction, where Stop cannot reach it.
@@ -1375,12 +1610,14 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     @html.div(class="composer-status", status),
   ]
   if conv.is_running() {
-    // One morphing button while this conversation's turn runs: a sendable
-    // draft (typed text) turns it into a steer submit, anything else —
-    // empty, or chips still waiting for their instruction — leaves it as the
-    // interrupt. A turn being cancelled cannot be steered, so the button
-    // waits with the user's draft in the composer.
-    if !conv.draft_sendable() {
+    // One morphing button while this conversation's turn runs. It becomes a
+    // steer submit only when the durable boundary is ready too; a draft must
+    // never hide Stop behind a disabled Send during reload/reconciliation.
+    let can_steer = has_input &&
+      conv.run_durable_floor is Some(_) &&
+      conv.run is Open(stage~, ..) &&
+      !(stage is Cancelling)
+    if !can_steer {
       controls.push(
         @html.button(
           id="stop",
@@ -1392,13 +1629,12 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ),
       )
     } else {
-      let can_steer = has_input && !(conv.run is Open(stage=Cancelling, ..))
       controls.push(
         @html.button(
           id="send",
           class="icon-button send-button",
           title="Steer the running task",
-          disabled=!can_steer,
+          disabled=false,
           on_click=dispatch(Send),
           icon(icon_arrow_up),
         ),
@@ -1416,8 +1652,10 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ),
     )
   }
-  let children : Array[@html.Html] = []
-  if conv.pending_steers.length() > 0 {
+  // Permanent first child (see `connection_banner`) so the later children's
+  // indices never shift when the connection drops mid-typing.
+  let children : Array[@html.Html] = [connection_banner(model)]
+  if !conv.pending_steers().is_empty() {
     children.push(pending_steers_panel(conv))
   }
   // The requested phase reads as compacting already: the distinction (the
@@ -1478,19 +1716,28 @@ fn provider_select(
   dispatch : @cmd.Emit[Msg],
   selected : ApiProvider,
 ) -> @html.Html {
-  @html.select(on_change=dispatch.map(value => ProviderChanged(value)), [
-    @html.option(
-      value="openseek",
-      selected=selected is Openseek,
-      "OpenSeek (default, no API key)",
-    ),
-    @html.option(
-      value="deepseek",
-      selected=selected is Deepseek,
-      "DeepSeek official (your API key)",
-    ),
-    @html.option(value="custom", selected=selected is Custom, "Custom URL"),
-  ])
+  @html.select(
+    on_change=dispatch.map(value => ProviderChanged(value)),
+    attrs=@html.Attrs::build().aria_label("API endpoint"),
+    [
+      @html.option(
+        value="openseek",
+        selected=selected is Openseek,
+        "OpenSeek (default, no API key)",
+      ),
+      @html.option(
+        value="openseek-staging",
+        selected=selected is OpenseekStaging,
+        "OpenSeek staging (testing)",
+      ),
+      @html.option(
+        value="deepseek",
+        selected=selected is Deepseek,
+        "DeepSeek official (your API key)",
+      ),
+      @html.option(value="custom", selected=selected is Custom, "Custom URL"),
+    ],
+  )
 }
 
 ///|
@@ -1500,6 +1747,7 @@ fn corner_select(
 ) -> @html.Html {
   @html.select(
     on_change=dispatch.map(value => NotificationCornerChanged(value)),
+    attrs=@html.Attrs::build().aria_label("Notification corner"),
     [
       @html.option(
         value="bottom-right",
@@ -1526,33 +1774,125 @@ fn tree_layout_select(
   dispatch : @cmd.Emit[Msg],
   selected : @fileeditor.TreeLayout,
 ) -> @html.Html {
-  @html.select(on_change=dispatch.map(value => TreeLayoutChanged(value)), [
-    @html.option(
-      value="right-sidebar",
-      selected=selected is RightSidebar,
-      "Right sidebar",
-    ),
-    @html.option(
-      value="bottom-panel",
-      selected=selected is BottomPanel,
-      "Bottom panel",
-    ),
-  ])
+  @html.select(
+    on_change=dispatch.map(value => TreeLayoutChanged(value)),
+    attrs=@html.Attrs::build().aria_label("File tree layout"),
+    [
+      @html.option(
+        value="right-sidebar",
+        selected=selected is RightSidebar,
+        "Right sidebar",
+      ),
+      @html.option(
+        value="bottom-panel",
+        selected=selected is BottomPanel,
+        "Bottom panel",
+      ),
+    ],
+  )
 }
 
 ///|
-fn channel_select(
+/// The Remote access group's rows: sign-in state against the selected
+/// OpenSeek server, or why there is nothing to sign in to.
+fn remote_access_rows(
   dispatch : @cmd.Emit[Msg],
-  selected : UpdateChannel,
-) -> @html.Html {
-  @html.select(on_change=dispatch.map(value => UpdateChannelChanged(value)), [
-    @html.option(
-      value="production",
-      selected=selected is Production,
-      "Production",
-    ),
-    @html.option(value="staging", selected=selected is Staging, "Staging"),
-  ])
+  model : Model,
+) -> Array[@html.Html] {
+  let rows : Array[@html.Html] = []
+  // A pending connect bypasses the guard: switching the endpoint mid-flow
+  // must not hide the Cancel button while the sign-in still runs against
+  // the server it started with.
+  if !(model.api_provider is (Openseek | OpenseekStaging)) &&
+    !(model.remote_access is Some({ user_login: Some(_), .. })) &&
+    !model.remote_connecting {
+    rows.push(
+      setting_row(
+        "Remote control",
+        [],
+        desc="Needs the OpenSeek server — select it under API endpoint.",
+      ),
+    )
+    return rows
+  }
+  match model.remote_access {
+    None =>
+      rows.push(setting_row("Remote control", [], desc="Checking sign-in…"))
+    Some(status) =>
+      if status.managed_by_env {
+        rows.push(
+          setting_row(
+            "Remote control",
+            [],
+            desc="Configured through the environment (OPENSEEK_RELAY_URL); sign-in is disabled.",
+          ),
+        )
+      } else if status.user_login is Some(login) {
+        let state = if status.connected {
+          "online — reachable from your browser"
+        } else {
+          "connecting to the relay…"
+        }
+        rows.push(
+          setting_row(
+            "Signed in as",
+            [
+              @html.button(
+                class="secondary",
+                on_click=dispatch(RemoteDisconnectClicked),
+                "Disconnect",
+              ),
+            ],
+            desc="@\{login} — \{state}",
+          ),
+        )
+        if status.device_url is Some(url) {
+          let name = status.device_name.unwrap_or("this machine")
+          rows.push(
+            setting_row(
+              "Device page",
+              [],
+              desc="\{name} — open \{url} in a signed-in browser.",
+            ),
+          )
+        }
+      } else {
+        let target = match status.server_url {
+          Some(server) =>
+            "Registers this machine at \{server} so your browser can drive it."
+          None =>
+            "Registers this machine so your browser can drive it through the relay."
+        }
+        let controls : Array[@html.Html] = [
+          @html.button(
+            class="primary",
+            disabled=model.remote_connecting,
+            on_click=dispatch(RemoteConnectClicked),
+            if model.remote_connecting {
+              "Waiting for the browser…"
+            } else {
+              "Connect with GitHub"
+            },
+          ),
+        ]
+        // Appended after the stable Connect button, so its appearance
+        // never re-seats that node.
+        if model.remote_connecting {
+          controls.push(
+            @html.button(
+              class="secondary",
+              on_click=dispatch(RemoteCancelClicked),
+              "Cancel",
+            ),
+          )
+        }
+        rows.push(setting_row("Sign in", controls, desc=target))
+      }
+  }
+  if model.remote_error is Some(message) {
+    rows.push(setting_row("Problem", [], desc=message))
+  }
+  rows
 }
 
 ///|
@@ -1615,17 +1955,25 @@ fn update_check_controls(
 }
 
 ///|
+
+///|
 fn wsl_select(dispatch : @cmd.Emit[Msg], enabled : Bool) -> @html.Html {
-  @html.select(on_change=dispatch.map(value => WslModeChanged(value)), [
-    @html.option(value="native", selected=!enabled, "Windows (native)"),
-    @html.option(value="wsl", selected=enabled, "WSL"),
-  ])
+  @html.select(
+    on_change=dispatch.map(value => WslModeChanged(value)),
+    attrs=@html.Attrs::build().aria_label("Engine environment"),
+    [
+      @html.option(value="native", selected=!enabled, "Windows (native)"),
+      @html.option(value="wsl", selected=enabled, "WSL"),
+    ],
+  )
 }
 
 ///|
 fn provider_hint(provider : ApiProvider) -> String {
   match provider {
     Openseek => "Requests go through the OpenSeek service; no key needed."
+    OpenseekStaging =>
+      "The OpenSeek staging server: pre-release service and staging updates."
     Deepseek => "Requests go straight to api.deepseek.com with your key."
     Custom => "Any DeepSeek-compatible chat-completions URL; key optional."
   }
@@ -1652,6 +2000,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           value=model.max_steps,
           placeholder="1000",
           on_input=dispatch.map(value => MaxStepsChanged(value)),
+          attrs=@html.Attrs::build().aria_label("Max steps"),
         ),
       ],
       desc="How many agent steps one turn may take.",
@@ -1674,6 +2023,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             value=model.custom_api_url,
             placeholder="https://host/chat/completions",
             on_input=dispatch.map(value => CustomApiUrlChanged(value)),
+            attrs=@html.Attrs::build().aria_label("Endpoint URL"),
           ),
         ],
         stack=true,
@@ -1681,13 +2031,14 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
   }
   // The OpenSeek proxy ignores keys, so the key field only appears for the
-  // endpoints that can use one. The saved key is never echoed back into the
-  // field; saving a new one overwrites it.
+  // endpoints that can use one. The key lives on the host and is never
+  // echoed back — the page only knows one is saved; saving a new one
+  // overwrites it.
   if !(model.api_provider is Openseek) {
-    let saved_key = if model.api_provider is Custom {
-      model.custom_api_key
+    let key_saved = if model.api_provider is Custom {
+      model.custom_key_saved
     } else {
-      model.api_key
+      model.deepseek_key_saved
     }
     api_rows.push(
       setting_row(
@@ -1700,12 +2051,13 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.input(
             input_type=@html.InputType::Password,
             value=model.setup_api_key,
-            placeholder=if saved_key.trim().is_empty() {
-              "sk-..."
-            } else {
+            placeholder=if key_saved {
               "saved — enter to replace"
+            } else {
+              "sk-..."
             },
             on_input=dispatch.map(value => SetupApiKeyChanged(value)),
+            attrs=@html.Attrs::build().aria_label("API key"),
           ),
           @html.button(
             // The id is layout only (grid placement); the fill is the
@@ -1717,7 +2069,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             "Save API key",
           ),
         ],
-        desc="Stored on this machine and sent only with API requests.",
+        desc="Stored on the OpenSeek host machine and sent only with API requests.",
         stack=true,
       ),
     )
@@ -1737,21 +2089,32 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         desc="Where the editor panel docks its file tree.",
       ),
     ]),
-    settings_group(icon_sync, "Updates", [
-      setting_row(
-        "Update channel",
-        [channel_select(dispatch, model.update_channel)],
-        desc="Staging serves pre-release builds for testing.",
-      ),
-      setting_row(
-        "Check for updates",
-        update_check_controls(dispatch, model),
-        desc="Current version: \{@version.AppVersion}.",
-      ),
-    ]),
   ]
-  // WSL is Windows-only; elsewhere the section would be dead weight.
-  if model.is_windows {
+  // Self-update swaps the bundle under the desktop process, and the relay
+  // sign-in registers the machine the host runs on; from a browser both
+  // sections could only break things for whoever is at the machine.
+  if model.is_desktop {
+    groups.push(
+      settings_group(
+        icon_link_external,
+        "Remote access",
+        remote_access_rows(dispatch, model),
+      ),
+    )
+    groups.push(
+      settings_group(icon_sync, "Updates", [
+        setting_row(
+          "Check for updates",
+          update_check_controls(dispatch, model),
+          desc="Current version: \{@version.AppVersion}. The staging server serves staging builds.",
+        ),
+      ]),
+    )
+  }
+  // WSL exists only on a Windows host (the host's capability from
+  // `host.meta`, not this page's platform); elsewhere the section would be
+  // dead weight.
+  if model.host_wsl {
     let engine_rows : Array[@html.Html] = [
       setting_row(
         "Engine environment",
@@ -1769,6 +2132,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               value=model.wsl_distro,
               placeholder="default distro",
               on_input=dispatch.map(value => WslDistroChanged(value)),
+              attrs=@html.Attrs::build().aria_label("WSL distro"),
             ),
           ],
           desc="Blank uses the default distro.",
@@ -1783,6 +2147,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               value=model.wsl_engine,
               placeholder="bundled engine",
               on_input=dispatch.map(value => WslEngineChanged(value)),
+              attrs=@html.Attrs::build().aria_label("Engine command in WSL"),
             ),
           ],
           desc="Blank runs the Linux engine bundled with the app, falling back to openseek on the distro's PATH.",
@@ -2094,7 +2459,7 @@ fn launcher_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // A conversation's workspace exists only once it has run; a fresh chat with
   // no turn yet has nothing to open, so the launcher is disabled until then.
   let conv = model.active()
-  let ready = !conv.messages.is_empty() || conv.is_running()
+  let ready = !conv.visible_items().is_empty() || conv.is_running()
   let children : Array[@html.Html] = [
     @html.button(
       class=if model.launcher.open {
@@ -2175,7 +2540,12 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if !conv.watcher_status.is_empty() {
     items.push(@html.span(class="pill", "moon_check \{conv.watcher_status}"))
   }
-  items.push(launcher_view(dispatch, model))
+  // The launcher opens GUI apps on the host machine, which only means
+  // something when the page IS that machine's desktop window; from a remote
+  // browser the launched app would appear on a screen the user is not at.
+  if model.is_desktop {
+    items.push(launcher_view(dispatch, model))
+  }
   // Rightmost: the toggle for the whole right-hand panel — only while the
   // panel is closed; an open panel carries the toggle at the right edge of
   // its breadcrumb instead, keeping this bar uncrowded. Both spots hug the
@@ -2219,7 +2589,65 @@ fn page_with_toggle(
 }
 
 ///|
+/// The console's pre-sign-in page: one full-screen card. Checking shows
+/// progress (or the failure with a retry); signed out shows the GitHub
+/// sign-in link. Signed in never reaches here.
+fn console_gate_view(
+  dispatch : @cmd.Emit[Msg],
+  console : ConsoleState,
+) -> @html.Html {
+  let card : Array[@html.Html] = []
+  match console.auth {
+    AuthChecking => {
+      card.push(
+        @html.p(
+          match console.notice {
+            Some(notice) => notice
+            None => "Checking sign-in…"
+          },
+        ),
+      )
+      if console.notice is Some(_) {
+        card.push(
+          @html.button(
+            class="primary",
+            on_click=dispatch(Console(RefreshClicked)),
+            "Try again",
+          ),
+        )
+      }
+    }
+    AuthSignedOut => {
+      card.push(@html.h2("Sign in"))
+      card.push(
+        @html.p("Your OpenSeek devices and their workspaces, from any browser."),
+      )
+      card.push(
+        @html.a(
+          class="portal-button-link",
+          href="/v1/auth/login?return_to=%2F",
+          "Sign in with GitHub",
+        ),
+      )
+    }
+    AuthSignedIn(..) => ()
+  }
+  @html.section(class="portal", [
+    @html.div(class="portal-inner", [
+      @html.header(class="portal-header", [@html.h1("OpenSeek")]),
+      @html.div(class="portal-card", card),
+    ]),
+  ])
+}
+
+///|
 fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  // A browser page is gated on the relay session: until `/v1/auth/me`
+  // answers signed-in, the console frame — sidebar, composer, overlays —
+  // stays unbuilt and the full-screen gate card is the page.
+  if model.console is Some(console) && !(console.auth is AuthSignedIn(..)) {
+    return console_gate_view(dispatch, console)
+  }
   let content = match model.screen {
     Chat =>
       [
@@ -2254,6 +2682,18 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ),
     ]),
   ]
+  // On the narrow layout the open sidebar is a drawer over the content; the
+  // backdrop dims the page behind it and a tap there closes it. Appended
+  // after the stable shell children so toggling never re-keys them.
+  if model.narrow && model.sidebar_open {
+    children.push(
+      @html.div(
+        class="sidebar-backdrop",
+        on_click=dispatch(ToggleSidebar),
+        @html.nothing,
+      ),
+    )
+  }
   // The toast stack floats over everything (position: fixed), so appending
   // it last never shifts the layout; skipping it entirely while empty keeps
   // the corner clickable.
@@ -2264,10 +2704,33 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if model.update_ux is ConfirmingRestart(version~) {
     children.push(update_confirm_modal(dispatch, version))
   }
+  if model.workspace_picker is Some(picker) {
+    children.push(workspace_picker_modal(dispatch, picker))
+  }
+  // On the desktop a lost connection covers everything: with no event
+  // stream and every API call failing, the app behind it can do nothing,
+  // so an honest dead-end beats a half-broken UI. The console never gets
+  // the overlay — its other devices stay usable, so the drop reads as the
+  // group header's status plus the composer banner.
+  if model.is_desktop && model.bridge_state() is BridgeLost(message) {
+    children.push(bridge_lost_overlay(message))
+  }
   @html.div(
     class=if model.sidebar_open { "app" } else { "app sidebar-collapsed" },
     children,
   )
+}
+
+///|
+/// The full-screen card shown when the bridge is lost: a plain explanation
+/// and what to do; the only action here is the instruction itself.
+fn bridge_lost_overlay(message : String) -> @html.Html {
+  @html.div(class="bridge-lost-backdrop", [
+    @html.div(class="bridge-lost-card", [
+      @html.div(class="bridge-lost-title", "Disconnected"),
+      @html.div(class="bridge-lost-body", message),
+    ]),
+  ])
 }
 
 ///|
@@ -2295,6 +2758,155 @@ fn update_confirm_modal(
       ]),
     ]),
   ])
+}
+
+///|
+/// The in-app folder picker behind the sidebar's "Add a workspace", shaped
+/// like a system chooser: a clickable breadcrumb for the current directory
+/// (each segment navigates up to that level — there is no ".." row), a
+/// folder list that navigates on click, and a de-emphasized go-to-path
+/// field for typing a location directly (Enter navigates, which also
+/// validates; Escape closes). It renders the host machine's directories
+/// whichever gateway serves the page, so desktop and browser share the one
+/// flow. Clicks inside must not bubble to the backdrop, whose click closes
+/// the picker.
+fn workspace_picker_modal(
+  dispatch : @cmd.Emit[Msg],
+  picker : WorkspacePicker,
+) -> @html.Html {
+  let rows : Array[@html.Html] = []
+  for name in picker.entries {
+    rows.push(
+      @html.div(
+        class="picker-row",
+        on_click=dispatch(
+          WorkspacePickerNavigate(joined_path(picker.path, name)),
+        ),
+        [
+          @html.span(class="picker-row-icon", icon(icon_folder)),
+          @html.span(class="picker-row-name", name),
+        ],
+      ),
+    )
+  }
+  if picker.entries.length() == 0 {
+    rows.push(
+      @html.div(
+        class="picker-empty",
+        if picker.loading {
+          "Loading…"
+        } else {
+          "No subfolders"
+        },
+      ),
+    )
+  }
+  let children : Array[@html.Html] = [
+    @html.div(class="modal-title", "Add a workspace"),
+    picker_breadcrumbs(dispatch, picker),
+  ]
+  if picker.error is Some(message) {
+    children.push(@html.div(class="picker-error", message))
+  }
+  children.push(@html.div(class="picker-list", rows))
+  children.push(
+    @html.div(class="picker-goto", [
+      @html.input(
+        input_type=@html.InputType::Text,
+        value=picker.input,
+        placeholder="Go to path…",
+        on_input=dispatch.map(value => WorkspacePickerInput(value)),
+        attrs=@html.Attrs::build().on_keydown(event => {
+          match event.key() {
+            "Enter" => dispatch(WorkspacePickerNavigate(picker.input))
+            "Escape" => dispatch(WorkspacePickerClose)
+            _ => @cmd.none
+          }
+        }),
+      ),
+    ]),
+  )
+  children.push(
+    @html.div(class="modal-actions", [
+      @html.button(on_click=dispatch(WorkspacePickerClose), "Cancel"),
+      @html.button(
+        class="primary",
+        on_click=dispatch(WorkspacePickerConfirm),
+        if picker.path.is_empty() {
+          "Add this folder"
+        } else {
+          "Add \u{201c}\{workspace_label(picker.path)}\u{201d}"
+        },
+      ),
+    ]),
+  )
+  @html.div(class="modal-backdrop", on_click=dispatch(WorkspacePickerClose), [
+    @html.div(
+      class="modal picker-modal",
+      attrs=@html.Attrs::build().on_click(event => {
+        event.stop_propagation()
+        @cmd.none
+      }),
+      children,
+    ),
+  ])
+}
+
+///|
+/// The current directory as a clickable trail: every ancestor is a button
+/// that navigates back up to it, the way a system chooser's path bar works.
+/// Windows paths keep their drive segment as the trail's root; POSIX paths
+/// root at "/".
+fn picker_breadcrumbs(
+  dispatch : @cmd.Emit[Msg],
+  picker : WorkspacePicker,
+) -> @html.Html {
+  let crumbs : Array[@html.Html] = []
+  let windows = picker.path.contains("\\")
+  let sep = if windows { "\\" } else { "/" }
+  fn push_crumb(label : String, target : String, current : Bool) -> Unit {
+    if crumbs.length() > 0 {
+      crumbs.push(@html.span(class="picker-crumb-sep", "›"))
+    }
+    crumbs.push(
+      @html.button(
+        class=if current { "picker-crumb current" } else { "picker-crumb" },
+        on_click=dispatch(WorkspacePickerNavigate(target)),
+        label,
+      ),
+    )
+  }
+
+  let segments : Array[String] = []
+  for part in picker.path.split(sep) {
+    if !part.is_empty() {
+      segments.push("\{part}")
+    }
+  }
+  if !windows {
+    push_crumb("/", "/", segments.length() == 0)
+  }
+  // A Windows root must survive into every ancestor target: a bare `C:` is
+  // drive-relative (it resolves against that drive's current directory),
+  // so the drive crumb targets `C:\`; a UNC path keeps its `\\server`
+  // prefix so ancestors stay absolute.
+  let unc = windows && picker.path.has_prefix("\\\\")
+  let mut prefix = ""
+  for index, segment in segments {
+    prefix = if windows && index == 0 {
+      if unc {
+        "\\\\" + segment
+      } else {
+        segment + "\\"
+      }
+    } else if prefix.has_suffix(sep) {
+      prefix + segment
+    } else {
+      prefix + sep + segment
+    }
+    push_crumb(segment, prefix, index == segments.length() - 1)
+  }
+  @html.div(class="picker-crumbs", crumbs)
 }
 
 ///|

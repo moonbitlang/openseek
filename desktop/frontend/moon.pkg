@@ -6,6 +6,7 @@ import {
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/js",
+  "moonbit-community/rabbita/sub",
   "moonbitlang/editor/base/common",
   "openseek_desktop/internal/jsonx",
   "openseek_desktop/internal/pathx",
@@ -18,9 +19,3 @@ import {
 }
 
 supported_targets = "js"
-
-pkgtype(kind: "executable")
-
-options(
-  link: { "js": { "exports": [ ], "format": "iife" } },
-)

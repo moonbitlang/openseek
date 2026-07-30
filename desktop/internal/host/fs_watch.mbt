@@ -9,40 +9,82 @@
 // what moved.
 
 ///|
-/// The actor handle and its mailbox: the latest requested watch root (None = stop
-/// watching). `DiscardOldest(1)` because only the newest target matters — a
-/// burst of conversation switches must not queue up stale watches.
+/// One ordered actor request. Resolution happens inside the actor, after the
+/// request reaches this mailbox, so a slow `watch(A)` can never land after a
+/// later `unwatch` or `watch(B)`. The one-slot reply reports a workspace
+/// resolution error to the exact request task that asked.
+priv enum FsWatchRequest {
+  Watch(WatchWorkspacePayload, reply~ : @async.Queue[String?])
+  Unwatch(reply~ : @async.Queue[String?])
+}
+
+///|
+/// The actor handle and its bounded mailbox. Every request has a reply, so
+/// requests cannot be discarded: backpressure at 64 pending focus changes is
+/// preferable to silently applying them out of order.
 priv struct FsWatchActor {
-  requests : @async.Queue[String?]
+  requests : @async.Queue[FsWatchRequest]
 }
 
 ///|
 fn FsWatchActor::new() -> FsWatchActor {
-  { requests: Queue(kind=DiscardOldest(1)) }
+  { requests: Queue(kind=Blocking(64)) }
 }
 
 ///|
-/// Point the watcher at `payload.session`'s workspace root. Resolution only
-/// — the actor swaps watchers on its own schedule.
+/// Point the watcher at `payload.session`'s workspace root. The actor owns
+/// both resolution and watcher replacement; awaiting its reply gives requests
+/// one observable order even though WebSocket request tasks run concurrently.
 async fn FsWatchActor::watch(
   self : FsWatchActor,
   payload : WatchWorkspacePayload,
 ) -> Unit {
-  guard @engine.resolve_in_workspace(
-      payload.session,
-      "",
-      workspace?=payload.workspace,
-    )
-    is Some(root) else {
-    raise HostError("path is outside the conversation workspace")
+  let reply : @async.Queue[String?] = Queue(kind=Blocking(1))
+  self.requests.put(Watch(payload, reply~))
+  if reply.get() is Some(message) {
+    raise HostError(message)
   }
-  self.requests.put(Some(root.to_string()))
 }
 
 ///|
 /// Park the watcher — the editor panel closed with no tabs open.
 async fn FsWatchActor::unwatch(self : FsWatchActor) -> Unit {
-  self.requests.put(None)
+  let reply : @async.Queue[String?] = Queue(kind=Blocking(1))
+  self.requests.put(Unwatch(reply~))
+  ignore(reply.get())
+}
+
+///|
+/// Apply one mailbox request against the current root. A failed watch leaves
+/// the existing watcher in place, matching the old operation's behavior,
+/// while a successful watch or unwatch acknowledges only after the actor has
+/// chosen its next state.
+async fn FsWatchRequest::apply(
+  self : FsWatchRequest,
+  current : String?,
+) -> String? {
+  match self {
+    Unwatch(reply~) => {
+      reply.put(None)
+      None
+    }
+    Watch(payload, reply~) =>
+      match
+        @engine.resolve_in_workspace(
+          payload.session,
+          "",
+          workspace?=payload.workspace,
+        ) {
+        Some(root) => {
+          reply.put(None)
+          Some(root.to_string())
+        }
+        None => {
+          reply.put(Some("path is outside the conversation workspace"))
+          current
+        }
+      }
+  }
 }
 
 ///|
@@ -98,13 +140,11 @@ async fn FsWatchActor::run(
   self : FsWatchActor,
   emit : async (FsChangedPayload) -> Unit,
 ) -> Unit {
-  let mut root = self.requests.get()
+  let mut root : String? = None
   for ;; {
-    guard root is Some(target) else {
-      root = self.requests.get()
-      continue
-    }
-    root = @async.with_task_group(group => {
+    root = self.requests.get().apply(root)
+    guard root is Some(target) else { continue }
+    let request = @async.with_task_group(group => {
       group.spawn_bg(allow_failure=true, () => {
         if !@fs.exists(target) {
           for ;; {
@@ -124,6 +164,7 @@ async fn FsWatchActor::run(
       group.return_immediately(next)
       next
     })
+    root = request.apply(root)
   }
 }
 
@@ -146,11 +187,12 @@ test "ignored_watch_path prunes cache and build subtrees at any depth" {
 }
 
 ///|
-async test "host connections keep filesystem watch requests isolated" {
+test "host connections keep filesystem watch request mailboxes isolated" {
   let first = HostConnection::new()
   let second = HostConnection::new()
-  first.fs_watch.unwatch()
-  assert_true(first.fs_watch.requests.try_get() is Some(None))
+  let reply : @async.Queue[String?] = Queue(kind=Blocking(1))
+  assert_true(first.fs_watch.requests.try_put(Unwatch(reply~)))
+  assert_true(first.fs_watch.requests.try_get() is Some(Unwatch(..)))
   assert_true(second.fs_watch.requests.try_get() is None)
 }
 

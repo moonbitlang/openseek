@@ -96,6 +96,10 @@ priv struct SettingsSetPayload {
   deepseek_api_key : String?
   custom_api_key : String?
   wsl : SettingsWslPayload?
+  // One-time compatibility import from pre-host-settings desktop builds.
+  // The engine store accepts it only before any settings write has claimed
+  // the durable store, making a lost reply safe to retry.
+  legacy_migration : Bool?
 } derive(FromJson)
 
 ///|

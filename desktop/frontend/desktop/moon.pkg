@@ -1,0 +1,11 @@
+import {
+  "openseek_desktop/frontend",
+}
+
+supported_targets = "js"
+
+pkgtype(kind: "executable")
+
+options(
+  link: { "js": { "exports": [ ], "format": "iife" } },
+)

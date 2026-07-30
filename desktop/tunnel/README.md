@@ -37,7 +37,4 @@ WebSocket is paired, it carries the normal JSON-RPC client protocol unchanged;
 Malformed or unexpected control messages terminate the current connection.
 Ordinary network failures reconnect after a delay. A `fail` message is
 different: it rejects the current credentials, so the desktop waits for the
-configuration to change instead of retrying the same token forever. In this
-infrastructure-only branch the configuration comes from environment variables,
-so changing it takes effect on the next desktop launch; persisted sign-in state
-belongs to the later Remote access product change.
+user to sign in again instead of retrying the same token forever.

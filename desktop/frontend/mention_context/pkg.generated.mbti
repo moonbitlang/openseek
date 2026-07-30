@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/mention_context"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn encode(Array[MentionRef], String) -> String
+
+pub fn parse(String) -> MentionMessage?
+
+// Errors
+
+// Types and methods
+pub(all) struct MentionMessage {
+  mentions : Array[MentionRef]
+  task : String
+} derive(@debug.Debug)
+
+pub(all) enum MentionRef {
+  Skill(name~ : String)
+  Symbol(name~ : String, file~ : String, line~ : Int)
+  Annotation(file~ : String, start_line~ : Int, end_line~ : Int, quote~ : String, comment~ : String)
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

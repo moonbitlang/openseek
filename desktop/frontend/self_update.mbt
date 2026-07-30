@@ -5,20 +5,13 @@
 // a conversation would be interrupted.
 
 ///|
-/// Which release stream `check_update` asks. A Settings choice; Staging
-/// exists to exercise a release before it goes live.
+/// Which release stream `check_update` asks. Derived from the server
+/// selection (`ApiProvider::update_channel`): the staging server serves
+/// staging builds.
 priv enum UpdateChannel {
   Production
   Staging
 } derive(Eq)
-
-///|
-fn UpdateChannel::parse(value : String) -> UpdateChannel {
-  match value {
-    "staging" => Staging
-    _ => Production
-  }
-}
 
 ///|
 fn UpdateChannel::wire(self : UpdateChannel) -> String {
@@ -117,7 +110,13 @@ fn check_for_updates(
       let payload = @js.Object::new()
       payload["channel"] = channel.wire()
       let result = try {
-        let reply = @interop.bridge_request("check_update", payload.to_value())
+        // Self-update always targets the page's own desktop host, never a
+        // focused remote device.
+        let reply = @interop.bridge_request(
+          Local,
+          "update.check",
+          payload.to_value(),
+        )
         match decode_update_check(@interop.reply_json_text(reply)) {
           Some(result) => result
           None => CheckUnreachable(reason="the host answered unintelligibly")
@@ -142,7 +141,8 @@ fn download_update(
       let payload = @js.Object::new()
       payload["channel"] = channel.wire()
       let _ : @js.Value = @interop.bridge_request(
-        "download_update",
+        Local,
+        "update.download",
         payload.to_value(),
       ) catch {
         error => {

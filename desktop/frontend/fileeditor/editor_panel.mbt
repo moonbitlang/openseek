@@ -176,8 +176,10 @@ pub fn remove_editor_feedback(
 
 ///|
 /// Re-measure the viewport after the panel's width changes (it is laid out by
-/// CSS, so the viewer cannot see the change on its own).
-fn request_viewer_remeasure() -> @cmd.Cmd {
+/// CSS, so the viewer cannot see the change on its own). Public for the main
+/// package's viewport-resize handler — a window resize or phone rotation
+/// changes the panel's host size without any panel message.
+pub fn request_viewer_remeasure() -> @cmd.Cmd {
   @cmd.custom_cmd(
     _after => if viewer_state.viewer is Some(viewer) { viewer.layout() },
     kind=@cmd.after_render,
@@ -197,6 +199,7 @@ fn request_viewer_remeasure() -> @cmd.Cmd {
 /// brings the incoming document back to its saved position instead of the
 /// top — the Monaco save/restore-view-state contract around `set_model`.
 fn show_file_in_viewer(
+  channel : @interop.ChannelId,
   name : String,
   content : String,
   absolute? : @pathx.Absolute,
@@ -215,8 +218,8 @@ fn show_file_in_viewer(
     // (withheld binary/oversized file) has no file behind it, so its inert
     // scheme never parses as a model path and hover stays off.
     let uri = match absolute {
-      Some(absolute) => model_uri_of(absolute)
-      None => app_uri("openseek-notice", "/\{name}")
+      Some(absolute) => model_uri_of(channel, absolute)
+      None => app_uri("openseek-notice", "/" + name)
     }
     // Whether anything needs redrawing is decided here, against the document
     // the viewer really shows — the update loop only says "show this", it
@@ -351,6 +354,7 @@ fn forget_view_state(path : @pathx.Relative) -> @cmd.Cmd {
 /// model's own URI, so the viewer's marker-decoration service renders their
 /// squiggles on the document on screen.
 fn apply_diagnostics(
+  channel : @interop.ChannelId,
   absolute : @pathx.Absolute,
   diagnostics : Json,
 ) -> @cmd.Cmd {
@@ -358,7 +362,7 @@ fn apply_diagnostics(
     if viewer_state.absolute is Some(current) &&
       current == absolute &&
       viewer_state.services is Some(services) {
-      let uri = model_uri_of(absolute)
+      let uri = model_uri_of(channel, absolute)
       services.markers.set_diagnostics(
         DiagnosticsOwner,
         uri,

@@ -42,24 +42,88 @@ pub fn decode_sessions_reply(text : String) -> Array[SessionListItem]? {
 }
 
 ///|
+/// A decoded `session.load` reply: the transcript the snapshot renders as,
+/// and the highest event sequence it contains — the client's starting
+/// watermark, deciding which later `session.event` commits are already in
+/// the snapshot. An explicit top-level watermark is authoritative; replies
+/// from older hosts derive it from the maximum stored event sequence instead.
+/// An empty record therefore remains at 0 in either shape.
+pub struct SessionLoadView {
+  items : Array[TranscriptItem]
+  watermark : Int
+  // Durable event boundaries retained alongside the display projection.
+  // Each tuple is `(event sequence, is terminal, projected item count after
+  // the event)`. An event may add no bubble, so an exact lifecycle/EOF
+  // boundary cannot be reconstructed from `items` alone.
+  event_boundaries : Array[(Int, Bool, Int)]
+}
+
+///|
 /// Parse a `load_session` reply (the durable session JSON) into transcript
-/// items, reconstructing what the live transcript showed while the
-/// conversation was running: reasoning before the answer, tool cards,
-/// runtime updates, and error bubbles for turns that did not finish.
-pub fn transcript_from_session_json(text : String) -> Array[TranscriptItem]? {
+/// items plus its watermark, reconstructing what the live transcript showed
+/// while the conversation was running: reasoning before the answer, tool
+/// cards, runtime updates, and error bubbles for turns that did not finish.
+/// `None` only for structurally unusable JSON — the caller reports that as a
+/// failed load, never as an empty conversation.
+pub fn decode_session_load_reply(text : String) -> SessionLoadView? {
   let json = @json.parse(text) catch { _ => return None }
   guard json is Object(reply) else { return None }
   guard reply.get("session") is Some(Object(session)) else { return None }
-  guard session.get("events") is Some(Array(events)) else { return Some([]) }
+  let explicit_watermark = @jsonx.json_int(reply, "watermark")
+  guard session.get("events") is Some(Array(events)) else {
+    return Some({
+      items: [],
+      watermark: explicit_watermark.unwrap_or(0),
+      event_boundaries: [],
+    })
+  }
   let items : Array[TranscriptItem] = []
+  let event_boundaries : Array[(Int, Bool, Int)] = []
+  let mut derived_watermark = 0
   for event in events {
     guard event is Object(event_fields) else { continue }
+    // Old desktop hosts return the store JSON verbatim without a top-level
+    // watermark, but every stored event already carries its sequence. Derive
+    // the same frontier from those entries so reconnecting through an older
+    // host cannot roll a newer client's watermark back to zero.
+    let sequence = @jsonx.json_int(event_fields, "sequence")
+    if sequence is Some(sequence) && sequence > derived_watermark {
+      derived_watermark = sequence
+    }
     guard event_fields.get("item") is Some(Object(item)) else { continue }
     guard item.get("kind") is Some(String(kind)) else { continue }
     guard item.get("payload") is Some(Object(payload)) else { continue }
     append_session_item(items, kind, payload)
+    if sequence is Some(sequence) {
+      event_boundaries.push((sequence, kind == "terminal", items.length()))
+    }
   }
-  Some(items)
+  Some({
+    items,
+    watermark: explicit_watermark.unwrap_or(derived_watermark),
+    event_boundaries,
+  })
+}
+
+///|
+/// The items half of `decode_session_load_reply`, kept for callers (and
+/// tests) that predate watermarks.
+pub fn transcript_from_session_json(text : String) -> Array[TranscriptItem]? {
+  decode_session_load_reply(text).map(view => view.items)
+}
+
+///|
+/// Project one durable session item — a `session.event` commit's
+/// `{kind, payload}` — onto the transcript, appending the 0..N items it
+/// renders as. The same projector `transcript_from_session_json` replays a
+/// whole snapshot through, so a transcript built incrementally from commits
+/// and one rebuilt from the next snapshot agree by construction.
+pub fn apply_session_item(
+  items : Array[TranscriptItem],
+  kind : String,
+  payload : Map[String, Json],
+) -> Unit {
+  append_session_item(items, kind, payload)
 }
 
 ///|
@@ -93,7 +157,7 @@ fn append_session_item(
       if content is Some(content) {
         let content = content.trim().to_owned()
         if !content.is_empty() {
-          items.push({ kind: Assistant(false), content })
+          items.push({ kind: Assistant(is_danger=false), content })
         }
       }
     }
@@ -161,11 +225,11 @@ fn append_terminal_item(
     // message; only a differing terminal message adds a bubble.
     "finished" =>
       if !message.is_empty() && !ends_with_assistant(items, message) {
-        items.push({ kind: Assistant(false), content: message })
+        items.push({ kind: Assistant(is_danger=false), content: message })
       }
     "aborted" =>
       items.push({
-        kind: Assistant(true),
+        kind: Assistant(is_danger=true),
         content: if message.is_empty() {
           "aborted"
         } else {
@@ -174,7 +238,7 @@ fn append_terminal_item(
       })
     "interrupted" =>
       items.push({
-        kind: Assistant(true),
+        kind: Assistant(is_danger=true),
         content: if message.is_empty() {
           "cancelled"
         } else {
@@ -183,7 +247,7 @@ fn append_terminal_item(
       })
     "failed" =>
       items.push({
-        kind: Assistant(true),
+        kind: Assistant(is_danger=true),
         content: if message.is_empty() {
           "failed"
         } else {
@@ -248,6 +312,39 @@ fn session_reply(events_json : String) -> String {
 }
 
 ///|
+test "session load derives an old host's missing watermark from event sequences" {
+  let events =
+    #|{"sequence":1,"item":{"kind":"user","payload":{"content":"question"}}},
+    #|{"sequence":4,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
+  guard decode_session_load_reply(session_reply(events)) is Some(view) else {
+    fail("expected a decoded session")
+  }
+  inspect(view.watermark, content="4")
+  inspect(view.event_boundaries.length(), content="2")
+  let (first_sequence, first_terminal, first_boundary) = view.event_boundaries[0]
+  inspect(first_sequence, content="1")
+  assert_false(first_terminal)
+  inspect(first_boundary, content="1")
+  let (sequence, is_terminal, boundary) = view.event_boundaries[1]
+  inspect(sequence, content="4")
+  assert_true(is_terminal)
+  inspect(boundary, content="2")
+}
+
+///|
+test "an explicit session watermark remains authoritative" {
+  let text =
+    #|{"watermark":7,"session":{"version":1,"id":"desktop-x","events":[
+    #|{"sequence":9,"item":{"kind":"user","payload":{"content":"question"}}}
+    #|]}}
+  guard decode_session_load_reply(text) is Some(view) else {
+    fail("expected a decoded session")
+  }
+  inspect(view.watermark, content="7")
+  inspect(view.event_boundaries.length(), content="1")
+}
+
+///|
 test "transcript mapping replays a finished conversation" {
   let events =
     #|{"sequence":1,"item":{"kind":"user","payload":{"content":"  question  "}}},
@@ -267,7 +364,9 @@ test "transcript mapping replays a finished conversation" {
   inspect(items[1].content, content="output")
   guard items[2].kind is Reasoning else { fail("expected reasoning item") }
   inspect(items[2].content, content="thought")
-  guard items[3].kind is Assistant(false) else { fail("expected assistant") }
+  guard items[3].kind is Assistant(is_danger=false) else {
+    fail("expected assistant")
+  }
   inspect(items[3].content, content="answer")
 }
 
@@ -292,7 +391,9 @@ test "transcript mapping renders non-finished terminals as error bubbles" {
     fail("expected transcript items")
   }
   inspect(items.length(), content="3")
-  guard items[0].kind is Assistant(true) else { fail("expected error bubble") }
+  guard items[0].kind is Assistant(is_danger=true) else {
+    fail("expected error bubble")
+  }
   inspect(items[0].content, content="cancelled")
   inspect(items[1].content, content="aborted: the agent gave up")
   inspect(items[2].content, content="engine error")
@@ -326,7 +427,7 @@ test "transcript mapping replays a context checkpoint and yield guidance" {
   inspect(items.length(), content="2")
   guard items[0].kind is Summary else { fail("expected checkpoint summary") }
   inspect(items[0].content, content="checkpoint recap")
-  guard items[1].kind is Assistant(false) else {
+  guard items[1].kind is Assistant(is_danger=false) else {
     fail("expected context-yield guidance")
   }
   inspect(items[1].content, content="[context ceiling] continue in a new turn")

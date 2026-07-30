@@ -25,6 +25,12 @@ const EngineSettingsVersion = 1
 const EngineSettingsFileName = "engine-settings.json"
 
 ///|
+/// Durable compatibility fence. The first settings write sets it; a retried
+/// localStorage import then returns the current settings without replacing a
+/// newer browser or desktop edit.
+const LegacyMigrationFence = "legacy_client_settings_migrated"
+
+///|
 /// The official OpenSeek proxy endpoint runs use when the server is
 /// `Openseek` — the zero-config default. Must stay under
 /// `OpenseekProxyPrefix`, which is what routes the client token to it.
@@ -227,6 +233,7 @@ pub async fn settings_status(manager : EngineManager) -> Json {
 pub async fn update_settings(
   manager : EngineManager,
   patch : SettingsPatch,
+  legacy_migration? : Bool = false,
   on_committed? : (Json) -> Unit,
 ) -> Json {
   manager.settings_lock.acquire()
@@ -241,6 +248,19 @@ pub async fn update_settings(
     )
   }
   let raw = current.raw
+  // A migration may be retried after its commit reply was lost. It is also
+  // possible for a modern client to write first. In both cases the durable
+  // fence wins and the old localStorage snapshot is merely acknowledged so
+  // the desktop can delete it.
+  let store_claimed = raw.get(LegacyMigrationFence) is Some(True) ||
+    raw.get("provider") is Some(_) ||
+    raw.get("custom_api_url") is Some(_) ||
+    raw.get("deepseek_api_key") is Some(_) ||
+    raw.get("custom_api_key") is Some(_) ||
+    raw.get("wsl") is Some(_)
+  if legacy_migration && store_claimed {
+    return settings_status_json(current, manager.settings_revision)
+  }
   if patch.provider is Some(value) {
     guard ApiProvider::parse(value.trim().to_owned()) is Some(provider) else {
       raise EngineError("unknown API provider '\{value}'")
@@ -257,6 +277,7 @@ pub async fn update_settings(
     apply_text_patch(group, "engine", wsl.engine)
     raw["wsl"] = Json::object(group)
   }
+  raw[LegacyMigrationFence] = Json::boolean(true)
   raw["version"] = Json::number(EngineSettingsVersion.to_double())
   write_settings_file(dir, Json::object(raw).stringify(indent=2))
   // Disk is now committed. Advance the process-local order and publish while
@@ -538,6 +559,51 @@ async test "a present-but-blank field clears the stored value" {
       "has_custom_key": false,
       "wsl": { "enabled": false },
     })
+  })
+}
+
+///|
+async test "legacy migration cannot replay over a newer settings write" {
+  with_settings_dir(async fn(_dir, manager) {
+    let migrated = update_settings(
+      manager,
+      {
+        provider: Some("deepseek"),
+        custom_api_url: None,
+        deepseek_api_key: Some("sk-old"),
+        custom_api_key: None,
+        wsl: None,
+      },
+      legacy_migration=true,
+    )
+    assert_eq(settings_revision(migrated), 1)
+    let modern = update_settings(manager, {
+      provider: Some("custom"),
+      custom_api_url: Some("https://new.example/chat"),
+      deepseek_api_key: Some(""),
+      custom_api_key: Some("sk-new"),
+      wsl: None,
+    })
+    assert_eq(settings_revision(modern), 2)
+    // This is the desktop retry after the first migration's reply was lost.
+    // It gets the current status so the client can clear localStorage, but
+    // neither advances the revision nor restores the stale values.
+    let replay = update_settings(
+      manager,
+      {
+        provider: Some("deepseek"),
+        custom_api_url: None,
+        deepseek_api_key: Some("sk-old"),
+        custom_api_key: None,
+        wsl: None,
+      },
+      legacy_migration=true,
+    )
+    assert_eq(settings_revision(replay), 2)
+    let current = load_engine_settings(manager.runtime_dir)
+    assert_true(current.provider is Custom)
+    assert_true(current.deepseek_api_key is None)
+    assert_true(current.custom_api_key is Some("sk-new"))
   })
 }
 

@@ -1,9 +1,8 @@
 // The wire types of the host ops: payloads the client sends with each
 // method and the replies it gets back, per docs/remote-protocol.md.
 // Engine/session/workspace payloads live with the API dispatcher; these are
-// the host-side methods' shapes. Optional fields are absent when unset except
-// where the bundled legacy desktop has an established sentinel contract,
-// documented at that response type.
+// the host-side methods' shapes. Optional fields are absent when unset; the
+// current frontend does not send historical blank sentinels.
 
 ///|
 priv struct InstallSkillPayload {

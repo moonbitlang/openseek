@@ -1,6 +1,7 @@
 import {
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/js",
+  "moonbitlang/core/json",
   "openseek_desktop/internal/pathx",
 }
 

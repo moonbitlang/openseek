@@ -22,22 +22,17 @@ const ExtensionNamespace = "openseek"
 const ConnectMethod = "host.connect"
 
 ///|
-/// The desktop bundle on main still speaks the original Proton op/event
-/// names. Keeping that page on a separate bridge profile lets this native
-/// host land before the frontend transport change without changing the
-/// JSON-RPC catalog exposed to remote clients.
-priv enum BridgeProfile {
-  Catalog
-  LegacyDesktop
-}
+/// Open an external URL on the machine displaying the Proton window. Unlike
+/// the shared host catalog, this command is deliberately local-only: a relay
+/// browser must never make another device launch a URL.
+const OpenExternalMethod = "shell.open_external"
 
 ///|
 /// A page attachment waiting for the bridge actor to install it. The reply
-/// makes either connect op a finite readiness handshake: success means the
-/// actor has already emitted that profile's readiness event to this page.
+/// makes `host.connect` a finite readiness handshake: success means the
+/// actor has already emitted `agent.connected` to this page.
 priv struct BridgeAttachment {
   context : @app.AppCommandExtensionContext
-  profile : BridgeProfile
   reply : @async.Queue[Unit]
 }
 
@@ -57,12 +52,6 @@ struct DesktopBridgeActor {
   // remote WebSocket connection.
   host_connection : @host.HostConnection
   attachments : @async.Queue[BridgeAttachment]
-  // The legacy desktop model keys turns by Int. Remote protocol ids are
-  // opaque host-wide strings, so this adapter assigns page-local Int ids
-  // without weakening the WebSocket protocol's identity.
-  legacy_ids : Map[String, Int]
-  remote_ids : Map[Int, String]
-  mut next_legacy_id : Int
 }
 
 ///|
@@ -74,9 +63,6 @@ pub fn DesktopBridgeActor::new(state : @api.ApiState) -> DesktopBridgeActor {
     // reload to overlap the old page without allowing abandoned requests to
     // accumulate forever.
     attachments: Queue(kind=Blocking(4)),
-    legacy_ids: Map([]),
-    remote_ids: Map([]),
-    next_legacy_id: 1,
   }
 }
 
@@ -89,9 +75,7 @@ pub fn openseek_extension(
     @app.AppCommandApiDescriptor::new(name)
   })
   descriptors.push(@app.AppCommandApiDescriptor::new(ConnectMethod))
-  for name in bridge.legacy_method_names() {
-    descriptors.push(@app.AppCommandApiDescriptor::new(name))
-  }
+  descriptors.push(@app.AppCommandApiDescriptor::new(OpenExternalMethod))
   @app.AppCommandExtensionSpec::new(
     ExtensionId,
     ExtensionNamespace,
@@ -103,10 +87,10 @@ pub fn openseek_extension(
         })
       }
       context.op_async(ConnectMethod, (_ : Json) => {
-        bridge.attach(context, Catalog)
+        bridge.attach(context)
         Json::empty_object()
       })
-      bridge.bind_legacy_ops(context)
+      context.op_async(OpenExternalMethod, open_external)
     },
   )
 }
@@ -115,10 +99,9 @@ pub fn openseek_extension(
 async fn DesktopBridgeActor::attach(
   self : DesktopBridgeActor,
   context : @app.AppCommandExtensionContext,
-  profile : BridgeProfile,
 ) -> Unit {
   let reply : @async.Queue[Unit] = Queue(kind=Blocking(1))
-  self.attachments.put({ context, profile, reply })
+  self.attachments.put({ context, reply })
   reply.get()
 }
 
@@ -160,43 +143,17 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
         host_notifications.put({ method_, params })
       })
     })
-    let mut attached : (@app.AppCommandExtensionContext, BridgeProfile)? = None
+    let mut attached : @app.AppCommandExtensionContext? = None
     for ;; {
       match self.next_input(notifications, host_notifications) {
-        Attach({ context, profile, reply }) => {
-          // Managed Proton contexts queue events without raising. Publishing
-          // resynchronization and then readiness before acknowledging the
-          // attachment preserves the connect handshake while avoiding
-          // request-task ownership.
-          match profile {
-            Catalog => context.emit("agent.connected", Json::empty_object())
-            LegacyDesktop => {
-              // A full page reload did not observe the original Started event,
-              // but later stream and finish events still use that run id.
-              // Re-establish every active route before BridgeReady reaches the
-              // fresh frontend model.
-              for notification in self.legacy_active_starts() {
-                context.emit(notification.method_, notification.params)
-              }
-              context.emit("connected", Json::empty_object())
-            }
-          }
-          attached = Some((context, profile))
+        Attach({ context, reply }) => {
+          context.emit("agent.connected", Json::empty_object())
+          attached = Some(context)
           reply.put(())
         }
         Deliver(notification) =>
-          if attached is Some((context, profile)) {
-            match profile {
-              Catalog => context.emit(notification.method_, notification.params)
-              LegacyDesktop =>
-                if self.legacy_notification(notification)
-                  is Some(legacy_notification) {
-                  context.emit(
-                    legacy_notification.method_,
-                    legacy_notification.params,
-                  )
-                }
-            }
+          if attached is Some(context) {
+            context.emit(notification.method_, notification.params)
           }
       }
     }

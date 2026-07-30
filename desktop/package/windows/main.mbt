@@ -213,6 +213,7 @@ async fn copy_bundle_files(
     )
   }
   @packaging.copy_file(ws.at("index.html"), ws.at(AppAssetDir + "/index.html"))
+  @packaging.copy_file(ws.at("app.css"), ws.at(AppAssetDir + "/app.css"))
   @packaging.copy_file(
     ws.at("frontend.js"),
     ws.at(AppAssetDir + "/frontend.js"),

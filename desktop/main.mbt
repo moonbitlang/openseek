@@ -7,9 +7,9 @@ fn main {
     @shellenv.print_env_json(mark)
     return
   }
-  // The process main thread owns AppKit and CEF. Proton runs this async body
-  // on its application thread and marshals UI work back to the main thread,
-  // so native shutdown cannot race a still-open browser window.
+  // The process main thread now owns AppKit and CEF. Proton runs this async
+  // body on its application thread and marshals UI work back to the main
+  // thread, so native shutdown cannot race a still-open browser window.
   @proton.run(() => {
     // Proton runs everything in one process; the executable path locates the
     // bundled frontend assets and the engine binary that ship alongside it.
@@ -18,7 +18,12 @@ fn main {
       None => abort("current executable command is unavailable")
     }
     let log = launch_logger()
-    log.info() <? { "message": "start" }
+    log.info() <?
+      {
+        "event": "desktop_main_start",
+        "message": "start",
+        "log_path": @env.get_env_var("OPENSEEK_DESKTOP_LOG").unwrap_or(""),
+      }
     // A Finder/Dock launch inherits only launchd's minimal environment; graft
     // the user's login-shell environment (PATH, custom variables) onto this
     // process before anything downstream — engine, LSP, shell tool — spawns.
@@ -29,12 +34,23 @@ fn main {
     log.info() <? { "message": "frontend entry", "path": frontend_entry }
     log.info() <? { "message": "engine", "path": engine }
     let runtime_dir = @host.prepared_runtime_dir()
-    let state = @api.ApiState::new(engine~, runtime_dir?, executable~)
+    // The relay sign-in store: a persisted session from auth.json, unless the
+    // environment override pins the connector config directly (development).
+    let auth = @auth.AuthStore::load(
+      runtime_dir?,
+      env_override?=relay_settings(),
+    )
+    let state = @api.ApiState::new(engine~, runtime_dir?, executable~, auth~)
     let bridge = @extension.DesktopBridgeActor::new(state)
-    // Proton exposes the `__MoonBit__` bridge — both the ops and the extension
-    // event channel the frontend listens on — from its `proton://app/` asset
-    // origin. Proton reads the entry document and serves sibling static assets
-    // such as frontend.js and viewer.css from that same directory.
+    let relay = @remote.RelayActor::new(state, announce=device => {
+      log.info() <? { "message": "relay registered", "device": device }
+    })
+    // Proton exposes the `__MoonBit__` bridge — both the ops and the event
+    // channel the frontend listens on — only to the `proton://app/` origin its
+    // asset entry serves from. The window is bridge-only: it makes no HTTP
+    // requests at all (a proton:// page's http fetches stall inside CEF's
+    // network service). Remote browsers use the same method catalog over the
+    // relay WebSocket instead (docs/remote-protocol.md).
     let app = @proton.asset(
         "OpenSeek Desktop",
         frontend_entry,
@@ -47,13 +63,13 @@ fn main {
           @extension.openseek_extension(state, bridge),
         ),
       )
-      // Notifications are an ordinary generated extension: the frontend
-      // posts them and receives `notification.click` with the run id.
+      // System notifications are an ordinary generated extension now: the
+      // frontend posts them and receives `notification.click` with the run id.
       .extension(@notification.extension())
     @async.with_task_group(group => {
-      // These actors own their queues and native resources for the whole app
-      // lifetime. A bridge request only posts work; closing the app cancels
-      // the actors together after Proton has returned from its run loop.
+      // The bridge actor, engine actor, and host actors run for the app's
+      // lifetime — they feed every page/client rather than borrowing a
+      // `host.connect` request task as their owner.
       group.spawn_bg(allow_failure=true, () => bridge.run())
       group.spawn_bg(allow_failure=true, () => {
         state
@@ -65,34 +81,34 @@ fn main {
       @host.spawn_host_pumps(group, state.host_state(), (method_, params) => {
         state.publish(method_, params)
       })
-      // Remote access stays opt-in in this infrastructure PR. Product
-      // sign-in and settings UI belong to the frontend follow-up.
-      if relay_settings() is Some((relay_url, device_token, device_name)) {
-        let relay = @remote.RelayActor::new(
-          state,
-          relay_url~,
-          device_token~,
-          device_name~,
-          announce=device => {
-            log.info() <? { "message": "relay registered", "device": device }
-          },
-        )
-        group.spawn_bg(allow_failure=true, () => relay.run())
-      }
+      // The relay actor runs for the app's lifetime: it registers
+      // this host whenever a sign-in (or the environment override) says so,
+      // and idles otherwise.
+      group.spawn_bg(allow_failure=true, () => relay.run())
+      log.info() <? { "event": "desktop_app_run_start" }
       try {
         app.run()
-        log.info() <? { "message": "host process exit ok" }
+        log.info() <?
+          {
+            "event": "desktop_app_run_return",
+            "result": "ok",
+            "message": "host process exit ok",
+          }
       } catch {
         error =>
           log.error() <?
             {
+              "event": "desktop_app_run_return",
+              "result": "error",
               "message": "host process error",
               "error": @debug.render(Repr(error)),
             }
       }
+      // The window is closed: tear the pumps (and with them every serve
+      // engine) down rather than wait on their tasks forever.
       group.return_immediately(())
     })
-    // A successful `apply_update` swapped the bundle on disk and left a
+    // A successful `update.apply` swapped the bundle on disk and left a
     // relaunch marker: reopen the new version now that the run loop is done.
     // `open -n` hands the launch to LaunchServices, so the new instance is
     // not our child and this process can exit right after.
@@ -109,14 +125,17 @@ fn main {
         log.error() <? { "message": "relaunch failed", "code": code }
       }
     }
+    log.info() <? { "event": "desktop_main_return" }
   })
 }
 
 ///|
-/// Fixed relay settings for development and protocol testing. Both the relay
-/// URL and token are required; the later product-UI change replaces this
-/// environment-only entry point with persisted sign-in state.
-fn relay_settings() -> (String, String, String)? {
+/// The development relay override, all-or-nothing from the environment:
+/// `OPENSEEK_RELAY_URL` (the relay's `/v1/tunnel` WebSocket URL) and
+/// `OPENSEEK_DEVICE_TOKEN` (the secret that keeps this machine's device id
+/// stable); `OPENSEEK_DEVICE_NAME` labels the device on the relay's status
+/// page and defaults to "desktop". When set it bypasses sign-in entirely.
+fn relay_settings() -> @auth.ConnectorConfig? {
   guard @envx.get("OPENSEEK_RELAY_URL") is Some(relay_url) &&
     @envx.get("OPENSEEK_DEVICE_TOKEN") is Some(device_token) else {
     return None
@@ -125,5 +144,5 @@ fn relay_settings() -> (String, String, String)? {
     Some(name) => name
     None => "desktop"
   }
-  Some((relay_url, device_token, device_name))
+  Some({ relay_url, device_token, device_name })
 }

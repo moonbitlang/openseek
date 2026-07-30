@@ -10,7 +10,8 @@ A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://moonca
 - `internal/home/` — the user's home directory and `~` expansion.
 - `internal/userdirs/` — the user's Documents folder, answered by each platform's authority: the Windows known folder, the XDG user-dirs override, or `~/Documents`.
 - `internal/event/` — engine event decoding.
-- `frontend/` — the JS (Rabbita) UI bundled to `frontend.js`: the Elm-style model/update/view plus the command files talking to the host bridge.
+- `internal/menu/` — the macOS main menu (App/Edit/Window): macOS dispatches ⌘ key equivalents through the main menu and the webview library never creates one, so without it the editing shortcuts (⌘A/⌘C/⌘V, undo, quit) are silently dropped. No-op on other platforms.
+- `frontend/` — the JS (Rabbita) UI core: the Elm-style model/update/view plus the command files talking to the host bridge. Two thin shells bundle it: `frontend/desktop/` (the app's `frontend.js`) and `frontend/browser/` (the `browser.js` console bundle openseek-api serves).
 - `frontend/transcript/` — pure decoders from the engine's wire data to display items: engine events, session-list and session-replay replies, runtime updates.
 - `frontend/markdown/` — markdown rendering for transcript content (cmark to Rabbita nodes, panic-guarded).
 - `frontend/interop/` — the typed `@js` helpers shared by the frontend; no frontend package embeds raw JavaScript.
@@ -180,8 +181,9 @@ Why the bootstrap is a little involved:
 - Windows native builds include WebView2 COM headers. The headers are not kept
   in the repository, so they must be installed from the Microsoft WebView2 NuGet
   package once per checkout.
-- The desktop host expects `assets/index.html`, `assets/frontend.js`, and an
-  `openseek` engine executable beside it when packaged.
+- The desktop host expects `assets/index.html`, `assets/app.css`,
+  `assets/frontend.js`, and an `openseek` engine executable beside it when
+  packaged.
 
 ## Build
 
@@ -204,8 +206,8 @@ restage, clean, and rebuild until the submodule tree stays clean.
 Then build the frontend bundle and the native binary:
 
 ```sh
-moon build frontend --target js --release      # produce the JS bundle
-cp _build/js/release/build/openseek_desktop/frontend/frontend.js frontend.js
+moon build frontend/desktop --target js --release
+cp ../_build/js/release/build/openseek_desktop/frontend/desktop/desktop.js frontend.js
 moon build . --target native --release         # build the native binary
 ```
 
@@ -302,8 +304,8 @@ cd ..
 Build the frontend bundle, copy it to `frontend.js`, and build the native host:
 
 ```powershell
-moon build frontend --target js --release
-Copy-Item _build\js\release\build\openseek_desktop\frontend\frontend.js frontend.js
+moon build frontend/desktop --target js --release
+Copy-Item ..\_build\js\release\build\openseek_desktop\frontend\desktop\desktop.js frontend.js
 moon build . --target native --release
 ```
 
@@ -333,6 +335,7 @@ dist/windows-x64/OpenSeek Desktop/
   openseek-desktop.exe
   openseek.exe
   assets/index.html
+  assets/app.css
   assets/frontend.js
 ```
 
@@ -342,6 +345,7 @@ The files come from:
 openseek-desktop.exe <- desktop/_build/native/release/build/openseek_desktop/openseek_desktop.exe
 openseek.exe         <- _build/native/release/build/cmd/openseek/openseek.exe
 assets/index.html    <- desktop/index.html
+assets/app.css       <- desktop/app.css
 assets/frontend.js   <- desktop/frontend.js
 ```
 

@@ -28,9 +28,11 @@ pub(all) enum EngineEvent {
   MaxStepsExhausted
   AgentSetupFailed(String)
   // Steering input settled by the engine: applied at a step boundary, or
-  // dropped because it raced the turn's end. Both echo the original text.
-  SteerApplied(String)
-  SteerDropped(String)
+  // dropped because it raced the turn's end. Current hosts echo the globally
+  // unique local submission id; `None` is a legacy lifecycle-only receipt and
+  // must never claim a local ledger entry by matching text.
+  SteerApplied(content~ : String, submission_id~ : String?)
+  SteerDropped(content~ : String, submission_id~ : String?)
   // An automatic checkpoint completed inside the open turn. Unlike the
   // manual lifecycle below, this does not put the conversation into an idle
   // compaction phase.
@@ -77,8 +79,20 @@ pub fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
     AgentAborted(reason~) => Some(AgentAborted(reason))
     MaxStepsExhausted => Some(MaxStepsExhausted)
     AgentSetupFailed(error~) => Some(AgentSetupFailed(error))
-    SteerApplied(content~, ..) => Some(SteerApplied(content))
-    SteerDropped(content~) => Some(SteerDropped(content))
+    SteerApplied(content~, ..) =>
+      Some(
+        SteerApplied(
+          content~,
+          submission_id=@jsonx.json_text(raw, "submission_id"),
+        ),
+      )
+    SteerDropped(content~) =>
+      Some(
+        SteerDropped(
+          content~,
+          submission_id=@jsonx.json_text(raw, "submission_id"),
+        ),
+      )
     AutoCompactionFinished(summary~, ..) =>
       Some(AutoCompactionFinished(summary))
     CompactionStarted(..) => Some(CompactionStarted)
@@ -260,15 +274,19 @@ test "decode maps background notices onto the runtime-update path" {
 ///|
 test "decode recognizes the steer events" {
   guard decode_engine_event(
-      event_fields({ "event": "steer_applied", "content": "left" }),
+      event_fields({
+        "event": "steer_applied",
+        "content": "left",
+        "submission_id": "input-7",
+      }),
     )
-    is Some(SteerApplied("left")) else {
+    is Some(SteerApplied(content="left", submission_id=Some("input-7"))) else {
     fail("steer_applied not decoded")
   }
   guard decode_engine_event(
       event_fields({ "event": "steer_dropped", "content": "left" }),
     )
-    is Some(SteerDropped("left")) else {
+    is Some(SteerDropped(content="left", submission_id=None)) else {
     fail("steer_dropped not decoded")
   }
 }

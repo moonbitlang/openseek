@@ -1,12 +1,388 @@
 ///|
-fn should_append_answer(conv : Conversation, answer : String) -> Bool {
-  if answer.trim().is_empty() {
-    false
-  } else if conv.last_assistant_content() is Some(existing) {
-    existing != answer
+const TranscriptReloadMaxAttempts : Int = 3
+
+///|
+const ArchivedPendingInputNotice : String = "This conversation was archived while a prompt was being sent. The input was restored here; check the archived transcript before resubmitting."
+
+///|
+/// Build the request for one transcript generation. Foreground loads may
+/// activate a selected stored session; background refreshes only reconcile
+/// the conversation already in the model.
+fn session_snapshot_command(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  model : Model,
+  session : String,
+  generation : Int,
+  activate_on_success : Bool,
+) -> @cmd.Cmd {
+  let workspace = model.session_workspace(channel, session)
+  if activate_on_success {
+    open_session(dispatch, channel, session, workspace~, generation~)
   } else {
-    true
+    refresh_session(dispatch, channel, session, workspace~, generation~)
   }
+}
+
+///|
+/// Move the UI's focus to `channel`: refetch the focused-scoped mirrors
+/// that BridgeReady only loads for the then-focused device (host meta,
+/// host settings, installed skills) and reset their local bookkeeping, so
+/// nothing of the previous device's host bleeds through. The active
+/// conversation is the caller's to place afterwards (an activation or a
+/// rotation); until it does, nothing is selected. A no-op when focus is
+/// already there — or when the page does not hold the channel.
+fn focus_channel(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  channel : @interop.ChannelId,
+) -> (@cmd.Cmd, Model) {
+  guard channel != model.focused && model.device_state(channel) is Some(dev) else {
+    return (@cmd.none, model)
+  }
+  (
+    @cmd.batch([
+      fetch_host_meta(dispatch, channel),
+      fetch_host_settings(dispatch, channel, dev.connection_generation),
+      fetch_installed_skills(dispatch, channel),
+    ]),
+    {
+      ..model,
+      focused: channel,
+      active_session: "",
+      loading_conversation: None,
+      settings_saves: 0,
+      host_settings_revision: -1,
+      deferred_host_settings: None,
+      legacy_cleanup_pending: false,
+      host_wsl: false,
+      installed_skills: [],
+      completion: None,
+      // Forgetting what was watched makes the post-dispatch panel sync
+      // re-root `fs.watch` against the newly focused host.
+      file_panel: { ..model.file_panel, watching: None },
+    },
+  )
+}
+
+///|
+/// The OpenSession body against an explicit channel — the caller has
+/// already moved focus there, so `channel == model.focused` throughout.
+fn open_session_on(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  model : Model,
+  session_id : String,
+) -> (@cmd.Cmd, Model) {
+  let owner : @interop.ConversationKey = { channel, session: session_id }
+  if session_id == model.active_session {
+    let base = { ..model, screen: Chat, completion: None }
+    // Re-selecting is an explicit catch-up point for writes made by an
+    // idle CLI or another client. It also restarts an exhausted retry
+    // round; an existing request stays single-flight. A fresh chat has no
+    // durable record to read, including when returning here from Skills.
+    match model.find_conversation(channel, session_id) {
+      Some(conv) if !(conv.sync is Reloading(..)) &&
+        model.can_reload_transcript(conv) => {
+        let (next, generation) = base.begin_transcript_reload(conv)
+        let next = { ..next, loading_conversation: Some(owner) }
+        if generation is Some(generation) {
+          (
+            session_snapshot_command(
+              dispatch, channel, next, session_id, generation, true,
+            ),
+            next,
+          )
+        } else {
+          (@cmd.none, next)
+        }
+      }
+      _ =>
+        (
+          @cmd.none,
+          {
+            ..base,
+            loading_conversation: if base.loading_conversation == Some(owner) {
+              Some(owner)
+            } else {
+              None
+            },
+          },
+        )
+    }
+  } else if model.find_conversation(channel, session_id) is Some(conv) {
+    // Switching focus; the transcript re-pins at the tail. The store is
+    // also re-read behind the switch — the local copy may date from
+    // before a reconnect, or another client may be driving this
+    // conversation — and the current view stays on screen while the
+    // reply is in flight. A failed/ongoing first load also needs to stay
+    // attached even though it has no transcript yet.
+    let reread = model.can_reload_transcript(conv) || !(conv.sync is Synced)
+    let (model, generation) = if reread {
+      model.begin_transcript_reload(conv)
+    } else {
+      (model.replace_conversation(conv), None)
+    }
+    let next = {
+      ..model.activate(channel, session_id),
+      screen: Chat,
+      transcript_pinned: true,
+      loading_conversation: if generation is Some(_) {
+        Some(owner)
+      } else {
+        None
+      },
+      completion: None,
+    }.with_active_workspace(workspace_token(conv.workspace))
+    let commands = [scroll_transcript_after_render()]
+    if generation is Some(generation) {
+      commands.push(
+        session_snapshot_command(
+          dispatch, channel, next, session_id, generation, true,
+        ),
+      )
+    }
+    (@cmd.batch(commands), next)
+  } else {
+    // The sidebar item says which store holds the session; opening it
+    // also makes its workspace the active one, so "New chat" follows.
+    let workspace = model.session_workspace(channel, session_id)
+    let (model, generation) = model.begin_transcript_reload(
+      empty_conversation(channel, session_id, workspace~),
+    )
+    let next = { ..model, screen: Chat, loading_conversation: Some(owner) }.with_active_workspace(
+      workspace,
+    )
+    if generation is Some(generation) {
+      (
+        session_snapshot_command(
+          dispatch, channel, next, session_id, generation, true,
+        ),
+        next,
+      )
+    } else {
+      (@cmd.none, next)
+    }
+  }
+}
+
+///|
+/// Issue a live-session list request with a page-lifetime token. The token is
+/// advanced before the command leaves update, so any older same-connection
+/// reply is stale even if it returns last.
+fn request_sessions_refresh(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  model : Model,
+) -> (@cmd.Cmd, Model) {
+  guard model.device_state(channel) is Some(dev) else {
+    return (@cmd.none, model)
+  }
+  let request_generation = dev.sessions_request_generation + 1
+  (
+    fetch_sessions(
+      dispatch,
+      channel,
+      dev.connection_generation,
+      request_generation,
+    ),
+    model.replace_device({
+      ..dev,
+      sessions_request_generation: request_generation,
+    }),
+  )
+}
+
+///|
+/// The archived list is fetched independently from the live list and keeps
+/// its own token, so a newer live-only refresh does not invalidate a useful
+/// archived reply.
+fn request_archived_refresh(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  model : Model,
+) -> (@cmd.Cmd, Model) {
+  guard model.device_state(channel) is Some(dev) else {
+    return (@cmd.none, model)
+  }
+  let request_generation = dev.archived_request_generation + 1
+  (
+    fetch_archived(
+      dispatch,
+      channel,
+      dev.connection_generation,
+      request_generation,
+    ),
+    model.replace_device({
+      ..dev,
+      archived_request_generation: request_generation,
+    }),
+  )
+}
+
+///|
+/// Adopt one canonical workspace registry snapshot, preserving each
+/// conversation's durable placement hint while clearing a detached active
+/// picker root. Session groups are then rebuilt against the same registry.
+fn adopt_workspaces(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  model : Model,
+  paths : Array[String],
+) -> (@cmd.Cmd, Model) {
+  guard model.device_state(channel) is Some(dev) else {
+    return (@cmd.none, model)
+  }
+  let active_workspace = if dev.active_workspace.is_empty() ||
+    paths.contains(dev.active_workspace) {
+    dev.active_workspace
+  } else {
+    ""
+  }
+  request_sessions_refresh(
+    dispatch,
+    channel,
+    model.replace_device({ ..dev, workspaces: paths, active_workspace }),
+  )
+}
+
+///|
+/// Retry one failed generation without losing commits that arrived while its
+/// snapshot was in flight. Three attempts form one bounded round. Exhaustion
+/// keeps the buffer and a visible local notice; a later commit/reconnect/open
+/// starts a fresh generation.
+fn retry_session_snapshot(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  model : Model,
+  session : String,
+  generation : Int,
+  activate_on_success : Bool,
+  message : String,
+) -> (@cmd.Cmd, Model) {
+  guard model.find_conversation(channel, session) is Some(conv) &&
+    conv.sync
+    is Reloading(generation=current, attempt~, buffered~, reload_after_current~) &&
+    current == generation else {
+    return (@cmd.none, model)
+  }
+  if attempt < TranscriptReloadMaxAttempts {
+    let next_attempt = attempt + 1
+    let next = model.replace_conversation({
+      ..conv,
+      sync: Reloading(
+        generation~,
+        attempt=next_attempt,
+        buffered=buffered.copy(),
+        reload_after_current~,
+      ),
+    })
+    let delay_ms = match next_attempt {
+      2 => 250
+      _ => 500
+    }
+    (
+      @cmd.delay(
+        session_snapshot_command(
+          dispatch, channel, next, session, generation, activate_on_success,
+        ),
+        delay_ms,
+      ),
+      next,
+    )
+  } else {
+    let failed = {
+      ..conv,
+      sync: ReloadFailed(generation~, buffered=buffered.copy()),
+    }.append_local_notice_once(
+      Assistant(is_danger=true),
+      TranscriptRefreshFailedNotice,
+    )
+    let next = model.replace_conversation(failed)
+    let scroll = if failed.overlay.length() > conv.overlay.length() {
+      scroll_if_active(next, channel, session)
+    } else {
+      @cmd.none
+    }
+    let owner : @interop.ConversationKey = { channel, session }
+    if activate_on_success && model.loading_conversation == Some(owner) {
+      let (toast, next) = next.notify_error(dispatch, message)
+      let (sessions, next) = request_sessions_refresh(dispatch, channel, next)
+      (
+        @cmd.batch([toast, sessions, scroll]),
+        { ..next, loading_conversation: None },
+      )
+    } else {
+      (scroll, next)
+    }
+  }
+}
+
+///|
+/// Fold one current-generation snapshot into its conversation. Lower
+/// watermarks retry instead of rolling the transcript back; stale generations
+/// are no-ops. Buffered gaps start one new background generation. A
+/// foreground result activates only if it still owns `loading_conversation`.
+fn apply_session_snapshot(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  model : Model,
+  session : String,
+  items : Array[@transcript.TranscriptItem],
+  watermark : Int,
+  event_boundaries : Array[(Int, Bool, Int)],
+  generation : Int,
+  activate_on_success : Bool,
+) -> (@cmd.Cmd, Model) {
+  guard model.find_conversation(channel, session) is Some(conv) &&
+    conv.sync is Reloading(generation=current, reload_after_current~, ..) &&
+    current == generation else {
+    return (@cmd.none, model)
+  }
+  if watermark < conv.watermark {
+    return retry_session_snapshot(
+      dispatch,
+      channel,
+      model,
+      session,
+      generation,
+      activate_on_success,
+      "failed to load session \{session}: snapshot watermark moved backwards",
+    )
+  }
+  let (conv, gapped) = conv.adopt_snapshot(items, watermark, event_boundaries)
+  let mut next = model.replace_conversation(conv)
+  let commands : Array[@cmd.Cmd] = []
+  let owner : @interop.ConversationKey = { channel, session }
+  if activate_on_success && model.loading_conversation == Some(owner) {
+    next = {
+      ..next.activate(channel, session),
+      transcript_pinned: true,
+      loading_conversation: None,
+      completion: None,
+    }
+    commands.push(scroll_transcript_after_render())
+    // The host derives the resumed workspace from the session id, so the
+    // branch probe sends no cwd.
+    commands.push(fetch_branch(dispatch, channel, session, None))
+  } else {
+    commands.push(scroll_if_active(next, channel, session))
+  }
+  if gapped || reload_after_current {
+    guard next.find_conversation(channel, session) is Some(conv) else {
+      return (@cmd.batch(commands), next)
+    }
+    let (reloading, next_generation) = next.begin_transcript_reload(conv)
+    next = reloading
+    if next_generation is Some(next_generation) {
+      commands.push(
+        session_snapshot_command(
+          dispatch, channel, next, session, next_generation, false,
+        ),
+      )
+    }
+  }
+  (@cmd.batch(commands), next)
 }
 
 ///|
@@ -14,8 +390,14 @@ fn should_append_answer(conv : Conversation, answer : String) -> Bool {
 /// screen — a background conversation's stream must not yank the visible
 /// scroll position around — and only while the user is at the bottom:
 /// someone who scrolled up to read history stays where they are.
-fn scroll_if_active(model : Model, session_id : String) -> @cmd.Cmd {
-  if session_id == model.active_session && model.transcript_pinned {
+fn scroll_if_active(
+  model : Model,
+  channel : @interop.ChannelId,
+  session_id : String,
+) -> @cmd.Cmd {
+  if channel == model.focused &&
+    session_id == model.active_session &&
+    model.transcript_pinned {
     scroll_transcript_after_render()
   } else {
     @cmd.none
@@ -35,6 +417,11 @@ fn is_idle_event(event : @transcript.EngineEvent) -> Bool {
     | RuntimeUpdate(_) => true
     _ => false
   }
+}
+
+///|
+fn is_steer_receipt(event : @transcript.EngineEvent) -> Bool {
+  event is (SteerApplied(..) | SteerDropped(..))
 }
 
 ///|
@@ -146,14 +533,18 @@ fn open_editor_at(
   annotation? : String,
 ) -> (@cmd.Cmd, Model) {
   let conv = model.active()
+  let owner : @interop.ConversationKey = {
+    channel: model.focused,
+    session: conv.session_id,
+  }
   let femit = dispatch.map(msg => FileEditor(msg))
   // Re-root only when the panel's cached tree belongs to another
   // conversation; otherwise `sync_file_panel`'s post-dispatch pass would
   // see a session mismatch and wipe the tab/`open` set below.
-  let panel = if model.file_panel.session == conv.session_id {
+  let panel = if model.file_panel.owner == Some(owner) {
     model.file_panel
   } else {
-    { ..@fileeditor.State::empty(), session: conv.session_id }
+    { ..@fileeditor.State::empty(), owner: Some(owner) }
   }
   guard conversation_relative(conv, path) is Some(relative) else {
     return (
@@ -163,7 +554,7 @@ fn open_editor_at(
         file_panel: {
           ..panel,
           open: true,
-          error: "\{path} is outside the conversation workspace",
+          error: Some("\{path} is outside the conversation workspace"),
         },
       },
     )
@@ -188,21 +579,24 @@ fn symbol_fetch_cmd(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   value : String,
-  session : String,
+  owner : @interop.ConversationKey,
 ) -> @cmd.Cmd {
   guard CompletionTrigger::parse(value) is Some(trigger) &&
     trigger.kind is Symbols else {
     return @cmd.none
   }
   let query = trigger.query
-  if model.symbol_cache.session == session && model.symbol_cache.query == query {
+  if model.symbol_cache.owner == Some(owner) &&
+    model.symbol_cache.query == query {
     return @cmd.none
   }
   read_workspace_symbols(
     dispatch,
-    session,
+    owner,
     query,
-    workspace=workspace_root(model.session_workspace(session)),
+    workspace=workspace_root(
+      model.session_workspace(owner.channel, owner.session),
+    ),
   )
 }
 
@@ -213,18 +607,19 @@ fn symbol_fetch_cmd(
 /// keystroke is dropped, the same staleness guard the file panel uses.
 fn apply_symbol_reply(
   model : Model,
-  session : String,
+  owner : @interop.ConversationKey,
   query : String,
   items : Array[CompletionItem],
 ) -> (@cmd.Cmd, Model) {
   let draft = model.active().task
-  guard session == model.active().session_id &&
+  guard owner.channel == model.focused &&
+    owner.session == model.active().session_id &&
     CompletionTrigger::parse(draft) is Some(trigger) &&
     trigger.kind is Symbols &&
     trigger.query == query else {
     return (@cmd.none, model)
   }
-  let cache : SymbolCache = { session, query, items }
+  let cache : SymbolCache = { owner: Some(owner), query, items }
   (
     @cmd.none,
     {
@@ -234,7 +629,7 @@ fn apply_symbol_reply(
         draft,
         model.installed_skills,
         cache,
-        session,
+        owner,
       ),
     },
   )
@@ -267,15 +662,11 @@ fn run_slash_command(
         (
           compact_openseek(
             dispatch,
+            model.focused,
             session=conv.session_id,
             model=model.selected_model,
             max_steps=model.max_steps,
-            api_key=model.effective_api_key(),
-            api_url=model.effective_api_url(),
             workspace?=conv.workspace,
-            wsl_enabled=model.wsl_active(),
-            wsl_distro=model.wsl_distro,
-            wsl_engine=model.wsl_engine,
           ),
           {
             ..model.replace_conversation({
@@ -309,6 +700,7 @@ fn run_slash_command(
 fn apply_engine_event(
   conv : Conversation,
   event : @transcript.EngineEvent,
+  event_run_id : String?,
 ) -> (Bool, Conversation) {
   match event {
     AgentStep(step) => {
@@ -335,157 +727,61 @@ fn apply_engine_event(
           { ..conv, streaming_response: conv.streaming_response + content },
         )
       }
-    // The turn's full reasoning, emitted once its streaming ends and before
-    // the assistant message commits — so the transcript reads thought →
-    // answer.
-    ReasoningMessage(content) => {
-      let next = conv
-      let content = content.trim().to_owned()
-      if content.is_empty() {
-        (false, next)
-      } else {
-        (true, next.append_item(Reasoning, content))
-      }
-    }
-    AssistantMessage(content) => {
-      let conv = conv.clear_streams()
-      let content = content.trim().to_owned()
-      if content.is_empty() {
-        (false, conv)
-      } else {
-        (true, conv.append_item(Assistant(false), content))
-      }
-    }
+    // Full semantic events never append transcript items: the store commit is
+    // the sole source of the durable reasoning/answer item. The current wire
+    // protocol has no live reasoning stream, while the full assistant event
+    // settles the live response.
+    ReasoningMessage(_) => (false, conv)
+    AssistantMessage(_) => (false, conv.clear_streams())
     RuntimeUpdate(content) => {
       let update = @transcript.parse_runtime_update(content)
-      let next = { ..conv, watcher_status: update.status }
-      if !update.status.is_empty() || update.diagnostics.length() > 0 {
-        (
-          true,
-          next.append_item(
-            Tool(
-              name=@transcript.runtime_update_title(update),
-              is_error=false,
-              brief=None,
-            ),
-            update.diagnostics.join("\n"),
-          ),
-        )
-      } else {
-        (false, next)
-      }
+      (false, { ..conv, watcher_status: update.status })
     }
     Usage(prompt_tokens~, completion_tokens~) =>
       (false, { ..conv, usage_tokens: prompt_tokens + completion_tokens })
-    ToolResult(tool_name~, is_error~, content~, brief~) =>
-      (
-        true,
-        conv.append_item(
-          Tool(
-            name=if tool_name.trim().is_empty() { "tool" } else { tool_name },
-            is_error~,
-            brief~,
-          ),
-          content,
-        ),
-      )
-    ToolCallDecodeError(tool_name~, reason~) =>
-      (
-        true,
-        conv.append_item(
-          Tool(
-            name=if tool_name.trim().is_empty() { "tool" } else { tool_name },
-            is_error=true,
-            brief=None,
-          ),
-          if reason.trim().is_empty() {
-            "tool call decode error"
-          } else {
-            reason
-          },
-        ),
-      )
-    AgentFinished(answer) => {
-      let conv = conv.clear_streams()
-      let answer = answer.trim().to_owned()
-      if should_append_answer(conv, answer) {
-        (true, conv.append_item(Assistant(false), answer))
+    ToolResult(..) => (false, conv)
+    // The turn loop records this as an error `tool_result`; its commit is the
+    // one canonical transcript source, just like a successful tool result.
+    ToolCallDecodeError(..) => (false, conv)
+    AgentFinished(_)
+    | ContextYield(_)
+    | AgentAborted(_)
+    | AgentSetupFailed(_) => (false, conv.clear_streams())
+    MaxStepsExhausted => (false, conv.clear_streams())
+    // The steer took effect at a step boundary. Its durable user item arrives
+    // through `session.event`; the live event only settles pending UI.
+    SteerApplied(content~, submission_id~) => {
+      ignore(content)
+      if submission_id is Some(submission_id) {
+        let (next, _) = conv.acknowledge_submission(
+          submission_id,
+          SteerInput,
+          event_run_id,
+        )
+        (false, next)
       } else {
+        // Legacy receipt: lifecycle information only. Text is not ownership
+        // in a multi-client session, even when it happens to match.
         (false, conv)
       }
     }
-    // The checkpoint notice is not a task answer, but keeping the engine's
-    // continuation guidance in the transcript makes the live view agree with
-    // durable-session replay. The separate host Finished message closes the
-    // run with the non-success `context_yield` outcome.
-    ContextYield(answer) => {
-      let conv = conv.clear_streams()
-      let answer = answer.trim().to_owned()
-      if should_append_answer(conv, answer) {
-        (true, conv.append_item(Assistant(false), answer))
-      } else {
-        (false, conv)
-      }
-    }
-    AgentAborted(reason) => {
-      let content = if reason.trim().is_empty() {
-        "aborted"
-      } else {
-        "aborted: \{reason}"
-      }
-      (true, conv.clear_streams().append_item(Assistant(true), content))
-    }
-    MaxStepsExhausted =>
-      (
-        true,
-        conv.clear_streams().append_item(Assistant(true), "max steps exhausted"),
-      )
-    AgentSetupFailed(reason) => {
-      let content = if reason.trim().is_empty() {
-        "setup failed"
-      } else {
-        "setup failed: \{reason}"
-      }
-      (true, conv.clear_streams().append_item(Assistant(true), content))
-    }
-    // The steer took effect at a step boundary: it is part of the
-    // conversation now, so echo it as a user message.
-    SteerApplied(content) =>
-      (true, conv.settle_pending_steer(content).append_item(User, content))
     // The steer raced the turn's end through the pipes and was rejected; the
     // text must not vanish silently.
-    SteerDropped(content) =>
-      (
-        true,
-        conv
-        .settle_pending_steer(content)
-        .append_item(Assistant(true), steer_dropped_notice(content)),
-      )
-    // Automatic compaction runs inside this open turn. Show the durable
-    // checkpoint with the same Summary card as manual compaction and replay,
-    // but leave the between-turn CompactionPhase untouched.
-    AutoCompactionFinished(summary) => {
-      let summary = summary.trim().to_owned()
-      if summary.is_empty() {
-        (false, conv)
+    SteerDropped(content~, submission_id~) =>
+      if submission_id is Some(submission_id) {
+        let (next, removed) = conv.reject_submission(
+          submission_id,
+          SteerInput,
+          event_run_id,
+          steer_dropped_notice(content),
+        )
+        (removed, next)
       } else {
-        (true, conv.append_item(Summary, summary))
+        (false, conv)
       }
-    }
-    // Compaction runs while the engine is idle and the next prompt will carry
-    // the shrunken context. The summary is appended as a `Summary` item, the
-    // same shape a reloaded session shows for the checkpoint, so the live and
-    // replayed transcripts agree.
+    AutoCompactionFinished(_) => (false, conv)
     CompactionStarted => (false, { ..conv, compaction: Compacting })
-    CompactionFinished(summary) => {
-      let conv = { ..conv, compaction: NotCompacting }
-      let summary = summary.trim().to_owned()
-      if summary.is_empty() {
-        (false, conv)
-      } else {
-        (true, conv.append_item(Summary, summary))
-      }
-    }
+    CompactionFinished(_) => (false, { ..conv, compaction: NotCompacting })
     CompactionFailed(reason) => {
       let content = if reason.trim().is_empty() {
         "compaction failed"
@@ -494,8 +790,8 @@ fn apply_engine_event(
       }
       (
         true,
-        { ..conv, compaction: NotCompacting }.append_item(
-          Assistant(true),
+        { ..conv, compaction: NotCompacting }.append_local_notice(
+          Assistant(is_danger=true),
           content,
         ),
       )
@@ -510,10 +806,11 @@ fn apply_engine_event(
 fn file_ctx(model : Model) -> @fileeditor.Ctx {
   let conv = model.active()
   {
-    session: conv.session_id,
+    owner: { channel: model.focused, session: conv.session_id },
     workspace: conv.workspace,
     dark_mode: model.dark_mode,
     tree_layout: model.tree_layout,
+    narrow: model.narrow,
   }
 }
 
@@ -534,14 +831,103 @@ fn sync_file_panel(
 }
 
 ///|
+/// Leave an archived active session immediately, carrying only resubmittable
+/// composer state into the supplied fresh id. This is shared by list replies
+/// and identity notifications because either can win their delivery race.
+fn replace_archived_active(
+  model : Model,
+  channel : @interop.ChannelId,
+  session : String,
+  fresh_session : String,
+  workspace : String,
+) -> Model {
+  guard channel == model.focused &&
+    model.active_session == session &&
+    model.find_conversation(channel, session) is Some(archived_conv) else {
+    return model
+  }
+  let (restored_task, restored_mentions, pending_initial) = archived_conv.archive_salvage()
+  let conversations = model.conversations.filter(conv => {
+    conv.device != channel || conv.session_id != session
+  })
+  let activated = { ..model, conversations, }.activate(channel, fresh_session)
+  let fresh = activated.active()
+  let task = if fresh.task.is_empty() {
+    restored_task
+  } else if restored_task.is_empty() || fresh.task == restored_task {
+    fresh.task
+  } else {
+    restored_task + "\n\n" + fresh.task
+  }
+  let mentions = restored_mentions
+  for mention in fresh.mentions {
+    mentions.push(mention)
+  }
+  let fresh = { ..fresh, task, mentions, workspace: workspace_root(workspace) }
+  let fresh = if pending_initial {
+    fresh.append_local_notice(
+      Assistant(is_danger=true),
+      ArchivedPendingInputNotice,
+    )
+  } else {
+    fresh
+  }
+  {
+    ..activated.replace_conversation(fresh).with_active_workspace(workspace),
+    screen: Chat,
+    loading_conversation: None,
+    transcript_pinned: true,
+    completion: None,
+  }
+}
+
+///|
 fn update(
   dispatch : @cmd.Emit[Msg],
   msg : Msg,
   model : Model,
 ) -> (@cmd.Cmd, Model) {
+  let previous = model
   let (cmd, model) = update_msg(dispatch, msg, model)
+  // On the narrow layout the sidebar is a full-screen drawer, so any
+  // navigation that lands somewhere else — switching or creating a
+  // conversation, opening Skills or Settings — closes it; centralizing the
+  // rule here keeps every navigation handler drawer-agnostic.
+  let model = if model.narrow &&
+    model.sidebar_open &&
+    (
+      model.active_session != previous.active_session ||
+      model.focused != previous.focused ||
+      model.screen != previous.screen
+    ) {
+    { ..model, sidebar_open: false }
+  } else {
+    model
+  }
   let (model, panel_cmd) = sync_file_panel(dispatch, model)
   (@cmd.batch([cmd, panel_cmd]), model)
+}
+
+///|
+/// Push the model's (already-updated) WSL view to the host as one whole
+/// group — the shared tail of the three WSL edit handlers.
+fn push_wsl_settings(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> (@cmd.Cmd, Model) {
+  (
+    push_host_settings(
+      dispatch,
+      model.focused,
+      wsl_settings_patch(
+        enabled=model.wsl_enabled,
+        distro=model.wsl_distro,
+        engine=model.wsl_engine,
+      ),
+      model.focused_connection_generation(),
+    ),
+    { ..model, settings_saves: model.settings_saves + 1 },
+  )
 }
 
 ///|
@@ -552,95 +938,118 @@ fn update_msg(
 ) -> (@cmd.Cmd, Model) {
   match msg {
     Init =>
+      // A browser console boots by asking the relay who is signed in; the
+      // bridge, the session rotation, and the transcript scroll watcher
+      // wait for the first roster (`apply_roster`) — before sign-in there
+      // is no channel to install and no transcript DOM to watch. The
+      // desktop window boots its one Local channel directly.
+      match model.console {
+        Some(_) =>
+          (
+            @cmd.batch([
+              fetch_console_me(dispatch),
+              load_saved_settings(dispatch),
+              // Browser localStorage is relay-origin state, not device
+              // state. Purge old client-held engine credentials even while
+              // signed out or when no device is online to reach
+              // `BridgeReady`.
+              clear_legacy_engine_settings(),
+              watch_color_scheme(dispatch),
+            ]),
+            model,
+          )
+        None =>
+          (
+            @cmd.batch([
+              install_bridge(dispatch, model.focused),
+              load_saved_settings(dispatch),
+              watch_transcript_scroll(dispatch),
+              watch_color_scheme(dispatch),
+              rotate_session(dispatch, model.focused),
+            ]),
+            model,
+          )
+      }
+    Console(msg) => update_console_msg(dispatch, msg, model)
+    SettingsLoaded(notification_corner~, tree_layout~) =>
       (
-        @cmd.batch([
-          install_bridge(dispatch),
-          load_saved_settings(dispatch),
-          watch_transcript_scroll(dispatch),
-          watch_color_scheme(dispatch),
-          rotate_session(dispatch),
-        ]),
-        model,
-      )
-    BridgeReady =>
-      (
-        // The installed skills also feed the composer's `$` completion, so they
-        // are fetched on connect rather than only when the Skills page opens.
-        // The startup update check rides here too: settings (the channel)
-        // load synchronously at Init, so they are in by bridge time.
-        @cmd.batch([
-          fetch_sessions(dispatch),
-          fetch_installed_skills(dispatch),
-          fetch_archived(dispatch),
-          fetch_workspaces(dispatch),
-          check_for_updates(dispatch, model.update_channel, explicit=false),
-        ]),
+        @cmd.none,
         {
           ..model,
-          bridge: Connected,
-          // An unusable endpoint routes straight to Settings — the composer
-          // could do nothing anyway.
-          screen: if model.api_ready() {
-            model.screen
-          } else {
-            Settings
-          },
+          notification_corner: NotificationCorner::parse(notification_corner),
+          tree_layout: @fileeditor.TreeLayout::parse(tree_layout),
         },
       )
-    BridgeUnavailable(message) =>
-      (@cmd.none, { ..model, bridge: BridgeLost(message) })
-    SettingsLoaded(
+    // The host's settings, from the bridge-time `settings.get` or a peer's
+    // edit broadcast. Revisions order concurrent clients and RPC replies;
+    // while this page has optimistic writes, keep only the newest status and
+    // apply it once the last write settles.
+    LegacySettingsRead(
       provider~,
       custom_url~,
       api_key~,
       custom_api_key~,
       wsl_enabled~,
       wsl_distro~,
-      wsl_engine~,
-      notification_corner~,
-      tree_layout~,
-      update_channel~
-    ) => {
-      let next = {
-        ..model,
-        api_provider: ApiProvider::parse(provider),
-        custom_api_url: custom_url.trim().to_owned(),
-        api_key: api_key.trim().to_owned(),
-        custom_api_key: custom_api_key.trim().to_owned(),
-        wsl_enabled: wsl_enabled == "1",
-        wsl_distro: wsl_distro.trim().to_owned(),
-        wsl_engine: wsl_engine.trim().to_owned(),
-        notification_corner: NotificationCorner::parse(notification_corner),
-        tree_layout: @fileeditor.TreeLayout::parse(tree_layout),
-        update_channel: UpdateChannel::parse(update_channel),
-        setup_api_key: "",
+      wsl_engine~
+    ) =>
+      // Only the desktop window migrates: it is the one client whose stored
+      // values are unambiguously this host's. A browser page's copy may
+      // belong to a different device behind the same origin — pushing it is
+      // exactly the leak the host-side store removes — so it is purged.
+      if model.is_desktop {
+        let patch = legacy_settings_patch(
+          provider~,
+          custom_url~,
+          api_key~,
+          custom_api_key~,
+          wsl_enabled~,
+          wsl_distro~,
+          wsl_engine~,
+        )
+        // Mirror the pushed values optimistically so the Settings page and
+        // the ready gate reflect the migration immediately.
+        let next = {
+          ..model,
+          api_provider: ApiProvider::parse(provider),
+          custom_api_url: custom_url.trim().to_owned(),
+          deepseek_key_saved: model.deepseek_key_saved ||
+          !api_key.trim().is_empty(),
+          custom_key_saved: model.custom_key_saved ||
+          !custom_api_key.trim().is_empty(),
+          wsl_enabled: wsl_enabled == "1",
+          wsl_distro: wsl_distro.trim().to_owned(),
+          wsl_engine: wsl_engine.trim().to_owned(),
+          settings_saves: model.settings_saves + 1,
+          legacy_cleanup_pending: true,
+        }
+        (
+          push_host_settings(
+            dispatch,
+            model.focused,
+            patch,
+            model.focused_connection_generation(),
+            cleans_legacy=true,
+          ),
+          next,
+        )
+      } else {
+        (clear_legacy_engine_settings(), model)
       }
-      // The default provider needs no setup, so the Settings page only takes
-      // over when the stored settings are incomplete (official endpoint
-      // without a key, custom endpoint without a URL).
-      (
-        @cmd.none,
-        {
-          ..next,
-          screen: if next.api_ready() {
-            next.screen
-          } else {
-            Settings
-          },
-        },
-      )
-    }
     TaskChanged(value) => {
-      let session = model.active().session_id
+      let owner : @interop.ConversationKey = {
+        channel: model.focused,
+        session: model.active().session_id,
+      }
       (
-        symbol_fetch_cmd(dispatch, model, value, session),
+        symbol_fetch_cmd(dispatch, model, value, owner),
         {
           ..model.replace_conversation({ ..model.active(), task: value }),
           completion: compute_completion(
             value,
             model.installed_skills,
             model.symbol_cache,
-            session,
+            owner,
           ),
         },
       )
@@ -730,32 +1139,60 @@ fn update_msg(
       } else {
         (@cmd.none, { ..model, completion: None })
       }
-    SymbolsLoaded(session~, query~, items~) =>
-      apply_symbol_reply(model, session, query, items)
+    SymbolsLoaded(owner~, query~, items~) =>
+      apply_symbol_reply(model, owner, query, items)
     // A failed search reads as "no symbols": cache an empty result for the
     // query so the menu settles on "No symbols" rather than spinning.
-    SymbolsFailed(session~, query~) =>
-      apply_symbol_reply(model, session, query, [])
+    SymbolsFailed(owner~, query~) => apply_symbol_reply(model, owner, query, [])
     ModelChanged(value) => (@cmd.none, { ..model, selected_model: value })
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value })
     SetupApiKeyChanged(value) => (@cmd.none, { ..model, setup_api_key: value })
     ProviderChanged(value) => {
       let provider = ApiProvider::parse(value)
+      // A server switch can move the update channel with it; whatever the
+      // old channel's check said no longer applies.
+      let update_ux = if provider.update_channel() ==
+        model.api_provider.update_channel() {
+        model.update_ux
+      } else {
+        UpdateUnknown
+      }
       (
-        save_api_provider(provider),
-        { ..model, api_provider: provider, setup_api_key: "" },
+        push_host_settings(
+          dispatch,
+          model.focused,
+          provider_settings_patch(provider),
+          model.focused_connection_generation(),
+        ),
+        {
+          ..model,
+          api_provider: provider,
+          setup_api_key: "",
+          settings_saves: model.settings_saves + 1,
+          update_ux,
+        },
       )
     }
     CustomApiUrlChanged(value) =>
-      (save_custom_api_url(value), { ..model, custom_api_url: value })
-    WslModeChanged(value) => {
-      let enabled = value == "wsl"
-      (save_wsl_enabled(enabled), { ..model, wsl_enabled: enabled })
-    }
+      (
+        push_host_settings(
+          dispatch,
+          model.focused,
+          custom_url_settings_patch(value),
+          model.focused_connection_generation(),
+        ),
+        {
+          ..model,
+          custom_api_url: value,
+          settings_saves: model.settings_saves + 1,
+        },
+      )
+    WslModeChanged(value) =>
+      push_wsl_settings(dispatch, { ..model, wsl_enabled: value == "wsl" })
     WslDistroChanged(value) =>
-      (save_wsl_distro(value), { ..model, wsl_distro: value })
+      push_wsl_settings(dispatch, { ..model, wsl_distro: value })
     WslEngineChanged(value) =>
-      (save_wsl_engine(value), { ..model, wsl_engine: value })
+      push_wsl_settings(dispatch, { ..model, wsl_engine: value })
     NotificationCornerChanged(value) => {
       let corner = NotificationCorner::parse(value)
       (
@@ -781,15 +1218,42 @@ fn update_msg(
         @cmd.none,
         { ..model, notifications: model.notifications.filter(t => t.id != id) },
       )
-    UpdateChannelChanged(value) => {
-      let channel = UpdateChannel::parse(value)
-      // Whatever the old channel said no longer applies; the next check
-      // (Settings button or next launch) answers for the new one.
+    RemoteStatusLoaded(status) =>
+      (@cmd.none, { ..model, remote_access: Some(status) })
+    RemoteConnectClicked =>
+      // The flow blocks on a browser round-trip; a second click while one
+      // is pending would start a second loopback flow just to be refused.
+      if model.remote_connecting {
+        (@cmd.none, model)
+      } else {
+        (
+          connect_remote(dispatch),
+          { ..model, remote_connecting: true, remote_error: None },
+        )
+      }
+    RemoteConnectFinished(status) =>
       (
-        save_update_channel(channel),
-        { ..model, update_channel: channel, update_ux: UpdateUnknown },
+        @cmd.none,
+        {
+          ..model,
+          remote_access: Some(status),
+          remote_connecting: false,
+          remote_error: None,
+        },
       )
-    }
+    RemoteConnectFailed(message) =>
+      (
+        @cmd.none,
+        { ..model, remote_connecting: false, remote_error: Some(message) },
+      )
+    RemoteCancelClicked =>
+      // Fire-and-forget: the connect that is being cancelled reports back
+      // through its own reply, which is what clears the pending state.
+      (cancel_remote(dispatch), model)
+    RemoteDisconnectClicked =>
+      (disconnect_remote(dispatch), { ..model, remote_error: None })
+    RemoteDisconnectFailed(message) =>
+      (@cmd.none, { ..model, remote_error: Some(message) })
     CheckForUpdates =>
       // A user-initiated check; never stacks on an in-flight one, and never
       // interrupts a download already underway.
@@ -801,7 +1265,11 @@ fn update_msg(
         (@cmd.none, model)
       } else {
         (
-          check_for_updates(dispatch, model.update_channel, explicit=true),
+          check_for_updates(
+            dispatch,
+            model.api_provider.update_channel(),
+            explicit=true,
+          ),
           { ..model, update_ux: CheckingForUpdate },
         )
       }
@@ -894,7 +1362,7 @@ fn update_msg(
           (@cmd.none, { ..model, update_ux: ConfirmingRestart(version~) })
         } else {
           (
-            download_update(dispatch, model.update_channel),
+            download_update(dispatch, model.api_provider.update_channel()),
             { ..model, update_ux: DownloadingUpdate(version~) },
           )
         }
@@ -904,7 +1372,7 @@ fn update_msg(
     ConfirmUpdateRestart =>
       if model.update_ux is ConfirmingRestart(version~) {
         (
-          download_update(dispatch, model.update_channel),
+          download_update(dispatch, model.api_provider.update_channel()),
           { ..model, update_ux: DownloadingUpdate(version~) },
         )
       } else {
@@ -945,6 +1413,25 @@ fn update_msg(
     UpdateApplied => (close_window(), model)
     OpenSetup => (@cmd.none, { ..model, screen: Settings, setup_api_key: "" })
     ToggleSidebar => (@cmd.none, { ..model, sidebar_open: !model.sidebar_open })
+    ViewportResized(width~) => {
+      let narrow = width <= NarrowBreakpoint
+      // The embedded viewer only learns its host's size through layout(),
+      // so any resize while a document is up remeasures it — same-side
+      // resizes included (a rotation changes the host without crossing the
+      // breakpoint).
+      let cmd = if model.file_panel.open && model.file_panel.active is Some(_) {
+        @fileeditor.request_viewer_remeasure()
+      } else {
+        @cmd.none
+      }
+      if narrow == model.narrow {
+        (cmd, model)
+      } else {
+        // Crossing the breakpoint resets the sidebar to the new layout's
+        // default: an open column on wide, a closed drawer on narrow.
+        (cmd, { ..model, narrow, sidebar_open: !narrow })
+      }
+    }
     ToggleChatsSection =>
       (@cmd.none, { ..model, chats_collapsed: !model.chats_collapsed })
     ToggleWorkspacesSection =>
@@ -958,23 +1445,31 @@ fn update_msg(
         (@cmd.none, model)
       } else {
         match model.api_provider {
-          // Saving the key that completes the setup returns to the chat —
-          // the same auto-dismiss the popup used to have.
-          Deepseek => {
-            let next = { ..model, api_key, setup_api_key: "" }
+          // The key goes straight to the host's store; the mirror keeps
+          // only its presence. Saving the key that completes the setup
+          // returns to the chat — the same auto-dismiss the popup used to
+          // have — optimistically; a failed save comes back as a toast.
+          Deepseek | Custom as provider => {
+            let next = {
+              ..model,
+              deepseek_key_saved: model.deepseek_key_saved ||
+              provider is Deepseek,
+              custom_key_saved: model.custom_key_saved || provider is Custom,
+              setup_api_key: "",
+              settings_saves: model.settings_saves + 1,
+            }
             (
-              save_api_key(api_key),
+              push_host_settings(
+                dispatch,
+                model.focused,
+                api_key_settings_patch(provider, api_key),
+                model.focused_connection_generation(),
+              ),
               { ..next, screen: if next.api_ready() { Chat } else { Settings } },
             )
           }
-          Custom => {
-            let next = { ..model, custom_api_key: api_key, setup_api_key: "" }
-            (
-              save_custom_api_key(api_key),
-              { ..next, screen: if next.api_ready() { Chat } else { Settings } },
-            )
-          }
-          Openseek => (@cmd.none, { ..model, setup_api_key: "" })
+          Openseek | OpenseekStaging =>
+            (@cmd.none, { ..model, setup_api_key: "" })
         }
       }
     }
@@ -983,11 +1478,14 @@ fn update_msg(
       // failure); the installed list is cheap and refreshes on every open.
       let (catalog_cmd, skills_catalog) = match model.skills_catalog {
         CatalogIdle | CatalogFailed(_) =>
-          (fetch_skills_catalog(dispatch), CatalogLoading)
+          (fetch_skills_catalog(dispatch, model.focused), CatalogLoading)
         current => (@cmd.none, current)
       }
       (
-        @cmd.batch([catalog_cmd, fetch_installed_skills(dispatch)]),
+        @cmd.batch([
+          catalog_cmd,
+          fetch_installed_skills(dispatch, model.focused),
+        ]),
         { ..model, screen: Skills, skills_catalog, skills_notice: "" },
       )
     }
@@ -996,8 +1494,6 @@ fn update_msg(
       (@cmd.none, { ..model, skills_catalog: CatalogReady(items) })
     SkillsCatalogFailed(message) =>
       (@cmd.none, { ..model, skills_catalog: CatalogFailed(message) })
-    InstalledSkillsLoaded(items) =>
-      (@cmd.none, { ..model, installed_skills: items })
     SkillsNotice(message) => (@cmd.none, { ..model, skills_notice: message })
     InstallSkill(item) => {
       let key = @transcript.market_source_label(item)
@@ -1007,7 +1503,7 @@ fn update_msg(
         let skills_busy = model.skills_busy.copy()
         skills_busy.push(key)
         (
-          install_skill(dispatch, item),
+          install_skill(dispatch, model.focused, item),
           { ..model, skills_busy, skills_notice: "" },
         )
       }
@@ -1019,18 +1515,35 @@ fn update_msg(
         let skills_busy = model.skills_busy.copy()
         skills_busy.push(id)
         (
-          uninstall_skill(dispatch, id),
+          uninstall_skill(dispatch, model.focused, id),
           { ..model, skills_busy, skills_notice: "" },
         )
       }
-    SkillActionDone(key~, error~) => {
+    SkillActionDone(channel~, key~, error~) => {
       let skills_busy = model.skills_busy.filter(entry => entry != key)
       if error.is_empty() {
         // The library changed; what the panel shows must come from disk,
-        // not from a client-side guess.
-        (fetch_installed_skills(dispatch), { ..model, skills_busy, })
+        // not from a client-side guess. A result that outlived a focus
+        // switch belongs to its old host; that host will refetch when it is
+        // focused again.
+        if channel == model.focused {
+          (fetch_installed_skills(dispatch, channel), { ..model, skills_busy, })
+        } else {
+          (@cmd.none, { ..model, skills_busy, })
+        }
       } else {
-        (@cmd.none, { ..model, skills_busy, skills_notice: error })
+        (
+          @cmd.none,
+          {
+            ..model,
+            skills_busy,
+            skills_notice: if channel == model.focused {
+              error
+            } else {
+              model.skills_notice
+            },
+          },
+        )
       }
     }
     Send => {
@@ -1040,8 +1553,17 @@ fn update_msg(
       // context without an instruction and stay in the composer.
       let task = compose_prompt(conv.mentions, conv.task).trim().to_owned()
       if !conv.draft_sendable() ||
-        !(model.bridge is Connected) ||
+        !(model.bridge_state() is Connected) ||
         !model.api_ready() {
+        (@cmd.none, model)
+      } else if !(conv.sync is Synced) {
+        // A prompt or steer submitted while the durable frontier is unknown
+        // could make a delayed prior terminal look like this run's boundary.
+        // Keep the draft until the single-flight snapshot settles.
+        (@cmd.none, model)
+      } else if conv.has_unresolved_run_tail_notice() {
+        // The previous run's durable terminal is not proved yet. Starting or
+        // steering another run would make its later terminal ambiguous.
         (@cmd.none, model)
       } else if conv.is_running() {
         // Submitting while this conversation's turn runs steers it: the text
@@ -1050,21 +1572,32 @@ fn update_msg(
         // cannot be steered — the steer could outlive the dying turn in the
         // engine's queue and contaminate a later prompt — so the text stays
         // in the composer.
-        if conv.run is Open(run_id~, stage~) && !(stage is Cancelling) {
-          let pending_steers = conv.pending_steers.copy()
-          pending_steers.push(task)
+        if conv.run is Open(run_id~, stage~) &&
+          !(stage is Cancelling) &&
+          conv.run_durable_floor is Some(_) {
+          let (model, submission_id) = model.allocate_submission_id()
+          let conv = conv.enqueue_input(
+            SteerInput,
+            submission_id,
+            Some(run_id),
+            task,
+            conv.task,
+            conv.mentions,
+          )
           (
             @cmd.batch([
-              steer_openseek(dispatch, conv.session_id, task, run_id),
+              steer_openseek(
+                dispatch,
+                model.focused,
+                conv.session_id,
+                submission_id,
+                task,
+                run_id,
+              ),
               scroll_transcript_after_render(),
             ]),
             {
-              ..model.replace_conversation({
-                ..conv,
-                pending_steers,
-                task: "",
-                mentions: [],
-              }),
+              ..model.replace_conversation({ ..conv, task: "", mentions: [] }),
               transcript_pinned: true,
               completion: None,
             },
@@ -1082,28 +1615,38 @@ fn update_msg(
         // compaction settles.
         (@cmd.none, model)
       } else {
-        let next = conv.append_item(User, task)
+        let (model, submission_id) = model.allocate_submission_id()
+        let conv = conv.enqueue_input(
+          InitialPrompt,
+          submission_id,
+          None,
+          task,
+          conv.task,
+          conv.mentions,
+        )
         let next = {
-          ..next,
+          ..conv,
           task: "",
           mentions: [],
-          run: Starting,
+          run: Starting(submission_id~),
+          // The store may have advanced through an external CLI while this
+          // page was idle. Only the real Started seam's causal snapshot may
+          // establish this run's predecessor terminal floor.
+          run_durable_floor: None,
+          run_floor_generation: None,
           usage_tokens: 0,
         }
         (
           @cmd.batch([
             start_openseek(
               dispatch,
+              model.focused,
               task,
+              submission_id,
               model.selected_model,
               model.max_steps,
-              model.effective_api_key(),
-              model.effective_api_url(),
               conv.session_id,
               workspace=conv.workspace,
-              wsl_enabled=model.wsl_active(),
-              wsl_distro=model.wsl_distro,
-              wsl_engine=model.wsl_engine,
             ),
             scroll_transcript_after_render(),
           ]),
@@ -1117,29 +1660,11 @@ fn update_msg(
         )
       }
     }
-    SteerUndelivered(session~, text~) =>
-      // The steer never reached the engine, so no `steer_applied` /
-      // `steer_dropped` event will settle it — report the loss here instead.
-      if model.find_conversation(session) is Some(conv) {
-        let settled = conv.settle_pending_steer(text)
-        if settled.pending_steers.length() == conv.pending_steers.length() {
-          (@cmd.none, model)
-        } else {
-          (
-            scroll_if_active(model, session),
-            model.replace_conversation(
-              settled.append_item(Assistant(true), steer_dropped_notice(text)),
-            ),
-          )
-        }
-      } else {
-        (@cmd.none, model)
-      }
     Stop => {
       let conv = model.active()
       if conv.run is Open(run_id~, ..) {
         (
-          cancel_openseek(dispatch, run_id),
+          cancel_openseek(dispatch, model.focused, run_id),
           model.replace_conversation({
             ..conv,
             run: Open(run_id~, stage=Cancelling),
@@ -1153,32 +1678,45 @@ fn update_msg(
       // A fresh conversation can start at any time: the current one keeps
       // running in the background and stays one sidebar click away. It lands
       // in the active workspace — the one the on-screen conversation uses.
-      (rotate_session(dispatch), { ..model, loading_session: "" })
-    NewChatIn(workspace) =>
+      (
+        rotate_session(dispatch, model.focused),
+        { ..model, loading_conversation: None },
+      )
+    NewChatIn(channel, workspace) => {
       // A workspace section's own "new chat": the fresh conversation lands in
       // that project, and the workspace stays active for the next one. A new
       // loose chat unfolds the Chats section so its row is visible; a new
       // workspace chat unfolds the Workspaces section for the same reason.
+      // On the console, another device's ＋ first moves focus there.
+      let (focus_cmd, model) = focus_channel(dispatch, model, channel)
       (
-        rotate_session(dispatch),
+        @cmd.batch([focus_cmd, rotate_session(dispatch, channel)]),
         {
-          ..model,
-          active_workspace: workspace,
-          loading_session: "",
+          ..model.with_active_workspace(workspace),
+          loading_conversation: None,
           chats_collapsed: model.chats_collapsed && !workspace.is_empty(),
           workspaces_collapsed: model.workspaces_collapsed &&
           workspace.is_empty(),
         },
       )
-    SessionRotated(session_id) => {
-      let activated = model.activate(session_id)
+    }
+    SessionRotated(owner) => {
+      // A delayed rotation is owned by the channel that requested it. A focus
+      // switch overtakes it; activating the old owner's id here would yank the
+      // user back to the host they already left.
+      guard owner.channel == model.focused &&
+        model.device_state(owner.channel) is Some(dev) else {
+        return (@cmd.none, model)
+      }
+      let activated = model.activate(owner.channel, owner.session)
       // A rotation creates the conversation, so stamp it with the workspace
       // it was asked into; an existing conversation keeps its own.
       let conversations = activated.conversations.map(conv => {
-        if conv.session_id == session_id &&
+        if conv.device == owner.channel &&
+          conv.session_id == owner.session &&
           conv.messages.length() == 0 &&
           !conv.is_running() {
-          { ..conv, workspace: workspace_root(model.active_workspace) }
+          { ..conv, workspace: workspace_root(dev.active_workspace) }
         } else {
           conv
         }
@@ -1190,188 +1728,177 @@ fn update_msg(
           conversations,
           screen: Chat,
           transcript_pinned: true,
-          loading_session: "",
+          loading_conversation: None,
           completion: None,
         },
       )
     }
-    SessionsLoaded(items) => {
-      // A page reload can rediscover an active run before its session list
-      // arrives. Reconcile that background conversation with the store's
-      // workspace grouping once the list catches up.
-      let conversations = model.conversations.map(conv => {
-        if conv.workspace is Some(_) {
-          conv
-        } else {
-          let mut workspace : @pathx.Absolute? = None
-          for item in items {
-            if item.id == conv.session_id {
-              workspace = workspace_root(item.workspace)
-              break
-            }
-          }
-          { ..conv, workspace, }
-        }
-      })
-      (@cmd.none, { ..model, sessions: items, conversations })
-    }
-    WorkspacesLoaded(paths) => {
-      // A workspace that vanished from the registry cannot host runs anymore;
-      // conversations attached to it fall back to the default store so their
-      // next start does not error on an unregistered path.
-      let conversations = model.conversations.map(conv => {
-        if conv.workspace is Some(workspace) && !paths.contains(workspace.0) {
-          { ..conv, workspace: None }
-        } else {
-          conv
-        }
-      })
-      let active_workspace = if model.active_workspace.is_empty() ||
-        paths.contains(model.active_workspace) {
-        model.active_workspace
-      } else {
-        ""
-      }
+    PickWorkspace(channel) => {
+      // The picker registers its pick on the focused device, so focus moves
+      // first; the later navigate/confirm messages then follow `focused`.
+      let (focus_cmd, model) = focus_channel(dispatch, model, channel)
+      let picker = opening_workspace_picker()
       (
-        @cmd.none,
-        { ..model, workspaces: paths, conversations, active_workspace },
+        @cmd.batch([
+          focus_cmd,
+          browse_directory(dispatch, channel, "", generation=picker.generation),
+        ]),
+        { ..model, workspace_picker: Some(picker) },
       )
     }
-    PickWorkspace => (pick_workspace(dispatch), model)
-    OpenWorkspaceInput => (@cmd.none, { ..model, workspace_input: Some("") })
-    ToggleWorkspaceInput =>
+    WorkspacePickerNavigate(path) =>
+      match model.workspace_picker {
+        Some(picker) => {
+          let generation = picker.generation + 1
+          (
+            browse_directory(dispatch, model.focused, path, generation~),
+            {
+              ..model,
+              workspace_picker: Some({ ..picker, loading: true, generation }),
+            },
+          )
+        }
+        None => (@cmd.none, model)
+      }
+    WorkspacePickerLoaded(path~, entries~, generation~) =>
+      // A listing for a picker the user already closed — or one answering
+      // a navigation that has since been superseded — is dropped. The
+      // go-to field clears on arrival: the breadcrumb shows the location,
+      // and the field is for typing the next jump.
+      match model.workspace_picker {
+        Some(picker) if picker.generation == generation =>
+          (
+            @cmd.none,
+            {
+              ..model,
+              workspace_picker: Some({
+                path,
+                entries,
+                input: "",
+                loading: false,
+                error: None,
+                generation,
+              }),
+            },
+          )
+        _ => (@cmd.none, model)
+      }
+    WorkspacePickerFailed(message~, generation~) =>
+      match model.workspace_picker {
+        Some(picker) if picker.generation == generation =>
+          (
+            @cmd.none,
+            {
+              ..model,
+              workspace_picker: Some({
+                ..picker,
+                loading: false,
+                error: Some(message),
+              }),
+            },
+          )
+        _ => (@cmd.none, model)
+      }
+    WorkspacePickerInput(text) =>
+      match model.workspace_picker {
+        Some(picker) =>
+          (
+            @cmd.none,
+            { ..model, workspace_picker: Some({ ..picker, input: text }) },
+          )
+        None => (@cmd.none, model)
+      }
+    WorkspacePickerConfirm =>
+      match model.workspace_picker {
+        // Confirm registers the directory the host last listed — always
+        // something it confirmed exists — never raw field text; Enter in
+        // the field navigates (and validates) first.
+        Some(picker) if !picker.path.is_empty() =>
+          (
+            add_workspace(dispatch, model.focused, picker.path),
+            { ..model, workspace_picker: None },
+          )
+        _ => (@cmd.none, model)
+      }
+    WorkspacePickerClose => (@cmd.none, { ..model, workspace_picker: None })
+    RemoveWorkspace(channel, path) =>
+      (remove_workspace(dispatch, channel, path), model)
+    ArchiveSession(channel, session_id) => {
+      // Archiving acts on the row's own device and never moves focus.
+      guard model.device_state(channel) is Some(dev) else {
+        return (@cmd.none, model)
+      }
+      let sessions_request_generation = dev.sessions_request_generation + 1
+      let archived_request_generation = dev.archived_request_generation + 1
       (
-        @cmd.none,
-        {
-          ..model,
-          workspace_input: if model.workspace_input is Some(_) {
-            None
-          } else {
-            Some("")
-          },
-        },
+        archive_session(
+          dispatch,
+          channel,
+          session_id,
+          dev.connection_generation,
+          sessions_request_generation,
+          archived_request_generation,
+        ),
+        model.replace_device({
+          ..dev,
+          sessions_request_generation,
+          archived_request_generation,
+        }),
       )
-    WorkspaceInput(text) =>
-      (@cmd.none, { ..model, workspace_input: Some(text) })
-    AddWorkspace => {
-      let path = model.workspace_input.unwrap_or("").trim().to_owned()
-      if path.is_empty() {
-        (@cmd.none, model)
-      } else {
-        (add_workspace(dispatch, path), { ..model, workspace_input: None })
-      }
     }
-    RemoveWorkspace(path) => (remove_workspace(dispatch, path), model)
-    WorkspaceFailed(message) =>
-      model.notify_error(dispatch, "Workspace error: \{message}")
-    ArchiveSession(session_id) => (archive_session(dispatch, session_id), model)
-    UnarchiveSession(session_id) =>
-      (unarchive_session(dispatch, session_id), model)
-    ArchivedLoaded(items) => {
-      // Live client state for anything archived is dropped; when that
-      // includes the conversation on screen, rotate to a fresh chat.
-      let archived_now = (id : String) => {
-        items.iter().any(item => item.id == id)
+    UnarchiveSession(channel, session_id) => {
+      guard model.device_state(channel) is Some(dev) else {
+        return (@cmd.none, model)
       }
-      let conversations = model.conversations.filter(conv => {
-        !archived_now(conv.session_id)
-      })
-      let next = { ..model, archived: items, conversations }
-      if archived_now(model.active_session) {
-        (rotate_session(dispatch), { ..next, loading_session: "" })
-      } else {
-        (@cmd.none, next)
-      }
+      let sessions_request_generation = dev.sessions_request_generation + 1
+      let archived_request_generation = dev.archived_request_generation + 1
+      (
+        unarchive_session(
+          dispatch,
+          channel,
+          session_id,
+          dev.connection_generation,
+          sessions_request_generation,
+          archived_request_generation,
+        ),
+        model.replace_device({
+          ..dev,
+          sessions_request_generation,
+          archived_request_generation,
+        }),
+      )
     }
-    ArchiveFailed(message) =>
-      model.notify_error(dispatch, "Archive failed: \{message}")
-    SessionsFailed(message) =>
-      model.notify_error(dispatch, "Session list unavailable: \{message}")
     NotificationClicked(run_id~) => {
       // The run has finished by the time its notification is clicked, so the
       // owner usually matches by last run id; a still-running owner (steered
       // runs re-notify per turn) matches by active run.
-      let conv = if model.conversation_by_last_run(run_id) is Some(conv) {
+      let conv = if model.conversation_by_last_run(model.focused, run_id)
+        is Some(conv) {
         Some(conv)
       } else {
-        model.conversation_by_run(run_id)
+        model.conversation_by_run(model.focused, run_id)
       }
       if conv is Some(conv) {
-        update_msg(dispatch, OpenSession(conv.session_id), model)
+        update_msg(dispatch, OpenSession(conv.device, conv.session_id), model)
       } else {
         (@cmd.none, model)
       }
     }
-    OpenSession(session_id) =>
+    OpenSession(channel, session_id) =>
       // Selecting a conversation always returns to the chat — including
-      // re-selecting the active one from the Skills page.
+      // re-selecting the active one from the Skills page. On the console a
+      // click in another device's group is also the focus switch: the
+      // focused-scoped mirrors refetch, then the open runs on that channel.
       if session_id.is_empty() {
         (@cmd.none, model)
-      } else if session_id == model.active_session {
-        (
-          @cmd.none,
-          { ..model, screen: Chat, loading_session: "", completion: None },
-        )
-      } else if model.find_conversation(session_id) is Some(conv) {
-        // The conversation already has live client state — it may well still
-        // be running — so switching is just a change of focus. A switch lands
-        // at the new conversation's tail, so the transcript re-pins.
-        (
-          scroll_transcript_after_render(),
-          {
-            ..model.activate(session_id),
-            screen: Chat,
-            transcript_pinned: true,
-            loading_session: "",
-            completion: None,
-            active_workspace: workspace_token(conv.workspace),
-          },
-        )
       } else {
-        // The sidebar item says which store holds the session; opening it
-        // also makes its workspace the active one, so "New chat" follows.
-        let workspace = model.session_workspace(session_id)
-        (
-          open_session(dispatch, session_id, workspace~),
-          {
-            ..model,
-            screen: Chat,
-            loading_session: session_id,
-            active_workspace: workspace,
-          },
-        )
-      }
-    SessionLoaded(session=session_id, items~) =>
-      if model.loading_session != session_id {
-        (@cmd.none, model)
-      } else if model.find_conversation(session_id) is Some(conv) &&
-        conv.is_running() {
-        // A run that started in this conversation while the load was in flight
-        // wins; dropping the reply keeps the live state intact.
-        (@cmd.none, { ..model, loading_session: "" })
-      } else {
-        (
-          // The host derives the resumed workspace from the session id, so
-          // the branch probe sends no cwd.
-          @cmd.batch([
-            scroll_transcript_after_render(),
-            fetch_branch(dispatch, session_id, None),
-          ]),
-          {
-            ..model
-            .replace_conversation({
-              ..empty_conversation(
-                session_id,
-                workspace=model.session_workspace(session_id),
-              ),
-              messages: items,
-            })
-            .activate(session_id),
-            transcript_pinned: true,
-            loading_session: "",
-            completion: None,
-          },
-        )
+        // A row click that raced its device's removal has nowhere to go.
+        guard model.device_state(channel) is Some(_) else {
+          return (@cmd.none, model)
+        }
+        let (focus_cmd, model) = focus_channel(dispatch, model, channel)
+        let (cmd, model) = open_session_on(dispatch, channel, model, session_id)
+        (@cmd.batch([focus_cmd, cmd]), model)
       }
     TranscriptPinned(pinned) =>
       (@cmd.none, { ..model, transcript_pinned: pinned })
@@ -1380,26 +1907,23 @@ fn update_msg(
     JumpToLatest =>
       (scroll_transcript_after_render(), { ..model, transcript_pinned: true })
     ColorSchemeChanged(dark) => (@cmd.none, { ..model, dark_mode: dark })
-    BranchLoaded(session~, branch~) =>
-      if model.find_conversation(session) is Some(conv) {
-        (@cmd.none, model.replace_conversation({ ..conv, branch, }))
-      } else {
-        (@cmd.none, model)
-      }
     OpenFile(path) => {
       // A relative path is taken against the active conversation's working
       // directory: its `cwd` for a live run, or — when resumed without one —
       // the directory the host derives from the session id. Absolute paths
       // open directly. No workspace containment — the agent surfaced it.
       let conv = model.active()
-      (open_file(dispatch, conv.session_id, cwd=conv.cwd, path), model)
+      (
+        open_file(dispatch, model.focused, conv.session_id, cwd=conv.cwd, path),
+        model,
+      )
     }
     ToggleLauncher => {
       let opening = !model.launcher.open
       // Probe the host the first time the menu opens (and again after a
       // failure); the result is kept for the app run.
       let cmd = if opening && !(model.launcher.apps is AppsFetched(_)) {
-        fetch_apps(dispatch)
+        fetch_apps(dispatch, model.focused)
       } else {
         @cmd.none
       }
@@ -1418,26 +1942,975 @@ fn update_msg(
     LaunchApp(app) => {
       let conv = model.active()
       (
-        launch_app(dispatch, conv.session_id, cwd=conv.cwd, app),
+        launch_app(dispatch, model.focused, conv.session_id, cwd=conv.cwd, app),
         { ..model, launcher: { ..model.launcher, open: false } },
       )
     }
-    Started(run_id~, session~, model=selected_model, max_steps~, cwd~) => {
-      // A normal start already has a local conversation. A replay after a full
-      // page reload does not: recreate it as a background conversation so the
-      // run id can route subsequent stream and finish events without stealing
-      // focus from the fresh chat currently on screen.
-      let conv = model
-        .find_conversation(session)
-        .unwrap_or(
+    FileEditor(msg) => {
+      let (cmd, panel) = @fileeditor.update(
+        dispatch.map(msg => FileEditor(msg)),
+        msg,
+        model.file_panel,
+        file_ctx(model),
+      )
+      (cmd, { ..model, file_panel: panel })
+    }
+    HostActionFailed(message) => model.notify_error(dispatch, message)
+    ExternalLinkClicked(url) => (open_external_link(dispatch, url), model)
+    FromDevice(channel, msg) => update_device_msg(dispatch, channel, msg, model)
+  }
+}
+
+///|
+/// One device channel's messages — its connection lifecycle, its
+/// notification stream, and every generation-fenced reply. The arms are
+/// the same handlers `update_msg` held before the channel split; `channel`
+/// names the device the message came from.
+fn update_device_msg(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  msg : DeviceMsg,
+  model : Model,
+) -> (@cmd.Cmd, Model) {
+  guard model.device_state(channel) is Some(dev) else {
+    return (@cmd.none, model)
+  }
+  match msg {
+    InstalledSkillsLoaded(items) =>
+      if channel == model.focused {
+        (@cmd.none, { ..model, installed_skills: items })
+      } else {
+        (@cmd.none, model)
+      }
+    InstalledSkillsFailed(message) =>
+      if channel == model.focused {
+        (@cmd.none, { ..model, skills_notice: message })
+      } else {
+        (@cmd.none, model)
+      }
+    SkillsChanged =>
+      if channel == model.focused {
+        (fetch_installed_skills(dispatch, channel), model)
+      } else {
+        // `installed_skills` is the focused host's mirror. A background
+        // device is refreshed when focus moves to it.
+        (@cmd.none, model)
+      }
+    BridgeReady => {
+      let connection_generation = dev.connection_generation + 1
+      let sessions_request_generation = dev.sessions_request_generation + 1
+      let archived_request_generation = dev.archived_request_generation + 1
+      let workspaces_request_generation = dev.workspaces_request_generation + 1
+      // Capture the exact per-session lifecycle frontier before issuing the
+      // unversioned runs snapshot. A live Started or Finished received before
+      // its reply then wins over both stale positive rows and stale absence.
+      let run_frontier = model.run_snapshot_frontier(channel)
+      let commands = [
+        fetch_sessions(
+          dispatch, channel, connection_generation, sessions_request_generation,
+        ),
+        // In-flight runs, so a page that joined (or reconnected) mid-run
+        // learns each live run's identity — the resync half of the
+        // protocol's reconnect story (docs/remote-protocol.md).
+        fetch_runs(dispatch, channel, run_frontier, connection_generation),
+        fetch_archived(
+          dispatch, channel, connection_generation, archived_request_generation,
+        ),
+        fetch_workspaces(
+          dispatch, channel, connection_generation, workspaces_request_generation,
+        ),
+      ]
+      // The focused-scoped half: the host-settings mirror, host meta, and
+      // the installed skills (they feed the composer's `$` completion, so
+      // they load on connect rather than when the Skills page opens) follow
+      // the device the UI acts on — always this one while the app runs a
+      // single channel.
+      if channel == model.focused {
+        commands.push(fetch_host_meta(dispatch, channel))
+        commands.push(
+          fetch_host_settings(dispatch, channel, connection_generation),
+        )
+        // Legacy client-stored engine settings: the desktop migrates them
+        // up to the host, a browser purges them (see `LegacySettingsRead`).
+        commands.push(read_legacy_engine_settings(dispatch))
+        commands.push(fetch_installed_skills(dispatch, channel))
+        // Self-update and the relay sign-in are the desktop window's alone
+        // (see `is_desktop`); a browser never checks, so neither UI
+        // materializes there. The startup update check rides here: settings
+        // (the update channel) load synchronously at Init, so they are in by
+        // bridge time.
+        if model.is_desktop {
+          commands.push(
+            check_for_updates(
+              dispatch,
+              model.api_provider.update_channel(),
+              explicit=false,
+            ),
+          )
+          commands.push(fetch_remote_status(dispatch))
+        }
+      }
+      // Delta streams are not replayable across a connection boundary; keep
+      // none of the pre-gap fragment, or the first post-gap delta would splice
+      // onto stale text. Compaction has no wire resync in this protocol: an
+      // local queued/requested/in-flight marker is released here so a missed
+      // terminal event cannot disable Send forever. Any receipt still pending
+      // at this boundary becomes truthful `delivery unconfirmed` state; an
+      // exact late id can still retract it. If the host still compacts, its
+      // next prompt rejection is a transient, visible local failure.
+      let reconnect_snapshot_generation = model.transcript_request_generation +
+        1
+      let conversations = model.conversations.map(conv => {
+        if conv.device == channel {
+          {
+            ..conv
+            .clear_streams()
+            .mark_awaiting_inputs_unconfirmed(
+              snapshot_generation=reconnect_snapshot_generation,
+            ),
+            compaction: NotCompacting,
+          }
+        } else {
+          conv
+        }
+      })
+      let model = model.replace_device({
+        ..dev,
+        bridge: Connected,
+        reconnect_failures: 0,
+        connection_generation,
+        sessions_request_generation,
+        archived_request_generation,
+        workspaces_request_generation,
+        archive_overrides: [],
+      })
+      // Replies from writes issued on the dead bridge carry their captured
+      // generation and are ignored below. The new host may have restarted
+      // its in-memory settings revision, so its first authoritative status
+      // starts a fresh monotonic round. Focused-scoped, like the fetches
+      // that repopulate the mirror.
+      let model = if channel == model.focused {
+        {
+          ..model,
+          conversations,
+          settings_saves: 0,
+          host_settings_revision: -1,
+          deferred_host_settings: None,
+          legacy_cleanup_pending: false,
+        }
+      } else {
+        { ..model, conversations, }
+      }
+      // The resync's other half: whatever landed while this client was away
+      // (another client's prompts, items a still-running turn completed, a
+      // finished run's verdict) exists only in the store. Reads happen
+      // exactly where this client was absent: the conversation on screen
+      // re-reads now, every other one re-reads when opened (`OpenSession`
+      // always reloads). An in-flight user load keeps right of way.
+      let model = if channel == model.focused {
+        match model.find_conversation(channel, model.active_session) {
+          Some(conv) if (
+              model.can_reload_transcript(conv) || conv.sync is Reloading(..)
+            ) &&
+            model.loading_conversation is None => {
+            // A real engine pump can restart while the transport remains
+            // open. If an older read is already in flight, it may carry a
+            // pre-ready cut, so require one follow-up generation rather than
+            // treating the old single-flight request as sufficient.
+            let (model, generation) = model.ensure_transcript_reload_after_current(
+              conv,
+            )
+            if generation is Some(generation) {
+              commands.push(
+                session_snapshot_command(
+                  dispatch,
+                  channel,
+                  model,
+                  conv.session_id,
+                  generation,
+                  false,
+                ),
+              )
+            }
+            model
+          }
+          _ => model
+        }
+      } else {
+        model
+      }
+      guard channel == model.focused else {
+        return (@cmd.batch(commands), model)
+      }
+      (
+        @cmd.batch(commands),
+        {
+          ..model
+          // The host this bridge just (re)connected to may be a fresh
+          // process with no filesystem watcher; forgetting what was watched
+          // makes the post-dispatch panel sync re-issue `fs.watch` instead
+          // of reading the stale record as "already placed".
+          ,
+          file_panel: { ..model.file_panel, watching: None },
+          // An unusable endpoint routes straight to Settings — the composer
+          // could do nothing anyway.
+          screen: if model.api_ready() {
+            model.screen
+          } else {
+            Settings
+          },
+        },
+      )
+    }
+    HostMetaLoaded(wsl~) => {
+      // `host_wsl` mirrors the focused host; a reply that outlived a focus
+      // switch (or arrived for a background device) must not clobber it.
+      guard channel == model.focused else { return (@cmd.none, model) }
+      (@cmd.none, { ..model, host_wsl: wsl })
+    }
+    BridgeUnavailable(message) =>
+      (@cmd.none, model.replace_device({ ..dev, bridge: BridgeLost(message) }))
+    ChannelDown => {
+      // Count the loss and schedule the next attempt. Because the attempt
+      // comes back through this function, a device removed meanwhile fails
+      // the `device_state` guard above and its loop simply ends.
+      let failures = dev.reconnect_failures + 1
+      let bridge = if failures == WsLostAfter {
+        BridgeLost(
+          "Can't reach OpenSeek. Make sure OpenSeek is running, then reopen this page.",
+        )
+      } else {
+        dev.bridge
+      }
+      (
+        @cmd.delay(
+          dispatch(FromDevice(channel, ReconnectDue)),
+          reconnect_delay(failures),
+        ),
+        model.replace_device({ ..dev, bridge, reconnect_failures: failures }),
+      )
+    }
+    ReconnectDue => {
+      guard channel is Remote(device) else { return (@cmd.none, model) }
+      (connect_ws(dispatch, device), model)
+    }
+    FilePanel(msg) => {
+      // The file panel serves the focused conversation; a background
+      // device's fs/diagnostics noise must not re-stat or redraw it.
+      guard channel == model.focused else { return (@cmd.none, model) }
+      update_msg(dispatch, FileEditor(msg), model)
+    }
+    HostSettingsLoaded(settings, connection_generation~) => {
+      guard connection_generation is None ||
+        connection_generation == Some(dev.connection_generation) else {
+        return (@cmd.none, model)
+      }
+      // The settings mirror is the focused host's. A generation-carrying
+      // reply is only ever requested for the focused channel, but the
+      // `settings.changed` broadcast (generation None) arrives from every
+      // connected device — a background device's edit must not clobber the
+      // form. A focus switch refetches, so nothing is lost.
+      guard channel == model.focused else { return (@cmd.none, model) }
+      if settings.revision < model.host_settings_revision {
+        (@cmd.none, model)
+      } else if model.settings_saves > 0 {
+        (@cmd.none, model.defer_host_settings(settings))
+      } else {
+        (@cmd.none, model.apply_host_settings(settings))
+      }
+    }
+    HostSettingsApplied(settings, connection_generation~, cleans_legacy~) => {
+      guard connection_generation == dev.connection_generation else {
+        return (@cmd.none, model)
+      }
+      // A save issued on the old focus may settle after the user switches
+      // devices. Its revision and localStorage cleanup belong to that old
+      // host and must not alter the newly focused host's mirror.
+      guard channel == model.focused else { return (@cmd.none, model) }
+      let next = {
+        ..model,
+        settings_saves: if model.settings_saves > 0 {
+          model.settings_saves - 1
+        } else {
+          0
+        },
+      }.defer_host_settings(settings)
+      // The migration's secrets leave localStorage only once the host
+      // confirmed it holds them.
+      let cleanup = if cleans_legacy && next.legacy_cleanup_pending {
+        clear_legacy_engine_settings()
+      } else {
+        @cmd.none
+      }
+      let next = if cleans_legacy {
+        { ..next, legacy_cleanup_pending: false }
+      } else {
+        next
+      }
+      (
+        cleanup,
+        if next.settings_saves > 0 {
+          next
+        } else {
+          next.flush_host_settings()
+        },
+      )
+    }
+    HostSettingsSaveFailed(message, connection_generation~, cleans_legacy~) => {
+      guard connection_generation == dev.connection_generation else {
+        return (@cmd.none, model)
+      }
+      guard channel == model.focused else { return (@cmd.none, model) }
+      let next = {
+        ..model,
+        settings_saves: if model.settings_saves > 0 {
+          model.settings_saves - 1
+        } else {
+          0
+        },
+        // The push never landed; the legacy values stay in localStorage for
+        // the next launch's retry.
+        legacy_cleanup_pending: if cleans_legacy {
+          false
+        } else {
+          model.legacy_cleanup_pending
+        },
+      }
+      let next = if next.settings_saves == 0 {
+        next.flush_host_settings()
+      } else {
+        next
+      }
+      let (notice, notified) = next.notify_error(
+        dispatch,
+        "Saving settings failed: \{message}",
+      )
+      let commands = [notice]
+      if next.settings_saves == 0 {
+        // No successful reply may follow to correct the optimistic form.
+        // An authoritative get (same-revision statuses are accepted) restores
+        // host truth after a definite or ambiguous write failure.
+        commands.push(
+          fetch_host_settings(dispatch, channel, dev.connection_generation),
+        )
+      }
+      (@cmd.batch(commands), notified)
+    }
+    SteerUndelivered(session~, submission_id~, text~, run_id~) =>
+      // The response path failed, but the host may have accepted the steer;
+      // keep its exact-id ledger entry and let only a late id-bearing receipt
+      // retract the truthful unconfirmed notice.
+      if model.find_conversation(channel, session) is Some(conv) {
+        let changed = conv.input_ledger
+          .iter()
+          .any(input => {
+            input.submission_id == submission_id &&
+            input.kind is SteerInput &&
+            input.run_id is Some(owner) &&
+            owner == run_id &&
+            input.state is Awaiting
+          })
+        let (next, _) = if changed {
+          conv.mark_submission_unconfirmed(
+            submission_id,
+            steer_unconfirmed_notice(text),
+            false,
+          )
+        } else {
+          (conv, false)
+        }
+        if !changed {
+          (@cmd.none, model)
+        } else {
+          (
+            scroll_if_active(model, channel, session),
+            model.replace_conversation(next),
+          )
+        }
+      } else {
+        (@cmd.none, model)
+      }
+    SteerRejected(session~, submission_id~, text~, run_id~) =>
+      // A concrete `steered:false` cannot later commit. Retire the ledger entry
+      // and restore its exact draft; a later same-text submission is unrelated.
+      if model.find_conversation(channel, session) is Some(conv) {
+        let (next, removed) = conv.reject_submission(
+          submission_id,
+          SteerInput,
+          Some(run_id),
+          steer_dropped_notice(text),
+        )
+        if removed {
+          (
+            scroll_if_active(model, channel, session),
+            model.replace_conversation(next),
+          )
+        } else {
+          (@cmd.none, model)
+        }
+      } else {
+        (@cmd.none, model)
+      }
+    SessionsLoaded(items, connection_generation~, request_generation~) => {
+      guard connection_generation == dev.connection_generation &&
+        request_generation == dev.sessions_request_generation else {
+        return (@cmd.none, model)
+      }
+      // Whole-list replies have no store revision. An identity notification
+      // delivered after this request was issued wins for its session: remove
+      // newly archived rows and retain newly unarchived rows from the current
+      // model when the stale reply omitted them.
+      let items = items.filter(item => {
+        !(dev.archive_override(item.id) is Some(true))
+      })
+      for fact in dev.archive_overrides {
+        if !fact.archived && !items.iter().any(item => item.id == fact.session) {
+          for current in dev.sessions {
+            if current.id == fact.session {
+              items.push(current)
+            }
+          }
+        }
+      }
+      // A commit or Started broadcast can materialize a conversation before
+      // session.list tells this page which durable store owns it. Reconcile
+      // that provisional placement from the list before any later send: an
+      // empty workspace hint here would otherwise fork the same session into
+      // the default store.
+      let conversations = model.conversations.map(conv => {
+        if conv.device == channel {
+          let mut workspace = conv.workspace
+          for item in items {
+            if item.id == conv.session_id {
+              workspace = workspace_root(item.workspace)
+            }
+          }
+          { ..conv, workspace, }
+        } else {
+          conv
+        }
+      })
+      let mut active_workspace = dev.active_workspace
+      if channel == model.focused {
+        for item in items {
+          if item.id == model.active_session {
+            active_workspace = item.workspace
+          }
+        }
+      }
+      let mut next = {
+        ..model.replace_device({ ..dev, sessions: items, active_workspace }),
+        conversations,
+      }
+      let commands : Array[@cmd.Cmd] = []
+      // A start may have been accepted just before the connection vanished,
+      // while the first BridgeReady load raced persistence and returned empty.
+      // The session list is later durable proof that a record now exists: use
+      // that edge to retry exactly unresolved start recoveries.
+      for conv in next.conversations {
+        if conv.device == channel &&
+          conv.has_recovering_initial() &&
+          !(conv.sync is Reloading(..)) &&
+          items.iter().any(item => item.id == conv.session_id) {
+          let (updated, generation) = next.begin_transcript_reload(conv)
+          next = updated
+          if generation is Some(generation) {
+            commands.push(
+              session_snapshot_command(
+                dispatch,
+                channel,
+                next,
+                conv.session_id,
+                generation,
+                false,
+              ),
+            )
+          }
+        }
+      }
+      (@cmd.batch(commands), next)
+    }
+    WorkspacesLoaded(paths, connection_generation~, request_generation~) => {
+      guard connection_generation == dev.connection_generation &&
+        request_generation == dev.workspaces_request_generation else {
+        return (@cmd.none, model)
+      }
+      // Detaching only hides the registry entry; a conversation's durable
+      // placement remains part of its identity. Keep that hint so a later
+      // start is rejected as detached instead of silently creating the same
+      // session id in the default store.
+      adopt_workspaces(dispatch, channel, model, paths)
+    }
+    WorkspacesChanged(paths) => {
+      // The post-commit broadcast is newer than every list request issued so
+      // far. Advance the token before applying it, so an older list reply can
+      // never roll any client back after this canonical mutation order.
+      let next = model.replace_device({
+        ..dev,
+        workspaces_request_generation: dev.workspaces_request_generation + 1,
+      })
+      adopt_workspaces(dispatch, channel, next, paths)
+    }
+    WorkspaceFailed(message) =>
+      model.notify_error(dispatch, "Workspace error: \{message}")
+    ArchivedLoaded(
+      items,
+      connection_generation~,
+      request_generation~,
+      fresh_session~
+    ) => {
+      guard connection_generation == dev.connection_generation &&
+        request_generation == dev.archived_request_generation else {
+        return (@cmd.none, model)
+      }
+      // A newer unarchive notification wins over an older whole-list reply;
+      // a newer archive notification is supplemented from the current list
+      // when that reply predates the move.
+      let items = items.filter(item => {
+        !(dev.archive_override(item.id) is Some(false))
+      })
+      for fact in dev.archive_overrides {
+        if fact.archived && !items.iter().any(item => item.id == fact.session) {
+          for current in dev.archived {
+            if current.id == fact.session {
+              items.push(current)
+            }
+          }
+        }
+      }
+      // An archive mutation response can beat its session.changed callback.
+      // Treat a newly observed archived row as a local tombstone immediately,
+      // so a stale live-list reply cannot reopen it in that delivery gap.
+      let mut next = model
+      for item in items {
+        if next.archive_override(channel, item.id) is None {
+          next = next.with_archive_override(channel, item.id, true)
+        }
+      }
+      let archived_now = (id : String) => {
+        items.iter().any(item => item.id == id)
+      }
+      // The active conversation lives on the focused channel; another
+      // device's archived list must not displace it even when a session id
+      // collides across devices.
+      if channel == next.focused && archived_now(next.active_session) {
+        let mut workspace = next.session_workspace(channel, next.active_session)
+        for item in items {
+          if item.id == next.active_session {
+            workspace = item.workspace
+          }
+        }
+        next = replace_archived_active(
+          next,
+          channel,
+          next.active_session,
+          fresh_session,
+          workspace,
+        )
+      }
+      let conversations = next.conversations.filter(conv => {
+        conv.device != channel || !archived_now(conv.session_id)
+      })
+      guard next.device_state(channel) is Some(ndev) else {
+        return (@cmd.none, { ..next, conversations, })
+      }
+      let sessions = ndev.sessions.filter(item => !archived_now(item.id))
+      (
+        @cmd.none,
+        {
+          ..next.replace_device({ ..ndev, archived: items, sessions }),
+          conversations,
+        },
+      )
+    }
+    ArchiveFailed(message) =>
+      model.notify_error(dispatch, "Archive failed: \{message}")
+    SessionsFailed(message) =>
+      model.notify_error(dispatch, "Session list unavailable: \{message}")
+    // Another client archived or unarchived a conversation. Both sidebar
+    // lists are stale, but this identity-bearing fact takes effect for its
+    // session immediately and remains authoritative over in-flight replies.
+    SessionsChanged(change~, session~, fresh_session~) => {
+      let (sessions, model) = request_sessions_refresh(dispatch, channel, model)
+      let (archived, model) = request_archived_refresh(dispatch, channel, model)
+      let commands = @cmd.batch([sessions, archived])
+      guard model.device_state(channel) is Some(dev) else {
+        return (commands, model)
+      }
+      if change == "unarchived" {
+        let mut restored : @transcript.SessionListItem? = None
+        for item in dev.archived {
+          if item.id == session {
+            restored = Some(item)
+          }
+        }
+        let archived = dev.archived.filter(item => item.id != session)
+        let sessions = dev.sessions.copy()
+        if restored is Some(item) &&
+          !sessions.iter().any(current => current.id == session) {
+          sessions.push(item)
+        }
+        return (
+          commands,
+          model
+          .replace_device({ ..dev, sessions, archived })
+          .with_archive_override(channel, session, false),
+        )
+      }
+      if change != "archived" {
+        return (commands, model)
+      }
+      // Invalidate the live target before either async list reply. Keeping a
+      // placeholder archived entry also blocks a late session.event from
+      // rematerializing it during this window.
+      let workspace = model.session_workspace(channel, session)
+      let sessions = dev.sessions.filter(item => item.id != session)
+      let conversations = model.conversations.filter(conv => {
+        conv.device != channel || conv.session_id != session
+      })
+      let archived = dev.archived.copy()
+      if !archived.iter().any(item => item.id == session) {
+        let mut item : @transcript.SessionListItem = {
+          id: session,
+          title: None,
+          workspace,
+          workspace_name: "",
+        }
+        for live in dev.sessions {
+          if live.id == session {
+            item = live
+          }
+        }
+        archived.push(item)
+      }
+      let overridden = model.with_archive_override(channel, session, true)
+      let overridden = match overridden.device_state(channel) {
+        Some(ndev) => overridden.replace_device({ ..ndev, sessions, archived })
+        None => overridden
+      }
+      let next = {
+        ..overridden,
+        conversations: if channel == model.focused &&
+          model.active_session == session {
+          model.conversations
+        } else {
+          conversations
+        },
+      }
+      if channel == model.focused &&
+        model.active_session == session &&
+        fresh_session is Some(fresh) {
+        (
+          commands,
+          replace_archived_active(next, channel, session, fresh, workspace),
+        )
+      } else {
+        (commands, { ..next, conversations, })
+      }
+    }
+    SessionLoaded(session~, items~, watermark~, event_boundaries~, generation~) =>
+      apply_session_snapshot(
+        dispatch, channel, model, session, items, watermark, event_boundaries, generation,
+        true,
+      )
+    SessionRefreshed(
+      session~,
+      items~,
+      watermark~,
+      event_boundaries~,
+      generation~
+    ) =>
+      apply_session_snapshot(
+        dispatch, channel, model, session, items, watermark, event_boundaries, generation,
+        false,
+      )
+    SessionLoadFailed(session~, message~, generation~) =>
+      retry_session_snapshot(
+        dispatch, channel, model, session, generation, true, message,
+      )
+    SessionRefreshFailed(session~, generation~) =>
+      retry_session_snapshot(
+        dispatch,
+        channel,
+        model,
+        session,
+        generation,
+        false,
+        "failed to refresh session \{session}",
+      )
+    SessionCommitted(session~, sequence~, kind~, payload~) => {
+      // Archiving removes live client state after the hub's ordered final
+      // commit. A stale/replayed commit seen after that local fact must not
+      // resurrect the archived record as a live hidden conversation.
+      let archived = match dev.archive_override(session) {
+        Some(value) => value
+        None => dev.archived.iter().any(item => item.id == session)
+      }
+      if archived {
+        return (@cmd.none, model)
+      }
+      let first_commit_unseen = match
+        model.find_conversation(channel, session) {
+        Some(conv) => !conv.has_seen_durable_sequence(sequence)
+        None => true
+      }
+      let refresh_sessions = sequence == 1 &&
+        !dev.sessions.iter().any(item => item.id == session) &&
+        first_commit_unseen
+      // A short foreign run can commit and finish before either the session
+      // list or run resync reaches this page. Materialize hidden client state
+      // from the commit itself: sequence 1 projects immediately; a later
+      // sequence exposes a gap and follows the normal snapshot recovery path.
+      let model = if model.find_conversation(channel, session) is None {
+        model.replace_conversation(
           empty_conversation(
+            channel,
             session,
-            workspace=model.session_workspace(session),
+            workspace=model.session_workspace(channel, session),
           ),
         )
-      let updated = model.replace_conversation({
+      } else {
+        model
+      }
+      let (commit_cmd, next) = if model.find_conversation(channel, session)
+        is Some(conv) {
+        let commit : BufferedCommit = { sequence, kind, payload }
+        match conv.sync {
+          // A read is in flight: buffer — its snapshot's watermark decides
+          // whether this commit is already contained once it lands.
+          Reloading(..) =>
+            (@cmd.none, model.replace_conversation(conv.buffer_commit(commit)))
+          // A new commit is also a retry signal after a bounded round stopped.
+          ReloadFailed(..) => {
+            let (model, generation) = model.begin_transcript_reload(
+              conv.buffer_commit(commit),
+            )
+            if generation is Some(generation) {
+              (
+                session_snapshot_command(
+                  dispatch, channel, model, session, generation, false,
+                ),
+                model,
+              )
+            } else {
+              (@cmd.none, model)
+            }
+          }
+          Synced =>
+            if sequence <= conv.watermark {
+              // Old news: the snapshot (or an earlier commit) already
+              // carried it. Re-broadcasts are safe by construction.
+              (@cmd.none, model)
+            } else if sequence == conv.watermark + 1 {
+              let (grew, next) = conv.apply_commit(sequence, kind, payload)
+              (
+                if grew {
+                  scroll_if_active(model, channel, session)
+                } else {
+                  @cmd.none
+                },
+                model.replace_conversation({ ..next, watermark: sequence }),
+              )
+            } else {
+              // A gap: this client missed a broadcast (kicked as a slow
+              // subscriber, a host restart, an external writer). The record
+              // is the source of truth — re-read it, buffering from here.
+              let (model, generation) = model.begin_transcript_reload(conv)
+              guard model.find_conversation(channel, session) is Some(reloading) else {
+                return (@cmd.none, model)
+              }
+              let model = model.replace_conversation(
+                reloading.buffer_commit(commit),
+              )
+              if generation is Some(generation) {
+                (
+                  session_snapshot_command(
+                    dispatch, channel, model, session, generation, false,
+                  ),
+                  model,
+                )
+              } else {
+                (@cmd.none, model)
+              }
+            }
+        }
+      } else {
+        (@cmd.none, model)
+      }
+      // A live Started can overtake the store write and the BridgeReady list
+      // request can therefore miss a newly-created session. Sequence one is
+      // the first durable proof that the record exists; refresh the list so
+      // older hosts without Started.session_root, and clients that learned
+      // the commit first, still converge on the store's workspace grouping.
+      if refresh_sessions {
+        let (sessions, next) = request_sessions_refresh(dispatch, channel, next)
+        (@cmd.batch([commit_cmd, sessions]), next)
+      } else {
+        (commit_cmd, next)
+      }
+    }
+    BranchLoaded(session~, branch~) =>
+      if model.find_conversation(channel, session) is Some(conv) {
+        (@cmd.none, model.replace_conversation({ ..conv, branch, }))
+      } else {
+        (@cmd.none, model)
+      }
+    Started(
+      run_id~,
+      session~,
+      model=selected_model,
+      max_steps~,
+      cwd~,
+      session_root~,
+      task~,
+      submission_id~
+    ) => {
+      // A run another client started may reach us with no local conversation
+      // for its session (an `agent.runs` resync on a fresh page, or a live
+      // start for a session this client never opened): materialize one, so
+      // the run is trackable — streamable, cancellable, steerable — from
+      // every client, not just the one that sent the prompt. A run this
+      // client sent is already `Starting` when its `started` arrives (the
+      // send handler flips the phase before the request leaves). Repeating
+      // the same open id is idempotent; a distinct id replacing a stale open
+      // run is foreign and first settles that old run's transient state.
+      let existing = match model.find_conversation(channel, session) {
+        Some(conv) => conv
+        None =>
+          empty_conversation(
+            channel,
+            session,
+            workspace=model.session_workspace(channel, session),
+          )
+      }
+      let existing = match dev.workspace_for_session_root(session_root) {
+        Some(workspace) => { ..existing, workspace: workspace_root(workspace) }
+        None => existing
+      }
+      let owned = submission_id is Some(id) &&
+        existing.has_initial_submission(id)
+      let current_start = submission_id is Some(id) &&
+        existing.run is Starting(submission_id=current) &&
+        current == id
+      let same_open = existing.run is Open(run_id=current, ..) &&
+        current == run_id
+      // A competing Started while an older start request is still in flight
+      // does not retire that request's exact receipt path: its late rejection
+      // must still be able to restore the draft. An already-open predecessor,
+      // by contrast, is conclusively replaced by this lifecycle boundary.
+      let can_retire_previous_initial = current_start ||
+        !(existing.run is Starting(..))
+      // Started establishes exact run ownership, but neither it nor the start
+      // response proves the engine persisted its User item. Keep the draft in
+      // the ledger until a terminal-backed normal finish proves that append.
+      let conv = if owned && submission_id is Some(id) {
+        existing.bind_initial_submission_to_run(id, run_id)
+      } else {
+        existing
+      }
+      let successor_snapshot_generation = model.transcript_request_generation +
+        1
+      let (conv, foreign, stale_terminal) = match conv.run {
+        Starting(..) if owned && current_start => (conv, false, false)
+        Starting(..) =>
+          (
+            conv.mark_awaiting_inputs_unconfirmed(
+              snapshot_generation=successor_snapshot_generation,
+            ),
+            true,
+            false,
+          )
+        Open(run_id=current, ..) if current == run_id => (conv, false, false)
+        Open(run_id=previous_run, ..) =>
+          (
+            conv
+            .clear_streams()
+            .mark_awaiting_steers_unconfirmed(
+              owner_run_id=previous_run,
+              terminal_expected=false,
+              terminal_snapshot_generation=successor_snapshot_generation,
+            )
+            .mark_initial_for_run_unconfirmed(
+              previous_run,
+              terminal_snapshot_generation=successor_snapshot_generation,
+            ),
+            true,
+            false,
+          )
+        NoRun(..) if existing.last_run_id is Some(last) && last == run_id =>
+          (conv, false, true)
+        NoRun(..) => (conv, true, false)
+      }
+      let conv = if foreign {
+        conv.prepare_tail_notices_for_successor(successor_snapshot_generation)
+      } else {
+        conv
+      }
+      // Settle and anchor the predecessor before releasing an older prompt's
+      // exact-id ownership. BridgeReady may already have made that prompt
+      // Unconfirmed; retiring it first would leave its notice fixed ahead of
+      // durable predecessor output that lands with this successor snapshot.
+      let conv = if can_retire_previous_initial && submission_id is Some(id) {
+        conv.retire_unconfirmed_initials_before(id)
+      } else {
+        conv
+      }
+      // The prompt bubble itself is not appended here — not even from the
+      // pushed `task`: the durable transcript's only sources are snapshots
+      // and `session.event` commits, and the prompt's own commit (or the
+      // refresh below) brings it. `task` still rides on the event for
+      // clients that render run identity elsewhere.
+      ignore(task)
+      // A foreign run means the store holds a lifecycle boundary this client
+      // cannot infer from item kinds: a delayed User may still belong to the
+      // prior run as a steer. Re-read active and background conversations
+      // alike; commits buffer until that snapshot establishes the new run's
+      // terminal floor. If an older read is already in flight, mark one
+      // follow-up generation: its pre-Started cut may drain commits, but may
+      // not establish this run's floor.
+      // Every newly observed Started boundary gets a post-Started snapshot,
+      // including an owned local start. External/CLI turns may have advanced
+      // the store while this page was idle without a follower broadcasting
+      // them; reusing Send's stale terminal floor would let that older
+      // terminal be mistaken for this run's. The host admits this Started
+      // only after its predecessor's final drain, so this read is the first
+      // safe place to establish the new floor.
+      let refresh = foreign || current_start
+      let run = if stale_terminal {
+        conv.run
+      } else {
+        match conv.run {
+          Open(run_id=current, stage~) if current == run_id =>
+            Open(run_id=current, stage~)
+          _ => Open(run_id~, stage=Opened)
+        }
+      }
+      let run_durable_floor = if stale_terminal || same_open {
+        conv.run_durable_floor
+      } else {
+        // Lifecycle and durable commits are independent producers. A new run
+        // cannot trust this client's apparently-synced terminal frontier: its
+        // Started may have overtaken the previous run's terminal commit.
+        None
+      }
+      let run_floor_generation = if refresh {
+        Some(successor_snapshot_generation)
+      } else {
+        conv.run_floor_generation
+      }
+      let sync = if refresh &&
+        conv.sync
+        is Reloading(generation~, attempt~, buffered~, reload_after_current=_) {
+        Reloading(generation~, attempt~, buffered~, reload_after_current=true)
+      } else {
+        conv.sync
+      }
+      let conv = {
         ..conv,
-        run: Open(run_id~, stage=Opened),
+        run,
+        run_durable_floor,
+        run_floor_generation,
+        sync,
         last_run_id: Some(run_id),
         // A started run always reports its directory, but a malformed
         // event decodes as `None`; keeping the previous root beats
@@ -1447,47 +2920,342 @@ fn update_msg(
         } else {
           conv.cwd
         },
-      })
+      }
+      let (updated, generation) = if refresh {
+        model.begin_transcript_reload(conv)
+      } else {
+        (model.replace_conversation(conv), None)
+      }
       // The run's workspace directory now exists, so the branch chip can be
       // probed (and refreshed — a rerun may follow a checkout).
-      let branch_cmd = fetch_branch(dispatch, session, cwd)
+      let commands = [fetch_branch(dispatch, channel, session, cwd)]
+      if generation is Some(generation) {
+        commands.push(
+          session_snapshot_command(
+            dispatch, channel, updated, session, generation, false,
+          ),
+        )
+      }
       // Sync the global model/step settings only when this start belongs to
       // the conversation on screen. A slow background start (the user switched
       // chats mid-spawn) must not overwrite settings the user has since
       // changed for the now-active conversation.
-      if session == model.active_session {
+      if channel == updated.focused && session == updated.active_session {
         (
-          branch_cmd,
+          @cmd.batch(commands),
           { ..updated, selected_model, max_steps: max_steps.to_string() },
         )
       } else {
-        (branch_cmd, updated)
+        (@cmd.batch(commands), updated)
       }
+    }
+    RunsLoaded(runs~, settled~, live~, frontier~, connection_generation~) => {
+      guard connection_generation == dev.connection_generation else {
+        return (@cmd.none, model)
+      }
+      // Accept the snapshot as one state transition. No intermediate replayed
+      // Started row is rendered, and a later BridgeReady invalidates both its
+      // positive rows and its negative frontier together.
+      let commands : Array[@cmd.Cmd] = []
+      let mut next = model
+      let accepted_settlements : Array[RecoveredSettlement] = []
+      let settled_sessions : Array[String] = []
+      for settlement in settled {
+        if !accepted_settlements
+          .iter()
+          .any(item => item.run_id == settlement.run_id) &&
+          model.matched_settlement_frontier(channel, frontier, settlement)
+          is Some(_) {
+          accepted_settlements.push(settlement)
+          if !settled_sessions.contains(settlement.session) {
+            settled_sessions.push(settlement.session)
+          }
+        }
+      }
+      // Validate positive rows against the same immutable request-time model,
+      // before a predecessor settlement mutates it. One atomic host snapshot
+      // may legitimately contain completed r1 and active successor r2 for the
+      // same session; both pieces must survive that hand-off.
+      let accepted_runs : Array[RecoveredRun] = []
+      let admitted_run_sessions : Array[String] = []
+      for run in runs {
+        let duplicates_settlement = accepted_settlements
+          .iter()
+          .any(item => item.session == run.session && item.run_id == run.run_id)
+        if !duplicates_settlement &&
+          !admitted_run_sessions.contains(run.session) &&
+          model.matches_run_snapshot_frontier(channel, frontier, run.session) {
+          accepted_runs.push(run)
+          admitted_run_sessions.push(run.session)
+        }
+      }
+      // A completion selected by this request is stronger than mere absence.
+      // Replay it before active rows and negative settlement, but only while
+      // the page still has the exact owner captured at request time. A
+      // Starting owner first gains the host run id so the ordinary Finished
+      // transition can retire or restore its exact initial submission.
+      // A session can carry an older run selector and a newer unbound prompt
+      // selector at the same cut. Apply run-owned evidence first, then the
+      // submission-owned completion that controls the current composer gate.
+      let ordered_settlements : Array[RecoveredSettlement] = []
+      for settlement in accepted_settlements {
+        if model.matched_settlement_frontier(channel, frontier, settlement)
+          is Some(SettlementByRun) {
+          ordered_settlements.push(settlement)
+        }
+      }
+      for settlement in accepted_settlements {
+        if model.matched_settlement_frontier(channel, frontier, settlement)
+          is Some(SettlementBySubmission(_)) {
+          ordered_settlements.push(settlement)
+        }
+      }
+      for settlement in ordered_settlements {
+        guard model.matched_settlement_frontier(channel, frontier, settlement)
+          is Some(owner) else {
+          continue
+        }
+        if owner is SettlementBySubmission(submission_id) &&
+          next.find_conversation(channel, settlement.session) is Some(conv) {
+          let bound = conv.bind_initial_submission_to_run(
+            submission_id,
+            settlement.run_id,
+          )
+          next = next.replace_conversation({
+            ..bound,
+            run: Open(run_id=settlement.run_id, stage=Opened),
+            run_durable_floor: None,
+            run_floor_generation: None,
+            last_run_id: Some(settlement.run_id),
+          })
+        }
+        let (cmd, updated) = update_device_msg(
+          dispatch,
+          channel,
+          Finished(
+            run_id=settlement.run_id,
+            status=settlement.status,
+            answer=None,
+            durable_sequence=settlement.durable_sequence,
+          ),
+          next,
+        )
+        commands.push(cmd)
+        next = updated
+      }
+      for run in accepted_runs {
+        let (cmd, updated) = update_device_msg(
+          dispatch,
+          channel,
+          Started(
+            run_id=run.run_id,
+            session=run.session,
+            model=run.model,
+            max_steps=run.max_steps,
+            cwd=run.cwd,
+            session_root=run.session_root,
+            task=run.task,
+            submission_id=run.submission_id,
+          ),
+          next,
+        )
+        commands.push(cmd)
+        next = updated
+      }
+      // Do not let the older negative-set logic re-anchor a completion that
+      // just supplied an exact durable frontier (notably sequence zero).
+      let unsettled_frontier = frontier.filter(captured => {
+        !settled_sessions.contains(captured.session)
+      })
+      let (settled_cmd, settled) = update_device_msg(
+        dispatch,
+        channel,
+        RunsSettled(live~, frontier=unsettled_frontier),
+        next,
+      )
+      commands.push(settled_cmd)
+      (@cmd.batch(commands), settled)
+    }
+    RunsSettled(live~, frontier~) => {
+      // A conversation still showing an open run the host no longer has: the
+      // run ended while this client was away, and its terminal event will
+      // never be replayed, so the phase settles here. How it ended is
+      // unknowable (`ended=None`); the verdict text lives in the store and
+      // arrives through the usual reads — the active conversation reloads at
+      // `BridgeReady`, the rest when opened. Only a lifecycle state that still
+      // exactly matches this request's per-session frontier may settle; live
+      // Started/Finished transitions received meanwhile are newer truth.
+      let boundary_reloads : Array[String] = []
+      let snapshot_generation = model.transcript_request_generation + 1
+      let settled = model.conversations.map(conv => {
+        if conv.device != channel {
+          return conv
+        }
+        for captured in frontier {
+          if captured.session == conv.session_id {
+            return match captured.state {
+              SnapshotOpen(run_id~) if conv.run is Open(run_id=current, ..) &&
+                current == run_id &&
+                !live.contains(run_id) => {
+                // The runs reply may be slower than a steer the user sent
+                // after this request began. Close the captured lifecycle, but
+                // only adjudicate submissions that existed at the request's
+                // own frontier; later exact receipts keep their ownership.
+                let unconfirmed = conv
+                  .clear_streams()
+                  .mark_awaiting_steers_unconfirmed(
+                    submission_ids=captured.steer_ids,
+                    owner_run_id=run_id,
+                    terminal_expected=false,
+                    terminal_snapshot_generation=snapshot_generation,
+                  )
+                  .arm_unconfirmed_steers_at_snapshot_cut(
+                    captured.steer_ids,
+                    run_id,
+                    snapshot_generation,
+                  )
+                  .mark_initial_for_run_unconfirmed(
+                    run_id,
+                    terminal_snapshot_generation=snapshot_generation,
+                  )
+                let needs_boundary_reload = unconfirmed.has_submission_at_snapshot_cut_for_run(
+                  run_id,
+                )
+                if needs_boundary_reload {
+                  boundary_reloads.push(conv.session_id)
+                }
+                {
+                  ..unconfirmed,
+                  run: NoRun(ended=None),
+                  last_run_id: Some(run_id),
+                }
+              }
+              SnapshotIdle(last_run_id=Some(run_id)) if conv.run is NoRun(..) &&
+                conv.last_run_id is Some(current) &&
+                current == run_id => {
+                // A prior abnormal finish may have crossed a disconnect after
+                // its lifecycle notification but before its exact EOF
+                // boundary. Negative idle resync cannot replay that boundary,
+                // so arm only the exact steer ids captured with this request
+                // for a post-reply snapshot observation cut.
+                let armed = conv.arm_unconfirmed_steers_at_snapshot_cut(
+                  captured.steer_ids,
+                  run_id,
+                  snapshot_generation,
+                )
+                let armed = armed.mark_initial_for_run_unconfirmed(
+                  run_id,
+                  terminal_snapshot_generation=snapshot_generation,
+                )
+                let needs_boundary_reload = armed.has_submission_at_snapshot_cut_for_run(
+                  run_id,
+                )
+                if needs_boundary_reload {
+                  boundary_reloads.push(conv.session_id)
+                }
+                armed
+              }
+              SnapshotStarting(submission_id~) if conv.run
+                is Starting(submission_id=current) &&
+                current == submission_id => {
+                let mut prompt = ""
+                for input in conv.input_ledger {
+                  if input.kind is InitialPrompt &&
+                    input.submission_id == submission_id {
+                    prompt = input.draft
+                  }
+                }
+                let (unconfirmed, _) = conv.mark_submission_unconfirmed(
+                  submission_id,
+                  "Prompt delivery could not be confirmed after run resync — " +
+                  "check the transcript before resubmitting: " +
+                  prompt,
+                  true,
+                  terminal_expected=false,
+                  terminal_snapshot_generation=snapshot_generation,
+                )
+                let unconfirmed = unconfirmed.anchor_submission_notice_at_snapshot_cut(
+                  submission_id, snapshot_generation,
+                )
+                if unconfirmed.overlay
+                  .iter()
+                  .any(notice => {
+                    notice.anchor is SnapshotCut(..) &&
+                    notice.reconciliation is Submission(id) &&
+                    id == submission_id
+                  }) {
+                  boundary_reloads.push(conv.session_id)
+                }
+                { ..unconfirmed.clear_streams(), run: NoRun(ended=None) }
+              }
+              _ => conv
+            }
+          }
+        }
+        conv
+      })
+      let commands : Array[@cmd.Cmd] = []
+      let mut next = { ..model, conversations: settled }
+      for session in boundary_reloads {
+        if next.find_conversation(channel, session) is Some(conv) {
+          let (updated, generation) = next.ensure_transcript_reload_after_current(
+            conv,
+          )
+          next = updated
+          if generation is Some(generation) {
+            commands.push(
+              session_snapshot_command(
+                dispatch, channel, next, session, generation, false,
+              ),
+            )
+          }
+        }
+      }
+      (@cmd.batch(commands), next)
     }
     Engine(run_id, event, session~) => {
       // Compaction and background notices happen between turns, so their
       // events arrive after the run that owned `run_id` cleared
-      // `active_run_id`. The host stamps them with their session, which also
-      // covers a conversation compacted before its first prompt of this
-      // app-lifetime (its engine has no run id at all); the conversation
-      // that last held the id remains the fallback for unstamped events.
-      let conv = if model.conversation_by_run(run_id) is Some(conv) {
+      // `active_run_id` — or with no run id at all (an engine spawned just
+      // to compact). The host stamps them with their session, which covers
+      // that case too; the conversation that last held the id remains the
+      // fallback for unstamped events.
+      let conv = if run_id is Some(id) &&
+        model.conversation_by_run(channel, id) is Some(conv) {
         Some(conv)
-      } else if is_idle_event(event) {
-        if session is Some(session) &&
-          model.find_conversation(session) is Some(conv) {
+      } else if is_steer_receipt(event) && run_id is Some(id) {
+        // Host settling receipts may intentionally trail the terminal event;
+        // an even newer Started can already have replaced last_run_id. Prefer
+        // the exact local ownership ledger before the legacy run fallback.
+        let exact = match event {
+          SteerApplied(submission_id=Some(submission_id), ..) =>
+            model.conversation_by_pending_steer(channel, submission_id, id)
+          SteerDropped(submission_id=Some(submission_id), ..) =>
+            model.conversation_by_pending_steer(channel, submission_id, id)
+          _ => None
+        }
+        if exact is Some(conv) {
           Some(conv)
         } else {
-          model.conversation_by_last_run(run_id)
+          model.conversation_by_last_run(channel, id)
+        }
+      } else if is_idle_event(event) {
+        if session is Some(session) &&
+          model.find_conversation(channel, session) is Some(conv) {
+          Some(conv)
+        } else if run_id is Some(id) {
+          model.conversation_by_last_run(channel, id)
+        } else {
+          None
         }
       } else {
         None
       }
       if conv is Some(conv) {
-        let (transcript_grew, next) = apply_engine_event(conv, event)
+        let (transcript_grew, next) = apply_engine_event(conv, event, run_id)
         (
           if transcript_grew {
-            scroll_if_active(model, conv.session_id)
+            scroll_if_active(model, channel, conv.session_id)
           } else {
             @cmd.none
           },
@@ -1499,72 +3267,275 @@ fn update_msg(
     }
     // Everything else the panel owns (tree, viewer, diagnostics) is the
     // fileeditor package's business; route it there and adopt its state.
-    FileEditor(msg) => {
-      let (cmd, panel) = @fileeditor.update(
-        dispatch.map(msg => FileEditor(msg)),
-        msg,
-        model.file_panel,
-        file_ctx(model),
-      )
-      (cmd, { ..model, file_panel: panel })
-    }
-    Failed(session~, message~) =>
-      // The start request broke the turn the user just sent, so the error
-      // belongs in that conversation's transcript.
-      if model.find_conversation(session) is Some(conv) {
-        let next = {
-          ..conv
-          .clear_streams()
-          .sweep_pending_steers()
-          .append_item(Assistant(true), message),
-          run: NoRun(ended=Some(RunFailed)),
+    StartResponded(session~, submission_id~, run_id~, status~, exit_code~) => {
+      guard model.find_conversation(channel, session) is Some(conv) &&
+        conv.has_initial_submission(submission_id) else {
+        return (@cmd.none, model)
+      }
+      // The id-bearing reply always settles its exact ledger entry, even when
+      // Finished A and Started B overtook A's RPC response. Only lifecycle
+      // mutation remains conditional on A still owning the conversation.
+      let owns_lifecycle = match conv.run {
+        Starting(submission_id=current) => current == submission_id
+        Open(run_id=current, ..) => current == run_id
+        NoRun(..) => conv.last_run_id is Some(last) && last == run_id
+      }
+      let conv = conv.bind_initial_submission_to_run(submission_id, run_id)
+      if status == "accepted" {
+        let missed_started = owns_lifecycle &&
+          conv.run is Starting(submission_id=current) &&
+          current == submission_id
+        let late_abnormal = conv.run is NoRun(..) &&
+          conv.last_run_id is Some(owner) &&
+          owner == run_id &&
+          !(conv.run is NoRun(ended=Some(RunFinished(outcome))) &&
+          outcome is (Completed | ContextYield | MaxStepsExhausted))
+        let snapshot_generation = model.transcript_request_generation + 1
+        // `accepted` proves only that the JSONL command reached the child
+        // writer. Keep the recoverable prompt until a terminal-backed finish
+        // proves its User append; a pre-append engine failure must not erase
+        // the user's text. A response that trails such a normal finish can
+        // retire it now because the exact run binding is finally known.
+        let settled = if conv.run is NoRun(ended=Some(RunFinished(outcome))) &&
+          conv.last_run_id is Some(owner) &&
+          owner == run_id &&
+          outcome is (Completed | ContextYield | MaxStepsExhausted) {
+          conv.acknowledge_initial_for_run(run_id)
+        } else if conv.run is NoRun(..) &&
+          conv.last_run_id is Some(owner) &&
+          owner == run_id {
+          conv.mark_initial_for_run_unconfirmed(
+            run_id,
+            terminal_snapshot_generation=snapshot_generation,
+          )
+        } else {
+          conv
         }
-        (
-          @cmd.batch([
-            scroll_if_active(model, session),
-            fetch_sessions(dispatch),
-          ]),
-          model.replace_conversation(next),
+        // The reply still opens the lifecycle when its Started notification
+        // was delayed. A very short run may already be finished; never
+        // resurrect that settled phase.
+        let next = if owns_lifecycle {
+          match settled.run {
+            NoRun(..) => settled
+            Open(run_id=current, stage~) if current == run_id =>
+              {
+                ..settled,
+                run: Open(run_id=current, stage~),
+                last_run_id: Some(run_id),
+              }
+            _ =>
+              {
+                ..settled,
+                run: Open(run_id~, stage=Opened),
+                last_run_id: Some(run_id),
+              }
+          }
+        } else {
+          settled
+        }
+        let next = if missed_started {
+          {
+            ..next,
+            run_durable_floor: None,
+            run_floor_generation: Some(snapshot_generation),
+          }
+        } else {
+          next
+        }
+        let (updated, generation) = if missed_started || late_abnormal {
+          model.ensure_transcript_reload_after_current(next)
+        } else {
+          (model.replace_conversation(next), None)
+        }
+        let commands = [fetch_branch(dispatch, channel, session, settled.cwd)]
+        if generation is Some(generation) {
+          commands.push(
+            session_snapshot_command(
+              dispatch, channel, updated, session, generation, false,
+            ),
+          )
+        }
+        (@cmd.batch(commands), updated)
+      } else {
+        // The process result closes a still-live run, but does not prove that
+        // its User or Terminal append reached the store. Preserve the exact
+        // prompt as unconfirmed until durable recovery or a definitive reject.
+        let snapshot_generation = model.transcript_request_generation + 1
+        let mut prompt = ""
+        for input in conv.input_ledger {
+          if input.kind is InitialPrompt && input.submission_id == submission_id {
+            prompt = input.draft
+          }
+        }
+        let (unconfirmed, _) = conv.mark_submission_unconfirmed(
+          submission_id,
+          "Prompt delivery could not be confirmed (host returned " +
+          status +
+          ", exit code " +
+          exit_code.to_string() +
+          ") — check the transcript before resubmitting: " +
+          prompt,
+          true,
+          terminal_expected=false,
+          terminal_snapshot_generation=snapshot_generation,
         )
+        let unconfirmed = unconfirmed.anchor_submission_notice_at_snapshot_cut(
+          submission_id, snapshot_generation,
+        )
+        let unconfirmed = if owns_lifecycle {
+          unconfirmed.mark_awaiting_steers_unconfirmed(
+            owner_run_id=run_id,
+            terminal_expected=false,
+            terminal_snapshot_generation=snapshot_generation,
+          )
+        } else {
+          unconfirmed
+        }
+        let next = if owns_lifecycle {
+          match unconfirmed.run {
+            Starting(..) | Open(..) =>
+              {
+                ..unconfirmed.clear_streams(),
+                run: NoRun(ended=Some(RunFailed)),
+                last_run_id: Some(run_id),
+              }
+            NoRun(..) => unconfirmed
+          }
+        } else {
+          unconfirmed
+        }
+        let (model, generation) = model.ensure_transcript_reload_after_current(
+          next,
+        )
+        let (sessions, model) = request_sessions_refresh(
+          dispatch, channel, model,
+        )
+        let commands = [
+          sessions,
+          fetch_runs(
+            dispatch,
+            channel,
+            model.run_snapshot_frontier(channel),
+            dev.connection_generation,
+          ),
+        ]
+        if generation is Some(generation) {
+          commands.push(
+            session_snapshot_command(
+              dispatch, channel, model, session, generation, false,
+            ),
+          )
+        }
+        (@cmd.batch(commands), model)
+      }
+    }
+    StartUndelivered(session~, submission_id~, message~) =>
+      if model.find_conversation(channel, session) is Some(conv) {
+        let owns_submission = conv.has_initial_submission(submission_id)
+        let mut prompt = ""
+        for input in conv.input_ledger {
+          if input.kind is InitialPrompt && input.submission_id == submission_id {
+            prompt = input.draft
+          }
+        }
+        let (unconfirmed, changed) = conv.mark_submission_unconfirmed(
+          submission_id,
+          "Prompt delivery could not be confirmed (" +
+          message +
+          ") — check the transcript before resubmitting: " +
+          prompt,
+          false,
+        )
+        if !owns_submission {
+          (@cmd.none, model)
+        } else {
+          let next = if conv.run is Starting(submission_id=current) &&
+            current == submission_id {
+            { ..unconfirmed.clear_streams(), run: NoRun(ended=Some(RunFailed)) }
+          } else {
+            // A Started push/response for another run won the race. An
+            // uncorrelated transport failure must never close that open run.
+            unconfirmed
+          }
+          let updated = model.replace_conversation(next)
+          let (sessions, updated) = request_sessions_refresh(
+            dispatch, channel, updated,
+          )
+          let commands = [
+            sessions,
+            fetch_runs(
+              dispatch,
+              channel,
+              updated.run_snapshot_frontier(channel),
+              dev.connection_generation,
+            ),
+          ]
+          if changed {
+            commands.push(scroll_if_active(model, channel, session))
+          }
+          (@cmd.batch(commands), updated)
+        }
       } else {
         (@cmd.none, model)
       }
-    SessionLoadFailed(session~, message~) =>
-      // Only the newest selection may settle the loading marker; a failure
-      // overtaken by a later click (or an abandoning New chat) is dropped.
-      if model.loading_session != session {
-        (@cmd.none, model)
-      } else {
-        // The sidebar may be listing sessions the store no longer has —
-        // refresh it alongside the toast.
-        let (toast, next) = model.notify_error(dispatch, message)
-        (
-          @cmd.batch([toast, fetch_sessions(dispatch)]),
-          { ..next, loading_session: "" },
+    StartRejected(session~, submission_id~, message~) =>
+      if model.find_conversation(channel, session) is Some(conv) {
+        let (rejected, removed) = conv.reject_submission(
+          submission_id,
+          InitialPrompt,
+          None,
+          message,
         )
+        if !removed {
+          (@cmd.none, model)
+        } else {
+          let next = if conv.run is Starting(submission_id=current) &&
+            current == submission_id {
+            { ..rejected.clear_streams(), run: NoRun(ended=Some(RunFailed)) }
+          } else {
+            rejected
+          }
+          (
+            scroll_if_active(model, channel, session),
+            model.replace_conversation(next),
+          )
+        }
+      } else {
+        (@cmd.none, model)
       }
-    HostActionFailed(message) => model.notify_error(dispatch, message)
-    Error(run_id~, message~, diagnostics~) => {
-      // A host error without a run belongs to whatever conversation the
-      // user is looking at.
+    Error(run_id~, message~, diagnostics~, exit_code~) => {
+      // Agent-side semantic errors are lifecycle-only here; their durable
+      // status is classified by the subsequent Finished event. Process
+      // diagnostics carry `exit_code` and have no durable twin, so they remain
+      // a local notice.
       let conv = if run_id is Some(run_id) {
-        model.conversation_by_run(run_id)
-      } else {
+        if model.conversation_by_run(channel, run_id) is Some(conv) {
+          Some(conv)
+        } else {
+          model.conversation_by_last_run(channel, run_id)
+        }
+      } else if channel == model.focused {
         Some(model.active())
+      } else {
+        None
       }
       if conv is Some(conv) {
+        if run_id is Some(_) && exit_code is None {
+          return (@cmd.none, model)
+        }
         let content = if diagnostics is Some(diagnostics) &&
           !diagnostics.trim().is_empty() {
           "\{message}\n\n\{diagnostics}"
         } else {
           message
         }
-        // Mid-run the error is transient — the host closes the run with its
-        // own finished event moments later, and that verdict wins; only an
-        // idle conversation keeps the error as how things stand.
-        let next = conv.append_item(Assistant(true), content)
+        let next = if run_id is Some(owner) && exit_code is Some(_) {
+          conv.append_run_diagnostic(owner, content)
+        } else {
+          conv.append_local_notice(Assistant(is_danger=true), content)
+        }
         (
-          scroll_if_active(model, conv.session_id),
+          scroll_if_active(model, channel, conv.session_id),
           model.replace_conversation(
             if next.run is NoRun(..) {
               { ..next, run: NoRun(ended=Some(RunErrored)) }
@@ -1578,49 +3549,233 @@ fn update_msg(
       }
     }
     CompactRejected(session~, message~) =>
-      if model.find_conversation(session) is Some(conv) {
+      if model.find_conversation(channel, session) is Some(conv) {
         (
-          scroll_if_active(model, conv.session_id),
+          scroll_if_active(model, channel, conv.session_id),
           model.replace_conversation({
-            ..conv.append_item(Assistant(true), message),
+            ..conv.append_local_notice(Assistant(is_danger=true), message),
             compaction: NotCompacting,
           }),
         )
       } else {
         (@cmd.none, model)
       }
-    Finished(run_id~, status~, answer~) =>
-      if model.conversation_by_run(run_id) is Some(conv) {
-        let outcome = RunOutcome::parse(status)
-        // In the normal path the engine settled every steer before this
-        // terminal event; sweeping here only matters when the run died with
-        // steers still in flight.
+    Finished(run_id~, status~, answer~, durable_sequence~) =>
+      if (if model.conversation_by_run(channel, run_id) is Some(conv) {
+          Some(conv)
+        } else {
+          // RunsSettled may have closed the phase first; Finished is still the
+          // authoritative outcome for the conversation that last owned it.
+          model.conversation_by_last_run(channel, run_id)
+        })
+        is Some(conv) {
+        let first_finish = !(conv.run is NoRun(ended=Some(RunFinished(_))) &&
+          conv.last_run_id is Some(last) &&
+          last == run_id)
+        // Missing receipts are not guessed dropped. Keep exact-id ownership
+        // briefly and show a truthful unconfirmed notice behind the durable
+        // terminal boundary; a trailing receipt may still settle it.
+        // On abnormal EOF the host includes a sequence only after its final
+        // follower scan succeeded. That is the exact durable EOF boundary;
+        // unlike a normal finish, it need not be followed by a Terminal.
+        let durable_frontier = durable_sequence
+        // Only events logged strictly after a successful Terminal append are
+        // terminal-backed. Failed/aborted/cancelled paths attempt the append
+        // in a catch block that may itself fail; the host closes that engine
+        // and later supplies an exact EOF boundary instead.
+        let terminal_expected = match status {
+          "finished" | "context_yield" | "max_steps_exhausted" => true
+          _ => false
+        }
+        // Normal finishes use this generation to locate their promised
+        // Terminal. Abnormal finishes use the same post-transition read only
+        // as an observation cut; they never claim an anonymous Terminal.
+        let terminal_snapshot_generation = Some(
+          model.transcript_request_generation + 1,
+        )
+        let conv = if terminal_expected {
+          // A successful terminal path can only occur after this run's User
+          // append. This is the durable proof that finally retires the prompt
+          // kept past the earlier stdin-write response.
+          conv.acknowledge_initial_for_run(run_id)
+        } else {
+          conv.mark_initial_for_run_unconfirmed(
+            run_id,
+            durable_frontier?,
+            terminal_snapshot_generation?,
+          )
+        }
+        let conv = if durable_frontier is Some(frontier) {
+          conv
+          .anchor_unconfirmed_steers_at_durable_frontier(run_id, frontier)
+          .anchor_run_diagnostics_at_durable_frontier(run_id, frontier)
+        } else {
+          conv
+          .anchor_unconfirmed_steers_at_run_finish(
+            run_id,
+            terminal_expected,
+            terminal_snapshot_generation?,
+          )
+          .anchor_run_diagnostics_at_finish(
+            run_id,
+            terminal_expected,
+            terminal_snapshot_generation?,
+          )
+        }
+        let settled_inputs = conv
+          .clear_streams()
+          .mark_awaiting_steers_unconfirmed(
+            durable_frontier?,
+            owner_run_id=run_id,
+            terminal_expected~,
+            terminal_snapshot_generation?,
+          )
         let base = {
-          ..conv.clear_streams().sweep_pending_steers(),
-          run: NoRun(ended=Some(RunFinished(outcome))),
+          ..settled_inputs,
+          run: NoRun(ended=Some(RunFinished(RunOutcome::parse(status)))),
+          last_run_id: Some(run_id),
           // A finish the user watched happen needs no reminder; one landing
           // in a background conversation leaves a dot until they visit.
-          unseen_finish: conv.session_id != model.active_session,
+          unseen_finish: conv.device != model.focused ||
+          conv.session_id != model.active_session,
         }
-        let answer = answer.map(answer => answer.trim().to_owned())
+        // An exact zero EOF cut proves that a fresh failed run created no
+        // durable record. Cancel its now-obsolete speculative snapshot read:
+        // otherwise `session.load` can only fail (the file does not exist)
+        // and eventually leave Send permanently gated behind ReloadFailed.
+        // Be deliberately narrow: any applied or buffered durable content
+        // still takes the normal reconciliation path.
+        let exact_empty_eof = !terminal_expected &&
+          durable_frontier is Some(frontier) &&
+          base.is_empty_at_durable_frontier(frontier)
+        let base = if exact_empty_eof {
+          { ..base.restore_unpersisted_initial_for_run(run_id), sync: Synced }
+        } else {
+          base
+        }
         // The finished run just appended to the durable store, so the
         // sidebar list (and this conversation's title) may have changed —
         // and the turn may have created the repository or switched branches.
-        let refresh = @cmd.batch([
-          fetch_sessions(dispatch),
-          fetch_branch(dispatch, conv.session_id, conv.cwd),
-          notify_run_finished(run_id, outcome, answer),
-        ])
-        if answer is Some(answer) && should_append_answer(conv, answer) {
-          (
-            @cmd.batch([scroll_if_active(model, conv.session_id), refresh]),
-            model.replace_conversation(
-              base.append_item(Assistant(false), answer),
-            ),
+        let mut next = model.replace_conversation(base)
+        let (sessions, requested) = request_sessions_refresh(
+          dispatch, channel, next,
+        )
+        next = requested
+        let commands = [
+          sessions,
+          fetch_branch(dispatch, channel, conv.session_id, conv.cwd),
+        ]
+        // Only the embedded desktop page owns system notifications. Remote
+        // browser pages never have the notification extension, and replaying
+        // the same Finished boundary must not post a second notification.
+        if first_finish && channel is Local {
+          commands.push(
+            FinishedSystemNotification::{ run_id, status, answer }.command(),
           )
-        } else {
-          (refresh, model.replace_conversation(base))
         }
+        if first_finish && !exact_empty_eof && !base.session_id.is_empty() {
+          match base.sync {
+            Reloading(generation~, attempt~, buffered~, reload_after_current~) =>
+              // The current snapshot may have been captured before this
+              // Finished boundary. Do not start a concurrent read; remember
+              // to run exactly one fresh generation after it settles.
+              if !reload_after_current {
+                next = next.replace_conversation({
+                  ..base,
+                  sync: Reloading(
+                    generation~,
+                    attempt~,
+                    buffered~,
+                    reload_after_current=true,
+                  ),
+                })
+              }
+            Synced | ReloadFailed(..) => {
+              let (reloading, generation) = next.begin_transcript_reload(base)
+              next = reloading
+              if generation is Some(generation) {
+                commands.push(
+                  session_snapshot_command(
+                    dispatch,
+                    channel,
+                    next,
+                    base.session_id,
+                    generation,
+                    false,
+                  ),
+                )
+              }
+            }
+          }
+        }
+        if base.overlay.length() > conv.overlay.length() {
+          commands.push(scroll_if_active(model, channel, conv.session_id))
+        }
+        (@cmd.batch(commands), next)
+      } else {
+        // Even when this page missed both Started and every commit, the list
+        // can reveal the finished durable session for a later open.
+        request_sessions_refresh(dispatch, channel, model)
+      }
+    DurableBoundary(run_id~, session~, sequence~) =>
+      if model.find_conversation(channel, session) is Some(conv) &&
+        conv.last_run_id is Some(owner) &&
+        owner == run_id {
+        let anchored = conv
+          .mark_initial_for_run_unconfirmed(run_id, durable_frontier=sequence)
+          .anchor_unconfirmed_steers_at_durable_frontier(run_id, sequence)
+          .anchor_run_diagnostics_at_durable_frontier(run_id, sequence)
+        let exact_empty_eof = anchored.is_empty_at_durable_frontier(sequence)
+        let anchored = if exact_empty_eof {
+          {
+            ..anchored.restore_unpersisted_initial_for_run(run_id),
+            sync: Synced,
+          }
+        } else {
+          anchored
+        }
+        let unresolved = anchored.overlay
+          .iter()
+          .any(notice => {
+            notice.anchor is DurableTail(frontier) && frontier == sequence
+          })
+        if unresolved {
+          // The earlier synthetic Finished may already have completed its
+          // compatibility reload before this process finally exited. Re-read
+          // once so the snapshot's per-event boundaries can place an exact
+          // frontier that is older than the current display watermark.
+          let (next, generation) = model.begin_transcript_reload(anchored)
+          if generation is Some(generation) {
+            (
+              session_snapshot_command(
+                dispatch, channel, next, session, generation, false,
+              ),
+              next,
+            )
+          } else {
+            (@cmd.none, next)
+          }
+        } else {
+          (@cmd.none, model.replace_conversation(anchored))
+        }
+        // Finished removes the run from the host's active set before a
+        // failed final follower scan can publish this boundary. An earlier
+        // runs snapshot may therefore have closed `Starting` without ever
+        // learning the run id. The host records the boundary before this
+        // notification reaches us; ask once more with the still-exact
+        // submission selector so its now-replayable settlement can bind the
+        // run and apply the frontier (including exact zero).
+      } else if model.find_conversation(channel, session) is Some(conv) &&
+        conv.has_recovering_initial() {
+        (
+          fetch_runs(
+            dispatch,
+            channel,
+            model.run_snapshot_frontier(channel),
+            dev.connection_generation,
+          ),
+          model,
+        )
       } else {
         (@cmd.none, model)
       }
@@ -1637,24 +3792,129 @@ fn test_dispatch() -> @cmd.Emit[Msg] {
 }
 
 ///|
+/// Test-only: a device-scoped message as the page's one channel delivers it.
+fn on_home(msg : DeviceMsg) -> Msg {
+  FromDevice(@interop.ChannelId::Local, msg)
+}
+
+///|
+/// Test-only: `update` with a device message on the page's one channel.
+fn update_dev(
+  dispatch : @cmd.Emit[Msg],
+  msg : DeviceMsg,
+  model : Model,
+) -> (@cmd.Cmd, Model) {
+  update(dispatch, on_home(msg), model)
+}
+
+///|
 fn test_conversation() -> Conversation {
-  empty_conversation("desktop-test")
+  empty_conversation(@interop.ChannelId::Local, "desktop-test")
+}
+
+///|
+fn test_reloading(buffered : Array[BufferedCommit]) -> TranscriptSync {
+  Reloading(generation=1, attempt=1, buffered~, reload_after_current=false)
 }
 
 ///|
 fn running_conversation() -> Conversation {
-  { ..test_conversation(), run: Open(run_id=7, stage=Opened) }
+  {
+    ..test_conversation(),
+    run: Open(run_id="r7", stage=Opened),
+    run_durable_floor: Some(0),
+  }
 }
 
 ///|
 fn test_model() -> Model {
   {
-    ..initial_model(),
-    bridge: Connected,
-    api_key: "sk-test",
+    ..initial_model()
+    // The headless test runtime has no page location, so `initial_model()`
+    // seeds no devices (and, looking like a browser, a console); every test
+    // here runs desktop-shaped, on an explicit Local channel.
+    ,
+    devices: [
+      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
+    ],
+    focused: @interop.ChannelId::Local,
+    console: None,
     active_session: "desktop-test",
     conversations: [test_conversation()],
   }
+}
+
+///|
+/// Test-only: the focused device's state; raising keeps a broken model a
+/// test failure rather than a silent mismatch.
+fn Model::dev(self : Model) -> DeviceState raise {
+  guard self.focused_device() is Some(dev) else {
+    fail("the model holds no focused device")
+  }
+  dev
+}
+
+///|
+/// Test-only: transform the focused device's state, e.g. seeding a session
+/// list on `test_model()`.
+fn Model::with_dev(
+  self : Model,
+  transform : (DeviceState) -> DeviceState,
+) -> Model raise {
+  self.replace_device(transform(self.dev()))
+}
+
+///|
+fn sessions_loaded(
+  items : Array[@transcript.SessionListItem],
+  request_generation? : Int = 0,
+) -> Msg {
+  on_home(SessionsLoaded(items, connection_generation=0, request_generation~))
+}
+
+///|
+test "viewport resize flips the narrow flag and resets the sidebar" {
+  let dispatch = test_dispatch()
+  let (_, narrow) = update(dispatch, ViewportResized(width=390), test_model())
+  assert_true(narrow.narrow)
+  assert_false(narrow.sidebar_open)
+  // Same side of the breakpoint: nothing moves (idempotent).
+  let (_, same) = update(dispatch, ViewportResized(width=390), narrow)
+  assert_true(same.narrow)
+  assert_false(same.sidebar_open)
+  let (_, wide) = update(dispatch, ViewportResized(width=1280), same)
+  assert_false(wide.narrow)
+  assert_true(wide.sidebar_open)
+}
+
+///|
+test "the narrow drawer closes when navigation lands elsewhere" {
+  let dispatch = test_dispatch()
+  let (_, narrow) = update(dispatch, ViewportResized(width=390), test_model())
+  let (_, opened) = update(dispatch, ToggleSidebar, narrow)
+  assert_true(opened.sidebar_open)
+  // Navigating to the Skills page from the drawer closes it; on the wide
+  // layout the same navigation leaves the sidebar column alone.
+  let (_, settled) = update(dispatch, OpenSkills, opened)
+  assert_false(settled.sidebar_open)
+  let (_, wide) = update(dispatch, ViewportResized(width=1280), settled)
+  let (_, back) = update(dispatch, OpenSetup, wide)
+  assert_true(back.sidebar_open)
+}
+
+///|
+fn archived_loaded(
+  items : Array[@transcript.SessionListItem],
+  request_generation? : Int = 0,
+) -> Msg {
+  on_home(
+    ArchivedLoaded(
+      items,
+      connection_generation=0,
+      request_generation~,
+      fresh_session="desktop-archive-replacement",
+    ),
+  )
 }
 
 ///|
@@ -1663,16 +3923,260 @@ fn running_model() -> Model {
 }
 
 ///|
+fn encoded_start_workspace(conv : Conversation) -> String? {
+  let payload = start_payload(
+    "continue",
+    "deepseek-v4-pro",
+    "1000",
+    conv.session_id,
+    "test-submission",
+    workspace=conv.workspace,
+  )
+  let json = @json.parse(@interop.reply_json_text(payload)) catch {
+    _ => return None
+  }
+  guard json is Object(fields) else { return None }
+  @jsonx.json_text(fields, "workspace")
+}
+
+///|
+test "runs resync names exact Starting Open and Idle owners" {
+  let starting = {
+    ..empty_conversation(@interop.ChannelId::Local, "starting-session"),
+    run: Starting(submission_id="submission-starting"),
+  }
+  let open = {
+    ..empty_conversation(@interop.ChannelId::Local, "open-session"),
+    run: Open(run_id="run-open", stage=Opened),
+  }
+  let idle = {
+    ..empty_conversation(@interop.ChannelId::Local, "idle-session"),
+    last_run_id: Some("run-idle"),
+  }
+  let empty = empty_conversation(@interop.ChannelId::Local, "never-started")
+  let model = test_model()
+    .replace_conversation(starting)
+    .replace_conversation(open)
+    .replace_conversation(idle)
+    .replace_conversation(empty)
+  let json = @json.parse(
+    @interop.reply_json_text(
+      runs_payload(model.run_snapshot_frontier(@interop.ChannelId::Local)),
+    ),
+  ) catch {
+    _ => fail("runs payload was not JSON")
+  }
+  guard json is { "known": Array(known), .. } else {
+    fail("runs payload omitted known selectors")
+  }
+  inspect(known.length(), content="3")
+  assert_true(
+    known.contains({
+      "session": "starting-session",
+      "submission_id": "submission-starting",
+    }),
+  )
+  assert_true(
+    known.contains({ "session": "open-session", "run_id": "run-open" }),
+  )
+  assert_true(
+    known.contains({ "session": "idle-session", "run_id": "run-idle" }),
+  )
+}
+
+///|
+fn with_pending_steers(
+  conv : Conversation,
+  texts : Array[String],
+  run_id? : String = "r7",
+) -> Conversation {
+  let mut next = conv
+  for index, text in texts {
+    next = next.enqueue_input(
+      SteerInput,
+      "test-steer-" + index.to_string(),
+      Some(run_id),
+      text,
+      text,
+      [],
+    )
+  }
+  next
+}
+
+///|
+fn with_initial_submission(
+  conv : Conversation,
+  id : String,
+  text : String,
+) -> Conversation {
+  conv.enqueue_input(InitialPrompt, id, None, text, text, [])
+}
+
+///|
+/// Drive one new-chat prompt through its id-bearing Started boundary. The
+/// resulting causal transcript read is deliberately left in flight.
+fn fresh_started_model(
+  submission_id : String,
+  run_id : String,
+  prompt : String,
+) -> Model {
+  let conv = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id~) },
+    submission_id,
+    prompt,
+  )
+  let (_, started) = update_dev(
+    test_dispatch(),
+    Started(
+      run_id~,
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some(prompt),
+      submission_id=Some(submission_id),
+    ),
+    test_model().replace_conversation(conv),
+  )
+  started
+}
+
+///|
+/// Run A has finished but its exact start response is still in flight; run B
+/// has already been sent and announced on the same conversation.
+fn second_run_started_before_first_response() -> (Model, String)? {
+  let dispatch = test_dispatch()
+  let first = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id="first-start") },
+    "first-start",
+    "first prompt",
+  )
+  let (_, first_started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-first",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("first prompt"),
+      submission_id=Some("first-start"),
+    ),
+    test_model().replace_conversation(first),
+  )
+  let (_, first_finished) = update_dev(
+    dispatch,
+    Finished(
+      run_id="r-first",
+      status="finished",
+      answer=None,
+      durable_sequence=None,
+    ),
+    first_started,
+  )
+  let (_, reconciled) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=1,
+      event_boundaries=[(1, true, 0)],
+      generation=1,
+    ),
+    first_finished,
+  )
+  let (_, post_finish) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=1,
+      event_boundaries=[(1, true, 0)],
+      generation=2,
+    ),
+    reconciled,
+  )
+  let (_, drafted) = update(dispatch, TaskChanged("second prompt"), post_finish)
+  let (_, sending) = update(dispatch, Send, drafted)
+  guard sending.active().run is Starting(submission_id=second_submission) else {
+    return None
+  }
+  let (_, second_started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-second",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("second prompt"),
+      submission_id=Some(second_submission),
+    ),
+    sending,
+  )
+  Some((second_started, second_submission))
+}
+
+///|
+/// Run A ended with one steer receipt still in flight, then run B started.
+fn second_run_started_before_first_steer_receipt() -> Model? {
+  let dispatch = test_dispatch()
+  let first = with_pending_steers(running_conversation(), ["late steer"])
+  let (_, first_finished) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="finished", answer=None, durable_sequence=None),
+    running_model().replace_conversation(first),
+  )
+  // A second local run is admitted only after the prior durable terminal has
+  // reconciled. The old steer receipt may still trail that boundary.
+  let (_, reconciled) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=1,
+      event_boundaries=[(1, true, 0)],
+      generation=1,
+    ),
+    first_finished,
+  )
+  let (_, drafted) = update(dispatch, TaskChanged("second prompt"), reconciled)
+  let (_, sending) = update(dispatch, Send, drafted)
+  guard sending.active().run is Starting(submission_id=second_submission) else {
+    return None
+  }
+  let (_, second_started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r8",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("second prompt"),
+      submission_id=Some(second_submission),
+    ),
+    sending,
+  )
+  Some(second_started)
+}
+
+///|
 test "assistant deltas accumulate into the streaming response" {
   let dispatch = test_dispatch()
-  let (_, first) = update(
+  let (_, first) = update_dev(
     dispatch,
-    Engine(7, AssistantDelta("Hello"), session=None),
+    Engine(Some("r7"), AssistantDelta("Hello"), session=None),
     running_model(),
   )
-  let (_, second) = update(
+  let (_, second) = update_dev(
     dispatch,
-    Engine(7, AssistantDelta(", world"), session=None),
+    Engine(Some("r7"), AssistantDelta(", world"), session=None),
     first,
   )
   inspect(second.active().streaming_response, content="Hello, world")
@@ -1686,14 +4190,14 @@ test "update is pure: replaying a delta on the same model is idempotent" {
     ..running_conversation(),
     streaming_response: "partial",
   })
-  let (_, once) = update(
+  let (_, once) = update_dev(
     dispatch,
-    Engine(7, AssistantDelta("!"), session=None),
+    Engine(Some("r7"), AssistantDelta("!"), session=None),
     model,
   )
-  let (_, twice) = update(
+  let (_, twice) = update_dev(
     dispatch,
-    Engine(7, AssistantDelta("!"), session=None),
+    Engine(Some("r7"), AssistantDelta("!"), session=None),
     model,
   )
   inspect(once.active().streaming_response, content="partial!")
@@ -1703,45 +4207,59 @@ test "update is pure: replaying a delta on the same model is idempotent" {
 ///|
 test "deltas from an unknown run are dropped" {
   let dispatch = test_dispatch()
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Engine(99, AssistantDelta("stale"), session=None),
+    Engine(Some("r99"), AssistantDelta("stale"), session=None),
     running_model(),
   )
   inspect(next.active().streaming_response, content="")
 }
 
 ///|
-test "reasoning message commits a thinking item" {
+test "reasoning message waits for its durable commit" {
   let dispatch = test_dispatch()
   let model = running_model()
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Engine(7, ReasoningMessage("full thought"), session=None),
+    Engine(Some("r7"), ReasoningMessage("full thought"), session=None),
     model,
   )
-  inspect(next.active().messages.length(), content="1")
-  guard next.active().messages[0].kind is Reasoning else {
-    fail("expected reasoning")
-  }
-  inspect(next.active().messages[0].content, content="full thought")
+  inspect(next.active().messages.length(), content="0")
+  inspect(next.active().overlay.length(), content="0")
 }
 
 ///|
-test "assistant message replaces the live stream with a committed item" {
+test "assistant message only settles the transient response" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
     streaming_response: "answ",
   })
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Engine(7, AssistantMessage("answer"), session=None),
+    Engine(Some("r7"), AssistantMessage("answer"), session=None),
     model,
   )
   inspect(next.active().streaming_response, content="")
-  inspect(next.active().messages.length(), content="1")
-  inspect(next.active().messages[0].content, content="answer")
+  inspect(next.active().messages.length(), content="0")
+  inspect(next.active().overlay.length(), content="0")
+}
+
+///|
+test "agent setup failure is lifecycle-only until its durable terminal" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    streaming_response: "partial answer",
+  })
+  let (_, next) = update_dev(
+    dispatch,
+    Engine(Some("r7"), AgentSetupFailed("could not initialize"), session=None),
+    model,
+  )
+  inspect(next.active().streaming_response, content="")
+  inspect(next.active().messages.length(), content="0")
+  inspect(next.active().overlay.length(), content="0")
 }
 
 ///|
@@ -1751,9 +4269,9 @@ test "a new agent step clears the live stream" {
     ..running_conversation(),
     streaming_response: "left",
   })
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Engine(7, AgentStep(Some(2)), session=None),
+    Engine(Some("r7"), AgentStep(Some(2)), session=None),
     model,
   )
   inspect(next.active().streaming_response, content="")
@@ -1766,9 +4284,14 @@ test "finished run clears any leftover stream" {
     ..running_conversation(),
     streaming_response: "leftover",
   })
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Finished(run_id=7, status="finished", answer=Some("done")),
+    Finished(
+      run_id="r7",
+      status="finished",
+      answer=Some("done"),
+      durable_sequence=None,
+    ),
     model,
   )
   inspect(next.active().streaming_response, content="")
@@ -1776,11 +4299,100 @@ test "finished run clears any leftover stream" {
 }
 
 ///|
+test "finished run reloads the named durable session for an old host" {
+  let dispatch = test_dispatch()
+  let (_, finished) = update_dev(
+    dispatch,
+    Finished(
+      run_id="r7",
+      status="finished",
+      answer=Some("done"),
+      durable_sequence=None,
+    ),
+    running_model(),
+  )
+  guard finished.active().sync
+    is Reloading(generation=1, reload_after_current=false, ..) else {
+    fail("Finished did not start the compatibility snapshot")
+  }
+  // Old hosts send no session.event; their post-Finished full snapshot is
+  // therefore the only canonical source the commit-aware frontend consumes.
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "question" },
+        { kind: Assistant(is_danger=false), content: "done" },
+      ],
+      watermark=3,
+      event_boundaries=[(3, true, 2)],
+      generation=1,
+    ),
+    finished,
+  )
+  inspect(loaded.active().messages.length(), content="2")
+  inspect(loaded.active().messages[1].content, content="done")
+  inspect(loaded.active().watermark, content="3")
+  assert_true(loaded.active().sync is Synced)
+}
+
+///|
+test "Finished queues one follow-up behind an older in-flight snapshot" {
+  let dispatch = test_dispatch()
+  let model = {
+    ..running_model().replace_conversation({
+      ..running_conversation(),
+      sync: test_reloading([]),
+    }),
+    transcript_request_generation: 1,
+  }
+  let finish : DeviceMsg = Finished(
+    run_id="r7",
+    status="finished",
+    answer=None,
+    durable_sequence=None,
+  )
+  let (_, finished) = update_dev(dispatch, finish, model)
+  guard finished.active().sync
+    is Reloading(generation=1, reload_after_current=true, ..) else {
+    fail("Finished did not remember the post-boundary reload")
+  }
+  // A duplicate lifecycle notification is idempotent: it is not a second
+  // durable boundary and must not queue another generation.
+  let (_, duplicate) = update_dev(dispatch, finish, finished)
+  guard duplicate.active().sync
+    is Reloading(generation=1, reload_after_current=true, ..) else {
+    fail("duplicate Finished changed the queued follow-up")
+  }
+  let (_, followed) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=0,
+      event_boundaries=[],
+      generation=1,
+    ),
+    duplicate,
+  )
+  guard followed.active().sync
+    is Reloading(generation=2, reload_after_current=false, ..) else {
+    fail("the older snapshot did not hand off to one fresh generation")
+  }
+}
+
+///|
 test "a finish the user watched leaves no unseen dot" {
   let dispatch = test_dispatch()
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Finished(run_id=7, status="finished", answer=Some("done")),
+    Finished(
+      run_id="r7",
+      status="finished",
+      answer=Some("done"),
+      durable_sequence=None,
+    ),
     running_model(),
   )
   inspect(next.active().unseen_finish, content="false")
@@ -1791,17 +4403,24 @@ test "a background finish marks its conversation until it is opened" {
   let dispatch = test_dispatch()
   // The run belongs to "desktop-test"; the user is looking at another chat.
   let model = { ..running_model(), active_session: "desktop-elsewhere" }
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Finished(run_id=7, status="finished", answer=Some("done")),
+    Finished(
+      run_id="r7",
+      status="finished",
+      answer=Some("done"),
+      durable_sequence=None,
+    ),
     model,
   )
-  guard next.find_conversation("desktop-test") is Some(conv) else {
+  guard next.find_conversation(@interop.ChannelId::Local, "desktop-test")
+    is Some(conv) else {
     fail("conversation missing")
   }
   inspect(conv.unseen_finish, content="true")
-  let opened = next.activate("desktop-test")
-  guard opened.find_conversation("desktop-test") is Some(seen) else {
+  let opened = next.activate(@interop.ChannelId::Local, "desktop-test")
+  guard opened.find_conversation(@interop.ChannelId::Local, "desktop-test")
+    is Some(seen) else {
     fail("conversation missing after activate")
   }
   inspect(seen.unseen_finish, content="false")
@@ -1814,28 +4433,28 @@ test "an idle background notice routes by the last run id" {
   // memory ties the id back to its conversation.
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    last_run_id: Some(7),
+    last_run_id: Some("r7"),
   })
   let notice = "[moon_check update]\nstatus=failed\nmain.mbt:1 error"
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Engine(7, RuntimeUpdate(notice), session=None),
+    Engine(Some("r7"), RuntimeUpdate(notice), session=None),
     model,
   )
   inspect(next.active().watcher_status, content="failed")
-  guard next.active().messages.get(0)
-    is Some({ kind: Tool(name="moon_check failed", ..), .. }) else {
-    fail("expected a runtime notice card")
-  }
+  inspect(next.active().overlay.length(), content="0")
 }
 
 ///|
 test "new chat keeps the model intact until the rotation lands" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), loading_session: "desktop-stale" }
+  let model = {
+    ..running_model(),
+    loading_conversation: Some({ channel: Local, session: "desktop-stale" }),
+  }
   let (_, next) = update(dispatch, NewChat, model)
   inspect(next.active().is_running(), content="true")
-  inspect(next.loading_session, content="")
+  assert_true(next.loading_conversation is None)
 }
 
 ///|
@@ -1869,14 +4488,18 @@ test "session rotation activates a fresh conversation, keeping the old one" {
     ..running_conversation(),
     messages: [{ kind: User, content: "hi" }],
   })
-  let (_, next) = update(dispatch, SessionRotated("desktop-fresh"), model)
+  let (_, next) = update(
+    dispatch,
+    SessionRotated({ channel: Local, session: "desktop-fresh" }),
+    model,
+  )
   inspect(next.active_session, content="desktop-fresh")
   inspect(next.active().messages.length(), content="0")
   inspect(next.active().usage_tokens, content="0")
-  inspect(next.api_key, content="sk-test")
   assert_true(next.display_status() is Ready)
   // The previous conversation keeps running in the background.
-  guard next.find_conversation("desktop-test") is Some(old) else {
+  guard next.find_conversation(@interop.ChannelId::Local, "desktop-test")
+    is Some(old) else {
     fail("expected the old conversation to survive")
   }
   inspect(old.is_running(), content="true")
@@ -1886,11 +4509,74 @@ test "session rotation activates a fresh conversation, keeping the old one" {
 ///|
 test "session rotation prunes abandoned empty conversations" {
   let dispatch = test_dispatch()
-  let (_, first) = update(dispatch, SessionRotated("desktop-a"), test_model())
-  let (_, second) = update(dispatch, SessionRotated("desktop-b"), first)
+  let (_, first) = update(
+    dispatch,
+    SessionRotated({ channel: Local, session: "desktop-a" }),
+    test_model(),
+  )
+  let (_, second) = update(
+    dispatch,
+    SessionRotated({ channel: Local, session: "desktop-b" }),
+    first,
+  )
   // "desktop-test" and "desktop-a" had no transcript, no draft, no run.
   inspect(second.conversations.length(), content="1")
   inspect(second.active_session, content="desktop-b")
+}
+
+///|
+test "a delayed rotation cannot steal focus from another channel" {
+  let dispatch = test_dispatch()
+  let remote : @interop.ChannelId = Remote("d-remote")
+  let model = {
+    ..test_model(),
+    devices: [
+      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
+      { ..empty_device_state(remote), bridge: Connected },
+    ],
+  }
+  let (_, next) = update(
+    dispatch,
+    SessionRotated({ channel: remote, session: "remote-late" }),
+    model,
+  )
+  assert_true(next.focused is Local)
+  inspect(next.active_session, content="desktop-test")
+  assert_true(next.find_conversation(remote, "remote-late") is None)
+}
+
+///|
+test "a symbol reply with the same session id but another channel is stale" {
+  let dispatch = test_dispatch()
+  let local_owner : @interop.ConversationKey = {
+    channel: Local,
+    session: "desktop-test",
+  }
+  let remote_owner : @interop.ConversationKey = {
+    channel: Remote("d-remote"),
+    session: "desktop-test",
+  }
+  let (_, querying) = update(dispatch, TaskChanged("#parse"), test_model())
+  let items = symbol_cache(local_owner, "parse", ["parse_file"]).items
+  let (_, stale) = update(
+    dispatch,
+    SymbolsLoaded(owner=remote_owner, query="parse", items~),
+    querying,
+  )
+  guard stale.completion is Some(stale_menu) else {
+    fail("symbol menu disappeared")
+  }
+  assert_true(stale_menu.loading)
+  let (_, settled) = update(
+    dispatch,
+    SymbolsLoaded(owner=local_owner, query="parse", items~),
+    stale,
+  )
+  guard settled.completion is Some(menu) else {
+    fail("symbol menu disappeared")
+  }
+  assert_false(menu.loading)
+  inspect(menu.items[0].label, content="parse_file")
 }
 
 ///|
@@ -1904,34 +4590,184 @@ test "sessions loaded replaces the sidebar list" {
       workspace_name: "",
     },
   ]
-  let (_, once) = update(dispatch, SessionsLoaded(items), test_model())
-  let (_, twice) = update(dispatch, SessionsLoaded(items), test_model())
-  inspect(once.sessions.length(), content="1")
-  inspect(once.sessions[0].id, content="desktop-a")
-  inspect(twice.sessions.length(), content="1")
+  let (_, once) = update(dispatch, sessions_loaded(items), test_model())
+  let (_, twice) = update(dispatch, sessions_loaded(items), test_model())
+  inspect(once.dev().sessions.length(), content="1")
+  inspect(once.dev().sessions[0].id, content="desktop-a")
+  inspect(twice.dev().sessions.length(), content="1")
 }
 
 ///|
-test "sessions loaded restores a replayed run's workspace" {
+test "session list assigns a commit-first conversation to its durable workspace" {
   let dispatch = test_dispatch()
-  let replayed = {
-    ..empty_conversation("desktop-running"),
-    run: Open(run_id=7, stage=Opened),
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-foreign", sequence=1, kind="user", payload={
+      "content": Json::string("arrived before the list"),
+    }),
+    test_model(),
+  )
+  guard committed.find_conversation(
+      @interop.ChannelId::Local,
+      "desktop-foreign",
+    )
+    is Some(provisional) else {
+    fail("commit did not materialize its conversation")
   }
-  let model = test_model().replace_conversation(replayed)
-  let items : Array[@transcript.SessionListItem] = [
-    {
-      id: "desktop-running",
-      title: Some("running question"),
-      workspace: "/home/u/project",
-      workspace_name: "project",
-    },
-  ]
-  let (_, next) = update(dispatch, SessionsLoaded(items), model)
-  guard next.find_conversation("desktop-running") is Some(running) else {
-    fail("expected the replayed conversation")
+  assert_true(provisional.workspace is None)
+  let (_, listed) = update(
+    dispatch,
+    sessions_loaded(
+      [
+        {
+          id: "desktop-foreign",
+          title: Some("arrived before the list"),
+          workspace: "/work/foreign",
+          workspace_name: "foreign",
+        },
+      ],
+      request_generation=committed.dev().sessions_request_generation,
+    ),
+    committed.activate(@interop.ChannelId::Local, "desktop-foreign"),
+  )
+  guard listed.find_conversation(@interop.ChannelId::Local, "desktop-foreign")
+    is Some(reconciled) else {
+    fail("listed conversation disappeared")
   }
-  assert_true(running.workspace is Some(Absolute("/home/u/project")))
+  inspect(workspace_token(reconciled.workspace), content="/work/foreign")
+  inspect(listed.dev().active_workspace, content="/work/foreign")
+  assert_true(encoded_start_workspace(reconciled) is Some("/work/foreign"))
+}
+
+///|
+test "a background session list updates only its channel's same-id workspace" {
+  let dispatch = test_dispatch()
+  let remote : @interop.ChannelId = Remote("d-remote")
+  let local_conv = {
+    ..empty_conversation(@interop.ChannelId::Local, "shared"),
+    workspace: Some(Absolute("/local")),
+  }
+  let remote_conv = {
+    ..empty_conversation(remote, "shared"),
+    workspace: Some(Absolute("/remote-old")),
+  }
+  let model = {
+    ..test_model(),
+    devices: [
+      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
+      { ..empty_device_state(remote), bridge: Connected },
+    ],
+    active_session: "shared",
+    conversations: [local_conv, remote_conv],
+  }
+  let (_, next) = update(
+    dispatch,
+    FromDevice(
+      remote,
+      SessionsLoaded(
+        [
+          {
+            id: "shared",
+            title: Some("remote"),
+            workspace: "/remote-new",
+            workspace_name: "remote-new",
+          },
+        ],
+        connection_generation=0,
+        request_generation=0,
+      ),
+    ),
+    model,
+  )
+  guard next.find_conversation(@interop.ChannelId::Local, "shared")
+    is Some(local_conv) &&
+    next.find_conversation(remote, "shared") is Some(remote_conv) else {
+    fail("same-id conversations disappeared")
+  }
+  inspect(workspace_token(local_conv.workspace), content="/local")
+  inspect(workspace_token(remote_conv.workspace), content="/remote-new")
+}
+
+///|
+test "session list assigns a Started-first conversation to its durable workspace" {
+  let dispatch = test_dispatch()
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="foreign-run",
+      session="desktop-started-first",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("arrived before the list"),
+      submission_id=None,
+    ),
+    test_model(),
+  )
+  guard started.find_conversation(
+      @interop.ChannelId::Local,
+      "desktop-started-first",
+    )
+    is Some(provisional) else {
+    fail("Started did not materialize its conversation")
+  }
+  assert_true(provisional.workspace is None)
+  let (_, listed) = update(
+    dispatch,
+    sessions_loaded([
+      {
+        id: "desktop-started-first",
+        title: Some("arrived before the list"),
+        workspace: "/work/started-first",
+        workspace_name: "started-first",
+      },
+    ]),
+    started,
+  )
+  guard listed.find_conversation(
+      @interop.ChannelId::Local,
+      "desktop-started-first",
+    )
+    is Some(reconciled) else {
+    fail("listed conversation disappeared")
+  }
+  inspect(workspace_token(reconciled.workspace), content="/work/started-first")
+  assert_true(
+    encoded_start_workspace(reconciled) is Some("/work/started-first"),
+  )
+}
+
+///|
+test "Started places a foreign conversation from its host session root" {
+  let dispatch = test_dispatch()
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    workspaces: ["C:\\work\\core"],
+  })
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="foreign-run",
+      session="desktop-workspace-run",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=Some(Absolute("C:/work/core")),
+      session_root=Some(Absolute("C:/work/core/.openseek")),
+      task=Some("arrived before the list"),
+      submission_id=None,
+    ),
+    model,
+  )
+  guard started.find_conversation(
+      @interop.ChannelId::Local,
+      "desktop-workspace-run",
+    )
+    is Some(foreign) else {
+    fail("Started did not materialize its conversation")
+  }
+  assert_eq(workspace_token(foreign.workspace), "C:\\work\\core")
+  inspect(started.active_session, content="desktop-test")
 }
 
 ///|
@@ -1941,7 +4777,7 @@ test "sessions failure pops a toast without touching the transcript" {
     ..test_conversation(),
     messages: [{ kind: User, content: "hi" }],
   })
-  let (_, next) = update(dispatch, SessionsFailed("engine exploded"), model)
+  let (_, next) = update_dev(dispatch, SessionsFailed("engine exploded"), model)
   inspect(next.notifications.length(), content="1")
   inspect(
     next.notifications[0].message,
@@ -1953,29 +4789,46 @@ test "sessions failure pops a toast without touching the transcript" {
 ///|
 test "open session is a no-op for the current session" {
   let dispatch = test_dispatch()
-  let (_, next) = update(dispatch, OpenSession("desktop-test"), test_model())
+  let (_, next) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    test_model(),
+  )
   inspect(next.active_session, content="desktop-test")
   inspect(next.conversations.length(), content="1")
 }
 
 ///|
-test "open session switches to a live conversation without reloading it" {
+test "open session keeps live state on screen while re-reading the store" {
   let dispatch = test_dispatch()
   let background = {
-    ..empty_conversation("desktop-bg"),
-    run: Open(run_id=9, stage=Opened),
+    ..empty_conversation(@interop.ChannelId::Local, "desktop-bg"),
+    run: Open(run_id="r9", stage=Opened),
     streaming_response: "mid-stream",
     messages: [{ kind: User, content: "background task" }],
   }
   let model = running_model().replace_conversation(background)
-  let (_, once) = update(dispatch, OpenSession("desktop-bg"), model)
-  let (_, twice) = update(dispatch, OpenSession("desktop-bg"), model)
+  let (_, once) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-bg"),
+    model,
+  )
+  let (_, twice) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-bg"),
+    model,
+  )
   inspect(once.active_session, content="desktop-bg")
-  // The live state survives the switch: no reload, nothing reset.
+  // The live state stays on screen; the store re-read happens behind it
+  // (this client may have been absent for part of this conversation).
   inspect(once.active().streaming_response, content="mid-stream")
   inspect(once.active().is_running(), content="true")
+  assert_true(
+    once.loading_conversation is Some({ channel: Local, session: "desktop-bg" }),
+  )
   // The previous conversation is still running in the background.
-  guard once.find_conversation("desktop-test") is Some(old) else {
+  guard once.find_conversation(@interop.ChannelId::Local, "desktop-test")
+    is Some(old) else {
     fail("expected the old conversation to survive")
   }
   inspect(old.is_running(), content="true")
@@ -1983,72 +4836,697 @@ test "open session switches to a live conversation without reloading it" {
 }
 
 ///|
+test "reconnect refresh is single-flight and preserves its commit buffer" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    messages: [{ kind: User, content: "kept" }],
+    watermark: 1,
+  })
+  let (_, refreshing) = update_dev(dispatch, BridgeReady, model)
+  guard refreshing.active().sync is Reloading(generation=1, attempt=1, ..) else {
+    fail("expected the first reconnect refresh")
+  }
+  let (_, buffered) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=3, kind="user", payload={
+      "content": Json::string("future"),
+    }),
+    refreshing,
+  )
+  let (_, reconnected_again) = update_dev(dispatch, BridgeReady, buffered)
+  guard reconnected_again.active().sync
+    is Reloading(generation=1, attempt=1, buffered=commits, ..) else {
+    fail("a second reconnect started another generation")
+  }
+  inspect(commits.length(), content="1")
+  inspect(commits[0].sequence, content="3")
+}
+
+///|
+test "BridgeReady clears every non-replayable stream and compaction phase" {
+  let dispatch = test_dispatch()
+  let active = {
+    ..test_conversation(),
+    streaming_response: "old answer",
+    compaction: Queued,
+  }
+  let background = {
+    ..empty_conversation(@interop.ChannelId::Local, "desktop-bg"),
+    streaming_response: "background answer",
+    compaction: Compacting,
+  }
+  let model = test_model()
+    .replace_conversation(active)
+    .replace_conversation(background)
+  let (_, next) = update_dev(dispatch, BridgeReady, model)
+  for conv in next.conversations {
+    inspect(conv.streaming_response, content="")
+    assert_true(conv.compaction is NotCompacting)
+  }
+}
+
+///|
+test "BridgeReady resets only conversations owned by its channel" {
+  let dispatch = test_dispatch()
+  let background : @interop.ChannelId = Remote("d-bg")
+  let local_conv = {
+    ..empty_conversation(@interop.ChannelId::Local, "shared"),
+    streaming_response: "local answer",
+    compaction: Queued,
+  }
+  let remote = {
+    ..empty_conversation(background, "shared"),
+    streaming_response: "remote answer",
+    compaction: Compacting,
+  }
+  let model = {
+    ..test_model(),
+    devices: [
+      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
+      { ..empty_device_state(background), bridge: Connected },
+    ],
+    active_session: "shared",
+    conversations: [local_conv, remote],
+  }
+  let (_, next) = update(dispatch, FromDevice(background, BridgeReady), model)
+  guard next.find_conversation(@interop.ChannelId::Local, "shared")
+    is Some(kept) &&
+    next.find_conversation(background, "shared") is Some(reset) else {
+    fail("same-id conversations were not preserved")
+  }
+  inspect(kept.streaming_response, content="local answer")
+  assert_true(kept.compaction is Queued)
+  inspect(reset.streaming_response, content="")
+  assert_true(reset.compaction is NotCompacting)
+}
+
+///|
+test "socket losses mark the bridge lost at the third consecutive drop" {
+  let dispatch = test_dispatch()
+  let channel : @interop.ChannelId = Remote("d1")
+  let model = {
+    ..initial_model(),
+    devices: [{ ..empty_device_state(channel), bridge: Connected }],
+    focused: channel,
+  }
+  let (_, one) = update(dispatch, FromDevice(channel, ChannelDown), model)
+  let (_, two) = update(dispatch, FromDevice(channel, ChannelDown), one)
+  inspect(two.dev().reconnect_failures, content="2")
+  assert_true(two.bridge_state() is Connected)
+  let (_, three) = update(dispatch, FromDevice(channel, ChannelDown), two)
+  assert_true(three.bridge_state() is BridgeLost(_))
+}
+
+///|
+test "BridgeReady resets the reconnect failure count" {
+  let dispatch = test_dispatch()
+  let channel : @interop.ChannelId = Remote("d1")
+  let model = {
+    ..initial_model(),
+    devices: [
+      {
+        ..empty_device_state(channel),
+        reconnect_failures: 2,
+        bridge: BridgeLost("gone"),
+      },
+    ],
+    focused: channel,
+  }
+  let (_, next) = update(dispatch, FromDevice(channel, BridgeReady), model)
+  inspect(next.dev().reconnect_failures, content="0")
+  assert_true(next.bridge_state() is Connected)
+}
+
+///|
+test "a late reconnect tick for a removed device changes nothing" {
+  let dispatch = test_dispatch()
+  let channel : @interop.ChannelId = Remote("gone")
+  let model = test_model()
+  let (_, next) = update(dispatch, FromDevice(channel, ReconnectDue), model)
+  inspect(next.devices.length(), content="1")
+  assert_true(next.device_state(channel) is None)
+}
+
+///|
+test "BridgeReady fences an awaiting initial after disconnected canonical items" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    {
+      ..test_conversation(),
+      run: Starting(submission_id="reconnect-prompt"),
+      messages: [{ kind: User, content: "before disconnect" }],
+      watermark: 1,
+    },
+    "reconnect-prompt",
+    "prompt sent near disconnect",
+  )
+  let (_, reconnected) = update_dev(
+    dispatch,
+    BridgeReady,
+    test_model().replace_conversation(conv),
+  )
+  assert_true(reconnected.active().input_ledger[0].state is Unconfirmed)
+  assert_true(
+    reconnected.active().overlay[0].anchor is SnapshotCut(snapshot_generation=1),
+  )
+  assert_true(reconnected.active().sync is Reloading(generation=1, ..))
+  let (_, reconciled) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "before disconnect" },
+        { kind: User, content: "canonical prompt from the gap" },
+        {
+          kind: Assistant(is_danger=false),
+          content: "canonical answer from the gap",
+        },
+      ],
+      watermark=3,
+      event_boundaries=[(1, false, 1), (2, false, 2), (3, false, 3)],
+      generation=1,
+    ),
+    reconnected,
+  )
+  assert_true(reconciled.active().overlay[0].anchor is AfterMessages(3))
+  let visible = reconciled.active().visible_items()
+  inspect(visible.length(), content="4")
+  inspect(visible[2].content, content="canonical answer from the gap")
+  assert_true(visible[3].content.contains("prompt sent near disconnect"))
+}
+
+///|
+test "BridgeReady fences an awaiting steer after disconnected canonical items" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      messages: [{ kind: User, content: "before disconnect" }],
+      watermark: 1,
+    },
+    ["steer sent near disconnect"],
+  )
+  let (_, reconnected) = update_dev(
+    dispatch,
+    BridgeReady,
+    running_model().replace_conversation(conv),
+  )
+  assert_true(reconnected.active().input_ledger[0].state is Unconfirmed)
+  assert_true(
+    reconnected.active().overlay[0].anchor is SnapshotCut(snapshot_generation=1),
+  )
+  assert_true(reconnected.active().sync is Reloading(generation=1, ..))
+  let (_, reconciled) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "before disconnect" },
+        { kind: User, content: "canonical steer from the gap" },
+        {
+          kind: Assistant(is_danger=false),
+          content: "canonical output from the gap",
+        },
+      ],
+      watermark=3,
+      event_boundaries=[(1, false, 1), (2, false, 2), (3, false, 3)],
+      generation=1,
+    ),
+    reconnected,
+  )
+  assert_true(reconciled.active().overlay[0].anchor is AfterMessages(3))
+  let visible = reconciled.active().visible_items()
+  inspect(visible.length(), content="4")
+  inspect(visible[2].content, content="canonical output from the gap")
+  assert_true(visible[3].content.contains("steer sent near disconnect"))
+}
+
+///|
+test "an explicit rejected fresh start does not force reconnect reloads" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id="rejected-id") },
+    "rejected-id",
+    "try this",
+  )
+  let (_, rejected) = update_dev(
+    dispatch,
+    StartRejected(
+      session="desktop-test",
+      submission_id="rejected-id",
+      message="host refused",
+    ),
+    test_model().replace_conversation(conv),
+  )
+  inspect(rejected.active().input_ledger.length(), content="0")
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, rejected)
+  assert_true(reconnected.active().sync is Synced)
+  inspect(reconnected.transcript_request_generation, content="0")
+}
+
+///|
+test "an unconfirmed empty start forces reconnect recovery" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id="unknown-id") },
+    "unknown-id",
+    "maybe accepted",
+  )
+  let (_, uncertain) = update_dev(
+    dispatch,
+    StartUndelivered(
+      session="desktop-test",
+      submission_id="unknown-id",
+      message="connection lost",
+    ),
+    test_model().replace_conversation(conv),
+  )
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, uncertain)
+  guard reconnected.active().sync is Reloading(generation=1, ..) else {
+    fail("unconfirmed start did not force a durable reload")
+  }
+}
+
+///|
+test "SessionsLoaded retries an unconfirmed start after an empty recovery" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    { ..test_conversation(), run: NoRun(ended=Some(RunFailed)) },
+    "unknown-id",
+    "maybe accepted",
+  )
+  let (conv, _) = conv.mark_submission_unconfirmed(
+    "unknown-id", "delivery unconfirmed", false,
+  )
+  let model = {
+    ..test_model().replace_conversation({ ..conv, sync: test_reloading([]) }),
+    transcript_request_generation: 1,
+  }
+  let (_, empty) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=0,
+      event_boundaries=[],
+      generation=1,
+    ),
+    model,
+  )
+  assert_true(empty.active().sync is Synced)
+  inspect(empty.active().input_ledger.length(), content="1")
+  let (_, proved) = update(
+    dispatch,
+    sessions_loaded([
+      {
+        id: "desktop-test",
+        title: Some("persisted"),
+        workspace: "",
+        workspace_name: "",
+      },
+    ]),
+    empty,
+  )
+  guard proved.active().sync is Reloading(generation=2, ..) else {
+    fail("durable session-list proof did not retry the recovery")
+  }
+}
+
+///|
 test "open session tracks the latest load and ignores stale replies" {
   let dispatch = test_dispatch()
-  let (_, loading_a) = update(dispatch, OpenSession("desktop-a"), test_model())
+  let (_, loading_a) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-a"),
+    test_model(),
+  )
   inspect(loading_a.active_session, content="desktop-test")
-  inspect(loading_a.loading_session, content="desktop-a")
-  let (_, loading_b) = update(dispatch, OpenSession("desktop-b"), loading_a)
-  inspect(loading_b.loading_session, content="desktop-b")
+  assert_true(
+    loading_a.loading_conversation
+    is Some({ channel: Local, session: "desktop-a" }),
+  )
+  let (_, loading_b) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-b"),
+    loading_a,
+  )
+  assert_true(
+    loading_b.loading_conversation
+    is Some({ channel: Local, session: "desktop-b" }),
+  )
   let a_items : Array[@transcript.TranscriptItem] = [
     { kind: User, content: "old selection" },
   ]
-  let (_, after_a) = update(
+  let (_, after_a) = update_dev(
     dispatch,
-    SessionLoaded(session="desktop-a", items=a_items),
+    SessionLoaded(
+      session="desktop-a",
+      items=a_items,
+      watermark=0,
+      event_boundaries=[],
+      generation=1,
+    ),
     loading_b,
   )
   inspect(after_a.active_session, content="desktop-test")
-  inspect(after_a.loading_session, content="desktop-b")
+  assert_true(
+    after_a.loading_conversation
+    is Some({ channel: Local, session: "desktop-b" }),
+  )
   let b_items : Array[@transcript.TranscriptItem] = [
     { kind: User, content: "latest selection" },
   ]
-  let (_, after_b) = update(
+  let (_, after_b) = update_dev(
     dispatch,
-    SessionLoaded(session="desktop-b", items=b_items),
+    SessionLoaded(
+      session="desktop-b",
+      items=b_items,
+      watermark=0,
+      event_boundaries=[],
+      generation=2,
+    ),
     after_a,
   )
   inspect(after_b.active_session, content="desktop-b")
-  inspect(after_b.loading_session, content="")
+  assert_true(after_b.loading_conversation is None)
   inspect(after_b.active().messages[0].content, content="latest selection")
 }
 
 ///|
-test "abandoned session load failures are dropped" {
+test "same-id session loads are fenced by channel owner" {
   let dispatch = test_dispatch()
-  let (_, loading) = update(dispatch, OpenSession("desktop-a"), test_model())
-  let (_, abandoned) = update(dispatch, NewChat, loading)
+  let remote : @interop.ChannelId = Remote("d-remote")
+  let local_conv = {
+    ..empty_conversation(@interop.ChannelId::Local, "shared"),
+    messages: [{ kind: User, content: "local" }],
+  }
+  let remote_conv = {
+    ..empty_conversation(remote, "shared"),
+    messages: [{ kind: User, content: "remote" }],
+  }
+  let model = {
+    ..test_model(),
+    devices: [
+      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
+      { ..empty_device_state(remote), bridge: Connected },
+    ],
+    active_session: "shared",
+    conversations: [local_conv, remote_conv],
+  }
+  let (_, loading_remote) = update(
+    dispatch,
+    OpenSession(remote, "shared"),
+    model,
+  )
+  let (_, loading_local) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "shared"),
+    loading_remote,
+  )
+  assert_true(
+    loading_local.loading_conversation
+    is Some({ channel: Local, session: "shared" }),
+  )
+  let (_, remote_reply) = update(
+    dispatch,
+    FromDevice(
+      remote,
+      SessionLoaded(
+        session="shared",
+        items=[{ kind: Assistant(is_danger=false), content: "remote loaded" }],
+        watermark=1,
+        event_boundaries=[],
+        generation=1,
+      ),
+    ),
+    loading_local,
+  )
+  assert_true(remote_reply.focused is Local)
+  inspect(remote_reply.active().messages[0].content, content="local")
+  assert_true(
+    remote_reply.loading_conversation
+    is Some({ channel: Local, session: "shared" }),
+  )
+  guard remote_reply.find_conversation(remote, "shared") is Some(loaded) else {
+    fail("remote conversation disappeared")
+  }
+  inspect(loaded.messages[0].content, content="remote loaded")
+}
+
+///|
+test "reselecting a synced active session reloads idle external writes" {
+  let dispatch = test_dispatch()
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    sessions: [
+      { id: "desktop-test", title: Some(""), workspace: "", workspace_name: "" },
+    ],
+  })
+  let (_, reloading) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    model,
+  )
+  assert_true(
+    reloading.loading_conversation
+    is Some({ channel: Local, session: "desktop-test" }),
+  )
+  guard reloading.active().sync is Reloading(generation=1, attempt=1, ..) else {
+    fail("expected active reselect to catch up")
+  }
+  let (_, still_single_flight) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    reloading,
+  )
+  inspect(still_single_flight.transcript_request_generation, content="1")
+  guard still_single_flight.active().sync
+    is Reloading(generation=1, attempt=1, ..) else {
+    fail("active reselect duplicated an in-flight request")
+  }
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionLoaded(
+      session="desktop-test",
+      items=[{ kind: Assistant(is_danger=false), content: "written elsewhere" }],
+      watermark=1,
+      event_boundaries=[],
+      generation=1,
+    ),
+    still_single_flight,
+  )
+  inspect(loaded.active().messages.length(), content="1")
+  inspect(loaded.active().messages[0].content, content="written elsewhere")
+  inspect(loaded.active().watermark, content="1")
+  assert_true(loaded.active().sync is Synced)
+}
+
+///|
+test "returning to a fresh active chat does not load a missing session" {
+  let dispatch = test_dispatch()
+  let model = {
+    ..test_model().replace_conversation({
+      ..test_conversation(),
+      task: "unsent draft",
+    }),
+    screen: Skills,
+  }
   let (_, next) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    model,
+  )
+  assert_true(next.screen is Chat)
+  assert_true(next.loading_conversation is None)
+  inspect(next.transcript_request_generation, content="0")
+  assert_true(next.active().sync is Synced)
+  inspect(next.active().task, content="unsent draft")
+}
+
+///|
+test "pruning and reopening cannot reuse a transcript request token" {
+  let dispatch = test_dispatch()
+  let (_, opening) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-pruned"),
+    test_model(),
+  )
+  guard opening.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
+    is Some(first) &&
+    first.sync is Reloading(generation=1, ..) else {
+    fail("expected the original request")
+  }
+  let pruned = opening.activate(@interop.ChannelId::Local, "desktop-other")
+  assert_true(
+    pruned.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
+    is None,
+  )
+  let (_, reopened) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-pruned"),
+    pruned,
+  )
+  guard reopened.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
+    is Some(second) &&
+    second.sync is Reloading(generation=2, ..) else {
+    fail("reopened conversation reused its old request token")
+  }
+  let (_, stale) = update_dev(
+    dispatch,
+    SessionLoaded(
+      session="desktop-pruned",
+      items=[{ kind: User, content: "late old snapshot" }],
+      watermark=9,
+      event_boundaries=[],
+      generation=1,
+    ),
+    reopened,
+  )
+  assert_true(
+    stale.loading_conversation
+    is Some({ channel: Local, session: "desktop-pruned" }),
+  )
+  guard stale.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
+    is Some(current) &&
+    current.sync is Reloading(generation=2, ..) else {
+    fail("late reply changed the reopened conversation")
+  }
+  inspect(current.messages.length(), content="0")
+  inspect(current.watermark, content="0")
+  let (_, fresh) = update_dev(
+    dispatch,
+    SessionLoaded(
+      session="desktop-pruned",
+      items=[{ kind: User, content: "fresh snapshot" }],
+      watermark=1,
+      event_boundaries=[],
+      generation=2,
+    ),
+    stale,
+  )
+  inspect(fresh.active_session, content="desktop-pruned")
+  inspect(fresh.active().messages[0].content, content="fresh snapshot")
+}
+
+///|
+test "archive removal and reopening cannot reuse a transcript request token" {
+  let dispatch = test_dispatch()
+  let (_, opening) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-archived"),
+    test_model(),
+  )
+  let (_, archived) = update(
+    dispatch,
+    archived_loaded([archived_item("desktop-archived")]),
+    opening,
+  )
+  assert_true(
+    archived.find_conversation(@interop.ChannelId::Local, "desktop-archived")
+    is None,
+  )
+  let (_, restored) = update(dispatch, archived_loaded([]), archived)
+  let (_, reopened) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-archived"),
+    restored,
+  )
+  guard reopened.find_conversation(
+      @interop.ChannelId::Local,
+      "desktop-archived",
+    )
+    is Some(current) &&
+    current.sync is Reloading(generation=2, ..) else {
+    fail("archive removal allowed a request token to be reused")
+  }
+  let (_, stale) = update_dev(
+    dispatch,
+    SessionLoaded(
+      session="desktop-archived",
+      items=[{ kind: User, content: "late archived snapshot" }],
+      watermark=4,
+      event_boundaries=[],
+      generation=1,
+    ),
+    reopened,
+  )
+  guard stale.find_conversation(@interop.ChannelId::Local, "desktop-archived")
+    is Some(unchanged) &&
+    unchanged.sync is Reloading(generation=2, ..) else {
+    fail("late pre-archive reply changed the reopened conversation")
+  }
+  inspect(unchanged.messages.length(), content="0")
+  inspect(unchanged.watermark, content="0")
+}
+
+///|
+test "an abandoned session load retries silently" {
+  let dispatch = test_dispatch()
+  let (_, loading) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-a"),
+    test_model(),
+  )
+  let (_, abandoned) = update(dispatch, NewChat, loading)
+  let (_, next) = update_dev(
     dispatch,
     SessionLoadFailed(
       session="desktop-a",
       message="failed to load session desktop-a",
+      generation=1,
     ),
     abandoned,
   )
-  inspect(next.loading_session, content="")
+  assert_true(next.loading_conversation is None)
   inspect(next.active().messages.length(), content="0")
   inspect(next.notifications.length(), content="0")
 }
 
 ///|
-test "a live session load failure pops a toast, not a transcript bubble" {
+test "a foreground load preserves state through retries and reports exhaustion" {
   let dispatch = test_dispatch()
-  let (_, loading) = update(dispatch, OpenSession("desktop-a"), test_model())
-  let (_, next) = update(
+  let (_, loading) = update(
     dispatch,
-    SessionLoadFailed(
-      session="desktop-a",
-      message="failed to load session desktop-a: no such file",
-    ),
-    loading,
+    OpenSession(@interop.ChannelId::Local, "desktop-a"),
+    test_model(),
   )
-  inspect(next.loading_session, content="")
+  let failure = SessionLoadFailed(
+    session="desktop-a",
+    message="failed to load session desktop-a: no such file",
+    generation=1,
+  )
+  let (_, retrying2) = update_dev(dispatch, failure, loading)
+  assert_true(
+    retrying2.loading_conversation
+    is Some({ channel: Local, session: "desktop-a" }),
+  )
+  inspect(retrying2.notifications.length(), content="0")
+  guard retrying2.find_conversation(@interop.ChannelId::Local, "desktop-a")
+    is Some(conv2) &&
+    conv2.sync is Reloading(attempt=2, ..) else {
+    fail("expected the second foreground attempt")
+  }
+  let (_, retrying3) = update_dev(dispatch, failure, retrying2)
+  guard retrying3.find_conversation(@interop.ChannelId::Local, "desktop-a")
+    is Some(conv3) &&
+    conv3.sync is Reloading(attempt=3, ..) else {
+    fail("expected the third foreground attempt")
+  }
+  let (_, next) = update_dev(dispatch, failure, retrying3)
+  assert_true(next.loading_conversation is None)
   inspect(next.notifications.length(), content="1")
   inspect(
     next.notifications[0].message,
     content="failed to load session desktop-a: no such file",
   )
+  guard next.find_conversation(@interop.ChannelId::Local, "desktop-a")
+    is Some(failed) else {
+    fail("expected the failed conversation")
+  }
+  assert_true(failed.sync is ReloadFailed(..))
+  inspect(failed.overlay.length(), content="1")
+  assert_eq(failed.overlay[0].content, TranscriptRefreshFailedNotice)
   // The conversation on screen keeps its transcript and status untouched.
   inspect(next.active().messages.length(), content="0")
   assert_true(next.display_status() is Ready)
@@ -2067,31 +5545,144 @@ test "a host action failure pops a toast" {
 }
 
 ///|
+test "opening an external link is a pure model transition" {
+  let dispatch = test_dispatch()
+  let base = test_model()
+  let (_, first) = update(
+    dispatch,
+    ExternalLinkClicked("https://example.com/docs"),
+    base,
+  )
+  let (_, second) = update(
+    dispatch,
+    ExternalLinkClicked("https://example.com/docs"),
+    base,
+  )
+  inspect(first.active_session, content="desktop-test")
+  inspect(second.active_session, content="desktop-test")
+  inspect(first.notifications.length(), content="0")
+  inspect(second.notifications.length(), content="0")
+}
+
+///|
+test "run semantic errors never duplicate their terminal commit" {
+  let dispatch = test_dispatch()
+  let semantic = Error(
+    run_id=Some("r7"),
+    message="engine error",
+    diagnostics=None,
+    exit_code=None,
+  )
+  let terminal = SessionCommitted(
+    session="desktop-test",
+    sequence=1,
+    kind="terminal",
+    payload={
+      "kind": Json::string("failed"),
+      "message": Json::string("engine error"),
+    },
+  )
+  let (_, semantic_first) = update_dev(dispatch, semantic, running_model())
+  inspect(semantic_first.active().overlay.length(), content="0")
+  let (_, committed_after) = update_dev(dispatch, terminal, semantic_first)
+  inspect(committed_after.active().messages.length(), content="1")
+  inspect(committed_after.active().overlay.length(), content="0")
+  let (_, committed_first) = update_dev(dispatch, terminal, running_model())
+  let (_, semantic_after) = update_dev(dispatch, semantic, committed_first)
+  inspect(semantic_after.active().messages.length(), content="1")
+  inspect(semantic_after.active().overlay.length(), content="0")
+}
+
+///|
+test "a process-exit error keeps its host diagnostics as a local notice" {
+  let dispatch = test_dispatch()
+  let (_, next) = update_dev(
+    dispatch,
+    Error(
+      run_id=Some("r7"),
+      message="engine process exited",
+      diagnostics=Some("fatal stderr"),
+      exit_code=Some(9),
+    ),
+    running_model(),
+  )
+  inspect(next.active().overlay.length(), content="1")
+  assert_true(next.active().overlay[0].content.contains("fatal stderr"))
+}
+
+///|
+test "agent error decoder preserves an optional process exit code" {
+  guard error_msg({
+      "run_id": Json::string("r7"),
+      "message": Json::string("exited"),
+      "exit_code": Json::number(9),
+    })
+    is Some(Error(exit_code=Some(9), ..)) else {
+    fail("expected the exit code")
+  }
+}
+
+///|
+test "finished and durable-boundary decoders preserve exact EOF frontiers" {
+  guard finished_msg({
+      "run_id": Json::string("r7"),
+      "status": Json::string("failed"),
+      "exit_code": Json::number(9),
+      "durable_sequence": Json::number(12),
+    })
+    is Some(Finished(durable_sequence=Some(12), ..)) else {
+    fail("expected the final-scan sequence")
+  }
+  guard durable_boundary_msg({
+      "run_id": Json::string("r7"),
+      "session": Json::string("desktop-test"),
+      "sequence": Json::number(12),
+    })
+    is Some(DurableBoundary(sequence=12, ..)) else {
+    fail("expected the delayed durable boundary")
+  }
+}
+
+///|
 test "session loaded swaps the active conversation onto the stored session" {
   let dispatch = test_dispatch()
-  let model = {
-    ..test_model().replace_conversation({
-      ..test_conversation(),
-      usage_tokens: 42,
-      watcher_status: "running",
-      streaming_response: "leftover",
-      messages: [{ kind: User, content: "old chat" }],
-    }),
-    loading_session: "desktop-stored",
-  }
-  let items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "stored question" },
-    { kind: Assistant(false), content: "stored answer" },
-  ]
-  let (_, once) = update(
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    usage_tokens: 42,
+    watcher_status: "running",
+    streaming_response: "leftover",
+    messages: [{ kind: User, content: "old chat" }],
+  })
+  let (_, loading) = update(
     dispatch,
-    SessionLoaded(session="desktop-stored", items~),
+    OpenSession(@interop.ChannelId::Local, "desktop-stored"),
     model,
   )
-  let (_, twice) = update(
+  let items : Array[@transcript.TranscriptItem] = [
+    { kind: User, content: "stored question" },
+    { kind: Assistant(is_danger=false), content: "stored answer" },
+  ]
+  let (_, once) = update_dev(
     dispatch,
-    SessionLoaded(session="desktop-stored", items~),
-    model,
+    SessionLoaded(
+      session="desktop-stored",
+      items~,
+      watermark=0,
+      event_boundaries=[],
+      generation=1,
+    ),
+    loading,
+  )
+  let (_, twice) = update_dev(
+    dispatch,
+    SessionLoaded(
+      session="desktop-stored",
+      items~,
+      watermark=0,
+      event_boundaries=[],
+      generation=1,
+    ),
+    loading,
   )
   inspect(once.active_session, content="desktop-stored")
   inspect(once.active().messages.length(), content="2")
@@ -2105,45 +5696,80 @@ test "session loaded swaps the active conversation onto the stored session" {
 }
 
 ///|
-test "session loaded is dropped only when that conversation is running" {
+test "session loaded adopts the store transcript and keeps live run state" {
   let dispatch = test_dispatch()
-  let model = { ..running_model(), loading_session: "desktop-stored" }
+  let model = running_model()
   let items : Array[@transcript.TranscriptItem] = [
     { kind: User, content: "stored" },
   ]
   // The active conversation runs; loading some other stored session is fine.
-  let (_, other) = update(
+  let (_, loading_other) = update(
     dispatch,
-    SessionLoaded(session="desktop-stored", items~),
+    OpenSession(@interop.ChannelId::Local, "desktop-stored"),
     model,
   )
+  let (_, other) = update_dev(
+    dispatch,
+    SessionLoaded(
+      session="desktop-stored",
+      items~,
+      watermark=0,
+      event_boundaries=[],
+      generation=1,
+    ),
+    loading_other,
+  )
   inspect(other.active_session, content="desktop-stored")
-  guard other.find_conversation("desktop-test") is Some(live) else {
+  guard other.find_conversation(@interop.ChannelId::Local, "desktop-test")
+    is Some(live) else {
     fail("expected the running conversation to survive")
   }
   inspect(live.is_running(), content="true")
-  // A stale load reply for the running conversation itself is dropped.
-  let model = { ..running_model(), loading_session: "desktop-test" }
-  let (_, same) = update(
+  // A load reply for the running conversation itself adopts the store's
+  // transcript — the source of truth for completed items — while the live
+  // run state (phase, streaming buffers) rides across untouched.
+  let streaming = running_model().replace_conversation({
+    ..running_conversation(),
+    streaming_response: "mid-step",
+  })
+  let loading_same = {
+    ..streaming.replace_conversation({
+      ..streaming.active(),
+      sync: test_reloading([]),
+    }),
+    loading_conversation: Some({ channel: Local, session: "desktop-test" }),
+  }
+  let (_, same) = update_dev(
     dispatch,
-    SessionLoaded(session="desktop-test", items~),
-    model,
+    SessionLoaded(
+      session="desktop-test",
+      items~,
+      watermark=0,
+      event_boundaries=[],
+      generation=1,
+    ),
+    loading_same,
   )
-  inspect(same.active().messages.length(), content="0")
+  inspect(same.active().messages.length(), content="1")
+  inspect(same.active().messages[0].content, content="stored")
   inspect(same.active().is_running(), content="true")
+  inspect(same.active().streaming_response, content="mid-step")
 }
 
 ///|
 test "started routes by session and records the host's workspace" {
   let dispatch = test_dispatch()
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
     Started(
-      run_id=7,
+      run_id="r7",
       session="desktop-test",
       model="deepseek-v4-pro",
       max_steps=1000,
       cwd=Some(Absolute("/home/u/Documents/OpenSeek/desktop-test")),
+      session_root=None,
+      task=None,
+      submission_id=None,
     ),
     test_model(),
   )
@@ -2152,76 +5778,1401 @@ test "started routes by session and records the host's workspace" {
     is Some(Absolute("/home/u/Documents/OpenSeek/desktop-test")),
   )
   inspect(next.active().is_running(), content="true")
-  guard next.active().run is Open(run_id=7, ..) else {
+  guard next.active().run is Open(run_id="r7", ..) else {
     fail("expected the run id to be recorded")
+  }
+  // A run this client did not send: the store gained its prompt, so the
+  // on-screen conversation re-reads it in the background, buffering commits
+  // until the snapshot lands. The user-load marker stays free.
+  assert_true(next.active().sync is Reloading(..))
+  assert_true(next.loading_conversation is None)
+}
+
+///|
+test "started decoder preserves optional placement and submission id" {
+  guard started_msg({
+      "run_id": Json::string("r7"),
+      "session": Json::string("desktop-test"),
+      "model": Json::string("deepseek-v4-pro"),
+      "max_steps": Json::number(1000),
+      "session_root": Json::string("/work/core/.openseek"),
+      "submission_id": Json::string("submission-7"),
+    })
+    is Some(
+      Started(
+        session_root=Some(Absolute("/work/core/.openseek")),
+        submission_id=Some("submission-7"),
+        ..
+      )
+    ) else {
+    fail("placement or submission id was lost while decoding Started")
   }
 }
 
 ///|
-test "a replayed start restores an unknown session without changing focus" {
+test "started for an unknown session materializes its conversation" {
   let dispatch = test_dispatch()
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
     Started(
-      run_id=7,
+      run_id="r7",
       session="desktop-ghost",
       model="deepseek-v4-pro",
       max_steps=1000,
       cwd=None,
+      session_root=None,
+      task=Some("fix the flaky test"),
+      submission_id=None,
     ),
     test_model(),
   )
-  inspect(next.active().is_running(), content="false")
+  // Another client's run is now trackable here: cancellable, steerable,
+  // and its events route to a real conversation.
+  guard next.find_conversation(@interop.ChannelId::Local, "desktop-ghost")
+    is Some(ghost) else {
+    fail("expected the foreign run's conversation to materialize")
+  }
+  inspect(ghost.is_running(), content="true")
+  guard ghost.run is Open(run_id="r7", ..) else {
+    fail("expected the run id to be recorded")
+  }
+  // No bubble is synthesized from the pushed task — the durable transcript's
+  // only sources are snapshots and commits, and the prompt's own commit (or
+  // the read when this conversation is opened) brings it.
+  inspect(ghost.messages.length(), content="0")
+  inspect(ghost.overlay.length(), content="0")
+  // Focus stays where the user is.
   inspect(next.active_session, content="desktop-test")
-  inspect(next.conversations.length(), content="2")
-  guard next.find_conversation("desktop-ghost") is Some(replayed) else {
-    fail("expected the replayed conversation")
-  }
-  inspect(replayed.is_running(), content="true")
-  guard replayed.run is Open(run_id=7, ..) else {
-    fail("expected the replayed run id")
-  }
-  let (_, streamed) = update(
+  inspect(next.active().is_running(), content="false")
+}
+
+///|
+test "a distinct started id replaces a stale open run as foreign" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      run: Open(run_id="r-old", stage=AtStep(Some(3))),
+      streaming_response: "old answer fragment",
+    },
+    ["old steer"],
+    run_id="r-old",
+  )
+  let model = running_model().replace_conversation(conv)
+  let (_, next) = update_dev(
     dispatch,
-    Engine(
-      7,
-      AssistantDelta("continued after reload"),
-      session=Some("desktop-ghost"),
+    Started(
+      run_id="r-new",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("new foreign prompt"),
+      submission_id=None,
     ),
-    next,
+    model,
   )
-  guard streamed.find_conversation("desktop-ghost") is Some(streaming) else {
-    fail("expected the replayed conversation to receive output")
+  guard next.active().run is Open(run_id="r-new", stage=Opened) else {
+    fail("expected the new run to replace the stale id")
   }
-  inspect(streaming.streaming_response, content="continued after reload")
-  let (_, finished) = update(
-    dispatch,
-    Finished(run_id=7, status="finished", answer=Some("done")),
-    streamed,
+  inspect(next.active().streaming_response, content="")
+  inspect(next.active().pending_steers().length(), content="0")
+  inspect(next.active().overlay.length(), content="1")
+  assert_true(next.active().overlay[0].content.contains("old steer"))
+  guard next.active().sync is Reloading(generation=1, attempt=1, ..) else {
+    fail("a foreign replacement did not refresh the transcript")
+  }
+}
+
+///|
+test "a repeated started id is idempotent" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      run: Open(run_id="r7", stage=AtStep(Some(4))),
+      streaming_response: "current fragment",
+    },
+    ["current steer"],
   )
-  guard finished.find_conversation("desktop-ghost") is Some(settled) else {
-    fail("expected the replayed conversation to finish")
+  let model = running_model().replace_conversation(conv)
+  let (_, next) = update_dev(
+    dispatch,
+    Started(
+      run_id="r7",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=None,
+      submission_id=None,
+    ),
+    model,
+  )
+  guard next.active().run is Open(run_id="r7", stage=AtStep(Some(4))) else {
+    fail("a repeated start reset the live run stage")
+  }
+  inspect(next.active().streaming_response, content="current fragment")
+  inspect(next.active().pending_steers().length(), content="1")
+  inspect(next.active().pending_steers()[0], content="current steer")
+  inspect(next.transcript_request_generation, content="0")
+  assert_true(next.active().sync is Synced)
+}
+
+///|
+test "a start failure cannot close a run opened by a winning push" {
+  let dispatch = test_dispatch()
+  let starting_conv = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id="mine") },
+    "mine",
+    "my competing prompt",
+  )
+  let starting = test_model().replace_conversation(starting_conv)
+  let (_, opened) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-foreign",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("the other client's prompt"),
+      submission_id=Some("theirs"),
+    ),
+    starting,
+  )
+  let opened = opened.replace_conversation(
+    with_pending_steers(
+      { ..opened.active(), streaming_response: "foreign fragment" },
+      ["steer for foreign run"],
+      run_id="r-foreign",
+    ),
+  )
+  let (_, failed) = update_dev(
+    dispatch,
+    StartRejected(
+      session="desktop-test",
+      submission_id="mine",
+      message="start was rejected",
+    ),
+    opened,
+  )
+  guard failed.active().run is Open(run_id="r-foreign", stage=Opened) else {
+    fail("the local failure closed the already-open run")
+  }
+  inspect(failed.active().streaming_response, content="foreign fragment")
+  inspect(failed.active().pending_steers().length(), content="1")
+  inspect(failed.active().pending_steers()[0], content="steer for foreign run")
+  inspect(failed.active().task, content="my competing prompt")
+  inspect(failed.active().overlay.length(), content="1")
+  inspect(failed.active().overlay[0].content, content="start was rejected")
+  guard failed.active().sync is Reloading(generation=1, ..) else {
+    fail("the raced start failure did not catch up the transcript")
+  }
+}
+
+///|
+test "a start failure closes only a still-starting run" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    {
+      ..test_conversation(),
+      run: Starting(submission_id="prompt-id"),
+      streaming_response: "partial",
+    },
+    "prompt-id",
+    "prompt",
+  )
+  let model = test_model().replace_conversation(conv)
+  let (_, failed) = update_dev(
+    dispatch,
+    StartRejected(
+      session="desktop-test",
+      submission_id="prompt-id",
+      message="start failed",
+    ),
+    model,
+  )
+  assert_true(failed.active().run is NoRun(ended=Some(RunFailed)))
+  inspect(failed.active().streaming_response, content="")
+  inspect(failed.active().overlay.length(), content="1")
+  inspect(failed.active().task, content="prompt")
+  inspect(failed.transcript_request_generation, content="0")
+}
+
+///|
+test "canonical User text never claims an unconfirmed start" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    test_conversation(),
+    "prompt-id",
+    "accepted prompt",
+  )
+  let model = test_model().replace_conversation({
+    ..conv,
+    run: Starting(submission_id="prompt-id"),
+  })
+  let (_, failed) = update_dev(
+    dispatch,
+    StartUndelivered(
+      session="desktop-test",
+      submission_id="prompt-id",
+      message="response transport closed",
+    ),
+    model,
+  )
+  assert_true(failed.active().run is NoRun(ended=Some(RunFailed)))
+  inspect(failed.active().overlay.length(), content="1")
+  inspect(failed.active().input_ledger.length(), content="1")
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=1, kind="user", payload={
+      "content": Json::string("accepted prompt"),
+    }),
+    failed,
+  )
+  assert_true(committed.active().run is NoRun(ended=Some(RunFailed)))
+  inspect(committed.active().overlay.length(), content="1")
+  inspect(committed.active().input_ledger.length(), content="1")
+  inspect(committed.active().messages.length(), content="1")
+}
+
+///|
+test "a matching Started establishes the run without consuming its prompt" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id="prompt-id") },
+    "prompt-id",
+    "accepted prompt",
+  )
+  let (_, failed) = update_dev(
+    dispatch,
+    StartUndelivered(
+      session="desktop-test",
+      submission_id="prompt-id",
+      message="connection lost",
+    ),
+    test_model().replace_conversation(conv),
+  )
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-recovered",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("accepted prompt"),
+      submission_id=Some("prompt-id"),
+    ),
+    failed,
+  )
+  assert_true(started.active().run is Open(run_id="r-recovered", ..))
+  inspect(started.active().overlay.length(), content="1")
+  assert_true(started.active().overlay[0].content.contains("accepted prompt"))
+  inspect(started.active().input_ledger.length(), content="1")
+  inspect(started.active().input_ledger[0].submission_id, content="prompt-id")
+  assert_true(started.active().input_ledger[0].state is Unconfirmed)
+}
+
+///|
+test "an accepted start response opens the run without Started" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id="prompt-id") },
+    "prompt-id",
+    "prompt",
+  )
+  let (_, responded) = update_dev(
+    dispatch,
+    StartResponded(
+      session="desktop-test",
+      submission_id="prompt-id",
+      run_id="r-response",
+      status="accepted",
+      exit_code=0,
+    ),
+    test_model().replace_conversation(conv),
+  )
+  assert_true(responded.active().run is Open(run_id="r-response", ..))
+  assert_true(responded.active().last_run_id is Some("r-response"))
+  inspect(responded.active().input_ledger.length(), content="1")
+  assert_true(responded.active().input_ledger[0].run_id is Some("r-response"))
+  assert_true(responded.active().sync is Reloading(generation=1, ..))
+  assert_true(responded.active().run_durable_floor is None)
+  assert_true(responded.active().run_floor_generation is Some(1))
+  let (_, drafted) = update(dispatch, TaskChanged("too early"), responded)
+  let (_, gated) = update(dispatch, Send, drafted)
+  inspect(gated.active().input_ledger.length(), content="1")
+  inspect(gated.active().task, content="too early")
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-response",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("prompt"),
+      submission_id=Some("prompt-id"),
+    ),
+    gated,
+  )
+  // The delayed Started is idempotent with the response-first recovery: it
+  // neither drops nor queues a second generation.
+  assert_true(started.active().sync is Reloading(generation=1, ..))
+  assert_true(started.active().run_floor_generation is Some(1))
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "external prompt" },
+        { kind: Assistant(is_danger=false), content: "external answer" },
+        { kind: User, content: "prompt" },
+      ],
+      watermark=4,
+      event_boundaries=[
+        (1, false, 1),
+        (2, false, 2),
+        (3, true, 2),
+        (4, false, 3),
+      ],
+      generation=1,
+    ),
+    started,
+  )
+  assert_true(loaded.active().sync is Synced)
+  assert_true(loaded.active().run_durable_floor is Some(3))
+  assert_true(loaded.active().run_floor_generation is None)
+  inspect(loaded.active().input_ledger.length(), content="1")
+}
+
+///|
+test "accepted start remains recoverable when the engine fails before User append" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id="prompt-id") },
+    "prompt-id",
+    "must not disappear",
+  )
+  let (_, accepted) = update_dev(
+    dispatch,
+    StartResponded(
+      session="desktop-test",
+      submission_id="prompt-id",
+      run_id="r-failed",
+      status="accepted",
+      exit_code=0,
+    ),
+    test_model().replace_conversation(conv),
+  )
+  let (_, failed) = update_dev(
+    dispatch,
+    Finished(
+      run_id="r-failed",
+      status="failed",
+      answer=None,
+      durable_sequence=None,
+    ),
+    accepted,
+  )
+  inspect(failed.active().input_ledger.length(), content="1")
+  assert_true(failed.active().input_ledger[0].state is Unconfirmed)
+  assert_true(failed.active().overlay[0].content.contains("must not disappear"))
+  let (_, external_snapshot) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: User, content: "external writer only" }],
+      watermark=1,
+      event_boundaries=[(1, false, 1)],
+      generation=1,
+    ),
+    failed,
+  )
+  // Unrelated durable text is not ownership proof for this exact prompt.
+  inspect(external_snapshot.active().input_ledger.length(), content="1")
+  assert_true(
+    external_snapshot.active().overlay[0].content.contains("must not disappear"),
+  )
+}
+
+///|
+test "an old-host Started without an id is settled by the exact start response" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id="prompt-id") },
+    "prompt-id",
+    "prompt",
+  )
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-old-host",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("prompt"),
+      submission_id=None,
+    ),
+    test_model().replace_conversation(conv),
+  )
+  assert_true(started.active().run is Open(run_id="r-old-host", ..))
+  inspect(started.active().input_ledger.length(), content="1")
+  inspect(started.active().overlay.length(), content="1")
+  let (_, responded) = update_dev(
+    dispatch,
+    StartResponded(
+      session="desktop-test",
+      submission_id="prompt-id",
+      run_id="r-old-host",
+      status="accepted",
+      exit_code=0,
+    ),
+    started,
+  )
+  assert_true(responded.active().run is Open(run_id="r-old-host", ..))
+  inspect(responded.active().input_ledger.length(), content="1")
+  assert_true(responded.active().input_ledger[0].run_id is Some("r-old-host"))
+  inspect(responded.active().overlay.length(), content="1")
+}
+
+///|
+test "a late accepted response settles run A without replacing open run B" {
+  let dispatch = test_dispatch()
+  guard second_run_started_before_first_response() is Some(result) else {
+    fail("expected the second prompt to be starting")
+  }
+  let (second_started, second_submission) = result
+  let (_, responded) = update_dev(
+    dispatch,
+    StartResponded(
+      session="desktop-test",
+      submission_id="first-start",
+      run_id="r-first",
+      status="accepted",
+      exit_code=0,
+    ),
+    second_started,
+  )
+  assert_true(responded.active().run is Open(run_id="r-second", ..))
+  assert_true(responded.active().last_run_id is Some("r-second"))
+  inspect(responded.active().input_ledger.length(), content="1")
+  inspect(
+    responded.active().input_ledger[0].submission_id,
+    content=second_submission,
+  )
+  assert_true(responded.active().input_ledger[0].state is Awaiting)
+}
+
+///|
+test "a late failed response for durable run A cannot disturb open run B" {
+  let dispatch = test_dispatch()
+  guard second_run_started_before_first_response() is Some(result) else {
+    fail("expected the second prompt to be starting")
+  }
+  let (second_started, second_submission) = result
+  let (_, responded) = update_dev(
+    dispatch,
+    StartResponded(
+      session="desktop-test",
+      submission_id="first-start",
+      run_id="r-first",
+      status="failed",
+      exit_code=1,
+    ),
+    second_started,
+  )
+  assert_true(responded.active().run is Open(run_id="r-second", ..))
+  assert_true(responded.active().last_run_id is Some("r-second"))
+  inspect(responded.active().input_ledger.length(), content="1")
+  inspect(
+    responded.active().input_ledger[0].submission_id,
+    content=second_submission,
+  )
+  assert_true(responded.active().input_ledger[0].state is Awaiting)
+  inspect(responded.active().overlay.length(), content="0")
+}
+
+///|
+test "runs settled closes runs the host no longer has, sparing live and starting ones" {
+  let dispatch = test_dispatch()
+  // A run that ended while this client was away: its terminal event is
+  // gone for good, so only the `agent.runs` reply can close it.
+  let stale = {
+    ..empty_conversation(@interop.ChannelId::Local, "desktop-stale"),
+    run: Open(run_id="r9", stage=AtStep(Some(4))),
+    streaming_response: "mid-step",
+  }
+  // A send still in flight has no run id yet; its own `started` (or
+  // failure) is coming and must be the one to settle it.
+  let starting = {
+    ..empty_conversation(@interop.ChannelId::Local, "desktop-starting"),
+    run: Starting(submission_id="pending-start"),
+  }
+  let model = running_model()
+    .replace_conversation(stale)
+    .replace_conversation(starting)
+  let (_, next) = update_dev(
+    dispatch,
+    RunsSettled(live=["r7"], frontier=[
+      {
+        session: "desktop-test",
+        state: SnapshotOpen(run_id="r7"),
+        initial_ids: [],
+        steer_ids: [],
+      },
+      {
+        session: "desktop-stale",
+        state: SnapshotOpen(run_id="r9"),
+        initial_ids: [],
+        steer_ids: [],
+      },
+    ]),
+    model,
+  )
+  // Run 7 is still in flight on the host: untouched.
+  inspect(next.active().is_running(), content="true")
+  guard next.find_conversation(@interop.ChannelId::Local, "desktop-stale")
+    is Some(settled) else {
+    fail("expected the stale conversation")
   }
   inspect(settled.is_running(), content="false")
-  inspect(finished.active_session, content="desktop-test")
+  inspect(settled.streaming_response, content="")
+  guard settled.run is NoRun(ended=None) else {
+    fail("expected the stale run to settle without a verdict")
+  }
+  guard next.find_conversation(@interop.ChannelId::Local, "desktop-starting")
+    is Some(sending) else {
+    fail("expected the starting conversation")
+  }
+  assert_true(sending.run is Starting(..))
+}
+
+///|
+test "reconnect runs snapshot settles only its captured Starting submission" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id="pre-gap-start") },
+    "pre-gap-start",
+    "maybe accepted",
+  )
+  let (_, bridged) = update_dev(
+    dispatch,
+    BridgeReady,
+    test_model().replace_conversation(conv),
+  )
+  assert_true(bridged.active().input_ledger[0].state is Unconfirmed)
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsSettled(
+      live=[],
+      frontier=bridged.run_snapshot_frontier(@interop.ChannelId::Local),
+    ),
+    bridged,
+  )
+  assert_true(settled.active().run is NoRun(ended=None))
+}
+
+///|
+test "an old empty runs snapshot cannot close a start sent after reconnect" {
+  let dispatch = test_dispatch()
+  let (_, ready) = update_dev(dispatch, BridgeReady, test_model())
+  let (_, drafted) = update(dispatch, TaskChanged("new prompt"), ready)
+  let (_, sent) = update(dispatch, Send, drafted)
+  assert_true(sent.active().run is Starting(..))
+  let (_, stale_snapshot) = update_dev(
+    dispatch,
+    RunsSettled(live=[], frontier=[]),
+    sent,
+  )
+  assert_true(stale_snapshot.active().run is Starting(..))
+}
+
+///|
+test "an older recovered ledger entry cannot adjudicate the current start" {
+  let dispatch = test_dispatch()
+  let old = with_initial_submission(
+    test_conversation(),
+    "pre-gap-start",
+    "older prompt",
+  )
+  let (old, _) = old.mark_submission_unconfirmed(
+    "pre-gap-start", "older delivery unconfirmed", false,
+  )
+  let current = with_initial_submission(
+    { ..old, run: Starting(submission_id="current-start") },
+    "current-start",
+    "current prompt",
+  )
+  let (_, next) = update_dev(
+    dispatch,
+    RunsSettled(live=[], frontier=[
+      {
+        session: "desktop-test",
+        state: SnapshotStarting(submission_id="pre-gap-start"),
+        initial_ids: ["pre-gap-start"],
+        steer_ids: [],
+      },
+    ]),
+    test_model().replace_conversation(current),
+  )
+  assert_true(next.active().run is Starting(submission_id="current-start"))
+  inspect(next.active().input_ledger.length(), content="2")
+}
+
+///|
+test "an older start rejection cannot close the current start" {
+  let dispatch = test_dispatch()
+  let old = with_initial_submission(
+    test_conversation(),
+    "older-start",
+    "older prompt",
+  )
+  let current = with_initial_submission(
+    { ..old, run: Starting(submission_id="current-start") },
+    "current-start",
+    "current prompt",
+  )
+  let (_, next) = update_dev(
+    dispatch,
+    StartRejected(
+      session="desktop-test",
+      submission_id="older-start",
+      message="older start rejected",
+    ),
+    test_model().replace_conversation(current),
+  )
+  assert_true(next.active().run is Starting(submission_id="current-start"))
+  inspect(next.active().input_ledger.length(), content="1")
+  inspect(next.active().input_ledger[0].submission_id, content="current-start")
+}
+
+///|
+test "a Started racing ahead of an older runs response stays open" {
+  let dispatch = test_dispatch()
+  let frontier = test_model().run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-after-snapshot",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("new foreign run"),
+      submission_id=Some("foreign-new"),
+    ),
+    test_model(),
+  )
+  let (_, stale_snapshot) = update_dev(
+    dispatch,
+    RunsSettled(live=[], frontier~),
+    started,
+  )
+  assert_true(
+    stale_snapshot.active().run is Open(run_id="r-after-snapshot", ..),
+  )
+}
+
+///|
+test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
+  let dispatch = test_dispatch()
+  let (_, generation_one) = update_dev(dispatch, BridgeReady, test_model())
+  let stale = RunsLoaded(
+    runs=[
+      {
+        run_id: "old-run",
+        session: "old-session",
+        model: "deepseek-v4-pro",
+        max_steps: 1000,
+        cwd: None,
+        session_root: None,
+        task: Some("from the old engine epoch"),
+        submission_id: None,
+      },
+    ],
+    settled=[],
+    live=["old-run"],
+    frontier=generation_one.run_snapshot_frontier(@interop.ChannelId::Local),
+    connection_generation=generation_one.dev().connection_generation,
+  )
+  let (_, generation_two) = update_dev(dispatch, BridgeReady, generation_one)
+  // The current generation's empty answer wins first. The delayed older
+  // answer must then be rejected whole, before replaying its Started row.
+  let (_, current) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      live=[],
+      frontier=generation_two.run_snapshot_frontier(@interop.ChannelId::Local),
+      connection_generation=generation_two.dev().connection_generation,
+    ),
+    generation_two,
+  )
+  let (_, once) = update_dev(dispatch, stale, current)
+  let (_, twice) = update_dev(dispatch, stale, current)
+  assert_true(
+    once.find_conversation(@interop.ChannelId::Local, "old-session") is None,
+  )
+  assert_true(
+    twice.find_conversation(@interop.ChannelId::Local, "old-session") is None,
+  )
+  inspect(once.dev().connection_generation, content="2")
+  inspect(twice.dev().connection_generation, content="2")
+}
+
+///|
+test "runs settlement restores a Starting prompt that reached exact-zero EOF offline" {
+  let dispatch = test_dispatch()
+  let submission_id = "offline-start"
+  let before = test_model().replace_conversation(
+    with_initial_submission(
+      { ..test_conversation(), run: Starting(submission_id~), task: "" },
+      submission_id,
+      "restore after reconnect",
+    ),
+  )
+  let frontier = before.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, bridged) = update_dev(dispatch, BridgeReady, before)
+  assert_true(bridged.active().sync is Reloading(..))
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "run-offline-zero",
+          session: "desktop-test",
+          submission_id: Some(submission_id),
+          status: "failed",
+          durable_sequence: Some(0),
+        },
+      ],
+      live=[],
+      frontier~,
+      connection_generation=bridged.dev().connection_generation,
+    ),
+    bridged,
+  )
+  assert_true(
+    recovered.active().run is NoRun(ended=Some(RunFinished(RunFailed))),
+  )
+  assert_true(recovered.active().sync is Synced)
+  inspect(recovered.active().task, content="restore after reconnect")
+  inspect(recovered.active().input_ledger.length(), content="0")
+  assert_true(recovered.active().overlay[0].reconciliation is Retained)
+}
+
+///|
+test "a late durable boundary refetches a Starting settlement hidden by the first runs snapshot" {
+  let dispatch = test_dispatch()
+  let submission_id = "late-boundary-start"
+  let before = test_model().replace_conversation(
+    with_initial_submission(
+      { ..test_conversation(), run: Starting(submission_id~), task: "" },
+      submission_id,
+      "restore after the boundary",
+    ),
+  )
+  let first_frontier = before.run_snapshot_frontier(@interop.ChannelId::Local)
+  // Finished has already removed the run, but its failed final scan has not
+  // made the abnormal settlement replayable yet.
+  let (_, absent) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      live=[],
+      frontier=first_frontier,
+      connection_generation=before.dev().connection_generation,
+    ),
+    before,
+  )
+  assert_true(absent.active().run is NoRun(ended=None))
+  assert_true(absent.active().last_run_id is None)
+  assert_true(absent.active().has_recovering_initial())
+
+  // The boundary cannot route by run id yet. It keeps the exact local owner
+  // unchanged and schedules another current-generation agent.runs query.
+  let (_, after_boundary) = update_dev(
+    dispatch,
+    DurableBoundary(
+      run_id="run-late-boundary",
+      session="desktop-test",
+      sequence=0,
+    ),
+    absent,
+  )
+  assert_true(after_boundary.active().last_run_id is None)
+  let second_frontier = after_boundary.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+  )
+  guard second_frontier is [captured] else {
+    fail("late boundary lost the settlement selector")
+  }
+  assert_true(captured.initial_ids.contains(submission_id))
+
+  // The host recorded agent.durable before broadcasting it, so that query
+  // returns the newly replayable settlement and restores exact-zero input.
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "run-late-boundary",
+          session: "desktop-test",
+          submission_id: Some(submission_id),
+          status: "failed",
+          durable_sequence: Some(0),
+        },
+      ],
+      live=[],
+      frontier=second_frontier,
+      connection_generation=after_boundary.dev().connection_generation,
+    ),
+    after_boundary,
+  )
+  assert_true(recovered.active().sync is Synced)
+  inspect(recovered.active().task, content="restore after the boundary")
+  inspect(recovered.active().input_ledger.length(), content="0")
+  assert_true(recovered.active().overlay[0].reconciliation is Retained)
+}
+
+///|
+test "runs settlement recovers a transport-undelivered prompt by submission id" {
+  let dispatch = test_dispatch()
+  let submission_id = "socket-lost-start"
+  let starting = test_model().replace_conversation(
+    with_initial_submission(
+      { ..test_conversation(), run: Starting(submission_id~), task: "" },
+      submission_id,
+      "restore after socket loss",
+    ),
+  )
+  let (_, undelivered) = update_dev(
+    dispatch,
+    StartUndelivered(
+      session="desktop-test",
+      submission_id~,
+      message="connection closed",
+    ),
+    starting,
+  )
+  assert_true(undelivered.active().run is NoRun(ended=Some(RunFailed)))
+  assert_true(undelivered.active().input_ledger[0].run_id is None)
+  let frontier = undelivered.run_snapshot_frontier(@interop.ChannelId::Local)
+  let selectors = @json.parse(@interop.reply_json_text(runs_payload(frontier))) catch {
+    _ => fail("runs payload was not JSON")
+  }
+  assert_true(
+    selectors
+    is {
+      "known": Array(
+        [
+          {
+            "session": "desktop-test",
+            "submission_id": "socket-lost-start",
+            ..
+          },
+        ]
+      ),
+      ..
+    },
+  )
+  let (_, bridged) = update_dev(dispatch, BridgeReady, undelivered)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "run-socket-lost-zero",
+          session: "desktop-test",
+          submission_id: Some(submission_id),
+          status: "failed",
+          durable_sequence: Some(0),
+        },
+      ],
+      live=[],
+      frontier~,
+      connection_generation=bridged.dev().connection_generation,
+    ),
+    bridged,
+  )
+  assert_true(recovered.active().sync is Synced)
+  inspect(recovered.active().task, content="restore after socket loss")
+  inspect(recovered.active().input_ledger.length(), content="0")
+  assert_true(recovered.active().overlay[0].reconciliation is Retained)
+}
+
+///|
+test "runs settlement restores an Open prompt whose zero boundary was missed" {
+  let dispatch = test_dispatch()
+  let before = fresh_started_model(
+    "offline-open", "run-offline-open", "restore open after reconnect",
+  )
+  let frontier = before.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, bridged) = update_dev(dispatch, BridgeReady, before)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "run-offline-open",
+          session: "desktop-test",
+          submission_id: Some("offline-open"),
+          status: "failed",
+          durable_sequence: Some(0),
+        },
+      ],
+      live=[],
+      frontier~,
+      connection_generation=bridged.dev().connection_generation,
+    ),
+    bridged,
+  )
+  assert_true(recovered.active().sync is Synced)
+  inspect(recovered.active().task, content="restore open after reconnect")
+  inspect(recovered.active().input_ledger.length(), content="0")
+}
+
+///|
+test "one runs snapshot keeps an active successor after settling its predecessor" {
+  let dispatch = test_dispatch()
+  let before = fresh_started_model(
+    "old-submission", "run-predecessor", "restore predecessor prompt",
+  )
+  let frontier = before.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, next) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[
+        {
+          run_id: "run-successor",
+          session: "desktop-test",
+          model: "deepseek-v4-pro",
+          max_steps: 1000,
+          cwd: None,
+          session_root: None,
+          task: Some("foreign successor"),
+          submission_id: Some("foreign-submission"),
+        },
+      ],
+      settled=[
+        {
+          run_id: "run-predecessor",
+          session: "desktop-test",
+          submission_id: Some("old-submission"),
+          status: "failed",
+          durable_sequence: Some(0),
+        },
+      ],
+      live=["run-successor"],
+      frontier~,
+      connection_generation=before.dev().connection_generation,
+    ),
+    before,
+  )
+  assert_true(next.active().run is Open(run_id="run-successor", ..))
+  assert_true(next.active().last_run_id is Some("run-successor"))
+  inspect(next.active().task, content="restore predecessor prompt")
+  inspect(next.active().input_ledger.length(), content="0")
+  assert_true(
+    next.active().overlay
+    .iter()
+    .any(notice => {
+      notice.reconciliation is Retained &&
+      notice.content.contains("restored for resubmission")
+    }),
+  )
+}
+
+///|
+test "a settlement captured for an older Starting owner cannot close its successor" {
+  let dispatch = test_dispatch()
+  let old = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id="old-owner") },
+    "old-owner",
+    "old prompt",
+  )
+  let frontier = test_model()
+    .replace_conversation(old)
+    .run_snapshot_frontier(@interop.ChannelId::Local)
+  let current = with_initial_submission(
+    { ..old, run: Starting(submission_id="new-owner") },
+    "new-owner",
+    "new prompt",
+  )
+  let model = test_model().replace_conversation(current)
+  let (_, unchanged) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "old-run",
+          session: "desktop-test",
+          submission_id: Some("old-owner"),
+          status: "failed",
+          durable_sequence: Some(0),
+        },
+      ],
+      live=[],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+    ),
+    model,
+  )
+  assert_true(unchanged.active().run is Starting(submission_id="new-owner"))
+  inspect(unchanged.active().input_ledger.length(), content="2")
+}
+
+///|
+test "an older positive runs row cannot replace a newer Started" {
+  let dispatch = test_dispatch()
+  let model = running_model()
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, finished) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="finished", answer=None, durable_sequence=None),
+    model,
+  )
+  let (_, newer) = update_dev(
+    dispatch,
+    Started(
+      run_id="r8",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("newer run"),
+      submission_id=None,
+    ),
+    finished,
+  )
+  let (_, stale) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          model: "deepseek-v4-pro",
+          max_steps: 1000,
+          cwd: None,
+          session_root: None,
+          task: Some("older run"),
+          submission_id: None,
+        },
+      ],
+      settled=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=0,
+    ),
+    newer,
+  )
+  assert_true(stale.active().run is Open(run_id="r8", ..))
+  assert_true(stale.active().last_run_id is Some("r8"))
+}
+
+///|
+test "an older positive runs row cannot resurrect a finished run" {
+  let dispatch = test_dispatch()
+  let model = running_model()
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, finished) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="finished", answer=None, durable_sequence=None),
+    model,
+  )
+  let (_, stale) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          model: "deepseek-v4-pro",
+          max_steps: 1000,
+          cwd: None,
+          session_root: None,
+          task: Some("already finished"),
+          submission_id: None,
+        },
+      ],
+      settled=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=0,
+    ),
+    finished,
+  )
+  assert_true(stale.active().run is NoRun(ended=Some(RunFinished(Completed))))
+  assert_true(stale.active().last_run_id is Some("r7"))
+}
+
+///|
+test "Finished after RunsSettled fills the last run outcome idempotently" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    last_run_id: Some("r7"),
+  })
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsSettled(
+      live=[],
+      frontier=model.run_snapshot_frontier(@interop.ChannelId::Local),
+    ),
+    model,
+  )
+  assert_true(settled.active().run is NoRun(ended=None))
+  let finish : DeviceMsg = Finished(
+    run_id="r7",
+    status="finished",
+    answer=None,
+    durable_sequence=None,
+  )
+  let (_, once) = update_dev(dispatch, finish, settled)
+  let (_, twice) = update_dev(dispatch, finish, once)
+  assert_true(once.active().run is NoRun(ended=Some(RunFinished(Completed))))
+  assert_true(twice.active().run is NoRun(ended=Some(RunFinished(Completed))))
+  inspect(twice.active().overlay.length(), content="0")
+}
+
+///|
+test "a failed start response keeps its prompt through an empty snapshot" {
+  let dispatch = test_dispatch()
+  let conv = {
+    ..test_conversation(),
+    run: Starting(submission_id="failed-start"),
+  }.enqueue_input(
+    InitialPrompt,
+    "failed-start",
+    None,
+    "<user_mentions>serialized context</user_mentions>\nprompt",
+    "prompt",
+    [],
+  )
+  let (_, failed) = update_dev(
+    dispatch,
+    StartResponded(
+      session="desktop-test",
+      submission_id="failed-start",
+      run_id="r-failed",
+      status="failed",
+      exit_code=1,
+    ),
+    test_model().replace_conversation(conv),
+  )
+  assert_true(failed.active().run is NoRun(ended=Some(RunFailed)))
+  assert_true(failed.active().sync is Reloading(..))
+  inspect(failed.active().input_ledger.length(), content="1")
+  assert_true(failed.active().input_ledger[0].state is Unconfirmed)
+  inspect(failed.active().input_ledger[0].draft, content="prompt")
+  inspect(failed.active().overlay.length(), content="1")
+  assert_true(failed.active().overlay[0].content.contains("prompt"))
+  assert_false(failed.active().overlay[0].content.contains("<user_mentions>"))
+  let (_, empty) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=0,
+      event_boundaries=[],
+      generation=1,
+    ),
+    failed,
+  )
+  inspect(empty.active().input_ledger.length(), content="1")
+  assert_true(empty.active().input_ledger[0].state is Unconfirmed)
+  inspect(empty.active().visible_items().length(), content="1")
+  assert_true(empty.active().visible_items()[0].content.contains("prompt"))
+  let (_, late_started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-failed",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=Some(Absolute("/workspace")),
+      session_root=None,
+      task=Some("prompt"),
+      submission_id=Some("failed-start"),
+    ),
+    empty,
+  )
+  assert_true(late_started.active().run is NoRun(ended=Some(RunFailed)))
+  assert_true(late_started.active().cwd is Some(Absolute("/workspace")))
+}
+
+///|
+test "a failed response after durable Finished cannot resurrect its prompt" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id="fast-start") },
+    "fast-start",
+    "fast prompt",
+  )
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-fast",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("fast prompt"),
+      submission_id=Some("fast-start"),
+    ),
+    test_model().replace_conversation(conv),
+  )
+  inspect(started.active().input_ledger.length(), content="1")
+  let (_, finished) = update_dev(
+    dispatch,
+    Finished(
+      run_id="r-fast",
+      status="finished",
+      answer=None,
+      durable_sequence=None,
+    ),
+    started,
+  )
+  assert_true(
+    finished.active().run is NoRun(ended=Some(RunFinished(Completed))),
+  )
+  let (_, failed) = update_dev(
+    dispatch,
+    StartResponded(
+      session="desktop-test",
+      submission_id="fast-start",
+      run_id="r-fast",
+      status="failed",
+      exit_code=1,
+    ),
+    finished,
+  )
+  assert_true(failed.active().run is NoRun(ended=Some(RunFinished(Completed))))
+  inspect(failed.active().input_ledger.length(), content="0")
+  inspect(failed.active().overlay.length(), content="0")
+  let (_, empty) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=0,
+      event_boundaries=[],
+      generation=1,
+    ),
+    failed,
+  )
+  assert_true(empty.active().run is NoRun(ended=Some(RunFinished(Completed))))
+  inspect(empty.active().input_ledger.length(), content="0")
+  inspect(empty.active().overlay.length(), content="0")
+}
+
+///|
+test "an accepted response consumes a fast-finished prompt without reopening" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    {
+      ..test_conversation(),
+      run: NoRun(ended=Some(RunFinished(Completed))),
+      last_run_id: Some("r-fast"),
+    },
+    "fast-start",
+    "fast prompt",
+  )
+  let (conv, _) = conv.mark_submission_unconfirmed(
+    "fast-start", "delivery unconfirmed: fast prompt", false,
+  )
+  let (_, accepted) = update_dev(
+    dispatch,
+    StartResponded(
+      session="desktop-test",
+      submission_id="fast-start",
+      run_id="r-fast",
+      status="accepted",
+      exit_code=0,
+    ),
+    test_model().replace_conversation(conv),
+  )
+  assert_true(
+    accepted.active().run is NoRun(ended=Some(RunFinished(Completed))),
+  )
+  inspect(accepted.active().input_ledger.length(), content="0")
+  inspect(accepted.active().overlay.length(), content="0")
+}
+
+///|
+test "a newer Started retires an older unconfirmed start ledger entry" {
+  let dispatch = test_dispatch()
+  let old = with_initial_submission(
+    { ..test_conversation(), run: NoRun(ended=Some(RunFailed)) },
+    "old-start",
+    "old prompt",
+  )
+  let (old, _) = old.mark_submission_unconfirmed(
+    "old-start", "old delivery unconfirmed", false,
+  )
+  let current = with_initial_submission(
+    { ..old, run: Starting(submission_id="new-start") },
+    "new-start",
+    "new prompt",
+  )
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-new",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("new prompt"),
+      submission_id=Some("new-start"),
+    ),
+    test_model().replace_conversation(current),
+  )
+  inspect(started.active().input_ledger.length(), content="1")
+  inspect(started.active().input_ledger[0].submission_id, content="new-start")
+  inspect(started.active().overlay.length(), content="1")
+  assert_true(started.active().overlay[0].reconciliation is Retained)
 }
 
 ///|
 test "concurrent conversations keep their streams apart" {
   let dispatch = test_dispatch()
   let second = {
-    ..empty_conversation("desktop-second"),
-    run: Open(run_id=8, stage=Opened),
+    ..empty_conversation(@interop.ChannelId::Local, "desktop-second"),
+    run: Open(run_id="r8", stage=Opened),
   }
   let model = running_model().replace_conversation(second)
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Engine(8, AssistantDelta("for B"), session=None),
+    Engine(Some("r8"), AssistantDelta("for B"), session=None),
     model,
   )
   // Run 8 belongs to the background conversation; the active one is untouched.
   inspect(next.active().streaming_response, content="")
-  guard next.find_conversation("desktop-second") is Some(bg) else {
+  guard next.find_conversation(@interop.ChannelId::Local, "desktop-second")
+    is Some(bg) else {
     fail("expected the background conversation")
   }
   inspect(bg.streaming_response, content="for B")
@@ -2231,22 +7182,28 @@ test "concurrent conversations keep their streams apart" {
 test "a background run finishes without disturbing the conversation on screen" {
   let dispatch = test_dispatch()
   let second = {
-    ..empty_conversation("desktop-second"),
-    run: Open(run_id=8, stage=Opened),
+    ..empty_conversation(@interop.ChannelId::Local, "desktop-second"),
+    run: Open(run_id="r8", stage=Opened),
     messages: [{ kind: User, content: "background ask" }],
   }
   let model = running_model().replace_conversation(second)
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Finished(run_id=8, status="finished", answer=Some("done")),
+    Finished(
+      run_id="r8",
+      status="finished",
+      answer=Some("done"),
+      durable_sequence=None,
+    ),
     model,
   )
-  guard next.find_conversation("desktop-second") is Some(bg) else {
+  guard next.find_conversation(@interop.ChannelId::Local, "desktop-second")
+    is Some(bg) else {
     fail("expected the background conversation")
   }
   inspect(bg.is_running(), content="false")
   assert_true(bg.run is NoRun(ended=Some(RunFinished(_))))
-  inspect(bg.messages[1].content, content="done")
+  inspect(bg.overlay.length(), content="0")
   // The conversation on screen is still running its own turn.
   inspect(next.active().is_running(), content="true")
   assert_true(next.display_status() is Running)
@@ -2262,13 +7219,13 @@ test "send while running queues a steer instead of a prompt" {
   let (_, once) = update(dispatch, Send, model)
   let (_, twice) = update(dispatch, Send, model)
   inspect(once.active().task, content="")
-  inspect(once.active().pending_steers.length(), content="1")
-  inspect(once.active().pending_steers[0], content="focus on the tests")
+  inspect(once.active().pending_steers().length(), content="1")
+  inspect(once.active().pending_steers()[0], content="focus on the tests")
   // The steer is pending, not part of the transcript yet.
   inspect(once.active().messages.length(), content="0")
   inspect(once.active().is_running(), content="true")
-  inspect(twice.active().pending_steers.length(), content="1")
-  inspect(twice.active().pending_steers[0], content="focus on the tests")
+  inspect(twice.active().pending_steers().length(), content="1")
+  inspect(twice.active().pending_steers()[0], content="focus on the tests")
 }
 
 ///|
@@ -2276,26 +7233,34 @@ test "a cancelling turn cannot be steered; the text stays in the composer" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
-    run: Open(run_id=7, stage=Cancelling),
+    run: Open(run_id="r7", stage=Cancelling),
     task: "too late",
   })
   let (_, next) = update(dispatch, Send, model)
   inspect(next.active().task, content="too late")
-  inspect(next.active().pending_steers.length(), content="0")
+  inspect(next.active().pending_steers().length(), content="0")
 }
 
 ///|
 test "the composer draft stays with its conversation across a switch" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
-    ..empty_conversation("desktop-second"),
+    ..empty_conversation(@interop.ChannelId::Local, "desktop-second"),
     messages: [{ kind: User, content: "earlier" }],
   })
   let (_, drafted) = update(dispatch, TaskChanged("half a thought"), model)
-  let (_, switched) = update(dispatch, OpenSession("desktop-second"), drafted)
+  let (_, switched) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-second"),
+    drafted,
+  )
   // The other conversation starts with its own (empty) draft …
   inspect(switched.active().task, content="")
-  let (_, back) = update(dispatch, OpenSession("desktop-test"), switched)
+  let (_, back) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    switched,
+  )
   // … and the original draft is still waiting where it was typed.
   inspect(back.active().task, content="half a thought")
 }
@@ -2348,7 +7313,11 @@ test "an inline symbol reply rebuilds the live completion menu" {
   )
   let (_, loaded) = update(
     dispatch,
-    SymbolsLoaded(session="desktop-test", query="parse", items=[item]),
+    SymbolsLoaded(
+      owner={ channel: Local, session: "desktop-test" },
+      query="parse",
+      items=[item],
+    ),
     searching,
   )
   guard loaded.completion is Some(menu) else {
@@ -2361,156 +7330,1979 @@ test "an inline symbol reply rebuilds the live completion menu" {
 }
 
 ///|
-test "steer_applied commits the pending steer as a user message" {
+test "steer_applied only settles pending UI until its commit" {
   let dispatch = test_dispatch()
-  let model = running_model().replace_conversation({
-    ..running_conversation(),
-    pending_steers: ["go left"],
-  })
-  let (_, next) = update(
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["go left"]),
+  )
+  let (_, next) = update_dev(
     dispatch,
-    Engine(7, SteerApplied("go left"), session=None),
+    Engine(
+      Some("r7"),
+      SteerApplied(content="go left", submission_id=Some("test-steer-0")),
+      session=None,
+    ),
     model,
   )
-  inspect(next.active().pending_steers.length(), content="0")
-  inspect(next.active().messages.length(), content="1")
-  guard next.active().messages[0].kind is User else {
-    fail("expected a user item")
-  }
-  inspect(next.active().messages[0].content, content="go left")
+  inspect(next.active().pending_steers().length(), content="0")
+  inspect(next.active().messages.length(), content="0")
+  inspect(next.active().overlay.length(), content="0")
+}
+
+///|
+test "a legacy text-only steer receipt cannot claim local ownership" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["go left"]),
+  )
+  let (_, next) = update_dev(
+    dispatch,
+    Engine(
+      Some("r7"),
+      SteerApplied(content="go left", submission_id=None),
+      session=None,
+    ),
+    model,
+  )
+  inspect(next.active().pending_steers().length(), content="1")
+  inspect(next.active().input_ledger.length(), content="1")
+}
+
+///|
+test "a canonical user commit never settles a local steer" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["go left"]),
+  )
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=1, kind="user", payload={
+      "content": Json::string("go left"),
+    }),
+    model,
+  )
+  inspect(committed.active().messages.length(), content="1")
+  inspect(committed.active().pending_steers().length(), content="1")
+  inspect(committed.active().input_ledger.length(), content="1")
+}
+
+///|
+test "a snapshot never settles a local steer by text" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      messages: [{ kind: User, content: "same" }],
+      watermark: 1,
+      sync: test_reloading([]),
+    },
+    ["same"],
+  )
+  let model = running_model().replace_conversation(conv)
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: User, content: "same" }],
+      watermark=1,
+      event_boundaries=[],
+      generation=1,
+    ),
+    model,
+  )
+  inspect(loaded.active().pending_steers().length(), content="1")
+  inspect(loaded.active().input_ledger.length(), content="1")
 }
 
 ///|
 test "steer_dropped settles the pending steer with a visible notice" {
   let dispatch = test_dispatch()
-  let model = running_model().replace_conversation({
-    ..running_conversation(),
-    pending_steers: ["go left"],
-  })
-  let (_, next) = update(
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["go left"]),
+  )
+  let (_, next) = update_dev(
     dispatch,
-    Engine(7, SteerDropped("go left"), session=None),
+    Engine(
+      Some("r7"),
+      SteerDropped(content="go left", submission_id=Some("test-steer-0")),
+      session=None,
+    ),
     model,
   )
-  inspect(next.active().pending_steers.length(), content="0")
-  inspect(next.active().messages.length(), content="1")
-  guard next.active().messages[0].kind is Assistant(true) else {
+  inspect(next.active().pending_steers().length(), content="0")
+  inspect(next.active().overlay.length(), content="1")
+  inspect(next.active().task, content="go left")
+  guard next.active().overlay[0].kind is Assistant(is_danger=true) else {
     fail("expected an error bubble")
   }
-  assert_true(next.active().messages[0].content.contains("go left"))
+  assert_true(next.active().overlay[0].content.contains("go left"))
 }
 
 ///|
 test "an identical-text settle removes exactly one pending entry" {
   let dispatch = test_dispatch()
-  let model = running_model().replace_conversation({
-    ..running_conversation(),
-    pending_steers: ["again", "again"],
-  })
-  let (_, next) = update(
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["again", "again"]),
+  )
+  let (_, next) = update_dev(
     dispatch,
-    Engine(7, SteerApplied("again"), session=None),
+    Engine(
+      Some("r7"),
+      SteerApplied(content="again", submission_id=Some("test-steer-0")),
+      session=None,
+    ),
     model,
   )
-  inspect(next.active().pending_steers.length(), content="1")
-  inspect(next.active().pending_steers[0], content="again")
-  inspect(next.active().messages.length(), content="1")
+  inspect(next.active().pending_steers().length(), content="1")
+  inspect(next.active().pending_steers()[0], content="again")
+  inspect(next.active().input_ledger[0].submission_id, content="test-steer-1")
+  inspect(next.active().overlay.length(), content="0")
 }
 
 ///|
 test "an undelivered steer is reported instead of vanishing" {
   let dispatch = test_dispatch()
-  let model = running_model().replace_conversation({
-    ..running_conversation(),
-    pending_steers: ["lost"],
-  })
-  let (_, next) = update(
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["lost"]),
+  )
+  let (_, next) = update_dev(
     dispatch,
-    SteerUndelivered(session="desktop-test", text="lost"),
+    SteerUndelivered(
+      session="desktop-test",
+      submission_id="test-steer-0",
+      text="lost",
+      run_id="r7",
+    ),
     model,
   )
-  inspect(next.active().pending_steers.length(), content="0")
-  inspect(next.active().messages.length(), content="1")
-  guard next.active().messages[0].kind is Assistant(true) else {
+  inspect(next.active().pending_steers().length(), content="0")
+  inspect(next.active().input_ledger.length(), content="1")
+  assert_true(next.active().input_ledger[0].state is Unconfirmed)
+  inspect(next.active().overlay.length(), content="1")
+  guard next.active().overlay[0].kind is Assistant(is_danger=true) else {
     fail("expected an error bubble")
   }
-  assert_true(next.active().messages[0].content.contains("lost"))
+  assert_true(next.active().overlay[0].content.contains("lost"))
 }
 
 ///|
-test "a run that ends with steers in flight sweeps them into notices" {
+test "a run that ends with steers in flight marks delivery unconfirmed" {
   let dispatch = test_dispatch()
-  let model = running_model().replace_conversation({
-    ..running_conversation(),
-    pending_steers: ["orphaned"],
-  })
-  let (_, next) = update(
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["orphaned"]),
+  )
+  let (_, next) = update_dev(
     dispatch,
-    Finished(run_id=7, status="finished", answer=Some("")),
+    Finished(
+      run_id="r7",
+      status="finished",
+      answer=Some(""),
+      durable_sequence=None,
+    ),
     model,
   )
-  inspect(next.active().pending_steers.length(), content="0")
+  inspect(next.active().pending_steers().length(), content="0")
+  inspect(next.active().input_ledger.length(), content="1")
   inspect(next.active().is_running(), content="false")
-  guard next.active().messages[0].kind is Assistant(true) else {
+  guard next.active().overlay[0].kind is Assistant(is_danger=true) else {
     fail("expected an error bubble")
   }
-  assert_true(next.active().messages[0].content.contains("orphaned"))
+  assert_true(next.active().overlay[0].content.contains("orphaned"))
 }
 
 ///|
-test "late undelivered steer is dropped after run-end sweep" {
+test "a late exact applied receipt retracts a run-end unconfirmed notice" {
   let dispatch = test_dispatch()
-  let model = running_model().replace_conversation({
-    ..running_conversation(),
-    pending_steers: ["lost"],
-  })
-  let (_, finished) = update(
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["lost"]),
+  )
+  let (_, finished) = update_dev(
     dispatch,
-    Finished(run_id=7, status="finished", answer=Some("")),
+    Finished(
+      run_id="r7",
+      status="finished",
+      answer=Some(""),
+      durable_sequence=None,
+    ),
     model,
   )
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    SteerUndelivered(session="desktop-test", text="lost"),
+    Engine(
+      Some("r7"),
+      SteerApplied(content="lost", submission_id=Some("test-steer-0")),
+      session=None,
+    ),
     finished,
   )
-  inspect(next.active().pending_steers.length(), content="0")
-  inspect(next.active().messages.length(), content="1")
-  assert_true(next.active().messages[0].content.contains("lost"))
+  inspect(next.active().pending_steers().length(), content="0")
+  inspect(next.active().input_ledger.length(), content="0")
+  inspect(next.active().overlay.length(), content="0")
+}
+
+///|
+test "a trailing applied receipt for run A settles after run B Started" {
+  let dispatch = test_dispatch()
+  guard second_run_started_before_first_steer_receipt() is Some(started) else {
+    fail("expected the second prompt to be starting")
+  }
+  let (_, next) = update_dev(
+    dispatch,
+    Engine(
+      Some("r7"),
+      SteerApplied(content="late steer", submission_id=Some("test-steer-0")),
+      session=None,
+    ),
+    started,
+  )
+  assert_true(next.active().run is Open(run_id="r8", ..))
+  assert_true(next.active().last_run_id is Some("r8"))
+  inspect(next.active().input_ledger.length(), content="1")
+  assert_true(next.active().input_ledger[0].kind is InitialPrompt)
+  inspect(next.active().overlay.length(), content="0")
+}
+
+///|
+test "a trailing dropped receipt for run A restores input without closing run B" {
+  let dispatch = test_dispatch()
+  guard second_run_started_before_first_steer_receipt() is Some(started) else {
+    fail("expected the second prompt to be starting")
+  }
+  let (_, next) = update_dev(
+    dispatch,
+    Engine(
+      Some("r7"),
+      SteerDropped(content="late steer", submission_id=Some("test-steer-0")),
+      session=None,
+    ),
+    started,
+  )
+  assert_true(next.active().run is Open(run_id="r8", ..))
+  assert_true(next.active().last_run_id is Some("r8"))
+  inspect(next.active().input_ledger.length(), content="1")
+  assert_true(next.active().input_ledger[0].kind is InitialPrompt)
+  inspect(next.active().task, content="late steer")
+  inspect(next.active().overlay.length(), content="1")
+  assert_true(next.active().overlay[0].content.contains("late steer"))
+}
+
+///|
+test "run-end unconfirmed notice follows assistant and terminal before freezing" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      messages: [{ kind: User, content: "question" }],
+      watermark: 1,
+    },
+    ["late steer"],
+  )
+  let (_, finished) = update_dev(
+    dispatch,
+    Finished(
+      run_id="r7",
+      status="finished",
+      answer=Some("answer"),
+      durable_sequence=None,
+    ),
+    running_model().replace_conversation(conv),
+  )
+  let (_, buffered) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=2, kind="assistant", payload={
+      "content": Json::string("answer"),
+    }),
+    finished,
+  )
+  let (_, buffered_terminal) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=3, kind="terminal", payload={
+      "kind": Json::string("finished"),
+      "message": Json::string("answer"),
+    }),
+    buffered,
+  )
+  let (_, answered) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "question" },
+        { kind: Assistant(is_danger=false), content: "answer" },
+      ],
+      watermark=3,
+      event_boundaries=[(3, true, 2)],
+      generation=1,
+    ),
+    buffered_terminal,
+  )
+  let visible = answered.active().visible_items()
+  inspect(visible.length(), content="3")
+  inspect(visible[1].content, content="answer")
+  assert_true(visible[2].content.contains("late steer"))
+  let (_, next_turn) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=4, kind="user", payload={
+      "content": Json::string("next question"),
+    }),
+    answered,
+  )
+  let visible = next_turn.active().visible_items()
+  inspect(visible.length(), content="4")
+  inspect(visible[1].content, content="answer")
+  assert_true(visible[2].content.contains("late steer"))
+  inspect(visible[3].content, content="next question")
+}
+
+///|
+test "a snapshot freezes a prior run-tail notice before its next turn" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      messages: [{ kind: User, content: "question" }],
+      watermark: 1,
+    },
+    ["late steer"],
+  )
+  let (_, finished) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="finished", answer=None, durable_sequence=None),
+    running_model().replace_conversation(conv),
+  )
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "question" },
+        { kind: Assistant(is_danger=false), content: "first answer" },
+        { kind: User, content: "next question" },
+        { kind: Assistant(is_danger=false), content: "next answer" },
+      ],
+      watermark=7,
+      event_boundaries=[(3, true, 2), (7, true, 4)],
+      generation=1,
+    ),
+    finished,
+  )
+  let visible = loaded.active().visible_items()
+  inspect(visible.length(), content="5")
+  inspect(visible[0].content, content="question")
+  inspect(visible[1].content, content="first answer")
+  assert_true(visible[2].content.contains("late steer"))
+  inspect(visible[3].content, content="next question")
+  inspect(visible[4].content, content="next answer")
+}
+
+///|
+test "a snapshot does not mistake a same-run steer User for the terminal boundary" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      messages: [{ kind: User, content: "question" }],
+      watermark: 1,
+      sync: test_reloading([]),
+    },
+    ["late steer"],
+  )
+  let model = running_model().replace_conversation(conv)
+  let (_, steer_buffered) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=2, kind="user", payload={
+      "content": Json::string("late steer"),
+    }),
+    model,
+  )
+  let (_, finished) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="finished", answer=None, durable_sequence=None),
+    steer_buffered,
+  )
+  let (_, answered) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=3, kind="assistant", payload={
+      "content": Json::string("answer"),
+    }),
+    finished,
+  )
+  let (_, terminal) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=4, kind="terminal", payload={
+      "kind": Json::string("finished"),
+      "message": Json::string("answer"),
+    }),
+    answered,
+  )
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "question" },
+        { kind: User, content: "late steer" },
+        { kind: Assistant(is_danger=false), content: "answer" },
+      ],
+      watermark=4,
+      event_boundaries=[(4, true, 3)],
+      generation=1,
+    ),
+    terminal,
+  )
+  let visible = loaded.active().visible_items()
+  inspect(visible.length(), content="4")
+  inspect(visible[1].content, content="late steer")
+  inspect(visible[2].content, content="answer")
+  assert_true(visible[3].content.contains("late steer"))
+}
+
+///|
+test "a terminal committed before Finished still owns the run-tail notice" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      messages: [
+        { kind: User, content: "question" },
+        { kind: Assistant(is_danger=false), content: "answer" },
+      ],
+      watermark: 2,
+    },
+    ["late steer"],
+  )
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=3, kind="terminal", payload={
+      "kind": Json::string("finished"),
+      "message": Json::string("answer"),
+    }),
+    running_model().replace_conversation(conv),
+  )
+  inspect(committed.active().last_terminal_sequence, content="3")
+  let (_, finished) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="finished", answer=None, durable_sequence=None),
+    committed,
+  )
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "question" },
+        { kind: Assistant(is_danger=false), content: "answer" },
+      ],
+      watermark=3,
+      event_boundaries=[(3, true, 2)],
+      generation=1,
+    ),
+    finished,
+  )
+  let visible = loaded.active().visible_items()
+  inspect(visible.length(), content="3")
+  inspect(visible[1].content, content="answer")
+  assert_true(visible[2].content.contains("late steer"))
+}
+
+///|
+test "a successor resolves an old terminal tail only from its causal snapshot" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      messages: [
+        { kind: User, content: "first question" },
+        { kind: Assistant(is_danger=false), content: "first answer" },
+      ],
+      watermark: 2,
+      run_durable_floor: Some(0),
+      sync: test_reloading([]),
+    },
+    ["late steer"],
+  )
+  let model = {
+    ..running_model().replace_conversation(conv),
+    transcript_request_generation: 1,
+  }
+  // The old terminal commit beat Finished, so no future live commit can be
+  // assumed to be the boundary for the notice Finished is about to create.
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=3, kind="terminal", payload={
+      "kind": Json::string("finished"),
+      "message": Json::string("first answer"),
+    }),
+    model,
+  )
+  let (_, finished) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="finished", answer=None, durable_sequence=None),
+    committed,
+  )
+  assert_true(
+    finished.active().overlay[0].anchor
+    is PriorTerminalTail(floor=0, snapshot_generation=2),
+  )
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r8",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("second question"),
+      submission_id=None,
+    ),
+    finished,
+  )
+  assert_true(
+    started.active().overlay[0].anchor
+    is PriorTerminalTail(floor=0, snapshot_generation=2),
+  )
+  let (_, second_user) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=4, kind="user", payload={
+      "content": Json::string("second question"),
+    }),
+    started,
+  )
+  let (_, second_terminal) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=5, kind="terminal", payload={
+      "kind": Json::string("finished"),
+      "message": Json::string("second answer"),
+    }),
+    second_user,
+  )
+  // Generation 1 predates Finished and Started. It drains both runs' buffered
+  // terminals, but neither anonymous live commit may place the notice.
+  let (_, old_cut) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "first question" },
+        { kind: Assistant(is_danger=false), content: "first answer" },
+      ],
+      watermark=2,
+      event_boundaries=[(1, false, 1), (2, false, 2)],
+      generation=1,
+    ),
+    second_terminal,
+  )
+  assert_true(old_cut.active().sync is Reloading(generation=2, ..))
+  assert_true(old_cut.active().overlay[0].anchor is PriorTerminalTail(..))
+  let (_, causal) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "first question" },
+        { kind: Assistant(is_danger=false), content: "first answer" },
+        { kind: User, content: "second question" },
+        { kind: Assistant(is_danger=false), content: "second answer" },
+      ],
+      watermark=5,
+      event_boundaries=[
+        (1, false, 1),
+        (2, false, 2),
+        (3, true, 2),
+        (4, false, 3),
+        (5, true, 4),
+      ],
+      generation=2,
+    ),
+    old_cut,
+  )
+  assert_true(causal.active().overlay[0].anchor is AfterMessages(2))
+  let visible = causal.active().visible_items()
+  inspect(visible.length(), content="5")
+  assert_true(visible[2].content.contains("late steer"))
+  inspect(visible[3].content, content="second question")
+}
+
+///|
+test "a successor terminal cannot claim a setup-failed run's snapshot cut" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      watermark: 1,
+      last_terminal_sequence: 1,
+      run_durable_floor: Some(1),
+    },
+    ["late steer"],
+  )
+  let (_, setup_failed) = update_dev(
+    dispatch,
+    Error(
+      run_id=Some("r7"),
+      message="agent setup failed: boom",
+      diagnostics=None,
+      exit_code=None,
+    ),
+    running_model().replace_conversation(conv),
+  )
+  inspect(setup_failed.active().overlay.length(), content="0")
+  let (_, finished) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="failed", answer=None, durable_sequence=None),
+    setup_failed,
+  )
+  assert_true(
+    finished.active().overlay[0].anchor is SnapshotCut(snapshot_generation=1),
+  )
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r8",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("next question"),
+      submission_id=None,
+    ),
+    finished,
+  )
+  assert_true(
+    started.active().overlay[0].anchor is SnapshotCut(snapshot_generation=2),
+  )
+  let (_, old_cut) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=1,
+      event_boundaries=[(1, true, 0)],
+      generation=1,
+    ),
+    started,
+  )
+  assert_true(old_cut.active().sync is Reloading(generation=2, ..))
+  assert_true(
+    old_cut.active().overlay[0].anchor is SnapshotCut(snapshot_generation=2),
+  )
+  let (_, causal) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "next question" },
+        { kind: Assistant(is_danger=false), content: "next answer" },
+      ],
+      watermark=3,
+      event_boundaries=[(1, true, 0), (2, false, 1), (3, true, 2)],
+      generation=2,
+    ),
+    old_cut,
+  )
+  assert_true(causal.active().overlay[0].anchor is AfterMessages(2))
+  assert_false(causal.active().has_unresolved_run_tail_notice())
+  let visible = causal.active().visible_items()
+  inspect(visible.length(), content="3")
+  inspect(visible[0].content, content="next question")
+  inspect(visible[1].content, content="next answer")
+  assert_true(visible[2].content.contains("late steer"))
+}
+
+///|
+test "an offline successor snapshot fences without claiming its terminal" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      watermark: 1,
+      last_terminal_sequence: 1,
+      run_durable_floor: Some(1),
+    },
+    ["unconfirmed steer"],
+  )
+  let (_, finished) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="failed", answer=None, durable_sequence=None),
+    running_model().replace_conversation(conv),
+  )
+  // This page missed every lifecycle event for r8 while it was offline. The
+  // snapshot's terminal therefore has no identity tying it to r7.
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "offline successor" },
+        { kind: Assistant(is_danger=false), content: "successor answer" },
+      ],
+      watermark=3,
+      event_boundaries=[(1, true, 0), (2, false, 1), (3, true, 2)],
+      generation=1,
+    ),
+    finished,
+  )
+  assert_true(loaded.active().overlay[0].anchor is AfterMessages(2))
+  assert_false(loaded.active().has_unresolved_run_tail_notice())
+}
+
+///|
+test "failure and abort statuses never assume a durable terminal" {
+  let dispatch = test_dispatch()
+  for status in ["failed", "aborted", "cancelled", "future_failure"] {
+    let conv = with_pending_steers(running_conversation(), ["unconfirmed"])
+    let (_, finished) = update_dev(
+      dispatch,
+      Finished(run_id="r7", status~, answer=None, durable_sequence=None),
+      running_model().replace_conversation(conv),
+    )
+    guard finished.active().overlay is [notice] else {
+      fail("expected one notice for " + status)
+    }
+    assert_true(notice.anchor is SnapshotCut(snapshot_generation=1))
+  }
+}
+
+///|
+test "a foreign run gains a floor only after snapshot data follows the prior terminal" {
+  let dispatch = test_dispatch()
+  let conv = {
+    ..test_conversation(),
+    messages: [{ kind: Assistant(is_danger=false), content: "previous" }],
+    watermark: 2,
+    last_terminal_sequence: 2,
+    sync: test_reloading([]),
+  }
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="foreign",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("current"),
+      submission_id=None,
+    ),
+    test_model().replace_conversation(conv),
+  )
+  assert_true(started.active().run_durable_floor is None)
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: Assistant(is_danger=false), content: "previous" },
+        { kind: User, content: "current" },
+      ],
+      watermark=3,
+      event_boundaries=[(2, true, 1)],
+      generation=1,
+    ),
+    started,
+  )
+  assert_true(loaded.active().run_durable_floor is Some(2))
+}
+
+///|
+test "a foreign background run waits for a snapshot cut after Started" {
+  let dispatch = test_dispatch()
+  let session = "desktop-background"
+  let conv = {
+    ..empty_conversation(@interop.ChannelId::Local, session),
+    watermark: 1,
+    last_terminal_sequence: 1,
+    sync: test_reloading([]),
+  }
+  let model = {
+    ..test_model().replace_conversation(conv),
+    transcript_request_generation: 1,
+  }
+  // This previous-run answer arrived behind a snapshot whose read cut was
+  // already taken, but before the next run's lifecycle announcement.
+  let (_, buffered_answer) = update_dev(
+    dispatch,
+    SessionCommitted(session~, sequence=2, kind="assistant", payload={
+      "content": Json::string("previous answer"),
+    }),
+    model,
+  )
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="foreign-next",
+      session~,
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("current question"),
+      submission_id=None,
+    ),
+    buffered_answer,
+  )
+  guard started.find_conversation(@interop.ChannelId::Local, session)
+    is Some(started_conv) else {
+    fail("missing background conversation")
+  }
+  assert_true(started_conv.run_durable_floor is None)
+  assert_true(started_conv.run_floor_generation is Some(2))
+  assert_true(
+    started_conv.sync is Reloading(generation=1, reload_after_current=true, ..),
+  )
+  let (_, buffered_terminal) = update_dev(
+    dispatch,
+    SessionCommitted(session~, sequence=3, kind="terminal", payload={
+      "kind": Json::string("finished"),
+      "message": Json::string("previous answer"),
+    }),
+    started,
+  )
+  let (_, buffered_user) = update_dev(
+    dispatch,
+    SessionCommitted(session~, sequence=4, kind="user", payload={
+      "content": Json::string("current question"),
+    }),
+    buffered_terminal,
+  )
+  // Generation 1 predates Started. It may drain the ordered buffer, but it
+  // cannot let the old answer claim the new run's floor.
+  let (_, after_old_cut) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session~,
+      items=[],
+      watermark=1,
+      event_boundaries=[(1, true, 0)],
+      generation=1,
+    ),
+    buffered_user,
+  )
+  guard after_old_cut.find_conversation(@interop.ChannelId::Local, session)
+    is Some(after_old) else {
+    fail("missing conversation after old snapshot")
+  }
+  assert_true(after_old.run_durable_floor is None)
+  assert_true(after_old.run_floor_generation is Some(2))
+  assert_true(after_old.sync is Reloading(generation=2, ..))
+  inspect(after_old.last_terminal_sequence, content="3")
+  let (_, causal) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session~,
+      items=[
+        { kind: Assistant(is_danger=false), content: "previous answer" },
+        { kind: User, content: "current question" },
+      ],
+      watermark=4,
+      event_boundaries=[
+        (1, true, 0),
+        (2, false, 1),
+        (3, true, 1),
+        (4, false, 2),
+      ],
+      generation=2,
+    ),
+    after_old_cut,
+  )
+  guard causal.find_conversation(@interop.ChannelId::Local, session)
+    is Some(current) else {
+    fail("missing conversation after causal snapshot")
+  }
+  assert_true(current.run_durable_floor is Some(3))
+  assert_true(current.run_floor_generation is None)
+}
+
+///|
+test "buffered future terminal cannot become its own run floor" {
+  let dispatch = test_dispatch()
+  let conv = {
+    ..running_conversation(),
+    watermark: 1,
+    last_terminal_sequence: 1,
+    run_durable_floor: None,
+    sync: test_reloading([]),
+  }
+  let model = test_model().replace_conversation(conv)
+  let (_, user) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=2, kind="user", payload={
+      "content": Json::string("current question"),
+    }),
+    model,
+  )
+  let (_, answer) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=3, kind="assistant", payload={
+      "content": Json::string("current answer"),
+    }),
+    user,
+  )
+  let (_, terminal) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=4, kind="terminal", payload={
+      "kind": Json::string("finished"),
+      "message": Json::string("current answer"),
+    }),
+    answer,
+  )
+  // Buffered state is delivery, not applied chronology.
+  inspect(terminal.active().last_terminal_sequence, content="1")
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=1,
+      event_boundaries=[(1, true, 0)],
+      generation=1,
+    ),
+    terminal,
+  )
+  assert_true(loaded.active().run_durable_floor is Some(1))
+  inspect(loaded.active().last_terminal_sequence, content="4")
+}
+
+///|
+test "a late durable EOF finalizes an unconfirmed steer without a terminal" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      watermark: 1,
+      last_terminal_sequence: 1,
+      run_durable_floor: Some(1),
+    },
+    ["late steer"],
+  )
+  let (_, errored) = update_dev(
+    dispatch,
+    Error(
+      run_id=Some("r7"),
+      message="engine exited without a result",
+      diagnostics=None,
+      exit_code=Some(1),
+    ),
+    test_model().replace_conversation(conv),
+  )
+  let (_, synthetic) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="failed", answer=None, durable_sequence=None),
+    errored,
+  )
+  guard synthetic.active().overlay is [_, steer_notice] else {
+    fail("expected the process error and unconfirmed steer notices")
+  }
+  assert_true(steer_notice.anchor is SnapshotCut(snapshot_generation=1))
+  let (_, partial) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=2, kind="assistant", payload={
+      "content": Json::string("partial answer"),
+    }),
+    synthetic,
+  )
+  // The real EOF consumer publishes a non-lifecycle boundary only after its
+  // final scan, carrying the exact last sequence even though no Terminal was
+  // appended.
+  let (_, finalized) = update_dev(
+    dispatch,
+    DurableBoundary(run_id="r7", session="desktop-test", sequence=2),
+    partial,
+  )
+  assert_true(finalized.active().overlay[1].anchor is DurableTail(2))
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: Assistant(is_danger=false), content: "partial answer" }],
+      watermark=2,
+      event_boundaries=[(1, true, 0), (2, false, 1)],
+      generation=1,
+    ),
+    finalized,
+  )
+  assert_true(loaded.active().overlay[1].anchor is AfterMessages(1))
+  assert_false(loaded.active().has_unresolved_run_tail_notice())
+  let visible = loaded.active().visible_items()
+  inspect(visible.length(), content="3")
+  inspect(visible[0].content, content="partial answer")
+  assert_true(visible[1].content.contains("engine exited"))
+  assert_true(visible[2].content.contains("late steer"))
+}
+
+///|
+test "two run-tail notice groups freeze only at their own terminals" {
+  let first = { ..test_conversation(), run_durable_floor: Some(1) }.append_run_tail_notice(
+    Assistant(is_danger=true),
+    "first",
+    Retained,
+  )
+  let second = { ..first, run_durable_floor: Some(5) }.append_run_tail_notice(
+    Assistant(is_danger=true),
+    "second",
+    Retained,
+  )
+  let frozen = second.freeze_run_tail_notices_from_snapshot(
+    [(4, true, 2), (8, true, 4)],
+    1,
+  )
+  assert_true(frozen.overlay[0].anchor is AfterMessages(2))
+  assert_true(frozen.overlay[1].anchor is AfterMessages(4))
+}
+
+///|
+test "only a causal gap-free snapshot may abandon a missing prior terminal" {
+  let prior = { ..test_conversation(), run_durable_floor: Some(1) }
+    .append_run_tail_notice(Assistant(is_danger=true), "old notice", Retained)
+    .prepare_tail_notices_for_successor(2)
+  let old_cut = prior
+    .freeze_run_tail_notices_from_snapshot([], 1)
+    .abandon_missing_prior_terminals(1, 0)
+  assert_true(old_cut.overlay[0].anchor is PriorTerminalTail(..))
+  let causal = old_cut
+    .freeze_run_tail_notices_from_snapshot([], 2)
+    .abandon_missing_prior_terminals(2, 0)
+  assert_true(causal.overlay[0].anchor is AfterMessages(0))
+}
+
+///|
+test "send waits while the durable transcript frontier is reloading" {
+  let dispatch = test_dispatch()
+  let conv = {
+    ..running_conversation(),
+    task: "do not send yet",
+    sync: test_reloading([]),
+  }
+  let model = running_model().replace_conversation(conv)
+  let (_, next) = update(dispatch, Send, model)
+  inspect(next.active().task, content="do not send yet")
+  inspect(next.active().input_ledger.length(), content="0")
+}
+
+///|
+test "runs settled keeps exact steer ownership without notice growth" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["lost"]),
+  )
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, once) = update_dev(dispatch, RunsSettled(live=[], frontier~), model)
+  inspect(once.active().input_ledger.length(), content="1")
+  assert_true(once.active().input_ledger[0].state is Unconfirmed)
+  inspect(once.active().overlay.length(), content="1")
+  assert_true(
+    once.active().overlay[0].reconciliation is Submission("test-steer-0"),
+  )
+  let (_, twice) = update_dev(dispatch, RunsSettled(live=[], frontier~), once)
+  inspect(twice.active().input_ledger.length(), content="1")
+  inspect(twice.active().overlay.length(), content="1")
+}
+
+///|
+test "a trailing applied receipt settles after an empty runs snapshot" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["late applied"]),
+  )
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsSettled(live=[], frontier~),
+    model,
+  )
+  let (_, applied) = update_dev(
+    dispatch,
+    Engine(
+      Some("r7"),
+      SteerApplied(content="late applied", submission_id=Some("test-steer-0")),
+      session=None,
+    ),
+    settled,
+  )
+  inspect(applied.active().input_ledger.length(), content="0")
+  inspect(applied.active().overlay.length(), content="0")
+}
+
+///|
+test "a trailing dropped receipt restores input after an empty runs snapshot" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["late dropped"]),
+  )
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsSettled(live=[], frontier~),
+    model,
+  )
+  let (_, dropped) = update_dev(
+    dispatch,
+    Engine(
+      Some("r7"),
+      SteerDropped(content="late dropped", submission_id=Some("test-steer-0")),
+      session=None,
+    ),
+    settled,
+  )
+  inspect(dropped.active().input_ledger.length(), content="0")
+  inspect(dropped.active().task, content="late dropped")
+  inspect(dropped.active().overlay.length(), content="1")
+  assert_true(dropped.active().overlay[0].content.contains("late dropped"))
+}
+
+///|
+test "a successor step cannot retire an older steer before its RPC rejection" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["late rejection"]),
+  )
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsSettled(live=[], frontier~),
+    model,
+  )
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r8",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("foreign next run"),
+      submission_id=None,
+    ),
+    settled,
+  )
+  let (_, stepped) = update_dev(
+    dispatch,
+    Engine(Some("r8"), AgentStep(Some(1)), session=None),
+    started,
+  )
+  inspect(stepped.active().input_ledger.length(), content="1")
+  let (_, rejected) = update_dev(
+    dispatch,
+    SteerRejected(
+      session="desktop-test",
+      submission_id="test-steer-0",
+      text="late rejection",
+      run_id="r7",
+    ),
+    stepped,
+  )
+  assert_true(rejected.active().run is Open(run_id="r8", ..))
+  inspect(rejected.active().input_ledger.length(), content="0")
+  inspect(rejected.active().task, content="late rejection")
+}
+
+///|
+test "a runs snapshot cannot retire a steer submitted after its frontier" {
+  let dispatch = test_dispatch()
+  let model = running_model()
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, drafted) = update(dispatch, TaskChanged("post-snapshot steer"), model)
+  let (_, steered) = update(dispatch, Send, drafted)
+  guard steered.active().input_ledger is [pending] else {
+    fail("expected one steer awaiting its exact receipt")
+  }
+  let submission_id = pending.submission_id
+  assert_true(pending.state is Awaiting)
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsSettled(live=[], frontier~),
+    steered,
+  )
+  assert_true(settled.active().run is NoRun(ended=None))
+  guard settled.active().input_ledger is [still_pending] else {
+    fail("the older runs reply retired a newer steer")
+  }
+  assert_eq(still_pending.submission_id, submission_id)
+  assert_true(still_pending.state is Awaiting)
+  let (_, r2_started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r8",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("foreign next run"),
+      submission_id=None,
+    ),
+    settled,
+  )
+  let (_, after_r2) = update_dev(
+    dispatch,
+    Finished(run_id="r8", status="finished", answer=None, durable_sequence=None),
+    r2_started,
+  )
+  guard after_r2.active().input_ledger is [still_r1] else {
+    fail("the successor finish consumed an older run's steer")
+  }
+  assert_eq(still_r1.submission_id, submission_id)
+  assert_true(still_r1.state is Awaiting)
+  inspect(after_r2.active().overlay.length(), content="0")
+  // With no transcript, draft, overlay, or live run, exact ownership is the
+  // only reason this conversation survives a switch.
+  let other = {
+    ..empty_conversation(@interop.ChannelId::Local, "desktop-other"),
+    messages: [{ kind: User, content: "other conversation" }],
+  }
+  let (_, switched) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-other"),
+    after_r2.replace_conversation(other),
+  )
+  guard switched.find_conversation(@interop.ChannelId::Local, "desktop-test")
+    is Some(retained) else {
+    fail("switching conversations pruned exact steer ownership")
+  }
+  assert_true(retained.has_begun())
+  let (_, rejected) = update_dev(
+    dispatch,
+    SteerRejected(
+      session="desktop-test",
+      submission_id~,
+      text="post-snapshot steer",
+      run_id="r7",
+    ),
+    switched,
+  )
+  guard rejected.find_conversation(@interop.ChannelId::Local, "desktop-test")
+    is Some(restored) else {
+    fail("late rejection lost its conversation")
+  }
+  inspect(restored.input_ledger.length(), content="0")
+  inspect(restored.task, content="post-snapshot steer")
+}
+
+///|
+test "runs settlement releases after a causal cut and keeps exact receipt" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      watermark: 2,
+      last_terminal_sequence: 2,
+      run_durable_floor: Some(2),
+      sync: test_reloading([]),
+    },
+    ["captured steer"],
+  )
+  let model = {
+    ..running_model().replace_conversation(conv),
+    transcript_request_generation: 1,
+  }
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, snapshot_first) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=3,
+      event_boundaries=[(3, true, 0)],
+      generation=1,
+    ),
+    model,
+  )
+  assert_true(snapshot_first.active().sync is Synced)
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsSettled(live=[], frontier~),
+    snapshot_first,
+  )
+  assert_true(settled.active().sync is Reloading(generation=2, ..))
+  assert_true(settled.active().has_unresolved_run_tail_notice())
+  let (_, reconciled) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=3,
+      event_boundaries=[(3, true, 0)],
+      generation=2,
+    ),
+    settled,
+  )
+  assert_true(reconciled.active().sync is Synced)
+  assert_true(reconciled.active().overlay[0].anchor is AfterMessages(0))
+  assert_false(reconciled.active().has_unresolved_run_tail_notice())
+  inspect(reconciled.active().input_ledger.length(), content="1")
+  let (_, drafted) = update(dispatch, TaskChanged("next prompt"), reconciled)
+  let (_, sent) = update(dispatch, Send, drafted)
+  assert_true(sent.active().run is Starting(..))
+  let (_, received) = update_dev(
+    dispatch,
+    Engine(
+      Some("r7"),
+      SteerApplied(content="captured steer", submission_id=Some("test-steer-0")),
+      session=None,
+    ),
+    sent,
+  )
+  assert_false(received.active().has_unresolved_run_tail_notice())
+  inspect(received.active().overlay.length(), content="0")
+  inspect(received.active().input_ledger.length(), content="1")
+}
+
+///|
+test "a late normal Finished upgrades a runs-settled uncertain steer" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    {
+      ..running_conversation(),
+      watermark: 1,
+      last_terminal_sequence: 1,
+      run_durable_floor: Some(1),
+    },
+    ["captured steer"],
+  )
+  let model = running_model().replace_conversation(conv)
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsSettled(live=[], frontier~),
+    model,
+  )
+  assert_true(
+    settled.active().overlay[0].anchor is SnapshotCut(snapshot_generation=1),
+  )
+  let finish : DeviceMsg = Finished(
+    run_id="r7",
+    status="finished",
+    answer=None,
+    durable_sequence=None,
+  )
+  let (_, finished) = update_dev(dispatch, finish, settled)
+  assert_true(
+    finished.active().overlay[0].anchor
+    is PriorTerminalTail(floor=1, snapshot_generation=2),
+  )
+  let (_, duplicate) = update_dev(dispatch, finish, finished)
+  assert_true(
+    duplicate.active().overlay[0].anchor
+    is PriorTerminalTail(floor=1, snapshot_generation=2),
+  )
+  let (_, old_cut) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=1,
+      event_boundaries=[(1, true, 0)],
+      generation=1,
+    ),
+    duplicate,
+  )
+  assert_true(old_cut.active().sync is Reloading(generation=2, ..))
+  assert_true(old_cut.active().overlay[0].anchor is PriorTerminalTail(..))
+  let (_, causal) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: Assistant(is_danger=false), content: "answer" }],
+      watermark=2,
+      event_boundaries=[(1, true, 0), (2, true, 1)],
+      generation=2,
+    ),
+    old_cut,
+  )
+  assert_true(causal.active().overlay[0].anchor is AfterMessages(1))
+  assert_false(causal.active().has_unresolved_run_tail_notice())
+  let (_, after_duplicate) = update_dev(dispatch, finish, causal)
+  assert_true(after_duplicate.active().overlay[0].anchor is AfterMessages(1))
+  assert_false(after_duplicate.active().has_unresolved_run_tail_notice())
+}
+
+///|
+test "a late failed Finished preserves a runs-settled snapshot cut" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(running_conversation(), ["captured steer"])
+  let model = running_model().replace_conversation(conv)
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsSettled(live=[], frontier~),
+    model,
+  )
+  let finish : DeviceMsg = Finished(
+    run_id="r7",
+    status="failed",
+    answer=None,
+    durable_sequence=None,
+  )
+  let (_, finished) = update_dev(dispatch, finish, settled)
+  assert_true(
+    finished.active().overlay[0].anchor is SnapshotCut(snapshot_generation=1),
+  )
+  assert_true(finished.active().has_unresolved_run_tail_notice())
+  let (_, finalized) = update_dev(
+    dispatch,
+    DurableBoundary(run_id="r7", session="desktop-test", sequence=1),
+    finished,
+  )
+  assert_true(finalized.active().overlay[0].anchor is DurableTail(1))
+  let (_, duplicate) = update_dev(dispatch, finish, finalized)
+  assert_true(duplicate.active().overlay[0].anchor is DurableTail(1))
+  assert_true(duplicate.active().has_unresolved_run_tail_notice())
+}
+
+///|
+test "runs settlement follows an older in-flight transcript cut" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(
+    { ..running_conversation(), sync: test_reloading([]) },
+    ["captured steer"],
+  )
+  let model = {
+    ..running_model().replace_conversation(conv),
+    transcript_request_generation: 1,
+  }
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsSettled(live=[], frontier~),
+    model,
+  )
+  assert_true(
+    settled.active().sync
+    is Reloading(generation=1, reload_after_current=true, ..),
+  )
+  let (_, first_cut) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=1,
+      event_boundaries=[(1, true, 0)],
+      generation=1,
+    ),
+    settled,
+  )
+  assert_true(first_cut.active().sync is Reloading(generation=2, ..))
+}
+
+///|
+test "duplicate abnormal Finished keeps an initial prompt on one causal cut" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    running_conversation(),
+    "prompt-id",
+    "recover this prompt",
+  ).bind_initial_submission_to_run("prompt-id", "r7")
+  let finish : DeviceMsg = Finished(
+    run_id="r7",
+    status="failed",
+    answer=None,
+    durable_sequence=None,
+  )
+  let (_, once) = update_dev(
+    dispatch,
+    finish,
+    running_model().replace_conversation(conv),
+  )
+  guard once.active().overlay is [first_notice] else {
+    fail("the failed run should leave one recoverable prompt notice")
+  }
+  assert_true(first_notice.anchor is SnapshotCut(snapshot_generation=1))
+  assert_true(once.active().sync is Reloading(generation=1, ..))
+  let (_, twice) = update_dev(dispatch, finish, once)
+  guard twice.active().overlay is [duplicate_notice] else {
+    fail("duplicate Finished must not grow the prompt notice set")
+  }
+  assert_true(duplicate_notice.anchor is SnapshotCut(snapshot_generation=1))
+  assert_true(twice.active().sync is Reloading(generation=1, ..))
+  let (_, reconciled) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=0,
+      event_boundaries=[],
+      generation=1,
+    ),
+    twice,
+  )
+  assert_true(reconciled.active().sync is Synced)
+  assert_true(reconciled.active().overlay[0].anchor is AfterMessages(0))
+  assert_false(reconciled.active().has_unresolved_run_tail_notice())
+  inspect(reconciled.active().input_ledger.length(), content="1")
+  assert_true(reconciled.active().input_ledger[0].state is Unconfirmed)
+}
+
+///|
+test "runs settlement causally freezes bound initial prompts from open and idle frontiers" {
+  let dispatch = test_dispatch()
+  let open_conv = with_initial_submission(
+    running_conversation(),
+    "open-prompt",
+    "prompt from the open run",
+  ).bind_initial_submission_to_run("open-prompt", "r7")
+  let open_model = running_model().replace_conversation(open_conv)
+  let (_, open_settled) = update_dev(
+    dispatch,
+    RunsSettled(
+      live=[],
+      frontier=open_model.run_snapshot_frontier(@interop.ChannelId::Local),
+    ),
+    open_model,
+  )
+  assert_true(open_settled.active().run is NoRun(ended=None))
+  assert_true(open_settled.active().input_ledger[0].state is Unconfirmed)
+  assert_true(
+    open_settled.active().overlay[0].anchor
+    is SnapshotCut(snapshot_generation=1),
+  )
+  assert_true(open_settled.active().sync is Reloading(generation=1, ..))
+  let (_, open_frozen) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: User, content: "open-run durable tail" }],
+      watermark=1,
+      event_boundaries=[(1, false, 1)],
+      generation=1,
+    ),
+    open_settled,
+  )
+  assert_true(open_frozen.active().overlay[0].anchor is AfterMessages(1))
+  assert_false(open_frozen.active().has_unresolved_run_tail_notice())
+  inspect(open_frozen.active().input_ledger.length(), content="1")
+
+  let idle_bound = with_initial_submission(
+    { ..test_conversation(), run: NoRun(ended=None), last_run_id: Some("r7") },
+    "idle-prompt",
+    "prompt from the idle run",
+  ).bind_initial_submission_to_run("idle-prompt", "r7")
+  let (idle_conv, marked) = idle_bound.mark_submission_unconfirmed(
+    "idle-prompt", "existing uncertain prompt notice", false,
+  )
+  assert_true(marked)
+  let idle_model = test_model().replace_conversation(idle_conv)
+  let (_, idle_settled) = update_dev(
+    dispatch,
+    RunsSettled(
+      live=[],
+      frontier=idle_model.run_snapshot_frontier(@interop.ChannelId::Local),
+    ),
+    idle_model,
+  )
+  assert_true(idle_settled.active().input_ledger[0].state is Unconfirmed)
+  assert_true(
+    idle_settled.active().overlay[0].anchor
+    is SnapshotCut(snapshot_generation=1),
+  )
+  assert_true(idle_settled.active().sync is Reloading(generation=1, ..))
+  let (_, idle_frozen) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: Assistant(is_danger=false), content: "idle-run durable tail" },
+      ],
+      watermark=1,
+      event_boundaries=[(1, false, 1)],
+      generation=1,
+    ),
+    idle_settled,
+  )
+  assert_true(idle_frozen.active().overlay[0].anchor is AfterMessages(1))
+  assert_false(idle_frozen.active().has_unresolved_run_tail_notice())
+  inspect(idle_frozen.active().input_ledger.length(), content="1")
+}
+
+///|
+test "an initial warning freezes between a snapshot and its buffered successor" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    running_conversation(),
+    "prompt-id",
+    "prompt awaiting proof",
+  ).bind_initial_submission_to_run("prompt-id", "r7")
+  let (_, finished) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="failed", answer=None, durable_sequence=None),
+    running_model().replace_conversation(conv),
+  )
+  let (_, buffered) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=2, kind="user", payload={
+      "content": Json::string("buffered W+1"),
+    }),
+    finished,
+  )
+  guard buffered.active().sync is Reloading(buffered=commits, ..) else {
+    fail("the post-cut commit should wait behind the snapshot")
+  }
+  inspect(commits.length(), content="1")
+  let (_, reconciled) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: User, content: "snapshot W" }],
+      watermark=1,
+      event_boundaries=[(1, false, 1)],
+      generation=1,
+    ),
+    buffered,
+  )
+  assert_true(reconciled.active().sync is Synced)
+  assert_true(reconciled.active().overlay[0].anchor is AfterMessages(1))
+  inspect(reconciled.active().watermark, content="2")
+  let visible = reconciled.active().visible_items()
+  inspect(visible.length(), content="3")
+  inspect(visible[0].content, content="snapshot W")
+  assert_true(visible[1].content.contains("prompt awaiting proof"))
+  inspect(visible[2].content, content="buffered W+1")
+}
+
+///|
+test "foreign Started reanchors a reconnected initial before retiring its ownership" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    running_conversation(),
+    "old-prompt",
+    "old prompt",
+  ).bind_initial_submission_to_run("old-prompt", "r7")
+  let (_, bridged) = update_dev(
+    dispatch,
+    BridgeReady,
+    running_model().replace_conversation(conv),
+  )
+  assert_true(bridged.active().input_ledger[0].state is Unconfirmed)
+  assert_true(
+    bridged.active().overlay[0].anchor is SnapshotCut(snapshot_generation=1),
+  )
+  assert_true(bridged.active().sync is Reloading(generation=1, ..))
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r8",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("foreign prompt"),
+      submission_id=Some("foreign-prompt"),
+    ),
+    bridged,
+  )
+  inspect(started.active().input_ledger.length(), content="0")
+  guard started.active().overlay is [retired_notice] else {
+    fail("the old prompt warning should survive as a retained notice")
+  }
+  assert_true(retired_notice.reconciliation is Retained)
+  assert_true(retired_notice.anchor is SnapshotCut(snapshot_generation=2))
+  assert_true(
+    started.active().sync
+    is Reloading(generation=1, reload_after_current=true, ..),
+  )
+  let (_, old_cut) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: User, content: "old durable prompt" }],
+      watermark=1,
+      event_boundaries=[(1, false, 1)],
+      generation=1,
+    ),
+    started,
+  )
+  assert_true(old_cut.active().sync is Reloading(generation=2, ..))
+  assert_true(
+    old_cut.active().overlay[0].anchor is SnapshotCut(snapshot_generation=2),
+  )
+  let (_, causal) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: User, content: "old durable prompt" }],
+      watermark=1,
+      event_boundaries=[(1, false, 1)],
+      generation=2,
+    ),
+    old_cut,
+  )
+  assert_true(causal.active().sync is Synced)
+  assert_true(causal.active().overlay[0].anchor is AfterMessages(1))
+  let visible = causal.active().visible_items()
+  inspect(visible.length(), content="2")
+  inspect(visible[0].content, content="old durable prompt")
+  assert_true(visible[1].content.contains("old prompt"))
+}
+
+///|
+test "an exact zero abnormal EOF releases a fresh prompt for another send" {
+  let dispatch = test_dispatch()
+  let conv = with_initial_submission(
+    { ..test_conversation(), run: Starting(submission_id="fresh-prompt") },
+    "fresh-prompt",
+    "prompt before setup failure",
+  )
+  let (_, started) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-fresh",
+      session="desktop-test",
+      model="deepseek-v4-pro",
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=Some("prompt before setup failure"),
+      submission_id=Some("fresh-prompt"),
+    ),
+    test_model().replace_conversation(conv),
+  )
+  assert_true(started.active().sync is Reloading(generation=1, ..))
+  let (_, failed) = update_dev(
+    dispatch,
+    Finished(
+      run_id="r-fresh",
+      status="failed",
+      answer=None,
+      durable_sequence=Some(0),
+    ),
+    started,
+  )
+  assert_true(failed.active().sync is Synced)
+  assert_true(failed.active().run is NoRun(ended=Some(RunFinished(RunFailed))))
+  inspect(failed.active().input_ledger.length(), content="0")
+  inspect(failed.active().task, content="prompt before setup failure")
+  assert_true(failed.active().overlay[0].anchor is AfterMessages(0))
+  assert_true(failed.active().overlay[0].reconciliation is Retained)
+  assert_true(
+    failed.active().visible_items()[0].content.contains(
+      "restored for resubmission",
+    ),
+  )
+  assert_false(failed.active().has_unresolved_run_tail_notice())
+  let (_, retried) = update(dispatch, Send, failed)
+  assert_true(retried.active().run is Starting(..))
+  inspect(retried.active().task, content="")
+  inspect(retried.active().input_ledger.length(), content="1")
+}
+
+///|
+test "late start responses cannot reopen an exact-zero recovery read" {
+  let dispatch = test_dispatch()
+  let started = fresh_started_model(
+    "late-response-prompt", "r-late-response", "restore before the response",
+  )
+  let (_, recovered) = update_dev(
+    dispatch,
+    Finished(
+      run_id="r-late-response",
+      status="failed",
+      answer=None,
+      durable_sequence=Some(0),
+    ),
+    started,
+  )
+  assert_true(recovered.active().sync is Synced)
+  inspect(recovered.active().input_ledger.length(), content="0")
+  let generation = recovered.transcript_request_generation
+  let (_, accepted) = update_dev(
+    dispatch,
+    StartResponded(
+      session="desktop-test",
+      submission_id="late-response-prompt",
+      run_id="r-late-response",
+      status="accepted",
+      exit_code=0,
+    ),
+    recovered,
+  )
+  assert_true(accepted.active().sync is Synced)
+  assert_eq(accepted.transcript_request_generation, generation)
+  inspect(accepted.active().task, content="restore before the response")
+  inspect(accepted.active().input_ledger.length(), content="0")
+  let (_, failed) = update_dev(
+    dispatch,
+    StartResponded(
+      session="desktop-test",
+      submission_id="late-response-prompt",
+      run_id="r-late-response",
+      status="failed",
+      exit_code=1,
+    ),
+    recovered,
+  )
+  assert_true(failed.active().sync is Synced)
+  assert_eq(failed.transcript_request_generation, generation)
+  inspect(failed.active().task, content="restore before the response")
+  inspect(failed.active().input_ledger.length(), content="0")
+}
+
+///|
+test "BridgeReady does not probe a record disproved by exact-zero EOF" {
+  let dispatch = test_dispatch()
+  let started = fresh_started_model(
+    "reconnect-zero-prompt", "r-reconnect-zero", "restore across reconnect",
+  )
+  let (_, recovered) = update_dev(
+    dispatch,
+    Finished(
+      run_id="r-reconnect-zero",
+      status="failed",
+      answer=None,
+      durable_sequence=Some(0),
+    ),
+    started,
+  )
+  let generation = recovered.transcript_request_generation
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, recovered)
+  assert_true(reconnected.active().sync is Synced)
+  assert_eq(reconnected.transcript_request_generation, generation)
+  inspect(reconnected.active().task, content="restore across reconnect")
+  inspect(reconnected.active().input_ledger.length(), content="0")
+  assert_true(reconnected.active().overlay[0].reconciliation is Retained)
+}
+
+///|
+test "a late exact-zero durable boundary recovers from active and failed reloads" {
+  let dispatch = test_dispatch()
+  let reloading_started = fresh_started_model(
+    "reloading-zero-prompt", "r-reloading-zero", "restore from reloading",
+  )
+  let (_, reloading) = update_dev(
+    dispatch,
+    Finished(
+      run_id="r-reloading-zero",
+      status="failed",
+      answer=None,
+      durable_sequence=None,
+    ),
+    reloading_started,
+  )
+  assert_true(reloading.active().sync is Reloading(..))
+  let (_, recovered_reloading) = update_dev(
+    dispatch,
+    DurableBoundary(
+      run_id="r-reloading-zero",
+      session="desktop-test",
+      sequence=0,
+    ),
+    reloading,
+  )
+  assert_true(recovered_reloading.active().sync is Synced)
+  inspect(recovered_reloading.active().task, content="restore from reloading")
+  inspect(recovered_reloading.active().input_ledger.length(), content="0")
+  assert_true(
+    recovered_reloading.active().overlay[0].reconciliation is Retained,
+  )
+
+  let failed_started = fresh_started_model(
+    "failed-zero-prompt", "r-failed-zero", "restore from failed reload",
+  )
+  let (_, waiting) = update_dev(
+    dispatch,
+    Finished(
+      run_id="r-failed-zero",
+      status="failed",
+      answer=None,
+      durable_sequence=None,
+    ),
+    failed_started,
+  )
+  let failed_reload = waiting.replace_conversation({
+    ..waiting.active(),
+    sync: ReloadFailed(generation=1, buffered=[]),
+  })
+  let (_, recovered_failed) = update_dev(
+    dispatch,
+    DurableBoundary(run_id="r-failed-zero", session="desktop-test", sequence=0),
+    failed_reload,
+  )
+  assert_true(recovered_failed.active().sync is Synced)
+  inspect(recovered_failed.active().task, content="restore from failed reload")
+  inspect(recovered_failed.active().input_ledger.length(), content="0")
+  assert_true(recovered_failed.active().overlay[0].reconciliation is Retained)
+}
+
+///|
+test "exact-zero recovery refuses buffered or nonzero durable frontiers" {
+  let dispatch = test_dispatch()
+  let buffered_started = fresh_started_model(
+    "buffered-zero-prompt", "r-buffered-zero", "keep buffered ownership",
+  )
+  let (_, waiting) = update_dev(
+    dispatch,
+    Finished(
+      run_id="r-buffered-zero",
+      status="failed",
+      answer=None,
+      durable_sequence=None,
+    ),
+    buffered_started,
+  )
+  let (_, buffered) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=1, kind="user", payload={
+      "content": Json::string("durable prompt arrived"),
+    }),
+    waiting,
+  )
+  let (_, zero_with_buffer) = update_dev(
+    dispatch,
+    DurableBoundary(
+      run_id="r-buffered-zero",
+      session="desktop-test",
+      sequence=0,
+    ),
+    buffered,
+  )
+  guard zero_with_buffer.active().sync is Reloading(buffered=commits, ..) else {
+    fail("a buffered commit must keep transcript reconciliation active")
+  }
+  inspect(commits.length(), content="1")
+  inspect(zero_with_buffer.active().task, content="")
+  inspect(zero_with_buffer.active().input_ledger.length(), content="1")
+  assert_true(
+    zero_with_buffer.active().overlay[0].reconciliation
+    is Submission("buffered-zero-prompt"),
+  )
+
+  let nonzero_started = fresh_started_model(
+    "nonzero-prompt", "r-nonzero", "keep nonzero ownership",
+  )
+  let (_, nonzero) = update_dev(
+    dispatch,
+    Finished(
+      run_id="r-nonzero",
+      status="failed",
+      answer=None,
+      durable_sequence=Some(1),
+    ),
+    nonzero_started,
+  )
+  assert_true(nonzero.active().sync is Reloading(..))
+  inspect(nonzero.active().task, content="")
+  inspect(nonzero.active().input_ledger.length(), content="1")
+  assert_true(nonzero.active().overlay[0].anchor is DurableTail(1))
+  assert_true(
+    nonzero.active().overlay[0].reconciliation is Submission("nonzero-prompt"),
+  )
 }
 
 ///|
 test "the default provider needs no API key to be ready" {
-  let model = { ..test_model(), api_key: "" }
+  let model = test_model()
+  assert_false(model.deepseek_key_saved)
   assert_true(model.api_ready())
-  inspect(model.effective_api_url(), content=OpenseekApiUrl)
-  inspect(model.effective_api_key(), content="")
-}
-
-///|
-test "custom endpoints never reuse the saved DeepSeek key" {
-  let openseek = { ..test_model(), api_provider: Openseek }
-  inspect(openseek.effective_api_key(), content="")
-  let official = { ..test_model(), api_provider: Deepseek }
-  inspect(official.effective_api_key(), content="sk-test")
-  let unauthenticated_custom = {
-    ..test_model(),
-    api_provider: Custom,
-    custom_api_url: "https://proxy.example/v1/chat/completions",
-  }
-  inspect(unauthenticated_custom.effective_api_key(), content="")
-  let authenticated_custom = {
-    ..unauthenticated_custom,
-    custom_api_key: "sk-custom",
-  }
-  inspect(authenticated_custom.effective_api_key(), content="sk-custom")
 }
 
 ///|
 test "the official endpoint requires a key, a custom endpoint a URL" {
-  let official = { ..test_model(), api_provider: Deepseek, api_key: "" }
+  let official = { ..test_model(), api_provider: Deepseek }
   assert_false(official.api_ready())
   assert_true(official.display_status() is ApiKeyRequired)
+  assert_true({ ..official, deepseek_key_saved: true }.api_ready())
   let custom = { ..test_model(), api_provider: Custom, custom_api_url: "" }
   assert_false(custom.api_ready())
   assert_true(custom.display_status() is SetupRequired)
@@ -2519,97 +9311,340 @@ test "the official endpoint requires a key, a custom endpoint a URL" {
     custom_api_url: "https://proxy.example/chat/completions",
   }
   assert_true(configured.api_ready())
-  inspect(
-    configured.effective_api_url(),
-    content="https://proxy.example/chat/completions",
-  )
 }
 
 ///|
-test "loaded settings open the popup only when incomplete" {
+test "loaded UI preferences parse their wire names" {
   let dispatch = test_dispatch()
-  let (_, zero_config) = update(
+  let (_, restored) = update(
     dispatch,
-    SettingsLoaded(
-      provider="",
-      custom_url="",
-      api_key="",
-      custom_api_key="",
-      wsl_enabled="",
-      wsl_distro="",
-      wsl_engine="",
-      notification_corner="",
-      tree_layout="",
-      update_channel="",
+    SettingsLoaded(notification_corner="top-left", tree_layout=""),
+    test_model(),
+  )
+  assert_true(restored.notification_corner is TopLeft)
+  // Unknown stored values fall back to the defaults.
+  let (_, unknown) = update(
+    dispatch,
+    SettingsLoaded(notification_corner="", tree_layout=""),
+    test_model(),
+  )
+  assert_true(unknown.notification_corner is BottomRight)
+}
+
+///|
+fn host_settings(
+  provider~ : String,
+  revision? : Int = 0,
+  has_deepseek_key? : Bool = false,
+  wsl_enabled? : Bool = false,
+  wsl_distro? : String = "",
+  wsl_engine? : String = "",
+) -> HostSettings {
+  {
+    revision,
+    provider,
+    custom_api_url: "",
+    has_deepseek_key,
+    has_custom_key: false,
+    wsl_enabled,
+    wsl_distro,
+    wsl_engine,
+  }
+}
+
+///|
+test "host settings open the settings page only when incomplete" {
+  let dispatch = test_dispatch()
+  let (_, zero_config) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="openseek"),
+      connection_generation=None,
     ),
     test_model(),
   )
   assert_true(zero_config.screen is Chat)
   assert_true(zero_config.api_provider is Openseek)
   assert_true(zero_config.display_status() is Ready)
-  let (_, keyless) = update(
+  let (_, keyless) = update_dev(
     dispatch,
-    SettingsLoaded(
-      provider="deepseek",
-      custom_url="",
-      api_key="",
-      custom_api_key="",
-      wsl_enabled="",
-      wsl_distro="",
-      wsl_engine="",
-      notification_corner="",
-      tree_layout="",
-      update_channel="",
+    HostSettingsLoaded(
+      host_settings(provider="deepseek"),
+      connection_generation=None,
     ),
     test_model(),
   )
   assert_true(keyless.screen is Settings)
   assert_true(keyless.display_status() is ApiKeyRequired)
-  let (_, restored) = update(
+  let (_, restored) = update_dev(
     dispatch,
-    SettingsLoaded(
-      provider="deepseek",
-      custom_url="",
-      api_key="sk-stored",
-      custom_api_key="sk-custom-stored",
-      wsl_enabled="1",
-      wsl_distro=" Ubuntu ",
-      wsl_engine="/usr/local/bin/openseek",
-      notification_corner="top-left",
-      tree_layout="",
-      update_channel="staging",
+    HostSettingsLoaded(
+      host_settings(
+        provider="deepseek",
+        has_deepseek_key=true,
+        wsl_enabled=true,
+        wsl_distro="Ubuntu",
+        wsl_engine="/usr/local/bin/openseek",
+      ),
+      connection_generation=None,
     ),
     test_model(),
   )
   assert_true(restored.screen is Chat)
-  inspect(restored.api_key, content="sk-stored")
-  inspect(restored.custom_api_key, content="sk-custom-stored")
+  assert_true(restored.deepseek_key_saved)
   inspect(restored.wsl_enabled, content="true")
   inspect(restored.wsl_distro, content="Ubuntu")
   inspect(restored.wsl_engine, content="/usr/local/bin/openseek")
-  assert_true(restored.notification_corner is TopLeft)
-  assert_true(restored.update_channel is Staging)
-  // An unknown stored corner or channel falls back to the default.
-  assert_true(zero_config.notification_corner is BottomRight)
-  assert_true(zero_config.update_channel is Production)
-  let (_, custom) = update(
+}
+
+///|
+test "a background device's pushes leave the focused mirrors alone" {
+  let dispatch = test_dispatch()
+  let background : @interop.ChannelId = Remote("d_bg")
+  let model = {
+    ..test_model(),
+    devices: [
+      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
+      { ..empty_device_state(background), bridge: Connected },
+    ],
+  }
+  // A settings.changed broadcast from the background device: the form (and
+  // the incomplete-settings redirect) keeps the focused host's state.
+  let (_, settled) = update(
     dispatch,
-    SettingsLoaded(
-      provider="custom",
-      custom_url="https://proxy.example/chat/completions",
-      api_key="sk-deepseek",
-      custom_api_key="sk-custom",
-      wsl_enabled="",
-      wsl_distro="",
-      wsl_engine="",
-      notification_corner="",
-      tree_layout="",
-      update_channel="",
+    FromDevice(
+      background,
+      HostSettingsLoaded(
+        host_settings(provider="deepseek"),
+        connection_generation=None,
+      ),
     ),
-    test_model(),
+    model,
   )
-  assert_true(custom.screen is Chat)
-  inspect(custom.effective_api_key(), content="sk-custom")
+  assert_true(settled.api_provider is Openseek)
+  assert_true(settled.screen is Chat)
+  // host.meta from the background device: host_wsl stays the focused host's.
+  let (_, meta) = update(
+    dispatch,
+    FromDevice(background, HostMetaLoaded(wsl=true)),
+    model,
+  )
+  inspect(meta.host_wsl, content="false")
+  // The same push on the focused channel still applies.
+  let (_, focused_meta) = update_dev(dispatch, HostMetaLoaded(wsl=true), model)
+  inspect(focused_meta.host_wsl, content="true")
+}
+
+///|
+test "host settings are deferred while this client's writes are in flight" {
+  let dispatch = test_dispatch()
+  let model = { ..test_model(), settings_saves: 1 }
+  // A broadcast (or a stale get reply) arriving mid-write must not clobber
+  // the optimistic mirror.
+  let (_, ignored) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek", revision=1),
+      connection_generation=None,
+    ),
+    model,
+  )
+  assert_true(ignored.api_provider is Openseek)
+  inspect(ignored.settings_saves, content="1")
+  // The write's own reply reconciles once it is the last one out.
+  let (_, settled) = update_dev(
+    dispatch,
+    HostSettingsApplied(
+      host_settings(provider="deepseek", revision=2, has_deepseek_key=true),
+      connection_generation=0,
+      cleans_legacy=false,
+    ),
+    model,
+  )
+  inspect(settled.settings_saves, content="0")
+  assert_true(settled.api_provider is Deepseek)
+  assert_true(settled.deepseek_key_saved)
+  inspect(settled.host_settings_revision, content="2")
+  // With more writes still out, even a reply only decrements.
+  let stacked = { ..model, settings_saves: 2 }
+  let (_, still_pending) = update_dev(
+    dispatch,
+    HostSettingsApplied(
+      host_settings(provider="deepseek", revision=1),
+      connection_generation=0,
+      cleans_legacy=false,
+    ),
+    stacked,
+  )
+  inspect(still_pending.settings_saves, content="1")
+  assert_true(still_pending.api_provider is Openseek)
+}
+
+///|
+test "a newer peer broadcast beats a delayed local settings reply" {
+  let dispatch = test_dispatch()
+  let model = {
+    ..test_model(),
+    api_provider: Custom,
+    settings_saves: 1,
+    host_settings_revision: 5,
+  }
+  let (_, broadcast) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek", revision=7),
+      connection_generation=None,
+    ),
+    model,
+  )
+  // Preserve the optimistic form until the local RPC settles.
+  assert_true(broadcast.api_provider is Custom)
+  let (_, settled) = update_dev(
+    dispatch,
+    HostSettingsApplied(
+      host_settings(provider="openseek", revision=6),
+      connection_generation=0,
+      cleans_legacy=false,
+    ),
+    broadcast,
+  )
+  assert_true(settled.api_provider is Deepseek)
+  inspect(settled.host_settings_revision, content="7")
+  inspect(settled.settings_saves, content="0")
+}
+
+///|
+test "legacy client settings migrate up only from the desktop window" {
+  let dispatch = test_dispatch()
+  let legacy = LegacySettingsRead(
+    provider="deepseek",
+    custom_url="",
+    api_key="sk-legacy",
+    custom_api_key="",
+    wsl_enabled="1",
+    wsl_distro="Ubuntu",
+    wsl_engine="",
+  )
+  let (_, desktop) = update(dispatch, legacy, {
+    ..test_model(),
+    is_desktop: true,
+  })
+  assert_true(desktop.api_provider is Deepseek)
+  assert_true(desktop.deepseek_key_saved)
+  inspect(desktop.wsl_distro, content="Ubuntu")
+  inspect(desktop.settings_saves, content="1")
+  assert_true(desktop.legacy_cleanup_pending)
+  // A browser page only purges — its copy may belong to another device.
+  let (_, browser) = update(dispatch, legacy, {
+    ..test_model(),
+    is_desktop: false,
+  })
+  assert_false(browser.deepseek_key_saved)
+  inspect(browser.settings_saves, content="0")
+  assert_false(browser.legacy_cleanup_pending)
+}
+
+///|
+test "only the migration settings response owns legacy cleanup" {
+  let dispatch = test_dispatch()
+  let pending = {
+    ..test_model(),
+    settings_saves: 2,
+    legacy_cleanup_pending: true,
+  }
+  // An unrelated save may finish first; it must not consume the migration's
+  // right to clear localStorage when that exact write is acknowledged.
+  let (_, unrelated) = update_dev(
+    dispatch,
+    HostSettingsApplied(
+      host_settings(provider="custom", revision=1),
+      connection_generation=0,
+      cleans_legacy=false,
+    ),
+    pending,
+  )
+  inspect(unrelated.settings_saves, content="1")
+  assert_true(unrelated.legacy_cleanup_pending)
+  let (_, migrated) = update_dev(
+    dispatch,
+    HostSettingsApplied(
+      host_settings(provider="deepseek", revision=2, has_deepseek_key=true),
+      connection_generation=0,
+      cleans_legacy=true,
+    ),
+    unrelated,
+  )
+  inspect(migrated.settings_saves, content="0")
+  assert_false(migrated.legacy_cleanup_pending)
+  assert_true(migrated.api_provider is Deepseek)
+  assert_true(migrated.deepseek_key_saved)
+}
+
+///|
+test "a failed migration keeps legacy storage for a later launch" {
+  let dispatch = test_dispatch()
+  let pending = {
+    ..test_model(),
+    settings_saves: 1,
+    legacy_cleanup_pending: true,
+  }
+  let (_, failed) = update_dev(
+    dispatch,
+    HostSettingsSaveFailed(
+      "host write failed",
+      connection_generation=0,
+      cleans_legacy=true,
+    ),
+    pending,
+  )
+  inspect(failed.settings_saves, content="0")
+  // False means this launch must not clear localStorage; LegacySettingsRead
+  // on the next launch will discover and retry the still-present values.
+  assert_false(failed.legacy_cleanup_pending)
+}
+
+///|
+test "background settings replies cannot alter the focused host mirror" {
+  let dispatch = test_dispatch()
+  let home = test_model()
+  let focused = {
+    ..home,
+    devices: [
+      home.devices[0],
+      { ..empty_device_state(Remote("d_b")), bridge: Connected },
+    ],
+    focused: Remote("d_b"),
+    api_provider: Custom,
+    settings_saves: 1,
+  }
+  let (_, applied) = update(
+    dispatch,
+    FromDevice(
+      Local,
+      HostSettingsApplied(
+        host_settings(provider="deepseek", revision=7),
+        connection_generation=0,
+        cleans_legacy=false,
+      ),
+    ),
+    focused,
+  )
+  assert_true(applied.api_provider is Custom)
+  assert_eq(applied.settings_saves, 1)
+  let (_, failed) = update(
+    dispatch,
+    FromDevice(
+      Local,
+      HostSettingsSaveFailed(
+        "old host failed",
+        connection_generation=0,
+        cleans_legacy=false,
+      ),
+    ),
+    applied,
+  )
+  assert_eq(failed.settings_saves, 1)
+  assert_eq(failed.notifications.length(), 0)
 }
 
 ///|
@@ -2646,43 +9681,43 @@ test "the tree-layout setting parses its wire names" {
 ///|
 test "update is pure: a provider change is idempotent" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), api_key: "", setup_api_key: "typed" }
+  let model = { ..test_model(), setup_api_key: "typed" }
   let (_, once) = update(dispatch, ProviderChanged("deepseek"), model)
   let (_, twice) = update(dispatch, ProviderChanged("deepseek"), model)
   assert_true(once.api_provider is Deepseek)
   assert_true(twice.api_provider is Deepseek)
   inspect(once.setup_api_key, content="")
   inspect(twice.setup_api_key, content="")
+  inspect(once.settings_saves, content="1")
+  inspect(twice.settings_saves, content="1")
   assert_true(once.display_status() is ApiKeyRequired)
   assert_true(twice.display_status() is ApiKeyRequired)
 }
 
 ///|
-test "saving a key writes the active provider credential only" {
+test "saving a key marks the active provider credential only" {
   let dispatch = test_dispatch()
   let deepseek = {
     ..test_model(),
     api_provider: Deepseek,
-    api_key: "sk-old",
-    custom_api_key: "sk-custom-old",
     setup_api_key: "  sk-new  ",
     screen: Settings,
   }
   let (_, saved_deepseek) = update(dispatch, SaveApiKey, deepseek)
-  inspect(saved_deepseek.api_key, content="sk-new")
-  inspect(saved_deepseek.custom_api_key, content="sk-custom-old")
+  assert_true(saved_deepseek.deepseek_key_saved)
+  assert_false(saved_deepseek.custom_key_saved)
+  inspect(saved_deepseek.setup_api_key, content="")
+  inspect(saved_deepseek.settings_saves, content="1")
   assert_true(saved_deepseek.screen is Chat)
   let custom = {
     ..deepseek,
     api_provider: Custom,
     custom_api_url: "https://proxy.example/chat/completions",
-    api_key: "sk-deepseek",
     setup_api_key: "  sk-custom-new  ",
   }
   let (_, saved_custom) = update(dispatch, SaveApiKey, custom)
-  inspect(saved_custom.api_key, content="sk-deepseek")
-  inspect(saved_custom.custom_api_key, content="sk-custom-new")
-  inspect(saved_custom.effective_api_key(), content="sk-custom-new")
+  assert_false(saved_custom.deepseek_key_saved)
+  assert_true(saved_custom.custom_key_saved)
   assert_true(saved_custom.screen is Chat)
 }
 
@@ -2699,13 +9734,12 @@ test "changing settings mid-run leaves the run status alone" {
 /// even while the endpoint is unusable (the composer blocks sending then).
 test "sidebar navigation leaves the settings page" {
   let dispatch = test_dispatch()
-  let model = {
-    ..test_model(),
-    api_provider: Deepseek,
-    api_key: "",
-    screen: Settings,
-  }
-  let (_, next) = update(dispatch, SessionRotated("s-fresh"), model)
+  let model = { ..test_model(), api_provider: Deepseek, screen: Settings }
+  let (_, next) = update(
+    dispatch,
+    SessionRotated({ channel: Local, session: "s-fresh" }),
+    model,
+  )
   assert_true(next.screen is Chat)
 }
 
@@ -2721,20 +9755,20 @@ test "the scroll watcher's report lands on the model" {
 ///|
 test "a branch reply lands on its conversation and an empty one hides it" {
   let dispatch = test_dispatch()
-  let (_, named) = update(
+  let (_, named) = update_dev(
     dispatch,
     BranchLoaded(session="desktop-test", branch=Some("feature/x")),
     test_model(),
   )
   assert_true(named.active().branch is Some("feature/x"))
-  let (_, cleared) = update(
+  let (_, cleared) = update_dev(
     dispatch,
     BranchLoaded(session="desktop-test", branch=Some("")),
     named,
   )
   assert_true(cleared.active().branch is Some(""))
   // A reply for an unknown session is dropped.
-  let (_, ignored) = update(
+  let (_, ignored) = update_dev(
     dispatch,
     BranchLoaded(session="desktop-gone", branch=Some("main")),
     test_model(),
@@ -2748,39 +9782,407 @@ fn archived_item(id : String) -> @transcript.SessionListItem {
 }
 
 ///|
+test "session.changed decoder preserves archive invalidation identity" {
+  guard session_changed_msg({
+      "change": Json::string("archived"),
+      "session": Json::string("desktop-old"),
+    })
+    is Some(
+      SessionsChanged(
+        change="archived",
+        session="desktop-old",
+        fresh_session=Some(_)
+      )
+    ) else {
+    fail("archive invalidation was not decoded")
+  }
+}
+
+///|
+test "archive broadcast invalidates the active send target before list replies" {
+  let dispatch = test_dispatch()
+  let mention : Mention = { ref_: Skill(name="draft-skill"), range: None }
+  let model = test_model()
+    .replace_conversation({
+      ..test_conversation(),
+      task: "must not target archived session",
+      mentions: [mention],
+    })
+    .with_dev(dev => {
+      ..dev,
+      sessions: [
+        {
+          ..archived_item("desktop-test"),
+          workspace: "/work/archived",
+          workspace_name: "archived",
+        },
+      ],
+    })
+  let (_, invalidated) = update_dev(
+    dispatch,
+    SessionsChanged(
+      change="archived",
+      session="desktop-test",
+      fresh_session=Some("desktop-fresh"),
+    ),
+    model,
+  )
+  inspect(invalidated.active_session, content="desktop-fresh")
+  assert_true(
+    invalidated.find_conversation(@interop.ChannelId::Local, "desktop-test")
+    is None,
+  )
+  inspect(invalidated.active().session_id, content="desktop-fresh")
+  inspect(invalidated.dev().active_workspace, content="/work/archived")
+  inspect(
+    workspace_token(invalidated.active().workspace),
+    content="/work/archived",
+  )
+  inspect(invalidated.active().task, content="must not target archived session")
+  inspect(invalidated.active().mentions.length(), content="1")
+  assert_true(
+    invalidated.active().mentions[0].ref_ is Skill(name="draft-skill"),
+  )
+  assert_true(
+    invalidated.dev().archived.iter().any(item => item.id == "desktop-test"),
+  )
+  assert_false(
+    invalidated.dev().sessions.iter().any(item => item.id == "desktop-test"),
+  )
+  // Even before either sidebar refresh returns, the next submit belongs to
+  // the replacement conversation; no live state can target the archived id.
+  let (_, drafted) = update(
+    dispatch,
+    TaskChanged("safe replacement"),
+    invalidated,
+  )
+  let (_, sent) = update(dispatch, Send, drafted)
+  inspect(sent.active_session, content="desktop-fresh")
+  inspect(sent.active().session_id, content="desktop-fresh")
+  assert_true(sent.active().run is Starting(..))
+  assert_true(
+    sent.find_conversation(@interop.ChannelId::Local, "desktop-test") is None,
+  )
+}
+
+///|
+test "an archive response arriving before its notification preserves the draft once" {
+  let dispatch = test_dispatch()
+  let model = test_model()
+    .replace_conversation({ ..test_conversation(), task: "keep this draft" })
+    .with_dev(dev => { ..dev, sessions: [archived_item("desktop-test")] })
+  let (_, responded) = update(
+    dispatch,
+    archived_loaded([archived_item("desktop-test")]),
+    model,
+  )
+  inspect(responded.active_session, content="desktop-archive-replacement")
+  inspect(responded.active().task, content="keep this draft")
+  let (_, notified) = update_dev(
+    dispatch,
+    SessionsChanged(
+      change="archived",
+      session="desktop-test",
+      fresh_session=Some("desktop-notification-replacement"),
+    ),
+    responded,
+  )
+  // The late duplicate only refreshes the tombstone; it cannot rotate the
+  // already-safe composer a second time or lose its recovered text.
+  inspect(notified.active_session, content="desktop-archive-replacement")
+  inspect(notified.active().task, content="keep this draft")
+  inspect(notified.active().overlay.length(), content="0")
+}
+
+///|
+test "archiving a pending start restores its original composer without ownership" {
+  let dispatch = test_dispatch()
+  let sent_mention : Mention = { ref_: Skill(name="sent-skill"), range: None }
+  let newer_mention : Mention = { ref_: Skill(name="newer-skill"), range: None }
+  let pending = test_conversation().enqueue_input(
+    InitialPrompt,
+    "pending-start",
+    None,
+    "serialized prompt",
+    "original draft",
+    [sent_mention],
+  )
+  let model = test_model()
+    .replace_conversation({
+      ..pending,
+      run: Starting(submission_id="pending-start"),
+      task: "typed afterward",
+      mentions: [newer_mention],
+    })
+    .with_dev(dev => { ..dev, sessions: [archived_item("desktop-test")] })
+  let (_, next) = update_dev(
+    dispatch,
+    SessionsChanged(
+      change="archived",
+      session="desktop-test",
+      fresh_session=Some("desktop-restored"),
+    ),
+    model,
+  )
+  inspect(next.active_session, content="desktop-restored")
+  inspect(next.active().task, content="original draft\n\ntyped afterward")
+  inspect(next.active().mentions.length(), content="2")
+  assert_true(next.active().run is NoRun(ended=None))
+  inspect(next.active().input_ledger.length(), content="0")
+  inspect(next.active().overlay.length(), content="1")
+  inspect(next.active().overlay[0].content, content=ArchivedPendingInputNotice)
+  assert_true(next.active().overlay[0].reconciliation is Retained)
+}
+
+///|
+test "an archive notification wins over a stale live-list reply" {
+  let dispatch = test_dispatch()
+  let item = archived_item("desktop-test")
+  let model = test_model().with_dev(dev => { ..dev, sessions: [item] })
+  let (_, invalidated) = update_dev(
+    dispatch,
+    SessionsChanged(
+      change="archived",
+      session="desktop-test",
+      fresh_session=Some("desktop-safe"),
+    ),
+    model,
+  )
+  let (_, stale) = update(
+    dispatch,
+    sessions_loaded([item], request_generation=1),
+    invalidated,
+  )
+  assert_false(
+    stale.dev().sessions.iter().any(current => current.id == item.id),
+  )
+  assert_true(stale.dev().archived.iter().any(current => current.id == item.id))
+  inspect(stale.active_session, content="desktop-safe")
+}
+
+///|
+test "a background archive removes only its channel's same-id conversation" {
+  let dispatch = test_dispatch()
+  let remote : @interop.ChannelId = Remote("d-remote")
+  let local_conv = {
+    ..empty_conversation(@interop.ChannelId::Local, "shared"),
+    messages: [{ kind: User, content: "local" }],
+  }
+  let remote_conv = {
+    ..empty_conversation(remote, "shared"),
+    messages: [{ kind: User, content: "remote" }],
+  }
+  let model = {
+    ..test_model(),
+    devices: [
+      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
+      { ..empty_device_state(remote), bridge: Connected },
+    ],
+    active_session: "shared",
+    conversations: [local_conv, remote_conv],
+  }
+  let (_, next) = update(
+    dispatch,
+    FromDevice(
+      remote,
+      ArchivedLoaded(
+        [archived_item("shared")],
+        connection_generation=0,
+        request_generation=0,
+        fresh_session="remote-fresh",
+      ),
+    ),
+    model,
+  )
+  assert_true(next.focused is Local)
+  inspect(next.active_session, content="shared")
+  guard next.find_conversation(@interop.ChannelId::Local, "shared")
+    is Some(kept) else {
+    fail("the focused same-id conversation was removed")
+  }
+  inspect(kept.messages[0].content, content="local")
+  assert_true(next.find_conversation(remote, "shared") is None)
+}
+
+///|
+test "an unarchive notification wins over a stale archived-list reply" {
+  let dispatch = test_dispatch()
+  let item = archived_item("desktop-old")
+  let model = test_model().with_dev(dev => { ..dev, archived: [item] })
+  let (_, restored) = update_dev(
+    dispatch,
+    SessionsChanged(
+      change="unarchived",
+      session="desktop-old",
+      fresh_session=None,
+    ),
+    model,
+  )
+  let (_, stale) = update(
+    dispatch,
+    archived_loaded([item], request_generation=1),
+    restored,
+  )
+  assert_false(
+    stale.dev().archived.iter().any(current => current.id == item.id),
+  )
+  assert_true(stale.dev().sessions.iter().any(current => current.id == item.id))
+}
+
+///|
+test "BridgeReady replaces archive overrides with fresh-list truth" {
+  let dispatch = test_dispatch()
+  let item = archived_item("desktop-old")
+  let model = test_model()
+    .with_archive_override(@interop.ChannelId::Local, "desktop-old", true)
+    .with_dev(dev => { ..dev, archived: [item] })
+  let (_, ready) = update_dev(dispatch, BridgeReady, model)
+  inspect(ready.dev().connection_generation, content="1")
+  inspect(ready.dev().archive_overrides.length(), content="0")
+  let (_, live) = update_dev(
+    dispatch,
+    SessionsLoaded([item], connection_generation=1, request_generation=1),
+    ready,
+  )
+  let (_, reconciled) = update_dev(
+    dispatch,
+    ArchivedLoaded(
+      [],
+      connection_generation=1,
+      request_generation=1,
+      fresh_session="desktop-unused",
+    ),
+    live,
+  )
+  assert_true(
+    reconciled.dev().sessions.iter().any(current => current.id == item.id),
+  )
+  inspect(reconciled.dev().archived.length(), content="0")
+  let (_, stale) = update_dev(
+    dispatch,
+    ArchivedLoaded(
+      [item],
+      connection_generation=0,
+      request_generation=1,
+      fresh_session="desktop-stale",
+    ),
+    reconciled,
+  )
+  inspect(stale.dev().archived.length(), content="0")
+}
+
+///|
+test "an older same-connection live list cannot replace a newer reply" {
+  let dispatch = test_dispatch()
+  let old : @transcript.SessionListItem = {
+    id: "desktop-listed",
+    title: Some("old title"),
+    workspace: "",
+    workspace_name: "",
+  }
+  let current = { ..old, title: Some("current title") }
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    sessions_request_generation: 2,
+  })
+  let (_, newest) = update_dev(
+    dispatch,
+    SessionsLoaded([current], connection_generation=0, request_generation=2),
+    model,
+  )
+  let (_, stale) = update_dev(
+    dispatch,
+    SessionsLoaded([old], connection_generation=0, request_generation=1),
+    newest,
+  )
+  inspect(stale.dev().sessions.length(), content="1")
+  assert_true(stale.dev().sessions[0].title is Some("current title"))
+}
+
+///|
+test "an older same-connection archived list cannot replace a newer reply" {
+  let dispatch = test_dispatch()
+  let old : @transcript.SessionListItem = {
+    id: "desktop-archived",
+    title: Some("old title"),
+    workspace: "",
+    workspace_name: "",
+  }
+  let current = { ..old, title: Some("current title") }
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    archived_request_generation: 2,
+  })
+  let (_, newest) = update_dev(
+    dispatch,
+    ArchivedLoaded(
+      [current],
+      connection_generation=0,
+      request_generation=2,
+      fresh_session="desktop-unused",
+    ),
+    model,
+  )
+  let (_, stale) = update_dev(
+    dispatch,
+    ArchivedLoaded(
+      [old],
+      connection_generation=0,
+      request_generation=1,
+      fresh_session="desktop-unused",
+    ),
+    newest,
+  )
+  inspect(stale.dev().archived.length(), content="1")
+  assert_true(stale.dev().archived[0].title is Some("current title"))
+}
+
+///|
 test "an archived background session drops its live state, active stays" {
   let dispatch = test_dispatch()
   let model = {
     ..test_model(),
-    conversations: [test_conversation(), empty_conversation("desktop-old")],
+    conversations: [
+      test_conversation(),
+      empty_conversation(@interop.ChannelId::Local, "desktop-old"),
+    ],
   }
   let (_, next) = update(
     dispatch,
-    ArchivedLoaded([archived_item("desktop-old")]),
+    archived_loaded([archived_item("desktop-old")]),
     model,
   )
-  inspect(next.archived.length(), content="1")
-  inspect(next.archived[0].id, content="desktop-old")
-  assert_true(next.find_conversation("desktop-old") is None)
+  inspect(next.dev().archived.length(), content="1")
+  inspect(next.dev().archived[0].id, content="desktop-old")
+  assert_true(
+    next.find_conversation(@interop.ChannelId::Local, "desktop-old") is None,
+  )
   inspect(next.active_session, content="desktop-test")
 }
 
 ///|
-test "archiving the active conversation clears it for the rotation" {
+test "an archived-list reply immediately replaces the active conversation" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
-    ArchivedLoaded([archived_item("desktop-test")]),
+    archived_loaded([archived_item("desktop-test")]),
     test_model(),
   )
-  assert_true(next.find_conversation("desktop-test") is None)
-  inspect(next.archived[0].id, content="desktop-test")
+  assert_true(
+    next.find_conversation(@interop.ChannelId::Local, "desktop-test") is None,
+  )
+  inspect(next.active_session, content="desktop-archive-replacement")
+  inspect(next.dev().archived[0].id, content="desktop-test")
 }
 
 ///|
 test "an archive failure pops a toast that a click or its timer dismisses" {
   let dispatch = test_dispatch()
-  let (_, failed) = update(dispatch, ArchiveFailed("zip missing"), test_model())
+  let (_, failed) = update_dev(
+    dispatch,
+    ArchiveFailed("zip missing"),
+    test_model(),
+  )
   inspect(failed.notifications.length(), content="1")
   inspect(
     failed.notifications[0].message,
@@ -2790,7 +10192,11 @@ test "an archive failure pops a toast that a click or its timer dismisses" {
   // A stale timer (the toast is already gone) must not touch a later toast.
   let (_, dismissed) = update(dispatch, DismissNotification(id), failed)
   inspect(dismissed.notifications.length(), content="0")
-  let (_, again) = update(dispatch, ArchiveFailed("still missing"), dismissed)
+  let (_, again) = update_dev(
+    dispatch,
+    ArchiveFailed("still missing"),
+    dismissed,
+  )
   let (_, expired) = update(dispatch, NotificationExpired(id), again)
   inspect(expired.notifications.length(), content="1")
   inspect(
@@ -2802,8 +10208,8 @@ test "an archive failure pops a toast that a click or its timer dismisses" {
 ///|
 test "toast ids only ever grow, so timers and toasts stay paired" {
   let dispatch = test_dispatch()
-  let (_, first) = update(dispatch, ArchiveFailed("one"), test_model())
-  let (_, second) = update(dispatch, SessionsFailed("two"), first)
+  let (_, first) = update_dev(dispatch, ArchiveFailed("one"), test_model())
+  let (_, second) = update_dev(dispatch, SessionsFailed("two"), first)
   inspect(second.notifications.length(), content="2")
   assert_true(second.notifications[0].id != second.notifications[1].id)
   inspect(second.notification_seq, content="2")
@@ -2833,9 +10239,9 @@ test "an unpinned transcript stays unpinned while a stream grows" {
   // must not flip it back, or the next render would yank the reader down.
   let dispatch = test_dispatch()
   let model = { ..running_model(), transcript_pinned: false }
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Engine(7, AssistantDelta("more"), session=None),
+    Engine(Some("r7"), AssistantDelta("more"), session=None),
     model,
   )
   inspect(next.transcript_pinned, content="false")
@@ -2867,23 +10273,41 @@ test "explicit user actions re-pin the transcript" {
 
   // Switching to a conversation that has live state lands at its tail.
   let two = {
-    ..test_model().replace_conversation(empty_conversation("desktop-other")),
+    ..test_model().replace_conversation(
+      empty_conversation(@interop.ChannelId::Local, "desktop-other"),
+    ),
     transcript_pinned: false,
   }
-  let (_, switched) = update(dispatch, OpenSession("desktop-other"), two)
+  let (_, switched) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-other"),
+    two,
+  )
   inspect(switched.transcript_pinned, content="true")
 
   // So does loading a stored session or rotating to a fresh one.
-  let (_, loaded) = update(
+  let (_, loading_old) = update(
     dispatch,
-    SessionLoaded(session="desktop-old", items=[]),
-    { ..test_model(), transcript_pinned: false, loading_session: "desktop-old" },
+    OpenSession(@interop.ChannelId::Local, "desktop-old"),
+    { ..test_model(), transcript_pinned: false },
+  )
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionLoaded(
+      session="desktop-old",
+      items=[],
+      watermark=0,
+      event_boundaries=[],
+      generation=1,
+    ),
+    loading_old,
   )
   inspect(loaded.transcript_pinned, content="true")
-  let (_, rotated) = update(dispatch, SessionRotated("desktop-fresh"), {
-    ..test_model(),
-    transcript_pinned: false,
-  })
+  let (_, rotated) = update(
+    dispatch,
+    SessionRotated({ channel: Local, session: "desktop-fresh" }),
+    { ..test_model(), transcript_pinned: false },
+  )
   inspect(rotated.transcript_pinned, content="true")
 }
 
@@ -2928,11 +10352,19 @@ test "selecting a conversation returns from the skills page to the chat" {
   assert_true(opened.screen is Skills)
 
   // Re-selecting the active conversation is enough to switch back…
-  let (_, back) = update(dispatch, OpenSession("desktop-test"), opened)
+  let (_, back) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    opened,
+  )
   assert_true(back.screen is Chat)
 
   // …and so is rotating to a fresh one.
-  let (_, rotated) = update(dispatch, SessionRotated("desktop-fresh"), opened)
+  let (_, rotated) = update(
+    dispatch,
+    SessionRotated({ channel: Local, session: "desktop-fresh" }),
+    opened,
+  )
   assert_true(rotated.screen is Chat)
 }
 
@@ -2977,7 +10409,11 @@ test "a settled action releases its busy entry" {
   let busy = { ..test_model(), skills_busy: ["acme/widget@1.0.0", "other"] }
   let (_, done) = update(
     dispatch,
-    SkillActionDone(key="acme/widget@1.0.0", error=""),
+    SkillActionDone(
+      channel=@interop.ChannelId::Local,
+      key="acme/widget@1.0.0",
+      error="",
+    ),
     busy,
   )
   inspect(done.skills_busy.length(), content="1")
@@ -2987,7 +10423,11 @@ test "a settled action releases its busy entry" {
   // A failure surfaces as the panel notice instead.
   let (_, failed) = update(
     dispatch,
-    SkillActionDone(key="other", error="digest mismatch"),
+    SkillActionDone(
+      channel=@interop.ChannelId::Local,
+      key="other",
+      error="digest mismatch",
+    ),
     done,
   )
   inspect(failed.skills_busy.length(), content="0")
@@ -3027,7 +10467,11 @@ test "catalog and library replies land on the model" {
       source: "acme/widget@1.0.0",
     },
   ]
-  let (_, listed) = update(dispatch, InstalledSkillsLoaded(installed), ready)
+  let (_, listed) = update_dev(
+    dispatch,
+    InstalledSkillsLoaded(installed),
+    ready,
+  )
   assert_true(listed.skill_installed("acme/widget@1.0.0"))
   let (_, noticed) = update(
     dispatch,
@@ -3035,6 +10479,40 @@ test "catalog and library replies land on the model" {
     listed,
   )
   inspect(noticed.skills_notice, content="library unreadable")
+}
+
+///|
+test "installed skills replies are scoped to their source device" {
+  let dispatch = test_dispatch()
+  let home = test_model()
+  let focused = {
+    ..home,
+    devices: [
+      home.devices[0],
+      { ..empty_device_state(Remote("d_b")), bridge: Connected },
+    ],
+    focused: Remote("d_b"),
+    installed_skills: [],
+  }
+  let old_host : Array[@transcript.InstalledSkillItem] = [
+    { id: "old", name: "old", description: "", source: "old/source@1.0.0" },
+  ]
+  let (_, ignored) = update(
+    dispatch,
+    FromDevice(Local, InstalledSkillsLoaded(old_host)),
+    focused,
+  )
+  assert_eq(ignored.installed_skills.length(), 0)
+  let new_host : Array[@transcript.InstalledSkillItem] = [
+    { id: "new", name: "new", description: "", source: "new/source@1.0.0" },
+  ]
+  let (_, applied) = update(
+    dispatch,
+    FromDevice(Remote("d_b"), InstalledSkillsLoaded(new_host)),
+    ignored,
+  )
+  assert_eq(applied.installed_skills.length(), 1)
+  assert_eq(applied.installed_skills[0].id, "new")
 }
 
 ///|
@@ -3074,7 +10552,10 @@ test "EditorCommentAdded attaches a deduplicated annotation chip" {
   // the file was shown); the resource URI only routes the bubble removal.
   let msg : Msg = FileEditor(
     EditorCommentAdded(
-      resource=@fileeditor.ModelUri::of(Absolute("/work/project/src/main.mbt")),
+      resource=@fileeditor.ModelUri::of(
+        @interop.ChannelId::Local,
+        Absolute("/work/project/src/main.mbt"),
+      ),
       file=Relative("src/main.mbt"),
       range=@common.Range::Range(5, 1, 6, 3),
       quote="fn parse_hover() {",
@@ -3139,7 +10620,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     model,
   )
   assert_true(outside.file_panel.active is None)
-  assert_false(outside.file_panel.error.is_empty())
+  assert_true(outside.file_panel.error is Some(_))
 }
 
 ///|
@@ -3149,7 +10630,7 @@ test "RevealDirectory(\"\") opens the tree pane without a highlight" {
   let panel = {
     ..model.file_panel,
     open: true,
-    session: "desktop-test",
+    owner: Some({ channel: Local, session: "desktop-test" }),
     tree_open: false,
     active: Some(Relative("README.md")),
     highlighted: Some(Relative("src")),
@@ -3169,7 +10650,11 @@ test "RevealDirectory(\"\") opens the tree pane without a highlight" {
 test "RevealDirectory expands an uncached ancestor and highlights the target" {
   let dispatch = test_dispatch()
   let model = test_model()
-  let panel = { ..model.file_panel, open: true, session: "desktop-test" }
+  let panel = {
+    ..model.file_panel,
+    open: true,
+    owner: Some({ channel: Local, session: "desktop-test" }),
+  }
   let (_, next) = update(
     dispatch,
     FileEditor(RevealDirectory(Relative("src/foo"))),
@@ -3190,7 +10675,7 @@ test "RevealDirectory on an already-cached ancestor needs no reload" {
   let panel = {
     ..model.file_panel,
     open: true,
-    session: "desktop-test",
+    owner: Some({ channel: Local, session: "desktop-test" }),
     children,
   }
   let (_, next) = update(
@@ -3210,7 +10695,7 @@ test "HighlightCleared only clears a highlight that still matches" {
   // panel and clears the highlight itself.
   let panel = {
     ..model.file_panel,
-    session: "desktop-test",
+    owner: Some({ channel: Local, session: "desktop-test" }),
     highlighted: Some(Relative("src")),
   }
   let (_, stale) = update(
@@ -3251,7 +10736,7 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..running_conversation(),
-    last_run_id: Some(7),
+    last_run_id: Some("r7"),
   })
   let (_, queued) = run_slash_command(dispatch, model, "compact")
   assert_true(queued.active().compaction is Queued)
@@ -3260,9 +10745,14 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
   assert_true(again.active().compaction is Queued)
   // The turn ends before compaction_started arrives; a prompt sent into
   // that gap would queue behind the compaction, out of Stop's reach.
-  let (_, ended) = update(
+  let (_, ended) = update_dev(
     dispatch,
-    Finished(run_id=7, status="completed", answer=None),
+    Finished(
+      run_id="r7",
+      status="completed",
+      answer=None,
+      durable_sequence=None,
+    ),
     again,
   )
   assert_true(ended.active().compaction is Queued)
@@ -3273,9 +10763,9 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
   let (_, held) = update(dispatch, Send, drafted)
   inspect(held.active().task, content="next prompt")
   // The engine reaches the queued compaction: queued flips into compacting.
-  let (_, started) = update(
+  let (_, started) = update_dev(
     dispatch,
-    Engine(7, CompactionStarted, session=None),
+    Engine(Some("r7"), CompactionStarted, session=None),
     held,
   )
   assert_true(started.active().compaction is Compacting)
@@ -3303,44 +10793,36 @@ test "an idle /compact holds the send gate until the engine confirms" {
   inspect(held.active().task, content="next prompt")
   inspect(held.active().messages.length(), content="0")
   // The engine confirms; the session stamp routes it (no run id exists yet).
-  let (_, started) = update(
+  let (_, started) = update_dev(
     dispatch,
-    Engine(0, CompactionStarted, session=Some("desktop-test")),
+    Engine(None, CompactionStarted, session=Some("desktop-test")),
     held,
   )
   assert_true(started.active().compaction is Compacting)
 }
 
 ///|
-/// Rabbita purity: applying the automatic-checkpoint event twice to the same
-/// input produces the same transcript and never mutates the manual compaction
-/// lifecycle.
-test "update is pure: automatic checkpoint appends a summary" {
+/// Rabbita purity: the automatic-checkpoint semantic event is lifecycle-only;
+/// its Summary card comes from the durable commit.
+test "update is pure: automatic checkpoint waits for its commit" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
     streaming_response: "partial",
   })
-  let (_, once) = update(
+  let (_, once) = update_dev(
     dispatch,
-    Engine(7, AutoCompactionFinished("checkpoint recap"), session=None),
+    Engine(Some("r7"), AutoCompactionFinished("checkpoint recap"), session=None),
     model,
   )
-  let (_, twice) = update(
+  let (_, twice) = update_dev(
     dispatch,
-    Engine(7, AutoCompactionFinished("checkpoint recap"), session=None),
+    Engine(Some("r7"), AutoCompactionFinished("checkpoint recap"), session=None),
     model,
   )
-  inspect(model.active().messages.length(), content="0")
-  inspect(once.active().messages.length(), content="1")
-  inspect(twice.active().messages.length(), content="1")
-  guard once.active().messages.last() is Some(once_item) &&
-    twice.active().messages.last() is Some(twice_item) else {
-    fail("expected checkpoint summaries")
-  }
-  assert_true(once_item.kind is Summary && twice_item.kind is Summary)
-  inspect(once_item.content, content="checkpoint recap")
-  inspect(twice_item.content, content="checkpoint recap")
+  inspect(model.active().overlay.length(), content="0")
+  inspect(once.active().overlay.length(), content="0")
+  inspect(twice.active().overlay.length(), content="0")
   inspect(once.active().streaming_response, content="partial")
   inspect(twice.active().streaming_response, content="partial")
   assert_true(
@@ -3353,75 +10835,59 @@ test "update is pure: automatic checkpoint appends a summary" {
 /// Rabbita purity: context-yield guidance is a deterministic model update.
 /// The raw stream event clears partial streams but does not close the run;
 /// the host's following Finished message owns that transition.
-test "update is pure: context yield appends continuation guidance" {
+test "update is pure: context yield waits for its commit" {
   let dispatch = test_dispatch()
   let answer = "[context ceiling] continue in a new turn"
   let model = running_model().replace_conversation({
     ..running_conversation(),
     streaming_response: "partial",
   })
-  let (_, once) = update(
+  let (_, once) = update_dev(
     dispatch,
-    Engine(7, ContextYield(answer), session=None),
+    Engine(Some("r7"), ContextYield(answer), session=None),
     model,
   )
-  let (_, twice) = update(
+  let (_, twice) = update_dev(
     dispatch,
-    Engine(7, ContextYield(answer), session=None),
+    Engine(Some("r7"), ContextYield(answer), session=None),
     model,
   )
-  inspect(model.active().messages.length(), content="0")
-  inspect(once.active().messages.length(), content="1")
-  inspect(twice.active().messages.length(), content="1")
-  guard once.active().messages.last() is Some(once_item) &&
-    twice.active().messages.last() is Some(twice_item) else {
-    fail("expected context-yield guidance")
-  }
-  assert_true(
-    once_item.kind is Assistant(false) && twice_item.kind is Assistant(false),
-  )
-  inspect(once_item.content, content="[context ceiling] continue in a new turn")
-  inspect(
-    twice_item.content,
-    content="[context ceiling] continue in a new turn",
-  )
+  inspect(model.active().overlay.length(), content="0")
+  inspect(once.active().overlay.length(), content="0")
+  inspect(twice.active().overlay.length(), content="0")
   inspect(once.active().streaming_response, content="")
   inspect(twice.active().streaming_response, content="")
   assert_true(once.active().is_running() && twice.active().is_running())
 }
 
 ///|
-/// The successful ceiling path is one automatic Summary, one continuation
-/// notice, then a warning terminal that re-opens Send. It never enters the
-/// manual compaction lifecycle.
+/// The successful ceiling path re-opens Send without synthesizing durable
+/// transcript items. Its Summary and guidance arrive through commits.
 test "context yield settles after its automatic checkpoint" {
   let dispatch = test_dispatch()
   let answer = "[context ceiling] continue in a new turn"
-  let (_, checkpointed) = update(
+  let (_, checkpointed) = update_dev(
     dispatch,
-    Engine(7, AutoCompactionFinished("checkpoint recap"), session=None),
+    Engine(Some("r7"), AutoCompactionFinished("checkpoint recap"), session=None),
     running_model(),
   )
-  let (_, yielded) = update(
+  let (_, yielded) = update_dev(
     dispatch,
-    Engine(7, ContextYield(answer), session=None),
+    Engine(Some("r7"), ContextYield(answer), session=None),
     checkpointed,
   )
   assert_true(yielded.active().is_running())
-  let (_, settled) = update(
+  let (_, settled) = update_dev(
     dispatch,
-    Finished(run_id=7, status="context_yield", answer=Some(answer)),
+    Finished(
+      run_id="r7",
+      status="context_yield",
+      answer=Some(answer),
+      durable_sequence=None,
+    ),
     yielded,
   )
-  inspect(settled.active().messages.length(), content="2")
-  guard settled.active().messages.get(0) is Some(summary) &&
-    settled.active().messages.get(1) is Some(guidance) else {
-    fail("expected checkpoint and guidance")
-  }
-  assert_true(summary.kind is Summary)
-  inspect(summary.content, content="checkpoint recap")
-  assert_true(guidance.kind is Assistant(false))
-  inspect(guidance.content, content="[context ceiling] continue in a new turn")
+  inspect(settled.active().overlay.length(), content="0")
   assert_true(settled.active().compaction is NotCompacting)
   assert_false(settled.active().is_running())
   guard settled.display_status() is Finished(outcome) else {
@@ -3433,25 +10899,24 @@ test "context yield settles after its automatic checkpoint" {
 }
 
 ///|
-/// The compaction summary lands as its own Summary item — never a tool call
-/// the transcript loop would fold into the preceding turn's activity card
-/// (which would also swallow that turn's answer bubble into the fold).
-test "compaction_finished appends a standalone summary item" {
+/// Compaction completion settles lifecycle state; its Summary is commit-only.
+test "compaction_finished waits for its durable summary" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
     compaction: Compacting,
-    last_run_id: Some(7),
+    last_run_id: Some("r7"),
   })
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Engine(7, CompactionFinished("earlier turns compacted"), session=None),
+    Engine(
+      Some("r7"),
+      CompactionFinished("earlier turns compacted"),
+      session=None,
+    ),
     model,
   )
-  guard next.active().messages.last() is Some(item) && item.kind is Summary else {
-    fail("expected a summary item")
-  }
-  inspect(item.content, content="earlier turns compacted")
+  inspect(next.active().overlay.length(), content="0")
   assert_true(next.active().compaction is NotCompacting)
 }
 
@@ -3466,24 +10931,22 @@ test "compaction events route by session when no run id matches" {
     ..test_conversation(),
     last_run_id: None,
   })
-  let (_, started) = update(
+  let (_, started) = update_dev(
     dispatch,
-    Engine(0, CompactionStarted, session=Some("desktop-test")),
+    Engine(None, CompactionStarted, session=Some("desktop-test")),
     model,
   )
   assert_true(started.active().compaction is Compacting)
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
     Engine(
-      0,
+      None,
       CompactionFinished("earlier turns compacted"),
       session=Some("desktop-test"),
     ),
     started,
   )
-  guard next.active().messages.last() is Some(item) && item.kind is Summary else {
-    fail("expected a summary item")
-  }
+  inspect(next.active().overlay.length(), content="0")
   assert_true(next.active().compaction is NotCompacting)
 }
 
@@ -3496,15 +10959,15 @@ test "compaction_failed settles a still-queued compaction" {
   let model = test_model().replace_conversation({
     ..test_conversation(),
     compaction: Queued,
-    last_run_id: Some(7),
+    last_run_id: Some("r7"),
   })
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
-    Engine(7, CompactionFailed("engine exited"), session=None),
+    Engine(Some("r7"), CompactionFailed("engine exited"), session=None),
     model,
   )
   assert_true(next.active().compaction is NotCompacting)
-  inspect(next.active().messages.length(), content="1")
+  inspect(next.active().overlay.length(), content="1")
 }
 
 ///|
@@ -3517,13 +10980,13 @@ test "CompactRejected clears the queued notice and reports the error" {
     ..test_conversation(),
     compaction: Queued,
   })
-  let (_, next) = update(
+  let (_, next) = update_dev(
     dispatch,
     CompactRejected(session="desktop-test", message="no engine"),
     model,
   )
   assert_true(next.active().compaction is NotCompacting)
-  inspect(next.active().messages.length(), content="1")
+  inspect(next.active().overlay.length(), content="1")
 }
 
 ///|
@@ -3667,7 +11130,10 @@ test "clicking Update goes straight to download when nothing runs" {
 test "clicking Update asks first while a conversation runs" {
   let dispatch = test_dispatch()
   let busy = {
-    ..test_model().replace_conversation({ ..test_conversation(), run: Starting }),
+    ..test_model().replace_conversation({
+      ..test_conversation(),
+      run: Starting(submission_id="pending-update"),
+    }),
     update_ux: UpdateAvailable(version="0.2.0", installable=true),
   }
   let (_, asked) = update(dispatch, UpdateClicked, busy)
@@ -3736,7 +11202,7 @@ test "a stale check reply cannot clobber a download in flight" {
 }
 
 ///|
-test "switching the update channel forgets the previous answer" {
+test "switching the server to staging moves the channel and forgets the previous answer" {
   let dispatch = test_dispatch()
   let available = {
     ..test_model(),
@@ -3744,11 +11210,16 @@ test "switching the update channel forgets the previous answer" {
   }
   let (_, switched) = update(
     dispatch,
-    UpdateChannelChanged("staging"),
+    ProviderChanged("openseek-staging"),
     available,
   )
-  assert_true(switched.update_channel is Staging)
+  assert_true(switched.api_provider is OpenseekStaging)
+  assert_true(switched.api_provider.update_channel() is Staging)
   assert_true(switched.update_ux is UpdateUnknown)
+  // A switch that keeps the channel keeps the answer.
+  let (_, kept) = update(dispatch, ProviderChanged("deepseek"), available)
+  assert_true(kept.api_provider.update_channel() is Production)
+  assert_true(kept.update_ux is UpdateAvailable(..))
 }
 
 ///|
@@ -3800,4 +11271,726 @@ test "check_update replies decode by kind" {
   assert_true(decode_update_check("{\"kind\":\"available\"}") is None)
   assert_true(decode_update_check("{\"kind\":\"surprise\"}") is None)
   assert_true(decode_update_check("garbage") is None)
+}
+
+///|
+test "send does not show a prompt until its commit lands" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    task: "build the thing",
+  })
+  let (_, sent) = update(dispatch, Send, model)
+  // Starting the request changes lifecycle/composer state only.
+  inspect(sent.active().messages.length(), content="0")
+  inspect(sent.active().overlay.length(), content="0")
+  inspect(sent.active().watermark, content="0")
+  // The durable commit is the first point the prompt becomes transcript.
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=1, kind="user", payload={
+      "content": Json::string("build the thing"),
+    }),
+    sent,
+  )
+  inspect(committed.active().messages.length(), content="1")
+  guard committed.active().messages[0].kind is User else {
+    fail("expected a user item")
+  }
+  inspect(committed.active().overlay.length(), content="0")
+  inspect(committed.active().watermark, content="1")
+}
+
+///|
+test "a replayed commit at or below the watermark is dropped" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    messages: [{ kind: User, content: "already there" }],
+    watermark: 2,
+  })
+  let (_, next) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=2, kind="user", payload={
+      "content": Json::string("already there"),
+    }),
+    model,
+  )
+  inspect(next.active().messages.length(), content="1")
+  inspect(next.active().watermark, content="2")
+}
+
+///|
+test "a commit past the frontier buffers and flips into a reload" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    watermark: 1,
+  })
+  let (_, next) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=5, kind="user", payload={
+      "content": Json::string("from the future"),
+    }),
+    model,
+  )
+  // The gap means missed broadcasts; nothing is applied out of order.
+  inspect(next.active().messages.length(), content="0")
+  inspect(next.active().watermark, content="1")
+  guard next.active().sync is Reloading(buffered~, ..) else {
+    fail("expected a reload in flight")
+  }
+  inspect(buffered.length(), content="1")
+  inspect(buffered[0].sequence, content="5")
+}
+
+///|
+test "commits buffer while a reload is in flight" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    sync: test_reloading([]),
+  })
+  let (_, next) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=3, kind="user", payload={
+      "content": Json::string("mid-reload"),
+    }),
+    model,
+  )
+  inspect(next.active().messages.length(), content="0")
+  guard next.active().sync is Reloading(buffered~, ..) else {
+    fail("expected the reload to stay in flight")
+  }
+  inspect(buffered.length(), content="1")
+}
+
+///|
+test "a snapshot drains buffered commits in sequence order" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation()
+    // Out of arrival order on purpose; the drain sorts by sequence.
+    ,
+    sync: test_reloading([
+      {
+        sequence: 4,
+        kind: "user",
+        payload: { "content": Json::string("four") },
+      },
+      {
+        sequence: 3,
+        kind: "user",
+        payload: { "content": Json::string("three") },
+      },
+    ]),
+  })
+  let (_, next) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[
+        { kind: User, content: "one" },
+        { kind: Assistant(is_danger=false), content: "two" },
+      ],
+      watermark=2,
+      event_boundaries=[],
+      generation=1,
+    ),
+    model,
+  )
+  inspect(next.active().messages.length(), content="4")
+  inspect(next.active().messages[2].content, content="three")
+  inspect(next.active().messages[3].content, content="four")
+  inspect(next.active().watermark, content="4")
+  assert_true(next.active().sync is Synced)
+}
+
+///|
+test "a snapshot already containing the buffered commits drops them" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    sync: test_reloading([
+      { sequence: 2, kind: "user", payload: { "content": Json::string("dup") } },
+    ]),
+  })
+  let (_, next) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: User, content: "one" }, { kind: User, content: "dup" }],
+      watermark=2,
+      event_boundaries=[],
+      generation=1,
+    ),
+    model,
+  )
+  inspect(next.active().messages.length(), content="2")
+  inspect(next.active().watermark, content="2")
+  assert_true(next.active().sync is Synced)
+}
+
+///|
+test "a snapshot with a still-gapped buffer keeps reloading" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    sync: test_reloading([
+      { sequence: 9, kind: "user", payload: { "content": Json::string("far") } },
+    ]),
+  })
+  let (_, next) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: User, content: "one" }],
+      watermark=2,
+      event_boundaries=[],
+      generation=1,
+    ),
+    model,
+  )
+  inspect(next.active().watermark, content="2")
+  guard next.active().sync is Reloading(buffered~, ..) else {
+    fail("expected another reload for the remaining gap")
+  }
+  inspect(buffered.length(), content="1")
+  inspect(buffered[0].sequence, content="9")
+}
+
+///|
+test "background retries preserve buffered commits until a later success" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    messages: [{ kind: User, content: "kept" }],
+    watermark: 1,
+    sync: test_reloading([
+      { sequence: 3, kind: "user", payload: { "content": Json::string("x") } },
+    ]),
+  })
+  let model = { ..model, transcript_request_generation: 1 }
+  let failure = SessionRefreshFailed(session="desktop-test", generation=1)
+  let (_, retrying2) = update_dev(dispatch, failure, model)
+  guard retrying2.active().sync is Reloading(attempt=2, buffered=buffered2, ..) else {
+    fail("expected the second background attempt")
+  }
+  inspect(buffered2.length(), content="1")
+  let (_, retrying3) = update_dev(dispatch, failure, retrying2)
+  guard retrying3.active().sync is Reloading(attempt=3, ..) else {
+    fail("expected the third background attempt")
+  }
+  let (_, failed) = update_dev(dispatch, failure, retrying3)
+  guard failed.active().sync is ReloadFailed(buffered=failed_buffer, ..) else {
+    fail("expected bounded retry exhaustion")
+  }
+  inspect(failed_buffer.length(), content="1")
+  inspect(failed.active().messages.length(), content="1")
+  inspect(failed.active().overlay.length(), content="1")
+  // The next commit starts a fresh generation without applying out of order.
+  let (_, retrying) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=2, kind="user", payload={
+      "content": Json::string("next"),
+    }),
+    failed,
+  )
+  guard retrying.active().sync
+    is Reloading(generation=2, buffered=retry_buffer, ..) else {
+    fail("expected a new generation")
+  }
+  inspect(retry_buffer.length(), content="2")
+  let (_, healed) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: User, content: "kept" }],
+      watermark=1,
+      event_boundaries=[],
+      generation=2,
+    ),
+    retrying,
+  )
+  inspect(healed.active().messages.length(), content="3")
+  inspect(healed.active().messages[1].content, content="next")
+  inspect(healed.active().messages[2].content, content="x")
+  inspect(healed.active().watermark, content="3")
+  inspect(healed.active().overlay.length(), content="0")
+  assert_true(healed.active().sync is Synced)
+}
+
+///|
+test "reopening an active failed reload retries and preserves other local notices" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    messages: [{ kind: User, content: "kept" }],
+    watermark: 1,
+    sync: ReloadFailed(generation=1, buffered=[
+      { sequence: 2, kind: "user", payload: { "content": Json::string("two") } },
+    ]),
+    overlay: [
+      {
+        kind: Assistant(is_danger=true),
+        content: TranscriptRefreshFailedNotice,
+        anchor: AfterMessages(1),
+        reconciliation: Retained,
+      },
+      {
+        kind: Assistant(is_danger=true),
+        content: "local steer loss",
+        anchor: AfterMessages(1),
+        reconciliation: Retained,
+      },
+    ],
+  })
+  let model = { ..model, transcript_request_generation: 1 }
+  let (_, reopened) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    model,
+  )
+  assert_true(
+    reopened.loading_conversation
+    is Some({ channel: Local, session: "desktop-test" }),
+  )
+  guard reopened.active().sync
+    is Reloading(generation=2, attempt=1, buffered~, ..) else {
+    fail("expected the active click to restart the reload")
+  }
+  inspect(buffered.length(), content="1")
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionLoaded(
+      session="desktop-test",
+      items=[{ kind: User, content: "kept" }],
+      watermark=1,
+      event_boundaries=[],
+      generation=2,
+    ),
+    reopened,
+  )
+  assert_true(loaded.loading_conversation is None)
+  inspect(loaded.active().messages.length(), content="2")
+  inspect(loaded.active().watermark, content="2")
+  // Success clears only the exact refresh-state warning.
+  inspect(loaded.active().overlay.length(), content="1")
+  inspect(loaded.active().overlay[0].content, content="local steer loss")
+}
+
+///|
+test "stale and lower-watermark snapshots cannot overwrite current state" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    messages: [{ kind: User, content: "current" }],
+    watermark: 5,
+    sync: Reloading(
+      generation=2,
+      attempt=1,
+      buffered=[
+        {
+          sequence: 6,
+          kind: "user",
+          payload: { "content": Json::string("six") },
+        },
+      ],
+      reload_after_current=false,
+    ),
+  })
+  let (_, stale) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: User, content: "stale generation" }],
+      watermark=9,
+      event_boundaries=[],
+      generation=1,
+    ),
+    model,
+  )
+  inspect(stale.active().messages[0].content, content="current")
+  inspect(stale.active().watermark, content="5")
+  guard stale.active().sync is Reloading(generation=2, attempt=1, ..) else {
+    fail("stale generation changed the active reload")
+  }
+  let (_, lower) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[{ kind: User, content: "older snapshot" }],
+      watermark=4,
+      event_boundaries=[],
+      generation=2,
+    ),
+    stale,
+  )
+  inspect(lower.active().messages[0].content, content="current")
+  inspect(lower.active().watermark, content="5")
+  guard lower.active().sync is Reloading(generation=2, attempt=2, buffered~, ..) else {
+    fail("lower watermark did not retry the current generation")
+  }
+  inspect(buffered.length(), content="1")
+}
+
+///|
+test "tool decode semantics wait for their durable error tool result" {
+  let dispatch = test_dispatch()
+  let semantic = Engine(
+    Some("r7"),
+    ToolCallDecodeError(tool_name="edit", reason="invalid arguments"),
+    session=None,
+  )
+  let commit = SessionCommitted(
+    session="desktop-test",
+    sequence=1,
+    kind="tool_result",
+    payload={
+      "tool_name": Json::string("edit"),
+      "is_error": Json::boolean(true),
+      "content": Json::string("invalid arguments"),
+    },
+  )
+  let (_, semantic_first) = update_dev(dispatch, semantic, running_model())
+  inspect(semantic_first.active().messages.length(), content="0")
+  inspect(semantic_first.active().overlay.length(), content="0")
+  let (_, committed_after) = update_dev(dispatch, commit, semantic_first)
+  inspect(committed_after.active().messages.length(), content="1")
+  inspect(committed_after.active().overlay.length(), content="0")
+  guard committed_after.active().messages[0].kind
+    is Tool(name="edit", is_error=true, ..) else {
+    fail("expected the canonical error tool result")
+  }
+  inspect(
+    committed_after.active().messages[0].content,
+    content="invalid arguments",
+  )
+  let (_, committed_first) = update_dev(dispatch, commit, running_model())
+  let (_, semantic_after) = update_dev(dispatch, semantic, committed_first)
+  inspect(semantic_after.active().messages.length(), content="1")
+  inspect(semantic_after.active().overlay.length(), content="0")
+}
+
+///|
+test "assistant semantic events wait for their durable commit" {
+  let dispatch = test_dispatch()
+  let (_, thought) = update_dev(
+    dispatch,
+    Engine(Some("r7"), ReasoningMessage("think"), session=None),
+    running_model(),
+  )
+  let (_, answered) = update_dev(
+    dispatch,
+    Engine(Some("r7"), AssistantMessage("answer"), session=None),
+    thought,
+  )
+  inspect(answered.active().messages.length(), content="0")
+  inspect(answered.active().overlay.length(), content="0")
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=1, kind="assistant", payload={
+      "content": Json::string("answer"),
+      "reasoning_content": Json::string("think"),
+    }),
+    answered,
+  )
+  // One durable item projects as reasoning + answer exactly once.
+  inspect(committed.active().messages.length(), content="2")
+  inspect(committed.active().overlay.length(), content="0")
+  inspect(committed.active().watermark, content="1")
+}
+
+///|
+test "a delayed assistant commit never clears a newer live delta" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    streaming_response: "newer turn fragment",
+  })
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=1, kind="assistant", payload={
+      "content": Json::string("older committed answer"),
+    }),
+    model,
+  )
+  inspect(committed.active().streaming_response, content="newer turn fragment")
+}
+
+///|
+test "a delayed terminal commit never clears a newer live delta" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    messages: [{ kind: User, content: "older prompt" }],
+    watermark: 1,
+    streaming_response: "next turn fragment",
+  })
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=2, kind="terminal", payload={
+      "kind": Json::string("finished"),
+      "message": Json::string("older answer"),
+    }),
+    model,
+  )
+  inspect(committed.active().streaming_response, content="next turn fragment")
+}
+
+///|
+test "a fixed local notice stays before later durable turns" {
+  let dispatch = test_dispatch()
+  let conv = {
+    ..test_conversation(),
+    messages: [{ kind: User, content: "question" }],
+    watermark: 1,
+  }.append_local_notice(Assistant(is_danger=true), "local failure")
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=2, kind="assistant", payload={
+      "content": Json::string("later answer"),
+    }),
+    test_model().replace_conversation(conv),
+  )
+  let visible = committed.active().visible_items()
+  inspect(visible.length(), content="3")
+  inspect(visible[0].content, content="question")
+  inspect(visible[1].content, content="local failure")
+  inspect(visible[2].content, content="later answer")
+}
+
+///|
+test "a durable commit never retires a same-class local notice" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    overlay: [
+      {
+        kind: Assistant(is_danger=true),
+        content: "local-only failure",
+        anchor: AfterMessages(0),
+        reconciliation: Retained,
+      },
+    ],
+  })
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=1, kind="assistant", payload={
+      "content": Json::string("durable answer"),
+    }),
+    model,
+  )
+  inspect(committed.active().messages.length(), content="1")
+  inspect(committed.active().overlay.length(), content="1")
+  inspect(committed.active().overlay[0].content, content="local-only failure")
+}
+
+///|
+test "commit-first assistant semantics do not append again" {
+  let dispatch = test_dispatch()
+  let streaming = running_model().replace_conversation({
+    ..running_conversation(),
+    streaming_response: "answer",
+  })
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-test", sequence=1, kind="assistant", payload={
+      "content": Json::string("answer"),
+      "reasoning_content": Json::string("think"),
+    }),
+    streaming,
+  )
+  let (_, thought) = update_dev(
+    dispatch,
+    Engine(Some("r7"), ReasoningMessage("think"), session=None),
+    committed,
+  )
+  let (_, answered) = update_dev(
+    dispatch,
+    Engine(Some("r7"), AssistantMessage("answer"), session=None),
+    thought,
+  )
+  inspect(answered.active().messages.length(), content="2")
+  inspect(answered.active().overlay.length(), content="0")
+  inspect(answered.active().watermark, content="1")
+  inspect(answered.active().streaming_response, content="")
+}
+
+///|
+test "a sequence-one commit materializes an unknown hidden conversation" {
+  let dispatch = test_dispatch()
+  let (_, next) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-elsewhere", sequence=1, kind="user", payload={
+      "content": Json::string("hi"),
+    }),
+    test_model(),
+  )
+  inspect(next.conversations.length(), content="2")
+  inspect(next.active().messages.length(), content="0")
+  guard next.find_conversation(@interop.ChannelId::Local, "desktop-elsewhere")
+    is Some(hidden) else {
+    fail("unknown commit did not materialize its session")
+  }
+  inspect(hidden.messages.length(), content="1")
+  inspect(hidden.messages[0].content, content="hi")
+  inspect(hidden.watermark, content="1")
+  inspect(next.dev().sessions_request_generation, content="1")
+  let (_, repeated) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-elsewhere", sequence=1, kind="user", payload={
+      "content": Json::string("hi"),
+    }),
+    next,
+  )
+  inspect(repeated.dev().sessions_request_generation, content="1")
+}
+
+///|
+test "a gapped commit for an unknown session materializes then reloads" {
+  let dispatch = test_dispatch()
+  let (_, next) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-gap", sequence=3, kind="user", payload={
+      "content": Json::string("third"),
+    }),
+    test_model(),
+  )
+  guard next.find_conversation(@interop.ChannelId::Local, "desktop-gap")
+    is Some(hidden) else {
+    fail("gapped commit did not materialize its session")
+  }
+  inspect(hidden.messages.length(), content="0")
+  guard hidden.sync is Reloading(generation=1, buffered~, ..) else {
+    fail("unknown gap did not start a snapshot recovery")
+  }
+  inspect(buffered.length(), content="1")
+  inspect(buffered[0].sequence, content="3")
+  inspect(next.active_session, content="desktop-test")
+}
+
+///|
+test "a late commit cannot resurrect a locally known archived session" {
+  let dispatch = test_dispatch()
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    archived: [
+      {
+        id: "desktop-archived",
+        title: Some("archived"),
+        workspace: "",
+        workspace_name: "",
+      },
+    ],
+  })
+  let (_, next) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-archived", sequence=1, kind="user", payload={
+      "content": Json::string("stale"),
+    }),
+    model,
+  )
+  assert_true(
+    next.find_conversation(@interop.ChannelId::Local, "desktop-archived")
+    is None,
+  )
+  inspect(next.conversations.length(), content="1")
+}
+
+///|
+test "an archive tombstone blocks commits before the archived list refreshes" {
+  let dispatch = test_dispatch()
+  let model = test_model().with_archive_override(
+    @interop.ChannelId::Local,
+    "desktop-tombstoned",
+    true,
+  )
+  let (_, next) = update_dev(
+    dispatch,
+    SessionCommitted(session="desktop-tombstoned", sequence=1, kind="user", payload={
+      "content": Json::string("stale"),
+    }),
+    model,
+  )
+  assert_true(
+    next.find_conversation(@interop.ChannelId::Local, "desktop-tombstoned")
+    is None,
+  )
+  inspect(next.conversations.length(), content="1")
+}
+
+///|
+test "remote access walks connect states and dedups clicks" {
+  let dispatch = test_dispatch()
+  let signed_out : RemoteAccess = {
+    server_url: Some("https://relay.example"),
+    connected: false,
+    managed_by_env: false,
+    user_login: None,
+    device_name: None,
+    device_url: None,
+  }
+  let (_, seeded) = update(
+    dispatch,
+    RemoteStatusLoaded(signed_out),
+    test_model(),
+  )
+  assert_true(seeded.remote_access is Some({ user_login: None, .. }))
+  let (_, connecting) = update(dispatch, RemoteConnectClicked, seeded)
+  assert_true(connecting.remote_connecting)
+  // A second click while the browser round-trip is pending is a no-op.
+  let (second_cmd, second) = update(dispatch, RemoteConnectClicked, connecting)
+  assert_true(second.remote_connecting)
+  ignore(second_cmd)
+  let (_, failed) = update(dispatch, RemoteConnectFailed("nope"), connecting)
+  assert_false(failed.remote_connecting)
+  assert_true(failed.remote_error is Some("nope"))
+  let signed_in : RemoteAccess = {
+    ..signed_out,
+    user_login: Some("octocat"),
+    connected: true,
+  }
+  let (_, done) = update(dispatch, RemoteConnectFinished(signed_in), connecting)
+  assert_false(done.remote_connecting)
+  assert_true(
+    done.remote_access
+    is Some({ user_login: Some("octocat"), connected: true, .. }),
+  )
+  // A broadcast keeps the mirror fresh without touching the pending flag.
+  let (_, broadcast) = update(
+    dispatch,
+    RemoteStatusLoaded(signed_out),
+    connecting,
+  )
+  assert_true(broadcast.remote_connecting)
+}
+
+///|
+test "auth status payloads decode by shape" {
+  guard decode_remote_access({
+      "connected": Json::boolean(true),
+      "server_url": Json::string("https://relay.example"),
+      "user": {
+        "login": Json::string("octocat"),
+        "avatar_url": Json::string(""),
+      },
+      "device": {
+        "id": Json::string("d_abc"),
+        "name": Json::string("My Mac"),
+        "url": Json::string("https://relay.example/d/d_abc/"),
+      },
+    })
+    is Some(status) else {
+    fail("a full status did not decode")
+  }
+  assert_true(status.connected)
+  assert_true(status.user_login is Some("octocat"))
+  assert_true(status.device_url is Some("https://relay.example/d/d_abc/"))
+  guard decode_remote_access({ "connected": Json::boolean(false) })
+    is Some(signed_out) else {
+    fail("a signed-out status did not decode")
+  }
+  assert_true(signed_out.user_login is None)
+  assert_true(decode_remote_access({ "server_url": Json::string("x") }) is None)
 }

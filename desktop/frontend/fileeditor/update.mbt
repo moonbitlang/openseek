@@ -1,7 +1,7 @@
 // The panel's message handlers and post-dispatch reconciliation, extracted
 // from the main package's update loop. `update` is pure: effects go out as
-// commands, and every host reply carries the `session` it answers so a reply
-// that lost a conversation switch is dropped against `ctx`/`state.session`.
+// commands, and every host reply carries the conversation owner it answers so
+// a reply that lost a device/session switch is dropped against `ctx`/`state`.
 
 ///|
 /// Attach the viewer the first time the panel has real width, install the
@@ -36,7 +36,7 @@ fn show_tab(dispatch : @cmd.Emit[Msg], ctx : Ctx, tab : Tab) -> @cmd.Cmd {
       // show.
       read_file(
         dispatch,
-        ctx.session,
+        ctx.owner,
         tab.path,
         tab.name,
         range=None,
@@ -44,6 +44,7 @@ fn show_tab(dispatch : @cmd.Emit[Msg], ctx : Ctx, tab : Tab) -> @cmd.Cmd {
       )
     TabLoaded(content~, absolute~, ..) => {
       let show = show_file_in_viewer(
+        ctx.owner.channel,
         tab.name,
         content,
         absolute~,
@@ -51,7 +52,7 @@ fn show_tab(dispatch : @cmd.Emit[Msg], ctx : Ctx, tab : Tab) -> @cmd.Cmd {
         restore_scroll=true,
       )
       if language_id(tab.name) == "moonbit" {
-        @cmd.batch([show, request_diagnostics(dispatch, absolute)])
+        @cmd.batch([show, request_diagnostics(dispatch, ctx.owner, absolute)])
       } else {
         show
       }
@@ -69,7 +70,7 @@ fn show_tab(dispatch : @cmd.Emit[Msg], ctx : Ctx, tab : Tab) -> @cmd.Cmd {
       show,
       read_file(
         dispatch,
-        ctx.session,
+        ctx.owner,
         tab.path,
         tab.name,
         range=None,
@@ -106,12 +107,23 @@ fn open_or_activate(
     tab_index(state, path) is Some(index) &&
     !(state.tabs[index].state is (TabBinary | TabOversized | TabDeleted)) {
     let show = show_tab(dispatch, ctx, state.tabs[index])
-    let cmd = if state.active is None {
+    // Gaining the first active tab reveals the breadcrumb row, and the
+    // narrow drill-down closing the tree reveals a viewer that was last
+    // measured while hidden — both need a remeasure alongside the show.
+    let cmd = if state.active is None || (state.tree_open && ctx.narrow) {
       @cmd.batch([show, request_viewer_remeasure()])
     } else {
       show
     }
-    return (cmd, { ..state, active: Some(path), error: "" })
+    return (
+      cmd,
+      {
+        ..state,
+        active: Some(path),
+        error: None,
+        tree_open: state.tree_open && !ctx.narrow,
+      },
+    )
   }
   let tabs = if tab_index(state, path) is Some(_) {
     state.tabs
@@ -122,21 +134,31 @@ fn open_or_activate(
   }
   let read = read_file(
     dispatch,
-    ctx.session,
+    ctx.owner,
     path,
     name,
     range~,
     annotation?,
     workspace=ctx.workspace,
   )
-  // Gaining the first active tab reveals the breadcrumb row, so the viewer
-  // must remeasure before the reply's document lands.
-  let cmd = if state.active is None {
+  // Gaining the first active tab reveals the breadcrumb row, and the narrow
+  // drill-down closing the tree reveals a hidden-measured viewer — either
+  // way the viewer must remeasure before the reply's document lands.
+  let cmd = if state.active is None || (state.tree_open && ctx.narrow) {
     @cmd.batch([read, request_viewer_remeasure()])
   } else {
     read
   }
-  (cmd, { ..state, tabs, active: Some(path), error: "" })
+  (
+    cmd,
+    {
+      ..state,
+      tabs,
+      active: Some(path),
+      error: None,
+      tree_open: state.tree_open && !ctx.narrow,
+    },
+  )
 }
 
 ///|
@@ -170,14 +192,34 @@ pub fn open_file(
 /// background (their staleness must keep being tracked for the reopen), park
 /// it otherwise. Wraps every `sync` exit so the bookkeeping cannot be missed.
 fn with_watch(state : State, ctx : Ctx, cmd : @cmd.Cmd) -> (State, @cmd.Cmd) {
-  let want = if state.open || !state.tabs.is_empty() { ctx.session } else { "" }
+  let want = if (state.open || !state.tabs.is_empty()) &&
+    !ctx.owner.session.is_empty() {
+    Some(ctx.owner)
+  } else {
+    None
+  }
   if state.watching == want {
     (state, cmd)
   } else {
-    (
-      { ..state, watching: want },
-      @cmd.batch([cmd, watch_workspace(want, workspace=ctx.workspace)]),
-    )
+    let commands = [cmd]
+    // A watcher is host-local. Moving across channels must explicitly retire
+    // the old host; placing a new watch on another socket cannot replace it.
+    if state.watching is Some(current) &&
+      (want is None || (want is Some(next) && current.channel != next.channel)) {
+      commands.push(
+        watch_workspace(channel=current.channel, "", workspace=None),
+      )
+    }
+    if want is Some(next) {
+      commands.push(
+        watch_workspace(
+          channel=next.channel,
+          next.session,
+          workspace=ctx.workspace,
+        ),
+      )
+    }
+    ({ ..state, watching: want }, @cmd.batch(commands))
   }
 }
 
@@ -201,24 +243,24 @@ pub fn sync(
   // When the active conversation changes, drop the cached tree *and* the
   // viewer's open document — the viewer is imperative state outside the
   // model, so it would otherwise keep showing the previous conversation's
-  // file. The open tabs are parked by session id and restored (identities
+  // file. The open tabs are parked by conversation key and restored (identities
   // only: the active one reloads now, the rest load on activation) when
   // their conversation returns. This runs even while the panel is closed:
-  // `with_watch` follows `ctx.session` whenever tabs remain, so leaving the
+  // `with_watch` follows `ctx.owner` whenever tabs remain, so leaving the
   // tabs rooted in the previous conversation would have the next fs_changed
   // stat their paths against the new conversation's workspace — marking
   // hidden tabs deleted/stale for files that never moved.
-  let (state, reroot_cmd) = if state.session == ctx.session {
+  let (state, reroot_cmd) = if state.owner == Some(ctx.owner) {
     (state, @cmd.none)
   } else {
     let remembered = state.remembered.copy()
-    if !state.session.is_empty() {
-      remembered[state.session] = {
+    if state.owner is Some(owner) && !owner.session.is_empty() {
+      remembered[owner] = {
         entries: state.tabs.map(tab => { path: tab.path, name: tab.name }),
         active: state.active,
       }
     }
-    let (tabs, active) = match remembered.get(ctx.session) {
+    let (tabs, active) = match remembered.get(ctx.owner) {
       Some(parked) =>
         (
           parked.entries.map(entry => {
@@ -240,7 +282,7 @@ pub fn sync(
       cmds.push(
         read_file(
           dispatch,
-          ctx.session,
+          ctx.owner,
           path,
           tabs[index].name,
           range=None,
@@ -252,7 +294,7 @@ pub fn sync(
       {
         ..State::empty(),
         open: state.open,
-        session: ctx.session,
+        owner: Some(ctx.owner),
         tree_open: state.tree_open,
         // What the host actually watches doesn't change with the reroot;
         // `with_watch` re-points it against this record on the way out.
@@ -271,7 +313,7 @@ pub fn sync(
   // function of the session id, so the host can list it without waiting for a
   // run to report `cwd` (it reports an empty workspace until the first turn
   // creates the directory).
-  if ctx.session.is_empty() ||
+  if ctx.owner.session.is_empty() ||
     state.children.contains("") ||
     state.loading.contains("") {
     return with_watch(state, ctx, reroot_cmd)
@@ -285,7 +327,7 @@ pub fn sync(
       reroot_cmd,
       read_directory(
         dispatch,
-        ctx.session,
+        ctx.owner,
         @pathx.Relative::root(),
         workspace=ctx.workspace,
       ),
@@ -331,9 +373,22 @@ pub fn update(
       if state.active == Some(path) {
         (@cmd.none, state)
       } else if tab_index(state, path) is Some(index) {
+        let show = show_tab(dispatch, ctx, state.tabs[index])
+        // The narrow drill-down closing the tree reveals a viewer that was
+        // last measured while hidden; it must remeasure with the show.
+        let cmd = if state.tree_open && ctx.narrow {
+          @cmd.batch([show, request_viewer_remeasure()])
+        } else {
+          show
+        }
         (
-          show_tab(dispatch, ctx, state.tabs[index]),
-          { ..state, active: Some(path), error: "" },
+          cmd,
+          {
+            ..state,
+            active: Some(path),
+            error: None,
+            tree_open: state.tree_open && !ctx.narrow,
+          },
         )
       } else {
         (@cmd.none, state)
@@ -393,7 +448,7 @@ pub fn update(
             cmds.push(
               read_directory(
                 dispatch,
-                ctx.session,
+                ctx.owner,
                 ancestor,
                 workspace=ctx.workspace,
               ),
@@ -435,7 +490,7 @@ pub fn update(
           let loading = state.loading.copy()
           loading.push(path)
           (
-            read_directory(dispatch, ctx.session, path, workspace=ctx.workspace),
+            read_directory(dispatch, ctx.owner, path, workspace=ctx.workspace),
             { ..state, expanded, loading },
           )
         }
@@ -449,7 +504,7 @@ pub fn update(
       // that follow from stacking duplicate requests.
       if !query.trim().is_empty() && state.index is IndexEmpty {
         (
-          list_files(dispatch, ctx.session, workspace=ctx.workspace),
+          list_files(dispatch, ctx.owner, workspace=ctx.workspace),
           { ..state, index: IndexLoading },
         )
       } else {
@@ -506,9 +561,9 @@ pub fn update(
       } else {
         (@cmd.none, state)
       }
-    DirLoaded(session~, path~, entries~) =>
+    DirLoaded(owner~, path~, entries~) =>
       // Drop a reply whose conversation is no longer the panel's.
-      if state.session != session {
+      if state.owner != Some(owner) {
         (@cmd.none, state)
       } else {
         let children = state.children.copy()
@@ -528,12 +583,12 @@ pub fn update(
             ..state,
             children,
             loading: state.loading.filter(entry => entry != path),
-            error: "",
+            error: None,
           },
         )
       }
-    DirFailed(session~, path~, message~) =>
-      if state.session != session {
+    DirFailed(owner~, path~, message~) =>
+      if state.owner != Some(owner) {
         (@cmd.none, state)
       } else {
         (
@@ -541,30 +596,30 @@ pub fn update(
           {
             ..state,
             loading: state.loading.filter(entry => entry != path),
-            error: message,
+            error: Some(message),
           },
         )
       }
-    FilesIndexed(session~, files~, truncated~) =>
-      if state.session != session {
+    FilesIndexed(owner~, files~, truncated~) =>
+      if state.owner != Some(owner) {
         (@cmd.none, state)
       } else {
         (@cmd.none, { ..state, index: IndexReady(files~, truncated~) })
       }
-    FileIndexFailed(session~) =>
+    FileIndexFailed(owner~) =>
       // Only a failed first fetch drops back to retry-on-keystroke; a failed
       // refresh keeps serving the index it already has.
-      if state.session != session || !(state.index is IndexLoading) {
+      if state.owner != Some(owner) || !(state.index is IndexLoading) {
         (@cmd.none, state)
       } else {
         (@cmd.none, { ..state, index: IndexEmpty })
       }
     FileSelected(path~, name~) =>
       open_or_activate(dispatch, state, ctx, path, name, range=None)
-    FileLoaded(session~, path~, name~, file~, range~, annotation~) =>
+    FileLoaded(owner~, path~, name~, file~, range~, annotation~) =>
       // A stale read — the conversation switched, or the tab was closed
       // while the read was in flight — must not resurrect state.
-      if state.session != session || tab_index(state, path) is None {
+      if state.owner != Some(owner) || tab_index(state, path) is None {
         (@cmd.none, state)
       } else {
         guard tab_index(state, path) is Some(index)
@@ -593,6 +648,7 @@ pub fn update(
             // — so only the viewer shows.
             Content(content~, absolute~, ..) => {
               let show = show_file_in_viewer(
+                ctx.owner.channel,
                 name,
                 content,
                 absolute~,
@@ -604,7 +660,10 @@ pub fn update(
                 restore_scroll=previous is TabLoaded(..),
               )
               if language_id(name) == "moonbit" {
-                @cmd.batch([show, request_diagnostics(dispatch, absolute)])
+                @cmd.batch([
+                  show,
+                  request_diagnostics(dispatch, ctx.owner, absolute),
+                ])
               } else {
                 show
               }
@@ -619,6 +678,7 @@ pub fn update(
         (cmd, { ..state, tabs, })
       }
     FsChanged => {
+      guard state.owner is Some(owner) else { return (@cmd.none, state) }
       // Something under the watched workspace moved. Find out what: one
       // batched stat for the open tabs, and a re-list of the root plus every
       // expanded directory already on screen (marked loading so a burst of
@@ -628,7 +688,7 @@ pub fn update(
         cmds.push(
           stat_files(
             dispatch,
-            state.session,
+            owner,
             state.tabs.map(tab => tab.path),
             workspace=ctx.workspace,
           ),
@@ -646,20 +706,18 @@ pub fn update(
       let loading = state.loading.copy()
       for dir in relist {
         loading.push(dir)
-        cmds.push(
-          read_directory(dispatch, state.session, dir, workspace=ctx.workspace),
-        )
+        cmds.push(read_directory(dispatch, owner, dir, workspace=ctx.workspace))
       }
       // The fuzzy filter's index goes stale with the tree; rebuild it if
       // anyone has ever needed it (the reply just replaces the old list, so
       // the filter keeps showing the previous matches meanwhile).
       if !(state.index is IndexEmpty) {
-        cmds.push(list_files(dispatch, state.session, workspace=ctx.workspace))
+        cmds.push(list_files(dispatch, owner, workspace=ctx.workspace))
       }
       (@cmd.batch(cmds), { ..state, loading, })
     }
-    StatsLoaded(session~, stats~) =>
-      if state.session != session {
+    StatsLoaded(owner~, stats~) =>
+      if state.owner != Some(owner) {
         (@cmd.none, state)
       } else {
         let tabs = state.tabs.copy()
@@ -669,7 +727,7 @@ pub fn update(
             continue
           }
           let tab = tabs[index]
-          if stat.sig.is_empty() {
+          guard stat.sig is Some(current_sig) else {
             // The file is gone. The tab stays as the user's bookmark; the
             // notice replaces the document if it is the one on screen.
             if !(tab.state is TabDeleted) {
@@ -680,52 +738,62 @@ pub fn update(
                 cmds.push(clear_document())
               }
             }
-          } else {
-            let changed = match tab.state {
-              // The loaded baseline says whether the disk moved on.
-              TabLoaded(sig~, ..) => sig != stat.sig
-              // A deleted file whose signature came back: it reappeared.
-              TabDeleted => true
-              // A read is already in flight; its reply carries a fresh
-              // signature anyway.
-              TabLoading => false
-              // Withheld tabs carry no baseline to compare against (see
-              // `TabState`); they refresh on explicit re-open instead.
-              TabBinary | TabOversized => false
-            }
-            if changed {
-              if state.active == Some(tab.path) {
-                // The document on screen reloads eagerly (scroll kept —
-                // `FileLoaded` sees the previous content). The tab keeps its
-                // loaded state so that restore has its baseline.
-                cmds.push(
-                  read_file(
-                    dispatch,
-                    state.session,
-                    tab.path,
-                    tab.name,
-                    range=None,
-                    workspace=ctx.workspace,
-                  ),
-                )
-              } else {
-                // Background tabs just remember they are behind; activation
-                // reloads them. A build storm therefore costs one read, not
-                // one per open tab.
-                tabs[index] = { ..tab, stale: true }
-              }
+            continue
+          }
+          let changed = match tab.state {
+            // The loaded baseline says whether the disk moved on.
+            TabLoaded(sig~, ..) => sig != current_sig
+            // A deleted file whose signature came back: it reappeared.
+            TabDeleted => true
+            // A read is already in flight; its reply carries a fresh
+            // signature anyway.
+            TabLoading => false
+            // Withheld tabs carry no baseline to compare against (see
+            // `TabState`); they refresh on explicit re-open instead.
+            TabBinary | TabOversized => false
+          }
+          if changed {
+            if state.active == Some(tab.path) {
+              // The document on screen reloads eagerly (scroll kept —
+              // `FileLoaded` sees the previous content). The tab keeps its
+              // loaded state so that restore has its baseline.
+              cmds.push(
+                read_file(
+                  dispatch,
+                  owner,
+                  tab.path,
+                  tab.name,
+                  range=None,
+                  workspace=ctx.workspace,
+                ),
+              )
+            } else {
+              // Background tabs just remember they are behind; activation
+              // reloads them. A build storm therefore costs one read, not
+              // one per open tab.
+              tabs[index] = { ..tab, stale: true }
             }
           }
         }
         (@cmd.batch(cmds), { ..state, tabs, })
       }
-    DiagnosticsPublished(absolute~, diagnostics~) =>
-      (apply_diagnostics(absolute, diagnostics), state)
-    FileFailed(session~, message~) =>
-      if state.session != session {
+    DiagnosticsLoaded(owner~, absolute~, diagnostics~) =>
+      if state.owner == Some(owner) {
+        (apply_diagnostics(owner.channel, absolute, diagnostics), state)
+      } else {
+        (@cmd.none, state)
+      }
+    DiagnosticsPublished(channel~, absolute~, diagnostics~) =>
+      if state.owner is Some(owner) && owner.channel == channel {
+        (apply_diagnostics(channel, absolute, diagnostics), state)
+      } else {
+        (@cmd.none, state)
+      }
+    FileFailed(owner~, message~) =>
+      if state.owner != Some(owner) {
         (@cmd.none, state)
       } else {
-        (@cmd.none, { ..state, error: message })
+        (@cmd.none, { ..state, error: Some(message) })
       }
     // Owned by the main package's update: the comment becomes a composer
     // chip there, which then clears the editor bubble through
@@ -747,16 +815,17 @@ fn test_emit() -> @cmd.Emit[Msg] {
 ///|
 fn test_ctx() -> Ctx {
   {
-    session: "desktop-test",
+    owner: { channel: @interop.ChannelId::Local, session: "desktop-test" },
     workspace: None,
     dark_mode: false,
     tree_layout: BottomPanel,
+    narrow: false,
   }
 }
 
 ///|
 fn open_state() -> State {
-  { ..State::empty(), open: true, session: "desktop-test" }
+  { ..State::empty(), open: true, owner: Some(test_ctx().owner) }
 }
 
 ///|
@@ -797,6 +866,40 @@ test "FileSelected opens tabs in click order and activates the last" {
   )
   assert_eq(again.tabs.length(), 2)
   assert_true(again.active is Some(Relative("a.mbt")))
+}
+
+///|
+test "narrow ctx: opening or activating a file closes the tree pane" {
+  let emit = test_emit()
+  let narrow : Ctx = { ..test_ctx(), narrow: true }
+  let start = { ..open_state(), tree_open: true }
+  // A fresh open drills down into the viewer.
+  let (_, opened) = update(
+    emit,
+    FileSelected(path=Relative("a.mbt"), name="a.mbt"),
+    start,
+    narrow,
+  )
+  assert_false(opened.tree_open)
+  // Back to the tree (the breadcrumb toggle), then activating an open tab
+  // drills down again.
+  let (_, tree) = update(emit, ToggleTree, opened, narrow)
+  assert_true(tree.tree_open)
+  let (_, activated) = update(
+    emit,
+    FileSelected(path=Relative("a.mbt"), name="a.mbt"),
+    { ..tree, tabs: [loaded_tab("a.mbt", "a.mbt")], active: None },
+    narrow,
+  )
+  assert_false(activated.tree_open)
+  // The wide layout keeps the pane open alongside the viewer.
+  let (_, wide) = update(
+    emit,
+    FileSelected(path=Relative("b.mbt"), name="b.mbt"),
+    start,
+    test_ctx(),
+  )
+  assert_true(wide.tree_open)
 }
 
 ///|
@@ -927,7 +1030,7 @@ test "FileLoaded settles content into its tab, active or not" {
   let (_, next) = update(
     emit,
     FileLoaded(
-      session="desktop-test",
+      owner=test_ctx().owner,
       path=Relative("a.mbt"),
       name="a.mbt",
       file=Content(
@@ -947,7 +1050,7 @@ test "FileLoaded settles content into its tab, active or not" {
   let (_, stray) = update(
     emit,
     FileLoaded(
-      session="desktop-test",
+      owner=test_ctx().owner,
       path=Relative("gone.mbt"),
       name="gone.mbt",
       file=Content(content="", absolute=Absolute("/work/gone.mbt"), sig="2:0"),
@@ -961,7 +1064,10 @@ test "FileLoaded settles content into its tab, active or not" {
   let (_, other) = update(
     emit,
     FileLoaded(
-      session="other-session",
+      owner={
+        channel: @interop.ChannelId::Remote("other"),
+        session: "desktop-test",
+      },
       path=Relative("a.mbt"),
       name="a.mbt",
       file=Binary,
@@ -983,17 +1089,18 @@ test "sync parks the outgoing conversation's tabs and restores them later" {
     active: Some(Relative("a.mbt")),
     tree_open: false,
   }
-  // Switch away: the tab set parks under its session id.
+  // Switch away: the tab set parks under its full conversation identity.
   let other : Ctx = {
-    session: "other-session",
-    workspace: None,
-    dark_mode: false,
-    tree_layout: BottomPanel,
+    ..test_ctx(),
+    owner: {
+      channel: @interop.ChannelId::Remote("other"),
+      session: "desktop-test",
+    },
   }
   let (parked, _) = sync(emit, state, other)
-  assert_eq(parked.session, "other-session")
+  assert_true(parked.owner is Some({ channel: Remote("other"), .. }))
   assert_eq(parked.tabs.length(), 0)
-  assert_true(parked.remembered.contains("desktop-test"))
+  assert_true(parked.remembered.contains(test_ctx().owner))
   // The pane-visibility preference follows the panel, not the conversation.
   assert_false(parked.tree_open)
   // Switch back: identities return, contents reload lazily (the tabs are
@@ -1016,23 +1123,24 @@ test "a closed panel still re-roots when the conversation switches" {
   let state = {
     ..open_state(),
     open: false,
-    watching: "desktop-test",
+    watching: Some(test_ctx().owner),
     tabs: [loaded_tab("a.mbt", "a.mbt")],
     active: Some(Relative("a.mbt")),
   }
   let other : Ctx = {
-    session: "other-session",
-    workspace: None,
-    dark_mode: false,
-    tree_layout: BottomPanel,
+    ..test_ctx(),
+    owner: {
+      channel: @interop.ChannelId::Remote("other"),
+      session: "desktop-test",
+    },
   }
   let (parked, _) = sync(emit, state, other)
-  assert_eq(parked.session, "other-session")
+  assert_true(parked.owner is Some({ channel: Remote("other"), .. }))
   assert_false(parked.open)
   assert_eq(parked.tabs.length(), 0)
-  assert_true(parked.remembered.contains("desktop-test"))
+  assert_true(parked.remembered.contains(test_ctx().owner))
   // Nothing left to track in the new conversation, so the watcher parks.
-  assert_eq(parked.watching, "")
+  assert_true(parked.watching is None)
   // Switching back restores the identities — still hidden, not read yet —
   // and the watcher follows the tabs again.
   let (restored, _) = sync(emit, parked, test_ctx())
@@ -1040,7 +1148,9 @@ test "a closed panel still re-roots when the conversation switches" {
   assert_eq(restored.tabs.length(), 1)
   assert_true(restored.tabs[0].state is TabLoading)
   assert_true(restored.active is Some(Relative("a.mbt")))
-  assert_eq(restored.watching, "desktop-test")
+  assert_true(
+    restored.watching is Some({ channel: Local, session: "desktop-test" }),
+  )
   // Reopening is what reads the restored active tab (the command is opaque;
   // the tab stays TabLoading until the reply lands).
   let (_, reopened) = update(emit, ToggleFilePanel, restored, test_ctx())
@@ -1076,14 +1186,14 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   }
   let (_, next) = update(
     emit,
-    StatsLoaded(session="desktop-test", stats=[
+    StatsLoaded(owner=test_ctx().owner, stats=[
       // The active file changed: reloaded eagerly, so its tab stays loaded
       // (the baseline the scroll-keeping reload compares against).
-      { path: Relative("a.mbt"), sig: "9:0" },
+      { path: Relative("a.mbt"), sig: Some("9:0") },
       // A background file changed: only marked stale.
-      { path: Relative("b.mbt"), sig: "9:0" },
+      { path: Relative("b.mbt"), sig: Some("9:0") },
       // Deleted: the tab flips to the deleted notice state.
-      { path: Relative("c.mbt"), sig: "" },
+      { path: Relative("c.mbt"), sig: None },
     ]),
     state,
     test_ctx(),
@@ -1095,8 +1205,8 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   // An unchanged signature is a no-op.
   let (_, same) = update(
     emit,
-    StatsLoaded(session="desktop-test", stats=[
-      { path: Relative("b.mbt"), sig: "9:0" },
+    StatsLoaded(owner=test_ctx().owner, stats=[
+      { path: Relative("b.mbt"), sig: Some("9:0") },
     ]),
     { ..next, tabs: [loaded_tab("b.mbt", "b.mbt")], active: None },
     test_ctx(),
@@ -1106,7 +1216,13 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   // A reply from another conversation is dropped.
   let (_, other) = update(
     emit,
-    StatsLoaded(session="other", stats=[{ path: Relative("a.mbt"), sig: "" }]),
+    StatsLoaded(
+      owner={
+        channel: @interop.ChannelId::Remote("other"),
+        session: "desktop-test",
+      },
+      stats=[{ path: Relative("a.mbt"), sig: None }],
+    ),
     state,
     test_ctx(),
   )
@@ -1130,8 +1246,8 @@ test "a deleted tab whose file reappears reloads on the next stats" {
   }
   let (_, next) = update(
     emit,
-    StatsLoaded(session="desktop-test", stats=[
-      { path: Relative("a.mbt"), sig: "3:0" },
+    StatsLoaded(owner=test_ctx().owner, stats=[
+      { path: Relative("a.mbt"), sig: Some("3:0") },
     ]),
     state,
     test_ctx(),
@@ -1168,7 +1284,7 @@ test "sync reconciles the watcher with the panel and its tabs" {
   let emit = test_emit()
   // Open panel: watch the active session.
   let (watched, _) = sync(emit, open_state(), test_ctx())
-  assert_eq(watched.watching, "desktop-test")
+  assert_true(watched.watching == Some(test_ctx().owner))
   // Closed panel with tabs still open: keep watching (staleness tracking).
   let closed = {
     ..watched,
@@ -1178,9 +1294,9 @@ test "sync reconciles the watcher with the panel and its tabs" {
     loading: [],
   }
   let (still, _) = sync(emit, closed, test_ctx())
-  assert_eq(still.watching, "desktop-test")
+  assert_true(still.watching == Some(test_ctx().owner))
   // Closed panel, no tabs: park the watcher.
   let empty_panel = { ..still, tabs: [] }
   let (parked, _) = sync(emit, empty_panel, test_ctx())
-  assert_eq(parked.watching, "")
+  assert_true(parked.watching is None)
 }

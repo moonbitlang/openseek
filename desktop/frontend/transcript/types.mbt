@@ -6,7 +6,11 @@
 ///|
 pub(all) enum ItemKind {
   User
-  Assistant(Bool)
+  // Something the agent said. `is_danger` marks the ones that aren't a reply
+  // at all — an abort/cancel/failure terminal, or a notice the frontend
+  // raised itself. They wear the assistant's bubble but render as plain red
+  // text, never markdown: an error's own `*` and `#` are not formatting.
+  Assistant(is_danger~ : Bool)
   Reasoning
   // A tool call's result: the tool name, whether it failed, and the tool's
   // optional one-line human-readable summary of what the call did (`None`

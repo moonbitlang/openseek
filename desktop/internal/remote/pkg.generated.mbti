@@ -11,7 +11,7 @@ import {
 
 // Types and methods
 type RelayActor
-pub fn RelayActor::new(@api.ApiState, relay_url~ : String, device_token~ : String, device_name~ : String, announce~ : (String) -> Unit) -> Self
+pub fn RelayActor::new(@api.ApiState, announce~ : (String) -> Unit) -> Self
 pub async fn RelayActor::run(Self) -> Unit
 
 // Type aliases

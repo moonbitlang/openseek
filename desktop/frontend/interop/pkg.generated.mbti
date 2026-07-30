@@ -4,15 +4,20 @@ package "openseek_desktop/frontend/interop"
 import {
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/js",
+  "moonbitlang/core/debug",
   "openseek_desktop/internal/pathx",
 }
 
 // Values
 pub fn add_capture_listener(@js.Value, String, (@dom.Event) -> Unit) -> Unit
 
+pub fn bridge_error_is_definite(Error) -> Bool
+
 pub fn bridge_error_text(Error) -> String
 
-pub async fn bridge_request(String, @js.Value) -> @js.Value
+pub async fn bridge_request(ChannelId, String, @js.Value) -> @js.Value
+
+pub async fn bridge_request_in_order(ChannelId, String, @js.Value) -> @js.Value
 
 pub fn js_method_promise(@js.Value, String, @js.Value) -> @js.Promise raise @js.Error_
 
@@ -22,17 +27,41 @@ pub fn moonbit_bridge_root() -> @js.Value?
 
 pub fn openseek_api() -> @js.Value?
 
+pub fn page_channel() -> ChannelId?
+
+pub fn page_query_param(String) -> String?
+
+pub fn page_ws_origin() -> String?
+
 pub fn reply_json_text(@js.Value) -> String
 
 pub fn set_trimmed(@js.Object, String, String) -> Unit
 
 pub fn set_workspace(@js.Object, @pathx.Absolute?) -> Unit
 
+pub fn using_proton_bridge() -> Bool
+
+pub fn viewport_width() -> Int?
+
+pub fn ws_close(ChannelId) -> Unit
+
+pub fn ws_connect(String, on_notification~ : (String, Map[String, Json]) -> Unit, on_down~ : () -> Unit) -> Unit
+
 // Errors
 
 // Types and methods
+pub(all) enum ChannelId {
+  Local
+  Remote(String)
+} derive(Eq, Hash, @debug.Debug)
+pub fn ChannelId::from_uri_authority(String) -> Self?
+pub fn ChannelId::uri_authority(Self) -> String
+
+pub(all) struct ConversationKey {
+  channel : ChannelId
+  session : String
+} derive(Eq, Hash, @debug.Debug)
 
 // Type aliases
 
 // Traits
-

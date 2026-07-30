@@ -2,11 +2,15 @@
 package "openseek_desktop/frontend/transcript"
 
 // Values
+pub fn apply_session_item(Array[TranscriptItem], String, Map[String, Json]) -> Unit
+
 pub fn decode_apps_reply(String) -> Array[LauncherAppItem]?
 
 pub fn decode_engine_event(Map[String, Json]) -> EngineEvent?
 
 pub fn decode_installed_skills_reply(String) -> Array[InstalledSkillItem]?
+
+pub fn decode_session_load_reply(String) -> SessionLoadView?
 
 pub fn decode_sessions_reply(String) -> Array[SessionListItem]?
 
@@ -37,8 +41,8 @@ pub(all) enum EngineEvent {
   AgentAborted(String)
   MaxStepsExhausted
   AgentSetupFailed(String)
-  SteerApplied(String)
-  SteerDropped(String)
+  SteerApplied(content~ : String, submission_id~ : String?)
+  SteerDropped(content~ : String, submission_id~ : String?)
   AutoCompactionFinished(String)
   CompactionStarted
   CompactionFinished(String)
@@ -54,7 +58,7 @@ pub(all) struct InstalledSkillItem {
 
 pub(all) enum ItemKind {
   User
-  Assistant(Bool)
+  Assistant(is_danger~ : Bool)
   Reasoning
   Tool(name~ : String, is_error~ : Bool, brief~ : String?)
   Summary
@@ -87,6 +91,12 @@ pub(all) struct SessionListItem {
   workspace : String
   workspace_name : String
 } derive(Eq)
+
+pub struct SessionLoadView {
+  items : Array[TranscriptItem]
+  watermark : Int
+  event_boundaries : Array[(Int, Bool, Int)]
+}
 
 pub(all) struct TranscriptItem {
   kind : ItemKind

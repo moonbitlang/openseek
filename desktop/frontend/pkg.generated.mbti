@@ -2,6 +2,7 @@
 package "openseek_desktop/frontend"
 
 // Values
+pub fn boot() -> Unit
 
 // Errors
 
