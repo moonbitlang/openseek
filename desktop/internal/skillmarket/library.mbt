@@ -13,10 +13,10 @@ const SidecarFile = ".mooncakes.json"
 
 ///|
 /// One process-wide boundary for the skills directory. Install holds it from
-/// its initial ownership check through both file writes, so another install
-/// cannot pair one SKILL.md with another request's provenance. Uninstall
-/// cannot pass an in-flight install and report success before that install
-/// recreates the entry.
+/// its initial ownership check through a cancellation-shielded two-file
+/// commit, so another install cannot pair one SKILL.md with another request's
+/// provenance. Uninstall cannot pass an in-flight install and report success
+/// before that install recreates the entry.
 let library_lock : @async.Mutex = Mutex()
 
 ///|
@@ -201,15 +201,21 @@ pub async fn install_skill(
     raise SkillMarketError("SKILL.md download returned HTTP \{code}")
   }
   let content = data.binary()
-  @fsx.ensure_dir(target)
-  @fsx.write_bytes(target.join("SKILL.md"), content)
   let provenance : Json = {
     "module": module_name,
     "version": version,
     "package": package_path,
     "digest": content_digest(content),
   }
-  @fsx.write_text(sidecar, provenance.stringify())
+  // Network work above remains cancellable. Once the first library file
+  // changes, however, finish both writes before propagating cancellation:
+  // exposing only SKILL.md makes a registry install look user-authored, while
+  // an interrupted upgrade pairs new instructions with old provenance.
+  @async.protect_from_cancel(() => {
+    @fsx.ensure_dir(target)
+    @fsx.write_bytes(target.join("SKILL.md"), content)
+    @fsx.write_text(sidecar, provenance.stringify())
+  })
   let text = data.text() catch { _ => "" }
   let (name, description) = parse_frontmatter(text, slug)
   {

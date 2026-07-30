@@ -225,12 +225,19 @@ async fn apply_update_op(state : UpdateState) -> ApplyUpdateReply {
     state.bundle_path is Some(bundle) else {
     raise HostError("No update is staged")
   }
-  @update.apply_staged(staged_app=staged.app_path, bundle_path=bundle) catch {
-    @update.UpdateError(message) => raise HostError(message)
-    error => raise error
-  }
-  state.staged = None
-  @update.write_relaunch_marker(work_dir=dir, bundle_path=bundle)
+  // The mutex serializes update requests but does not delay cancellation.
+  // Once the running bundle can move to `.old`, finish the swap, consume the
+  // staged state, and write the relaunch marker even if this request's client
+  // disconnects. Otherwise cancellation during `mv` bypasses rollback and can
+  // leave no launchable bundle at the original path.
+  @async.protect_from_cancel(() => {
+    @update.apply_staged(staged_app=staged.app_path, bundle_path=bundle) catch {
+      @update.UpdateError(message) => raise HostError(message)
+      error => raise error
+    }
+    state.staged = None
+    @update.write_relaunch_marker(work_dir=dir, bundle_path=bundle)
+  })
   { applied: true }
 }
 
