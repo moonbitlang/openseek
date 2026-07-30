@@ -384,6 +384,11 @@ fn DesktopBridgeActor::legacy_notification(
     "agent.connected" => "connected"
     "lsp.diagnostics" => "diagnostics"
     "fs.changed" => "fs_changed"
+    // The bundled page has no catalog-invalidation events. Its connected
+    // handler is the existing resync seam: it re-reads live and archived
+    // sessions plus the workspace registry, including rotating away from a
+    // conversation another client archived.
+    "session.changed" | "workspace.changed" => "connected"
     _ => return None
   }
   let params = if notification.method_ == "agent.event" {
@@ -494,7 +499,7 @@ async test "legacy desktop snapshots active starts for page reload" {
 }
 
 ///|
-test "legacy desktop routes pre-run engine events by session" {
+test "legacy desktop translates notifications for the bundled page" {
   let bridge = DesktopBridgeActor::new(@api.ApiState::new(engine="openseek"))
   guard bridge.legacy_notification({
       method_: "agent.event",
@@ -512,6 +517,16 @@ test "legacy desktop routes pre-run engine events by session" {
   }
   assert_eq(fields.get("run_id"), Some(Json::number(0.0)))
   assert_eq(fields.get("session"), Some(Json::string("desktop-session")))
+  for method_ in ["session.changed", "workspace.changed"] {
+    guard bridge.legacy_notification({
+        method_,
+        params: { "source": "another client" },
+      })
+      is Some(refresh) else {
+      fail("legacy bridge dropped \{method_}")
+    }
+    assert_eq(refresh.method_, "connected")
+  }
 }
 
 ///|
