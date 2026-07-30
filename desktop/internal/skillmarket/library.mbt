@@ -12,14 +12,6 @@
 const SidecarFile = ".mooncakes.json"
 
 ///|
-/// One process-wide boundary for the skills directory. Install holds it from
-/// its initial ownership check through a cancellation-shielded two-file
-/// commit, so another install cannot pair one SKILL.md with another request's
-/// provenance. Uninstall cannot pass an in-flight install and report success
-/// before that install recreates the entry.
-let library_lock : @async.Mutex = Mutex()
-
-///|
 /// One entry of the local skills library.
 pub struct InstalledSkill {
   // The library entry (directory or file stem) — the key uninstall takes.
@@ -165,15 +157,16 @@ fn decode_sidecar(text : String) -> String {
 /// path-escape the library), and the SKILL.md is fetched from the skill's
 /// assets. A same-named entry the user wrote by hand (no sidecar) is never
 /// overwritten; one we installed is — that is a reinstall or an upgrade.
+/// `on_committed` runs after the complete staged directory becomes live, while
+/// the library lock and cancellation shield are still held.
 pub async fn install_skill(
   module_name~ : String,
   version~ : String,
   package_path~ : String,
   registry? : String = DefaultRegistry,
   library_dir? : @path.Path = library_dir_from_env(),
+  on_committed? : () -> Unit,
 ) -> InstalledSkill {
-  library_lock.acquire()
-  defer library_lock.release()
   let entry = entry_path(module_name, version, package_path)
   let download_url = skill_md_url(registry, entry)
   let identity = if package_path.is_empty() {
@@ -201,29 +194,34 @@ pub async fn install_skill(
     raise SkillMarketError("SKILL.md download returned HTTP \{code}")
   }
   let content = data.binary()
+  let text = data.text() catch { _ => "" }
+  let (name, description) = parse_frontmatter(text, slug)
+  let installed = {
+    id: slug,
+    name,
+    description,
+    source: source_label(module_name, version, package_path),
+  }
   let provenance : Json = {
     "module": module_name,
     "version": version,
     "package": package_path,
     "digest": content_digest(content),
   }
-  // Network work above remains cancellable. Once the first library file
-  // changes, however, finish both writes before propagating cancellation:
-  // exposing only SKILL.md makes a registry install look user-authored, while
-  // an interrupted upgrade pairs new instructions with old provenance.
-  @async.protect_from_cancel(() => {
-    @fsx.ensure_dir(target)
-    @fsx.write_bytes(target.join("SKILL.md"), content)
-    @fsx.write_text(sidecar, provenance.stringify())
-  })
-  let text = data.text() catch { _ => "" }
-  let (name, description) = parse_frontmatter(text, slug)
-  {
-    id: slug,
-    name,
-    description,
-    source: source_label(module_name, version, package_path),
+  library_lock.acquire()
+  defer library_lock.release()
+  let library : SkillLibrary = { root: library_dir }
+  library.recover()
+  // Re-check ownership only after acquiring the process-wide boundary:
+  // another request may have installed this slug while the network fetch ran.
+  if @fsx.exists(flat_target) || (@fsx.exists(target) && !@fsx.exists(sidecar)) {
+    raise SkillMarketError(
+      "a skill named \{slug} already exists in your library; not overwriting it",
+    )
   }
+  library.stage(slug, content, provenance.stringify())
+  library.activate(slug, on_committed?)
+  installed
 }
 
 ///|
@@ -234,6 +232,10 @@ pub async fn install_skill(
 pub async fn installed_skills(
   library_dir? : @path.Path = library_dir_from_env(),
 ) -> Array[InstalledSkill] {
+  library_lock.acquire()
+  defer library_lock.release()
+  let library : SkillLibrary = { root: library_dir }
+  library.recover()
   let entries = if @fsx.Directory::try_open(library_dir) is Some(dir) {
     dir.collect()
   } else {
@@ -271,13 +273,17 @@ pub async fn installed_skills(
 ///|
 /// Remove one installed skill. Only entries carrying our provenance sidecar
 /// are removable — a hand-written skill is the user's file, not ours to
-/// delete.
+/// delete. `on_committed` runs after the live directory moves under `.trash`,
+/// before any best-effort physical deletion.
 pub async fn uninstall_skill(
   id : String,
   library_dir? : @path.Path = library_dir_from_env(),
+  on_committed? : () -> Unit,
 ) -> Unit {
   library_lock.acquire()
   defer library_lock.release()
+  let library : SkillLibrary = { root: library_dir }
+  library.recover()
   guard valid_slug(id) else {
     raise SkillMarketError("invalid skill id: \{id}")
   }
@@ -290,8 +296,5 @@ pub async fn uninstall_skill(
       "\{id} was not installed from the registry; remove it by hand",
     )
   }
-  @fsx.rmdir(target, recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
-    error => raise SkillMarketError("failed to remove \{id}: \{error}")
-  }
+  library.move_to_trash(id, on_committed?)
 }

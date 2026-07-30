@@ -8,11 +8,11 @@ import {
 // Values
 pub async fn fetch_catalog(registry? : String) -> Array[MarketSkill]
 
-pub async fn install_skill(module_name~ : String, version~ : String, package_path~ : String, registry? : String, library_dir? : @path.Path) -> InstalledSkill
+pub async fn install_skill(module_name~ : String, version~ : String, package_path~ : String, registry? : String, library_dir? : @path.Path, on_committed? : () -> Unit) -> InstalledSkill
 
 pub async fn installed_skills(library_dir? : @path.Path) -> Array[InstalledSkill]
 
-pub async fn uninstall_skill(String, library_dir? : @path.Path) -> Unit
+pub async fn uninstall_skill(String, library_dir? : @path.Path, on_committed? : () -> Unit) -> Unit
 
 // Errors
 pub(all) suberror SkillMarketError {

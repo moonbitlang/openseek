@@ -14,11 +14,15 @@ async fn skills_catalog_op() -> SkillsCatalogReply {
 }
 
 ///|
-async fn install_skill_op(payload : InstallSkillPayload) -> InstallSkillReply {
+async fn install_skill_op(
+  payload : InstallSkillPayload,
+  on_committed : () -> Unit,
+) -> InstallSkillReply {
   let installed = @skillmarket.install_skill(
     module_name=payload.module_name,
     version=payload.version,
     package_path=payload.package_path.unwrap_or(""),
+    on_committed~,
   ) catch {
     @skillmarket.SkillMarketError(message) => raise HostError(message)
     error => raise error
@@ -38,8 +42,9 @@ async fn installed_skills_op() -> InstalledSkillsReply {
 ///|
 async fn uninstall_skill_op(
   payload : UninstallSkillPayload,
+  on_committed : () -> Unit,
 ) -> UninstallSkillReply {
-  @skillmarket.uninstall_skill(payload.id) catch {
+  @skillmarket.uninstall_skill(payload.id, on_committed~) catch {
     @skillmarket.SkillMarketError(message) => raise HostError(message)
     error => raise error
   }

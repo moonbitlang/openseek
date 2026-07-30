@@ -217,7 +217,10 @@ pub async fn dispatch(
         "wsl": Json::boolean(HostWslCapable),
       }
     _ =>
-      match @host.host_op(state.host, connection, method_, params) {
+      match
+        @host.host_op(state.host, connection, method_, params, (method_, params) => {
+          state.hub.publish(method_, params)
+        }) {
         Some(reply) => reply
         None => raise UnknownMethod(method_)
       }

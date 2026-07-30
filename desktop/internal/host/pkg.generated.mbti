@@ -17,7 +17,7 @@ pub async fn frontend_entry_path(String) -> String
 
 pub fn host_method_names() -> Array[String]
 
-pub async fn host_op(HostState, HostConnection, String, Json) -> Json?
+pub async fn host_op(HostState, HostConnection, String, Json, (String, Json) -> Unit) -> Json?
 
 pub fn new_host_state(String, runtime_dir? : @path.Path, executable? : String) -> HostState
 

@@ -99,13 +99,18 @@ async fn LegacyEngineSettings::apply(
   self : LegacyEngineSettings,
   state : @api.ApiState,
 ) -> Unit {
-  ignore(
-    @engine.update_settings(state.manager(), self.patch(), on_committed=fn(
-      status,
-    ) {
-      state.publish("settings.changed", status)
-    }),
-  )
+  // A page reload cancels its legacy request task. Keep the persisted file,
+  // process-local revision, and shared notification in one finite operation,
+  // exactly like catalog `settings.set`.
+  @async.protect_from_cancel(() => {
+    ignore(
+      @engine.update_settings(state.manager(), self.patch(), on_committed=fn(
+        status,
+      ) {
+        state.publish("settings.changed", status)
+      }),
+    )
+  })
 }
 
 ///|
@@ -386,9 +391,9 @@ fn DesktopBridgeActor::legacy_notification(
     "fs.changed" => "fs_changed"
     // The bundled page has no catalog-invalidation events. Its connected
     // handler is the existing resync seam: it re-reads live and archived
-    // sessions plus the workspace registry, including rotating away from a
-    // conversation another client archived.
-    "session.changed" | "workspace.changed" => "connected"
+    // sessions, workspaces, and installed skills, including rotating away
+    // from a conversation another client archived.
+    "session.changed" | "workspace.changed" | "skills.changed" => "connected"
     _ => return None
   }
   let params = if notification.method_ == "agent.event" {
@@ -517,7 +522,7 @@ test "legacy desktop translates notifications for the bundled page" {
   }
   assert_eq(fields.get("run_id"), Some(Json::number(0.0)))
   assert_eq(fields.get("session"), Some(Json::string("desktop-session")))
-  for method_ in ["session.changed", "workspace.changed"] {
+  for method_ in ["session.changed", "workspace.changed", "skills.changed"] {
     guard bridge.legacy_notification({
         method_,
         params: { "source": "another client" },

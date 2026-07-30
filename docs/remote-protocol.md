@@ -68,6 +68,11 @@ in `engine-settings.json`; clients edit them through `settings.get` and
 `settings.set`. Secret values are never returned—status replies only report
 whether a key is present.
 
+After `skills.install` or `skills.uninstall` switches the local library
+successfully, the host publishes `skills.changed` with empty parameters.
+Every client, including one that did not make the request, should then call
+`skills.installed` again.
+
 ## Proton compatibility profile
 
 The frontend currently on `main` still calls the original names such as

@@ -119,20 +119,34 @@ fn[T : @json.FromJson] decode_payload(payload : Json) -> T raise {
 ///|
 /// Dispatch one host method by its catalog name, returning its JSON reply —
 /// or None for a name this host does not know, which the transport reports
-/// as an unknown method rather than a failed op.
+/// as an unknown method rather than a failed op. `publish` sends shared
+/// invalidations whose filesystem change must stay coupled to its notification.
 pub async fn host_op(
   state : HostState,
   connection : HostConnection,
   op : String,
   payload : Json,
+  publish : (String, Json) -> Unit,
 ) -> Json? {
   match op {
     "skills.catalog" => Some(ToJson::to_json(skills_catalog_op()))
     "skills.install" =>
-      Some(ToJson::to_json(install_skill_op(decode_payload(payload))))
+      Some(
+        ToJson::to_json(
+          install_skill_op(decode_payload(payload), () => {
+            publish("skills.changed", Json::empty_object())
+          }),
+        ),
+      )
     "skills.installed" => Some(ToJson::to_json(installed_skills_op()))
     "skills.uninstall" =>
-      Some(ToJson::to_json(uninstall_skill_op(decode_payload(payload))))
+      Some(
+        ToJson::to_json(
+          uninstall_skill_op(decode_payload(payload), () => {
+            publish("skills.changed", Json::empty_object())
+          }),
+        ),
+      )
     "host.open_path" =>
       Some(ToJson::to_json(open_path_op(decode_payload(payload))))
     "update.check" =>

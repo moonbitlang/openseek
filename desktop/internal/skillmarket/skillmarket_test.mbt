@@ -239,10 +239,10 @@ async test "concurrent upgrades of one slug are serialized" {
     }
     completed.get()
     completed.get()
-    // Each install makes two registry requests. Holding the library mutation
-    // lock for the complete install keeps the other upgrade out until both
-    // requests and both file writes finish.
-    assert_eq(probe.max_active, 1)
+    // Registry work is deliberately outside the library lock, so the two
+    // downloads may overlap. Only recovery, staging, and the live-directory
+    // switch are serialized.
+    assert_eq(probe.max_active, 2)
     let content = @fs.read_file("\{lib}/acme-widget/SKILL.md").binary()
     let sidecar = @fs.read_file("\{lib}/acme-widget/.mooncakes.json").text()
     guard @json.parse(sidecar) is { "version": String(version), .. } else {
@@ -296,14 +296,19 @@ async test "uninstall removes registry installs and nothing else" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     let lib = @fs.tmpdir(prefix="skillmarket-")
+    let mut changes = 0
     let _ = @skillmarket.install_skill(
       module_name="acme/widget",
       version="1.0.0",
       package_path="",
       registry=base,
       library_dir=lib,
+      on_committed=fn() { changes += 1 },
     )
-    @skillmarket.uninstall_skill("acme-widget", library_dir=lib)
+    @skillmarket.uninstall_skill("acme-widget", library_dir=lib, on_committed=fn() {
+      changes += 1
+    })
+    assert_eq(changes, 2)
     assert_false(@fs.exists("\{lib}/acme-widget"))
     let message = uninstall_failure(lib, "acme-widget")
     assert_true(message.contains("no skill named"))
@@ -318,6 +323,65 @@ async test "uninstall removes registry installs and nothing else" {
     assert_true(message.contains("remove it by hand"))
     assert_true(@fs.exists("\{lib}/handmade/SKILL.md"))
   }
+}
+
+///|
+async test "listing recovers interrupted local skill changes" {
+  let lib = @fs.tmpdir(prefix="skillmarket-")
+  // An interrupted upgrade parked the previous complete entry but never made
+  // its staged replacement live. Listing must restore the backup before it
+  // takes a directory snapshot.
+  @fs.mkdir("\{lib}/.backup/acme-widget", recursive=true)
+  @fs.write_file(
+    "\{lib}/.backup/acme-widget/SKILL.md",
+    "---\nname: widget\ndescription: recovered\n---\nold",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_file(
+    "\{lib}/.backup/acme-widget/.mooncakes.json",
+    (
+      {
+        "module": "acme/widget",
+        "version": "1.0.0",
+        "package": "",
+        "digest": "sha256:old",
+      } : Json).stringify(),
+    create_mode=CreateOrTruncate,
+  )
+  @fs.mkdir("\{lib}/.staging/acme-widget", recursive=true)
+  @fs.write_file(
+    "\{lib}/.staging/acme-widget/SKILL.md",
+    "incomplete replacement",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.mkdir("\{lib}/.trash/removed-skill", recursive=true)
+  @fs.write_file(
+    "\{lib}/.trash/removed-skill/SKILL.md",
+    "already uninstalled",
+    create_mode=CreateOrTruncate,
+  )
+  guard @skillmarket.installed_skills(library_dir=lib) is [recovered] else {
+    fail("the parked skill was not restored")
+  }
+  assert_eq(recovered.id, "acme-widget")
+  assert_eq(recovered.description, "recovered")
+  assert_eq(recovered.source, "acme/widget@1.0.0")
+  assert_true(@fs.exists("\{lib}/acme-widget/SKILL.md"))
+  assert_false(@fs.exists("\{lib}/.backup/acme-widget"))
+  assert_false(@fs.exists("\{lib}/.staging/acme-widget"))
+  assert_false(@fs.exists("\{lib}/.trash/removed-skill"))
+
+  // If both target and backup exist, the new target was already activated;
+  // recovery keeps it and only removes the obsolete backup.
+  @fs.mkdir("\{lib}/.backup/acme-widget", recursive=true)
+  @fs.write_file(
+    "\{lib}/.backup/acme-widget/SKILL.md",
+    "obsolete backup",
+    create_mode=CreateOrTruncate,
+  )
+  ignore(@skillmarket.installed_skills(library_dir=lib))
+  assert_true(@fs.exists("\{lib}/acme-widget/SKILL.md"))
+  assert_false(@fs.exists("\{lib}/.backup/acme-widget"))
 }
 
 ///|
