@@ -611,6 +611,7 @@ async test "sandbox preblocks common source-writing commands" {
         "git checkout -- .", "git checkout feature/foo", "git switch feature/foo",
         "git restore main.mbt", "git reset --hard", "git rm main.mbt", "git stash",
         "git clean -fdn", "git status", "git apply --check patch.diff", "git apply --stat patch.diff",
+        "git worktree add ../wt", "git worktree remove ../wt",
       ] {
       assert_true(
         tree_target(recoverable_git, real_root, Some(real_root)) is None,
@@ -1374,6 +1375,28 @@ test "sandbox trusts recoverable git, sandboxes patch and reconfiguring git" {
   }
   // Unknown / plumbing / read-only git is not granted trust (fail closed).
   for cmd in ["git status", "git diff", "git checkout-index -a", "git co -- ."] {
+    assert_true(mode_for(cmd) is SourceReadOnly)
+  }
+  // The recoverable `git worktree` verbs are trusted: `add` only creates new
+  // paths (git refuses an existing non-empty target, force included) filled
+  // from the object store, non-force `remove` deletes only tracked clean
+  // content, and `prune` touches only `$GIT_DIR/worktrees` admin data.
+  for
+    cmd in [
+      "git worktree add ../wt", "git worktree add --force ../wt", "git worktree add -b feat ../wt HEAD",
+      "git worktree remove ../wt", "git worktree prune",
+    ] {
+    assert_true(mode_for(cmd) is TrustedSourceWrite)
+  }
+  // Force remove permanently deletes modified or untracked files; the other
+  // verbs (read-only `list`, byte-moving `move`, ...) fail closed, and a
+  // reconfigured or custom-environment invocation is demoted like any git.
+  for
+    cmd in [
+      "git worktree remove --force ../wt", "git worktree remove -f ../wt", "git worktree list",
+      "git worktree move ../wt ../wt2", "git worktree", "git -C /tmp/x worktree add ../wt",
+      "GIT_DIR=/tmp/x git worktree add ../wt",
+    ] {
     assert_true(mode_for(cmd) is SourceReadOnly)
   }
 }

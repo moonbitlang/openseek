@@ -107,3 +107,32 @@ test "text_should_preblock mirrors should_preblock on a flat word list" {
   let help = ["git", "apply", "--help"]
   assert_false(@git_policy.text_should_preblock(help, 1, help.length()))
 }
+
+///|
+test "worktree args: add and prune recoverable, remove only without force" {
+  fn recoverable(args : Array[String]) -> Bool {
+    @git_policy.worktree_args_are_recoverable(args, 0, args.length())
+  }
+
+  // `add` in any form: git itself refuses an existing non-empty target, force
+  // included, so nothing existing can be clobbered.
+  assert_true(recoverable(["add", "../wt"]))
+  assert_true(recoverable(["add", "--force", "../wt"]))
+  assert_true(recoverable(["add", "-b", "feat", "../wt", "HEAD"]))
+  assert_true(recoverable(["add", "--detach", "../wt"]))
+  // `remove` without force deletes only tracked, clean content.
+  assert_true(recoverable(["remove", "../wt"]))
+  assert_true(recoverable(["remove", "--", "../wt"]))
+  assert_true(recoverable(["prune"]))
+  assert_true(recoverable(["prune", "-n", "--expire", "1.day"]))
+  // Force remove permanently deletes modified or untracked files.
+  assert_false(recoverable(["remove", "--force", "../wt"]))
+  assert_false(recoverable(["remove", "-f", "../wt"]))
+  assert_false(recoverable(["remove", "-ff", "../wt"]))
+  // Everything else fails closed, including a missing verb.
+  assert_false(recoverable(["list"]))
+  assert_false(recoverable(["lock", "../wt"]))
+  assert_false(recoverable(["move", "../wt", "../wt2"]))
+  assert_false(recoverable(["repair"]))
+  assert_false(recoverable([]))
+}

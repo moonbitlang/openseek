@@ -75,6 +75,43 @@ pub fn subcommand_writes_from_object_store(subcommand : String) -> Bool {
 }
 
 ///|
+/// Whether a `git worktree` invocation (args in `words[start..end)`, starting at
+/// the verb) is a recoverable write. `add` qualifies with any flags: git
+/// unconditionally refuses an existing non-empty (or file) target — `--force`
+/// only relaxes the branch-checked-out-elsewhere and registered-but-missing-path
+/// safeguards — so it only creates new paths whose content comes from the object
+/// store, and a `-B` branch reset is reflog-recoverable like trusted `reset`.
+/// `remove` qualifies only without force: git then refuses a worktree containing
+/// modified or untracked files, so everything deleted is tracked and clean
+/// (ignored files go silently — the same exposure as trusted `checkout`).
+/// `prune` touches only `$GIT_DIR/worktrees` admin data. Everything else fails
+/// closed: `list` is read-only and runs fine sandboxed, `move` relocates
+/// arbitrary worktree bytes like the excluded `mv`.
+pub fn worktree_args_are_recoverable(
+  words : Array[String],
+  start : Int,
+  end : Int,
+) -> Bool {
+  guard start < end else { return false }
+  match words[start] {
+    "add" | "prune" => true
+    "remove" => {
+      for index in (start + 1)..<end {
+        let arg = words[index]
+        // `--force`, or `-f` possibly clustered (`-ff`). A path named `-f`
+        // after `--` also matches — a conservative false positive that only
+        // drops the command back into the sandbox.
+        if arg == "--force" || short_cluster_has(arg, "f") {
+          return false
+        }
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+///|
 /// Whether a git invocation must be pre-blocked before execution — the
 /// cross-platform guard that does not depend on the runtime sandbox. Conservative
 /// by design: block the git that mutates source but is NOT a recoverable

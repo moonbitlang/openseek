@@ -14,6 +14,8 @@ pub fn text_invocation_writes_from_object_store(Array[String], Int, Int) -> Bool
 
 pub fn text_should_preblock(Array[String], Int, Int) -> Bool
 
+pub fn worktree_args_are_recoverable(Array[String], Int, Int) -> Bool
+
 // Errors
 
 // Types and methods

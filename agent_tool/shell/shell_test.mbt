@@ -1749,6 +1749,81 @@ async test "shell allows recoverable git worktree rollback" {
 
 ///|
 #cfg(not(platform="windows"))
+async test "shell allows trusted git worktree add and remove" {
+  @vfs.with_tmpdir(prefix="openseek-shell-git-worktree-", dir => {
+    write_answer_main(dir)
+    let setup_output = run_shell_in_workspace(dir, {
+      "cmd": "git init -q && git config user.email a@b.c && git config user.name t && git add main.mbt && git commit -q -m init",
+      "cwd": dir,
+    })
+    assert_false(setup_output.is_error)
+    // `git worktree add` materializes a fresh checkout from the object store
+    // into a new directory — a trusted source write that runs unsandboxed.
+    let add_output = run_shell_in_workspace(dir, {
+      "cmd": "git worktree add wt -b scratch",
+      "cwd": dir,
+    })
+    assert_false(add_output.is_error)
+    assert_true(add_output.content.contains("<system>exit=0</system>"))
+    assert_answer_main_unchanged("\{dir}/wt")
+    // Removing the clean worktree deletes only tracked, committed content.
+    let remove_output = run_shell_in_workspace(dir, {
+      "cmd": "git worktree remove wt",
+      "cwd": dir,
+    })
+    assert_false(remove_output.is_error)
+    assert_true(remove_output.content.contains("<system>exit=0</system>"))
+    assert_false(@fs.exists("\{dir}/wt"))
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "shell sandboxes forced git worktree remove" {
+  if !sandbox_exec_usable_for_test() {
+    return
+  }
+  @vfs.with_tmpdir(prefix="openseek-shell-git-worktree-force-", dir => {
+    write_answer_main(dir)
+    let setup_output = run_shell_in_workspace(dir, {
+      "cmd": "git init -q && git config user.email a@b.c && git config user.name t && git add main.mbt && git commit -q -m init",
+      "cwd": dir,
+    })
+    assert_false(setup_output.is_error)
+    // Run the add alone: chained with the sandboxed setup commands above it
+    // would not be granted trust, and here it must actually succeed.
+    let add_output = run_shell_in_workspace(dir, {
+      "cmd": "git worktree add wt -b scratch",
+      "cwd": dir,
+    })
+    assert_true(add_output.content.contains("<system>exit=0</system>"))
+    // An untracked SOURCE file: force remove would permanently delete it, so
+    // the command is not trusted and runs sandboxed, where deleting a source
+    // file is kernel-denied. (Non-source untracked files are not the sandbox's
+    // contract — any sandboxed command may delete those, before or after the
+    // denial fires, so only the source file's survival is deterministic.)
+    @fs.write_file(
+      "\{dir}/wt/extra.mbt",
+      "pub fn extra() -> Int { 7 }\n",
+      create_mode=CreateOrTruncate,
+    )
+    let force_output = run_shell_in_workspace(dir, {
+      "cmd": "git worktree remove --force wt",
+      "cwd": dir,
+    })
+    assert_false(force_output.content.contains("<system>exit=0</system>"))
+    assert_true(
+      force_output.content.contains("source file writes from shell are blocked"),
+    )
+    assert_eq(
+      @fs.read_file("\{dir}/wt/extra.mbt").text(),
+      "pub fn extra() -> Int { 7 }\n",
+    )
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
 async test "shell allows trusted moon fmt command" {
   if !sandbox_exec_usable_for_test() {
     return
