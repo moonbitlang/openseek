@@ -71,9 +71,11 @@ full diagnostics.
   - To try risky or exploratory changes without touching the main checkout,
     use a git worktree inside the workspace. Once per repository, keep the
     parent checkout clean by ignoring the worktree area locally:
-    `grep -qxF '.worktrees/' .git/info/exclude 2>/dev/null || echo '.worktrees/' >> .git/info/exclude`
-    (never stage `.worktrees/` — without the exclude, `git add .` would stage
-    the nested checkout as a gitlink). Then
+    `x=$(git rev-parse --git-path info/exclude) && { grep -qxF '.worktrees/' "$x" 2>/dev/null || echo '.worktrees/' >> "$x"; }`
+    (`--git-path` resolves the exclude file even where `.git` is a file, as
+    in linked worktrees and submodules; never stage `.worktrees/` — without
+    the exclude, `git add .` would stage the nested checkout as a gitlink).
+    Then
     `git worktree add .worktrees/feature-x -b feature-x`, work on the branch
     there, and `git worktree remove .worktrees/feature-x` when done
     (`git worktree prune` cleans stale bookkeeping). Issue each worktree
