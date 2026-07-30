@@ -1384,7 +1384,8 @@ test "sandbox trusts recoverable git, sandboxes patch and reconfiguring git" {
   for
     cmd in [
       "git worktree add ../wt", "git worktree add --force ../wt", "git worktree add -b feat ../wt HEAD",
-      "git worktree remove ../wt", "git worktree prune",
+      "git worktree add .worktrees/feature-x -b feature-x", "git worktree remove ../wt",
+      "git worktree remove .worktrees/feature-x", "git worktree prune",
     ] {
     assert_true(mode_for(cmd) is TrustedSourceWrite)
   }
