@@ -12,6 +12,14 @@
 const SidecarFile = ".mooncakes.json"
 
 ///|
+/// One process-wide boundary for the skills directory. Install holds it from
+/// its initial ownership check through both file writes, so another install
+/// cannot pair one SKILL.md with another request's provenance. Uninstall
+/// cannot pass an in-flight install and report success before that install
+/// recreates the entry.
+let library_lock : @async.Mutex = Mutex()
+
+///|
 /// One entry of the local skills library.
 pub struct InstalledSkill {
   // The library entry (directory or file stem) — the key uninstall takes.
@@ -164,6 +172,8 @@ pub async fn install_skill(
   registry? : String = DefaultRegistry,
   library_dir? : @path.Path = library_dir_from_env(),
 ) -> InstalledSkill {
+  library_lock.acquire()
+  defer library_lock.release()
   let entry = entry_path(module_name, version, package_path)
   let download_url = skill_md_url(registry, entry)
   let identity = if package_path.is_empty() {
@@ -260,6 +270,8 @@ pub async fn uninstall_skill(
   id : String,
   library_dir? : @path.Path = library_dir_from_env(),
 ) -> Unit {
+  library_lock.acquire()
+  defer library_lock.release()
   guard valid_slug(id) else {
     raise SkillMarketError("invalid skill id: \{id}")
   }
