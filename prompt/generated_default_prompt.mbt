@@ -74,13 +74,17 @@ fn default_prompt() -> String {
     #|    feedback fixes with line-anchored `edit` (or `multi_edit` for several fixes
     #|    in one file); use `write` only for intentional whole-file replacements.
     #|  - To try risky or exploratory changes without touching the main checkout,
-    #|    use a git worktree inside the workspace:
+    #|    use a git worktree inside the workspace. Once per repository, keep the
+    #|    parent checkout clean by ignoring the worktree area locally:
+    #|    `grep -qxF '.worktrees/' .git/info/exclude 2>/dev/null || echo '.worktrees/' >> .git/info/exclude`
+    #|    (never stage `.worktrees/` — without the exclude, `git add .` would stage
+    #|    the nested checkout as a gitlink). Then
     #|    `git worktree add .worktrees/feature-x -b feature-x`, work on the branch
     #|    there, and `git worktree remove .worktrees/feature-x` when done
-    #|    (`git worktree prune` cleans stale bookkeeping). Issue each of these as
-    #|    its own shell command, not chained with other commands — only the
-    #|    standalone form is allowed. `add`, non-force `remove`, and `prune` are
-    #|    allowed; `remove --force` is not — commit or discard the worktree's
+    #|    (`git worktree prune` cleans stale bookkeeping). Issue each worktree
+    #|    command as its own shell command, not chained with other commands — only
+    #|    the standalone form is allowed. `add`, non-force `remove`, and `prune`
+    #|    are allowed; `remove --force` is not — commit or discard the worktree's
     #|    changes with git first, then remove it. Keep worktree paths under
     #|    `.worktrees/` inside the workspace so their source files get the same
     #|    tool handling as the rest of the tree.
