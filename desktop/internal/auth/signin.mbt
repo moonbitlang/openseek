@@ -89,33 +89,44 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
     CancelledByUser => raise AuthError("the sign-in was cancelled")
   }
 
-  // Exchange = device registration. The cancel channel stays armed through
-  // it: the swap can take up to 30 seconds, and a Cancel clicked then must
-  // abort the flow, not queue behind a session commit.
-  let exchanged : ExchangeWait = @async.any([
-    () => {
-      Exchanged(
-        exchange_code(server_url~, code=one_time_code, verifier~, name~),
-      )
-    },
-    () => {
-      self.sign_in_abort.get()
-      ExchangeCancelled
-    },
-  ])
-  guard exchanged is Exchanged(session) else {
-    raise AuthError("the sign-in was cancelled")
-  }
-  // A cancel that landed a hair after the exchange won still counts — but
-  // the exchange already minted a device row, so revoke it best-effort
-  // before failing the flow.
-  if (self.sign_in_abort.try_get() catch { _ => None }) is Some(_) {
-    revoke_device(session) catch {
-      error if @async.is_being_cancelled() => raise error
-      error =>
-        @xlog.warn(category="auth") <?
-          { "message": "device revoke failed", "error": "\{error}" }
+  // Exchange = device registration. Once the relay may have committed the
+  // device, cancelling the HTTP task can lose the only token authorized to
+  // revoke it. Run the exchange as a structured child so its own timeout
+  // remains effective, then protect only the requester's wait for its result.
+  //
+  // `auth.cancel` itself still replies immediately after queueing its signal;
+  // only the pending `auth.connect` waits for exchange cleanup to settle.
+  let exchanged : Ref[AuthSession?] = Ref(None)
+  @async.protect_from_cancel(() => {
+    @async.with_task_group(group => {
+      let exchange = group.spawn(() => {
+        exchange_code(server_url~, code=one_time_code, verifier~, name~)
+      })
+      exchanged.val = Some(exchange.wait())
+    })
+  }) catch {
+    error if @async.is_cancellation_error(error) => {
+      // Transport cancellation arrived while the exchange was protected.
+      // The result is now available, so remove the minted device before the
+      // original cancellation escapes.
+      if exchanged.val is Some(session) {
+        @async.protect_from_cancel(
+          () => session.revoke_after_cancelled_exchange(),
+          resume_on_cancel=true,
+        )
+      }
+      raise error
     }
+    error => raise error
+  }
+  guard exchanged.val is Some(session) else {
+    raise AuthError("the sign-in exchange returned no session")
+  }
+  // A queued user cancellation, or a transport cancellation that landed
+  // immediately after the exchange shield, must revoke instead of commit.
+  if (self.sign_in_abort.try_get() catch { _ => None }) is Some(_) ||
+    @async.is_being_cancelled() {
+    @async.protect_from_cancel(() => session.revoke_after_cancelled_exchange())
     raise AuthError("the sign-in was cancelled")
   }
 
@@ -150,13 +161,6 @@ priv enum SignInWait {
   GotCode(String)
   TimedOut
   CancelledByUser
-}
-
-///|
-/// How the code-for-token exchange ended.
-priv enum ExchangeWait {
-  Exchanged(AuthSession)
-  ExchangeCancelled
 }
 
 ///|
