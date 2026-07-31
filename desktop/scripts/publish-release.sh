@@ -40,7 +40,7 @@ case "${1:-}" in
     artifact="${2:-$default_artifact}"
     if [[ ! -f "$artifact" ]]; then
       echo "artifact not found: $artifact" >&2
-      echo "build it first: moon run ./package/macos -- --sign '...'" >&2
+      echo "build it first: moon run ./package/macos -- --target zip --sign '...'" >&2
       exit 1
     fi
     url="$origin/desktop/releases/v$version/$release_name"

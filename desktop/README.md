@@ -405,6 +405,7 @@ timestamp are applied automatically) and notarize:
 # one-time: xcrun notarytool store-credentials openseek \
 #   --apple-id you@example.com --team-id TEAMID --password <app-specific-pw>
 moon run --target native package/macos -- \
+  --target dmg \
   --sign "Developer ID Application: Your Name (TEAMID)" \
   --notarize openseek
 ```
