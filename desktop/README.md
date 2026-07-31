@@ -355,13 +355,7 @@ The target machine also needs Microsoft WebView2 Runtime installed.
 
 `package/macos` runs all of the above (including the codegen bootstrap),
 builds the `openseek` engine from the monorepo's `cmd/openseek` source, and
-produces a signed app plus two distribution artifacts:
-
-- `dist/OpenSeek Desktop-macos-arm64.dmg` is for first-time installation. It
-  contains the app and an `/Applications` shortcut so users can install by
-  dragging the app into Applications.
-- `dist/OpenSeek Desktop-macos-arm64.zip` carries the same app for in-app
-  updates.
+produces `dist/OpenSeek Desktop.app` by default:
 
 ```sh
 moon run --target native package/macos
@@ -369,22 +363,29 @@ moon run --target native package/macos
 moon -C desktop run --target native package/macos
 ```
 
-For local testing, build and sign only the app bundle:
+This app-only output keeps the valid ad-hoc signatures written by the linker and
+re-signs the five CEF helpers whose rpaths the packager modifies. It deliberately
+does not seal the outer app bundle or re-sign the bundled MoonBit toolchain.
+This faster output is for development on the build machine, not distribution or
+the in-app updater. Scripts may pass `--target app` to request the same output
+explicitly.
 
-```sh
-moon run --target native package/macos -- --target app
-```
-
-To build the app and a specific distribution artifact, select `dmg` or `zip`:
+To build a distribution artifact, select `dmg` or `zip`:
 
 ```sh
 moon run --target native package/macos -- --target dmg
 moon run --target native package/macos -- --target zip
 ```
 
+- `dist/OpenSeek Desktop-macos-arm64.dmg` is for first-time installation. It
+  contains the app and an `/Applications` shortcut so users can install by
+  dragging the app into Applications.
+- `dist/OpenSeek Desktop-macos-arm64.zip` carries the same app for in-app
+  updates.
+
 `--target` is repeatable. The `dmg` and `zip` targets always include the app
-bundle they package. With no `--target`, the command keeps its release-oriented
-default and produces the app, DMG, and ZIP.
+bundle they package. With no `--target`, the command produces only the local app
+bundle.
 
 The bundled engine is built from the same checkout, so the desktop app and its
 engine never drift out of version with each other.
@@ -394,10 +395,11 @@ The app also contains a read-only MoonBit toolchain seed under
 host initializes a writable copy under the per-user runtime directory before
 setting `MOON_HOME` for the engine.
 
-By default the bundle is ad-hoc signed: it runs on the build machine, but
-it is not a distributable build that Gatekeeper will trust on another machine.
-For distribution, sign with a Developer ID Application identity (hardened
-runtime and a secure timestamp are applied automatically) and notarize:
+The `dmg` or `zip` targets fully ad-hoc sign the app bundle when no identity is
+supplied. Such output runs on the build machine, but it is not a distributable
+build that Gatekeeper will trust on another machine. For distribution, sign
+with a Developer ID Application identity (hardened runtime and a secure
+timestamp are applied automatically) and notarize:
 
 ```sh
 # one-time: xcrun notarytool store-credentials openseek \

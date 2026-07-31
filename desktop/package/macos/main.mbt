@@ -659,9 +659,20 @@ priv struct ArtifactPlan {
 } derive(Debug, Eq)
 
 ///|
+/// Distribution archives require a sealed outer app bundle even without a
+/// Developer ID identity. App-only output is for local development: its
+/// linker-signed executables stay valid, while only the CEF helpers modified by
+/// `install_name_tool` need a fresh ad-hoc signature.
+fn ArtifactPlan::requires_ad_hoc_bundle_signature(self : ArtifactPlan) -> Bool {
+  self.dmg || self.zip
+}
+
+///|
+/// No explicit target means the fast local app-only build. Selecting either
+/// archive also requests the complete bundle signing that distribution needs.
 fn parse_artifact_plan(values : ArrayView[String]) -> ArtifactPlan raise {
   if values.is_empty() {
-    return { dmg: true, zip: true }
+    return { dmg: false, zip: false }
   }
   let mut dmg = false
   let mut zip = false
@@ -698,12 +709,12 @@ priv struct PackageOptions {
 fn package_command() -> @argparse.Command {
   Command(
     "package/macos",
-    about="Build the macOS app bundle, DMG, and zip archive.",
+    about="Build the macOS app bundle and optional distribution archives.",
     options=[
       OptionArg(
         "target",
         action=Append,
-        about="Artifact to produce: app, dmg, or zip. Repeatable; defaults to dmg and zip.",
+        about="Artifact to produce: app, dmg, or zip. Repeatable; defaults to app.",
       ),
       OptionArg(
         "sign",
@@ -753,12 +764,27 @@ fn parse_package_options(argv? : ArrayView[String]) -> PackageOptions raise {
 }
 
 ///|
-async fn sign_app(ws : @packaging.Workspace, sign : SignConfig) -> Unit {
+/// App-only local output preserves existing linker signatures and signs only
+/// the patched CEF helpers. Archive and Developer ID output retains the full
+/// inside-out bundle signing required for verification and distribution.
+async fn sign_app(
+  ws : @packaging.Workspace,
+  sign : SignConfig,
+  artifacts : ArtifactPlan,
+) -> Unit {
   let entitlements = write_signing_entitlements(ws)
-  let jit_entitlements = write_jit_entitlements(ws)
   guard sign.identity is Some(identity) else {
-    sign_moonbit_seed_binaries(ws, "-", jit_entitlements, distribution=false)
+    if artifacts.requires_ad_hoc_bundle_signature() {
+      let jit_entitlements = write_jit_entitlements(ws)
+      sign_moonbit_seed_binaries(ws, "-", jit_entitlements, distribution=false)
+    }
     sign_cef_helper(ws, "-", entitlements, distribution=false)
+    if !artifacts.requires_ad_hoc_bundle_signature() {
+      println(
+        "kept linker signatures and signed only patched CEF helpers for local app",
+      )
+      return
+    }
     // Do NOT re-sign the bundled CEF runtime. `cef setup` ships it
     // linker-signed (a valid adhoc signature); re-signing with `codesign`
     // replaces that with a plain adhoc signature. The runtime under Resources
@@ -776,6 +802,7 @@ async fn sign_app(ws : @packaging.Workspace, sign : SignConfig) -> Unit {
     )
     return
   }
+  let jit_entitlements = write_jit_entitlements(ws)
   // Real distribution signing: hardened runtime and a secure timestamp are
   // notarization requirements. Sign inside-out: nested executables first, then
   // the bundle, because deprecated `--deep` signs nested code with the wrong
@@ -908,7 +935,7 @@ async fn sign_and_package(
   sign : SignConfig,
   artifacts : ArtifactPlan,
 ) -> Unit {
-  sign_app(ws, sign)
+  sign_app(ws, sign, artifacts)
   if artifacts.dmg {
     create_dmg(ws, sign)
     notarize_if_configured(ws, sign)
@@ -943,11 +970,12 @@ async fn main {
 }
 
 ///|
-test "macos package args default to ad-hoc signing" {
+test "macos package args default to local app-only signing" {
   let options = parse_package_options(argv=[])
   assert_true(options.sign.identity is None)
   assert_true(options.sign.notary_profile is None)
-  assert_eq(options.artifacts, { dmg: true, zip: true })
+  assert_eq(options.artifacts, { dmg: false, zip: false })
+  assert_false(options.artifacts.requires_ad_hoc_bundle_signature())
 }
 
 ///|
@@ -1015,7 +1043,8 @@ test "macos host executable rpath points at bundled proton runtime" {
 ///|
 test "macos package args parse signing and notarization" {
   let options = parse_package_options(argv=[
-    "--sign", "Developer ID Application: Example", "--notarize", "notary",
+    "--target", "dmg", "--sign", "Developer ID Application: Example", "--notarize",
+    "notary",
   ])
   assert_true(
     options.sign.identity is Some("Developer ID Application: Example"),
@@ -1043,12 +1072,14 @@ test "macos notarization requires distribution signing" {
 test "macos package target app skips distribution archives" {
   let options = parse_package_options(argv=["--target", "app"])
   assert_eq(options.artifacts, { dmg: false, zip: false })
+  assert_false(options.artifacts.requires_ad_hoc_bundle_signature())
 }
 
 ///|
 test "macos package target dmg includes the app but skips zip" {
   let options = parse_package_options(argv=["--target", "dmg"])
   assert_eq(options.artifacts, { dmg: true, zip: false })
+  assert_true(options.artifacts.requires_ad_hoc_bundle_signature())
 }
 
 ///|
