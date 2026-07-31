@@ -406,6 +406,7 @@ timestamp are applied automatically) and notarize:
 #   --apple-id you@example.com --team-id TEAMID --password <app-specific-pw>
 moon run --target native package/macos -- \
   --target dmg \
+  --target zip \
   --sign "Developer ID Application: Your Name (TEAMID)" \
   --notarize openseek
 ```
