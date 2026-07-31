@@ -10,8 +10,8 @@
 
 #if defined(_WIN32)
 
-#include <shellapi.h>
 #include <windows.h>
+#include <shellapi.h>
 
 #if defined(_MSC_VER)
 #pragma comment(lib, "shell32.lib")
