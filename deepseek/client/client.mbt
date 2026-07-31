@@ -125,15 +125,15 @@ let max_backoff_ms : Int = 60_000
 /// (exponential backoff doubling from `retry_backoff_ms`, capped at
 /// `max_backoff_ms`; `max_retry` counts restarts, hence the -1).
 ///
-/// The `fatal_error` classification: cancellations, plain failures (our own
-/// final verdicts — non-retryable HTTP statuses, malformed response bodies,
-/// truncated streams), and malformed-api_url parse errors (which fail
+/// The `fatal_error` classification: active cancellation, cancellation errors,
+/// plain failures (our own final verdicts — non-retryable HTTP statuses and
+/// malformed response bodies), and malformed-api_url parse errors (which fail
 /// identically every time, before any network I/O) propagate immediately;
-/// anything else is transport-shaped (connect refused, reset, DNS) and
-/// retries within budget. `bail` lets an attempt declare later retries
-/// pointless — streaming chat sets it once the stream has produced any event,
-/// since replaying a half-consumed completion would duplicate content (or
-/// regenerate tool calls) downstream.
+/// anything else is transport-shaped (connect refused, reset, DNS, truncated
+/// streams) and retries within budget. `bail` lets an attempt declare later
+/// retries pointless — streaming chat sets it once the stream has produced any
+/// event, since replaying a half-consumed completion would duplicate content
+/// (or regenerate tool calls) downstream.
 ///
 /// A `RetryableApiError` that survives the budget (or bail) re-raises as a
 /// plain failure carrying the same text a non-retrying client would have
@@ -152,6 +152,7 @@ async fn[T] Client::with_retries(
     max_retry=self.retry_attempts - 1,
     fatal_error=error => {
       bail() ||
+      @async.is_being_cancelled() ||
       @async.is_cancellation_error(error) ||
       error is Failure::Failure(_) ||
       error is @http.URIParseError::InvalidFormat ||
@@ -159,6 +160,7 @@ async fn[T] Client::with_retries(
     },
     attempt,
   ) catch {
+    error if @async.is_being_cancelled() => raise error
     RetryableApiError(message) => fail(message)
     error => raise error
   }

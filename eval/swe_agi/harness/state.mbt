@@ -17,12 +17,25 @@ enum TrialStop {
 } derive(Debug, Eq)
 
 ///|
-/// A closed model stream is a transport interruption, not an agent decision.
-/// The controller may resubmit a neutral continuation prompt in the same
-/// durable serve session while the benchmark wall deadline still applies.
+/// A model stream that closes or stalls before its terminal marker is a
+/// transport interruption, not an agent decision. The controller may resubmit
+/// a neutral continuation prompt in the same durable serve session while the
+/// benchmark wall deadline still applies.
+///
+/// Current SSE body reads attach the stable DeepSeek prefixes below. Exact raw
+/// `ConnectionClosed` and `ReaderClosed` matches cover request setup and header
+/// reads that still expose their transport error directly, as well as older
+/// frozen engines. Exact matching avoids treating unrelated local errors that
+/// merely mention those names as network failures.
 fn TrialStop::is_recoverable_transport_failure(self : TrialStop) -> Bool {
   match self {
-    TurnFailed(error) => error == "ConnectionClosed"
+    TurnFailed(error) =>
+      error == "ConnectionClosed" ||
+      error == "ReaderClosed" ||
+      error == "DeepSeek stream ended before [DONE]" ||
+      error.has_prefix("DeepSeek stream idle for ") ||
+      error.has_prefix("DeepSeek response headers idle for ") ||
+      error.has_prefix("DeepSeek stream read interrupted before [DONE]: ")
     _ => false
   }
 }

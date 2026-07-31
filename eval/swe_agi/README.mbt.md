@@ -12,10 +12,13 @@ sets a short durable goal with automatic continuation, waits for the engine to
 confirm it, then sends the complete `TASK.md` as the first prompt. The process
 stdin stays open until the goal is met, blocked, fails, or reaches the
 agent-work deadline. Benchmark runs set the goal continuation count to
-unlimited; the wall deadline remains the final bound. A `ConnectionClosed`
-turn resumes in the same serve session with 5, 10, 20, 40, then 60 second
-backoff, up to ten consecutive failures. A completed provider response resets
-that consecutive-failure count. If the serve process itself exits
+unlimited; the wall deadline remains the final bound. A DeepSeek stream
+interruption — an early EOF, idle timeout, or read-side transport error —
+resumes in the same serve session with 5, 10, 20, 40, then 60 second backoff,
+up to ten consecutive failures. Raw `ConnectionClosed` and `ReaderClosed`
+errors from request setup or response-header reads — and from older frozen
+engines — remain recoverable by exact match. A completed provider response
+resets that consecutive-failure count. If the serve process itself exits
 unexpectedly, the runner reconnects the same durable session up to three
 consecutive times.
 Retries, restarts, and their waits all consume the same wall deadline. Bounded

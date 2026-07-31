@@ -159,6 +159,66 @@ async test "streaming chat retries an idle stall before any event" {
 }
 
 ///|
+/// An outer task cancellation is not a provider failure. Wait until the server
+/// has completed the response headers and started the SSE body, then cancel the
+/// client task directly. The retry loop must preserve `Cancelled` and must not
+/// open a replacement request.
+async test "streaming chat preserves outer cancellation during an idle read" {
+  @async.with_task_group() <| group => {
+    guard bind_test_server(
+        "local TCP bind unavailable; skipping cancellation test",
+      )
+      is Some(server) else {
+      return
+    }
+    let hits : Ref[Int] = { val: 0 }
+    let body_started : @async.Queue[Unit] = Queue(kind=Blocking(1))
+    group.spawn_bg(no_wait=true) <| () => {
+      server.run_forever(
+        (_request, body, conn) => {
+          let _ = body.read_all()
+          hits.val = hits.val + 1
+          conn.send_response(200, "OK", extra_headers={
+            "Content-Type": "text/event-stream",
+          })
+          // The first body write finishes the chunked response headers. An SSE
+          // comment enters the body reader without counting as model output.
+          conn.write(": keepalive\n\n")
+          conn.flush()
+          body_started.put(())
+          @async.sleep(3_000)
+        },
+        max_connections=8,
+      )
+    }
+    let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
+    let client = @client.Client(
+      api_key="test-key",
+      api_url=url,
+      retry_attempts=3,
+      retry_backoff_ms=1,
+      idle_timeout_ms=3_000,
+    )
+    let chat = group.spawn(allow_failure=true, () => {
+      client.chat(
+        [ChatMessage(User, content="hello")],
+        stream=StreamHandler(on_content_delta=_ => ()),
+      )
+    })
+    body_started.get()
+    chat.cancel()
+    let _ = chat.wait() catch {
+      error => {
+        assert_true(@async.is_cancellation_error(error))
+        assert_eq(hits.val, 1)
+        return
+      }
+    }
+    fail("expected the streaming chat task to be cancelled")
+  }
+}
+
+///|
 /// Once an event has been delivered, an idle stall must surface as a failure
 /// rather than retry — replaying the stream would hand the consumer duplicate
 /// content. The server streams one delta, then goes silent forever; the idle
@@ -206,6 +266,9 @@ async test "streaming chat fails an idle stall after a delta without retrying" {
     ) catch {
       error => {
         assert_true("\{error}".contains("idle"))
+        // The idle timer cancels its child read and waits for it to stop. It
+        // must not manufacture the HTTP parser's premature-EOF error.
+        assert_false(error is @io.ReaderClosed)
         assert_eq(deltas.join("|"), "partial")
         assert_eq(hits.val, 1)
         return
@@ -270,6 +333,121 @@ async test "streaming chat does not retry an idle stall after an unterminated da
       }
     }
     fail("expected an idle-stall failure without retry")
+  }
+}
+
+///|
+/// Closing a chunked response without its terminal zero-length chunk is a
+/// genuine premature EOF. Before the stream produces any event, the client may
+/// safely retry the request on a fresh connection.
+async test "streaming chat retries a chunked ReaderClosed before any event" {
+  @async.with_task_group() <| group => {
+    guard bind_test_server(
+        "local TCP bind unavailable; skipping truncated-stream test",
+      )
+      is Some(server) else {
+      return
+    }
+    let hits : Ref[Int] = { val: 0 }
+    group.spawn_bg(no_wait=true) <| () => {
+      server.run_forever(
+        (_request, body, conn) => {
+          let _ = body.read_all()
+          hits.val = hits.val + 1
+          conn.send_response(200, "OK", extra_headers={
+            "Content-Type": "text/event-stream",
+          })
+          if hits.val == 1 {
+            // A comment completes the chunked headers and enters the SSE body
+            // without counting as model output. Close without end_response():
+            // the parser has no terminal `0\r\n\r\n` chunk and raises
+            // ReaderClosed while looking for the next SSE line.
+            conn.write(": keepalive\n\n")
+            conn.flush()
+            conn.close()
+          } else {
+            conn.write(
+              "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n",
+            )
+            conn.write("data: [DONE]\n\n")
+          }
+        },
+        max_connections=8,
+      )
+    }
+    let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
+    let client = @client.Client(
+      api_key="test-key",
+      api_url=url,
+      retry_attempts=3,
+      retry_backoff_ms=1,
+    )
+    let response = client.chat(
+      [ChatMessage(User, content="hello")],
+      stream=StreamHandler(on_content_delta=_ => ()),
+    )
+    assert_eq(response.content, "ok")
+    assert_eq(hits.val, 2)
+  }
+}
+
+///|
+/// Even before its blank-line event terminator arrives, a received `data:` line
+/// is model output. A later premature EOF must flush that buffered line, label
+/// the failure for the outer controller, and remain final inside this call.
+async test "streaming chat labels ReaderClosed after buffered output without retrying" {
+  @async.with_task_group() <| group => {
+    guard bind_test_server(
+        "local TCP bind unavailable; skipping truncated-stream test",
+      )
+      is Some(server) else {
+      return
+    }
+    let hits : Ref[Int] = { val: 0 }
+    group.spawn_bg(no_wait=true) <| () => {
+      server.run_forever(
+        (_request, body, conn) => {
+          let _ = body.read_all()
+          hits.val = hits.val + 1
+          conn.send_response(200, "OK", extra_headers={
+            "Content-Type": "text/event-stream",
+          })
+          conn.write(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n",
+          )
+          conn.flush()
+          // Omit the blank SSE line, [DONE], and the terminal chunk. The
+          // interruption path must flush the buffered data before it raises.
+          conn.close()
+        },
+        max_connections=8,
+      )
+    }
+    let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
+    let client = @client.Client(
+      api_key="test-key",
+      api_url=url,
+      retry_attempts=3,
+      retry_backoff_ms=1,
+    )
+    let deltas : Array[String] = []
+    let _ = client.chat(
+      [ChatMessage(User, content="hello")],
+      stream=StreamHandler(on_content_delta=delta => deltas.push(delta)),
+    ) catch {
+      error => {
+        assert_false(error is @io.ReaderClosed)
+        assert_true(
+          "\{error}".contains(
+            "DeepSeek stream read interrupted before [DONE]: ReaderClosed",
+          ),
+        )
+        assert_eq(deltas.join("|"), "partial")
+        assert_eq(hits.val, 1)
+        return
+      }
+    }
+    fail("expected a labeled truncated-stream failure without retry")
   }
 }
 

@@ -223,19 +223,28 @@ async fn[T] with_idle_timeout(
 }
 
 ///|
-/// One SSE line under the idle bound: `Some(Some(line))` is a line,
-/// `Some(None)` is EOF, and `None` is an idle timeout — kept distinct from EOF
-/// only so the caller can label the retry reason, since both are handled the
-/// same way (flush any buffered event first). A non-positive budget disables
-/// the bound.
+/// One SSE line under the idle bound. `Ok(Some(Some(line)))` is a line,
+/// `Ok(Some(None))` is EOF, `Ok(None)` is an idle timeout, and `Err(reason)` is
+/// a read-side transport interruption. All three stop cases return to the body
+/// loop so it can flush a buffered `data:` line before deciding whether replay
+/// is safe. HTTP framing reports a truncated body as `ReaderClosed`; normalize
+/// that and other read errors at this provider boundary. Cancellation remains
+/// cancellation, so stopping a turn cannot be mistaken for a retryable network
+/// failure. A non-positive budget disables the bound.
 async fn read_stream_line(
   reader : @http.Client,
   idle_timeout_ms : Int,
-) -> String?? {
-  if idle_timeout_ms <= 0 {
-    Some(reader.read_until("\n"))
-  } else {
-    @async.with_timeout_opt(idle_timeout_ms, () => reader.read_until("\n"))
+) -> Result[String??, String] {
+  Ok(
+    if idle_timeout_ms <= 0 {
+      Some(reader.read_until("\n"))
+    } else {
+      @async.with_timeout_opt(idle_timeout_ms, () => reader.read_until("\n"))
+    },
+  ) catch {
+    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
+      raise error
+    error => Err("DeepSeek stream read interrupted before [DONE]: \{error}")
   }
 }
 
@@ -256,7 +265,7 @@ async fn read_chat_stream(
     // on_stream_event and keeps the retry loop from replaying a half-consumed
     // completion. EOF and timeout differ only in the retry reason.
     let reason = match read_stream_line(reader, idle_timeout_ms) {
-      Some(Some(raw)) => {
+      Ok(Some(Some(raw))) => {
         let trimmed = raw.trim()
         if trimmed.is_empty() {
           if flush_sse_event(
@@ -273,8 +282,9 @@ async fn read_chat_stream(
         }
         continue
       }
-      Some(None) => "DeepSeek stream ended before [DONE]"
-      None => "DeepSeek stream idle for \{idle_timeout_ms}ms"
+      Ok(Some(None)) => "DeepSeek stream ended before [DONE]"
+      Ok(None) => "DeepSeek stream idle for \{idle_timeout_ms}ms"
+      Err(reason) => reason
     }
     if flush_sse_event(
         acc,
