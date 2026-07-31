@@ -58,14 +58,17 @@ fn main {
         height=760,
       )
       .debug_level(1)
-      .extension(
-        @proton_extension.from_command_spec(
-          @extension.openseek_extension(state, bridge),
-        ),
-      )
+      .extension(@extension.openseek_extension(state, bridge))
       // System notifications are an ordinary generated extension now: the
       // frontend posts them and receives `notification.click` with the run id.
       .extension(@notification.extension())
+      // The connect request proves the page can issue commands; this paired
+      // lifecycle supplies the window-owned event destination that remains
+      // valid after that request returns.
+      .window_lifecycle(
+        on_ready=async fn(context) { bridge.window_ready(context.events()) },
+        on_close=async fn(_) { bridge.window_closed() },
+      )
     @async.with_task_group(group => {
       // The bridge actor, engine actor, and host actors run for the app's
       // lifetime — they feed every page/client rather than borrowing a

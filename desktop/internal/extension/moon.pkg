@@ -1,5 +1,7 @@
 import {
-  "justjavac/proton/command" @app,
+  "justjavac/proton",
+  "justjavac/proton/extension" @proton_extension,
+  "justjavac/proton_contract",
   "openseek_desktop/internal/api",
   "openseek_desktop/internal/host",
   "openseek_desktop/internal/platform",

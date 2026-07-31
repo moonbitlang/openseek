@@ -2,14 +2,14 @@
 package "openseek_desktop/internal/extension"
 
 import {
-  "justjavac/proton/command",
+  "justjavac/proton",
   "openseek_desktop/internal/api",
 }
 
 // Values
 pub const ExtensionId : String = "openseek-desktop"
 
-pub fn openseek_extension(@api.ApiState, DesktopBridgeActor) -> @command.AppCommandExtensionSpec
+pub fn openseek_extension(@api.ApiState, DesktopBridgeActor) -> @justjavac/proton/extension.Extension
 
 // Errors
 
@@ -17,6 +17,8 @@ pub fn openseek_extension(@api.ApiState, DesktopBridgeActor) -> @command.AppComm
 type DesktopBridgeActor
 pub fn DesktopBridgeActor::new(@api.ApiState) -> Self
 pub async fn DesktopBridgeActor::run(Self) -> Unit
+pub async fn DesktopBridgeActor::window_closed(Self) -> Unit
+pub async fn DesktopBridgeActor::window_ready(Self, @proton.WindowEventEmitter) -> Unit
 
 // Type aliases
 
