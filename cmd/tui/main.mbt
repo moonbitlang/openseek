@@ -268,7 +268,7 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
   }
   let (engine, engine_args_prefix) = match explicit_engine {
     Some(engine) => (engine, [])
-    None => default_engine(@sys.get_cli_args())
+    None => default_engine(@env.args())
   }
   {
     api_key,
@@ -479,7 +479,7 @@ test "cli accepts no initial task" {
   assert_true(config.max_steps is None)
   // With no --engine, the engine falls through to re-launching this command
   // (`default_engine` of the process args), not a hardcoded string.
-  let (expected_engine, expected_prefix) = default_engine(@sys.get_cli_args())
+  let (expected_engine, expected_prefix) = default_engine(@env.args())
   assert_eq(config.engine, expected_engine)
   @debug.assert_eq(config.engine_args_prefix, expected_prefix)
   // No --session still converses in a session: a generated per-launch id, so
@@ -673,7 +673,7 @@ async test "engine defaults to this binary; --engine/OPENSEEK_ENGINE override it
   let default_cfg = parse_config(
     cli_command().parse(argv=[], env={ "DEEPSEEK": "k" }),
   )
-  let (expected_engine, expected_prefix) = default_engine(@sys.get_cli_args())
+  let (expected_engine, expected_prefix) = default_engine(@env.args())
   assert_eq(default_cfg.engine, expected_engine)
   @debug.assert_eq(default_cfg.engine_args_prefix, expected_prefix)
   // OPENSEEK_ENGINE is treated as an explicit engine.
