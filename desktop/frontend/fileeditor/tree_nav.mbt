@@ -170,7 +170,6 @@ fn scroll_cursor_after_render(path : @pathx.Relative) -> @cmd.Cmd {
 fn nav_state() -> State {
   {
     ..State::empty(),
-    open: true,
     owner: Some(test_ctx().owner),
     children: Map::from_array([
       (
@@ -224,35 +223,37 @@ test "Enter toggles a directory under the cursor and opens a file" {
     nav_state(),
     test_ctx(),
   )
+  // A file under the cursor re-dispatches `FileSelected` for the root to
+  // intercept (the command is opaque); the table itself is untouched.
   let (_, opened) = update(emit, TreeKeyAccept, on_file, test_ctx())
-  assert_true(opened.active is Some(Relative("main.mbt")))
-  assert_eq(opened.tabs.length(), 1)
+  assert_true(opened == on_file)
 }
 
 ///|
-test "Enter with no cursor opens a non-blank filter's top match" {
+test "Enter with no cursor acts only on a non-blank filter" {
   let emit = test_emit()
+  // The top match's open is an opaque re-dispatch; the state is untouched
+  // either way.
   let state = { ..nav_state(), filter: "lib" }
   let (_, opened) = update(emit, TreeKeyAccept, state, test_ctx())
-  assert_true(opened.active is Some(Relative("src/lib.mbt")))
-  // A blank filter with no cursor has nothing to act on.
+  assert_true(opened == state)
   let (_, untouched) = update(emit, TreeKeyAccept, nav_state(), test_ctx())
-  assert_true(untouched.active is None)
+  assert_true(untouched == nav_state())
 }
 
 ///|
 test "Escape clears the filter first, then closes the tree" {
   let emit = test_emit()
-  let state = {
-    ..nav_state(),
-    filter: "lib",
-    tabs: [loaded_tab("main.mbt", "main.mbt")],
-    active: Some(Relative("main.mbt")),
+  let viewing : Ctx = {
+    ..test_ctx(),
+    open_files: [Relative("main.mbt")],
+    active_file: Some(Relative("main.mbt")),
   }
-  let (_, cleared) = update(emit, TreeKeyDismiss, state, test_ctx())
+  let state = { ..nav_state(), filter: "lib" }
+  let (_, cleared) = update(emit, TreeKeyDismiss, state, viewing)
   assert_eq(cleared.filter, "")
   assert_true(cleared.tree_open)
-  let (_, closed) = update(emit, TreeKeyDismiss, cleared, test_ctx())
+  let (_, closed) = update(emit, TreeKeyDismiss, cleared, viewing)
   assert_false(closed.tree_open)
   // With no file open the tree is unconditional; Escape leaves it alone.
   let (_, kept) = update(emit, TreeKeyDismiss, nav_state(), test_ctx())
@@ -283,16 +284,18 @@ test "the fuzzy filter matches the workspace index, best score first" {
 }
 
 ///|
-test "Enter opens the index's top match even when unlisted" {
+test "Enter resolves the index's top match even when unlisted" {
   let emit = test_emit()
   let state = {
     ..nav_state(),
     filter: "lib",
     index: IndexReady(files=[Relative("deep/lib.mbt")], truncated=false),
   }
+  // The open itself is an opaque `FileSelected` re-dispatch for the root to
+  // intercept; the resolution (an index row synthesizes a file entry) is
+  // what `visible_entries` covers above, so here the state stays untouched.
   let (_, opened) = update(emit, TreeKeyAccept, state, test_ctx())
-  assert_true(opened.active is Some(Relative("deep/lib.mbt")))
-  assert_eq(opened.tabs[0].name, "lib.mbt")
+  assert_true(opened == state)
 }
 
 ///|

@@ -532,27 +532,42 @@ fn open_editor_at(
     session: conv.session_id,
   }
   let femit = dispatch.map(msg => FileEditor(msg))
-  // Re-root only when the panel's cached tree belongs to another
-  // conversation; otherwise `sync_file_panel`'s post-dispatch pass would
-  // see a session mismatch and wipe the tab/`open` set below.
+  // Park/restore the strip for a conversation switch up front, and re-root
+  // the file subsystem when its cached tree belongs to another conversation;
+  // otherwise `sync_file_panel`'s post-dispatch pass would see a session
+  // mismatch and wipe the freshly opened tab below. A re-rooted document
+  // table is seeded from the restored strip (identities only), exactly like
+  // `@fileeditor.sync`'s own re-root.
+  let dock = @dock.sync(model.dock, owner)
   let panel = if model.file_panel.owner == Some(owner) {
     model.file_panel
   } else {
-    { ..@fileeditor.State::empty(), owner: Some(owner) }
+    let docs : Map[@pathx.Relative, @fileeditor.Doc] = Map([])
+    for open_path in @dock.file_paths(dock) {
+      docs[open_path] = {
+        name: @fileeditor.basename(open_path),
+        state: TabLoading,
+        stale: false,
+      }
+    }
+    { ..@fileeditor.State::empty(), owner: Some(owner), docs }
   }
   guard conversation_relative(conv, path) is Some(relative) else {
     return (
       @fileeditor.mount_cmds(femit),
       {
         ..model,
+        dock: { ..dock, open: true },
         file_panel: {
           ..panel,
-          open: true,
           error: Some("\{path} is outside the conversation workspace"),
         },
       },
     )
   }
+  let had_active = @dock.active_file(dock) is Some(_)
+  let dock = { ..@dock.open_file(dock, relative), open: true }
+  let model = { ..model, dock, file_panel: panel }
   let (cmd, panel) = @fileeditor.open_file(
     femit,
     panel,
@@ -560,6 +575,7 @@ fn open_editor_at(
     relative,
     range~,
     annotation?,
+    had_active~,
   )
   (cmd, { ..model, file_panel: panel })
 }
@@ -805,6 +821,11 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     dark_mode: model.dark_mode,
     tree_layout: model.tree_layout,
     narrow: model.narrow,
+    // The dock's projection: strip membership and the active tab are the
+    // dock's truth, handed to the file subsystem read-only.
+    panel_open: model.dock.open,
+    open_files: @dock.file_paths(model.dock),
+    active_file: @dock.active_file(model.dock),
   }
 }
 
@@ -846,13 +867,22 @@ fn sync_terminal_panel(
 }
 
 ///|
-/// Reconcile the file panel with the active conversation after every message
-/// (see `@fileeditor.sync`). Centralizing it here keeps every
+/// Reconcile the dock strip, then the file subsystem, with the active
+/// conversation after every message (see `@dock.sync` /
+/// `@fileeditor.sync`). Order matters: the dock parks/restores the strip
+/// first, so the file sync sees the fresh projection and re-roots its
+/// document table from it. Centralizing it here keeps every
 /// conversation-switching handler from having to re-root the panel itself.
 fn sync_file_panel(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> (Model, @cmd.Cmd) {
+  let conv = model.active()
+  let dock = @dock.sync(model.dock, {
+    channel: model.focused,
+    session: conv.session_id,
+  })
+  let model = { ..model, dock, }
   let (panel, cmd) = @fileeditor.sync(
     dispatch.map(msg => FileEditor(msg)),
     model.file_panel,
@@ -1122,6 +1152,46 @@ fn update_msg(
         @fileeditor.remove_editor_feedback(resource, feedback_id),
         model.replace_conversation({ ..conv, mentions, }),
       )
+    }
+    // Intercepted like the comment above: which dock tab a tree click opens
+    // is the strip's business. The dock opens (or re-activates) the tab,
+    // then the file subsystem loads and shows the document against the
+    // fresh projection.
+    FileEditor(FileSelected(path~, name~)) => {
+      let had_active = @dock.active_file(model.dock) is Some(_)
+      let dock = @dock.open_file(model.dock, path)
+      let model = { ..model, dock, }
+      let (cmd, panel) = @fileeditor.open_document(
+        dispatch.map(msg => FileEditor(msg)),
+        model.file_panel,
+        file_ctx(model),
+        path,
+        name~,
+        range=None,
+        had_active~,
+      )
+      (cmd, { ..model, file_panel: panel })
+    }
+    // Intercepted for the same reason: a navigation jump (go-to-definition,
+    // a reference pick) opens a dock tab before the document loads. The
+    // owner stamp rejects a reply that outlived a conversation switch.
+    FileEditor(OpenNavigationLocation(owner~, path~, range~)) => {
+      guard model.file_panel.owner == Some(owner) &&
+        file_ctx(model).owner == owner else {
+        return (@cmd.none, model)
+      }
+      let had_active = @dock.active_file(model.dock) is Some(_)
+      let dock = @dock.open_file(model.dock, path)
+      let model = { ..model, dock, }
+      let (cmd, panel) = @fileeditor.open_file(
+        dispatch.map(msg => FileEditor(msg)),
+        model.file_panel,
+        file_ctx(model),
+        path,
+        range=Some(range),
+        had_active~,
+      )
+      (cmd, { ..model, file_panel: panel })
     }
     CompletionAccept =>
       if model.completion is Some(menu) && menu.current() is Some(item) {
@@ -1444,7 +1514,7 @@ fn update_msg(
       // so any resize while a document is up remeasures it — same-side
       // resizes included (a rotation changes the host without crossing the
       // breakpoint).
-      let cmd = if model.file_panel.open && model.file_panel.active is Some(_) {
+      let cmd = if model.dock.open && @dock.active_file(model.dock) is Some(_) {
         @fileeditor.request_viewer_remeasure()
       } else {
         @cmd.none
@@ -1997,6 +2067,60 @@ fn update_msg(
         file_ctx(model),
       )
       (cmd, { ..model, file_panel: panel })
+    }
+    Dock(msg) => {
+      // The strip machine is pure; the cross-package effects of the
+      // transition — showing or dropping documents, mounting hosts — are
+      // commanded here off the before/after difference.
+      let before = model.dock
+      let dock = @dock.update(msg, before)
+      let model = { ..model, dock, }
+      let femit = dispatch.map(msg => FileEditor(msg))
+      match msg {
+        TogglePanel =>
+          (
+            @fileeditor.panel_toggle_cmds(
+              femit,
+              model.file_panel,
+              file_ctx(model),
+              opening=dock.open,
+            ),
+            model,
+          )
+        TabActivated(_) =>
+          if dock.active != before.active &&
+            @dock.active_file(dock) is Some(path) {
+            let (cmd, panel) = @fileeditor.activate(
+              femit,
+              model.file_panel,
+              file_ctx(model),
+              path,
+            )
+            (cmd, { ..model, file_panel: panel })
+          } else {
+            (@cmd.none, model)
+          }
+        TabClosed(tab) =>
+          // A stale close (racing another close) leaves the strip — and so
+          // the document table — untouched.
+          if before.tabs.search_by(entry => entry == tab) is Some(_) {
+            match tab {
+              File(path~) => {
+                let (cmd, panel) = @fileeditor.close_document(
+                  femit,
+                  model.file_panel,
+                  file_ctx(model),
+                  path,
+                  next=@dock.active_file(dock),
+                  was_active=before.active == Some(tab),
+                )
+                (cmd, { ..model, file_panel: panel })
+              }
+            }
+          } else {
+            (@cmd.none, model)
+          }
+      }
     }
     Terminal(msg) => {
       // Host-originated replies and notifications can already be queued when
@@ -10729,8 +10853,10 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
     mentions: [mention],
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
-  assert_true(next.file_panel.open)
-  assert_true(next.file_panel.active is Some(Relative("src/main.mbt")))
+  assert_true(next.dock.open)
+  assert_true(@dock.active_file(next.dock) is Some(Relative("src/main.mbt")))
+  // The document table follows the strip: the jumped-to file has an entry.
+  assert_true(next.file_panel.docs.contains(Relative("src/main.mbt")))
 }
 
 ///|
@@ -10742,8 +10868,8 @@ test "JumpToMention is a no-op for a chip without a resolved location" {
     mentions: [mention],
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
-  assert_false(next.file_panel.open)
-  assert_true(next.file_panel.active is None)
+  assert_false(next.dock.open)
+  assert_true(next.dock.active is None)
 }
 
 ///|
@@ -10794,7 +10920,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ),
     model,
   )
-  assert_true(next.file_panel.active is Some(Relative("src/main.mbt")))
+  assert_true(@dock.active_file(next.dock) is Some(Relative("src/main.mbt")))
   // Before the first run reports cwd, the attached workspace serves as root.
   let model = test_model().replace_conversation({
     ..test_conversation(),
@@ -10809,7 +10935,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ),
     model,
   )
-  assert_true(next.file_panel.active is Some(Relative("src/main.mbt")))
+  assert_true(@dock.active_file(next.dock) is Some(Relative("src/main.mbt")))
   // An absolute path outside every root cannot be opened; the panel says so
   // instead of sending the host a bogus read.
   let (_, outside) = update(
@@ -10821,7 +10947,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ),
     model,
   )
-  assert_true(outside.file_panel.active is None)
+  assert_true(outside.dock.active is None)
   assert_true(outside.file_panel.error is Some(_))
 }
 
@@ -10829,21 +10955,28 @@ test "chip jumps relativize legacy absolute paths against the roots" {
 test "RevealDirectory(\"\") opens the tree pane without a highlight" {
   let dispatch = test_dispatch()
   let model = test_model()
+  let owner : @interop.ConversationKey = {
+    channel: Local,
+    session: "desktop-test",
+  }
+  let dock = {
+    ..@dock.open_file(model.dock, Relative("README.md")),
+    open: true,
+    owner: Some(owner),
+  }
   let panel = {
     ..model.file_panel,
-    open: true,
-    owner: Some({ channel: Local, session: "desktop-test" }),
+    owner: Some(owner),
     tree_open: false,
-    active: Some(Relative("README.md")),
     highlighted: Some(Relative("src")),
   }
   let (_, next) = update(
     dispatch,
     FileEditor(RevealDirectory(@pathx.Relative::root())),
-    { ..model, file_panel: panel },
+    { ..model, dock, file_panel: panel },
   )
   // The active tab stays put — revealing the tree must not close the file.
-  assert_true(next.file_panel.active is Some(Relative("README.md")))
+  assert_true(@dock.active_file(next.dock) is Some(Relative("README.md")))
   assert_true(next.file_panel.tree_open)
   assert_true(next.file_panel.highlighted is None)
 }
@@ -10854,7 +10987,6 @@ test "RevealDirectory expands an uncached ancestor and highlights the target" {
   let model = test_model()
   let panel = {
     ..model.file_panel,
-    open: true,
     owner: Some({ channel: Local, session: "desktop-test" }),
   }
   let (_, next) = update(
@@ -10876,7 +11008,6 @@ test "RevealDirectory on an already-cached ancestor needs no reload" {
   ])
   let panel = {
     ..model.file_panel,
-    open: true,
     owner: Some({ channel: Local, session: "desktop-test" }),
     children,
   }

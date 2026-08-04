@@ -10,19 +10,33 @@ import {
 }
 
 // Values
+pub fn activate(@cmd.Emit[Msg], State, Ctx, @pathx.Relative) -> (@cmd.Cmd, State)
+
 pub fn basename(@pathx.Relative) -> String
+
+pub fn body_view(@cmd.Emit[Msg], State, Ctx) -> @html.Html
+
+pub fn breadcrumb_view(@cmd.Emit[Msg], State, Ctx) -> @html.Html
+
+pub fn close_document(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, next~ : @pathx.Relative?, was_active~ : Bool) -> (@cmd.Cmd, State)
+
+pub fn editor_classes(State, Ctx) -> String
 
 pub fn mount_cmds(@cmd.Emit[Msg]) -> @cmd.Cmd
 
-pub fn open_file(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, range~ : @common.Range?, annotation? : String) -> (@cmd.Cmd, State)
+pub fn open_document(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, name~ : String, range~ : @common.Range?, annotation? : String, had_active~ : Bool) -> (@cmd.Cmd, State)
 
-pub fn panel_view(@cmd.Emit[Msg], State, Ctx) -> @html.Html
+pub fn open_file(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, range~ : @common.Range?, annotation? : String, had_active~ : Bool) -> (@cmd.Cmd, State)
+
+pub fn panel_toggle_cmds(@cmd.Emit[Msg], State, Ctx, opening~ : Bool) -> @cmd.Cmd
 
 pub fn read_file(@cmd.Emit[Msg], @interop.ConversationKey, @pathx.Relative, String, range~ : @common.Range?, annotation? : String, workspace~ : @pathx.Absolute?) -> @cmd.Cmd
 
 pub fn remove_editor_feedback(ModelUri, String) -> @cmd.Cmd
 
 pub fn request_viewer_remeasure() -> @cmd.Cmd
+
+pub fn resize_handle_view() -> @html.Html
 
 pub fn sync(@cmd.Emit[Msg], State, Ctx) -> (State, @cmd.Cmd)
 
@@ -37,7 +51,16 @@ pub(all) struct Ctx {
   dark_mode : Bool
   tree_layout : TreeLayout
   narrow : Bool
+  panel_open : Bool
+  open_files : Array[@pathx.Relative]
+  active_file : @pathx.Relative?
 }
+
+pub(all) struct Doc {
+  name : String
+  state : TabState
+  stale : Bool
+} derive(Eq)
 
 pub(all) enum FileContent {
   Binary
@@ -66,12 +89,9 @@ pub struct ModelUri(String)
 pub fn ModelUri::of(@interop.ChannelId, @pathx.Absolute) -> Self
 
 pub(all) enum Msg {
-  ToggleFilePanel
   RevealDirectory(@pathx.Relative)
   HighlightCleared(@pathx.Relative)
   ToggleTree
-  TabActivated(@pathx.Relative)
-  TabClosed(@pathx.Relative)
   DirToggle(@pathx.Relative)
   FileFilterChanged(String)
   TreeKeyMove(delta~ : Int)
@@ -92,27 +112,14 @@ pub(all) enum Msg {
   EditorCommentAdded(resource~ : ModelUri, file~ : @pathx.Relative, range~ : @common.Range, quote~ : String, comment~ : String, feedback_id~ : String)
 }
 
-pub(all) struct RememberedTab {
-  path : @pathx.Relative
-  name : String
-} derive(Eq)
-
-pub(all) struct RememberedTabs {
-  entries : Array[RememberedTab]
-  active : @pathx.Relative?
-} derive(Eq)
-
 pub(all) struct State {
-  open : Bool
   owner : @interop.ConversationKey?
   tree_open : Bool
   watching : @interop.ConversationKey?
   expanded : Array[@pathx.Relative]
   loading : Array[@pathx.Relative]
   children : Map[@pathx.Relative, Array[FileEntry]]
-  tabs : Array[Tab]
-  active : @pathx.Relative?
-  remembered : Map[@interop.ConversationKey, RememberedTabs]
+  docs : Map[@pathx.Relative, Doc]
   highlighted : @pathx.Relative?
   filter : String
   index : FileIndex
@@ -120,13 +127,6 @@ pub(all) struct State {
   error : String?
 } derive(Eq)
 pub fn State::empty() -> Self
-
-pub(all) struct Tab {
-  path : @pathx.Relative
-  name : String
-  state : TabState
-  stale : Bool
-} derive(Eq)
 
 pub(all) enum TabState {
   TabLoading

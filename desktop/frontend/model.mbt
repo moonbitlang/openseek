@@ -736,10 +736,16 @@ priv struct Model {
   // host, not a conversation or workspace, so this catalog is probed once
   // and kept while the frontend runs.
   launcher : Launcher
-  // The editor side-panel: the active conversation's file tree and the file
-  // shown in the embedded viewer. Rooted at `active().cwd`; rebuilt when the
-  // active conversation changes. Owned by the `fileeditor` package; this
-  // model only carries its state and routes `FileEditor` messages to it.
+  // The right panel's dock: the mixed tab strip's membership, order, active
+  // tab, and per-conversation parked strips. Owned by the `dock` package;
+  // the projection (open files, active file, panel visibility) feeds
+  // `file_ctx` every dispatch.
+  dock : @dock.State
+  // The file subsystem behind the dock's file tabs: the active
+  // conversation's file tree and the document table the embedded viewer
+  // shows from. Rooted at `active().cwd`; rebuilt when the active
+  // conversation changes. Owned by the `fileeditor` package; this model only
+  // carries its state and routes `FileEditor` messages to it.
   file_panel : @fileeditor.State
   // The integrated terminal. Each tab retains the device channel that owns
   // its PTY, so the desktop uses Local while a browser uses its relay-backed
@@ -1059,11 +1065,16 @@ priv enum Msg {
   LauncherFailed(String)
   // Launch one detected app (by its id) on the active conversation's workspace.
   LaunchApp(String)
-  // The editor side-panel's own messages (tree, viewer, diagnostics,
-  // comments), routed to the `fileeditor` package's update. The one
-  // exception is `EditorCommentAdded`, which this update intercepts: the
-  // comment becomes a chip on the composer draft, which only the app model
-  // knows about.
+  // The right panel's strip messages (panel toggle, tab activate/close),
+  // routed to the `dock` package's pure strip machine; this update then
+  // drives the content subsystems from the transition (see the `Dock` arm).
+  Dock(@dock.Msg)
+  // The file subsystem's own messages (tree, viewer, diagnostics,
+  // comments), routed to the `fileeditor` package's update. Two exceptions
+  // this update intercepts: `EditorCommentAdded` (the comment becomes a chip
+  // on the composer draft, which only the app model knows about) and
+  // `FileSelected` (which dock tab a tree click opens is the strip's
+  // business).
   FileEditor(@fileeditor.Msg)
   // The integrated terminal panel's own messages, routed to the `terminal`
   // package's update.
@@ -1418,6 +1429,7 @@ fn initial_model() -> Model {
     completion: None,
     symbol_cache: empty_symbol_cache(),
     launcher: { open: false, apps: AppsNotFetched },
+    dock: @dock.State::empty(),
     file_panel: @fileeditor.State::empty(),
     terminal_panel: @terminal.State::empty(),
     notifications: [],

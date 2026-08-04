@@ -2563,12 +2563,12 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // panel is closed; an open panel carries the toggle at the right edge of
   // its breadcrumb instead, keeping this bar uncrowded. Both spots hug the
   // window's right edge, so the toggle stays put as the panel opens/closes.
-  if !model.file_panel.open {
+  if !model.dock.open {
     items.push(
       @html.button(
         class="panel-toggle",
         title="Show panel",
-        on_click=dispatch(FileEditor(ToggleFilePanel)),
+        on_click=dispatch(Dock(TogglePanel)),
         icon(icon_layout_sidebar_right),
       ),
     )
@@ -2654,6 +2654,34 @@ fn console_gate_view(
 }
 
 ///|
+/// The right panel: the dock's strip over the file subsystem's breadcrumb
+/// and viewer/tree body, in the exact child order the old fileeditor panel
+/// rendered — the order is structural (rabbita diffs by index) and the
+/// viewer host must never be re-keyed. The strip renders identities only;
+/// labels and the deleted styling come from the document table.
+fn dock_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  let femit = dispatch.map(msg => FileEditor(msg))
+  let ctx = file_ctx(model)
+  let chips : Array[@dock.TabChip] = model.dock.tabs.map(tab => {
+    match tab {
+      File(path~) => {
+        let (label, missing) = match model.file_panel.docs.get(path) {
+          Some(doc) => (doc.name, doc.state is TabDeleted)
+          None => (@fileeditor.basename(path), false)
+        }
+        { tab, label, title: path.0, missing }
+      }
+    }
+  })
+  @html.div(class=@fileeditor.editor_classes(model.file_panel, ctx), [
+    @fileeditor.resize_handle_view(),
+    @dock.tabs_bar(dispatch.map(msg => Dock(msg)), model.dock, chips),
+    @fileeditor.breadcrumb_view(femit, model.file_panel, ctx),
+    @fileeditor.body_view(femit, model.file_panel, ctx),
+  ])
+}
+
+///|
 fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // A browser page is gated on the relay session: until `/v1/auth/me`
   // answers signed-in, the console frame — sidebar, composer, overlays —
@@ -2683,7 +2711,7 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // chat; on the Skills page it stays collapsed, but the editor column (and the
   // viewer host inside it) is still rendered so the attached viewer is never
   // torn down.
-  let panel_open = model.file_panel.open && model.screen is Chat
+  let panel_open = model.dock.open && model.screen is Chat
   let mut content_class = if panel_open {
     "content panel-open"
   } else {
@@ -2696,11 +2724,7 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     sidebar_view(dispatch, model),
     @html.div(class=content_class, [
       @html.main_(content),
-      @fileeditor.panel_view(
-        dispatch.map(msg => FileEditor(msg)),
-        model.file_panel,
-        file_ctx(model),
-      ),
+      dock_panel_view(dispatch, model),
       // Keep the stable emulator host mounted while the panel is hidden; its
       // imperative xterm instances retain their screens and scrollback.
       @terminal.panel_view(

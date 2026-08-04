@@ -52,32 +52,16 @@ pub(all) enum TabState {
 } derive(Eq)
 
 ///|
-/// One open file in the editor's tab strip. Identified by its
-/// workspace-relative `path`; the strip's order is the order files were
-/// opened.
-pub(all) struct Tab {
-  path : @pathx.Relative
+/// One open file's document record, keyed by its workspace-relative path in
+/// `State.docs`. Which files are open — and in what order — is the dock
+/// strip's business; this table only holds what each open file's document
+/// looks like.
+pub(all) struct Doc {
   name : String
   state : TabState
-  // The file changed on disk while the tab was in the background; reloaded
+  // The file changed on disk while its tab was in the background; reloaded
   // on activation rather than eagerly, so a build storm costs one read.
   stale : Bool
-} derive(Eq)
-
-///|
-/// A conversation's tab set, remembered across conversation switches. Only
-/// identities — content would pin up to 1MiB per tab for conversations not
-/// on screen — so restoring reloads the active tab and marks the rest for
-/// load-on-activation.
-pub(all) struct RememberedTab {
-  path : @pathx.Relative
-  name : String
-} derive(Eq)
-
-///|
-pub(all) struct RememberedTabs {
-  entries : Array[RememberedTab]
-  active : @pathx.Relative?
 } derive(Eq)
 
 ///|
@@ -107,16 +91,15 @@ pub(all) enum FileIndex {
 } derive(Eq)
 
 ///|
-/// The editor side-panel's state: a lazily-loaded file tree of the active
-/// conversation's workspace and the files open in the embedded viewer's tab
-/// strip. Keyed entirely by workspace-relative paths; `owner` records which
-/// channel's conversation the cached tree belongs to, so switching either
-/// channel or session swaps it (parking the open tabs in `remembered`) rather
-/// than showing another host's files.
+/// The file subsystem's state: a lazily-loaded file tree of the active
+/// conversation's workspace and the document table behind the dock's open
+/// file tabs. Keyed entirely by workspace-relative paths; `owner` records
+/// which channel's conversation the cached tree and documents belong to, so
+/// switching either channel or session swaps them rather than showing
+/// another host's files. Strip membership, order, the active tab, and the
+/// parked per-conversation strips all live in the dock package — the open
+/// file list arrives through `Ctx`.
 pub(all) struct State {
-  // Whether the panel column is expanded; the column is always rendered (so
-  // the viewer host element stays put) and merely hidden by CSS when closed.
-  open : Bool
   owner : @interop.ConversationKey?
   // Whether the file-tree pane (the toggleable column right of the viewer)
   // is shown. A panel preference, not per-conversation state, so it
@@ -132,13 +115,10 @@ pub(all) struct State {
   loading : Array[@pathx.Relative]
   // Listed directories' entries, keyed by the directory's relative path.
   children : Map[@pathx.Relative, Array[FileEntry]]
-  // The open files, in strip order, and which of them the viewer shows.
-  // `active: None` leaves the viewer on its placeholder.
-  tabs : Array[Tab]
-  active : @pathx.Relative?
-  // Tab sets parked by conversation switches, keyed by their full host-local
-  // identity, restored when that conversation returns to the screen.
-  remembered : Map[@interop.ConversationKey, RememberedTabs]
+  // Each open file's document, keyed by workspace-relative path. The key set
+  // mirrors the dock strip's file tabs (`Ctx.open_files`): the root update
+  // adds an entry when it opens a tab and drops it when the tab closes.
+  docs : Map[@pathx.Relative, Doc]
   // The directory a breadcrumb click most recently revealed, flashed in the
   // tree until `HighlightCleared` fires.
   highlighted : @pathx.Relative?
@@ -161,16 +141,13 @@ pub(all) struct State {
 ///|
 pub fn State::empty() -> State {
   {
-    open: false,
     owner: None,
     tree_open: true,
     watching: None,
     expanded: [],
     loading: [],
     children: Map([]),
-    tabs: [],
-    active: None,
-    remembered: Map([]),
+    docs: Map([]),
     highlighted: None,
     filter: "",
     index: IndexEmpty,
@@ -223,13 +200,17 @@ pub(all) struct Ctx {
   // share one full-width pane (CSS shows exactly one), so opening a file
   // closes the tree — a drill-down — instead of showing both side by side.
   narrow : Bool
+  // The dock's projection, recomputed by the root each dispatch: whether the
+  // right panel is expanded, which files the strip holds (in strip order —
+  // the stat/watch/reload sweeps run over this list), and which file tab is
+  // active (`None` while no file tab is on screen).
+  panel_open : Bool
+  open_files : Array[@pathx.Relative]
+  active_file : @pathx.Relative?
 }
 
 ///|
 pub(all) enum Msg {
-  // Show or hide the editor side-panel. Opening it loads the active
-  // conversation's workspace root if it has not been listed yet.
-  ToggleFilePanel
   // A breadcrumb segment was clicked: switch back to the (always-rooted)
   // tree and reveal this directory — expanding whatever ancestors are
   // needed to show it, then scrolling to and flashing it. `""` (the leading
@@ -240,13 +221,6 @@ pub(all) enum Msg {
   HighlightCleared(@pathx.Relative)
   // Show or hide the file-tree pane (the column right of the viewer).
   ToggleTree
-  // A tab in the strip was clicked: show that file in the viewer.
-  TabActivated(@pathx.Relative)
-  // A tab's close button was clicked. Closing the active tab activates its
-  // right neighbor, else its left, else none (the viewer falls back to the
-  // placeholder, and the tree pane is forced open so the panel is never
-  // empty).
-  TabClosed(@pathx.Relative)
   // Expand or collapse a directory row in the file tree; the first expansion
   // lazily lists the directory through the host.
   DirToggle(@pathx.Relative)

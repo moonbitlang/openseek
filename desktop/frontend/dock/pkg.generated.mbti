@@ -1,0 +1,60 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/dock"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/internal/pathx",
+}
+
+// Values
+pub fn active_file(State) -> @pathx.Relative?
+
+pub fn file_paths(State) -> Array[@pathx.Relative]
+
+pub fn open_file(State, @pathx.Relative) -> State
+
+pub fn sync(State, @interop.ConversationKey) -> State
+
+pub fn tabs_bar(@cmd.Emit[Msg], State, Array[TabChip]) -> @html.Html
+
+pub fn update(Msg, State) -> State
+
+// Errors
+
+// Types and methods
+pub(all) enum DockTab {
+  File(path~ : @pathx.Relative)
+} derive(Eq)
+
+pub(all) enum Msg {
+  TogglePanel
+  TabActivated(DockTab)
+  TabClosed(DockTab)
+}
+
+pub(all) struct RememberedStrip {
+  tabs : Array[DockTab]
+  active : DockTab?
+} derive(Eq)
+
+pub(all) struct State {
+  open : Bool
+  owner : @interop.ConversationKey?
+  tabs : Array[DockTab]
+  active : DockTab?
+  remembered : Map[@interop.ConversationKey, RememberedStrip]
+} derive(Eq)
+pub fn State::empty() -> Self
+
+pub(all) struct TabChip {
+  tab : DockTab
+  label : String
+  title : String
+  missing : Bool
+}
+
+// Type aliases
+
+// Traits
