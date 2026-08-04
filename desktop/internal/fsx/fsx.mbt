@@ -4,6 +4,27 @@ pub async fn exists(path : @path.Path) -> Bool {
 }
 
 ///|
+/// True when `path` names a regular executable file — the right probe for
+/// "can I spawn this binary". `can_execute` alone is not enough: X_OK on a
+/// directory means searchable, so a directory shadowing a binary's name
+/// would pass it. Sequenced as two statements — async calls joined with
+/// `&&` are evaluated eagerly, and `kind` raises on a missing path. Probe
+/// errors (an ENOTDIR from a file-shaped ancestor, a race with deletion)
+/// mean "not a usable executable" — a probe answers a question, it does not
+/// propagate the filesystem's mood.
+pub async fn is_executable_file(path : @path.Path) -> Bool {
+  try {
+    if !@fs.can_execute(path.to_string()) {
+      return false
+    }
+    @fs.kind(path.to_string()) is Regular
+  } catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => false
+  }
+}
+
+///|
 pub async fn try_read_text(path : @path.Path) -> String? {
   Some(@fs.read_file(path.to_string()).text()) catch {
     error if @async.is_being_cancelled() => raise error

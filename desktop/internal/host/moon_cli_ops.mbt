@@ -34,11 +34,22 @@ const MaxModuleRoots = 6
 const MaxSymbolResults = 50
 
 ///|
-/// One resolved way to launch a toolchain binary: the bundled one with its
-/// complete child environment, or a bare name found on PATH (`env` absent).
+/// One resolved way to launch the selected toolchain's `moon` binary with its
+/// complete child environment.
 priv struct ToolSpawnConfig {
   command : String
   env : Map[String, String]?
+}
+
+///|
+/// Cached outcome of the one-shot toolchain resolution. `ToolUnavailable` is
+/// a diagnosed terminal state — the reason was already logged — so later
+/// language requests answer empty instead of retrying or spawning an ambient
+/// `moon` whose provenance is unknown.
+priv enum ToolSpawnResolution {
+  ToolUnresolved
+  ToolUnavailable
+  ToolResolved(ToolSpawnConfig)
 }
 
 ///|
@@ -50,9 +61,8 @@ priv struct MoonCliState {
   engine : String
   runtime_dir : @path.Path?
   // Resolved on first use; concurrent first requests may both resolve, which
-  // is benign — `prepare_bundled_home` serializes itself and the results are
-  // identical.
-  mut command : ToolSpawnConfig?
+  // is benign — bundled preparation serializes itself and the results agree.
+  mut command : ToolSpawnResolution
   // Module root → the files the last `moon check` reported diagnostics on.
   // The next run pushes an empty array for any file that dropped out, the
   // wire's "squiggles fixed" signal. Bounded by the module roots touched in
@@ -69,7 +79,7 @@ fn MoonCliState::new(
   {
     engine,
     runtime_dir,
-    command: None,
+    command: ToolUnresolved,
     published: Map([]),
     diagnostics: Queue(kind=DiscardOldest(256)),
   }
@@ -87,24 +97,39 @@ async fn MoonCliState::forward_diagnostics(
 }
 
 ///|
-async fn MoonCliState::resolve_command(self : MoonCliState) -> ToolSpawnConfig {
-  if self.command is Some(config) {
-    return config
+async fn MoonCliState::resolve_command(self : MoonCliState) -> ToolSpawnConfig? {
+  match self.command {
+    ToolResolved(config) => return Some(config)
+    ToolUnavailable => return None
+    ToolUnresolved => ()
   }
-  let config = if @moonbit.bundled_moon(
-      self.engine,
-      runtime_dir?=self.runtime_dir,
-    )
-    is Some(path) {
-    {
-      command: path.to_string(),
-      env: Some(@moonbit.bundled_tool_env(path.dirname())),
+  let toolchain = @moonbit.resolve_toolchain(
+    self.engine,
+    runtime_dir?=self.runtime_dir,
+  ) catch {
+    error if @async.is_being_cancelled() => raise error
+    @moonbit.ToolchainUnavailable as unavailable => {
+      @xlog.warn() <?
+        {
+          "event": "desktop_moon_cli_toolchain_unavailable",
+          "reason": "\{unavailable}",
+        }
+      self.command = ToolUnavailable
+      return None
     }
-  } else {
-    { command: "moon", env: None }
+    error => {
+      @xlog.warn() <?
+        { "event": "desktop_moon_cli_toolchain_error", "error": "\{error}" }
+      self.command = ToolUnavailable
+      return None
+    }
   }
-  self.command = Some(config)
-  config
+  let config = {
+    command: toolchain.moon.to_string(),
+    env: Some(toolchain.tool_env()),
+  }
+  self.command = ToolResolved(config)
+  Some(config)
 }
 
 ///|
@@ -117,7 +142,7 @@ async fn MoonCliState::run_moon(
   args : Array[String],
   cwd : String,
 ) -> (Int, String, String)? {
-  let config = self.resolve_command()
+  guard self.resolve_command() is Some(config) else { return None }
   @async.with_timeout_opt(MoonCliTimeoutMs, () => {
     // An empty-file stdin keeps any accidentally interactive tool from
     // waiting on the host's inherited stdin, mirroring the engine's tool

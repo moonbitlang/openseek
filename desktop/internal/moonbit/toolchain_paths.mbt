@@ -24,19 +24,12 @@ fn bin_sibling_toolchain_dir(
 }
 
 ///|
-async fn executable_exists(root : @path.Path, name : String) -> Bool {
-  @fs.exists(root.join("bin").join(name).to_string()) ||
-  @fs.exists(root.join("bin").join("\{name}.exe").to_string())
-}
-
-///|
-async fn moonbit_seed_looks_complete(path : @path.Path) -> Bool {
-  executable_exists(path, "moon") &&
-  executable_exists(path, "moonc") &&
-  @fs.exists(path.join("lib/core/moon.mod").to_string())
-}
-
-///|
+/// A seed is detected by the version stamp packaging writes as its final
+/// step — after extracting the binary and core archives and verifying the
+/// staged compiler answers `moonc -v` with the expected version. The stamp's
+/// presence therefore already asserts a complete seed; re-probing individual
+/// files here would re-litigate what packaging proved, and the sealed app
+/// bundle guards integrity from there.
 async fn bundled_moonbit_seed_dir(engine_command : String) -> @path.Path? {
   let command_dir = @path.Path(engine_command).dirname().resolve()
   let candidates = [
@@ -48,16 +41,16 @@ async fn bundled_moonbit_seed_dir(engine_command : String) -> @path.Path? {
     bin_sibling_toolchain_dir(command_dir, "macos-arm64"),
   ]
   for candidate in candidates {
-    let complete = moonbit_seed_looks_complete(candidate)
+    let version = bundled_moonbit_seed_version(candidate)
     @xlog.debug() <?
       {
         "event": "desktop_moonbit_seed_candidate",
         "engine_command": engine_command,
         "command_dir": command_dir.to_string(),
         "candidate": candidate.to_string(),
-        "complete": complete,
+        "seed_version": version,
       }
-    if complete {
+    if version is Some(_) {
       @xlog.debug() <?
         {
           "event": "desktop_moonbit_seed_selected",
@@ -155,8 +148,8 @@ fn moonbit_wasm_gc_bundle_probe_path(moon_home : @path.Path) -> @path.Path {
 }
 
 ///|
-/// Lay a fake seed under `root`: the two executables and the core manifest
-/// `moonbit_seed_looks_complete` probes for.
+/// Lay a fake completed seed under `root`, including the version stamp that
+/// packaging writes only after it has verified the extracted toolchain.
 async fn write_fake_seed(root : @path.Path) -> Unit {
   @fs.mkdir(root.join("bin").to_string(), recursive=true)
   @fs.mkdir(root.join("lib/core").to_string(), recursive=true)
@@ -175,6 +168,11 @@ async fn write_fake_seed(root : @path.Path) -> Unit {
     "{}",
     create_mode=CreateOrTruncate,
   )
+  @fs.write_file(
+    root.join(MoonbitSeedVersionFile).to_string(),
+    "test-version",
+    create_mode=CreateOrTruncate,
+  )
 }
 
 ///|
@@ -182,7 +180,7 @@ async fn write_fake_seed(root : @path.Path) -> Unit {
 /// (`<input>/bin/openseek` beside `<input>/toolchains/`), unlike the Linux
 /// AppImage and the Windows bundle, which put the engine straight into the
 /// directory holding `toolchains/`. Both shapes must resolve, or the engine
-/// never spawns — `prepare_bundled_home` raises before it.
+/// never spawns — `resolve_toolchain` raises before it.
 async test "the seed is found beside the engine and one level above it" {
   let tmp = @path.Path(@fs.tmpdir(prefix="openseek-moonbit-seed-layout-"))
   // macOS: `<input>/bin/openseek` with `<input>/toolchains/…`.

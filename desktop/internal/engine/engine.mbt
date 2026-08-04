@@ -1294,27 +1294,22 @@ async fn add_moonbit_path_for_native_engine(
   config : RunConfig,
   runtime_dir : @path.Path?,
 ) -> Unit {
-  let moon_home = @moonbit.prepare_bundled_home(config.engine, runtime_dir?)
-  let moon_bin_dir = moon_home.join("bin")
-  let moon = moon_bin_dir.join("moon")
-  let moon_exe = moon_bin_dir.join("moon.exe")
-  // The agent tools spawn `moon` by name, so prepend the bundled bin to the
-  // path variable (updating `Path` in place on Windows — see
-  // `@env.prepend_path_entry`). Deliberately do not set `MOON_HOME` (it would
-  // redirect registry/cache lookup into the bundled payload) and drop any
-  // ambient `MOON_HOME` the launching shell exported: moon prefers it over
-  // the executable-relative home and would otherwise run the bundled binary
-  // against the user's (possibly missing or incompatible) MoonBit home.
-  let path = @env.prepend_path_entry(env, moon_bin_dir.to_string())
-  env.remove("MOON_HOME")
+  // The agent tools spawn `moon` by name, so prepend the resolved toolchain's
+  // bin to the path variable (updating `Path` in place on Windows — see
+  // `@env.prepend_path_entry`). `MOON_HOME` passes through untouched: moon
+  // finds its compiler assets relative to its own executable, and the
+  // variable's actual cargo — registry credentials and caches — must keep
+  // working (`moon publish`) inside spawned sessions.
+  // An unavailable toolchain fails the spawn: a session whose `moon` would
+  // break in confusing ways downstream is worth less than a clear error
+  // naming the cause now.
+  let toolchain = @moonbit.resolve_toolchain(config.engine, runtime_dir?)
+  toolchain.apply_to_env(env)
   @xlog.debug() <?
     {
       "event": "desktop_engine_moonbit_path",
-      "moon_home": moon_home.to_string(),
-      "moon_bin_dir": moon_bin_dir.to_string(),
-      "moon_exists": @fsx.exists(moon),
-      "moon_exe_exists": @fsx.exists(moon_exe),
-      "path_prefix": first_path_entry(Some(path)),
+      "bin_dir": toolchain.bin_dir.to_string(),
+      "path_prefix": first_path_entry(path_env_value(env)),
     }
 }
 
@@ -2109,8 +2104,8 @@ async fn prepare_fake_moonbit_seed(
   seed : @path.Path,
   version~ : String,
 ) -> Unit {
-  write_fake_file(seed.join("bin/moon"))
-  write_fake_file(seed.join("bin/moonc"))
+  write_fake_executable(seed.join("bin/moon"))
+  write_fake_executable(seed.join("bin/moonc"))
   write_fake_file(seed.join("lib/core/moon.mod"))
   @fs.write_file(
     seed.join(".openseek-moonbit-seed-version").to_string(),
@@ -2142,6 +2137,19 @@ async fn prepare_fake_bundled_moonbit_home(
 async fn write_fake_file(path : @path.Path) -> Unit {
   @fsx.ensure_dir(path.dirname())
   @fs.write_file(path.to_string(), "", create_mode=CreateOrTruncate)
+}
+
+///|
+/// The resolver only assembles a toolchain around a regular executable `moon`,
+/// and initialization executes `moonc`, so both fakes must carry the bit.
+async fn write_fake_executable(path : @path.Path) -> Unit {
+  @fsx.ensure_dir(path.dirname())
+  @fs.write_file(
+    path.to_string(),
+    "",
+    create_mode=CreateOrTruncate,
+    permission=0o755,
+  )
 }
 
 ///|

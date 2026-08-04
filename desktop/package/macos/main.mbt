@@ -105,6 +105,13 @@ fn PackageOptions::parse(argv? : ArrayView[String]) -> PackageOptions raise {
   if notary_profile is Some(_) && !artifacts.dmg {
     raise @packaging.PackageError("--notarize requires --target dmg")
   }
+  // A Developer ID signature marks distributable output. Require an explicit
+  // archive target instead of signing only the intermediate app bundle.
+  if identity is Some(_) && !artifacts.dmg && !artifacts.zip {
+    raise @packaging.PackageError(
+      "--sign requires a distribution target (--target dmg or --target zip)",
+    )
+  }
   {
     artifacts,
     sign: { identity, notary_profile },
@@ -226,6 +233,8 @@ async fn @packaging.Workspace::stage_package_inputs(
     ["+x", PackageBinDir + "/openseek"],
     dir=self.dir(),
   )
+  // Proton applies the static `bundle.sign.binaries` list to both ad-hoc and
+  // Developer ID signing, so every macOS app must stage these seed binaries.
   let target = @moonbit.moonbit_macos_arm64_toolchain()
   @moonbit.stage_moonbit_toolchain_seed(
     self,
@@ -306,4 +315,16 @@ test "macOS packaging combines optional archive targets" {
     "--target", "app", "--target", "zip", "--target", "dmg",
   ])
   @debug.assert_eq(options.artifacts, { dmg: true, zip: true })
+}
+
+///|
+test "macOS signing requires a distribution target" {
+  try PackageOptions::parse(argv=["--sign", "Developer ID"]) catch {
+    error =>
+      assert_true(
+        error.to_string().contains("--sign requires a distribution target"),
+      )
+  } noraise {
+    _ => fail("expected --sign without a distribution target to fail")
+  }
 }

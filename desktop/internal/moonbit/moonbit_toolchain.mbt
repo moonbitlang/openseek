@@ -1,7 +1,11 @@
 ///|
+/// Environment overrides for running the payload's own tools during
+/// preparation. The payload's `moon`/`moonc` locate their compiler assets
+/// relative to their own executables, so a path prepend is all they need;
+/// `MOON_HOME` stays whatever the user has (it holds registry credentials
+/// and caches, not the toolchain).
 fn moonbit_process_env(moon_home : @path.Path) -> Map[String, String] {
   {
-    "MOON_HOME": moon_home.to_string(),
     "PATH": @env.prepend_to_path_env(
       moonbit_bin_dir(moon_home).to_string(),
       @env.get("PATH"),
@@ -35,32 +39,6 @@ async fn prepare_tool_stdin(
   }
   @fs.write_file(path.to_string(), "", create_mode=CreateOrTruncate)
   @process.redirect_from_file(path.to_string())
-}
-
-///|
-async fn get_moonc_version(
-  moon_home : @path.Path,
-  runtime_dir : @path.Path?,
-) -> String {
-  let moonc = moonbit_compiler_command(moon_home)
-  let child_stdin = prepare_tool_stdin(runtime_dir, moonc)
-  let (code, output) = @process.collect_output_merged(
-    moonc.to_string(),
-    ["-v"],
-    inherit_env=true,
-    extra_env=moonbit_process_env(moon_home),
-    stdin=child_stdin,
-  )
-  if code != 0 {
-    fail(
-      "failed to read bundled MoonBit compiler version: \{output.text().trim()}",
-    )
-  }
-  match [..output.text().trim().split(" ")] {
-    [['v', .. version], ..] => version.to_owned()
-    [version, ..] => version.to_owned()
-    [] => ""
-  }
 }
 
 ///|
@@ -131,11 +109,15 @@ async fn copy_moonbit_seed_dir(
 }
 
 ///|
+/// Build the copied seed's core bundles against the version packaging already
+/// verified with `moonc -v`. The seed version stamp is authoritative here: it
+/// is written only after extraction, executable-bit normalization, and the
+/// compiler-version check have all succeeded.
 async fn initialize_moonbit(
   moon_home : @path.Path,
+  version : String,
   runtime_dir : @path.Path?,
 ) -> Unit {
-  let version = get_moonc_version(moon_home, runtime_dir)
   @xlog.debug() <?
     {
       "event": "desktop_moonbit_initialize",
@@ -196,6 +178,9 @@ async fn prepared_bundled_moonbit_payload(
   }
   prepare_payload_lock.acquire()
   defer prepare_payload_lock.release()
+  guard bundled_moonbit_seed_version(seed_dir) is Some(version) else {
+    return None
+  }
   @xlog.debug() <?
     {
       "event": "desktop_moonbit_prepare_payload",
@@ -204,8 +189,7 @@ async fn prepared_bundled_moonbit_payload(
       "moon_exists": @fsx.exists(moonbit_command(moon_home)),
       "moonc_exists": @fsx.exists(moonbit_compiler_command(moon_home)),
     }
-  if bundled_moonbit_seed_version(seed_dir) is Some(version) &&
-    is_moonbit_bundled(moon_home, version) {
+  if is_moonbit_bundled(moon_home, version) {
     @xlog.debug() <?
       {
         "event": "desktop_moonbit_prepare_payload_reuse",
@@ -223,7 +207,7 @@ async fn prepared_bundled_moonbit_payload(
     }
   @fsx.remove_if_exists(moon_home)
   copy_moonbit_seed_dir(seed_dir, moon_home)
-  initialize_moonbit(moon_home, runtime_dir)
+  initialize_moonbit(moon_home, version, runtime_dir)
   @xlog.debug() <?
     {
       "event": "desktop_moonbit_prepare_payload_complete",
@@ -233,100 +217,6 @@ async fn prepared_bundled_moonbit_payload(
       "moonc_exists": @fsx.exists(moonbit_compiler_command(moon_home)),
     }
   Some(moon_home)
-}
-
-///|
-pub async fn prepare_bundled_home(
-  engine_command : String,
-  runtime_dir? : @path.Path,
-) -> @path.Path {
-  @xlog.debug() <?
-    {
-      "event": "desktop_moonbit_prepare_home",
-      "engine_command": engine_command,
-      "runtime_dir": runtime_dir.map(dir => dir.to_string()).unwrap_or(""),
-    }
-  guard bundled_moonbit_seed_dir(engine_command) is Some(seed_dir) else {
-    fail("bundled MoonBit toolchain seed not found")
-  }
-  guard prepared_bundled_moonbit_payload(seed_dir~, runtime_dir?)
-    is Some(moon_home) else {
-    fail("failed to prepare bundled MoonBit toolchain")
-  }
-  @xlog.debug() <?
-    {
-      "event": "desktop_moonbit_prepare_home_complete",
-      "engine_command": engine_command,
-      "seed_dir": seed_dir.to_string(),
-      "moon_home": moon_home.to_string(),
-    }
-  moon_home
-}
-
-///|
-/// A complete child environment (pass with `inherit_env=false`) for spawning a
-/// binary out of the bundled toolchain: the current environment with `bin_dir`
-/// prepended to the path variable and any ambient `MOON_HOME` dropped — moon
-/// tools prefer `MOON_HOME` over their executable-relative home, so one
-/// exported by the launching shell would run the bundled binary against an
-/// unrelated toolchain home. Mirrors the engine's child environment. Windows
-/// blocks commonly spell the key `Path`; update the spelling that already
-/// exists and drop any duplicates, so the child sees exactly one path variable.
-pub fn bundled_tool_env(bin_dir : @path.Path) -> Map[String, String] {
-  let env = @sys.get_env_vars()
-  @env.prepend_path_entry(env, bin_dir.to_string()) |> ignore
-  env.remove("MOON_HOME")
-  env
-}
-
-///|
-/// Path to the `moon` CLI shipped in the bundled MoonBit toolchain, or `None`
-/// when there is no bundled seed — a dev run of the bare host binary, where
-/// the caller deliberately falls back to `moon` on PATH. Packaged hosts
-/// always execute the prepared per-user copy, so every language service
-/// shares one toolchain; the home is the one the engine prepares, so once a
-/// conversation has run this is a cheap existence check.
-pub async fn bundled_moon(
-  engine_command : String,
-  runtime_dir? : @path.Path,
-) -> @path.Path? {
-  let moon_home = prepare_bundled_home(engine_command, runtime_dir?) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return None
-  }
-  let moon = moonbit_command(moon_home)
-  if @fsx.exists(moon) {
-    Some(moon)
-  } else {
-    None
-  }
-}
-
-///|
-async test "prepare bundled home raises when seed is missing" {
-  let dir = @fs.tmpdir(prefix="openseek-moonbit-missing-seed-")
-  let engine = @path.Path(dir).join("engine").to_string()
-  try prepare_bundled_home(engine) catch {
-    Failure::Failure(message) => {
-      @fs.rmdir(dir, recursive=true) catch {
-        _ => ()
-      }
-      assert_true(message.contains("bundled MoonBit toolchain seed not found"))
-    }
-    error => {
-      @fs.rmdir(dir, recursive=true) catch {
-        _ => ()
-      }
-      raise error
-    }
-  } noraise {
-    _ => {
-      @fs.rmdir(dir, recursive=true) catch {
-        _ => ()
-      }
-      fail("missing seed prepared successfully")
-    }
-  }
 }
 
 ///|

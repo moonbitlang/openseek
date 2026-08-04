@@ -101,24 +101,24 @@ async fn resolve_moonide_request(
 }
 
 ///|
-fn moonide_spawn_config_from_bundled(
-  bundled : @path.Path?,
-) -> MoonIdeSpawnConfig {
-  match bundled {
-    Some(path) =>
-      {
-        executable: path.to_string(),
-        extra_env: Some(@moonbit.bundled_tool_env(path.dirname())),
-      }
-    None => { executable: "moon", extra_env: None }
-  }
-}
-
-///|
+/// Diagnostics win over fallback: every anomaly — a resolution error, no
+/// toolchain anywhere, or a toolchain without a usable `moon` — surfaces to
+/// the caller as a [HostError] naming the cause, instead of spawning
+/// whatever `moon` the ambient environment happens to serve.
 async fn moonide_spawn_config(state : HostState) -> MoonIdeSpawnConfig {
-  moonide_spawn_config_from_bundled(
-    @moonbit.bundled_moon(state.engine, runtime_dir?=state.runtime_dir),
-  )
+  let toolchain = @moonbit.resolve_toolchain(
+    state.engine,
+    runtime_dir?=state.runtime_dir,
+  ) catch {
+    error if @async.is_being_cancelled() => raise error
+    @moonbit.ToolchainUnavailable as unavailable =>
+      raise HostError("\{unavailable}")
+    error => raise HostError("could not resolve a MoonBit toolchain: \{error}")
+  }
+  {
+    executable: toolchain.moon.to_string(),
+    extra_env: Some(toolchain.tool_env()),
+  }
 }
 
 ///|
@@ -395,14 +395,4 @@ test "physical Moon IDE results keep the lexical attached workspace identity" {
   assert_true(
     moonide_client_path(lexical, physical, "/private/projects/project") is None,
   )
-}
-
-///|
-test "Moon IDE spawn config prefers bundled moon and falls back to PATH" {
-  let bundled = moonide_spawn_config_from_bundled(Some(Path("/tool/bin/moon")))
-  assert_eq(bundled.executable, "/tool/bin/moon")
-  assert_true(bundled.extra_env is Some(_))
-  let fallback = moonide_spawn_config_from_bundled(None)
-  assert_eq(fallback.executable, "moon")
-  assert_true(fallback.extra_env is None)
 }
