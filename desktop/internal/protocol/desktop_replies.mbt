@@ -198,7 +198,9 @@ pub impl FromJson for SessionTerminal with fn from_json(json, path) {
 
 ///|
 /// The durable session item's tagged payload. Its manual codec preserves the
-/// engine store's `{kind,payload}` representation while exposing a closed enum.
+/// engine store's `{kind,payload}` representation. `Unknown` retains the whole
+/// raw item so an older Desktop can load and forward records written by a newer
+/// engine without pretending to understand them.
 pub(all) enum SessionItem {
   User(SessionUserMessage)
   Assistant(SessionAssistantMessage)
@@ -206,6 +208,7 @@ pub(all) enum SessionItem {
   RuntimeNotice(SessionRuntimeNotice)
   Summary(SessionSummary)
   Terminal(SessionTerminal)
+  Unknown(Json)
 } derive(Debug, Eq)
 
 ///|
@@ -217,6 +220,7 @@ pub impl ToJson for SessionItem with fn to_json(self) {
     RuntimeNotice(payload) => { "kind": "runtime_notice", "payload": payload }
     Summary(payload) => { "kind": "summary", "payload": payload }
     Terminal(payload) => { "kind": "terminal", "payload": payload }
+    Unknown(raw) => raw
   }
 }
 
@@ -225,21 +229,34 @@ pub impl FromJson for SessionItem with fn from_json(json, path) {
   guard json is Object(fields) &&
     fields.get("kind") is Some(String(kind_)) &&
     fields.get("payload") is Some(payload) else {
-    raise JsonDecodeError((path, "expected session item"))
+    return Unknown(json)
   }
   match kind_ {
-    "user" => User(@json.from_json(payload, path=path.add_key("payload")))
+    "user" =>
+      User(@json.from_json(payload, path=path.add_key("payload"))) catch {
+        _ => Unknown(json)
+      }
     "assistant" =>
-      Assistant(@json.from_json(payload, path=path.add_key("payload")))
+      Assistant(@json.from_json(payload, path=path.add_key("payload"))) catch {
+        _ => Unknown(json)
+      }
     "tool_result" =>
-      ToolResult(@json.from_json(payload, path=path.add_key("payload")))
+      ToolResult(@json.from_json(payload, path=path.add_key("payload"))) catch {
+        _ => Unknown(json)
+      }
     "runtime_notice" =>
-      RuntimeNotice(@json.from_json(payload, path=path.add_key("payload")))
-    "summary" => Summary(@json.from_json(payload, path=path.add_key("payload")))
+      RuntimeNotice(@json.from_json(payload, path=path.add_key("payload"))) catch {
+        _ => Unknown(json)
+      }
+    "summary" =>
+      Summary(@json.from_json(payload, path=path.add_key("payload"))) catch {
+        _ => Unknown(json)
+      }
     "terminal" =>
-      Terminal(@json.from_json(payload, path=path.add_key("payload")))
-    _ =>
-      raise JsonDecodeError((path.add_key("kind"), "unknown session item kind"))
+      Terminal(@json.from_json(payload, path=path.add_key("payload"))) catch {
+        _ => Unknown(json)
+      }
+    _ => Unknown(json)
   }
 }
 
@@ -254,7 +271,8 @@ pub(all) struct SessionEvent {
 
 ///|
 /// The session document returned by the engine. Metadata added by newer
-/// engines stays optional; Desktop's transcript is defined by `events`.
+/// engines stays optional; Desktop's transcript is defined by `events`, whose
+/// unknown items remain available for forward-compatible round trips.
 pub(all) struct SessionDocument {
   version : Int?
   id : String?

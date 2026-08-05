@@ -732,8 +732,9 @@ fn RecoveredSettlement::from_reply(
 
 ///|
 /// One typed `session.event` commit. The durable sequence is duplicated in
-/// the outer notification for routing; the closed item enum is what the
-/// transcript projector consumes.
+/// the outer notification for routing; the typed item enum is what the
+/// transcript projector consumes, with raw unknown items retained for newer
+/// Desktop versions.
 fn session_event_msg(payload : @protocol.SessionCommitPayload) -> DeviceMsg? {
   Some(
     SessionCommitted(

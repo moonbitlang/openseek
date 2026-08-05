@@ -88,9 +88,10 @@ pub fn transcript_from_session(
 ///|
 /// Project one durable session item — a `session.event` commit's
 /// `{kind, payload}` — onto the transcript, appending the 0..N items it
-/// renders as. The same projector `transcript_from_session_json` replays a
-/// whole snapshot through, so a transcript built incrementally from commits
-/// and one rebuilt from the next snapshot agree by construction.
+/// renders as. Unknown items deliberately append nothing: their event sequence
+/// still advances the durable watermark, while their raw JSON stays available
+/// to newer code. The same projector replays snapshots and live commits, so
+/// both paths agree by construction.
 pub fn apply_session_item(
   items : Array[TranscriptItem],
   item : @desktop_protocol.SessionItem,
@@ -157,6 +158,7 @@ pub fn apply_session_item(
     }
     @desktop_protocol.Terminal(terminal) =>
       SessionTerminalProjection(terminal).append_to(items)
+    @desktop_protocol.Unknown(_) => ()
   }
 }
 
@@ -294,6 +296,21 @@ test "an explicit session watermark remains authoritative" {
   let view = session_from_reply({ ..reply, watermark: Some(7) })
   inspect(view.watermark, content="7")
   inspect(view.event_boundaries.length(), content="1")
+}
+
+///|
+test "session load keeps unknown items without hiding known transcript" {
+  let events =
+    #|{"sequence":1,"item":{"kind":"user","payload":{"content":"question"}}},
+    #|{"sequence":2,"item":{"kind":"future_item","payload":{"value":42},"future_field":true}},
+    #|{"sequence":3,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}
+  let reply = session_reply(events)
+  let view = session_from_reply(reply)
+  inspect(view.watermark, content="3")
+  inspect(view.event_boundaries.length(), content="3")
+  inspect(view.items.length(), content="2")
+  inspect(view.items[0].content, content="question")
+  inspect(view.items[1].content, content="answer")
 }
 
 ///|

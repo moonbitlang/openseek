@@ -1136,6 +1136,36 @@ async test "timed out sessions show is killed and the next read can run" {
 
 ///|
 #cfg(not(platform="windows"))
+async test "session load preserves a future item without hiding known events" {
+  archive_env_test_lock.acquire()
+  defer archive_env_test_lock.release()
+  let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+  let dir = @fs.tmpdir(prefix="openseek-load-future-item-")
+  let engine = dir + "/engine.sh"
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir)
+  defer restore_session_root_env(previous)
+  @fsx.ensure_dir(Path(dir + "/sessions/s-future"))
+  @fs.write_file(
+    engine,
+    "#!/bin/sh\nprintf '%s' '{\"events\":[{\"sequence\":1,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"question\"}}},{\"sequence\":2,\"item\":{\"kind\":\"future_item\",\"payload\":{\"value\":42}}},{\"sequence\":3,\"item\":{\"kind\":\"assistant\",\"payload\":{\"content\":\"answer\"}}}]}'\n",
+    create_mode=CreateOrTruncate,
+  )
+  assert_eq(@process.run("chmod", ["+x", engine]), 0)
+  let reply = load_session(new_engine_manager(engine), {
+    session: "s-future",
+    workspace: None,
+  })
+  guard reply.session.events is Some(events) else {
+    fail("expected session events")
+  }
+  assert_eq(events.length(), 3)
+  assert_true(events[1].item is Unknown(_))
+  assert_eq(reply.watermark, Some(3))
+  @fs.rmdir(dir, recursive=true)
+}
+
+///|
+#cfg(not(platform="windows"))
 async test "load rejects a detached workspace hint instead of probing global" {
   archive_env_test_lock.acquire()
   defer archive_env_test_lock.release()

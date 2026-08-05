@@ -474,6 +474,7 @@ pub(all) enum SessionItem {
   RuntimeNotice(SessionRuntimeNotice)
   Summary(SessionSummary)
   Terminal(SessionTerminal)
+  Unknown(Json)
 } derive(Eq, @debug.Debug)
 pub impl ToJson for SessionItem
 pub impl @json.FromJson for SessionItem

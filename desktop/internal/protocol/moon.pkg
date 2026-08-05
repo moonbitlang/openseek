@@ -1,5 +1,6 @@
 import {
   "bobzhang/openseek_protocol" @wire,
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 
