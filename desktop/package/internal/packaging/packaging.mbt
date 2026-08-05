@@ -651,7 +651,13 @@ async fn install_empty_mimalloc(ws : Workspace) -> MimallocSwap? {
   }
   let scratch = @asyncfs.tmpdir(prefix="openseek-disable-mimalloc-")
   let backup = join_path(scratch, "libmoonbitrun.o")
-  copy_file(object, backup)
+  // `cp -p` (this path only runs on macOS) carries the object's mtime into
+  // the backup so restoration can put it back byte- and time-identical. A
+  // fresh mtime on this file invalidates the link step of every native
+  // executable moon builds on the machine — one packaging run would tax the
+  // next `proton_cli` install (and every other moon link) with a pointless
+  // relink.
+  run_checked("cp", ["-p", object, backup], dir=ws.dir())
   let empty_source = join_path(scratch, "empty.c")
   write_text(empty_source, "int openseek_mimalloc_disabled;\n")
   run_checked("cc", ["-c", empty_source, "-o", object], dir=ws.dir())
@@ -668,7 +674,10 @@ async fn install_empty_mimalloc(ws : Workspace) -> MimallocSwap? {
 /// which matters more to surface than the current command's exit path.
 async fn restore_mimalloc(swap : MimallocSwap?) -> Unit {
   guard swap is Some(swap) else { return }
-  copy_file(swap.backup, swap.object) catch {
+  // `-p` restores the original mtime along with the bytes, so the swap
+  // leaves no trace in the runtime object's metadata and later moon links
+  // stay cached.
+  run_checked("cp", ["-p", swap.backup, swap.object], dir=swap.scratch) catch {
     error =>
       println(
         "warning: failed to restore \{swap.object} (\{error}); rerun to fix mimalloc",
