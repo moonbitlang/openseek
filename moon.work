@@ -7,5 +7,7 @@ members = [
   "./desktop",
   "./desktop/lepus/config",
   "./desktop/lepus/extensions",
+  "./desktop/lepus/rsa",
+  "./desktop/lepus/updater",
   "./desktop/lepus/proton",
 ]

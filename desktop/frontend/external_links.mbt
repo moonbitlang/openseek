@@ -69,8 +69,9 @@ fn open_external_link(dispatch : @cmd.Emit[Msg], url : String) -> @cmd.Cmd {
 ///|
 /// Install one delegated capture listener and return its identity for removal.
 /// Browser pages preserve ordinary navigation but force safe external targets
-/// into a new tab. Proton pages prevent every anchor navigation (so the app
-/// frame cannot escape) and emit only allowlisted external schemes.
+/// into a new tab. Pages with the injected Desktop bridge prevent every anchor
+/// navigation (so the app frame cannot escape) and emit only allowlisted
+/// external schemes.
 extern "js" fn add_external_link_capture(
   on_external : (String) -> Unit,
 ) -> @js.Value =
@@ -88,7 +89,7 @@ extern "js" fn add_external_link_capture(
   #|     const supported = destination.protocol === "http:" ||
   #|       destination.protocol === "https:" ||
   #|       destination.protocol === "mailto:";
-  #|     if (globalThis.location?.protocol === "proton:") {
+  #|     if (globalThis.__MoonBit__?.openseek) {
   #|       event.preventDefault();
   #|       if (supported) onExternal(destination.href);
   #|       return;

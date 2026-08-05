@@ -54,7 +54,7 @@ pub fn ChannelId::from_uri_authority(authority : String) -> ChannelId? {
 /// local host. `None` in a browser — the console at `/` holds no channel
 /// until it fetches the device roster and connects each device.
 pub fn page_channel() -> ChannelId? {
-  if using_proton_bridge() {
+  if openseek_api() is Some(_) {
     Some(Local)
   } else {
     None

@@ -18,17 +18,6 @@ impl Show for BridgeError with fn output(self, logger) {
 }
 
 ///|
-/// Whether this page is the desktop webview (served from `proton://app/`,
-/// where the `__MoonBit__` bridge is injected) as opposed to a browser.
-pub fn using_proton_bridge() -> Bool {
-  guard js_prop(@js.globalThis, "location") is Some(location) else {
-    return false
-  }
-  (@js.Cast::into((location.get_with_string("protocol") : @js.Value)) : String?)
-  is Some("proton:")
-}
-
-///|
 /// `globalThis.__MoonBit__.openseek`, once the proton bridge is injected.
 pub fn openseek_api() -> @js.Value? {
   guard moonbit_bridge_root() is Some(root) else { return None }
@@ -127,7 +116,7 @@ pub fn bridge_error_is_definite(error : Error) -> Bool {
   match error {
     BridgeError(_) => false
     @js.Error_(value) =>
-      using_proton_bridge() || browser_rpc_error_is_definite(value)
+      openseek_api() is Some(_) || browser_rpc_error_is_definite(value)
     _ => false
   }
 }

@@ -148,7 +148,9 @@ pub async fn self_update_unavailable_reason(bundle_path~ : String) -> String? {
   if team_identifier(bundle_path) is Some(_) {
     bundle_replacement_failure(bundle_path)
   } else {
-    Some("The running OpenSeek bundle is not Developer ID signed.")
+    Some(
+      "Update is not available because current application is not signed with Developer ID",
+    )
   }
 }
 

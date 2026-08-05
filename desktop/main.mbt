@@ -53,10 +53,12 @@ fn main {
     // relay WebSocket instead (docs/remote-protocol.md).
     let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760)
       .debug_level(1)
-      .extension(@extension.openseek_extension(state, bridge))
+      // Both command extensions are deliberately exposed to the configured
+      // entry page; registration alone does not grant renderer access.
+      .expose(@extension.openseek_extension(state, bridge))
       // System notifications are an ordinary generated extension now: the
       // frontend posts them and receives `notification.click` with the run id.
-      .extension(@notification.extension())
+      .expose(@notification.extension())
       // The connect request proves the page can issue commands; this paired
       // lifecycle supplies the window-owned event destination that remains
       // valid after that request returns.

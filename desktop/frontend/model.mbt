@@ -1356,6 +1356,7 @@ fn initial_model() -> Model {
   // browser console, the device (`?device=`, minted by the relay's redirect
   // off the retired `/d/<id>/` routes); the first conversation lands there.
   let preselect_workspace = @interop.page_query_param("workspace")
+  let is_desktop = @interop.openseek_api() is Some(_)
   {
     // The desktop window's one channel; a browser page starts empty and
     // fills `devices` from the fetched roster (`apply_roster`).
@@ -1382,10 +1383,10 @@ fn initial_model() -> Model {
     host_settings_revision: -1,
     deferred_host_settings: None,
     legacy_cleanup_pending: false,
-    is_desktop: @interop.using_proton_bridge(),
+    is_desktop,
     // Every browser page is the console: it signs in against the relay and
     // fetches the device roster before any channel opens.
-    console: if @interop.using_proton_bridge() {
+    console: if is_desktop {
       None
     } else {
       Some(

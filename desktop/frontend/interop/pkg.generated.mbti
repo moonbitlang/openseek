@@ -39,8 +39,6 @@ pub fn set_trimmed(@js.Object, String, String) -> Unit
 
 pub fn set_workspace(@js.Object, @pathx.Absolute?) -> Unit
 
-pub fn using_proton_bridge() -> Bool
-
 pub fn viewport_width() -> Int?
 
 pub fn ws_close(ChannelId) -> Unit
