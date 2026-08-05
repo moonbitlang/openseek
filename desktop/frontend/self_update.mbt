@@ -1,8 +1,10 @@
 // The self-update flow, driven from this side: the app asks `check_update`
-// once at startup (and whenever the user asks in Settings), shows an accent
-// Update button while a release is installable, and on click walks
-// `download_update` → `apply_update` → window close, confirming first when
-// a conversation would be interrupted.
+// when the authoritative settings first load, again whenever the update
+// channel moves, and whenever the user asks in Settings; it starts
+// `download_update` by itself as soon as a check reports an installable
+// release. The staged download then waits in `UpdateReady` until the user
+// asks to restart — confirming first when a conversation would be
+// interrupted — and only that click walks `apply_update` → window close.
 
 ///|
 /// Which release stream `check_update` asks. Derived from the server
@@ -18,6 +20,18 @@ fn UpdateChannel::wire(self : UpdateChannel) -> String {
   match self {
     Production => "production"
     Staging => "staging"
+  }
+}
+
+///|
+/// The inverse of `wire`, for the channel tag the host stamps on its
+/// download notifications. An unknown name reads as `None` — an untagged
+/// event, which the handlers accept rather than fence.
+fn UpdateChannel::from_wire(wire : String) -> UpdateChannel? {
+  match wire {
+    "production" => Some(Production)
+    "staging" => Some(Staging)
+    _ => None
   }
 }
 
@@ -100,12 +114,27 @@ priv enum UpdateUx {
   UpdateUnknown
   CheckingForUpdate
   UpToDate
-  // A newer release; `installable` gates the accent Update button — a dev
-  // binary or a platform without a package only gets the announcement.
+  // A newer release; `installable` gates whether a download can start — a
+  // dev binary or a platform without a package only gets the announcement.
+  // Installable releases download themselves straight from the check, so
+  // this state is the resting point after a failed download, where the
+  // accent button offers a retry.
   UpdateAvailable(version~ : String, installable~ : Bool)
+  // A download in flight — started by the app itself right after a check,
+  // or by a retry click on the restored offer. `channel` is the one the
+  // download serves: notifications tagged with another channel are void,
+  // and a channel no longer matching the provider's marks the flow as
+  // draining — kept only until its terminal event, whose result is
+  // discarded in favor of a fresh check.
+  DownloadingUpdate(
+    version~ : String,
+    progress~ : UpdateDownloadProgress,
+    channel~ : UpdateChannel
+  )
+  // Downloaded and staged; restarting is the user's call.
+  UpdateReady(version~ : String)
   // The modal asking to interrupt running conversations is up.
   ConfirmingRestart(version~ : String)
-  DownloadingUpdate(version~ : String, progress~ : UpdateDownloadProgress)
   // The bundle is swapped; the window is about to close.
   RestartingForUpdate(version~ : String)
   // What the Settings row shows when a check could not answer.
@@ -168,8 +197,10 @@ fn decode_update_check(text : String) -> UpdateCheck? {
 
 ///|
 /// Ask the host to check the channel's manifest. Every outcome lands in
-/// `UpdateCheckFinished`: op failures (bridge missing, host error) fold
-/// into `CheckUnreachable`, so the handler has one shape to route.
+/// `UpdateCheckFinished` carrying the channel it asked — the reply's
+/// validity is bound to that channel, not to whichever one is in force when
+/// it lands. Op failures (bridge missing, host error) fold into
+/// `CheckUnreachable`, so the handler has one shape to route.
 fn check_for_updates(
   dispatch : @cmd.Emit[Msg],
   channel : UpdateChannel,
@@ -194,9 +225,67 @@ fn check_for_updates(
       } catch {
         error => CheckUnreachable(reason=@interop.bridge_error_text(error))
       }
-      scheduler.add(dispatch(UpdateCheckFinished(result~, explicit~)))
+      scheduler.add(dispatch(UpdateCheckFinished(result~, channel~, explicit~)))
     })
   })
+}
+
+///|
+/// Drop whatever the update flow knew and quietly ask the channel now in
+/// force — the shared tail of every path that voids the old channel's
+/// answer (a provider switch, a drained download settling). A browser page
+/// only forgets: checking is the desktop window's alone.
+fn forget_and_recheck(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> (@cmd.Cmd, Model) {
+  (
+    if model.is_desktop {
+      check_for_updates(
+        dispatch,
+        model.api_provider.update_channel(),
+        explicit=false,
+      )
+    } else {
+      @cmd.none
+    },
+    { ..model, update_ux: UpdateUnknown },
+  )
+}
+
+///|
+/// The follow-through after any event that can move the authoritative
+/// update channel: the first host-settings load, a provider switch in
+/// Settings, a remote edit landing, a failed save restoring the old
+/// provider. The moment the channel is known — or moves — whatever the old
+/// channel's check said no longer applies: forget it and quietly check the
+/// channel now in force. Carve-outs, in order: a download in flight keeps
+/// the host pump busy, so the flow stays put and merely turns stale (its
+/// own channel no longer matches the provider's); its terminal event
+/// performs the deferred forget-and-recheck. An apply in flight is past
+/// interfering with — the window is about to close either way. A staged
+/// release survives a settings reload that kept the channel, but a move
+/// voids it: the pump is idle after staging, so the re-check runs at once.
+fn recheck_update_channel(
+  dispatch : @cmd.Emit[Msg],
+  before : Model,
+  next : Model,
+) -> (@cmd.Cmd, Model) {
+  let channel = next.api_provider.update_channel()
+  let became_known = !before.host_settings_loaded() &&
+    next.host_settings_loaded()
+  let moved = channel != before.api_provider.update_channel()
+  guard became_known || moved else { return (@cmd.none, next) }
+  match next.update_ux {
+    DownloadingUpdate(..) | RestartingForUpdate(..) => (@cmd.none, next)
+    UpdateReady(..) | ConfirmingRestart(..) =>
+      if moved {
+        forget_and_recheck(dispatch, next)
+      } else {
+        (@cmd.none, next)
+      }
+    _ => forget_and_recheck(dispatch, next)
+  }
 }
 
 ///|
@@ -219,7 +308,12 @@ fn download_update(
       ) catch {
         error => {
           scheduler.add(
-            dispatch(UpdateFailed(message=@interop.bridge_error_text(error))),
+            dispatch(
+              UpdateFailed(
+                message=@interop.bridge_error_text(error),
+                channel=Some(channel),
+              ),
+            ),
           )
           return
         }

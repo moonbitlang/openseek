@@ -750,18 +750,19 @@ fn sidebar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-/// The sidebar footer: Skills and Settings, and — while an installable
-/// release is on offer — the accent Update button above them, tracking the
-/// download so its progress stays visible from any screen.
+/// The sidebar footer: Skills and Settings, and — while a release is being
+/// fetched or waiting to install — the accent update button above them,
+/// tracking the automatic download so its progress stays visible from any
+/// screen and asking for the restart once the release is staged.
 fn sidebar_footer_buttons(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> Array[@html.Html] {
   let buttons : Array[@html.Html] = []
   let update_label : String? = match model.update_ux {
-    UpdateAvailable(installable=true, ..) | ConfirmingRestart(..) =>
-      Some("Update")
+    UpdateAvailable(installable=true, ..) => Some("Update")
     DownloadingUpdate(progress~, ..) => Some(progress.sidebar_label())
+    UpdateReady(..) | ConfirmingRestart(..) => Some("Restart to update")
     RestartingForUpdate(..) => Some("Restarting…")
     _ => None
   }
@@ -769,7 +770,7 @@ fn sidebar_footer_buttons(
     buttons.push(
       @html.button(
         class="sidebar-button primary",
-        disabled=!(model.update_ux is UpdateAvailable(..)),
+        disabled=!(model.update_ux is (UpdateAvailable(..) | UpdateReady(..))),
         on_click=dispatch(UpdateClicked),
         [
           @html.span(class="sidebar-icon", icon(icon_arrow_up)),
@@ -1962,18 +1963,35 @@ fn update_check_controls(
           ),
         )
       }
+    UpdateReady(version~) =>
+      controls.push(
+        @html.button(
+          class="primary",
+          on_click=dispatch(UpdateClicked),
+          "Restart to install \{version}",
+        ),
+      )
     ConfirmingRestart(version~) =>
       // The interrupt modal is up over this row; keep the button visible
       // behind it so the row does not blink while the user decides.
-      controls.push(@html.button(class="primary", "Update to \{version}"))
-    DownloadingUpdate(version~, progress~) => {
+      controls.push(
+        @html.button(class="primary", "Restart to install \{version}"),
+      )
+    DownloadingUpdate(version~, progress~, channel~) => {
       let (fill_class, fill_style) = match progress.percentage() {
         Some(percent) => ("update-progress-fill", ["width: \{percent}%"])
         None => ("update-progress-fill indeterminate", [])
       }
+      // A flow whose channel the provider has left is only draining; its
+      // result will be discarded, so its version is not worth announcing.
+      let status = if channel == model.api_provider.update_channel() {
+        progress.status_text(version)
+      } else {
+        "Finishing an obsolete download…"
+      }
       controls.push(
         @html.div(class="update-progress", [
-          @html.span(class="update-status", progress.status_text(version)),
+          @html.span(class="update-status", status),
           // A CSS div keeps this available on the current Rabbita element
           // surface; the adjacent text is the accessible progress value.
           @html.div(class="update-progress-track", [
@@ -1992,8 +2010,15 @@ fn update_check_controls(
   controls.push(
     @html.button(
       class="secondary",
-      disabled=model.update_ux
-        is (CheckingForUpdate | DownloadingUpdate(..) | RestartingForUpdate(..)),
+      // Also held until the authoritative settings land: before that the
+      // channel is only `initial_model`'s default, and a check would ask
+      // the wrong stream.
+      disabled=!model.host_settings_loaded() ||
+        model.update_ux
+        is (CheckingForUpdate
+        | DownloadingUpdate(..)
+        | UpdateReady(..)
+        | RestartingForUpdate(..)),
       on_click=dispatch(CheckForUpdates),
       "Check for updates",
     ),
@@ -2762,26 +2787,27 @@ fn bridge_lost_overlay(message : String) -> @html.Html {
 }
 
 ///|
-/// The modal shown when updating would cut running conversations off:
-/// restarting tears the engine processes down mid-run. The backdrop and the
-/// Cancel button both keep the current version running.
+/// The modal shown when restarting into a staged update would cut running
+/// conversations off: restarting tears the engine processes down mid-run.
+/// The backdrop and the Cancel button both keep the current version running,
+/// with the downloaded release parked for later.
 fn update_confirm_modal(
   dispatch : @cmd.Emit[Msg],
   version : String,
 ) -> @html.Html {
   @html.div(class="modal-backdrop", on_click=dispatch(CancelUpdateRestart), [
     @html.div(class="modal", [
-      @html.div(class="modal-title", "Update to \{version}?"),
+      @html.div(class="modal-title", "Restart into \{version}?"),
       @html.div(
         class="modal-body",
-        "A conversation is still running. Updating restarts the app and interrupts it; the transcript so far is saved.",
+        "A conversation is still running. Restarting the app interrupts it; the transcript so far is saved.",
       ),
       @html.div(class="modal-actions", [
         @html.button(on_click=dispatch(CancelUpdateRestart), "Keep working"),
         @html.button(
           class="primary",
           on_click=dispatch(ConfirmUpdateRestart),
-          "Update and restart",
+          "Restart now",
         ),
       ]),
     ]),

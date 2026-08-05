@@ -99,7 +99,17 @@ fn bridge_msg(
       terminal_exit_msg(channel, payload).map(msg => Terminal(msg))
     "update.downloaded" =>
       if channel is Local {
-        Some(UpdateDownloaded)
+        // The host names the version it actually staged (its download-time
+        // re-check may have found a newer release than the frontend's
+        // check); a payload without one still completes the flow with the
+        // version the check announced. The channel tag lets the handler
+        // void an event from a channel the user has since left.
+        Some(
+          UpdateDownloaded(
+            version=@jsonx.json_text(payload, "version"),
+            channel=payload_update_channel(payload),
+          ),
+        )
       } else {
         None
       }
@@ -111,19 +121,36 @@ fn bridge_msg(
           Some(total) if total > 0 => Some(total)
           _ => None
         }
-        Some(UpdateDownloadProgress(downloaded_bytes~, total_bytes~))
+        Some(
+          UpdateDownloadProgress(
+            downloaded_bytes~,
+            total_bytes~,
+            channel=payload_update_channel(payload),
+          ),
+        )
       } else {
         None
       }
     "update.download_failed" =>
       if channel is Local {
         @jsonx.json_text(payload, "message").map(message => {
-          UpdateFailed(message~)
+          UpdateFailed(message~, channel=payload_update_channel(payload))
         })
       } else {
         None
       }
     _ => device_msg(method_, payload).map(msg => FromDevice(channel, msg))
+  }
+}
+
+///|
+/// The channel tag the host's download pump stamps on its notifications.
+/// Absent or unrecognized reads as None — an untagged event the update
+/// handlers accept rather than fence.
+fn payload_update_channel(payload : Map[String, Json]) -> UpdateChannel? {
+  match @jsonx.json_text(payload, "channel") {
+    Some(wire) => UpdateChannel::from_wire(wire)
+    None => None
   }
 }
 
@@ -295,17 +322,35 @@ test "update download notifications control only the local desktop flow" {
     bridge_msg(Local, "update.download_progress", {
       "downloaded_bytes": Json::number(42),
       "total_bytes": Json::number(100),
+      "channel": Json::string("staging"),
     })
-    is Some(UpdateDownloadProgress(downloaded_bytes=42, total_bytes=Some(100))),
+    is Some(
+      UpdateDownloadProgress(
+        downloaded_bytes=42,
+        total_bytes=Some(100),
+        channel=Some(Staging)
+      )
+    ),
   )
   assert_true(
-    bridge_msg(Local, "update.downloaded", Map([])) is Some(UpdateDownloaded),
+    bridge_msg(Local, "update.downloaded", {
+      "version": Json::string("0.2.2"),
+      "channel": Json::string("production"),
+    })
+    is Some(UpdateDownloaded(version=Some("0.2.2"), channel=Some(Production))),
+  )
+  // A payload without the tags still decodes: version falls back to the
+  // check's and the untagged channel is accepted rather than fenced.
+  assert_true(
+    bridge_msg(Local, "update.downloaded", Map([]))
+    is Some(UpdateDownloaded(version=None, channel=None)),
   )
   assert_true(
     bridge_msg(Local, "update.download_failed", {
       "message": Json::string("digest mismatch"),
+      "channel": Json::string("staging"),
     })
-    is Some(UpdateFailed(message="digest mismatch")),
+    is Some(UpdateFailed(message="digest mismatch", channel=Some(Staging))),
   )
   assert_true(
     bridge_msg(Local, "update.download_progress", {
@@ -1257,7 +1302,13 @@ fn apply_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       ) catch {
         error => {
           scheduler.add(
-            dispatch(UpdateFailed(message=@interop.bridge_error_text(error))),
+            dispatch(
+              // An apply is not a download and serves no channel; untagged.
+              UpdateFailed(
+                message=@interop.bridge_error_text(error),
+                channel=None,
+              ),
+            ),
           )
           return
         }

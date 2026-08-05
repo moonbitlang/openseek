@@ -1150,27 +1150,25 @@ fn update_msg(
       guard model.host_settings_loaded() else { return (@cmd.none, model) }
       let provider = ApiProvider::parse(value)
       // A server switch can move the update channel with it; whatever the
-      // old channel's check said no longer applies.
-      let update_ux = if provider.update_channel() ==
-        model.api_provider.update_channel() {
-        model.update_ux
-      } else {
-        UpdateUnknown
-      }
+      // old channel's check said no longer applies, and the channel now in
+      // force deserves a fresh quiet check.
+      let (recheck, next) = recheck_update_channel(dispatch, model, {
+        ..model,
+        api_provider: provider,
+        setup_api_key: "",
+        settings_saves: model.settings_saves + 1,
+      })
       (
-        push_host_settings(
-          dispatch,
-          model.focused,
-          provider_settings_patch(provider),
-          model.focused_connection_generation(),
-        ),
-        {
-          ..model,
-          api_provider: provider,
-          setup_api_key: "",
-          settings_saves: model.settings_saves + 1,
-          update_ux,
-        },
+        @cmd.batch([
+          push_host_settings(
+            dispatch,
+            model.focused,
+            provider_settings_patch(provider),
+            model.focused_connection_generation(),
+          ),
+          recheck,
+        ]),
+        next,
       )
     }
     CustomApiUrlChanged(value) => {
@@ -1250,13 +1248,19 @@ fn update_msg(
       (disconnect_remote(dispatch), { ..model, remote_error: None })
     RemoteDisconnectFailed(message) =>
       (@cmd.none, { ..model, remote_error: Some(message) })
-    CheckForUpdates =>
-      // A user-initiated check; never stacks on an in-flight one, and never
-      // interrupts a download already underway.
+    CheckForUpdates => {
+      // Until the authoritative settings land, the provider — and with it
+      // the channel — is only `initial_model`'s default; a check now would
+      // ask the wrong stream (the button is disabled to match).
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      // A user-initiated check; never stacks on an in-flight one, never
+      // interrupts a download already underway, and never clobbers a staged
+      // download waiting for its restart.
       if model.update_ux
         is (CheckingForUpdate
         | ConfirmingRestart(..)
         | DownloadingUpdate(..)
+        | UpdateReady(..)
         | RestartingForUpdate(..)) {
         (@cmd.none, model)
       } else {
@@ -1269,7 +1273,8 @@ fn update_msg(
           { ..model, update_ux: CheckingForUpdate },
         )
       }
-    UpdateCheckFinished(result~, explicit~) => {
+    }
+    UpdateCheckFinished(result~, channel~, explicit~) => {
       // A stale reply must not clobber a flow the user has since started
       // (confirming, downloading); only the waiting states accept results.
       guard model.update_ux
@@ -1279,15 +1284,39 @@ fn update_msg(
         | UpdateCheckFailed(..)) else {
         return (@cmd.none, model)
       }
+      // A reply is only as good as the channel it asked. If the provider
+      // moved while the request was in flight, the answer belongs to a
+      // channel no longer in force and reads as if it never arrived — the
+      // switch itself already started a fresh check.
+      guard channel == model.api_provider.update_channel() else {
+        return (@cmd.none, model)
+      }
       match result {
-        CheckFound(version~, installable~, unavailable_reason~) => {
-          let (cmd, next) = if !installable &&
-            unavailable_reason is Some(reason) {
+        CheckFound(version~, installable=true, ..) =>
+          // An installable release downloads itself — restarting into it
+          // stays the user's call. The download asks the channel the check
+          // answered for, not whichever one a later switch installs.
+          (
+            download_update(dispatch, channel),
+            {
+              ..model,
+              update_ux: DownloadingUpdate(
+                version~,
+                progress={ downloaded_bytes: 0, total_bytes: None },
+                channel~,
+              ),
+            },
+          )
+        CheckFound(version~, installable=false, unavailable_reason~) => {
+          let (cmd, next) = if unavailable_reason is Some(reason) {
             model.notify_error(dispatch, reason)
           } else {
             (@cmd.none, model)
           }
-          (cmd, { ..next, update_ux: UpdateAvailable(version~, installable~) })
+          (
+            cmd,
+            { ..next, update_ux: UpdateAvailable(version~, installable=false) },
+          )
         }
         CheckUpToDate =>
           (
@@ -1350,70 +1379,41 @@ fn update_msg(
       }
     }
     UpdateClicked =>
-      // Only meaningful while an installable release is on offer; the
-      // button does not render otherwise, but a stale click must not
-      // restart a download.
-      if model.update_ux is UpdateAvailable(version~, installable=true) {
-        if model.any_conversation_busy() {
-          (@cmd.none, { ..model, update_ux: ConfirmingRestart(version~) })
-        } else {
+      // The one accent button walks the whole flow: from an offer it
+      // retries the download (harmless while conversations run), from a
+      // staged download it restarts — asking first when that would cut a
+      // conversation off. The button does not render in other states, but
+      // a stale click must not restart a download or replay an apply.
+      match model.update_ux {
+        UpdateAvailable(version~, installable=true) => {
+          // The offer always belongs to the provider's current channel — a
+          // channel move forgets `UpdateAvailable` rather than keeping it.
+          let channel = model.api_provider.update_channel()
           (
-            download_update(dispatch, model.api_provider.update_channel()),
+            download_update(dispatch, channel),
             {
               ..model,
-              update_ux: DownloadingUpdate(version~, progress={
-                downloaded_bytes: 0,
-                total_bytes: None,
-              }),
+              update_ux: DownloadingUpdate(
+                version~,
+                progress={ downloaded_bytes: 0, total_bytes: None },
+                channel~,
+              ),
             },
           )
         }
-      } else {
-        (@cmd.none, model)
+        UpdateReady(version~) =>
+          if model.any_conversation_busy() {
+            (@cmd.none, { ..model, update_ux: ConfirmingRestart(version~) })
+          } else {
+            (
+              apply_update(dispatch),
+              { ..model, update_ux: RestartingForUpdate(version~) },
+            )
+          }
+        _ => (@cmd.none, model)
       }
     ConfirmUpdateRestart =>
       if model.update_ux is ConfirmingRestart(version~) {
-        (
-          download_update(dispatch, model.api_provider.update_channel()),
-          {
-            ..model,
-            update_ux: DownloadingUpdate(version~, progress={
-              downloaded_bytes: 0,
-              total_bytes: None,
-            }),
-          },
-        )
-      } else {
-        (@cmd.none, model)
-      }
-    CancelUpdateRestart =>
-      if model.update_ux is ConfirmingRestart(version~) {
-        (
-          @cmd.none,
-          { ..model, update_ux: UpdateAvailable(version~, installable=true) },
-        )
-      } else {
-        (@cmd.none, model)
-      }
-    UpdateDownloadProgress(downloaded_bytes~, total_bytes~) =>
-      if model.update_ux is DownloadingUpdate(version~, ..) {
-        (
-          @cmd.none,
-          {
-            ..model,
-            update_ux: DownloadingUpdate(version~, progress={
-              downloaded_bytes,
-              total_bytes,
-            }),
-          },
-        )
-      } else {
-        // A late event must not revive a completed, failed, or never-started
-        // download after the UI has moved to another state.
-        (@cmd.none, model)
-      }
-    UpdateDownloaded =>
-      if model.update_ux is DownloadingUpdate(version~, ..) {
         (
           apply_update(dispatch),
           { ..model, update_ux: RestartingForUpdate(version~) },
@@ -1421,20 +1421,99 @@ fn update_msg(
       } else {
         (@cmd.none, model)
       }
-    UpdateFailed(message~) => {
-      // A failed download can be retried. A failed swap means the preflight
-      // no longer considers this location replaceable, so withdraw the
-      // button until a fresh check says otherwise. Both failures say why.
-      let (cmd, next) = model.notify_error(dispatch, message)
-      let update_ux = match next.update_ux {
-        DownloadingUpdate(version~, ..) =>
-          UpdateAvailable(version~, installable=true)
-        RestartingForUpdate(version~) =>
-          UpdateAvailable(version~, installable=false)
-        other => other
+    CancelUpdateRestart =>
+      if model.update_ux is ConfirmingRestart(version~) {
+        // The download already happened; declining the restart just parks
+        // the staged release until the user is ready.
+        (@cmd.none, { ..model, update_ux: UpdateReady(version~) })
+      } else {
+        (@cmd.none, model)
       }
-      (cmd, { ..next, update_ux, })
-    }
+    UpdateDownloadProgress(downloaded_bytes~, total_bytes~, channel~) =>
+      if model.update_ux is DownloadingUpdate(version~, channel=flow, ..) &&
+        !(channel is Some(tagged) && tagged != flow) {
+        (
+          @cmd.none,
+          {
+            ..model,
+            update_ux: DownloadingUpdate(
+              version~,
+              progress={ downloaded_bytes, total_bytes },
+              channel=flow,
+            ),
+          },
+        )
+      } else {
+        // A late event must not revive a completed, failed, or never-started
+        // download after the UI has moved to another state, and another
+        // channel's bytes must not animate this flow's bar.
+        (@cmd.none, model)
+      }
+    UpdateDownloaded(version~, channel~) =>
+      if model.update_ux is DownloadingUpdate(version=checked, channel=flow, ..) &&
+        !(channel is Some(tagged) && tagged != flow) {
+        if flow == model.api_provider.update_channel() {
+          // Staged, not applied: swapping the bundle under the running app
+          // waits for the user's restart, so nothing is pulled out from
+          // beneath the process (or the person) mid-flight. The version
+          // shown from here on is the one the host actually staged — its
+          // deliberate re-check may have picked up a release newer than the
+          // one this flow started from.
+          (
+            @cmd.none,
+            {
+              ..model,
+              update_ux: UpdateReady(version=version.unwrap_or(checked)),
+            },
+          )
+        } else {
+          // The provider moved while this download drained; what the host
+          // staged belongs to a channel no longer in force. Discard the
+          // result and ask the channel the user actually chose.
+          forget_and_recheck(dispatch, model)
+        }
+      } else {
+        (@cmd.none, model)
+      }
+    UpdateFailed(message~, channel~) =>
+      match model.update_ux {
+        DownloadingUpdate(version~, channel=flow, ..) =>
+          if channel is Some(tagged) && tagged != flow {
+            // Another channel's failure is not this flow's business.
+            (@cmd.none, model)
+          } else if flow == model.api_provider.update_channel() {
+            // A failed download — the app's own background download
+            // included — says why and restores the offer for a retry.
+            let (cmd, next) = model.notify_error(dispatch, message)
+            (
+              cmd,
+              { ..next, update_ux: UpdateAvailable(version~, installable=true) },
+            )
+          } else {
+            // A draining download failing changes nothing the user still
+            // cares about — they already left its channel and a fresh
+            // check fires here — so it resolves quietly.
+            forget_and_recheck(dispatch, model)
+          }
+        RestartingForUpdate(version~) => {
+          // A failed swap means the preflight no longer considers this
+          // location replaceable, so withdraw the button until a fresh
+          // check says otherwise.
+          let (cmd, next) = model.notify_error(dispatch, message)
+          (
+            cmd,
+            { ..next, update_ux: UpdateAvailable(version~, installable=false) },
+          )
+        }
+        _ =>
+          if channel is Some(_) {
+            // A tagged failure names a download this page no longer
+            // tracks; it settled some earlier flow, not this state.
+            (@cmd.none, model)
+          } else {
+            model.notify_error(dispatch, message)
+          }
+      }
     UpdateApplied => (close_window(), model)
     OpenSetup => (@cmd.none, { ..model, screen: Settings, setup_api_key: "" })
     ToggleSidebar => (@cmd.none, { ..model, sidebar_open: !model.sidebar_open })
@@ -2113,17 +2192,12 @@ fn update_device_msg(
         commands.push(fetch_installed_skills(dispatch, channel))
         // Self-update and the relay sign-in are the desktop window's alone
         // (see `is_desktop`); a browser never checks, so neither UI
-        // materializes there. The startup update check rides here: settings
-        // (the update channel) load synchronously at Init, so they are in by
-        // bridge time.
+        // materializes there. The startup update check does NOT ride here:
+        // the update channel is part of the host settings this batch only
+        // requests, so the check waits for the first authoritative load
+        // (see `recheck_update_channel`) rather than asking whichever
+        // channel `initial_model` defaulted to.
         if model.is_desktop {
-          commands.push(
-            check_for_updates(
-              dispatch,
-              model.api_provider.update_channel(),
-              explicit=false,
-            ),
-          )
           commands.push(fetch_remote_status(dispatch))
         }
       }
@@ -2314,7 +2388,15 @@ fn update_device_msg(
       } else if model.settings_saves > 0 {
         (@cmd.none, model.defer_host_settings(settings))
       } else {
-        (@cmd.none, model.apply_host_settings(settings))
+        // The first authoritative load is what starts the startup update
+        // check: only now is the update channel known to be the saved one
+        // rather than `initial_model`'s default. Later loads re-check only
+        // when they move the channel.
+        recheck_update_channel(
+          dispatch,
+          model,
+          model.apply_host_settings(settings),
+        )
       }
     }
     HostSettingsApplied(settings, connection_generation~, cleans_legacy~) => {
@@ -2345,14 +2427,18 @@ fn update_device_msg(
       } else {
         next
       }
-      (
-        cleanup,
-        if next.settings_saves > 0 {
-          next
-        } else {
-          next.flush_host_settings()
-        },
-      )
+      if next.settings_saves > 0 {
+        (cleanup, next)
+      } else {
+        // A deferred authoritative status can move the update channel just
+        // like a direct load (and can be the first one to make it known).
+        let (recheck, flushed) = recheck_update_channel(
+          dispatch,
+          next,
+          next.flush_host_settings(),
+        )
+        (@cmd.batch([cleanup, recheck]), flushed)
+      }
     }
     HostSettingsSaveFailed(message, connection_generation~, cleans_legacy~) => {
       guard connection_generation == dev.connection_generation else {
@@ -2374,16 +2460,19 @@ fn update_device_msg(
           model.legacy_cleanup_pending
         },
       }
-      let next = if next.settings_saves == 0 {
-        next.flush_host_settings()
+      // A failed save falls back to the deferred authoritative status,
+      // which can restore the previous provider — and with it the previous
+      // update channel.
+      let (recheck, next) = if next.settings_saves == 0 {
+        recheck_update_channel(dispatch, next, next.flush_host_settings())
       } else {
-        next
+        (@cmd.none, next)
       }
       let (notice, notified) = next.notify_error(
         dispatch,
         "Saving settings failed: \{message}",
       )
-      let commands = [notice]
+      let commands = [notice, recheck]
       if next.settings_saves == 0 {
         // No successful reply may follow to correct the optimistic form.
         // An authoritative get (same-revision statuses are accepted) restores
@@ -11192,24 +11281,24 @@ test "CompactRejected clears the queued notice and reports the error" {
 }
 
 ///|
-test "a startup check surfaces an installable release as the Update button" {
+test "a check finding an installable release downloads it by itself" {
   let dispatch = test_dispatch()
-  let (_, model) = update(
-    dispatch,
-    UpdateCheckFinished(
-      result=CheckFound(
-        version="0.2.0",
-        installable=true,
-        unavailable_reason=None,
-      ),
-      explicit=false,
-    ),
-    test_model(),
+  let found = CheckFound(
+    version="0.2.0",
+    installable=true,
+    unavailable_reason=None,
   )
-  assert_true(
-    model.update_ux is UpdateAvailable(version="0.2.0", installable=true),
-  )
-  assert_eq(model.notifications.length(), 0)
+  // The quiet startup check and the user asking from Settings download the
+  // same way; only the restart waits for a click.
+  for explicit in [false, true] {
+    let (_, next) = update(
+      dispatch,
+      UpdateCheckFinished(result=found, channel=Production, explicit~),
+      test_model(),
+    )
+    assert_true(next.update_ux is DownloadingUpdate(version="0.2.0", ..))
+    assert_eq(next.notifications.length(), 0)
+  }
 }
 
 ///|
@@ -11222,6 +11311,7 @@ test "an unavailable startup update reports why without offering Update" {
       installable=false,
       unavailable_reason=Some("Move SeekMoon.app to Applications."),
     ),
+    channel=Production,
     explicit=false,
   )
   let (_, first) = update(dispatch, msg, model)
@@ -11250,6 +11340,7 @@ test "a package-less release stays informational" {
         installable=false,
         unavailable_reason=None,
       ),
+      channel=Production,
       explicit=false,
     ),
     test_model(),
@@ -11271,7 +11362,7 @@ test "quiet startup outcomes leave no trace; explicit ones answer" {
     ] {
     let (_, silent) = update(
       dispatch,
-      UpdateCheckFinished(result~, explicit=false),
+      UpdateCheckFinished(result~, channel=Production, explicit=false),
       test_model(),
     )
     assert_true(silent.update_ux is UpdateUnknown)
@@ -11279,7 +11370,7 @@ test "quiet startup outcomes leave no trace; explicit ones answer" {
   }
   let (_, ok) = update(
     dispatch,
-    UpdateCheckFinished(result=CheckUpToDate, explicit=true),
+    UpdateCheckFinished(result=CheckUpToDate, channel=Production, explicit=true),
     test_model(),
   )
   assert_true(ok.update_ux is UpToDate)
@@ -11287,6 +11378,7 @@ test "quiet startup outcomes leave no trace; explicit ones answer" {
     dispatch,
     UpdateCheckFinished(
       result=CheckUnreachable(reason="offline"),
+      channel=Production,
       explicit=true,
     ),
     test_model(),
@@ -11305,6 +11397,7 @@ test "a broken package entry is loud even when the app asked" {
     dispatch,
     UpdateCheckFinished(
       result=CheckBroken(version="0.2.0", reason="url is not https"),
+      channel=Production,
       explicit=false,
     ),
     test_model(),
@@ -11315,7 +11408,204 @@ test "a broken package entry is loud even when the app asked" {
 }
 
 ///|
-test "clicking Update goes straight to download when nothing runs" {
+test "a finished download stages the release; restarting stays a click away" {
+  let dispatch = test_dispatch()
+  let downloading = {
+    ..test_model(),
+    update_ux: DownloadingUpdate(
+      version="0.2.0",
+      progress={ downloaded_bytes: 0, total_bytes: None },
+      channel=Production,
+    ),
+  }
+  let progress = UpdateDownloadProgress(
+    downloaded_bytes=42,
+    total_bytes=Some(100),
+    channel=Some(Production),
+  )
+  let (_, progressed) = update(dispatch, progress, downloading)
+  let (_, replayed) = update(dispatch, progress, downloading)
+  assert_true(progressed.update_ux == replayed.update_ux)
+  assert_true(
+    progressed.update_ux
+    is DownloadingUpdate(
+      version="0.2.0",
+      progress={ downloaded_bytes: 42, total_bytes: Some(100) },
+      ..
+    ),
+  )
+  let (_, staged) = update(
+    dispatch,
+    UpdateDownloaded(version=None, channel=Some(Production)),
+    progressed,
+  )
+  assert_true(staged.update_ux is UpdateReady(version="0.2.0"))
+  // With nothing running, the restart click applies immediately.
+  let (_, clicked) = update(dispatch, UpdateClicked, staged)
+  assert_true(clicked.update_ux is RestartingForUpdate(version="0.2.0"))
+}
+
+///|
+test "the staged version comes from the host, not the stale check" {
+  let dispatch = test_dispatch()
+  let downloading = {
+    ..test_model(),
+    update_ux: DownloadingUpdate(
+      version="0.2.0",
+      progress={ downloaded_bytes: 0, total_bytes: None },
+      channel=Production,
+    ),
+  }
+  // The host's download-time re-check staged a release newer than the one
+  // this flow started from; the notification's version wins.
+  let (_, staged) = update(
+    dispatch,
+    UpdateDownloaded(version=Some("0.2.1"), channel=Some(Production)),
+    downloading,
+  )
+  assert_true(staged.update_ux is UpdateReady(version="0.2.1"))
+}
+
+///|
+test "a reply from a channel no longer in force is discarded" {
+  let dispatch = test_dispatch()
+  // The model runs on production; a staging answer that raced a provider
+  // switch must read as if it never arrived.
+  let (_, next) = update(
+    dispatch,
+    UpdateCheckFinished(
+      result=CheckFound(
+        version="0.2.0",
+        installable=true,
+        unavailable_reason=None,
+      ),
+      channel=Staging,
+      explicit=false,
+    ),
+    test_model(),
+  )
+  assert_true(next.update_ux is UpdateUnknown)
+  assert_eq(next.notifications.length(), 0)
+}
+
+///|
+test "a channel move voids a staged release and keeps a download draining" {
+  let dispatch = test_dispatch()
+  // A staged release belongs to the channel that downloaded it; the pump is
+  // idle after staging, so the move forgets it on the spot (and quietly
+  // re-checks the new channel).
+  let (_, unstaged) = update(dispatch, ProviderChanged("openseek-staging"), {
+    ..test_model(),
+    update_ux: UpdateReady(version="0.2.0"),
+  })
+  assert_true(unstaged.api_provider.update_channel() is Staging)
+  assert_true(unstaged.update_ux is UpdateUnknown)
+  // A download in flight keeps the host pump busy: the flow stays put —
+  // stale, since its channel no longer matches the provider's — until its
+  // terminal event resolves the drain.
+  let (_, draining) = update(dispatch, ProviderChanged("openseek-staging"), {
+    ..test_model(),
+    update_ux: DownloadingUpdate(
+      version="0.2.0",
+      progress={ downloaded_bytes: 0, total_bytes: None },
+      channel=Production,
+    ),
+  })
+  assert_true(draining.api_provider.update_channel() is Staging)
+  assert_true(draining.update_ux is DownloadingUpdate(channel=Production, ..))
+}
+
+///|
+test "a draining download resolves at its terminal event" {
+  let dispatch = test_dispatch()
+  // The provider moved to staging while a production download drained.
+  let (_, draining) = update(dispatch, ProviderChanged("openseek-staging"), {
+    ..test_model(),
+    update_ux: DownloadingUpdate(
+      version="0.2.0",
+      progress={ downloaded_bytes: 0, total_bytes: None },
+      channel=Production,
+    ),
+  })
+  // What the host staged serves a channel the user already left: never
+  // `UpdateReady` — forget it (a quiet check of the new channel fires).
+  let (_, drained) = update(
+    dispatch,
+    UpdateDownloaded(version=Some("0.2.1"), channel=Some(Production)),
+    draining,
+  )
+  assert_true(drained.update_ux is UpdateUnknown)
+  // A draining download failing is just the drain ending: no toast — the
+  // user is not waiting on that channel anymore.
+  let (_, failed) = update(
+    dispatch,
+    UpdateFailed(message="connection reset", channel=Some(Production)),
+    draining,
+  )
+  assert_true(failed.update_ux is UpdateUnknown)
+  assert_eq(failed.notifications.length(), 0)
+}
+
+///|
+test "download events tagged with another channel are void" {
+  let dispatch = test_dispatch()
+  let downloading = {
+    ..test_model(),
+    update_ux: DownloadingUpdate(
+      version="0.2.0",
+      progress={ downloaded_bytes: 0, total_bytes: None },
+      channel=Production,
+    ),
+  }
+  // A leftover staging download settling must not complete, animate, or
+  // fail the production flow now in flight.
+  let (_, after_downloaded) = update(
+    dispatch,
+    UpdateDownloaded(version=Some("0.3.0-rc"), channel=Some(Staging)),
+    downloading,
+  )
+  assert_true(after_downloaded.update_ux == downloading.update_ux)
+  let (_, after_progress) = update(
+    dispatch,
+    UpdateDownloadProgress(
+      downloaded_bytes=42,
+      total_bytes=Some(100),
+      channel=Some(Staging),
+    ),
+    downloading,
+  )
+  assert_true(after_progress.update_ux == downloading.update_ux)
+  let (_, after_failed) = update(
+    dispatch,
+    UpdateFailed(message="digest mismatch", channel=Some(Staging)),
+    downloading,
+  )
+  assert_true(after_failed.update_ux == downloading.update_ux)
+  assert_eq(after_failed.notifications.length(), 0)
+  // With no download tracked at all, a tagged failure settled some earlier
+  // flow — not a reason to toast over whatever the page shows now.
+  let idle = { ..test_model(), update_ux: UpToDate }
+  let (_, still_idle) = update(
+    dispatch,
+    UpdateFailed(message="connection reset", channel=Some(Staging)),
+    idle,
+  )
+  assert_true(still_idle.update_ux is UpToDate)
+  assert_eq(still_idle.notifications.length(), 0)
+}
+
+///|
+test "checking waits for the authoritative settings" {
+  let dispatch = test_dispatch()
+  // Before the first host-settings snapshot the provider is only
+  // `initial_model`'s default; a check would ask the wrong channel.
+  let loading = { ..test_model(), host_settings_revision: -1 }
+  let (_, next) = update(dispatch, CheckForUpdates, loading)
+  assert_true(next.update_ux is UpdateUnknown)
+}
+
+///|
+test "clicking the restored offer retries the download" {
   let dispatch = test_dispatch()
   let available = {
     ..test_model(),
@@ -11323,44 +11613,25 @@ test "clicking Update goes straight to download when nothing runs" {
   }
   let (_, clicked) = update(dispatch, UpdateClicked, available)
   assert_true(clicked.update_ux is DownloadingUpdate(version="0.2.0", ..))
-  let progress = UpdateDownloadProgress(
-    downloaded_bytes=42,
-    total_bytes=Some(100),
-  )
-  let (_, progressed) = update(dispatch, progress, clicked)
-  let (_, replayed) = update(dispatch, progress, clicked)
-  assert_true(progressed.update_ux == replayed.update_ux)
-  assert_true(
-    progressed.update_ux
-    is DownloadingUpdate(
-      version="0.2.0",
-      progress={ downloaded_bytes: 42, total_bytes: Some(100) }
-    ),
-  )
-  // Downloaded hands off to apply and marks the restart.
-  let (_, done) = update(dispatch, UpdateDownloaded, progressed)
-  assert_true(done.update_ux is RestartingForUpdate(version="0.2.0"))
 }
 
 ///|
-test "clicking Update asks first while a conversation runs" {
+test "restarting asks first while a conversation runs" {
   let dispatch = test_dispatch()
   let busy = {
     ..test_model().replace_conversation({
       ..test_conversation(),
       run: Starting(submission_id="pending-update"),
     }),
-    update_ux: UpdateAvailable(version="0.2.0", installable=true),
+    update_ux: UpdateReady(version="0.2.0"),
   }
   let (_, asked) = update(dispatch, UpdateClicked, busy)
   assert_true(asked.update_ux is ConfirmingRestart(version="0.2.0"))
-  // Cancel restores the offer; confirm starts the download.
+  // Cancel parks the staged release; confirm applies it.
   let (_, kept) = update(dispatch, CancelUpdateRestart, asked)
-  assert_true(
-    kept.update_ux is UpdateAvailable(version="0.2.0", installable=true),
-  )
+  assert_true(kept.update_ux is UpdateReady(version="0.2.0"))
   let (_, confirmed) = update(dispatch, ConfirmUpdateRestart, asked)
-  assert_true(confirmed.update_ux is DownloadingUpdate(version="0.2.0", ..))
+  assert_true(confirmed.update_ux is RestartingForUpdate(version="0.2.0"))
 }
 
 ///|
@@ -11368,14 +11639,15 @@ test "a failed download says why and restores the offer" {
   let dispatch = test_dispatch()
   let downloading = {
     ..test_model(),
-    update_ux: DownloadingUpdate(version="0.2.0", progress={
-      downloaded_bytes: 42,
-      total_bytes: Some(100),
-    }),
+    update_ux: DownloadingUpdate(
+      version="0.2.0",
+      progress={ downloaded_bytes: 42, total_bytes: Some(100) },
+      channel=Production,
+    ),
   }
   let (_, failed) = update(
     dispatch,
-    UpdateFailed(message="digest mismatch"),
+    UpdateFailed(message="digest mismatch", channel=Some(Production)),
     downloading,
   )
   assert_eq(failed.notifications.length(), 1)
@@ -11392,7 +11664,11 @@ test "a failed apply says why and withdraws the offer" {
     ..test_model(),
     update_ux: RestartingForUpdate(version="0.2.0"),
   }
-  let msg = UpdateFailed(message="the app location became read-only")
+  // The swap serves no channel; apply failures arrive untagged.
+  let msg = UpdateFailed(
+    message="the app location became read-only",
+    channel=None,
+  )
   let (_, first) = update(dispatch, msg, restarting)
   let (_, replayed) = update(dispatch, msg, restarting)
   for failed in [first, replayed] {
@@ -11410,17 +11686,40 @@ test "a stale check reply cannot clobber a download in flight" {
   let dispatch = test_dispatch()
   let downloading = {
     ..test_model(),
-    update_ux: DownloadingUpdate(version="0.2.0", progress={
-      downloaded_bytes: 42,
-      total_bytes: Some(100),
-    }),
+    update_ux: DownloadingUpdate(
+      version="0.2.0",
+      progress={ downloaded_bytes: 42, total_bytes: Some(100) },
+      channel=Production,
+    ),
   }
   let (_, next) = update(
     dispatch,
-    UpdateCheckFinished(result=CheckUpToDate, explicit=false),
+    UpdateCheckFinished(
+      result=CheckUpToDate,
+      channel=Production,
+      explicit=false,
+    ),
     downloading,
   )
   assert_true(next.update_ux is DownloadingUpdate(version="0.2.0", ..))
+}
+
+///|
+test "a staged release survives stale check replies and re-check clicks" {
+  let dispatch = test_dispatch()
+  let staged = { ..test_model(), update_ux: UpdateReady(version="0.2.0") }
+  let (_, after_reply) = update(
+    dispatch,
+    UpdateCheckFinished(
+      result=CheckUpToDate,
+      channel=Production,
+      explicit=false,
+    ),
+    staged,
+  )
+  assert_true(after_reply.update_ux is UpdateReady(version="0.2.0"))
+  let (_, after_click) = update(dispatch, CheckForUpdates, staged)
+  assert_true(after_click.update_ux is UpdateReady(version="0.2.0"))
 }
 
 ///|
@@ -11430,7 +11729,11 @@ test "late update progress cannot revive an available release" {
     ..test_model(),
     update_ux: UpdateAvailable(version="0.2.0", installable=true),
   }
-  let msg = UpdateDownloadProgress(downloaded_bytes=42, total_bytes=Some(100))
+  let msg = UpdateDownloadProgress(
+    downloaded_bytes=42,
+    total_bytes=Some(100),
+    channel=Some(Production),
+  )
   let (_, first) = update(dispatch, msg, available)
   let (_, replayed) = update(dispatch, msg, available)
   assert_true(first.update_ux == available.update_ux)

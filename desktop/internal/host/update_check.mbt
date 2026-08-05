@@ -1,13 +1,16 @@
 // Self-update ops, driven entirely by the webview: `check_update` asks the
 // channel's manifest and reports what it found as data (never an op
-// rejection — every outcome is a state the frontend renders); a user
-// clicking Update hands one download to the app-lifetime pump, which fetches
-// + verifies into the staging dir and reports progress and completion as
-// `update.*` notifications; the `update.downloaded` notification then lets
-// the page run `apply_update` (swap the bundle and arrange the relaunch that
-// `main` performs once the run loop exits). The download cannot live in its
-// `op_async` request: Proton cancels any bridge request that exceeds its
-// finite request deadline.
+// rejection — every outcome is a state the frontend renders); the page
+// hands one download at a time to the app-lifetime pump (it starts one by
+// itself once a check reports an installable release), which fetches +
+// verifies into the staging dir and reports progress and completion as
+// `update.*` notifications, each stamped with the channel it serves so the
+// page can void events from a channel the user has since left; the
+// `update.downloaded` notification leaves the
+// release staged until the user asks the page to run `apply_update` (swap
+// the bundle and arrange the relaunch that `main` performs once the run
+// loop exits). The download cannot live in its `op_async` request: Proton
+// cancels any bridge request that exceeds its finite request deadline.
 
 ///|
 /// Self-update state shared by request tasks and the app-lifetime download
@@ -71,6 +74,17 @@ fn UpdateChannelPayload::to_channel(
   match self.channel {
     Some("staging") => Staging
     _ => Production
+  }
+}
+
+///|
+/// The canonical wire name of the channel this payload resolves to — what
+/// the pump stamps on its notifications, normalized rather than echoed so a
+/// stale stored value cannot leak an unknown channel name back to the page.
+fn UpdateChannelPayload::wire_channel(self : UpdateChannelPayload) -> String {
+  match self.to_channel() {
+    Staging => "staging"
+    Production => "production"
   }
 }
 
@@ -171,9 +185,11 @@ priv struct DownloadUpdateAcceptedReply {
 } derive(ToJson)
 
 ///|
-/// Reply carried by `update.downloaded`: the version now staged and verified.
+/// Reply carried by `update.downloaded`: the version now staged and
+/// verified, and the channel that download served.
 priv struct DownloadUpdateReply {
   version : String
+  channel : String
 } derive(ToJson)
 
 ///|
@@ -182,6 +198,7 @@ priv struct DownloadUpdateReply {
 priv struct DownloadUpdateProgress {
   downloaded_bytes : Int
   total_bytes : Int?
+  channel : String
 }
 
 ///|
@@ -192,6 +209,7 @@ fn DownloadUpdateProgress::to_json(self : DownloadUpdateProgress) -> Json {
       Some(total) => Json::number(total.to_double())
       None => Json::null()
     },
+    "channel": Json::string(self.channel),
   }
 }
 
@@ -249,7 +267,11 @@ async fn SelfUpdate::download_package(
     downloaded_bytes,
     total_bytes,
   ) {
-    let progress : DownloadUpdateProgress = { downloaded_bytes, total_bytes }
+    let progress : DownloadUpdateProgress = {
+      downloaded_bytes,
+      total_bytes,
+      channel: payload.wire_channel(),
+    }
     emit("update.download_progress", progress.to_json())
   }) catch {
     error if @async.is_being_cancelled() => raise error
@@ -298,13 +320,19 @@ async fn SelfUpdate::run(
         } else {
           "\{error}"
         }
-        emit("update.download_failed", { "message": Json::string(message) })
+        emit("update.download_failed", {
+          "message": Json::string(message),
+          "channel": Json::string(payload.wire_channel()),
+        })
       }
     } noraise {
       staged => {
         self.staged = Some(staged)
         self.busy = false
-        let reply : DownloadUpdateReply = { version: staged.version }
+        let reply : DownloadUpdateReply = {
+          version: staged.version,
+          channel: payload.wire_channel(),
+        }
         emit("update.downloaded", ToJson::to_json(reply))
       }
     }
@@ -393,6 +421,8 @@ async test "self-update pump reports download failures" {
     assert_true(
       params is { "message": String("this build cannot install updates"), .. },
     )
+    // The failure names its channel so the page can void it after a switch.
+    assert_true(params is { "channel": String("production"), .. })
     group.return_immediately(())
   })
 }
@@ -427,18 +457,21 @@ test "download progress serializes an optional total" {
   let known : DownloadUpdateProgress = {
     downloaded_bytes: 42,
     total_bytes: Some(100),
+    channel: "staging",
   }
   assert_true(
     known.to_json()
     is {
       "downloaded_bytes": Number(42.0, ..),
       "total_bytes": Number(100.0, ..),
+      "channel": String("staging"),
       ..
     },
   )
   let unknown : DownloadUpdateProgress = {
     downloaded_bytes: 42,
     total_bytes: None,
+    channel: "production",
   }
   assert_true(unknown.to_json() is { "total_bytes": Null, .. })
 }

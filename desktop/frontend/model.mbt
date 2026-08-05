@@ -938,22 +938,38 @@ priv enum Msg {
   RemoteDisconnectClicked
   RemoteDisconnectFailed(String)
   // A `check_update` reply (or its failure, folded into `Unreachable`).
-  // `explicit` says a user asked, which is what decides how loudly each
-  // outcome shows.
-  UpdateCheckFinished(result~ : UpdateCheck, explicit~ : Bool)
-  // The accent Update button (sidebar or Settings row): confirm first when
-  // a conversation is running, otherwise start the download.
+  // `channel` is the one the request asked, so a reply that raced a
+  // provider switch can be recognized as void; `explicit` says a user
+  // asked, which is what decides how loudly each outcome shows.
+  UpdateCheckFinished(
+    result~ : UpdateCheck,
+    channel~ : UpdateChannel,
+    explicit~ : Bool
+  )
+  // The accent update button (sidebar or Settings row): from a restored
+  // offer it retries the download; from a staged release it restarts,
+  // confirming first while a conversation runs.
   UpdateClicked
   // The interrupt-confirmation modal's two exits.
   ConfirmUpdateRestart
   CancelUpdateRestart
   // The actor-owned download reports throttled byte progress independently
-  // of the short request that accepted it.
-  UpdateDownloadProgress(downloaded_bytes~ : Int, total_bytes~ : Int?)
-  // The host's `update.downloaded` event says the bundle is staged and verified.
-  UpdateDownloaded
+  // of the short request that accepted it. On these three download events,
+  // `channel` is the one the host's pump served — an event tagged with a
+  // channel other than the tracked flow's is void; None (an untagged
+  // origin, e.g. an apply failure) is accepted rather than fenced.
+  UpdateDownloadProgress(
+    downloaded_bytes~ : Int,
+    total_bytes~ : Int?,
+    channel~ : UpdateChannel?
+  )
+  // The host's `update.downloaded` event says the bundle is staged and
+  // verified. It names the version actually staged — the host re-checks
+  // the manifest before downloading, so this can be newer than the one the
+  // frontend's check announced; None only for a host that omitted it.
+  UpdateDownloaded(version~ : String?, channel~ : UpdateChannel?)
   // The download or the swap failed; back to Available with a toast.
-  UpdateFailed(message~ : String)
+  UpdateFailed(message~ : String, channel~ : UpdateChannel?)
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
