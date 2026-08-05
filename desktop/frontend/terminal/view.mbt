@@ -85,7 +85,7 @@ pub fn panel_view(
   items.push(
     @html.button(
       class="terminal-close",
-      title="Hide terminal",
+      title="Hide terminal (Ctrl+`)",
       on_click=dispatch(ToggleTerminal),
       "✕",
     ),

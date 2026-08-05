@@ -2551,9 +2551,9 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         "panel-toggle"
       },
       title=if model.terminal_panel.open {
-        "Hide terminal"
+        "Hide terminal (Ctrl+`)"
       } else {
-        "Show terminal"
+        "Show terminal (Ctrl+`)"
       },
       on_click=dispatch(Terminal(ToggleTerminal)),
       icon(icon_terminal),

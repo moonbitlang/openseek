@@ -17,10 +17,27 @@ pub fn boot() -> Unit {
       },
       // The narrow-layout flag must track the window: rotating a phone or
       // resizing a desktop window across the breakpoint re-lays the app out.
+      // Ctrl+` follows the terminal buttons' existing toggle path, so the
+      // shortcut works from the composer, editor, and terminal itself.
       subscriptions=(emit, _) => {
         @sub.batch([
           @sub.on_resize(
             emit.map(viewport => ViewportResized(width=viewport.width)),
+          ),
+          @sub.on_key_down(
+            @cmd.Emit((keyboard : @keyboard.Keyboard) => {
+              if keyboard.code() == "Backquote" &&
+                keyboard.ctrl_key() &&
+                !keyboard.shift_key() &&
+                !keyboard.alt_key() &&
+                !keyboard.meta_key() &&
+                !keyboard.is_composing() &&
+                !keyboard.repeat() {
+                emit(Terminal(ToggleTerminal))
+              } else {
+                @cmd.none
+              }
+            }),
           ),
           external_link_subscription(emit.map(url => ExternalLinkClicked(url))),
         ])
