@@ -60,7 +60,7 @@ priv enum FollowerMsg {
 
 ///|
 priv enum FollowerLoadReply {
-  LoadOk(Json)
+  LoadOk(@protocol.SessionDocument)
   LoadFailed(String)
   // The follower was already draining; the caller waits/retries the actor.
   LoadStopped
@@ -189,24 +189,16 @@ async fn file_signature(path : String) -> FileSignature? {
 }
 
 ///|
-/// The store events in `session_json` committed after `watermark`, in file
-/// order (the store guarantees ascending sequences). Each entry pairs the
-/// event's sequence with the store event JSON, passed through verbatim so
-/// the client sees exactly what a `session.load` snapshot would carry.
-fn commits_after(session_json : Json, watermark : Int) -> Array[(Int, Json)] {
-  guard session_json is Object(fields) &&
-    fields.get("events") is Some(Array(events)) else {
-    return []
-  }
-  let fresh : Array[(Int, Json)] = []
-  for event in events {
-    guard event is Object(event_fields) &&
-      event_fields.get("sequence") is Some(Number(sequence, ..)) else {
-      continue
-    }
-    let sequence = sequence.to_int()
-    if sequence > watermark {
-      fresh.push((sequence, event))
+/// The typed store events committed after `watermark`, in file order (the
+/// store guarantees ascending sequences).
+fn commits_after(
+  session : @protocol.SessionDocument,
+  watermark : Int,
+) -> Array[@protocol.SessionEvent] {
+  let fresh : Array[@protocol.SessionEvent] = []
+  for event in session.events.unwrap_or([]) {
+    if event.sequence > watermark {
+      fresh.push(event)
     }
   }
   fresh
@@ -215,12 +207,11 @@ fn commits_after(session_json : Json, watermark : Int) -> Array[(Int, Json)] {
 ///|
 /// The highest event sequence in a session JSON — what a snapshot's
 /// watermark is. 0 for a record with no events.
-fn session_max_sequence(session_json : Json) -> Int {
+fn session_max_sequence(session : @protocol.SessionDocument) -> Int {
   let mut max = 0
-  for entry in commits_after(session_json, 0) {
-    let (sequence, _) = entry
-    if sequence > max {
-      max = sequence
+  for event in commits_after(session, 0) {
+    if event.sequence > max {
+      max = event.sequence
     }
   }
   max
@@ -237,7 +228,7 @@ async fn SessionFollower::scan(
   sink : EventSink,
   manager : EngineManager,
   force~ : Bool,
-) -> Json? {
+) -> @protocol.SessionDocument? {
   let signature = file_signature(session_store_file(self.root, self.session))
   if !force && signature is Some(_) && signature == self.consumed {
     return None
@@ -246,13 +237,18 @@ async fn SessionFollower::scan(
   let session_json = @json.parse(output) catch {
     _ => raise EngineError("engine returned a malformed session")
   }
-  for entry in commits_after(session_json, self.watermark) {
-    let (sequence, event) = entry
-    emit(sink, SessionCommit({ session: self.session, sequence, event }))
-    self.watermark = sequence
+  let session : @protocol.SessionDocument = @json.from_json(session_json) catch {
+    _ => raise EngineError("engine returned a malformed session")
+  }
+  for event in commits_after(session, self.watermark) {
+    emit(
+      sink,
+      SessionCommit({ session: self.session, sequence: event.sequence, event }),
+    )
+    self.watermark = event.sequence
   }
   self.consumed = signature
-  Some(session_json)
+  Some(session)
 }
 
 ///|
@@ -283,10 +279,18 @@ async fn SessionFollower::run(
     // drop commits at or below their own watermark — it only costs bytes.
     _ => ""
   }
-  if !baseline.is_empty() &&
-    (@json.parse(baseline) catch { _ => Json::null() }) is (Object(_) as json) {
-    follower.watermark = session_max_sequence(json)
-    follower.consumed = baseline_signature
+  if !baseline.is_empty() {
+    let document : @protocol.SessionDocument? = try
+      @json.from_json(@json.parse(baseline))
+    catch {
+      _ => None
+    } noraise {
+      document => Some(document)
+    }
+    if document is Some(document) {
+      follower.watermark = session_max_sequence(document)
+      follower.consumed = baseline_signature
+    }
   }
   ready.put(())
   let mut retired_generation = 0
@@ -676,45 +680,49 @@ async fn request_follower_load(follower : SessionFollower) -> FollowerLoadReply 
 // stop drain) needs a live engine binary and is exercised end to end.
 
 ///|
-test "commits_after filters by watermark in file order" {
-  let session : Json = {
-    "events": [
-      { "sequence": 1, "ts": 0, "item": { "kind": "user" } },
-      { "sequence": 2, "ts": 0, "item": { "kind": "assistant" } },
-      { "sequence": 3, "ts": 0, "item": { "kind": "tool_result" } },
-    ],
+test "commits_after filters typed events by watermark in file order" {
+  let session : @protocol.SessionDocument = {
+    version: None,
+    id: Some("s"),
+    system_prompt: None,
+    events: Some([
+      { sequence: 1, ts: None, item: User({ content: "one" }) },
+      { sequence: 2, ts: None, item: User({ content: "two" }) },
+      { sequence: 3, ts: None, item: User({ content: "three" }) },
+    ]),
   }
   let fresh = commits_after(session, 1)
   inspect(fresh.length(), content="2")
-  inspect(fresh[0].0, content="2")
-  inspect(fresh[1].0, content="3")
+  inspect(fresh[0].sequence, content="2")
+  inspect(fresh[1].sequence, content="3")
   inspect(commits_after(session, 3).length(), content="0")
 }
 
 ///|
-test "commits_after skips malformed events without dropping the rest" {
-  let session : Json = {
-    "events": [{ "sequence": "seven" }, 42, { "sequence": 7 }],
-  }
-  let fresh = commits_after(session, 0)
-  inspect(fresh.length(), content="1")
-  inspect(fresh[0].0, content="7")
-}
-
-///|
 test "commits_after tolerates a session without events" {
-  inspect(commits_after({ "id": "s" }, 0).length(), content="0")
-  inspect(commits_after(Json::null(), 0).length(), content="0")
+  let session : @protocol.SessionDocument = {
+    version: None,
+    id: Some("s"),
+    system_prompt: None,
+    events: None,
+  }
+  inspect(commits_after(session, 0).length(), content="0")
 }
 
 ///|
 test "session_max_sequence is the snapshot's watermark" {
-  let session : Json = {
-    "events": [{ "sequence": 5 }, { "sequence": 9 }, { "sequence": 7 }],
+  let session : @protocol.SessionDocument = {
+    version: None,
+    id: Some("s"),
+    system_prompt: None,
+    events: Some([
+      { sequence: 5, ts: None, item: User({ content: "five" }) },
+      { sequence: 9, ts: None, item: User({ content: "nine" }) },
+      { sequence: 7, ts: None, item: User({ content: "seven" }) },
+    ]),
   }
   inspect(session_max_sequence(session), content="9")
-  inspect(session_max_sequence({ "events": [] }), content="0")
-  inspect(session_max_sequence(Json::null()), content="0")
+  inspect(session_max_sequence({ ..session, events: Some([]) }), content="0")
 }
 
 ///|
@@ -941,7 +949,7 @@ async test "nonzero durable boundary survives a failed final scan" {
     $|case "$count" in
     $|  1) printf '%s' '{"events":[]}' ;;
     $|  2) printf '%s' 'transient show failure' >&2; exit 7 ;;
-    $|  *) printf '%s' '{"events":[{"sequence":1,"ts":0,"item":{"kind":"assistant","content":"done"}}]}' ;;
+    $|  *) printf '%s' '{"events":[{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"done"}}}]}' ;;
     $|esac
     $|
   @fs.write_file(engine, script, create_mode=CreateOrTruncate)
@@ -1627,7 +1635,9 @@ async test "load request is queued before its collapsed control message" {
     let request = follower.load_requests.get()
     assert_true(request.active)
     request.active = false
-    request.reply.put(LoadOk({ "events": [] }))
+    request.reply.put(
+      LoadOk({ version: None, id: None, system_prompt: None, events: Some([]) }),
+    )
     assert_true(caller.wait() is LoadOk(_))
   })
 }
@@ -1649,7 +1659,9 @@ async test "backpressured load schedules the next control generation" {
     let request = follower.load_requests.get()
     assert_true(request.active)
     request.active = false
-    request.reply.put(LoadOk({ "events": [] }))
+    request.reply.put(
+      LoadOk({ version: None, id: None, system_prompt: None, events: Some([]) }),
+    )
     assert_true(caller.wait() is LoadOk(_))
   })
 }

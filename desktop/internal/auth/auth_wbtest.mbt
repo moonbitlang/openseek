@@ -242,11 +242,14 @@ async test "a terminal refusal clears a session but only parks an override" {
 ///|
 test "status shapes" {
   let store = AuthStore::empty()
-  json_inspect(store.status_json(), content={ "connected": false })
-  json_inspect(store.status_json(server_url="https://relay.example"), content={
-    "connected": false,
-    "server_url": "https://relay.example",
-  })
+  let empty = store.status()
+  assert_false(empty.connected)
+  assert_eq(empty.server_url, None)
+  assert_eq(empty.user, None)
+  assert_eq(empty.device, None)
+  let configured = store.status(server_url="https://relay.example")
+  assert_false(configured.connected)
+  assert_eq(configured.server_url, Some("https://relay.example"))
   store.session = Some({
     server_url: "https://relay.example",
     device_token: "odt_secret",
@@ -256,19 +259,23 @@ test "status shapes" {
     user_avatar_url: "https://avatars.example/1",
   })
   store.connected = true
-  let status = store.status_json()
-  json_inspect(status, content={
-    "connected": true,
-    "server_url": "https://relay.example",
-    "user": { "login": "octocat", "avatar_url": "https://avatars.example/1" },
-    "device": {
-      "id": "d_abc",
-      "name": "My Mac",
-      "url": "https://relay.example/?device=d_abc",
-    },
-  })
-  // The token itself never appears in any status.
-  assert_false(status.stringify().contains("odt_secret"))
+  let status = store.status()
+  assert_true(status.connected)
+  assert_eq(status.server_url, Some("https://relay.example"))
+  assert_eq(
+    status.user,
+    Some({ login: "octocat", avatar_url: "https://avatars.example/1" }),
+  )
+  assert_eq(
+    status.device,
+    Some({
+      id: "d_abc",
+      name: "My Mac",
+      url: "https://relay.example/?device=d_abc",
+    }),
+  )
+  // The transport encoding must not accidentally disclose the stored token.
+  assert_false(status.to_json().stringify().contains("odt_secret"))
 }
 
 ///|

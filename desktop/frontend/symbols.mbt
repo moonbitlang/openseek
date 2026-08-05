@@ -16,84 +16,49 @@ fn read_workspace_symbols(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["session"] = owner.session
-      payload["query"] = query
-      @interop.set_workspace(payload, workspace)
       let reply = @interop.bridge_request(
         owner.channel,
-        "lsp.workspace_symbols",
-        payload.to_value(),
+        @commands.lsp_workspace_symbols,
+        {
+          session: owner.session,
+          query,
+          workspace: workspace.map(value => value.0),
+        },
       ) catch {
         _ => {
           scheduler.add(dispatch(SymbolsFailed(owner~, query~)))
           return
         }
       }
-      match decode_symbols(@interop.reply_json_text(reply)) {
-        Some(items) =>
-          scheduler.add(dispatch(SymbolsLoaded(owner~, query~, items~)))
-        None => scheduler.add(dispatch(SymbolsFailed(owner~, query~)))
-      }
+      scheduler.add(
+        dispatch(
+          SymbolsLoaded(owner~, query~, items=SymbolsProjection(reply).rows()),
+        ),
+      )
     })
   })
 }
 
 ///|
-/// Parse a `workspace_symbols` reply into completion rows. `None` only for
-/// structurally unusable JSON; a malformed row is skipped.
-fn decode_symbols(text : String) -> Array[CompletionItem]? {
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) else { return None }
-  guard reply.get("symbols") is Some(Array(items)) else { return None }
-  let rows : Array[CompletionItem] = []
-  for item in items {
-    guard item is Object(fields) else { continue }
-    // `name`/`path`/`range` are unconditional on the wire (an all-zeros
-    // range stands in for a location without one) — a row missing any is
-    // malformed. `container` really is optional: omitted for a top-level
-    // symbol.
-    guard @jsonx.json_text(fields, "name") is Some(name) && !name.is_empty() else {
-      continue
-    }
-    guard @jsonx.json_text(fields, "path") is Some(path) &&
-      json_range(fields) is Some(range) else {
-      continue
-    }
-    rows.push(
-      symbol_item(
-        name,
-        container=@jsonx.json_text(fields, "container"),
-        path~,
-        range~,
-      ),
-    )
-  }
-  Some(rows)
-}
+/// Project a typed `workspace_symbols` reply into completion rows.
+priv struct SymbolsProjection(@protocol.WorkspaceSymbolsReply)
 
 ///|
-/// A symbol row's `range` (LSP-shaped, zero-based) as a one-based viewer
-/// range; `None` for a malformed one. The host always sends a range — all
-/// zeros for a location without one, which lands as the empty range at the
-/// document start.
-fn json_range(fields : Map[String, Json]) -> @common.Range? {
-  guard fields.get("range")
-    is Some(Object({ "start": Object(start), "end": Object(end_), .. })) &&
-    @jsonx.json_int(start, "line") is Some(start_line) &&
-    @jsonx.json_int(start, "col") is Some(start_col) &&
-    @jsonx.json_int(end_, "line") is Some(end_line) &&
-    @jsonx.json_int(end_, "col") is Some(end_col) else {
-    return None
+fn SymbolsProjection::rows(self : SymbolsProjection) -> Array[CompletionItem] {
+  let rows : Array[CompletionItem] = []
+  for item in self.0.symbols {
+    guard !item.name.is_empty() else { continue }
+    let range = @common.Range::Range(
+      item.range.start.line + 1,
+      item.range.start.col + 1,
+      item.range.end.line + 1,
+      item.range.end.col + 1,
+    )
+    rows.push(
+      symbol_item(item.name, container=item.container, path=item.path, range~),
+    )
   }
-  Some(
-    @common.Range::Range(
-      start_line + 1,
-      start_col + 1,
-      end_line + 1,
-      end_col + 1,
-    ),
-  )
+  rows
 }
 
 ///|

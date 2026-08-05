@@ -395,7 +395,7 @@ fn forget_view_state(path : @pathx.Relative) -> @cmd.Cmd {
 fn apply_diagnostics(
   channel : @interop.ChannelId,
   absolute : @pathx.Absolute,
-  diagnostics : Json,
+  diagnostics : Array[@protocol.LspDiagnostic],
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     if viewer_state.absolute is Some(current) &&
@@ -405,7 +405,7 @@ fn apply_diagnostics(
       services.markers.set_diagnostics(
         DiagnosticsOwner,
         uri,
-        decode_diagnostics(diagnostics),
+        DiagnosticsProjection(diagnostics).to_viewer(),
       )
     }
   })

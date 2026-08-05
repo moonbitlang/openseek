@@ -7,21 +7,10 @@
 // shown are always the host machine's.
 
 ///|
-priv struct BrowseDirectoryPayload {
-  // The directory to list; absent or blank = the user's home directory. A
-  // leading `~` expands like `open_path`'s.
-  path : String?
-} derive(FromJson)
+type BrowseDirectoryPayload = @protocol.BrowseDirectoryPayload
 
 ///|
-priv struct BrowseDirectoryReply {
-  // The listed directory, resolved absolute — what a confirm registers.
-  path : String
-  // Its parent for upward navigation; None at the filesystem root.
-  parent : String?
-  // Subdirectory names (not paths), sorted, dotfiles skipped.
-  entries : Array[String]
-} derive(ToJson)
+type BrowseDirectoryReply = @protocol.BrowseDirectoryReply
 
 ///|
 async fn browse_directory_op(

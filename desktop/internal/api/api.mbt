@@ -1,22 +1,7 @@
-// The one method dispatcher behind every transport. The proton bridge and
-// each remote WebSocket feed the same catalog (docs/remote-protocol.md)
-// through `dispatch`; they differ only in envelope. Errors stay typed so
-// each transport maps them to its own vocabulary: `@host.PayloadError` =
-// malformed params, `@engine.EngineError` / `@host.HostError` = the op
-// failed, `UnknownMethod` = a name outside the catalog.
-
-///|
-/// A method name this host does not serve.
-pub(all) suberror UnknownMethod {
-  UnknownMethod(String)
-}
-
-///|
-impl Show for UnknownMethod with fn output(self, logger) {
-  match self {
-    UnknownMethod(method_) => logger.write_string("unknown method '\{method_}'")
-  }
-}
+// The native endpoint catalog behind both Desktop transports. Each entry
+// pairs one typed command descriptor with its typed operation once; Proton
+// binds the captured types directly, while remote JSON-RPC invokes the JSON
+// closure retained by the same endpoint.
 
 ///|
 /// Everything the methods operate on: the app-lifetime engine actor and its
@@ -88,14 +73,16 @@ pub fn ApiState::sink(self : ApiState) -> @engine.EventSink {
 /// when done (a defer next to the subscribe). A subscriber that stops
 /// draining is kicked by the hub: its queue is closed, which ends the
 /// drain loop.
-pub fn ApiState::subscribe(self : ApiState) -> @async.Queue[Notification] {
+pub fn ApiState::subscribe(
+  self : ApiState,
+) -> @async.Queue[@protocol.Notification] {
   self.hub.subscribe()
 }
 
 ///|
 pub fn ApiState::unsubscribe(
   self : ApiState,
-  queue : @async.Queue[Notification],
+  queue : @async.Queue[@protocol.Notification],
 ) -> Unit {
   self.hub.unsubscribe(queue)
 }
@@ -106,10 +93,9 @@ pub fn ApiState::unsubscribe(
 /// bypass the hub and return only to their owning connection.
 pub fn ApiState::publish(
   self : ApiState,
-  method_ : String,
-  params : Json,
+  notification : @protocol.Notification,
 ) -> Unit {
-  self.hub.publish(method_, params)
+  self.hub.publish(notification)
 }
 
 ///|
@@ -125,123 +111,212 @@ pub fn ApiState::manager(self : ApiState) -> @engine.EngineManager {
 }
 
 ///|
-fn[T : @json.FromJson] decode(params : Json) -> T raise {
-  @json.from_json(params) catch {
-    _ => raise @host.PayloadError("malformed request payload")
-  }
-}
-
-///|
-/// Serve one method call. Every transport funnels through here.
-pub async fn dispatch(
+/// The commands shared by the embedded page and remote WebSocket. A generic
+/// Endpoint constructor checks each payload/reply pair, then erases those
+/// types only inside the two transport closures it creates.
+pub fn endpoints(
   state : ApiState,
   connection : @host.HostConnection,
-  method_ : String,
-  params : Json,
-) -> Json {
-  match method_ {
-    "agent.start" => {
-      let payload : StartPayload = decode(params)
-      @engine.start_run(state.sink(), state.manager, payload.to_request()).to_json()
-    }
-    "agent.cancel" => {
-      let payload : CancelPayload = decode(params)
-      @engine.cancel_run(state.manager, payload.to_request()).to_json()
-    }
-    "agent.steer" => {
-      let payload : SteerPayload = decode(params)
-      @engine.steer_run(state.manager, payload.to_request()).to_json()
-    }
-    "agent.compact" => {
-      let payload : CompactPayload = decode(params)
-      @engine.compact_run(state.manager, payload.to_request()).to_json()
-    }
-    "agent.runs" => {
-      let payload : RunsPayload = decode(params)
+) -> Array[@endpoint.Endpoint] {
+  [
+    @endpoint.Endpoint::remote(@commands.agent_start, async fn(payload) {
+      @engine.start_run(state.sink(), state.manager, payload.to_request())
+    }),
+    @endpoint.Endpoint::remote(@commands.agent_cancel, async fn(payload) {
+      @engine.cancel_run(state.manager, payload.to_request())
+    }),
+    @endpoint.Endpoint::remote(@commands.agent_steer, async fn(payload) {
+      @engine.steer_run(state.manager, payload.to_request())
+    }),
+    @endpoint.Endpoint::remote(@commands.agent_compact, async fn(payload) {
+      @engine.compact_run(state.manager, payload.to_request())
+    }),
+    @endpoint.Endpoint::remote_sync(@commands.agent_runs, payload => {
       state.hub.runs(known?=payload.known)
-    }
-    "session.list" => @engine.list_sessions(state.manager).to_json()
-    "session.load" => {
-      let payload : LoadSessionPayload = decode(params)
-      @engine.load_session(state.manager, payload.to_request()).to_json()
-    }
-    "session.list_archived" =>
+    }),
+    @endpoint.Endpoint::remote(@commands.session_list, async fn(_) {
+      @engine.list_sessions(state.manager)
+    }),
+    @endpoint.Endpoint::remote(@commands.session_load, async fn(payload) {
+      @engine.load_session(state.manager, payload.to_request())
+    }),
+    @endpoint.Endpoint::remote(@commands.session_list_archived, async fn(_) {
       @engine.archived_sessions(state.manager, session => {
         publish_session_changed(state, "archived", session)
-      }).to_json()
-    "session.archive" => {
-      let payload : SessionPayload = decode(params)
+      })
+    }),
+    @endpoint.Endpoint::remote(@commands.session_archive, async fn(payload) {
       let session = payload.canonical_session()
       // The callback runs inside the rename's cancellation shield. Every
       // other client learns the canonical id before any cancellable list
       // reply, so a cancelled requester cannot suppress invalidation.
       @engine.archive_session(state.manager, session, () => {
         publish_session_changed(state, "archived", session)
-      }).to_json()
-    }
-    "session.unarchive" => {
-      let payload : SessionPayload = decode(params)
+      })
+    }),
+    @endpoint.Endpoint::remote(@commands.session_unarchive, async fn(payload) {
       let session = payload.canonical_session()
       @engine.unarchive_session(state.manager, session, () => {
         publish_session_changed(state, "unarchived", session)
-      }).to_json()
-    }
-    "settings.get" => @engine.settings_status(state.manager)
-    "settings.set" => {
-      let payload : SettingsSetPayload = decode(params)
+      })
+    }),
+    @endpoint.Endpoint::remote(@commands.settings_get, async fn(_) {
+      @engine.settings_status(state.manager)
+    }),
+    @endpoint.Endpoint::remote(@commands.settings_set, async fn(payload) {
       // The store commit and its broadcast are one finite cancellation-
       // shielded linearization point. `update_settings` invokes the callback
       // while its manager-owned lock is still held, preserving revision order
       // across concurrent clients even if the requester disconnects.
-      let status = @async.protect_from_cancel(() => {
+      @async.protect_from_cancel(() => {
         let status = @engine.update_settings(
           state.manager,
           payload.to_patch(),
           legacy_migration=payload.legacy_migration == Some(true),
           on_committed=fn(status) {
-            // Every client renders these settings (the Settings page, the
-            // composer's ready gate); clients that did not ask must learn too.
-            state.hub.publish("settings.changed", status)
+            // Every client renders these settings; clients that did not ask
+            // must learn about the committed revision too.
+            state.hub.publish(SettingsChanged(status))
           },
         )
-        // Device credentials belong to the server that issued them. If this
-        // commit switched servers, clear the old credentials before the
-        // settings request can complete or be cancelled.
+        // Credentials belong to the server that issued them. Clear stale
+        // credentials before this request can complete or be cancelled.
         sign_out_after_server_switch(state)
         status
       })
-      status
-    }
-    "workspace.list" => @engine.list_workspaces().to_json()
-    "workspace.add" => {
-      let payload : WorkspacePayload = decode(params)
+    }),
+    @endpoint.Endpoint::remote(@commands.workspace_list, async fn(_) {
+      @engine.list_workspaces()
+    }),
+    @endpoint.Endpoint::remote(@commands.workspace_add, async fn(payload) {
       @engine.attach_workspace(payload.path, workspaces => {
-        state.hub.publish("workspace.changed", {
-          "workspaces": workspaces.to_json(),
-        })
-      }).to_json()
-    }
-    "workspace.remove" => {
-      let payload : WorkspacePayload = decode(params)
+        state.hub.publish(WorkspaceChanged({ workspaces, }))
+      })
+    }),
+    @endpoint.Endpoint::remote(@commands.workspace_remove, async fn(payload) {
       @engine.detach_workspace(state.manager, payload.path, workspaces => {
-        state.hub.publish("workspace.changed", {
-          "workspaces": workspaces.to_json(),
-        })
-      }).to_json()
+        state.hub.publish(WorkspaceChanged({ workspaces, }))
+      })
+    }),
+    @endpoint.Endpoint::remote(@commands.auth_status, async fn(_) {
+      auth_status(state)
+    }),
+    @endpoint.Endpoint::remote(@commands.auth_connect, async fn(_) {
+      auth_connect(state)
+    }),
+    @endpoint.Endpoint::remote(@commands.auth_disconnect, async fn(_) {
+      auth_disconnect(state)
+    }),
+    @endpoint.Endpoint::remote(@commands.auth_cancel, async fn(_) {
+      auth_cancel(state)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_read_file, async fn(payload) {
+      @host.read_file(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_read_directory, async fn(payload) {
+      @host.read_directory(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_list_files, async fn(payload) {
+      @host.list_files(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_stat_files, async fn(payload) {
+      @host.stat_files(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_watch, async fn(payload) {
+      connection.watch(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_unwatch, async fn(_) {
+      connection.unwatch()
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_browse, async fn(payload) {
+      @host.browse_directory(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.terminal_open, async fn(payload) {
+      connection.terminal_open(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.terminal_input, async fn(payload) {
+      connection.terminal_input(payload)
+    }),
+    @endpoint.Endpoint::remote_sync(@commands.terminal_resize, payload => {
+      connection.terminal_resize(payload)
+    }),
+    @endpoint.Endpoint::remote_sync(@commands.terminal_ack, payload => {
+      connection.terminal_ack(payload)
+    }),
+    @endpoint.Endpoint::remote_sync(@commands.terminal_close, payload => {
+      connection.terminal_close(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.lsp_open, async fn(payload) {
+      state.host.lsp_open(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.lsp_hover, async fn(payload) {
+      state.host.lsp_hover(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.lsp_workspace_symbols, async fn(
+      payload,
+    ) {
+      state.host.lsp_workspace_symbols(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.moonide_definition, async fn(payload) {
+      state.host.moonide_definition(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.moonide_references, async fn(payload) {
+      state.host.moonide_references(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.skills_catalog, async fn(_) {
+      @host.skills_catalog()
+    }),
+    @endpoint.Endpoint::remote(@commands.skills_installed, async fn(_) {
+      @host.skills_installed()
+    }),
+    @endpoint.Endpoint::remote(@commands.skills_install, async fn(payload) {
+      @host.skills_install(payload, () => state.publish(SkillsChanged))
+    }),
+    @endpoint.Endpoint::remote(@commands.skills_uninstall, async fn(payload) {
+      @host.skills_uninstall(payload, () => state.publish(SkillsChanged))
+    }),
+    @endpoint.Endpoint::remote(@commands.update_check, async fn(payload) {
+      state.host.update_check(payload)
+    }),
+    @endpoint.Endpoint::remote_sync(@commands.update_download, payload => {
+      state.host.update_download(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.update_apply, async fn(_) {
+      state.host.update_apply()
+    }),
+    @endpoint.Endpoint::remote(@commands.app_list, async fn(_) {
+      @host.app_list()
+    }),
+    @endpoint.Endpoint::remote(@commands.app_launch, async fn(payload) {
+      @host.app_launch(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.git_branch, async fn(payload) {
+      @host.git_branch_info(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.host_open_path, async fn(payload) {
+      @host.open_path(payload)
+    }),
+  ]
+}
+
+///|
+test "remote endpoint catalog has one entry per command name" {
+  let state = ApiState::new(engine="unused")
+  let connection = @host.HostConnection::new()
+  let names : Array[String] = []
+  for endpoint in endpoints(state, connection) {
+    let name = endpoint.name()
+    if names.contains(name) {
+      fail("duplicate endpoint: " + name)
     }
-    "auth.status" => auth_status(state)
-    "auth.connect" => auth_connect(state)
-    "auth.disconnect" => auth_disconnect(state)
-    "auth.cancel" => auth_cancel(state)
-    _ =>
-      match
-        @host.host_op(state.host, connection, method_, params, (method_, params) => {
-          state.hub.publish(method_, params)
-        }) {
-        Some(reply) => reply
-        None => raise UnknownMethod(method_)
-      }
+    names.push(name)
   }
+  assert_eq(names.length(), 47)
+  assert_true(names.contains("agent.start"))
+  assert_true(names.contains("terminal.close"))
+  assert_true(names.contains("moonide.references"))
+  assert_false(names.contains("host.connect"))
+  assert_false(names.contains("shell.open_external"))
 }
 
 ///|
@@ -253,21 +328,5 @@ fn publish_session_changed(
   change : String,
   session : String,
 ) -> Unit {
-  state.hub.publish("session.changed", {
-    "change": Json::string(change),
-    "session": Json::string(session),
-  })
-}
-
-///|
-/// Every method in the catalog — the transport adapters register exactly
-/// this set.
-pub fn method_names() -> Array[String] {
-  [
-    "agent.start", "agent.cancel", "agent.steer", "agent.compact", "agent.runs",
-    "session.list", "session.load", "session.list_archived", "session.archive", "session.unarchive",
-    "settings.get", "settings.set", "workspace.list", "workspace.add", "workspace.remove",
-    "auth.status", "auth.connect", "auth.disconnect", "auth.cancel",
-  ] +
-  @host.host_method_names()
+  state.hub.publish(SessionChanged({ change, session }))
 }

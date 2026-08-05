@@ -10,8 +10,8 @@ fn fetch_apps(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
     @js.async_run(() => {
       let reply = @interop.bridge_request(
         @interop.ChannelId::Local,
-        "app.list",
-        @js.Object::new().to_value(),
+        @commands.app_list,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         error => {
           scheduler.add(
@@ -20,10 +20,9 @@ fn fetch_apps(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           return
         }
       }
-      match @transcript.decode_apps_reply(@interop.reply_json_text(reply)) {
-        Some(apps) => scheduler.add(dispatch(LauncherLoaded(apps)))
-        None => scheduler.add(dispatch(LauncherFailed("malformed app list")))
-      }
+      scheduler.add(
+        dispatch(LauncherLoaded(@transcript.apps_from_reply(reply))),
+      )
     })
   })
 }
@@ -40,22 +39,27 @@ fn launch_app(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["session"] = session
-      @interop.set_trimmed(payload, "cwd", workspace_token(cwd))
-      payload["app"] = app
-      let _ : @js.Value = @interop.bridge_request(
-        @interop.ChannelId::Local,
-        "app.launch",
-        payload.to_value(),
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(HostActionFailed(@interop.bridge_error_text(error))),
-          )
-          return
-        }
-      }
+      ignore(
+        @interop.bridge_request(
+          @interop.ChannelId::Local,
+          @commands.app_launch,
+          {
+            session,
+            cwd: match workspace_token(cwd).trim() {
+              "" => None
+              value => Some(value.to_owned())
+            },
+            app,
+          },
+        ) catch {
+          error => {
+            scheduler.add(
+              dispatch(HostActionFailed(@interop.bridge_error_text(error))),
+            )
+            return
+          }
+        },
+      )
     })
   })
 }

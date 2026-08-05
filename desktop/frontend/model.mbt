@@ -413,8 +413,7 @@ priv enum TranscriptSync {
 ///|
 priv struct BufferedCommit {
   sequence : Int
-  kind : String
-  payload : Map[String, Json]
+  item : @protocol.SessionItem
 } derive(Eq)
 
 ///|
@@ -1175,8 +1174,7 @@ priv enum DeviceMsg {
   SessionCommitted(
     session~ : String,
     sequence~ : Int,
-    kind~ : String,
-    payload~ : Map[String, Json]
+    item~ : @protocol.SessionItem
   )
   // The registered workspaces — the reply to `workspace.list`. Both
   // generations are required: reconnect rejects a dead socket, while request
@@ -3102,33 +3100,33 @@ fn Conversation::freeze_durable_tail_notices_from_snapshot(
 fn Conversation::apply_commit(
   self : Conversation,
   sequence : Int,
-  kind : String,
-  payload : Map[String, Json],
+  item : @protocol.SessionItem,
 ) -> (Bool, Conversation) {
   // A canonical User is transcript data, never local-submission ownership.
   // It is not a run boundary: the same kind also stores in-run steering.
   let messages = self.messages.copy()
   let before = messages.length()
-  @transcript.apply_session_item(messages, kind, payload)
+  @transcript.apply_session_item(messages, item)
+  let terminal = item is @protocol.SessionItem::Terminal(_)
   let conv = {
     ..self,
     messages,
     run_durable_floor: if !(self.run is NoRun(..)) &&
       self.run_durable_floor is None &&
       self.run_floor_generation is None &&
-      kind != "terminal" {
+      !terminal {
       Some(self.last_terminal_sequence)
     } else {
       self.run_durable_floor
     },
-    last_terminal_sequence: if kind == "terminal" &&
+    last_terminal_sequence: if terminal &&
       sequence > self.last_terminal_sequence {
       sequence
     } else {
       self.last_terminal_sequence
     },
   }
-  let conv = if kind == "terminal" {
+  let conv = if terminal {
     conv.freeze_run_tail_notices_at_terminal(sequence, messages.length())
   } else {
     conv
@@ -3344,11 +3342,7 @@ fn Conversation::adopt_snapshot(
       continue
     }
     if commit.sequence == conv.watermark + 1 && leftover.is_empty() {
-      let (_, next) = conv.apply_commit(
-        commit.sequence,
-        commit.kind,
-        commit.payload,
-      )
+      let (_, next) = conv.apply_commit(commit.sequence, commit.item)
       conv = { ..next, watermark: commit.sequence }
     } else {
       leftover.push(commit)

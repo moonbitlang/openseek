@@ -5,16 +5,10 @@
 // current frontend does not send historical blank sentinels.
 
 ///|
-priv struct InstallSkillPayload {
-  module_name : String
-  version : String
-  package_path : String?
-} derive(FromJson)
+type InstallSkillPayload = @protocol.InstallSkillPayload
 
 ///|
-priv struct UninstallSkillPayload {
-  id : String
-} derive(FromJson)
+type UninstallSkillPayload = @protocol.UninstallSkillPayload
 
 ///|
 /// Open a transcript-referenced file in the user's system. `path` is the
@@ -23,189 +17,98 @@ priv struct UninstallSkillPayload {
 /// run), otherwise derived from `session` (a resumed conversation). No
 /// workspace containment is applied — the user clicked a path the agent itself
 /// surfaced.
-priv struct OpenPathPayload {
-  session : String
-  cwd : String?
-  path : String
-} derive(FromJson)
+type OpenPathPayload = @protocol.OpenPathPayload
 
 ///|
 /// Reply to `open_path`: whether the file was handed to the system opener.
-priv struct OpenPathReply {
-  opened : Bool
-} derive(ToJson)
+type OpenPathReply = @protocol.OpenPathReply
 
 ///|
 /// Reply to `apply_update`: the swap succeeded and the window may close.
-priv struct ApplyUpdateReply {
-  applied : Bool
-} derive(ToJson)
+type ApplyUpdateReply = @protocol.ApplyUpdateReply
 
 ///|
 /// Reply to `list_apps`: the launcher apps detected as installed on this
 /// machine, in catalog order. `icon` is a `data:image/png` URL (empty when the
 /// app's icon could not be extracted — the frontend falls back to an initial).
-priv struct ListAppsReply {
-  apps : Array[AppEntry]
-} derive(ToJson)
-
-///|
-priv struct AppEntry {
-  id : String
-  name : String
-  icon : String
-} derive(ToJson)
+type ListAppsReply = @protocol.ListAppsReply
 
 ///|
 /// Launch one detected app (`app` = the `id` from `app.list`) with the
 /// conversation's working directory — `cwd` when the frontend has it, otherwise
 /// derived by the host from `session`, mirroring `host.open_path`.
-priv struct LaunchAppPayload {
-  session : String
-  cwd : String?
-  app : String
-} derive(FromJson)
+type LaunchAppPayload = @protocol.LaunchAppPayload
 
 ///|
 /// Reply to `launch_app`: whether the app was handed the directory.
-priv struct LaunchAppReply {
-  launched : Bool
-} derive(ToJson)
+type LaunchAppReply = @protocol.LaunchAppReply
 
 ///|
 /// Reply to `skills_catalog`: the registry's installable skills.
-priv struct SkillsCatalogReply {
-  skills : Array[@skillmarket.MarketSkill]
-} derive(ToJson)
+type SkillsCatalogReply = @protocol.SkillsCatalogReply
 
 ///|
 /// Reply to `skills_installed`: the global skills library's contents,
 /// registry installs and hand-written skills alike.
-priv struct InstalledSkillsReply {
-  skills : Array[@skillmarket.InstalledSkill]
-} derive(ToJson)
+type InstalledSkillsReply = @protocol.InstalledSkillsReply
 
 ///|
-priv struct InstallSkillReply {
-  installed : @skillmarket.InstalledSkill
-} derive(ToJson)
+type InstallSkillReply = @protocol.InstallSkillReply
 
 ///|
-priv struct UninstallSkillReply {
-  removed : Bool
-} derive(ToJson)
+type UninstallSkillReply = @protocol.UninstallSkillReply
 
 ///|
 /// `git.branch` reports the git branch of the conversation's working
 /// directory — `cwd` when the frontend has it (a live run), otherwise derived
 /// from `session`, mirroring `host.open_path`.
-priv struct GitBranchPayload {
-  session : String
-  cwd : String?
-} derive(FromJson)
+type GitBranchPayload = @protocol.GitBranchPayload
 
 ///|
 /// Reply to `git.branch`. `branch` is the checked-out branch (a detached
 /// HEAD reads as its short hash); absent when the directory is not a git
 /// repository or git is unavailable.
-priv struct GitBranchReply {
-  branch : String?
-} derive(ToJson)
+type GitBranchReply = @protocol.GitBranchReply
 
 ///|
 /// `read_directory` lists `path`, resolved relative to the conversation's
 /// workspace; `""` lists the workspace root. The host derives the root from
 /// `session`, so the client never names an absolute path.
-priv struct ReadDirPayload {
-  session : String
-  path : String
-  // The conversation's workspace, when it has one — lets a fresh workspace
-  // conversation browse the project before its durable record exists.
-  workspace : String?
-} derive(FromJson)
+type ReadDirPayload = @protocol.ReadDirPayload
 
 ///|
-priv struct DirEntry {
-  name : String
-  is_dir : Bool
-} derive(ToJson)
+type DirEntry = @protocol.DirEntry
 
 ///|
 /// Reply to `read_directory`: the directory's entries, directories first.
-priv struct ReadDirReply {
-  entries : Array[DirEntry]
-} derive(ToJson)
+type ReadDirReply = @protocol.ReadDirReply
 
 ///|
 /// `list_files` enumerates every file under the conversation's workspace
 /// (recursively, pruning the same churn directories the watcher skips) for
 /// the editor panel's fuzzy file finder. One flat snapshot, not a live view —
 /// the panel re-requests it on `fs_changed`.
-priv struct ListFilesPayload {
-  session : String
-  // The conversation's workspace, when it has one (see `read_directory`).
-  workspace : String?
-} derive(FromJson)
+type ListFilesPayload = @protocol.ListFilesPayload
 
 ///|
 /// Reply to `list_files`: workspace-relative `/`-separated file paths, in
 /// depth-first lexicographic order. `truncated` is set when the walk hit the
 /// index cap and stopped, so the frontend knows the list is partial.
-priv struct ListFilesReply {
-  files : Array[String]
-  truncated : Bool
-} derive(ToJson)
+type ListFilesReply = @protocol.ListFilesReply
 
 ///|
-priv struct ReadFilePayload {
-  session : String
-  path : String
-  // The conversation's workspace, when it has one (see `read_directory`).
-  workspace : String?
-} derive(FromJson)
+type ReadFilePayload = @protocol.ReadFilePayload
 
 ///|
 /// Reply to `read_file`, discriminated on the wire by a `kind` field.
-priv enum ReadFileReply {
-  // Withheld files carry no content and no address — a notice document has
-  // no file behind it for path-routed ops, and the frontend owns the
-  // user-facing wording.
-  Binary
-  Oversized
-  // `absolute` is the host-resolved absolute path — the address the
-  // frontend uses for path-routed ops (`hover`). `sig` is the file's
-  // mtime signature (see `stat_files`), stat'ed from the same open handle,
-  // so a loaded tab carries the baseline the change detector compares
-  // against without a second round-trip.
-  Content(content~ : String, absolute~ : String, sig~ : String)
-}
-
-///|
-impl ToJson for ReadFileReply with fn to_json(self) {
-  match self {
-    Binary => { "kind": "binary" }
-    Oversized => { "kind": "oversized" }
-    Content(content~, absolute~, sig~) =>
-      {
-        "kind": "content",
-        "content": content,
-        "absolute": absolute,
-        "sig": sig,
-      }
-  }
-}
+type ReadFileReply = @protocol.ReadFileReply
 
 ///|
 /// `stat_files` asks for the mtime signatures of the open tabs' files, all
 /// resolved under the conversation's workspace like `read_file`. One op for
 /// the whole tab set: the frontend calls it on every coarse "something
 /// changed" push to decide which files to re-read.
-priv struct StatFilesPayload {
-  session : String
-  paths : Array[String]
-  // The conversation's workspace, when it has one (see `read_directory`).
-  workspace : String?
-} derive(FromJson)
+type StatFilesPayload = @protocol.StatFilesPayload
 
 ///|
 /// One file's signature: `"{seconds}:{nanos}"` of its mtime, absent internally
@@ -214,48 +117,29 @@ priv struct StatFilesPayload {
 /// deleted-file sentinel, so the manual encoder preserves that wire contract.
 /// The frontend only ever compares signatures for equality, so the shape stays
 /// opaque text — no Int64 crossing JSON.
-priv struct FileStat {
-  path : String
-  sig : String?
-}
-
-///|
-impl ToJson for FileStat with fn to_json(self) {
-  { "path": self.path, "sig": self.sig.unwrap_or("") }
-}
+type FileStat = @protocol.FileStat
 
 ///|
 test "file stat keeps the legacy missing-file sentinel on the wire" {
-  assert_eq(ToJson::to_json(({ path: "deleted.mbt", sig: None } : FileStat)), {
+  assert_eq(ToJson::to_json(({ path: "deleted.mbt", sig: "" } : FileStat)), {
     "path": "deleted.mbt",
     "sig": "",
   })
   assert_eq(
-    ToJson::to_json(({ path: "present.mbt", sig: Some("12:34") } : FileStat)),
+    ToJson::to_json(({ path: "present.mbt", sig: "12:34" } : FileStat)),
     { "path": "present.mbt", "sig": "12:34" },
   )
 }
 
 ///|
-priv struct StatFilesReply {
-  stats : Array[FileStat]
-} derive(ToJson)
+type StatFilesReply = @protocol.StatFilesReply
 
 ///|
 /// `fs.watch` points this client connection's workspace watcher at the
 /// conversation's workspace root. Other desktop or remote connections keep
 /// their own watchers. Stopping is its own method, `fs.unwatch` — sent when
 /// this client's panel closes with no tabs open.
-priv struct WatchWorkspacePayload {
-  session : String
-  // The conversation's workspace, when it has one (see `fs.read_directory`).
-  workspace : String?
-  // Current clients send both arrays. Their absence retains the older
-  // recursive-watch behavior for protocol compatibility; present arrays are
-  // an explicit selection, including when one of them is empty.
-  files : Array[String]?
-  directories : Array[String]?
-} derive(FromJson)
+type WatchWorkspacePayload = @protocol.WatchWorkspacePayload
 
 ///|
 /// One concrete event from `Watcher::wait`. Rename uses `path` for the new
@@ -275,7 +159,7 @@ priv struct FsChangedPayload {
   root : String
   baseline : Bool
   events : Array[FsEventPayload]
-} derive(ToJson)
+}
 
 ///|
 fn FsEventPayload::from_event(event : @fs.FsEvent) -> FsEventPayload {
@@ -330,57 +214,37 @@ test "filesystem watcher failures retain their conversation on the wire" {
 /// `line`/`character` in `path` — an absolute path, the request's whole
 /// address: the host maps it to its attached workspace and module root, and
 /// rejects paths outside every attached directory.
-priv struct LspHoverPayload {
-  path : String
-  line : Int
-  character : Int
-} derive(FromJson)
+type LspHoverPayload = @protocol.LspHoverPayload
 
 ///|
 /// A source position for Moon IDE navigation. `line` and `column` are positive,
 /// one-based numbers which the host passes to `moon ide --loc` unchanged.
 /// `path` is absolute and is accepted only when it belongs to an attached
 /// workspace.
-priv struct MoonIdeNavigationPayload {
-  path : String
-  line : Int
-  column : Int
-} derive(FromJson)
+type MoonIdeNavigationPayload = @protocol.MoonIdeNavigationPayload
 
 ///|
 /// One Moon IDE navigation result. The host validates the CLI path against the
 /// physical workspace, then maps it back under the attached workspace's
 /// lexical spelling. Its compact range becomes explicit numeric fields while
 /// line and column values retain the coordinates emitted by Moon IDE.
-priv struct MoonIdeLocation {
-  path : String
-  start_line : Int
-  start_column : Int
-  end_line : Int
-  end_column : Int
-} derive(ToJson)
+type MoonIdeLocation = @protocol.MoonIdeLocation
 
 ///|
 /// Shared reply shape for `moonide.definition` and `moonide.references`.
-priv struct MoonIdeLocationsReply {
-  locations : Array[MoonIdeLocation]
-} derive(ToJson)
+type MoonIdeLocationsReply = @protocol.MoonIdeLocationsReply
 
 ///|
 /// `lsp_open` tells the host the editor is now showing the file at absolute
 /// `path`, so the language server opens/syncs it and starts publishing
 /// diagnostics. The reply carries whatever the server has already reported;
 /// later changes arrive as `diagnostics` events.
-priv struct LspOpenPayload {
-  path : String
-} derive(FromJson)
+type LspOpenPayload = @protocol.LspOpenPayload
 
 ///|
 /// Reply to `lsp_open`: the server's current diagnostics for the file (the raw
 /// LSP `diagnostics` array, 0-based ranges), empty when it has none yet.
-priv struct LspDiagnosticsReply {
-  diagnostics : Json
-} derive(ToJson)
+type LspDiagnosticsReply = @protocol.LspDiagnosticsReply
 
 ///|
 /// A `diagnostics` event pushed to the webview: the absolute `path` whose
@@ -390,33 +254,20 @@ priv struct LspDiagnosticsReply {
 /// involved, mirroring `hover`.
 priv struct DiagnosticsPush {
   path : String
-  diagnostics : Json
-} derive(ToJson)
+  diagnostics : Array[@protocol.LspDiagnostic]
+}
 
 ///|
 /// Reply to `hover`. An empty `value` means "no hover here". `range` (the four
 /// position fields) marks the symbol the tooltip describes, valid only when
 /// `has_range` is set; the front-end maps it back to a document offset.
-priv struct LspHoverReply {
-  value : String
-  markdown : Bool
-  has_range : Bool
-  start_line : Int
-  start_character : Int
-  end_line : Int
-  end_character : Int
-} derive(ToJson)
+type LspHoverReply = @protocol.LspHoverReply
 
 ///|
 /// `workspace_symbols` searches the conversation workspace's language-server
 /// symbol index for `query` (a substring the server matches). The host derives
 /// the workspace from `session`, so the client never names a path.
-priv struct WorkspaceSymbolsPayload {
-  session : String
-  query : String
-  // The conversation's workspace, when it has one (see `read_directory`).
-  workspace : String?
-} derive(FromJson)
+type WorkspaceSymbolsPayload = @protocol.WorkspaceSymbolsPayload
 
 ///|
 /// One row of a `workspace_symbols` reply. `path` is workspace-relative and
@@ -426,30 +277,13 @@ priv struct WorkspaceSymbolsPayload {
 /// label or icon as it likes, and omitted when the server sent none.
 /// `container` is the enclosing symbol's name, omitted when the symbol has
 /// none.
-priv struct SymbolItem {
-  name : String
-  kind : Int?
-  container : String?
-  path : String
-  range : SymbolRange
-} derive(ToJson)
+type SymbolItem = @protocol.SymbolItem
 
 ///|
 /// A symbol's location range on the wire, mirroring the LSP shape with
 /// zero-based positions.
-priv struct SymbolRange {
-  start : SymbolPosition
-  end : SymbolPosition
-} derive(ToJson)
-
-///|
-priv struct SymbolPosition {
-  line : Int
-  col : Int
-} derive(ToJson)
+type SymbolRange = @protocol.SymbolRange
 
 ///|
 /// Reply to `workspace_symbols`: the matching symbols, capped host-side.
-priv struct WorkspaceSymbolsReply {
-  symbols : Array[SymbolItem]
-} derive(ToJson)
+type WorkspaceSymbolsReply = @protocol.WorkspaceSymbolsReply

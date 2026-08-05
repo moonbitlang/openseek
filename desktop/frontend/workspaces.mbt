@@ -17,17 +17,12 @@ fn fetch_workspaces(
       // A host without the op just reads as "no workspaces attached".
       let reply = @interop.bridge_request(
         channel,
-        "workspace.list",
-        @js.Object::new().to_value(),
+        @commands.workspace_list,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         _ => return
       }
-      // A malformed reply is dropped like a failed op: the sidebar keeps
-      // whatever list it already shows.
-      guard decode_workspaces(@interop.reply_json_text(reply))
-        is Some(workspaces) else {
-        return
-      }
+      let workspaces = reply.workspaces.filter(path => !path.is_empty())
       scheduler.add(
         dispatch(
           WorkspacesLoaded(
@@ -47,7 +42,7 @@ fn add_workspace(
   channel : @interop.ChannelId,
   path : String,
 ) -> @cmd.Cmd {
-  workspace_action(dispatch, channel, "workspace.add", path)
+  workspace_action(dispatch, channel, @commands.workspace_add, { path, })
 }
 
 ///|
@@ -56,7 +51,7 @@ fn remove_workspace(
   channel : @interop.ChannelId,
   path : String,
 ) -> @cmd.Cmd {
-  workspace_action(dispatch, channel, "workspace.remove", path)
+  workspace_action(dispatch, channel, @commands.workspace_remove, { path, })
 }
 
 ///|
@@ -72,13 +67,12 @@ fn browse_directory(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      @interop.set_trimmed(payload, "path", path)
-      let reply = @interop.bridge_request(
-        channel,
-        "fs.browse",
-        payload.to_value(),
-      ) catch {
+      let reply = @interop.bridge_request(channel, @commands.fs_browse, {
+        path: match path.trim() {
+          "" => None
+          value => Some(value.to_owned())
+        },
+      }) catch {
         error => {
           scheduler.add(
             dispatch(
@@ -92,46 +86,31 @@ fn browse_directory(
           return
         }
       }
-      match decode_browse(@interop.reply_json_text(reply)) {
-        Some((path, entries)) =>
-          scheduler.add(
-            dispatch(
-              WorkspacePickerLoaded(channel~, path~, entries~, generation~),
+      if !reply.path.is_empty() {
+        let entries = reply.entries.filter(name => !name.is_empty())
+        scheduler.add(
+          dispatch(
+            WorkspacePickerLoaded(
+              channel~,
+              path=reply.path,
+              entries~,
+              generation~,
             ),
-          )
-        None =>
-          scheduler.add(
-            dispatch(
-              WorkspacePickerFailed(
-                channel~,
-                message="malformed directory listing",
-                generation~,
-              ),
+          ),
+        )
+      } else {
+        scheduler.add(
+          dispatch(
+            WorkspacePickerFailed(
+              channel~,
+              message="malformed directory listing",
+              generation~,
             ),
-          )
+          ),
+        )
       }
     })
   })
-}
-
-///|
-/// A browse reply's fields; `None` only for structurally unusable JSON.
-fn decode_browse(text : String) -> (String, Array[String])? {
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) &&
-    reply.get("path") is Some(String(path)) &&
-    !path.is_empty() else {
-    return None
-  }
-  let entries : Array[String] = []
-  if reply.get("entries") is Some(Array(items)) {
-    for item in items {
-      if item is String(name) && !name.is_empty() {
-        entries.push(name)
-      }
-    }
-  }
-  Some((path, entries))
 }
 
 ///|
@@ -152,12 +131,15 @@ fn joined_path(dir : String, name : String) -> String {
 fn workspace_action(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  op : String,
-  path : String,
+  command : @commands.Command[
+    @protocol.WorkspacePayload,
+    @protocol.WorkspacesReply,
+  ],
+  payload : @protocol.WorkspacePayload,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      workspace_action_into(scheduler, dispatch, channel, op, path)
+      workspace_action_into(scheduler, dispatch, channel, command, payload)
     })
   })
 }
@@ -167,13 +149,14 @@ async fn workspace_action_into(
   scheduler : &@cmd.Scheduler,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  op : String,
-  path : String,
+  command : @commands.Command[
+    @protocol.WorkspacePayload,
+    @protocol.WorkspacesReply,
+  ],
+  payload : @protocol.WorkspacePayload,
 ) -> Unit noraise {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
-  let payload = @js.Object::new()
-  payload["path"] = path
-  let _ = @interop.bridge_request(channel, op, payload.to_value()) catch {
+  let _ = @interop.bridge_request(channel, command, payload) catch {
     error => {
       scheduler.add(
         dispatch(WorkspaceFailed(@interop.bridge_error_text(error))),
@@ -184,29 +167,6 @@ async fn workspace_action_into(
   // Success is published to every client as canonical `workspace.changed`
   // from the registry commit seam. The RPC response itself carries no newer
   // ordering information and must not start a second, fallible list read.
-}
-
-///|
-/// The reply's registered workspace paths; `None` only for structurally
-/// unusable JSON.
-fn decode_workspaces(text : String) -> Array[String]? {
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) else { return None }
-  workspaces_from_fields(reply)
-}
-
-///|
-/// Decode the common `{workspaces:[...]}` shape used by list replies and the
-/// host's post-commit broadcast.
-fn workspaces_from_fields(reply : Map[String, Json]) -> Array[String]? {
-  guard reply.get("workspaces") is Some(Array(items)) else { return None }
-  let paths : Array[String] = []
-  for item in items {
-    if item is String(path) && !path.is_empty() {
-      paths.push(path)
-    }
-  }
-  Some(paths)
 }
 
 ///|
@@ -374,9 +334,10 @@ test "a workspace commit broadcast supersedes list replies and refreshes session
 
 ///|
 test "workspace commit decoder carries the canonical registry list" {
-  guard bridge_msg(@interop.ChannelId::Local, "workspace.changed", {
-      "workspaces": Json::array([Json::string("/one"), Json::string("/two")]),
-    })
+  guard bridge_msg(
+      @interop.ChannelId::Local,
+      @protocol.Notification::WorkspaceChanged({ workspaces: ["/one", "/two"] }),
+    )
     is Some(FromDevice(_, WorkspacesChanged(paths))) else {
     fail("expected a workspace change")
   }
@@ -387,8 +348,8 @@ test "workspace commit decoder carries the canonical registry list" {
 ///|
 test "proton subscribes to canonical durable and workspace notifications" {
   let methods = proton_event_methods()
-  assert_true(methods.contains("agent.durable"))
-  assert_true(methods.contains("workspace.changed"))
+  assert_true(methods.contains(@protocol.NotificationKind::AgentDurable))
+  assert_true(methods.contains(@protocol.NotificationKind::WorkspaceChanged))
 }
 
 ///|

@@ -3,16 +3,6 @@
 // so it cannot be called through the relay WebSocket.
 
 ///|
-priv struct OpenExternalPayload {
-  url : String
-} derive(FromJson)
-
-///|
-priv struct OpenExternalReply {
-  opened : Bool
-} derive(ToJson)
-
-///|
 priv suberror OpenExternalError {
   OpenExternalError(String)
 }
@@ -41,10 +31,9 @@ fn allowed_external_url(url : String) -> Bool {
 }
 
 ///|
-async fn open_external(params : Json) -> Json {
-  let payload : OpenExternalPayload = @json.from_json(params) catch {
-    _ => raise OpenExternalError("Malformed external link request")
-  }
+async fn open_external(
+  payload : @protocol.ExternalLinkPayload,
+) -> @protocol.OpenExternalReply {
   guard allowed_external_url(payload.url) else {
     raise OpenExternalError("Blocked unsupported external link")
   }
@@ -55,7 +44,7 @@ async fn open_external(params : Json) -> Json {
   guard code == 0 else {
     raise OpenExternalError("Could not open external link")
   }
-  ToJson::to_json(OpenExternalReply::{ opened: true })
+  { opened: true }
 }
 
 ///|
@@ -71,7 +60,11 @@ test "external link policy allows browser schemes only" {
 
 ///|
 test "external link opener is absent from the relay method catalog" {
+  let state = @api.ApiState::new(engine="unused")
+  let connection = @host.HostConnection::new()
   assert_false(
-    @api.method_names().iter().any(name => name == OpenExternalMethod),
+    @api.endpoints(state, connection)
+    .iter()
+    .any(endpoint => endpoint.name() == @commands.shell_open_external.name()),
   )
 }

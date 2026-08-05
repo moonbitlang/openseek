@@ -1,8 +1,11 @@
 import {
+  "bobzhang/openseek_protocol" @wire,
   "openseek_desktop/internal/api",
   "openseek_desktop/internal/auth",
   "openseek_desktop/internal/engine",
+  "openseek_desktop/internal/endpoint",
   "openseek_desktop/internal/host",
+  "openseek_desktop/internal/protocol",
   "openseek_desktop/tunnel",
   "moonbitlang/async",
   "moonbitlang/async/io",

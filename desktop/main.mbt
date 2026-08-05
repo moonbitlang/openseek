@@ -75,11 +75,18 @@ fn main {
         state
         .engine_actor()
         .run(state.sink(), message => {
-          state.publish("agent.error", { "message": Json::string(message) })
+          state.publish(
+            AgentError({
+              run_id: None,
+              message,
+              exit_code: None,
+              diagnostics: None,
+            }),
+          )
         })
       })
-      @host.spawn_host_pumps(group, state.host_state(), (method_, params) => {
-        state.publish(method_, params)
+      @host.spawn_host_pumps(group, state.host_state(), notification => {
+        state.publish(notification)
       })
       // The relay actor runs for the app's lifetime: it registers
       // this host whenever a sign-in (or the environment override) says so,

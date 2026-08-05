@@ -12,8 +12,8 @@ fn fetch_skills_catalog(
     @js.async_run(() => {
       let reply = @interop.bridge_request(
         channel,
-        "skills.catalog",
-        @js.Object::new().to_value(),
+        @commands.skills_catalog,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         error => {
           scheduler.add(
@@ -22,14 +22,11 @@ fn fetch_skills_catalog(
           return
         }
       }
-      match
-        @transcript.decode_skills_catalog_reply(@interop.reply_json_text(reply)) {
-        Some(items) => scheduler.add(dispatch(SkillsCatalogLoaded(items)))
-        None =>
-          scheduler.add(
-            dispatch(SkillsCatalogFailed("malformed skill catalog")),
-          )
-      }
+      scheduler.add(
+        dispatch(
+          SkillsCatalogLoaded(@transcript.skills_catalog_from_reply(reply)),
+        ),
+      )
     })
   })
 }
@@ -45,8 +42,8 @@ fn fetch_installed_skills(
     @js.async_run(() => {
       let reply = @interop.bridge_request(
         channel,
-        "skills.installed",
-        @js.Object::new().to_value(),
+        @commands.skills_installed,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         error => {
           scheduler.add(
@@ -55,16 +52,11 @@ fn fetch_installed_skills(
           return
         }
       }
-      match
-        @transcript.decode_installed_skills_reply(
-          @interop.reply_json_text(reply),
-        ) {
-        Some(items) => scheduler.add(dispatch(InstalledSkillsLoaded(items)))
-        None =>
-          scheduler.add(
-            dispatch(InstalledSkillsFailed("malformed installed-skill list")),
-          )
-      }
+      scheduler.add(
+        dispatch(
+          InstalledSkillsLoaded(@transcript.installed_skills_from_reply(reply)),
+        ),
+      )
     })
   })
 }
@@ -80,30 +72,30 @@ fn install_skill(
   let key = @transcript.market_source_label(item)
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["module_name"] = item.module_name
-      payload["version"] = item.version
-      if !item.package_path.is_empty() {
-        payload["package_path"] = item.package_path
-      }
-      let _ : @js.Value = @interop.bridge_request(
-        channel,
-        "skills.install",
-        payload.to_value(),
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(
-              SkillActionDone(
-                channel~,
-                key~,
-                error=@interop.bridge_error_text(error),
+      ignore(
+        @interop.bridge_request(channel, @commands.skills_install, {
+          module_name: item.module_name,
+          version: item.version,
+          package_path: if item.package_path.is_empty() {
+            None
+          } else {
+            Some(item.package_path)
+          },
+        }) catch {
+          error => {
+            scheduler.add(
+              dispatch(
+                SkillActionDone(
+                  channel~,
+                  key~,
+                  error=@interop.bridge_error_text(error),
+                ),
               ),
-            ),
-          )
-          return
-        }
-      }
+            )
+            return
+          }
+        },
+      )
       scheduler.add(dispatch(SkillActionDone(channel~, key~, error="")))
     })
   })
@@ -119,26 +111,22 @@ fn uninstall_skill(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["id"] = id
-      let _ : @js.Value = @interop.bridge_request(
-        channel,
-        "skills.uninstall",
-        payload.to_value(),
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(
-              SkillActionDone(
-                channel~,
-                key=id,
-                error=@interop.bridge_error_text(error),
+      ignore(
+        @interop.bridge_request(channel, @commands.skills_uninstall, { id, }) catch {
+          error => {
+            scheduler.add(
+              dispatch(
+                SkillActionDone(
+                  channel~,
+                  key=id,
+                  error=@interop.bridge_error_text(error),
+                ),
               ),
-            ),
-          )
-          return
-        }
-      }
+            )
+            return
+          }
+        },
+      )
       scheduler.add(dispatch(SkillActionDone(channel~, key=id, error="")))
     })
   })

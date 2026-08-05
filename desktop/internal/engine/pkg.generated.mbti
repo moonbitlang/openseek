@@ -3,32 +3,33 @@ package "openseek_desktop/internal/engine"
 
 import {
   "moonbitlang/x/path",
+  "openseek_desktop/internal/protocol",
 }
 
 // Values
 pub async fn add_workspace(String, (Array[String]) -> Unit) -> Array[String]
 
-pub async fn archive_session(EngineManager, String, () -> Unit) -> SessionsReply
+pub async fn archive_session(EngineManager, String, () -> Unit) -> @protocol.SessionsReply
 
-pub async fn archived_sessions(EngineManager, (String) -> Unit) -> SessionsReply
+pub async fn archived_sessions(EngineManager, (String) -> Unit) -> @protocol.SessionsReply
 
-pub async fn attach_workspace(String, (Array[String]) -> Unit) -> WorkspacesReply
+pub async fn attach_workspace(String, (Array[String]) -> Unit) -> @protocol.WorkspacesReply
 
 pub async fn attached_workspace_dir(String) -> @path.Path?
 
-pub async fn cancel_run(EngineManager, CancelRequest) -> CancelReply
+pub async fn cancel_run(EngineManager, CancelRequest) -> @protocol.CancelReply
 
-pub async fn compact_run(EngineManager, CompactRequest) -> CompactReply
+pub async fn compact_run(EngineManager, CompactRequest) -> @protocol.CompactReply
 
-pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) -> WorkspacesReply
+pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) -> @protocol.WorkspacesReply
 
 pub async fn engine_command(String) -> String
 
-pub async fn list_sessions(EngineManager) -> SessionsReply
+pub async fn list_sessions(EngineManager) -> @protocol.SessionsReply
 
-pub async fn list_workspaces() -> WorkspacesReply
+pub async fn list_workspaces() -> @protocol.WorkspacesReply
 
-pub async fn load_session(EngineManager, LoadSessionRequest) -> LoadSessionReply
+pub async fn load_session(EngineManager, LoadSessionRequest) -> @protocol.LoadSessionReply
 
 pub fn new_engine_actor(String, runtime_dir? : @path.Path) -> EngineActor
 
@@ -44,15 +45,15 @@ pub async fn resolve_in_workspace(String, String, workspace? : String) -> @path.
 
 pub async fn session_cwd(String) -> String
 
-pub async fn settings_status(EngineManager) -> Json
+pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 
-pub async fn start_run(EventSink, EngineManager, StartRequest) -> StartReply
+pub async fn start_run(EventSink, EngineManager, StartRequest) -> @protocol.StartReply
 
-pub async fn steer_run(EngineManager, SteerRequest) -> SteerReply
+pub async fn steer_run(EngineManager, SteerRequest) -> @protocol.SteerReply
 
-pub async fn unarchive_session(EngineManager, String, () -> Unit) -> SessionsReply
+pub async fn unarchive_session(EngineManager, String, () -> Unit) -> @protocol.SessionsReply
 
-pub async fn update_settings(EngineManager, SettingsPatch, legacy_migration? : Bool, on_committed? : (Json) -> Unit) -> Json
+pub async fn update_settings(EngineManager, SettingsPatch, legacy_migration? : Bool, on_committed? : (@protocol.SettingsStatusPayload) -> Unit) -> @protocol.SettingsStatusPayload
 
 pub fn workspace_session_root(@path.Path) -> @path.Path
 
@@ -62,13 +63,9 @@ pub(all) suberror EngineError {
 }
 
 // Types and methods
-type CancelReply derive(ToJson)
-
 pub(all) struct CancelRequest {
   run_id : String?
 }
-
-type CompactReply derive(ToJson)
 
 pub(all) struct CompactRequest {
   session : String
@@ -77,52 +74,28 @@ pub(all) struct CompactRequest {
   workspace : String?
 }
 
-type ConnectedPayload derive(ToJson)
-
-type DurableBoundaryPayload derive(ToJson)
-
 type EngineActor
 pub fn EngineActor::manager(Self) -> EngineManager
 pub async fn EngineActor::run(Self, EventSink, (String) -> Unit) -> Unit
 
 pub(all) enum EngineEvent {
-  Connected(ConnectedPayload)
-  Started(StartedPayload)
-  StreamEvent(EventPayload)
-  Error(ErrorPayload)
-  Finished(FinishedPayload)
-  SessionCommit(SessionCommitPayload)
-  DurableBoundary(DurableBoundaryPayload)
+  Connected(@protocol.ConnectedPayload)
+  Started(@protocol.StartedPayload)
+  StreamEvent(@protocol.AgentEventPayload)
+  Error(@protocol.AgentErrorPayload)
+  Finished(@protocol.FinishedPayload)
+  SessionCommit(@protocol.SessionCommitPayload)
+  DurableBoundary(@protocol.DurableBoundaryPayload)
 }
 
 type EngineManager
 
-type ErrorPayload derive(ToJson)
-
-type EventPayload derive(ToJson)
-
 pub(all) struct EventSink(async (EngineEvent) -> Unit)
-
-pub struct FinishedPayload {
-  run_id : String
-  status : String
-  answer : String?
-  exit_code : Int?
-  durable_sequence : Int?
-} derive(ToJson)
-
-type LoadSessionReply derive(ToJson)
 
 pub(all) struct LoadSessionRequest {
   session : String
   workspace : String?
 }
-
-type SessionCommitPayload derive(ToJson)
-
-type SessionGroup derive(ToJson)
-
-type SessionsReply derive(ToJson)
 
 pub(all) struct SettingsPatch {
   provider : String?
@@ -130,8 +103,6 @@ pub(all) struct SettingsPatch {
   deepseek_api_key : String?
   custom_api_key : String?
 }
-
-type StartReply derive(ToJson)
 
 pub(all) struct StartRequest {
   task : String
@@ -142,18 +113,13 @@ pub(all) struct StartRequest {
   workspace : String?
 }
 
-type StartedPayload derive(ToJson)
-
-type SteerReply derive(ToJson)
-
 pub(all) struct SteerRequest {
   text : String
   run_id : String?
   submission_id : String?
 }
 
-type WorkspacesReply derive(ToJson)
-
 // Type aliases
+pub using @protocol {type FinishedPayload}
 
 // Traits

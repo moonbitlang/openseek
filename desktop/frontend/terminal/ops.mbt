@@ -21,16 +21,12 @@ fn open_session(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["session"] = session
-      @interop.set_workspace(payload, workspace)
-      payload["cols"] = cols
-      payload["rows"] = rows
-      let reply = @interop.bridge_request(
-        channel,
-        "terminal.open",
-        payload.to_value(),
-      ) catch {
+      let reply = @interop.bridge_request(channel, @commands.terminal_open, {
+        session,
+        workspace: workspace.map(value => value.0),
+        cols,
+        rows,
+      }) catch {
         error => {
           scheduler.add(
             dispatch(
@@ -40,14 +36,7 @@ fn open_session(
           return
         }
       }
-      guard @interop.js_prop(reply, "id") is Some(value) else {
-        scheduler.add(
-          dispatch(OpenFailed(key~, message="malformed terminal.open reply")),
-        )
-        return
-      }
-      let id : Int = value.cast()
-      scheduler.add(dispatch(Opened(channel~, key~, id~)))
+      scheduler.add(dispatch(Opened(channel~, key~, id=reply.id)))
     })
   })
 }
@@ -63,27 +52,30 @@ fn send_input(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["id"] = id
-      if binary {
-        payload["data_base64"] = data
-      } else {
-        payload["data"] = data
-      }
-      let _ : @js.Value = @interop.bridge_request(
-        channel,
-        "terminal.input",
-        payload.to_value(),
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(
-              InputFailed(key~, message=@interop.bridge_error_text(error)),
-            ),
-          )
-          return
-        }
-      }
+      ignore(
+        @interop.bridge_request(channel, @commands.terminal_input, {
+          id,
+          data: if binary {
+            None
+          } else {
+            Some(data)
+          },
+          data_base64: if binary {
+            Some(data)
+          } else {
+            None
+          },
+        }) catch {
+          error => {
+            scheduler.add(
+              dispatch(
+                InputFailed(key~, message=@interop.bridge_error_text(error)),
+              ),
+            )
+            return
+          }
+        },
+      )
     })
   })
 }
@@ -97,17 +89,15 @@ fn send_resize(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["id"] = id
-      payload["cols"] = cols
-      payload["rows"] = rows
-      let _ : @js.Value = @interop.bridge_request(
-        channel,
-        "terminal.resize",
-        payload.to_value(),
-      ) catch {
-        _ => return
-      }
+      ignore(
+        @interop.bridge_request(channel, @commands.terminal_resize, {
+          id,
+          cols,
+          rows,
+        }) catch {
+          _ => return
+        },
+      )
     })
   })
 }
@@ -126,25 +116,23 @@ priv struct TerminalAck {
 fn TerminalAck::send(self : TerminalAck) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["id"] = self.id
-      payload["sequence"] = self.sequence
-      let _ : @js.Value = @interop.bridge_request(
-        self.channel,
-        "terminal.ack",
-        payload.to_value(),
-      ) catch {
-        _ => {
-          // The in-process bridge keeps one terminal-id namespace, so a lost
-          // reply is safe to retry there. A remote WebSocket failure ends the
-          // namespace together with all of its PTYs; replaying this id after
-          // reconnect could acknowledge an unrelated new terminal.
-          if self.channel is @interop.ChannelId::Local {
-            _scheduler.add(@cmd.delay(self.send(), AckRetryDelayMs))
+      ignore(
+        @interop.bridge_request(self.channel, @commands.terminal_ack, {
+          id: self.id,
+          sequence: self.sequence,
+        }) catch {
+          _ => {
+            // The in-process bridge keeps one terminal-id namespace, so a lost
+            // reply is safe to retry there. A remote WebSocket failure ends the
+            // namespace together with all of its PTYs; replaying this id after
+            // reconnect could acknowledge an unrelated new terminal.
+            if self.channel is @interop.ChannelId::Local {
+              _scheduler.add(@cmd.delay(self.send(), AckRetryDelayMs))
+            }
+            return
           }
-          return
-        }
-      }
+        },
+      )
     })
   })
 }
@@ -153,15 +141,11 @@ fn TerminalAck::send(self : TerminalAck) -> @cmd.Cmd {
 fn send_close(channel : @interop.ChannelId, id : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["id"] = id
-      let _ : @js.Value = @interop.bridge_request(
-        channel,
-        "terminal.close",
-        payload.to_value(),
-      ) catch {
-        _ => return
-      }
+      ignore(
+        @interop.bridge_request(channel, @commands.terminal_close, { id, }) catch {
+          _ => return
+        },
+      )
     })
   })
 }

@@ -48,20 +48,20 @@ fn external_link_subscription(emit : @cmd.Emit[String]) -> @sub.Sub {
 fn open_external_link(dispatch : @cmd.Emit[Msg], url : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["url"] = url
-      let _ : @js.Value = @interop.bridge_request(
-        @interop.ChannelId::Local,
-        "shell.open_external",
-        payload.to_value(),
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(HostActionFailed(@interop.bridge_error_text(error))),
-          )
-          return
-        }
-      }
+      ignore(
+        @interop.bridge_request(
+          @interop.ChannelId::Local,
+          @commands.shell_open_external,
+          { url, },
+        ) catch {
+          error => {
+            scheduler.add(
+              dispatch(HostActionFailed(@interop.bridge_error_text(error))),
+            )
+            return
+          }
+        },
+      )
     })
   })
 }

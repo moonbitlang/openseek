@@ -7,8 +7,6 @@ import {
 }
 
 // Values
-pub const ExtensionId : String = "openseek-desktop"
-
 pub fn openseek_extension(@api.ApiState, DesktopBridgeActor) -> @justjavac/proton/extension.Extension
 
 // Errors
@@ -23,4 +21,3 @@ pub async fn DesktopBridgeActor::window_ready(Self, @proton.WindowEventEmitter) 
 // Type aliases
 
 // Traits
-

@@ -6,87 +6,124 @@
 // displays.
 
 ///|
-/// The extension id; the proton app enables it under this name.
-pub const ExtensionId = "openseek-desktop"
+/// Command identities and their concrete payload/reply pairs live in
+/// `internal/commands`; this package only binds them to native handlers.
 
 ///|
-/// The `__MoonBit__` property the ops and events hang off:
-/// `__MoonBit__.openseek["agent.start"](payload)`, events named
-/// `openseek.<method>`.
-const ExtensionNamespace = "openseek"
-
-///|
-/// The one bridge-only op: the webview calls it once to attach the current
-/// page to the app-lifetime bridge actor. Not part of the wire catalog — a
-/// WebSocket client's subscription is its connection.
-const ConnectMethod = "host.connect"
-
-///|
-/// Open an external URL on the machine displaying the Proton window. Unlike
-/// the shared host catalog, this command is deliberately local-only: a relay
-/// browser must never make another device launch a URL.
-const OpenExternalMethod = "shell.open_external"
-
-///|
-/// The typed identity shared by every command and event exposed under
-/// `window.__MoonBit__.openseek`.
-let desktop_contract : @proton_contract.ExtensionContract = @proton_contract.extension(
-  id=ExtensionId,
-  js_namespace=ExtensionNamespace,
+let connected_event : @proton_contract.Event[@protocol.ConnectedPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::AgentConnected.wire_name(),
 )
 
 ///|
-/// The shared API catalog remains JSON-shaped because the browser and relay
-/// transports both feed the same dynamic dispatcher.
-let catalog_commands : Array[@proton_contract.Command[Json, Json]] = @api.method_names().map(fn(
-    name,
-  ) {
-    desktop_contract.command(name)
-  },
+let started_event : @proton_contract.Event[@protocol.StartedPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::AgentStarted.wire_name(),
 )
 
 ///|
-let connect_command : @proton_contract.Command[Json, Json] = desktop_contract.command(
-  ConnectMethod,
+let agent_event : @proton_contract.Event[@protocol.AgentEventPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::AgentEvent.wire_name(),
 )
 
 ///|
-let open_external_command : @proton_contract.Command[Json, Json] = desktop_contract.command(
-  OpenExternalMethod,
+let agent_error_event : @proton_contract.Event[@protocol.AgentErrorPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::AgentError.wire_name(),
 )
 
 ///|
-let connected_event : @proton_contract.Event[Json] = desktop_contract.event(
-  "agent.connected",
+let finished_event : @proton_contract.Event[@protocol.FinishedPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::AgentFinished.wire_name(),
 )
 
 ///|
-/// Proton requires one stable event descriptor per member name. Keep this list
-/// aligned with the frontend listeners in `desktop/frontend/bridge.mbt`.
-let notification_events : Map[String, @proton_contract.Event[Json]] = {
-  "agent.connected": connected_event,
-  "agent.started": desktop_contract.event("agent.started"),
-  "agent.event": desktop_contract.event("agent.event"),
-  "agent.error": desktop_contract.event("agent.error"),
-  "agent.finished": desktop_contract.event("agent.finished"),
-  "agent.durable": desktop_contract.event("agent.durable"),
-  "session.event": desktop_contract.event("session.event"),
-  "session.changed": desktop_contract.event("session.changed"),
-  "workspace.changed": desktop_contract.event("workspace.changed"),
-  "settings.changed": desktop_contract.event("settings.changed"),
-  "skills.changed": desktop_contract.event("skills.changed"),
-  "update.download_progress": desktop_contract.event("update.download_progress"),
-  "update.downloaded": desktop_contract.event("update.downloaded"),
-  "update.download_failed": desktop_contract.event("update.download_failed"),
-  "auth.changed": desktop_contract.event("auth.changed"),
-  "lsp.diagnostics": desktop_contract.event("lsp.diagnostics"),
-  "fs.changed": desktop_contract.event("fs.changed"),
-  "fs.watch_failed": desktop_contract.event("fs.watch_failed"),
-  // PTY output and exit notifications originate from the connection-owned
-  // terminal pump, but still need explicit Proton descriptors to reach xterm.
-  "terminal.output": desktop_contract.event("terminal.output"),
-  "terminal.exit": desktop_contract.event("terminal.exit"),
-}
+let durable_event : @proton_contract.Event[@protocol.DurableBoundaryPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::AgentDurable.wire_name(),
+)
+
+///|
+let session_event : @proton_contract.Event[@protocol.SessionCommitPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::SessionEvent.wire_name(),
+)
+
+///|
+let session_changed_event : @proton_contract.Event[
+  @protocol.SessionChangedPayload,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::SessionChanged.wire_name(),
+)
+
+///|
+let workspace_changed_event : @proton_contract.Event[
+  @protocol.WorkspacesChangedPayload,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::WorkspaceChanged.wire_name(),
+)
+
+///|
+let settings_changed_event : @proton_contract.Event[
+  @protocol.SettingsStatusPayload,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::SettingsChanged.wire_name(),
+)
+
+///|
+let skills_changed_event : @proton_contract.Event[@protocol.EmptyPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::SkillsChanged.wire_name(),
+)
+
+///|
+let update_progress_event : @proton_contract.Event[
+  @protocol.UpdateDownloadProgressPayload,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::UpdateDownloadProgress.wire_name(),
+)
+
+///|
+let update_downloaded_event : @proton_contract.Event[
+  @protocol.UpdateDownloadedPayload,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::UpdateDownloaded.wire_name(),
+)
+
+///|
+let update_failed_event : @proton_contract.Event[
+  @protocol.UpdateDownloadFailedPayload,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::UpdateDownloadFailed.wire_name(),
+)
+
+///|
+let auth_changed_event : @proton_contract.Event[@protocol.AuthStatusPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::AuthChanged.wire_name(),
+)
+
+///|
+let diagnostics_event : @proton_contract.Event[@protocol.DiagnosticsPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::LspDiagnostics.wire_name(),
+)
+
+///|
+let fs_changed_event : @proton_contract.Event[@protocol.FsChangedPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::FsChanged.wire_name(),
+)
+
+///|
+let fs_watch_failed_event : @proton_contract.Event[
+  @protocol.FsWatchFailedPayload,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::FsWatchFailed.wire_name(),
+)
+
+///|
+let terminal_output_event : @proton_contract.Event[
+  @protocol.TerminalOutputPayload,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::TerminalOutput.wire_name(),
+)
+
+///|
+let terminal_exit_event : @proton_contract.Event[@protocol.TerminalExitPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::TerminalExit.wire_name(),
+)
 
 ///|
 /// The page connection and Proton's window lifecycle hook start independently.
@@ -109,12 +146,36 @@ priv struct PageEventTarget {
 ///|
 async fn PageEventTarget::emit(
   self : PageEventTarget,
-  notification : @api.Notification,
+  notification : @protocol.Notification,
 ) -> Unit {
-  // An undeclared event has no frontend listener either. Ignore it until both
-  // explicit catalogs are updated instead of inventing a runtime route.
-  if notification_events.get(notification.method_) is Some(event) {
-    self.events.emit(event, notification.params)
+  // Matching the closed enum keeps each Proton descriptor paired with the
+  // payload type that belongs to that event.
+  match notification {
+    AgentConnected(payload) => self.events.emit(connected_event, payload)
+    AgentStarted(payload) => self.events.emit(started_event, payload)
+    AgentEvent(payload) => self.events.emit(agent_event, payload)
+    AgentError(payload) => self.events.emit(agent_error_event, payload)
+    AgentFinished(payload) => self.events.emit(finished_event, payload)
+    AgentDurable(payload) => self.events.emit(durable_event, payload)
+    SessionEvent(payload) => self.events.emit(session_event, payload)
+    SessionChanged(payload) => self.events.emit(session_changed_event, payload)
+    WorkspaceChanged(payload) =>
+      self.events.emit(workspace_changed_event, payload)
+    SettingsChanged(payload) =>
+      self.events.emit(settings_changed_event, payload)
+    SkillsChanged => self.events.emit(skills_changed_event, NoPayload)
+    UpdateDownloadProgress(payload) =>
+      self.events.emit(update_progress_event, payload)
+    UpdateDownloaded(payload) =>
+      self.events.emit(update_downloaded_event, payload)
+    UpdateDownloadFailed(payload) =>
+      self.events.emit(update_failed_event, payload)
+    AuthChanged(payload) => self.events.emit(auth_changed_event, payload)
+    LspDiagnostics(payload) => self.events.emit(diagnostics_event, payload)
+    FsChanged(payload) => self.events.emit(fs_changed_event, payload)
+    FsWatchFailed(payload) => self.events.emit(fs_watch_failed_event, payload)
+    TerminalOutput(payload) => self.events.emit(terminal_output_event, payload)
+    TerminalExit(payload) => self.events.emit(terminal_exit_event, payload)
   }
 }
 
@@ -124,7 +185,7 @@ async fn PageEventTarget::emit(
 /// retains request-scoped state after the command returns.
 priv enum BridgeInput {
   Control(BridgeControl)
-  Deliver(@api.Notification)
+  Deliver(@protocol.Notification)
 }
 
 ///|
@@ -156,41 +217,43 @@ pub fn openseek_extension(
   state : @api.ApiState,
   bridge : DesktopBridgeActor,
 ) -> @proton_extension.Extension {
-  let command_routes = catalog_commands.map(fn(command) {
-    command.contract_route()
-  })
-  command_routes.push(connect_command.contract_route())
-  command_routes.push(open_external_command.contract_route())
-  @proton_extension.typed(desktop_contract, command_routes, fn(
-    registrar,
-  ) raise {
-    for command in catalog_commands {
-      let name = command.name()
-      registrar.bind(command, async fn(_, params) {
-        @api.dispatch(state, bridge.host_connection, name, params)
-      })
-    }
-    registrar.bind(connect_command, async fn(context, _) {
+  let endpoints = @api.endpoints(state, bridge.host_connection)
+  endpoints.push(
+    @endpoint.Endpoint::window(@commands.host_connect, async fn(context, _) {
       bridge.connect(context)
-    })
-    registrar.bind(open_external_command, async fn(_, params) {
-      open_external(params)
-    })
-  })
+    }),
+  )
+  endpoints.push(
+    @endpoint.Endpoint::window(@commands.shell_open_external, async fn(
+      _,
+      payload,
+    ) {
+      open_external(payload)
+    }),
+  )
+  @proton_extension.typed(
+    @commands.extension_contract,
+    endpoints.map(endpoint => endpoint.route()),
+    registrar => {
+      for endpoint in endpoints {
+        endpoint.bind(registrar)
+      }
+    },
+  )
 }
 
 ///|
 async fn DesktopBridgeActor::connect(
   self : DesktopBridgeActor,
   context : @proton.CommandContext,
-) -> Json {
+) -> @protocol.EmptyReply {
   // A reloaded page has no references to the previous page's emulator
   // instances, so its PTYs must not survive the new attachment.
   self.host_connection.close_terminals()
   let reply : @async.Queue[Unit] = Queue(kind=Blocking(1))
   self.controls.put(PageConnected(context, reply))
   reply.get()
-  Json::empty_object()
+  Acknowledged
 }
 
 ///|
@@ -216,8 +279,8 @@ pub async fn DesktopBridgeActor::window_closed(
 /// lane is ready, race their blocking reads; `any` cancels the losing read.
 async fn DesktopBridgeActor::next_input(
   self : DesktopBridgeActor,
-  notifications : @async.Queue[@api.Notification],
-  host_notifications : @async.Queue[@api.Notification],
+  notifications : @async.Queue[@protocol.Notification],
+  host_notifications : @async.Queue[@protocol.Notification],
 ) -> BridgeInput {
   if self.controls.try_get() is Some(control) {
     return Control(control)
@@ -237,7 +300,7 @@ async fn DesktopBridgeActor::next_input(
 pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
   let notifications = self.state.subscribe()
   defer self.state.unsubscribe(notifications)
-  let host_notifications : @async.Queue[@api.Notification] = Queue(
+  let host_notifications : @async.Queue[@protocol.Notification] = Queue(
     kind=Blocking(64),
   )
   @async.with_task_group(group => {
@@ -245,13 +308,13 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
     // never enter the process-wide hub, so a remote client's watch cannot
     // trigger desktop file refreshes (or vice versa).
     group.spawn_bg(allow_failure=true, () => {
-      self.host_connection.run((method_, params) => {
-        host_notifications.put({ method_, params })
+      self.host_connection.run(notification => {
+        host_notifications.put(notification)
       })
     })
     let mut connected = false
     let mut target : PageEventTarget? = None
-    let pending : Array[@api.Notification] = []
+    let pending : Array[@protocol.Notification] = []
     for ;; {
       match self.next_input(notifications, host_notifications) {
         Control(control) =>
@@ -259,7 +322,7 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
             PageConnected(context, reply) => {
               // Serialize readiness before subsequent delivery so the
               // frontend can use it as the resync boundary.
-              context.emit(connected_event, Json::empty_object())
+              context.emit(connected_event, { ready: None })
               connected = true
               reply.put(())
             }

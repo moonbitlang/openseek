@@ -20,16 +20,15 @@ fn fetch_archived(
       // empty Archived group.
       let reply = @interop.bridge_request(
         channel,
-        "session.list_archived",
-        @js.Object::new().to_value(),
+        @commands.session_list_archived,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         _ => return
       }
       scheduler.add(
         dispatch(
           ArchivedLoaded(
-            @transcript.decode_sessions_reply(@interop.reply_json_text(reply)).unwrap_or([],
-            ),
+            @transcript.sessions_from_reply(reply),
             connection_generation~,
             request_generation~,
             fresh_session=generated_session_id(),
@@ -50,7 +49,12 @@ fn archive_session(
   archived_request_generation : Int,
 ) -> @cmd.Cmd {
   archive_action(
-    dispatch, channel, "session.archive", session, connection_generation, sessions_request_generation,
+    dispatch,
+    channel,
+    @commands.session_archive,
+    { session, },
+    connection_generation,
+    sessions_request_generation,
     archived_request_generation,
   )
 }
@@ -65,7 +69,12 @@ fn unarchive_session(
   archived_request_generation : Int,
 ) -> @cmd.Cmd {
   archive_action(
-    dispatch, channel, "session.unarchive", session, connection_generation, sessions_request_generation,
+    dispatch,
+    channel,
+    @commands.session_unarchive,
+    { session, },
+    connection_generation,
+    sessions_request_generation,
     archived_request_generation,
   )
 }
@@ -74,8 +83,8 @@ fn unarchive_session(
 fn archive_action(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  op : String,
-  session : String,
+  command : @commands.Command[@protocol.SessionPayload, @protocol.SessionsReply],
+  payload : @protocol.SessionPayload,
   connection_generation : Int,
   sessions_request_generation : Int,
   archived_request_generation : Int,
@@ -83,9 +92,7 @@ fn archive_action(
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["session"] = session
-      let reply = @interop.bridge_request(channel, op, payload.to_value()) catch {
+      let reply = @interop.bridge_request(channel, command, payload) catch {
         error => {
           scheduler.add(
             dispatch(ArchiveFailed(@interop.bridge_error_text(error))),
@@ -96,8 +103,7 @@ fn archive_action(
       scheduler.add(
         dispatch(
           ArchivedLoaded(
-            @transcript.decode_sessions_reply(@interop.reply_json_text(reply)).unwrap_or([],
-            ),
+            @transcript.sessions_from_reply(reply),
             connection_generation~,
             request_generation=archived_request_generation,
             fresh_session=generated_session_id(),
@@ -108,8 +114,8 @@ fn archive_action(
       // live list is stale until re-fetched.
       let sessions = @interop.bridge_request(
         channel,
-        "session.list",
-        @js.Object::new().to_value(),
+        @commands.session_list,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         error => {
           scheduler.add(
@@ -118,21 +124,15 @@ fn archive_action(
           return
         }
       }
-      match
-        @transcript.decode_sessions_reply(@interop.reply_json_text(sessions)) {
-        Some(items) =>
-          scheduler.add(
-            dispatch(
-              SessionsLoaded(
-                items,
-                connection_generation~,
-                request_generation=sessions_request_generation,
-              ),
-            ),
-          )
-        None =>
-          scheduler.add(dispatch(SessionsFailed("malformed session list")))
-      }
+      scheduler.add(
+        dispatch(
+          SessionsLoaded(
+            @transcript.sessions_from_reply(sessions),
+            connection_generation~,
+            request_generation=sessions_request_generation,
+          ),
+        ),
+      )
     })
   })
 }

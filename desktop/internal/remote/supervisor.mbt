@@ -54,7 +54,7 @@ pub async fn RelayActor::run(self : RelayActor) -> Unit {
               "error": "\{error}",
             }
       }
-      self.state.publish("auth.changed", auth_changed_params(self.state))
+      self.state.publish(AuthChanged(auth_changed_params(self.state)))
     }
     match store.desired_connector() {
       // Idle: nothing to run until someone pokes the store.
@@ -86,7 +86,7 @@ pub async fn RelayActor::run(self : RelayActor) -> Unit {
                     "error": "\{error}",
                   }
             }
-            self.state.publish("auth.changed", auth_changed_params(self.state))
+            self.state.publish(AuthChanged(auth_changed_params(self.state)))
           }
         }
       }
@@ -98,14 +98,14 @@ pub async fn RelayActor::run(self : RelayActor) -> Unit {
 fn RelayActor::registered(self : RelayActor, device : String) -> Unit {
   (self.announce)(device)
   if self.state.auth_store().mark_registered(device) {
-    self.state.publish("auth.changed", auth_changed_params(self.state))
+    self.state.publish(AuthChanged(auth_changed_params(self.state)))
   }
 }
 
 ///|
 fn RelayActor::dropped(self : RelayActor) -> Unit {
   if self.state.auth_store().mark_dropped() {
-    self.state.publish("auth.changed", auth_changed_params(self.state))
+    self.state.publish(AuthChanged(auth_changed_params(self.state)))
   }
 }
 
@@ -113,6 +113,6 @@ fn RelayActor::dropped(self : RelayActor) -> Unit {
 /// The `auth.changed` params: the store's status shape. Notifications the
 /// actor pushes never carry a fallback `server_url` — when nothing is
 /// signed in the Settings page derives the selectable server itself.
-fn auth_changed_params(state : @api.ApiState) -> Json {
-  state.auth_store().status_json()
+fn auth_changed_params(state : @api.ApiState) -> @protocol.AuthStatusPayload {
+  state.auth_store().status()
 }

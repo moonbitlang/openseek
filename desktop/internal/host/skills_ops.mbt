@@ -10,7 +10,21 @@ async fn skills_catalog_op() -> SkillsCatalogReply {
     @skillmarket.SkillMarketError(message) => raise HostError(message)
     error => raise error
   }
-  { skills, }
+  {
+    skills: [
+      for skill in skills => {
+        {
+          name: skill.name,
+          module_name: skill.module_name,
+          package_path: skill.package_path,
+          version: skill.version,
+          description: skill.description,
+          author: skill.author,
+          repository: skill.repository,
+        }
+      }
+    ],
+  }
 }
 
 ///|
@@ -27,7 +41,14 @@ async fn install_skill_op(
     @skillmarket.SkillMarketError(message) => raise HostError(message)
     error => raise error
   }
-  { installed, }
+  {
+    installed: {
+      id: installed.id,
+      name: installed.name,
+      description: installed.description,
+      source: installed.source,
+    },
+  }
 }
 
 ///|
@@ -36,7 +57,18 @@ async fn installed_skills_op() -> InstalledSkillsReply {
     @skillmarket.SkillMarketError(message) => raise HostError(message)
     error => raise error
   }
-  { skills, }
+  {
+    skills: [
+      for skill in skills => {
+        {
+          id: skill.id,
+          name: skill.name,
+          description: skill.description,
+          source: skill.source,
+        }
+      }
+    ],
+  }
 }
 
 ///|

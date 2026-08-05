@@ -1,44 +1,28 @@
-// Decoding of the host's session replies. Both shapes originate in the
-// engine (`sessions list --format=json` and `sessions show`) and are
-// passed through
-// the host verbatim; this module turns them into sidebar entries and
-// transcript items, mirroring how the live event stream renders the same
-// conversation.
+// Projection of typed host session replies into sidebar and transcript view
+// models. JSON decoding belongs to the engine or WebSocket adapter; this
+// package never handles an open-ended durable-session object.
 
 ///|
-/// Parse a `list_sessions` reply into sidebar entries: the host groups
+/// Project a `list_sessions` reply into sidebar entries: the host groups
 /// sessions by workspace store, and each entry carries its group's workspace
-/// so the sidebar can section them. `None` only for structurally unusable
-/// JSON; unrecognized entries (and failed groups — their error is the group's
-/// own affair) are skipped so one odd session cannot blank the whole sidebar.
-pub fn decode_sessions_reply(text : String) -> Array[SessionListItem]? {
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) else { return None }
-  guard reply.get("groups") is Some(Array(groups)) else { return None }
+/// so the sidebar can section them. Failed groups remain empty; invalid engine
+/// rows have already been dropped at the process adapter.
+pub fn sessions_from_reply(
+  reply : @desktop_protocol.SessionsReply,
+) -> Array[SessionListItem] {
   let items : Array[SessionListItem] = []
-  for group in groups {
-    guard group is Object(group_fields) else { continue }
-    // The host emits both group fields unconditionally ("" names the global
-    // scratch group); a group missing either is malformed and skipped whole.
-    guard @jsonx.json_text(group_fields, "workspace") is Some(workspace) &&
-      @jsonx.json_text(group_fields, "name") is Some(workspace_name) else {
-      continue
-    }
-    guard group_fields.get("sessions") is Some(Array(entries)) else { continue }
-    for entry in entries {
-      guard entry is Object(fields) else { continue }
-      guard fields.get("id") is Some(String(id)) && !id.is_empty() else {
-        continue
-      }
+  for group in reply.groups {
+    for entry in group.sessions {
+      guard !entry.id.is_empty() else { continue }
       items.push({
-        id,
-        title: @jsonx.json_text(fields, "title"),
-        workspace,
-        workspace_name,
+        id: entry.id,
+        title: entry.title,
+        workspace: group.workspace,
+        workspace_name: group.name,
       })
     }
   }
-  Some(items)
+  items
 }
 
 ///|
@@ -59,57 +43,46 @@ pub struct SessionLoadView {
 }
 
 ///|
-/// Parse a `load_session` reply (the durable session JSON) into transcript
+/// Project a `load_session` reply into transcript
 /// items plus its watermark, reconstructing what the live transcript showed
 /// while the conversation was running: reasoning before the answer, tool
 /// cards, runtime updates, and error bubbles for turns that did not finish.
-/// `None` only for structurally unusable JSON — the caller reports that as a
-/// failed load, never as an empty conversation.
-pub fn decode_session_load_reply(text : String) -> SessionLoadView? {
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) else { return None }
-  guard reply.get("session") is Some(Object(session)) else { return None }
-  let explicit_watermark = @jsonx.json_int(reply, "watermark")
-  guard session.get("events") is Some(Array(events)) else {
-    return Some({
-      items: [],
-      watermark: explicit_watermark.unwrap_or(0),
-      event_boundaries: [],
-    })
-  }
+pub fn session_from_reply(
+  reply : @desktop_protocol.LoadSessionReply,
+) -> SessionLoadView {
   let items : Array[TranscriptItem] = []
   let event_boundaries : Array[(Int, Bool, Int)] = []
   let mut derived_watermark = 0
-  for event in events {
-    guard event is Object(event_fields) else { continue }
+  for event in reply.session.events.unwrap_or([]) {
     // Old desktop hosts return the store JSON verbatim without a top-level
     // watermark, but every stored event already carries its sequence. Derive
     // the same frontier from those entries so reconnecting through an older
     // host cannot roll a newer client's watermark back to zero.
-    let sequence = @jsonx.json_int(event_fields, "sequence")
-    if sequence is Some(sequence) && sequence > derived_watermark {
-      derived_watermark = sequence
+    if event.sequence > derived_watermark {
+      derived_watermark = event.sequence
     }
-    guard event_fields.get("item") is Some(Object(item)) else { continue }
-    guard item.get("kind") is Some(String(kind)) else { continue }
-    guard item.get("payload") is Some(Object(payload)) else { continue }
-    append_session_item(items, kind, payload)
-    if sequence is Some(sequence) {
-      event_boundaries.push((sequence, kind == "terminal", items.length()))
-    }
+    apply_session_item(items, event.item)
+    event_boundaries.push(
+      (
+        event.sequence,
+        event.item is @desktop_protocol.Terminal(_),
+        items.length(),
+      ),
+    )
   }
-  Some({
+  {
     items,
-    watermark: explicit_watermark.unwrap_or(derived_watermark),
+    watermark: reply.watermark.unwrap_or(derived_watermark),
     event_boundaries,
-  })
+  }
 }
 
 ///|
-/// The items half of `decode_session_load_reply`, kept for callers (and
-/// tests) that predate watermarks.
-pub fn transcript_from_session_json(text : String) -> Array[TranscriptItem]? {
-  decode_session_load_reply(text).map(view => view.items)
+/// The items half of `session_from_reply`.
+pub fn transcript_from_session(
+  reply : @desktop_protocol.LoadSessionReply,
+) -> Array[TranscriptItem] {
+  session_from_reply(reply).items
 }
 
 ///|
@@ -120,71 +93,51 @@ pub fn transcript_from_session_json(text : String) -> Array[TranscriptItem]? {
 /// and one rebuilt from the next snapshot agree by construction.
 pub fn apply_session_item(
   items : Array[TranscriptItem],
-  kind : String,
-  payload : Map[String, Json],
+  item : @desktop_protocol.SessionItem,
 ) -> Unit {
-  append_session_item(items, kind, payload)
-}
-
-///|
-fn append_session_item(
-  items : Array[TranscriptItem],
-  kind : String,
-  payload : Map[String, Json],
-) -> Unit {
-  // Every payload writes `content` unconditionally (the store's structs have
-  // no optional content); an item missing one is malformed and dropped.
-  // Whether *blank* content still earns a bubble is per-kind display policy.
-  let content = @jsonx.json_text(payload, "content")
-  match kind {
-    "user" =>
-      if content is Some(content) {
-        let content = content.trim().to_owned()
-        if !content.is_empty() {
-          items.push({ kind: User, content })
-        }
+  match item {
+    @desktop_protocol.User(payload) => {
+      let content = payload.content.trim().to_owned()
+      if !content.is_empty() {
+        items.push({ kind: User, content })
       }
-    "assistant" => {
+    }
+    @desktop_protocol.Assistant(payload) => {
       // Thinking-mode turns store the reasoning alongside the answer (the
       // store omits the field entirely otherwise); the live transcript
       // showed it first, so replay does too.
-      if @jsonx.json_text(payload, "reasoning_content") is Some(reasoning) {
+      if payload.reasoning_content is Some(reasoning) {
         let reasoning = reasoning.trim().to_owned()
         if !reasoning.is_empty() {
           items.push({ kind: Reasoning, content: reasoning })
         }
       }
-      if content is Some(content) {
-        let content = content.trim().to_owned()
-        if !content.is_empty() {
-          items.push({ kind: Assistant(is_danger=false), content })
-        }
+      let content = payload.content.trim().to_owned()
+      if !content.is_empty() {
+        items.push({ kind: Assistant(is_danger=false), content })
       }
     }
-    "tool_result" => {
-      guard @jsonx.json_text(payload, "tool_name") is Some(tool_name) &&
-        @jsonx.json_bool(payload, "is_error") is Some(is_error) &&
-        content is Some(content) else {
-        return
-      }
+    @desktop_protocol.ToolResult(payload) =>
       items.push({
         kind: Tool(
-          name=if tool_name.trim().is_empty() { "tool" } else { tool_name },
-          is_error~,
-          brief=@jsonx.json_text(payload, "brief"),
+          name=if payload.tool_name.trim().is_empty() {
+            "tool"
+          } else {
+            payload.tool_name
+          },
+          is_error=payload.is_error,
+          brief=payload.brief,
         ),
-        content,
+        content: payload.content,
       })
-    }
-    "runtime_notice" =>
+    @desktop_protocol.RuntimeNotice(payload) =>
       // Goal-family notices are transport (set/clear/block markers, the
       // baseline pairing record) or model-directed text — never display
       // cards. Local prefix check: this js-only package cannot depend on
       // agent_session's parsers.
-      if content is Some(content) &&
-        !content.trim().is_empty() &&
-        !content.has_prefix("[goal") {
-        let update = parse_runtime_update(content)
+      if !payload.content.trim().is_empty() &&
+        !payload.content.has_prefix("[goal") {
+        let update = parse_runtime_update(payload.content)
         if !update.status.is_empty() || update.diagnostics.length() > 0 {
           items.push({
             kind: Tool(
@@ -196,28 +149,31 @@ fn append_session_item(
           })
         }
       }
-    "summary" =>
-      if content is Some(content) {
-        let content = content.trim().to_owned()
-        if !content.is_empty() {
-          items.push({ kind: Summary, content })
-        }
+    @desktop_protocol.Summary(payload) => {
+      let content = payload.content.trim().to_owned()
+      if !content.is_empty() {
+        items.push({ kind: Summary, content })
       }
-    "terminal" => append_terminal_item(items, payload)
-    _ => ()
+    }
+    @desktop_protocol.Terminal(terminal) =>
+      SessionTerminalProjection(terminal).append_to(items)
   }
 }
 
 ///|
-fn append_terminal_item(
+/// One typed terminal item projected into its optional final/error bubble.
+priv struct SessionTerminalProjection(@desktop_protocol.SessionTerminal)
+
+///|
+fn SessionTerminalProjection::append_to(
+  self : SessionTerminalProjection,
   items : Array[TranscriptItem],
-  payload : Map[String, Json],
 ) -> Unit {
-  // The store's terminal item always carries both fields (`message` may be
-  // blank — a turn that finished without a distinct closing line).
-  guard @jsonx.json_text(payload, "kind") is Some(kind) &&
-    @jsonx.json_text(payload, "message") is Some(message) else {
-    return
+  let (kind, message) = match self.0 {
+    @desktop_protocol.Finished(message) => ("finished", message)
+    @desktop_protocol.Aborted(message) => ("aborted", message)
+    @desktop_protocol.Interrupted(message) => ("interrupted", message)
+    @desktop_protocol.Failed(message) => ("failed", message)
   }
   let message = message.trim().to_owned()
   match kind {
@@ -267,22 +223,28 @@ fn ends_with_assistant(items : Array[TranscriptItem], content : String) -> Bool 
 // durable-session-to-transcript mapping.
 
 ///|
-test "session list decoding keeps well-formed entries and skips the rest" {
-  let text =
-    #|{"groups":[
-    #|  {"workspace":"","name":"","session_root":"/home/user/.openseek","error":"","sessions":[
-    #|    {"id":"desktop-b","title":"newest","updated_at_ms":2000,"last_sequence":4},
-    #|    {"id":"","title":"no id"},
-    #|    "not an object"
-    #|  ]},
-    #|  {"workspace":"/home/user/proj","name":"proj","session_root":"/home/user/proj/.openseek","error":"","sessions":[
-    #|    {"id":"tui-a","title":""}
-    #|  ]},
-    #|  {"workspace":"/home/user/broken","name":"broken","session_root":"/home/user/broken/.openseek","error":"session list failed","sessions":[]}
-    #|]}
-  guard decode_sessions_reply(text) is Some(items) else {
-    fail("expected a decoded list")
-  }
+test "session list projection preserves grouping and skips empty ids" {
+  let items = sessions_from_reply({
+    groups: [
+      {
+        workspace: "",
+        name: "",
+        session_root: "/home/user/.openseek",
+        error: "",
+        sessions: [
+          { id: "desktop-b", title: Some("newest") },
+          { id: "", title: Some("no id") },
+        ],
+      },
+      {
+        workspace: "/home/user/proj",
+        name: "proj",
+        session_root: "/home/user/proj/.openseek",
+        error: "",
+        sessions: [{ id: "tui-a", title: Some("") }],
+      },
+    ],
+  })
   inspect(items.length(), content="2")
   inspect(items[0].id, content="desktop-b")
   assert_true(items[0].title is Some("newest"))
@@ -296,19 +258,14 @@ test "session list decoding keeps well-formed entries and skips the rest" {
 }
 
 ///|
-test "session list decoding rejects structurally unusable replies" {
-  assert_true(decode_sessions_reply("not json") is None)
-  assert_true(decode_sessions_reply("{\"groups\":42}") is None)
-  assert_true(decode_sessions_reply("[]") is None)
-}
-
-///|
-fn session_reply(events_json : String) -> String {
+fn session_reply(
+  events_json : String,
+) -> @desktop_protocol.LoadSessionReply raise {
   let prefix =
     #|{"session":{"version":1,"id":"desktop-x","system_prompt":"system","events":[
   let suffix =
     #|]}}
-  prefix + events_json + suffix
+  @json.from_json(@json.parse(prefix + events_json + suffix))
 }
 
 ///|
@@ -316,9 +273,7 @@ test "session load derives an old host's missing watermark from event sequences"
   let events =
     #|{"sequence":1,"item":{"kind":"user","payload":{"content":"question"}}},
     #|{"sequence":4,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
-  guard decode_session_load_reply(session_reply(events)) is Some(view) else {
-    fail("expected a decoded session")
-  }
+  let view = session_from_reply(session_reply(events))
   inspect(view.watermark, content="4")
   inspect(view.event_boundaries.length(), content="2")
   let (first_sequence, first_terminal, first_boundary) = view.event_boundaries[0]
@@ -333,13 +288,10 @@ test "session load derives an old host's missing watermark from event sequences"
 
 ///|
 test "an explicit session watermark remains authoritative" {
-  let text =
-    #|{"watermark":7,"session":{"version":1,"id":"desktop-x","events":[
+  let event =
     #|{"sequence":9,"item":{"kind":"user","payload":{"content":"question"}}}
-    #|]}}
-  guard decode_session_load_reply(text) is Some(view) else {
-    fail("expected a decoded session")
-  }
+  let reply = session_reply(event)
+  let view = session_from_reply({ ..reply, watermark: Some(7) })
   inspect(view.watermark, content="7")
   inspect(view.event_boundaries.length(), content="1")
 }
@@ -351,9 +303,7 @@ test "transcript mapping replays a finished conversation" {
     #|{"sequence":2,"item":{"kind":"tool_result","payload":{"tool_call_id":"c1","tool_name":"shell","content":"output","is_error":true,"brief":"ran ls → exit 1"}}},
     #|{"sequence":3,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[],"reasoning_content":"thought"}}},
     #|{"sequence":4,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
-  guard transcript_from_session_json(session_reply(events)) is Some(items) else {
-    fail("expected transcript items")
-  }
+  let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="4")
   guard items[0].kind is User else { fail("expected user item") }
   inspect(items[0].content, content="question")
@@ -375,9 +325,7 @@ test "transcript mapping deduplicates the finished answer" {
   let events =
     #|{"sequence":1,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}},
     #|{"sequence":2,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
-  guard transcript_from_session_json(session_reply(events)) is Some(items) else {
-    fail("expected transcript items")
-  }
+  let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="1")
 }
 
@@ -387,9 +335,7 @@ test "transcript mapping renders non-finished terminals as error bubbles" {
     #|{"sequence":1,"item":{"kind":"terminal","payload":{"kind":"interrupted","message":""}}},
     #|{"sequence":2,"item":{"kind":"terminal","payload":{"kind":"aborted","message":"the agent gave up"}}},
     #|{"sequence":3,"item":{"kind":"terminal","payload":{"kind":"failed","message":"engine error"}}}
-  guard transcript_from_session_json(session_reply(events)) is Some(items) else {
-    fail("expected transcript items")
-  }
+  let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="3")
   guard items[0].kind is Assistant(is_danger=true) else {
     fail("expected error bubble")
@@ -405,9 +351,7 @@ test "transcript mapping keeps summaries and meaningful runtime notices" {
     #|{"sequence":1,"item":{"kind":"summary","payload":{"content":"earlier turns compacted","from_sequence":1,"to_sequence":8}}},
     #|{"sequence":2,"item":{"kind":"runtime_notice","payload":{"content":"[moon_check update]\nstatus=failed\nmain.mbt:1 error"}}},
     #|{"sequence":3,"item":{"kind":"runtime_notice","payload":{"content":""}}}
-  guard transcript_from_session_json(session_reply(events)) is Some(items) else {
-    fail("expected transcript items")
-  }
+  let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="2")
   guard items[0].kind is Summary else { fail("expected summary") }
   guard items[1].kind is Tool(name="moon_check failed", is_error=false, ..) else {
@@ -421,9 +365,7 @@ test "transcript mapping replays a context checkpoint and yield guidance" {
   let events =
     #|{"sequence":1,"item":{"kind":"summary","payload":{"content":"checkpoint recap","from_sequence":1,"to_sequence":8}}},
     #|{"sequence":2,"item":{"kind":"terminal","payload":{"kind":"finished","message":"[context ceiling] continue in a new turn"}}}
-  guard transcript_from_session_json(session_reply(events)) is Some(items) else {
-    fail("expected transcript items")
-  }
+  let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="2")
   guard items[0].kind is Summary else { fail("expected checkpoint summary") }
   inspect(items[0].content, content="checkpoint recap")
@@ -431,10 +373,4 @@ test "transcript mapping replays a context checkpoint and yield guidance" {
     fail("expected context-yield guidance")
   }
   inspect(items[1].content, content="[context ceiling] continue in a new turn")
-}
-
-///|
-test "transcript mapping rejects structurally unusable replies" {
-  assert_true(transcript_from_session_json("not json") is None)
-  assert_true(transcript_from_session_json("{\"other\":1}") is None)
 }

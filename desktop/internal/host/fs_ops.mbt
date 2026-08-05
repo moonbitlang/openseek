@@ -185,7 +185,7 @@ async fn stat_files_op(payload : StatFilesPayload) -> StatFilesReply {
       Some(file) => file_signature(file.to_string())
       None => None
     }
-    stats.push({ path, sig })
+    stats.push({ path, sig: sig.unwrap_or("") })
   }
   { stats, }
 }

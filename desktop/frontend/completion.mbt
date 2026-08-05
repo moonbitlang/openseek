@@ -502,16 +502,26 @@ test "a draft of chips alone is not sendable" {
 }
 
 ///|
-test "decode_symbols parses rows and skips malformed ones" {
-  let text =
-    #|{"symbols":[
-    #|{"name":"parse_hover","kind":12,"container":"Lsp","path":"a/b.mbt",
-    #| "range":{"start":{"line":4,"col":2},"end":{"line":4,"col":13}}},
-    #|{"name":"","path":"x.mbt"},
-    #|{"path":"y.mbt"}
-    #|]}
-  guard decode_symbols(text) is Some(items) else { fail("expected rows") }
-  // The blank-name and name-less rows are dropped; one good row remains.
+test "typed symbols project rows and skip blank names" {
+  let items = SymbolsProjection({
+    symbols: [
+      {
+        name: "parse_hover",
+        kind: Some(12),
+        container: Some("Lsp"),
+        path: "a/b.mbt",
+        range: { start: { line: 4, col: 2 }, end: { line: 4, col: 13 } },
+      },
+      {
+        name: "",
+        kind: None,
+        container: None,
+        path: "x.mbt",
+        range: { start: { line: 0, col: 0 }, end: { line: 0, col: 0 } },
+      },
+    ],
+  }).rows()
+  // The blank-name row is dropped; one good row remains.
   assert_eq(items.length(), 1)
   assert_eq(items[0].label, "parse_hover")
   // Detail reads container · path:line (line shown one-based).
@@ -520,5 +530,4 @@ test "decode_symbols parses rows and skips malformed ones" {
   assert_true(
     items[0].range is Some(range) && range == @common.Range::Range(5, 3, 5, 14),
   )
-  assert_true(decode_symbols("not json") is None)
 }

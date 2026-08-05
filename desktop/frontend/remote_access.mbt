@@ -1,51 +1,29 @@
 // The host's relay sign-in, over the wire: `auth.status` seeds the mirror
 // at bridge time, `auth.connect`/`auth.disconnect` drive it from the
-// Settings page, and the `auth.changed` broadcast keeps it fresh (decoded
-// in bridge.mbt through the same `decode_remote_access`). Desktop-window
+// Settings page, and the `auth.changed` broadcast keeps it fresh (projected
+// in bridge.mbt through the same `RemoteAccess::from_status`). Desktop-window
 // ops by convention — a browser signs in with the relay directly — so every
 // call here is pinned to the `Local` channel: the section describes this
 // host's own relay registration, never a focused remote device's.
 
 ///|
-/// Decode one status payload (a reply's JSON or a broadcast's params).
-/// `connected` is the shape's one required field.
-fn decode_remote_access(payload : Map[String, Json]) -> RemoteAccess? {
-  guard payload.get("connected") is Some(connected) &&
-    connected is (True | False) else {
-    return None
+/// Project the shared auth status used by both replies and broadcasts.
+fn RemoteAccess::from_status(
+  payload : @protocol.AuthStatusPayload,
+) -> RemoteAccess {
+  let user_login = payload.user.map(user => user.login)
+  let (device_name, device_url) = match payload.device {
+    Some(device) => (Some(device.name), Some(device.url))
+    None => (None, None)
   }
-  let (user_login, device_name, device_url) = {
-    let login = match payload.get("user") {
-      Some(Object(user)) => @jsonx.json_text(user, "login")
-      _ => None
-    }
-    match payload.get("device") {
-      Some(Object(device)) =>
-        (
-          login,
-          @jsonx.json_text(device, "name"),
-          @jsonx.json_text(device, "url"),
-        )
-      _ => (login, None, None)
-    }
-  }
-  Some({
-    server_url: @jsonx.json_text(payload, "server_url"),
-    connected: connected is True,
-    managed_by_env: payload.get("managed_by_env") is Some(True),
+  {
+    server_url: payload.server_url,
+    connected: payload.connected,
+    managed_by_env: payload.managed_by_env.unwrap_or(false),
     user_login,
     device_name,
     device_url,
-  })
-}
-
-///|
-fn reply_remote_access(reply : @js.Value) -> RemoteAccess? {
-  let json = @json.parse(@interop.reply_json_text(reply)) catch {
-    _ => return None
   }
-  guard json is Object(fields) else { return None }
-  decode_remote_access(fields)
 }
 
 ///|
@@ -54,16 +32,16 @@ fn reply_remote_access(reply : @js.Value) -> RemoteAccess? {
 fn fetch_remote_status(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = @interop.bridge_request(
+      let status = @interop.bridge_request(
         Local,
-        "auth.status",
-        @js.Object::new().to_value(),
+        @commands.auth_status,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         _ => return
       }
-      if reply_remote_access(reply) is Some(status) {
-        scheduler.add(dispatch(RemoteStatusLoaded(status)))
-      }
+      scheduler.add(
+        dispatch(RemoteStatusLoaded(RemoteAccess::from_status(status))),
+      )
     })
   })
 }
@@ -75,10 +53,10 @@ fn fetch_remote_status(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 fn connect_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = @interop.bridge_request(
+      let status = @interop.bridge_request(
         Local,
-        "auth.connect",
-        @js.Object::new().to_value(),
+        @commands.auth_connect,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         error => {
           scheduler.add(
@@ -87,11 +65,9 @@ fn connect_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           return
         }
       }
-      match reply_remote_access(reply) {
-        Some(status) => scheduler.add(dispatch(RemoteConnectFinished(status)))
-        None =>
-          scheduler.add(dispatch(RemoteConnectFailed("malformed auth reply")))
-      }
+      scheduler.add(
+        dispatch(RemoteConnectFinished(RemoteAccess::from_status(status))),
+      )
     })
   })
 }
@@ -104,8 +80,8 @@ fn cancel_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
     @js.async_run(() => {
       let _ = @interop.bridge_request(
         Local,
-        "auth.cancel",
-        @js.Object::new().to_value(),
+        @commands.auth_cancel,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         error => {
           scheduler.add(
@@ -125,8 +101,8 @@ fn disconnect_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
     @js.async_run(() => {
       let reply = @interop.bridge_request(
         Local,
-        "auth.disconnect",
-        @js.Object::new().to_value(),
+        @commands.auth_disconnect,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         error => {
           scheduler.add(
@@ -135,13 +111,9 @@ fn disconnect_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           return
         }
       }
-      match reply_remote_access(reply) {
-        Some(status) => scheduler.add(dispatch(RemoteStatusLoaded(status)))
-        None =>
-          scheduler.add(
-            dispatch(RemoteDisconnectFailed("malformed auth reply")),
-          )
-      }
+      scheduler.add(
+        dispatch(RemoteStatusLoaded(RemoteAccess::from_status(reply))),
+      )
     })
   })
 }

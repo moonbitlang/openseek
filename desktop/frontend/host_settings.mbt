@@ -1,33 +1,21 @@
 // The host's engine endpoint settings, over the wire: `settings.get` seeds
 // the mirror at bridge time, `settings.set` pushes each edit, and the
 // `settings.changed` broadcast keeps every other client's mirror fresh
-// (decoded in bridge.mbt through the same `decode_host_settings`). Key
+// (projected in bridge.mbt through the same `HostSettings::from_status`). Key
 // material never travels down — only presence flags.
 
 ///|
-/// Decode one status payload (a reply's JSON or a broadcast's params).
-/// Absent fields read as their defaults; a payload without `provider` is
-/// malformed and dropped.
-fn decode_host_settings(payload : Map[String, Json]) -> HostSettings? {
-  guard @jsonx.json_text(payload, "provider") is Some(provider) else {
-    return None
+/// Project the shared settings status used by both replies and broadcasts.
+fn HostSettings::from_status(
+  payload : @protocol.SettingsStatusPayload,
+) -> HostSettings {
+  {
+    revision: payload.revision,
+    provider: payload.provider,
+    custom_api_url: payload.custom_api_url.unwrap_or(""),
+    has_deepseek_key: payload.has_deepseek_key,
+    has_custom_key: payload.has_custom_key,
   }
-  Some({
-    revision: @jsonx.json_int(payload, "revision").unwrap_or(0),
-    provider,
-    custom_api_url: @jsonx.json_text(payload, "custom_api_url").unwrap_or(""),
-    has_deepseek_key: payload.get("has_deepseek_key") is Some(True),
-    has_custom_key: payload.get("has_custom_key") is Some(True),
-  })
-}
-
-///|
-fn reply_host_settings(reply : @js.Value) -> HostSettings? {
-  let json = @json.parse(@interop.reply_json_text(reply)) catch {
-    _ => return None
-  }
-  guard json is Object(fields) else { return None }
-  decode_host_settings(fields)
 }
 
 ///|
@@ -44,21 +32,19 @@ fn fetch_host_settings(
     @js.async_run(() => {
       let reply = @interop.bridge_request(
         channel,
-        "settings.get",
-        @js.Object::new().to_value(),
+        @commands.settings_get,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         _ => return
       }
-      if reply_host_settings(reply) is Some(settings) {
-        scheduler.add(
-          dispatch(
-            HostSettingsLoaded(
-              settings,
-              connection_generation=Some(connection_generation),
-            ),
+      scheduler.add(
+        dispatch(
+          HostSettingsLoaded(
+            HostSettings::from_status(reply),
+            connection_generation=Some(connection_generation),
           ),
-        )
-      }
+        ),
+      )
     })
   })
 }
@@ -71,14 +57,16 @@ fn fetch_host_settings(
 fn push_host_settings(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  patch : @js.Value,
+  patch : @protocol.SettingsSetPayload,
   connection_generation : Int,
   cleans_legacy? : Bool = false,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = @interop.bridge_request(channel, "settings.set", patch) catch {
+      let reply = @interop.bridge_request(
+        channel, @commands.settings_set, patch,
+      ) catch {
         error => {
           scheduler.add(
             dispatch(
@@ -92,58 +80,65 @@ fn push_host_settings(
           return
         }
       }
-      match reply_host_settings(reply) {
-        Some(settings) =>
-          scheduler.add(
-            dispatch(
-              HostSettingsApplied(
-                settings,
-                connection_generation~,
-                cleans_legacy~,
-              ),
-            ),
-          )
-        None =>
-          scheduler.add(
-            dispatch(
-              HostSettingsSaveFailed(
-                "malformed settings reply",
-                connection_generation~,
-                cleans_legacy~,
-              ),
-            ),
-          )
-      }
+      scheduler.add(
+        dispatch(
+          HostSettingsApplied(
+            HostSettings::from_status(reply),
+            connection_generation~,
+            cleans_legacy~,
+          ),
+        ),
+      )
     })
   })
 }
 
 ///|
-fn provider_settings_patch(provider : ApiProvider) -> @js.Value {
-  let patch = @js.Object::new()
-  patch["provider"] = provider.wire()
-  patch.to_value()
+fn provider_settings_patch(
+  provider : ApiProvider,
+) -> @protocol.SettingsSetPayload {
+  {
+    provider: Some(provider.wire()),
+    custom_api_url: None,
+    deepseek_api_key: None,
+    custom_api_key: None,
+    legacy_migration: None,
+  }
 }
 
 ///|
 /// The URL is sent verbatim (not omitted when blank): a present-but-empty
 /// field is the wire's "clear the stored value".
-fn custom_url_settings_patch(url : String) -> @js.Value {
-  let patch = @js.Object::new()
-  patch["custom_api_url"] = url
-  patch.to_value()
+fn custom_url_settings_patch(url : String) -> @protocol.SettingsSetPayload {
+  {
+    provider: None,
+    custom_api_url: Some(url),
+    deepseek_api_key: None,
+    custom_api_key: None,
+    legacy_migration: None,
+  }
 }
 
 ///|
-fn api_key_settings_patch(provider : ApiProvider, key : String) -> @js.Value {
-  let patch = @js.Object::new()
-  match provider {
-    Deepseek => patch["deepseek_api_key"] = key
-    Custom => patch["custom_api_key"] = key
-    // The proxy takes no user key; callers never build this patch for it.
-    Openseek | OpenseekStaging => ()
+fn api_key_settings_patch(
+  provider : ApiProvider,
+  key : String,
+) -> @protocol.SettingsSetPayload {
+  {
+    provider: None,
+    custom_api_url: None,
+    deepseek_api_key: if provider is Deepseek {
+      Some(key)
+    } else {
+      None
+    },
+    custom_api_key: if provider is Custom {
+      Some(key)
+    } else {
+      None
+    },
+    legacy_migration: None,
   }
-  patch.to_value()
 }
 
 ///|
@@ -155,17 +150,37 @@ fn legacy_settings_patch(
   custom_url~ : String,
   api_key~ : String,
   custom_api_key~ : String,
-) -> @js.Value {
-  let patch = @js.Object::new()
+) -> @protocol.SettingsSetPayload {
   // The host persists a one-shot fence with the first settings write.
   // Retrying this import after a lost reply therefore acknowledges and
   // clears localStorage without overwriting a newer host configuration.
-  patch["legacy_migration"] = true
-  @interop.set_trimmed(patch, "provider", provider)
-  @interop.set_trimmed(patch, "custom_api_url", custom_url)
-  @interop.set_trimmed(patch, "deepseek_api_key", api_key)
-  @interop.set_trimmed(patch, "custom_api_key", custom_api_key)
-  patch.to_value()
+  let provider = provider.trim().to_owned()
+  let custom_url = custom_url.trim().to_owned()
+  let api_key = api_key.trim().to_owned()
+  let custom_api_key = custom_api_key.trim().to_owned()
+  {
+    provider: if provider.is_empty() {
+      None
+    } else {
+      Some(provider)
+    },
+    custom_api_url: if custom_url.is_empty() {
+      None
+    } else {
+      Some(custom_url)
+    },
+    deepseek_api_key: if api_key.is_empty() {
+      None
+    } else {
+      Some(api_key)
+    },
+    custom_api_key: if custom_api_key.is_empty() {
+      None
+    } else {
+      Some(custom_api_key)
+    },
+    legacy_migration: Some(true),
+  }
 }
 
 ///|

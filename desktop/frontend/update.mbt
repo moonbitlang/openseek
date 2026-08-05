@@ -2736,7 +2736,7 @@ fn update_device_msg(
         false,
         "failed to refresh session \{session}",
       )
-    SessionCommitted(session~, sequence~, kind~, payload~) => {
+    SessionCommitted(session~, sequence~, item~) => {
       // Archiving removes live client state after the hub's ordered final
       // commit. A stale/replayed commit seen after that local fact must not
       // resurrect the archived record as a live hidden conversation.
@@ -2772,7 +2772,7 @@ fn update_device_msg(
       }
       let (commit_cmd, next) = if model.find_conversation(channel, session)
         is Some(conv) {
-        let commit : BufferedCommit = { sequence, kind, payload }
+        let commit : BufferedCommit = { sequence, item }
         match conv.sync {
           // A read is in flight: buffer — its snapshot's watermark decides
           // whether this commit is already contained once it lands.
@@ -2800,7 +2800,7 @@ fn update_device_msg(
               // carried it. Re-broadcasts are safe by construction.
               (@cmd.none, model)
             } else if sequence == conv.watermark + 1 {
-              let (grew, next) = conv.apply_commit(sequence, kind, payload)
+              let (grew, next) = conv.apply_commit(sequence, item)
               (
                 if grew {
                   scroll_if_active(model, channel, session)
@@ -4033,9 +4033,7 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
     "test-submission",
     workspace=conv.workspace,
   )
-  let json = @json.parse(@interop.reply_json_text(payload)) catch {
-    _ => return None
-  }
+  let json = payload.to_json()
   guard json is Object(fields) else { return None }
   @jsonx.json_text(fields, "workspace")
 }
@@ -4060,13 +4058,9 @@ test "runs resync names exact Starting Open and Idle owners" {
     .replace_conversation(open)
     .replace_conversation(idle)
     .replace_conversation(empty)
-  let json = @json.parse(
-    @interop.reply_json_text(
-      runs_payload(model.run_snapshot_frontier(@interop.ChannelId::Local)),
-    ),
-  ) catch {
-    _ => fail("runs payload was not JSON")
-  }
+  let json = runs_payload(
+    model.run_snapshot_frontier(@interop.ChannelId::Local),
+  ).to_json()
   guard json is { "known": Array(known), .. } else {
     fail("runs payload omitted known selectors")
   }
@@ -4703,9 +4697,11 @@ test "session list assigns a commit-first conversation to its durable workspace"
   let dispatch = test_dispatch()
   let (_, committed) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-foreign", sequence=1, kind="user", payload={
-      "content": Json::string("arrived before the list"),
-    }),
+    SessionCommitted(
+      session="desktop-foreign",
+      sequence=1,
+      item=@protocol.User({ content: "arrived before the list" }),
+    ),
     test_model(),
   )
   guard committed.find_conversation(
@@ -4950,9 +4946,11 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
   }
   let (_, buffered) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=3, kind="user", payload={
-      "content": Json::string("future"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=3,
+      item=@protocol.User({ content: "future" }),
+    ),
     refreshing,
   )
   let (_, reconnected_again) = update_dev(dispatch, BridgeReady, buffered)
@@ -5773,11 +5771,7 @@ test "run semantic errors never duplicate their terminal commit" {
   let terminal = SessionCommitted(
     session="desktop-test",
     sequence=1,
-    kind="terminal",
-    payload={
-      "kind": Json::string("failed"),
-      "message": Json::string("engine error"),
-    },
+    item=@protocol.Terminal(@protocol.Failed("engine error")),
   )
   let (_, semantic_first) = update_dev(dispatch, semantic, running_model())
   inspect(semantic_first.active().overlay.length(), content="0")
@@ -5810,9 +5804,10 @@ test "a process-exit error keeps its host diagnostics as a local notice" {
 ///|
 test "agent error decoder preserves an optional process exit code" {
   guard error_msg({
-      "run_id": Json::string("r7"),
-      "message": Json::string("exited"),
-      "exit_code": Json::number(9),
+      run_id: Some("r7"),
+      message: "exited",
+      exit_code: Some(9),
+      diagnostics: None,
     })
     is Some(Error(exit_code=Some(9), ..)) else {
     fail("expected the exit code")
@@ -5822,18 +5817,19 @@ test "agent error decoder preserves an optional process exit code" {
 ///|
 test "finished and durable-boundary decoders preserve exact EOF frontiers" {
   guard finished_msg({
-      "run_id": Json::string("r7"),
-      "status": Json::string("failed"),
-      "exit_code": Json::number(9),
-      "durable_sequence": Json::number(12),
+      run_id: "r7",
+      status: "failed",
+      answer: None,
+      exit_code: Some(9),
+      durable_sequence: Some(12),
     })
     is Some(Finished(durable_sequence=Some(12), ..)) else {
     fail("expected the final-scan sequence")
   }
   guard durable_boundary_msg({
-      "run_id": Json::string("r7"),
-      "session": Json::string("desktop-test"),
-      "sequence": Json::number(12),
+      run_id: "r7",
+      session: "desktop-test",
+      sequence: 12,
     })
     is Some(DurableBoundary(sequence=12, ..)) else {
     fail("expected the delayed durable boundary")
@@ -5988,12 +5984,15 @@ test "started routes by session and records the host's workspace" {
 ///|
 test "started decoder preserves optional placement and submission id" {
   guard started_msg({
-      "run_id": Json::string("r7"),
-      "session": Json::string("desktop-test"),
-      "model": Json::string("deepseek-v4-pro"),
-      "max_steps": Json::number(1000),
-      "session_root": Json::string("/work/core/.openseek"),
-      "submission_id": Json::string("submission-7"),
+      run_id: "r7",
+      task: None,
+      submission_id: Some("submission-7"),
+      engine: None,
+      model: Some("deepseek-v4-pro"),
+      max_steps: Some(1000),
+      cwd: None,
+      session: Some("desktop-test"),
+      session_root: Some("/work/core/.openseek"),
     })
     is Some(
       Started(
@@ -6226,9 +6225,11 @@ test "canonical User text never claims an unconfirmed start" {
   inspect(failed.active().input_ledger.length(), content="1")
   let (_, committed) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=1, kind="user", payload={
-      "content": Json::string("accepted prompt"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=1,
+      item=@protocol.User({ content: "accepted prompt" }),
+    ),
     failed,
   )
   assert_true(committed.active().run is NoRun(ended=Some(RunFailed)))
@@ -6870,9 +6871,7 @@ test "runs settlement recovers a transport-undelivered prompt by submission id" 
   assert_true(undelivered.active().run is NoRun(ended=Some(RunFailed)))
   assert_true(undelivered.active().input_ledger[0].run_id is None)
   let frontier = undelivered.run_snapshot_frontier(@interop.ChannelId::Local)
-  let selectors = @json.parse(@interop.reply_json_text(runs_payload(frontier))) catch {
-    _ => fail("runs payload was not JSON")
-  }
+  let selectors = runs_payload(frontier).to_json()
   assert_true(
     selectors
     is {
@@ -7573,9 +7572,11 @@ test "a canonical user commit never settles a local steer" {
   )
   let (_, committed) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=1, kind="user", payload={
-      "content": Json::string("go left"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=1,
+      item=@protocol.User({ content: "go left" }),
+    ),
     model,
   )
   inspect(committed.active().messages.length(), content="1")
@@ -7806,17 +7807,24 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
   )
   let (_, buffered) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=2, kind="assistant", payload={
-      "content": Json::string("answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=2,
+      item=@protocol.Assistant({
+        content: "answer",
+        tool_calls: None,
+        reasoning_content: None,
+      }),
+    ),
     finished,
   )
   let (_, buffered_terminal) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=3, kind="terminal", payload={
-      "kind": Json::string("finished"),
-      "message": Json::string("answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=3,
+      item=@protocol.Terminal(@protocol.Finished("answer")),
+    ),
     buffered,
   )
   let (_, answered) = update_dev(
@@ -7839,9 +7847,11 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
   assert_true(visible[2].content.contains("late steer"))
   let (_, next_turn) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=4, kind="user", payload={
-      "content": Json::string("next question"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=4,
+      item=@protocol.User({ content: "next question" }),
+    ),
     answered,
   )
   let visible = next_turn.active().visible_items()
@@ -7907,9 +7917,11 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
   let model = running_model().replace_conversation(conv)
   let (_, steer_buffered) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=2, kind="user", payload={
-      "content": Json::string("late steer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=2,
+      item=@protocol.User({ content: "late steer" }),
+    ),
     model,
   )
   let (_, finished) = update_dev(
@@ -7919,17 +7931,24 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
   )
   let (_, answered) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=3, kind="assistant", payload={
-      "content": Json::string("answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=3,
+      item=@protocol.Assistant({
+        content: "answer",
+        tool_calls: None,
+        reasoning_content: None,
+      }),
+    ),
     finished,
   )
   let (_, terminal) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=4, kind="terminal", payload={
-      "kind": Json::string("finished"),
-      "message": Json::string("answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=4,
+      item=@protocol.Terminal(@protocol.Finished("answer")),
+    ),
     answered,
   )
   let (_, loaded) = update_dev(
@@ -7970,10 +7989,11 @@ test "a terminal committed before Finished still owns the run-tail notice" {
   )
   let (_, committed) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=3, kind="terminal", payload={
-      "kind": Json::string("finished"),
-      "message": Json::string("answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=3,
+      item=@protocol.Terminal(@protocol.Finished("answer")),
+    ),
     running_model().replace_conversation(conv),
   )
   inspect(committed.active().last_terminal_sequence, content="3")
@@ -8026,10 +8046,11 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
   // assumed to be the boundary for the notice Finished is about to create.
   let (_, committed) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=3, kind="terminal", payload={
-      "kind": Json::string("finished"),
-      "message": Json::string("first answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=3,
+      item=@protocol.Terminal(@protocol.Finished("first answer")),
+    ),
     model,
   )
   let (_, finished) = update_dev(
@@ -8061,17 +8082,20 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
   )
   let (_, second_user) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=4, kind="user", payload={
-      "content": Json::string("second question"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=4,
+      item=@protocol.User({ content: "second question" }),
+    ),
     started,
   )
   let (_, second_terminal) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=5, kind="terminal", payload={
-      "kind": Json::string("finished"),
-      "message": Json::string("second answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=5,
+      item=@protocol.Terminal(@protocol.Finished("second answer")),
+    ),
     second_user,
   )
   // Generation 1 predates Finished and Started. It drains both runs' buffered
@@ -8321,9 +8345,15 @@ test "a foreign background run waits for a snapshot cut after Started" {
   // already taken, but before the next run's lifecycle announcement.
   let (_, buffered_answer) = update_dev(
     dispatch,
-    SessionCommitted(session~, sequence=2, kind="assistant", payload={
-      "content": Json::string("previous answer"),
-    }),
+    SessionCommitted(
+      session~,
+      sequence=2,
+      item=@protocol.Assistant({
+        content: "previous answer",
+        tool_calls: None,
+        reasoning_content: None,
+      }),
+    ),
     model,
   )
   let (_, started) = update_dev(
@@ -8351,17 +8381,20 @@ test "a foreign background run waits for a snapshot cut after Started" {
   )
   let (_, buffered_terminal) = update_dev(
     dispatch,
-    SessionCommitted(session~, sequence=3, kind="terminal", payload={
-      "kind": Json::string("finished"),
-      "message": Json::string("previous answer"),
-    }),
+    SessionCommitted(
+      session~,
+      sequence=3,
+      item=@protocol.Terminal(@protocol.Finished("previous answer")),
+    ),
     started,
   )
   let (_, buffered_user) = update_dev(
     dispatch,
-    SessionCommitted(session~, sequence=4, kind="user", payload={
-      "content": Json::string("current question"),
-    }),
+    SessionCommitted(
+      session~,
+      sequence=4,
+      item=@protocol.User({ content: "current question" }),
+    ),
     buffered_terminal,
   )
   // Generation 1 predates Started. It may drain the ordered buffer, but it
@@ -8425,24 +8458,33 @@ test "buffered future terminal cannot become its own run floor" {
   let model = test_model().replace_conversation(conv)
   let (_, user) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=2, kind="user", payload={
-      "content": Json::string("current question"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=2,
+      item=@protocol.User({ content: "current question" }),
+    ),
     model,
   )
   let (_, answer) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=3, kind="assistant", payload={
-      "content": Json::string("current answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=3,
+      item=@protocol.Assistant({
+        content: "current answer",
+        tool_calls: None,
+        reasoning_content: None,
+      }),
+    ),
     user,
   )
   let (_, terminal) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=4, kind="terminal", payload={
-      "kind": Json::string("finished"),
-      "message": Json::string("current answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=4,
+      item=@protocol.Terminal(@protocol.Finished("current answer")),
+    ),
     answer,
   )
   // Buffered state is delivery, not applied chronology.
@@ -8495,9 +8537,15 @@ test "a late durable EOF finalizes an unconfirmed steer without a terminal" {
   assert_true(steer_notice.anchor is SnapshotCut(snapshot_generation=1))
   let (_, partial) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=2, kind="assistant", payload={
-      "content": Json::string("partial answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=2,
+      item=@protocol.Assistant({
+        content: "partial answer",
+        tool_calls: None,
+        reasoning_content: None,
+      }),
+    ),
     synthetic,
   )
   // The real EOF consumer publishes a non-lifecycle boundary only after its
@@ -9128,9 +9176,11 @@ test "an initial warning freezes between a snapshot and its buffered successor" 
   )
   let (_, buffered) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=2, kind="user", payload={
-      "content": Json::string("buffered W+1"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=2,
+      item=@protocol.User({ content: "buffered W+1" }),
+    ),
     finished,
   )
   guard buffered.active().sync is Reloading(buffered=commits, ..) else {
@@ -9440,9 +9490,11 @@ test "exact-zero recovery refuses buffered or nonzero durable frontiers" {
   )
   let (_, buffered) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=1, kind="user", payload={
-      "content": Json::string("durable prompt arrived"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=1,
+      item=@protocol.User({ content: "durable prompt arrived" }),
+    ),
     waiting,
   )
   let (_, zero_with_buffer) = update_dev(
@@ -9985,10 +10037,7 @@ fn archived_item(id : String) -> @transcript.SessionListItem {
 
 ///|
 test "session.changed decoder preserves archive invalidation identity" {
-  guard session_changed_msg({
-      "change": Json::string("archived"),
-      "session": Json::string("desktop-old"),
-    })
+  guard session_changed_msg({ change: "archived", session: "desktop-old" })
     is Some(
       SessionsChanged(
         change="archived",
@@ -11460,53 +11509,43 @@ test "switching the server to staging moves the channel and forgets the previous
 
 ///|
 test "check_update replies decode by kind" {
+  assert_true(UpdateCheck::from_reply(@protocol.UpToDate) is CheckUpToDate)
   assert_true(
-    decode_update_check("{\"kind\":\"up_to_date\"}") is Some(CheckUpToDate),
+    UpdateCheck::from_reply(
+      @protocol.Available(
+        version="0.2.0",
+        installable=true,
+        unavailable_reason=None,
+      ),
+    )
+    is CheckFound(version="0.2.0", installable=true, unavailable_reason=None),
   )
   assert_true(
-    decode_update_check(
-      "{\"kind\":\"available\",\"version\":\"0.2.0\",\"installable\":true,\"unavailable_reason\":null}",
-    )
-    is Some(
-      CheckFound(version="0.2.0", installable=true, unavailable_reason=None)
-    ),
-  )
-  assert_true(
-    decode_update_check(
-      "{\"kind\":\"available\",\"version\":\"0.2.0\",\"installable\":false,\"unavailable_reason\":\"move the app\"}",
-    )
-    is Some(
-      CheckFound(
+    UpdateCheck::from_reply(
+      @protocol.Available(
         version="0.2.0",
         installable=false,
-        unavailable_reason=Some("move the app")
-      )
+        unavailable_reason=Some("move the app"),
+      ),
+    )
+    is CheckFound(
+      version="0.2.0",
+      installable=false,
+      unavailable_reason=Some("move the app")
     ),
   )
-  // The host always writes `installable` on an `available` reply; one
-  // without it is malformed rather than "not installable".
   assert_true(
-    decode_update_check("{\"kind\":\"available\",\"version\":\"0.2.0\"}")
-    is None,
+    UpdateCheck::from_reply(@protocol.Unreachable(reason="offline"))
+    is CheckUnreachable(reason="offline"),
   )
   assert_true(
-    decode_update_check("{\"kind\":\"unreachable\",\"reason\":\"offline\"}")
-    is Some(CheckUnreachable(reason="offline")),
+    UpdateCheck::from_reply(@protocol.Malformed(reason="not json"))
+    is CheckMalformed(reason="not json"),
   )
   assert_true(
-    decode_update_check("{\"kind\":\"malformed\",\"reason\":\"not json\"}")
-    is Some(CheckMalformed(reason="not json")),
+    UpdateCheck::from_reply(@protocol.Broken(version="0.2.0", reason="bad url"))
+    is CheckBroken(version="0.2.0", reason="bad url"),
   )
-  assert_true(
-    decode_update_check(
-      "{\"kind\":\"broken\",\"version\":\"0.2.0\",\"reason\":\"bad url\"}",
-    )
-    is Some(CheckBroken(version="0.2.0", reason="bad url")),
-  )
-  // Unknown kinds and structurally unusable replies are indecipherable.
-  assert_true(decode_update_check("{\"kind\":\"available\"}") is None)
-  assert_true(decode_update_check("{\"kind\":\"surprise\"}") is None)
-  assert_true(decode_update_check("garbage") is None)
 }
 
 ///|
@@ -11524,9 +11563,11 @@ test "send does not show a prompt until its commit lands" {
   // The durable commit is the first point the prompt becomes transcript.
   let (_, committed) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=1, kind="user", payload={
-      "content": Json::string("build the thing"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=1,
+      item=@protocol.User({ content: "build the thing" }),
+    ),
     sent,
   )
   inspect(committed.active().messages.length(), content="1")
@@ -11547,9 +11588,11 @@ test "a replayed commit at or below the watermark is dropped" {
   })
   let (_, next) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=2, kind="user", payload={
-      "content": Json::string("already there"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=2,
+      item=@protocol.User({ content: "already there" }),
+    ),
     model,
   )
   inspect(next.active().messages.length(), content="1")
@@ -11565,9 +11608,11 @@ test "a commit past the frontier buffers and flips into a reload" {
   })
   let (_, next) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=5, kind="user", payload={
-      "content": Json::string("from the future"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=5,
+      item=@protocol.User({ content: "from the future" }),
+    ),
     model,
   )
   // The gap means missed broadcasts; nothing is applied out of order.
@@ -11589,9 +11634,11 @@ test "commits buffer while a reload is in flight" {
   })
   let (_, next) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=3, kind="user", payload={
-      "content": Json::string("mid-reload"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=3,
+      item=@protocol.User({ content: "mid-reload" }),
+    ),
     model,
   )
   inspect(next.active().messages.length(), content="0")
@@ -11609,16 +11656,8 @@ test "a snapshot drains buffered commits in sequence order" {
     // Out of arrival order on purpose; the drain sorts by sequence.
     ,
     sync: test_reloading([
-      {
-        sequence: 4,
-        kind: "user",
-        payload: { "content": Json::string("four") },
-      },
-      {
-        sequence: 3,
-        kind: "user",
-        payload: { "content": Json::string("three") },
-      },
+      { sequence: 4, item: @protocol.User({ content: "four" }) },
+      { sequence: 3, item: @protocol.User({ content: "three" }) },
     ]),
   })
   let (_, next) = update_dev(
@@ -11648,7 +11687,7 @@ test "a snapshot already containing the buffered commits drops them" {
   let model = test_model().replace_conversation({
     ..test_conversation(),
     sync: test_reloading([
-      { sequence: 2, kind: "user", payload: { "content": Json::string("dup") } },
+      { sequence: 2, item: @protocol.User({ content: "dup" }) },
     ]),
   })
   let (_, next) = update_dev(
@@ -11673,7 +11712,7 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
   let model = test_model().replace_conversation({
     ..test_conversation(),
     sync: test_reloading([
-      { sequence: 9, kind: "user", payload: { "content": Json::string("far") } },
+      { sequence: 9, item: @protocol.User({ content: "far" }) },
     ]),
   })
   let (_, next) = update_dev(
@@ -11703,7 +11742,7 @@ test "background retries preserve buffered commits until a later success" {
     messages: [{ kind: User, content: "kept" }],
     watermark: 1,
     sync: test_reloading([
-      { sequence: 3, kind: "user", payload: { "content": Json::string("x") } },
+      { sequence: 3, item: @protocol.User({ content: "x" }) },
     ]),
   })
   let model = { ..model, transcript_request_generation: 1 }
@@ -11727,9 +11766,11 @@ test "background retries preserve buffered commits until a later success" {
   // The next commit starts a fresh generation without applying out of order.
   let (_, retrying) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=2, kind="user", payload={
-      "content": Json::string("next"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=2,
+      item=@protocol.User({ content: "next" }),
+    ),
     failed,
   )
   guard retrying.active().sync
@@ -11764,7 +11805,7 @@ test "reopening an active failed reload retries and preserves other local notice
     messages: [{ kind: User, content: "kept" }],
     watermark: 1,
     sync: ReloadFailed(generation=1, buffered=[
-      { sequence: 2, kind: "user", payload: { "content": Json::string("two") } },
+      { sequence: 2, item: @protocol.User({ content: "two" }) },
     ]),
     overlay: [
       {
@@ -11825,13 +11866,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
     sync: Reloading(
       generation=2,
       attempt=1,
-      buffered=[
-        {
-          sequence: 6,
-          kind: "user",
-          payload: { "content": Json::string("six") },
-        },
-      ],
+      buffered=[{ sequence: 6, item: @protocol.User({ content: "six" }) }],
       reload_after_current=false,
     ),
   })
@@ -11881,12 +11916,13 @@ test "tool decode semantics wait for their durable error tool result" {
   let commit = SessionCommitted(
     session="desktop-test",
     sequence=1,
-    kind="tool_result",
-    payload={
-      "tool_name": Json::string("edit"),
-      "is_error": Json::boolean(true),
-      "content": Json::string("invalid arguments"),
-    },
+    item=@protocol.ToolResult({
+      tool_call_id: "",
+      tool_name: "edit",
+      content: "invalid arguments",
+      is_error: true,
+      brief: None,
+    }),
   )
   let (_, semantic_first) = update_dev(dispatch, semantic, running_model())
   inspect(semantic_first.active().messages.length(), content="0")
@@ -11925,10 +11961,15 @@ test "assistant semantic events wait for their durable commit" {
   inspect(answered.active().overlay.length(), content="0")
   let (_, committed) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=1, kind="assistant", payload={
-      "content": Json::string("answer"),
-      "reasoning_content": Json::string("think"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=1,
+      item=@protocol.Assistant({
+        content: "answer",
+        tool_calls: None,
+        reasoning_content: Some("think"),
+      }),
+    ),
     answered,
   )
   // One durable item projects as reasoning + answer exactly once.
@@ -11946,9 +11987,15 @@ test "a delayed assistant commit never clears a newer live delta" {
   })
   let (_, committed) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=1, kind="assistant", payload={
-      "content": Json::string("older committed answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=1,
+      item=@protocol.Assistant({
+        content: "older committed answer",
+        tool_calls: None,
+        reasoning_content: None,
+      }),
+    ),
     model,
   )
   inspect(committed.active().streaming_response, content="newer turn fragment")
@@ -11965,10 +12012,11 @@ test "a delayed terminal commit never clears a newer live delta" {
   })
   let (_, committed) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=2, kind="terminal", payload={
-      "kind": Json::string("finished"),
-      "message": Json::string("older answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=2,
+      item=@protocol.Terminal(@protocol.Finished("older answer")),
+    ),
     model,
   )
   inspect(committed.active().streaming_response, content="next turn fragment")
@@ -11984,9 +12032,15 @@ test "a fixed local notice stays before later durable turns" {
   }.append_local_notice(Assistant(is_danger=true), "local failure")
   let (_, committed) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=2, kind="assistant", payload={
-      "content": Json::string("later answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=2,
+      item=@protocol.Assistant({
+        content: "later answer",
+        tool_calls: None,
+        reasoning_content: None,
+      }),
+    ),
     test_model().replace_conversation(conv),
   )
   let visible = committed.active().visible_items()
@@ -12012,9 +12066,15 @@ test "a durable commit never retires a same-class local notice" {
   })
   let (_, committed) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=1, kind="assistant", payload={
-      "content": Json::string("durable answer"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=1,
+      item=@protocol.Assistant({
+        content: "durable answer",
+        tool_calls: None,
+        reasoning_content: None,
+      }),
+    ),
     model,
   )
   inspect(committed.active().messages.length(), content="1")
@@ -12031,10 +12091,15 @@ test "commit-first assistant semantics do not append again" {
   })
   let (_, committed) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-test", sequence=1, kind="assistant", payload={
-      "content": Json::string("answer"),
-      "reasoning_content": Json::string("think"),
-    }),
+    SessionCommitted(
+      session="desktop-test",
+      sequence=1,
+      item=@protocol.Assistant({
+        content: "answer",
+        tool_calls: None,
+        reasoning_content: Some("think"),
+      }),
+    ),
     streaming,
   )
   let (_, thought) = update_dev(
@@ -12058,9 +12123,11 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
   let dispatch = test_dispatch()
   let (_, next) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-elsewhere", sequence=1, kind="user", payload={
-      "content": Json::string("hi"),
-    }),
+    SessionCommitted(
+      session="desktop-elsewhere",
+      sequence=1,
+      item=@protocol.User({ content: "hi" }),
+    ),
     test_model(),
   )
   inspect(next.conversations.length(), content="2")
@@ -12075,9 +12142,11 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
   inspect(next.dev().sessions_request_generation, content="1")
   let (_, repeated) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-elsewhere", sequence=1, kind="user", payload={
-      "content": Json::string("hi"),
-    }),
+    SessionCommitted(
+      session="desktop-elsewhere",
+      sequence=1,
+      item=@protocol.User({ content: "hi" }),
+    ),
     next,
   )
   inspect(repeated.dev().sessions_request_generation, content="1")
@@ -12088,9 +12157,11 @@ test "a gapped commit for an unknown session materializes then reloads" {
   let dispatch = test_dispatch()
   let (_, next) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-gap", sequence=3, kind="user", payload={
-      "content": Json::string("third"),
-    }),
+    SessionCommitted(
+      session="desktop-gap",
+      sequence=3,
+      item=@protocol.User({ content: "third" }),
+    ),
     test_model(),
   )
   guard next.find_conversation(@interop.ChannelId::Local, "desktop-gap")
@@ -12122,9 +12193,11 @@ test "a late commit cannot resurrect a locally known archived session" {
   })
   let (_, next) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-archived", sequence=1, kind="user", payload={
-      "content": Json::string("stale"),
-    }),
+    SessionCommitted(
+      session="desktop-archived",
+      sequence=1,
+      item=@protocol.User({ content: "stale" }),
+    ),
     model,
   )
   assert_true(
@@ -12144,9 +12217,11 @@ test "an archive tombstone blocks commits before the archived list refreshes" {
   )
   let (_, next) = update_dev(
     dispatch,
-    SessionCommitted(session="desktop-tombstoned", sequence=1, kind="user", payload={
-      "content": Json::string("stale"),
-    }),
+    SessionCommitted(
+      session="desktop-tombstoned",
+      sequence=1,
+      item=@protocol.User({ content: "stale" }),
+    ),
     model,
   )
   assert_true(
@@ -12204,29 +12279,26 @@ test "remote access walks connect states and dedups clicks" {
 
 ///|
 test "auth status payloads decode by shape" {
-  guard decode_remote_access({
-      "connected": Json::boolean(true),
-      "server_url": Json::string("https://relay.example"),
-      "user": {
-        "login": Json::string("octocat"),
-        "avatar_url": Json::string(""),
-      },
-      "device": {
-        "id": Json::string("d_abc"),
-        "name": Json::string("My Mac"),
-        "url": Json::string("https://relay.example/d/d_abc/"),
-      },
-    })
-    is Some(status) else {
-    fail("a full status did not decode")
-  }
+  let status = RemoteAccess::from_status({
+    connected: true,
+    server_url: Some("https://relay.example"),
+    managed_by_env: None,
+    user: Some({ login: "octocat", avatar_url: "" }),
+    device: Some({
+      id: "d_abc",
+      name: "My Mac",
+      url: "https://relay.example/d/d_abc/",
+    }),
+  })
   assert_true(status.connected)
   assert_true(status.user_login is Some("octocat"))
   assert_true(status.device_url is Some("https://relay.example/d/d_abc/"))
-  guard decode_remote_access({ "connected": Json::boolean(false) })
-    is Some(signed_out) else {
-    fail("a signed-out status did not decode")
-  }
+  let signed_out = RemoteAccess::from_status({
+    connected: false,
+    server_url: None,
+    managed_by_env: None,
+    user: None,
+    device: None,
+  })
   assert_true(signed_out.user_login is None)
-  assert_true(decode_remote_access({ "server_url": Json::string("x") }) is None)
 }

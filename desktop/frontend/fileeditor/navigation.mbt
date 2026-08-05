@@ -74,10 +74,8 @@ impl @language.DefinitionProvider for MoonIdeNavigationProvider with fn provide_
   }
   let locations = request_moon_ide_locations(
     channel,
-    "moonide.definition",
-    path,
-    position.line_number,
-    position.column,
+    @commands.moonide_definition,
+    { path: path.0, line: position.line_number, column: position.column },
   ) catch {
     _ => return []
   }
@@ -104,10 +102,8 @@ impl @language.ReferencesProvider for MoonIdeNavigationProvider with fn provide_
   }
   let locations = request_moon_ide_locations(
     channel,
-    "moonide.references",
-    path,
-    position.line_number,
-    position.column,
+    @commands.moonide_references,
+    { path: path.0, line: position.line_number, column: position.column },
   ) catch {
     _ => return []
   }
@@ -139,56 +135,53 @@ fn register_moon_ide_navigation_providers() -> Array[@common.Disposable] {
 ///|
 async fn request_moon_ide_locations(
   channel : @interop.ChannelId,
-  op : String,
-  path : @pathx.Absolute,
-  line : Int,
-  column : Int,
+  command : @commands.Command[
+    @protocol.MoonIdeNavigationPayload,
+    @protocol.MoonIdeLocationsReply,
+  ],
+  payload : @protocol.MoonIdeNavigationPayload,
 ) -> Array[@language.Location] {
-  let payload = @js.Object::new()
-  payload["path"] = path.0
-  payload["line"] = line
-  payload["column"] = column
-  let reply = @interop.bridge_request(channel, op, payload.to_value())
-  decode_moon_ide_locations(@interop.reply_json_text(reply), channel)
+  let reply = @interop.bridge_request(channel, command, payload)
+  MoonIdeProjection::{ reply, channel }.to_viewer()
 }
 
 ///|
-/// Decode the host-normalized location reply. Every coordinate is already a
+/// Project the host-normalized typed locations into Viewer locations. Every
+/// coordinate is already a
 /// one-based protocol position, so no client-side column conversion or
 /// LSP-style shifting occurs here.
-fn decode_moon_ide_locations(
-  text : String,
-  channel : @interop.ChannelId,
+priv struct MoonIdeProjection {
+  reply : @protocol.MoonIdeLocationsReply
+  channel : @interop.ChannelId
+}
+
+///|
+fn MoonIdeProjection::to_viewer(
+  self : MoonIdeProjection,
 ) -> Array[@language.Location] {
-  let json = @json.parse(text) catch { _ => return [] }
-  guard json is Object(reply) && reply.get("locations") is Some(Array(items)) else {
-    return []
-  }
   let result : Array[@language.Location] = []
-  for item in items {
-    guard item is Object(fields) &&
-      @jsonx.json_text(fields, "path") is Some(path) &&
-      !path.is_empty() &&
-      @jsonx.json_int(fields, "start_line") is Some(start_line) &&
-      @jsonx.json_int(fields, "start_column") is Some(start_column) &&
-      @jsonx.json_int(fields, "end_line") is Some(end_line) &&
-      @jsonx.json_int(fields, "end_column") is Some(end_column) else {
-      continue
-    }
-    guard start_line > 0 &&
-      start_column > 0 &&
-      end_line > 0 &&
-      end_column > 0 &&
+  for location in self.reply.locations {
+    guard !location.path.is_empty() &&
+      location.start_line > 0 &&
+      location.start_column > 0 &&
+      location.end_line > 0 &&
+      location.end_column > 0 &&
       (
-        end_line > start_line ||
-        (end_line == start_line && end_column >= start_column)
+        location.end_line > location.start_line ||
+        (
+          location.end_line == location.start_line &&
+          location.end_column >= location.start_column
+        )
       ) else {
       continue
     }
     result.push(@language.Location::{
-      uri: model_uri_of(channel, Absolute(path)),
+      uri: model_uri_of(self.channel, Absolute(location.path)),
       range: @common.Range::Range(
-        start_line, start_column, end_line, end_column,
+        location.start_line,
+        location.start_column,
+        location.end_line,
+        location.end_column,
       ),
     })
   }
@@ -302,12 +295,27 @@ test "navigation root follows host absolute and workspace-relative paths" {
 
 ///|
 test "moon ide locations stay one based and channel routed" {
-  let reply =
-    #|{"locations":[{"path":"/ws/lib.mbt","start_line":2,"start_column":3,"end_line":2,"end_column":9},{"path":"/ws/bad.mbt","start_line":0,"start_column":1,"end_line":1,"end_column":1}]}
-  let locations = decode_moon_ide_locations(
-    reply,
-    @interop.ChannelId::Remote("device"),
-  )
+  let locations = MoonIdeProjection::{
+    reply: {
+      locations: [
+        {
+          path: "/ws/lib.mbt",
+          start_line: 2,
+          start_column: 3,
+          end_line: 2,
+          end_column: 9,
+        },
+        {
+          path: "/ws/bad.mbt",
+          start_line: 0,
+          start_column: 1,
+          end_line: 1,
+          end_column: 1,
+        },
+      ],
+    },
+    channel: @interop.ChannelId::Remote("device"),
+  }.to_viewer()
   assert_eq(locations.length(), 1)
   assert_true(
     model_uri_channel(locations[0].uri) == Some(Remote("device")) &&

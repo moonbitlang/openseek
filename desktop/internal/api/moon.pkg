@@ -1,7 +1,10 @@
 import {
   "openseek_desktop/internal/auth",
+  "openseek_desktop/internal/commands",
   "openseek_desktop/internal/engine",
+  "openseek_desktop/internal/endpoint",
   "openseek_desktop/internal/host",
+  "openseek_desktop/internal/protocol",
   "moonbitlang/async",
   "moonbitlang/core/json",
   "moonbitlang/x/path",

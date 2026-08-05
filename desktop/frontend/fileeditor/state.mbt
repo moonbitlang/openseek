@@ -354,7 +354,7 @@ pub(all) enum Msg {
   DiagnosticsLoaded(
     owner~ : @interop.ConversationKey,
     absolute~ : @pathx.Absolute,
-    diagnostics~ : Json
+    diagnostics~ : Array[@protocol.LspDiagnostic]
   )
   // A later diagnostics push from the host. The wire event is channel-scoped
   // but carries no session, so the main package first rejects background
@@ -362,7 +362,7 @@ pub(all) enum Msg {
   DiagnosticsPublished(
     channel~ : @interop.ChannelId,
     absolute~ : @pathx.Absolute,
-    diagnostics~ : Json
+    diagnostics~ : Array[@protocol.LspDiagnostic]
   )
   // The user commented on a selection in the editor viewer (the
   // agent-feedback inline input). NOT handled by this package's `update`:

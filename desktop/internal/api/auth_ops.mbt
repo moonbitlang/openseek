@@ -7,8 +7,8 @@
 ///|
 /// The current status. The fallback `server_url` is the settings' server
 /// selection — present only when that server has a relay to sign in to.
-async fn auth_status(state : ApiState) -> Json {
-  state.auth.status_json(server_url?=@engine.remote_server_base(state.manager))
+async fn auth_status(state : ApiState) -> @protocol.AuthStatusPayload {
+  state.auth.status(server_url?=@engine.remote_server_base(state.manager))
 }
 
 ///|
@@ -16,7 +16,7 @@ async fn auth_status(state : ApiState) -> Json {
 /// connector. Signed in already means "make sure the connector runs", not
 /// a second browser round-trip — every exchange mints a new device row
 /// server-side, so re-running the flow would duplicate the device.
-async fn auth_connect(state : ApiState) -> Json {
+async fn auth_connect(state : ApiState) -> @protocol.AuthStatusPayload {
   let store = state.auth
   if store.managed_by_env() {
     raise @host.HostError(
@@ -45,7 +45,7 @@ async fn auth_connect(state : ApiState) -> Json {
       if @engine.remote_server_base(state.manager) != Some(server_url) {
         // Publish the final local state even if cleanup itself raises after
         // clearing it.
-        defer state.hub.publish("auth.changed", store.status_json())
+        defer state.hub.publish(AuthChanged(store.status()))
         store.sign_out() catch {
           @auth.AuthError(message) =>
             raise @host.HostError(
@@ -60,7 +60,7 @@ async fn auth_connect(state : ApiState) -> Json {
           "the server changed during sign-in; connect again for the selected server",
         )
       }
-      state.hub.publish("auth.changed", store.status_json())
+      state.hub.publish(AuthChanged(store.status()))
     },
     resume_on_cancel=true,
   )
@@ -70,7 +70,7 @@ async fn auth_connect(state : ApiState) -> Json {
 ///|
 /// Sign out: the durable local clear wins, the relay-side revoke is
 /// best-effort, and the supervisor parks once poked.
-async fn auth_disconnect(state : ApiState) -> Json {
+async fn auth_disconnect(state : ApiState) -> @protocol.AuthStatusPayload {
   let store = state.auth
   if store.managed_by_env() {
     raise @host.HostError("remote access is configured through the environment")
@@ -80,7 +80,7 @@ async fn auth_disconnect(state : ApiState) -> Json {
       // `sign_out` has already cleared local authority and poked the
       // supervisor before cancellation can escape its local transition.
       @async.protect_from_cancel(
-        () => state.hub.publish("auth.changed", store.status_json()),
+        () => state.hub.publish(AuthChanged(store.status())),
         resume_on_cancel=true,
       )
       raise error
@@ -90,7 +90,7 @@ async fn auth_disconnect(state : ApiState) -> Json {
       // it writes the marker. Publish that truthful in-process state even
       // though the persistence failure must still reach the requester.
       @async.protect_from_cancel(
-        () => state.hub.publish("auth.changed", store.status_json()),
+        () => state.hub.publish(AuthChanged(store.status())),
         resume_on_cancel=true,
       )
       raise @host.HostError(message)
@@ -98,7 +98,7 @@ async fn auth_disconnect(state : ApiState) -> Json {
     error => raise @host.HostError("sign-out failed: \{error}")
   }
   @async.protect_from_cancel(() => {
-    state.hub.publish("auth.changed", store.status_json())
+    state.hub.publish(AuthChanged(store.status()))
   })
   auth_status(state)
 }
@@ -106,7 +106,7 @@ async fn auth_disconnect(state : ApiState) -> Json {
 ///|
 /// Abort an in-flight sign-in; the pending `auth.connect` settles with
 /// its own error. A no-op (current status) when nothing is in flight.
-async fn auth_cancel(state : ApiState) -> Json {
+async fn auth_cancel(state : ApiState) -> @protocol.AuthStatusPayload {
   ignore(state.auth.cancel_sign_in())
   auth_status(state)
 }
@@ -134,6 +134,6 @@ async fn sign_out_after_server_switch(state : ApiState) -> Unit {
         }
   }
   @async.protect_from_cancel(() => {
-    state.hub.publish("auth.changed", store.status_json())
+    state.hub.publish(AuthChanged(store.status()))
   })
 }

@@ -96,30 +96,16 @@ pub(all) struct LoadSessionRequest {
 }
 
 ///|
-struct StartReply {
-  run_id : String
-  status : String
-  exit_code : Int
-} derive(ToJson)
+type StartReply = @protocol.StartReply
 
 ///|
-struct CancelReply {
-  cancelled : Bool
-  run_id : String?
-} derive(ToJson)
+type CancelReply = @protocol.CancelReply
 
 ///|
-struct SteerReply {
-  steered : Bool
-  run_id : String?
-} derive(ToJson)
+type SteerReply = @protocol.SteerReply
 
 ///|
-struct CompactReply {
-  // Whether the compaction command reached a live engine for this
-  // conversation; the engine reports the actual progress through events.
-  compacting : Bool
-} derive(ToJson)
+type CompactReply = @protocol.CompactReply
 
 ///|
 /// One sidebar group of `list_sessions`: the conversations stored under one
@@ -128,84 +114,31 @@ struct CompactReply {
 /// basename). A group whose listing failed carries the engine's message in
 /// `error` and an empty `sessions` — one broken workspace must not take the
 /// whole sidebar down.
-struct SessionGroup {
-  workspace : String
-  name : String
-  session_root : String
-  sessions : Json
-  error : String
-} derive(ToJson)
+type SessionGroup = @protocol.SessionGroup
 
 ///|
-struct SessionsReply {
-  groups : Array[SessionGroup]
-} derive(ToJson)
+type SessionsReply = @protocol.SessionsReply
 
 ///|
-struct WorkspacesReply {
-  workspaces : Array[String]
-} derive(ToJson)
+type WorkspacesReply = @protocol.WorkspacesReply
 
 ///|
-struct LoadSessionReply {
-  session : Json
-  // The highest event sequence contained in `session` — the client's
-  // starting watermark: `session.event` commits at or below it are already
-  // in the snapshot, and the first fresh commit is watermark + 1.
-  watermark : Int
-} derive(ToJson)
+type LoadSessionReply = @protocol.LoadSessionReply
 
 ///|
-struct ConnectedPayload {
-  ready : Bool
-} derive(ToJson)
+type ConnectedPayload = @protocol.ConnectedPayload
 
 ///|
-struct StartedPayload {
-  run_id : String
-  task : String
-  submission_id : String?
-  engine : String
-  model : String
-  max_steps : Int
-  cwd : String?
-  session : String?
-  session_root : String?
-} derive(ToJson)
+type StartedPayload = @protocol.StartedPayload
 
 ///|
-struct EventPayload {
-  // The run this event belongs to — absent for events the engine emits
-  // before any run of this process's lifetime (a spawn for compaction).
-  run_id : String?
-  // The conversation the event belongs to (the engine's session key, "" for
-  // a session-less engine). Idle events — the compaction lifecycle and
-  // background notices — are routed by it: run-id routing needs a `Started`
-  // event this app-lifetime, which a conversation resumed and compacted
-  // before its first prompt never had.
-  session : String
-  event : Json
-} derive(ToJson)
+type EventPayload = @protocol.AgentEventPayload
 
 ///|
-pub struct FinishedPayload {
-  run_id : String
-  status : String
-  answer : String?
-  exit_code : Int?
-  // Present only after the host's follower completed its final durable scan.
-  // An abnormal process exit may have no Terminal item; this sequence is the
-  // exact chronology boundary clients can safely attach local notices to.
-  durable_sequence : Int?
-} derive(ToJson)
+pub type FinishedPayload = @protocol.FinishedPayload
 
 ///|
-struct ErrorPayload {
-  run_id : String?
-  message : String
-  exit_code : Int?
-  diagnostics : String?
-} derive(ToJson)
+type ErrorPayload = @protocol.AgentErrorPayload
 
 ///|
 /// One durably committed session event, broadcast as `session.event`. The
@@ -213,25 +146,16 @@ struct ErrorPayload {
 /// in the session's store file, and `sequence` is the item's one-based
 /// position there — contiguous per session, so a client can apply commits
 /// with a plain watermark (drop ≤ W, apply W+1, anything later is a gap and
-/// means reload). `event` is the store's event JSON verbatim
-/// (`{"sequence", "ts", "item"}`), exactly what a `session.load` snapshot
-/// carries in its `events` array.
-struct SessionCommitPayload {
-  session : String
-  sequence : Int
-  event : Json
-} derive(ToJson)
+/// means reload). `event` is the typed store event, exactly the value a
+/// `session.load` snapshot carries in its `events` array.
+type SessionCommitPayload = @protocol.SessionCommitPayload
 
 ///|
 /// A lifecycle finish emitted before a stubborn child could be reaped is
 /// later strengthened by this non-lifecycle boundary notification. Keeping it
 /// distinct avoids a second Finished (and duplicate system/client terminal
 /// side effects) for the same run.
-struct DurableBoundaryPayload {
-  run_id : String
-  session : String
-  sequence : Int
-} derive(ToJson)
+type DurableBoundaryPayload = @protocol.DurableBoundaryPayload
 
 ///|
 pub(all) enum EngineEvent {

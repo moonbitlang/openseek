@@ -108,7 +108,7 @@ impl @language.HoverProvider for LspHoverProvider with fn provide_hover(
   ) catch {
     _ => return None
   }
-  decode_hover(@interop.reply_json_text(reply), model)
+  HoverProjection::{ reply, model }.to_viewer()
 }
 
 ///|
@@ -129,56 +129,53 @@ async fn request_hover(
   path~ : @pathx.Absolute,
   line~ : Int,
   character~ : Int,
-) -> @js.Value {
-  let payload = @js.Object::new()
-  payload["path"] = path.0
-  payload["line"] = line
-  payload["character"] = character
-  @interop.bridge_request(channel, "lsp.hover", payload.to_value())
+) -> @protocol.LspHoverReply {
+  @interop.bridge_request(channel, @commands.lsp_hover, {
+    path: path.0,
+    line,
+    character,
+  })
 }
 
 ///|
-/// Decode the host's flat hover reply into a viewer `Hover`. `None` when the
-/// reply has no text. The range comes back as LSP line/character positions,
-/// which the model's snapshot converts to the document offsets `Range` uses.
-fn decode_hover(text : String, model : @model.TextModel) -> @language.Hover? {
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) else { return None }
+/// The typed host hover reply together with the document snapshot needed to
+/// project its LSP coordinates into Viewer coordinates.
+priv struct HoverProjection {
+  reply : @protocol.LspHoverReply
+  model : @model.TextModel
+}
+
+///|
+fn HoverProjection::to_viewer(self : HoverProjection) -> @language.Hover? {
   // `value` is always on the wire; the host says "no hover here" with "".
-  guard @jsonx.json_text(reply, "value") is Some(value) && !value.is_empty() else {
-    return None
-  }
-  let content = if reply.get("markdown") is Some(True) {
-    @language.HoverContent::Markdown(value)
+  guard !self.reply.value.is_empty() else { return None }
+  let content = if self.reply.markdown {
+    @language.HoverContent::Markdown(self.reply.value)
   } else {
-    @language.HoverContent::PlainText(value)
+    @language.HoverContent::PlainText(self.reply.value)
   }
-  Some(@language.Hover::{
-    range: hover_range(reply, model),
-    contents: [content],
-  })
+  Some(@language.Hover::{ range: self.range(), contents: [content] })
 }
 
 ///|
 /// The offset range the tooltip highlights. An empty range at the document
 /// start when the reply carries none (`has_range` unset) — or when a
 /// position field is malformed, which reads the same way.
-fn hover_range(
-  reply : Map[String, Json],
-  model : @model.TextModel,
-) -> @common.Range {
-  let snapshot = model.snapshot()
-  guard reply.get("has_range") is Some(True) &&
-    @jsonx.json_int(reply, "start_line") is Some(start_line) &&
-    @jsonx.json_int(reply, "start_character") is Some(start_character) &&
-    @jsonx.json_int(reply, "end_line") is Some(end_line) &&
-    @jsonx.json_int(reply, "end_character") is Some(end_character) else {
+fn HoverProjection::range(self : HoverProjection) -> @common.Range {
+  let snapshot = self.model.snapshot()
+  guard self.reply.has_range else {
     return snapshot.range_of(@common.OffsetRange::empty_at(0))
   }
   // The reply carries 0-based LSP positions; shift to the viewer's 1-based
   // line/column, then round-trip through offsets so the range stays clamped.
-  let start = snapshot.get_offset_at(start_line + 1, start_character + 1)
-  let end = snapshot.get_offset_at(end_line + 1, end_character + 1)
+  let start = snapshot.get_offset_at(
+    self.reply.start_line + 1,
+    self.reply.start_character + 1,
+  )
+  let end = snapshot.get_offset_at(
+    self.reply.end_line + 1,
+    self.reply.end_character + 1,
+  )
   snapshot.range_of(@common.OffsetRange::from_to(start, end))
 }
 
@@ -199,9 +196,10 @@ fn request_diagnostics(
       let reply = request_lsp_open(channel=owner.channel, path=absolute) catch {
         _ => return
       }
-      let diagnostics = reply_diagnostics(@interop.reply_json_text(reply))
       scheduler.add(
-        dispatch(DiagnosticsLoaded(owner~, absolute~, diagnostics~)),
+        dispatch(
+          DiagnosticsLoaded(owner~, absolute~, diagnostics=reply.diagnostics),
+        ),
       )
     })
   })
@@ -212,59 +210,43 @@ fn request_diagnostics(
 async fn request_lsp_open(
   channel~ : @interop.ChannelId,
   path~ : @pathx.Absolute,
-) -> @js.Value {
-  let payload = @js.Object::new()
-  payload["path"] = path.0
-  @interop.bridge_request(channel, "lsp.open", payload.to_value())
+) -> @protocol.LspDiagnosticsReply {
+  @interop.bridge_request(channel, @commands.lsp_open, { path: path.0 })
 }
 
 ///|
-/// The `diagnostics` array from an `lsp_open` reply; an empty array when the
-/// reply is malformed or the server has none.
-fn reply_diagnostics(text : String) -> Json {
-  let json = @json.parse(text) catch { _ => return [] }
-  guard json is Object(reply) && reply.get("diagnostics") is Some(diagnostics) else {
-    return []
-  }
-  diagnostics
+/// A typed diagnostics batch projected into Viewer's diagnostic model.
+priv struct DiagnosticsProjection(Array[@protocol.LspDiagnostic])
+
+///|
+fn DiagnosticsProjection::to_viewer(
+  self : DiagnosticsProjection,
+) -> Array[@language.Diagnostic] {
+  self.0.map(diagnostic => DiagnosticProjection(diagnostic).to_viewer())
 }
 
 ///|
-/// Decode a raw LSP `diagnostics` array into the viewer's `Diagnostic` shape.
+/// One typed LSP diagnostic projected into Viewer's `Diagnostic` shape.
 /// LSP positions are 0-based; the viewer's ranges are 1-based, so each bound
-/// shifts by one. An item without a range or message is skipped.
-fn decode_diagnostics(diagnostics : Json) -> Array[@language.Diagnostic] {
-  guard diagnostics is Array(items) else { return [] }
-  let result : Array[@language.Diagnostic] = []
-  for item in items {
-    guard item is Object(fields) else { continue }
-    // LSP requires `range` (with all four positions) and `message`; an item
-    // missing any is malformed and skipped. `severity` really is optional.
-    guard fields.get("range")
-      is Some(Object({ "start": Object(start), "end": Object(end_), .. })) &&
-      @jsonx.json_int(start, "line") is Some(start_line) &&
-      @jsonx.json_int(start, "character") is Some(start_character) &&
-      @jsonx.json_int(end_, "line") is Some(end_line) &&
-      @jsonx.json_int(end_, "character") is Some(end_character) else {
-      continue
-    }
-    guard @jsonx.json_text(fields, "message") is Some(message) &&
-      !message.is_empty() else {
-      continue
-    }
-    result.push(@language.Diagnostic::{
-      range: @common.Range::Range(
-        start_line + 1,
-        start_character + 1,
-        end_line + 1,
-        end_character + 1,
-      ),
-      severity: diagnostic_severity(@jsonx.json_int(fields, "severity")),
-      message,
-      tags: decode_diagnostic_tags(fields),
-    })
+/// shifts by one. Malformed rows have already been dropped at the LSP adapter.
+priv struct DiagnosticProjection(@protocol.LspDiagnostic)
+
+///|
+fn DiagnosticProjection::to_viewer(
+  self : DiagnosticProjection,
+) -> @language.Diagnostic {
+  let diagnostic = self.0
+  @language.Diagnostic::{
+    range: @common.Range::Range(
+      diagnostic.range.start.line + 1,
+      diagnostic.range.start.character + 1,
+      diagnostic.range.end.line + 1,
+      diagnostic.range.end.character + 1,
+    ),
+    severity: diagnostic_severity(diagnostic.severity),
+    message: diagnostic.message,
+    tags: self.tags(),
   }
-  result
 }
 
 ///|
@@ -284,15 +266,15 @@ fn diagnostic_severity(value : Int?) -> @language.DiagnosticSeverity {
 /// Decode the optional LSP `tags` array (`Unnecessary=1`, `Deprecated=2`) that
 /// drives the viewer's faded/struck-through rendering. `None` when there are
 /// none, so the diagnostic carries no tag list at all.
-fn decode_diagnostic_tags(
-  fields : Map[String, Json],
+fn DiagnosticProjection::tags(
+  self : DiagnosticProjection,
 ) -> Array[@language.DiagnosticTag]? {
-  guard fields.get("tags") is Some(Array(items)) else { return None }
+  guard self.0.tags is Some(items) else { return None }
   let tags : Array[@language.DiagnosticTag] = []
   for item in items {
     match item {
-      Number(1, ..) => tags.push(Unnecessary)
-      Number(2, ..) => tags.push(Deprecated)
+      1 => tags.push(Unnecessary)
+      2 => tags.push(Deprecated)
       _ => ()
     }
   }

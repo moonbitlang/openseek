@@ -2,6 +2,7 @@ import {
   "openseek_desktop/internal/entropy",
   "openseek_desktop/internal/fsx",
   "openseek_desktop/internal/platform",
+  "openseek_desktop/internal/protocol",
   "openseek_desktop/internal/uri",
   "moonbitlang/async",
   "moonbitlang/async/fs",

@@ -1,6 +1,6 @@
-// Which engine host a request is for. Every feature package names its
-// channel in `bridge_request(channel, op, payload)`; the channel picks the
-// transport while method names and payloads stay identical either way
+// Which engine host a request is for. Every feature package passes a typed
+// `Request` to `bridge_request`; the channel only chooses the transport. The
+// request becomes a method name plus JSON at that transport's edge
 // (docs/remote-protocol.md).
 
 ///|

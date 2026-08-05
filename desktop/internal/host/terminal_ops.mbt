@@ -3,24 +3,13 @@
 // per-session sequence so a client can retry an acknowledgement safely.
 
 ///|
-priv struct TerminalOpenPayload {
-  session : String
-  workspace : String?
-  cols : Int
-  rows : Int
-} derive(FromJson)
+type TerminalOpenPayload = @protocol.TerminalOpenPayload
 
 ///|
-priv struct TerminalOpenReply {
-  id : Int
-} derive(ToJson)
+type TerminalOpenReply = @protocol.TerminalOpenReply
 
 ///|
-priv struct TerminalInputPayload {
-  id : Int
-  data : String?
-  data_base64 : String?
-} derive(FromJson)
+type TerminalInputPayload = @protocol.TerminalInputPayload
 
 ///|
 fn TerminalInputPayload::bytes(
@@ -37,35 +26,26 @@ fn TerminalInputPayload::bytes(
 }
 
 ///|
-priv struct TerminalResizePayload {
-  id : Int
-  cols : Int
-  rows : Int
-} derive(FromJson)
+type TerminalResizePayload = @protocol.TerminalResizePayload
 
 ///|
-priv struct TerminalAckPayload {
-  id : Int
-  sequence : Int
-} derive(FromJson)
+type TerminalAckPayload = @protocol.TerminalAckPayload
 
 ///|
-priv struct TerminalClosePayload {
-  id : Int
-} derive(FromJson)
+type TerminalClosePayload = @protocol.TerminalClosePayload
 
 ///|
 priv struct TerminalOutputPayload {
   id : Int
   sequence : Int
   data : String
-} derive(ToJson)
+}
 
 ///|
 priv struct TerminalExitPayload {
   id : Int
   code : Int
-} derive(ToJson)
+}
 
 ///|
 async fn terminal_open_op(

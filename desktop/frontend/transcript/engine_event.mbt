@@ -47,14 +47,13 @@ pub(all) enum EngineEvent {
 }
 
 ///|
-/// Normalize the raw engine-event JSON into a typed event. Unknown event
-/// names — and events missing a field the engine emits unconditionally —
-/// decode to `None` and are dropped at the bridge, so neither the
-/// stringly-typed tag nor a fabricated placeholder ever escapes into the
-/// update logic.
-pub fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
-  guard @protocol.parse(Json::object(raw)) is Some(event) else { return None }
-  match event {
+/// Project the shared typed engine event into the subset rendered by the
+/// transcript. Unknown wire events were rejected before this function; `None`
+/// means a known event that intentionally has no desktop presentation.
+pub fn decode_engine_event(
+  stream : @desktop_protocol.AgentStreamEvent,
+) -> EngineEvent? {
+  match stream.event {
     AgentStep(step~) => Some(AgentStep(Some(step)))
     AssistantDelta(content~) => Some(AssistantDelta(content))
     ReasoningMessage(content~) => Some(ReasoningMessage(content))
@@ -80,19 +79,9 @@ pub fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
     MaxStepsExhausted => Some(MaxStepsExhausted)
     AgentSetupFailed(error~) => Some(AgentSetupFailed(error))
     SteerApplied(content~, ..) =>
-      Some(
-        SteerApplied(
-          content~,
-          submission_id=@jsonx.json_text(raw, "submission_id"),
-        ),
-      )
+      Some(SteerApplied(content~, submission_id=stream.submission_id))
     SteerDropped(content~) =>
-      Some(
-        SteerDropped(
-          content~,
-          submission_id=@jsonx.json_text(raw, "submission_id"),
-        ),
-      )
+      Some(SteerDropped(content~, submission_id=stream.submission_id))
     AutoCompactionFinished(summary~, ..) =>
       Some(AutoCompactionFinished(summary))
     CompactionStarted(..) => Some(CompactionStarted)
@@ -148,9 +137,15 @@ pub fn decode_engine_event(raw : Map[String, Json]) -> EngineEvent? {
 }
 
 ///|
-fn event_fields(json : Json) -> Map[String, Json] raise {
-  guard json is Object(fields) else { fail("expected a JSON object") }
-  fields
+fn event_fields(json : Json) -> @desktop_protocol.AgentStreamEvent raise {
+  guard @protocol.parse(json) is Some(event) else {
+    fail("expected a known engine event")
+  }
+  let submission_id = match json {
+    Object(fields) => @jsonx.json_text(fields, "submission_id")
+    _ => None
+  }
+  { event, submission_id }
 }
 
 ///|
@@ -198,26 +193,28 @@ test "decode normalizes numbers and unknown events" {
     )
     is Some(Usage(prompt_tokens=5, completion_tokens=7)),
   )
-  // A usage event whose counters are not where the engine writes them is
-  // malformed and dropped, never fabricated as zeros.
-  assert_true(
-    decode_engine_event(
-      event_fields({
-        "event": "usage",
-        "prompt_tokens": 5,
-        "completion_tokens": 7,
-      }),
-    )
-    is None,
-  )
-  // A tool_result missing fields the engine emits unconditionally is
-  // dropped too.
-  assert_true(
-    decode_engine_event(
-      event_fields({ "event": "tool_result", "tool_name": "read" }),
-    )
-    is None,
-  )
+  // Malformed wire events are rejected before the typed projection rather
+  // than reaching it with fabricated defaults.
+  let malformed_usage : @desktop_protocol.AgentStreamEvent? = try
+    @json.from_json({
+      "event": "usage",
+      "prompt_tokens": 5,
+      "completion_tokens": 7,
+    })
+  catch {
+    _ => None
+  } noraise {
+    event => Some(event)
+  }
+  assert_true(malformed_usage is None)
+  let malformed_tool : @desktop_protocol.AgentStreamEvent? = try
+    @json.from_json({ "event": "tool_result", "tool_name": "read" })
+  catch {
+    _ => None
+  } noraise {
+    event => Some(event)
+  }
+  assert_true(malformed_tool is None)
   // `brief` is the one genuinely optional field: absent when the tool
   // supplied none (or the call was skipped).
   assert_true(
@@ -245,7 +242,6 @@ test "decode normalizes numbers and unknown events" {
     )
     is Some(ToolResult(brief=None, ..)),
   )
-  assert_true(decode_engine_event(event_fields({ "event": "novel" })) is None)
 }
 
 ///|

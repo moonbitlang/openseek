@@ -60,9 +60,7 @@ async fn SelfUpdate::cleanup(self : SelfUpdate) -> Unit {
 /// The channel half of `check_update` / `download_update`. Anything but the
 /// literal "staging" reads as production, so a stale stored value can only
 /// fall back to the safe default.
-priv struct UpdateChannelPayload {
-  channel : String?
-} derive(FromJson)
+type UpdateChannelPayload = @protocol.UpdateChannelPayload
 
 ///|
 fn UpdateChannelPayload::to_channel(
@@ -82,40 +80,7 @@ fn UpdateChannelPayload::to_channel(
 /// captive portals (log material), `unreachable` is routine offline life.
 /// An available release carries an optional actionable reason when this
 /// installation itself cannot be replaced.
-priv enum CheckUpdateReply {
-  UpToDate
-  Available(
-    version~ : String,
-    installable~ : Bool,
-    unavailable_reason~ : String?
-  )
-  Unreachable(reason~ : String)
-  Malformed(reason~ : String)
-  Broken(version~ : String, reason~ : String)
-}
-
-///|
-impl ToJson for CheckUpdateReply with fn to_json(self) {
-  match self {
-    UpToDate => { "kind": "up_to_date" }
-    Available(version~, installable~, unavailable_reason~) => {
-      let unavailable_reason = match unavailable_reason {
-        Some(reason) => Json::string(reason)
-        None => Json::null()
-      }
-      {
-        "kind": "available",
-        "version": version,
-        "installable": installable,
-        "unavailable_reason": unavailable_reason,
-      }
-    }
-    Unreachable(reason~) => { "kind": "unreachable", "reason": reason }
-    Malformed(reason~) => { "kind": "malformed", "reason": reason }
-    Broken(version~, reason~) =>
-      { "kind": "broken", "version": version, "reason": reason }
-  }
-}
+type CheckUpdateReply = @protocol.CheckUpdateReply
 
 ///|
 /// Ask the channel's manifest for a newer release. `installable` reports
@@ -166,34 +131,7 @@ async fn SelfUpdate::check(
 ///|
 /// The immediate `update.download` reply. Completion arrives separately as
 /// `update.downloaded` or `update.download_failed` from the host-owned pump.
-priv struct DownloadUpdateAcceptedReply {
-  accepted : Bool
-} derive(ToJson)
-
-///|
-/// Reply carried by `update.downloaded`: the version now staged and verified.
-priv struct DownloadUpdateReply {
-  version : String
-} derive(ToJson)
-
-///|
-/// Bytes received for the active package. `total_bytes` is absent only when
-/// the server omitted a usable Content-Length header.
-priv struct DownloadUpdateProgress {
-  downloaded_bytes : Int
-  total_bytes : Int?
-}
-
-///|
-fn DownloadUpdateProgress::to_json(self : DownloadUpdateProgress) -> Json {
-  {
-    "downloaded_bytes": Json::number(self.downloaded_bytes.to_double()),
-    "total_bytes": match self.total_bytes {
-      Some(total) => Json::number(total.to_double())
-      None => Json::null()
-    },
-  }
-}
+type DownloadUpdateAcceptedReply = @protocol.DownloadUpdateAcceptedReply
 
 ///|
 /// Accept one download for the app-lifetime pump, or say why not. The
@@ -228,7 +166,7 @@ fn SelfUpdate::start_download(
 async fn SelfUpdate::download_package(
   self : SelfUpdate,
   payload : UpdateChannelPayload,
-  emit : async (String, Json) -> Unit,
+  emit : async (@protocol.Notification) -> Unit,
 ) -> @update.StagedUpdate {
   guard self.work_dir is Some(dir) && self.bundle_path is Some(bundle) else {
     raise HostError("this build cannot install updates")
@@ -249,8 +187,7 @@ async fn SelfUpdate::download_package(
     downloaded_bytes,
     total_bytes,
   ) {
-    let progress : DownloadUpdateProgress = { downloaded_bytes, total_bytes }
-    emit("update.download_progress", progress.to_json())
+    emit(UpdateDownloadProgress({ downloaded_bytes, total_bytes }))
   }) catch {
     error if @async.is_being_cancelled() => raise error
     error => {
@@ -276,7 +213,7 @@ async fn SelfUpdate::download_package(
 /// acceptance until the matching completion notification.
 async fn SelfUpdate::run(
   self : SelfUpdate,
-  emit : async (String, Json) -> Unit,
+  emit : async (@protocol.Notification) -> Unit,
 ) -> Unit {
   // A closed queue turns later `update.download` requests into rejections
   // instead of accepted work nobody will perform.
@@ -298,14 +235,13 @@ async fn SelfUpdate::run(
         } else {
           "\{error}"
         }
-        emit("update.download_failed", { "message": Json::string(message) })
+        emit(UpdateDownloadFailed({ message, }))
       }
     } noraise {
       staged => {
         self.staged = Some(staged)
         self.busy = false
-        let reply : DownloadUpdateReply = { version: staged.version }
-        emit("update.downloaded", ToJson::to_json(reply))
+        emit(UpdateDownloaded({ version: staged.version }))
       }
     }
   }
@@ -380,16 +316,17 @@ test "self-update rejects downloads unsupported by this build" {
 ///|
 async test "self-update pump reports download failures" {
   let updates = SelfUpdate::new(None, None)
-  let events : @async.Queue[(String, Json)] = Queue(kind=Blocking(1))
+  let events : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(1))
   @async.with_task_group(group => {
     group.spawn_bg(allow_failure=true, () => {
-      updates.run(async fn(method_, params) { events.put((method_, params)) })
+      updates.run(async fn(notification) { events.put(notification) })
     })
     // Bypass `start_download` so even this unsupported build reaches the
     // pump's failure path deterministically, with no network involved.
     updates.downloads.put({ channel: None })
-    let (method_, params) = @async.with_timeout(1000, () => events.get())
-    assert_eq(method_, "update.download_failed")
+    let notification = @async.with_timeout(1000, () => events.get())
+    assert_eq(notification.wire_name(), "update.download_failed")
+    let params = notification.params()
     assert_true(
       params is { "message": String("this build cannot install updates"), .. },
     )
@@ -420,25 +357,4 @@ async test "self-update apply refuses while a download is active" {
     error => raise error
   }
   assert_true(still_downloading)
-}
-
-///|
-test "download progress serializes an optional total" {
-  let known : DownloadUpdateProgress = {
-    downloaded_bytes: 42,
-    total_bytes: Some(100),
-  }
-  assert_true(
-    known.to_json()
-    is {
-      "downloaded_bytes": Number(42.0, ..),
-      "total_bytes": Number(100.0, ..),
-      ..
-    },
-  )
-  let unknown : DownloadUpdateProgress = {
-    downloaded_bytes: 42,
-    total_bytes: None,
-  }
-  assert_true(unknown.to_json() is { "total_bytes": Null, .. })
 }

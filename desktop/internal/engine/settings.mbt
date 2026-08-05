@@ -159,18 +159,17 @@ pub(all) struct SettingsPatch {
 ///|
 /// The `settings.get`/`settings.set` reply, and the `settings.changed`
 /// broadcast params. Key material never leaves the host — only presence.
-fn settings_status_json(settings : EngineSettings, revision : Int) -> Json {
-  let status : Map[String, Json] = Map([])
-  status["revision"] = Json::number(revision.to_double())
-  status["provider"] = Json::string(settings.provider.wire())
-  if settings.custom_api_url is Some(url) {
-    status["custom_api_url"] = Json::string(url)
+fn settings_status_payload(
+  settings : EngineSettings,
+  revision : Int,
+) -> @protocol.SettingsStatusPayload {
+  {
+    revision,
+    provider: settings.provider.wire(),
+    custom_api_url: settings.custom_api_url,
+    has_deepseek_key: settings.deepseek_api_key is Some(_),
+    has_custom_key: settings.custom_api_key is Some(_),
   }
-  status["has_deepseek_key"] = Json::boolean(
-    settings.deepseek_api_key is Some(_),
-  )
-  status["has_custom_key"] = Json::boolean(settings.custom_api_key is Some(_))
-  Json::object(status)
 }
 
 ///|
@@ -187,9 +186,11 @@ async fn EngineManager::settings_snapshot(
 
 ///|
 /// The `settings.get` reply.
-pub async fn settings_status(manager : EngineManager) -> Json {
+pub async fn settings_status(
+  manager : EngineManager,
+) -> @protocol.SettingsStatusPayload {
   let (settings, revision) = manager.settings_snapshot()
-  settings_status_json(settings, revision)
+  settings_status_payload(settings, revision)
 }
 
 ///|
@@ -200,8 +201,8 @@ pub async fn update_settings(
   manager : EngineManager,
   patch : SettingsPatch,
   legacy_migration? : Bool = false,
-  on_committed? : (Json) -> Unit,
-) -> Json {
+  on_committed? : (@protocol.SettingsStatusPayload) -> Unit,
+) -> @protocol.SettingsStatusPayload {
   manager.settings_lock.acquire()
   defer manager.settings_lock.release()
   guard manager.runtime_dir is Some(dir) else {
@@ -224,7 +225,7 @@ pub async fn update_settings(
     raw.get("deepseek_api_key") is Some(_) ||
     raw.get("custom_api_key") is Some(_)
   if legacy_migration && store_claimed {
-    return settings_status_json(current, manager.settings_revision)
+    return settings_status_payload(current, manager.settings_revision)
   }
   if patch.provider is Some(value) {
     guard ApiProvider::parse(value.trim().to_owned()) is Some(provider) else {
@@ -246,7 +247,7 @@ pub async fn update_settings(
   // before revision 1. The API shields this finite commit+broadcast section
   // from requester cancellation.
   manager.settings_revision = manager.settings_revision + 1
-  let status = settings_status_json(
+  let status = settings_status_payload(
     decode_settings(raw),
     manager.settings_revision,
   )
@@ -437,7 +438,7 @@ async test "a saved key round-trips as presence, never as text" {
       "has_custom_key": false,
     })
     // The status never carries the key; the file carries it trimmed.
-    assert_false(status.stringify().contains("sk-secret"))
+    assert_false(status.to_json().stringify().contains("sk-secret"))
     let text = @fsx.read_text(settings_file(dir))
     assert_true(text.contains("\"sk-secret\""))
     let reloaded = load_engine_settings(manager.runtime_dir)
@@ -538,14 +539,14 @@ async test "legacy migration cannot replay over a newer settings write" {
       },
       legacy_migration=true,
     )
-    assert_eq(settings_revision(migrated), 1)
+    assert_eq(migrated.revision, 1)
     let modern = update_settings(manager, {
       provider: Some("custom"),
       custom_api_url: Some("https://new.example/chat"),
       deepseek_api_key: Some(""),
       custom_api_key: Some("sk-new"),
     })
-    assert_eq(settings_revision(modern), 2)
+    assert_eq(modern.revision, 2)
     // This is the desktop retry after the first migration's reply was lost.
     // It gets the current status so the client can clear localStorage, but
     // neither advances the revision nor restores the stale values.
@@ -559,21 +560,12 @@ async test "legacy migration cannot replay over a newer settings write" {
       },
       legacy_migration=true,
     )
-    assert_eq(settings_revision(replay), 2)
+    assert_eq(replay.revision, 2)
     let current = load_engine_settings(manager.runtime_dir)
     assert_true(current.provider is Custom)
     assert_true(current.deepseek_api_key is None)
     assert_true(current.custom_api_key is Some("sk-new"))
   })
-}
-
-///|
-fn settings_revision(status : Json) -> Int {
-  guard status is Object(fields) &&
-    fields.get("revision") is Some(Number(revision, ..)) else {
-    return -1
-  }
-  revision.to_int()
 }
 
 ///|
@@ -596,7 +588,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
             deepseek_api_key: Some("sk-concurrent"),
             custom_api_key: None,
           },
-          on_committed=fn(status) { committed.push(settings_revision(status)) },
+          on_committed=fn(status) { committed.push(status.revision) },
         )
       })
       let custom = group.spawn(() => {
@@ -609,7 +601,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
             deepseek_api_key: None,
             custom_api_key: Some("sk-custom"),
           },
-          on_committed=fn(status) { committed.push(settings_revision(status)) },
+          on_committed=fn(status) { committed.push(status.revision) },
         )
       })
       ready.get()
@@ -617,10 +609,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
       manager.settings_lock.release()
       let endpoint_status = endpoint.wait()
       let custom_status = custom.wait()
-      let revisions = [
-        settings_revision(endpoint_status),
-        settings_revision(custom_status),
-      ]
+      let revisions = [endpoint_status.revision, custom_status.revision]
       revisions.sort()
       assert_eq(revisions, [1, 2])
     })
@@ -638,7 +627,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
     assert_true(fields.get("custom_api_key") is Some(String("sk-custom")))
     // Revision is a host-process epoch, not a persistence-format change.
     assert_true(fields.get("revision") is None)
-    assert_eq(settings_revision(settings_status(manager)), 2)
+    assert_eq(settings_status(manager).revision, 2)
   })
 }
 

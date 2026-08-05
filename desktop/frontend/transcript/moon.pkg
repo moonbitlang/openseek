@@ -1,6 +1,7 @@
 import {
   "bobzhang/openseek_protocol" @protocol,
   "moonbitlang/core/json",
+  "openseek_desktop/internal/protocol" @desktop_protocol,
   "openseek_desktop/internal/jsonx",
 }
 

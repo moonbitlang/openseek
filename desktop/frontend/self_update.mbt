@@ -130,39 +130,14 @@ priv enum UpdateCheck {
 }
 
 ///|
-fn decode_update_check(text : String) -> UpdateCheck? {
-  // Every kind's fields are unconditional on the wire; a reply missing one
-  // is malformed and reads as `None` (the caller folds that into
-  // `CheckUnreachable`).
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) else { return None }
-  let reason = @jsonx.json_text(reply, "reason")
-  guard @jsonx.json_text(reply, "kind") is Some(kind) else { return None }
-  match kind {
-    "up_to_date" => Some(CheckUpToDate)
-    "available" => {
-      guard @jsonx.json_text(reply, "version") is Some(version) &&
-        @jsonx.json_bool(reply, "installable") is Some(installable) else {
-        return None
-      }
-      Some(
-        CheckFound(
-          version~,
-          installable~,
-          unavailable_reason=@jsonx.json_text(reply, "unavailable_reason"),
-        ),
-      )
-    }
-    "unreachable" => reason.map(reason => CheckUnreachable(reason~))
-    "malformed" => reason.map(reason => CheckMalformed(reason~))
-    "broken" => {
-      guard @jsonx.json_text(reply, "version") is Some(version) &&
-        reason is Some(reason) else {
-        return None
-      }
-      Some(CheckBroken(version~, reason~))
-    }
-    _ => None
+fn UpdateCheck::from_reply(reply : @protocol.CheckUpdateReply) -> UpdateCheck {
+  match reply {
+    @protocol.UpToDate => CheckUpToDate
+    @protocol.Available(version~, installable~, unavailable_reason~) =>
+      CheckFound(version~, installable~, unavailable_reason~)
+    @protocol.Unreachable(reason~) => CheckUnreachable(reason~)
+    @protocol.Malformed(reason~) => CheckMalformed(reason~)
+    @protocol.Broken(version~, reason~) => CheckBroken(version~, reason~)
   }
 }
 
@@ -177,20 +152,13 @@ fn check_for_updates(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["channel"] = channel.wire()
       let result = try {
         // Self-update always targets the page's own desktop host, never a
         // focused remote device.
-        let reply = @interop.bridge_request(
-          Local,
-          "update.check",
-          payload.to_value(),
-        )
-        match decode_update_check(@interop.reply_json_text(reply)) {
-          Some(result) => result
-          None => CheckUnreachable(reason="the host answered unintelligibly")
-        }
+        let reply = @interop.bridge_request(Local, @commands.update_check, {
+          channel: Some(channel.wire()),
+        })
+        UpdateCheck::from_reply(reply)
       } catch {
         error => CheckUnreachable(reason=@interop.bridge_error_text(error))
       }
@@ -210,20 +178,18 @@ fn download_update(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["channel"] = channel.wire()
-      let _ : @js.Value = @interop.bridge_request(
-        Local,
-        "update.download",
-        payload.to_value(),
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(UpdateFailed(message=@interop.bridge_error_text(error))),
-          )
-          return
-        }
-      }
+      ignore(
+        @interop.bridge_request(Local, @commands.update_download, {
+          channel: Some(channel.wire()),
+        }) catch {
+          error => {
+            scheduler.add(
+              dispatch(UpdateFailed(message=@interop.bridge_error_text(error))),
+            )
+            return
+          }
+        },
+      )
     })
   })
 }

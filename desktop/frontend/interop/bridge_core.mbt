@@ -25,15 +25,17 @@ pub fn openseek_api() -> @js.Value? {
 }
 
 ///|
-/// Call one engine-host method on a channel and wait for its reply. Raises
-/// when the transport is missing/down, the call throws, or the host rejects
-/// the method.
-pub async fn bridge_request(
+/// Call one typed Desktop command on a channel and wait for its concrete
+/// reply. The command value fixes both generic types, so a caller cannot send
+/// one command's payload under another command name or decode the wrong reply.
+pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request(
   channel : ChannelId,
-  op : String,
-  payload : @js.Value,
-) -> @js.Value {
-  match channel {
+  command : @commands.Command[Payload, Reply],
+  payload : Payload,
+) -> Reply {
+  let op = command.name()
+  let payload = @js.Value::from_json(payload.to_json())
+  let reply = match channel {
     Local => {
       guard openseek_api() is Some(api) && js_prop(api, op) is Some(_) else {
         raise BridgeError("OpenSeek bridge unavailable")
@@ -41,6 +43,16 @@ pub async fn bridge_request(
       js_method_promise(api, op, payload).wait()
     }
     Remote(_) => ws_request(channel, op, payload)
+  }
+  let json = if reply.is_undefined() || reply.is_null() {
+    Json::empty_object()
+  } else {
+    reply.to_json() catch {
+      _ => raise BridgeError("Malformed reply from {op}")
+    }
+  }
+  @json.from_json(json) catch {
+    _ => raise BridgeError("Malformed reply from {op}")
   }
 }
 
@@ -72,12 +84,14 @@ extern "js" fn js_ordered_method_promise(
 /// not two independent queries, so Proton must not reorder their entry into
 /// the connection's actor. Remote requests use the same call site; their
 /// socket reader additionally preserves these two methods' wire order.
-pub async fn bridge_request_in_order(
+pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(
   channel : ChannelId,
-  op : String,
-  payload : @js.Value,
-) -> @js.Value {
-  match channel {
+  command : @commands.Command[Payload, Reply],
+  payload : Payload,
+) -> Reply {
+  let op = command.name()
+  let payload = @js.Value::from_json(payload.to_json())
+  let reply = match channel {
     Local => {
       guard openseek_api() is Some(api) && js_prop(api, op) is Some(_) else {
         raise BridgeError("OpenSeek bridge unavailable")
@@ -85,6 +99,16 @@ pub async fn bridge_request_in_order(
       js_ordered_method_promise(api, op, payload).wait()
     }
     Remote(_) => ws_request(channel, op, payload)
+  }
+  let json = if reply.is_undefined() || reply.is_null() {
+    Json::empty_object()
+  } else {
+    reply.to_json() catch {
+      _ => raise BridgeError("Malformed reply from {op}")
+    }
+  }
+  @json.from_json(json) catch {
+    _ => raise BridgeError("Malformed reply from {op}")
   }
 }
 
@@ -125,39 +149,4 @@ pub fn bridge_error_is_definite(error : Error) -> Bool {
 fn browser_rpc_error_is_definite(value : @js.Value) -> Bool {
   js_prop(value, "__openseek_rpc_rejection") is Some(marker) &&
   (@js.Cast::into(marker) : Bool?) is Some(true)
-}
-
-///|
-/// The op reply as JSON text for the reply decoders. A reply of
-/// `undefined`/`null` (an op that returned nothing) reads as the empty
-/// object; an unserializable reply reads as malformed input.
-pub fn reply_json_text(reply : @js.Value) -> String {
-  if reply.is_undefined() || reply.is_null() {
-    return "{}"
-  }
-  reply.to_json_string() catch {
-    _ => ""
-  }
-}
-
-///|
-/// Set `payload[key]` to the trimmed `value`, omitting it entirely when
-/// blank — the host documents that a present field always carries
-/// non-blank text.
-pub fn set_trimmed(payload : @js.Object, key : String, value : String) -> Unit {
-  let text = value.trim().to_owned()
-  if !text.is_empty() {
-    payload[key] = text
-  }
-}
-
-///|
-/// Attach the workspace hint to an op payload, when the conversation has one.
-pub fn set_workspace(
-  payload : @js.Object,
-  workspace : @pathx.Absolute?,
-) -> Unit {
-  if workspace is Some(workspace) {
-    set_trimmed(payload, "workspace", workspace.0)
-  }
 }

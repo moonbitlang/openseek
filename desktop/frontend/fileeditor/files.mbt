@@ -17,14 +17,14 @@ fn read_directory(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["session"] = owner.session
-      payload["path"] = path.0
-      @interop.set_workspace(payload, workspace)
       let reply = @interop.bridge_request(
         owner.channel,
-        "fs.read_directory",
-        payload.to_value(),
+        @commands.fs_read_directory,
+        {
+          session: owner.session,
+          path: path.0,
+          workspace: workspace.map(value => value.0),
+        },
       ) catch {
         error => {
           scheduler.add(
@@ -39,16 +39,13 @@ fn read_directory(
           return
         }
       }
-      match decode_dir_entries(@interop.reply_json_text(reply), path) {
-        Some(entries) =>
-          scheduler.add(dispatch(DirLoaded(owner~, path~, entries~)))
-        None =>
-          scheduler.add(
-            dispatch(
-              DirFailed(owner~, path~, message="could not read directory"),
-            ),
-          )
+      let entries : Array[FileEntry] = []
+      for entry in reply.entries {
+        if FileEntry::from_reply(entry, path) is Some(entry) {
+          entries.push(entry)
+        }
       }
+      scheduler.add(dispatch(DirLoaded(owner~, path~, entries~)))
     })
   })
 }
@@ -64,42 +61,28 @@ fn list_files(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["session"] = owner.session
-      @interop.set_workspace(payload, workspace)
       let reply = @interop.bridge_request(
         owner.channel,
-        "fs.list_files",
-        payload.to_value(),
+        @commands.fs_list_files,
+        { session: owner.session, workspace: workspace.map(value => value.0) },
       ) catch {
         _ => {
           scheduler.add(dispatch(FileIndexFailed(owner~)))
           return
         }
       }
-      match decode_file_index(@interop.reply_json_text(reply)) {
-        Some((files, truncated)) =>
-          scheduler.add(dispatch(FilesIndexed(owner~, files~, truncated~)))
-        None => scheduler.add(dispatch(FileIndexFailed(owner~)))
-      }
+      let files = reply.files.filter_map(path => {
+        if path.is_empty() {
+          None
+        } else {
+          Some(@pathx.Relative(path))
+        }
+      })
+      scheduler.add(
+        dispatch(FilesIndexed(owner~, files~, truncated=reply.truncated)),
+      )
     })
   })
-}
-
-///|
-/// Parse a `list_files` reply into relative paths plus the truncation flag.
-fn decode_file_index(text : String) -> (Array[@pathx.Relative], Bool)? {
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) else { return None }
-  guard reply.get("files") is Some(Array(items)) else { return None }
-  let files : Array[@pathx.Relative] = []
-  for item in items {
-    guard item is String(path) else { continue }
-    if !path.is_empty() {
-      files.push(Relative(path))
-    }
-  }
-  Some((files, reply.get("truncated") is Some(True)))
 }
 
 ///|
@@ -120,14 +103,14 @@ pub fn read_file(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["session"] = owner.session
-      payload["path"] = path.0
-      @interop.set_workspace(payload, workspace)
       let reply = @interop.bridge_request(
         owner.channel,
-        "fs.read_file",
-        payload.to_value(),
+        @commands.fs_read_file,
+        {
+          session: owner.session,
+          path: path.0,
+          workspace: workspace.map(value => value.0),
+        },
       ) catch {
         error => {
           scheduler.add(
@@ -138,7 +121,7 @@ pub fn read_file(
           return
         }
       }
-      match decode_file_content(@interop.reply_json_text(reply)) {
+      match FileContent::from_reply(reply) {
         Some(file) =>
           scheduler.add(
             dispatch(
@@ -176,47 +159,28 @@ fn child_path(parent : @pathx.Relative, name : String) -> @pathx.Relative {
 }
 
 ///|
-/// Parse a `read_directory` reply into entries carrying full relative paths.
-/// `None` only for structurally unusable JSON; a malformed row is skipped.
-fn decode_dir_entries(
-  text : String,
+/// Convert one typed directory row into the panel's path-aware entry.
+fn FileEntry::from_reply(
+  entry : @protocol.DirEntry,
   parent : @pathx.Relative,
-) -> Array[FileEntry]? {
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) else { return None }
-  guard reply.get("entries") is Some(Array(items)) else { return None }
-  let entries : Array[FileEntry] = []
-  for item in items {
-    guard item is Object(fields) else { continue }
-    // The host writes both fields on every entry.
-    guard @jsonx.json_text(fields, "name") is Some(name) && !name.is_empty() else {
-      continue
-    }
-    guard @jsonx.json_bool(fields, "is_dir") is Some(is_dir) else { continue }
-    entries.push({ name, path: child_path(parent, name), is_dir })
-  }
-  Some(entries)
+) -> FileEntry? {
+  guard !entry.name.is_empty() else { return None }
+  Some({
+    name: entry.name,
+    path: child_path(parent, entry.name),
+    is_dir: entry.is_dir,
+  })
 }
 
 ///|
-fn decode_file_content(text : String) -> FileContent? {
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) else { return None }
-  guard @jsonx.json_text(reply, "kind") is Some(kind) else { return None }
-  match kind {
-    "binary" => Some(Binary)
-    "oversized" => Some(Oversized)
-    "content" => {
-      // The `content` variant always carries all three fields.
-      guard @jsonx.json_text(reply, "content") is Some(content) &&
-        @jsonx.json_text(reply, "absolute") is Some(absolute) &&
-        @jsonx.json_text(reply, "sig") is Some(sig) else {
-        return None
-      }
+fn FileContent::from_reply(reply : @protocol.ReadFileReply) -> FileContent? {
+  match reply {
+    @protocol.Binary => Some(Binary)
+    @protocol.Oversized => Some(Oversized)
+    @protocol.Content(content~, absolute~, sig~) => {
       guard !absolute.is_empty() else { return None }
       Some(Content(content~, absolute=Absolute(absolute), sig~))
     }
-    _ => None
   }
 }
 
@@ -231,18 +195,14 @@ async fn read_file_snapshot(
   path : @pathx.Relative,
   workspace~ : @pathx.Absolute?,
 ) -> FileContent? {
-  let payload = @js.Object::new()
-  payload["session"] = owner.session
-  payload["path"] = path.0
-  @interop.set_workspace(payload, workspace)
-  let reply = @interop.bridge_request(
-    owner.channel,
-    "fs.read_file",
-    payload.to_value(),
-  ) catch {
+  let reply = @interop.bridge_request(owner.channel, @commands.fs_read_file, {
+    session: owner.session,
+    path: path.0,
+    workspace: workspace.map(value => value.0),
+  }) catch {
     _ => return None
   }
-  decode_file_content(@interop.reply_json_text(reply))
+  FileContent::from_reply(reply)
 }
 
 ///|
@@ -256,40 +216,33 @@ fn stat_files(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["session"] = owner.session
-      payload["paths"] = paths.map(path => path.0)
-      @interop.set_workspace(payload, workspace)
       let reply = @interop.bridge_request(
         owner.channel,
-        "fs.stat_files",
-        payload.to_value(),
+        @commands.fs_stat_files,
+        {
+          session: owner.session,
+          paths: paths.map(path => path.0),
+          workspace: workspace.map(value => value.0),
+        },
       ) catch {
         _ => return
       }
-      guard decode_file_stats(@interop.reply_json_text(reply)) is Some(stats) else {
-        return
+      let stats : Array[FileStat] = []
+      for stat in reply.stats {
+        if !stat.path.is_empty() {
+          stats.push({
+            path: Relative(stat.path),
+            sig: if stat.sig.is_empty() {
+              None
+            } else {
+              Some(stat.sig)
+            },
+          })
+        }
       }
       scheduler.add(dispatch(StatsLoaded(owner~, stats~)))
     })
   })
-}
-
-///|
-fn decode_file_stats(text : String) -> Array[FileStat]? {
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) else { return None }
-  guard reply.get("stats") is Some(Array(items)) else { return None }
-  let stats : Array[FileStat] = []
-  for item in items {
-    guard item is Object(fields) else { continue }
-    guard @jsonx.json_text(fields, "path") is Some(path) && !path.is_empty() else {
-      continue
-    }
-    // `sig` is absent for a file the host could not stat — a deleted file.
-    stats.push({ path: Relative(path), sig: @jsonx.json_text(fields, "sig") })
-  }
-  Some(stats)
 }
 
 ///|
@@ -304,36 +257,36 @@ fn watch_workspace(
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       if watched is None {
-        let _ : @js.Value = @interop.bridge_request_in_order(
-          channel,
-          "fs.unwatch",
-          @js.Object::new().to_value(),
-        ) catch {
-          _ => return
-        }
+        ignore(
+          @interop.bridge_request_in_order(
+            channel,
+            @commands.fs_unwatch,
+            @protocol.EmptyPayload::NoPayload,
+          ) catch {
+            _ => return
+          },
+        )
       } else if watched is Some(watched) {
-        let payload = @js.Object::new()
-        payload["session"] = watched.owner.session
-        payload["files"] = watched.files.map(path => path.0)
-        payload["directories"] = watched.directories.map(path => path.0)
-        @interop.set_workspace(payload, watched.workspace)
-        let _ : @js.Value = @interop.bridge_request_in_order(
-          channel,
-          "fs.watch",
-          payload.to_value(),
-        ) catch {
-          error => {
-            scheduler.add(
-              dispatch(
-                FileWatchFailed(
-                  owner=watched.owner,
-                  message="File watching failed: \{@interop.bridge_error_text(error)}",
+        ignore(
+          @interop.bridge_request_in_order(channel, @commands.fs_watch, {
+            session: watched.owner.session,
+            workspace: watched.workspace.map(value => value.0),
+            files: Some(watched.files.map(path => path.0)),
+            directories: Some(watched.directories.map(path => path.0)),
+          }) catch {
+            error => {
+              scheduler.add(
+                dispatch(
+                  FileWatchFailed(
+                    owner=watched.owner,
+                    message="File watching failed: \{@interop.bridge_error_text(error)}",
+                  ),
                 ),
-              ),
-            )
-            return
-          }
-        }
+              )
+              return
+            }
+          },
+        )
       }
     })
   })
@@ -360,80 +313,39 @@ test "language_id maps known extensions and falls back to plain text" {
 }
 
 ///|
-test "decode_dir_entries builds full relative paths and skips bad rows" {
-  let reply =
-    #|{"entries":[{"name":"src","is_dir":true},{"name":"moon.mod","is_dir":false},{"is_dir":true}]}
-  let entries = decode_dir_entries(reply, @pathx.Relative::root()).unwrap()
-  // The third row has no name and is dropped.
-  assert_eq(entries.length(), 2)
-  assert_eq(entries[0].name, "src")
-  assert_eq(entries[0].path.0, "src")
-  assert_true(entries[0].is_dir)
-  assert_eq(entries[1].name, "moon.mod")
-  assert_eq(entries[1].path.0, "moon.mod")
-  assert_false(entries[1].is_dir)
-}
-
-///|
-test "decode_dir_entries roots child paths at the parent directory" {
-  let reply =
-    #|{"entries":[{"name":"util.mbt","is_dir":false}]}
-  let entries = decode_dir_entries(reply, Relative("src/lib")).unwrap()
-  assert_eq(entries[0].path.0, "src/lib/util.mbt")
-}
-
-///|
-test "decode_dir_entries rejects structurally unusable replies" {
-  assert_true(decode_dir_entries("not json", @pathx.Relative::root()) is None)
+test "typed directory rows build full relative paths" {
+  guard FileEntry::from_reply(
+      { name: "src", is_dir: true },
+      @pathx.Relative::root(),
+    )
+    is Some(entry) else {
+    fail("valid directory row was rejected")
+  }
+  assert_eq(entry.name, "src")
+  assert_eq(entry.path.0, "src")
+  assert_true(entry.is_dir)
   assert_true(
-    decode_dir_entries("{\"entries\":42}", @pathx.Relative::root()) is None,
+    FileEntry::from_reply({ name: "", is_dir: false }, @pathx.Relative::root())
+    is None,
   )
 }
 
 ///|
-test "decode_file_index parses paths, truncation, and rejects garbage" {
-  let reply =
-    #|{"files":["moon.mod","src/lib.mbt",42,""],"truncated":true}
-  let (files, truncated) = decode_file_index(reply).unwrap()
-  // The non-string and empty rows are dropped.
-  assert_eq(files.length(), 2)
-  assert_eq(files[0].0, "moon.mod")
-  assert_eq(files[1].0, "src/lib.mbt")
-  assert_true(truncated)
-  assert_true(decode_file_index("{\"files\":[]}").unwrap().0.is_empty())
-  assert_false(decode_file_index("{\"files\":[]}").unwrap().1)
-  assert_true(decode_file_index("not json") is None)
-  assert_true(decode_file_index("{\"files\":42}") is None)
-}
-
-///|
-test "decode_file_content decodes each reply kind" {
+test "typed file replies map to viewer content" {
   assert_true(
-    decode_file_content(
-      "{\"kind\":\"content\",\"content\":\"hello\",\"absolute\":\"/ws/a.mbt\",\"sig\":\"12:34\"}",
+    FileContent::from_reply(
+      @protocol.Content(content="hello", absolute="/ws/a.mbt", sig="12:34"),
     )
     is Some(
       Content(content="hello", absolute=Absolute("/ws/a.mbt"), sig="12:34")
     ),
   )
-  assert_true(decode_file_content("{\"kind\":\"binary\"}") is Some(Binary))
+  assert_true(FileContent::from_reply(@protocol.Binary) is Some(Binary))
+  assert_true(FileContent::from_reply(@protocol.Oversized) is Some(Oversized))
   assert_true(
-    decode_file_content("{\"kind\":\"oversized\"}") is Some(Oversized),
-  )
-  // The host writes all three fields on every content reply; one missing its
-  // address or signature is malformed and unusable, as is anything else.
-  assert_true(
-    decode_file_content(
-      "{\"kind\":\"content\",\"content\":\"x\",\"sig\":\"1:2\"}",
+    FileContent::from_reply(
+      @protocol.Content(content="x", absolute="", sig="1:2"),
     )
     is None,
   )
-  assert_true(
-    decode_file_content(
-      "{\"kind\":\"content\",\"content\":\"x\",\"absolute\":\"/ws/a.mbt\"}",
-    )
-    is None,
-  )
-  assert_true(decode_file_content("{\"truncated\":true}") is None)
-  assert_true(decode_file_content("garbage") is None)
 }

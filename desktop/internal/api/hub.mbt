@@ -5,14 +5,6 @@
 // reconnects and rebuilds state through `session.list` + `agent.runs`.
 
 ///|
-/// One server-pushed notification: a catalog method name and its params.
-/// Transports encode it at their own edge (JSON-RPC frame, proton event).
-pub(all) struct Notification {
-  method_ : String
-  params : Json
-}
-
-///|
 /// A subscriber queue's bound. Generous — the desktop webview and a healthy
 /// browser drain far faster than the engine produces — so hitting it means
 /// the connection is wedged, and the protocol's answer to a wedged
@@ -23,12 +15,12 @@ const SubscriberQueueCapacity = 1024
 /// The hub is owned by `ApiState`; transports reach it through
 /// `ApiState::subscribe`/`unsubscribe`.
 priv struct Hub {
-  subscribers : Array[@async.Queue[Notification]]
-  // The `agent.started` params of every run still in flight, keyed by run
+  subscribers : Array[@async.Queue[@protocol.Notification]]
+  // The typed `agent.started` payload of every run still in flight, keyed by run
   // id — the source for `agent.runs`, which is how a client that joins (or
   // reconnects) mid-run learns the run's identity. Insertion order is
   // run-start order.
-  active_starts : Map[String, Json]
+  active_starts : Map[String, @protocol.StartedPayload]
   // Completed lifecycle records survive client reconnects for this host
   // process. An abnormal finish without an exact durable frontier stays here
   // but is not replayable until its matching `agent.durable` boundary arrives.
@@ -55,23 +47,19 @@ priv struct RunSettlement {
 }
 
 ///|
-/// Encode only the public lifecycle settlement. `replayable` is a host-side
-/// publication gate, not part of the wire contract.
-fn RunSettlement::wire_json(self : RunSettlement) -> Json {
-  let fields : Map[String, Json] = Map([])
-  fields["run_id"] = Json::string(self.run_id)
-  fields["session"] = Json::string(self.session)
-  if self.submission_id is Some(submission_id) {
-    fields["submission_id"] = Json::string(submission_id)
+/// Expose only the public lifecycle settlement. `replayable` is a host-side
+/// publication gate, not part of the response.
+fn RunSettlement::wire_payload(
+  self : RunSettlement,
+) -> @protocol.RunSettlementPayload {
+  {
+    run_id: self.run_id,
+    session: self.session,
+    submission_id: self.submission_id,
+    status: self.status,
+    exit_code: self.exit_code,
+    durable_sequence: self.durable_sequence,
   }
-  fields["status"] = Json::string(self.status)
-  if self.exit_code is Some(exit_code) {
-    fields["exit_code"] = Json::number(exit_code.to_double())
-  }
-  if self.durable_sequence is Some(sequence) {
-    fields["durable_sequence"] = Json::number(sequence.to_double())
-  }
-  Json::object(fields)
 }
 
 ///|
@@ -88,43 +76,31 @@ fn terminal_backed_status(status : String) -> Bool {
 /// Capture Finished while its Started row is still present. Duplicate
 /// lifecycle events merge only missing evidence; a later notification can
 /// strengthen the durable frontier but never lower it.
-fn Hub::record_finished(self : Hub, run_id : String, params : Json) -> Unit {
-  guard params is Object(finished) &&
-    finished.get("status") is Some(String(status)) else {
-    return
-  }
-  let exit_code = if finished.get("exit_code") is Some(Number(value, ..)) {
-    Some(value.to_int())
-  } else {
-    None
-  }
-  let durable_sequence = if finished.get("durable_sequence")
-    is Some(Number(value, ..)) {
-    Some(value.to_int())
-  } else {
-    None
-  }
+fn Hub::record_finished(
+  self : Hub,
+  payload : @protocol.FinishedPayload,
+) -> Unit {
   let mut session = ""
   let mut submission_id : String? = None
-  if self.active_starts.get(run_id) is Some(Object(started)) {
-    if started.get("session") is Some(String(value)) {
+  if self.active_starts.get(payload.run_id) is Some(started) {
+    if started.session is Some(value) {
       session = value
     }
-    if started.get("submission_id") is Some(String(value)) {
+    if started.submission_id is Some(value) {
       submission_id = Some(value)
     }
   }
-  if self.settlements.get(run_id) is Some(existing) {
+  if self.settlements.get(payload.run_id) is Some(existing) {
     if existing.session.is_empty() && !session.is_empty() {
       existing.session = session
     }
     if existing.submission_id is None && submission_id is Some(value) {
       existing.submission_id = Some(value)
     }
-    if existing.exit_code is None && exit_code is Some(value) {
+    if existing.exit_code is None && payload.exit_code is Some(value) {
       existing.exit_code = Some(value)
     }
-    if durable_sequence is Some(sequence) {
+    if payload.durable_sequence is Some(sequence) {
       if existing.durable_sequence is Some(current) {
         if sequence > current {
           existing.durable_sequence = Some(sequence)
@@ -136,14 +112,15 @@ fn Hub::record_finished(self : Hub, run_id : String, params : Json) -> Unit {
     }
     return
   }
-  self.settlements[run_id] = {
-    run_id,
+  self.settlements[payload.run_id] = {
+    run_id: payload.run_id,
     session,
     submission_id,
-    status,
-    exit_code,
-    durable_sequence,
-    replayable: durable_sequence is Some(_) || terminal_backed_status(status),
+    status: payload.status,
+    exit_code: payload.exit_code,
+    durable_sequence: payload.durable_sequence,
+    replayable: payload.durable_sequence is Some(_) ||
+    terminal_backed_status(payload.status),
   }
 }
 
@@ -152,23 +129,18 @@ fn Hub::record_finished(self : Hub, run_id : String, params : Json) -> Unit {
 /// and session. Sequence zero is evidence, not absence, and remains `Some(0)`.
 fn Hub::record_durable_boundary(
   self : Hub,
-  run_id : String,
-  params : Json,
+  payload : @protocol.DurableBoundaryPayload,
 ) -> Unit {
-  guard params is Object(boundary) &&
-    boundary.get("session") is Some(String(session)) &&
-    boundary.get("sequence") is Some(Number(value, ..)) &&
-    self.settlements.get(run_id) is Some(settlement) &&
-    settlement.session == session else {
+  guard self.settlements.get(payload.run_id) is Some(settlement) &&
+    settlement.session == payload.session else {
     return
   }
-  let sequence = value.to_int()
   if settlement.durable_sequence is Some(current) {
-    if sequence > current {
-      settlement.durable_sequence = Some(sequence)
+    if payload.sequence > current {
+      settlement.durable_sequence = Some(payload.sequence)
     }
   } else {
-    settlement.durable_sequence = Some(sequence)
+    settlement.durable_sequence = Some(payload.sequence)
   }
   settlement.replayable = true
 }
@@ -181,24 +153,22 @@ fn Hub::record_durable_boundary(
 /// queue, and it removes the queue from `subscribers` in the same breath,
 /// so `try_put` on a closed queue cannot happen — `try!` turns that
 /// invariant into a hard stop instead of a silent discard.
-fn Hub::publish(self : Hub, method_ : String, params : Json) -> Unit {
-  if params_run_id(params) is Some(run_id) {
-    match method_ {
-      "agent.started" => self.active_starts[run_id] = params
-      // Error is diagnostic, not a lifecycle boundary: the engine publishes
-      // Finished only after it has closed the run. Removing on Error would let
-      // a concurrent `agent.runs` snapshot report a still-draining run idle.
-      "agent.finished" => {
-        self.record_finished(run_id, params)
-        self.active_starts.remove(run_id)
-      }
-      "agent.durable" => self.record_durable_boundary(run_id, params)
-      _ => ()
+fn Hub::publish(self : Hub, notification : @protocol.Notification) -> Unit {
+  match notification {
+    AgentStarted(payload) => self.active_starts[payload.run_id] = payload
+    // Error is diagnostic, not a lifecycle boundary: the engine publishes
+    // Finished only after it has closed the run. Removing on Error would let
+    // a concurrent `agent.runs` snapshot report a still-draining run idle.
+    AgentFinished(payload) => {
+      self.record_finished(payload)
+      self.active_starts.remove(payload.run_id)
     }
+    AgentDurable(payload) => self.record_durable_boundary(payload)
+    _ => ()
   }
   let wedged : Array[Int] = []
   for index, queue in self.subscribers {
-    if !(try! queue.try_put({ method_, params })) {
+    if !(try! queue.try_put(notification)) {
       wedged.push(index)
     }
   }
@@ -210,16 +180,8 @@ fn Hub::publish(self : Hub, method_ : String, params : Json) -> Unit {
 }
 
 ///|
-fn params_run_id(params : Json) -> String? {
-  guard params is Object(fields) && fields.get("run_id") is Some(String(run_id)) else {
-    return None
-  }
-  Some(run_id)
-}
-
-///|
-fn Hub::subscribe(self : Hub) -> @async.Queue[Notification] {
-  let queue : @async.Queue[Notification] = Queue(
+fn Hub::subscribe(self : Hub) -> @async.Queue[@protocol.Notification] {
+  let queue : @async.Queue[@protocol.Notification] = Queue(
     kind=Blocking(SubscriberQueueCapacity),
   )
   self.subscribers.push(queue)
@@ -230,7 +192,10 @@ fn Hub::subscribe(self : Hub) -> @async.Queue[Notification] {
 /// Drop a subscriber by queue identity and close its queue, waking a writer
 /// blocked on `get`. Unsubscribing twice is fine; so is unsubscribing a
 /// queue the hub already kicked.
-fn Hub::unsubscribe(self : Hub, queue : @async.Queue[Notification]) -> Unit {
+fn Hub::unsubscribe(
+  self : Hub,
+  queue : @async.Queue[@protocol.Notification],
+) -> Unit {
   for index, candidate in self.subscribers {
     if physical_equal(candidate, queue) {
       ignore(self.subscribers.remove(index))
@@ -245,21 +210,24 @@ fn Hub::unsubscribe(self : Hub, queue : @async.Queue[Notification]) -> Unit {
 /// run-start order (the map preserves insertion order), plus only replayable
 /// settlements named by the caller's reconnect selectors. This function has
 /// no suspension point, so active runs and settlements form one atomic view.
-fn Hub::runs(self : Hub, known? : Array[KnownRunPayload]) -> Json {
-  let runs : Array[Json] = []
-  for _, params in self.active_starts {
-    runs.push(params)
+fn Hub::runs(
+  self : Hub,
+  known? : Array[KnownRunPayload],
+) -> @protocol.RunsReply {
+  let runs : Array[@protocol.StartedPayload] = []
+  for _, payload in self.active_starts {
+    runs.push(payload)
   }
-  let settled : Array[Json] = []
+  let settled : Array[@protocol.RunSettlementPayload] = []
   if known is Some(selectors) {
     for _, settlement in self.settlements {
       if settlement.replayable &&
         selectors.any(selector => settlement_matches(settlement, selector)) {
-        settled.push(settlement.wire_json())
+        settled.push(settlement.wire_payload())
       }
     }
   }
-  { "runs": Json::array(runs), "settled": Json::array(settled) }
+  { runs, settled }
 }
 
 ///|
@@ -282,9 +250,12 @@ fn settlement_matches(
 /// the old task group may have been cancelled before emitting Finished, so
 /// their starts are no longer live and must be cleared before readiness is
 /// published. Per-WebSocket synthetic ready frames do not pass through here.
-fn Hub::engine_connected(self : Hub, params : Json) -> Unit {
+fn Hub::engine_connected(
+  self : Hub,
+  payload : @protocol.ConnectedPayload,
+) -> Unit {
   self.active_starts.clear()
-  self.publish("agent.connected", params)
+  self.publish(AgentConnected(payload))
 }
 
 ///|
@@ -297,27 +268,26 @@ fn Hub::sink(
 ) -> @engine.EventSink {
   EventSink(event => {
     match event {
-      Connected(payload) => self.engine_connected(payload.to_json())
-      Started(payload) => self.publish("agent.started", payload.to_json())
-      StreamEvent(payload) => self.publish("agent.event", payload.to_json())
-      Error(payload) => self.publish("agent.error", payload.to_json())
+      Connected(payload) => self.engine_connected(payload)
+      Started(payload) => self.publish(AgentStarted(payload))
+      StreamEvent(payload) => self.publish(AgentEvent(payload))
+      Error(payload) => self.publish(AgentError(payload))
       Finished(payload) => {
         if on_finished is Some(notify) {
           notify(payload)
         }
-        self.publish("agent.finished", payload.to_json())
+        self.publish(AgentFinished(payload))
       }
       // The canonical transcript channel: one durably committed store event.
       // Clients that understand it build their durable transcript from these
       // plus `session.load` snapshots; the `agent.event` stream above only
       // settles transient stream and lifecycle state in commit-aware clients
       // (docs/remote-protocol.md).
-      SessionCommit(payload) => self.publish("session.event", payload.to_json())
+      SessionCommit(payload) => self.publish(SessionEvent(payload))
       // A failed command may have settled lifecycle before its process was
       // reapable. This later durable boundary is not a second finish: it must
       // not post another system notification or mutate the live-runs table.
-      DurableBoundary(payload) =>
-        self.publish("agent.durable", payload.to_json())
+      DurableBoundary(payload) => self.publish(AgentDurable(payload))
     }
   })
 }
@@ -326,36 +296,40 @@ fn Hub::sink(
 test "a real engine connection retires old active runs before readiness" {
   let hub = Hub::new()
   let subscriber = hub.subscribe()
-  hub.publish("agent.started", { "run_id": "r-old", "task": "old" })
-  guard hub.runs() is Object(before) && before.get("runs") is Some(Array([_])) else {
+  hub.publish(
+    AgentStarted(@json.from_json({ "run_id": "r-old", "task": "old" })),
+  )
+  guard hub.runs().runs is [_] else {
     fail("expected one active run before reconnect")
   }
-  hub.engine_connected({ "ready": true })
-  guard hub.runs() is Object(after) && after.get("runs") is Some(Array([])) else {
+  hub.engine_connected({ ready: Some(true) })
+  guard hub.runs().runs is [] else {
     fail("old active run survived a new engine pump")
   }
   guard subscriber.try_get() is Some(started) else {
     fail("missing started notification")
   }
-  assert_eq(started.method_, "agent.started")
+  assert_eq(started.wire_name(), "agent.started")
   guard subscriber.try_get() is Some(connected) else {
     fail("missing connected notification")
   }
-  assert_eq(connected.method_, "agent.connected")
+  assert_eq(connected.wire_name(), "agent.connected")
 }
 
 ///|
 test "an agent error does not retire a run before its finished boundary" {
   let hub = Hub::new()
-  hub.publish("agent.started", { "run_id": "r1", "task": "work" })
-  hub.publish("agent.error", { "run_id": "r1", "message": "boom" })
-  guard hub.runs() is Object(after_error) &&
-    after_error.get("runs") is Some(Array([_])) else {
+  hub.publish(AgentStarted(@json.from_json({ "run_id": "r1", "task": "work" })))
+  hub.publish(
+    AgentError(@json.from_json({ "run_id": "r1", "message": "boom" })),
+  )
+  guard hub.runs().runs is [_] else {
     fail("agent.error retired a still-draining run")
   }
-  hub.publish("agent.finished", { "run_id": "r1", "status": "failed" })
-  guard hub.runs() is Object(after_finish) &&
-    after_finish.get("runs") is Some(Array([])) else {
+  hub.publish(
+    AgentFinished(@json.from_json({ "run_id": "r1", "status": "failed" })),
+  )
+  guard hub.runs().runs is [] else {
     fail("agent.finished did not retire the run")
   }
 }
@@ -363,56 +337,60 @@ test "an agent error does not retire a run before its finished boundary" {
 ///|
 test "a normal terminal-backed finish is replayable only to a matching caller" {
   let hub = Hub::new()
-  hub.publish("agent.started", {
-    "run_id": "r-normal",
-    "session": "s-normal",
-    "submission_id": "sub-normal",
-    "task": "work",
-  })
-  hub.publish("agent.finished", {
-    "run_id": "r-normal",
-    "status": "finished",
-    "exit_code": 0,
-  })
-  guard hub.runs(known=[
-      {
-        session: "s-normal",
-        run_id: Some("r-normal"),
-        submission_id: Some("sub-normal"),
-      },
-      // A second matching selector must not duplicate the ledger row.
-      { session: "s-normal", run_id: None, submission_id: Some("sub-normal") },
-    ])
-    is Object(reply) &&
-    reply.get("runs") is Some(Array([])) &&
-    reply.get("settled") is Some(Array([Object(settlement)])) else {
+  hub.publish(
+    AgentStarted(
+      @json.from_json({
+        "run_id": "r-normal",
+        "session": "s-normal",
+        "submission_id": "sub-normal",
+        "task": "work",
+      }),
+    ),
+  )
+  hub.publish(
+    AgentFinished(
+      @json.from_json({
+        "run_id": "r-normal",
+        "status": "finished",
+        "exit_code": 0,
+      }),
+    ),
+  )
+  let reply = hub.runs(known=[
+    {
+      session: "s-normal",
+      run_id: Some("r-normal"),
+      submission_id: Some("sub-normal"),
+    },
+    // A second matching selector must not duplicate the ledger row.
+    { session: "s-normal", run_id: None, submission_id: Some("sub-normal") },
+  ])
+  guard reply.runs is [] && reply.settled is [settlement] else {
     fail("matching reconnect identity did not receive one settlement")
   }
-  assert_eq(settlement.get("run_id"), Some(Json::string("r-normal")))
-  assert_eq(settlement.get("session"), Some(Json::string("s-normal")))
-  assert_eq(settlement.get("submission_id"), Some(Json::string("sub-normal")))
-  assert_eq(settlement.get("status"), Some(Json::string("finished")))
-  assert_eq(settlement.get("exit_code"), Some(Json::number(0)))
-  assert_eq(settlement.get("replayable"), None)
+  assert_eq(settlement.run_id, "r-normal")
+  assert_eq(settlement.session, "s-normal")
+  assert_eq(settlement.submission_id, Some("sub-normal"))
+  assert_eq(settlement.status, "finished")
+  assert_eq(settlement.exit_code, Some(0))
 
-  guard hub.runs(known=[
-      {
-        session: "other-session",
-        run_id: Some("r-normal"),
-        submission_id: Some("sub-normal"),
-      },
-      { session: "s-normal", run_id: Some("other-run"), submission_id: None },
-      {
-        session: "s-normal",
-        run_id: None,
-        submission_id: Some("other-submission"),
-      },
-      // A session alone is not an owner selector and must not expose that
-      // session's process-lifetime completion history.
-      { session: "s-normal", run_id: None, submission_id: None },
-    ])
-    is Object(mismatched) &&
-    mismatched.get("settled") is Some(Array([])) else {
+  let mismatched = hub.runs(known=[
+    {
+      session: "other-session",
+      run_id: Some("r-normal"),
+      submission_id: Some("sub-normal"),
+    },
+    { session: "s-normal", run_id: Some("other-run"), submission_id: None },
+    {
+      session: "s-normal",
+      run_id: None,
+      submission_id: Some("other-submission"),
+    },
+    // A session alone is not an owner selector and must not expose that
+    // session's process-lifetime completion history.
+    { session: "s-normal", run_id: None, submission_id: None },
+  ])
+  guard mismatched.settled is [] else {
     fail("a non-matching reconnect identity received a settlement")
   }
 }
@@ -420,16 +398,20 @@ test "a normal terminal-backed finish is replayable only to a matching caller" {
 ///|
 test "an abnormal finish waits for an exact durable boundary including zero" {
   let hub = Hub::new()
-  hub.publish("agent.started", {
-    "run_id": "r-zero",
-    "session": "s-zero",
-    "submission_id": "sub-zero",
-  })
-  hub.publish("agent.finished", {
-    "run_id": "r-zero",
-    "status": "failed",
-    "exit_code": 1,
-  })
+  hub.publish(
+    AgentStarted(
+      @json.from_json({
+        "run_id": "r-zero",
+        "session": "s-zero",
+        "submission_id": "sub-zero",
+      }),
+    ),
+  )
+  hub.publish(
+    AgentFinished(
+      @json.from_json({ "run_id": "r-zero", "status": "failed", "exit_code": 1 }),
+    ),
+  )
   let known : Array[KnownRunPayload] = [
     {
       session: "s-zero",
@@ -437,99 +419,131 @@ test "an abnormal finish waits for an exact durable boundary including zero" {
       submission_id: Some("sub-zero"),
     },
   ]
-  guard hub.runs(known~) is Object(pending) &&
-    pending.get("settled") is Some(Array([])) else {
+  guard hub.runs(known~).settled is [] else {
     fail("an unbounded abnormal finish was replayed")
   }
-  hub.publish("agent.durable", {
-    "run_id": "r-zero",
-    "session": "other-session",
-    "sequence": 99,
-  })
-  guard hub.runs(known~) is Object(still_pending) &&
-    still_pending.get("settled") is Some(Array([])) else {
+  hub.publish(
+    AgentDurable(
+      @json.from_json({
+        "run_id": "r-zero",
+        "session": "other-session",
+        "sequence": 99,
+      }),
+    ),
+  )
+  guard hub.runs(known~).settled is [] else {
     fail("a boundary from another session settled the run")
   }
-  hub.publish("agent.durable", {
-    "run_id": "r-zero",
-    "session": "s-zero",
-    "sequence": 0,
-  })
-  guard hub.runs(known~) is Object(settled_reply) &&
-    settled_reply.get("settled") is Some(Array([Object(settlement)])) else {
+  hub.publish(
+    AgentDurable(
+      @json.from_json({ "run_id": "r-zero", "session": "s-zero", "sequence": 0 }),
+    ),
+  )
+  guard hub.runs(known~).settled is [settlement] else {
     fail("exact-zero boundary did not settle the abnormal finish")
   }
-  assert_eq(settlement.get("durable_sequence"), Some(Json::number(0)))
+  assert_eq(settlement.durable_sequence, Some(0))
 }
 
 ///|
 test "duplicate finish and durable boundaries never downgrade a settlement" {
   let hub = Hub::new()
-  hub.publish("agent.started", {
-    "run_id": "r-dedup",
-    "session": "s-dedup",
-    "submission_id": "sub-dedup",
-  })
-  hub.publish("agent.finished", {
-    "run_id": "r-dedup",
-    "status": "failed",
-    "exit_code": 9,
-  })
-  hub.publish("agent.durable", {
-    "run_id": "r-dedup",
-    "session": "s-dedup",
-    "sequence": 12,
-  })
+  hub.publish(
+    AgentStarted(
+      @json.from_json({
+        "run_id": "r-dedup",
+        "session": "s-dedup",
+        "submission_id": "sub-dedup",
+      }),
+    ),
+  )
+  hub.publish(
+    AgentFinished(
+      @json.from_json({
+        "run_id": "r-dedup",
+        "status": "failed",
+        "exit_code": 9,
+      }),
+    ),
+  )
+  hub.publish(
+    AgentDurable(
+      @json.from_json({
+        "run_id": "r-dedup",
+        "session": "s-dedup",
+        "sequence": 12,
+      }),
+    ),
+  )
   // Both messages are idempotent. A stale lower boundary and a duplicate
   // Finished without a sequence cannot erase the stronger frontier.
-  hub.publish("agent.durable", {
-    "run_id": "r-dedup",
-    "session": "s-dedup",
-    "sequence": 3,
-  })
-  hub.publish("agent.finished", { "run_id": "r-dedup", "status": "failed" })
-  guard hub.runs(known=[
-      {
-        session: "s-dedup",
-        run_id: Some("r-dedup"),
-        submission_id: Some("sub-dedup"),
-      },
-    ])
-    is Object(reply) &&
-    reply.get("settled") is Some(Array([Object(settlement)])) else {
+  hub.publish(
+    AgentDurable(
+      @json.from_json({
+        "run_id": "r-dedup",
+        "session": "s-dedup",
+        "sequence": 3,
+      }),
+    ),
+  )
+  hub.publish(
+    AgentFinished(@json.from_json({ "run_id": "r-dedup", "status": "failed" })),
+  )
+  let reply = hub.runs(known=[
+    {
+      session: "s-dedup",
+      run_id: Some("r-dedup"),
+      submission_id: Some("sub-dedup"),
+    },
+  ])
+  guard reply.settled is [settlement] else {
     fail("deduplicated settlement missing")
   }
-  assert_eq(settlement.get("exit_code"), Some(Json::number(9)))
-  assert_eq(settlement.get("durable_sequence"), Some(Json::number(12)))
+  assert_eq(settlement.exit_code, Some(9))
+  assert_eq(settlement.durable_sequence, Some(12))
 }
 
 ///|
 async test "agent.runs keeps old requests compatible and decodes known selectors" {
   let state = ApiState::new(engine="unused")
   let connection = @host.HostConnection::new()
-  state.hub.publish("agent.started", {
-    "run_id": "r-api",
-    "session": "s-api",
-    "submission_id": "sub-api",
-  })
-  state.hub.publish("agent.finished", {
-    "run_id": "r-api",
-    "status": "finished",
-  })
-  let legacy = dispatch(state, connection, "agent.runs", Json::empty_object())
-  guard legacy is Object(legacy_reply) &&
-    legacy_reply.get("runs") is Some(Array([])) &&
-    legacy_reply.get("settled") is Some(Array([])) else {
+  state.hub.publish(
+    AgentStarted(
+      @json.from_json({
+        "run_id": "r-api",
+        "session": "s-api",
+        "submission_id": "sub-api",
+      }),
+    ),
+  )
+  state.hub.publish(
+    AgentFinished(@json.from_json({ "run_id": "r-api", "status": "finished" })),
+  )
+  let mut runs_endpoint = None
+  for endpoint in endpoints(state, connection) {
+    if endpoint.name() == "agent.runs" {
+      runs_endpoint = Some(endpoint)
+      break
+    }
+  }
+  guard runs_endpoint is Some(runs_endpoint) else {
+    fail("agent.runs endpoint missing")
+  }
+  let legacy : @protocol.RunsReply = @json.from_json(
+    runs_endpoint.invoke_remote(Json::empty_object()),
+  )
+  guard legacy is { runs: [], settled: [] } else {
     fail("legacy agent.runs request changed shape")
   }
-  let replay = dispatch(state, connection, "agent.runs", {
-    "known": [
-      { "session": "s-api", "run_id": "r-api", "submission_id": "sub-api" },
-    ],
-  })
-  guard replay is Object(replay_reply) &&
-    replay_reply.get("settled") is Some(Array([Object(settlement)])) else {
+  let replay : @protocol.RunsReply = @json.from_json(
+    runs_endpoint.invoke_remote({
+      "known": [
+        { "session": "s-api", "run_id": "r-api", "submission_id": "sub-api" },
+      ],
+    }),
+  )
+  guard replay is { settled: [settlement], .. } else {
     fail("agent.runs did not decode the known selector")
   }
-  assert_eq(settlement.get("run_id"), Some(Json::string("r-api")))
+  assert_eq(settlement.run_id, "r-api")
 }

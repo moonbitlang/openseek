@@ -1,6 +1,5 @@
-// Decoding of the host's skill-market replies: the mooncakes.io catalog of
-// installable skills and the contents of the engine's global skills
-// library.
+// Projection of typed host skill-market replies into the UI's catalog and
+// installed-library rows.
 
 ///|
 /// One installable entry of the registry catalog, as the host reports it.
@@ -41,146 +40,122 @@ pub fn market_source_label(item : MarketSkillItem) -> String {
 }
 
 ///|
-/// Parse a `skills_catalog` reply. `None` only for structurally unusable
-/// JSON; unrecognized entries are skipped so one odd skill cannot blank the
-/// whole catalog.
-pub fn decode_skills_catalog_reply(text : String) -> Array[MarketSkillItem]? {
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) else { return None }
-  guard reply.get("skills") is Some(Array(entries)) else { return None }
+/// Project a `skills_catalog` reply. The native catalog adapter has already
+/// removed malformed registry rows before constructing this value.
+pub fn skills_catalog_from_reply(
+  reply : @desktop_protocol.SkillsCatalogReply,
+) -> Array[MarketSkillItem] {
   let items : Array[MarketSkillItem] = []
-  for entry in entries {
-    guard entry is Object(fields) else { continue }
-    // The host emits every field unconditionally (blank means "none", e.g. a
-    // root skill's package_path); an entry missing one is malformed.
-    guard @jsonx.json_text(fields, "module_name") is Some(module_name) &&
-      @jsonx.json_text(fields, "version") is Some(version) &&
-      @jsonx.json_text(fields, "name") is Some(name) &&
-      @jsonx.json_text(fields, "package_path") is Some(package_path) &&
-      @jsonx.json_text(fields, "description") is Some(description) &&
-      @jsonx.json_text(fields, "author") is Some(author) &&
-      @jsonx.json_text(fields, "repository") is Some(repository) else {
+  for entry in reply.skills {
+    guard !entry.module_name.is_empty() && !entry.version.is_empty() else {
       continue
     }
-    guard !module_name.is_empty() && !version.is_empty() else { continue }
     items.push({
-      name: if name.trim().is_empty() {
-        module_name
+      name: if entry.name.trim().is_empty() {
+        entry.module_name
       } else {
-        name
+        entry.name
       },
-      module_name,
-      package_path,
-      version,
-      description,
-      author,
-      repository,
+      module_name: entry.module_name,
+      package_path: entry.package_path,
+      version: entry.version,
+      description: entry.description,
+      author: entry.author,
+      repository: entry.repository,
     })
   }
-  Some(items)
+  items
 }
 
 ///|
-/// Parse a `skills_installed` reply.
-pub fn decode_installed_skills_reply(
-  text : String,
-) -> Array[InstalledSkillItem]? {
-  let json = @json.parse(text) catch { _ => return None }
-  guard json is Object(reply) else { return None }
-  guard reply.get("skills") is Some(Array(entries)) else { return None }
+/// Project a `skills_installed` reply.
+pub fn installed_skills_from_reply(
+  reply : @desktop_protocol.InstalledSkillsReply,
+) -> Array[InstalledSkillItem] {
   let items : Array[InstalledSkillItem] = []
-  for entry in entries {
-    guard entry is Object(fields) else { continue }
-    guard @jsonx.json_text(fields, "id") is Some(id) && !id.is_empty() else {
-      continue
-    }
-    guard @jsonx.json_text(fields, "name") is Some(name) &&
-      @jsonx.json_text(fields, "description") is Some(description) &&
-      @jsonx.json_text(fields, "source") is Some(source) else {
-      continue
-    }
+  for entry in reply.skills {
+    guard !entry.id.is_empty() else { continue }
     items.push({
-      id,
-      name: if name.trim().is_empty() {
-        id
+      id: entry.id,
+      name: if entry.name.trim().is_empty() {
+        entry.id
       } else {
-        name
+        entry.name
       },
-      description,
-      source,
+      description: entry.description,
+      source: entry.source,
     })
   }
-  Some(items)
+  items
 }
 
 ///|
 test "skills catalog replies decode and skip odd entries" {
-  let reply : Json = {
-    "skills": [
+  let items = skills_catalog_from_reply({
+    skills: [
       {
-        "name": "acme/widget",
-        "module_name": "acme/widget",
-        "package_path": "",
-        "version": "1.0.0",
-        "description": "Build widgets fast.",
-        "author": "acme",
-        "repository": "https://example.com/acme/widget",
+        name: "acme/widget",
+        module_name: "acme/widget",
+        package_path: "",
+        version: "1.0.0",
+        description: "Build widgets fast.",
+        author: "acme",
+        repository: "https://example.com/acme/widget",
       },
-      // Unusable: no module name.
-      { "version": "1.0.0" },
-      "nonsense",
+      {
+        name: "odd",
+        module_name: "",
+        package_path: "",
+        version: "1.0.0",
+        description: "",
+        author: "",
+        repository: "",
+      },
     ],
-  }
-  guard decode_skills_catalog_reply(reply.stringify()) is Some([item]) else {
-    fail("expected exactly one catalog item")
-  }
+  })
+  guard items is [item] else { fail("expected exactly one catalog item") }
   assert_eq(item.name, "acme/widget")
   assert_eq(item.module_name, "acme/widget")
   assert_eq(item.version, "1.0.0")
   assert_eq(item.description, "Build widgets fast.")
   assert_eq(market_source_label(item), "acme/widget@1.0.0")
-  assert_true(decode_skills_catalog_reply("[]") is None)
-  assert_true(decode_skills_catalog_reply("not json") is None)
 }
 
 ///|
 test "subpackage skills carry their package path in the source label" {
-  let reply : Json = {
-    "skills": [
+  let items = skills_catalog_from_reply({
+    skills: [
       {
-        "name": "alice/alpha/cmd/run",
-        "module_name": "alice/alpha",
-        "package_path": "cmd/run",
-        "version": "0.2.0",
-        "description": "Run alpha commands",
-        "author": "",
-        "repository": "",
+        name: "alice/alpha/cmd/run",
+        module_name: "alice/alpha",
+        package_path: "cmd/run",
+        version: "0.2.0",
+        description: "Run alpha commands",
+        author: "",
+        repository: "",
       },
     ],
-  }
-  guard decode_skills_catalog_reply(reply.stringify()) is Some([item]) else {
-    fail("expected one catalog item")
-  }
+  })
+  guard items is [item] else { fail("expected one catalog item") }
   assert_eq(market_source_label(item), "alice/alpha@0.2.0/cmd/run")
   assert_eq(item.author, "")
 }
 
 ///|
 test "installed skill replies decode, with name falling back to id" {
-  let reply : Json = {
-    "skills": [
+  let items = installed_skills_from_reply({
+    skills: [
       {
-        "id": "acme-widget",
-        "name": "widget",
-        "description": "Build widgets fast.",
-        "source": "acme/widget@1.0.0",
+        id: "acme-widget",
+        name: "widget",
+        description: "Build widgets fast.",
+        source: "acme/widget@1.0.0",
       },
-      { "id": "handmade", "name": "", "description": "", "source": "" },
-      { "name": "no-id" },
+      { id: "handmade", name: "", description: "", source: "" },
+      { id: "", name: "no-id", description: "", source: "" },
     ],
-  }
-  guard decode_installed_skills_reply(reply.stringify())
-    is Some([widget, handmade]) else {
+  })
+  guard items is [widget, handmade] else {
     fail("expected two installed items")
   }
   assert_eq(widget.id, "acme-widget")
@@ -188,5 +163,4 @@ test "installed skill replies decode, with name falling back to id" {
   assert_eq(widget.source, "acme/widget@1.0.0")
   assert_eq(handmade.name, "handmade")
   assert_eq(handmade.source, "")
-  assert_true(decode_installed_skills_reply("{}") is None)
 }

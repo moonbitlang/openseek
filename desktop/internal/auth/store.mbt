@@ -207,40 +207,49 @@ pub fn AuthStore::managed_by_env(self : AuthStore) -> Bool {
 /// session's issuer when there is one, the override's origin in override
 /// mode, and otherwise the caller-provided current selection (absent when
 /// the selected server has no relay).
-pub fn AuthStore::status_json(self : AuthStore, server_url? : String) -> Json {
-  let status : Map[String, Json] = Map([])
-  status["connected"] = Json::boolean(self.connected)
+pub fn AuthStore::status(
+  self : AuthStore,
+  server_url? : String,
+) -> @protocol.AuthStatusPayload {
   if self.env_override is Some(config) {
-    status["server_url"] = Json::string(origin_from_relay_url(config.relay_url))
-    status["managed_by_env"] = Json::boolean(true)
-    if self.override_device is Some(device) {
-      status["device"] = {
-        "id": device.to_json(),
-        "name": config.device_name.to_json(),
-        "url": device_url(origin_from_relay_url(config.relay_url), device).to_json(),
-      }
+    let origin = origin_from_relay_url(config.relay_url)
+    return {
+      connected: self.connected,
+      server_url: Some(origin),
+      managed_by_env: Some(true),
+      user: None,
+      device: self.override_device.map(device => {
+        id: device,
+        name: config.device_name,
+        url: device_url(origin, device),
+      }),
     }
-    return Json::object(status)
   }
   match self.session {
-    Some(session) => {
-      status["server_url"] = Json::string(session.server_url)
-      status["user"] = {
-        "login": session.user_login.to_json(),
-        "avatar_url": session.user_avatar_url.to_json(),
+    Some(session) =>
+      {
+        connected: self.connected,
+        server_url: Some(session.server_url),
+        managed_by_env: None,
+        user: Some({
+          login: session.user_login,
+          avatar_url: session.user_avatar_url,
+        }),
+        device: Some({
+          id: session.device_id,
+          name: session.device_name,
+          url: device_url(session.server_url, session.device_id),
+        }),
       }
-      status["device"] = {
-        "id": session.device_id.to_json(),
-        "name": session.device_name.to_json(),
-        "url": device_url(session.server_url, session.device_id).to_json(),
-      }
-    }
     None =>
-      if server_url is Some(url) {
-        status["server_url"] = Json::string(url)
+      {
+        connected: self.connected,
+        server_url,
+        managed_by_env: None,
+        user: None,
+        device: None,
       }
   }
-  Json::object(status)
 }
 
 ///|

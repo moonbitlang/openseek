@@ -349,11 +349,11 @@ fn SteerRunTracker::record_terminal(
 fn SteerRunTracker::route_event(
   self : SteerRunTracker,
   decoded : @event.AgentEvent?,
-  raw : Json,
+  prompt_steer_applied : Bool,
   latest_run : String?,
 ) -> (String?, String?) {
   match decoded {
-    Some(SteerApplied(content)) if is_prompt_steer_applied(raw) =>
+    Some(SteerApplied(content)) if prompt_steer_applied =>
       self.route_receipt(content, latest_run)
     Some(SteerDropped(content)) => self.route_receipt(content, latest_run)
     // serve drains every old prompt receipt before beginning the next step.
@@ -393,32 +393,6 @@ fn SteerRunTracker::route_receipt(
 }
 
 ///|
-/// Older serve peers omitted `kind`, where steer_applied was necessarily a
-/// prompt receipt. New peers also emit command/notice applications with the
-/// same decoded shape; only `kind: "prompt"` owns a desktop steer submission.
-fn is_prompt_steer_applied(raw : Json) -> Bool {
-  guard raw is Object(fields) else { return false }
-  match fields.get("kind") {
-    None | Some(String("prompt")) => true
-    _ => false
-  }
-}
-
-///|
-/// Failure/abort logs whose matching Terminal append is not proven by the
-/// event itself. Setup logs before appending; turn failure and cancellation
-/// catches log even when their best-effort Terminal append also failed. Close
-/// this serve writer and use the follower's EOF scan as the exact boundary
-/// before admitting a successor.
-fn needs_durable_finish_scan(raw : Json) -> Bool {
-  guard raw is Object(fields) else { return false }
-  guard fields.get("event") is Some(String(name)) else { return false }
-  name == "agent_setup_failed" ||
-  name == "turn_failed" ||
-  name == "agent_aborted"
-}
-
-///|
 fn take_first_tracked_steer(
   items : Array[TrackedSteer],
   text : String,
@@ -429,19 +403,6 @@ fn take_first_tracked_steer(
     }
   }
   None
-}
-
-///|
-/// Add the client correlation id to a matched steer receipt without mutating
-/// the engine-owned JSON object. A legacy submission has no id, so its event
-/// is returned byte-for-shape unchanged.
-fn event_with_submission_id(raw : Json, submission_id : String?) -> Json {
-  guard submission_id is Some(submission_id) && raw is Object(fields) else {
-    return raw
-  }
-  let correlated = fields.copy()
-  correlated["submission_id"] = Json::string(submission_id)
-  Json::object(correlated)
 }
 
 ///|
@@ -865,9 +826,47 @@ async fn EngineManager::close_engines_for_workspace(
 
 ///|
 priv enum StreamMessage {
-  StreamEvent(Json)
+  StreamEvent(DecodedStreamEvent)
   StreamReaderFailed(String)
   StreamExited(Int)
+}
+
+///|
+/// One engine JSONL event after the process adapter has extracted every fact
+/// the actor needs. Keeping the raw JSON out of `StreamMessage` makes the
+/// reader/actor channel typed without losing legacy lifecycle normalization.
+priv struct DecodedStreamEvent {
+  legacy : @event.AgentEvent?
+  wire : @wire.Event?
+  prompt_steer_applied : Bool
+  needs_durable_scan : Bool
+}
+
+///|
+fn DecodedStreamEvent::from_wire(raw : Json) -> DecodedStreamEvent {
+  let (prompt_steer_applied, needs_durable_scan) = match raw {
+    Object(fields) => {
+      let prompt_steer_applied = match fields.get("kind") {
+        None | Some(String("prompt")) => true
+        _ => false
+      }
+      let needs_durable_scan = match fields.get("event") {
+        Some(String(name)) =>
+          name == "agent_setup_failed" ||
+          name == "turn_failed" ||
+          name == "agent_aborted"
+        _ => false
+      }
+      (prompt_steer_applied, needs_durable_scan)
+    }
+    _ => (false, false)
+  }
+  {
+    legacy: @event.decode_event(raw),
+    wire: @wire.parse(raw),
+    prompt_steer_applied,
+    needs_durable_scan,
+  }
 }
 
 ///|
@@ -963,7 +962,7 @@ async fn read_engine_stdout(
     for ;; {
       guard reader.read_until("\n") is Some(line) else { break }
       for json in @jsonl.parse(line) {
-        messages.put(StreamEvent(json))
+        messages.put(StreamEvent(DecodedStreamEvent::from_wire(json)))
       }
     }
   } catch {
@@ -1085,7 +1084,7 @@ async fn EngineActor::run_generation(
 
   manager.pump = Serving(sessions~)
   defer reset()
-  emit(sink, Connected({ ready: true }))
+  emit(sink, Connected({ ready: Some(true) }))
   @async.with_task_group(group => {
     for ;; {
       match manager.commands.get() {
@@ -1452,13 +1451,14 @@ async fn ServeEngine::run(
   let sink = self.sink
   for ;; {
     match messages.get() {
-      StreamEvent(raw) => {
+      StreamEvent(stream) => {
         // Every stdout event is a hint that the engine may just have
         // appended to the durable record — the follower's low-latency
         // wakeup (its poll only backstops this).
         manager.kick_follower(engine.session_key)
-        let decoded = @event.decode_event(raw)
-        let needs_durable_scan = needs_durable_finish_scan(raw)
+        let decoded = stream.legacy
+        let wire_event = stream.wire
+        let needs_durable_scan = stream.needs_durable_scan
         // These events do not prove their matching Terminal append succeeded.
         // Synchronously close admission and stdin before the first sink
         // suspension; the current turn can finish its append/TurnDone, while
@@ -1474,7 +1474,7 @@ async fn ServeEngine::run(
         }
         let (run_id, submission_id) = engine.steer_runs.route_event(
           decoded,
-          raw,
+          stream.prompt_steer_applied,
           engine.latest_run,
         )
         // These normalized Finished events cannot carry an exact sequence
@@ -1485,7 +1485,6 @@ async fn ServeEngine::run(
           engine.follower is Some(follower) {
           follower.expect_durable_finish(id)
         }
-        let raw = event_with_submission_id(raw, submission_id)
         match decoded {
           // The abort the user asked for: report it as a cancellation, the
           // same wire status the pre-serve host used. A Running phase is
@@ -1503,10 +1502,15 @@ async fn ServeEngine::run(
             // their raw event as well would make the frontend render the same
             // failure twice. With no run to close (no id recorded yet) the
             // normalization cannot happen, so the raw event is the report.
-            if !host_reports_terminal_error(decoded) || run_id is None {
+            if (!host_reports_terminal_error(decoded) || run_id is None) &&
+              wire_event is Some(event) {
               emit(
                 sink,
-                StreamEvent({ run_id, session: engine.session_key, event: raw }),
+                StreamEvent({
+                  run_id,
+                  session: Some(engine.session_key),
+                  event: { event, submission_id },
+                }),
               )
             }
             match decoded {
@@ -1535,11 +1539,16 @@ async fn ServeEngine::run(
               engine.steer_runs.record_terminal(id)
             }
           }
-          None =>
+          None if wire_event is Some(event) =>
             emit(
               sink,
-              StreamEvent({ run_id, session: engine.session_key, event: raw }),
+              StreamEvent({
+                run_id,
+                session: Some(engine.session_key),
+                event: { event, submission_id },
+              }),
             )
+          None => ()
         }
       }
       StreamReaderFailed(message) => {
@@ -1720,8 +1729,11 @@ async fn emit_compaction_failed(
     sink,
     StreamEvent({
       run_id: engine.latest_run,
-      session: engine.session_key,
-      event: (CompactionFailed(error=reason) : @wire.Event).to_json(),
+      session: Some(engine.session_key),
+      event: {
+        event: (CompactionFailed(error=reason) : @wire.Event),
+        submission_id: None,
+      },
     }),
   )
 }
@@ -1740,11 +1752,21 @@ test "terminal failures are normalized by the host" {
 
 ///|
 test "unproven terminal logs require an EOF durable scan" {
-  assert_true(needs_durable_finish_scan({ "event": "agent_setup_failed" }))
-  assert_true(needs_durable_finish_scan({ "event": "turn_failed" }))
-  assert_true(needs_durable_finish_scan({ "event": "agent_aborted" }))
-  assert_false(needs_durable_finish_scan({ "event": "agent_finished" }))
-  assert_false(needs_durable_finish_scan({ "event": "max_steps_exhausted" }))
+  assert_true(
+    DecodedStreamEvent::from_wire({ "event": "agent_setup_failed" }).needs_durable_scan,
+  )
+  assert_true(
+    DecodedStreamEvent::from_wire({ "event": "turn_failed" }).needs_durable_scan,
+  )
+  assert_true(
+    DecodedStreamEvent::from_wire({ "event": "agent_aborted" }).needs_durable_scan,
+  )
+  assert_false(
+    DecodedStreamEvent::from_wire({ "event": "agent_finished" }).needs_durable_scan,
+  )
+  assert_false(
+    DecodedStreamEvent::from_wire({ "event": "max_steps_exhausted" }).needs_durable_scan,
+  )
 }
 
 ///|
@@ -1801,19 +1823,11 @@ test "trailing steer settle events keep the terminal run id" {
   let old_drop : @event.AgentEvent? = Some(SteerDropped("old steer"))
   let fresh_apply : @event.AgentEvent? = Some(SteerApplied("fresh steer"))
   assert_eq(
-    tracker.route_event(
-      old_drop,
-      { "event": "steer_dropped", "content": "old steer" },
-      Some("r42"),
-    ),
+    tracker.route_event(old_drop, false, Some("r42")),
     (Some("r41"), Some("submission-old")),
   )
   assert_eq(
-    tracker.route_event(
-      fresh_apply,
-      { "event": "steer_applied", "content": "fresh steer" },
-      Some("r42"),
-    ),
+    tracker.route_event(fresh_apply, true, Some("r42")),
     (Some("r42"), Some("submission-fresh")),
   )
 }
@@ -1825,33 +1839,32 @@ test "equal steer text receipts retain writer-order submission ids" {
   ignore(tracker.record_sent("same", Some("submission-a")))
   ignore(tracker.record_sent("same", Some("submission-b")))
   let receipt : @event.AgentEvent? = Some(SteerApplied("same"))
-  let raw : Json = { "event": "steer_applied", "content": "same" }
   let (first_run, first_submission) = tracker.route_event(
     receipt,
-    raw,
+    true,
     Some("r9"),
   )
   assert_eq(first_run, Some("r9"))
-  guard event_with_submission_id(
-      { "event": "steer_applied", "content": "same" },
-      first_submission,
-    )
-    is Object(first_fields) &&
+  let first_event : @protocol.AgentStreamEvent = {
+    event: (SteerApplied(kind="prompt", content="same") : @wire.Event),
+    submission_id: first_submission,
+  }
+  guard first_event.to_json() is Object(first_fields) &&
     first_fields.get("submission_id") is Some(String(first_id)) else {
     fail("first receipt did not carry a submission id")
   }
   assert_eq(first_id, "submission-a")
   let (second_run, second_submission) = tracker.route_event(
     receipt,
-    raw,
+    true,
     Some("r9"),
   )
   assert_eq(second_run, Some("r9"))
-  guard event_with_submission_id(
-      { "event": "steer_applied", "content": "same" },
-      second_submission,
-    )
-    is Object(second_fields) &&
+  let second_event : @protocol.AgentStreamEvent = {
+    event: (SteerApplied(kind="prompt", content="same") : @wire.Event),
+    submission_id: second_submission,
+  }
+  guard second_event.to_json() is Object(second_fields) &&
     second_fields.get("submission_id") is Some(String(second_id)) else {
     fail("second receipt did not carry a submission id")
   }
@@ -1864,9 +1877,12 @@ test "legacy steer receipt does not gain a submission field" {
   tracker.begin_run()
   ignore(tracker.record_sent("legacy", None))
   let decoded : @event.AgentEvent? = Some(SteerApplied("legacy"))
-  let raw : Json = { "event": "steer_applied", "content": "legacy" }
-  let (_, submission_id) = tracker.route_event(decoded, raw, Some("r11"))
-  guard event_with_submission_id(raw, submission_id) is Object(fields) else {
+  let (_, submission_id) = tracker.route_event(decoded, true, Some("r11"))
+  let event : @protocol.AgentStreamEvent = {
+    event: (SteerApplied(kind="prompt", content="legacy") : @wire.Event),
+    submission_id,
+  }
+  guard event.to_json() is Object(fields) else {
     fail("expected receipt object")
   }
   assert_true(fields.get("submission_id") is None)
@@ -1895,11 +1911,11 @@ test "submission ids are non-blank and bounded by UTF-8 bytes" {
 test "started payload omits a missing submission id" {
   let payload : StartedPayload = {
     run_id: "r1",
-    task: "hello",
+    task: Some("hello"),
     submission_id: None,
-    engine: "openseek",
-    model: "model",
-    max_steps: 10,
+    engine: Some("openseek"),
+    model: Some("model"),
+    max_steps: Some(10),
     cwd: None,
     session: None,
     session_root: None,
@@ -1917,16 +1933,12 @@ test "new turn events clear stale settling state" {
   ignore(tracker.record_sent("old steer", Some("submission-old")))
   tracker.record_terminal("r7")
   assert_eq(
-    tracker.route_event(Some(AgentStep), { "event": "agent_step" }, Some("r8")),
+    tracker.route_event(Some(AgentStep), false, Some("r8")),
     (Some("r8"), None),
   )
   let old_drop : @event.AgentEvent? = Some(SteerDropped("old steer"))
   assert_eq(
-    tracker.route_event(
-      old_drop,
-      { "event": "steer_dropped", "content": "old steer" },
-      Some("r8"),
-    ),
+    tracker.route_event(old_drop, false, Some("r8")),
     (Some("r8"), None),
   )
 }
@@ -1940,27 +1952,15 @@ test "background events do not clear trailing steer receipts" {
   tracker.record_terminal("r-old")
   tracker.begin_run()
   assert_eq(
-    tracker.route_event(
-      None,
-      { "event": "notice", "content": "background" },
-      Some("r-new"),
-    ),
+    tracker.route_event(None, false, Some("r-new")),
     (Some("r-new"), None),
   )
   assert_eq(
-    tracker.route_event(
-      Some(SteerApplied("first")),
-      { "event": "steer_applied", "kind": "prompt", "content": "first" },
-      Some("r-new"),
-    ),
+    tracker.route_event(Some(SteerApplied("first")), true, Some("r-new")),
     (Some("r-old"), Some("submission-first")),
   )
   assert_eq(
-    tracker.route_event(
-      Some(SteerDropped("second")),
-      { "event": "steer_dropped", "content": "second" },
-      Some("r-new"),
-    ),
+    tracker.route_event(Some(SteerDropped("second")), false, Some("r-new")),
     (Some("r-old"), Some("submission-second")),
   )
 }
@@ -1971,22 +1971,14 @@ test "only prompt steer_applied consumes a desktop steer" {
   tracker.begin_run()
   ignore(tracker.record_sent("same", Some("submission-prompt")))
   let decoded : @event.AgentEvent? = Some(SteerApplied("same"))
-  for kind in ["command", "notice"] {
+  for _ in ["command", "notice"] {
     assert_eq(
-      tracker.route_event(
-        decoded,
-        { "event": "steer_applied", "kind": kind, "content": "same" },
-        Some("r1"),
-      ),
+      tracker.route_event(decoded, false, Some("r1")),
       (Some("r1"), None),
     )
   }
   assert_eq(
-    tracker.route_event(
-      decoded,
-      { "event": "steer_applied", "kind": "prompt", "content": "same" },
-      Some("r1"),
-    ),
+    tracker.route_event(decoded, true, Some("r1")),
     (Some("r1"), Some("submission-prompt")),
   )
 }

@@ -28,13 +28,21 @@ const MaxLspServers = 6
 const MaxSymbolResults = 50
 
 ///|
-/// One request handled by a single language-server actor. Every variant uses
-/// the same raw-JSON reply shape: `None` means the server stopped or had no
-/// answer.
+/// One request handled by a single language-server actor. Each variant owns
+/// the concrete reply queue its caller expects; raw LSP JSON never crosses
+/// this actor boundary.
 priv enum LspServerCommand {
-  Hover(String, String, Int, Int, @async.Queue[Json?])
-  Open(String, String, @async.Queue[Json?])
-  Symbols(String, @async.Queue[Json?])
+  Hover(String, String, Int, Int, @async.Queue[LspHoverReply])
+  Open(String, String, @async.Queue[LspDiagnosticsReply])
+  Symbols(String, String, @async.Queue[WorkspaceSymbolsReply])
+}
+
+///|
+/// The typed result produced inside the actor after decoding one LSP reply.
+priv enum LspServerResult {
+  HoverResult(LspHoverReply)
+  OpenResult(LspDiagnosticsReply)
+  SymbolsResult(WorkspaceSymbolsReply)
 }
 
 ///|
@@ -45,7 +53,7 @@ priv enum LspServerInput {
 
 ///|
 priv enum LspServerOutcome {
-  ServerCompleted(Json?)
+  ServerCompleted(LspServerResult)
   ServerStopped
 }
 
@@ -389,19 +397,20 @@ fn LspServerActor::stop(self : LspServerActor) -> Unit {
 }
 
 ///|
-async fn LspServerActor::call(
+async fn[T] LspServerActor::call(
   self : LspServerActor,
-  build : (@async.Queue[Json?]) -> LspServerCommand,
-) -> Json? {
-  guard !self.closed.val else { return None }
-  let reply : @async.Queue[Json?] = Queue(kind=Blocking(1))
-  self.inbox.put(build(reply)) catch {
+  command : LspServerCommand,
+  reply : @async.Queue[T],
+  fallback : T,
+) -> T {
+  guard !self.closed.val else { return fallback }
+  self.inbox.put(command) catch {
     error if @async.is_being_cancelled() => raise error
-    _ => return None
+    _ => return fallback
   }
   reply.get() catch {
     error if @async.is_being_cancelled() => raise error
-    _ => None
+    _ => fallback
   }
 }
 
@@ -412,8 +421,9 @@ async fn LspServerActor::hover(
   text : String,
   line : Int,
   character : Int,
-) -> Json? {
-  self.call(reply => Hover(uri, text, line, character, reply))
+) -> LspHoverReply {
+  let reply : @async.Queue[LspHoverReply] = Queue(kind=Blocking(1))
+  self.call(Hover(uri, text, line, character, reply), reply, no_hover())
 }
 
 ///|
@@ -421,26 +431,40 @@ async fn LspServerActor::open(
   self : LspServerActor,
   uri : String,
   text : String,
-) -> Json? {
-  self.call(reply => Open(uri, text, reply))
+) -> LspDiagnosticsReply {
+  let reply : @async.Queue[LspDiagnosticsReply] = Queue(kind=Blocking(1))
+  self.call(Open(uri, text, reply), reply, { diagnostics: [] })
 }
 
 ///|
 async fn LspServerActor::symbols(
   self : LspServerActor,
   query : String,
-) -> Json? {
-  self.call(reply => Symbols(query, reply))
+  workspace_dir : String,
+) -> WorkspaceSymbolsReply {
+  let reply : @async.Queue[WorkspaceSymbolsReply] = Queue(kind=Blocking(1))
+  self.call(Symbols(query, workspace_dir, reply), reply, { symbols: [] })
 }
 
 ///|
-fn LspServerCommand::reply(self : LspServerCommand, result : Json?) -> Unit {
-  let reply = match self {
-    Hover(_, _, _, _, reply) => reply
-    Open(_, _, reply) => reply
-    Symbols(_, reply) => reply
+fn LspServerCommand::reply(
+  self : LspServerCommand,
+  result : LspServerResult?,
+) -> Unit {
+  match (self, result) {
+    (Hover(_, _, _, _, reply), Some(HoverResult(value))) =>
+      ignore(reply.try_put(value) catch { _ => false })
+    (Hover(_, _, _, _, reply), _) =>
+      ignore(reply.try_put(no_hover()) catch { _ => false })
+    (Open(_, _, reply), Some(OpenResult(value))) =>
+      ignore(reply.try_put(value) catch { _ => false })
+    (Open(_, _, reply), _) =>
+      ignore(reply.try_put({ diagnostics: [] }) catch { _ => false })
+    (Symbols(_, _, reply), Some(SymbolsResult(value))) =>
+      ignore(reply.try_put(value) catch { _ => false })
+    (Symbols(_, _, reply), _) =>
+      ignore(reply.try_put({ symbols: [] }) catch { _ => false })
   }
-  ignore(reply.try_put(result) catch { _ => false })
 }
 
 ///|
@@ -498,7 +522,7 @@ async fn[G] LspServerActor::run_in_group(
           },
         ])
         match outcome {
-          ServerCompleted(result) => command.reply(result)
+          ServerCompleted(result) => command.reply(Some(result))
           ServerStopped => {
             command.reply(None)
             return
@@ -555,7 +579,10 @@ async fn[G] LspServerActor::start_runtime(
   )
   let session = @lsp.Session::new(client)
   session.on_publish_diagnostics((uri, diags) => {
-    (diagnostics.try_put({ path: @uri.file_uri_path(uri), diagnostics: diags }) catch {
+    (diagnostics.try_put({
+      path: @uri.file_uri_path(uri),
+      diagnostics: @protocol.LspDiagnostic::array_from_wire(diags),
+    }) catch {
       _ => false
     })
     |> ignore
@@ -584,17 +611,24 @@ async fn[G] LspServerActor::start_runtime(
 async fn LspServerRuntime::execute(
   self : LspServerRuntime,
   command : LspServerCommand,
-) -> Json? {
+) -> LspServerResult {
   match command {
     Hover(uri, text, line, character, _) => {
       self.sync(uri, text)
-      self.session.hover(uri~, line~, character~)
+      HoverResult(parse_hover(self.session.hover(uri~, line~, character~)))
     }
     Open(uri, text, _) => {
       self.sync(uri, text)
-      self.session.diagnostics_for(uri~)
+      let diagnostics = match self.session.diagnostics_for(uri~) {
+        Some(raw) => @protocol.LspDiagnostic::array_from_wire(raw)
+        None => []
+      }
+      OpenResult({ diagnostics, })
     }
-    Symbols(query, _) => self.session.workspace_symbols(query~)
+    Symbols(query, workspace_dir, _) =>
+      SymbolsResult(
+        parse_symbols(self.session.workspace_symbols(query~), workspace_dir),
+      )
   }
 }
 
@@ -638,7 +672,7 @@ async fn lsp_hover_op(
   }
   guard read_text(file) is Some(text) else { return no_hover() }
   let uri = @uri.file_uri(file.to_string())
-  parse_hover(server.hover(uri, text, payload.line, payload.character))
+  server.hover(uri, text, payload.line, payload.character)
 }
 
 ///|
@@ -662,7 +696,7 @@ async fn lsp_open_op(
   }
   guard read_text(file) is Some(text) else { return { diagnostics: [] } }
   let uri = @uri.file_uri(file.to_string())
-  { diagnostics: server.open(uri, text).unwrap_or([]) }
+  server.open(uri, text)
 }
 
 ///|
@@ -695,7 +729,7 @@ async fn workspace_symbols_op(
     if symbols.length() >= MaxSymbolResults {
       break
     }
-    let reply = parse_symbols(server.symbols(payload.query), workspace_dir)
+    let reply = server.symbols(payload.query, workspace_dir)
     for symbol in reply.symbols {
       if symbols.length() >= MaxSymbolResults {
         break

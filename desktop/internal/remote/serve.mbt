@@ -2,7 +2,7 @@
 // dialed out through the relay (docs/remote-protocol.md). Requests fan out
 // to the shared dispatcher concurrently; notifications flow back from the
 // hub. The bridge and this file are the only two transports, and everything
-// below the envelope is `@api.dispatch`.
+// below the envelope is the typed Endpoint selected from `@api.endpoints`.
 
 ///|
 /// Everything the single writer task sends, encoded only at the writer so
@@ -10,7 +10,7 @@
 priv enum Outgoing {
   // A complete JSON-RPC response envelope, built where the request ran.
   Response(Json)
-  Notify(@api.Notification)
+  Notify(@protocol.Notification)
   // Protocol-level keepalive, serialized with every text frame.
   Ping
 }
@@ -22,7 +22,7 @@ priv enum Outgoing {
 /// subscribe and readiness. Forwarders may only start after this returns.
 priv struct ClientSubscription {
   out : @async.Queue[Outgoing]
-  notifications : @async.Queue[@api.Notification]
+  notifications : @async.Queue[@protocol.Notification]
 }
 
 ///|
@@ -50,7 +50,7 @@ async fn WsClientActor::open_subscription(
   // `agent.connected` as "state may have changed, reload". Queue it before
   // any notification forwarder exists, making it this subscription's first
   // outbound frame even if the hub publishes immediately after subscribe.
-  out.put(Notify({ method_: "agent.connected", params: Json::empty_object() }))
+  out.put(Notify(AgentConnected({ ready: None })))
   { out, notifications }
 }
 
@@ -163,6 +163,9 @@ async fn WsClientActor::serve(
     InflightRequestCapacity,
     initial_value=InflightRequestCapacity,
   )
+  // Endpoint closures capture this connection's watch and PTY ownership once;
+  // every request only performs a name lookup in the stable catalog.
+  let endpoints = @api.endpoints(self.state, self.host_connection)
   defer self.state.unsubscribe(notifications)
   @async.with_task_group(group => {
     group.spawn_bg(() => {
@@ -174,8 +177,8 @@ async fn WsClientActor::serve(
       // Filesystem watch events belong to this WebSocket connection. They
       // bypass the shared hub so other desktop and remote clients never
       // receive this connection's `fs.changed` notifications.
-      self.host_connection.run((method_, params) => {
-        enqueue_outgoing(out, Notify({ method_, params }))
+      self.host_connection.run(notification => {
+        enqueue_outgoing(out, Notify(notification))
       })
     })
     group.spawn_bg(() => {
@@ -239,15 +242,7 @@ async fn WsClientActor::serve(
             // tasks.
             enqueue_outgoing(
               out,
-              Response(
-                run_request(
-                  self.state,
-                  self.host_connection,
-                  id,
-                  method_,
-                  params,
-                ),
-              ),
+              Response(run_request(endpoints, id, method_, params)),
             )
           } else {
             // Each other request runs in its own task so a slow op (an engine
@@ -260,15 +255,7 @@ async fn WsClientActor::serve(
               defer request_permits.release()
               enqueue_outgoing(
                 out,
-                Response(
-                  run_request(
-                    self.state,
-                    self.host_connection,
-                    id,
-                    method_,
-                    params,
-                  ),
-                ),
+                Response(run_request(endpoints, id, method_, params)),
               )
             })
           }
@@ -320,8 +307,8 @@ async fn Outgoing::write(self : Outgoing, conn : @websocket.Conn) -> Unit {
     Notify(notification) =>
       {
         "jsonrpc": "2.0",
-        "method": Json::string(notification.method_),
-        "params": notification.params,
+        "method": Json::string(notification.wire_name()),
+        "params": notification.params(),
       }
   }
   conn.send_text(envelope.stringify())
@@ -366,76 +353,53 @@ fn classify(text : String) -> Inbound {
 /// trimmed so the hub's original notification stays untouched for local
 /// transports.
 fn notification_for_client(
-  notification : @api.Notification,
-) -> @api.Notification? {
-  let method_ = notification.method_
-  let params = notification.params
-  // A session-less run has no store and therefore no `session.event` twin.
-  // Keep its complete semantic stream intact; the same browser may interleave
-  // durable and ephemeral runs.
-  let has_durable_session = params is Object(fields) &&
-    fields.get("session") is Some(String(session)) &&
-    !session.is_empty()
-  if method_ == "agent.event" &&
-    has_durable_session &&
-    params is Object(fields) &&
-    fields.get("event") is Some(Object(event)) &&
-    event.get("event") is Some(String(event_name)) {
-    match event_name {
-      // These full messages also settle the preceding delta streams. Keep
-      // that state transition while removing the durable text itself.
-      "reasoning_message" | "assistant_message" => {
-        let lifecycle_event = event.copy()
-        lifecycle_event["content"] = Json::string("")
-        let lifecycle = fields.copy()
-        lifecycle["event"] = Json::object(lifecycle_event)
-        return Some({ method_, params: Json::object(lifecycle) })
+  notification : @protocol.Notification,
+) -> @protocol.Notification? {
+  match notification {
+    AgentEvent(payload) => {
+      // A session-less run has no store and therefore no `session.event`
+      // twin. Keep its complete semantic stream intact.
+      guard payload.session is Some(session) && !session.is_empty() else {
+        return Some(notification)
       }
-      "tool_result"
-      | "auto_compaction_finished"
-      // The separate `agent.finished` frame below keeps the terminal state.
-      | "agent_finished"
-      | "context_yield" => return None
-      // The summary is durable, but this frame also clears the client's
-      // compaction lifecycle state; retain its shape with an empty summary.
-      "compaction_finished" => {
-        let lifecycle_event = event.copy()
-        lifecycle_event["summary"] = Json::string("")
-        let lifecycle = fields.copy()
-        lifecycle["event"] = Json::object(lifecycle_event)
-        return Some({ method_, params: Json::object(lifecycle) })
+      if payload.event.remote_lifecycle() is Some(event) {
+        Some(AgentEvent({ ..payload, event, }))
+      } else {
+        None
       }
-      _ => ()
     }
+    AgentStarted(payload) if payload.session is Some(session) &&
+      !session.is_empty() =>
+      // The prompt itself arrives as a durable commit. Keep the field so
+      // clients with a required-string decoder still accept the frame.
+      Some(AgentStarted({ ..payload, task: Some("") }))
+    _ => Some(notification)
   }
-  // `agent.finished` has no session identity, so the edge cannot prove that
-  // its answer has a canonical twin. Preserve the answer for every run.
-  if method_ == "agent.started" &&
-    has_durable_session &&
-    params is Object(fields) {
-    // Keep the field so clients with a required-string decoder still accept
-    // the run lifecycle frame; the prompt itself arrives as a commit.
-    let lifecycle = fields.copy()
-    lifecycle["task"] = Json::string("")
-    return Some({ method_, params: Json::object(lifecycle) })
-  }
-  Some(notification)
 }
 
 ///|
 /// Run one request through the dispatcher and shape the outcome as a
 /// JSON-RPC response, mapping each typed failure to its protocol code.
 async fn run_request(
-  state : @api.ApiState,
-  connection : @host.HostConnection,
+  endpoints : Array[@endpoint.Endpoint],
   id : Json,
   method_ : String,
   params : Json,
 ) -> Json {
-  let result = @api.dispatch(state, connection, method_, params) catch {
+  let mut selected_endpoint = None
+  for endpoint in endpoints {
+    if endpoint.name() == method_ {
+      selected_endpoint = Some(endpoint)
+      break
+    }
+  }
+  guard selected_endpoint is Some(endpoint) else {
+    return error_envelope(id, CodeMethodNotFound, "unknown method '\{method_}'")
+  }
+  let result = endpoint.invoke_remote(params) catch {
     error if @async.is_being_cancelled() => raise error
-    @api.UnknownMethod(name) =>
-      return error_envelope(id, CodeMethodNotFound, "unknown method '\{name}'")
+    @endpoint.InvalidEndpointPayload(message) =>
+      return error_envelope(id, CodeInvalidParams, message)
     @host.PayloadError(message) =>
       return error_envelope(id, CodeInvalidParams, message)
     @engine.EngineError(message) =>
@@ -462,17 +426,23 @@ async test "readiness precedes the first forwarded hub notification" {
   let state = @api.ApiState::new(engine="unused")
   let subscription = WsClientActor::new(state, "unused").open_subscription()
   defer state.unsubscribe(subscription.notifications)
-  state.publish("session.event", { "sequence": 1 })
+  state.publish(
+    SessionEvent({
+      session: "session-1",
+      sequence: 1,
+      event: { sequence: 1, ts: None, item: User({ content: "test" }) },
+    }),
+  )
   let notification = subscription.notifications.get()
   assert_true(subscription.out.try_put(Notify(notification)))
   guard subscription.out.get() is Notify(readiness) else {
     fail("expected readiness notification")
   }
-  assert_eq(readiness.method_, "agent.connected")
+  assert_eq(readiness.wire_name(), "agent.connected")
   guard subscription.out.get() is Notify(forwarded) else {
     fail("expected forwarded notification")
   }
-  assert_eq(forwarded.method_, "session.event")
+  assert_eq(forwarded.wire_name(), "session.event")
 }
 
 ///|
@@ -555,25 +525,36 @@ test "classify rejects non-object catalog parameters" {
 }
 
 ///|
-fn expect_notification(value : @api.Notification?) -> @api.Notification raise {
+fn expect_notification(
+  value : @protocol.Notification?,
+) -> @protocol.Notification raise {
   guard value is Some(notification) else { fail("expected a notification") }
   notification
 }
 
 ///|
 test "remote delivery omits only canonical transcript duplicates" {
-  for
-    event_name in [
-      "tool_result", "auto_compaction_finished", "agent_finished", "context_yield",
-    ] {
+  let events : Array[@wire.Event] = [
+    ToolResult(
+      tool_call_id="call-1",
+      tool_name="read",
+      is_error=false,
+      content="result",
+      brief=None,
+    ),
+    AutoCompactionFinished(from_sequence=1, to_sequence=2, summary="summary"),
+    AgentFinished(answer="answer"),
+    ContextYield(to_sequence=2, answer="answer"),
+  ]
+  for event in events {
     assert_true(
-      notification_for_client({
-        method_: "agent.event",
-        params: {
-          "session": "session-1",
-          "event": { "event": Json::string(event_name) },
-        },
-      })
+      notification_for_client(
+        AgentEvent({
+          run_id: None,
+          session: Some("session-1"),
+          event: { event, submission_id: None },
+        }),
+      )
       is None,
     )
   }
@@ -581,29 +562,52 @@ test "remote delivery omits only canonical transcript duplicates" {
 
 ///|
 test "remote delivery retains streaming runtime and error events" {
-  for
-    event_name in [
-      "agent_step", "assistant_delta", "reasoning_delta", "usage", "tool_call_decode_error",
-      "background_notice", "runtime_update", "steer_applied", "steer_dropped", "agent_aborted",
-      "max_steps_exhausted", "agent_setup_failed", "compaction_started", "compaction_failed",
-      "unknown_future_event",
-    ] {
+  let events : Array[@wire.Event] = [
+    AgentStep(step=1),
+    AssistantDelta(content="delta"),
+    ReasoningMessage(content="reasoning"),
+    Usage(usage={
+      prompt_tokens: 1,
+      completion_tokens: 2,
+      total_tokens: 3,
+      prompt_cache_hit_tokens: 0,
+      prompt_cache_miss_tokens: 1,
+    }),
+    ToolCallDecodeError(
+      tool_call_id="call-1",
+      tool_name="read",
+      error="bad arguments",
+    ),
+    BackgroundNotice(content="notice"),
+    GoalUpdated(goal=Some("goal")),
+    SteerApplied(kind="prompt", content="steered"),
+    SteerDropped(content="late"),
+    AgentAborted(reason="cancelled"),
+    MaxStepsExhausted,
+    AgentSetupFailed(error="setup failed"),
+    CompactionStarted(from_sequence=1, to_sequence=2),
+    CompactionFailed(error="compact failed"),
+  ]
+  for event in events {
     assert_true(
-      notification_for_client({
-        method_: "agent.event",
-        params: {
-          "session": "session-1",
-          "event": { "event": Json::string(event_name) },
-        },
-      })
+      notification_for_client(
+        AgentEvent({
+          run_id: None,
+          session: Some("session-1"),
+          event: { event, submission_id: None },
+        }),
+      )
       is Some(_),
     )
   }
   assert_true(
-    notification_for_client({
-      method_: "session.event",
-      params: Json::empty_object(),
-    })
+    notification_for_client(
+      SessionEvent({
+        session: "session-1",
+        sequence: 1,
+        event: { sequence: 1, ts: None, item: User({ content: "test" }) },
+      }),
+    )
     is Some(_),
   )
 }
@@ -611,62 +615,86 @@ test "remote delivery retains streaming runtime and error events" {
 ///|
 test "remote lifecycle frames keep state and trim transcript text" {
   let started = expect_notification(
-    notification_for_client({
-      method_: "agent.started",
-      params: {
-        "run_id": "run-1",
-        "session": "session-1",
-        "task": "large prompt",
-      },
-    }),
+    notification_for_client(
+      AgentStarted({
+        run_id: "run-1",
+        task: Some("large prompt"),
+        submission_id: None,
+        engine: None,
+        model: None,
+        max_steps: None,
+        cwd: None,
+        session: Some("session-1"),
+        session_root: None,
+      }),
+    ),
   )
-  assert_eq(started.params, {
+  assert_eq(started.params(), {
     "run_id": "run-1",
     "session": "session-1",
     "task": "",
   })
   let finished = expect_notification(
-    notification_for_client({
-      method_: "agent.finished",
-      params: {
-        "run_id": "run-1",
-        "status": "finished",
-        "answer": "large answer",
-      },
-    }),
+    notification_for_client(
+      AgentFinished({
+        run_id: "run-1",
+        status: "finished",
+        answer: Some("large answer"),
+        exit_code: None,
+        durable_sequence: None,
+      }),
+    ),
   )
-  assert_eq(finished.params, {
+  assert_eq(finished.params(), {
     "run_id": "run-1",
     "status": "finished",
     "answer": "large answer",
   })
   let compacted = expect_notification(
-    notification_for_client({
-      method_: "agent.event",
-      params: {
-        "session": "session-1",
-        "event": { "event": "compaction_finished", "summary": "large summary" },
-      },
-    }),
-  )
-  assert_eq(compacted.params, {
-    "session": "session-1",
-    "event": { "event": "compaction_finished", "summary": "" },
-  })
-  for event_name in ["reasoning_message", "assistant_message"] {
-    let settled = expect_notification(
-      notification_for_client({
-        method_: "agent.event",
-        params: {
-          "session": "session-1",
-          "event": {
-            "event": Json::string(event_name),
-            "content": "large content",
-          },
+    notification_for_client(
+      AgentEvent({
+        run_id: None,
+        session: Some("session-1"),
+        event: {
+          event: CompactionFinished(
+            from_sequence=1,
+            to_sequence=2,
+            summary="large summary",
+          ),
+          submission_id: None,
         },
       }),
+    ),
+  )
+  assert_eq(compacted.params(), {
+    "session": "session-1",
+    "event": {
+      "event": "compaction_finished",
+      "from_sequence": 1,
+      "to_sequence": 2,
+      "summary": "",
+    },
+  })
+  let settled_events : Array[@wire.Event] = [
+    ReasoningMessage(content="large content"),
+    AssistantMessage(content="large content"),
+  ]
+  for event in settled_events {
+    let settled = expect_notification(
+      notification_for_client(
+        AgentEvent({
+          run_id: None,
+          session: Some("session-1"),
+          event: { event, submission_id: None },
+        }),
+      ),
     )
-    assert_eq(settled.params, {
+    let event_name = match event {
+      ReasoningMessage(..) => "reasoning_message"
+      AssistantMessage(..) => "assistant_message"
+      _ => fail("expected a semantic message")
+    }
+    assert_eq(settled.params(), {
       "session": "session-1",
       "event": { "event": Json::string(event_name), "content": "" },
     })
@@ -675,40 +703,61 @@ test "remote lifecycle frames keep state and trim transcript text" {
 
 ///|
 test "remote delivery preserves session-less transcript events" {
-  let started_params : Json = {
-    "run_id": "run-ephemeral",
-    "task": "ephemeral prompt",
-  }
+  let started_notification : @protocol.Notification = AgentStarted({
+    run_id: "run-ephemeral",
+    task: Some("ephemeral prompt"),
+    submission_id: None,
+    engine: None,
+    model: None,
+    max_steps: None,
+    cwd: None,
+    session: None,
+    session_root: None,
+  })
   let started = expect_notification(
-    notification_for_client({ method_: "agent.started", params: started_params }),
+    notification_for_client(started_notification),
   )
-  assert_eq(started.params, started_params)
-  for
-    event_name in [
-      "reasoning_message", "assistant_message", "tool_result", "agent_finished",
-      "context_yield",
-    ] {
-    let params : Json = {
-      "event": {
-        "event": Json::string(event_name),
-        "content": "ephemeral content",
-      },
-    }
-    let delivered = expect_notification(
-      notification_for_client({ method_: "agent.event", params }),
-    )
-    assert_eq(delivered.params, params)
+  assert_eq(started.params(), started_notification.params())
+  let events : Array[@wire.Event] = [
+    ReasoningMessage(content="ephemeral content"),
+    AssistantMessage(content="ephemeral content"),
+    ToolResult(
+      tool_call_id="call-1",
+      tool_name="read",
+      is_error=false,
+      content="ephemeral content",
+      brief=None,
+    ),
+    AgentFinished(answer="ephemeral content"),
+    ContextYield(to_sequence=1, answer="ephemeral content"),
+  ]
+  for event in events {
+    let notification : @protocol.Notification = AgentEvent({
+      run_id: None,
+      session: None,
+      event: { event, submission_id: None },
+    })
+    let delivered = expect_notification(notification_for_client(notification))
+    assert_eq(delivered.params(), notification.params())
   }
 }
 
 ///|
 test "empty session is not treated as durable" {
-  let params : Json = {
-    "session": "",
-    "event": { "event": "tool_result", "content": "ephemeral result" },
-  }
-  let delivered = expect_notification(
-    notification_for_client({ method_: "agent.event", params }),
-  )
-  assert_eq(delivered.params, params)
+  let notification : @protocol.Notification = AgentEvent({
+    run_id: None,
+    session: Some(""),
+    event: {
+      event: ToolResult(
+        tool_call_id="call-1",
+        tool_name="read",
+        is_error=false,
+        content="ephemeral result",
+        brief=None,
+      ),
+      submission_id: None,
+    },
+  })
+  let delivered = expect_notification(notification_for_client(notification))
+  assert_eq(delivered.params(), notification.params())
 }

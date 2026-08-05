@@ -3,15 +3,7 @@
 // Host-side method payloads live in internal/host/protocol.mbt.
 
 ///|
-priv struct StartPayload {
-  task : String
-  submission_id : String?
-  model : String?
-  max_steps : Int?
-  session : String?
-  // A registered workspace directory to run in; absent = scratch workspace.
-  workspace : String?
-} derive(FromJson)
+type StartPayload = @protocol.StartPayload
 
 ///|
 fn StartPayload::to_request(self : StartPayload) -> @engine.StartRequest {
@@ -26,9 +18,7 @@ fn StartPayload::to_request(self : StartPayload) -> @engine.StartRequest {
 }
 
 ///|
-priv struct CancelPayload {
-  run_id : String?
-} derive(FromJson)
+type CancelPayload = @protocol.CancelPayload
 
 ///|
 fn CancelPayload::to_request(self : CancelPayload) -> @engine.CancelRequest {
@@ -36,11 +26,7 @@ fn CancelPayload::to_request(self : CancelPayload) -> @engine.CancelRequest {
 }
 
 ///|
-priv struct SteerPayload {
-  text : String
-  run_id : String?
-  submission_id : String?
-} derive(FromJson)
+type SteerPayload = @protocol.SteerPayload
 
 ///|
 fn SteerPayload::to_request(self : SteerPayload) -> @engine.SteerRequest {
@@ -51,30 +37,16 @@ fn SteerPayload::to_request(self : SteerPayload) -> @engine.SteerRequest {
 /// One lifecycle identity the caller still needs the host to settle. `session`
 /// is always present; before Started is observed the client may know only the
 /// submission id, and after it is observed the run id is authoritative.
-priv struct KnownRunPayload {
-  session : String
-  run_id : String?
-  submission_id : String?
-} derive(FromJson)
+type KnownRunPayload = @protocol.KnownRunPayload
 
 ///|
 /// `agent.runs` remains compatible with the original empty-object request.
 /// Omitting `known` asks only for the active-run snapshot and cannot replay
 /// the process-lifetime settlement ledger.
-priv struct RunsPayload {
-  known : Array[KnownRunPayload]?
-} derive(FromJson)
-
-///|
 /// A compact carries the same engine settings as a start (minus the task):
 /// a conversation resumed after a restart has no live serve process, and
 /// compacting it spawns one with these settings.
-priv struct CompactPayload {
-  session : String
-  model : String?
-  max_steps : Int?
-  workspace : String?
-} derive(FromJson)
+type CompactPayload = @protocol.CompactPayload
 
 ///|
 fn CompactPayload::to_request(self : CompactPayload) -> @engine.CompactRequest {
@@ -89,16 +61,7 @@ fn CompactPayload::to_request(self : CompactPayload) -> @engine.CompactRequest {
 ///|
 /// `settings.set`: every field optional (absent = unchanged); a present
 /// string field is trimmed, and empty clears the stored value.
-priv struct SettingsSetPayload {
-  provider : String?
-  custom_api_url : String?
-  deepseek_api_key : String?
-  custom_api_key : String?
-  // One-time compatibility import from pre-host-settings desktop builds.
-  // The engine store accepts it only before any settings write has claimed
-  // the durable store, making a lost reply safe to retry.
-  legacy_migration : Bool?
-} derive(FromJson)
+type SettingsSetPayload = @protocol.SettingsSetPayload
 
 ///|
 fn SettingsSetPayload::to_patch(
@@ -113,11 +76,7 @@ fn SettingsSetPayload::to_patch(
 }
 
 ///|
-priv struct LoadSessionPayload {
-  session : String
-  // The workspace whose store holds the session, when the client knows it.
-  workspace : String?
-} derive(FromJson)
+type LoadSessionPayload = @protocol.LoadSessionPayload
 
 ///|
 fn LoadSessionPayload::to_request(
@@ -129,16 +88,9 @@ fn LoadSessionPayload::to_request(
 ///|
 /// `workspace.add` / `workspace.remove` name the project directory to
 /// attach or detach.
-priv struct WorkspacePayload {
-  path : String
-} derive(FromJson)
-
-///|
 /// `session.archive` / `session.unarchive` address a conversation by its
 /// durable session id.
-priv struct SessionPayload {
-  session : String
-} derive(FromJson)
+type SessionPayload = @protocol.SessionPayload
 
 ///|
 fn SessionPayload::canonical_session(self : SessionPayload) -> String {
@@ -147,12 +99,12 @@ fn SessionPayload::canonical_session(self : SessionPayload) -> String {
 
 ///|
 test "start and steer payloads preserve submission ids" {
-  let start : StartPayload = decode({
+  let start : StartPayload = @json.from_json({
     "task": "hello",
     "submission_id": "submission-start",
   })
   assert_eq(start.to_request().submission_id, Some("submission-start"))
-  let steer : SteerPayload = decode({
+  let steer : SteerPayload = @json.from_json({
     "text": "more detail",
     "run_id": "r1",
     "submission_id": "submission-steer",
@@ -162,15 +114,15 @@ test "start and steer payloads preserve submission ids" {
 
 ///|
 test "legacy start and steer payloads omit submission ids" {
-  let start : StartPayload = decode({ "task": "hello" })
+  let start : StartPayload = @json.from_json({ "task": "hello" })
   assert_true(start.to_request().submission_id is None)
-  let steer : SteerPayload = decode({ "text": "more detail" })
+  let steer : SteerPayload = @json.from_json({ "text": "more detail" })
   assert_true(steer.to_request().submission_id is None)
 }
 
 ///|
 test "client-authored session roots are ignored" {
-  let start : StartPayload = decode({
+  let start : StartPayload = @json.from_json({
     "task": "hello",
     "session": "s-start",
     "session_root": "/client/chosen/store",
@@ -178,7 +130,7 @@ test "client-authored session roots are ignored" {
   let start_request = start.to_request()
   assert_eq(start_request.session, Some("s-start"))
   assert_true(start_request.workspace is None)
-  let compact : CompactPayload = decode({
+  let compact : CompactPayload = @json.from_json({
     "session": "s-compact",
     "session_root": "/client/chosen/store",
   })
@@ -189,6 +141,8 @@ test "client-authored session roots are ignored" {
 
 ///|
 test "session move payload has one canonical id" {
-  let payload : SessionPayload = decode({ "session": "  s-canonical  " })
+  let payload : SessionPayload = @json.from_json({
+    "session": "  s-canonical  ",
+  })
   assert_eq(payload.canonical_session(), "s-canonical")
 }

@@ -1,9 +1,6 @@
-// The package's public face: the transport-agnostic host ops — everything
-// the desktop host offers a client beyond the engine itself (file browsing,
-// language services, skills, self-update, app launching) — dispatched by
-// method name. The method names and payload shapes are the wire catalog of
-// docs/remote-protocol.md, shared verbatim by the proton bridge and the
-// remote WebSocket.
+// Transport-agnostic host operations: file browsing, language services,
+// skills, self-update, app launching, and connection-owned filesystem/PTY
+// state. Typed payloads enter here only after an Endpoint has decoded them.
 
 ///|
 /// A host-side failure with a user-facing message. Ops raise it; the
@@ -96,12 +93,12 @@ pub fn new_host_state(
 pub fn[G] spawn_host_pumps(
   group : @async.TaskGroup[G],
   state : HostState,
-  emit : async (String, Json) -> Unit,
+  emit : async (@protocol.Notification) -> Unit,
 ) -> Unit {
   group.spawn_bg(allow_failure=true, () => state.lsp.run())
   group.spawn_bg(allow_failure=true, () => {
     state.lsp.forward_diagnostics(async fn(push) {
-      emit("lsp.diagnostics", ToJson::to_json(push))
+      emit(LspDiagnostics({ path: push.path, diagnostics: push.diagnostics }))
     })
   })
   group.spawn_bg(allow_failure=true, () => state.updates.run(emit))
@@ -113,7 +110,7 @@ pub fn[G] spawn_host_pumps(
 /// process-wide hub.
 pub async fn HostConnection::run(
   self : HostConnection,
-  emit : async (String, Json) -> Unit,
+  emit : async (@protocol.Notification) -> Unit,
 ) -> Unit {
   @async.with_task_group(group => {
     // Closing the request queue is the terminal pump's normal connection-end
@@ -128,18 +125,47 @@ pub async fn HostConnection::run(
               sequence,
               data: @base64.encode(data),
             }
-            emit("terminal.output", ToJson::to_json(payload))
+            emit(
+              TerminalOutput({
+                id: payload.id,
+                sequence: payload.sequence,
+                data: payload.data,
+              }),
+            )
           }
           Exited(id~, code~) => {
             let payload : TerminalExitPayload = { id, code }
-            emit("terminal.exit", ToJson::to_json(payload))
+            emit(TerminalExit({ id: payload.id, code: payload.code }))
           }
         }
       })
     })
     self.fs_watch.run(
-      async fn(push) { emit("fs.changed", ToJson::to_json(push)) },
-      async fn(failure) { emit("fs.watch_failed", ToJson::to_json(failure)) },
+      async fn(push) {
+        emit(
+          FsChanged({
+            session: Some(push.session),
+            root: Some(push.root),
+            baseline: Some(push.baseline),
+            events: Some(
+              push.events.map(event => {
+                kind_: event.kind_,
+                path: event.path,
+                old_path: event.old_path,
+              }),
+            ),
+          }),
+        )
+      },
+      async fn(failure) {
+        emit(
+          FsWatchFailed({
+            session: failure.session,
+            root: failure.root,
+            message: failure.message,
+          }),
+        )
+      },
     )
   })
 }
@@ -153,147 +179,214 @@ pub fn HostConnection::close_terminals(self : HostConnection) -> Unit {
 }
 
 ///|
-fn[T : @json.FromJson] decode_payload(payload : Json) -> T raise {
-  @json.from_json(payload) catch {
-    _ => raise PayloadError("malformed request payload")
-  }
+/// Typed host methods are the native API consumed by the endpoint registry.
+/// Transport names and JSON never enter this package.
+pub async fn skills_catalog() -> @protocol.SkillsCatalogReply {
+  skills_catalog_op()
 }
 
 ///|
-/// Dispatch one host method by its catalog name, returning its JSON reply —
-/// or None for a name this host does not know, which the transport reports
-/// as an unknown method rather than a failed op. `publish` sends shared
-/// invalidations whose filesystem change must stay coupled to its notification.
-pub async fn host_op(
-  state : HostState,
-  connection : HostConnection,
-  op : String,
-  payload : Json,
-  publish : (String, Json) -> Unit,
-) -> Json? {
-  match op {
-    "skills.catalog" => Some(ToJson::to_json(skills_catalog_op()))
-    "skills.install" =>
-      Some(
-        ToJson::to_json(
-          install_skill_op(decode_payload(payload), () => {
-            publish("skills.changed", Json::empty_object())
-          }),
-        ),
-      )
-    "skills.installed" => Some(ToJson::to_json(installed_skills_op()))
-    "skills.uninstall" =>
-      Some(
-        ToJson::to_json(
-          uninstall_skill_op(decode_payload(payload), () => {
-            publish("skills.changed", Json::empty_object())
-          }),
-        ),
-      )
-    "host.open_path" =>
-      Some(ToJson::to_json(open_path_op(decode_payload(payload))))
-    "update.check" =>
-      Some(ToJson::to_json(state.updates.check(decode_payload(payload))))
-    "update.download" =>
-      Some(
-        ToJson::to_json(state.updates.start_download(decode_payload(payload))),
-      )
-    "update.apply" => Some(ToJson::to_json(state.updates.apply()))
-    "git.branch" =>
-      Some(ToJson::to_json(git_branch_op(decode_payload(payload))))
-    "app.list" => Some(ToJson::to_json(list_apps_op()))
-    "app.launch" =>
-      Some(ToJson::to_json(launch_app_op(decode_payload(payload))))
-    "fs.read_directory" =>
-      Some(ToJson::to_json(read_directory_op(decode_payload(payload))))
-    "fs.list_files" =>
-      Some(ToJson::to_json(list_files_op(decode_payload(payload))))
-    "fs.read_file" =>
-      Some(ToJson::to_json(read_file_op(decode_payload(payload))))
-    "fs.stat_files" =>
-      Some(ToJson::to_json(stat_files_op(decode_payload(payload))))
-    "fs.watch" => {
-      connection.fs_watch.watch(decode_payload(payload))
-      Some(Json::empty_object())
-    }
-    "fs.unwatch" => {
-      connection.fs_watch.unwatch()
-      Some(Json::empty_object())
-    }
-    "terminal.open" =>
-      Some(
-        ToJson::to_json(
-          terminal_open_op(connection.terminal, decode_payload(payload)),
-        ),
-      )
-    "terminal.input" => {
-      terminal_input_op(connection.terminal, decode_payload(payload))
-      Some(Json::empty_object())
-    }
-    "terminal.resize" => {
-      terminal_resize_op(connection.terminal, decode_payload(payload))
-      Some(Json::empty_object())
-    }
-    "terminal.ack" => {
-      terminal_ack_op(connection.terminal, decode_payload(payload))
-      Some(Json::empty_object())
-    }
-    "terminal.close" => {
-      terminal_close_op(connection.terminal, decode_payload(payload))
-      Some(Json::empty_object())
-    }
-    "lsp.hover" =>
-      Some(ToJson::to_json(lsp_hover_op(state.lsp, decode_payload(payload))))
-    "lsp.open" =>
-      Some(ToJson::to_json(lsp_open_op(state.lsp, decode_payload(payload))))
-    "lsp.workspace_symbols" =>
-      Some(
-        ToJson::to_json(
-          workspace_symbols_op(state.lsp, decode_payload(payload)),
-        ),
-      )
-    "moonide.definition" =>
-      Some(
-        ToJson::to_json(moonide_definition_op(state, decode_payload(payload))),
-      )
-    "moonide.references" =>
-      Some(
-        ToJson::to_json(moonide_references_op(state, decode_payload(payload))),
-      )
-    "fs.browse" =>
-      Some(ToJson::to_json(browse_directory_op(decode_payload(payload))))
-    _ => None
-  }
+pub async fn skills_install(
+  payload : @protocol.InstallSkillPayload,
+  on_changed : () -> Unit,
+) -> @protocol.InstallSkillReply {
+  install_skill_op(payload, on_changed)
 }
 
 ///|
-/// Every host method name, in catalog order — the transport adapters
-/// register or advertise exactly this set.
-pub fn host_method_names() -> Array[String] {
-  [
-    "fs.read_file", "fs.read_directory", "fs.list_files", "fs.stat_files", "fs.watch",
-    "fs.unwatch", "fs.browse", "terminal.open", "terminal.input", "terminal.resize",
-    "terminal.ack", "terminal.close", "lsp.open", "lsp.hover", "lsp.workspace_symbols",
-    "moonide.definition", "moonide.references", "skills.catalog", "skills.installed",
-    "skills.install", "skills.uninstall", "update.check", "update.download", "update.apply",
-    "app.list", "app.launch", "git.branch", "host.open_path",
-  ]
+pub async fn skills_installed() -> @protocol.InstalledSkillsReply {
+  installed_skills_op()
 }
 
 ///|
-test "host catalog advertises the complete terminal surface" {
-  let methods = host_method_names()
-  for
-    method_ in [
-      "terminal.open", "terminal.input", "terminal.resize", "terminal.ack", "terminal.close",
-    ] {
-    assert_true(methods.contains(method_))
-  }
+pub async fn skills_uninstall(
+  payload : @protocol.UninstallSkillPayload,
+  on_changed : () -> Unit,
+) -> @protocol.UninstallSkillReply {
+  uninstall_skill_op(payload, on_changed)
 }
 
 ///|
-test "host catalog advertises Moon IDE navigation" {
-  let methods = host_method_names()
-  assert_true(methods.contains("moonide.definition"))
-  assert_true(methods.contains("moonide.references"))
+pub async fn open_path(
+  payload : @protocol.OpenPathPayload,
+) -> @protocol.OpenPathReply {
+  open_path_op(payload)
+}
+
+///|
+pub async fn HostState::update_check(
+  self : HostState,
+  payload : @protocol.UpdateChannelPayload,
+) -> @protocol.CheckUpdateReply {
+  self.updates.check(payload)
+}
+
+///|
+pub fn HostState::update_download(
+  self : HostState,
+  payload : @protocol.UpdateChannelPayload,
+) -> @protocol.DownloadUpdateAcceptedReply raise {
+  self.updates.start_download(payload)
+}
+
+///|
+pub async fn HostState::update_apply(
+  self : HostState,
+) -> @protocol.ApplyUpdateReply {
+  self.updates.apply()
+}
+
+///|
+pub async fn git_branch_info(
+  payload : @protocol.GitBranchPayload,
+) -> @protocol.GitBranchReply {
+  git_branch_op(payload)
+}
+
+///|
+pub async fn app_list() -> @protocol.ListAppsReply {
+  list_apps_op()
+}
+
+///|
+pub async fn app_launch(
+  payload : @protocol.LaunchAppPayload,
+) -> @protocol.LaunchAppReply {
+  launch_app_op(payload)
+}
+
+///|
+pub async fn read_directory(
+  payload : @protocol.ReadDirPayload,
+) -> @protocol.ReadDirReply {
+  read_directory_op(payload)
+}
+
+///|
+pub async fn list_files(
+  payload : @protocol.ListFilesPayload,
+) -> @protocol.ListFilesReply {
+  list_files_op(payload)
+}
+
+///|
+pub async fn read_file(
+  payload : @protocol.ReadFilePayload,
+) -> @protocol.ReadFileReply {
+  read_file_op(payload)
+}
+
+///|
+pub async fn stat_files(
+  payload : @protocol.StatFilesPayload,
+) -> @protocol.StatFilesReply {
+  stat_files_op(payload)
+}
+
+///|
+pub async fn HostConnection::watch(
+  self : HostConnection,
+  payload : @protocol.WatchWorkspacePayload,
+) -> @protocol.EmptyReply {
+  self.fs_watch.watch(payload)
+  Acknowledged
+}
+
+///|
+pub async fn HostConnection::unwatch(
+  self : HostConnection,
+) -> @protocol.EmptyReply {
+  self.fs_watch.unwatch()
+  Acknowledged
+}
+
+///|
+pub async fn HostConnection::terminal_open(
+  self : HostConnection,
+  payload : @protocol.TerminalOpenPayload,
+) -> @protocol.TerminalOpenReply {
+  terminal_open_op(self.terminal, payload)
+}
+
+///|
+pub async fn HostConnection::terminal_input(
+  self : HostConnection,
+  payload : @protocol.TerminalInputPayload,
+) -> @protocol.EmptyReply {
+  terminal_input_op(self.terminal, payload)
+  Acknowledged
+}
+
+///|
+pub fn HostConnection::terminal_resize(
+  self : HostConnection,
+  payload : @protocol.TerminalResizePayload,
+) -> @protocol.EmptyReply raise {
+  terminal_resize_op(self.terminal, payload)
+  Acknowledged
+}
+
+///|
+pub fn HostConnection::terminal_ack(
+  self : HostConnection,
+  payload : @protocol.TerminalAckPayload,
+) -> @protocol.EmptyReply {
+  terminal_ack_op(self.terminal, payload)
+  Acknowledged
+}
+
+///|
+pub fn HostConnection::terminal_close(
+  self : HostConnection,
+  payload : @protocol.TerminalClosePayload,
+) -> @protocol.EmptyReply {
+  terminal_close_op(self.terminal, payload)
+  Acknowledged
+}
+
+///|
+pub async fn HostState::lsp_hover(
+  self : HostState,
+  payload : @protocol.LspHoverPayload,
+) -> @protocol.LspHoverReply {
+  lsp_hover_op(self.lsp, payload)
+}
+
+///|
+pub async fn HostState::lsp_open(
+  self : HostState,
+  payload : @protocol.LspOpenPayload,
+) -> @protocol.LspDiagnosticsReply {
+  lsp_open_op(self.lsp, payload)
+}
+
+///|
+pub async fn HostState::lsp_workspace_symbols(
+  self : HostState,
+  payload : @protocol.WorkspaceSymbolsPayload,
+) -> @protocol.WorkspaceSymbolsReply {
+  workspace_symbols_op(self.lsp, payload)
+}
+
+///|
+pub async fn HostState::moonide_definition(
+  self : HostState,
+  payload : @protocol.MoonIdeNavigationPayload,
+) -> @protocol.MoonIdeLocationsReply {
+  moonide_definition_op(self, payload)
+}
+
+///|
+pub async fn HostState::moonide_references(
+  self : HostState,
+  payload : @protocol.MoonIdeNavigationPayload,
+) -> @protocol.MoonIdeLocationsReply {
+  moonide_references_op(self, payload)
+}
+
+///|
+pub async fn browse_directory(
+  payload : @protocol.BrowseDirectoryPayload,
+) -> @protocol.BrowseDirectoryReply {
+  browse_directory_op(payload)
 }

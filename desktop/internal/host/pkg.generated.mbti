@@ -4,10 +4,17 @@ package "openseek_desktop/internal/host"
 import {
   "moonbitlang/async",
   "moonbitlang/x/path",
+  "openseek_desktop/internal/protocol",
 }
 
 // Values
 pub fn app_bundle_path(String) -> String?
+
+pub async fn app_launch(@protocol.LaunchAppPayload) -> @protocol.LaunchAppReply
+
+pub async fn app_list() -> @protocol.ListAppsReply
+
+pub async fn browse_directory(@protocol.BrowseDirectoryPayload) -> @protocol.BrowseDirectoryReply
 
 pub fn frontend_asset_dir(String) -> String
 
@@ -15,15 +22,31 @@ pub async fn frontend_document(String) -> String
 
 pub async fn frontend_entry_path(String) -> String
 
-pub fn host_method_names() -> Array[String]
+pub async fn git_branch_info(@protocol.GitBranchPayload) -> @protocol.GitBranchReply
 
-pub async fn host_op(HostState, HostConnection, String, Json, (String, Json) -> Unit) -> Json?
+pub async fn list_files(@protocol.ListFilesPayload) -> @protocol.ListFilesReply
 
 pub fn new_host_state(String, runtime_dir? : @path.Path, executable? : String) -> HostState
 
+pub async fn open_path(@protocol.OpenPathPayload) -> @protocol.OpenPathReply
+
 pub async fn prepared_runtime_dir() -> @path.Path?
 
-pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (String, Json) -> Unit) -> Unit
+pub async fn read_directory(@protocol.ReadDirPayload) -> @protocol.ReadDirReply
+
+pub async fn read_file(@protocol.ReadFilePayload) -> @protocol.ReadFileReply
+
+pub async fn skills_catalog() -> @protocol.SkillsCatalogReply
+
+pub async fn skills_install(@protocol.InstallSkillPayload, () -> Unit) -> @protocol.InstallSkillReply
+
+pub async fn skills_installed() -> @protocol.InstalledSkillsReply
+
+pub async fn skills_uninstall(@protocol.UninstallSkillPayload, () -> Unit) -> @protocol.UninstallSkillReply
+
+pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (@protocol.Notification) -> Unit) -> Unit
+
+pub async fn stat_files(@protocol.StatFilesPayload) -> @protocol.StatFilesReply
 
 // Errors
 pub(all) suberror HostError {
@@ -38,9 +61,24 @@ pub(all) suberror PayloadError {
 type HostConnection
 pub fn HostConnection::close_terminals(Self) -> Unit
 pub fn HostConnection::new() -> Self
-pub async fn HostConnection::run(Self, async (String, Json) -> Unit) -> Unit
+pub async fn HostConnection::run(Self, async (@protocol.Notification) -> Unit) -> Unit
+pub fn HostConnection::terminal_ack(Self, @protocol.TerminalAckPayload) -> @protocol.EmptyReply
+pub fn HostConnection::terminal_close(Self, @protocol.TerminalClosePayload) -> @protocol.EmptyReply
+pub async fn HostConnection::terminal_input(Self, @protocol.TerminalInputPayload) -> @protocol.EmptyReply
+pub async fn HostConnection::terminal_open(Self, @protocol.TerminalOpenPayload) -> @protocol.TerminalOpenReply
+pub fn HostConnection::terminal_resize(Self, @protocol.TerminalResizePayload) -> @protocol.EmptyReply raise
+pub async fn HostConnection::unwatch(Self) -> @protocol.EmptyReply
+pub async fn HostConnection::watch(Self, @protocol.WatchWorkspacePayload) -> @protocol.EmptyReply
 
 type HostState
+pub async fn HostState::lsp_hover(Self, @protocol.LspHoverPayload) -> @protocol.LspHoverReply
+pub async fn HostState::lsp_open(Self, @protocol.LspOpenPayload) -> @protocol.LspDiagnosticsReply
+pub async fn HostState::lsp_workspace_symbols(Self, @protocol.WorkspaceSymbolsPayload) -> @protocol.WorkspaceSymbolsReply
+pub async fn HostState::moonide_definition(Self, @protocol.MoonIdeNavigationPayload) -> @protocol.MoonIdeLocationsReply
+pub async fn HostState::moonide_references(Self, @protocol.MoonIdeNavigationPayload) -> @protocol.MoonIdeLocationsReply
+pub async fn HostState::update_apply(Self) -> @protocol.ApplyUpdateReply
+pub async fn HostState::update_check(Self, @protocol.UpdateChannelPayload) -> @protocol.CheckUpdateReply
+pub fn HostState::update_download(Self, @protocol.UpdateChannelPayload) -> @protocol.DownloadUpdateAcceptedReply raise
 
 // Type aliases
 

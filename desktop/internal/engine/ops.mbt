@@ -98,11 +98,11 @@ pub async fn start_run(
       sink,
       Started({
         run_id,
-        task: config.task,
+        task: Some(config.task),
         submission_id,
-        engine: config.engine,
-        model: config.model,
-        max_steps: config.max_steps,
+        engine: Some(config.engine),
+        model: Some(config.model),
+        max_steps: Some(config.max_steps),
         cwd: config.cwd.map(cwd => cwd.to_string()),
         session: config.session,
         session_root: config.session_root.map(root => root.to_string()),
@@ -553,7 +553,7 @@ async fn session_group(
   }
   let root = root.to_string()
   fn failed(error : String) -> SessionGroup {
-    { workspace, name, session_root: root, sessions: Json::array([]), error }
+    { workspace, name, session_root: root, sessions: [], error }
   }
 
   let output = engine_stdout(manager, [
@@ -563,9 +563,13 @@ async fn session_group(
     EngineError(detail) => return failed("session list failed: \{detail}")
     error => return failed("session list failed: \{error}")
   }
-  let sessions = @json.parse(output) catch {
+  let sessions_json = @json.parse(output) catch {
     _ => return failed("engine returned a malformed session list")
   }
+  guard sessions_json is Array(_) else {
+    return failed("engine returned a malformed session list")
+  }
+  let sessions = @protocol.SessionListEntry::array_from_wire(sessions_json)
   { workspace, name, session_root: root, sessions, error: "" }
 }
 
@@ -604,8 +608,11 @@ pub async fn load_session(
   // that broadcasts `session.event` commits, so the two can never disagree
   // about what has been committed. The reply's watermark tells the client
   // which commits its snapshot already contains.
-  if follower_snapshot(manager, session, root) is Some(json) {
-    return { session: json, watermark: session_max_sequence(json) }
+  if follower_snapshot(manager, session, root) is Some(document) {
+    return {
+      session: document,
+      watermark: Some(session_max_sequence(document)),
+    }
   }
   let output = session_show_stdout(manager, session, root) catch {
     EngineError(detail) => raise EngineError("session load failed: " + detail)
@@ -614,7 +621,10 @@ pub async fn load_session(
   let json = @json.parse(output) catch {
     _ => raise EngineError("engine returned a malformed session")
   }
-  { session: json, watermark: session_max_sequence(json) }
+  let document : @protocol.SessionDocument = @json.from_json(json) catch {
+    _ => raise EngineError("engine returned a malformed session")
+  }
+  { session: document, watermark: Some(session_max_sequence(document)) }
 }
 
 ///|
@@ -624,7 +634,7 @@ async fn follower_snapshot(
   manager : EngineManager,
   session : String,
   root : @path.Path,
-) -> Json? {
+) -> @protocol.SessionDocument? {
   for ;; {
     guard manager.followers.get(session) is Some(follower) else { return None }
     // Session ids can exist in several stores. Never return a snapshot from
@@ -640,7 +650,7 @@ async fn follower_snapshot(
       continue
     }
     match request_follower_load(follower) {
-      LoadOk(json) => return Some(json)
+      LoadOk(document) => return Some(document)
       LoadStopped => continue
       LoadFailed(detail) => raise EngineError("session load failed: " + detail)
     }

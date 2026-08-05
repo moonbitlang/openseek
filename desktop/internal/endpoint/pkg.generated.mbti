@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/endpoint"
+
+import {
+  "justjavac/proton/command",
+  "justjavac/proton/core",
+  "justjavac/proton_contract",
+  "moonbitlang/core/json",
+  "openseek_desktop/internal/commands",
+}
+
+// Values
+
+// Errors
+pub(all) suberror InvalidEndpointPayload {
+  InvalidEndpointPayload(String)
+}
+
+// Types and methods
+type Endpoint
+pub fn Endpoint::bind(Self, @command.CommandRegistrar) -> Unit raise
+pub async fn Endpoint::invoke_remote(Self, Json) -> Json
+pub fn Endpoint::name(Self) -> String
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::remote(@commands.Command[Payload, Reply], async (Payload) -> Reply) -> Self
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::remote_sync(@commands.Command[Payload, Reply], (Payload) -> Reply raise) -> Self
+pub fn Endpoint::route(Self) -> @proton_contract.ContractRoute
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::window(@commands.Command[Payload, Reply], async (@core.AppCommandRequestContext, Payload) -> Reply) -> Self
+
+// Type aliases
+
+// Traits

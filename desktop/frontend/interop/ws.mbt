@@ -71,7 +71,7 @@ fn ws_url(device : String) -> String? {
 /// user-facing message.
 pub fn ws_connect(
   device : String,
-  on_notification~ : (String, Map[String, Json]) -> Unit,
+  on_notification~ : (@protocol.Notification) -> Unit,
   on_down~ : () -> Unit,
 ) -> Unit {
   guard ws_url(device) is Some(url) else {
@@ -183,7 +183,7 @@ fn remove_pending_if_same(
 fn handle_message(
   session : RpcSession,
   event : @js.Value,
-  on_notification : (String, Map[String, Json]) -> Unit,
+  on_notification : (@protocol.Notification) -> Unit,
 ) -> Unit {
   guard js_prop(event, "data") is Some(data) &&
     (@js.Cast::into(data) : String?) is Some(text) else {
@@ -198,8 +198,12 @@ fn handle_message(
       Some(params) => params.to_json() catch { _ => return }
       None => Json::empty_object()
     }
-    guard params is Object(fields) else { return }
-    on_notification(method_, fields)
+    guard params is Object(_) else { return }
+    guard @protocol.Notification::from_wire(method_, params)
+      is Some(notification) else {
+      return
+    }
+    on_notification(notification)
     return
   }
   guard js_prop(envelope, "id") is Some(id_value) &&
@@ -224,8 +228,8 @@ fn handle_message(
     None => {
       let result = match js_prop(envelope, "result") {
         Some(result) => result
-        // A result-less success settles as an empty reply, which
-        // `reply_json_text` reads as `{}`.
+        // A result-less success settles as an empty object, which the typed
+        // response adapter decodes for acknowledgement-only methods.
         None => @js.Object::new().to_value()
       }
       settle(deferred, "resolve", result)

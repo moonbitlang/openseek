@@ -12,6 +12,8 @@ import {
   "moonbitlang/editor/base/common",
   "openseek_desktop/internal/jsonx",
   "openseek_desktop/internal/pathx",
+  "openseek_desktop/internal/protocol",
+  "openseek_desktop/internal/commands",
   "openseek_desktop/internal/version",
   "openseek_desktop/frontend/fileeditor",
   "openseek_desktop/frontend/terminal",

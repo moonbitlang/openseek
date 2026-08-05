@@ -25,53 +25,47 @@ fn install_bridge(
 /// back page-global or focused-scoped state and stay root messages.
 fn bridge_msg(
   channel : @interop.ChannelId,
-  method_ : String,
-  payload : Map[String, Json],
+  notification : @protocol.Notification,
 ) -> Msg? {
-  match method_ {
-    "auth.changed" =>
+  match notification {
+    AuthChanged(payload) =>
       // The desktop window's own relay registration (Settings → Remote
       // access). A remote device's auth changes are its host's business,
       // never this page's UI.
       if channel is Local {
-        decode_remote_access(payload).map(status => RemoteStatusLoaded(status))
+        Some(RemoteStatusLoaded(RemoteAccess::from_status(payload)))
       } else {
         None
       }
-    "lsp.diagnostics" =>
+    LspDiagnostics(payload) =>
       diagnostics_msg(channel, payload).map(msg => {
         FromDevice(channel, FilePanel(msg))
       })
-    "fs.changed" => {
-      let session = @jsonx.json_text(payload, "session")
-      let changes : Array[@fileeditor.FileChange]? = if @jsonx.json_bool(
-          payload, "baseline",
-        ).unwrap_or(false) {
+    FsChanged(payload) => {
+      let changes : Array[@fileeditor.FileChange]? = if payload.baseline.unwrap_or(
+          false,
+        ) {
         None
-      } else if payload.get("events") is Some(Array(items)) {
+      } else if payload.events is Some(items) {
         let decoded : Array[@fileeditor.FileChange] = []
         for item in items {
-          if item is Object(fields) &&
-            @jsonx.json_text(fields, "kind") is Some(kind_) &&
-            @jsonx.json_text(fields, "path") is Some(path) {
-            match kind_ {
-              "modify" =>
-                decoded.push(@fileeditor.Modified(@pathx.Relative(path)))
-              "create" =>
-                decoded.push(@fileeditor.Created(@pathx.Relative(path)))
-              "remove" =>
-                decoded.push(@fileeditor.Removed(@pathx.Relative(path)))
-              "rename" =>
-                if @jsonx.json_text(fields, "old_path") is Some(old) {
-                  decoded.push(
-                    @fileeditor.Renamed(
-                      old=@pathx.Relative(old),
-                      new=@pathx.Relative(path),
-                    ),
-                  )
-                }
-              _ => ()
-            }
+          match item.kind_ {
+            "modify" =>
+              decoded.push(@fileeditor.Modified(@pathx.Relative(item.path)))
+            "create" =>
+              decoded.push(@fileeditor.Created(@pathx.Relative(item.path)))
+            "remove" =>
+              decoded.push(@fileeditor.Removed(@pathx.Relative(item.path)))
+            "rename" =>
+              if item.old_path is Some(old) {
+                decoded.push(
+                  @fileeditor.Renamed(
+                    old=@pathx.Relative(old),
+                    new=@pathx.Relative(item.path),
+                  ),
+                )
+              }
+            _ => ()
           }
         }
         Some(decoded)
@@ -79,51 +73,57 @@ fn bridge_msg(
         // An older host sent only `{root}`; preserve its coarse refresh.
         None
       }
-      Some(FromDevice(channel, FilePanel(FsChanged(session~, changes~))))
+      Some(
+        FromDevice(
+          channel,
+          FilePanel(FsChanged(session=payload.session, changes~)),
+        ),
+      )
     }
-    "fs.watch_failed" =>
-      if @jsonx.json_text(payload, "session") is Some(session) &&
-        @jsonx.json_text(payload, "message") is Some(message) {
-        Some(
-          FromDevice(
-            channel,
-            FilePanel(FileWatchFailed(owner={ channel, session }, message~)),
+    FsWatchFailed(payload) =>
+      Some(
+        FromDevice(
+          channel,
+          FilePanel(
+            FileWatchFailed(
+              owner={ channel, session: payload.session },
+              message=payload.message,
+            ),
           ),
-        )
-      } else {
-        None
-      }
-    "terminal.output" =>
+        ),
+      )
+    TerminalOutput(payload) =>
       terminal_output_msg(channel, payload).map(msg => Terminal(msg))
-    "terminal.exit" =>
+    TerminalExit(payload) =>
       terminal_exit_msg(channel, payload).map(msg => Terminal(msg))
-    "update.downloaded" =>
+    UpdateDownloaded(_) =>
       if channel is Local {
         Some(UpdateDownloaded)
       } else {
         None
       }
-    "update.download_progress" =>
-      if channel is Local &&
-        @jsonx.json_int(payload, "downloaded_bytes") is Some(downloaded_bytes) &&
-        downloaded_bytes >= 0 {
-        let total_bytes = match @jsonx.json_int(payload, "total_bytes") {
+    UpdateDownloadProgress(payload) =>
+      if channel is Local && payload.downloaded_bytes >= 0 {
+        let total_bytes = match payload.total_bytes {
           Some(total) if total > 0 => Some(total)
           _ => None
         }
-        Some(UpdateDownloadProgress(downloaded_bytes~, total_bytes~))
+        Some(
+          UpdateDownloadProgress(
+            downloaded_bytes=payload.downloaded_bytes,
+            total_bytes~,
+          ),
+        )
       } else {
         None
       }
-    "update.download_failed" =>
+    UpdateDownloadFailed(payload) =>
       if channel is Local {
-        @jsonx.json_text(payload, "message").map(message => {
-          UpdateFailed(message~)
-        })
+        Some(UpdateFailed(message=payload.message))
       } else {
         None
       }
-    _ => device_msg(method_, payload).map(msg => FromDevice(channel, msg))
+    _ => device_msg(notification).map(msg => FromDevice(channel, msg))
   }
 }
 
@@ -132,26 +132,36 @@ fn bridge_msg(
 /// readiness/resync signal on both transports: it re-fires on every
 /// reconnect (and engine-pump restart), and the refetches BridgeReady
 /// triggers — including `agent.runs` — rebuild whatever was missed.
-fn device_msg(method_ : String, payload : Map[String, Json]) -> DeviceMsg? {
-  match method_ {
-    "agent.connected" => Some(BridgeReady)
-    "agent.started" => started_msg(payload)
-    "agent.event" => engine_msg(payload)
-    "agent.error" => error_msg(payload)
-    "agent.finished" => finished_msg(payload)
-    "agent.durable" => durable_boundary_msg(payload)
-    "session.event" => session_event_msg(payload)
-    "session.changed" => session_changed_msg(payload)
-    "workspace.changed" =>
-      workspaces_from_fields(payload).map(paths => WorkspacesChanged(paths))
-    "settings.changed" =>
-      decode_host_settings(payload).map(settings => {
-        HostSettingsLoaded(settings, connection_generation=None)
-      })
+fn device_msg(notification : @protocol.Notification) -> DeviceMsg? {
+  match notification {
+    AgentConnected(_) => Some(BridgeReady)
+    AgentStarted(payload) => started_msg(payload)
+    AgentEvent(payload) => engine_msg(payload)
+    AgentError(payload) => error_msg(payload)
+    AgentFinished(payload) => finished_msg(payload)
+    AgentDurable(payload) => durable_boundary_msg(payload)
+    SessionEvent(payload) => session_event_msg(payload)
+    SessionChanged(payload) => session_changed_msg(payload)
+    WorkspaceChanged(payload) => {
+      let paths : Array[String] = []
+      for path in payload.workspaces {
+        if !path.is_empty() {
+          paths.push(path)
+        }
+      }
+      Some(WorkspacesChanged(paths))
+    }
+    SettingsChanged(payload) =>
+      Some(
+        HostSettingsLoaded(
+          HostSettings::from_status(payload),
+          connection_generation=None,
+        ),
+      )
     // The payload is intentionally empty: the installed library is the
     // source of truth, so every client re-reads it instead of applying a
     // requester-specific install/uninstall guess.
-    "skills.changed" => Some(SkillsChanged)
+    SkillsChanged => Some(SkillsChanged)
     _ => None
   }
 }
@@ -160,16 +170,12 @@ fn device_msg(method_ : String, payload : Map[String, Json]) -> DeviceMsg? {
 /// Decode archive invalidation synchronously. A fresh id is allocated at the
 /// event boundary (outside `update`) so archiving the active conversation can
 /// switch immediately without a render where Send still targets the stale id.
-fn session_changed_msg(payload : Map[String, Json]) -> DeviceMsg? {
-  guard @jsonx.json_text(payload, "change") is Some(change) &&
-    @jsonx.json_text(payload, "session") is Some(session) else {
-    return None
-  }
+fn session_changed_msg(payload : @protocol.SessionChangedPayload) -> DeviceMsg? {
   Some(
     SessionsChanged(
-      change~,
-      session~,
-      fresh_session=if change == "archived" {
+      change=payload.change,
+      session=payload.session,
+      fresh_session=if payload.change == "archived" {
         Some(generated_session_id())
       } else {
         None
@@ -257,90 +263,121 @@ fn open_host_connection(
 }
 
 ///|
-/// Notification methods exposed by the host extension. Proton requires an
+/// Notification kinds exposed by the host extension. Proton requires an
 /// explicit listener for each one, unlike the WebSocket transport's generic
-/// notification callback.
-fn proton_event_methods() -> Array[String] {
-  [
-    "agent.connected", "agent.started", "agent.event", "agent.error", "agent.finished",
-    "agent.durable", "session.event", "session.changed", "workspace.changed", "settings.changed",
-    "skills.changed", "update.download_progress", "update.downloaded", "update.download_failed",
-    "auth.changed", "lsp.diagnostics", "fs.changed", "fs.watch_failed", "terminal.output",
-    "terminal.exit",
-  ]
+/// notification callback, so the listeners derive from the shared catalog.
+fn proton_event_methods() -> Array[@protocol.NotificationKind] {
+  @protocol.NotificationKind::all()
 }
 
 ///|
 test "proton subscribes to remote-access status changes" {
-  assert_true(
-    proton_event_methods().iter().any(method_ => method_ == "auth.changed"),
-  )
+  assert_true(proton_event_methods().contains(AuthChanged))
 }
 
 ///|
 test "skill invalidations are device-scoped catalog events" {
-  assert_true(proton_event_methods().contains("skills.changed"))
+  assert_true(proton_event_methods().contains(SkillsChanged))
   assert_true(
-    bridge_msg(Remote("d1"), "skills.changed", Map([]))
+    bridge_msg(Remote("d1"), @protocol.Notification::SkillsChanged)
     is Some(FromDevice(Remote("d1"), SkillsChanged)),
   )
 }
 
 ///|
 test "update download notifications control only the local desktop flow" {
-  assert_true(proton_event_methods().contains("update.download_progress"))
-  assert_true(proton_event_methods().contains("update.downloaded"))
-  assert_true(proton_event_methods().contains("update.download_failed"))
+  assert_true(proton_event_methods().contains(UpdateDownloadProgress))
+  assert_true(proton_event_methods().contains(UpdateDownloaded))
+  assert_true(proton_event_methods().contains(UpdateDownloadFailed))
   assert_true(
-    bridge_msg(Local, "update.download_progress", {
-      "downloaded_bytes": Json::number(42),
-      "total_bytes": Json::number(100),
-    })
+    bridge_msg(
+      Local,
+      @protocol.Notification::UpdateDownloadProgress({
+        downloaded_bytes: 42,
+        total_bytes: Some(100),
+      }),
+    )
     is Some(UpdateDownloadProgress(downloaded_bytes=42, total_bytes=Some(100))),
   )
   assert_true(
-    bridge_msg(Local, "update.downloaded", Map([])) is Some(UpdateDownloaded),
+    bridge_msg(
+      Local,
+      @protocol.Notification::UpdateDownloaded({ version: "test" }),
+    )
+    is Some(UpdateDownloaded),
   )
   assert_true(
-    bridge_msg(Local, "update.download_failed", {
-      "message": Json::string("digest mismatch"),
-    })
+    bridge_msg(
+      Local,
+      @protocol.Notification::UpdateDownloadFailed({
+        message: "digest mismatch",
+      }),
+    )
     is Some(UpdateFailed(message="digest mismatch")),
   )
   assert_true(
-    bridge_msg(Local, "update.download_progress", {
-      "downloaded_bytes": Json::number(-1),
-      "total_bytes": Json::null(),
-    })
+    bridge_msg(
+      Local,
+      @protocol.Notification::UpdateDownloadProgress({
+        downloaded_bytes: -1,
+        total_bytes: None,
+      }),
+    )
     is None,
   )
   assert_true(
-    bridge_msg(Remote("d1"), "update.download_progress", {
-      "downloaded_bytes": Json::number(42),
-    })
+    bridge_msg(
+      Remote("d1"),
+      @protocol.Notification::UpdateDownloadProgress({
+        downloaded_bytes: 42,
+        total_bytes: None,
+      }),
+    )
     is None,
   )
-  assert_true(bridge_msg(Remote("d1"), "update.downloaded", Map([])) is None)
+  assert_true(
+    bridge_msg(
+      Remote("d1"),
+      @protocol.Notification::UpdateDownloaded({ version: "test" }),
+    )
+    is None,
+  )
 }
 
 ///|
 test "file-panel pushes carry their channel; auth.changed is Local-only" {
   let channel : @interop.ChannelId = Remote("d1")
   assert_true(
-    bridge_msg(channel, "fs.changed", Map([]))
+    bridge_msg(
+      channel,
+      @protocol.Notification::FsChanged({
+        session: None,
+        root: None,
+        baseline: None,
+        events: None,
+      }),
+    )
     is Some(
       FromDevice(Remote("d1"), FilePanel(FsChanged(session=None, changes=None)))
     ),
   )
   assert_true(
-    bridge_msg(channel, "fs.changed", {
-      "session": Json::string("s-1"),
-      "baseline": Json::boolean(false),
-      "events": Json::array([
-        { "kind": "modify", "path": "src/main.mbt" },
-        { "kind": "rename", "path": "src/new.mbt", "old_path": "src/old.mbt" },
-      ]),
-    })
+    bridge_msg(
+      channel,
+      @protocol.Notification::FsChanged({
+        session: Some("s-1"),
+        root: Some("/work/project"),
+        baseline: Some(false),
+        events: Some([
+          { kind_: "modify", path: "src/main.mbt", old_path: None },
+          {
+            kind_: "rename",
+            path: "src/new.mbt",
+            old_path: Some("src/old.mbt"),
+          },
+        ]),
+      }),
+    )
     is Some(
       FromDevice(
         Remote("d1"),
@@ -361,13 +398,16 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
       )
     ),
   )
-  assert_true(proton_event_methods().contains("fs.watch_failed"))
+  assert_true(proton_event_methods().contains(FsWatchFailed))
   assert_true(
-    bridge_msg(channel, "fs.watch_failed", {
-      "session": Json::string("s-1"),
-      "root": Json::string("/work/project"),
-      "message": Json::string("File watching stopped"),
-    })
+    bridge_msg(
+      channel,
+      @protocol.Notification::FsWatchFailed({
+        session: "s-1",
+        root: "/work/project",
+        message: "File watching stopped",
+      }),
+    )
     is Some(
       FromDevice(
         Remote("d1"),
@@ -381,18 +421,34 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
     ),
   )
   // A remote device's relay registration is its host's business.
-  assert_true(bridge_msg(channel, "auth.changed", Map([])) is None)
+  assert_true(
+    bridge_msg(
+      channel,
+      @protocol.Notification::AuthChanged({
+        connected: false,
+        server_url: None,
+        managed_by_env: None,
+        user: None,
+        device: None,
+      }),
+    )
+    is None,
+  )
 }
 
 ///|
 test "terminal pushes retain the channel that owns their host session" {
-  let payload : Map[String, Json] = { "id": 1, "sequence": 2, "data": "YQ==" }
+  let payload : @protocol.TerminalOutputPayload = {
+    id: 1,
+    sequence: 2,
+    data: "YQ==",
+  }
   assert_true(
-    bridge_msg(Local, "terminal.output", payload)
+    bridge_msg(Local, @protocol.Notification::TerminalOutput(payload))
     is Some(Terminal(Output(channel=Local, id=1, sequence=2, data="YQ=="))),
   )
   assert_true(
-    bridge_msg(Remote("d1"), "terminal.output", payload)
+    bridge_msg(Remote("d1"), @protocol.Notification::TerminalOutput(payload))
     is Some(
       Terminal(Output(channel=Remote("d1"), id=1, sequence=2, data="YQ=="))
     ),
@@ -417,8 +473,15 @@ fn wire_proton_events(
     ])
   }
 
-  for method_ in proton_event_methods() {
-    on("openseek." + method_, payload => bridge_msg(Local, method_, payload))
+  for kind_ in proton_event_methods() {
+    let method_ = kind_.wire_name()
+    on("openseek." + method_, payload => {
+      guard @protocol.Notification::from_wire(method_, Json::object(payload))
+        is Some(notification) else {
+        return None
+      }
+      bridge_msg(Local, notification)
+    })
   }
   // Emitted by the notification extension when the user clicks a system
   // notification; the payload is the run id this frontend stamped on it.
@@ -465,8 +528,8 @@ fn connect_ws(
     let channel : @interop.ChannelId = Remote(device)
     @interop.ws_connect(
       device,
-      on_notification=(method_, params) => {
-        if bridge_msg(channel, method_, params) is Some(msg) {
+      on_notification=notification => {
+        if bridge_msg(channel, notification) is Some(msg) {
           scheduler.add(dispatch(msg))
         }
       },
@@ -518,40 +581,30 @@ fn fetch_runs(
   let payload = runs_payload(frontier)
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = @interop.bridge_request(channel, "agent.runs", payload) catch {
+      let reply = @interop.bridge_request(
+        channel, @commands.agent_runs, payload,
+      ) catch {
         _ => return
-      }
-      let json = @json.parse(@interop.reply_json_text(reply)) catch {
-        _ => return
-      }
-      guard json is Object(fields) && fields.get("runs") is Some(Array(runs)) else {
-        return
       }
       let live : Array[String] = []
       let recovered : Array[RecoveredRun] = []
-      for item in runs {
-        guard item is Object(fields) else { continue }
-        if @jsonx.json_text(fields, "run_id") is Some(run_id) {
-          live.push(run_id)
-        }
-        if recovered_run(fields) is Some(run) {
+      for item in reply.runs {
+        live.push(item.run_id)
+        if RecoveredRun::from_started(item) is Some(run) {
           recovered.push(run)
         }
       }
-      let settled : Array[RecoveredSettlement] = []
-      if fields.get("settled") is Some(Array(items)) {
-        for item in items {
-          if item is Object(fields) &&
-            recovered_settlement(fields) is Some(settlement) {
-            settled.push(settlement)
-          }
+      let recovered_settlements : Array[RecoveredSettlement] = []
+      for item in reply.settled {
+        if RecoveredSettlement::from_reply(item) is Some(settlement) {
+          recovered_settlements.push(settlement)
         }
       }
       scheduler.add(
         dispatch(
           RunsLoaded(
             runs=recovered,
-            settled~,
+            settled=recovered_settlements,
             live~,
             frontier~,
             connection_generation~,
@@ -567,84 +620,89 @@ fn fetch_runs(
 /// these selectors to return matching process-lifetime settlements without
 /// exposing an unbounded completion history or guessing which local input a
 /// same-text prompt belonged to.
-fn runs_payload(frontier : Array[RunSnapshotFrontier]) -> @js.Value {
-  let known : Array[@js.Value] = []
+fn runs_payload(frontier : Array[RunSnapshotFrontier]) -> @protocol.RunsPayload {
+  let known : Array[@protocol.KnownRunPayload] = []
   for captured in frontier {
     let lifecycle_submission : String? = match captured.state {
       SnapshotStarting(submission_id~) => {
-        let selector = @js.Object::new()
-        selector["session"] = captured.session
-        selector["submission_id"] = submission_id
-        known.push(selector.to_value())
+        known.push({
+          session: captured.session,
+          run_id: None,
+          submission_id: Some(submission_id),
+        })
         Some(submission_id)
       }
       SnapshotOpen(run_id~) | SnapshotIdle(last_run_id=Some(run_id)) => {
-        let selector = @js.Object::new()
-        selector["session"] = captured.session
-        selector["run_id"] = run_id
-        known.push(selector.to_value())
+        known.push({
+          session: captured.session,
+          run_id: Some(run_id),
+          submission_id: None,
+        })
         None
       }
       SnapshotIdle(last_run_id=None) => None
     }
     for submission_id in captured.initial_ids {
       if lifecycle_submission != Some(submission_id) {
-        let selector = @js.Object::new()
-        selector["session"] = captured.session
-        selector["submission_id"] = submission_id
-        known.push(selector.to_value())
+        known.push({
+          session: captured.session,
+          run_id: None,
+          submission_id: Some(submission_id),
+        })
       }
     }
   }
-  let payload = @js.Object::new()
-  payload["known"] = known
-  payload.to_value()
+  { known: Some(known) }
 }
 
 ///|
-fn started_msg(payload : Map[String, Json]) -> DeviceMsg? {
+fn started_msg(payload : @protocol.StartedPayload) -> DeviceMsg? {
   // `run_id`/`session`/`model`/`max_steps` are unconditional on this event
   // (the app's own start op always names a session); a payload missing one
   // is malformed and dropped. `cwd` and the durable `session_root` are
   // genuinely optional, and the host resolved both itself, so this is the
   // decode boundary where their absolute provenance is collapsed into the
   // type.
-  recovered_run(payload).map(run => {
+  guard payload.session is Some(session) &&
+    payload.model is Some(model) &&
+    payload.max_steps is Some(max_steps) else {
+    return None
+  }
+  Some(
     Started(
-      run_id=run.run_id,
-      session=run.session,
-      model=run.model,
-      max_steps=run.max_steps,
-      cwd=run.cwd,
-      session_root=run.session_root,
-      task=run.task,
-      submission_id=run.submission_id,
-    )
-  })
+      run_id=payload.run_id,
+      session~,
+      model~,
+      max_steps~,
+      cwd=payload.cwd.map(path => Absolute(path)),
+      session_root=payload.session_root.map(path => Absolute(path)),
+      task=payload.task,
+      submission_id=payload.submission_id,
+    ),
+  )
 }
 
 ///|
-/// Decode the common `agent.started` / `agent.runs` row shape without
+/// Project the common `agent.started` / `agent.runs` row shape without
 /// dispatching it. Snapshot rows remain plain data until `update` accepts the
 /// reply's connection generation.
-fn recovered_run(payload : Map[String, Json]) -> RecoveredRun? {
-  guard @jsonx.json_text(payload, "run_id") is Some(run_id) &&
-    @jsonx.json_text(payload, "session") is Some(session) &&
-    @jsonx.json_text(payload, "model") is Some(model) &&
-    @jsonx.json_int(payload, "max_steps") is Some(max_steps) else {
+fn RecoveredRun::from_started(
+  payload : @protocol.StartedPayload,
+) -> RecoveredRun? {
+  guard payload.session is Some(session) &&
+    payload.model is Some(model) &&
+    payload.max_steps is Some(max_steps) else {
     return None
   }
   Some({
-    run_id,
+    run_id: payload.run_id,
     session,
     model,
     max_steps,
-    cwd: @jsonx.json_text(payload, "cwd").map(path => Absolute(path)),
-    session_root: @jsonx.json_text(payload, "session_root").map(path => {
-      Absolute(path)
-    }),
-    task: @jsonx.json_text(payload, "task"),
-    submission_id: @jsonx.json_text(payload, "submission_id"),
+    cwd: payload.cwd.map(path => Absolute(path)),
+    session_root: payload.session_root.map(path => Absolute(path)),
+    task: payload.task,
+    submission_id: payload.submission_id,
   })
 }
 
@@ -654,58 +712,47 @@ fn recovered_run(payload : Map[String, Json]) -> RecoveredRun? {
 /// future status requires the host's exact EOF sequence before it is safe to
 /// replay. This keeps a malformed/older host from turning an absence into a
 /// false zero-durable conclusion.
-fn recovered_settlement(payload : Map[String, Json]) -> RecoveredSettlement? {
-  guard @jsonx.json_text(payload, "run_id") is Some(run_id) &&
-    @jsonx.json_text(payload, "session") is Some(session) &&
-    @jsonx.json_text(payload, "status") is Some(status) else {
+fn RecoveredSettlement::from_reply(
+  payload : @protocol.RunSettlementPayload,
+) -> RecoveredSettlement? {
+  let terminal_backed = payload.status == "finished" ||
+    payload.status == "context_yield" ||
+    payload.status == "max_steps_exhausted"
+  guard terminal_backed || payload.durable_sequence is Some(_) else {
     return None
   }
-  let durable_sequence = @jsonx.json_int(payload, "durable_sequence")
-  let terminal_backed = status == "finished" ||
-    status == "context_yield" ||
-    status == "max_steps_exhausted"
-  guard terminal_backed || durable_sequence is Some(_) else { return None }
   Some({
-    run_id,
-    session,
-    submission_id: @jsonx.json_text(payload, "submission_id"),
-    status,
-    durable_sequence,
+    run_id: payload.run_id,
+    session: payload.session,
+    submission_id: payload.submission_id,
+    status: payload.status,
+    durable_sequence: payload.durable_sequence,
   })
 }
 
 ///|
-/// One `session.event` commit: the store event rides in `event` verbatim
-/// (`{"sequence", "ts", "item"}`), and the item's `{kind, payload}` is what
-/// the transcript projector consumes. A payload missing any of it is
-/// malformed and dropped — the watermark gap it leaves behind is answered by
-/// a reload, so nothing is lost silently.
-fn session_event_msg(payload : Map[String, Json]) -> DeviceMsg? {
-  guard @jsonx.json_text(payload, "session") is Some(session) &&
-    @jsonx.json_int(payload, "sequence") is Some(sequence) &&
-    payload.get("event") is Some(Object(event)) &&
-    event.get("item") is Some(Object(item)) &&
-    @jsonx.json_text(item, "kind") is Some(kind) &&
-    item.get("payload") is Some(Object(item_payload)) else {
-    return None
-  }
-  Some(SessionCommitted(session~, sequence~, kind~, payload=item_payload))
+/// One typed `session.event` commit. The durable sequence is duplicated in
+/// the outer notification for routing; the closed item enum is what the
+/// transcript projector consumes.
+fn session_event_msg(payload : @protocol.SessionCommitPayload) -> DeviceMsg? {
+  Some(
+    SessionCommitted(
+      session=payload.session,
+      sequence=payload.sequence,
+      item=payload.event.item,
+    ),
+  )
 }
 
 ///|
-fn engine_msg(payload : Map[String, Json]) -> DeviceMsg? {
-  guard payload.get("event") is Some(Object(raw)) else { return None }
-  guard @transcript.decode_engine_event(raw) is Some(event) else { return None }
+fn engine_msg(payload : @protocol.AgentEventPayload) -> DeviceMsg? {
+  guard @transcript.decode_engine_event(payload.event) is Some(event) else {
+    return None
+  }
   // `run_id` is absent for events the engine emits before any run of its
   // process lifetime (a compaction on a freshly spawned engine); those still
   // route by `session`.
-  Some(
-    Engine(
-      @jsonx.json_text(payload, "run_id"),
-      event,
-      session=@jsonx.json_text(payload, "session"),
-    ),
-  )
+  Some(Engine(payload.run_id, event, session=payload.session))
 }
 
 ///|
@@ -715,48 +762,46 @@ fn engine_msg(payload : Map[String, Json]) -> DeviceMsg? {
 /// showing. Unlike other events, a malformed error is not dropped: an error
 /// must never vanish silently, so a missing or blank `message` still
 /// surfaces, labeled generically.
-fn error_msg(payload : Map[String, Json]) -> DeviceMsg? {
-  let message = if @jsonx.json_text(payload, "message") is Some(message) &&
-    !message.trim().is_empty() {
-    message
+fn error_msg(payload : @protocol.AgentErrorPayload) -> DeviceMsg? {
+  let message = if !payload.message.trim().is_empty() {
+    payload.message
   } else {
     "error"
   }
   Some(
     Error(
-      run_id=@jsonx.json_text(payload, "run_id"),
+      run_id=payload.run_id,
       message~,
-      diagnostics=@jsonx.json_text(payload, "diagnostics"),
-      exit_code=@jsonx.json_int(payload, "exit_code"),
+      diagnostics=payload.diagnostics,
+      exit_code=payload.exit_code,
     ),
   )
 }
 
 ///|
-fn finished_msg(payload : Map[String, Json]) -> DeviceMsg? {
+fn finished_msg(payload : @protocol.FinishedPayload) -> DeviceMsg? {
   // `answer` is present only when the agent finished with one.
-  guard @jsonx.json_text(payload, "run_id") is Some(run_id) &&
-    @jsonx.json_text(payload, "status") is Some(status) else {
-    return None
-  }
   Some(
     Finished(
-      run_id~,
-      status~,
-      answer=@jsonx.json_text(payload, "answer"),
-      durable_sequence=@jsonx.json_int(payload, "durable_sequence"),
+      run_id=payload.run_id,
+      status=payload.status,
+      answer=payload.answer,
+      durable_sequence=payload.durable_sequence,
     ),
   )
 }
 
 ///|
-fn durable_boundary_msg(payload : Map[String, Json]) -> DeviceMsg? {
-  guard @jsonx.json_text(payload, "run_id") is Some(run_id) &&
-    @jsonx.json_text(payload, "session") is Some(session) &&
-    @jsonx.json_int(payload, "sequence") is Some(sequence) else {
-    return None
-  }
-  Some(DurableBoundary(run_id~, session~, sequence~))
+fn durable_boundary_msg(
+  payload : @protocol.DurableBoundaryPayload,
+) -> DeviceMsg? {
+  Some(
+    DurableBoundary(
+      run_id=payload.run_id,
+      session=payload.session,
+      sequence=payload.sequence,
+    ),
+  )
 }
 
 ///|
@@ -765,16 +810,14 @@ fn durable_boundary_msg(payload : Map[String, Json]) -> DeviceMsg? {
 /// filters it to the file on screen.
 fn diagnostics_msg(
   channel : @interop.ChannelId,
-  payload : Map[String, Json],
+  payload : @protocol.DiagnosticsPayload,
 ) -> @fileeditor.Msg? {
-  guard @jsonx.json_text(payload, "path") is Some(path) && !path.is_empty() else {
-    return None
-  }
+  guard !payload.path.is_empty() else { return None }
   Some(
     DiagnosticsPublished(
       channel~,
-      absolute=Absolute(path),
-      diagnostics=payload.get("diagnostics").unwrap_or([]),
+      absolute=Absolute(payload.path),
+      diagnostics=payload.diagnostics,
     ),
   )
 }
@@ -784,26 +827,24 @@ fn diagnostics_msg(
 /// `sequence` is echoed by the idempotent flow-control acknowledgement.
 fn terminal_output_msg(
   channel : @interop.ChannelId,
-  payload : Map[String, Json],
+  payload : @protocol.TerminalOutputPayload,
 ) -> @terminal.Msg? {
-  guard @jsonx.json_int(payload, "id") is Some(id) &&
-    @jsonx.json_int(payload, "sequence") is Some(sequence) &&
-    @jsonx.json_text(payload, "data") is Some(data) else {
-    return None
-  }
-  Some(Output(channel~, id~, sequence~, data~))
+  Some(
+    Output(
+      channel~,
+      id=payload.id,
+      sequence=payload.sequence,
+      data=payload.data,
+    ),
+  )
 }
 
 ///|
 fn terminal_exit_msg(
   channel : @interop.ChannelId,
-  payload : Map[String, Json],
+  payload : @protocol.TerminalExitPayload,
 ) -> @terminal.Msg? {
-  guard @jsonx.json_int(payload, "id") is Some(id) &&
-    @jsonx.json_int(payload, "code") is Some(code) else {
-    return None
-  }
-  Some(SessionExited(channel~, id~, code~))
+  Some(SessionExited(channel~, id=payload.id, code=payload.code))
 }
 
 ///|
@@ -840,7 +881,9 @@ fn start_openseek(
   )
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = @interop.bridge_request(channel, "agent.start", payload) catch {
+      let reply = @interop.bridge_request(
+        channel, @commands.agent_start, payload,
+      ) catch {
         error => {
           let message = @interop.bridge_error_text(error)
           scheduler.add(
@@ -855,38 +898,15 @@ fn start_openseek(
           return
         }
       }
-      let json = @json.parse(@interop.reply_json_text(reply)) catch {
-        _ => {
-          scheduler.add(
-            dispatch(
-              StartUndelivered(
-                session~,
-                submission_id~,
-                message="malformed agent.start reply",
-              ),
-            ),
-          )
-          return
-        }
-      }
-      guard json is Object(fields) &&
-        @jsonx.json_text(fields, "run_id") is Some(run_id) &&
-        @jsonx.json_text(fields, "status") is Some(status) &&
-        @jsonx.json_int(fields, "exit_code") is Some(exit_code) else {
-        scheduler.add(
-          dispatch(
-            StartUndelivered(
-              session~,
-              submission_id~,
-              message="malformed agent.start reply",
-            ),
-          ),
-        )
-        return
-      }
       scheduler.add(
         dispatch(
-          StartResponded(session~, submission_id~, run_id~, status~, exit_code~),
+          StartResponded(
+            session~,
+            submission_id~,
+            run_id=reply.run_id,
+            status=reply.status,
+            exit_code=reply.exit_code,
+          ),
         ),
       )
     })
@@ -907,35 +927,24 @@ fn start_payload(
   session : String,
   submission_id : String,
   workspace~ : @pathx.Absolute?,
-) -> @js.Value {
-  let payload = @js.Object::new()
-  payload["task"] = task
-  payload["submission_id"] = submission_id
-  set_engine_settings(
-    payload,
-    model=selected_model,
-    max_steps~,
-    session~,
-    workspace?,
-  )
-  payload.to_value()
-}
-
-///|
-/// Fill `payload` with the engine settings shared by `start` and `compact` —
-/// everything the host needs to spawn a serve engine, minus the task.
-fn set_engine_settings(
-  payload : @js.Object,
-  model~ : String,
-  max_steps~ : String,
-  session~ : String,
-  workspace? : @pathx.Absolute,
-) -> Unit {
-  @interop.set_trimmed(payload, "model", model)
-  @interop.set_trimmed(payload, "session", session)
-  @interop.set_workspace(payload, workspace)
-  if parsed_max_steps(max_steps) is Some(steps) {
-    payload["max_steps"] = steps
+) -> @protocol.StartPayload {
+  let selected_model = selected_model.trim().to_owned()
+  let session = session.trim().to_owned()
+  {
+    task,
+    submission_id: Some(submission_id),
+    model: if selected_model.is_empty() {
+      None
+    } else {
+      Some(selected_model)
+    },
+    max_steps: parsed_max_steps(max_steps),
+    session: if session.is_empty() {
+      None
+    } else {
+      Some(session)
+    },
+    workspace: workspace.map(value => value.0),
   }
 }
 
@@ -983,23 +992,23 @@ async fn refresh_sessions_into(
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   let reply = @interop.bridge_request(
     channel,
-    "session.list",
-    @js.Object::new().to_value(),
+    @commands.session_list,
+    @protocol.EmptyPayload::NoPayload,
   ) catch {
     error => {
       scheduler.add(dispatch(SessionsFailed(@interop.bridge_error_text(error))))
       return
     }
   }
-  match @transcript.decode_sessions_reply(@interop.reply_json_text(reply)) {
-    Some(items) =>
-      scheduler.add(
-        dispatch(
-          SessionsLoaded(items, connection_generation~, request_generation~),
-        ),
-      )
-    None => scheduler.add(dispatch(SessionsFailed("malformed session list")))
-  }
+  scheduler.add(
+    dispatch(
+      SessionsLoaded(
+        @transcript.sessions_from_reply(reply),
+        connection_generation~,
+        request_generation~,
+      ),
+    ),
+  )
 }
 
 ///|
@@ -1084,24 +1093,21 @@ fn load_session_cmd(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["session"] = session_id
-      @interop.set_trimmed(payload, "workspace", workspace)
-      let reply = @interop.bridge_request(
-        channel,
-        "session.load",
-        payload.to_value(),
-      ) catch {
+      let workspace = workspace.trim().to_owned()
+      let reply = @interop.bridge_request(channel, @commands.session_load, {
+        session: session_id,
+        workspace: if workspace.is_empty() {
+          None
+        } else {
+          Some(workspace)
+        },
+      }) catch {
         error => {
           scheduler.add(on_failed(@interop.bridge_error_text(error)))
           return
         }
       }
-      match
-        @transcript.decode_session_load_reply(@interop.reply_json_text(reply)) {
-        Some(view) => scheduler.add(on_loaded(view))
-        None => scheduler.add(on_failed("malformed data"))
-      }
+      scheduler.add(on_loaded(@transcript.session_from_reply(reply)))
     })
   })
 }
@@ -1152,17 +1158,12 @@ async fn steer_delivered(
   submission_id : String,
   run_id : String,
 ) -> Bool {
-  let payload = @js.Object::new()
-  payload["text"] = text
-  payload["submission_id"] = submission_id
-  payload["run_id"] = run_id
-  let reply = @interop.bridge_request(
-    channel,
-    "agent.steer",
-    payload.to_value(),
-  )
-  @interop.js_prop(reply, "steered") is Some(flag) &&
-  (@js.Cast::into(flag) : Bool?) is Some(true)
+  let reply = @interop.bridge_request(channel, @commands.agent_steer, {
+    text,
+    run_id: Some(run_id),
+    submission_id: Some(submission_id),
+  })
+  reply.steered
 }
 
 ///|
@@ -1182,30 +1183,36 @@ fn compact_openseek(
   workspace? : @pathx.Absolute,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
-  let payload = @js.Object::new()
-  set_engine_settings(payload, model~, max_steps~, session~, workspace?)
+  let model = model.trim().to_owned()
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let _ : @js.Value = @interop.bridge_request(
-        channel,
-        "agent.compact",
-        payload.to_value(),
-      ) catch {
-        error => {
-          // Routed by session, not as a generic Error: the rejection must
-          // also clear the conversation's queued/compacting notice, which
-          // no compaction event will ever settle now.
-          scheduler.add(
-            dispatch(
-              CompactRejected(
-                session~,
-                message=@interop.bridge_error_text(error),
+      ignore(
+        @interop.bridge_request(channel, @commands.agent_compact, {
+          session,
+          model: if model.is_empty() {
+            None
+          } else {
+            Some(model)
+          },
+          max_steps: parsed_max_steps(max_steps),
+          workspace: workspace.map(value => value.0),
+        }) catch {
+          error => {
+            // Routed by session, not as a generic Error: the rejection must
+            // also clear the conversation's queued/compacting notice, which
+            // no compaction event will ever settle now.
+            scheduler.add(
+              dispatch(
+                CompactRejected(
+                  session~,
+                  message=@interop.bridge_error_text(error),
+                ),
               ),
-            ),
-          )
-          return
-        }
-      }
+            )
+            return
+          }
+        },
+      )
     })
   })
 }
@@ -1218,24 +1225,23 @@ fn cancel_openseek(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["run_id"] = run_id
-      let _ : @js.Value = @interop.bridge_request(
-        channel,
-        "agent.cancel",
-        payload.to_value(),
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(
-              HostActionFailed(
-                "Failed to cancel the run: " + @interop.bridge_error_text(error),
+      ignore(
+        @interop.bridge_request(channel, @commands.agent_cancel, {
+          run_id: Some(run_id),
+        }) catch {
+          error => {
+            scheduler.add(
+              dispatch(
+                HostActionFailed(
+                  "Failed to cancel the run: " +
+                  @interop.bridge_error_text(error),
+                ),
               ),
-            ),
-          )
-          return
-        }
-      }
+            )
+            return
+          }
+        },
+      )
     })
   })
 }
@@ -1250,18 +1256,20 @@ fn apply_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
     @js.async_run(() => {
       // Self-update always targets the page's own desktop host, never a
       // focused remote device.
-      let _ : @js.Value = @interop.bridge_request(
-        Local,
-        "update.apply",
-        @js.Object::new().to_value(),
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(UpdateFailed(message=@interop.bridge_error_text(error))),
-          )
-          return
-        }
-      }
+      ignore(
+        @interop.bridge_request(
+          Local,
+          @commands.update_apply,
+          @protocol.EmptyPayload::NoPayload,
+        ) catch {
+          error => {
+            scheduler.add(
+              dispatch(UpdateFailed(message=@interop.bridge_error_text(error))),
+            )
+            return
+          }
+        },
+      )
       scheduler.add(dispatch(UpdateApplied))
     })
   })
@@ -1294,22 +1302,23 @@ fn open_file(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let payload = @js.Object::new()
-      payload["session"] = session
-      @interop.set_trimmed(payload, "cwd", workspace_token(cwd))
-      payload["path"] = path
-      let _ : @js.Value = @interop.bridge_request(
-        channel,
-        "host.open_path",
-        payload.to_value(),
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(HostActionFailed(@interop.bridge_error_text(error))),
-          )
-          return
-        }
-      }
+      ignore(
+        @interop.bridge_request(channel, @commands.host_open_path, {
+          session,
+          cwd: match workspace_token(cwd).trim() {
+            "" => None
+            value => Some(value.to_owned())
+          },
+          path,
+        }) catch {
+          error => {
+            scheduler.add(
+              dispatch(HostActionFailed(@interop.bridge_error_text(error))),
+            )
+            return
+          }
+        },
+      )
     })
   })
 }

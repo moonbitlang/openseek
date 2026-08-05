@@ -9,6 +9,7 @@ import {
   "openseek_desktop/internal/moonbit",
   "openseek_desktop/internal/pathx",
   "openseek_desktop/internal/platform",
+  "openseek_desktop/internal/protocol",
   "openseek_desktop/internal/skillmarket",
   "openseek_desktop/internal/terminal",
   "openseek_desktop/internal/update",
