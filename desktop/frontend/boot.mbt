@@ -25,7 +25,7 @@ pub fn boot() -> Unit {
             emit.map(viewport => ViewportResized(width=viewport.width)),
           ),
           @sub.on_key_down(
-            @cmd.Emit((keyboard : @keyboard.Keyboard) => {
+            @cmd.Emit((keyboard : @rabbita/common.Keyboard) => {
               if keyboard.code() == "Backquote" &&
                 keyboard.ctrl_key() &&
                 !keyboard.shift_key() &&
