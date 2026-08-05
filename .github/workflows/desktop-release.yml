@@ -1,19 +1,27 @@
-name: Desktop staging release
+name: Desktop release
 
-run-name: Desktop staging v${{ inputs.version }} by @${{ github.actor }}
+run-name: Desktop ${{ inputs.channel }} v${{ inputs.version }} by @${{ github.actor }}
 
 on:
   workflow_dispatch:
     inputs:
+      channel:
+        description: Release channel
+        required: true
+        type: choice
+        default: staging
+        options:
+          - staging
+          - stable
       version:
-        description: Version to publish to staging, for example 0.1.8
+        description: Version to publish, for example 0.1.8
         required: true
         type: string
 
 # A release must finish as one upload/publish transaction. A second dispatch
 # waits instead of cancelling a run that may already have uploaded its archive.
 concurrency:
-  group: desktop-staging-release
+  group: desktop-${{ inputs.channel }}-release
   cancel-in-progress: false
 
 permissions:
@@ -28,8 +36,9 @@ jobs:
     env:
       APPLE_TEAM_ID: NYZ3LQ5QWC
       MACOS_SIGNING_IDENTITY: "Developer ID Application: Haoxiang Fei (NYZ3LQ5QWC)"
-      NOTARY_PROFILE: openseek-nightly
-      OPENSEEK_API_ORIGIN: https://openseek-api-staging.moonbitlang.cn
+      NOTARY_PROFILE: openseek-${{ inputs.channel }}
+      OPENSEEK_API_ORIGIN: ${{ inputs.channel == 'staging' && 'https://openseek-api-staging.moonbitlang.cn' || 'https://openseek-api.moonbitlang.cn' }}
+      RELEASE_CHANNEL: ${{ inputs.channel }}
       RELEASE_VERSION: ${{ inputs.version }}
 
     steps:
@@ -71,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           certificate_path="$RUNNER_TEMP/openseek-developer-id.p12"
-          signing_keychain="$RUNNER_TEMP/openseek-nightly.keychain-db"
+          signing_keychain="$RUNNER_TEMP/openseek-$RELEASE_CHANNEL.keychain-db"
           signing_keychain_password="$(openssl rand -base64 32)"
           trap 'rm -f "$certificate_path"' EXIT
 
@@ -129,8 +138,8 @@ jobs:
           retention-days: 14
 
       # Upload verifies the server-computed digest before publish atomically
-      # switches staging's latest.json to this version.
-      - name: Publish to staging
+      # switches the selected channel's latest.json to this version.
+      - name: Publish to ${{ inputs.channel }}
         shell: bash
         env:
           OPENSEEK_DEPLOY_TOKEN: ${{ secrets.OPENSEEK_DEPLOY_TOKEN }}
@@ -138,7 +147,7 @@ jobs:
           desktop/scripts/publish-release.sh upload
           desktop/scripts/publish-release.sh publish "v$RELEASE_VERSION"
 
-      - name: Verify staging manifest
+      - name: Verify ${{ inputs.channel }} manifest
         shell: bash
         run: |
           set -euo pipefail
@@ -157,7 +166,7 @@ jobs:
             <<< "$manifest"
 
           {
-            echo "## Desktop staging release"
+            echo "## Desktop $RELEASE_CHANNEL release"
             echo
             echo "- Version: \`$RELEASE_VERSION\`"
             echo "- Artifact: $archive_url"
