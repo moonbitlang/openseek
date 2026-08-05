@@ -80,9 +80,11 @@ fn notification_msg(
     // Terminal notifications go straight to the terminal component emitter
     // and never enter the application message enum.
     TerminalOutput(_) | TerminalExit(_) => None
-    UpdateDownloaded(_) =>
+    UpdateDownloaded(payload) =>
+      // The host names the version it actually staged; its download-time
+      // re-check may have found a newer release than the frontend's check.
       if channel is Local {
-        Some(UpdateDownloaded)
+        Some(UpdateDownloaded(version=payload.version))
       } else {
         None
       }
@@ -398,9 +400,9 @@ test "update download notifications control only the local desktop flow" {
   assert_true(
     notification_msg(
       Local,
-      @protocol.Notification::UpdateDownloaded({ version: "test", }),
+      @protocol.Notification::UpdateDownloaded({ version: "0.2.2", }),
     )
-    is Some(UpdateDownloaded),
+    is Some(UpdateDownloaded(version="0.2.2")),
   )
   assert_true(
     notification_msg(

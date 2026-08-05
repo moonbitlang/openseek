@@ -1,10 +1,11 @@
 // The self-update flow, driven from this side: the app asks `check_update`
-// once at startup (and whenever the user asks in Settings), shows an accent
-// Update button while a release is installable, and on click walks
-// `download_update` → `apply_update` → window close, confirming first when
-// a conversation would be interrupted. The update manifest lives on the
-// SeekMoon origin; there is one release stream, so the requests carry no
-// parameters (the update channel went with the Settings server selector).
+// once at startup (and whenever the user asks in Settings) and starts
+// `download_update` by itself as soon as a check reports an installable
+// release. The staged download then waits in `UpdateReady` until the user
+// asks to restart — confirming first when a conversation would be
+// interrupted — and only that click walks `apply_update` → window close.
+// The update manifest lives on the SeekMoon origin; there is one release
+// stream, so the requests carry no parameters.
 
 ///|
 /// Byte progress for the package currently being downloaded. The total is
@@ -105,12 +106,19 @@ priv enum UpdateUx {
   UpdateUnknown
   CheckingForUpdate
   UpToDate
-  // A newer release; `installable` gates the accent Update button — a dev
-  // binary or a platform without a package only gets the announcement.
+  // A newer release; `installable` gates whether a download can start — a
+  // dev binary or a platform without a package only gets the announcement.
+  // Installable releases download themselves straight from the check, so
+  // this state is the resting point after a failed download, where the
+  // accent button offers a retry.
   UpdateAvailable(version~ : String, installable~ : Bool)
+  // A download in flight — started by the app itself right after a check,
+  // or by a retry click on the restored offer.
+  DownloadingUpdate(version~ : String, progress~ : UpdateDownloadProgress)
+  // Downloaded and staged; restarting is the user's call.
+  UpdateReady(version~ : String)
   // The modal asking to interrupt running conversations is up.
   ConfirmingRestart(version~ : String)
-  DownloadingUpdate(version~ : String, progress~ : UpdateDownloadProgress)
   // The bundle is swapped; the window is about to close.
   RestartingForUpdate(version~ : String)
   // What the Settings row shows when a check could not answer.
