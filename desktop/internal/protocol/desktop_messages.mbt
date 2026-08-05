@@ -4,10 +4,13 @@
 ///|
 pub(all) struct StartPayload {
   task : String
+  // Optional client-minted lifecycle identity echoed with `agent.started`.
+  // Blank ids and ids longer than 128 UTF-8 bytes are ignored.
   submission_id : String?
   model : String?
   max_steps : Int?
   session : String?
+  // A registered workspace directory; absent means a scratch workspace.
   workspace : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
@@ -20,6 +23,7 @@ pub(all) struct CancelPayload {
 pub(all) struct SteerPayload {
   text : String
   run_id : String?
+  // Optional client-minted lifecycle identity echoed on the steer receipt.
   submission_id : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
@@ -37,7 +41,9 @@ pub(all) struct RunsPayload {
 
 ///|
 pub(all) struct CompactPayload {
+  // Compaction addresses a durable conversation rather than a live run.
   session : String
+  // A resumed conversation may need a new engine process with these settings.
   model : String?
   max_steps : Int?
   workspace : String?
@@ -46,6 +52,7 @@ pub(all) struct CompactPayload {
 ///|
 pub(all) struct LoadSessionPayload {
   session : String
+  // The workspace holding the session, when the client already knows it.
   workspace : String?
 } derive(Debug, Eq, FromJson, ToJson)
 

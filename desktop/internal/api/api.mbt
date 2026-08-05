@@ -118,18 +118,18 @@ pub fn endpoints(
   state : ApiState,
   connection : @host.HostConnection,
 ) -> Array[@endpoint.Endpoint] {
-  [
+  let endpoints = [
     @endpoint.Endpoint::remote(@commands.agent_start, async fn(payload) {
-      @engine.start_run(state.sink(), state.manager, payload.to_request())
+      @engine.start_run(state.sink(), state.manager, payload)
     }),
     @endpoint.Endpoint::remote(@commands.agent_cancel, async fn(payload) {
-      @engine.cancel_run(state.manager, payload.to_request())
+      @engine.cancel_run(state.manager, payload)
     }),
     @endpoint.Endpoint::remote(@commands.agent_steer, async fn(payload) {
-      @engine.steer_run(state.manager, payload.to_request())
+      @engine.steer_run(state.manager, payload)
     }),
     @endpoint.Endpoint::remote(@commands.agent_compact, async fn(payload) {
-      @engine.compact_run(state.manager, payload.to_request())
+      @engine.compact_run(state.manager, payload)
     }),
     @endpoint.Endpoint::remote_sync(@commands.agent_runs, payload => {
       state.hub.runs(known?=payload.known)
@@ -138,7 +138,7 @@ pub fn endpoints(
       @engine.list_sessions(state.manager)
     }),
     @endpoint.Endpoint::remote(@commands.session_load, async fn(payload) {
-      @engine.load_session(state.manager, payload.to_request())
+      @engine.load_session(state.manager, payload)
     }),
     @endpoint.Endpoint::remote(@commands.session_list_archived, async fn(_) {
       @engine.archived_sessions(state.manager, session => {
@@ -210,93 +210,14 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.auth_cancel, async fn(_) {
       auth_cancel(state)
     }),
-    @endpoint.Endpoint::remote(@commands.fs_read_file, async fn(payload) {
-      @host.read_file(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.fs_read_directory, async fn(payload) {
-      @host.read_directory(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.fs_list_files, async fn(payload) {
-      @host.list_files(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.fs_stat_files, async fn(payload) {
-      @host.stat_files(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.fs_watch, async fn(payload) {
-      connection.watch(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.fs_unwatch, async fn(_) {
-      connection.unwatch()
-    }),
-    @endpoint.Endpoint::remote(@commands.fs_browse, async fn(payload) {
-      @host.browse_directory(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.terminal_open, async fn(payload) {
-      connection.terminal_open(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.terminal_input, async fn(payload) {
-      connection.terminal_input(payload)
-    }),
-    @endpoint.Endpoint::remote_sync(@commands.terminal_resize, payload => {
-      connection.terminal_resize(payload)
-    }),
-    @endpoint.Endpoint::remote_sync(@commands.terminal_ack, payload => {
-      connection.terminal_ack(payload)
-    }),
-    @endpoint.Endpoint::remote_sync(@commands.terminal_close, payload => {
-      connection.terminal_close(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.lsp_open, async fn(payload) {
-      state.host.lsp_open(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.lsp_hover, async fn(payload) {
-      state.host.lsp_hover(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.lsp_workspace_symbols, async fn(
-      payload,
-    ) {
-      state.host.lsp_workspace_symbols(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.moonide_definition, async fn(payload) {
-      state.host.moonide_definition(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.moonide_references, async fn(payload) {
-      state.host.moonide_references(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.skills_catalog, async fn(_) {
-      @host.skills_catalog()
-    }),
-    @endpoint.Endpoint::remote(@commands.skills_installed, async fn(_) {
-      @host.skills_installed()
-    }),
-    @endpoint.Endpoint::remote(@commands.skills_install, async fn(payload) {
-      @host.skills_install(payload, () => state.publish(SkillsChanged))
-    }),
-    @endpoint.Endpoint::remote(@commands.skills_uninstall, async fn(payload) {
-      @host.skills_uninstall(payload, () => state.publish(SkillsChanged))
-    }),
-    @endpoint.Endpoint::remote(@commands.update_check, async fn(payload) {
-      state.host.update_check(payload)
-    }),
-    @endpoint.Endpoint::remote_sync(@commands.update_download, payload => {
-      state.host.update_download(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.update_apply, async fn(_) {
-      state.host.update_apply()
-    }),
-    @endpoint.Endpoint::remote(@commands.app_list, async fn(_) {
-      @host.app_list()
-    }),
-    @endpoint.Endpoint::remote(@commands.app_launch, async fn(payload) {
-      @host.app_launch(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.git_branch, async fn(payload) {
-      @host.git_branch_info(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.host_open_path, async fn(payload) {
-      @host.open_path(payload)
-    }),
   ]
+  for
+    endpoint in @host.endpoints(state.host, connection, () => {
+      state.publish(SkillsChanged)
+    }) {
+    endpoints.push(endpoint)
+  }
+  endpoints
 }
 
 ///|

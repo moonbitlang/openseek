@@ -90,7 +90,7 @@ fn configured_max_steps(value : Int?) -> Int raise EngineError {
 ///|
 async fn run_config(
   manager : EngineManager,
-  payload : StartRequest,
+  payload : @protocol.StartPayload,
 ) -> RunConfig {
   let task = payload.task.trim().to_owned()
   guard !task.is_empty() else { raise EngineError("task must not be empty") }
@@ -112,7 +112,7 @@ async fn run_config(
 /// and the fingerprint deliberately excludes the task.
 async fn compact_config(
   manager : EngineManager,
-  payload : CompactRequest,
+  payload : @protocol.CompactPayload,
 ) -> RunConfig {
   let session = payload.session.trim().to_owned()
   guard !session.is_empty() else {

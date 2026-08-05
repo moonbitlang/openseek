@@ -14,7 +14,7 @@
 pub async fn start_run(
   sink : EventSink,
   manager : EngineManager,
-  payload : StartRequest,
+  payload : @protocol.StartPayload,
 ) -> StartReply {
   manager.workspace_lifecycle_lock.acquire()
   let mut placement_locked = true
@@ -152,7 +152,7 @@ fn mint_run_id() -> String raise EngineError {
 /// to cancel.
 pub async fn cancel_run(
   manager : EngineManager,
-  payload : CancelRequest,
+  payload : @protocol.CancelPayload,
 ) -> CancelReply {
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) else {
     return { cancelled: false, run_id: None }
@@ -250,7 +250,7 @@ async fn request_spawn(
 /// the command reached a live engine.
 pub async fn compact_run(
   manager : EngineManager,
-  payload : CompactRequest,
+  payload : @protocol.CompactPayload,
 ) -> CompactReply {
   manager.workspace_lifecycle_lock.acquire()
   let mut placement_locked = true
@@ -352,7 +352,7 @@ pub async fn compact_run(
 /// emitting any settling event, which would leave a phantom acknowledgment.
 pub async fn steer_run(
   manager : EngineManager,
-  payload : SteerRequest,
+  payload : @protocol.SteerPayload,
 ) -> SteerReply {
   guard !payload.text.trim().is_empty() else {
     return { steered: false, run_id: None }
@@ -576,7 +576,7 @@ async fn session_group(
 ///|
 pub async fn load_session(
   manager : EngineManager,
-  payload : LoadSessionRequest,
+  payload : @protocol.LoadSessionPayload,
 ) -> LoadSessionReply {
   let session = payload.session.trim().to_owned()
   guard !session.is_empty() else {

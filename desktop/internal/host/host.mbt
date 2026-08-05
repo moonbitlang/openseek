@@ -179,214 +179,107 @@ pub fn HostConnection::close_terminals(self : HostConnection) -> Unit {
 }
 
 ///|
-/// Typed host methods are the native API consumed by the endpoint registry.
-/// Transport names and JSON never enter this package.
-pub async fn skills_catalog() -> @protocol.SkillsCatalogReply {
-  skills_catalog_op()
-}
-
-///|
-pub async fn skills_install(
-  payload : @protocol.InstallSkillPayload,
-  on_changed : () -> Unit,
-) -> @protocol.InstallSkillReply {
-  install_skill_op(payload, on_changed)
-}
-
-///|
-pub async fn skills_installed() -> @protocol.InstalledSkillsReply {
-  installed_skills_op()
-}
-
-///|
-pub async fn skills_uninstall(
-  payload : @protocol.UninstallSkillPayload,
-  on_changed : () -> Unit,
-) -> @protocol.UninstallSkillReply {
-  uninstall_skill_op(payload, on_changed)
-}
-
-///|
-pub async fn open_path(
-  payload : @protocol.OpenPathPayload,
-) -> @protocol.OpenPathReply {
-  open_path_op(payload)
-}
-
-///|
-pub async fn HostState::update_check(
-  self : HostState,
-  payload : @protocol.UpdateChannelPayload,
-) -> @protocol.CheckUpdateReply {
-  self.updates.check(payload)
-}
-
-///|
-pub fn HostState::update_download(
-  self : HostState,
-  payload : @protocol.UpdateChannelPayload,
-) -> @protocol.DownloadUpdateAcceptedReply raise {
-  self.updates.start_download(payload)
-}
-
-///|
-pub async fn HostState::update_apply(
-  self : HostState,
-) -> @protocol.ApplyUpdateReply {
-  self.updates.apply()
-}
-
-///|
-pub async fn git_branch_info(
-  payload : @protocol.GitBranchPayload,
-) -> @protocol.GitBranchReply {
-  git_branch_op(payload)
-}
-
-///|
-pub async fn app_list() -> @protocol.ListAppsReply {
-  list_apps_op()
-}
-
-///|
-pub async fn app_launch(
-  payload : @protocol.LaunchAppPayload,
-) -> @protocol.LaunchAppReply {
-  launch_app_op(payload)
-}
-
-///|
-pub async fn read_directory(
-  payload : @protocol.ReadDirPayload,
-) -> @protocol.ReadDirReply {
-  read_directory_op(payload)
-}
-
-///|
-pub async fn list_files(
-  payload : @protocol.ListFilesPayload,
-) -> @protocol.ListFilesReply {
-  list_files_op(payload)
-}
-
-///|
-pub async fn read_file(
-  payload : @protocol.ReadFilePayload,
-) -> @protocol.ReadFileReply {
-  read_file_op(payload)
-}
-
-///|
-pub async fn stat_files(
-  payload : @protocol.StatFilesPayload,
-) -> @protocol.StatFilesReply {
-  stat_files_op(payload)
-}
-
-///|
-pub async fn HostConnection::watch(
-  self : HostConnection,
-  payload : @protocol.WatchWorkspacePayload,
-) -> @protocol.EmptyReply {
-  self.fs_watch.watch(payload)
-  Acknowledged
-}
-
-///|
-pub async fn HostConnection::unwatch(
-  self : HostConnection,
-) -> @protocol.EmptyReply {
-  self.fs_watch.unwatch()
-  Acknowledged
-}
-
-///|
-pub async fn HostConnection::terminal_open(
-  self : HostConnection,
-  payload : @protocol.TerminalOpenPayload,
-) -> @protocol.TerminalOpenReply {
-  terminal_open_op(self.terminal, payload)
-}
-
-///|
-pub async fn HostConnection::terminal_input(
-  self : HostConnection,
-  payload : @protocol.TerminalInputPayload,
-) -> @protocol.EmptyReply {
-  terminal_input_op(self.terminal, payload)
-  Acknowledged
-}
-
-///|
-pub fn HostConnection::terminal_resize(
-  self : HostConnection,
-  payload : @protocol.TerminalResizePayload,
-) -> @protocol.EmptyReply raise {
-  terminal_resize_op(self.terminal, payload)
-  Acknowledged
-}
-
-///|
-pub fn HostConnection::terminal_ack(
-  self : HostConnection,
-  payload : @protocol.TerminalAckPayload,
-) -> @protocol.EmptyReply {
-  terminal_ack_op(self.terminal, payload)
-  Acknowledged
-}
-
-///|
-pub fn HostConnection::terminal_close(
-  self : HostConnection,
-  payload : @protocol.TerminalClosePayload,
-) -> @protocol.EmptyReply {
-  terminal_close_op(self.terminal, payload)
-  Acknowledged
-}
-
-///|
-pub async fn HostState::lsp_hover(
-  self : HostState,
-  payload : @protocol.LspHoverPayload,
-) -> @protocol.LspHoverReply {
-  lsp_hover_op(self.lsp, payload)
-}
-
-///|
-pub async fn HostState::lsp_open(
-  self : HostState,
-  payload : @protocol.LspOpenPayload,
-) -> @protocol.LspDiagnosticsReply {
-  lsp_open_op(self.lsp, payload)
-}
-
-///|
-pub async fn HostState::lsp_workspace_symbols(
-  self : HostState,
-  payload : @protocol.WorkspaceSymbolsPayload,
-) -> @protocol.WorkspaceSymbolsReply {
-  workspace_symbols_op(self.lsp, payload)
-}
-
-///|
-pub async fn HostState::moonide_definition(
-  self : HostState,
-  payload : @protocol.MoonIdeNavigationPayload,
-) -> @protocol.MoonIdeLocationsReply {
-  moonide_definition_op(self, payload)
-}
-
-///|
-pub async fn HostState::moonide_references(
-  self : HostState,
-  payload : @protocol.MoonIdeNavigationPayload,
-) -> @protocol.MoonIdeLocationsReply {
-  moonide_references_op(self, payload)
-}
-
-///|
-pub async fn browse_directory(
-  payload : @protocol.BrowseDirectoryPayload,
-) -> @protocol.BrowseDirectoryReply {
-  browse_directory_op(payload)
+/// Host-owned endpoints are assembled next to the private operations they
+/// invoke. The API package concatenates this catalog with engine/auth
+/// endpoints, so these operations do not need one public forwarding method
+/// apiece.
+pub fn endpoints(
+  state : HostState,
+  connection : HostConnection,
+  on_skills_changed : () -> Unit,
+) -> Array[@endpoint.Endpoint] {
+  [
+    @endpoint.Endpoint::remote(@commands.fs_read_file, async fn(payload) {
+      read_file_op(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_read_directory, async fn(payload) {
+      read_directory_op(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_list_files, async fn(payload) {
+      list_files_op(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_stat_files, async fn(payload) {
+      stat_files_op(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_watch, async fn(payload) {
+      connection.fs_watch.watch(payload)
+      Acknowledged
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_unwatch, async fn(_) {
+      connection.fs_watch.unwatch()
+      Acknowledged
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_browse, async fn(payload) {
+      browse_directory_op(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.terminal_open, async fn(payload) {
+      terminal_open_op(connection.terminal, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.terminal_input, async fn(payload) {
+      terminal_input_op(connection.terminal, payload)
+      Acknowledged
+    }),
+    @endpoint.Endpoint::remote_sync(@commands.terminal_resize, payload => {
+      terminal_resize_op(connection.terminal, payload)
+      Acknowledged
+    }),
+    @endpoint.Endpoint::remote_sync(@commands.terminal_ack, payload => {
+      terminal_ack_op(connection.terminal, payload)
+      Acknowledged
+    }),
+    @endpoint.Endpoint::remote_sync(@commands.terminal_close, payload => {
+      terminal_close_op(connection.terminal, payload)
+      Acknowledged
+    }),
+    @endpoint.Endpoint::remote(@commands.lsp_open, async fn(payload) {
+      lsp_open_op(state.lsp, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.lsp_hover, async fn(payload) {
+      lsp_hover_op(state.lsp, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.lsp_workspace_symbols, async fn(
+      payload,
+    ) {
+      workspace_symbols_op(state.lsp, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.moonide_definition, async fn(payload) {
+      moonide_definition_op(state, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.moonide_references, async fn(payload) {
+      moonide_references_op(state, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.skills_catalog, async fn(_) {
+      skills_catalog_op()
+    }),
+    @endpoint.Endpoint::remote(@commands.skills_installed, async fn(_) {
+      installed_skills_op()
+    }),
+    @endpoint.Endpoint::remote(@commands.skills_install, async fn(payload) {
+      install_skill_op(payload, on_skills_changed)
+    }),
+    @endpoint.Endpoint::remote(@commands.skills_uninstall, async fn(payload) {
+      uninstall_skill_op(payload, on_skills_changed)
+    }),
+    @endpoint.Endpoint::remote(@commands.update_check, async fn(payload) {
+      state.updates.check(payload)
+    }),
+    @endpoint.Endpoint::remote_sync(@commands.update_download, payload => {
+      state.updates.start_download(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.update_apply, async fn(_) {
+      state.updates.apply()
+    }),
+    @endpoint.Endpoint::remote(@commands.app_list, async fn(_) {
+      list_apps_op()
+    }),
+    @endpoint.Endpoint::remote(@commands.app_launch, async fn(payload) {
+      launch_app_op(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.git_branch, async fn(payload) {
+      git_branch_op(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.host_open_path, async fn(payload) {
+      open_path_op(payload)
+    }),
+  ]
 }

@@ -42,60 +42,6 @@ fn normalize_submission_id(submission_id : String?) -> String? {
 }
 
 ///|
-/// The endpoint and credentials are the host-owned settings' business — a
-/// start names only the work and where it runs.
-pub(all) struct StartRequest {
-  task : String
-  // Optional client-minted lifecycle identity echoed with `agent.started`.
-  // The host ignores blank ids and ids longer than 128 UTF-8 bytes; accepted
-  // values are opaque and echoed unchanged.
-  submission_id : String?
-  model : String?
-  max_steps : Int?
-  session : String?
-  // A registered workspace directory to run in: the engine works in the
-  // project itself and the session's durable record lands in its in-project
-  // store. Overrides the derived scratch cwd and store lookup.
-  workspace : String?
-}
-
-///|
-pub(all) struct CancelRequest {
-  run_id : String?
-}
-
-///|
-pub(all) struct SteerRequest {
-  text : String
-  run_id : String?
-  // Optional client-minted lifecycle identity echoed on the matching steer
-  // receipt. The same 128-byte, non-blank boundary as StartRequest applies.
-  submission_id : String?
-}
-
-///|
-pub(all) struct CompactRequest {
-  // The conversation to compact, addressed by its durable session id. Unlike
-  // cancel/steer there is no open run to key on: compaction is normally asked
-  // for once a turn has finished and the engine is idle.
-  session : String
-  // The same engine settings a start carries (minus the task): a conversation
-  // resumed after a restart has no live serve process, and compacting it
-  // spawns one on the durable session with exactly these settings.
-  model : String?
-  max_steps : Int?
-  workspace : String?
-}
-
-///|
-pub(all) struct LoadSessionRequest {
-  session : String
-  // The workspace whose store holds the session, when the client knows it;
-  // otherwise the host probes the registered workspaces and the global root.
-  workspace : String?
-}
-
-///|
 type StartReply = @protocol.StartReply
 
 ///|

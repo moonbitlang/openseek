@@ -17,9 +17,9 @@ pub async fn attach_workspace(String, (Array[String]) -> Unit) -> @protocol.Work
 
 pub async fn attached_workspace_dir(String) -> @path.Path?
 
-pub async fn cancel_run(EngineManager, CancelRequest) -> @protocol.CancelReply
+pub async fn cancel_run(EngineManager, @protocol.CancelPayload) -> @protocol.CancelReply
 
-pub async fn compact_run(EngineManager, CompactRequest) -> @protocol.CompactReply
+pub async fn compact_run(EngineManager, @protocol.CompactPayload) -> @protocol.CompactReply
 
 pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) -> @protocol.WorkspacesReply
 
@@ -29,7 +29,7 @@ pub async fn list_sessions(EngineManager) -> @protocol.SessionsReply
 
 pub async fn list_workspaces() -> @protocol.WorkspacesReply
 
-pub async fn load_session(EngineManager, LoadSessionRequest) -> @protocol.LoadSessionReply
+pub async fn load_session(EngineManager, @protocol.LoadSessionPayload) -> @protocol.LoadSessionReply
 
 pub fn new_engine_actor(String, runtime_dir? : @path.Path) -> EngineActor
 
@@ -47,9 +47,9 @@ pub async fn session_cwd(String) -> String
 
 pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 
-pub async fn start_run(EventSink, EngineManager, StartRequest) -> @protocol.StartReply
+pub async fn start_run(EventSink, EngineManager, @protocol.StartPayload) -> @protocol.StartReply
 
-pub async fn steer_run(EngineManager, SteerRequest) -> @protocol.SteerReply
+pub async fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply
 
 pub async fn unarchive_session(EngineManager, String, () -> Unit) -> @protocol.SessionsReply
 
@@ -63,17 +63,6 @@ pub(all) suberror EngineError {
 }
 
 // Types and methods
-pub(all) struct CancelRequest {
-  run_id : String?
-}
-
-pub(all) struct CompactRequest {
-  session : String
-  model : String?
-  max_steps : Int?
-  workspace : String?
-}
-
 type EngineActor
 pub fn EngineActor::manager(Self) -> EngineManager
 pub async fn EngineActor::run(Self, EventSink, (String) -> Unit) -> Unit
@@ -92,31 +81,11 @@ type EngineManager
 
 pub(all) struct EventSink(async (EngineEvent) -> Unit)
 
-pub(all) struct LoadSessionRequest {
-  session : String
-  workspace : String?
-}
-
 pub(all) struct SettingsPatch {
   provider : String?
   custom_api_url : String?
   deepseek_api_key : String?
   custom_api_key : String?
-}
-
-pub(all) struct StartRequest {
-  task : String
-  submission_id : String?
-  model : String?
-  max_steps : Int?
-  session : String?
-  workspace : String?
-}
-
-pub(all) struct SteerRequest {
-  text : String
-  run_id : String?
-  submission_id : String?
 }
 
 // Type aliases
