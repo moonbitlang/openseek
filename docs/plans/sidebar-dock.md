@@ -216,6 +216,23 @@ regress.
   no back/forward). Decision pending: pursue this as the P1 browser host,
   or keep the placeholder-pane plan and leave real rendering to P2 — see
   the P2 section: upstream is building the native view right now.
+
+  **Addendum (2026-08-05): `https://proton.localhost` does NOT open the
+  network.** After the lepus bump to 0.1.14/upstream main (asset entries
+  now serve from the intercepted `https://proton.localhost` origin — a
+  domain-bound CEF scheme factory registered for the (https,
+  proton.localhost) pair in `native/src/engine/cef_common/scheme.c`; no
+  real server, no TLS), the probe was rerun in asset mode
+  (`probe_iframe/assets/ws_probe.html` + the logging WS server). Verdict:
+  all four renderer-initiated real-network vectors from that origin —
+  `fetch`, `<img>`, `<iframe src="http://127.0.0.1:…">`, and
+  `new WebSocket("ws://…")` — are still swallowed (zero server hits;
+  main-frame `load_end` never fires), while a same-origin subframe loads
+  normally (status=200 control). The https label buys secure context and
+  a stable origin, not network access. Consequences: the "asset-entry
+  page + loopback WS" hybrid is dead, M2 iframes cannot ride the asset
+  origin, and M1.5's real loopback-http origin remains the only working
+  path.
 - **M1 — strip hoist.** The dock package plus the fileeditor demotion, as a
   pure behavior-preserving refactor: after M1 the app renders and behaves
   identically to today (file tabs only), with dock and fileeditor each under
@@ -400,15 +417,50 @@ to main yet; API may still churn; a bump requires a runtime rebuild (native
 ABI additions). When it lands, the dock's `Browser` tab host can skip the
 iframe entirely.
 
+**Merged and probe-verified (2026-08-05).** `feat/web-contents-view` merged
+to lepus main as PR #80 (cf2f7e7); submodule bumped to d19a843 and the
+darwin-arm64 runtime dist reassembled (same `proton-0.1.14` name, new view
+ABI — a stale dist fails at link/probe, so `cef setup` must rerun on every
+bump). Probe (`probe_iframe view http://127.0.0.1:18931/`):
+`web_contents_view_supported=true`; from inside the view, page load, fetch,
+and a WebSocket handshake + frame round-trip all hit the probe server —
+the view is a real network-served browser, no request-swallow disease — and
+`on_view_event` delivered Navigated / LoadingChanged / TitleUpdated.
+Facade surface: `App::window_lifecycle(on_ready)` → `WindowHandle` →
+`add_view/remove_view/view/views`, runtime-managed; bounds are window
+logical coordinates that match host-page CSS px at zoom 100 (the 52
+example positions a view against a CSS sidebar with raw numbers).
+Consequence for M2: build `Browser` tabs on native views NOW and skip the
+iframe scaffold — frontend keeps tab strip + address bar, sends the browser
+ops (open/navigate/back/forward/reload/set-bounds/close) to the host, which
+owns the ViewHandles and streams view events back for the address bar.
+Iframes remain the fallback only if a per-platform view bug appears. Known
+costs unchanged: views z-order above ALL HTML (hide or shrink the view when
+frontend overlays/popovers must cover the content area), zoom ≠ 100 breaks
+the CSS-px↔logical-pt bounds mapping (pin zoom or scale bounds).
+
+**Decision (2026-08-05): M2 builds directly on origin/main.** With native
+views verified, the http-origin migration is no longer a prerequisite for
+the dock: main already carries the view-ABI lepus (PR #650 pinned the
+submodule past the web-contents-view merge and added the rsa/updater
+workspace members), and views are host-created, so they work under the
+bridge transport exactly as well. PR #639 (loopback-http window, bridge
+deletion) is parked as a draft — its remaining rationale is transport
+unification with the browser console (the window-as-WS-client architecture
+is impossible on the asset origin, where renderer WebSockets are swallowed)
+— to be revisited after the dock ships. PR #640 (this dock hoist) is
+retargeted to main and proceeds. M2's frontend↔host channel is therefore
+the existing proton bridge ops, not loopback WS local ops; the op names and
+event shapes stay as designed so a later #639 revival only swaps the
+carrier.
+
 ## Next Implementation Step
 
-M0 (failed → escape route probed), M1 (strip hoist), and M1.5 (transport
-unification; window on `http://127.0.0.1`) are implemented, all uncommitted.
-Next: the user's live E2E pass on M1.5 (window paint over the loopback
-origin, run round-trip, terminal, notification click, external links,
-reload-reconnect), then M2 — the preview package with real iframes for
-loopback URLs, the launcher (empty-strip pane + `+` popup + `FilePicker`
-tab), and the routing recorded under Open Questions.
+M0 (failed → probed to native views), M1 (strip hoist, PR #640 on main),
+and M1.5 (transport unification, PR #639 — parked) are done. Next: M2 —
+`Browser` tabs hosted by native web contents views (bridge ops + view
+events per the P2 section), the launcher (empty-strip pane + `+` popup +
+`FilePicker` tab), and the routing recorded under Open Questions.
 
 ## Validation Plan
 
