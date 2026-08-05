@@ -264,7 +264,7 @@ fn Hub::engine_connected(
 /// finished runs to the embedding host — the desktop's system notification.
 fn Hub::sink(
   self : Hub,
-  on_finished? : (@engine.FinishedPayload) -> Unit,
+  on_finished? : (@protocol.FinishedPayload) -> Unit,
 ) -> @engine.EventSink {
   EventSink(event => {
     match event {

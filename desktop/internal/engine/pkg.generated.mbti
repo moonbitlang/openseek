@@ -89,6 +89,5 @@ pub(all) struct SettingsPatch {
 }
 
 // Type aliases
-pub using @protocol {type FinishedPayload}
 
 // Traits

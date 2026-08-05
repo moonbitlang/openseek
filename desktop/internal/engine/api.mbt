@@ -81,9 +81,6 @@ type StartedPayload = @protocol.StartedPayload
 type EventPayload = @protocol.AgentEventPayload
 
 ///|
-pub type FinishedPayload = @protocol.FinishedPayload
-
-///|
 type ErrorPayload = @protocol.AgentErrorPayload
 
 ///|
@@ -109,7 +106,7 @@ pub(all) enum EngineEvent {
   Started(StartedPayload)
   StreamEvent(EventPayload)
   Error(ErrorPayload)
-  Finished(FinishedPayload)
+  Finished(@protocol.FinishedPayload)
   SessionCommit(SessionCommitPayload)
   DurableBoundary(DurableBoundaryPayload)
 }

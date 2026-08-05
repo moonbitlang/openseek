@@ -56,34 +56,6 @@ pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
 }
 
 ///|
-/// Decode an event name immediately after it crosses a transport.
-pub fn NotificationKind::from_wire(name : String) -> NotificationKind? {
-  match name {
-    "agent.connected" => Some(AgentConnected)
-    "agent.started" => Some(AgentStarted)
-    "agent.event" => Some(AgentEvent)
-    "agent.error" => Some(AgentError)
-    "agent.finished" => Some(AgentFinished)
-    "agent.durable" => Some(AgentDurable)
-    "session.event" => Some(SessionEvent)
-    "session.changed" => Some(SessionChanged)
-    "workspace.changed" => Some(WorkspaceChanged)
-    "settings.changed" => Some(SettingsChanged)
-    "skills.changed" => Some(SkillsChanged)
-    "update.download_progress" => Some(UpdateDownloadProgress)
-    "update.downloaded" => Some(UpdateDownloaded)
-    "update.download_failed" => Some(UpdateDownloadFailed)
-    "auth.changed" => Some(AuthChanged)
-    "lsp.diagnostics" => Some(LspDiagnostics)
-    "fs.changed" => Some(FsChanged)
-    "fs.watch_failed" => Some(FsWatchFailed)
-    "terminal.output" => Some(TerminalOutput)
-    "terminal.exit" => Some(TerminalExit)
-    _ => None
-  }
-}
-
-///|
 /// Every event exposed by the desktop transports, in registration order.
 pub fn NotificationKind::all() -> Array[NotificationKind] {
   [
@@ -138,33 +110,34 @@ pub(all) enum Notification {
 } derive(Debug, Eq)
 
 ///|
-/// Decode the event name at the WebSocket/Proton boundary. Unknown events are
-/// deliberately ignored so newer hosts remain compatible with older pages.
+/// Decode the event name and payload together at the WebSocket/Proton boundary.
+/// Unknown events are deliberately ignored so newer hosts remain compatible
+/// with older pages. Matching the wire name here avoids a second name-to-kind
+/// table that would only be consumed by this decoder.
 pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
-  guard NotificationKind::from_wire(name) is Some(kind_) else { return None }
-  match kind_ {
-    AgentConnected =>
+  match name {
+    "agent.connected" =>
       Some(AgentConnected(@json.from_json(params) catch { _ => return None }))
-    AgentStarted =>
+    "agent.started" =>
       Some(AgentStarted(@json.from_json(params) catch { _ => return None }))
-    AgentEvent =>
+    "agent.event" =>
       Some(AgentEvent(@json.from_json(params) catch { _ => return None }))
-    AgentError =>
+    "agent.error" =>
       Some(AgentError(@json.from_json(params) catch { _ => return None }))
-    AgentFinished =>
+    "agent.finished" =>
       Some(AgentFinished(@json.from_json(params) catch { _ => return None }))
-    AgentDurable =>
+    "agent.durable" =>
       Some(AgentDurable(@json.from_json(params) catch { _ => return None }))
-    SessionEvent =>
+    "session.event" =>
       Some(SessionEvent(@json.from_json(params) catch { _ => return None }))
-    SessionChanged =>
+    "session.changed" =>
       Some(SessionChanged(@json.from_json(params) catch { _ => return None }))
-    WorkspaceChanged =>
+    "workspace.changed" =>
       Some(WorkspaceChanged(@json.from_json(params) catch { _ => return None }))
-    SettingsChanged =>
+    "settings.changed" =>
       Some(SettingsChanged(@json.from_json(params) catch { _ => return None }))
-    SkillsChanged => Some(SkillsChanged)
-    UpdateDownloadProgress =>
+    "skills.changed" => Some(SkillsChanged)
+    "update.download_progress" =>
       Some(
         UpdateDownloadProgress(
           @json.from_json(params) catch {
@@ -172,24 +145,25 @@ pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
           },
         ),
       )
-    UpdateDownloaded =>
+    "update.downloaded" =>
       Some(UpdateDownloaded(@json.from_json(params) catch { _ => return None }))
-    UpdateDownloadFailed =>
+    "update.download_failed" =>
       Some(
         UpdateDownloadFailed(@json.from_json(params) catch { _ => return None }),
       )
-    AuthChanged =>
+    "auth.changed" =>
       Some(AuthChanged(@json.from_json(params) catch { _ => return None }))
-    LspDiagnostics =>
+    "lsp.diagnostics" =>
       Some(LspDiagnostics(@json.from_json(params) catch { _ => return None }))
-    FsChanged =>
+    "fs.changed" =>
       Some(FsChanged(@json.from_json(params) catch { _ => return None }))
-    FsWatchFailed =>
+    "fs.watch_failed" =>
       Some(FsWatchFailed(@json.from_json(params) catch { _ => return None }))
-    TerminalOutput =>
+    "terminal.output" =>
       Some(TerminalOutput(@json.from_json(params) catch { _ => return None }))
-    TerminalExit =>
+    "terminal.exit" =>
       Some(TerminalExit(@json.from_json(params) catch { _ => return None }))
+    _ => None
   }
 }
 

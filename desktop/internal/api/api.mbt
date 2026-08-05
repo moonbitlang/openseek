@@ -18,7 +18,7 @@ struct ApiState {
   auth : @auth.AuthStore
   // Called for every finished run, alongside the notification fan-out — the
   // desktop posts its system notification here.
-  on_finished : ((@engine.FinishedPayload) -> Unit)?
+  on_finished : ((@protocol.FinishedPayload) -> Unit)?
 }
 
 ///|
@@ -31,7 +31,7 @@ pub fn ApiState::new(
   runtime_dir? : @path.Path,
   executable? : String,
   auth? : @auth.AuthStore,
-  on_finished? : (@engine.FinishedPayload) -> Unit,
+  on_finished? : (@protocol.FinishedPayload) -> Unit,
 ) -> ApiState {
   let engine_actor = @engine.new_engine_actor(engine, runtime_dir?)
   {

@@ -371,7 +371,6 @@ pub(all) enum NotificationKind {
   TerminalExit
 } derive(Eq, Hash, @debug.Debug)
 pub fn NotificationKind::all() -> Array[Self]
-pub fn NotificationKind::from_wire(String) -> Self?
 pub fn NotificationKind::wire_name(Self) -> String
 
 pub(all) struct OpenExternalReply {
