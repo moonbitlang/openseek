@@ -149,7 +149,7 @@ async fn emit_error(
   exit_code? : Int,
   diagnostics? : String,
 ) -> Unit {
-  emit(sink, Error({ run_id, message, exit_code, diagnostics }))
+  emit(sink, Error({ run_id, message: Some(message), exit_code, diagnostics }))
 }
 
 ///|

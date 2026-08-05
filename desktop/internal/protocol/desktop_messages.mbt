@@ -243,12 +243,41 @@ pub(all) struct AgentEventPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// A host failure report stays decodable even when one of its display fields
+/// is absent or has the wrong JSON type. Errors are the one notification class
+/// that must not disappear because the report describing them is malformed;
+/// the frontend assigns the generic label for a missing or blank `message`.
 pub(all) struct AgentErrorPayload {
   run_id : String?
-  message : String
+  message : String?
   exit_code : Int?
   diagnostics : String?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq, ToJson)
+
+///|
+pub impl FromJson for AgentErrorPayload with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected agent error payload"))
+  }
+  {
+    run_id: match fields.get("run_id") {
+      Some(String(value)) => Some(value)
+      _ => None
+    },
+    message: match fields.get("message") {
+      Some(String(value)) => Some(value)
+      _ => None
+    },
+    exit_code: match fields.get("exit_code") {
+      Some(Number(value, ..)) => Some(value.to_int())
+      _ => None
+    },
+    diagnostics: match fields.get("diagnostics") {
+      Some(String(value)) => Some(value)
+      _ => None
+    },
+  }
+}
 
 ///|
 pub(all) struct FinishedPayload {

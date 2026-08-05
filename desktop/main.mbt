@@ -78,7 +78,7 @@ fn main {
           state.publish(
             AgentError({
               run_id: None,
-              message,
+              message: Some(message),
               exit_code: None,
               diagnostics: None,
             }),

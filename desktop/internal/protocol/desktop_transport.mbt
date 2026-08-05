@@ -235,3 +235,15 @@ test "desktop notifications round-trip at the wire edge" {
   assert_eq(event.params(), { "id": 1, "code": 0 })
   assert_eq(Notification::from_wire("future.event", {}), None)
 }
+
+///|
+test "malformed agent errors remain visible notifications" {
+  let cases : Array[Json] = [{}, { "message": 42 }]
+  for params in cases {
+    guard Notification::from_wire("agent.error", params)
+      is Some(AgentError(payload)) else {
+      fail("malformed agent error was dropped")
+    }
+    assert_eq(payload.message, None)
+  }
+}

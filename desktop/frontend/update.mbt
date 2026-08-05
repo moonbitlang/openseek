@@ -5802,15 +5802,24 @@ test "a process-exit error keeps its host diagnostics as a local notice" {
 }
 
 ///|
-test "agent error decoder preserves an optional process exit code" {
+test "agent error decoder preserves exit codes and normalizes missing messages" {
   guard error_msg({
       run_id: Some("r7"),
-      message: "exited",
+      message: Some("exited"),
       exit_code: Some(9),
       diagnostics: None,
     })
     is Some(Error(exit_code=Some(9), ..)) else {
     fail("expected the exit code")
+  }
+  guard error_msg({
+      run_id: None,
+      message: None,
+      exit_code: None,
+      diagnostics: None,
+    })
+    is Some(Error(message="error", ..)) else {
+    fail("expected the generic error label")
   }
 }
 
@@ -7974,7 +7983,7 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
 }
 
 ///|
-test "a terminal committed before Finished still owns the run-tail notice" {
+test "an unknown terminal before Finished still owns the run-tail notice" {
   let dispatch = test_dispatch()
   let conv = with_pending_steers(
     {
@@ -7992,7 +8001,10 @@ test "a terminal committed before Finished still owns the run-tail notice" {
     SessionCommitted(
       session="desktop-test",
       sequence=3,
-      item=@protocol.Terminal(@protocol.Finished("answer")),
+      item=@protocol.UnknownTerminal({
+        "kind": "terminal",
+        "payload": { "kind": "future_terminal", "message": "answer" },
+      }),
     ),
     running_model().replace_conversation(conv),
   )

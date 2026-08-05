@@ -764,10 +764,9 @@ fn engine_msg(payload : @protocol.AgentEventPayload) -> DeviceMsg? {
 /// must never vanish silently, so a missing or blank `message` still
 /// surfaces, labeled generically.
 fn error_msg(payload : @protocol.AgentErrorPayload) -> DeviceMsg? {
-  let message = if !payload.message.trim().is_empty() {
-    payload.message
-  } else {
-    "error"
+  let message = match payload.message {
+    Some(message) if !message.trim().is_empty() => message
+    _ => "error"
   }
   Some(
     Error(

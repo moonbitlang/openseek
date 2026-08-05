@@ -3107,7 +3107,8 @@ fn Conversation::apply_commit(
   let messages = self.messages.copy()
   let before = messages.length()
   @transcript.apply_session_item(messages, item)
-  let terminal = item is @protocol.SessionItem::Terminal(_)
+  // Unknown terminal payloads render nothing but still close the durable run.
+  let terminal = item.is_terminal()
   let conv = {
     ..self,
     messages,

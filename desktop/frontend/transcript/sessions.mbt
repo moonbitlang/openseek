@@ -63,11 +63,7 @@ pub fn session_from_reply(
     }
     apply_session_item(items, event.item)
     event_boundaries.push(
-      (
-        event.sequence,
-        event.item is @desktop_protocol.Terminal(_),
-        items.length(),
-      ),
+      (event.sequence, event.item.is_terminal(), items.length()),
     )
   }
   {
@@ -158,6 +154,7 @@ pub fn apply_session_item(
     }
     @desktop_protocol.Terminal(terminal) =>
       SessionTerminalProjection(terminal).append_to(items)
+    @desktop_protocol.UnknownTerminal(_) => ()
     @desktop_protocol.Unknown(_) => ()
   }
 }
@@ -311,6 +308,20 @@ test "session load keeps unknown items without hiding known transcript" {
   inspect(view.items.length(), content="2")
   inspect(view.items[0].content, content="question")
   inspect(view.items[1].content, content="answer")
+}
+
+///|
+test "session load keeps unknown terminal payloads as terminal boundaries" {
+  let events =
+    #|{"sequence":1,"item":{"kind":"user","payload":{"content":"question"}}},
+    #|{"sequence":2,"item":{"kind":"terminal","payload":{"kind":"future_terminal","message":"later"}}}
+  let view = session_from_reply(session_reply(events))
+  inspect(view.items.length(), content="1")
+  inspect(view.event_boundaries.length(), content="2")
+  let (sequence, is_terminal, boundary) = view.event_boundaries[1]
+  inspect(sequence, content="2")
+  assert_true(is_terminal)
+  inspect(boundary, content="1")
 }
 
 ///|

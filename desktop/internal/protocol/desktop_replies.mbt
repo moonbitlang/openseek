@@ -200,7 +200,8 @@ pub impl FromJson for SessionTerminal with fn from_json(json, path) {
 /// The durable session item's tagged payload. Its manual codec preserves the
 /// engine store's `{kind,payload}` representation. `Unknown` retains the whole
 /// raw item so an older Desktop can load and forward records written by a newer
-/// engine without pretending to understand them.
+/// engine without pretending to understand them. `UnknownTerminal` additionally
+/// retains the known top-level terminal boundary when only its payload is new.
 pub(all) enum SessionItem {
   User(SessionUserMessage)
   Assistant(SessionAssistantMessage)
@@ -208,6 +209,7 @@ pub(all) enum SessionItem {
   RuntimeNotice(SessionRuntimeNotice)
   Summary(SessionSummary)
   Terminal(SessionTerminal)
+  UnknownTerminal(Json)
   Unknown(Json)
 } derive(Debug, Eq)
 
@@ -220,16 +222,29 @@ pub impl ToJson for SessionItem with fn to_json(self) {
     RuntimeNotice(payload) => { "kind": "runtime_notice", "payload": payload }
     Summary(payload) => { "kind": "summary", "payload": payload }
     Terminal(payload) => { "kind": "terminal", "payload": payload }
+    UnknownTerminal(raw) => raw
     Unknown(raw) => raw
   }
 }
 
 ///|
+/// Whether this record closes a durable run. A newer terminal payload may not
+/// render a bubble, but its top-level `kind` still settles ordering and notices.
+pub fn SessionItem::is_terminal(self : SessionItem) -> Bool {
+  self is Terminal(_) || self is UnknownTerminal(_)
+}
+
+///|
 pub impl FromJson for SessionItem with fn from_json(json, path) {
-  guard json is Object(fields) &&
-    fields.get("kind") is Some(String(kind_)) &&
-    fields.get("payload") is Some(payload) else {
+  guard json is Object(fields) && fields.get("kind") is Some(String(kind_)) else {
     return Unknown(json)
+  }
+  guard fields.get("payload") is Some(payload) else {
+    return if kind_ == "terminal" {
+      UnknownTerminal(json)
+    } else {
+      Unknown(json)
+    }
   }
   match kind_ {
     "user" =>
@@ -254,7 +269,7 @@ pub impl FromJson for SessionItem with fn from_json(json, path) {
       }
     "terminal" =>
       Terminal(@json.from_json(payload, path=path.add_key("payload"))) catch {
-        _ => Unknown(json)
+        _ => UnknownTerminal(json)
       }
     _ => Unknown(json)
   }

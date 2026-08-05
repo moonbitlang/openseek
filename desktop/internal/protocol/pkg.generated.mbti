@@ -21,10 +21,11 @@ pub fn steer(String) -> @openseek_protocol.Command
 // Types and methods
 pub(all) struct AgentErrorPayload {
   run_id : String?
-  message : String
+  message : String?
   exit_code : Int?
   diagnostics : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, ToJson, @debug.Debug)
+pub impl @json.FromJson for AgentErrorPayload
 
 pub(all) struct AgentEventPayload {
   run_id : String?
@@ -474,8 +475,10 @@ pub(all) enum SessionItem {
   RuntimeNotice(SessionRuntimeNotice)
   Summary(SessionSummary)
   Terminal(SessionTerminal)
+  UnknownTerminal(Json)
   Unknown(Json)
 } derive(Eq, @debug.Debug)
+pub fn SessionItem::is_terminal(Self) -> Bool
 pub impl ToJson for SessionItem
 pub impl @json.FromJson for SessionItem
 
