@@ -3771,6 +3771,19 @@ fn update_device_msg(
             FinishedSystemNotification::{ run_id, status, answer }.command(),
           )
         }
+        // The turn's edits routinely land in files the editor panel never
+        // shows — paths its pruned watcher does not cover — so the settled
+        // boundary re-checks the active MoonBit file's module. The panel's
+        // owner fence drops a finish from a conversation it is not showing.
+        if first_finish {
+          let (panel_cmd, panel_next) = update_msg(
+            dispatch,
+            FileEditor(RunSettled(owner={ channel, session: conv.session_id })),
+            next,
+          )
+          commands.push(panel_cmd)
+          next = panel_next
+        }
         if first_finish && !exact_empty_eof && !base.session_id.is_empty() {
           match base.sync {
             Reloading(generation~, attempt~, buffered~, reload_after_current~) =>

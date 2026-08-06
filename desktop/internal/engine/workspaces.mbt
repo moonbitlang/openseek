@@ -24,8 +24,25 @@ fn workspaces_file() -> @path.Path? {
 }
 
 ///|
+/// The canonical (symlink-resolved) spelling of a workspace directory — the
+/// registry's one identity per project, so `/tmp/x` and `/private/tmp/x`
+/// cannot register as two workspaces holding separate watcher, diagnostics,
+/// and session state, and every path the registry hands out matches the
+/// canonical paths tools like moonc report. Falls back to the lexical
+/// spelling when resolution fails (the directory vanished), keeping a dead
+/// entry addressable for removal.
+async fn canonical_workspace_path(dir : @path.Path) -> String {
+  @fs.realpath(dir.to_string()) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => dir.to_string()
+  }
+}
+
+///|
 /// The registered workspace directories, in registration order. A missing or
-/// malformed registry reads as "no workspaces".
+/// malformed registry reads as "no workspaces". Entries canonicalize on
+/// read, so a registry written before symlink resolution (or edited by hand)
+/// collapses aliases of one physical directory into its first spelling.
 async fn read_registry_unlocked() -> Array[String] {
   guard workspaces_file() is Some(file) else { return [] }
   let text = @fsx.try_read_text(file) catch {
@@ -39,8 +56,10 @@ async fn read_registry_unlocked() -> Array[String] {
   }
   let paths : Array[String] = []
   for item in items {
-    if item is String(path) && !path.is_empty() && !paths.contains(path) {
-      paths.push(path)
+    guard item is String(path) && !path.is_empty() else { continue }
+    let canonical = canonical_workspace_path(Path(path))
+    if !paths.contains(canonical) {
+      paths.push(canonical)
     }
   }
   paths
@@ -90,7 +109,7 @@ pub async fn add_workspace(
   }
   let dir = expanded_workspace_path(path)
   guard @fsx.is_dir(dir) else { raise EngineError("\{dir} is not a directory") }
-  let canonical = dir.to_string()
+  let canonical = canonical_workspace_path(dir)
   // Best-effort ancillary work is deliberately before the durable commit:
   // cancellation here changes no registry state and needs no invalidation.
   exclude_store_from_git(dir)
@@ -119,7 +138,7 @@ pub async fn remove_workspace(
   path : String,
   on_committed : (Array[String]) -> Unit,
 ) -> Array[String] {
-  let target = expanded_workspace_path(path).to_string()
+  let target = canonical_workspace_path(expanded_workspace_path(path))
   workspace_registry_lock.acquire()
   defer workspace_registry_lock.release()
   let paths = read_registry_unlocked().filter(p => p != target)
@@ -157,12 +176,15 @@ fn expanded_workspace_path(path : String) -> @path.Path raise EngineError {
 ///|
 /// A client-supplied workspace path, accepted only when it is registered:
 /// op payloads may name a workspace, but the registry — host state — decides
-/// which directories the webview may reach.
+/// which directories the webview may reach. The hint canonicalizes before
+/// the comparison, so a client still holding an attach-time symlink spelling
+/// keeps matching the registry's physical one.
 async fn registered_workspace(path : String) -> @path.Path? {
   let trimmed = path.trim().to_owned()
   guard !trimmed.is_empty() else { return None }
-  if registered_workspaces().contains(trimmed) {
-    Some(Path(trimmed))
+  let canonical = canonical_workspace_path(Path(trimmed))
+  if registered_workspaces().contains(canonical) {
+    Some(Path(canonical))
   } else {
     None
   }
@@ -283,4 +305,25 @@ test "blank workspace paths are refused" {
     }
   }
   fail("a blank workspace path was accepted")
+}
+
+///|
+/// Both spellings of one physical directory canonicalize to the same
+/// identity, and a vanished directory keeps its lexical spelling so a dead
+/// registry entry stays removable.
+async test "workspace identity follows symlinks and survives deletion" {
+  let dir = @fs.tmpdir(prefix="openseek-workspace-canon-")
+  let real = @path.Path(dir).join("real")
+  @fs.mkdir(real.to_string())
+  let link = @path.Path(dir).join("link")
+  @fs.symlink(link.to_string(), target=real.to_string())
+  let canonical = canonical_workspace_path(real)
+  let linked = canonical_workspace_path(link)
+  let missing = @path.Path(dir).join("missing")
+  let vanished = canonical_workspace_path(missing)
+  @fs.rmdir(dir, recursive=true) catch {
+    _ => ()
+  }
+  assert_eq(linked, canonical)
+  assert_eq(vanished, missing.to_string())
 }

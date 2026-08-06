@@ -8,8 +8,6 @@ import {
 // Values
 pub async fn bundled_moon(String, runtime_dir? : @path.Path) -> @path.Path?
 
-pub async fn bundled_moon_lsp(String, runtime_dir? : @path.Path) -> @path.Path?
-
 pub fn bundled_tool_env(@path.Path) -> Map[String, String]
 
 pub async fn prepare_bundled_home(String, runtime_dir? : @path.Path) -> @path.Path
@@ -21,4 +19,3 @@ pub async fn prepare_bundled_home(String, runtime_dir? : @path.Path) -> @path.Pa
 // Type aliases
 
 // Traits
-

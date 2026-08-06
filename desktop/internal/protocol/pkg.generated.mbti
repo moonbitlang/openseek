@@ -261,7 +261,7 @@ pub(all) struct LspDiagnostic {
 pub fn LspDiagnostic::array_from_wire(Json) -> Array[Self]
 
 pub(all) struct LspDiagnosticsReply {
-  diagnostics : Array[LspDiagnostic]
+  diagnostics : Array[LspDiagnostic]?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct LspHoverPayload {

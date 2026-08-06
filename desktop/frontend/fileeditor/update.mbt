@@ -228,6 +228,55 @@ fn FileChange::changes_file_list(self : FileChange) -> Bool {
 }
 
 ///|
+/// Whether the change involves a path that feeds `moon check` — a source or
+/// interface file, or a module/package manifest. Only these can move the
+/// module's diagnostics.
+fn FileChange::moonbit_relevant(self : FileChange) -> Bool {
+  match self {
+    Modified(path) | Created(path) | Removed(path) => moonbit_check_input(path)
+    Renamed(old~, new~) => moonbit_check_input(old) || moonbit_check_input(new)
+  }
+}
+
+///|
+/// The diagnostics request for the active tab when it is a loaded MoonBit
+/// file, or `None` when it is anything else — the shared trigger behind the
+/// stats, watcher, and run-finish re-check paths.
+fn active_moonbit_diagnostics(
+  dispatch : @cmd.Emit[Msg],
+  owner : @interop.ConversationKey,
+  tabs : Array[Tab],
+  active : @pathx.Relative?,
+) -> @cmd.Cmd? {
+  guard active is Some(active) &&
+    tabs.search_by(tab => tab.path == active) is Some(index) &&
+    tabs[index] is { name, state: TabLoaded(absolute~, ..), .. } &&
+    language_id(name) == "moonbit" else {
+    return None
+  }
+  Some(request_diagnostics(dispatch, owner, absolute))
+}
+
+///|
+fn moonbit_check_input(path : @pathx.Relative) -> Bool {
+  let text = path.0
+  if text.has_suffix(".mbt") ||
+    text.has_suffix(".mbti") ||
+    text.has_suffix(".mbt.md") {
+    return true
+  }
+  for
+    name in [
+      "moon.pkg", "moon.mod", "moon.work", "moon.pkg.json", "moon.mod.json",
+    ] {
+    if text == name || text.has_suffix("/" + name) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Reconcile the host's workspace watcher with what the panel needs: follow
 /// the active session while the panel is open or tabs remain open in the
 /// background (their staleness must keep being tracked for the reopen), park
@@ -707,10 +756,10 @@ pub fn update(
         let cmd = if state.active == Some(path) {
           match file {
             // A real MoonBit file also gets a diagnostics request: the host
-            // opens it in the language server and returns its current
-            // diagnostics, and future re-analysis arrives as `diagnostics`
-            // events. Other files have no server behind `lsp_open` — syncing
-            // a README or JSON file to moon-lsp would surface bogus squiggles
+            // runs `moon check` over the file's module and returns its
+            // current diagnostics, and future re-analysis arrives as
+            // `diagnostics` events. Other files have nothing behind
+            // `lsp_open` — moon has no diagnostics for a README or JSON file
             // — so only the viewer shows.
             Content(content~, absolute~, ..) => {
               let show = show_file_in_viewer(
@@ -746,6 +795,14 @@ pub fn update(
       } else {
         (@cmd.none, state)
       }
+    RunSettled(owner~) =>
+      if state.owner == Some(owner) &&
+        active_moonbit_diagnostics(dispatch, owner, state.tabs, state.active)
+        is Some(recheck) {
+        (recheck, state)
+      } else {
+        (@cmd.none, state)
+      }
     FsChanged(session~, changes~) =>
       if state.owner is Some(owner) &&
         (session is None || session == Some(owner.session)) {
@@ -756,8 +813,12 @@ pub fn update(
         let stat_paths : Array[@pathx.Relative] = []
         let relist : Array[@pathx.Relative] = []
         let mut refresh_index = false
+        let mut moonbit_changed = false
         if changes is Some(changes) {
           for change in changes {
+            if change.moonbit_relevant() {
+              moonbit_changed = true
+            }
             for tab in state.tabs {
               if change.touches(tab.path) && !stat_paths.contains(tab.path) {
                 stat_paths.push(tab.path)
@@ -794,6 +855,15 @@ pub fn update(
           cmds.push(
             stat_files(dispatch, owner, stat_paths, workspace=ctx.workspace),
           )
+        } else if moonbit_changed &&
+          active_moonbit_diagnostics(dispatch, owner, state.tabs, state.active)
+          is Some(recheck) {
+          // A MoonBit change that touched no open tab still moves the
+          // module's diagnostics (a sibling file's edit can break or fix the
+          // active file), and without a stat round there is no `StatsLoaded`
+          // to carry the usual re-check — ask directly. The check's pushes
+          // refresh the other open tabs too.
+          cmds.push(recheck)
         }
         let loading = state.loading.copy()
         for directory in relist {
@@ -816,6 +886,9 @@ pub fn update(
       } else {
         let tabs = state.tabs.copy()
         let cmds = []
+        // Whether the loop below already reloads the active tab — that path
+        // re-requests diagnostics on its own.
+        let mut active_reloading = false
         for stat in stats {
           guard tabs.search_by(tab => tab.path == stat.path) is Some(index) else {
             continue
@@ -851,6 +924,7 @@ pub fn update(
               // The document on screen reloads eagerly (scroll kept —
               // `FileLoaded` sees the previous content). The tab keeps its
               // loaded state so that restore has its baseline.
+              active_reloading = true
               cmds.push(
                 read_file(
                   dispatch,
@@ -868,6 +942,18 @@ pub fn update(
               tabs[index] = { ..tab, stale: true }
             }
           }
+        }
+        // A change elsewhere in the module can add or remove the active
+        // file's diagnostics without touching its own mtime — the one-shot
+        // `moon check` behind `lsp_open` only runs when asked, unlike the
+        // resident server it replaced. One re-check per (debounced) change
+        // burst covers that: the reload above brings its own request, so
+        // only an active tab the stats left untouched needs the explicit
+        // refresh. Its check's pushes update the other open tabs too.
+        if !active_reloading &&
+          active_moonbit_diagnostics(dispatch, owner, tabs, state.active)
+          is Some(recheck) {
+          cmds.push(recheck)
         }
         (@cmd.batch(cmds), { ..state, tabs, })
       }
@@ -1420,6 +1506,21 @@ test "concrete watcher events refresh only affected listed directories" {
     test_ctx(),
   )
   assert_true(stale.loading.is_empty())
+}
+
+///|
+test "moonbit-relevant changes cover sources, interfaces, and manifests" {
+  assert_true(Modified(Relative("src/lib.mbt")).moonbit_relevant())
+  assert_true(Removed(Relative("pkg.generated.mbti")).moonbit_relevant())
+  assert_true(Created(Relative("README.mbt.md")).moonbit_relevant())
+  assert_true(Modified(Relative("src/moon.pkg")).moonbit_relevant())
+  assert_true(Modified(Relative("moon.mod")).moonbit_relevant())
+  assert_true(
+    Renamed(old=Relative("notes.md"), new=Relative("src/a.mbt")).moonbit_relevant(),
+  )
+  assert_false(Modified(Relative("README.md")).moonbit_relevant())
+  assert_false(Modified(Relative("src/notmoon.pkg.bak")).moonbit_relevant())
+  assert_false(Created(Relative("assets/logo.png")).moonbit_relevant())
 }
 
 ///|

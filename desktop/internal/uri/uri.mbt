@@ -1,5 +1,5 @@
-// Percent-encoding for the URIs the desktop speaks: the `file:` URIs handed
-// to moon-lsp (host side) and the viewer's `openseek:` model URIs (frontend
+// Percent-encoding for the URIs the desktop speaks: `file:` URIs (auth
+// callbacks, host side) and the viewer's `openseek:` model URIs (frontend
 // side). Encoding walks a string's UTF-8 bytes so every reserved or
 // non-ASCII byte escapes as `%XX`; decoding reverses it byte-accurately and
 // tolerates malformed input, because half the URIs come back from other

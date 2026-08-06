@@ -33,13 +33,15 @@ impl Show for PayloadError with fn output(self, logger) {
 }
 
 ///|
-/// The host ops' process-wide state: the language-server pool and the
+/// The host ops' process-wide state: the moon-CLI state behind the language
+/// services (hover, check diagnostics, symbol search), the engine identity
+/// the Moon IDE navigation ops resolve their `moon` from, and the
 /// self-update staging state. Filesystem watches are connection-owned below,
 /// because two clients may watch different workspaces at the same time.
 struct HostState {
   engine : String
   runtime_dir : @path.Path?
-  lsp : LspPoolActor
+  moon : MoonCliState
   updates : SelfUpdate
 }
 
@@ -58,35 +60,28 @@ pub fn HostConnection::new() -> HostConnection {
 }
 
 ///|
-/// `engine` is the engine executable (the LSP pool spawns the bundled
-/// `moon-lsp` resolved next to it); `executable` is the host's own binary,
-/// which self-update uses to locate the running .app bundle (absent or
-/// non-bundle layouts only lose the in-app install, never the announcement).
+/// `engine` is the engine executable (the language services resolve the
+/// bundled `moon` next to it); `executable` is the host's own binary, which
+/// self-update uses to locate the running .app bundle (absent or non-bundle
+/// layouts only lose the in-app install, never the announcement).
 pub fn new_host_state(
   engine : String,
   runtime_dir? : @path.Path,
   executable? : String,
 ) -> HostState {
-  let lsp = LspPoolActor::new(engine, runtime_dir?)
-  // Mirror LSP wire traffic to its own log next to the host's runtime
-  // state, so a broken hover/symbol round-trip can be read back without the
-  // per-message noise landing in the main app log.
-  if runtime_dir is Some(dir) {
-    @lsp.enable_traffic_log(dir.join("lsp.log").to_string())
-  }
   {
     engine,
     runtime_dir,
-    lsp,
+    moon: MoonCliState::new(engine, runtime_dir?),
     updates: SelfUpdate::new(runtime_dir, executable),
   }
 }
 
 ///|
 /// The background tasks behind the host ops, spawned into the caller's
-/// app-lifetime task group: the LSP pool actor, diagnostics forwarder, and the
-/// self-update pump with its startup leftover sweep. These are shared by every
-/// connection;
+/// app-lifetime task group: the moon-check diagnostics forwarder and the
+/// self-update pump with its startup leftover sweep. These are shared by
+/// every connection;
 /// connection-owned filesystem watcher tasks start in `HostConnection::run`.
 /// Every background task is best-effort: a language-service hiccup degrades
 /// that feature, never the connection.
@@ -95,9 +90,8 @@ pub fn[G] spawn_host_pumps(
   state : HostState,
   emit : async (@protocol.Notification) -> Unit,
 ) -> Unit {
-  group.spawn_bg(allow_failure=true, () => state.lsp.run())
   group.spawn_bg(allow_failure=true, () => {
-    state.lsp.forward_diagnostics(async fn(push) {
+    state.moon.forward_diagnostics(async fn(push) {
       emit(LspDiagnostics({ path: push.path, diagnostics: push.diagnostics }))
     })
   })
@@ -232,15 +226,15 @@ pub fn endpoints(
       Acknowledged
     }),
     @endpoint.Endpoint::remote(@commands.lsp_open, async fn(payload) {
-      lsp_open_op(state.lsp, payload)
+      lsp_open_op(state.moon, payload)
     }),
     @endpoint.Endpoint::remote(@commands.lsp_hover, async fn(payload) {
-      lsp_hover_op(state.lsp, payload)
+      lsp_hover_op(state.moon, payload)
     }),
     @endpoint.Endpoint::remote(@commands.lsp_workspace_symbols, async fn(
       payload,
     ) {
-      workspace_symbols_op(state.lsp, payload)
+      workspace_symbols_op(state.moon, payload)
     }),
     @endpoint.Endpoint::remote(@commands.moonide_definition, async fn(payload) {
       moonide_definition_op(state, payload)

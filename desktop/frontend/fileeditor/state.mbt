@@ -345,6 +345,13 @@ pub(all) enum Msg {
   // baseline reconciliation. Later pushes contain the exact debounced events.
   // `session` is absent only for compatibility with an older host.
   FsChanged(session~ : String?, changes~ : Array[FileChange]?)
+  // The conversation's agent run finished: the workspace has settled, so
+  // re-check the active MoonBit file's module. The pruned watcher cannot see
+  // edits outside open files and listed directories, and an agent turn
+  // routinely writes files the panel never shows — the finish boundary is
+  // the one cheap signal that covers them. `owner` fences a background
+  // conversation's finish.
+  RunSettled(owner~ : @interop.ConversationKey)
   // A `stat_files` reply: each open tab's current mtime signature (`""` =
   // the file is gone). `owner` says which conversation it answers, like
   // every other reply.

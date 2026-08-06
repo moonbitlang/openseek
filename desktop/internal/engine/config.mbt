@@ -368,7 +368,9 @@ async test "host chooses durable placement from workspace state" {
   archive_env_test_lock.acquire()
   defer archive_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
-  let dir = @fs.tmpdir(prefix="openseek-config-workspace-")
+  // The registry canonicalizes workspace paths, so build the fixture from
+  // the tmpdir's physical spelling (`/tmp` is a symlink on macOS).
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-config-workspace-"))
   let global_root = dir + "/global"
   let workspace = dir + "/workspace"
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", global_root)

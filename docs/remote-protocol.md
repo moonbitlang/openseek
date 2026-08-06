@@ -469,15 +469,15 @@ Notifications:
 
 | method | params | result |
 |---|---|---|
-| `lsp.open` | `{path}` (absolute) | `{diagnostics}` — the server's current diagnostics for the file; later changes push as `lsp.diagnostics` |
-| `lsp.hover` | `{path, line, character}` (0-based) | `{value, markdown, has_range, start_line, start_character, end_line, end_character}` — empty `value` = no hover |
-| `lsp.workspace_symbols` | `{session, query, workspace?}` | `{symbols: [{name, kind?, container?, path, range}]}` |
+| `lsp.open` | `{path}` (absolute) | `{diagnostics}` — the file's diagnostics from a fresh `moon check` of its module; other files' changes push as `lsp.diagnostics`. `diagnostics` absent = the check could not run; keep current markers |
+| `lsp.hover` | `{path, line, character}` (0-based) | `{value, markdown, has_range, start_line, start_character, end_line, end_character}` — empty `value` = no hover; served by `moon ide hover` |
+| `lsp.workspace_symbols` | `{session, query, workspace?}` | `{symbols: [{name, kind?, container?, path, range}]}` — served by `moon ide workspace-symbols` |
 
 Notification:
 
 | method | params |
 |---|---|
-| `lsp.diagnostics` | `{path, diagnostics}` — same array shape as `lsp.open`'s reply |
+| `lsp.diagnostics` | `{path, diagnostics}` — same array shape as `lsp.open`'s reply; an empty array clears the file's markers |
 
 ### moonide.* — workspace navigation
 

@@ -1207,7 +1207,11 @@ async test "workspace detach refuses a running conversation without hiding it" {
   archive_env_test_lock.acquire()
   defer archive_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
-  let root : @path.Path = Path(@fs.tmpdir(prefix="openseek-detach-running-"))
+  // The registry canonicalizes workspace paths, so build the fixture from
+  // the tmpdir's physical spelling (`/tmp` is a symlink on macOS).
+  let root : @path.Path = Path(
+    @fs.realpath(@fs.tmpdir(prefix="openseek-detach-running-")),
+  )
   let global_store = root.join("global")
   let workspace = root.join("workspace")
   let engine = root.join("bin/engine.sh")
@@ -1284,7 +1288,11 @@ async test "workspace detach drains an idle writer and its follower first" {
   archive_env_test_lock.acquire()
   defer archive_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
-  let root : @path.Path = Path(@fs.tmpdir(prefix="openseek-detach-idle-"))
+  // The registry canonicalizes workspace paths, so build the fixture from
+  // the tmpdir's physical spelling (`/tmp` is a symlink on macOS).
+  let root : @path.Path = Path(
+    @fs.realpath(@fs.tmpdir(prefix="openseek-detach-idle-")),
+  )
   let global_store = root.join("global")
   let workspace = root.join("workspace")
   let engine = root.join("bin/engine.sh")

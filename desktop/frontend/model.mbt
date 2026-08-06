@@ -430,8 +430,8 @@ priv enum Screen {
 ///|
 /// Which trigger opened the composer's completion menu: `/` lists built-in
 /// commands that act on the conversation, `$` lists installed skills whose
-/// name is inserted into the prompt, `#` lists workspace symbols (fetched from
-/// the conversation's language server) whose reference is inserted.
+/// name is inserted into the prompt, `#` lists workspace symbols (fetched
+/// through the host's symbol search) whose reference is inserted.
 priv enum CompletionKind {
   SlashCommands
   SkillMentions
@@ -452,9 +452,9 @@ priv struct CompletionItem {
   // A symbol row's resolved location — workspace-relative path and the
   // symbol's full range (one-based, viewer coordinates) — so the chip it
   // becomes can jump there and select the named code. `None` for slash
-  // commands, skills, and symbols the language server could not place in a
-  // file. A server that placed the symbol without a range yields an empty
-  // range anchored at its line.
+  // commands, skills, and symbols the search could not place in a file. A
+  // symbol placed without a range yields an empty range anchored at its
+  // line.
   path : String?
   range : @common.Range?
 } derive(Eq)

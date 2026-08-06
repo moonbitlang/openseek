@@ -1,6 +1,6 @@
 // The composer's `#` symbol completion: search the active conversation's
-// workspace symbol index through the host's `workspace_symbols` op (which
-// proxies the workspace's moon-lsp) and fold the matches into completion rows.
+// workspace symbols through the host's `workspace_symbols` op (served by
+// `moon ide workspace-symbols`) and fold the matches into completion rows.
 // Each reply carries the conversation owner and query it answers, so a reply
 // that lost a device/session switch or was overtaken by a later keystroke is
 // discarded.

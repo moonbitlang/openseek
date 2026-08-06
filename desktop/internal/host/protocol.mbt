@@ -210,9 +210,9 @@ test "filesystem watcher failures retain their conversation on the wire" {
 }
 
 ///|
-/// `hover` asks a language server for hover at a zero-based
-/// `line`/`character` in `path` — an absolute path, the request's whole
-/// address: the host maps it to its attached workspace and module root, and
+/// `hover` asks for hover at a zero-based `line`/`character` in `path` — an
+/// absolute path, the request's whole address: the host maps it to its
+/// attached workspace and module root (where it runs `moon ide hover`), and
 /// rejects paths outside every attached directory.
 type LspHoverPayload = @protocol.LspHoverPayload
 
@@ -236,22 +236,44 @@ type MoonIdeLocationsReply = @protocol.MoonIdeLocationsReply
 
 ///|
 /// `lsp_open` tells the host the editor is now showing the file at absolute
-/// `path`, so the language server opens/syncs it and starts publishing
-/// diagnostics. The reply carries whatever the server has already reported;
-/// later changes arrive as `diagnostics` events.
+/// `path`, so it runs `moon check` over the file's module. The reply carries
+/// the file's diagnostics from that run; other files' changes from the same
+/// run — and later runs — arrive as `diagnostics` events.
 type LspOpenPayload = @protocol.LspOpenPayload
 
 ///|
-/// Reply to `lsp_open`: the server's current diagnostics for the file (the raw
-/// LSP `diagnostics` array, 0-based ranges), empty when it has none yet.
+/// Reply to `lsp_open`: the file's current diagnostics (an LSP-shaped
+/// `diagnostics` array, 0-based ranges), empty when the check reported none.
+/// The field is absent when the check itself could not run — "no data", which
+/// the client answers by keeping the markers it has, distinct from the empty
+/// array's "no problems", which clears them.
 type LspDiagnosticsReply = @protocol.LspDiagnosticsReply
 
 ///|
+test "lsp_open replies distinguish no data from no problems" {
+  assert_eq(
+    ToJson::to_json(({ diagnostics: Some([]) } : LspDiagnosticsReply)),
+    { "diagnostics": [] },
+  )
+  assert_eq(
+    ToJson::to_json(({ diagnostics: None } : LspDiagnosticsReply)),
+    Json::empty_object(),
+  )
+  // The client reads the same distinction back: an absent field must decode
+  // as "no data", not as an empty batch that would clear its markers.
+  let no_problems : LspDiagnosticsReply = @json.from_json({ "diagnostics": [] })
+  assert_eq(no_problems.diagnostics, Some([]))
+  let no_data : LspDiagnosticsReply = @json.from_json(Json::empty_object())
+  assert_eq(no_data.diagnostics, None)
+}
+
+///|
 /// A `diagnostics` event pushed to the webview: the absolute `path` whose
-/// diagnostics changed and the raw LSP `diagnostics` array — the same shape
-/// `lsp_open` replies with, so the editor decodes both through one path. The
-/// path is the whole address (matching the viewer's model URI); no session is
-/// involved, mirroring `hover`.
+/// diagnostics changed and the LSP-shaped `diagnostics` array — the same
+/// shape `lsp_open` replies with, so the editor decodes both through one
+/// path. An empty array clears the file's markers. The path is the whole
+/// address (matching the viewer's model URI); no session is involved,
+/// mirroring `hover`.
 priv struct DiagnosticsPush {
   path : String
   diagnostics : Array[@protocol.LspDiagnostic]
@@ -264,19 +286,18 @@ priv struct DiagnosticsPush {
 type LspHoverReply = @protocol.LspHoverReply
 
 ///|
-/// `workspace_symbols` searches the conversation workspace's language-server
-/// symbol index for `query` (a substring the server matches). The host derives
+/// `workspace_symbols` searches the conversation workspace's symbols for
+/// `query` (fuzzy-matched by `moon ide workspace-symbols`). The host derives
 /// the workspace from `session`, so the client never names a path.
 type WorkspaceSymbolsPayload = @protocol.WorkspaceSymbolsPayload
 
 ///|
 /// One row of a `workspace_symbols` reply. `path` is workspace-relative and
-/// `range` is the symbol's zero-based `location.range` (the front-end shows
-/// it one-based) — all zeros when the server returned a location without a
-/// range; `kind` is the raw LSP `SymbolKind`, forwarded for the front-end to
-/// label or icon as it likes, and omitted when the server sent none.
-/// `container` is the enclosing symbol's name, omitted when the symbol has
-/// none.
+/// `range` is the symbol's zero-based range (the front-end shows it
+/// one-based) — all zeros when the row carried none; `kind` is the raw LSP
+/// `SymbolKind` number, forwarded for the front-end to label or icon as it
+/// likes, and omitted when unknown. `container` is the enclosing symbol's
+/// name, omitted when the symbol has none.
 type SymbolItem = @protocol.SymbolItem
 
 ///|

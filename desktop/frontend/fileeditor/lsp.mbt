@@ -1,7 +1,7 @@
 // The viewer's hover provider: when the pointer rests on a symbol in a `.mbt`
-// file, ask the host's `hover` op (which proxies the workspace's moon-lsp) and
-// render the reply as a viewer tooltip. The host owns the language server, so
-// the front-end only marshals the position and decodes the reply.
+// file, ask the host's `hover` op (served by `moon ide hover`) and render the
+// reply as a viewer tooltip. The host owns the language tooling, so the
+// front-end only marshals the position and decodes the reply.
 
 ///|
 /// The scheme of viewer model URIs this app mints. The hover provider only
@@ -92,7 +92,7 @@ impl @language.HoverProvider for LspHoverProvider with fn provide_hover(
   position,
   token,
 ) {
-  // v1 covers MoonBit only; other languages have no server behind the op.
+  // v1 covers MoonBit only; other languages have no tooling behind the op.
   guard model.language_id == "moonbit" else { return None }
   guard !token.is_cancellation_requested() else { return None }
   guard model_uri_path(model.uri) is Some(path) else { return None }
@@ -196,10 +196,12 @@ fn request_diagnostics(
       let reply = request_lsp_open(channel=owner.channel, path=absolute) catch {
         _ => return
       }
+      // An absent `diagnostics` field means the host's check could not run:
+      // keep the markers we have rather than clearing them with fake "no
+      // problems".
+      guard reply.diagnostics is Some(diagnostics) else { return }
       scheduler.add(
-        dispatch(
-          DiagnosticsLoaded(owner~, absolute~, diagnostics=reply.diagnostics),
-        ),
+        dispatch(DiagnosticsLoaded(owner~, absolute~, diagnostics~)),
       )
     })
   })

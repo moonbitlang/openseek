@@ -1,7 +1,8 @@
-// Host-owned Moon IDE navigation. These operations are deliberately separate
-// from the persistent moon-lsp pool: each request invokes the checked-out
-// workspace through `moon ide`, whose package/build-index semantics are the
-// source of truth for definition and reference locations.
+// Host-owned Moon IDE navigation (`moonide.definition` / `moonide.references`).
+// Each request invokes the checked-out workspace through `moon ide`, whose
+// package/build-index semantics are the source of truth for definition and
+// reference locations. The `lsp.*` ops (hover, diagnostics, symbol search)
+// live in moon_cli_ops.mbt and shell out to the same CLI.
 
 ///|
 priv enum MoonIdeQuery {

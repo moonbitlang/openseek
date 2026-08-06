@@ -805,9 +805,9 @@ fn durable_boundary_msg(
 }
 
 ///|
-/// A `diagnostics` push: the language server re-analyzed a file. The payload
-/// carries the absolute `path` and the raw LSP `diagnostics` array; the update
-/// filters it to the file on screen.
+/// A `diagnostics` push: the host re-checked a file's module. The payload
+/// carries the absolute `path` and the LSP-shaped `diagnostics` array; the
+/// update filters it to the file on screen.
 fn diagnostics_msg(
   channel : @interop.ChannelId,
   payload : @protocol.DiagnosticsPayload,

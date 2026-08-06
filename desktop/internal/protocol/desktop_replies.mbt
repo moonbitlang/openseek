@@ -509,8 +509,11 @@ pub fn LspDiagnostic::array_from_wire(json : Json) -> Array[LspDiagnostic] {
 }
 
 ///|
+/// The field is absent when the check itself could not run — "no data", which
+/// the client answers by keeping the markers it has, distinct from the empty
+/// array's "no problems", which clears them.
 pub(all) struct LspDiagnosticsReply {
-  diagnostics : Array[LspDiagnostic]
+  diagnostics : Array[LspDiagnostic]?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
