@@ -87,6 +87,77 @@
   }
 }
 
+/* A user selection wins over the host media query. The explicit blocks are
+   intentionally complete: every app-owned token changes as one palette, so
+   the shell, forms, overlays, editor chrome, and terminal never split themes. */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --paper: #fbfbf9;
+  --surface: #ffffff;
+  --surface-2: #f6f6f3;
+  --ink: #16171a;
+  --ink-2: #5c5f66;
+  --ink-3: #9a9da4;
+  --line: #e9e8e3;
+  --line-2: #f0efea;
+
+  --accent: #3b6ef5;
+  --accent-ink: #2a55cc;
+  --accent-soft: #eef2fe;
+  --accent-line: #d6e0fd;
+
+  --add: #1f8a5b;
+  --add-bg: #eaf6ef;
+  --add-line: #cdead9;
+  --del: #c0453b;
+  --del-bg: #fcefed;
+  --del-line: #f2d4cf;
+  --warn: #b7791f;
+  --tool: #7a5af0;
+  --tool-bg: #f1eefe;
+  --tool-line: #e6e0fb;
+
+  --code: #2b2f36;
+  --shadow: 0 1px 2px rgba(20, 23, 26, 0.04),
+    0 6px 22px -10px rgba(20, 23, 26, 0.1);
+  --shadow-pop: 0 8px 30px -8px rgba(20, 23, 26, 0.22);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #16181d;
+  --surface: #1c1f26;
+  --surface-2: #23272f;
+  --ink: #e9ebf0;
+  --ink-2: #a3a8b4;
+  --ink-3: #6f7480;
+  --line: #2c313b;
+  --line-2: #262b33;
+
+  --accent: #5b8cff;
+  --accent-ink: #9db8ff;
+  --accent-soft: #1e2740;
+  --accent-line: #2f3e63;
+
+  --add: #3fd089;
+  --add-bg: #16271f;
+  --add-line: #244534;
+  --del: #ff8a80;
+  --del-bg: #2a1b1b;
+  --del-line: #4a2f2f;
+  --warn: #e3b341;
+  --tool: #b39bff;
+  --tool-bg: #221f33;
+  --tool-line: #322c4a;
+
+  --code: #d7dbe2;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3),
+    0 6px 22px -10px rgba(0, 0, 0, 0.5);
+  --shadow-pop: 0 8px 30px -8px rgba(0, 0, 0, 0.6);
+}
+
 * {
   box-sizing: border-box;
 }

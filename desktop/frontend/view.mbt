@@ -2146,6 +2146,24 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     settings_group(icon_key, "API", api_rows),
     settings_group(icon_layout, "Interface", [
       setting_row(
+        "Theme",
+        [
+          @html.select(
+            on_change=dispatch.map(value => ThemeChanged(value)),
+            attrs=@html.Attrs::build().aria_label("Theme"),
+            [
+              @html.option(
+                value="light",
+                selected=!model.theme.is_dark(),
+                "Light",
+              ),
+              @html.option(value="dark", selected=model.theme.is_dark(), "Dark"),
+            ],
+          ),
+        ],
+        desc="Used by the app, editor, and terminal.",
+      ),
+      setting_row(
         "Notification corner",
         [corner_select(dispatch, model.notification_corner)],
         desc="Where error notifications pop up.",

@@ -19,6 +19,7 @@ fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         SettingsLoaded(
           notification_corner=load_setting(NotificationCornerStorageKey),
           tree_layout=load_setting(TreeLayoutStorageKey),
+          theme=load_setting(ThemeStorageKey),
         ),
       ),
     )
@@ -33,6 +34,13 @@ fn save_notification_corner(corner : NotificationCorner) -> @cmd.Cmd {
 ///|
 fn save_tree_layout(layout : @fileeditor.TreeLayout) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(TreeLayoutStorageKey, layout.wire()))
+}
+
+///|
+/// Persist only a fixed Settings choice; the initial System state remains
+/// represented by an absent key.
+fn Theme::save(self : Theme) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(ThemeStorageKey, self.wire()))
 }
 
 ///|

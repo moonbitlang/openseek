@@ -36,9 +36,53 @@ const NotificationCornerStorageKey : String = "openseek.notification_corner"
 const TreeLayoutStorageKey : String = "openseek.tree_layout"
 
 ///|
+/// The page-local appearance override. An absent value keeps following the
+/// host color scheme until the user chooses a theme in Settings.
+const ThemeStorageKey : String = "openseek.theme"
+
+///|
 /// Obsolete: the update channel derives from the server selection now. The
 /// key is kept only so startup can delete whatever old builds stored.
 const UpdateChannelStorageKey : String = "openseek.update_channel"
+
+///|
+/// The app's appearance choice. `System` retains the latest host preference;
+/// choosing Light/Dark in Settings fixes a choice that can be restored from
+/// localStorage on the next launch.
+priv enum Theme {
+  System(dark~ : Bool)
+  Light
+  Dark
+} derive(Eq)
+
+///|
+fn Theme::is_dark(self : Theme) -> Bool {
+  match self {
+    System(dark~) => dark
+    Light => false
+    Dark => true
+  }
+}
+
+///|
+/// Unknown or absent stored values deliberately retain the live system
+/// preference, so old/corrupt page storage cannot force an arbitrary palette.
+fn Theme::parse(value : String, fallback : Theme) -> Theme {
+  match value {
+    "light" => Light
+    "dark" => Dark
+    _ => fallback
+  }
+}
+
+///|
+fn Theme::wire(self : Theme) -> String {
+  if self.is_dark() {
+    "dark"
+  } else {
+    "light"
+  }
+}
 
 ///|
 /// Which chat-completions endpoint the engine talks to. `Openseek` is the
@@ -677,11 +721,9 @@ priv struct Model {
   // roster (see `ConsoleState`). None in the desktop window, whose one
   // Local channel needs no account and no roster.
   console : ConsoleState?
-  // Whether the host prefers a dark color scheme. The app's own palette
-  // follows `prefers-color-scheme` in CSS; this mirror drives the embedded
-  // viewer's `data-theme` attribute, which CSS media queries cannot set.
-  // Seeded at startup and kept fresh by `watch_color_scheme`.
-  dark_mode : Bool
+  // The effective page theme and whether it still follows the host. This one
+  // value drives the app root, embedded viewer, and terminal together.
+  theme : Theme
   // Whether the viewport is phone-narrow (at most `NarrowBreakpoint` wide).
   // Seeded from the window at startup and kept fresh by the resize
   // subscription; the value must agree with index.html's one mobile media
@@ -880,7 +922,11 @@ priv enum Msg {
   // UI preferences read back from localStorage at startup. Engine endpoint
   // settings are the host's (`HostSettingsLoaded`); only page-local looks
   // live here.
-  SettingsLoaded(notification_corner~ : String, tree_layout~ : String)
+  SettingsLoaded(
+    notification_corner~ : String,
+    tree_layout~ : String,
+    theme~ : String
+  )
   // The legacy localStorage engine settings, read at bridge time. The
   // desktop window migrates them up to the host once; a browser page only
   // purges them (a stale secret in shared storage is the leak this design
@@ -980,6 +1026,8 @@ priv enum Msg {
   UpdateApplied
   OpenSetup
   ToggleSidebar
+  // A Settings selection fixes the page to Light or Dark and persists it.
+  ThemeChanged(String)
   // The window was resized; `width` decides the narrow (phone) layout.
   ViewportResized(width~ : Int)
   // The sidebar's "Chats" heading was clicked — fold or unfold the section.
@@ -1075,8 +1123,8 @@ priv enum Msg {
   // The floating "jump to latest" button: scroll the transcript back to its
   // tail and re-pin auto-follow.
   JumpToLatest
-  // The host's dark-mode preference changed (the user switched the OS theme).
-  // Reported by the `matchMedia` watcher.
+  // The host's dark-mode preference changed. It updates the palette only while
+  // no explicit Light/Dark choice has been saved.
   ColorSchemeChanged(Bool)
   // A file path in the transcript was clicked: open it in the system's
   // default app. The host resolves the path inside the active conversation's
@@ -1445,7 +1493,7 @@ fn initial_model() -> Model {
         ),
       )
     },
-    dark_mode: host_prefers_dark(),
+    theme: System(dark=host_prefers_dark()),
     narrow,
     sidebar_open: !narrow,
     chats_collapsed: false,

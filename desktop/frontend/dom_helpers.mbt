@@ -80,12 +80,24 @@ fn host_prefers_dark() -> Bool {
 }
 
 ///|
+/// Mirror the effective model theme onto the document root after update. CSS
+/// owns the palette; the command keeps the DOM write out of the pure handler.
+fn Theme::apply(self : Theme) -> @cmd.Cmd {
+  let value = self.wire()
+  @cmd.custom_cmd(_ => {
+    if @dom.document().get_document_element() is Some(root) {
+      root.set_attribute("data-theme", value)
+    }
+  })
+}
+
+///|
 let color_scheme_watched : Ref[Bool] = Ref(false)
 
 ///|
 /// Follow the host's dark-mode preference, feeding changes back as
-/// `ColorSchemeChanged` so the viewer's theme flips together with the app's
-/// palette instead of staying frozen at its startup value.
+/// `ColorSchemeChanged`. Update ignores these reports after the user chooses a
+/// fixed palette.
 fn watch_color_scheme(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     guard !color_scheme_watched.val else { return }

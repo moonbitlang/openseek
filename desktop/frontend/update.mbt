@@ -827,7 +827,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
   {
     owner: { channel: model.focused, session: conv.session_id },
     workspace: conv.workspace,
-    dark_mode: model.dark_mode,
+    dark_mode: model.theme.is_dark(),
     tree_layout: model.tree_layout,
     narrow: model.narrow,
   }
@@ -848,7 +848,7 @@ fn terminal_ctx(model : Model) -> @terminal.Ctx {
     channel: conv.device,
     session: conv.session_id,
     workspace: conv.workspace,
-    dark_mode: model.dark_mode,
+    dark_mode: model.theme.is_dark(),
     connected,
   }
 }
@@ -1006,15 +1006,18 @@ fn update_msg(
           )
       }
     Console(msg) => update_console_msg(dispatch, msg, model)
-    SettingsLoaded(notification_corner~, tree_layout~) =>
+    SettingsLoaded(notification_corner~, tree_layout~, theme~) => {
+      let theme = Theme::parse(theme, model.theme)
       (
-        @cmd.none,
+        theme.apply(),
         {
           ..model,
           notification_corner: NotificationCorner::parse(notification_corner),
           tree_layout: @fileeditor.TreeLayout::parse(tree_layout),
+          theme,
         },
       )
+    }
     // The host's settings, from the bridge-time `settings.get` or a peer's
     // edit broadcast. Revisions order concurrent clients and RPC replies;
     // while this page has optimistic writes, keep only the newest status and
@@ -2035,7 +2038,22 @@ fn update_msg(
     // watcher would only confirm it after the scroll settles.
     JumpToLatest =>
       (scroll_transcript_after_render(), { ..model, transcript_pinned: true })
-    ColorSchemeChanged(dark) => (@cmd.none, { ..model, dark_mode: dark })
+    ColorSchemeChanged(dark) =>
+      match model.theme {
+        System(_) => {
+          let theme = System(dark~)
+          (theme.apply(), { ..model, theme, })
+        }
+        Light | Dark => (@cmd.none, model)
+      }
+    ThemeChanged(value) => {
+      let theme = Theme::parse(value, model.theme)
+      if theme == model.theme {
+        (@cmd.none, model)
+      } else {
+        (@cmd.batch([theme.apply(), theme.save()]), { ..model, theme, })
+      }
+    }
     OpenFile(path) => {
       // A relative path is taken against the active conversation's working
       // directory: its `cwd` for a live run, or — when resumed without one —
@@ -9778,17 +9796,19 @@ test "loaded UI preferences parse their wire names" {
   let dispatch = test_dispatch()
   let (_, restored) = update(
     dispatch,
-    SettingsLoaded(notification_corner="top-left", tree_layout=""),
+    SettingsLoaded(notification_corner="top-left", tree_layout="", theme="dark"),
     test_model(),
   )
   assert_true(restored.notification_corner is TopLeft)
+  assert_true(restored.theme is Dark)
   // Unknown stored values fall back to the defaults.
   let (_, unknown) = update(
     dispatch,
-    SettingsLoaded(notification_corner="", tree_layout=""),
+    SettingsLoaded(notification_corner="", tree_layout="", theme="broken"),
     test_model(),
   )
   assert_true(unknown.notification_corner is BottomRight)
+  assert_true(unknown.theme is System(dark=false))
 }
 
 ///|
@@ -10678,12 +10698,28 @@ test "toast ids only ever grow, so timers and toasts stay paired" {
 }
 
 ///|
-test "the color-scheme watcher's report lands on the model" {
+test "the color-scheme watcher only changes a system-following theme" {
   let dispatch = test_dispatch()
-  let (_, dark) = update(dispatch, ColorSchemeChanged(true), test_model())
-  inspect(dark.dark_mode, content="true")
-  let (_, light) = update(dispatch, ColorSchemeChanged(false), dark)
-  inspect(light.dark_mode, content="false")
+  let system = { ..test_model(), theme: System(dark=false) }
+  let (_, dark) = update(dispatch, ColorSchemeChanged(true), system)
+  assert_true(dark.theme is System(dark=true))
+  let fixed = { ..dark, theme: Light }
+  let (_, unchanged) = update(dispatch, ColorSchemeChanged(true), fixed)
+  assert_true(unchanged.theme is Light)
+}
+
+///|
+test "theme settings switch fixed palettes and are idempotent" {
+  let dispatch = test_dispatch()
+  let system = { ..test_model(), theme: System(dark=false) }
+  let (_, first) = update(dispatch, ThemeChanged("dark"), system)
+  let (_, repeated) = update(dispatch, ThemeChanged("dark"), first)
+  assert_true(first.theme is Dark)
+  assert_true(repeated.theme is Dark)
+  let (_, light) = update(dispatch, ThemeChanged("light"), first)
+  assert_true(light.theme is Light)
+  let (_, unchanged) = update(dispatch, ThemeChanged("unknown"), system)
+  assert_true(unchanged.theme is System(dark=false))
 }
 
 ///|
