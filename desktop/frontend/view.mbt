@@ -2153,15 +2153,20 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             attrs=@html.Attrs::build().aria_label("Theme"),
             [
               @html.option(
+                value="system",
+                selected=model.theme is System,
+                "System",
+              ),
+              @html.option(
                 value="light",
-                selected=!model.theme.is_dark(),
+                selected=model.theme is Light,
                 "Light",
               ),
-              @html.option(value="dark", selected=model.theme.is_dark(), "Dark"),
+              @html.option(value="dark", selected=model.theme is Dark, "Dark"),
             ],
           ),
         ],
-        desc="Used by the app, editor, and terminal.",
+        desc="Used by the app, editor, and terminal. System follows the OS appearance.",
       ),
       setting_row(
         "Notification corner",

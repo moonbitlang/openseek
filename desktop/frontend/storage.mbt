@@ -37,8 +37,8 @@ fn save_tree_layout(layout : @fileeditor.TreeLayout) -> @cmd.Cmd {
 }
 
 ///|
-/// Persist only a fixed Settings choice; the initial System state remains
-/// represented by an absent key.
+/// Persist the Settings selection. An absent key still parses as the initial
+/// System state, while an explicit System choice survives subsequent reloads.
 fn Theme::save(self : Theme) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(ThemeStorageKey, self.wire()))
 }

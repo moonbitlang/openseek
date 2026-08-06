@@ -28,6 +28,7 @@
 
   --accent: #3b6ef5;
   --accent-ink: #2a55cc;
+  --on-accent-ink: #fff;
   --accent-soft: #eef2fe;
   --accent-line: #d6e0fd;
 
@@ -65,6 +66,7 @@
 
     --accent: #5b8cff;
     --accent-ink: #9db8ff;
+    --on-accent-ink: #10131a;
     --accent-soft: #1e2740;
     --accent-line: #2f3e63;
 
@@ -104,6 +106,7 @@
 
   --accent: #3b6ef5;
   --accent-ink: #2a55cc;
+  --on-accent-ink: #fff;
   --accent-soft: #eef2fe;
   --accent-line: #d6e0fd;
 
@@ -138,6 +141,7 @@
 
   --accent: #5b8cff;
   --accent-ink: #9db8ff;
+  --on-accent-ink: #10131a;
   --accent-soft: #1e2740;
   --accent-line: #2f3e63;
 
@@ -3282,22 +3286,17 @@ select:focus {
   color: var(--ink-2);
   font-size: 13.5px;
 }
-/* The darker accent as fill: plain --accent under 13px white text
-   sits just below the 4.5:1 contrast floor in both palettes. In dark
-   mode --accent-ink is the light shade, so the text flips dark. */
+/* The darker accent as fill: plain --accent under 13px text sits just below
+   the 4.5:1 contrast floor in both palettes. The paired foreground token
+   follows explicit data-theme overrides as well as the OS default. */
 .portal-button-link {
   display: inline-block;
   padding: 8px 14px;
   border-radius: var(--radius-sm);
   background: var(--accent-ink);
-  color: #fff;
+  color: var(--on-accent-ink);
   text-decoration: none;
   font-size: 13px;
-}
-@media (prefers-color-scheme: dark) {
-  .portal-button-link {
-    color: #10131a;
-  }
 }
 .portal-button-link:hover {
   filter: brightness(0.94);

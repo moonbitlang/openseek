@@ -831,7 +831,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
   {
     owner: { channel: model.focused, session: conv.session_id },
     workspace: conv.workspace,
-    dark_mode: model.theme.is_dark(),
+    dark_mode: model.theme.is_dark(model.system_dark),
     tree_layout: model.tree_layout,
     narrow: model.narrow,
   }
@@ -852,7 +852,7 @@ fn terminal_ctx(model : Model) -> @terminal.Ctx {
     channel: conv.device,
     session: conv.session_id,
     workspace: conv.workspace,
-    dark_mode: model.theme.is_dark(),
+    dark_mode: model.theme.is_dark(model.system_dark),
     connected,
   }
 }
@@ -1017,7 +1017,7 @@ fn update_msg(
     SettingsLoaded(notification_corner~, tree_layout~, theme~) => {
       let theme = Theme::parse(theme, model.theme)
       (
-        theme.apply(),
+        theme.apply(model.system_dark),
         {
           ..model,
           notification_corner: NotificationCorner::parse(notification_corner),
@@ -2060,20 +2060,22 @@ fn update_msg(
     // watcher would only confirm it after the scroll settles.
     JumpToLatest =>
       (scroll_transcript_after_render(), { ..model, transcript_pinned: true })
-    ColorSchemeChanged(dark) =>
+    ColorSchemeChanged(dark) => {
+      let model = { ..model, system_dark: dark }
       match model.theme {
-        System(_) => {
-          let theme = System(dark~)
-          (theme.apply(), { ..model, theme, })
-        }
+        System => (System.apply(dark), model)
         Light | Dark => (@cmd.none, model)
       }
+    }
     ThemeChanged(value) => {
       let theme = Theme::parse(value, model.theme)
       if theme == model.theme {
         (@cmd.none, model)
       } else {
-        (@cmd.batch([theme.apply(), theme.save()]), { ..model, theme, })
+        (
+          @cmd.batch([theme.apply(model.system_dark), theme.save()]),
+          { ..model, theme, },
+        )
       }
     }
     OpenFile(path) => {
@@ -9839,7 +9841,7 @@ test "loaded UI preferences parse their wire names" {
     test_model(),
   )
   assert_true(unknown.notification_corner is BottomRight)
-  assert_true(unknown.theme is System(dark=false))
+  assert_true(unknown.theme is System)
 }
 
 ///|
@@ -10731,26 +10733,32 @@ test "toast ids only ever grow, so timers and toasts stay paired" {
 ///|
 test "the color-scheme watcher only changes a system-following theme" {
   let dispatch = test_dispatch()
-  let system = { ..test_model(), theme: System(dark=false) }
+  let system = { ..test_model(), theme: System, system_dark: false }
   let (_, dark) = update(dispatch, ColorSchemeChanged(true), system)
-  assert_true(dark.theme is System(dark=true))
+  assert_true(dark.theme is System)
+  assert_true(dark.system_dark)
   let fixed = { ..dark, theme: Light }
-  let (_, unchanged) = update(dispatch, ColorSchemeChanged(true), fixed)
-  assert_true(unchanged.theme is Light)
+  let (_, changed_host) = update(dispatch, ColorSchemeChanged(false), fixed)
+  assert_true(changed_host.theme is Light)
+  assert_false(changed_host.system_dark)
 }
 
 ///|
 test "theme settings switch fixed palettes and are idempotent" {
   let dispatch = test_dispatch()
-  let system = { ..test_model(), theme: System(dark=false) }
+  let system = { ..test_model(), theme: System, system_dark: true }
   let (_, first) = update(dispatch, ThemeChanged("dark"), system)
   let (_, repeated) = update(dispatch, ThemeChanged("dark"), first)
   assert_true(first.theme is Dark)
   assert_true(repeated.theme is Dark)
+  assert_true(first.system_dark && repeated.system_dark)
+  let (_, following) = update(dispatch, ThemeChanged("system"), first)
+  assert_true(following.theme is System)
+  assert_true(following.system_dark)
   let (_, light) = update(dispatch, ThemeChanged("light"), first)
   assert_true(light.theme is Light)
   let (_, unchanged) = update(dispatch, ThemeChanged("unknown"), system)
-  assert_true(unchanged.theme is System(dark=false))
+  assert_true(unchanged.theme is System)
 }
 
 ///|

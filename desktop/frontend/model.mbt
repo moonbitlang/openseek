@@ -46,29 +46,29 @@ const ThemeStorageKey : String = "openseek.theme"
 const UpdateChannelStorageKey : String = "openseek.update_channel"
 
 ///|
-/// The app's appearance choice. `System` retains the latest host preference;
-/// choosing Light/Dark in Settings fixes a choice that can be restored from
-/// localStorage on the next launch.
+/// The app's appearance choice. System preference is tracked separately on
+/// the model so this enum always describes exactly what Settings displays.
 priv enum Theme {
-  System(dark~ : Bool)
+  System
   Light
   Dark
 } derive(Eq)
 
 ///|
-fn Theme::is_dark(self : Theme) -> Bool {
+fn Theme::is_dark(self : Theme, system_dark : Bool) -> Bool {
   match self {
-    System(dark~) => dark
+    System => system_dark
     Light => false
     Dark => true
   }
 }
 
 ///|
-/// Unknown or absent stored values deliberately retain the live system
-/// preference, so old/corrupt page storage cannot force an arbitrary palette.
+/// Unknown or absent stored values deliberately retain the current selection,
+/// so old/corrupt page storage cannot force an arbitrary palette.
 fn Theme::parse(value : String, fallback : Theme) -> Theme {
   match value {
+    "system" => System
     "light" => Light
     "dark" => Dark
     _ => fallback
@@ -77,10 +77,10 @@ fn Theme::parse(value : String, fallback : Theme) -> Theme {
 
 ///|
 fn Theme::wire(self : Theme) -> String {
-  if self.is_dark() {
-    "dark"
-  } else {
-    "light"
+  match self {
+    System => "system"
+    Light => "light"
+    Dark => "dark"
   }
 }
 
@@ -747,8 +747,11 @@ priv struct Model {
   // roster (see `ConsoleState`). None in the desktop window, whose one
   // Local channel needs no account and no roster.
   console : ConsoleState?
-  // The effective page theme and whether it still follows the host. This one
-  // value drives the app root, embedded viewer, and terminal together.
+  // The latest host preference is retained even while a fixed theme is
+  // selected, so switching Settings back to System applies the current value.
+  system_dark : Bool
+  // The Settings selection. Its effective palette drives the app root,
+  // embedded viewer, and terminal together.
   theme : Theme
   // Whether the viewport is phone-narrow (at most `NarrowBreakpoint` wide).
   // Seeded from the window at startup and kept fresh by the resize
@@ -1553,7 +1556,8 @@ fn initial_model() -> Model {
         ),
       )
     },
-    theme: System(dark=host_prefers_dark()),
+    system_dark: host_prefers_dark(),
+    theme: System,
     narrow,
     sidebar_open: !narrow,
     chats_collapsed: false,

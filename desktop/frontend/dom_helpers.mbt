@@ -82,8 +82,8 @@ fn host_prefers_dark() -> Bool {
 ///|
 /// Mirror the effective model theme onto the document root after update. CSS
 /// owns the palette; the command keeps the DOM write out of the pure handler.
-fn Theme::apply(self : Theme) -> @cmd.Cmd {
-  let value = self.wire()
+fn Theme::apply(self : Theme, system_dark : Bool) -> @cmd.Cmd {
+  let value = if self.is_dark(system_dark) { "dark" } else { "light" }
   @cmd.custom_cmd(_ => {
     if @dom.document().get_document_element() is Some(root) {
       root.set_attribute("data-theme", value)
@@ -96,8 +96,8 @@ let color_scheme_watched : Ref[Bool] = Ref(false)
 
 ///|
 /// Follow the host's dark-mode preference, feeding changes back as
-/// `ColorSchemeChanged`. Update ignores these reports after the user chooses a
-/// fixed palette.
+/// `ColorSchemeChanged`. Update retains every report and applies it immediately
+/// only while Settings remains on System.
 fn watch_color_scheme(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     guard !color_scheme_watched.val else { return }
