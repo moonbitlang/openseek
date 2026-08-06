@@ -30,9 +30,11 @@ fn main {
     @shellenv.apply_login_shell_env(executable, log)
     let frontend_entry = @host.frontend_entry_path(executable)
     let engine = @engine.engine_command(executable)
+    let app_version = @host.package_version(executable)
     log.info() <? { "message": "host process start" }
     log.info() <? { "message": "frontend entry", "path": frontend_entry }
     log.info() <? { "message": "engine", "path": engine }
+    log.info() <? { "message": "app version", "version": app_version }
     let runtime_dir = @host.prepared_runtime_dir()
     // The relay sign-in store: a persisted session from auth.json, unless the
     // environment override pins the connector config directly (development).
@@ -40,7 +42,13 @@ fn main {
       runtime_dir?,
       env_override?=relay_settings(),
     )
-    let state = @api.ApiState::new(engine~, runtime_dir?, executable~, auth~)
+    let state = @api.ApiState::new(
+      engine~,
+      runtime_dir?,
+      executable~,
+      auth~,
+      app_version~,
+    )
     let bridge = @extension.DesktopBridgeActor::new(state)
     let relay = @remote.RelayActor::new(state, announce=device => {
       log.info() <? { "message": "relay registered", "device": device }

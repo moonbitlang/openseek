@@ -100,16 +100,17 @@ jobs:
           echo "RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
           echo "version=$release_version" >> "$GITHUB_OUTPUT"
 
-      # Stamp only this runner's checkout; the source branch is not modified.
+      # Stamp only this runner's checkout. Proton reads the version from
+      # moon.mod and writes it into Info.plist and proton-package.json.
       - name: Stamp release version
         shell: bash
         run: |
           set -euo pipefail
           RELEASE_VERSION="$RELEASE_VERSION" perl -0pi -e '
-            s/pub const AppVersion : String = "[^"]+"/pub const AppVersion : String = "$ENV{RELEASE_VERSION}"/
-          ' desktop/internal/version/version.mbt
-          expected="pub const AppVersion : String = \"$RELEASE_VERSION\""
-          grep -Fx "$expected" desktop/internal/version/version.mbt
+            s/^version = "[^"]+"/version = "$ENV{RELEASE_VERSION}"/m
+          ' desktop/moon.mod
+          expected="version = \"$RELEASE_VERSION\""
+          grep -Fx "$expected" desktop/moon.mod
 
       - name: Set up MoonBit (nightly)
         run: |
@@ -172,8 +173,7 @@ jobs:
         env:
           OPENSEEK_CLIENT_TOKEN: ${{ secrets.OPENSEEK_CLIENT_TOKEN }}
         run: |
-          moon -C desktop run --target native --release package/macos -- \
-            --release \
+          moon -C desktop run --target native package/macos -- \
             --target dmg \
             --target zip \
             --sign "$MACOS_SIGNING_IDENTITY" \
@@ -184,8 +184,8 @@ jobs:
         with:
           name: SeekMoon-macos-arm64-v${{ steps.release.outputs.version }}
           path: |
-            desktop/dist/SeekMoon-macos-arm64.zip
-            desktop/dist/SeekMoon-macos-arm64.dmg
+            desktop/dist/SeekMoon.app.zip
+            desktop/dist/SeekMoon.dmg
           if-no-files-found: error
           retention-days: 14
 
@@ -198,7 +198,7 @@ jobs:
         run: |
           desktop/scripts/publish-release.sh upload
           desktop/scripts/publish-release.sh upload \
-            desktop/dist/SeekMoon-macos-arm64.dmg
+            desktop/dist/SeekMoon.dmg
           desktop/scripts/publish-release.sh publish "v$RELEASE_VERSION"
 
       - name: Verify release manifest
@@ -206,12 +206,12 @@ jobs:
         run: |
           set -euo pipefail
           manifest="$(curl -fsSL "$OPENSEEK_API_ORIGIN/desktop/releases/latest.json")"
-          archive="desktop/dist/SeekMoon-macos-arm64.zip"
+          archive="desktop/dist/SeekMoon.app.zip"
           archive_sha256="$(shasum -a 256 "$archive" | cut -d' ' -f1)"
-          archive_url="$OPENSEEK_API_ORIGIN/desktop/releases/v$RELEASE_VERSION/SeekMoon-macos-arm64.zip"
-          dmg="desktop/dist/SeekMoon-macos-arm64.dmg"
+          archive_url="$OPENSEEK_API_ORIGIN/desktop/releases/v$RELEASE_VERSION/SeekMoon.app.zip"
+          dmg="desktop/dist/SeekMoon.dmg"
           dmg_sha256="$(shasum -a 256 "$dmg" | cut -d' ' -f1)"
-          dmg_url="$OPENSEEK_API_ORIGIN/desktop/releases/v$RELEASE_VERSION/SeekMoon-macos-arm64.dmg"
+          dmg_url="$OPENSEEK_API_ORIGIN/desktop/releases/v$RELEASE_VERSION/SeekMoon.dmg"
 
           # The updater installs from the bare platform key; the `-dmg`
           # entry is the manual installer the web console links to.

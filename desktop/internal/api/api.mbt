@@ -16,6 +16,8 @@ struct ApiState {
   hub : Hub
   // The host's relay sign-in state, shared with the relay actor.
   auth : @auth.AuthStore
+  // Installed package version read from Proton's generated package manifest.
+  app_version : String
   // Called for every finished run, alongside the notification fan-out — the
   // desktop posts its system notification here.
   on_finished : ((@protocol.FinishedPayload) -> Unit)?
@@ -31,18 +33,20 @@ pub fn ApiState::new(
   runtime_dir? : @path.Path,
   executable? : String,
   auth? : @auth.AuthStore,
+  app_version? : String = "development",
   on_finished? : (@protocol.FinishedPayload) -> Unit,
 ) -> ApiState {
   let engine_actor = @engine.new_engine_actor(engine, runtime_dir?)
   {
     engine: engine_actor,
     manager: engine_actor.manager(),
-    host: @host.new_host_state(engine, runtime_dir?, executable?),
+    host: @host.new_host_state(engine, runtime_dir?, executable?, app_version~),
     hub: Hub::new(),
     auth: match auth {
       Some(store) => store
       None => @auth.AuthStore::empty()
     },
+    app_version,
     on_finished,
   }
 }
@@ -171,6 +175,9 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.settings_get, async fn(_) {
       @engine.settings_status(state.manager)
     }),
+    @endpoint.Endpoint::remote_sync(@commands.app_info, _ => {
+      version: state.app_version,
+    }),
     @endpoint.Endpoint::remote(@commands.settings_set, async fn(payload) {
       // The store commit and its broadcast are one finite cancellation-
       // shielded linearization point. `update_settings` invokes the callback
@@ -264,8 +271,9 @@ test "remote endpoint catalog has one entry per command name" {
     }
     names.push(name)
   }
-  assert_eq(names.length(), 50)
+  assert_eq(names.length(), 51)
   assert_true(names.contains("agent.start"))
+  assert_true(names.contains("app.info"))
   assert_true(names.contains("terminal.close"))
   assert_true(names.contains("moonide.references"))
   assert_false(names.contains("host.connect"))

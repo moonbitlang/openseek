@@ -21,24 +21,23 @@ desktop_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 origin="${OPENSEEK_API_ORIGIN:-https://openseek-api.moonbitlang.cn}"
 token="${OPENSEEK_DEPLOY_TOKEN:?set OPENSEEK_DEPLOY_TOKEN}"
 
-version="$(sed -n 's/^pub const AppVersion : String = "\(.*\)"$/\1/p' \
-  "$desktop_dir/internal/version/version.mbt")"
+version="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$desktop_dir/moon.mod")"
 if [[ -z "$version" ]]; then
-  echo "could not read AppVersion from internal/version/version.mbt" >&2
+  echo "could not read version from moon.mod" >&2
   exit 1
 fi
 
 # The default remains the ZIP consumed by the in-app updater. An explicit
 # artifact, such as the DMG offered for manual installation, uploads under
 # its own basename so both files can coexist under the same version.
-default_artifact="$desktop_dir/dist/SeekMoon-macos-arm64.zip"
+default_artifact="$desktop_dir/dist/SeekMoon.app.zip"
 
 case "${1:-}" in
   upload)
     artifact="${2:-$default_artifact}"
     if [[ ! -f "$artifact" ]]; then
       echo "artifact not found: $artifact" >&2
-      echo "build it first: moon run ./package/macos -- --release --target dmg --target zip --sign '...'" >&2
+      echo "build it first: moon run ./package/macos -- --target dmg --target zip --sign '...'" >&2
       exit 1
     fi
     release_name="$(basename "$artifact")"

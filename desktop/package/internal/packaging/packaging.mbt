@@ -182,6 +182,28 @@ pub fn Workspace::engine_binary(self : Workspace, release~ : Bool) -> String {
 }
 
 ///|
+/// Read the desktop module version used as the package source of truth.
+/// Proton writes this value into its package manifest; platform tooling that
+/// has not migrated to Proton yet reads the same field instead of keeping a
+/// second version constant.
+pub async fn Workspace::module_version(self : Workspace) -> String {
+  let manifest = self.at("moon.mod")
+  let text = @asyncfs.read_file(manifest).text()
+  for line in text.split("\n") {
+    let line = line.trim().to_owned()
+    if line.has_prefix("version = \"") && line.has_suffix("\"") {
+      let version = line
+        .unsafe_substring(start=11, end=line.length() - 1)
+        .to_string()
+      if !version.is_empty() {
+        return version
+      }
+    }
+  }
+  raise PackageError("desktop version not found in \{manifest}")
+}
+
+///|
 /// Return the openseek engine package path relative to the monorepo root.
 pub fn engine_package() -> String {
   EnginePackage
@@ -807,6 +829,12 @@ test "package build paths select debug or release" {
     ws.native_binary(release=true),
     "/abs/repo/_build/native/release/build/openseek_desktop/openseek_desktop.exe",
   )
+}
+
+///|
+async test "workspace module version reads moon.mod" {
+  let ws = locate_workspace()
+  assert_eq(ws.module_version(), "0.1.5")
 }
 
 ///|

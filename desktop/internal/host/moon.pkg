@@ -12,7 +12,6 @@ import {
   "openseek_desktop/internal/skillmarket",
   "openseek_desktop/internal/terminal",
   "openseek_desktop/internal/update",
-  "openseek_desktop/internal/version",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/os_error",

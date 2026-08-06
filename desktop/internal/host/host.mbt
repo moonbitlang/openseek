@@ -68,12 +68,13 @@ pub fn new_host_state(
   engine : String,
   runtime_dir? : @path.Path,
   executable? : String,
+  app_version? : String = "development",
 ) -> HostState {
   {
     engine,
     runtime_dir,
     moon: MoonCliState::new(engine, runtime_dir?),
-    updates: SelfUpdate::new(runtime_dir, executable),
+    updates: SelfUpdate::new(runtime_dir, executable, app_version~),
   }
 }
 

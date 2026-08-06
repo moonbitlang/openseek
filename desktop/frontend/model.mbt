@@ -743,6 +743,8 @@ priv struct Model {
   // close path — from a browser tab, `window.close()` exits nothing, and the
   // update would yank the app out from under whoever is at the machine.
   is_desktop : Bool
+  // Installed package version supplied by the native host's `app.info` op.
+  app_version : String
   // A browser page's account layer: the relay session and the device
   // roster (see `ConsoleState`). None in the desktop window, whose one
   // Local channel needs no account and no roster.
@@ -1068,6 +1070,8 @@ priv enum Msg {
   // as `RemoteStatusLoaded` via the op's reply).
   RemoteDisconnectClicked
   RemoteDisconnectFailed(String)
+  // Proton package metadata returned by the native host.
+  AppInfoLoaded(String)
   // A `check_update` reply (or its failure, folded into `Unreachable`).
   // `explicit` says a user asked, which is what decides how loudly each
   // outcome shows.
@@ -1544,6 +1548,7 @@ fn initial_model() -> Model {
     deferred_host_settings: None,
     legacy_cleanup_pending: false,
     is_desktop,
+    app_version: "development",
     // Every browser page is the console: it signs in against the relay and
     // fetches the device roster before any channel opens.
     console: if is_desktop {

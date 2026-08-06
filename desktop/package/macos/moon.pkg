@@ -1,13 +1,10 @@
 import {
-  "openseek_desktop/internal/version",
   "openseek_desktop/package/internal/moonbit",
   "openseek_desktop/package/internal/packaging",
   "openseek_desktop/package/internal/xterm_assets",
   "moonbitlang/async",
-  "moonbitlang/async/fs" @asyncfs,
-  "moonbitlang/async/process",
   "moonbitlang/core/argparse",
-  "moonbitlang/core/string",
+  "moonbitlang/core/debug",
 }
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

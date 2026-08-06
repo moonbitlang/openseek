@@ -2,6 +2,9 @@
 const FrontendEntryPath = "assets/index.html"
 
 ///|
+const ProtonPackageFrontendEntryPath = "target/proton-package-input/assets/index.html"
+
+///|
 /// Locate the bundled frontend entry relative to the executable. On macOS
 /// the assets live in `Contents/Resources/` — `Contents/MacOS/` may only
 /// hold code, since non-`--deep` codesigning rejects data files there — so
@@ -12,6 +15,10 @@ const FrontendEntryPath = "assets/index.html"
 pub async fn frontend_entry_path(framework_command : String) -> String {
   let command_dir = @path.Path(framework_command).dirname().resolve()
   let candidates = [
+    command_dir
+    .join("..")
+    .join("Resources")
+    .join(ProtonPackageFrontendEntryPath),
     command_dir.join("..").join("Resources").join(FrontendEntryPath),
     command_dir.join(FrontendEntryPath),
   ]
@@ -22,6 +29,30 @@ pub async fn frontend_entry_path(framework_command : String) -> String {
     }
   }
   FrontendEntryPath
+}
+
+///|
+/// Read the application version written by `proton_cli package`. Development
+/// binaries have no package manifest and identify themselves explicitly
+/// instead of consulting a second source version constant.
+pub async fn package_version(executable : String) -> String {
+  let command_dir = @path.Path(executable).dirname().resolve()
+  let manifest = command_dir
+    .join("..")
+    .join("Resources")
+    .join("proton-package.json")
+    .normalize()
+    .to_string()
+  guard @fs.exists(manifest) else { return "development" }
+  let text = @fs.read_file(manifest).text() catch { _ => return "development" }
+  match @json.parse(text) {
+    Object(fields) =>
+      match fields.get("version") {
+        Some(String(version)) if !version.trim().is_empty() => version
+        _ => "development"
+      }
+    _ => "development"
+  }
 }
 
 ///|

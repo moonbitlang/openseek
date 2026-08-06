@@ -103,6 +103,11 @@ pub let settings_set : Command[
 ] = Command("settings.set")
 
 ///|
+pub let app_info : Command[@protocol.EmptyPayload, @protocol.AppInfoReply] = Command(
+  "app.info",
+)
+
+///|
 pub let workspace_list : Command[
   @protocol.EmptyPayload,
   @protocol.WorkspacesReply,

@@ -47,6 +47,10 @@ pub(all) struct AppEntry {
   icon : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
+pub(all) struct AppInfoReply {
+  version : String
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
 pub(all) struct ApplyUpdateReply {
   applied : Bool
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)

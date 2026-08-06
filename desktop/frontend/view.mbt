@@ -2196,7 +2196,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         setting_row(
           "Check for updates",
           update_check_controls(dispatch, model),
-          desc="Current version: \{@version.AppVersion}. The staging server serves staging builds.",
+          desc="Current version: \{model.app_version}. The staging server serves staging builds.",
         ),
       ]),
     )

@@ -365,6 +365,13 @@ pub(all) struct SettingsStatusPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// Immutable identity of the installed desktop package. The native host reads
+/// this from `proton-package.json`; it is not an editable engine setting.
+pub(all) struct AppInfoReply {
+  version : String
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
 pub(all) struct UpdateDownloadProgressPayload {
   downloaded_bytes : Int
   total_bytes : Int?

@@ -56,6 +56,7 @@ pub fn Workspace::at(Self, String) -> String
 pub fn Workspace::dir(Self) -> String
 pub fn Workspace::engine_binary(Self, release~ : Bool) -> String
 pub fn Workspace::mermaid_assets(Self) -> String
+pub async fn Workspace::module_version(Self) -> String
 pub fn Workspace::native_binary(Self, release~ : Bool) -> String
 pub fn Workspace::repo(Self) -> String
 pub fn Workspace::repo_at(Self, String) -> String

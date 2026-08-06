@@ -144,7 +144,7 @@ jobs:
       # end-user distribution.
       # Unstamped — no OPENSEEK_CLIENT_TOKEN in CI; see the Linux job's note.
       - name: Build the macOS artifacts
-        run: moon -C desktop run --target native package/macos -- --release --target dmg --target zip
+        run: moon -C desktop run --target native package/macos -- --target dmg --target zip
 
       # Only a trusted push to main publishes the cache shared by later PRs.
       - name: Save CEF distribution
@@ -161,8 +161,8 @@ jobs:
         with:
           name: SeekMoon-macos-arm64
           path: |
-            desktop/dist/SeekMoon-macos-arm64.zip
-            desktop/dist/SeekMoon-macos-arm64.dmg
+            desktop/dist/SeekMoon.app.zip
+            desktop/dist/SeekMoon.dmg
           if-no-files-found: error
 
   desktop-windows:

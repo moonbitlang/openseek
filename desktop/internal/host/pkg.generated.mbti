@@ -19,7 +19,9 @@ pub async fn frontend_document(String) -> String
 
 pub async fn frontend_entry_path(String) -> String
 
-pub fn new_host_state(String, runtime_dir? : @path.Path, executable? : String) -> HostState
+pub fn new_host_state(String, runtime_dir? : @path.Path, executable? : String, app_version? : String) -> HostState
+
+pub async fn package_version(String) -> String
 
 pub async fn prepared_runtime_dir() -> @path.Path?
 

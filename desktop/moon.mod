@@ -1,6 +1,6 @@
 name = "openseek_desktop"
 
-version = "0.1.0"
+version = "0.1.5"
 
 import {
   "bobzhang/jsonl@0.2.0",

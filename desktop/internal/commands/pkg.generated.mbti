@@ -19,6 +19,8 @@ pub let agent_start : Command[@protocol.StartPayload, @protocol.StartReply]
 
 pub let agent_steer : Command[@protocol.SteerPayload, @protocol.SteerReply]
 
+pub let app_info : Command[@protocol.EmptyPayload, @protocol.AppInfoReply]
+
 pub let app_launch : Command[@protocol.LaunchAppPayload, @protocol.LaunchAppReply]
 
 pub let app_list : Command[@protocol.EmptyPayload, @protocol.ListAppsReply]

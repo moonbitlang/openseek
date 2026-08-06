@@ -1,6 +1,7 @@
 .DS_Store
 .vscode/
 _build/
+target/
 .mooncakes/
 .moonagent/
 .repos/

@@ -1,5 +1,4 @@
 import {
-  "openseek_desktop/internal/version",
   "openseek_desktop/package/internal/moonbit",
   "openseek_desktop/package/internal/packaging",
   "openseek_desktop/package/internal/pe",

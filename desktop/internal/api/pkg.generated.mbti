@@ -22,7 +22,7 @@ pub fn ApiState::auth_store(Self) -> @auth.AuthStore
 pub fn ApiState::engine_actor(Self) -> @engine.EngineActor
 pub fn ApiState::host_state(Self) -> @host.HostState
 pub fn ApiState::manager(Self) -> @engine.EngineManager
-pub fn ApiState::new(engine~ : String, runtime_dir? : @path.Path, executable? : String, auth? : @auth.AuthStore, on_finished? : (@protocol.FinishedPayload) -> Unit) -> Self
+pub fn ApiState::new(engine~ : String, runtime_dir? : @path.Path, executable? : String, auth? : @auth.AuthStore, app_version? : String, on_finished? : (@protocol.FinishedPayload) -> Unit) -> Self
 pub fn ApiState::publish(Self, @protocol.Notification) -> Unit
 pub fn ApiState::sink(Self) -> @engine.EventSink
 pub fn ApiState::subscribe(Self) -> @aqueue.Queue[@protocol.Notification]

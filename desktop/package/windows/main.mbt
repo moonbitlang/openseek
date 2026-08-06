@@ -267,10 +267,11 @@ async fn build_installer(ws : @packaging.Workspace) -> Unit {
   }
   // `ws.at(...)` is already absolute, so makensis receives unambiguous paths
   // regardless of the cwd it runs in.
+  let app_version = ws.module_version()
   @packaging.run_checked(
     makensis_command(ws),
     [
-      "/DAPP_VERSION=\{@version.AppVersion}",
+      "/DAPP_VERSION=\{app_version}",
       "/DSOURCE_DIR=\{ws.at(BundleDir)}",
       "/DOUTPUT_DIR=\{ws.at("dist")}",
       ws.at(InstallerScript),

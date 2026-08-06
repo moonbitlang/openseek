@@ -21,6 +21,21 @@ fn macos_resources_toolchain_dir(command_dir : @path.Path) -> @path.Path {
 }
 
 ///|
+fn @path.Path::proton_package_macos_toolchain_dir(
+  self : @path.Path,
+) -> @path.Path {
+  self
+  .join("..")
+  .join("Resources")
+  .join("target")
+  .join("proton-package-input")
+  .join("toolchains")
+  .join("moonbit")
+  .join("macos-arm64")
+  .normalize()
+}
+
+///|
 async fn executable_exists(root : @path.Path, name : String) -> Bool {
   @fs.exists(root.join("bin").join(name).to_string()) ||
   @fs.exists(root.join("bin").join("\{name}.exe").to_string())
@@ -40,6 +55,7 @@ async fn bundled_moonbit_seed_dir(engine_command : String) -> @path.Path? {
     moonbit_toolchain_dir(command_dir, "windows-x64"),
     moonbit_toolchain_dir(command_dir, "linux-x64"),
     moonbit_toolchain_dir(command_dir, "macos-arm64"),
+    command_dir.proton_package_macos_toolchain_dir(),
     macos_resources_toolchain_dir(command_dir),
   ]
   for candidate in candidates {

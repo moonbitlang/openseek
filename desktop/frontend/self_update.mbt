@@ -142,6 +142,26 @@ fn UpdateCheck::from_reply(reply : @protocol.CheckUpdateReply) -> UpdateCheck {
 }
 
 ///|
+/// Read immutable installed-package metadata from the desktop host. This is a
+/// separate operation from settings because changing a preference must never
+/// change the version shown by the application.
+fn Model::fetch_app_info(self : Model, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+  guard self.is_desktop else { return @cmd.none }
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let reply = @interop.bridge_request(
+        Local,
+        @commands.app_info,
+        @protocol.EmptyPayload::NoPayload,
+      ) catch {
+        _ => return
+      }
+      scheduler.add(dispatch(AppInfoLoaded(reply.version)))
+    })
+  })
+}
+
+///|
 /// Ask the host to check the channel's manifest. Every outcome lands in
 /// `UpdateCheckFinished`: op failures (bridge missing, host error) fold
 /// into `CheckUnreachable`, so the handler has one shape to route.

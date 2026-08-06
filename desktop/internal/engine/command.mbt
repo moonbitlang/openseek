@@ -9,6 +9,21 @@ async fn bundled_engine_path(framework_command : String) -> String? {
     Some("Windows_NT") => ["openseek.exe", "openseek"]
     _ => ["openseek", "openseek.exe"]
   }
+  // Proton preserves bundle.resources below Contents/Resources. Probe the
+  // prepared package input first, then retain the executable-adjacent layouts
+  // used by the other platform packagers and development builds.
+  for candidate in candidates {
+    let path = command_dir
+      .join("..")
+      .join("Resources")
+      .join("target/proton-package-input/bin")
+      .join(candidate)
+      .normalize()
+      .to_string()
+    if @fs.exists(path) {
+      return Some(path)
+    }
+  }
   for candidate in candidates {
     let path = command_dir.join(candidate).normalize().to_string()
     if @fs.exists(path) {

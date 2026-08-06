@@ -364,7 +364,10 @@ The target machine also needs Microsoft WebView2 Runtime installed.
 
 `package/macos` runs all of the above (including the codegen bootstrap),
 builds the `openseek` engine from the monorepo's `cmd/openseek` source, and
-produces `dist/SeekMoon.app` from debug MoonBit artifacts by default:
+prepares the frontend and MoonBit toolchain inputs. It then delegates the App
+layout, CEF runtime, helper bundles, package metadata, signing, ZIP, and DMG to
+`proton_cli package`. Packaging always consumes optimized release artifacts and
+produces `dist/SeekMoon.app` by default:
 
 ```sh
 moon run --target native package/macos
@@ -372,25 +375,20 @@ moon run --target native package/macos
 moon -C desktop run --target native package/macos
 ```
 
-This app-only output keeps the valid ad-hoc signatures written by the linker and
-re-signs the five CEF helpers whose rpaths the packager modifies. It deliberately
-does not seal the outer app bundle or re-sign the bundled MoonBit toolchain.
-This faster output is for development on the build machine, not distribution or
-the in-app updater. Scripts may pass `--target app` to request the same output
-explicitly. Pass `--release` after `--` to build the frontend, host, and engine
-as optimized release artifacts.
+The app-only output is ad-hoc signed by Proton for local use. Scripts may pass
+`--target app` to request the same output explicitly.
 
 To build a distribution artifact, select `dmg` or `zip`:
 
 ```sh
-moon run --target native package/macos -- --release --target dmg
-moon run --target native package/macos -- --release --target zip
+moon run --target native package/macos -- --target dmg
+moon run --target native package/macos -- --target zip
 ```
 
-- `dist/SeekMoon-macos-arm64.dmg` is for first-time installation. It
+- `dist/SeekMoon.dmg` is for first-time installation. It
   contains the app and an `/Applications` shortcut so users can install by
   dragging the app into Applications.
-- `dist/SeekMoon-macos-arm64.zip` carries the same app for in-app
+- `dist/SeekMoon.app.zip` carries the same app for in-app
   updates.
 
 `--target` is repeatable. The `dmg` and `zip` targets always include the app
@@ -415,21 +413,16 @@ timestamp are applied automatically) and notarize:
 # one-time: xcrun notarytool store-credentials openseek \
 #   --apple-id you@example.com --team-id TEAMID --password <app-specific-pw>
 moon run --target native package/macos -- \
-  --release \
   --target dmg \
   --target zip \
   --sign "Developer ID Application: Your Name (TEAMID)" \
   --notarize openseek
 ```
 
-`--notarize` submits only the signed DMG with `notarytool --wait`. Apple scans
-the DMG and its nested app in that single submission. After approval, the
-packager staples and validates tickets on both the built app and the DMG, then
-creates the final updater ZIP from that stapled app. The ZIP is therefore only
-a transport for the notarized app and is not submitted separately. Without
-`--notarize`, neither artifact is notarized; without `--sign`, the app is only
-ad-hoc signed and the DMG container is unsigned. Such outputs are not intended
-for distribution.
+`--notarize` passes the configured keychain profile to Proton, which submits the
+signed artifact, waits for approval, and staples the resulting ticket. Without
+`--notarize`, the artifacts are not notarized; without `--sign`, the app is only
+ad-hoc signed. Such outputs are not intended for distribution.
 
 ## Package (Linux)
 

@@ -16,6 +16,8 @@
 /// `busy` is the sole serializer of downloads and applies, which consume the
 /// same staging dir and bundle path.
 priv struct SelfUpdate {
+  // The installed version comes from Proton's package manifest, not source.
+  app_version : String
   work_dir : String?
   bundle_path : String?
   // At most one payload is ever buffered: `busy` flips in the same atomic
@@ -29,8 +31,10 @@ priv struct SelfUpdate {
 fn SelfUpdate::new(
   runtime_dir : @path.Path?,
   executable : String?,
+  app_version? : String = "development",
 ) -> SelfUpdate {
   {
+    app_version,
     work_dir: if runtime_dir is Some(dir) {
       Some(dir.to_string())
     } else {
@@ -93,7 +97,7 @@ async fn SelfUpdate::check(
   payload : UpdateChannelPayload,
 ) -> CheckUpdateReply {
   let info = @update.check_for_update(
-    current=@version.AppVersion,
+    current=self.app_version,
     channel=payload.to_channel(),
   ) catch {
     @update.Unreachable(reason~) => return Unreachable(reason~)
@@ -172,7 +176,7 @@ async fn SelfUpdate::download_package(
     raise HostError("this build cannot install updates")
   }
   let info = @update.check_for_update(
-    current=@version.AppVersion,
+    current=self.app_version,
     channel=payload.to_channel(),
   ) catch {
     @update.Unreachable(reason~) => raise HostError(reason)
@@ -282,6 +286,7 @@ async fn SelfUpdate::apply(self : SelfUpdate) -> ApplyUpdateReply {
 ///|
 test "self-update accepts one download and rejects a second" {
   let updates : SelfUpdate = {
+    app_version: "0.1.0",
     work_dir: Some("/runtime"),
     bundle_path: Some("/Applications/OpenSeek Desktop.app"),
     downloads: Queue(kind=Blocking(1)),
@@ -337,6 +342,7 @@ async test "self-update pump reports download failures" {
 ///|
 async test "self-update apply refuses while a download is active" {
   let updates : SelfUpdate = {
+    app_version: "0.1.0",
     work_dir: Some("/runtime"),
     bundle_path: Some("/Applications/OpenSeek Desktop.app"),
     downloads: Queue(kind=Blocking(1)),
