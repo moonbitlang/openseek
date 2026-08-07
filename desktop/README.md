@@ -143,11 +143,11 @@ opens the release page in the browser.
 
 - The [`moon`](https://www.moonbitlang.com/download) toolchain.
 
-No separate `openseek` engine is needed on your `PATH`: the packaging flow
-builds the engine from the monorepo's `cmd/openseek` source and bundles it, and
-the desktop app always runs that bundled engine alongside its bundled MoonBit
-toolchain seed. Development uses the same bundle flow — see
-[Run during development](#run-during-development).
+No separate `openseek` engine is needed on your `PATH`: both packaging and the
+development launcher build it from the monorepo's `cmd/openseek` source.
+Packaged apps run the bundled engine and MoonBit toolchain seed. The unbundled
+development host runs that checkout's `_build` engine and resolves a local
+MoonBit toolchain through the normal fallback chain.
 
 ## Setup
 
@@ -212,23 +212,42 @@ corresponding `_build/*/release/` directories.
 
 ## Run during development
 
-Run the app through the packaging flow for your platform and launch the produced
-bundle — for example, on macOS:
+From the monorepo root, run:
 
 ```sh
-moon run --target native package/macos
-open "dist/SeekMoon.app"
+moon run ./desktop/package/dev
 ```
 
-(Use `package/linux` for the AppImage or `package/windows` for the Windows
-bundle; see the Package sections below.) The host resolves its frontend assets,
-the `openseek` engine, and the bundled MoonBit toolchain seed relative to the
-packaged layout, so running the bare `openseek_desktop` binary unbundled — or
-pointing it at an `openseek` on `PATH` — is not supported. To iterate on the UI,
-rebuild the frontend bundle and re-run the package command; the engine and seed
-are rebuilt and re-staged from the same checkout, so the app never drifts out of
-version with them. Package commands build debug MoonBit artifacts by default;
-pass `--release` after `--` when you need optimized artifacts.
+The launcher detects the desktop workspace, builds the frontend, engine, and
+native host with Moon's normal incremental build, prepares the checked-out
+Proton/CEF runtime, and launches the bare host. The first CEF setup may download
+a large archive; later development and platform-package runs reuse the
+validated assembled runtime without installing or invoking the Proton CLI. If
+`PROTON_NATIVE_DIST` already names a prepared runtime, the launcher uses it
+without requiring another path argument.
+
+The executable implementation lives in `package/dev`; it accepts no path or
+build-mode arguments.
+
+Development does not use Moon's `data_dir` and does not assemble a package
+asset directory. `desktop-dev.html` is served with the repository as its asset
+root: it loads the frontend straight from `_build`, imports the editor's source
+styles as separate files, and loads xterm's upstream browser files without
+esbuild. Mermaid and xterm archives are downloaded, checksum-verified, and
+extracted once under ignored `target/` directories; they are reused until their
+pinned versions change.
+
+The host recognizes its `_build/native/<profile>/build/openseek_desktop`
+location and derives the checkout HTML, matching engine, and worktree-local
+`desktop/target/dev-state` from it. Packaged layouts are checked first. The
+engine then finds the local MoonBit toolchain through the same deterministic
+resolver as production: a bundled seed when one exists, otherwise `moon` on
+`PATH`, then `~/.moon/bin`. No frontend, engine, state, or toolchain path
+argument is needed.
+
+Platform package commands remain the release-layout test. They build debug
+MoonBit artifacts by default; pass `--release` after `--` when you need
+optimized artifacts.
 
 ## Bootstrap desktop submodules on Windows
 

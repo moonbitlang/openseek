@@ -7,8 +7,8 @@
 // host and the framework child can share the file safely.
 
 ///|
-async fn launch_logger() -> @xlog.Logger {
-  guard @host.prepared_runtime_dir() is Some(dir) else {
+async fn launch_logger(executable : String) -> @xlog.Logger {
+  guard @host.prepared_runtime_dir(executable) is Some(dir) else {
     fail("cannot determine the per-user runtime directory")
   }
   let path = dir.join("openseek-desktop.log").to_string()

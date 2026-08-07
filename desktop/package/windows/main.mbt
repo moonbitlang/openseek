@@ -102,17 +102,8 @@ async fn build_outputs(
   ws : @packaging.Workspace,
   release~ : Bool,
 ) -> @xterm_assets.Assets {
-  // Assemble the CEF runtime first so the native host links against it.
-  @packaging.assemble_cef_runtime(ws, @packaging.windows_proton_cli())
-  // Then replace the assembled dist's proton library with one built from the
-  // submodule's sources: the checked-in win32 prebuilt is not rebuilt on
-  // every proton C change and would otherwise fail the host link. MSVC's
-  // multi-config generator nests outputs under `Release/`.
-  @packaging.rebuild_libproton(ws, [
-    ("bin/Release/proton.dll", "bin/proton.dll"),
-    ("bin/Release/cef_process.exe", "bin/cef_process.exe"),
-    ("lib/Release/proton.lib", "lib/proton.lib"),
-  ])
+  // Reuse CEF while rebuilding the native Proton artifacts from this checkout.
+  ws.prepare_checkout_proton_runtime(@packaging.windows_proton_cli())
   @packaging.build_frontend_bundle(ws, release~)
   let terminal_assets = @xterm_assets.build(
     ws,

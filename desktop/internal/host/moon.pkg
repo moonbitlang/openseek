@@ -1,6 +1,7 @@
 import {
   "openseek_desktop/internal/applauncher",
   "openseek_desktop/internal/commands",
+  "openseek_desktop/internal/development",
   "openseek_desktop/internal/engine",
   "openseek_desktop/internal/endpoint",
   "openseek_desktop/internal/fsx",

@@ -168,7 +168,7 @@ async fn @packaging.Workspace::build_package_inputs(
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
     "PROTON_PACKAGE_RPATH": "@executable_path/../Resources/proton/lib",
   }
-  @packaging.assemble_cef_runtime(self, @packaging.posix_proton_cli(), extra_env={
+  self.prepare_checkout_proton_runtime(@packaging.posix_proton_cli(), extra_env={
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
   })
   @packaging.build_frontend_bundle(self, release~)

@@ -182,6 +182,15 @@ pub fn Workspace::engine_binary(self : Workspace, release~ : Bool) -> String {
 }
 
 ///|
+/// Return the selected-mode JavaScript frontend artifact emitted by Moon.
+/// Development serves this file in place; packagers copy the same artifact
+/// into their stable resource layout.
+pub fn Workspace::frontend_binary(self : Workspace, release~ : Bool) -> String {
+  let mode = if release { "release" } else { "debug" }
+  self.repo_at("_build/js/\{mode}/\{FrontendBundleArtifact}")
+}
+
+///|
 /// Read the desktop module version used as the package source of truth.
 /// Proton writes this value into its package manifest; platform tooling that
 /// has not migrated to Proton yet reads the same field instead of keeping a
@@ -270,16 +279,29 @@ pub async fn ensure_proton_cli(ws : Workspace, tool_path : String) -> Unit {
 }
 
 ///|
-/// Assemble the Proton CEF runtime (`cef setup`) so the native host links
-/// against `libproton`/CEF and the runtime can be copied into the bundle
-/// (`proton_runtime_dist` reads the assembled dist's path). The command
-/// downloads CEF on first run (large); a pre-populated `.cef-cache` lets it
-/// complete offline.
-pub async fn assemble_cef_runtime(
+/// Ensure a Proton CEF runtime matching this checkout is available. A complete
+/// runtime recorded by `.proton/runtime.json` is reused by development and all
+/// platform packagers. The Proton CLI is installed and `cef setup` runs only
+/// when that runtime is missing, incomplete, or belongs to another platform or
+/// Proton version.
+pub async fn ensure_cef_runtime(
   ws : Workspace,
   tool_path : String,
   extra_env? : Map[String, String] = Map([]),
 ) -> Unit {
+  let cached = try ws.validated_proton_runtime_dist() catch {
+    error if @async.is_being_cancelled() => raise error
+    error => {
+      println("existing Proton runtime cannot be reused: \{error}")
+      None
+    }
+  } noraise {
+    dist => Some(dist)
+  }
+  if cached is Some(dist) {
+    println("reusing Proton CEF runtime: \{dist}")
+    return
+  }
   ensure_proton_cli(ws, tool_path)
   run_checked(
     ws.at(tool_path),
@@ -287,6 +309,8 @@ pub async fn assemble_cef_runtime(
     dir=ws.dir(),
     extra_env~,
   )
+  let dist = ws.validated_proton_runtime_dist()
+  println("prepared Proton CEF runtime: \{dist}")
 }
 
 ///|
@@ -294,7 +318,7 @@ pub async fn assemble_cef_runtime(
 /// the manifest `cef setup` writes. Raises when the manifest is missing or
 /// malformed.
 pub async fn proton_runtime_dist(ws : Workspace) -> String {
-  ws.proton_project_at(proton_runtime_field(ws, "dist"))
+  ws.proton_project_at(ws.proton_runtime_field("dist"))
 }
 
 ///|
@@ -303,31 +327,167 @@ pub async fn proton_runtime_dist(ws : Workspace) -> String {
 /// `~/.proton/cache/cef` directory or a `PROTON_CEF_CACHE` override; consumers
 /// must not reconstruct the older project-local cache layout.
 async fn Workspace::proton_cef_root(self : Workspace) -> String {
-  proton_runtime_field(self, "cef")
+  self.proton_runtime_field("cef")
 }
 
 ///|
-/// Read a string field from `.proton/runtime.json`, the manifest `cef setup`
-/// writes. Raises when the manifest is missing, malformed, or lacks the field.
-async fn proton_runtime_field(ws : Workspace, field : String) -> String {
-  let manifest = ws.proton_project_at(".proton/runtime.json")
+/// Read one Proton JSON manifest as an object. Keeping parsing here lets the
+/// reuse check compare the active, assembled, and checked-in manifests without
+/// running the Proton CLI.
+async fn Workspace::read_proton_manifest(
+  manifest : String,
+) -> Map[String, Json] {
   if !@asyncfs.exists(manifest) {
-    raise PackageError(
-      "Proton runtime manifest not found: \{manifest} (run cef setup)",
-    )
+    raise PackageError("Proton runtime manifest not found: \{manifest}")
   }
   let text = @asyncfs.read_file(manifest).text()
   match @json.parse(text) {
-    Object(fields) =>
-      match fields.get(field) {
-        Some(String(value)) => value
-        _ =>
-          raise PackageError(
-            "Proton runtime manifest has no \"\{field}\": \{text}",
-          )
-      }
+    Object(fields) => fields
     _ => raise PackageError("Proton runtime manifest is not an object: \{text}")
   }
+}
+
+///|
+/// Read a required string from a parsed Proton manifest.
+fn Workspace::proton_manifest_string(
+  fields : Map[String, Json],
+  manifest : String,
+  field : String,
+) -> String raise PackageError {
+  if fields.get(field) is Some(String(value)) {
+    return value
+  }
+  raise PackageError(
+    "Proton runtime manifest has no string field \"\{field}\": \{manifest}",
+  )
+}
+
+///|
+/// Read a string field from the active runtime manifest written by `cef setup`.
+async fn Workspace::proton_runtime_field(
+  self : Workspace,
+  field : String,
+) -> String {
+  let manifest = self.proton_project_at(".proton/runtime.json")
+  let fields = Workspace::read_proton_manifest(manifest)
+  Workspace::proton_manifest_string(fields, manifest, field)
+}
+
+///|
+/// Return the one Proton platform supported by each desktop packager. These
+/// names are also the directory names below `lepus/proton/prebuilt`.
+fn Workspace::proton_platform() -> String raise PackageError {
+  if @platform.win32 || @platform.win64 {
+    "win32-x64"
+  } else if @platform.apple_os_mac {
+    "darwin-arm64"
+  } else if @platform.linux {
+    "linux-x64"
+  } else {
+    raise PackageError("CEF packaging is unsupported on this platform")
+  }
+}
+
+///|
+/// Files the desktop build and launcher consume from an assembled runtime.
+/// Checking the complete Proton-required layout prevents a partially removed
+/// runtime from being mistaken for a cache hit.
+fn Workspace::proton_runtime_required_files(
+  platform : String,
+) -> Array[String] raise PackageError {
+  match platform {
+    "win32-x64" =>
+      [
+        "bin/proton.dll", "bin/cef_process.exe", "lib/proton.lib", "include/proton_native.h",
+        "bin/libcef.dll", "bin/icudtl.dat", "Resources/icudtl.dat", "Resources/locales",
+      ]
+    "linux-x64" =>
+      [
+        "bin/cef_process", "lib/libproton.so", "include/proton_native.h", "bin/libcef.so",
+        "bin/icudtl.dat", "bin/v8_context_snapshot.bin", "Resources/icudtl.dat",
+        "Resources/locales",
+      ]
+    "darwin-arm64" =>
+      [
+        "bin/cef_process", "lib/libproton.dylib", "include/proton_native.h", "bin/libEGL.dylib",
+        "bin/libGLESv2.dylib", "bin/libvk_swiftshader.dylib", "Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework",
+        "Frameworks/Chromium Embedded Framework.framework/Libraries/libcef_sandbox.dylib",
+        "Resources/icudtl.dat",
+      ]
+    _ => raise PackageError("unsupported Proton runtime platform: \{platform}")
+  }
+}
+
+///|
+/// Resolve and validate the existing runtime without installing or invoking
+/// the Proton CLI. The active and assembled manifests must agree, the active
+/// platform must match this packager, the checked-in prebuilt must have the
+/// same Proton version, and every runtime file consumed by Proton must exist.
+async fn Workspace::validated_proton_runtime_dist(self : Workspace) -> String {
+  let active_path = self.proton_project_at(".proton/runtime.json")
+  let active = Workspace::read_proton_manifest(active_path)
+  let platform = Workspace::proton_manifest_string(
+    active, active_path, "platform",
+  )
+  let expected_platform = Workspace::proton_platform()
+  if platform != expected_platform {
+    raise PackageError(
+      "Proton runtime platform mismatch: expected \{expected_platform}, got \{platform}",
+    )
+  }
+  let prebuilt_path = self.proton_project_at(
+    "proton/prebuilt/\{platform}/manifest.json",
+  )
+  let prebuilt = Workspace::read_proton_manifest(prebuilt_path)
+  let prebuilt_platform = Workspace::proton_manifest_string(
+    prebuilt, prebuilt_path, "platform",
+  )
+  if prebuilt_platform != platform {
+    raise PackageError(
+      "Proton prebuilt platform mismatch: expected \{platform}, got \{prebuilt_platform}",
+    )
+  }
+  let active_version = Workspace::proton_manifest_string(
+    active, active_path, "proton_version",
+  )
+  let prebuilt_version = Workspace::proton_manifest_string(
+    prebuilt, prebuilt_path, "proton_version",
+  )
+  if active_version != prebuilt_version {
+    raise PackageError(
+      "Proton runtime version mismatch: expected \{prebuilt_version}, got \{active_version}",
+    )
+  }
+  let relative_dist = Workspace::proton_manifest_string(
+    active, active_path, "dist",
+  )
+  let dist = self.proton_project_at(relative_dist)
+  let assembled_path = join_path(dist, "manifest.json")
+  let assembled = Workspace::read_proton_manifest(assembled_path)
+  for field in ["platform", "proton_version", "cef_version", "dist"] {
+    let active_value = Workspace::proton_manifest_string(
+      active, active_path, field,
+    )
+    let assembled_value = Workspace::proton_manifest_string(
+      assembled, assembled_path, field,
+    )
+    if active_value != assembled_value {
+      raise PackageError(
+        "Proton runtime manifest mismatch for \"\{field}\": active has \"\{active_value}\", assembled runtime has \"\{assembled_value}\"",
+      )
+    }
+  }
+  let cef_root = Workspace::proton_manifest_string(active, active_path, "cef")
+  if !@asyncfs.exists(cef_root) {
+    raise PackageError("Proton CEF cache not found: \{cef_root}")
+  }
+  for relative in Workspace::proton_runtime_required_files(platform) {
+    let required = join_path(dist, relative)
+    if !@asyncfs.exists(required) {
+      raise PackageError("Proton runtime file not found: \{required}")
+    }
+  }
+  dist
 }
 
 ///|
@@ -389,6 +549,40 @@ pub async fn rebuild_libproton(
     ws.at("lepus/native/include/proton_native.h"),
     join_path(dist, "include/proton_native.h"),
   )
+}
+
+///|
+/// Prepare the Proton runtime owned by this checkout before compiling its
+/// native host. CEF setup remains reusable, while Linux and Windows replace
+/// their potentially stale checked-in Proton artifacts with outputs built from
+/// the same Lepus sources that Moon imports. macOS continues to use the runtime
+/// prepared by Proton without a local rebuild.
+pub async fn Workspace::prepare_checkout_proton_runtime(
+  self : Workspace,
+  tool_path : String,
+  extra_env? : Map[String, String] = Map([]),
+) -> Unit {
+  ensure_cef_runtime(self, tool_path, extra_env~)
+  if @platform.win32 || @platform.win64 {
+    rebuild_libproton(
+      self,
+      [
+        ("bin/Release/proton.dll", "bin/proton.dll"),
+        ("bin/Release/cef_process.exe", "bin/cef_process.exe"),
+        ("lib/Release/proton.lib", "lib/proton.lib"),
+      ],
+      extra_env~,
+    )
+  } else if @platform.linux {
+    rebuild_libproton(
+      self,
+      [
+        ("lib/libproton.so", "lib/libproton.so"),
+        ("bin/cef_process", "bin/cef_process"),
+      ],
+      extra_env~,
+    )
+  }
 }
 
 ///|
@@ -455,20 +649,29 @@ pub async fn run_checked(
 }
 
 ///|
-/// Build the frontend package in the selected mode and copy the generated
-/// JS bundle to the stable `frontend.js` path the host and packagers consume.
-pub async fn build_frontend_bundle(ws : Workspace, release~ : Bool) -> Unit {
+/// Build the frontend package in the selected mode. Moon owns the artifact and
+/// its dependency graph, so repeated development launches get its normal
+/// incremental build without copying or rewriting the result.
+pub async fn build_frontend(ws : Workspace, release~ : Bool) -> Unit {
   let release_args = if release { ["--release"] } else { [] }
   run_checked(
     "moon",
     ["build", FrontendPackage, "--target", "js", ..release_args],
     dir=ws.dir(),
   )
-  let mode = if release { "release" } else { "debug" }
-  copy_file(
-    ws.repo_at("_build/js/\{mode}/\{FrontendBundleArtifact}"),
-    ws.at(FrontendBundleOutput),
-  )
+  let frontend = ws.frontend_binary(release~)
+  if !@asyncfs.exists(frontend) {
+    raise PackageError("desktop frontend artifact not found: \{frontend}")
+  }
+}
+
+///|
+/// Build the frontend package and copy the generated JS bundle to the stable
+/// `frontend.js` path consumed by packaged layouts. Development calls
+/// `build_frontend` directly and serves Moon's artifact in place.
+pub async fn build_frontend_bundle(ws : Workspace, release~ : Bool) -> Unit {
+  build_frontend(ws, release~)
+  copy_file(ws.frontend_binary(release~), ws.at(FrontendBundleOutput))
   build_viewer_stylesheet(ws)
   build_mermaid_assets(ws)
 }
@@ -532,15 +735,28 @@ async fn assembled_viewer_stylesheet(ws : Workspace) -> String {
 }
 
 ///|
+async test "development viewer stylesheet imports every production source" {
+  let ws = locate_workspace()
+  let development = @asyncfs.read_file(ws.at("dev/viewer.css")).text()
+  for source in viewer_css_sources() {
+    assert_true(development.contains("../../editor/" + source))
+  }
+}
+
+///|
 /// Build the native desktop host in the selected mode.
 pub async fn build_native_host(
   ws : Workspace,
   release~ : Bool,
   extra_args? : Array[String] = [],
   extra_env? : Map[String, String] = Map([]),
+  runtime_dist? : String,
 ) -> Unit {
   // Resolve the read-only runtime prerequisite before starting the build.
-  let runtime_dist = proton_runtime_dist(ws)
+  let runtime_dist = match runtime_dist {
+    Some(path) => path
+    None => proton_runtime_dist(ws)
+  }
   // The assembled runtime lives under the checked-out Proton project, not
   // necessarily above Moon's process cwd. Pass it explicitly so the prebuild
   // linker config cannot fall back to a stale checked-in runtime.
@@ -679,6 +895,64 @@ async test "Proton CEF root follows the active runtime manifest" {
     Json::object({ "cef": Json::string(cef_root) }).stringify(),
   )
   assert_eq(fixture.proton_cef_root(), cef_root)
+  remove_path_if_exists(fixture_root)
+}
+
+///|
+async test "matching Proton runtime is reused without invoking setup" {
+  let ws = locate_workspace()
+  let fixture_root = ws.at("target/proton-runtime-reuse-test")
+  remove_path_if_exists(fixture_root)
+  let fixture : Workspace = { root: fixture_root }
+  let platform = Workspace::proton_platform()
+  let version = "0.1.14-test"
+  let relative_dist = ".proton/runtimes/\{platform}/test-runtime"
+  let dist = fixture.proton_project_at(relative_dist)
+  let cef_root = fixture.at("cef-cache")
+  ensure_dir(cef_root)
+  let active_path = fixture.proton_project_at(".proton/runtime.json")
+  ensure_dir((active_path : @path.Path).dirname().to_string())
+  write_text(
+    active_path,
+    Json::object({
+      "schema_version": Json::number(1),
+      "platform": Json::string(platform),
+      "proton_version": Json::string(version),
+      "cef_version": Json::string("cef-test"),
+      "cef": Json::string(cef_root),
+      "dist": Json::string(relative_dist),
+    }).stringify(),
+  )
+  let prebuilt_path = fixture.proton_project_at(
+    "proton/prebuilt/\{platform}/manifest.json",
+  )
+  ensure_dir((prebuilt_path : @path.Path).dirname().to_string())
+  write_text(
+    prebuilt_path,
+    Json::object({
+      "platform": Json::string(platform),
+      "proton_version": Json::string(version),
+    }).stringify(),
+  )
+  let assembled_path = join_path(dist, "manifest.json")
+  ensure_dir((assembled_path : @path.Path).dirname().to_string())
+  write_text(
+    assembled_path,
+    Json::object({
+      "schema_version": Json::number(1),
+      "platform": Json::string(platform),
+      "proton_version": Json::string(version),
+      "cef_version": Json::string("cef-test"),
+      "dist": Json::string(relative_dist),
+    }).stringify(),
+  )
+  for relative in Workspace::proton_runtime_required_files(platform) {
+    let required = join_path(dist, relative)
+    ensure_dir((required : @path.Path).dirname().to_string())
+    write_text(required, "fixture")
+  }
+  ensure_cef_runtime(fixture, "setup-must-not-run")
+  assert_eq(proton_runtime_dist(fixture), dist)
   remove_path_if_exists(fixture_root)
 }
 

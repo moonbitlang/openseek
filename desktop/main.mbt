@@ -11,13 +11,14 @@ fn main {
   // body on its application thread and marshals UI work back to the main
   // thread, so native shutdown cannot race a still-open browser window.
   @proton.run(() => {
-    // Proton runs everything in one process; the executable path locates the
-    // bundled frontend assets and the engine binary that ship alongside it.
+    // Proton runs everything in one process. Packaged builds resolve copied
+    // assets and the engine beside the executable; an unbundled Moon host
+    // derives the frontend, engine, and state paths from its `_build` layout.
     let executable = match @env.args().get(0) {
       Some(command) => command
       None => abort("current executable command is unavailable")
     }
-    let log = launch_logger()
+    let log = launch_logger(executable)
     log.info() <?
       {
         "event": "desktop_main_start",
@@ -35,7 +36,7 @@ fn main {
     log.info() <? { "message": "frontend entry", "path": frontend_entry }
     log.info() <? { "message": "engine", "path": engine }
     log.info() <? { "message": "app version", "version": app_version }
-    let runtime_dir = @host.prepared_runtime_dir()
+    let runtime_dir = @host.prepared_runtime_dir(executable)
     // The relay sign-in store: a persisted session from auth.json, unless the
     // environment override pins the connector config directly (development).
     let auth = @auth.AuthStore::load(
@@ -57,11 +58,10 @@ fn main {
       log.info() <? { "message": "relay registered", "device": device }
     })
     // Proton exposes the `__MoonBit__` bridge — both the ops and the event
-    // channel the frontend listens on — only to the `proton://app/` origin its
-    // asset entry serves from. The window is bridge-only: it makes no HTTP
-    // requests at all (a proton:// page's http fetches stall inside CEF's
-    // network service). Remote browsers use the same method catalog over the
-    // relay WebSocket instead (docs/remote-protocol.md).
+    // channel the frontend listens on — only to the local origin its asset
+    // entry serves from. The window is bridge-only: it makes no HTTP requests
+    // at all. Remote browsers use the same method catalog over the relay
+    // WebSocket instead (docs/remote-protocol.md).
     let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760)
       .debug_level(1)
       // Both command extensions are deliberately exposed to the configured

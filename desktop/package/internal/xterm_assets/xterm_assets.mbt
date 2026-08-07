@@ -11,6 +11,12 @@ const EsbuildVersion : String = "0.28.1"
 const VendorDir : String = "target/vendor-xterm"
 
 ///|
+/// Records which raw upstream browser files are present in the development
+/// cache. A version change invalidates the extracted tree without requiring a
+/// separate clean command.
+const DevelopmentStamp : String = "xterm=\{XtermVersion}\naddon-fit=\{FitVersion}\n"
+
+///|
 const XtermSha256 : String = "bd954fa721872170188cc5d7e83e88db3c83c9a18a4e8d24c2783d26491f59d2"
 
 ///|
@@ -120,7 +126,6 @@ fn Archive::esbuild(target : EsbuildTarget) -> Archive {
 ///|
 priv struct AssetBuilder {
   workspace : @packaging.Workspace
-  esbuild_target : EsbuildTarget
 }
 
 ///|
@@ -190,8 +195,39 @@ async fn AssetBuilder::extract_archive(
 }
 
 ///|
-fn AssetBuilder::esbuild_binary(self : AssetBuilder) -> String {
-  self.at("work/esbuild/\{self.esbuild_target.binary_path}")
+fn AssetBuilder::esbuild_binary(
+  self : AssetBuilder,
+  target : EsbuildTarget,
+) -> String {
+  self.at("work/esbuild/\{target.binary_path}")
+}
+
+///|
+/// Prepare xterm's already browser-ready upstream UMD files for development.
+/// No JavaScript is bundled or minified: the dev HTML loads xterm and
+/// addon-fit separately, then installs OpenSeek's small global adapter.
+pub async fn stage_development(workspace : @packaging.Workspace) -> Unit {
+  let builder : AssetBuilder = { workspace, }
+  let stamp = builder.at("work/development-versions")
+  let xterm_javascript = builder.at("work/xterm/lib/xterm.js")
+  let xterm_stylesheet = builder.at("work/xterm/css/xterm.css")
+  let fit_javascript = builder.at("work/fit/lib/addon-fit.js")
+  let mut reusable = @asyncfs.exists(stamp) &&
+    @asyncfs.exists(xterm_javascript) &&
+    @asyncfs.exists(xterm_stylesheet) &&
+    @asyncfs.exists(fit_javascript)
+  if reusable {
+    reusable = @asyncfs.read_file(stamp).text() == DevelopmentStamp
+  }
+  if reusable {
+    return
+  }
+  @packaging.ensure_dir(builder.at("cache"))
+  let xterm_archive = builder.ensure_cached_archive(Archive::xterm())
+  let fit_archive = builder.ensure_cached_archive(Archive::fit())
+  builder.extract_archive(xterm_archive, builder.at("work/xterm"))
+  builder.extract_archive(fit_archive, builder.at("work/fit"))
+  @packaging.write_text(stamp, DevelopmentStamp)
 }
 
 ///|
@@ -204,7 +240,7 @@ pub async fn build(
   workspace : @packaging.Workspace,
   esbuild_target : EsbuildTarget,
 ) -> Assets {
-  let builder : AssetBuilder = { workspace, esbuild_target }
+  let builder : AssetBuilder = { workspace, }
   @packaging.ensure_dir(builder.at("cache"))
   let xterm_archive = builder.ensure_cached_archive(Archive::xterm())
   let fit_archive = builder.ensure_cached_archive(Archive::fit())
@@ -221,7 +257,7 @@ pub async fn build(
   let javascript = builder.at("dist/xterm.js")
   let stylesheet = builder.at("dist/xterm.css")
   @packaging.run_checked(
-    builder.esbuild_binary(),
+    builder.esbuild_binary(esbuild_target),
     [
       builder.at("work/entry.js"),
       "--bundle",

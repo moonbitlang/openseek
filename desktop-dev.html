@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
+    />
+    <title>SeekMoon Development</title>
+    <!-- Proton uses this file's directory as its asset root. Keeping the file
+         at the repository root lets CEF serve source CSS, cached vendor files,
+         and Moon's _build artifact without copying them into a data_dir. -->
+    <link rel="stylesheet" href="/desktop/dev/viewer.css" />
+    <link rel="stylesheet" href="/desktop/app.css" />
+    <link
+      rel="stylesheet"
+      href="/desktop/target/vendor-xterm/work/xterm/css/xterm.css"
+    />
+    <!-- Mermaid's loader resolves its historical `mermaid/...` URL before
+         calling dynamic import. Remap that URL to the verified local ESM tree
+         prepared by the editor-owned asset package. -->
+    <script type="importmap">
+      {
+        "imports": {
+          "https://proton.localhost/mermaid/": "/desktop/target/vendor-mermaid/dist/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="/desktop/target/vendor-xterm/work/xterm/lib/xterm.js"></script>
+    <script src="/desktop/target/vendor-xterm/work/fit/lib/addon-fit.js"></script>
+    <script src="/desktop/dev/xterm.js"></script>
+    <script src="/_build/js/debug/build/openseek_desktop/frontend/desktop/desktop.js"></script>
+  </body>
+</html>

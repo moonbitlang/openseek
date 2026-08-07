@@ -23,7 +23,7 @@ pub fn new_host_state(String, runtime_dir? : @pathx.Path, executable? : String, 
 
 pub async fn package_version(String) -> String
 
-pub async fn prepared_runtime_dir() -> @pathx.Path?
+pub async fn prepared_runtime_dir(String) -> @pathx.Path?
 
 pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (@protocol.Notification) -> Unit) -> Unit
 
