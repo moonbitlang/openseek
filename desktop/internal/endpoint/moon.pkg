@@ -1,6 +1,6 @@
 import {
-  "justjavac/proton",
-  "justjavac/proton_contract",
+  "moonbit-community/proton",
+  "moonbit-community/proton_contract",
   "openseek_desktop/internal/commands",
   "moonbitlang/core/json",
 }

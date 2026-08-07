@@ -2,14 +2,14 @@
 package "openseek_desktop/internal/extension"
 
 import {
-  "justjavac/proton",
+  "moonbit-community/proton",
   "openseek_desktop/internal/api",
 }
 
 // Values
 pub fn browser_view_id(String) -> Int?
 
-pub fn openseek_extension(@api.ApiState, DesktopBridgeActor, BrowserViews) -> @justjavac/proton/extension.Extension
+pub fn openseek_extension(@api.ApiState, DesktopBridgeActor, BrowserViews) -> @moonbit-community/proton/extension.Extension
 
 pub fn view_event_json(Int, @proton.ViewEvent) -> Json
 

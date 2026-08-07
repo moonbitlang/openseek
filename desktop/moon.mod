@@ -11,12 +11,12 @@ import {
   "moonbit-community/rabbita@0.13.1",
   "moonbitlang/x@0.4.46",
   "moonbitlang/async@0.20.4",
-  "justjavac/proton@0.1.12",
-  "justjavac/proton_ext@0.1.7",
+  "moonbit-community/proton@0.1.14",
+  "moonbit-community/proton_ext@0.1.14",
   "tonyfettes/platform@0.1.1",
   "tonyfettes/xlog@0.4.0",
   "moonbitlang/editor@0.4.4",
-  "justjavac/proton_contract@0.1.0",
+  "moonbit-community/proton_contract@0.1.14",
 }
 
 readme = "README.md"

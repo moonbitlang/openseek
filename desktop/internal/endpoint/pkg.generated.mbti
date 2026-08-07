@@ -2,9 +2,9 @@
 package "openseek_desktop/internal/endpoint"
 
 import {
-  "justjavac/proton/command",
-  "justjavac/proton/core",
-  "justjavac/proton_contract",
+  "moonbit-community/proton/command",
+  "moonbit-community/proton/core",
+  "moonbit-community/proton_contract",
   "moonbitlang/core/json",
   "openseek_desktop/internal/commands",
 }

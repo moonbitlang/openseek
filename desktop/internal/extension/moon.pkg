@@ -1,7 +1,7 @@
 import {
-  "justjavac/proton",
-  "justjavac/proton/extension" @proton_extension,
-  "justjavac/proton_contract",
+  "moonbit-community/proton",
+  "moonbit-community/proton/extension" @proton_extension,
+  "moonbit-community/proton_contract",
   "openseek_desktop/internal/api",
   "openseek_desktop/internal/commands",
   "openseek_desktop/internal/endpoint",

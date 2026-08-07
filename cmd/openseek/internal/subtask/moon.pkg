@@ -3,9 +3,9 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
+  "moonbitlang/core/env",
   "moonbitlang/core/json",
   "moonbitlang/x/path",
-  "moonbitlang/x/sys" @env,
 }
 
 import {

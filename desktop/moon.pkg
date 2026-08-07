@@ -1,7 +1,7 @@
 import {
   "moonbitlang/async",
-  "justjavac/proton",
-  "justjavac/proton_ext/notification",
+  "moonbit-community/proton",
+  "moonbit-community/proton_ext/notification",
   "openseek_desktop/internal/api",
   "openseek_desktop/internal/auth",
   "openseek_desktop/internal/engine",

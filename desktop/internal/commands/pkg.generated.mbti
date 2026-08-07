@@ -2,7 +2,7 @@
 package "openseek_desktop/internal/commands"
 
 import {
-  "justjavac/proton_contract",
+  "moonbit-community/proton_contract",
   "openseek_desktop/internal/protocol",
 }
 
