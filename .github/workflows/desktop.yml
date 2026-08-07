@@ -127,12 +127,6 @@ jobs:
           done
           exit 1
 
-      # Exercise Proton's runtime/window path on macOS before packaging. Scope
-      # the command to Proton instead of repeating root CI's workspace-wide
-      # native tests.
-      - name: Test Proton runtime (release)
-        run: moon test --target native --release -p justjavac/proton/native
-
       # No --sign or --notarize argument, so the app is only ad-hoc signed,
       # the DMG container is unsigned, and neither artifact is intended for
       # end-user distribution.
