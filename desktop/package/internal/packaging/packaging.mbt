@@ -298,6 +298,15 @@ pub async fn proton_runtime_dist(ws : Workspace) -> String {
 }
 
 ///|
+/// Read the exact CEF distribution selected by Proton. The active manifest
+/// records an absolute path because the cache may live in the shared user-level
+/// `~/.proton/cache/cef` directory or a `PROTON_CEF_CACHE` override; consumers
+/// must not reconstruct the older project-local cache layout.
+async fn Workspace::proton_cef_root(self : Workspace) -> String {
+  proton_runtime_field(self, "cef")
+}
+
+///|
 /// Read a string field from `.proton/runtime.json`, the manifest `cef setup`
 /// writes. Raises when the manifest is missing, malformed, or lacks the field.
 async fn proton_runtime_field(ws : Workspace, field : String) -> String {
@@ -346,11 +355,7 @@ pub async fn rebuild_libproton(
   artifacts : Array[(String, String)],
   extra_env? : Map[String, String] = Map([]),
 ) -> Unit {
-  let platform = proton_runtime_field(ws, "platform")
-  let cef_version = proton_runtime_field(ws, "cef_version")
-  let cef_root = ws.proton_project_at(
-    ".proton/cache/cef/\{platform}/\{cef_version}",
-  )
+  let cef_root = ws.proton_cef_root()
   if !@asyncfs.exists(cef_root) {
     raise PackageError(
       "CEF distribution cache not found: \{cef_root} (run cef setup)",
@@ -655,6 +660,26 @@ test "package build paths select debug or release" {
 async test "workspace module version reads moon.mod" {
   let ws = locate_workspace()
   assert_eq(ws.module_version(), "0.1.5")
+}
+
+///|
+/// Proton owns the CEF cache location and records it in the active runtime
+/// manifest. Keep package rebuilding on that path instead of assuming the
+/// cache remains inside the checked-out Proton project.
+async test "Proton CEF root follows the active runtime manifest" {
+  let ws = locate_workspace()
+  let fixture_root = ws.at("target/proton-runtime-manifest-test")
+  remove_path_if_exists(fixture_root)
+  let fixture : Workspace = { root: fixture_root }
+  let manifest = fixture.proton_project_at(".proton/runtime.json")
+  ensure_dir((manifest : @path.Path).dirname().to_string())
+  let cef_root = fixture.at("shared-cache/cef")
+  write_text(
+    manifest,
+    Json::object({ "cef": Json::string(cef_root) }).stringify(),
+  )
+  assert_eq(fixture.proton_cef_root(), cef_root)
+  remove_path_if_exists(fixture_root)
 }
 
 ///|
