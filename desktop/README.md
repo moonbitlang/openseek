@@ -357,8 +357,8 @@ The target machine also needs Microsoft WebView2 Runtime installed.
 builds the `openseek` engine from the monorepo's `cmd/openseek` source, and
 prepares the frontend and MoonBit toolchain inputs. It then delegates the App
 layout, CEF runtime, helper bundles, package metadata, signing, ZIP, and DMG to
-`proton_cli package`. Packaging always consumes optimized release artifacts and
-produces `dist/SeekMoon.app` by default:
+`proton_cli package`. The application-specific MoonBit artifacts are debug by
+default, and the command produces `dist/SeekMoon.app`:
 
 ```sh
 moon run --target native package/macos
@@ -367,13 +367,14 @@ moon -C desktop run --target native package/macos
 ```
 
 The app-only output is ad-hoc signed by Proton for local use. Scripts may pass
-`--target app` to request the same output explicitly.
+`--target app` to request the same output explicitly. Pass `--release` after
+`--` to build the frontend, host, and engine as optimized release artifacts.
 
 To build a distribution artifact, select `dmg` or `zip`:
 
 ```sh
-moon run --target native package/macos -- --target dmg
-moon run --target native package/macos -- --target zip
+moon run --target native package/macos -- --release --target dmg
+moon run --target native package/macos -- --release --target zip
 ```
 
 - `dist/SeekMoon.dmg` is for first-time installation. It
@@ -404,6 +405,7 @@ timestamp are applied automatically) and notarize:
 # one-time: xcrun notarytool store-credentials openseek \
 #   --apple-id you@example.com --team-id TEAMID --password <app-specific-pw>
 moon run --target native package/macos -- \
+  --release \
   --target dmg \
   --target zip \
   --sign "Developer ID Application: Your Name (TEAMID)" \

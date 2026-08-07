@@ -11,7 +11,7 @@ const PackageAssetDir : String = PackageInputRoot + "/assets"
 const PackageBinDir : String = PackageInputRoot + "/bin"
 
 ///|
-/// Proton's default release-build target for the identifier declared in
+/// Proton's default package-build target for the identifier declared in
 /// `moon.proton`. Keep this path in sync if that identifier changes.
 const ProtonPackageBuildTargetDir : String = "target/proton-package-build/community-moonbit-proton-openseek-desktop"
 
@@ -55,6 +55,7 @@ priv struct SignConfig {
 priv struct PackageOptions {
   artifacts : ArtifactPlan
   sign : SignConfig
+  release : Bool
 }
 
 ///|
@@ -62,6 +63,12 @@ fn PackageOptions::command() -> @argparse.Command {
   Command(
     "package/macos",
     about="Prepare OpenSeek inputs and package them with proton_cli.",
+    flags=[
+      FlagArg(
+        "release",
+        about="Build optimized release artifacts instead of debug artifacts.",
+      ),
+    ],
     options=[
       OptionArg(
         "target",
@@ -98,7 +105,11 @@ fn PackageOptions::parse(argv? : ArrayView[String]) -> PackageOptions raise {
   if notary_profile is Some(_) && !artifacts.dmg {
     raise @packaging.PackageError("--notarize requires --target dmg")
   }
-  { artifacts, sign: { identity, notary_profile } }
+  {
+    artifacts,
+    sign: { identity, notary_profile },
+    release: matches.flags.get("release").unwrap_or(false),
+  }
 }
 
 ///|
@@ -108,6 +119,7 @@ fn PackageOptions::parse(argv? : ArrayView[String]) -> PackageOptions raise {
 /// the host built from this checkout.
 async fn @packaging.Workspace::build_package_inputs(
   self : @packaging.Workspace,
+  release~ : Bool,
 ) -> @xterm_assets.Assets {
   let build_env = {
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
@@ -116,18 +128,18 @@ async fn @packaging.Workspace::build_package_inputs(
   @packaging.assemble_cef_runtime(self, @packaging.posix_proton_cli(), extra_env={
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
   })
-  @packaging.build_frontend_bundle(self, release=true)
+  @packaging.build_frontend_bundle(self, release~)
   let terminal_assets = @xterm_assets.build(
     self,
     @xterm_assets.macos_arm64_target(),
   )
   @packaging.build_native_host(
     self,
-    release=true,
+    release~,
     extra_args=["--target-dir", self.repo_at(ProtonPackageBuildTargetDir)],
     extra_env=build_env,
   )
-  @packaging.build_engine(self, release=true, extra_env={
+  @packaging.build_engine(self, release~, extra_env={
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
   })
   terminal_assets
@@ -140,6 +152,7 @@ async fn @packaging.Workspace::build_package_inputs(
 async fn @packaging.Workspace::stage_package_inputs(
   self : @packaging.Workspace,
   terminal_assets : @xterm_assets.Assets,
+  release~ : Bool,
 ) -> Unit {
   @packaging.remove_path_if_exists(self.at(PackageInputRoot))
   @packaging.ensure_dir(self.at(PackageAssetDir))
@@ -169,7 +182,7 @@ async fn @packaging.Workspace::stage_package_inputs(
   )
   @packaging.copy_tree(self.at("fonts"), self.at(PackageAssetDir + "/fonts"))
   @packaging.copy_file(
-    self.engine_binary(release=true),
+    self.engine_binary(release~),
     self.at(PackageBinDir + "/openseek"),
   )
   @packaging.run_checked(
@@ -241,8 +254,8 @@ async fn @packaging.Workspace::package_with_proton(
 async fn main {
   let options = PackageOptions::parse()
   let ws = @packaging.locate_workspace()
-  let terminal_assets = ws.build_package_inputs()
-  ws.stage_package_inputs(terminal_assets)
+  let terminal_assets = ws.build_package_inputs(release=options.release)
+  ws.stage_package_inputs(terminal_assets, release=options.release)
   ws.package_with_proton(options)
 }
 
@@ -252,6 +265,13 @@ test "macOS packaging defaults to Proton app output" {
   @debug.assert_eq(options.artifacts, { dmg: false, zip: false })
   assert_true(options.sign.identity is None)
   assert_true(options.sign.notary_profile is None)
+  assert_false(options.release)
+}
+
+///|
+test "macOS packaging accepts release builds" {
+  let options = PackageOptions::parse(argv=["--release"])
+  assert_true(options.release)
 }
 
 ///|

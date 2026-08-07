@@ -137,7 +137,7 @@ jobs:
       # the DMG container is unsigned, and neither artifact is intended for
       # end-user distribution.
       - name: Build the macOS artifacts
-        run: moon -C desktop run --target native package/macos -- --target dmg --target zip
+        run: moon -C desktop run --target native package/macos -- --release --target dmg --target zip
 
       # Only a trusted push to main publishes the cache shared by later PRs.
       - name: Save CEF distribution

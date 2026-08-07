@@ -172,6 +172,7 @@ jobs:
         shell: bash
         run: |
           moon -C desktop run --target native package/macos -- \
+            --release \
             --target dmg \
             --target zip \
             --sign "$MACOS_SIGNING_IDENTITY" \
