@@ -4,9 +4,10 @@
 # server-side and switches clients over. Rolling back is publishing an
 # older version again.
 #
-#   scripts/publish-release.sh upload [file]      upload this platform's artifact
-#   scripts/publish-release.sh publish [vX.Y.Z]   make a version the live release
-#   scripts/publish-release.sh status             list uploaded versions + current
+#   scripts/publish-release.sh upload [file] [platform]  upload this platform's artifact
+#   scripts/publish-release.sh publish [vX.Y.Z]          make a version the live release
+#   scripts/publish-release.sh status                     list uploaded versions + current
+# Current Proton filenames have defaults; legacy SeekMoon-<platform> names are inferred.
 #
 # Requires OPENSEEK_DEPLOY_TOKEN (one of the server's OPENSEEK_DEPLOY_TOKENS).
 # Targets production by default; for staging:
@@ -41,11 +42,34 @@ case "${1:-}" in
       exit 1
     fi
     release_name="$(basename "$artifact")"
+    platform="${3:-}"
+    if [[ -z "$platform" ]]; then
+      case "$release_name" in
+        SeekMoon.app.zip) platform="macos-arm64" ;;
+        SeekMoon.dmg) platform="macos-arm64-dmg" ;;
+      esac
+    fi
     url="$origin/desktop/releases/v$version/$release_name"
+    if [[ -n "$platform" ]]; then
+      if [[ ! "$platform" =~ ^[[:alnum:]][[:alnum:]_.-]*$ ]]; then
+        echo "invalid release platform: $platform" >&2
+        exit 64
+      fi
+      # The API needs an explicit manifest key for Proton artifact names such
+      # as SeekMoon.app.zip, which do not encode the target platform.
+      url="$url?platform=$platform"
+    fi
     echo "uploading $artifact"
     echo "       to $url"
+    curl_status=0
     response="$(curl -sS --fail-with-body -T "$artifact" \
-      -H "Authorization: Bearer $token" "$url")"
+      -H "Authorization: Bearer $token" "$url")" || curl_status=$?
+    if ((curl_status != 0)); then
+      if [[ -n "$response" ]]; then
+        echo "$response" >&2
+      fi
+      exit "$curl_status"
+    fi
     echo "$response"
     local_sha="$(shasum -a 256 "$artifact" | cut -d' ' -f1)"
     if [[ "$response" != *"\"sha256\":\"$local_sha\""* ]]; then

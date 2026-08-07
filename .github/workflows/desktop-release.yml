@@ -196,9 +196,12 @@ jobs:
         env:
           OPENSEEK_DEPLOY_TOKEN: ${{ secrets.OPENSEEK_DEPLOY_TOKEN }}
         run: |
-          desktop/scripts/publish-release.sh upload
           desktop/scripts/publish-release.sh upload \
-            desktop/dist/SeekMoon.dmg
+            desktop/dist/SeekMoon.app.zip \
+            macos-arm64
+          desktop/scripts/publish-release.sh upload \
+            desktop/dist/SeekMoon.dmg \
+            macos-arm64-dmg
           desktop/scripts/publish-release.sh publish "v$RELEASE_VERSION"
 
       - name: Verify release manifest
