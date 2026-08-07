@@ -11,9 +11,27 @@ const PackageAssetDir : String = PackageInputRoot + "/assets"
 const PackageBinDir : String = PackageInputRoot + "/bin"
 
 ///|
+/// OpenSeek's selected-profile host build stays separate from Proton's fixed
+/// release lookup tree so staging a debug host cannot corrupt Moon's cached
+/// release output.
+const PackageHostBuildTargetDir : String = "target/openseek-package-host-build"
+
+///|
 /// Proton's default package-build target for the identifier declared in
 /// `moon.proton`. Keep this path in sync if that identifier changes.
 const ProtonPackageBuildTargetDir : String = "target/proton-package-build/community-moonbit-proton-openseek-desktop"
+
+///|
+/// The native host's path below Moon's target/profile directory. Proton finds
+/// this executable by name below its release build directory.
+const ProtonPackageHostArtifact : String = "build/openseek_desktop/openseek_desktop.exe"
+
+///|
+/// Proton's `package --no-build` searches this directory regardless of the
+/// mode OpenSeek selected, so packaging replaces this whole tree before
+/// staging the selected host.
+const ProtonPackageReleaseBuildDir : String = ProtonPackageBuildTargetDir +
+  "/native/release/build"
 
 ///|
 const SigningEntitlementsPath : String = "package/macos/SeekMoon.entitlements"
@@ -113,10 +131,50 @@ fn PackageOptions::parse(argv? : ArrayView[String]) -> PackageOptions raise {
 }
 
 ///|
+/// Return the selected host where OpenSeek's explicit Moon build writes it.
+fn @packaging.Workspace::built_package_host(
+  self : @packaging.Workspace,
+  release~ : Bool,
+) -> String {
+  let mode = if release { "release" } else { "debug" }
+  self.repo_at(
+    PackageHostBuildTargetDir + "/native/\{mode}/" + ProtonPackageHostArtifact,
+  )
+}
+
+///|
+/// Return the exact release path consumed by Proton's `package --no-build`.
+fn @packaging.Workspace::proton_package_host(
+  self : @packaging.Workspace,
+) -> String {
+  self.repo_at(
+    ProtonPackageBuildTargetDir + "/native/release/" + ProtonPackageHostArtifact,
+  )
+}
+
+///|
+/// Put the selected host at Proton's fixed lookup path. Replacing the complete
+/// search tree keeps stale executables from winning Proton's recursive lookup,
+/// while the separate build target preserves Moon's debug and release caches.
+async fn @packaging.Workspace::stage_proton_package_host(
+  self : @packaging.Workspace,
+  release~ : Bool,
+) -> Unit {
+  @packaging.remove_path_if_exists(self.repo_at(ProtonPackageReleaseBuildDir))
+  @packaging.ensure_dir(
+    self.repo_at(ProtonPackageReleaseBuildDir + "/openseek_desktop"),
+  )
+  @packaging.copy_file(
+    self.built_package_host(release~),
+    self.proton_package_host(),
+  )
+}
+
+///|
 /// Build the application-specific inputs Proton cannot infer from
-/// `moon.proton`. The native host is written directly to Proton's default,
-/// identifier-scoped package target so `package --no-build` consumes exactly
-/// the host built from this checkout.
+/// `moon.proton`. The native host is built in the selected profile below an
+/// OpenSeek-owned target, then staged at Proton's fixed release lookup path so
+/// `package --no-build` consumes this checkout's host.
 async fn @packaging.Workspace::build_package_inputs(
   self : @packaging.Workspace,
   release~ : Bool,
@@ -136,9 +194,10 @@ async fn @packaging.Workspace::build_package_inputs(
   @packaging.build_native_host(
     self,
     release~,
-    extra_args=["--target-dir", self.repo_at(ProtonPackageBuildTargetDir)],
+    extra_args=["--target-dir", self.repo_at(PackageHostBuildTargetDir)],
     extra_env=build_env,
   )
+  self.stage_proton_package_host(release~)
   @packaging.build_engine(self, release~, extra_env={
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
   })
@@ -280,4 +339,30 @@ test "macOS packaging combines optional archive targets" {
     "--target", "app", "--target", "zip", "--target", "dmg",
   ])
   @debug.assert_eq(options.artifacts, { dmg: true, zip: true })
+}
+
+///|
+async test "Proton host paths keep selected builds separate from its lookup" {
+  let ws = @packaging.locate_workspace()
+  assert_eq(
+    ws.built_package_host(release=false),
+    ws.repo_at(
+      PackageHostBuildTargetDir +
+      "/native/debug/build/openseek_desktop/openseek_desktop.exe",
+    ),
+  )
+  assert_eq(
+    ws.built_package_host(release=true),
+    ws.repo_at(
+      PackageHostBuildTargetDir +
+      "/native/release/build/openseek_desktop/openseek_desktop.exe",
+    ),
+  )
+  assert_eq(
+    ws.proton_package_host(),
+    ws.repo_at(
+      ProtonPackageBuildTargetDir +
+      "/native/release/build/openseek_desktop/openseek_desktop.exe",
+    ),
+  )
 }
