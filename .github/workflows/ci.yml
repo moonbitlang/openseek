@@ -53,20 +53,8 @@ jobs:
         run: |
           moon version --all
 
-      - name: Seed MoonBit registry index
-        run: |
-          mkdir -p "$HOME/.moon/registry"
-          for attempt in 1 2 3; do
-            rm -rf "$HOME/.moon/registry/index"
-            if git \
-              -c http.lowSpeedLimit=1000 \
-              -c http.lowSpeedTime=60 \
-              clone --depth 1 https://mooncakes.io/git/index "$HOME/.moon/registry/index"; then
-              exit 0
-            fi
-            sleep $((attempt * 10))
-          done
-          exit 1
+      - name: Update MoonBit package registry
+        run: moon update
 
       # OpenSeek, editor, editor-server, desktop, and Proton are tested together
       # by the root moon.work. The desktop and Proton native test binaries link

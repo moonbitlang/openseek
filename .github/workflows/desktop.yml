@@ -49,20 +49,8 @@ jobs:
         run: |
           moon version --all
 
-      - name: Seed MoonBit registry index
-        run: |
-          mkdir -p "$HOME/.moon/registry"
-          for attempt in 1 2 3; do
-            rm -rf "$HOME/.moon/registry/index"
-            if git \
-              -c http.lowSpeedLimit=1000 \
-              -c http.lowSpeedTime=60 \
-              clone --depth 1 https://mooncakes.io/git/index "$HOME/.moon/registry/index"; then
-              exit 0
-            fi
-            sleep $((attempt * 10))
-          done
-          exit 1
+      - name: Update MoonBit package registry
+        run: moon update
 
       # libx11-dev: the packager rebuilds libproton from the Proton sources,
       # whose CMake build pkg-config-checks gtk+-3.0 and x11.
@@ -112,20 +100,8 @@ jobs:
         run: |
           moon version --all
 
-      - name: Seed MoonBit registry index
-        run: |
-          mkdir -p "$HOME/.moon/registry"
-          for attempt in 1 2 3; do
-            rm -rf "$HOME/.moon/registry/index"
-            if git \
-              -c http.lowSpeedLimit=1000 \
-              -c http.lowSpeedTime=60 \
-              clone --depth 1 https://mooncakes.io/git/index "$HOME/.moon/registry/index"; then
-              exit 0
-            fi
-            sleep $((attempt * 10))
-          done
-          exit 1
+      - name: Update MoonBit package registry
+        run: moon update
 
       # No --sign or --notarize argument, so the app is only ad-hoc signed,
       # the DMG container is unsigned, and neither artifact is intended for
@@ -208,22 +184,9 @@ jobs:
         run: |
           moon version --all
 
-      - name: Seed MoonBit registry index
+      - name: Update MoonBit package registry
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force "$HOME\.moon\registry" | Out-Null
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            Remove-Item -Recurse -Force "$HOME\.moon\registry\index" -ErrorAction SilentlyContinue
-            git `
-              -c http.lowSpeedLimit=1000 `
-              -c http.lowSpeedTime=60 `
-              clone --depth 1 https://mooncakes.io/git/index "$HOME\.moon\registry\index"
-            if ($LASTEXITCODE -eq 0) {
-              exit 0
-            }
-            Start-Sleep -Seconds ($attempt * 10)
-          }
-          exit 1
+        run: moon update
 
       # Root CI runs native tests on Linux. Exercise the terminal package on
       # Windows too so platform-specific PTY tests cannot hide behind a
