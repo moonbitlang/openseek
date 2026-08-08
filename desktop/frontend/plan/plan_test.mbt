@@ -278,6 +278,26 @@ test "repeated titles are paired one to one, not all against the first" {
 }
 
 ///|
+test "a surviving duplicate pairs with the step that did not move" {
+  // Which of two identical titles the survivor "is" has no answer, so the
+  // tie goes to the reading that claims the least: pairing it with the
+  // pending one would report work finishing that may never have happened,
+  // and the ghost row reads the same either way.
+  guard @plan.decode(plan_json([("run tests", "completed")])) is Some(steps) else {
+    fail("expected a plan")
+  }
+  guard @plan.decode(
+      plan_json([("run tests", "pending"), ("run tests", "completed")]),
+    )
+    is Some(baseline) else {
+    fail("expected a baseline")
+  }
+  let rendered = markup(@plan.card(steps, baseline~))
+  assert_false(rendered.contains("step-delta-done"))
+  assert_true(rendered.contains("plan-step dropped"))
+}
+
+///|
 test "dropping one of two same-titled steps still shows a ghost row" {
   // The surviving occurrence answers for the title, so a by-title lookup
   // would report nothing dropped at all.

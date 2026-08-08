@@ -193,12 +193,20 @@ fn rewrites(
 /// (a session's first plan, or a rewrite) every marker is `None` and nothing
 /// is dropped, so the checklist renders bare.
 ///
-/// Both come out of one pass that pairs titles **one to one**, consuming each
-/// baseline step at most once. A plan may legitimately repeat a title, and
-/// matching every occurrence against the first old step of that name invents
-/// changes — two `run tests` steps would trade each other's statuses — while
-/// hiding the removal of a single duplicate, since some other occurrence
-/// still answers for the title.
+/// Both come out of pairing titles **one to one**, consuming each baseline
+/// step at most once. A plan may legitimately repeat a title — nothing
+/// constrains what the model writes — and matching every occurrence against
+/// the first old step of that name invents changes (two `run tests` steps
+/// would trade each other's statuses) while hiding the removal of a single
+/// duplicate, since another occurrence still answers for the title.
+///
+/// Steps that did not move are paired first. Which of several same-titled
+/// steps a survivor "is" has no answer, so the tie goes to the reading that
+/// claims the least: pairing a completed `run tests` with a *pending* one
+/// when an already-completed one was free would report work finishing that
+/// may never have happened. Whatever ambiguity survives that rule is between
+/// steps identical in both title and status — rows nobody can tell apart, so
+/// no remaining choice is observably wrong.
 fn changes(
   steps : Array[Step],
   baseline : Array[Step]?,
@@ -207,18 +215,33 @@ fn changes(
     return ([ for _ in steps => None ], [])
   }
   let paired = Array::make(previous.length(), false)
-  let markers : Array[String?] = []
-  for step in steps {
-    // A step with no unpaired counterpart is one this update added.
-    let mut marker : String? = Some("new")
-    for index, old in previous {
-      if !paired[index] && old.title == step.title {
-        paired[index] = true
-        marker = status_delta(old.status, step.status)
+  let carried = Array::make(steps.length(), false)
+  // A step with no counterpart at all is one this update added.
+  let markers : Array[String?] = Array::make(steps.length(), Some("new"))
+  for index, step in steps {
+    for old_index, old in previous {
+      if !paired[old_index] &&
+        old.title == step.title &&
+        old.status == step.status {
+        paired[old_index] = true
+        carried[index] = true
+        markers[index] = None
         break
       }
     }
-    markers.push(marker)
+  }
+  for index, step in steps {
+    if carried[index] {
+      continue
+    }
+    for old_index, old in previous {
+      if !paired[old_index] && old.title == step.title {
+        paired[old_index] = true
+        carried[index] = true
+        markers[index] = status_delta(old.status, step.status)
+        break
+      }
+    }
   }
   (markers, [ for index, old in previous if !paired[index] => old ])
 }
