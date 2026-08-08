@@ -3188,7 +3188,15 @@ main {
 .plan-panel[open] .plan-panel-caret::after {
   content: "▾";
 }
+/* The expanded checklist scrolls inside the panel rather than growing it.
+   The composer is `main`'s trailing `auto` row and the whole shell hides
+   overflow, so a near-maximum plan (the tool caps it at 20 steps, and long
+   titles wrap) would otherwise push the textarea and Send below the clipped
+   viewport with nothing left to scroll them back into reach. Capped in `vh`
+   as well as pixels so a short window keeps the composer visible. */
 .plan-panel .plan-steps {
+  max-height: min(34vh, 260px);
+  overflow-y: auto;
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px solid var(--line-2);
