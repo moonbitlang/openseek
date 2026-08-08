@@ -22,42 +22,30 @@ impl @syntax.LineTokenizer for BlockCommentToy with fn tokenize_line(
   state,
 ) {
   let tokens : Array[@syntax.LineToken] = []
-  let in_comment = for at = 0, in_comment = state == toy_comment; at <
-                      line_text.length(); {
-    if in_comment {
-      let close = find_marker(line_text, at, '*', '/')
-      let end = match close {
-        Some(index) => index + 2
-        None => line_text.length()
+  let in_comment = for at = 0, view = line_text[:], in_comment = state ==
+                         toy_comment; view.length() > 0; {
+    lexscan view with longest {
+      (re"^(?:/\*|\*/|[^*/]+|.)" as lexeme, after~) => {
+        let next = line_text.length() - after.length()
+        if in_comment || lexeme is "/*" {
+          @syntax.push_token(tokens, at, next, Comment)
+        }
+        continue next,
+          after,
+          if lexeme is "/*" {
+            true
+          } else if lexeme is "*/" {
+            false
+          } else {
+            in_comment
+          }
       }
-      tokens.push({ start: at, end, tag: Comment })
-      continue end, close is None
-    } else {
-      match find_marker(line_text, at, '/', '*') {
-        Some(index) => continue index, true
-        None => continue line_text.length(), false
-      }
+      _ => break in_comment
     }
   } nobreak {
     in_comment
   }
   (tokens, if in_comment { toy_comment } else { toy_code })
-}
-
-///|
-fn find_marker(
-  line_text : String,
-  from : Int,
-  first : Char,
-  second : Char,
-) -> Int? {
-  for i in from..<(line_text.length() - 1) {
-    if line_text[i].to_int() == first.to_int() &&
-      line_text[i + 1].to_int() == second.to_int() {
-      return Some(i)
-    }
-  }
-  None
 }
 
 ///|
@@ -78,6 +66,13 @@ test "block comment state threads across lines" {
     ),
   )
   assert_true(after_close == toy_code)
+
+  let (unicode, after_unicode) = toy.tokenize_line(
+    "\u{10348} /* ok */",
+    toy.initial_state(),
+  )
+  assert_eq(unicode, [{ start: 3, end: 11, tag: Comment }])
+  assert_true(after_unicode == toy_code)
 }
 
 ///|
