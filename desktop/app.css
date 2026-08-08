@@ -1469,22 +1469,32 @@ aside {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
 }
-/* A conversation row's trailing slot: the status dot and the archive
-   button stack in one fixed-size cell, so the dot sits at the same
-   offset whether or not the row is archivable. Hovering a row that
-   has an action swaps the dot for it. */
+/* A conversation row's trailing slot: two right-aligned groups — what the
+   row is (status glyphs) and what can be done to it (buttons) — stacked in
+   one grid cell. The cell takes the width of the wider group, so hovering
+   swaps one for the other without nudging the title, and a row with no
+   glyphs and no actions renders no slot at all (no reserved gutter). */
 .row-trailing {
   flex: 0 0 auto;
   display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
+  align-items: center;
+  justify-items: end;
 }
 .row-trailing > * {
   grid-area: 1 / 1;
 }
-.conversation-row:hover .row-trailing:has(.row-archive) .run-dot {
-  display: none;
+.row-status,
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Both groups stay in layout (visibility, not display) so the cell keeps
+   one width across the swap. Only a slot that actually has actions hides
+   its status — a running row has no archive button, and blanking its dot
+   under the cursor would leave the slot empty. */
+.conversation-row:hover .row-trailing:has(.row-actions) .row-status {
+  visibility: hidden;
 }
 
 /* The chat list's two section headings ("Workspaces", "Chats"): the
@@ -1554,26 +1564,24 @@ aside {
   visibility: visible;
 }
 
-/* Worktree affordances: the sidebar row's name chip and the composer's
+/* Worktree affordances: the sidebar row's branch glyph and the composer's
    launch-mode chip. The archive-discard confirmation reuses the shared
    modal styles. */
-/* The row's worktree name chip, joined from the registry mapping. Display
-   only — the environment lives and dies with its conversation. */
-.worktree-chip {
-  flex: 0 1 auto;
-  max-width: 45%;
-  overflow: hidden;
-  margin: 0;
-  padding: 0 6px;
-  border: 1px solid var(--accent-line);
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  font: inherit;
-  font-size: 10px;
-  line-height: 1.6;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* The row's worktree glyph, shown when the registry mapping (or the local
+   binding) names one; the name itself is the tooltip. Display only — the
+   environment lives and dies with its conversation. A fixed slot, so the
+   title keeps the rest of the row no matter how long the name is. */
+.worktree-mark {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+}
+.worktree-mark .icon {
+  width: 12px;
+  height: 12px;
 }
 /* The composer's launch-mode chip: Local ⇄ Worktree while the conversation
    can still choose; fixed to the worktree's name once bound. */

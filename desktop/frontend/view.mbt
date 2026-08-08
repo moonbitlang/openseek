@@ -141,7 +141,7 @@ fn session_row(
   label : String,
   archivable? : Bool = false,
   nested? : Bool = false,
-  chip? : String,
+  worktree? : String,
 ) -> @html.Html {
   // Session ids can collide across devices, so the accent pill needs the
   // channel to agree too.
@@ -177,31 +177,36 @@ fn session_row(
     class = class + " running"
   }
   let children = [@html.span(class="sidebar-label", label)]
-  // A worktree conversation wears its environment's name, joined from the
-  // registry (or the local binding while the first turn is still on its
-  // way to the store). Display only — the environment lives and dies with
-  // the conversation; archiving removes it.
-  if chip is Some(chip) {
-    children.push(
+  // The trailing slot holds two right-aligned groups stacked in one cell:
+  // what the row *is* (status) and what can be done to it (actions). At
+  // rest the status group shows; hovering a row that has actions swaps them
+  // in. Sizing is content-driven — a row with neither group has no slot at
+  // all, so idle rows carry no reserved gutter.
+  let status : Array[@html.Html] = []
+  // A worktree conversation wears a branch glyph; its environment's name —
+  // joined from the registry, or the local binding while the first turn is
+  // still on its way to the store — rides in the tooltip, where it stays
+  // legible without competing with the title for row width. Display only:
+  // the environment lives and dies with the conversation; archiving removes
+  // it.
+  if worktree is Some(name) {
+    status.push(
       @html.span(
-        class="worktree-chip",
-        title="This chat runs in worktree \{chip}; archiving removes its checkout but keeps the branch for Repair",
-        chip,
+        class="worktree-mark",
+        title="This chat runs in worktree \{name}; archiving removes its checkout but keeps the branch for Repair",
+        icon(icon_worktree),
       ),
     )
   }
-  // Status dot and archive button share one fixed trailing slot (stacked in
-  // the same grid cell), so the dot sits at the same offset whether or not
-  // the row is archivable; hovering an archivable row swaps the dot for the
-  // button.
-  let trailing : Array[@html.Html] = []
+  // The dot goes last, so the rightmost glyph is always the run state.
   if dot is Some(kind) {
-    trailing.push(@html.span(class="run-dot \{kind}", ""))
+    status.push(@html.span(class="run-dot \{kind}", ""))
   }
+  let actions : Array[@html.Html] = []
   // Archiving a running conversation would pull the durable record out from
   // under its engine, so the button waits for the turn to end.
   if archivable && !running {
-    trailing.push(
+    actions.push(
       @html.button(
         class="row-archive",
         type_="button",
@@ -215,7 +220,14 @@ fn session_row(
       ),
     )
   }
-  if trailing.length() > 0 {
+  if status.length() > 0 || actions.length() > 0 {
+    let trailing : Array[@html.Html] = []
+    if status.length() > 0 {
+      trailing.push(@html.span(class="row-status", status))
+    }
+    if actions.length() > 0 {
+      trailing.push(@html.span(class="row-actions", actions))
+    }
     children.push(@html.span(class="row-trailing", trailing))
   }
   @html.div(
@@ -558,7 +570,7 @@ fn push_group_rows(
     }
     // A fresh worktree conversation knows its binding locally; once the
     // first turn is durable the registry mapping takes over.
-    let chip = match conv.worktree {
+    let worktree = match conv.worktree {
       Some(name) => Some(name)
       None => worktree_name_for(dev, workspace, conv.session_id)
     }
@@ -571,7 +583,7 @@ fn push_group_rows(
           conv.session_id,
           conversation_title(conv),
           nested~,
-          chip?,
+          worktree?,
         ),
       )
     } else if composing &&
@@ -585,7 +597,7 @@ fn push_group_rows(
           conv.session_id,
           "New chat",
           nested~,
-          chip?,
+          worktree?,
         ),
       )
     }
@@ -610,7 +622,7 @@ fn push_group_rows(
         label,
         archivable=true,
         nested~,
-        chip?=worktree_name_for(dev, workspace, item.id),
+        worktree?=worktree_name_for(dev, workspace, item.id),
       ),
     )
   }

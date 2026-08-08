@@ -3,13 +3,13 @@
 // execution environment, bound 1:1 to the conversation. The composer
 // carries the mode toggle; the first submit
 // creates the worktree and starts the run in one command. Sidebar rows of
-// worktree conversations wear a name chip joined from the registry, and
-// clicking the chip stages the removal flow.
+// worktree conversations wear a branch glyph, tooltipped with the name
+// joined from the registry.
 
 ///|
 /// One registry row of `worktree.list` / `worktree.changed`, reduced to
-/// what the sidebar reads: the name (chip), the bound session (chip join),
-/// and whether the checkout still exists on disk.
+/// what the sidebar reads: the name (the glyph's tooltip), the bound
+/// session (the join key), and whether the checkout still exists on disk.
 priv struct WorktreeRow {
   name : String
   session : String?
@@ -252,7 +252,7 @@ fn worktree_row_for(
 }
 
 ///|
-/// The worktree a durable session runs in — the sidebar chip's data source.
+/// The worktree a durable session runs in — the sidebar glyph's data source.
 fn worktree_name_for(
   dev : DeviceState,
   workspace : @common.Uri?,
