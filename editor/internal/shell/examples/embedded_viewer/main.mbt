@@ -337,7 +337,7 @@ fn main {
   // by import and registered through the viewer languages facade.
   @languages.languages.set_tokens_provider(
     "moonbit",
-    @lang_moonbit.MoonbitTokenizer(),
+    @lang_moonbit.MoonBitTokenizer(),
   )
   |> ignore
   let app = @rabbita.new(() => {

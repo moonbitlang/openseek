@@ -257,7 +257,7 @@ pub fn start_app() -> Unit {
 fn install_language_tokenizers(services : WorkbenchServices) -> Unit {
   services.languages.set_tokens_provider(
     "moonbit",
-    @lang_moonbit.MoonbitTokenizer(),
+    @lang_moonbit.MoonBitTokenizer(),
   )
   |> ignore
   services.languages.set_tokens_provider("json", @lang_json.JsonTokenizer())

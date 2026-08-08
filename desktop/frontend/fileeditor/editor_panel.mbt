@@ -81,7 +81,7 @@ fn mounted_viewer() -> @viewer.Viewer? {
 fn register_tokenizers() -> Unit {
   @languages.languages.set_tokens_provider(
     "moonbit",
-    @lang_moonbit.MoonbitTokenizer(),
+    @lang_moonbit.MoonBitTokenizer(),
   )
   |> ignore
   @languages.languages.set_tokens_provider(

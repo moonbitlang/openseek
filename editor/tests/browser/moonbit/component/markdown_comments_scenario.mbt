@@ -342,7 +342,7 @@ fn run_markdown_comments_test() -> Unit {
     }),
     folding_rules: None,
   })
-  languages.set_tokens_provider("moonbit", @lang_moonbit.MoonbitTokenizer())
+  languages.set_tokens_provider("moonbit", @lang_moonbit.MoonBitTokenizer())
   |> ignore
   let services = @viewer.ViewerServices(
     languages=languages.language_handle(log_handle),

@@ -13,26 +13,26 @@
 ///   'b' inside a plain `{ ... }` brace pair nested in an interpolation
 /// No MoonBit string construct survives a line end, so every line both
 /// enters and leaves at "n"; the stack only drives the within-line modes.
-struct MoonbitTokenizer {
+struct MoonBitTokenizer {
   _unit : Unit
 }
 
 ///|
 /// Creates the MoonBit tokenizer.
-pub fn MoonbitTokenizer::MoonbitTokenizer() -> MoonbitTokenizer {
+pub fn MoonBitTokenizer::MoonBitTokenizer() -> MoonBitTokenizer {
   { _unit: () }
 }
 
 ///|
 /// Initial MoonBit lexer mode stack.
-pub impl @syntax.LineTokenizer for MoonbitTokenizer with fn initial_state(_self) {
+pub impl @syntax.LineTokenizer for MoonBitTokenizer with fn initial_state(_) {
   TokenizerState("n")
 }
 
 ///|
 /// Tokenizes one MoonBit source line and resets to normal mode at line end.
-pub impl @syntax.LineTokenizer for MoonbitTokenizer with fn tokenize_line(
-  _self,
+pub impl @syntax.LineTokenizer for MoonBitTokenizer with fn tokenize_line(
+  _,
   line_text,
   state,
 ) {

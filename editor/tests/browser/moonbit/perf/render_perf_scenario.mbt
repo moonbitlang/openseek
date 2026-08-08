@@ -2,7 +2,7 @@
 fn run_render_perf_test() -> Unit {
   @languages.languages.set_tokens_provider(
     "moonbit",
-    @lang_moonbit.MoonbitTokenizer(),
+    @lang_moonbit.MoonBitTokenizer(),
   )
   |> ignore
   let ctx = @support.BrowserTestContext("viewer_render_perf")

@@ -89,7 +89,7 @@ fn run_viewer_api_test() -> Unit {
         markers=MarkerStore(markers.marker_service_handle()),
         log_service=log_handle,
       )
-      languages.set_tokens_provider("moonbit", @lang_moonbit.MoonbitTokenizer())
+      languages.set_tokens_provider("moonbit", @lang_moonbit.MoonBitTokenizer())
       |> ignore
       let provider = ComponentHoverProvider::new()
       languages.register_hover_provider(LanguageId("moonbit"), provider)

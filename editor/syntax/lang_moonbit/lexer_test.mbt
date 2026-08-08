@@ -3,7 +3,7 @@
 /// document offsets — lines split on `\n`, lexer state threaded line to line
 /// exactly as the tokenization part's whole-document sweep does.
 fn render_tokens(source : String) -> String {
-  let tokenizer : &@syntax.LineTokenizer = @lang_moonbit.MoonbitTokenizer()
+  let tokenizer : &@syntax.LineTokenizer = @lang_moonbit.MoonBitTokenizer()
   let rendered : Array[String] = []
   for
     line in split_lines(source)
@@ -178,7 +178,7 @@ test "doc comments attributes numbers and package refs" {
 
 ///|
 test "state carries through tokenize_line but resets at line end" {
-  let lexer : &@syntax.LineTokenizer = @lang_moonbit.MoonbitTokenizer()
+  let lexer : &@syntax.LineTokenizer = @lang_moonbit.MoonBitTokenizer()
   // Unterminated string: the line still tokenizes and the carried state
   // returns to normal because MoonBit strings never span lines.
   let (_, after_unterminated) = lexer.tokenize_line(

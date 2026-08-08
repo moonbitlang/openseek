@@ -47,7 +47,7 @@ heuristic (`@syntax.is_capitalized`) is what promotes an identifier to `Type`.
 ///|
 test "declarations separate keywords, types, and values" {
   debug_inspect(
-    annotate(@lang_moonbit.MoonbitTokenizer(), [
+    annotate(@lang_moonbit.MoonBitTokenizer(), [
       "pub fn parse(input : String) -> Int {",
     ]),
     content=(
@@ -77,7 +77,7 @@ render differently from dead code.
 ///|
 test "doc comments and ordinary comments carry different tags" {
   debug_inspect(
-    annotate(@lang_moonbit.MoonbitTokenizer(), [
+    annotate(@lang_moonbit.MoonBitTokenizer(), [
       "/// Adds two numbers.", "// TODO: overflow", "///|",
     ]),
     content=(
@@ -98,7 +98,7 @@ mis-escaped literal is visible without re-lexing the string body.
 ///|
 test "escapes and interpolation are separate tokens inside a string" {
   debug_inspect(
-    annotate(@lang_moonbit.MoonbitTokenizer(), [
+    annotate(@lang_moonbit.MoonBitTokenizer(), [
       "let greeting = \"hi \\{name}\\n\"",
     ]),
     content=(
@@ -124,7 +124,7 @@ snapshot literal inside this very file tokenizes cleanly.
 ///|
 test "multiline string rows are recognized per line" {
   debug_inspect(
-    annotate(@lang_moonbit.MoonbitTokenizer(), [
+    annotate(@lang_moonbit.MoonBitTokenizer(), [
       "  #|literal row", "  $|interpolated \\{x}",
     ]),
     content=(
@@ -147,7 +147,7 @@ being smeared into neighbouring identifier tokens.
 ///|
 test "package references and attributes keep their structure" {
   debug_inspect(
-    annotate(@lang_moonbit.MoonbitTokenizer(), [
+    annotate(@lang_moonbit.MoonBitTokenizer(), [
       "#deprecated", "let v = @base_common.Position(1, 1)",
     ]),
     content=(
@@ -180,7 +180,7 @@ safe, regardless of what precedes it.
 ```mbt check
 ///|
 test "the returned state is always the base mode" {
-  let tokenizer : &@syntax.LineTokenizer = @lang_moonbit.MoonbitTokenizer()
+  let tokenizer : &@syntax.LineTokenizer = @lang_moonbit.MoonBitTokenizer()
   let (_, after_open) = tokenizer.tokenize_line(
     "let s = \"unterminated",
     tokenizer.initial_state(),

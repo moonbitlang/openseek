@@ -97,7 +97,7 @@ fn run_markdown_folding_test() -> Unit {
   app.append_child(shell.as_node())
   let token_registration = @syntax.tokenization_registry.register(
     "moonbit",
-    @lang_moonbit.MoonbitTokenizer(),
+    @lang_moonbit.MoonBitTokenizer(),
   )
   let hover_harness = MarkdownDocumentHoverHarness::new()
   let languages = @languages.Languages()
