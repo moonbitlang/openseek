@@ -849,10 +849,12 @@ priv struct Model {
   // the composer, persisted page-locally. The model a turn actually runs
   // with is the conversation's own `engine_model`, never this.
   default_model : EngineModel
-  // Tiers the user has chosen per conversation, newest first and capped at
-  // `ConversationModelsLimit`. Reopening a conversation recovers its own tier
-  // from here; `default_model` is only for conversations this list has never
-  // held — new chats, and ones whose entry the cap dropped.
+  // Each conversation's pinned tier, newest first and capped at
+  // `ConversationModelsLimit`. A conversation is pinned when the chip gives
+  // it a tier and when a run makes it durable — an inherited tier that was
+  // actually used counts, or the conversation would come back on whatever
+  // default an unrelated chat has moved to since. Reopening recovers from
+  // here; `default_model` is only for conversations this list has never held.
   conversation_models : Array[StoredConversationModel]
   max_steps : String
   // Whether the host has a key stored for each keyed provider. The key text

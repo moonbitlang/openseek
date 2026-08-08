@@ -1493,9 +1493,10 @@ fn update_msg(
     QuickOpenPick(index) => pick_quick_open_row(dispatch, model, index)
     QuickOpenDismiss => (@cmd.none, { ..model, quick_open: None })
     ToggleModel => {
-      // The chip switches the conversation on screen. The tier is remembered
-      // against that conversation, so reopening it later comes back here, and
-      // becomes what the next new chat starts from. A turn already in flight
+      // The chip switches the conversation on screen. The tier is pinned to
+      // that conversation right away — a chat can be given a tier and left
+      // unsent for days — and becomes what the next new chat starts from.
+      // (Starting a run pins it too; see `Started`.) A turn already in flight
       // keeps the model it was started with; this takes effect on the next.
       let conv = model.active()
       let engine_model = conv.engine_model.toggled()
@@ -3936,6 +3937,16 @@ fn update_device_msg(
             dispatch, channel, updated, session, generation, false,
           ),
         )
+      }
+      // A run is what makes a conversation durable, so this is where its tier
+      // gets pinned — the chip is not the only way to acquire one. A tier
+      // merely inherited from the page default and then used would otherwise
+      // stay unremembered, and the conversation would come back on whatever
+      // default an unrelated chat has moved to since. Re-pinning the same
+      // tier only reorders the list, so consecutive turns write once.
+      let updated = updated.remember_model(channel, session, conv.engine_model)
+      if updated.conversation_models != model.conversation_models {
+        commands.push(save_conversation_models(updated.conversation_models))
       }
       // The model rode in on the conversation above; max steps is still one
       // global setting, so sync it only when this start belongs to the
@@ -10678,6 +10689,38 @@ test "reopening a conversation recovers its own tier, not the last pick" {
   // back the unrelated default.
   let reopened = high.activate(@interop.ChannelId::Local, "desktop-test")
   assert_true(reopened.active().engine_model is Low)
+}
+
+///|
+test "a run pins an inherited tier the user never clicked for" {
+  let dispatch = test_dispatch()
+  // This chat never touched the chip — it just inherited High and ran. That
+  // still has to pin, or a later toggle elsewhere silently retiers it.
+  let (_, ran) = update_dev(
+    dispatch,
+    Started(
+      run_id="r1",
+      session="desktop-test",
+      model=High,
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=None,
+      submission_id=None,
+    ),
+    test_model(),
+  )
+  assert_true(
+    ran.remembered_model(@interop.ChannelId::Local, "desktop-test")
+    is Some(High),
+  )
+  // Another chat moves the page default to Low...
+  let elsewhere = ran.activate(@interop.ChannelId::Local, "other-chat")
+  let (_, moved) = update(dispatch, ToggleModel, elsewhere)
+  assert_true(moved.default_model is Low)
+  // ...and the first one still comes back on the tier it ran with.
+  let reopened = moved.activate(@interop.ChannelId::Local, "desktop-test")
+  assert_true(reopened.active().engine_model is High)
 }
 
 ///|
