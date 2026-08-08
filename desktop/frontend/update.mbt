@@ -3751,6 +3751,11 @@ fn update_device_msg(
             channel,
             session,
             workspace?=model.session_workspace(channel, session),
+            // A conversation this page is meeting for the first time takes
+            // the tier its run is on: better evidence than the default, and
+            // no local choice exists yet to contradict it. A conversation
+            // the page already holds keeps its own — see below.
+            model=selected_model,
           )
       }
       let existing = match dev.workspace_for_session_root(session_root) {
@@ -3881,12 +3886,12 @@ fn update_device_msg(
         run_durable_floor,
         run_floor_generation,
         sync,
-        // What the engine actually ran, which need not be what this client
-        // would have sent: another client (or the CLI) may have started this
-        // turn on the other tier. Re-establishing it here is also what
-        // restores a conversation's tier after a reload — `agent.runs`
-        // replays its rows through this same seam.
-        engine_model: selected_model,
+        // The tier is deliberately NOT re-established from the run. A start
+        // is always older than the composer: the user may have flipped the
+        // chip for the next turn while this one was still being spawned, and
+        // a turn another client started says nothing about what this user
+        // intends to send. The chip means "what your next turn runs on", so
+        // only the chip changes it.
         last_run_id: Some(run_id),
         // A started run always reports its directory, but a malformed
         // event decodes as `None`; keeping the previous root beats
@@ -10606,27 +10611,37 @@ test "the model chip switches one conversation, not the app" {
 }
 
 ///|
-test "a started run reports the tier the engine actually ran" {
+test "a start never overrides the tier picked for the next turn" {
   let dispatch = test_dispatch()
-  // Another client (or the CLI) started this conversation's turn on the low
-  // tier. The chip follows the run, not this page's last pick.
+  // The chip stays live while a turn spawns, so the user can flip it for the
+  // next turn before this one's `Started` arrives. The start is older than
+  // that choice and must not undo it — the same holds for a turn another
+  // client began, which says nothing about what this user means to send.
+  let (_, queued) = update(dispatch, ToggleModel, test_model())
+  assert_true(queued.active().engine_model is Low)
   let (_, ran) = update_dev(
     dispatch,
     Started(
       run_id="r1",
       session="desktop-test",
-      model=Low,
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
       task=None,
       submission_id=None,
     ),
-    test_model(),
+    queued,
   )
   assert_true(ran.active().engine_model is Low)
-  // A background conversation's start lands on that conversation alone: it
-  // moves neither the chat on screen nor the default new chats start from.
+}
+
+///|
+test "a conversation first met through a live run adopts its tier" {
+  let dispatch = test_dispatch()
+  // No local choice exists to contradict the run, so its tier is the best
+  // evidence available — and it lands on that conversation alone, moving
+  // neither the chat on screen nor the default new chats start from.
   let (_, background) = update_dev(
     dispatch,
     Started(

@@ -372,12 +372,13 @@ priv struct Conversation {
   // workspace root. Consumed by the create-then-start chain, which sets
   // `worktree` and clears this.
   worktree_mode : Bool
-  // The model this conversation's turns run with, chosen in the composer.
-  // Per conversation, not per app: a long refactor can sit on the high tier
-  // while a scratch chat next to it stays cheap. Born from the page's
-  // `default_model`, then re-established by every `agent.started` this
-  // session sees — including one from another client, whose choice is what
-  // the engine actually ran.
+  // The model this conversation's next turn runs with, chosen on the
+  // composer's chip. Per conversation, not per app: a long refactor can sit
+  // on the high tier while a scratch chat next to it stays cheap. Born from
+  // the page's `default_model` — or, for a conversation the page first meets
+  // through a live run, from that run's tier. Nothing but the chip changes it
+  // afterwards: a start is always older than the composer, so echoing one
+  // back would undo a choice the user has already made for the next turn.
   engine_model : EngineModel
   // Composer draft, kept per conversation so switching away (and back)
   // neither loses the text nor sends it to the wrong session.
