@@ -18,17 +18,18 @@ pub fn card(steps : Array[Step], baseline? : Array[Step]) -> @html.Html {
     ])
   }
   let diff_base = if evolves(steps, baseline) { baseline } else { None }
+  let (markers, cut) = changes(steps, diff_base)
   let rows : Array[@html.Html] = [
     for index, step in steps => {
       step_row(
         status=step.status,
         number="\{index + 1}.",
         title=step.title,
-        delta?=delta(step, diff_base),
+        delta?=markers[index],
       )
     }
   ]
-  for step in dropped(steps, diff_base) {
+  for step in cut {
     rows.push(dropped_row(step))
   }
   let body : Array[@html.Html] = [progress_view(steps)]

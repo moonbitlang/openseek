@@ -203,6 +203,46 @@ test "a card renders the meter, the checklist, and what changed" {
 }
 
 ///|
+test "repeated titles are paired one to one, not all against the first" {
+  // The tool permits a plan to repeat a title. Matching every occurrence
+  // against the first old step of that name would trade their statuses: the
+  // second row here would read "reopened" off the first row's baseline.
+  guard @plan.decode(
+      plan_json([("run tests", "completed"), ("run tests", "in_progress")]),
+    )
+    is Some(steps) else {
+    fail("expected a plan")
+  }
+  guard @plan.decode(
+      plan_json([("run tests", "completed"), ("run tests", "pending")]),
+    )
+    is Some(baseline) else {
+    fail("expected a baseline")
+  }
+  let rendered = markup(@plan.card(steps, baseline~))
+  assert_true(rendered.contains("step-delta-started"))
+  assert_false(rendered.contains("step-delta-reopened"))
+  assert_false(rendered.contains("step-delta-new"))
+}
+
+///|
+test "dropping one of two same-titled steps still shows a ghost row" {
+  // The surviving occurrence answers for the title, so a by-title lookup
+  // would report nothing dropped at all.
+  guard @plan.decode(plan_json([("run tests", "completed")])) is Some(steps) else {
+    fail("expected a plan")
+  }
+  guard @plan.decode(
+      plan_json([("run tests", "completed"), ("run tests", "pending")]),
+    )
+    is Some(baseline) else {
+    fail("expected a baseline")
+  }
+  let rendered = markup(@plan.card(steps, baseline~))
+  assert_true(rendered.contains("plan-step dropped"))
+}
+
+///|
 test "a first card has no baseline to mark against" {
   guard @plan.decode(plan_json([("one", "in_progress"), ("two", "pending")]))
     is Some(steps) else {

@@ -147,33 +147,58 @@ fn evolves(steps : Array[Step], baseline : Array[Step]?) -> Bool {
 }
 
 ///|
-/// What changed for `step` against the previous plan call, as marker text that
-/// doubles as a CSS class suffix; `None` when nothing changed or there is no
-/// usable baseline. Leaving a completed step is checked first, so finished
-/// work coming back reads "reopened" rather than a benign "started".
-fn delta(step : Step, baseline : Array[Step]?) -> String? {
-  guard baseline is Some(previous) && !previous.is_empty() else { return None }
-  for old in previous {
-    if old.title == step.title {
-      return match (old.status, step.status) {
-        (before, after) if before == after => None
-        (Completed, _) => Some("reopened")
-        (_, Completed) => Some("done")
-        (_, InProgress) => Some("started")
-        // in_progress -> pending: the step was set aside, not reopened.
-        (_, _) => Some("paused")
+/// What each step changed against the plan it replaced — marker text that
+/// doubles as a CSS class suffix, `None` for a step that did not move — plus
+/// the baseline steps this update dropped. With no baseline to diff against
+/// (a session's first plan, or a rewrite) every marker is `None` and nothing
+/// is dropped, so the checklist renders bare.
+///
+/// Both come out of one pass that pairs titles **one to one**, consuming each
+/// baseline step at most once. A plan may legitimately repeat a title, and
+/// matching every occurrence against the first old step of that name invents
+/// changes — two `run tests` steps would trade each other's statuses — while
+/// hiding the removal of a single duplicate, since some other occurrence
+/// still answers for the title.
+fn changes(
+  steps : Array[Step],
+  baseline : Array[Step]?,
+) -> (Array[String?], Array[Step]) {
+  guard baseline is Some(previous) && !previous.is_empty() else {
+    return ([ for _ in steps => None ], [])
+  }
+  let paired = Array::make(previous.length(), false)
+  let markers : Array[String?] = []
+  for step in steps {
+    // A step with no unpaired counterpart is one this update added.
+    let mut marker : String? = Some("new")
+    for index, old in previous {
+      if !paired[index] && old.title == step.title {
+        paired[index] = true
+        marker = status_delta(old.status, step.status)
+        break
       }
     }
+    markers.push(marker)
   }
-  Some("new")
+  (markers, [ for index, old in previous if !paired[index] => old ])
 }
 
 ///|
-/// Steps present in the baseline plan but absent (by title) from this one — a
-/// silently cut step is exactly what a reader wants to notice.
-fn dropped(steps : Array[Step], baseline : Array[Step]?) -> Array[Step] {
-  guard baseline is Some(previous) else { return [] }
-  previous.filter(old => !steps.any(step => step.title == old.title))
+/// How a step's status moved. Leaving a completed step is checked first, so
+/// finished work coming back reads "reopened" rather than a benign "started".
+fn status_delta(before : Status, after : Status) -> String? {
+  if before == after {
+    return None
+  }
+  Some(
+    match (before, after) {
+      (Completed, _) => "reopened"
+      (_, Completed) => "done"
+      (_, InProgress) => "started"
+      // in_progress -> pending: the step was set aside, not reopened.
+      _ => "paused"
+    },
+  )
 }
 
 ///|
