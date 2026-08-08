@@ -21,6 +21,7 @@ fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           tree_layout=load_setting(TreeLayoutStorageKey),
           theme=load_setting(ThemeStorageKey),
           model=load_setting(ModelStorageKey),
+          conversation_models=load_setting(ConversationModelsStorageKey),
         ),
       ),
     )
@@ -38,11 +39,47 @@ fn save_tree_layout(layout : @fileeditor.TreeLayout) -> @cmd.Cmd {
 }
 
 ///|
-/// Persist the tier new conversations start from. Only this default travels
-/// across launches: a conversation's own tier comes back with the runs the
-/// host replays at bridge time.
+/// Persist the tier new conversations start from.
 fn save_default_model(model : EngineModel) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(ModelStorageKey, model.wire()))
+}
+
+///|
+/// Persist the per-conversation tiers as one value, newest first — the order
+/// is the cap's eviction order, so it is written out explicitly as an array
+/// rather than left to an object's key order.
+fn save_conversation_models(
+  entries : Array[StoredConversationModel],
+) -> @cmd.Cmd {
+  let rows : Array[Json] = entries.map(entry => {
+    "key": entry.key.to_json(),
+    "model": entry.model.wire().to_json(),
+  })
+  @cmd.custom_cmd(_ => {
+    save_setting(ConversationModelsStorageKey, rows.to_json().stringify())
+  })
+}
+
+///|
+/// Read them back. Storage is an input boundary shared with older and newer
+/// builds: a store that will not parse degrades to remembering nothing, and a
+/// single malformed row is skipped rather than discarding the rest.
+fn parse_conversation_models(text : String) -> Array[StoredConversationModel] {
+  let entries : Array[StoredConversationModel] = []
+  guard !text.trim().is_empty() else { return entries }
+  let json = @json.parse(text) catch { _ => return entries }
+  guard json is Array(rows) else { return entries }
+  for row in rows {
+    guard entries.length() < ConversationModelsLimit else { break }
+    if row is Object(fields) &&
+      fields.get("key") is Some(String(key)) &&
+      !key.is_empty() &&
+      fields.get("model") is Some(String(wire)) &&
+      EngineModel::parse(wire) is Some(model) {
+      entries.push({ key, model })
+    }
+  }
+  entries
 }
 
 ///|

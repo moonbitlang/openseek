@@ -146,7 +146,11 @@ fn open_session_on(
         channel,
         session_id,
         workspace?,
-        model=model.default_model,
+        // Reopening a stored conversation recovers the tier it was left on,
+        // not whatever was picked last in some other chat.
+        model=model
+          .remembered_model(channel, session_id)
+          .unwrap_or(model.default_model),
       ),
     )
     let next = { ..model, screen: Chat, loading_conversation: Some(owner) }.with_active_workspace(
@@ -1251,11 +1255,17 @@ fn update_msg(
           )
       }
     Console(msg) => update_console_msg(dispatch, msg, model)
-    SettingsLoaded(notification_corner~, tree_layout~, theme~, model=stored) => {
+    SettingsLoaded(
+      notification_corner~,
+      tree_layout~,
+      theme~,
+      model=stored,
+      conversation_models=remembered
+    ) => {
       let theme = Theme::parse(theme, model.theme)
       // Startup runs before any conversation exists, so adopting the stored
-      // tier here is enough — every conversation minted afterwards is born
-      // from it.
+      // tiers here is enough — every conversation minted afterwards reads
+      // them.
       let default_model = EngineModel::parse(stored).unwrap_or(
         model.default_model,
       )
@@ -1267,6 +1277,7 @@ fn update_msg(
           tree_layout: @fileeditor.TreeLayout::parse(tree_layout),
           theme,
           default_model,
+          conversation_models: parse_conversation_models(remembered),
         },
       )
     }
@@ -1482,18 +1493,21 @@ fn update_msg(
     QuickOpenPick(index) => pick_quick_open_row(dispatch, model, index)
     QuickOpenDismiss => (@cmd.none, { ..model, quick_open: None })
     ToggleModel => {
-      // The chip switches the conversation on screen, and the tier it lands
-      // on becomes what the next new chat starts from — the only part of
-      // the choice that outlives the page. A turn already in flight keeps
-      // the model it was started with; this takes effect on the next one.
+      // The chip switches the conversation on screen. The tier is remembered
+      // against that conversation, so reopening it later comes back here, and
+      // becomes what the next new chat starts from. A turn already in flight
+      // keeps the model it was started with; this takes effect on the next.
       let conv = model.active()
       let engine_model = conv.engine_model.toggled()
+      let next = model
+        .replace_conversation({ ..conv, engine_model, })
+        .remember_model(conv.device, conv.session_id, engine_model)
       (
-        save_default_model(engine_model),
-        {
-          ..model.replace_conversation({ ..conv, engine_model, }),
-          default_model: engine_model,
-        },
+        @cmd.batch([
+          save_default_model(engine_model),
+          save_conversation_models(next.conversation_models),
+        ]),
+        { ..next, default_model: engine_model },
       )
     }
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value })
@@ -3636,7 +3650,9 @@ fn update_device_msg(
             channel,
             session,
             workspace?=model.session_workspace(channel, session),
-            model=model.default_model,
+            model=model
+              .remembered_model(channel, session)
+              .unwrap_or(model.default_model),
           ),
         )
       } else {
@@ -3752,10 +3768,14 @@ fn update_device_msg(
             session,
             workspace?=model.session_workspace(channel, session),
             // A conversation this page is meeting for the first time takes
-            // the tier its run is on: better evidence than the default, and
-            // no local choice exists yet to contradict it. A conversation
-            // the page already holds keeps its own — see below.
-            model=selected_model,
+            // the tier its run is on — better evidence than the default,
+            // and no choice exists yet to contradict it. A remembered choice
+            // still outranks it: that is what the user meant to send next,
+            // while the run may have been started elsewhere. A conversation
+            // the page already holds keeps its own tier — see below.
+            model=model
+              .remembered_model(channel, session)
+              .unwrap_or(selected_model),
           )
       }
       let existing = match dev.workspace_for_session_root(session_root) {
@@ -10563,12 +10583,15 @@ test "loaded UI preferences parse their wire names" {
       tree_layout="",
       theme="dark",
       model="deepseek-v4-flash",
+      conversation_models="[{\"key\":\"local/desktop-test\",\"model\":\"deepseek-v4-pro\"}]",
     ),
     test_model(),
   )
   assert_true(restored.notification_corner is TopLeft)
   assert_true(restored.theme is Dark)
   assert_true(restored.default_model is Low)
+  // The stored conversation outranks the stored default for its own chat.
+  assert_true(restored.active().engine_model is High)
   // Unknown stored values fall back to the defaults.
   let (_, unknown) = update(
     dispatch,
@@ -10577,12 +10600,15 @@ test "loaded UI preferences parse their wire names" {
       tree_layout="",
       theme="broken",
       model="",
+      conversation_models="not json",
     ),
     test_model(),
   )
   assert_true(unknown.notification_corner is BottomRight)
   assert_true(unknown.theme is System)
   assert_true(unknown.default_model is High)
+  // A store that will not parse remembers nothing rather than wedging.
+  assert_eq(unknown.conversation_models.length(), 0)
 }
 
 ///|
@@ -10634,6 +10660,73 @@ test "a start never overrides the tier picked for the next turn" {
     queued,
   )
   assert_true(ran.active().engine_model is Low)
+}
+
+///|
+test "reopening a conversation recovers its own tier, not the last pick" {
+  let dispatch = test_dispatch()
+  // Set the chat on screen to Low, then open a different one and put it back
+  // on High. The second pick moves the default new chats inherit — it must
+  // not follow the first conversation home.
+  let (_, low) = update(dispatch, ToggleModel, test_model())
+  let other = low.activate(@interop.ChannelId::Local, "other-chat")
+  assert_true(other.active().engine_model is Low)
+  let (_, high) = update(dispatch, ToggleModel, other)
+  assert_true(high.default_model is High)
+  // Reopening drops the conversation and mints it again (nothing was sent,
+  // so `activate` does not retain it) — exactly the path that used to hand
+  // back the unrelated default.
+  let reopened = high.activate(@interop.ChannelId::Local, "desktop-test")
+  assert_true(reopened.active().engine_model is Low)
+}
+
+///|
+test "remembered tiers survive a round trip through storage" {
+  let dispatch = test_dispatch()
+  let (_, chosen) = update(dispatch, ToggleModel, test_model())
+  // What `save_conversation_models` would write, read back by a fresh page.
+  let rows : Array[Json] = chosen.conversation_models.map(entry => {
+    "key": entry.key.to_json(),
+    "model": entry.model.wire().to_json(),
+  })
+  let restored = parse_conversation_models(rows.to_json().stringify())
+  assert_eq(restored, chosen.conversation_models)
+  assert_true(restored is [{ key: "local/desktop-test", model: Low }])
+}
+
+///|
+test "the remembered list stays capped, newest first" {
+  let mut model = test_model()
+  // One past the cap, so the first conversation chosen for is the one that
+  // falls off and reverts to the page default.
+  for index in 0..<=ConversationModelsLimit {
+    model = model.remember_model(
+      @interop.ChannelId::Local,
+      "session-\{index}",
+      if index % 2 == 0 {
+        Low
+      } else {
+        High
+      },
+    )
+  }
+  assert_eq(model.conversation_models.length(), ConversationModelsLimit)
+  assert_true(
+    model.remembered_model(@interop.ChannelId::Local, "session-0") is None,
+  )
+  assert_true(
+    model.remembered_model(
+      @interop.ChannelId::Local,
+      "session-\{ConversationModelsLimit}",
+    )
+    is Some(Low),
+  )
+  // Re-choosing an existing conversation moves it, never duplicates it.
+  let again = model.remember_model(@interop.ChannelId::Local, "session-1", Low)
+  assert_eq(again.conversation_models.length(), ConversationModelsLimit)
+  assert_true(
+    again.remembered_model(@interop.ChannelId::Local, "session-1") is Some(Low),
+  )
 }
 
 ///|

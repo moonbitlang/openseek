@@ -8,7 +8,7 @@ priv enum EngineModel {
   High
   Low
   Other(String)
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 fn EngineModel::wire(self : EngineModel) -> String {
@@ -51,6 +51,24 @@ fn EngineModel::toggled(self : EngineModel) -> EngineModel {
     High => Low
     Low | Other(_) => High
   }
+}
+
+///|
+/// One conversation's remembered tier. `ConversationKey` is a frontend value
+/// that deliberately never crosses a boundary, so persistence spells the same
+/// identity out itself: the channel's stable URI authority joined to the
+/// session id, which keeps two hosts' identical session ids apart.
+priv struct StoredConversationModel {
+  key : String
+  model : EngineModel
+} derive(Eq, Debug)
+
+///|
+fn conversation_model_key(
+  channel : @interop.ChannelId,
+  session : String,
+) -> String {
+  "\{channel.uri_authority()}/\{session}"
 }
 
 ///|
@@ -114,9 +132,23 @@ const ThemeStorageKey : String = "openseek.theme"
 
 ///|
 /// The tier new conversations are born with — the last one picked in the
-/// composer. Only this default is persisted; a conversation's own tier is
-/// its state, restored from the host's run table on reconnect.
+/// composer, and the fallback for a conversation nothing remembers.
 const ModelStorageKey : String = "openseek.model"
+
+///|
+/// Every conversation whose tier the user has chosen, so reopening one
+/// recovers its own tier instead of inheriting whatever was picked last in
+/// some unrelated chat. Page-local like the rest of this file: the desktop
+/// window and a browser console remember separately, and the host never sees
+/// this. Rows are newest first.
+const ConversationModelsStorageKey : String = "openseek.conversation_models"
+
+///|
+/// How many conversations remember their tier. Conversations are unbounded
+/// and this is one localStorage value, so the list is capped; past the cap
+/// the least recently chosen conversation forgets and opens on the default,
+/// exactly like one the user never chose a tier for.
+const ConversationModelsLimit : Int = 200
 
 ///|
 /// Obsolete: the update channel derives from the server selection now. The
@@ -817,6 +849,11 @@ priv struct Model {
   // the composer, persisted page-locally. The model a turn actually runs
   // with is the conversation's own `engine_model`, never this.
   default_model : EngineModel
+  // Tiers the user has chosen per conversation, newest first and capped at
+  // `ConversationModelsLimit`. Reopening a conversation recovers its own tier
+  // from here; `default_model` is only for conversations this list has never
+  // held — new chats, and ones whose entry the cap dropped.
+  conversation_models : Array[StoredConversationModel]
   max_steps : String
   // Whether the host has a key stored for each keyed provider. The key text
   // itself never reaches a client — the Settings page only needs presence
@@ -1112,7 +1149,8 @@ priv enum Msg {
     notification_corner~ : String,
     tree_layout~ : String,
     theme~ : String,
-    model~ : String
+    model~ : String,
+    conversation_models~ : String
   )
   // The legacy localStorage engine settings, read at bridge time. The
   // desktop window migrates them up to the host once; a browser page only
@@ -1721,6 +1759,7 @@ fn initial_model() -> Model {
     websocket_epoch: 0,
     focused: page_channel.unwrap_or(@interop.ChannelId::Local),
     default_model: High,
+    conversation_models: [],
     max_steps: DefaultMaxSteps,
     deepseek_key_saved: false,
     custom_key_saved: false,
@@ -2240,6 +2279,44 @@ fn Model::can_reload_transcript(self : Model, conv : Conversation) -> Bool {
 }
 
 ///|
+/// The tier this conversation was last given, if the page still remembers
+/// one. `None` — never chosen, or dropped by the cap — leaves the caller to
+/// pick its own fallback: the page default usually, a live run's tier when
+/// the conversation is first seen through one.
+fn Model::remembered_model(
+  self : Model,
+  channel : @interop.ChannelId,
+  session : String,
+) -> EngineModel? {
+  let key = conversation_model_key(channel, session)
+  for entry in self.conversation_models {
+    if entry.key == key {
+      return Some(entry.model)
+    }
+  }
+  None
+}
+
+///|
+/// Remember a conversation's tier, moving it to the front so the cap drops
+/// whichever conversation the user has gone longest without choosing for.
+fn Model::remember_model(
+  self : Model,
+  channel : @interop.ChannelId,
+  session : String,
+  model : EngineModel,
+) -> Model {
+  let key = conversation_model_key(channel, session)
+  let entries : Array[StoredConversationModel] = [{ key, model }]
+  for entry in self.conversation_models {
+    if entry.key != key && entries.length() < ConversationModelsLimit {
+      entries.push(entry)
+    }
+  }
+  { ..self, conversation_models: entries }
+}
+
+///|
 /// The conversation on screen. Until the startup session rotation lands the
 /// model has no conversations yet; an empty placeholder keeps the view (and
 /// every handler reading the active conversation) total.
@@ -2250,7 +2327,9 @@ fn Model::active(self : Model) -> Conversation {
     empty_conversation(
       self.focused,
       self.active_session,
-      model=self.default_model,
+      model=self
+        .remembered_model(self.focused, self.active_session)
+        .unwrap_or(self.default_model),
     )
   }
 }
@@ -2369,7 +2448,13 @@ fn Model::activate(
   }
   if !found {
     conversations.push(
-      empty_conversation(channel, session_id, model=self.default_model),
+      empty_conversation(
+        channel,
+        session_id,
+        model=self
+          .remembered_model(channel, session_id)
+          .unwrap_or(self.default_model),
+      ),
     )
   }
   // Activating a conversation is also what moves the UI's focus to its
