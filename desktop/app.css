@@ -2749,6 +2749,163 @@ main {
   background: var(--del-bg);
 }
 
+/* ---------- plan ----------
+   One checklist, rendered at three altitudes: a meter riding a folded run's
+   summary line, the full card inside an expanded `plan` call, and the
+   standing plan docked above the composer. The row and meter rules are shared
+   by all three so they cannot drift apart. */
+.plan-steps {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+.plan-step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  margin: 3px 0;
+}
+.plan-step .step-icon {
+  flex: none;
+  width: 14px;
+  color: var(--ink-3);
+  font-size: 12px;
+  text-align: center;
+}
+.plan-step.completed .step-icon {
+  color: var(--add);
+}
+.plan-step.in_progress .step-icon {
+  color: var(--accent);
+}
+.plan-step.dropped .step-icon {
+  color: var(--del);
+}
+/* a status this build does not know reads as its literal word: disguising it
+   as a pending ring would misreport e.g. a blocked step as untouched */
+.plan-step .step-status {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.plan-step .step-num {
+  flex: none;
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+.plan-step .step-title {
+  min-width: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.plan-step.completed .step-title {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+.plan-step.in_progress .step-title {
+  font-weight: 600;
+}
+.plan-step.dropped .step-title {
+  color: var(--ink-3);
+  text-decoration: line-through;
+  opacity: 0.75;
+}
+.plan-step .step-delta {
+  flex: none;
+  align-self: center;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-size: 10px;
+  line-height: 1.7;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.step-delta-done {
+  border-color: var(--add-line);
+  background: var(--add-bg);
+  color: var(--add);
+}
+.step-delta-started {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.step-delta-new {
+  border-color: var(--tool-line);
+  background: var(--tool-bg);
+  color: var(--tool);
+}
+.step-delta-reopened,
+.step-delta-dropped {
+  border-color: var(--del-line);
+  background: var(--del-bg);
+  color: var(--del);
+}
+
+/* The meter: the completed run, then one step's worth of lighter fill for the
+   step in progress — the only thing a per-step ribbon showed that a plain bar
+   does not. Fixed width, so a twenty-step plan does not stretch it. */
+.plan-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0;
+}
+.plan-progress-track {
+  display: flex;
+  flex: 0 1 200px;
+  height: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.plan-progress-fill {
+  flex: none;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+.plan-progress-fill.active {
+  background: var(--accent-line);
+}
+.plan-progress-fill.complete {
+  background: var(--add);
+}
+.plan-progress-count {
+  flex: none;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.plan-progress.mini {
+  flex: none;
+  align-self: center;
+  gap: 6px;
+}
+.plan-progress.mini .plan-progress-track {
+  flex: 0 0 52px;
+  height: 4px;
+}
+.plan-rewrite-note {
+  margin: 4px 0 0;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-style: italic;
+}
+.plan-cleared {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-style: italic;
+}
+
 /* ---------- composer ---------- */
 .composer {
   border-top: 1px solid var(--line);
@@ -2969,6 +3126,72 @@ main {
 }
 .composer-notice-btn:not(:disabled):hover {
   background: var(--surface-2);
+}
+
+/* the standing plan, docked above the composer: one line naming the active
+   step, expanding to the whole checklist. The slot is always in the DOM and
+   collapses to nothing without a plan, so the textarea below keeps its child
+   index while a plan appears and clears mid-turn */
+.plan-panel-slot:empty {
+  display: none;
+}
+.plan-panel {
+  max-width: 820px;
+  margin: 0 auto 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 6px 10px 8px;
+}
+.plan-panel-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.plan-panel-summary::-webkit-details-marker {
+  display: none;
+}
+.plan-panel-summary:hover {
+  color: var(--ink);
+}
+.plan-panel-icon {
+  flex: none;
+  color: var(--accent);
+}
+.plan-panel-title {
+  flex: none;
+  font-weight: 600;
+}
+.plan-panel-active {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plan-panel-summary .plan-progress-track {
+  flex: 0 0 90px;
+}
+.plan-panel-caret {
+  flex: none;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.plan-panel:not([open]) .plan-panel-caret::after {
+  content: "▸";
+}
+.plan-panel[open] .plan-panel-caret::after {
+  content: "▾";
+}
+.plan-panel .plan-steps {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line-2);
 }
 
 /* steering input not yet folded into the running turn: a panel docked

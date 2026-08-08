@@ -1,0 +1,40 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/plan"
+
+import {
+  "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
+  "openseek_desktop/frontend/transcript",
+}
+
+// Values
+pub fn baselines(Array[@transcript.TranscriptItem]) -> Map[String, Array[Step]]
+
+pub fn card(Array[Step], baseline? : Array[Step]) -> @html.Html
+
+pub fn decode(String) -> Array[Step]?
+
+pub fn fold_progress(Array[@transcript.TranscriptItem]) -> @html.Html
+
+pub fn latest(Array[@transcript.TranscriptItem]) -> Array[Step]?
+
+pub fn panel(Array[@transcript.TranscriptItem]) -> @html.Html
+
+// Errors
+
+// Types and methods
+pub enum Status {
+  Pending
+  InProgress
+  Completed
+  Other(String)
+} derive(Eq, @debug.Debug)
+
+pub struct Step {
+  title : String
+  status : Status
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

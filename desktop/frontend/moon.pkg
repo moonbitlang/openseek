@@ -21,6 +21,7 @@ import {
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/markdown",
   "openseek_desktop/frontend/mention_context",
+  "openseek_desktop/frontend/plan",
   "openseek_desktop/frontend/preview",
   "openseek_desktop/frontend/resource",
   "openseek_desktop/frontend/transcript",
