@@ -3,7 +3,6 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async",
   "moonbitlang/async/cond_var",
-  "moonbitlang/async/process",
   "moonbitlang/core/debug",
   "openseek_desktop/internal/env",
   "tonyfettes/xlog",

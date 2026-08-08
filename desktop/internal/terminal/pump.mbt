@@ -27,28 +27,18 @@ pub async fn run_terminal_pump(
 }
 
 ///|
-/// POSIX closes the PTY slave when the child dies, which wakes the reader and
-/// lets the session drain before its deferred `Pty::close` runs.
+/// POSIX reads are cancellable. Close the PTY while the read is still active
+/// so `Pty::close` also kills the child's process group, then cancel the read
+/// so explicit shutdown never depends on every possible slave copy reaching
+/// EOF first.
 #cfg(not(platform="windows"))
 async fn TerminalSession::close_when_requested(
   self : TerminalSession,
-  _output_task : @async.Task[Unit],
+  output_task : @async.Task[Unit],
 ) -> Unit {
   self.close_requested.get()
-  // POSIX gives negative process ids group-wide meanings. In particular,
-  // kill(-1, SIGKILL) targets nearly every process the user may signal, so a
-  // cleared or otherwise invalid PTY id must never reach hard_cancel.
-  guard self.pid > 0 else {
-    @xlog.error() <?
-      {
-        "event": "terminal_cancel_rejected",
-        "pid": self.pid,
-        "reason": "non-positive child process id",
-      }
-    return
-  }
-  let cancel = @process.hard_cancel()
-  cancel(self.pid)
+  self.pty.close()
+  output_task.cancel()
 }
 
 ///|
@@ -88,8 +78,8 @@ async fn run_session(
     let pty = @pty.spawn(
       group,
       request.argv,
-      // pty 0.2.3 applies the working directory in the platform spawn call,
-      // so neither POSIX nor Windows needs a shell command that performs cd.
+      // PTY applies the working directory in the platform spawn call, so
+      // neither POSIX nor Windows needs a shell command that performs cd.
       cwd=request.cwd,
       cols=request.cols,
       rows=request.rows,
@@ -125,7 +115,6 @@ async fn run_session(
     }
     let session : TerminalSession = {
       pty,
-      pid,
       unacked: 0,
       unacked_chunks: Map([]),
       next_output_sequence: 1,

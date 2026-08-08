@@ -189,6 +189,28 @@ async test "close_all_terminals retires every live session" {
 }
 
 ///|
+/// Closing a shell must also stop descendants that inherited its PTY slave.
+/// Otherwise the reader never observes EOF after the shell itself is killed.
+#cfg(not(platform="windows"))
+async test "closing a terminal wakes a read held open by descendants" {
+  @async.with_task_group(group => {
+    let state = @terminal.new_terminal_state()
+    defer state.shutdown()
+    let pushes = new_push_queue()
+    group.spawn_bg(allow_failure=true, () => {
+      @terminal.run_terminal_pump(state, async fn(push) { pushes.put(push) })
+    })
+    let id = @terminal.open_terminal(state, cwd=".", cols=80, rows=24, command=[
+      "/bin/sh", "-c", "trap '' HUP; sleep 30 & child=$!; echo ready; wait $child",
+    ])
+    // Seeing the marker proves the descendant exists before shutdown starts.
+    @async.with_timeout(5000, () => wait_for_output(pushes, "ready"))
+    @terminal.close_terminal(state, id~)
+    @async.with_timeout(5000, () => wait_for_exit(pushes))
+  })
+}
+
+///|
 /// An old page can disappear after its open request reaches the host but
 /// before the pump starts it. The next connect handshake must reject that
 /// queued request instead of starting a shell with no tab to own it.

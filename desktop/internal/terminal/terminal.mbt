@@ -43,10 +43,6 @@ const LowWatermark = 65536
 ///|
 priv struct TerminalSession {
   pty : @pty.Pty
-  /// The child id captured immediately after spawn. `Pty::close` clears the
-  /// id stored in the native PTY handle, so shutdown must never read it again
-  /// while another task may be closing that handle.
-  pid : Int
   /// Bytes emitted to the webview but not yet acknowledged.
   mut unacked : Int
   /// Each sequence remains here until its acknowledgement is applied. Removing
@@ -190,10 +186,9 @@ pub fn ack_terminal(state : TerminalState, id~ : Int, sequence~ : Int) -> Unit {
 }
 
 ///|
-/// Request a session's shutdown. Its task stops the child immediately and, on
-/// Windows, cancels the task that issued the blocking ConPTY read; the async
-/// I/O layer can then interrupt that exact read before the session closes its
-/// handles and emits `Exited`. Unknown ids are a no-op (already exited).
+/// Request a session's shutdown. Its task closes the PTY and cancels the task
+/// that issued the blocking read, so teardown does not depend on every slave
+/// descriptor reaching EOF. Unknown ids are a no-op (already exited).
 pub fn close_terminal(state : TerminalState, id~ : Int) -> Unit {
   guard state.sessions.get(id) is Some(session) else { return }
   guard !session.closing else { return }
