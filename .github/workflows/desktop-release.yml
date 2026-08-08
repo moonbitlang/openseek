@@ -58,6 +58,14 @@ jobs:
           path: ~/.proton/cache/cef
           key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/lepus/cli/cef/cef_platform.mbt') }}
 
+      # The packager stages the seed toolchain pinned by
+      # `desktop/.moonbit-version` from archives downloaded into this directory.
+      - name: Cache MoonBit toolchain seed
+        uses: actions/cache@v4
+        with:
+          path: desktop/dist/tools/moonbit
+          key: moonbit-seed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/.moonbit-version') }}
+
       - name: Resolve release version
         id: release
         shell: bash

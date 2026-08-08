@@ -40,6 +40,17 @@ jobs:
           path: ~/.proton/cache/cef
           key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/lepus/cli/cef/cef_platform.mbt') }}
 
+      # The packager downloads the compiler and core archives pinned by
+      # `desktop/.moonbit-version` here and reuses whatever is already present.
+      # No other workflow populates this directory, so each packaging job keeps
+      # its own platform cache.
+      - name: Restore MoonBit toolchain seed
+        id: moonbit-seed-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: desktop/dist/tools/moonbit
+          key: moonbit-seed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/.moonbit-version') }}
+
       - name: Set up MoonBit (stable)
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- latest
@@ -62,6 +73,16 @@ jobs:
 
       - name: Build the AppImage
         run: moon -C desktop run --target native package/linux -- --release
+
+      # Only a trusted push to main publishes the cache shared by later PRs.
+      - name: Save MoonBit toolchain seed
+        if: >-
+          github.event_name == 'push' &&
+          steps.moonbit-seed-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: desktop/dist/tools/moonbit
+          key: ${{ steps.moonbit-seed-cache.outputs.cache-primary-key }}
 
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
@@ -91,6 +112,13 @@ jobs:
           path: ~/.proton/cache/cef
           key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/lepus/cli/cef/cef_platform.mbt') }}
 
+      - name: Restore MoonBit toolchain seed
+        id: moonbit-seed-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: desktop/dist/tools/moonbit
+          key: moonbit-seed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/.moonbit-version') }}
+
       - name: Set up MoonBit (stable)
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- latest
@@ -118,6 +146,15 @@ jobs:
         with:
           path: ~/.proton/cache/cef
           key: ${{ steps.cef-cache.outputs.cache-primary-key }}
+
+      - name: Save MoonBit toolchain seed
+        if: >-
+          github.event_name == 'push' &&
+          steps.moonbit-seed-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: desktop/dist/tools/moonbit
+          key: ${{ steps.moonbit-seed-cache.outputs.cache-primary-key }}
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -148,6 +185,13 @@ jobs:
         with:
           path: ~/.proton/cache/cef
           key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/lepus/cli/cef/cef_platform.mbt') }}
+
+      - name: Restore MoonBit toolchain seed
+        id: moonbit-seed-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: desktop/dist/tools/moonbit
+          key: moonbit-seed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/.moonbit-version') }}
 
       - name: Set up MoonBit (stable)
         shell: pwsh
@@ -217,6 +261,15 @@ jobs:
         with:
           path: ~/.proton/cache/cef
           key: ${{ steps.cef-cache.outputs.cache-primary-key }}
+
+      - name: Save MoonBit toolchain seed
+        if: >-
+          github.event_name == 'push' &&
+          steps.moonbit-seed-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: desktop/dist/tools/moonbit
+          key: ${{ steps.moonbit-seed-cache.outputs.cache-primary-key }}
 
       - name: Upload Windows app artifact
         uses: actions/upload-artifact@v4
