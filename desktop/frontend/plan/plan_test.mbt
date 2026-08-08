@@ -198,7 +198,7 @@ test "baselines pair each call with the previous applied one" {
 }
 
 ///|
-test "baselines skip a rejected call and ambiguous ids" {
+test "baselines skip a rejected call" {
   let first = plan_json([("one", "in_progress")])
   let rejected = plan_json([("nonsense", "pending")])
   let third = plan_json([("one", "completed")])
@@ -214,15 +214,6 @@ test "baselines skip a rejected call and ambiguous ids" {
     fail("expected a baseline for c3")
   }
   assert_true(base[0].status is InProgress)
-  // An id shared by two calls cannot say which call a lookup means, and an
-  // empty id is a streaming glitch; neither gets an entry.
-  let ambiguous = @plan.baselines([
-    plan_call("dup", first),
-    plan_call("dup", third),
-    plan_call("", third),
-  ])
-  assert_true(ambiguous.get("dup") is None)
-  assert_true(ambiguous.get("") is None)
 }
 
 ///|

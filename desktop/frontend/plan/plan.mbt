@@ -138,22 +138,18 @@ pub fn latest(items : Array[@transcript.TranscriptItem]) -> Array[Step]? {
 /// baseline whose differences its card marks. A session's first plan has no
 /// entry and renders without change markers.
 ///
-/// A call with an empty id (a streaming glitch), or an id shared by several
-/// plan calls, gets no entry either: a per-id lookup cannot say which call it
-/// belongs to, and a wrong baseline fabricates plan history.
+/// Keyed by call id, which the view uses to look a card's baseline back up.
+/// The engine's streaming assembly slots tool calls by their delta `index`
+/// and copies each id through from the provider, so ids within a message are
+/// as distinct as the provider made them.
 pub fn baselines(
   items : Array[@transcript.TranscriptItem],
 ) -> Map[String, Array[Step]] {
-  let counts : Map[String, Int] = Map([])
-  for item in items {
-    guard applied_call(item) is Some((id, _)) else { continue }
-    counts.set(id, counts.get(id).unwrap_or(0) + 1)
-  }
   let baselines : Map[String, Array[Step]] = Map([])
   let mut previous : Array[Step]? = None
   for item in items {
     guard applied_call(item) is Some((id, steps)) else { continue }
-    if id != "" && counts.get(id) == Some(1) && previous is Some(prev) {
+    if previous is Some(prev) {
       baselines.set(id, prev)
     }
     previous = Some(steps)
