@@ -82,6 +82,28 @@ test "decode accepts a cleared plan and rejects what is not one" {
 }
 
 ///|
+test "decode refuses a payload too large to be a plan" {
+  // The tool caps a plan at 20 steps, but the transcript records the
+  // arguments of calls it rejected too — and of calls interrupted before any
+  // result. Decoding one of those on every render would build a DOM row per
+  // entry behind a collapsed card; past the bound the call keeps the generic
+  // rendering, which clamps before it parses.
+  let oversized = [ for index in 0..<201 => ("step \{index}", "pending") ]
+  assert_true(@plan.decode(plan_json(oversized)) is None)
+  // A plan an order of magnitude past the tool's cap still renders: the bound
+  // is about cost, not about re-checking the tool's limits.
+  let large = [ for index in 0..<199 => ("step \{index}", "pending") ]
+  guard @plan.decode(plan_json(large)) is Some(steps) else {
+    fail("expected a large but bounded plan to decode")
+  }
+  assert_eq(steps.length(), 199)
+  // A single enormous title is bounded by payload size before it is parsed.
+  assert_true(
+    @plan.decode(plan_json([("x".repeat(200_000), "pending")])) is None,
+  )
+}
+
+///|
 test "latest reads the last applied call and skips rejected ones" {
   let first = plan_json([("one", "in_progress")])
   let rejected = plan_json([("two", "in_progress")])

@@ -22,6 +22,26 @@ pub enum Status {
 } derive(Eq, @debug.Debug)
 
 ///|
+/// Ceilings on what is worth decoding, in UTF-16 code units and in steps.
+///
+/// The transcript records a call's arguments whether or not the tool accepted
+/// them, so a degenerate payload — a model looping, or anything past the
+/// tool's own caps — reaches this package, and every render decodes it: the
+/// card builds one DOM row per step even while its `details` sits collapsed
+/// (as the generic arguments path notes, a collapsed node is still built),
+/// and `baselines` decodes every plan call in the conversation. Past these
+/// bounds the call keeps the generic rendering, which clamps before parsing.
+///
+/// Deliberately far above the tool's own limits (20 steps, 120-character
+/// titles) rather than mirroring them: this is a resource bound, not a second
+/// copy of the validation, and it must not start rejecting real plans if
+/// those limits are ever raised.
+const MAX_PAYLOAD_CHARS = 128_000
+
+///|
+const MAX_RENDERED_STEPS = 200
+
+///|
 /// The steps of a recorded `plan` call, or `None` when `arguments` is not a
 /// plan payload this build can read. An accepted call carrying an empty array
 /// cleared the plan and decodes as `Some([])`.
@@ -33,9 +53,19 @@ pub enum Status {
 /// validation would only drift from the one that matters. The one thing it
 /// does reject is a step missing its title or status: inventing a row for it
 /// would show a plan that never existed.
+///
+/// It does refuse a payload too large to be a plan at all — see
+/// `MAX_PAYLOAD_CHARS` — because that is a cost question rather than a
+/// validation one.
 pub fn decode(arguments : String) -> Array[Step]? {
+  if arguments.length() > MAX_PAYLOAD_CHARS {
+    return None
+  }
   let json = @json.parse(arguments) catch { _ => return None }
   guard json is Object(fields) && fields.get("steps") is Some(Array(entries)) else {
+    return None
+  }
+  if entries.length() > MAX_RENDERED_STEPS {
     return None
   }
   let steps = []
