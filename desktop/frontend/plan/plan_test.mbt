@@ -7,13 +7,14 @@ fn plan_call(
   id : String,
   arguments : String,
   is_error? : Bool = false,
+  has_result? : Bool = true,
 ) -> @transcript.TranscriptItem {
   {
     kind: Tool(
       call_id=id,
       name="plan",
       arguments=Some(arguments),
-      has_result=true,
+      has_result~,
       is_error~,
       brief=None,
     ),
@@ -112,6 +113,44 @@ test "latest reports no plan for an empty transcript or a cleared plan" {
     ])
     is None,
   )
+}
+
+///|
+test "a call whose result never landed is not the standing plan" {
+  let applied = plan_json([("one", "completed")])
+  let never_ran = plan_json([("two", "in_progress")])
+  // A run interrupted between the assistant event and its result leaves the
+  // call unresolved for good. Arguments that were never executed must not
+  // stand as the plan for the rest of the session.
+  guard @plan.latest([
+      plan_call("c1", applied),
+      plan_call("c2", never_ran, has_result=false),
+    ])
+    is Some(steps) else {
+    fail("expected the applied plan")
+  }
+  assert_eq(steps[0].title, "one")
+  // Nor may an unresolved clear hide the plan that really did apply.
+  guard @plan.latest([
+      plan_call("c1", applied),
+      plan_call("c2", "{\"steps\":[]}", has_result=false),
+    ])
+    is Some(surviving) else {
+    fail("expected the applied plan to survive an unresolved clear")
+  }
+  assert_eq(surviving[0].title, "one")
+  // And it is not a baseline either — nothing diffs against a plan that
+  // never took effect.
+  let baselines = @plan.baselines([
+    plan_call("c1", applied),
+    plan_call("c2", never_ran, has_result=false),
+    plan_call("c3", plan_json([("one", "completed"), ("three", "pending")])),
+  ])
+  assert_true(baselines.get("c2") is None)
+  guard baselines.get("c3") is Some(base) else {
+    fail("expected c3 to diff against c1")
+  }
+  assert_eq(base.length(), 1)
 }
 
 ///|

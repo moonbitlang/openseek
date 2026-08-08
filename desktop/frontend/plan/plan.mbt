@@ -61,19 +61,24 @@ fn parse_status(word : String) -> Status {
 }
 
 ///|
-/// `(call id, steps)` when `item` is a `plan` call the tool applied.
+/// `(call id, steps)` when `item` is a `plan` call the tool applied — that is,
+/// one that recorded a result, and a successful one.
 ///
 /// A call the tool rejected (`is_error`) never became the model's plan, so it
-/// is not one here either — it keeps the generic failed-call rendering. A call
-/// still waiting for its result does count: `plan` executes synchronously, so
-/// the unresolved window is a frame, and holding the checklist back for it
-/// would make the panel lag the run.
+/// is not one here either; it keeps the generic failed-call rendering. A call
+/// with no result yet is the same story for a different reason: `plan` runs
+/// synchronously, so the live gap is a frame, but a run interrupted between
+/// the assistant event and its result leaves that call unresolved *forever* —
+/// and arguments that were never executed would otherwise stand as the plan
+/// for the rest of the session, or, if they cleared it, hide the last plan
+/// that really did apply.
 fn applied_call(item : @transcript.TranscriptItem) -> (String, Array[Step])? {
   guard item.kind
     is Tool(
       name="plan",
       call_id~,
       arguments=Some(arguments),
+      has_result=true,
       is_error=false,
       ..
     ) else {
