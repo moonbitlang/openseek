@@ -38,6 +38,11 @@ pub(all) enum ItemKind {
 pub(all) struct TranscriptItem {
   kind : ItemKind
   content : String
+  // When the durable event that produced this item was committed (unix
+  // milliseconds, as the store stamps it). `None` for a client-local bubble
+  // that never became a durable event, and for records written before the
+  // store stamped them — the view simply shows no time for those.
+  ts : Double?
 } derive(Eq)
 
 ///|

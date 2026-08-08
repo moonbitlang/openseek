@@ -587,6 +587,7 @@ priv enum TranscriptSync {
 ///|
 priv struct BufferedCommit {
   sequence : Int
+  ts : Double?
   item : @protocol.SessionItem
 } derive(Eq)
 
@@ -1541,6 +1542,9 @@ priv enum DeviceMsg {
   SessionCommitted(
     session~ : String,
     sequence~ : Int,
+    // The commit's own store stamp, kept on the message so a turn dates
+    // itself the moment it lands rather than only after the next reload.
+    ts~ : Double?,
     item~ : @protocol.SessionItem
   )
   // The registered workspaces — the reply to `workspace.list`. Both
@@ -3356,7 +3360,7 @@ fn Conversation::visible_items(
     for index in 0..<self.messages.length() {
       for notice in self.overlay {
         if notice.anchor is AfterMessages(boundary) && boundary == index {
-          visible.push({ kind: notice.kind, content: notice.content })
+          visible.push({ kind: notice.kind, content: notice.content, ts: None })
         }
       }
       visible.push(self.messages[index])
@@ -3368,9 +3372,9 @@ fn Conversation::visible_items(
         | SnapshotCut(..)
         | UncertainTail
         | DurableTail(_) =>
-          visible.push({ kind: notice.kind, content: notice.content })
+          visible.push({ kind: notice.kind, content: notice.content, ts: None })
         AfterMessages(boundary) if boundary >= self.messages.length() =>
-          visible.push({ kind: notice.kind, content: notice.content })
+          visible.push({ kind: notice.kind, content: notice.content, ts: None })
         _ => ()
       }
     }
@@ -3570,11 +3574,12 @@ fn Conversation::apply_commit(
   self : Conversation,
   sequence : Int,
   item : @protocol.SessionItem,
+  ts? : Double,
 ) -> (Bool, Conversation) {
   // A canonical User is transcript data, never local-submission ownership.
   // It is not a run boundary: the same kind also stores in-run steering.
   let messages = self.messages.copy()
-  let changed = @transcript.apply_session_item(messages, item)
+  let changed = @transcript.apply_session_item(messages, item, ts?)
   // Unknown terminal payloads render nothing but still close the durable run.
   let terminal = item.is_terminal()
   let conv = {
@@ -3811,7 +3816,11 @@ fn Conversation::adopt_snapshot(
       continue
     }
     if commit.sequence == conv.watermark + 1 && leftover.is_empty() {
-      let (_, next) = conv.apply_commit(commit.sequence, commit.item)
+      let (_, next) = conv.apply_commit(
+        commit.sequence,
+        commit.item,
+        ts?=commit.ts,
+      )
       conv = { ..next, watermark: commit.sequence }
     } else {
       leftover.push(commit)

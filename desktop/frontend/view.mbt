@@ -1253,16 +1253,19 @@ fn mention_target(mention : @mention_context.MentionRef) -> MentionTarget? {
 }
 
 ///|
-/// A user message bubble. A content that carries a `<user_mentions>` envelope
-/// (a prompt sent with chips) renders as the chips it was composed with — the
-/// same tray the composer showed, minus the remove buttons — above the typed
-/// text; anything else is plain text. A chip with a resolved location jumps
-/// the editor panel there via `on_jump`, when the caller wires one.
+/// A user message bubble. The bubble itself is what marks the turn as the
+/// user's — no avatar, no role label — so everything unbubbled below it reads
+/// as the agent's side of the conversation. A content that carries a
+/// `<user_mentions>` envelope (a prompt sent with chips) renders as the chips
+/// it was composed with — the same tray the composer showed, minus the remove
+/// buttons — above the typed text; anything else is plain text. A chip with a
+/// resolved location jumps the editor panel there via `on_jump`, when the
+/// caller wires one.
 fn user_message_view(
   content : String,
   on_jump? : (MentionTarget) -> @cmd.Cmd,
 ) -> @html.Html {
-  let body : Array[@html.Html] = [@html.div(class="msg-role", "You")]
+  let body : Array[@html.Html] = []
   match @mention_context.parse(content) {
     Some(parsed) => {
       let chips : Array[@html.Html] = []
@@ -1305,10 +1308,39 @@ fn user_message_view(
     None =>
       body.push(@html.div(class="msg-content", inline_code_nodes(content)))
   }
-  @html.div(class="msg", [
-    @html.div(class="avatar user", "›"),
-    @html.div(class="msg-body", body),
-  ])
+  @html.div(class="msg user", [@html.div(class="user-bubble", body)])
+}
+
+///|
+/// Format a durable event's stamp for the turn rule: the clock alone for
+/// something sent today, the date in front of it for anything older, and
+/// nothing at all for the zero/absent stamps old stores wrote. Local time and
+/// locale order come from the viewer's own environment.
+extern "js" fn js_clock_label(unix_ms : Double) -> String =
+  #|(ms) => {
+  #|  if (!Number.isFinite(ms) || ms <= 0) return ""
+  #|  const at = new Date(ms)
+  #|  const clock = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  #|  if (at.toDateString() === new Date().toDateString()) return clock
+  #|  return at.toLocaleDateString([], { month: "numeric", day: "numeric" }) + " " + clock
+  #|}
+
+///|
+/// The hairline closing a user's turn: everything below it until the next
+/// bubble is the agent's answer. Drawn after the bubble rather than before it
+/// because that is the boundary a reader needs — the bubble's own alignment
+/// already separates it from the answer above. The rule carries the prompt's
+/// send time at its right end, under the bubble it dates; a turn replayed
+/// from an unstamped store keeps the bare rule.
+fn turn_rule_view(ts? : Double) -> @html.Html {
+  let children : Array[@html.Html] = []
+  if ts is Some(ts) {
+    let label = js_clock_label(ts)
+    if !label.is_empty() {
+      children.push(@html.span(class="turn-time", label))
+    }
+  }
+  @html.div(class="turn-rule", children)
 }
 
 ///|
@@ -1330,13 +1362,7 @@ fn transcript_item_view(
           @markdown.markdown_nodes(item.content, open_file=on_open),
         )
       }
-      @html.div(class="msg", [
-        @html.div(class="avatar agent", [icon(icon_logo)]),
-        @html.div(class="msg-body", [
-          @html.div(class="msg-role", "openseek"),
-          content,
-        ]),
-      ])
+      @html.div(class="msg", [@html.div(class="msg-body", [content])])
     }
     // Unreachable in practice — the transcript loop batches every reasoning
     // and tool item into a run and builds the activity card itself — but the
@@ -1382,9 +1408,7 @@ fn streaming_response_view(
   on_open : (String) -> @cmd.Cmd,
 ) -> @html.Html {
   @html.div(class="msg streaming", [
-    @html.div(class="avatar agent", [icon(icon_logo)]),
     @html.div(class="msg-body", [
-      @html.div(class="msg-role", "openseek"),
       @html.div(
         class="msg-content markdown",
         @markdown.markdown_nodes(content, open_file=on_open),
@@ -1438,6 +1462,9 @@ fn transcript_view(
             )
           }),
         )
+        if visible[index].kind is User {
+          items.push(turn_rule_view(ts?=visible[index].ts))
+        }
         index = index + 1
         continue
       }
@@ -3223,6 +3250,7 @@ fn tool_item(
       brief=None,
     ),
     content: "output",
+    ts: None,
   }
 }
 
@@ -3284,6 +3312,22 @@ test "a tool group's summary recognizes every cmd/openseek built-in" {
 
 ///|
 #warnings("-alert_unstable")
+test "the turn rule dates itself only from a real stamp" {
+  let render = rule => {
+    @rabbita.render_to_string(() => @rabbita.Val::constant(rule))
+  }
+  // Locale and time zone are the viewer's, so the label's exact text is not
+  // asserted — only that a stamped turn gets one and an unstamped turn does
+  // not. A zero stamp is what old stores wrote for "no time recorded".
+  let stamped = render(turn_rule_view(ts=1781144351123))
+  assert_true(stamped.contains("turn-time"))
+  assert_true(stamped.contains(":"))
+  assert_false(render(turn_rule_view()).contains("turn-time"))
+  assert_false(render(turn_rule_view(ts=0)).contains("turn-time"))
+}
+
+///|
+#warnings("-alert_unstable")
 test "a tool row renders recorded arguments before its result" {
   let rendered = tool_call_view({
     kind: Tool(
@@ -3295,6 +3339,7 @@ test "a tool row renders recorded arguments before its result" {
       brief=Some("ran moon test → exit 1"),
     ),
     content: "test failed",
+    ts: None,
   })
   let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
   guard markup.split_once("Arguments") is Some((_, after_arguments)) else {
@@ -3320,6 +3365,7 @@ test "a tool row clamps large arguments before rendering" {
       brief=Some("wrote a large file"),
     ),
     content: "",
+    ts: None,
   })
   let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
   assert_true(markup.contains("UTF-16 code units skipped"))

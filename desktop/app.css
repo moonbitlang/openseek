@@ -2142,39 +2142,44 @@ main {
   animation: riseIn 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 auto;
-  border-radius: 7px;
-  font-size: 14px;
-  line-height: 1;
+/* Nothing labels the speaker: the user's turn is a bubble pushed to the
+   right, the agent's prose and its work log are unbubbled and flush
+   left, so either side reads as one voice however many messages it
+   spans. Extra room above the bubble marks the turn boundary the labels
+   used to. */
+.msg.user {
+  justify-content: flex-end;
+  margin-top: 8px;
 }
-.avatar.user {
-  background: var(--surface-2);
+.user-bubble {
+  min-width: 0;
+  max-width: 85%;
+  padding: 10px 14px;
   border: 1px solid var(--line);
-  color: var(--ink-2);
+  border-radius: var(--radius);
+  background: var(--surface-2);
 }
-.avatar.agent {
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-line);
-  color: var(--accent);
+
+/* Closes the user's turn: a hairline running to the right edge, where a
+   trailing label (the send time) can sit under the bubble it belongs
+   to. Empty of children it is simply the full-width rule. */
+.turn-rule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+.turn-rule::before {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
 }
 
 .msg-body {
   flex: 1;
   min-width: 0;
-  padding-top: 2px;
-}
-
-.msg-role {
-  margin-bottom: 5px;
-  color: var(--ink-3);
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
 }
 
 .msg-content {
@@ -2384,12 +2389,12 @@ main {
   color: var(--bg, #fff);
 }
 
-/* One turn's work (thinking + tool calls), indented under the agent
-   avatar and folded behind a single summary line. Borderless on
-   purpose: the work log is typography, not chrome — prose for
-   reasoning, gray one-liners for tool calls. */
+/* One turn's work (thinking + tool calls), folded behind a single
+   summary line. Flush with the agent's prose, not indented: the work is
+   the agent's, and an indent under a user bubble would read as the
+   user's. Borderless on purpose: the work log is typography, not
+   chrome — prose for reasoning, gray one-liners for tool calls. */
 .activity-row {
-  padding-left: 38px;
   min-width: 0;
   animation: riseIn 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
@@ -2656,10 +2661,10 @@ main {
 /* chips re-rendered inside a sent message (parsed back out of its
    <user_mentions> envelope): same chip chrome, no remove button, so the
    padding evens out; a small gap before the typed text below */
-.msg-body .mention-tray {
-  margin: 2px 0 4px;
+.user-bubble .mention-tray {
+  margin: 0 0 6px;
 }
-.msg-body .mention-chip {
+.user-bubble .mention-chip {
   padding: 2px 8px;
 }
 

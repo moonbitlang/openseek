@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub fn apply_session_item(Array[TranscriptItem], @protocol.SessionItem) -> Bool
+pub fn apply_session_item(Array[TranscriptItem], @protocol.SessionItem, ts? : Double) -> Bool
 
 pub fn apps_from_reply(@protocol.ListAppsReply) -> Array[LauncherAppItem]
 
@@ -107,6 +107,7 @@ pub struct SessionLoadView {
 pub(all) struct TranscriptItem {
   kind : ItemKind
   content : String
+  ts : Double?
 } derive(Eq)
 
 // Type aliases

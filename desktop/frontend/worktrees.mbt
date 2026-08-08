@@ -495,7 +495,7 @@ test "the launch mode toggles only before the conversation begins" {
   let begun = test_model().replace_conversation({
     ..test_conversation(),
     workspace: Some(workspace),
-    messages: [{ kind: User, content: "hi" }],
+    messages: [{ kind: User, content: "hi", ts: None }],
   })
   let (_, still) = update(dispatch, ToggleWorktreeMode, begun)
   assert_false(still.active().worktree_mode)

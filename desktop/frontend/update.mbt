@@ -3625,7 +3625,7 @@ fn update_device_msg(
         false,
         "failed to refresh session \{session}",
       )
-    SessionCommitted(session~, sequence~, item~) => {
+    SessionCommitted(session~, sequence~, ts~, item~) => {
       // Archiving removes live client state after the hub's ordered final
       // commit. A stale/replayed commit seen after that local fact must not
       // resurrect the archived record as a live hidden conversation.
@@ -3664,7 +3664,7 @@ fn update_device_msg(
       }
       let (commit_cmd, next) = if model.find_conversation(channel, session)
         is Some(conv) {
-        let commit : BufferedCommit = { sequence, item }
+        let commit : BufferedCommit = { sequence, ts, item }
         match conv.sync {
           // A read is in flight: buffer — its snapshot's watermark decides
           // whether this commit is already contained once it lands.
@@ -5387,8 +5387,8 @@ test "finished run reloads the named durable session for an old host" {
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "question" },
-        { kind: Assistant(is_danger=false), content: "done" },
+        { kind: User, content: "question", ts: None },
+        { kind: Assistant(is_danger=false), content: "done", ts: None },
       ],
       watermark=3,
       event_boundaries=[(3, true, 2)],
@@ -5551,7 +5551,7 @@ test "session rotation activates a fresh conversation, keeping the old one" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..running_conversation(),
-    messages: [{ kind: User, content: "hi" }],
+    messages: [{ kind: User, content: "hi", ts: None }],
   })
   let (_, next) = update(
     dispatch,
@@ -5679,6 +5679,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
     SessionCommitted(
       session="desktop-foreign",
       sequence=1,
+      ts=None,
       item=@protocol.User({ content: "arrived before the list" }),
     ),
     test_model(),
@@ -5856,7 +5857,7 @@ test "sessions failure pops a toast without touching the transcript" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "hi" }],
+    messages: [{ kind: User, content: "hi", ts: None }],
   })
   let (_, next) = update_dev(dispatch, SessionsFailed("engine exploded"), model)
   inspect(next.notifications.length(), content="1")
@@ -5886,7 +5887,7 @@ test "open session keeps live state on screen while re-reading the store" {
     ..empty_conversation(@interop.ChannelId::Local, "desktop-bg"),
     run: Open(run_id="r9", stage=Opened),
     streaming_response: "mid-stream",
-    messages: [{ kind: User, content: "background task" }],
+    messages: [{ kind: User, content: "background task", ts: None }],
   }
   let model = running_model().replace_conversation(background)
   let (_, once) = update(
@@ -5921,7 +5922,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "kept" }],
+    messages: [{ kind: User, content: "kept", ts: None }],
     watermark: 1,
   })
   let (_, refreshing) = update_dev(dispatch, BridgeReady, model)
@@ -5933,6 +5934,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
     SessionCommitted(
       session="desktop-test",
       sequence=3,
+      ts=None,
       item=@protocol.User({ content: "future" }),
     ),
     refreshing,
@@ -6157,7 +6159,7 @@ test "BridgeReady fences an awaiting initial after disconnected canonical items"
     {
       ..test_conversation(),
       run: Starting(submission_id="reconnect-prompt"),
-      messages: [{ kind: User, content: "before disconnect" }],
+      messages: [{ kind: User, content: "before disconnect", ts: None }],
       watermark: 1,
     },
     "reconnect-prompt",
@@ -6178,11 +6180,12 @@ test "BridgeReady fences an awaiting initial after disconnected canonical items"
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "before disconnect" },
-        { kind: User, content: "canonical prompt from the gap" },
+        { kind: User, content: "before disconnect", ts: None },
+        { kind: User, content: "canonical prompt from the gap", ts: None },
         {
           kind: Assistant(is_danger=false),
           content: "canonical answer from the gap",
+          ts: None,
         },
       ],
       watermark=3,
@@ -6204,7 +6207,7 @@ test "BridgeReady fences an awaiting steer after disconnected canonical items" {
   let conv = with_pending_steers(
     {
       ..running_conversation(),
-      messages: [{ kind: User, content: "before disconnect" }],
+      messages: [{ kind: User, content: "before disconnect", ts: None }],
       watermark: 1,
     },
     ["steer sent near disconnect"],
@@ -6224,11 +6227,12 @@ test "BridgeReady fences an awaiting steer after disconnected canonical items" {
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "before disconnect" },
-        { kind: User, content: "canonical steer from the gap" },
+        { kind: User, content: "before disconnect", ts: None },
+        { kind: User, content: "canonical steer from the gap", ts: None },
         {
           kind: Assistant(is_danger=false),
           content: "canonical output from the gap",
+          ts: None,
         },
       ],
       watermark=3,
@@ -6358,7 +6362,7 @@ test "open session tracks the latest load and ignores stale replies" {
     is Some({ channel: Local, session: "desktop-b" }),
   )
   let a_items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "old selection" },
+    { kind: User, content: "old selection", ts: None },
   ]
   let (_, after_a) = update_dev(
     dispatch,
@@ -6377,7 +6381,7 @@ test "open session tracks the latest load and ignores stale replies" {
     is Some({ channel: Local, session: "desktop-b" }),
   )
   let b_items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "latest selection" },
+    { kind: User, content: "latest selection", ts: None },
   ]
   let (_, after_b) = update_dev(
     dispatch,
@@ -6401,11 +6405,11 @@ test "same-id session loads are fenced by channel owner" {
   let remote : @interop.ChannelId = Remote("d-remote")
   let local_conv = {
     ..empty_conversation(@interop.ChannelId::Local, "shared"),
-    messages: [{ kind: User, content: "local" }],
+    messages: [{ kind: User, content: "local", ts: None }],
   }
   let remote_conv = {
     ..empty_conversation(remote, "shared"),
-    messages: [{ kind: User, content: "remote" }],
+    messages: [{ kind: User, content: "remote", ts: None }],
   }
   let model = {
     ..test_model(),
@@ -6436,7 +6440,13 @@ test "same-id session loads are fenced by channel owner" {
       remote,
       SessionLoaded(
         session="shared",
-        items=[{ kind: Assistant(is_danger=false), content: "remote loaded" }],
+        items=[
+          {
+            kind: Assistant(is_danger=false),
+            content: "remote loaded",
+            ts: None,
+          },
+        ],
         watermark=1,
         event_boundaries=[],
         generation=1,
@@ -6496,7 +6506,13 @@ test "reselecting a synced active session reloads idle external writes" {
     dispatch,
     SessionLoaded(
       session="desktop-test",
-      items=[{ kind: Assistant(is_danger=false), content: "written elsewhere" }],
+      items=[
+        {
+          kind: Assistant(is_danger=false),
+          content: "written elsewhere",
+          ts: None,
+        },
+      ],
       watermark=1,
       event_boundaries=[],
       generation=1,
@@ -6563,7 +6579,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
     dispatch,
     SessionLoaded(
       session="desktop-pruned",
-      items=[{ kind: User, content: "late old snapshot" }],
+      items=[{ kind: User, content: "late old snapshot", ts: None }],
       watermark=9,
       event_boundaries=[],
       generation=1,
@@ -6585,7 +6601,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
     dispatch,
     SessionLoaded(
       session="desktop-pruned",
-      items=[{ kind: User, content: "fresh snapshot" }],
+      items=[{ kind: User, content: "fresh snapshot", ts: None }],
       watermark=1,
       event_boundaries=[],
       generation=2,
@@ -6631,7 +6647,7 @@ test "archive removal and reopening cannot reuse a transcript request token" {
     dispatch,
     SessionLoaded(
       session="desktop-archived",
-      items=[{ kind: User, content: "late archived snapshot" }],
+      items=[{ kind: User, content: "late archived snapshot", ts: None }],
       watermark=4,
       event_boundaries=[],
       generation=1,
@@ -6763,6 +6779,7 @@ test "run semantic errors never duplicate their terminal commit" {
   let terminal = SessionCommitted(
     session="desktop-test",
     sequence=1,
+    ts=None,
     item=@protocol.Terminal(@protocol.Failed("engine error")),
   )
   let (_, semantic_first) = update_dev(dispatch, semantic, running_model())
@@ -6845,7 +6862,7 @@ test "session loaded swaps the active conversation onto the stored session" {
     usage_tokens: 42,
     watcher_status: "running",
     streaming_response: "leftover",
-    messages: [{ kind: User, content: "old chat" }],
+    messages: [{ kind: User, content: "old chat", ts: None }],
   })
   let (_, loading) = update(
     dispatch,
@@ -6853,8 +6870,8 @@ test "session loaded swaps the active conversation onto the stored session" {
     model,
   )
   let items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "stored question" },
-    { kind: Assistant(is_danger=false), content: "stored answer" },
+    { kind: User, content: "stored question", ts: None },
+    { kind: Assistant(is_danger=false), content: "stored answer", ts: None },
   ]
   let (_, once) = update_dev(
     dispatch,
@@ -6894,7 +6911,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
   let dispatch = test_dispatch()
   let model = running_model()
   let items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "stored" },
+    { kind: User, content: "stored", ts: None },
   ]
   // The active conversation runs; loading some other stored session is fine.
   let (_, loading_other) = update(
@@ -7253,6 +7270,7 @@ test "canonical User text never claims an unconfirmed start" {
     SessionCommitted(
       session="desktop-test",
       sequence=1,
+      ts=None,
       item=@protocol.User({ content: "accepted prompt" }),
     ),
     failed,
@@ -7355,9 +7373,13 @@ test "an accepted start response opens the run without Started" {
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "external prompt" },
-        { kind: Assistant(is_danger=false), content: "external answer" },
-        { kind: User, content: "prompt" },
+        { kind: User, content: "external prompt", ts: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "external answer",
+          ts: None,
+        },
+        { kind: User, content: "prompt", ts: None },
       ],
       watermark=4,
       event_boundaries=[
@@ -7412,7 +7434,7 @@ test "accepted start remains recoverable when the engine fails before User appen
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: User, content: "external writer only" }],
+      items=[{ kind: User, content: "external writer only", ts: None }],
       watermark=1,
       event_boundaries=[(1, false, 1)],
       generation=1,
@@ -8407,7 +8429,7 @@ test "a background run finishes without disturbing the conversation on screen" {
   let second = {
     ..empty_conversation(@interop.ChannelId::Local, "desktop-second"),
     run: Open(run_id="r8", stage=Opened),
-    messages: [{ kind: User, content: "background ask" }],
+    messages: [{ kind: User, content: "background ask", ts: None }],
   }
   let model = running_model().replace_conversation(second)
   let (_, next) = update_dev(
@@ -8469,7 +8491,7 @@ test "the composer draft stays with its conversation across a switch" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..empty_conversation(@interop.ChannelId::Local, "desktop-second"),
-    messages: [{ kind: User, content: "earlier" }],
+    messages: [{ kind: User, content: "earlier", ts: None }],
   })
   let (_, drafted) = update(dispatch, TaskChanged("half a thought"), model)
   let (_, switched) = update(
@@ -8603,6 +8625,7 @@ test "a canonical user commit never settles a local steer" {
     SessionCommitted(
       session="desktop-test",
       sequence=1,
+      ts=None,
       item=@protocol.User({ content: "go left" }),
     ),
     model,
@@ -8618,7 +8641,7 @@ test "a snapshot never settles a local steer by text" {
   let conv = with_pending_steers(
     {
       ..running_conversation(),
-      messages: [{ kind: User, content: "same" }],
+      messages: [{ kind: User, content: "same", ts: None }],
       watermark: 1,
       sync: test_reloading([]),
     },
@@ -8629,7 +8652,7 @@ test "a snapshot never settles a local steer by text" {
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: User, content: "same" }],
+      items=[{ kind: User, content: "same", ts: None }],
       watermark=1,
       event_boundaries=[],
       generation=1,
@@ -8818,7 +8841,7 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
   let conv = with_pending_steers(
     {
       ..running_conversation(),
-      messages: [{ kind: User, content: "question" }],
+      messages: [{ kind: User, content: "question", ts: None }],
       watermark: 1,
     },
     ["late steer"],
@@ -8838,6 +8861,7 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
     SessionCommitted(
       session="desktop-test",
       sequence=2,
+      ts=None,
       item=@protocol.Assistant({
         content: "answer",
         tool_calls: None,
@@ -8851,6 +8875,7 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
     SessionCommitted(
       session="desktop-test",
       sequence=3,
+      ts=None,
       item=@protocol.Terminal(@protocol.Finished("answer")),
     ),
     buffered,
@@ -8860,8 +8885,8 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "question" },
-        { kind: Assistant(is_danger=false), content: "answer" },
+        { kind: User, content: "question", ts: None },
+        { kind: Assistant(is_danger=false), content: "answer", ts: None },
       ],
       watermark=3,
       event_boundaries=[(3, true, 2)],
@@ -8878,6 +8903,7 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
     SessionCommitted(
       session="desktop-test",
       sequence=4,
+      ts=None,
       item=@protocol.User({ content: "next question" }),
     ),
     answered,
@@ -8895,7 +8921,7 @@ test "a snapshot freezes a prior run-tail notice before its next turn" {
   let conv = with_pending_steers(
     {
       ..running_conversation(),
-      messages: [{ kind: User, content: "question" }],
+      messages: [{ kind: User, content: "question", ts: None }],
       watermark: 1,
     },
     ["late steer"],
@@ -8910,10 +8936,10 @@ test "a snapshot freezes a prior run-tail notice before its next turn" {
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "question" },
-        { kind: Assistant(is_danger=false), content: "first answer" },
-        { kind: User, content: "next question" },
-        { kind: Assistant(is_danger=false), content: "next answer" },
+        { kind: User, content: "question", ts: None },
+        { kind: Assistant(is_danger=false), content: "first answer", ts: None },
+        { kind: User, content: "next question", ts: None },
+        { kind: Assistant(is_danger=false), content: "next answer", ts: None },
       ],
       watermark=7,
       event_boundaries=[(3, true, 2), (7, true, 4)],
@@ -8936,7 +8962,7 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
   let conv = with_pending_steers(
     {
       ..running_conversation(),
-      messages: [{ kind: User, content: "question" }],
+      messages: [{ kind: User, content: "question", ts: None }],
       watermark: 1,
       sync: test_reloading([]),
     },
@@ -8948,6 +8974,7 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
     SessionCommitted(
       session="desktop-test",
       sequence=2,
+      ts=None,
       item=@protocol.User({ content: "late steer" }),
     ),
     model,
@@ -8962,6 +8989,7 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
     SessionCommitted(
       session="desktop-test",
       sequence=3,
+      ts=None,
       item=@protocol.Assistant({
         content: "answer",
         tool_calls: None,
@@ -8975,6 +9003,7 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
     SessionCommitted(
       session="desktop-test",
       sequence=4,
+      ts=None,
       item=@protocol.Terminal(@protocol.Finished("answer")),
     ),
     answered,
@@ -8984,9 +9013,9 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "question" },
-        { kind: User, content: "late steer" },
-        { kind: Assistant(is_danger=false), content: "answer" },
+        { kind: User, content: "question", ts: None },
+        { kind: User, content: "late steer", ts: None },
+        { kind: Assistant(is_danger=false), content: "answer", ts: None },
       ],
       watermark=4,
       event_boundaries=[(4, true, 3)],
@@ -9008,8 +9037,8 @@ test "an unknown terminal before Finished still owns the run-tail notice" {
     {
       ..running_conversation(),
       messages: [
-        { kind: User, content: "question" },
-        { kind: Assistant(is_danger=false), content: "answer" },
+        { kind: User, content: "question", ts: None },
+        { kind: Assistant(is_danger=false), content: "answer", ts: None },
       ],
       watermark: 2,
     },
@@ -9020,6 +9049,7 @@ test "an unknown terminal before Finished still owns the run-tail notice" {
     SessionCommitted(
       session="desktop-test",
       sequence=3,
+      ts=None,
       item=@protocol.UnknownTerminal({
         "kind": "terminal",
         "payload": { "kind": "future_terminal", "message": "answer" },
@@ -9038,8 +9068,8 @@ test "an unknown terminal before Finished still owns the run-tail notice" {
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "question" },
-        { kind: Assistant(is_danger=false), content: "answer" },
+        { kind: User, content: "question", ts: None },
+        { kind: Assistant(is_danger=false), content: "answer", ts: None },
       ],
       watermark=3,
       event_boundaries=[(3, true, 2)],
@@ -9060,8 +9090,8 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
     {
       ..running_conversation(),
       messages: [
-        { kind: User, content: "first question" },
-        { kind: Assistant(is_danger=false), content: "first answer" },
+        { kind: User, content: "first question", ts: None },
+        { kind: Assistant(is_danger=false), content: "first answer", ts: None },
       ],
       watermark: 2,
       run_durable_floor: Some(0),
@@ -9080,6 +9110,7 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
     SessionCommitted(
       session="desktop-test",
       sequence=3,
+      ts=None,
       item=@protocol.Terminal(@protocol.Finished("first answer")),
     ),
     model,
@@ -9116,6 +9147,7 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
     SessionCommitted(
       session="desktop-test",
       sequence=4,
+      ts=None,
       item=@protocol.User({ content: "second question" }),
     ),
     started,
@@ -9125,6 +9157,7 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
     SessionCommitted(
       session="desktop-test",
       sequence=5,
+      ts=None,
       item=@protocol.Terminal(@protocol.Finished("second answer")),
     ),
     second_user,
@@ -9136,8 +9169,8 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "first question" },
-        { kind: Assistant(is_danger=false), content: "first answer" },
+        { kind: User, content: "first question", ts: None },
+        { kind: Assistant(is_danger=false), content: "first answer", ts: None },
       ],
       watermark=2,
       event_boundaries=[(1, false, 1), (2, false, 2)],
@@ -9152,10 +9185,10 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "first question" },
-        { kind: Assistant(is_danger=false), content: "first answer" },
-        { kind: User, content: "second question" },
-        { kind: Assistant(is_danger=false), content: "second answer" },
+        { kind: User, content: "first question", ts: None },
+        { kind: Assistant(is_danger=false), content: "first answer", ts: None },
+        { kind: User, content: "second question", ts: None },
+        { kind: Assistant(is_danger=false), content: "second answer", ts: None },
       ],
       watermark=5,
       event_boundaries=[
@@ -9244,8 +9277,8 @@ test "a successor terminal cannot claim a setup-failed run's snapshot cut" {
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "next question" },
-        { kind: Assistant(is_danger=false), content: "next answer" },
+        { kind: User, content: "next question", ts: None },
+        { kind: Assistant(is_danger=false), content: "next answer", ts: None },
       ],
       watermark=3,
       event_boundaries=[(1, true, 0), (2, false, 1), (3, true, 2)],
@@ -9286,8 +9319,12 @@ test "an offline successor snapshot fences without claiming its terminal" {
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "offline successor" },
-        { kind: Assistant(is_danger=false), content: "successor answer" },
+        { kind: User, content: "offline successor", ts: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "successor answer",
+          ts: None,
+        },
       ],
       watermark=3,
       event_boundaries=[(1, true, 0), (2, false, 1), (3, true, 2)],
@@ -9321,7 +9358,9 @@ test "a foreign run gains a floor only after snapshot data follows the prior ter
   let dispatch = test_dispatch()
   let conv = {
     ..test_conversation(),
-    messages: [{ kind: Assistant(is_danger=false), content: "previous" }],
+    messages: [
+      { kind: Assistant(is_danger=false), content: "previous", ts: None },
+    ],
     watermark: 2,
     last_terminal_sequence: 2,
     sync: test_reloading([]),
@@ -9346,8 +9385,8 @@ test "a foreign run gains a floor only after snapshot data follows the prior ter
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: Assistant(is_danger=false), content: "previous" },
-        { kind: User, content: "current" },
+        { kind: Assistant(is_danger=false), content: "previous", ts: None },
+        { kind: User, content: "current", ts: None },
       ],
       watermark=3,
       event_boundaries=[(2, true, 1)],
@@ -9379,6 +9418,7 @@ test "a foreign background run waits for a snapshot cut after Started" {
     SessionCommitted(
       session~,
       sequence=2,
+      ts=None,
       item=@protocol.Assistant({
         content: "previous answer",
         tool_calls: None,
@@ -9415,6 +9455,7 @@ test "a foreign background run waits for a snapshot cut after Started" {
     SessionCommitted(
       session~,
       sequence=3,
+      ts=None,
       item=@protocol.Terminal(@protocol.Finished("previous answer")),
     ),
     started,
@@ -9424,6 +9465,7 @@ test "a foreign background run waits for a snapshot cut after Started" {
     SessionCommitted(
       session~,
       sequence=4,
+      ts=None,
       item=@protocol.User({ content: "current question" }),
     ),
     buffered_terminal,
@@ -9454,8 +9496,12 @@ test "a foreign background run waits for a snapshot cut after Started" {
     SessionRefreshed(
       session~,
       items=[
-        { kind: Assistant(is_danger=false), content: "previous answer" },
-        { kind: User, content: "current question" },
+        {
+          kind: Assistant(is_danger=false),
+          content: "previous answer",
+          ts: None,
+        },
+        { kind: User, content: "current question", ts: None },
       ],
       watermark=4,
       event_boundaries=[
@@ -9492,6 +9538,7 @@ test "buffered future terminal cannot become its own run floor" {
     SessionCommitted(
       session="desktop-test",
       sequence=2,
+      ts=None,
       item=@protocol.User({ content: "current question" }),
     ),
     model,
@@ -9501,6 +9548,7 @@ test "buffered future terminal cannot become its own run floor" {
     SessionCommitted(
       session="desktop-test",
       sequence=3,
+      ts=None,
       item=@protocol.Assistant({
         content: "current answer",
         tool_calls: None,
@@ -9514,6 +9562,7 @@ test "buffered future terminal cannot become its own run floor" {
     SessionCommitted(
       session="desktop-test",
       sequence=4,
+      ts=None,
       item=@protocol.Terminal(@protocol.Finished("current answer")),
     ),
     answer,
@@ -9571,6 +9620,7 @@ test "a late durable EOF finalizes an unconfirmed steer without a terminal" {
     SessionCommitted(
       session="desktop-test",
       sequence=2,
+      ts=None,
       item=@protocol.Assistant({
         content: "partial answer",
         tool_calls: None,
@@ -9592,7 +9642,13 @@ test "a late durable EOF finalizes an unconfirmed steer without a terminal" {
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: Assistant(is_danger=false), content: "partial answer" }],
+      items=[
+        {
+          kind: Assistant(is_danger=false),
+          content: "partial answer",
+          ts: None,
+        },
+      ],
       watermark=2,
       event_boundaries=[(1, true, 0), (2, false, 1)],
       generation=1,
@@ -9827,7 +9883,7 @@ test "a runs snapshot cannot retire a steer submitted after its frontier" {
   // only reason this conversation survives a switch.
   let other = {
     ..empty_conversation(@interop.ChannelId::Local, "desktop-other"),
-    messages: [{ kind: User, content: "other conversation" }],
+    messages: [{ kind: User, content: "other conversation", ts: None }],
   }
   let (_, switched) = update(
     dispatch,
@@ -9981,7 +10037,7 @@ test "a late normal Finished upgrades a runs-settled uncertain steer" {
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: Assistant(is_danger=false), content: "answer" }],
+      items=[{ kind: Assistant(is_danger=false), content: "answer", ts: None }],
       watermark=2,
       event_boundaries=[(1, true, 0), (2, true, 1)],
       generation=2,
@@ -10139,7 +10195,7 @@ test "runs settlement causally freezes bound initial prompts from open and idle 
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: User, content: "open-run durable tail" }],
+      items=[{ kind: User, content: "open-run durable tail", ts: None }],
       watermark=1,
       event_boundaries=[(1, false, 1)],
       generation=1,
@@ -10179,7 +10235,11 @@ test "runs settlement causally freezes bound initial prompts from open and idle 
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: Assistant(is_danger=false), content: "idle-run durable tail" },
+        {
+          kind: Assistant(is_danger=false),
+          content: "idle-run durable tail",
+          ts: None,
+        },
       ],
       watermark=1,
       event_boundaries=[(1, false, 1)],
@@ -10210,6 +10270,7 @@ test "an initial warning freezes between a snapshot and its buffered successor" 
     SessionCommitted(
       session="desktop-test",
       sequence=2,
+      ts=None,
       item=@protocol.User({ content: "buffered W+1" }),
     ),
     finished,
@@ -10222,7 +10283,7 @@ test "an initial warning freezes between a snapshot and its buffered successor" 
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: User, content: "snapshot W" }],
+      items=[{ kind: User, content: "snapshot W", ts: None }],
       watermark=1,
       event_boundaries=[(1, false, 1)],
       generation=1,
@@ -10285,7 +10346,7 @@ test "foreign Started reanchors a reconnected initial before retiring its owners
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: User, content: "old durable prompt" }],
+      items=[{ kind: User, content: "old durable prompt", ts: None }],
       watermark=1,
       event_boundaries=[(1, false, 1)],
       generation=1,
@@ -10300,7 +10361,7 @@ test "foreign Started reanchors a reconnected initial before retiring its owners
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: User, content: "old durable prompt" }],
+      items=[{ kind: User, content: "old durable prompt", ts: None }],
       watermark=1,
       event_boundaries=[(1, false, 1)],
       generation=2,
@@ -10524,6 +10585,7 @@ test "exact-zero recovery refuses buffered or nonzero durable frontiers" {
     SessionCommitted(
       session="desktop-test",
       sequence=1,
+      ts=None,
       item=@protocol.User({ content: "durable prompt arrived" }),
     ),
     waiting,
@@ -11480,11 +11542,11 @@ test "a background archive removes only its channel's same-id conversation" {
   let remote : @interop.ChannelId = Remote("d-remote")
   let local_conv = {
     ..empty_conversation(@interop.ChannelId::Local, "shared"),
-    messages: [{ kind: User, content: "local" }],
+    messages: [{ kind: User, content: "local", ts: None }],
   }
   let remote_conv = {
     ..empty_conversation(remote, "shared"),
-    messages: [{ kind: User, content: "remote" }],
+    messages: [{ kind: User, content: "remote", ts: None }],
   }
   let model = {
     ..test_model(),
@@ -12929,6 +12991,7 @@ test "send does not show a prompt until its commit lands" {
     SessionCommitted(
       session="desktop-test",
       sequence=1,
+      ts=None,
       item=@protocol.User({ content: "build the thing" }),
     ),
     sent,
@@ -12946,7 +13009,7 @@ test "a replayed commit at or below the watermark is dropped" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "already there" }],
+    messages: [{ kind: User, content: "already there", ts: None }],
     watermark: 2,
   })
   let (_, next) = update_dev(
@@ -12954,6 +13017,7 @@ test "a replayed commit at or below the watermark is dropped" {
     SessionCommitted(
       session="desktop-test",
       sequence=2,
+      ts=None,
       item=@protocol.User({ content: "already there" }),
     ),
     model,
@@ -12974,6 +13038,7 @@ test "a commit past the frontier buffers and flips into a reload" {
     SessionCommitted(
       session="desktop-test",
       sequence=5,
+      ts=None,
       item=@protocol.User({ content: "from the future" }),
     ),
     model,
@@ -13000,6 +13065,7 @@ test "commits buffer while a reload is in flight" {
     SessionCommitted(
       session="desktop-test",
       sequence=3,
+      ts=None,
       item=@protocol.User({ content: "mid-reload" }),
     ),
     model,
@@ -13019,8 +13085,8 @@ test "a snapshot drains buffered commits in sequence order" {
     // Out of arrival order on purpose; the drain sorts by sequence.
     ,
     sync: test_reloading([
-      { sequence: 4, item: @protocol.User({ content: "four" }) },
-      { sequence: 3, item: @protocol.User({ content: "three" }) },
+      { sequence: 4, ts: None, item: @protocol.User({ content: "four" }) },
+      { sequence: 3, ts: None, item: @protocol.User({ content: "three" }) },
     ]),
   })
   let (_, next) = update_dev(
@@ -13028,8 +13094,8 @@ test "a snapshot drains buffered commits in sequence order" {
     SessionRefreshed(
       session="desktop-test",
       items=[
-        { kind: User, content: "one" },
-        { kind: Assistant(is_danger=false), content: "two" },
+        { kind: User, content: "one", ts: None },
+        { kind: Assistant(is_danger=false), content: "two", ts: None },
       ],
       watermark=2,
       event_boundaries=[],
@@ -13050,14 +13116,17 @@ test "a snapshot already containing the buffered commits drops them" {
   let model = test_model().replace_conversation({
     ..test_conversation(),
     sync: test_reloading([
-      { sequence: 2, item: @protocol.User({ content: "dup" }) },
+      { sequence: 2, ts: None, item: @protocol.User({ content: "dup" }) },
     ]),
   })
   let (_, next) = update_dev(
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: User, content: "one" }, { kind: User, content: "dup" }],
+      items=[
+        { kind: User, content: "one", ts: None },
+        { kind: User, content: "dup", ts: None },
+      ],
       watermark=2,
       event_boundaries=[],
       generation=1,
@@ -13075,14 +13144,14 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
   let model = test_model().replace_conversation({
     ..test_conversation(),
     sync: test_reloading([
-      { sequence: 9, item: @protocol.User({ content: "far" }) },
+      { sequence: 9, ts: None, item: @protocol.User({ content: "far" }) },
     ]),
   })
   let (_, next) = update_dev(
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: User, content: "one" }],
+      items=[{ kind: User, content: "one", ts: None }],
       watermark=2,
       event_boundaries=[],
       generation=1,
@@ -13102,10 +13171,10 @@ test "background retries preserve buffered commits until a later success" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "kept" }],
+    messages: [{ kind: User, content: "kept", ts: None }],
     watermark: 1,
     sync: test_reloading([
-      { sequence: 3, item: @protocol.User({ content: "x" }) },
+      { sequence: 3, ts: None, item: @protocol.User({ content: "x" }) },
     ]),
   })
   let model = { ..model, transcript_request_generation: 1 }
@@ -13132,6 +13201,7 @@ test "background retries preserve buffered commits until a later success" {
     SessionCommitted(
       session="desktop-test",
       sequence=2,
+      ts=None,
       item=@protocol.User({ content: "next" }),
     ),
     failed,
@@ -13145,7 +13215,7 @@ test "background retries preserve buffered commits until a later success" {
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: User, content: "kept" }],
+      items=[{ kind: User, content: "kept", ts: None }],
       watermark=1,
       event_boundaries=[],
       generation=2,
@@ -13165,10 +13235,10 @@ test "reopening an active failed reload retries and preserves other local notice
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "kept" }],
+    messages: [{ kind: User, content: "kept", ts: None }],
     watermark: 1,
     sync: ReloadFailed(generation=1, buffered=[
-      { sequence: 2, item: @protocol.User({ content: "two" }) },
+      { sequence: 2, ts: None, item: @protocol.User({ content: "two" }) },
     ]),
     overlay: [
       {
@@ -13204,7 +13274,7 @@ test "reopening an active failed reload retries and preserves other local notice
     dispatch,
     SessionLoaded(
       session="desktop-test",
-      items=[{ kind: User, content: "kept" }],
+      items=[{ kind: User, content: "kept", ts: None }],
       watermark=1,
       event_boundaries=[],
       generation=2,
@@ -13224,12 +13294,14 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "current" }],
+    messages: [{ kind: User, content: "current", ts: None }],
     watermark: 5,
     sync: Reloading(
       generation=2,
       attempt=1,
-      buffered=[{ sequence: 6, item: @protocol.User({ content: "six" }) }],
+      buffered=[
+        { sequence: 6, ts: None, item: @protocol.User({ content: "six" }) },
+      ],
       reload_after_current=false,
     ),
   })
@@ -13237,7 +13309,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: User, content: "stale generation" }],
+      items=[{ kind: User, content: "stale generation", ts: None }],
       watermark=9,
       event_boundaries=[],
       generation=1,
@@ -13253,7 +13325,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
     dispatch,
     SessionRefreshed(
       session="desktop-test",
-      items=[{ kind: User, content: "older snapshot" }],
+      items=[{ kind: User, content: "older snapshot", ts: None }],
       watermark=4,
       event_boundaries=[],
       generation=2,
@@ -13279,6 +13351,7 @@ test "tool decode semantics wait for their durable error tool result" {
   let commit = SessionCommitted(
     session="desktop-test",
     sequence=1,
+    ts=None,
     item=@protocol.ToolResult({
       tool_call_id: "",
       tool_name: "edit",
@@ -13327,6 +13400,7 @@ test "assistant semantic events wait for their durable commit" {
     SessionCommitted(
       session="desktop-test",
       sequence=1,
+      ts=None,
       item=@protocol.Assistant({
         content: "answer",
         tool_calls: None,
@@ -13381,6 +13455,7 @@ test "a delayed assistant commit never clears a newer live delta" {
     SessionCommitted(
       session="desktop-test",
       sequence=1,
+      ts=None,
       item=@protocol.Assistant({
         content: "older committed answer",
         tool_calls: None,
@@ -13397,7 +13472,7 @@ test "a delayed terminal commit never clears a newer live delta" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
-    messages: [{ kind: User, content: "older prompt" }],
+    messages: [{ kind: User, content: "older prompt", ts: None }],
     watermark: 1,
     streaming_response: "next turn fragment",
   })
@@ -13406,6 +13481,7 @@ test "a delayed terminal commit never clears a newer live delta" {
     SessionCommitted(
       session="desktop-test",
       sequence=2,
+      ts=None,
       item=@protocol.Terminal(@protocol.Finished("older answer")),
     ),
     model,
@@ -13418,7 +13494,7 @@ test "a fixed local notice stays before later durable turns" {
   let dispatch = test_dispatch()
   let conv = {
     ..test_conversation(),
-    messages: [{ kind: User, content: "question" }],
+    messages: [{ kind: User, content: "question", ts: None }],
     watermark: 1,
   }.append_local_notice(Assistant(is_danger=true), "local failure")
   let (_, committed) = update_dev(
@@ -13426,6 +13502,7 @@ test "a fixed local notice stays before later durable turns" {
     SessionCommitted(
       session="desktop-test",
       sequence=2,
+      ts=None,
       item=@protocol.Assistant({
         content: "later answer",
         tool_calls: None,
@@ -13460,6 +13537,7 @@ test "a durable commit never retires a same-class local notice" {
     SessionCommitted(
       session="desktop-test",
       sequence=1,
+      ts=None,
       item=@protocol.Assistant({
         content: "durable answer",
         tool_calls: None,
@@ -13485,6 +13563,7 @@ test "commit-first assistant semantics do not append again" {
     SessionCommitted(
       session="desktop-test",
       sequence=1,
+      ts=None,
       item=@protocol.Assistant({
         content: "answer",
         tool_calls: None,
@@ -13517,6 +13596,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
     SessionCommitted(
       session="desktop-elsewhere",
       sequence=1,
+      ts=None,
       item=@protocol.User({ content: "hi" }),
     ),
     test_model(),
@@ -13536,6 +13616,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
     SessionCommitted(
       session="desktop-elsewhere",
       sequence=1,
+      ts=None,
       item=@protocol.User({ content: "hi" }),
     ),
     next,
@@ -13551,6 +13632,7 @@ test "a gapped commit for an unknown session materializes then reloads" {
     SessionCommitted(
       session="desktop-gap",
       sequence=3,
+      ts=None,
       item=@protocol.User({ content: "third" }),
     ),
     test_model(),
@@ -13587,6 +13669,7 @@ test "a late commit cannot resurrect a locally known archived session" {
     SessionCommitted(
       session="desktop-archived",
       sequence=1,
+      ts=None,
       item=@protocol.User({ content: "stale" }),
     ),
     model,
@@ -13611,6 +13694,7 @@ test "an archive tombstone blocks commits before the archived list refreshes" {
     SessionCommitted(
       session="desktop-tombstoned",
       sequence=1,
+      ts=None,
       item=@protocol.User({ content: "stale" }),
     ),
     model,

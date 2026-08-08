@@ -795,6 +795,7 @@ fn session_event_msg(payload : @protocol.SessionCommitPayload) -> DeviceMsg? {
     SessionCommitted(
       session=payload.session,
       sequence=payload.sequence,
+      ts=payload.event.ts,
       item=payload.event.item,
     ),
   )

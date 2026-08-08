@@ -72,7 +72,7 @@ pub fn session_from_reply(
     if event.sequence > derived_watermark {
       derived_watermark = event.sequence
     }
-    ignore(apply_session_item(items, event.item))
+    ignore(apply_session_item(items, event.item, ts?=event.ts))
     event_boundaries.push(
       (event.sequence, event.item.is_terminal(), items.length()),
     )
@@ -99,10 +99,14 @@ pub fn transcript_from_session(
 /// whether the visible transcript changed. Unknown items deliberately change
 /// nothing: their event sequence still advances the durable watermark, while
 /// their raw JSON stays available to newer code. The same projector replays
-/// snapshots and live commits, so both paths agree by construction.
+/// snapshots and live commits, so both paths agree by construction. `ts` is
+/// the committing event's stamp, carried onto every row the item appends so
+/// the view can date a turn; a store (or fixture) written without one leaves
+/// the rows undated.
 pub fn apply_session_item(
   items : Array[TranscriptItem],
   item : @desktop_protocol.SessionItem,
+  ts? : Double,
 ) -> Bool {
   let before = items.length()
   let mut updated_existing = false
@@ -110,7 +114,7 @@ pub fn apply_session_item(
     @desktop_protocol.User(payload) => {
       let content = payload.content.trim().to_owned()
       if !content.is_empty() {
-        items.push({ kind: User, content })
+        items.push({ kind: User, content, ts })
       }
     }
     @desktop_protocol.Assistant(payload) => {
@@ -120,12 +124,12 @@ pub fn apply_session_item(
       if payload.reasoning_content is Some(reasoning) {
         let reasoning = reasoning.trim().to_owned()
         if !reasoning.is_empty() {
-          items.push({ kind: Reasoning, content: reasoning })
+          items.push({ kind: Reasoning, content: reasoning, ts })
         }
       }
       let content = payload.content.trim().to_owned()
       if !content.is_empty() {
-        items.push({ kind: Assistant(is_danger=false), content })
+        items.push({ kind: Assistant(is_danger=false), content, ts })
       }
       // Tool calls belong after this assistant event's reasoning and visible
       // prose, in the exact order the model emitted them. Their results arrive
@@ -141,6 +145,7 @@ pub fn apply_session_item(
             brief=None,
           ),
           content: "",
+          ts,
         })
       }
     }
@@ -178,6 +183,9 @@ pub fn apply_session_item(
             brief=payload.brief,
           ),
           content: payload.content,
+          // The row keeps the call's own stamp: it is one tool call, dated
+          // when the agent made it, not when its output came back.
+          ts: items[index].ts,
         }
         updated_existing = true
       } else {
@@ -197,6 +205,7 @@ pub fn apply_session_item(
             brief=payload.brief,
           ),
           content: payload.content,
+          ts,
         })
       }
     }
@@ -219,17 +228,18 @@ pub fn apply_session_item(
               brief=None,
             ),
             content: update.diagnostics.join("\n"),
+            ts,
           })
         }
       }
     @desktop_protocol.Summary(payload) => {
       let content = payload.content.trim().to_owned()
       if !content.is_empty() {
-        items.push({ kind: Summary, content })
+        items.push({ kind: Summary, content, ts })
       }
     }
     @desktop_protocol.Terminal(terminal) =>
-      SessionTerminalProjection(terminal).append_to(items)
+      SessionTerminalProjection(terminal).append_to(items, ts?)
     @desktop_protocol.UnknownTerminal(_) => ()
     @desktop_protocol.Unknown(_) => ()
   }
@@ -244,6 +254,7 @@ priv struct SessionTerminalProjection(@desktop_protocol.SessionTerminal)
 fn SessionTerminalProjection::append_to(
   self : SessionTerminalProjection,
   items : Array[TranscriptItem],
+  ts? : Double,
 ) -> Unit {
   let (kind, message) = match self.0 {
     @desktop_protocol.Finished(message) => ("finished", message)
@@ -257,7 +268,7 @@ fn SessionTerminalProjection::append_to(
     // message; only a differing terminal message adds a bubble.
     "finished" =>
       if !message.is_empty() && !ends_with_assistant(items, message) {
-        items.push({ kind: Assistant(is_danger=false), content: message })
+        items.push({ kind: Assistant(is_danger=false), content: message, ts })
       }
     "aborted" =>
       items.push({
@@ -267,6 +278,7 @@ fn SessionTerminalProjection::append_to(
         } else {
           "aborted: \{message}"
         },
+        ts,
       })
     "interrupted" =>
       items.push({
@@ -276,6 +288,7 @@ fn SessionTerminalProjection::append_to(
         } else {
           "cancelled: \{message}"
         },
+        ts,
       })
     "failed" =>
       items.push({
@@ -285,6 +298,7 @@ fn SessionTerminalProjection::append_to(
         } else {
           message
         },
+        ts,
       })
     _ => ()
   }
@@ -365,6 +379,30 @@ test "session load derives an old host's missing watermark from event sequences"
   inspect(sequence, content="4")
   assert_true(is_terminal)
   inspect(boundary, content="2")
+}
+
+///|
+test "projected rows carry their event's stamp, tool rows the call's own" {
+  let events =
+    #|{"sequence":1,"ts":1781144351123,"item":{"kind":"user","payload":{"content":"question"}}},
+    #|{"sequence":2,"ts":1781144352000,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[{"id":"c1","name":"read","arguments":"{}"}]}}},
+    #|{"sequence":3,"ts":1781144399000,"item":{"kind":"tool_result","payload":{"tool_call_id":"c1","tool_name":"read","content":"out","is_error":false}}}
+  let items = session_from_reply(session_reply(events)).items
+  inspect(items.length(), content="3")
+  assert_true(items[0].ts is Some(1781144351123))
+  assert_true(items[1].ts is Some(1781144352000))
+  // The result filled the call row in place; the row is dated when the call
+  // was made, not when its output came back.
+  assert_true(items[2].kind is Tool(has_result=true, ..))
+  assert_true(items[2].ts is Some(1781144352000))
+}
+
+///|
+test "rows from a store written without stamps stay undated" {
+  let events =
+    #|{"sequence":1,"item":{"kind":"user","payload":{"content":"question"}}}
+  let items = session_from_reply(session_reply(events)).items
+  assert_true(items[0].ts is None)
 }
 
 ///|
