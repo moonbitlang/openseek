@@ -1253,6 +1253,16 @@ fn mention_target(mention : @mention_context.MentionRef) -> MentionTarget? {
 }
 
 ///|
+/// Who is speaking, for anyone who cannot see the bubble that says so. The
+/// alignment, the fill, and the rule between turns are all pure CSS, so
+/// without this the transcript reaches a screen reader as an unattributed
+/// stream of text. It is the same word the visible caption used to carry,
+/// kept in the accessibility tree and out of the layout.
+fn speaker_label(name : String) -> @html.Html {
+  @html.span(class="visually-hidden", name)
+}
+
+///|
 /// A user message bubble. The bubble itself is what marks the turn as the
 /// user's — no avatar, no role label — so everything unbubbled below it reads
 /// as the agent's side of the conversation. A content that carries a
@@ -1265,7 +1275,7 @@ fn user_message_view(
   content : String,
   on_jump? : (MentionTarget) -> @cmd.Cmd,
 ) -> @html.Html {
-  let body : Array[@html.Html] = []
+  let body : Array[@html.Html] = [speaker_label("You")]
   match @mention_context.parse(content) {
     Some(parsed) => {
       let chips : Array[@html.Html] = []
@@ -1337,7 +1347,12 @@ fn turn_rule_view(ts? : Double) -> @html.Html {
   if ts is Some(ts) {
     let label = js_clock_label(ts)
     if !label.is_empty() {
-      children.push(@html.span(class="turn-time", label))
+      children.push(
+        @html.span(class="turn-time", [
+          speaker_label("Sent "),
+          @html.text(label),
+        ]),
+      )
     }
   }
   @html.div(class="turn-rule", children)
@@ -1362,7 +1377,9 @@ fn transcript_item_view(
           @markdown.markdown_nodes(item.content, open_file=on_open),
         )
       }
-      @html.div(class="msg", [@html.div(class="msg-body", [content])])
+      @html.div(class="msg", [
+        @html.div(class="msg-body", [speaker_label("OpenSeek"), content]),
+      ])
     }
     // Unreachable in practice — the transcript loop batches every reasoning
     // and tool item into a run and builds the activity card itself — but the
@@ -1409,6 +1426,7 @@ fn streaming_response_view(
 ) -> @html.Html {
   @html.div(class="msg streaming", [
     @html.div(class="msg-body", [
+      speaker_label("OpenSeek"),
       @html.div(
         class="msg-content markdown",
         @markdown.markdown_nodes(content, open_file=on_open),
@@ -3322,8 +3340,47 @@ test "the turn rule dates itself only from a real stamp" {
   let stamped = render(turn_rule_view(ts=1781144351123))
   assert_true(stamped.contains("turn-time"))
   assert_true(stamped.contains(":"))
+  // A bare clock reads as a stray number without it.
+  assert_true(stamped.contains("Sent "))
   assert_false(render(turn_rule_view()).contains("turn-time"))
   assert_false(render(turn_rule_view(ts=0)).contains("turn-time"))
+}
+
+///|
+#warnings("-alert_unstable")
+test "every message names its speaker to assistive technology" {
+  let render = item => {
+    @rabbita.render_to_string(() => {
+      @rabbita.Val::constant(transcript_item_view(item, _ => @cmd.none))
+    })
+  }
+  // The bubble, the alignment, and the rule are CSS only; the name has to
+  // survive somewhere a screen reader reaches.
+  let user = render({ kind: User, content: "question", ts: None })
+  assert_true(user.contains("<span class=\"visually-hidden\">You</span>"))
+  let assistant = render({
+    kind: Assistant(is_danger=false),
+    content: "answer",
+    ts: None,
+  })
+  assert_true(
+    assistant.contains("<span class=\"visually-hidden\">OpenSeek</span>"),
+  )
+  // An abort/failure notice is the agent talking too.
+  let danger = render({
+    kind: Assistant(is_danger=true),
+    content: "failed",
+    ts: None,
+  })
+  assert_true(
+    danger.contains("<span class=\"visually-hidden\">OpenSeek</span>"),
+  )
+  let streaming = @rabbita.render_to_string(() => {
+    @rabbita.Val::constant(streaming_response_view("partial", _ => @cmd.none))
+  })
+  assert_true(
+    streaming.contains("<span class=\"visually-hidden\">OpenSeek</span>"),
+  )
 }
 
 ///|

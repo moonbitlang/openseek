@@ -2160,6 +2160,20 @@ main {
   background: var(--surface-2);
 }
 
+/* In the accessibility tree, out of the layout: speaker names and the
+   like, which the redesign says visually through alignment and fill. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* Closes the user's turn: a hairline running to the right edge, where a
    trailing label (the send time) can sit under the bubble it belongs
    to. Empty of children it is simply the full-width rule. */
