@@ -10,11 +10,10 @@ import {
 // Errors
 
 // Types and methods
-type MoonbitTokenizer
-pub fn MoonbitTokenizer::MoonbitTokenizer() -> Self
-pub impl @syntax.LineTokenizer for MoonbitTokenizer
+type MoonBitTokenizer
+pub fn MoonBitTokenizer::MoonBitTokenizer() -> Self
+pub impl @syntax.LineTokenizer for MoonBitTokenizer
 
 // Type aliases
 
 // Traits
-
