@@ -3692,7 +3692,7 @@ fn update_device_msg(
               // carried it. Re-broadcasts are safe by construction.
               (@cmd.none, model)
             } else if sequence == conv.watermark + 1 {
-              let (changed, next) = conv.apply_commit(sequence, item)
+              let (changed, next) = conv.apply_commit(sequence, item, ts?)
               (
                 if changed {
                   scroll_if_active(model, channel, session)
@@ -8612,6 +8612,46 @@ test "a legacy text-only steer receipt cannot claim local ownership" {
   )
   inspect(next.active().pending_steers().length(), content="1")
   inspect(next.active().input_ledger.length(), content="1")
+}
+
+///|
+test "a live commit dates its row on arrival, buffered or applied straight" {
+  let dispatch = test_dispatch()
+  let stamped = (session, sequence, ts) => {
+    SessionCommitted(
+      session~,
+      sequence~,
+      ts=Some(ts),
+      item=@protocol.User({ content: "question" }),
+    )
+  }
+  // The contiguous-commit path a running conversation takes: the row must
+  // carry its stamp now, not only after the next snapshot reload.
+  let (_, direct) = update_dev(
+    dispatch,
+    stamped("desktop-test", 1, 1781144351123),
+    running_model(),
+  )
+  assert_true(direct.active().messages[0].ts is Some(1781144351123))
+  // The same stamp survives the buffer a reconnect drains commits through.
+  let (_, reconnecting) = update_dev(dispatch, BridgeReady, running_model())
+  let (_, buffered) = update_dev(
+    dispatch,
+    stamped("desktop-test", 1, 1781144352000),
+    reconnecting,
+  )
+  let (_, drained) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      items=[],
+      watermark=0,
+      event_boundaries=[],
+      generation=1,
+    ),
+    buffered,
+  )
+  assert_true(drained.active().messages[0].ts is Some(1781144352000))
 }
 
 ///|
