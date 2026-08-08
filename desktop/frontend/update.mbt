@@ -1506,7 +1506,10 @@ fn update_msg(
       (
         @cmd.batch([
           save_default_model(engine_model),
-          save_conversation_models(next.conversation_models),
+          save_conversation_model(
+            conversation_model_key(conv.device, conv.session_id),
+            engine_model,
+          ),
         ]),
         { ..next, default_model: engine_model },
       )
@@ -3944,10 +3947,16 @@ fn update_device_msg(
       // stay unremembered, and the conversation would come back on whatever
       // default an unrelated chat has moved to since. Re-pinning the same
       // tier only reorders the list, so consecutive turns write once.
-      let updated = updated.remember_model(channel, session, conv.engine_model)
-      if updated.conversation_models != model.conversation_models {
-        commands.push(save_conversation_models(updated.conversation_models))
+      let pinned = updated.remember_model(channel, session, conv.engine_model)
+      if pinned.conversation_models != model.conversation_models {
+        commands.push(
+          save_conversation_model(
+            conversation_model_key(channel, session),
+            conv.engine_model,
+          ),
+        )
       }
+      let updated = pinned
       // The model rode in on the conversation above; max steps is still one
       // global setting, so sync it only when this start belongs to the
       // conversation on screen. A slow background start (the user switched
@@ -10727,14 +10736,45 @@ test "a run pins an inherited tier the user never clicked for" {
 test "remembered tiers survive a round trip through storage" {
   let dispatch = test_dispatch()
   let (_, chosen) = update(dispatch, ToggleModel, test_model())
-  // What `save_conversation_models` would write, read back by a fresh page.
-  let rows : Array[Json] = chosen.conversation_models.map(entry => {
+  let restored = parse_conversation_models(
+    encoded_conversation_models(chosen.conversation_models),
+  )
+  assert_eq(restored, chosen.conversation_models)
+  assert_true(restored is [{ key: "local/desktop-test", model: Low }])
+}
+
+///|
+test "a write merges into the stored rows instead of replacing them" {
+  // A sibling console tab on the same origin wrote these while this page held
+  // a copy loaded at its own startup. Pinning here must not drop the other
+  // tab's row — that conversation would silently revert to the default.
+  let stored = parse_conversation_models(
+    encoded_conversation_models([
+      { key: "remote.b/sibling-chat", model: Low },
+      { key: "remote.a/desktop-test", model: High },
+    ]),
+  )
+  let merged = remembered_with(stored, "remote.a/desktop-test", Low)
+  assert_true(
+    merged
+    is [
+      { key: "remote.a/desktop-test", model: Low },
+      { key: "remote.b/sibling-chat", model: Low },
+    ],
+  )
+}
+
+///|
+/// Test-only: the stored spelling of a remembered list, as
+/// `save_conversation_model` writes it.
+fn encoded_conversation_models(
+  entries : Array[StoredConversationModel],
+) -> String {
+  let rows : Array[Json] = entries.map(entry => {
     "key": entry.key.to_json(),
     "model": entry.model.wire().to_json(),
   })
-  let restored = parse_conversation_models(rows.to_json().stringify())
-  assert_eq(restored, chosen.conversation_models)
-  assert_true(restored is [{ key: "local/desktop-test", model: Low }])
+  rows.to_json().stringify()
 }
 
 ///|

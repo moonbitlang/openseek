@@ -2308,14 +2308,33 @@ fn Model::remember_model(
   session : String,
   model : EngineModel,
 ) -> Model {
-  let key = conversation_model_key(channel, session)
-  let entries : Array[StoredConversationModel] = [{ key, model }]
-  for entry in self.conversation_models {
-    if entry.key != key && entries.length() < ConversationModelsLimit {
-      entries.push(entry)
+  {
+    ..self,
+    conversation_models: remembered_with(
+      self.conversation_models,
+      conversation_model_key(channel, session),
+      model,
+    ),
+  }
+}
+
+///|
+/// Move one conversation to the front of a remembered list, dropping the
+/// least recently chosen once the cap is reached. Free-standing because the
+/// durable store folds the same way: a write merges into the rows already
+/// there rather than replacing them (see `save_conversation_model`).
+fn remembered_with(
+  entries : Array[StoredConversationModel],
+  key : String,
+  model : EngineModel,
+) -> Array[StoredConversationModel] {
+  let merged : Array[StoredConversationModel] = [{ key, model }]
+  for entry in entries {
+    if entry.key != key && merged.length() < ConversationModelsLimit {
+      merged.push(entry)
     }
   }
-  { ..self, conversation_models: entries }
+  merged
 }
 
 ///|

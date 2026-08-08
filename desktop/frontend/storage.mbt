@@ -45,17 +45,28 @@ fn save_default_model(model : EngineModel) -> @cmd.Cmd {
 }
 
 ///|
-/// Persist the per-conversation tiers as one value, newest first — the order
-/// is the cap's eviction order, so it is written out explicitly as an array
-/// rather than left to an object's key order.
-fn save_conversation_models(
-  entries : Array[StoredConversationModel],
-) -> @cmd.Cmd {
-  let rows : Array[Json] = entries.map(entry => {
-    "key": entry.key.to_json(),
-    "model": entry.model.wire().to_json(),
-  })
+/// Pin one conversation's tier, merging into the rows already stored rather
+/// than writing this page's whole list over them. Relay console pages share
+/// one browser origin, so a second tab holds a copy loaded at its own
+/// startup; dumping that stale copy would delete whatever the other tab has
+/// since chosen for unrelated conversations — a scalar preference next to
+/// this one only races over its own value, but a collection loses rows.
+///
+/// This preserves those rows; it does not make tabs live-consistent. A tab
+/// still learns another's choices only when it reloads, which is the same
+/// staleness every other preference here already has.
+///
+/// The list is written as an array, not an object: newest first is the cap's
+/// eviction order, which an object's key order would not promise.
+fn save_conversation_model(key : String, model : EngineModel) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
+    let stored = parse_conversation_models(
+      load_setting(ConversationModelsStorageKey),
+    )
+    let rows : Array[Json] = remembered_with(stored, key, model).map(entry => {
+      "key": entry.key.to_json(),
+      "model": entry.model.wire().to_json(),
+    })
     save_setting(ConversationModelsStorageKey, rows.to_json().stringify())
   })
 }
