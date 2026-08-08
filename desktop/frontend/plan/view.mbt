@@ -17,23 +17,25 @@ pub fn card(steps : Array[Step], baseline? : Array[Step]) -> @html.Html {
       @html.span(class="plan-cleared", "plan cleared"),
     ])
   }
-  let diff_base = if evolves(steps, baseline) { baseline } else { None }
-  let (markers, cut) = changes(steps, diff_base)
+  let (markers, cut) = changes(steps, baseline)
+  let rewrite = rewrites(steps, baseline, markers)
   let rows : Array[@html.Html] = [
     for index, step in steps => {
       step_row(
         status=step.status,
         number="\{index + 1}.",
         title=step.title,
-        delta?=markers[index],
+        delta?=if rewrite { None } else { markers[index] },
       )
     }
   ]
-  for step in cut {
-    rows.push(dropped_row(step))
+  if !rewrite {
+    for step in cut {
+      rows.push(dropped_row(step))
+    }
   }
   let body : Array[@html.Html] = [progress_view(steps)]
-  if diff_base is None && baseline is Some(previous) && !previous.is_empty() {
+  if rewrite {
     body.push(
       @html.div(
         class="plan-rewrite-note",

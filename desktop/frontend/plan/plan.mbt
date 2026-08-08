@@ -158,23 +158,32 @@ pub fn baselines(
 }
 
 ///|
-/// Whether this plan reads as an evolution of `baseline` — at least half the
-/// steps of the smaller of the two carried over by title — rather than a
-/// wholesale rewrite. Measuring against the smaller plan keeps a pure
-/// extension (every old step kept, new ones appended) an evolution instead of
-/// branding an intact plan "rewritten". Only an evolution gets per-step change
-/// markers; diffing a rewrite against the old plan would chip every row.
-fn evolves(steps : Array[Step], baseline : Array[Step]?) -> Bool {
+/// Whether this update reads as a wholesale rewrite rather than an evolution
+/// of the plan it replaced: fewer than half the steps of the smaller of the
+/// two carried over. A rewrite would mark nearly every row, which drowns the
+/// checklist, so it gets a single note instead. Measuring against the smaller
+/// plan keeps a pure extension — every old step kept, new ones appended — an
+/// evolution instead of branding an intact plan "rewritten".
+///
+/// "Carried" is read off `markers`, the same one-to-one pairing the change
+/// markers come from: a step that paired with a baseline step is anything but
+/// `new`. Counting titles independently here would let the classifier and the
+/// markers disagree about which steps carried over — a plan repeating a title
+/// would look like an evolution to a by-title count while the pairing marked
+/// nearly every row.
+fn rewrites(
+  steps : Array[Step],
+  baseline : Array[Step]?,
+  markers : Array[String?],
+) -> Bool {
   guard baseline is Some(previous) && !previous.is_empty() else { return false }
-  let carried = steps.count_if(step => {
-    previous.any(old => old.title == step.title)
-  })
+  let carried = markers.count_if(marker => marker != Some("new"))
   let smaller = if steps.length() < previous.length() {
     steps.length()
   } else {
     previous.length()
   }
-  carried * 2 >= smaller
+  carried * 2 < smaller
 }
 
 ///|

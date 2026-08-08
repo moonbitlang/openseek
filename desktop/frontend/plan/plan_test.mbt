@@ -322,6 +322,38 @@ test "a rewrite is noted once instead of marking every row" {
 }
 
 ///|
+test "a plan that mostly repeats one title reads as a rewrite" {
+  // Only one step genuinely carries over. A by-title count would see every
+  // row as carried and call this an evolution, then mark nearly all of them —
+  // the noise the rewrite note exists to avoid.
+  let repeated = [
+    ("run tests", "pending"),
+    ..[
+      for _ in 0..<5 => ("run tests", "pending")
+    ],
+  ]
+  guard @plan.decode(plan_json(repeated)) is Some(steps) else {
+    fail("expected a plan")
+  }
+  guard @plan.decode(
+      plan_json(
+        [
+          ("run tests", "pending"),
+          ..[
+            for index in 0..<5 => ("step \{index}", "pending")
+          ],
+        ],
+      ),
+    )
+    is Some(baseline) else {
+    fail("expected a baseline")
+  }
+  let rendered = markup(@plan.card(steps, baseline~))
+  assert_true(rendered.contains("plan-rewrite-note"))
+  assert_false(rendered.contains("step-delta"))
+}
+
+///|
 test "a cleared plan says so instead of rendering an empty checklist" {
   guard @plan.decode("{\"steps\":[]}") is Some(steps) else {
     fail("expected a plan")
