@@ -2880,6 +2880,8 @@ main {
   font-size: 12px;
 }
 
+/* The model chip is the tier control: one click flips the conversation
+   between High and Low. */
 .composer-model {
   display: inline-flex;
   align-items: center;
@@ -2890,9 +2892,20 @@ main {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 4px 9px;
+  background: transparent;
   color: var(--ink-2);
   font-size: 11.5px;
   line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.composer-model:hover {
+  border-color: var(--accent);
+  color: var(--ink-1);
+}
+.composer-model > span {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

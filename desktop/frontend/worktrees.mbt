@@ -98,7 +98,7 @@ fn start_in_new_worktree(
   channel : @interop.ChannelId,
   task : String,
   submission_id : String,
-  selected_model : String,
+  selected_model : EngineModel,
   max_steps : String,
   session : String,
   workspace : @common.Uri,
@@ -991,7 +991,7 @@ test "a start payload never names a worktree" {
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let payload = start_payload(
     "go",
-    "deepseek-v4-pro",
+    High,
     "1000",
     "desktop-wt",
     "sub-1",

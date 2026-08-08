@@ -142,7 +142,12 @@ fn open_session_on(
     // also makes its workspace the active one, so "New chat" follows.
     let workspace = model.session_workspace(channel, session_id)
     let (model, generation) = model.begin_transcript_reload(
-      empty_conversation(channel, session_id, workspace?),
+      empty_conversation(
+        channel,
+        session_id,
+        workspace?,
+        model=model.default_model,
+      ),
     )
     let next = { ..model, screen: Chat, loading_conversation: Some(owner) }.with_active_workspace(
       workspace,
@@ -781,7 +786,7 @@ fn run_slash_command(
             dispatch,
             model.focused,
             session=conv.session_id,
-            model=model.selected_model,
+            model=conv.engine_model,
             max_steps=model.max_steps,
             workspace?=conv.workspace,
           ),
@@ -1246,8 +1251,14 @@ fn update_msg(
           )
       }
     Console(msg) => update_console_msg(dispatch, msg, model)
-    SettingsLoaded(notification_corner~, tree_layout~, theme~) => {
+    SettingsLoaded(notification_corner~, tree_layout~, theme~, model=stored) => {
       let theme = Theme::parse(theme, model.theme)
+      // Startup runs before any conversation exists, so adopting the stored
+      // tier here is enough — every conversation minted afterwards is born
+      // from it.
+      let default_model = EngineModel::parse(stored).unwrap_or(
+        model.default_model,
+      )
       (
         theme.apply(model.system_dark),
         {
@@ -1255,6 +1266,7 @@ fn update_msg(
           notification_corner: NotificationCorner::parse(notification_corner),
           tree_layout: @fileeditor.TreeLayout::parse(tree_layout),
           theme,
+          default_model,
         },
       )
     }
@@ -1469,7 +1481,21 @@ fn update_msg(
     QuickOpenAccept => accept_quick_open(dispatch, model)
     QuickOpenPick(index) => pick_quick_open_row(dispatch, model, index)
     QuickOpenDismiss => (@cmd.none, { ..model, quick_open: None })
-    ModelChanged(value) => (@cmd.none, { ..model, selected_model: value })
+    ToggleModel => {
+      // The chip switches the conversation on screen, and the tier it lands
+      // on becomes what the next new chat starts from — the only part of
+      // the choice that outlives the page. A turn already in flight keeps
+      // the model it was started with; this takes effect on the next one.
+      let conv = model.active()
+      let engine_model = conv.engine_model.toggled()
+      (
+        save_default_model(engine_model),
+        {
+          ..model.replace_conversation({ ..conv, engine_model, }),
+          default_model: engine_model,
+        },
+      )
+    }
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value })
     SetupApiKeyChanged(value) => {
       guard model.host_settings_loaded() else { return (@cmd.none, model) }
@@ -2018,7 +2044,7 @@ fn update_msg(
             model.focused,
             task,
             submission_id,
-            model.selected_model,
+            conv.engine_model,
             model.max_steps,
             conv.session_id,
             workspace,
@@ -2029,7 +2055,7 @@ fn update_msg(
             model.focused,
             task,
             submission_id,
-            model.selected_model,
+            conv.engine_model,
             model.max_steps,
             conv.session_id,
             workspace=conv.workspace,
@@ -3610,6 +3636,7 @@ fn update_device_msg(
             channel,
             session,
             workspace?=model.session_workspace(channel, session),
+            model=model.default_model,
           ),
         )
       } else {
@@ -3854,6 +3881,12 @@ fn update_device_msg(
         run_durable_floor,
         run_floor_generation,
         sync,
+        // What the engine actually ran, which need not be what this client
+        // would have sent: another client (or the CLI) may have started this
+        // turn on the other tier. Re-establishing it here is also what
+        // restores a conversation's tier after a reload — `agent.runs`
+        // replays its rows through this same seam.
+        engine_model: selected_model,
         last_run_id: Some(run_id),
         // A started run always reports its directory, but a malformed
         // event decodes as `None`; keeping the previous root beats
@@ -3879,15 +3912,13 @@ fn update_device_msg(
           ),
         )
       }
-      // Sync the global model/step settings only when this start belongs to
-      // the conversation on screen. A slow background start (the user switched
-      // chats mid-spawn) must not overwrite settings the user has since
+      // The model rode in on the conversation above; max steps is still one
+      // global setting, so sync it only when this start belongs to the
+      // conversation on screen. A slow background start (the user switched
+      // chats mid-spawn) must not overwrite a value the user has since
       // changed for the now-active conversation.
       if channel == updated.focused && session == updated.active_session {
-        (
-          @cmd.batch(commands),
-          { ..updated, selected_model, max_steps: max_steps.to_string() },
-        )
+        (@cmd.batch(commands), { ..updated, max_steps: max_steps.to_string() })
       } else {
         (@cmd.batch(commands), updated)
       }
@@ -4921,7 +4952,7 @@ fn running_model() -> Model {
 fn encoded_start_workspace(conv : Conversation) -> String? {
   let payload = start_payload(
     "continue",
-    "deepseek-v4-pro",
+    High,
     "1000",
     conv.session_id,
     "test-submission",
@@ -5020,7 +5051,7 @@ fn fresh_started_model(
     Started(
       run_id~,
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -5047,7 +5078,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
     Started(
       run_id="r-first",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -5098,7 +5129,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
     Started(
       run_id="r-second",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -5143,7 +5174,7 @@ fn second_run_started_before_first_steer_receipt() -> Model? {
     Started(
       run_id="r8",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -5701,7 +5732,7 @@ test "session list assigns a Started-first conversation to its durable workspace
     Started(
       run_id="foreign-run",
       session="desktop-started-first",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -5753,7 +5784,7 @@ test "Started places a foreign conversation from its host session root" {
     Started(
       run_id="foreign-run",
       session="desktop-workspace-run",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=Some(workspace),
       session_root=Some(
@@ -6885,7 +6916,7 @@ test "started routes by session and records the host's workspace" {
     Started(
       run_id="r7",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=Some(cwd),
       session_root=None,
@@ -6962,7 +6993,7 @@ test "started for an unknown session materializes its conversation" {
     Started(
       run_id="r7",
       session="desktop-ghost",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -7009,7 +7040,7 @@ test "a distinct started id replaces a stale open run as foreign" {
     Started(
       run_id="r-new",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -7047,7 +7078,7 @@ test "a repeated started id is idempotent" {
     Started(
       run_id="r7",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -7080,7 +7111,7 @@ test "a start failure cannot close a run opened by a winning push" {
     Started(
       run_id="r-foreign",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -7209,7 +7240,7 @@ test "a matching Started establishes the run without consuming its prompt" {
     Started(
       run_id="r-recovered",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -7261,7 +7292,7 @@ test "an accepted start response opens the run without Started" {
     Started(
       run_id="r-response",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -7363,7 +7394,7 @@ test "an old-host Started without an id is settled by the exact start response" 
     Started(
       run_id="r-old-host",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -7612,7 +7643,7 @@ test "a Started racing ahead of an older runs response stays open" {
     Started(
       run_id="r-after-snapshot",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -7640,7 +7671,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
       {
         run_id: "old-run",
         session: "old-session",
-        model: "deepseek-v4-pro",
+        model: High,
         max_steps: 1000,
         cwd: None,
         session_root: None,
@@ -7908,7 +7939,7 @@ test "one runs snapshot keeps an active successor after settling its predecessor
         {
           run_id: "run-successor",
           session: "desktop-test",
-          model: "deepseek-v4-pro",
+          model: High,
           max_steps: 1000,
           cwd: None,
           session_root: None,
@@ -8000,7 +8031,7 @@ test "an older positive runs row cannot replace a newer Started" {
     Started(
       run_id="r8",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -8016,7 +8047,7 @@ test "an older positive runs row cannot replace a newer Started" {
         {
           run_id: "r7",
           session: "desktop-test",
-          model: "deepseek-v4-pro",
+          model: High,
           max_steps: 1000,
           cwd: None,
           session_root: None,
@@ -8052,7 +8083,7 @@ test "an older positive runs row cannot resurrect a finished run" {
         {
           run_id: "r7",
           session: "desktop-test",
-          model: "deepseek-v4-pro",
+          model: High,
           max_steps: 1000,
           cwd: None,
           session_root: None,
@@ -8153,7 +8184,7 @@ test "a failed start response keeps its prompt through an empty snapshot" {
     Started(
       run_id="r-failed",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=Some(@interop.ChannelId::Local.test_resource("/workspace")),
       session_root=None,
@@ -8181,7 +8212,7 @@ test "a failed response after durable Finished cannot resurrect its prompt" {
     Started(
       run_id="r-fast",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -8288,7 +8319,7 @@ test "a newer Started retires an older unconfirmed start ledger entry" {
     Started(
       run_id="r-new",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -9022,7 +9053,7 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
     Started(
       run_id="r8",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -9136,7 +9167,7 @@ test "a successor terminal cannot claim a setup-failed run's snapshot cut" {
     Started(
       run_id="r8",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -9255,7 +9286,7 @@ test "a foreign run gains a floor only after snapshot data follows the prior ter
     Started(
       run_id="foreign",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -9316,7 +9347,7 @@ test "a foreign background run waits for a snapshot cut after Started" {
     Started(
       run_id="foreign-next",
       session~,
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -9669,7 +9700,7 @@ test "a successor step cannot retire an older steer before its RPC rejection" {
     Started(
       run_id="r8",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -9727,7 +9758,7 @@ test "a runs snapshot cannot retire a steer submitted after its frontier" {
     Started(
       run_id="r8",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -10186,7 +10217,7 @@ test "foreign Started reanchors a reconnected initial before retiring its owners
     Started(
       run_id="r8",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -10252,7 +10283,7 @@ test "an exact zero abnormal EOF releases a fresh prompt for another send" {
     Started(
       run_id="r-fresh",
       session="desktop-test",
-      model="deepseek-v4-pro",
+      model=High,
       max_steps=1000,
       cwd=None,
       session_root=None,
@@ -10522,19 +10553,104 @@ test "loaded UI preferences parse their wire names" {
   let dispatch = test_dispatch()
   let (_, restored) = update(
     dispatch,
-    SettingsLoaded(notification_corner="top-left", tree_layout="", theme="dark"),
+    SettingsLoaded(
+      notification_corner="top-left",
+      tree_layout="",
+      theme="dark",
+      model="deepseek-v4-flash",
+    ),
     test_model(),
   )
   assert_true(restored.notification_corner is TopLeft)
   assert_true(restored.theme is Dark)
+  assert_true(restored.default_model is Low)
   // Unknown stored values fall back to the defaults.
   let (_, unknown) = update(
     dispatch,
-    SettingsLoaded(notification_corner="", tree_layout="", theme="broken"),
+    SettingsLoaded(
+      notification_corner="",
+      tree_layout="",
+      theme="broken",
+      model="",
+    ),
     test_model(),
   )
   assert_true(unknown.notification_corner is BottomRight)
   assert_true(unknown.theme is System)
+  assert_true(unknown.default_model is High)
+}
+
+///|
+test "the model chip switches one conversation, not the app" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation(
+    empty_conversation(@interop.ChannelId::Local, "other-chat"),
+  )
+  let (_, low) = update(dispatch, ToggleModel, model)
+  assert_true(low.active().engine_model is Low)
+  // The conversation next door keeps the tier it was already on.
+  guard low.find_conversation(@interop.ChannelId::Local, "other-chat")
+    is Some(other) else {
+    fail("the second conversation vanished")
+  }
+  assert_true(other.engine_model is High)
+  // The tier just picked is what conversations opened afterwards start from.
+  assert_true(low.default_model is Low)
+  assert_true(
+    low.activate(@interop.ChannelId::Local, "fresh-chat").active().engine_model
+    is Low,
+  )
+  // Toggling back is the same one click.
+  let (_, high) = update(dispatch, ToggleModel, low)
+  assert_true(high.active().engine_model is High)
+}
+
+///|
+test "a started run reports the tier the engine actually ran" {
+  let dispatch = test_dispatch()
+  // Another client (or the CLI) started this conversation's turn on the low
+  // tier. The chip follows the run, not this page's last pick.
+  let (_, ran) = update_dev(
+    dispatch,
+    Started(
+      run_id="r1",
+      session="desktop-test",
+      model=Low,
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=None,
+      submission_id=None,
+    ),
+    test_model(),
+  )
+  assert_true(ran.active().engine_model is Low)
+  // A background conversation's start lands on that conversation alone: it
+  // moves neither the chat on screen nor the default new chats start from.
+  let (_, background) = update_dev(
+    dispatch,
+    Started(
+      run_id="r2",
+      session="background-chat",
+      model=Low,
+      max_steps=1000,
+      cwd=None,
+      session_root=None,
+      task=None,
+      submission_id=None,
+    ),
+    test_model(),
+  )
+  guard background.find_conversation(
+      @interop.ChannelId::Local,
+      "background-chat",
+    )
+    is Some(conv) else {
+    fail("the background run materialized no conversation")
+  }
+  assert_true(conv.engine_model is Low)
+  assert_true(background.active().engine_model is High)
+  assert_true(background.default_model is High)
 }
 
 ///|

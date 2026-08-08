@@ -1,5 +1,77 @@
 ///|
-const DefaultModel : String = "deepseek-v4-pro"
+/// Which model a conversation's turns run with. The composer's chip toggles
+/// between the two service tiers; `Other` retains a wire name this build does
+/// not know — a run started with `OPENSEEK_MODEL` set, or a newer engine's
+/// model echoed back by `agent.started` — so the chip reports what the engine
+/// actually ran instead of a tier it never used.
+priv enum EngineModel {
+  High
+  Low
+  Other(String)
+} derive(Eq)
+
+///|
+fn EngineModel::wire(self : EngineModel) -> String {
+  match self {
+    High => "deepseek-v4-pro"
+    Low => "deepseek-v4-flash"
+    Other(name) => name
+  }
+}
+
+///|
+/// Read a wire name. A blank one is the absence of a model, not a tier, so it
+/// reads as `None` — stored preferences fall back to what they already had,
+/// and the event decoders treat it like the missing field it is.
+fn EngineModel::parse(value : String) -> EngineModel? {
+  match value.trim().to_owned() {
+    "deepseek-v4-pro" => Some(High)
+    "deepseek-v4-flash" => Some(Low)
+    "" => None
+    name => Some(Other(name))
+  }
+}
+
+///|
+/// The product-facing tier name shown on the composer chip. An unknown model
+/// keeps its wire name, so a custom endpoint never renders as a blank label.
+fn EngineModel::label(self : EngineModel) -> String {
+  match self {
+    High => "High"
+    Low => "Low"
+    Other(name) => name
+  }
+}
+
+///|
+/// What clicking the chip selects. The toggle only spans the two tiers, so a
+/// conversation sitting on an unknown model enters the pair at the high one.
+fn EngineModel::toggled(self : EngineModel) -> EngineModel {
+  match self {
+    High => Low
+    Low | Other(_) => High
+  }
+}
+
+///|
+test "engine models round-trip their wire names" {
+  inspect(
+    EngineModel::parse("deepseek-v4-pro").unwrap().label(),
+    content="High",
+  )
+  inspect(
+    EngineModel::parse("deepseek-v4-flash").unwrap().label(),
+    content="Low",
+  )
+  inspect(
+    EngineModel::parse(" custom-model ").unwrap().wire(),
+    content="custom-model",
+  )
+  assert_true(EngineModel::parse("  ") is None)
+  assert_true(High.toggled() is Low)
+  assert_true(Low.toggled() is High)
+  assert_true(Other("custom-model").toggled() is High)
+}
 
 ///|
 /// Viewports at most this wide (CSS pixels) get the narrow layout. Must
@@ -39,6 +111,12 @@ const TreeLayoutStorageKey : String = "openseek.tree_layout"
 /// The page-local appearance override. An absent value keeps following the
 /// host color scheme until the user chooses a theme in Settings.
 const ThemeStorageKey : String = "openseek.theme"
+
+///|
+/// The tier new conversations are born with — the last one picked in the
+/// composer. Only this default is persisted; a conversation's own tier is
+/// its state, restored from the host's run table on reconnect.
+const ModelStorageKey : String = "openseek.model"
 
 ///|
 /// Obsolete: the update channel derives from the server selection now. The
@@ -209,7 +287,7 @@ priv enum RunEnd {
 priv struct RecoveredRun {
   run_id : String
   session : String
-  model : String
+  model : EngineModel
   max_steps : Int
   cwd : @common.Uri?
   session_root : @common.Uri?
@@ -294,6 +372,13 @@ priv struct Conversation {
   // workspace root. Consumed by the create-then-start chain, which sets
   // `worktree` and clears this.
   worktree_mode : Bool
+  // The model this conversation's turns run with, chosen in the composer.
+  // Per conversation, not per app: a long refactor can sit on the high tier
+  // while a scratch chat next to it stays cheap. Born from the page's
+  // `default_model`, then re-established by every `agent.started` this
+  // session sees — including one from another client, whose choice is what
+  // the engine actually ran.
+  engine_model : EngineModel
   // Composer draft, kept per conversation so switching away (and back)
   // neither loses the text nor sends it to the wrong session.
   task : String
@@ -727,7 +812,10 @@ priv struct Model {
   // is born with `Local`; a browser console starts on an inert `Local`
   // default that nothing reads and focuses a device with its first roster.
   focused : @interop.ChannelId
-  selected_model : String
+  // The tier a new conversation is born with: whatever was last picked in
+  // the composer, persisted page-locally. The model a turn actually runs
+  // with is the conversation's own `engine_model`, never this.
+  default_model : EngineModel
   max_steps : String
   // Whether the host has a key stored for each keyed provider. The key text
   // itself never reaches a client — the Settings page only needs presence
@@ -1022,7 +1110,8 @@ priv enum Msg {
   SettingsLoaded(
     notification_corner~ : String,
     tree_layout~ : String,
-    theme~ : String
+    theme~ : String,
+    model~ : String
   )
   // The legacy localStorage engine settings, read at bridge time. The
   // desktop window migrates them up to the host once; a browser page only
@@ -1097,7 +1186,9 @@ priv enum Msg {
   QuickOpenAccept
   QuickOpenPick(Int)
   QuickOpenDismiss
-  ModelChanged(String)
+  // The composer's model chip: flip the conversation on screen to the other
+  // service tier, and make that the tier new conversations start from.
+  ToggleModel
   MaxStepsChanged(String)
   SetupApiKeyChanged(String)
   ProviderChanged(String)
@@ -1472,7 +1563,7 @@ priv enum DeviceMsg {
   Started(
     run_id~ : String,
     session~ : String,
-    model~ : String,
+    model~ : EngineModel,
     max_steps~ : Int,
     cwd~ : @common.Uri?,
     session_root~ : @common.Uri?,
@@ -1558,6 +1649,7 @@ fn empty_conversation(
   channel : @interop.ChannelId,
   session_id : String,
   workspace? : @common.Uri,
+  model? : EngineModel = High,
 ) -> Conversation {
   {
     device: channel,
@@ -1565,6 +1657,7 @@ fn empty_conversation(
     workspace,
     worktree: None,
     worktree_mode: false,
+    engine_model: model,
     task: "",
     mentions: [],
     run: NoRun(ended=None),
@@ -1626,7 +1719,7 @@ fn initial_model() -> Model {
     },
     websocket_epoch: 0,
     focused: page_channel.unwrap_or(@interop.ChannelId::Local),
-    selected_model: DefaultModel,
+    default_model: High,
     max_steps: DefaultMaxSteps,
     deepseek_key_saved: false,
     custom_key_saved: false,
@@ -2153,7 +2246,11 @@ fn Model::active(self : Model) -> Conversation {
   if self.find_conversation(self.focused, self.active_session) is Some(conv) {
     conv
   } else {
-    empty_conversation(self.focused, self.active_session)
+    empty_conversation(
+      self.focused,
+      self.active_session,
+      model=self.default_model,
+    )
   }
 }
 
@@ -2270,7 +2367,9 @@ fn Model::activate(
     }
   }
   if !found {
-    conversations.push(empty_conversation(channel, session_id))
+    conversations.push(
+      empty_conversation(channel, session_id, model=self.default_model),
+    )
   }
   // Activating a conversation is also what moves the UI's focus to its
   // device — a no-op while the app runs a single channel.

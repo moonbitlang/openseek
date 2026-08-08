@@ -69,40 +69,18 @@ fn settings_group(
 }
 
 ///|
-/// Product-facing service tier for a model wire name. Unknown models retain
-/// their wire name so a future/custom model never renders as a blank label.
-fn model_label(model : String) -> String {
-  match model {
-    "deepseek-v4-pro" => "High"
-    "deepseek-v4-flash" => "Low"
-    other => other
-  }
-}
-
-///|
-test "DeepSeek models display as product tiers" {
-  inspect(model_label("deepseek-v4-pro"), content="High")
-  inspect(model_label("deepseek-v4-flash"), content="Low")
-  inspect(model_label("custom-model"), content="custom-model")
-}
-
-///|
-fn model_select(dispatch : @cmd.Emit[Msg], selected : String) -> @html.Html {
-  @html.select(
-    on_change=dispatch.map(value => ModelChanged(value)),
-    attrs=@html.Attrs::build().aria_label("Model"),
-    [
-      @html.option(
-        value="deepseek-v4-pro",
-        selected=selected == "deepseek-v4-pro",
-        "deepseek-v4-pro",
-      ),
-      @html.option(
-        value="deepseek-v4-flash",
-        selected=selected == "deepseek-v4-flash",
-        "deepseek-v4-flash",
-      ),
-    ],
+/// The composer's model chip: this conversation's service tier, and the
+/// control that changes it. One click flips to the other tier — the choice
+/// is the conversation's, so a long refactor can sit on High while the chat
+/// beside it stays on Low.
+fn model_chip(dispatch : @cmd.Emit[Msg], conv : Conversation) -> @html.Html {
+  let other = conv.engine_model.toggled()
+  @html.button(
+    class="composer-model",
+    type_="button",
+    title="Model: \{conv.engine_model.wire()} — click for \{other.label()}",
+    on_click=dispatch(ToggleModel),
+    [@html.span(conv.engine_model.label())],
   )
 }
 
@@ -1710,13 +1688,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     has_input
   // The left status group: the model, plus the workspace's git branch (moved
   // out of the topbar; a workspace that is not a repository has no chip).
-  let status : Array[@html.Html] = [
-    @html.span(
-      class="composer-model",
-      title=model.selected_model,
-      model_label(model.selected_model),
-    ),
-  ]
+  let status : Array[@html.Html] = [model_chip(dispatch, conv)]
   if conv.branch is Some(branch) && !branch.is_empty() {
     status.push(@html.span(class="composer-branch", branch))
   }
@@ -2166,12 +2138,9 @@ fn provider_hint(provider : ApiProvider) -> String {
 fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let settings_loaded = model.host_settings_loaded()
   let ready = model.api_ready()
-  let model_rows : Array[@html.Html] = [
-    setting_row(
-      "Model",
-      [model_select(dispatch, model.selected_model)],
-      desc="Used for new turns in every conversation.",
-    ),
+  // The model is not here: it belongs to a conversation, not to the app, and
+  // is picked on the composer's chip.
+  let engine_rows : Array[@html.Html] = [
     setting_row(
       "Max steps",
       [
@@ -2259,7 +2228,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
   }
   let groups : Array[@html.Html] = [
-    settings_group(icon_sparkle, "Model", model_rows),
+    settings_group(icon_sparkle, "Engine", engine_rows),
     settings_group(icon_key, "API", api_rows),
     settings_group(icon_layout, "Interface", [
       setting_row(

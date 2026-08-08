@@ -672,12 +672,14 @@ fn started_msg(
 ) -> DeviceMsg? {
   // `run_id`/`session`/`model`/`max_steps` are unconditional on this event
   // (the app's own start op always names a session); a payload missing one
-  // is malformed and dropped. `cwd` and the durable `session_root` are
+  // — a blank model included, since no run ever ran on no model — is
+  // malformed and dropped. `cwd` and the durable `session_root` are
   // genuinely optional, and the host resolved both itself, so this is the
   // decode boundary where their absolute provenance is collapsed into the
   // type.
   guard payload.session is Some(session) &&
     payload.model is Some(model) &&
+    EngineModel::parse(model) is Some(model) &&
     payload.max_steps is Some(max_steps) else {
     return None
   }
@@ -725,6 +727,7 @@ fn RecoveredRun::from_started(
 ) -> RecoveredRun? {
   guard payload.session is Some(session) &&
     payload.model is Some(model) &&
+    EngineModel::parse(model) is Some(model) &&
     payload.max_steps is Some(max_steps) else {
     return None
   }
@@ -915,7 +918,7 @@ fn start_openseek(
   channel : @interop.ChannelId,
   task : String,
   submission_id : String,
-  selected_model : String,
+  selected_model : EngineModel,
   max_steps : String,
   session : String,
   workspace~ : @common.Uri?,
@@ -992,22 +995,17 @@ async fn request_agent_start(
 /// resolved host-side from the settings store.
 fn start_payload(
   task : String,
-  selected_model : String,
+  selected_model : EngineModel,
   max_steps : String,
   session : String,
   submission_id : String,
   workspace~ : @common.Uri?,
 ) -> @protocol.StartPayload {
-  let selected_model = selected_model.trim().to_owned()
   let session = session.trim().to_owned()
   {
     task,
     submission_id: Some(submission_id),
-    model: if selected_model.is_empty() {
-      None
-    } else {
-      Some(selected_model)
-    },
+    model: Some(selected_model.wire()),
     max_steps: parsed_max_steps(max_steps),
     session: if session.is_empty() {
       None
@@ -1248,7 +1246,7 @@ fn compact_openseek(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session~ : String,
-  model~ : String,
+  model~ : EngineModel,
   max_steps~ : String,
   workspace? : @common.Uri,
 ) -> @cmd.Cmd {
@@ -1258,17 +1256,12 @@ fn compact_openseek(
     _ => ()
   }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
-  let model = model.trim().to_owned()
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       ignore(
         @interop.bridge_request(channel, @commands.agent_compact, {
           session,
-          model: if model.is_empty() {
-            None
-          } else {
-            Some(model)
-          },
+          model: Some(model.wire()),
           max_steps: parsed_max_steps(max_steps),
           workspace: workspace.map(value => value.path),
         }) catch {

@@ -20,6 +20,7 @@ fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           notification_corner=load_setting(NotificationCornerStorageKey),
           tree_layout=load_setting(TreeLayoutStorageKey),
           theme=load_setting(ThemeStorageKey),
+          model=load_setting(ModelStorageKey),
         ),
       ),
     )
@@ -34,6 +35,14 @@ fn save_notification_corner(corner : NotificationCorner) -> @cmd.Cmd {
 ///|
 fn save_tree_layout(layout : @fileeditor.TreeLayout) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(TreeLayoutStorageKey, layout.wire()))
+}
+
+///|
+/// Persist the tier new conversations start from. Only this default travels
+/// across launches: a conversation's own tier comes back with the runs the
+/// host replays at bridge time.
+fn save_default_model(model : EngineModel) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(ModelStorageKey, model.wire()))
 }
 
 ///|
