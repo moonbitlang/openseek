@@ -1568,7 +1568,8 @@ aside {
    launch-mode chip. The archive-discard confirmation reuses the shared
    modal styles. */
 /* The row's worktree glyph, shown when the registry mapping (or the local
-   binding) names one; the name itself is the tooltip. Display only — the
+   binding) names one; the name it stands for is in the row's own tooltip,
+   which stays reachable when hover swaps this glyph out. Display only — the
    environment lives and dies with its conversation. A fixed slot, so the
    title keeps the rest of the row no matter how long the name is. */
 .worktree-mark {

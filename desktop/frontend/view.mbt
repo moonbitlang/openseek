@@ -183,17 +183,16 @@ fn session_row(
   // in. Sizing is content-driven — a row with neither group has no slot at
   // all, so idle rows carry no reserved gutter.
   let status : Array[@html.Html] = []
-  // A worktree conversation wears a branch glyph; its environment's name —
-  // joined from the registry, or the local binding while the first turn is
-  // still on its way to the store — rides in the tooltip, where it stays
-  // legible without competing with the title for row width. Display only:
-  // the environment lives and dies with the conversation; archiving removes
-  // it.
+  // A worktree conversation wears a branch glyph — display only: the
+  // environment lives and dies with the conversation; archiving removes it.
+  // The name it stands for is on the row, not on the glyph: the pointer
+  // that would rest on the glyph to read a tooltip is already hovering the
+  // row, which swaps the glyph away.
   if worktree is Some(name) {
     status.push(
       @html.span(
         class="worktree-mark",
-        title="This chat runs in worktree \{name}; archiving removes its checkout but keeps the branch for Repair",
+        attrs=@html.Attrs::build().aria_label("Runs in worktree \{name}"),
         icon(icon_worktree),
       ),
     )
@@ -230,9 +229,18 @@ fn session_row(
     }
     children.push(@html.span(class="row-trailing", trailing))
   }
+  // The row's own tooltip carries the worktree name, joined from the
+  // registry (or the local binding while the first turn is still on its way
+  // to the store). Anywhere on the row reaches it, including the half of
+  // the row the archive button covers.
+  let row_title = if worktree is Some(name) {
+    "\{session_id}\nRuns in worktree \{name}; archiving removes its checkout but keeps the branch for Repair"
+  } else {
+    session_id
+  }
   @html.div(
     class~,
-    title=session_id,
+    title=row_title,
     on_click=dispatch(OpenSession(channel, session_id)),
     children,
   )
