@@ -247,28 +247,6 @@ async test "close_all_terminals cancels queued opens from an older page" {
 /// A bridge timeout can make the webview retry an acknowledgement whose first
 /// request already reached the host. Repeating that sequence must not release
 /// any other chunks or wake the paused reader prematurely.
-///
-/// Skipped: this deadlocks on the Linux CI runners often enough to red-line
-/// unrelated pull requests — 8 of the 40 main runs before 2026-08-08, on both
-/// the stable and nightly native rows, always with this same signature (the
-/// async runtime's deadlock detector fires, then SIGABRT). It does not
-/// reproduce on macOS (0/20 locally).
-///
-/// The hang is in the harness, not in the flow control this test covers. The
-/// detector reports live tasks spawned only within `run_terminal_pump`'s own
-/// loop; the session's output reader and close watcher — spawned further down
-/// in `run_session` — are already gone, so `run_session` never reached them.
-/// `open_terminal` waits on its reply queue with no timeout while `run_session`
-/// runs under `allow_failure=true`, so any failure or stall before
-/// `request.reply.put(Ok(()))` is swallowed and the open blocks forever instead
-/// of surfacing an error. That matches the ~25s of silence in the CI logs
-/// before the detector trips.
-///
-/// Unskip once the open reply is bounded (a timeout there turns this class of
-/// failure into a legible error) and the underlying stall — most likely in
-/// `@pty.spawn` on the runner — is understood. The flake predates the pty
-/// 0.3.2 upgrade in #692, so that is not the trigger.
-#skip("deadlocks intermittently on Linux CI; see the note above")
 #cfg(not(platform="windows"))
 async test "duplicate acknowledgements release an output chunk only once" {
   @async.with_task_group(group => {
