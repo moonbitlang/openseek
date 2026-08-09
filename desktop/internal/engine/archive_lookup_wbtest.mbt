@@ -111,6 +111,48 @@ async test "archive reports a workspace record whose directory vanished" {
 
 ///|
 #cfg(not(platform="windows"))
+async test "loading a conversation from a detached workspace names that state" {
+  archive_env_test_lock.acquire()
+  defer archive_env_test_lock.release()
+  let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+  defer restore_session_root_env(previous)
+  let dir = @fs.tmpdir(prefix="openseek-load-detached-")
+  let workspace = dir + "/ws"
+  let global_root = dir + "/global"
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", global_root)
+  @fsx.ensure_dir(Path(global_root))
+  @fsx.ensure_dir(Path(workspace + "/.openseek/sessions/s-ws"))
+  @fs.write_file(
+    global_root + "/workspaces.json",
+    ({ "workspaces": [workspace] } : Json).stringify(),
+    create_mode=CreateOrTruncate,
+  )
+  let manager = new_engine_manager("unused")
+  manager.pump = Serving(sessions=Map([]))
+  let detached = detach_workspace(manager, workspace, fn(_) {  })
+  assert_eq(detached.workspaces.length(), 0)
+  // A stale client's transcript reload names the conversation without a
+  // workspace hint; the reply must say the record is unreachable rather
+  // than surface the engine's raw file error.
+  let detail = try {
+    ignore(load_session(manager, { session: "s-ws", workspace: None }))
+    "no error"
+  } catch {
+    EngineError(detail) => detail
+    error if @async.is_being_cancelled() => raise error
+    error => "\{error}"
+  }
+  debug_inspect(
+    detail,
+    content=(
+      #|"no durable record for this conversation in the global store or any attached workspace"
+    ),
+  )
+  @fs.rmdir(dir, recursive=true)
+}
+
+///|
+#cfg(not(platform="windows"))
 async test "archiving an already-archived conversation names that state" {
   archive_env_test_lock.acquire()
   defer archive_env_test_lock.release()

@@ -626,6 +626,18 @@ pub async fn load_session(
       watermark: Some(session_max_sequence(document)),
     }
   }
+  // Name the missing-record states before spending an engine read that can
+  // only fail with a raw file error: a stale client asks for conversations
+  // whose store just detached (or whose record moved to an archived twin),
+  // and the answer should say that, not ENOENT.
+  if !@fsx.is_dir(root.join("sessions").join(session).to_path()) {
+    if archived_record_root(session) is Some(_) {
+      raise EngineError("this conversation is archived; unarchive it first")
+    }
+    raise EngineError(
+      "no durable record for this conversation in the global store or any attached workspace",
+    )
+  }
   let output = session_show_stdout(manager, session, root) catch {
     EngineError(detail) => raise EngineError("session load failed: " + detail)
     error => raise error
