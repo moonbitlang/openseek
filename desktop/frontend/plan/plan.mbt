@@ -28,9 +28,9 @@ pub enum Status {
 /// them, so a degenerate payload — a model looping, or anything past the
 /// tool's own caps — reaches this package, and every render decodes it: the
 /// card builds one DOM row per step even while its `details` sits collapsed
-/// (as the generic arguments path notes, a collapsed node is still built),
-/// and `baselines` decodes every plan call in the conversation. Past these
-/// bounds the call keeps the generic rendering, which clamps before parsing.
+/// (as the generic arguments path notes, a collapsed node is still built).
+/// Past these bounds the call keeps the generic rendering, which clamps
+/// before parsing.
 ///
 /// Deliberately far above the tool's own limits (20 steps, 120-character
 /// titles) rather than mirroring them: this is a resource bound, not a second
@@ -107,12 +107,16 @@ pub enum Call {
   /// Recorded, with no result yet — the model asked for this plan, and
   /// whether it took effect is not yet known.
   Pending(Array[Step])
-  /// A plan call this build will not read: past the decode bounds, or shaped
-  /// in a way it does not recognize — a newer engine raising the tool's caps,
-  /// say. Distinct from `Rejected` because the tool did not refuse it, so on
-  /// the engine's side this call did change the plan; what it changed it to
-  /// is simply unknown here.
-  Unreadable
+  /// A plan call whose payload this build cannot produce steps from: past the
+  /// decode bounds, shaped in a way it does not recognize (a newer engine
+  /// raising the tool's caps, say), or a result the loader could not pair
+  /// back to its call, which leaves no arguments at all.
+  ///
+  /// `applied` carries the same distinction `Applied` and `Pending` do, and
+  /// it is the whole weight of this state: an applied one is evidence the
+  /// plan changed to something unknown, while a pending one is evidence of
+  /// nothing yet.
+  Unreadable(applied~ : Bool)
   /// The tool refused the payload, so it never became a plan at all.
   Rejected
 }
@@ -121,19 +125,23 @@ pub enum Call {
 /// Classify a transcript item as a `plan` call, or `None` when it is not one:
 /// another tool, or a legacy row with no recorded arguments.
 ///
-/// A payload that will not decode is `Unreadable`, never `None`. The
+/// A plan row this build cannot read is `Unreadable`, never `None`. The
 /// difference matters to `latest`: "this row is not a plan call" is something
-/// to scan past, while "a plan call landed here and this build cannot read
-/// it" is a wall.
+/// to scan past, while "a plan call landed here and its content is not
+/// available" may be a wall.
 pub fn classify(item : @transcript.TranscriptItem) -> Call? {
-  guard item.kind
-    is Tool(name="plan", arguments=Some(arguments), has_result~, is_error~, ..) else {
+  guard item.kind is Tool(name="plan", arguments~, has_result~, is_error~, ..) else {
     return None
   }
   if is_error {
     return Some(Rejected)
   }
-  guard decode(arguments) is Some(steps) else { return Some(Unreadable) }
+  // Absent arguments are a result the loader could not pair back to its call
+  // — an older log, or an id it could not match. The payload is gone, but the
+  // recorded result is still evidence the call ran.
+  guard arguments is Some(arguments) && decode(arguments) is Some(steps) else {
+    return Some(Unreadable(applied=has_result))
+  }
   Some(if has_result { Applied(steps) } else { Pending(steps) })
 }
 
@@ -148,11 +156,14 @@ pub fn classify(item : @transcript.TranscriptItem) -> Call? {
 /// executed stand as the plan for the rest of the session — or, if they
 /// cleared it, hide the last plan that really did apply.
 ///
-/// An `Unreadable` call ends the search with no plan rather than being
-/// scanned past. The tool accepted it, so the plan *was* replaced; this build
-/// just cannot say with what. Walking past it would answer with the plan
-/// before it — a stale answer stated as a current one, and a silent one,
-/// which is worse than showing nothing.
+/// An *applied* `Unreadable` call ends the search with no plan rather than
+/// being scanned past. The tool accepted it, so the plan *was* replaced; this
+/// build just cannot say with what. Walking past it would answer with the
+/// plan before it — a stale answer stated as a current one, and silently,
+/// which is worse than showing nothing. A pending one is no such evidence and
+/// is skipped, exactly as a pending readable call is; a malformed call is
+/// unresolved for the moment before its rejection lands, and blanking the
+/// panel there would flicker on every one of them.
 ///
 /// Over a whole conversation this is the standing plan; over one folded run
 /// of activity it is the plan as that run left it.
@@ -161,8 +172,11 @@ pub fn latest(items : Array[@transcript.TranscriptItem]) -> Array[Step]? {
     match classify(item) {
       Some(Applied(steps)) =>
         return if steps.is_empty() { None } else { Some(steps) }
-      Some(Unreadable) => return None
-      Some(Pending(_)) | Some(Rejected) | None => continue
+      Some(Unreadable(applied=true)) => return None
+      Some(Pending(_))
+      | Some(Unreadable(applied=false))
+      | Some(Rejected)
+      | None => continue
     }
   }
   None

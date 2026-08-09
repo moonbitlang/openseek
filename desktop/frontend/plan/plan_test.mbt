@@ -24,6 +24,24 @@ fn plan_call(
 }
 
 ///|
+/// A successful `plan` result the loader could not pair back to its call, as
+/// `apply_session_item` records one: no arguments, but a result.
+fn unpaired_result() -> @transcript.TranscriptItem {
+  {
+    kind: Tool(
+      call_id="c9",
+      name="plan",
+      arguments=None,
+      has_result=true,
+      is_error=false,
+      brief=None,
+    ),
+    content: "Plan updated.",
+    ts: None,
+  }
+}
+
+///|
 /// A plan payload from `(title, status)` pairs.
 fn plan_json(steps : Array[(String, String)]) -> String {
   let entries = [
@@ -134,8 +152,21 @@ test "classify names every state a plan call can be observed in" {
     is None,
   )
   // A payload this build will not decode is its own state, not "not a plan
-  // call": something landed here, and only the reading of it is missing.
-  assert_true(@plan.classify(plan_call("c1", "not json")) is Some(Unreadable))
+  // call": something landed here, and only the reading of it is missing. It
+  // carries the same applied/pending distinction the readable states do.
+  assert_true(
+    @plan.classify(plan_call("c1", "not json"))
+    is Some(Unreadable(applied=true)),
+  )
+  assert_true(
+    @plan.classify(plan_call("c1", "not json", has_result=false))
+    is Some(Unreadable(applied=false)),
+  )
+  // A successful result the loader could not pair back to its call keeps no
+  // arguments, and is still evidence that a plan call ran.
+  assert_true(
+    @plan.classify(unpaired_result()) is Some(Unreadable(applied=true)),
+  )
 }
 
 ///|
@@ -164,6 +195,28 @@ test "an unreadable plan call hides the panel instead of showing an older plan" 
     fail("expected the plan recorded after the unreadable one")
   }
   assert_eq(steps[0].title, "two")
+  // A successful result with no recorded arguments is the same wall: the call
+  // ran, and its payload is simply not in the log.
+  assert_true(
+    @plan.latest([plan_call("c1", readable), unpaired_result()]) is None,
+  )
+}
+
+///|
+test "an unreadable call still awaiting its result keeps the prior plan" {
+  let readable = plan_json([("one", "in_progress")])
+  // A malformed call is unresolved for the moment before its rejection lands.
+  // Treating that as a wall would blank the panel on every malformed call,
+  // and permanently for a run interrupted in the window — while an equally
+  // unresolved *decodable* call correctly leaves the prior plan alone.
+  guard @plan.latest([
+      plan_call("c1", readable),
+      plan_call("c2", "not json", has_result=false),
+    ])
+    is Some(steps) else {
+    fail("expected the prior plan to survive a pending unreadable call")
+  }
+  assert_eq(steps[0].title, "one")
 }
 
 ///|
