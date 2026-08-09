@@ -104,6 +104,39 @@ test "decode refuses a payload too large to be a plan" {
 }
 
 ///|
+test "classify names every state a plan call can be observed in" {
+  let payload = plan_json([("one", "in_progress")])
+  // The store commits a call and its result separately, so both sides of that
+  // window are states a reader sees — and each consumer has to say which it
+  // accepts rather than rebuilding the test from `has_result`.
+  assert_true(@plan.classify(plan_call("c1", payload)) is Some(Applied(_)))
+  assert_true(
+    @plan.classify(plan_call("c1", payload, has_result=false))
+    is Some(Pending(_)),
+  )
+  assert_true(
+    @plan.classify(plan_call("c1", payload, is_error=true)) is Some(Rejected),
+  )
+  // Not a plan call at all, and a plan call this build declines to decode.
+  assert_true(
+    @plan.classify({
+      kind: Tool(
+        call_id="c1",
+        name="shell",
+        arguments=Some("{}"),
+        has_result=true,
+        is_error=false,
+        brief=None,
+      ),
+      content: "",
+      ts: None,
+    })
+    is None,
+  )
+  assert_true(@plan.classify(plan_call("c1", "not json")) is None)
+}
+
+///|
 test "latest reads the last applied call and skips rejected ones" {
   let first = plan_json([("one", "in_progress")])
   let rejected = plan_json([("two", "in_progress")])

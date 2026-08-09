@@ -1156,14 +1156,13 @@ fn tool_call_view(item : @transcript.TranscriptItem) -> @html.Html {
   )
   let error_class = if is_error { " error" } else { "" }
   let body : Array[@html.Html] = []
-  if arguments is Some(arguments) &&
-    name == "plan" &&
-    !is_error &&
-    @plan.decode(arguments) is Some(steps) {
-    // A `plan` call shows the checklist it recorded rather than its JSON. A
-    // call the tool rejected keeps the raw payload: the malformed arguments
-    // are what the reader needs, and dressing them as an applied checklist
-    // would report a plan that never took effect.
+  // A `plan` call shows the checklist it recorded rather than its JSON, in
+  // every state where that checklist is what the model asked for. A pending
+  // call qualifies: the card is a record of the call, and the missing Output
+  // section already marks it unfinished. A rejected one does not — the
+  // malformed arguments are what the reader needs, and dressing them up as a
+  // checklist would report a plan that never took effect.
+  if @plan.classify(item) is Some(Applied(steps) | Pending(steps)) {
     body.push(@html.div(class="tool-call-section", [@plan.card(steps)]))
   } else if arguments is Some(arguments) {
     let trimmed = arguments.trim()

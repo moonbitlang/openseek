@@ -91,29 +91,40 @@ fn parse_status(word : String) -> Status {
 }
 
 ///|
-/// The steps of a `plan` call the tool applied — one that recorded a result,
-/// and a successful one.
+/// What a recorded `plan` call amounts to.
 ///
-/// A call the tool rejected (`is_error`) never became the model's plan, so it
-/// is not one here either; it keeps the generic failed-call rendering. A call
-/// with no result yet is the same story for a different reason: `plan` runs
-/// synchronously, so the live gap is a frame, but a run interrupted between
-/// the assistant event and its result leaves that call unresolved *forever* —
-/// and arguments that were never executed would otherwise stand as the plan
-/// for the rest of the session, or, if they cleared it, hide the last plan
-/// that really did apply.
-fn applied_call(item : @transcript.TranscriptItem) -> Array[Step]? {
+/// The store commits a call and its result as two separate durable events, so
+/// every reader necessarily observes calls between the two — briefly during a
+/// healthy run, and forever for a run interrupted in that window. The states
+/// are named here, once, rather than left for each caller to reconstruct out
+/// of `has_result` and `is_error`: a caller then has to say which ones it
+/// accepts, and a state it fails to consider is a missing match arm rather
+/// than a missing `&&`.
+pub enum Call {
+  /// The tool ran and accepted it, so this call is what the model's plan
+  /// became. An empty step list is the model clearing the plan.
+  Applied(Array[Step])
+  /// Recorded, with no result yet — the model asked for this plan, and
+  /// whether it took effect is not yet known.
+  Pending(Array[Step])
+  /// The tool refused the payload, so it never became a plan at all.
+  Rejected
+}
+
+///|
+/// Classify a transcript item as a `plan` call, or `None` for anything else —
+/// another tool, a legacy row with no recorded arguments, or a payload this
+/// build declines to decode (see `MAX_PAYLOAD_CHARS`).
+pub fn classify(item : @transcript.TranscriptItem) -> Call? {
   guard item.kind
-    is Tool(
-      name="plan",
-      arguments=Some(arguments),
-      has_result=true,
-      is_error=false,
-      ..
-    ) else {
+    is Tool(name="plan", arguments=Some(arguments), has_result~, is_error~, ..) else {
     return None
   }
-  decode(arguments)
+  if is_error {
+    return Some(Rejected)
+  }
+  guard decode(arguments) is Some(steps) else { return None }
+  Some(if has_result { Applied(steps) } else { Pending(steps) })
 }
 
 ///|
@@ -121,11 +132,17 @@ fn applied_call(item : @transcript.TranscriptItem) -> Array[Step]? {
 /// is none — including when the last one cleared the plan, which is the
 /// model saying the checklist no longer applies.
 ///
+/// Only `Applied` counts. A rejected call never became the model's plan; a
+/// pending one is not known to have, and a run interrupted in that window
+/// leaves it pending for good, so honouring it would let arguments that never
+/// executed stand as the plan for the rest of the session — or, if they
+/// cleared it, hide the last plan that really did apply.
+///
 /// Over a whole conversation this is the standing plan; over one folded run
 /// of activity it is the plan as that run left it.
 pub fn latest(items : Array[@transcript.TranscriptItem]) -> Array[Step]? {
   for item in items.rev_iter() {
-    guard applied_call(item) is Some(steps) else { continue }
+    guard classify(item) is Some(Applied(steps)) else { continue }
     return if steps.is_empty() { None } else { Some(steps) }
   }
   None

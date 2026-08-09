@@ -10,6 +10,8 @@ import {
 // Values
 pub fn card(Array[Step]) -> @html.Html
 
+pub fn classify(@transcript.TranscriptItem) -> Call?
+
 pub fn decode(String) -> Array[Step]?
 
 pub fn fold_progress(Array[@transcript.TranscriptItem]) -> @html.Html
@@ -21,6 +23,12 @@ pub fn panel(Array[@transcript.TranscriptItem]) -> @html.Html
 // Errors
 
 // Types and methods
+pub enum Call {
+  Applied(Array[Step])
+  Pending(Array[Step])
+  Rejected
+}
+
 pub enum Status {
   Pending
   InProgress
