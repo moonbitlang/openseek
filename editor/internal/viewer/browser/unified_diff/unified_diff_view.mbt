@@ -26,16 +26,7 @@ pub fn UnifiedDiffBrowserView::set_hunks(
   self : UnifiedDiffBrowserView,
   hunks : Array[@unified_diff_model.UnifiedDiffHunk],
 ) -> Unit {
-  if self.disposed {
-    return
-  }
-  let next = render_unified_diff(hunks, self.on_comment)
-  match self.root {
-    Some(previous) => self.host.remove_child(previous.as_node())
-    None => ()
-  }
-  self.host.append_child(next.as_node())
-  self.root = Some(next)
+  self.install(() => render_unified_diff(hunks, self.on_comment))
 }
 
 ///|
@@ -44,14 +35,22 @@ pub fn UnifiedDiffBrowserView::set_message(
   self : UnifiedDiffBrowserView,
   message : String,
 ) -> Unit {
+  self.install(() => render_message(message))
+}
+
+///|
+/// Swaps the installed subtree for a freshly rendered one. The replacement is
+/// built before the previous root is detached so the host never holds rows from
+/// two document generations at once.
+fn UnifiedDiffBrowserView::install(
+  self : UnifiedDiffBrowserView,
+  render : () -> @rdom.Element,
+) -> Unit {
   if self.disposed {
     return
   }
-  let next = render_message(message)
-  match self.root {
-    Some(previous) => self.host.remove_child(previous.as_node())
-    None => ()
-  }
+  let next = render()
+  self.detach_root()
   self.host.append_child(next.as_node())
   self.root = Some(next)
 }
@@ -62,12 +61,14 @@ pub fn UnifiedDiffBrowserView::clear(self : UnifiedDiffBrowserView) -> Unit {
   if self.disposed {
     return
   }
-  match self.root {
-    Some(root) => {
-      self.host.remove_child(root.as_node())
-      self.root = None
-    }
-    None => ()
+  self.detach_root()
+}
+
+///|
+fn UnifiedDiffBrowserView::detach_root(self : UnifiedDiffBrowserView) -> Unit {
+  if self.root is Some(root) {
+    self.host.remove_child(root.as_node())
+    self.root = None
   }
 }
 
@@ -145,20 +146,16 @@ fn render_line(
     Addition => ("addition", "+")
   }
   let row = document.create_element("div")
-  row.set_attribute(
-    "class",
-    "moonbit-unified-diff-line moonbit-unified-diff-line-\{kind}",
-  )
+  let row_class = "moonbit-unified-diff-line moonbit-unified-diff-line-\{kind}"
+  row.set_attribute("class", row_class)
   row.set_attribute("data-line-kind", kind)
   row.set_attribute("role", "group")
   row.set_attribute("aria-label", accessible_line_label(line))
-  match line.original_line_number {
-    Some(number) => row.set_attribute("data-original-line", number.to_string())
-    None => ()
+  if line.original_line_number is Some(number) {
+    row.set_attribute("data-original-line", number.to_string())
   }
-  match line.modified_line_number {
-    Some(number) => row.set_attribute("data-modified-line", number.to_string())
-    None => ()
+  if line.modified_line_number is Some(number) {
+    row.set_attribute("data-modified-line", number.to_string())
   }
   let original_number = text_element(
     document,
@@ -181,7 +178,7 @@ fn render_line(
     Some(on_comment) => {
       row.set_attribute(
         "class",
-        "moonbit-unified-diff-line moonbit-unified-diff-line-\{kind} moonbit-unified-diff-line-commentable",
+        "\{row_class} moonbit-unified-diff-line-commentable",
       )
       let group = document.create_element("div")
       group.set_attribute("class", "moonbit-unified-diff-line-group")
@@ -307,8 +304,8 @@ fn show_line_comment_editor(
 fn comment_action_label(line : @unified_diff_model.UnifiedDiffLine) -> String {
   match (line.kind, line.original_line_number, line.modified_line_number) {
     (Deletion, Some(number), _) => "Comment on original line \{number}"
-    (Addition, _, Some(number)) => "Comment on modified line \{number}"
-    (Context, _, Some(number)) => "Comment on modified line \{number}"
+    (Addition | Context, _, Some(number)) =>
+      "Comment on modified line \{number}"
     _ => "Comment on diff line"
   }
 }
