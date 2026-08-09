@@ -1,10 +1,17 @@
 ///|
 /// JSON (and JSONC comments) behind the `syntax.LineTokenizer` contract:
-/// the trivial two-state machine. State "n" is normal; state "c" is
-/// inside a `/* ... */` block comment, the one construct that carries
-/// across lines.
+/// the trivial two-state machine. A block comment is the one construct that
+/// carries across lines.
 struct JsonTokenizer {
   _unit : Unit
+}
+
+///|
+/// Language-owned lexer state. Its serialized `TokenizerState` representation
+/// is confined to `decode_state` and `encode_state` below.
+priv enum JsonState {
+  Normal
+  BlockComment
 }
 
 ///|
@@ -16,7 +23,7 @@ pub fn JsonTokenizer::JsonTokenizer() -> JsonTokenizer {
 ///|
 /// Initial JSON lexer state outside block comments.
 pub impl @syntax.LineTokenizer for JsonTokenizer with fn initial_state(_self) {
-  TokenizerState("n")
+  encode_state(Normal)
 }
 
 ///|
@@ -27,18 +34,18 @@ pub impl @syntax.LineTokenizer for JsonTokenizer with fn tokenize_line(
   state,
 ) {
   let tokens : Array[@syntax.LineToken] = []
-  let in_comment = for at = 0, view = line_text[:], in_comment = state ==
-                         TokenizerState("c"); view.length() > 0; {
-    let (op, rest) = if in_comment {
-      comment_step(view)
-    } else {
-      normal_step(view)
+  let start_state = decode_state(state)
+  let end_state = for at = 0, view = line_text[:], lexer_state = start_state; view.length() >
+                     0; {
+    let (op, rest) = match lexer_state {
+      Normal => normal_step(view)
+      BlockComment => comment_step(view)
     }
     let consumed = view.length() - rest.length()
-    let next_in_comment = match op {
-      EnterComment => true
-      LeaveComment => false
-      _ => in_comment
+    let next_state = match op {
+      EnterComment => BlockComment
+      LeaveComment => Normal
+      _ => lexer_state
     }
     match op {
       Blank => ()
@@ -46,11 +53,32 @@ pub impl @syntax.LineTokenizer for JsonTokenizer with fn tokenize_line(
       EnterComment | LeaveComment =>
         tokens.push({ start: at, end: at + consumed, tag: Comment })
     }
-    continue at + consumed, rest, next_in_comment
+    continue at + consumed, rest, next_state
   } nobreak {
-    in_comment
+    lexer_state
   }
-  (tokens, TokenizerState(if in_comment { "c" } else { "n" }))
+  (tokens, encode_state(end_state))
+}
+
+///|
+/// Decodes the public, language-neutral state carrier. Unknown payloads retain
+/// the previous fail-closed behavior and start JSON tokenization in normal
+/// mode.
+fn decode_state(state : @syntax.TokenizerState) -> JsonState {
+  if state == TokenizerState("c") {
+    BlockComment
+  } else {
+    Normal
+  }
+}
+
+///|
+/// Encodes JSON's private state for the language-neutral tokenizer contract.
+fn encode_state(state : JsonState) -> @syntax.TokenizerState {
+  match state {
+    Normal => TokenizerState("n")
+    BlockComment => TokenizerState("c")
+  }
 }
 
 ///|
