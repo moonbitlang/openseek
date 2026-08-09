@@ -159,7 +159,7 @@ test "file Quick Open fuzzy-matches the full relative path" {
 ///|
 test "file Quick Open caps rendered rows at two hundred" {
   let candidates : Array[@pathx.Relative] = []
-  for index = 0; index < 250; index = index + 1 {
+  for _ in 0..<250 {
     candidates.push(Relative("src/file-{index}.mbt"))
   }
   assert_eq(rank_file_quick_open_items("", candidates).length(), 200)

@@ -1412,7 +1412,7 @@ async test "one Load control message answers a bounded request batch" {
       fail("expected follower")
     }
     let replies : Array[@async.Queue[FollowerLoadReply]] = []
-    for i = 0; i < 8; i = i + 1 {
+    for _ in 0..<8 {
       let reply : @async.Queue[FollowerLoadReply] = Queue(kind=Blocking(1))
       replies.push(reply)
       follower.load_requests.put({ reply, active: true })

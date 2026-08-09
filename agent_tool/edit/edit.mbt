@@ -610,11 +610,10 @@ fn total_line_count(content : String) -> Int {
   if content == "" {
     return 0
   }
-  let mut count = 0
-  for ch in content {
-    if ch == '\n' {
-      count += 1
-    }
+  let count = for ch in content; count = 0 {
+    continue if ch == '\n' { count + 1 } else { count }
+  } nobreak {
+    count
   }
   if content.has_suffix("\n") {
     count
@@ -868,11 +867,10 @@ fn line_end_offset(content : String, line : Int) -> Int {
 /// shares its line with whatever follows the insertion point). `new_string`
 /// is non-empty on the insertion path — both-empty edits are rejected first.
 fn inserted_line_span(new_string : String) -> Int {
-  let mut newlines = 0
-  for ch in new_string {
-    if ch == '\n' {
-      newlines += 1
-    }
+  let newlines = for ch in new_string; newlines = 0 {
+    continue if ch == '\n' { newlines + 1 } else { newlines }
+  } nobreak {
+    newlines
   }
   if new_string.has_suffix("\n") {
     newlines

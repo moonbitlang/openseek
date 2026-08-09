@@ -112,9 +112,10 @@ fn child_session_ordinal(id : String, parent : String) -> Int? {
     digits.iter().all(c => c.is_ascii_digit()) else {
     return None
   }
-  let mut value = 0
-  for c in digits {
-    value = value * 10 + (c.to_int() - '0'.to_int())
+  let value = for c in digits; value = 0 {
+    continue value * 10 + (c.to_int() - '0'.to_int())
+  } nobreak {
+    value
   }
   Some(value)
 }

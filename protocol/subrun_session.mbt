@@ -37,9 +37,10 @@ pub fn split_child_session_id(id : String) -> (String, Int)? {
     digits.iter().all(c => c.is_ascii_digit()) else {
     return None
   }
-  let mut ordinal = 0
-  for c in digits {
-    ordinal = ordinal * 10 + (c.to_int() - '0'.to_int())
+  let ordinal = for c in digits; ordinal = 0 {
+    continue ordinal * 10 + (c.to_int() - '0'.to_int())
+  } nobreak {
+    ordinal
   }
   Some((id[:start].to_owned(), ordinal))
 }

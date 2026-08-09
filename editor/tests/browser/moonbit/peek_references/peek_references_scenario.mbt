@@ -275,7 +275,7 @@ fn run_peek_references_browser_test() -> Unit {
     peek_references_location(markdown_uri, 5, 11, 17),
   ]
   let overflow_locations : Array[@language.Location] = []
-  for line = 1; line <= 24; line = line + 1 {
+  for line in 1..<=24 {
     overflow_locations.push(peek_references_location(source_uri, line, 1, 2))
   }
   guard code_viewer.get_dom_node() is Some(code_root) else {

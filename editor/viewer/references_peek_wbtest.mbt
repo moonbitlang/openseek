@@ -1170,7 +1170,7 @@ async fn run_references_peek_reentrant_model_swap_zone_test() -> Unit {
     // single-letter per-layout namespace wraps after 52 instances; the old
     // nested preview already consumed one successor, so 50 fillers make the
     // replacement root collide deterministically.
-    for index = 0; index < 50; index = index + 1 {
+    for _ in 0..<50 {
       @view_layout.LinesLayout(1, 18, 0, 0) |> ignore
     }
     viewer.set_model(Some(new_source))

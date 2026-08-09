@@ -233,11 +233,10 @@ async fn write_file(
   let lines = if input.content == "" {
     0
   } else {
-    let mut newlines = 0
-    for ch in input.content {
-      if ch == '\n' {
-        newlines += 1
-      }
+    let newlines = for ch in input.content; newlines = 0 {
+      continue if ch == '\n' { newlines + 1 } else { newlines }
+    } nobreak {
+      newlines
     }
     newlines + 1
   }

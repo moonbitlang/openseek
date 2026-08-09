@@ -205,7 +205,7 @@ fn MarkdownDiagramViewportLifetime::refresh(
   if !self.active {
     return
   }
-  for index = self.controllers.length() - 1; index >= 0; index = index - 1 {
+  for index in (self.controllers.length() - 1)>=..0 {
     let controller = self.controllers[index]
     if !controller.is_current() {
       self.controllers.remove(index) |> ignore
