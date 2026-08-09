@@ -1,7 +1,10 @@
 ///|
+/// Debug is what the host boundary logs: proton renders a failed handler's
+/// error through `Repr`, which prints only an opaque `<...: ...>` placeholder
+/// for types without it — swallowing the one string that says what failed.
 pub(all) suberror EngineError {
   EngineError(String)
-}
+} derive(Debug)
 
 ///|
 impl Show for EngineError with fn output(self, logger) {

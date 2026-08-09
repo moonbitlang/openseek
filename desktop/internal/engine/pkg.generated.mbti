@@ -2,6 +2,7 @@
 package "openseek_desktop/internal/engine"
 
 import {
+  "moonbitlang/core/debug",
   "openseek_desktop/internal/pathx",
   "openseek_desktop/internal/protocol",
 }
@@ -68,7 +69,7 @@ pub fn workspace_session_root(@pathx.Absolute) -> @pathx.Absolute
 // Errors
 pub(all) suberror EngineError {
   EngineError(String)
-}
+} derive(@debug.Debug)
 
 // Types and methods
 type EngineActor

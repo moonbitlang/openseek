@@ -3686,8 +3686,28 @@ fn update_device_msg(
         },
       )
     }
-    ArchiveFailed(message) =>
-      model.notify_error(dispatch, "Archive failed: \{message}")
+    ArchiveFailed(message) => {
+      // A definitive refusal usually means this page no longer matches the
+      // host's stores — the record moved, or its workspace detached while
+      // this sidebar still showed it. Re-adopt the registry snapshot (which
+      // prunes detached conversations and refreshes the live list) and the
+      // archived list, so the state that made the click possible heals
+      // instead of failing identically forever.
+      let workspaces_request_generation = dev.workspaces_request_generation + 1
+      let refresh = fetch_workspaces(
+        dispatch,
+        channel,
+        dev.connection_generation,
+        workspaces_request_generation,
+      )
+      let model = model.replace_device({ ..dev, workspaces_request_generation, })
+      let (archived, model) = request_archived_refresh(dispatch, channel, model)
+      let (toast, model) = model.notify_error(
+        dispatch,
+        "Archive failed: \{message}",
+      )
+      (@cmd.batch([refresh, archived, toast]), model)
+    }
     WorktreeFailed(message) =>
       model.notify_error(dispatch, "Worktree error: \{message}")
     SessionsFailed(message) =>

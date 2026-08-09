@@ -49,6 +49,22 @@ async fn archived_record_root(session : String) -> @pathx.Absolute? {
 }
 
 ///|
+/// The store root whose live `sessions/<id>` holds this conversation's
+/// durable record, searched like `archived_record_root`. Archive must find
+/// the record where it actually lives: a stale client can name a
+/// conversation long after its workspace detached, and the session id alone
+/// says nothing about which store owns it.
+async fn live_record_root(session : String) -> @pathx.Absolute? {
+  guard !session.is_empty() else { return None }
+  for root in known_session_roots() {
+    if @fsx.is_dir(root.join("sessions").join(session).to_path()) {
+      return Some(root)
+    }
+  }
+  None
+}
+
+///|
 async fn ensure_session_not_archived(session : String) -> Unit {
   if archived_record_root(session) is Some(_) {
     raise EngineError("session is archived; unarchive it first")
@@ -199,9 +215,21 @@ async fn archive_session_commit(
   if refusal is Some(refusal) {
     return Some(refusal)
   }
-  guard session_store_root(session) is Some(root) else {
+  guard live_record_root(session) is Some(root) else {
+    // Name the state the caller can act on. A record already sitting in an
+    // archived twin is not "missing" — the stale client just resyncs; and a
+    // conversation whose workspace detached needs that workspace re-attached,
+    // not a hunt for a lost record.
+    if archived_record_root(session) is Some(_) {
+      raise EngineError("this conversation is already archived")
+    }
+    guard resolved_session_root() is Some(_) else {
+      raise EngineError(
+        "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
+      )
+    }
     raise EngineError(
-      "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
+      "no durable record for this conversation in the global store or any attached workspace",
     )
   }
   // The rename and notification are the commit. Cancellation is delayed only
