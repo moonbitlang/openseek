@@ -45,6 +45,7 @@ pub(all) enum DockTab {
 pub(all) struct LauncherActions {
   browser : @cmd.Cmd?
   files : @cmd.Cmd
+  review : @cmd.Cmd
 }
 
 pub(all) enum Msg {
