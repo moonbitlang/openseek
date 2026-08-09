@@ -21,10 +21,15 @@ let icon_folder : String =
   #|<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M2 4.5V6H5.58579C5.71839 6 5.84557 5.94732 5.93934 5.85355L7.29289 4.5L5.93934 3.14645C5.84557 3.05268 5.71839 3 5.58579 3H3.5C2.67157 3 2 3.67157 2 4.5ZM1 4.5C1 3.11929 2.11929 2 3.5 2H5.58579C5.98361 2 6.36514 2.15804 6.64645 2.43934L8.20711 4H12.5C13.8807 4 15 5.11929 15 6.5V11.5C15 12.8807 13.8807 14 12.5 14H3.5C2.11929 14 1 12.8807 1 11.5V4.5ZM2 7V11.5C2 12.3284 2.67157 13 3.5 13H12.5C13.3284 13 14 12.3284 14 11.5V6.5C14 5.67157 13.3284 5 12.5 5H8.20711L6.64645 6.56066C6.36514 6.84197 5.98361 7 5.58579 7H2Z"/></svg>
 
 ///|
-/// A simple globe for the launcher's Browser row (drawn here, not a
+/// A simple globe for the launcher's Browse row (drawn here, not a
 /// codicon): a circle with one meridian and the equator.
 let icon_globe : String =
   #|<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor"><circle cx="8" cy="8" r="6"/><ellipse cx="8" cy="8" rx="2.6" ry="6"/><path d="M2 8h12"/></svg>
+
+///|
+/// A compact diff document for the launcher's Review row.
+let icon_review : String =
+  #|<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M5.5 2.5h7v11h-9v-7"/><path d="M1 3.5h4M3 1.5v4M1 9.5h4"/><path d="M7 6.5h3.5M7 9.5h3.5"/></svg>
 
 ///|
 /// An icon's SVG markup injected into a fixed-size span. The markup is a
@@ -59,6 +64,7 @@ pub(all) struct TabChip {
 pub(all) struct LauncherActions {
   browser : @cmd.Cmd?
   files : @cmd.Cmd
+  review : @cmd.Cmd
 }
 
 ///|
@@ -70,7 +76,7 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
     rows.push(
       @html.button(class="dock-launcher-row", on_click=open_browser, [
         icon(icon_globe),
-        @html.span(class="dock-launcher-name", "Browser"),
+        @html.span(class="dock-launcher-name", "Browse"),
         @html.span(class="dock-launcher-hint", "Open a page in a tab"),
       ]),
     )
@@ -80,6 +86,13 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
       icon(icon_folder),
       @html.span(class="dock-launcher-name", "Files"),
       @html.span(class="dock-launcher-hint", "Open a file from the workspace"),
+    ]),
+  )
+  rows.push(
+    @html.button(class="dock-launcher-row", on_click=actions.review, [
+      icon(icon_review),
+      @html.span(class="dock-launcher-name", "Review"),
+      @html.span(class="dock-launcher-hint", "Review changed files and diffs"),
     ]),
   )
   rows

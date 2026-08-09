@@ -795,6 +795,9 @@ html.is-resizing * {
   color: var(--ink-2);
   font-size: 13px;
 }
+.editor.mode-picker.mode-review .viewer-stack::after {
+  content: "Select a changed file to review";
+}
 /* The strip's new-tab button and its launcher popup. The tabsbar anchors
    the popup; the full-screen transparent backdrop catches the click away
    (reusing the topbar launcher's backdrop). */

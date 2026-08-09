@@ -2947,29 +2947,41 @@ fn dock_panel_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         { tab, label, title, missing: false }
       }
       FilePicker =>
-        {
-          tab,
-          label: "Open File",
-          title: "Open a workspace file",
-          missing: false,
+        if model.file_panel.explorer_mode is ExplorerChanges {
+          {
+            tab,
+            label: "Review Changes",
+            title: "Review changed files and diffs",
+            missing: false,
+          }
+        } else {
+          {
+            tab,
+            label: "Open File",
+            title: "Open a workspace file",
+            missing: false,
+          }
         }
     }
   })
   let actions : @dock.LauncherActions = {
     // Browser tabs need this window's native views; a remote console has
-    // none, so its launcher offers files only.
+    // none, so its launcher offers Files and Review only.
     browser: if model.is_desktop {
       Some(dispatch(BrowserTabRequested))
     } else {
       None
     },
     files: dispatch(FilePickerRequested),
+    review: dispatch(ReviewRequested),
   }
   // The active tab's kind as a class: every body part below is rendered
   // permanently and CSS shows exactly one, so no host is ever re-keyed.
   let mode = match model.dock.active {
     None => "mode-launcher"
     Some(Browser(_)) => "mode-browser"
+    Some(FilePicker) if model.file_panel.explorer_mode is ExplorerChanges =>
+      "mode-picker mode-review"
     Some(FilePicker) => "mode-picker"
     Some(File(_)) => "mode-file"
   }

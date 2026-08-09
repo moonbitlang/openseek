@@ -2685,7 +2685,25 @@ fn update_msg(
     }
     FilePickerRequested => {
       let dock = @dock.close_menu(@dock.open_picker(model.dock))
-      (@cmd.none, { ..model, dock, })
+      let next = { ..model, dock, }
+      let (cmd, file_panel) = @fileeditor.update(
+        dispatch.map(msg => FileEditor(msg)),
+        @fileeditor.ExplorerModeSelected(ExplorerFiles),
+        next.file_panel,
+        file_ctx(next),
+      )
+      (cmd, { ..next, file_panel, })
+    }
+    ReviewRequested => {
+      let dock = @dock.close_menu(@dock.open_picker(model.dock))
+      let next = { ..model, dock, }
+      let (cmd, file_panel) = @fileeditor.update(
+        dispatch.map(msg => FileEditor(msg)),
+        @fileeditor.ExplorerModeSelected(ExplorerChanges),
+        next.file_panel,
+        file_ctx(next),
+      )
+      (cmd, { ..next, file_panel, })
     }
     BrowserAddressEdited(value) =>
       match @dock.active_browser(model.dock) {
@@ -13895,7 +13913,7 @@ fn desktop_model() -> Model {
 }
 
 ///|
-test "launcher rows open a blank browser tab and the picker, closing the menu" {
+test "launcher rows open Browse, Files, and Review destinations" {
   let dispatch = test_dispatch()
   let model = desktop_model()
   let (_, model) = update(dispatch, Dock(TogglePanel), model)
@@ -13909,9 +13927,17 @@ test "launcher rows open a blank browser tab and the picker, closing the menu" {
   assert_false(page.loading)
   let (_, model) = update(dispatch, FilePickerRequested, model)
   assert_true(model.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(model.file_panel.explorer_mode is ExplorerFiles)
   assert_true(
     model.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
   )
+  let (_, model) = update(dispatch, ReviewRequested, model)
+  assert_true(model.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(model.file_panel.explorer_mode is ExplorerChanges)
+  assert_true(model.file_panel.changes is ChangeListLoading(_))
+  // Files is an explicit destination even after Review selected Changes.
+  let (_, model) = update(dispatch, FilePickerRequested, model)
+  assert_true(model.file_panel.explorer_mode is ExplorerFiles)
 }
 
 ///|

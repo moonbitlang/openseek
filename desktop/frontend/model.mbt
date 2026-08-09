@@ -1420,9 +1420,11 @@ priv enum Msg {
   // `browser.event` view events, routed to the `preview` package.
   Preview(@preview.Msg)
   // The dock launcher's rows: open a blank Browser tab (with the address
-  // bar focused) or the transient FilePicker tab. Both close the `+` menu.
+  // bar focused), or open the transient FilePicker tab on Files or Review.
+  // Every row closes the `+` menu.
   BrowserTabRequested
   FilePickerRequested
+  ReviewRequested
   // The browser toolbar, acting on whatever Browser tab is active — the
   // messages carry no id so a stale click cannot outlive a tab switch.
   BrowserAddressEdited(String)
