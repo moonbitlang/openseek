@@ -8,9 +8,7 @@ import {
 }
 
 // Values
-pub fn baselines(Array[@transcript.TranscriptItem]) -> Map[String, Array[Step]]
-
-pub fn card(Array[Step], baseline? : Array[Step]) -> @html.Html
+pub fn card(Array[Step]) -> @html.Html
 
 pub fn decode(String) -> Array[Step]?
 

@@ -2780,9 +2780,6 @@ main {
 .plan-step.in_progress .step-icon {
   color: var(--accent);
 }
-.plan-step.dropped .step-icon {
-  color: var(--del);
-}
 /* a status this build does not know reads as its literal word: disguising it
    as a pending ring would misreport e.g. a blocked step as untouched */
 .plan-step .step-status {
@@ -2810,46 +2807,6 @@ main {
 .plan-step.in_progress .step-title {
   font-weight: 600;
 }
-.plan-step.dropped .step-title {
-  color: var(--ink-3);
-  text-decoration: line-through;
-  opacity: 0.75;
-}
-.plan-step .step-delta {
-  flex: none;
-  align-self: center;
-  padding: 0 6px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--ink-3);
-  font-size: 10px;
-  line-height: 1.7;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.step-delta-done {
-  border-color: var(--add-line);
-  background: var(--add-bg);
-  color: var(--add);
-}
-.step-delta-started {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
-.step-delta-new {
-  border-color: var(--tool-line);
-  background: var(--tool-bg);
-  color: var(--tool);
-}
-.step-delta-reopened,
-.step-delta-dropped {
-  border-color: var(--del-line);
-  background: var(--del-bg);
-  color: var(--del);
-}
-
 /* The meter: the completed run, then one step's worth of lighter fill for the
    step in progress — the only thing a per-step ribbon showed that a plain bar
    does not. Fixed width, so a twenty-step plan does not stretch it. */
@@ -2893,12 +2850,6 @@ main {
 .plan-progress.mini .plan-progress-track {
   flex: 0 0 52px;
   height: 4px;
-}
-.plan-rewrite-note {
-  margin: 4px 0 0;
-  color: var(--ink-3);
-  font-size: 11px;
-  font-style: italic;
 }
 .plan-cleared {
   color: var(--ink-3);

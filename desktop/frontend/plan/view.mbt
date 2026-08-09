@@ -7,44 +7,26 @@
 /// The card body for a `plan` tool call: a progress meter over the checklist,
 /// in place of the raw arguments JSON.
 ///
-/// When the call reads as an evolution of `baseline` (the previous applied
-/// plan call), steps that changed carry a change marker and steps this update
-/// dropped stay visible as struck-through ghost rows. A wholesale rewrite
-/// would mark nearly every row, so it gets a single rewrite note instead.
-pub fn card(steps : Array[Step], baseline? : Array[Step]) -> @html.Html {
+/// It reports the call, not the difference from the call before it. The tool
+/// sends a whole snapshot every time and its steps carry no identity — no id,
+/// and titles the model may repeat — so which step of one call *is* which
+/// step of the next is a correspondence the protocol never records. Marking
+/// what changed meant guessing it.
+pub fn card(steps : Array[Step]) -> @html.Html {
   if steps.is_empty() {
     return @html.div(class="plan-args", [
       @html.span(class="plan-cleared", "plan cleared"),
     ])
   }
-  let (markers, cut) = changes(steps, baseline)
-  let rewrite = rewrites(steps, baseline, markers)
   let rows : Array[@html.Html] = [
     for index, step in steps => {
-      step_row(
-        status=step.status,
-        number="\{index + 1}.",
-        title=step.title,
-        delta?=if rewrite { None } else { markers[index] },
-      )
+      step_row(status=step.status, number="\{index + 1}.", title=step.title)
     }
   ]
-  if !rewrite {
-    for step in cut {
-      rows.push(dropped_row(step))
-    }
-  }
-  let body : Array[@html.Html] = [progress_view(steps)]
-  if rewrite {
-    body.push(
-      @html.div(
-        class="plan-rewrite-note",
-        "rewritten — replaces the previous plan",
-      ),
-    )
-  }
-  body.push(@html.ul(class="plan-steps", rows))
-  @html.div(class="plan-args", body)
+  @html.div(class="plan-args", [
+    progress_view(steps),
+    @html.ul(class="plan-steps", rows),
+  ])
 }
 
 ///|
@@ -143,32 +125,13 @@ fn progress_view(steps : Array[Step], mini? : Bool = false) -> @html.Html {
 
 ///|
 /// One checklist row, shared by the card and the panel so they cannot drift:
-/// a status cell, the step number, the title, and an optional change marker.
-/// The status doubles as the row's CSS class.
-fn step_row(
-  status~ : Status,
-  number~ : String,
-  title~ : String,
-  delta? : String,
-) -> @html.Html {
-  let cells : Array[@html.Html] = [
+/// a status cell, the step number, and the title. The status doubles as the
+/// row's CSS class.
+fn step_row(status~ : Status, number~ : String, title~ : String) -> @html.Html {
+  @html.li(class="plan-step \{status_class(status)}", [
     status_cell(status),
     @html.span(class="step-num", number),
     @html.span(class="step-title", title),
-  ]
-  if delta is Some(marker) {
-    cells.push(@html.span(class="step-delta step-delta-\{marker}", marker))
-  }
-  @html.li(class="plan-step \{status_class(status)}", cells)
-}
-
-///|
-/// A step the update dropped, kept visible as a ghost row.
-fn dropped_row(step : Step) -> @html.Html {
-  @html.li(class="plan-step dropped", [
-    @html.span(class="step-icon", title="dropped", "✕"),
-    @html.span(class="step-title", step.title),
-    @html.span(class="step-delta step-delta-dropped", "dropped"),
   ])
 }
 

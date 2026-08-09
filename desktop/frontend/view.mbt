@@ -1069,7 +1069,6 @@ fn failed_badge(failed : Int) -> @html.Html {
 fn activity_view(
   items : Array[@transcript.TranscriptItem],
   on_open : (String) -> @cmd.Cmd,
-  baselines~ : Map[String, Array[@plan.Step]],
 ) -> @html.Html {
   let log : Array[@html.Html] = []
   let mut index = 0
@@ -1080,7 +1079,7 @@ fn activity_view(
         tools.push(items[index])
         index = index + 1
       }
-      log.push(tool_line_view(tools, baselines~))
+      log.push(tool_line_view(tools))
     } else {
       // Reasoning; callers never pass user messages, assistant prose, or
       // error bubbles.
@@ -1124,10 +1123,7 @@ fn activity_view(
 /// A burst of consecutive tool calls: one gray line ("Read 2 files, ran 1
 /// command") that expands to the per-call briefs, arguments, and outputs. A
 /// burst with a failure starts open — the failure is what the reader came for.
-fn tool_line_view(
-  tools : Array[@transcript.TranscriptItem],
-  baselines~ : Map[String, Array[@plan.Step]],
-) -> @html.Html {
+fn tool_line_view(tools : Array[@transcript.TranscriptItem]) -> @html.Html {
   let failed = count_failed(tools)
   let summary : Array[@html.Html] = [
     @html.span(class="tool-line-text", tool_group_summary(tools)),
@@ -1137,27 +1133,8 @@ fn tool_line_view(
   }
   @html.details(class="tool-line", open=failed > 0, [
     @html.summary(class="tool-line-summary", summary),
-    @html.div(
-      class="tool-line-body",
-      [
-        for tool in tools => {
-          tool_call_view(tool, baseline?=call_baseline(tool, baselines))
-        }
-      ],
-    ),
+    @html.div(class="tool-line-body", tools.map(tool_call_view)),
   ])
-}
-
-///|
-/// The plan a `plan` call's card marks its changes against, looked up by call
-/// id; `None` for every other call and for a plan call with no usable
-/// baseline.
-fn call_baseline(
-  item : @transcript.TranscriptItem,
-  baselines : Map[String, Array[@plan.Step]],
-) -> Array[@plan.Step]? {
-  guard item.kind is Tool(call_id~, ..) else { return None }
-  baselines.get(call_id)
 }
 
 ///|
@@ -1166,10 +1143,7 @@ fn call_baseline(
 /// and the later result. Failed calls start open and read red. Calls from older
 /// sessions may have no recorded arguments; unmatched results keep their old
 /// output-only presentation.
-fn tool_call_view(
-  item : @transcript.TranscriptItem,
-  baseline? : Array[@plan.Step],
-) -> @html.Html {
+fn tool_call_view(item : @transcript.TranscriptItem) -> @html.Html {
   guard item.kind is Tool(name~, arguments~, is_error~, brief~, ..) else {
     return @html.text("")
   }
@@ -1190,9 +1164,7 @@ fn tool_call_view(
     // call the tool rejected keeps the raw payload: the malformed arguments
     // are what the reader needs, and dressing them as an applied checklist
     // would report a plan that never took effect.
-    body.push(
-      @html.div(class="tool-call-section", [@plan.card(steps, baseline?)]),
-    )
+    body.push(@html.div(class="tool-call-section", [@plan.card(steps)]))
   } else if arguments is Some(arguments) {
     let trimmed = arguments.trim()
     if !trimmed.is_empty() && trimmed != "{}" {
@@ -1526,8 +1498,8 @@ fn transcript_item_view(
     // Unreachable in practice — the transcript loop batches every reasoning
     // and tool item into a run and builds the activity card itself — but the
     // match must cover them, so a stray item gets the same one-item card.
-    Reasoning => activity_view([item], on_open, baselines=Map([]))
-    Tool(..) => activity_view([item], on_open, baselines=Map([]))
+    Reasoning => activity_view([item], on_open)
+    Tool(..) => activity_view([item], on_open)
     Summary => summary_card_view(item.content, on_open)
   }
 }
@@ -1589,9 +1561,6 @@ fn transcript_view(
   // folding pass. Live semantic events never synthesize durable-looking
   // items here; their store commits populate the transcript.
   let visible = conv.visible_items()
-  // One pass over the transcript pairs every plan call with the one it
-  // replaced, so each card can mark what that update changed.
-  let baselines = @plan.baselines(visible)
   if visible.is_empty() {
     items.push(
       @html.div(class="empty", [
@@ -1637,7 +1606,7 @@ fn transcript_view(
         run.push(visible[index])
         index = index + 1
       }
-      items.push(activity_view(run, on_open, baselines~))
+      items.push(activity_view(run, on_open))
     }
   }
   if !conv.streaming_response.is_empty() {
@@ -3650,20 +3619,12 @@ test "a folded run carries the plan it ended on" {
     content: "",
     ts: None,
   }
-  let rendered = activity_view(
-    [tool_item("read"), plan_item],
-    _ => @cmd.none,
-    baselines=Map([]),
-  )
+  let rendered = activity_view([tool_item("read"), plan_item], _ => @cmd.none)
   let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
   assert_true(markup.contains("plan-progress mini"))
   assert_true(markup.contains("plan-progress-count\">1/2"))
   // A run that touched no plan adds nothing to its summary line.
-  let plainer = activity_view(
-    [tool_item("read")],
-    _ => @cmd.none,
-    baselines=Map([]),
-  )
+  let plainer = activity_view([tool_item("read")], _ => @cmd.none)
   let plain_markup = @rabbita.render_to_string(() => {
     @rabbita.Val::constant(plainer)
   })

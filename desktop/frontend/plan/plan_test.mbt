@@ -1,4 +1,4 @@
-// The contract: what counts as the standing plan, what a card diffs against,
+// The contract: what a payload decodes to, what counts as the standing plan,
 // and what each of the three renderings puts on screen.
 
 ///|
@@ -161,63 +161,10 @@ test "a call whose result never landed is not the standing plan" {
     fail("expected the applied plan to survive an unresolved clear")
   }
   assert_eq(surviving[0].title, "one")
-  // And it is not a baseline either — nothing diffs against a plan that
-  // never took effect.
-  let baselines = @plan.baselines([
-    plan_call("c1", applied),
-    plan_call("c2", never_ran, has_result=false),
-    plan_call("c3", plan_json([("one", "completed"), ("three", "pending")])),
-  ])
-  assert_true(baselines.get("c2") is None)
-  guard baselines.get("c3") is Some(base) else {
-    fail("expected c3 to diff against c1")
-  }
-  assert_eq(base.length(), 1)
 }
 
 ///|
-test "baselines pair each call with the previous applied one" {
-  let first = plan_json([("one", "in_progress")])
-  let second = plan_json([("one", "completed")])
-  let third = plan_json([("one", "completed"), ("two", "in_progress")])
-  let baselines = @plan.baselines([
-    plan_call("c1", first),
-    plan_call("c2", second),
-    plan_call("c3", third),
-  ])
-  // The session's first plan has nothing to diff against.
-  assert_true(baselines.get("c1") is None)
-  guard baselines.get("c2") is Some(base_of_second) else {
-    fail("expected a baseline for c2")
-  }
-  assert_true(base_of_second[0].status is InProgress)
-  guard baselines.get("c3") is Some(base_of_third) else {
-    fail("expected a baseline for c3")
-  }
-  assert_eq(base_of_third.length(), 1)
-}
-
-///|
-test "baselines skip a rejected call" {
-  let first = plan_json([("one", "in_progress")])
-  let rejected = plan_json([("nonsense", "pending")])
-  let third = plan_json([("one", "completed")])
-  let baselines = @plan.baselines([
-    plan_call("c1", first),
-    plan_call("c2", rejected, is_error=true),
-    plan_call("c3", third),
-  ])
-  // A rejected call never changed the plan, so it is neither a baseline nor
-  // gets one: c3 diffs against c1.
-  assert_true(baselines.get("c2") is None)
-  guard baselines.get("c3") is Some(base) else {
-    fail("expected a baseline for c3")
-  }
-  assert_true(base[0].status is InProgress)
-}
-
-///|
-test "a card renders the meter, the checklist, and what changed" {
+test "a card renders the meter over the checklist" {
   guard @plan.decode(
       plan_json([
         ("read the failing test", "completed"),
@@ -229,148 +176,16 @@ test "a card renders the meter, the checklist, and what changed" {
     is Some(steps) else {
     fail("expected a plan")
   }
-  guard @plan.decode(
-      plan_json([
-        ("read the failing test", "completed"),
-        ("fix the parser", "in_progress"),
-        ("run moon test", "pending"),
-        ("write the changelog", "pending"),
-      ]),
-    )
-    is Some(baseline) else {
-    fail("expected a baseline")
-  }
-  let rendered = markup(@plan.card(steps, baseline~))
+  let rendered = markup(@plan.card(steps))
   // Two of four completed, with the in-progress step's own slice of the bar.
   assert_true(rendered.contains("plan-progress-count\">2/4"))
   assert_true(rendered.contains("width: 50%"))
   assert_true(rendered.contains("plan-progress-fill active"))
-  // The steps that moved carry markers; the untouched first one does not.
-  assert_true(rendered.contains("step-delta-done"))
-  assert_true(rendered.contains("step-delta-started"))
-  assert_true(rendered.contains("step-delta-new"))
-  // The step this update cut stays visible as a ghost row.
-  assert_true(rendered.contains("plan-step dropped"))
-  assert_true(rendered.contains("write the changelog"))
-}
-
-///|
-test "repeated titles are paired one to one, not all against the first" {
-  // The tool permits a plan to repeat a title. Matching every occurrence
-  // against the first old step of that name would trade their statuses: the
-  // second row here would read "reopened" off the first row's baseline.
-  guard @plan.decode(
-      plan_json([("run tests", "completed"), ("run tests", "in_progress")]),
-    )
-    is Some(steps) else {
-    fail("expected a plan")
-  }
-  guard @plan.decode(
-      plan_json([("run tests", "completed"), ("run tests", "pending")]),
-    )
-    is Some(baseline) else {
-    fail("expected a baseline")
-  }
-  let rendered = markup(@plan.card(steps, baseline~))
-  assert_true(rendered.contains("step-delta-started"))
-  assert_false(rendered.contains("step-delta-reopened"))
-  assert_false(rendered.contains("step-delta-new"))
-}
-
-///|
-test "a surviving duplicate pairs with the step that did not move" {
-  // Which of two identical titles the survivor "is" has no answer, so the
-  // tie goes to the reading that claims the least: pairing it with the
-  // pending one would report work finishing that may never have happened,
-  // and the ghost row reads the same either way.
-  guard @plan.decode(plan_json([("run tests", "completed")])) is Some(steps) else {
-    fail("expected a plan")
-  }
-  guard @plan.decode(
-      plan_json([("run tests", "pending"), ("run tests", "completed")]),
-    )
-    is Some(baseline) else {
-    fail("expected a baseline")
-  }
-  let rendered = markup(@plan.card(steps, baseline~))
-  assert_false(rendered.contains("step-delta-done"))
-  assert_true(rendered.contains("plan-step dropped"))
-}
-
-///|
-test "dropping one of two same-titled steps still shows a ghost row" {
-  // The surviving occurrence answers for the title, so a by-title lookup
-  // would report nothing dropped at all.
-  guard @plan.decode(plan_json([("run tests", "completed")])) is Some(steps) else {
-    fail("expected a plan")
-  }
-  guard @plan.decode(
-      plan_json([("run tests", "completed"), ("run tests", "pending")]),
-    )
-    is Some(baseline) else {
-    fail("expected a baseline")
-  }
-  let rendered = markup(@plan.card(steps, baseline~))
-  assert_true(rendered.contains("plan-step dropped"))
-}
-
-///|
-test "a first card has no baseline to mark against" {
-  guard @plan.decode(plan_json([("one", "in_progress"), ("two", "pending")]))
-    is Some(steps) else {
-    fail("expected a plan")
-  }
-  let rendered = markup(@plan.card(steps))
-  assert_true(rendered.contains("plan-steps"))
-  assert_false(rendered.contains("step-delta"))
-  assert_false(rendered.contains("plan-rewrite-note"))
-}
-
-///|
-test "a rewrite is noted once instead of marking every row" {
-  guard @plan.decode(plan_json([("alpha", "pending"), ("beta", "pending")]))
-    is Some(steps) else {
-    fail("expected a plan")
-  }
-  guard @plan.decode(plan_json([("gamma", "completed"), ("delta", "pending")]))
-    is Some(baseline) else {
-    fail("expected a baseline")
-  }
-  let rendered = markup(@plan.card(steps, baseline~))
-  assert_true(rendered.contains("plan-rewrite-note"))
-  assert_false(rendered.contains("step-delta"))
-}
-
-///|
-test "a plan that mostly repeats one title reads as a rewrite" {
-  // Only one step genuinely carries over. A by-title count would see every
-  // row as carried and call this an evolution, then mark nearly all of them —
-  // the noise the rewrite note exists to avoid.
-  let repeated = [
-    ("run tests", "pending"),
-    ..[
-      for _ in 0..<5 => ("run tests", "pending")
-    ],
-  ]
-  guard @plan.decode(plan_json(repeated)) is Some(steps) else {
-    fail("expected a plan")
-  }
-  guard @plan.decode(
-      plan_json(
-        [
-          ("run tests", "pending"),
-          ..[
-            for index in 0..<5 => ("step \{index}", "pending")
-          ],
-        ],
-      ),
-    )
-    is Some(baseline) else {
-    fail("expected a baseline")
-  }
-  let rendered = markup(@plan.card(steps, baseline~))
-  assert_true(rendered.contains("plan-rewrite-note"))
-  assert_false(rendered.contains("step-delta"))
+  // Every step is a row, in the order the call recorded them.
+  assert_true(rendered.contains("plan-step completed"))
+  assert_true(rendered.contains("plan-step in_progress"))
+  assert_true(rendered.contains("plan-step pending"))
+  assert_true(rendered.contains("update the mbti"))
 }
 
 ///|
@@ -435,8 +250,6 @@ test "the panel names the active step and keeps its slot when empty" {
   assert_true(rendered.contains("plan-panel-summary"))
   assert_true(rendered.contains("fix the parser"))
   assert_true(rendered.contains("plan-progress-count\">1/3"))
-  // The panel states the plan; it does not re-litigate what changed.
-  assert_false(rendered.contains("step-delta"))
   // With no plan the slot still renders, so the composer's children keep a
   // fixed shape as a plan appears and clears mid-turn.
   let empty = markup(@plan.panel([]))
