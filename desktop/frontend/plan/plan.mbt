@@ -107,14 +107,24 @@ pub enum Call {
   /// Recorded, with no result yet — the model asked for this plan, and
   /// whether it took effect is not yet known.
   Pending(Array[Step])
+  /// A plan call this build will not read: past the decode bounds, or shaped
+  /// in a way it does not recognize — a newer engine raising the tool's caps,
+  /// say. Distinct from `Rejected` because the tool did not refuse it, so on
+  /// the engine's side this call did change the plan; what it changed it to
+  /// is simply unknown here.
+  Unreadable
   /// The tool refused the payload, so it never became a plan at all.
   Rejected
 }
 
 ///|
-/// Classify a transcript item as a `plan` call, or `None` for anything else —
-/// another tool, a legacy row with no recorded arguments, or a payload this
-/// build declines to decode (see `MAX_PAYLOAD_CHARS`).
+/// Classify a transcript item as a `plan` call, or `None` when it is not one:
+/// another tool, or a legacy row with no recorded arguments.
+///
+/// A payload that will not decode is `Unreadable`, never `None`. The
+/// difference matters to `latest`: "this row is not a plan call" is something
+/// to scan past, while "a plan call landed here and this build cannot read
+/// it" is a wall.
 pub fn classify(item : @transcript.TranscriptItem) -> Call? {
   guard item.kind
     is Tool(name="plan", arguments=Some(arguments), has_result~, is_error~, ..) else {
@@ -123,7 +133,7 @@ pub fn classify(item : @transcript.TranscriptItem) -> Call? {
   if is_error {
     return Some(Rejected)
   }
-  guard decode(arguments) is Some(steps) else { return None }
+  guard decode(arguments) is Some(steps) else { return Some(Unreadable) }
   Some(if has_result { Applied(steps) } else { Pending(steps) })
 }
 
@@ -138,12 +148,22 @@ pub fn classify(item : @transcript.TranscriptItem) -> Call? {
 /// executed stand as the plan for the rest of the session — or, if they
 /// cleared it, hide the last plan that really did apply.
 ///
+/// An `Unreadable` call ends the search with no plan rather than being
+/// scanned past. The tool accepted it, so the plan *was* replaced; this build
+/// just cannot say with what. Walking past it would answer with the plan
+/// before it — a stale answer stated as a current one, and a silent one,
+/// which is worse than showing nothing.
+///
 /// Over a whole conversation this is the standing plan; over one folded run
 /// of activity it is the plan as that run left it.
 pub fn latest(items : Array[@transcript.TranscriptItem]) -> Array[Step]? {
   for item in items.rev_iter() {
-    guard classify(item) is Some(Applied(steps)) else { continue }
-    return if steps.is_empty() { None } else { Some(steps) }
+    match classify(item) {
+      Some(Applied(steps)) =>
+        return if steps.is_empty() { None } else { Some(steps) }
+      Some(Unreadable) => return None
+      Some(Pending(_)) | Some(Rejected) | None => continue
+    }
   }
   None
 }

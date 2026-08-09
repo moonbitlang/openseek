@@ -26,6 +26,7 @@ pub fn panel(Array[@transcript.TranscriptItem]) -> @html.Html
 pub enum Call {
   Applied(Array[Step])
   Pending(Array[Step])
+  Unreadable
   Rejected
 }
 

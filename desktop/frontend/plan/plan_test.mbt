@@ -133,7 +133,37 @@ test "classify names every state a plan call can be observed in" {
     })
     is None,
   )
-  assert_true(@plan.classify(plan_call("c1", "not json")) is None)
+  // A payload this build will not decode is its own state, not "not a plan
+  // call": something landed here, and only the reading of it is missing.
+  assert_true(@plan.classify(plan_call("c1", "not json")) is Some(Unreadable))
+}
+
+///|
+test "an unreadable plan call hides the panel instead of showing an older plan" {
+  let readable = plan_json([("one", "in_progress")])
+  let oversized = plan_json(
+    [
+      for index in 0..<201 => ("step \{index}", "pending")
+    ],
+  )
+  // A newer engine can raise the tool's caps past this build's display
+  // bounds. That call still replaced the plan, so the plan before it is not
+  // the current one — answering with it would be stale and silent.
+  assert_true(
+    @plan.latest([plan_call("c1", readable), plan_call("c2", oversized)])
+    is None,
+  )
+  // The wall is the call, not the payload: a readable plan after it is again
+  // the standing plan.
+  guard @plan.latest([
+      plan_call("c1", readable),
+      plan_call("c2", oversized),
+      plan_call("c3", plan_json([("two", "in_progress")])),
+    ])
+    is Some(steps) else {
+    fail("expected the plan recorded after the unreadable one")
+  }
+  assert_eq(steps[0].title, "two")
 }
 
 ///|
