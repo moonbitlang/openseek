@@ -251,6 +251,10 @@ pub(all) struct State {
   // not (see `sync`).
   explorer_mode : ExplorerMode
   changes : ChangeList
+  // Exact changed rows the user has marked reviewed in the current checkout.
+  // Watcher events and run boundaries invalidate affected progress; a final
+  // Git refresh also drops rows whose status or rename identity changed.
+  reviewed_changes : Array[ChangedFile]
   // Monotonic request token retained across conversation re-roots and advanced
   // across same-owner placement changes. Owner plus this generation rejects an
   // old A→B→A reply or one from an earlier checkout incarnation.
@@ -325,6 +329,7 @@ pub fn State::empty() -> State {
     tree_open: true,
     explorer_mode: ExplorerFiles,
     changes: ChangeListIdle,
+    reviewed_changes: [],
     changes_generation: 0,
     request_epoch: 0,
     changes_head: None,
@@ -480,6 +485,9 @@ pub(all) enum Msg {
   // Switch the active changed-file review between the ordinary source Viewer
   // and its full unified diff. Unavailable/loading reviews ignore the action.
   ToggleReviewDiff
+  // Mark the active changed-file review as reviewed, or return it to the
+  // unreviewed queue. Ordinary file tabs ignore the action.
+  ToggleReviewProgress
   // One `git.original_file` request settled. `path` is always the current
   // changed path (the dock/document key), even when the host read its rename
   // source from `original_path`.

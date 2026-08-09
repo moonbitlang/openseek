@@ -153,6 +153,7 @@ pub(all) enum Msg {
   FileSelected(path~ : @pathx.Relative, name~ : String)
   ChangedFileSelected(ChangedFile)
   ToggleReviewDiff
+  ToggleReviewProgress
   GitOriginalLoaded(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, original~ : @protocol.GitOriginalFileReply)
   GitOriginalFailed(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, message~ : String)
   OpenNavigationLocation(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, range~ : @common.Range)
@@ -197,6 +198,7 @@ pub(all) struct State {
   tree_open : Bool
   explorer_mode : ExplorerMode
   changes : ChangeList
+  reviewed_changes : Array[ChangedFile]
   changes_generation : Int
   request_epoch : Int
   changes_head : String?

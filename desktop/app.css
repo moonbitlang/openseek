@@ -1104,6 +1104,22 @@ html.is-resizing * {
   background: var(--accent-soft);
 }
 
+.change-row.reviewed .change-path {
+  color: var(--ink-2);
+}
+
+.change-row.reviewed .change-action {
+  border-color: color-mix(in srgb, var(--success, #268744) 35%, var(--line));
+  color: var(--success, #268744);
+  background: color-mix(in srgb, var(--success, #268744) 8%, transparent);
+}
+
+.review-progress-summary {
+  padding: 4px 12px 6px;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
 .change-path {
   flex: 1 1 auto;
   min-width: 0;
@@ -1260,6 +1276,17 @@ html.is-resizing * {
 .review-badge-action:hover {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.review-progress {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+}
+.review-progress.reviewed {
+  border-color: color-mix(in srgb, var(--success, #268744) 45%, var(--line));
+  color: var(--success, #268744);
+  background: color-mix(in srgb, var(--success, #268744) 10%, transparent);
 }
 
 .viewer-host {

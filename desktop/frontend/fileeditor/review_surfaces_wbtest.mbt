@@ -21,7 +21,17 @@ test "desktop review keeps sibling hosts stable across source and diff modes" {
   }
   let source_docs = owned_state().docs.copy()
   source_docs[path] = source_doc
-  let source_state = { ..owned_state(), docs: source_docs }
+  let source_state = {
+    ..owned_state(),
+    docs: source_docs,
+    explorer_mode: ExplorerChanges,
+    changes: ChangeListReady(
+      repository=true,
+      files=[selected],
+      refreshing=false,
+      refresh_again=false,
+    ),
+  }
   let source = render_review_html(body_view(test_emit(), source_state, ctx))
   assert_true(
     source.contains("id=\"viewer-host\" class=\"viewer-host editor-shell\""),
@@ -37,6 +47,7 @@ test "desktop review keeps sibling hosts stable across source and diff modes" {
   assert_true(source_breadcrumb.contains("aria-label=\"Full diff\""))
   assert_true(source_breadcrumb.contains("aria-pressed=\"false\""))
   assert_true(source_breadcrumb.contains(">View full diff</button>"))
+  assert_true(source_breadcrumb.contains(">Mark reviewed</button>"))
 
   let diff_doc = {
     ..source_doc,
@@ -63,4 +74,15 @@ test "desktop review keeps sibling hosts stable across source and diff modes" {
   assert_true(diff_breadcrumb.contains("aria-label=\"Full diff\""))
   assert_true(diff_breadcrumb.contains("aria-pressed=\"true\""))
   assert_true(diff_breadcrumb.contains(">View file</button>"))
+
+  let reviewed_state = { ..diff_state, reviewed_changes: [selected] }
+  let reviewed_breadcrumb = render_review_html(
+    breadcrumb_view(test_emit(), reviewed_state, ctx),
+  )
+  assert_true(reviewed_breadcrumb.contains(">✓ Reviewed</button>"))
+  let reviewed_tree = render_review_html(
+    tree_pane(test_emit(), reviewed_state, ctx),
+  )
+  assert_true(reviewed_tree.contains("1 of 1 reviewable files reviewed"))
+  assert_true(reviewed_tree.contains("change-row selected reviewed"))
 }

@@ -382,7 +382,24 @@ fn change_inventory(
       if files.is_empty() {
         [@html.div(class="file-panel-empty", "No changed files.")]
       } else {
-        files.map(change => changed_file_row(dispatch, state, ctx, change))
+        let reviewable = files.filter(change => change.selectable())
+        let reviewed = reviewable
+          .filter(change => state.reviewed_changes.contains(change))
+          .length()
+        let rows = [
+          @html.div(
+            class="review-progress-summary",
+            if reviewable.is_empty() {
+              "No reviewable text files"
+            } else {
+              "\{reviewed} of \{reviewable.length()} reviewable files reviewed"
+            },
+          ),
+        ]
+        for change in files {
+          rows.push(changed_file_row(dispatch, state, ctx, change))
+        }
+        rows
       }
   }
 }
@@ -413,7 +430,11 @@ fn changed_file_row(
   change : ChangedFile,
 ) -> @html.Html {
   let selected = change.is_selected(state, ctx)
+  let reviewed = state.reviewed_changes.contains(change)
   let mut class = if selected { "change-row selected" } else { "change-row" }
+  if reviewed {
+    class = class + " reviewed"
+  }
   if !change.selectable() {
     class = class + " disabled"
   }
@@ -430,7 +451,11 @@ fn changed_file_row(
         "change-action unavailable"
       },
       if change.selectable() {
-        "View diff"
+        if reviewed {
+          "✓ Reviewed"
+        } else {
+          "View diff"
+        }
       } else {
         "Unavailable"
       },
@@ -581,6 +606,7 @@ pub fn breadcrumb_view(
     [
       @html.div(class="crumb-path", crumbs),
       review_badge(dispatch, state, ctx),
+      review_progress(dispatch, state, ctx),
       @html.button(
         class="panel-toggle",
         title=if state.tree_open { "Hide file tree" } else { "Show file tree" },
@@ -588,6 +614,46 @@ pub fn breadcrumb_view(
         icon(icon_folder),
       ),
     ],
+  )
+}
+
+///|
+/// Progress control for the exact Changes row attached to the active review.
+/// Keeping it beside the diff-mode badge makes completion explicit without
+/// turning an ordinary file open into review state.
+fn review_progress(
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+  ctx : Ctx,
+) -> @html.Html {
+  guard ctx.active_file is Some(path) &&
+    state.docs.get(path) is Some({ review: Some(review), .. }) &&
+    state.changes is ChangeListReady(files~, ..) &&
+    files.contains(review.selected) else {
+    return @html.span(class="review-badge hidden", "")
+  }
+  let reviewed = state.reviewed_changes.contains(review.selected)
+  @html.button(
+    type_="button",
+    class=if reviewed {
+      "review-badge review-progress reviewed"
+    } else {
+      "review-badge review-progress"
+    },
+    title=if reviewed {
+      "Return this changed file to the review queue"
+    } else {
+      "Mark this changed file as reviewed"
+    },
+    on_click=dispatch(ToggleReviewProgress),
+    attrs=@html.Attrs::build()
+      .aria_label("Mark file reviewed")
+      .aria_pressed(reviewed.to_string()),
+    if reviewed {
+      "✓ Reviewed"
+    } else {
+      "Mark reviewed"
+    },
   )
 }
 

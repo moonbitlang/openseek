@@ -1147,6 +1147,25 @@ fn changes_live(state : State, ctx : Ctx) -> Bool {
 }
 
 ///|
+/// Whether one concrete watcher batch may have changed either side of this
+/// changed-file identity. Rename/copy reviews retain their original path, so
+/// edits on that side invalidate progress too.
+fn ChangedFile::touched_by(
+  self : ChangedFile,
+  changes : Array[FileChange],
+) -> Bool {
+  for change in changes {
+    if change.touches(self.path) {
+      return true
+    }
+    if self.original_path is Some(original) && change.touches(original) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// A baseline-bearing review cannot trust repeated `head=None` snapshots.
 /// New hosts only return that shape for an unborn repository, whose rows are
 /// additions/untracked files; an older host also returns it after real commits
@@ -1711,6 +1730,22 @@ pub fn update(
       }
       (command, { ..state, docs, })
     }
+    ToggleReviewProgress => {
+      guard ctx.active_file is Some(path) &&
+        state.docs.get(path) is Some({ review: Some(review), .. }) &&
+        state.changes is ChangeListReady(files~, ..) &&
+        files.contains(review.selected) else {
+        return (@cmd.none, state)
+      }
+      let reviewed_changes = if state.reviewed_changes.contains(review.selected) {
+        state.reviewed_changes.filter(change => change != review.selected)
+      } else {
+        let reviewed_changes = state.reviewed_changes.copy()
+        reviewed_changes.push(review.selected)
+        reviewed_changes
+      }
+      (@cmd.none, { ..state, reviewed_changes, })
+    }
     ExplorerModeSelected(mode) => {
       let already_selected = state.explorer_mode == mode
       let selected = { ..state, explorer_mode: mode }
@@ -1976,6 +2011,13 @@ pub fn update(
           @cmd.none
         }
         review_cmds.push(settle)
+        let reviewed_changes = if follow_up {
+          state.reviewed_changes
+        } else if head_changed {
+          []
+        } else {
+          state.reviewed_changes.filter(change => files.contains(change))
+        }
         (
           @cmd.batch(review_cmds),
           {
@@ -1993,6 +2035,7 @@ pub fn update(
             },
             changes_generation: next_generation,
             review_generation,
+            reviewed_changes,
             background_review_requests,
             review_recovery_pending: if follow_up {
               state.review_recovery_pending
@@ -2295,6 +2338,10 @@ pub fn update(
       }
     RunSettled(owner~) =>
       if state.owner == Some(owner) {
+        // A completed agent run can write files outside the pruned watcher.
+        // Git status alone cannot prove their content is unchanged, so review
+        // progress is conservatively reset at this authoritative boundary.
+        let state = { ..state, reviewed_changes: [] }
         let diagnostics = match
           active_moonbit_diagnostics(
             dispatch,
@@ -2328,6 +2375,11 @@ pub fn update(
     FsChanged(session~, changes~) =>
       if state.owner is Some(owner) &&
         (session is None || session == Some(owner.session)) {
+        let reviewed_changes = match changes {
+          Some(changes) =>
+            state.reviewed_changes.filter(change => !change.touched_by(changes))
+          None => state.reviewed_changes
+        }
         // A baseline checks the whole selection after watcher replacement.
         // Concrete batches stat only affected open files (the dock strip's
         // projection) and re-list only directories whose immediate children
@@ -2426,7 +2478,7 @@ pub fn update(
             ),
           )
         }
-        let next = { ..state, loading, }
+        let next = { ..state, loading, reviewed_changes }
         // Any content event can change Git status, not just a structural one.
         // Refresh only after Changes has been requested and while its explorer
         // or a review is live; reopening performs its own full refresh. The
