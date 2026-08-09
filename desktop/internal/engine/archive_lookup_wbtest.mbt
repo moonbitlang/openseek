@@ -32,7 +32,7 @@ async test "archive names the missing store after a workspace detach" {
   // reports the record as unreachable instead of pretending it never
   // existed.
   let detail = try {
-    ignore(archive_session(manager, "s-ws", fn() {  }))
+    ignore(archive_session(manager, "s-ws", _ => ()))
     "no error"
   } catch {
     EngineError(detail) => detail
@@ -53,7 +53,7 @@ async test "archive names the missing store after a workspace detach" {
   guard manager.pump is Serving(sessions~) else { fail("pump stopped") }
   assert_true(sessions.get("s-ws") is None)
   let second = try {
-    ignore(archive_session(manager, "s-ws", fn() {  }))
+    ignore(archive_session(manager, "s-ws", _ => ()))
     "no error"
   } catch {
     EngineError(detail) => detail
@@ -93,7 +93,7 @@ async test "archive reports a workspace record whose directory vanished" {
   // its dead entry addressable, so the sidebar still shows the workspace.
   @fs.rmdir(workspace, recursive=true)
   let detail = try {
-    ignore(archive_session(manager, "s-ws", fn() {  }))
+    ignore(archive_session(manager, "s-ws", _ => ()))
     "no error"
   } catch {
     EngineError(detail) => detail
@@ -164,7 +164,7 @@ async test "archiving an already-archived conversation names that state" {
   let manager = new_engine_manager("unused")
   manager.pump = Serving(sessions=Map([]))
   let detail = try {
-    ignore(archive_session(manager, "s-done", fn() {  }))
+    ignore(archive_session(manager, "s-done", _ => ()))
     "no error"
   } catch {
     EngineError(detail) => detail

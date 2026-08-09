@@ -10,7 +10,7 @@ import {
 // Values
 pub async fn add_workspace(String, (Array[@pathx.Absolute]) -> Unit raise EngineError) -> Array[@pathx.Absolute]
 
-pub async fn archive_session(EngineManager, String, () -> Unit, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveReply
+pub async fn archive_session(EngineManager, String, (String) -> Unit, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveReply
 
 pub async fn archived_sessions(EngineManager, (String) -> Unit) -> @protocol.SessionsReply
 
@@ -64,7 +64,7 @@ pub async fn start_run(EventSink, EngineManager, @protocol.StartPayload) -> @pro
 
 pub async fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply
 
-pub async fn unarchive_session(EngineManager, String, () -> Unit) -> @protocol.SessionsReply
+pub async fn unarchive_session(EngineManager, String, (String) -> Unit) -> @protocol.SessionsReply
 
 pub async fn update_settings(EngineManager, SettingsPatch, legacy_migration? : Bool, on_committed? : (@protocol.SettingsStatusPayload) -> Unit) -> @protocol.SettingsStatusPayload
 

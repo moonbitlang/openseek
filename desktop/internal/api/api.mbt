@@ -162,7 +162,7 @@ pub fn endpoints(
       @engine.archive_session(
         state.manager,
         session,
-        () => publish_session_changed(state, "archived", session),
+        moved => publish_session_changed(state, "archived", moved),
         force=payload.force == Some(true),
         on_worktree_changed=(workspace, worktrees) => {
           publish_worktree_changed(state, workspace, worktrees)
@@ -171,8 +171,8 @@ pub fn endpoints(
     }),
     @endpoint.Endpoint::remote(@commands.session_unarchive, async fn(payload) {
       let session = payload.canonical_session()
-      @engine.unarchive_session(state.manager, session, () => {
-        publish_session_changed(state, "unarchived", session)
+      @engine.unarchive_session(state.manager, session, moved => {
+        publish_session_changed(state, "unarchived", moved)
       })
     }),
     @endpoint.Endpoint::remote(@commands.settings_get, async fn(_) {

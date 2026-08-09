@@ -114,8 +114,10 @@ fn conversation_title(conv : Conversation) -> String {
 /// `subruns` is how many sub-run transcripts this conversation folded under
 /// it: above zero the row leads with a twisty that shows or hides them
 /// (`expanded` says which way it points). `subrun` marks the row as one of
-/// those children — indented a step, and never archivable on its own, since a
-/// sub-run's record belongs to the turn that produced it.
+/// those children — indented a step. Nested children have no independent
+/// archive action because archiving their parent moves the whole family; a
+/// legacy orphan that surfaces as a root row does get the action so old split
+/// state remains repairable.
 fn session_row(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -399,8 +401,11 @@ fn device_section_rows(
   // from the host's archived reply, not the live list; each row carries a
   // restore control instead of the archive one.
   let archived_rows : Array[@html.Html] = []
-  for item in dev.archived {
-    archived_rows.push(archived_row(dispatch, dev.channel, item))
+  for row in @transcript.session_tree(dev.archived) {
+    // A parent and its archived sub-run records are one conversation. Restore
+    // the root row and the host moves the complete family back together. An
+    // old orphan child still owns a row and can therefore be restored.
+    archived_rows.push(archived_row(dispatch, dev.channel, row.item))
   }
   if archived_rows.length() > 0 {
     rows.push(
@@ -512,11 +517,11 @@ fn push_group_rows(
         dev.channel,
         row.item.id,
         label_of(row.item),
-        // A child-shaped id offers no archive control even when it surfaces
-        // as a root row — its parent archived, or listed in another store.
-        // Archiving a sub-run on its own would strand it in the archived
-        // twin, where restoring its parent would not bring it back.
-        archivable=@transcript.subrun_label(row.item.id) is None,
+        // Ordinary children are folded below a live parent and receive no
+        // action. A child-shaped root is legacy split state (or belongs to a
+        // parent in another store), so it remains independently archivable;
+        // once beside its archived parent, family restore picks it up.
+        archivable=true,
         nested~,
         worktree?=worktree_name_for(dev, workspace, row.item.id),
         subruns=row.children.length(),
@@ -3558,6 +3563,38 @@ test "a completed singleton tool uses one brief disclosure" {
   assert_false(markup.contains("Ran 1 command"))
   assert_false(markup.contains("tool-line-summary"))
   assert_false(markup.contains("activity-summary"))
+}
+
+///|
+#warnings("-alert_unstable")
+test "archived families collapse while a live orphan child stays archivable" {
+  let archived_model = test_model().with_dev(dev => {
+    ..dev,
+    archived: [archived_item("chat"), archived_item("chat-sr-1")],
+  })
+  let archived_dev = archived_model.dev()
+  let archived_markup = @rabbita.render_to_string(() => {
+    @rabbita.Val::constant(
+      @html.div(
+        device_section_rows(test_dispatch(), archived_model, archived_dev),
+      ),
+    )
+  })
+  assert_true(archived_markup.contains("Archived (1)"))
+  assert_true(archived_markup.contains("title=\"chat\""))
+  assert_false(archived_markup.contains("chat-sr-1"))
+  let orphan_model = test_model().with_dev(dev => {
+    ..dev,
+    sessions: [archived_item("chat-sr-1")],
+  })
+  let orphan_dev = orphan_model.dev()
+  let orphan_markup = @rabbita.render_to_string(() => {
+    @rabbita.Val::constant(
+      @html.div(device_section_rows(test_dispatch(), orphan_model, orphan_dev)),
+    )
+  })
+  assert_true(orphan_markup.contains("chat-sr-1"))
+  assert_true(orphan_markup.contains("Archive — tuck this chat away"))
 }
 
 ///|
