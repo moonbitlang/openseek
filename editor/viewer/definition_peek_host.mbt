@@ -649,6 +649,20 @@ fn Viewer::open_references_peek_shell(
   let mounted_zone_id : Ref[String?] = Ref(None)
   let mounted_overlay : Ref[@editor_browser.OverlayWidget?] = Ref(None)
   let markdown_mounted = Ref(false)
+  // Every abandon path below unmounts the same shell, and each reads the mount
+  // facts as they stand at that point. Binding the call once keeps the reads
+  // late while leaving one place to extend the resource set.
+  let retire = () => {
+    self.retire_provisional_references_peek_shell(
+      state,
+      generation,
+      widget,
+      mounted_view.val,
+      mounted_zone_id.val,
+      mounted_overlay.val,
+      markdown_mounted.val,
+    )
+  }
   match self.current_code_browser_data() {
     Some(browser) => {
       let zone_dom_node = @rdom.document().create_element("div")
@@ -690,29 +704,13 @@ fn Viewer::open_references_peek_shell(
       let added_id = Ref("")
       self.change_view_zones(accessor => added_id.val = accessor.add_zone(zone))
       if added_id.val == "" {
-        self.retire_provisional_references_peek_shell(
-          state,
-          generation,
-          widget,
-          mounted_view.val,
-          mounted_zone_id.val,
-          mounted_overlay.val,
-          markdown_mounted.val,
-        )
+        retire()
         return false
       }
       mounted_view.val = Some(browser.view)
       mounted_zone_id.val = Some(added_id.val)
       if !self.references_peek_shell_owner_is_current(generation, widget) {
-        self.retire_provisional_references_peek_shell(
-          state,
-          generation,
-          widget,
-          mounted_view.val,
-          mounted_zone_id.val,
-          mounted_overlay.val,
-          markdown_mounted.val,
-        )
+        retire()
         return false
       }
       state.zone_id = Some(added_id.val)
@@ -723,29 +721,13 @@ fn Viewer::open_references_peek_shell(
       self.add_overlay_widget(overlay)
       mounted_overlay.val = Some(overlay)
       if !self.references_peek_shell_owner_is_current(generation, widget) {
-        self.retire_provisional_references_peek_shell(
-          state,
-          generation,
-          widget,
-          mounted_view.val,
-          mounted_zone_id.val,
-          mounted_overlay.val,
-          markdown_mounted.val,
-        )
+        retire()
         return false
       }
       state.overlay_widget = Some(overlay)
       self.reveal_references_peek_zone(position)
       if !self.references_peek_session_is_current(generation) {
-        self.retire_provisional_references_peek_shell(
-          state,
-          generation,
-          widget,
-          mounted_view.val,
-          mounted_zone_id.val,
-          mounted_overlay.val,
-          markdown_mounted.val,
-        )
+        retire()
         return false
       }
     }
@@ -760,15 +742,7 @@ fn Viewer::open_references_peek_shell(
           markdown.overlay_mount().append_child(widget.get_dom_node().as_node())
           markdown_mounted.val = true
           if !self.references_peek_shell_owner_is_current(generation, widget) {
-            self.retire_provisional_references_peek_shell(
-              state,
-              generation,
-              widget,
-              mounted_view.val,
-              mounted_zone_id.val,
-              mounted_overlay.val,
-              markdown_mounted.val,
-            )
+            retire()
             return false
           }
           state.markdown_projection_generation = Some(
@@ -776,29 +750,13 @@ fn Viewer::open_references_peek_shell(
           )
         }
         None => {
-          self.retire_provisional_references_peek_shell(
-            state,
-            generation,
-            widget,
-            mounted_view.val,
-            mounted_zone_id.val,
-            mounted_overlay.val,
-            markdown_mounted.val,
-          )
+          retire()
           return false
         }
       }
   }
   guard self.references_peek_session_is_current(generation) else {
-    self.retire_provisional_references_peek_shell(
-      state,
-      generation,
-      widget,
-      mounted_view.val,
-      mounted_zone_id.val,
-      mounted_overlay.val,
-      markdown_mounted.val,
-    )
+    retire()
     return false
   }
   state.focus_frame = Some(
@@ -1441,6 +1399,20 @@ fn Viewer::schedule_references_peek_preview(
       }
       return
     }
+    // Each step below can hand control to a listener that supersedes this
+    // preview, so every step is followed by the same currency re-check against
+    // the owners captured here. Binding it once keeps the interleaved
+    // browser work readable.
+    let still_current = () => {
+      self.references_peek_preview_commit_is_current(
+        generation,
+        preview_generation,
+        location.uri.to_string(),
+        model,
+        result_model,
+        widget,
+      )
+    }
     let preview_host = widget.get_preview_host()
     let preview = Viewer(
       services=self.services,
@@ -1456,26 +1428,12 @@ fn Viewer::schedule_references_peek_preview(
       resize_observer: None,
     }
     preview.attach(preview_host)
-    if !self.references_peek_preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    guard still_current() else {
       provisional.dispose()
       return
     }
     preview.set_model(Some(model))
-    if !self.references_peek_preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    guard still_current() else {
       provisional.dispose()
       return
     }
@@ -1505,14 +1463,7 @@ fn Viewer::schedule_references_peek_preview(
     provisional.decorations = Some(
       preview.create_decorations_collection(decorations~),
     )
-    if !self.references_peek_preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    guard still_current() else {
       provisional.dispose()
       return
     }
@@ -1525,121 +1476,58 @@ fn Viewer::schedule_references_peek_preview(
         "peekReferences"
       },
     )
-    if !self.references_peek_preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    guard still_current() else {
       provisional.dispose()
       return
     }
     preview.reveal_range_in_center_if_outside_viewport(
       Range(start.line_number, start.column, start.line_number, start.column),
     )
-    if !self.references_peek_preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    guard still_current() else {
       provisional.dispose()
       return
     }
     preview.handle_initialized()
-    if !self.references_peek_preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    guard still_current() else {
       provisional.dispose()
       return
     }
     provisional.resize_observer = @base_browser.observe_element_resize(
       preview_host,
       () => {
-        if self.references_peek_preview_commit_is_current(
-            generation,
-            preview_generation,
-            location.uri.to_string(),
-            model,
-            result_model,
-            widget,
-          ) &&
+        if still_current() &&
           state.preview_viewer is Some(current_preview) &&
           physical_equal(current_preview, preview) {
           preview.layout()
         }
       },
     )
-    if !self.references_peek_preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    guard still_current() else {
       provisional.dispose()
       return
     }
     provisional.layout_frame = Some(
       @base_browser.schedule_at_next_animation_frame(() => {
-        if self.references_peek_preview_commit_is_current(
-            generation,
-            preview_generation,
-            location.uri.to_string(),
-            model,
-            result_model,
-            widget,
-          ) &&
+        if still_current() &&
           state.preview_viewer is Some(current_preview) &&
           physical_equal(current_preview, preview) {
           preview.layout()
         }
       }),
     )
-    if !self.references_peek_preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    guard still_current() else {
       provisional.dispose()
       return
     }
     widget.show_preview_ready()
-    if !self.references_peek_preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    guard still_current() else {
       provisional.dispose()
       return
     }
     if restore_preview_focus {
       preview.focus()
     }
-    if !self.references_peek_preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    guard still_current() else {
       provisional.dispose()
       return
     }
