@@ -24,14 +24,7 @@ fn authority_of(url : String) -> String? {
   } else {
     return None
   }
-  let buf = StringBuilder::new()
-  for ch in url.view(start_offset=offset) {
-    if ch == '/' || ch == '?' || ch == '#' {
-      break
-    }
-    buf.write_char(ch)
-  }
-  Some(buf.to_string())
+  Some(head_of(url.view(start_offset=offset)))
 }
 
 ///|
@@ -145,7 +138,7 @@ fn all_digits(text : StringView) -> Bool {
 ///|
 /// The draft's first segment — everything before the path, query, or
 /// fragment — where a scheme or port would live.
-fn head_of(text : String) -> String {
+fn head_of(text : StringView) -> String {
   let buf = StringBuilder::new()
   for ch in text {
     if ch == '/' || ch == '?' || ch == '#' {
@@ -178,7 +171,7 @@ pub fn normalize_url(input : String) -> String? {
     trimmed
   } else {
     // A colon before any slash is either a port (digits) or a foreign scheme.
-    match head_of(trimmed).split(":").collect() {
+    match head_of(trimmed.view()).split(":").collect() {
       [_] => ()
       [_, port] if all_digits(port) => ()
       _ => return None
