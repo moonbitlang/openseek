@@ -10,6 +10,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",
+  "moonbit-community/rabbita/svg",
   "moonbitlang/editor/base/common",
   "openseek_desktop/internal/jsonx",
   "openseek_desktop/frontend/pathx",

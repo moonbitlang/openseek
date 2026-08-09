@@ -5,10 +5,23 @@
 
 ///|
 /// The folder codicon for the tree-pane toggle, from Microsoft's
-/// vscode-codicons (CC BY 4.0), embedded unmodified — mirrors the main
-/// package's icon set, which is not importable from here.
-let icon_folder : String =
-  #|<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M2 4.5V6H5.58579C5.71839 6 5.84557 5.94732 5.93934 5.85355L7.29289 4.5L5.93934 3.14645C5.84557 3.05268 5.71839 3 5.58579 3H3.5C2.67157 3 2 3.67157 2 4.5ZM1 4.5C1 3.11929 2.11929 2 3.5 2H5.58579C5.98361 2 6.36514 2.15804 6.64645 2.43934L8.20711 4H12.5C13.8807 4 15 5.11929 15 6.5V11.5C15 12.8807 13.8807 14 12.5 14H3.5C2.11929 14 1 12.8807 1 11.5V4.5ZM2 7V11.5C2 12.3284 2.67157 13 3.5 13H12.5C13.3284 13 14 12.3284 14 11.5V6.5C14 5.67157 13.3284 5 12.5 5H8.20711L6.64645 6.56066C6.36514 6.84197 5.98361 7 5.58579 7H2Z"/></svg>
+/// vscode-codicons (CC BY 4.0); the path data is unmodified, transcribed
+/// into `@svg` builders (an innerHTML-bearing element cannot be safely
+/// morphed by the positional child diff) — mirrors the main package's icon
+/// set, which is not importable from here.
+fn icon_folder() -> @html.Html {
+  @svg.svg(
+    width=16,
+    height=16,
+    view_box="0 0 16 16",
+    attrs=@svg.Attrs::build().fill("currentColor"),
+    [
+      @svg.path(
+        d="M2 4.5V6H5.58579C5.71839 6 5.84557 5.94732 5.93934 5.85355L7.29289 4.5L5.93934 3.14645C5.84557 3.05268 5.71839 3 5.58579 3H3.5C2.67157 3 2 3.67157 2 4.5ZM1 4.5C1 3.11929 2.11929 2 3.5 2H5.58579C5.98361 2 6.36514 2.15804 6.64645 2.43934L8.20711 4H12.5C13.8807 4 15 5.11929 15 6.5V11.5C15 12.8807 13.8807 14 12.5 14H3.5C2.11929 14 1 12.8807 1 11.5V4.5ZM2 7V11.5C2 12.3284 2.67157 13 3.5 13H12.5C13.3284 13 14 12.3284 14 11.5V6.5C14 5.67157 13.3284 5 12.5 5H8.20711L6.64645 6.56066C6.36514 6.84197 5.98361 7 5.58579 7H2Z",
+      ),
+    ],
+  )
+}
 
 ///|
 const ExplorerFilesTabId = "explorer-files-tab"
@@ -58,16 +71,13 @@ fn focus_changed_file_after_render(index : Int) -> @cmd.Cmd {
 }
 
 ///|
-/// An icon's SVG markup injected into a fixed-size span. The markup is a
-/// trusted compile-time constant, never user input, so the XSS alert on
-/// `inner_html` does not apply.
-#warnings("-alert_xss_vulnerable")
-fn icon(markup : String) -> @html.Html {
-  @html.span(
-    class="icon",
-    attrs=@html.Attrs::build().inner_html(markup).aria_hidden("true"),
-    ([] : Array[@html.Html]),
-  )
+/// An icon in a fixed-size span. Icons are functions, not shared constants:
+/// each render site gets its own virtual-DOM value, so no Props instance is
+/// ever aliased between two mounted elements.
+fn icon(image : () -> @html.Html) -> @html.Html {
+  @html.span(class="icon", attrs=@html.Attrs::build().aria_hidden("true"), [
+    image(),
+  ])
 }
 
 ///|

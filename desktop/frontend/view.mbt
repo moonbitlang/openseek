@@ -58,12 +58,12 @@ fn setting_row(
 /// surface, the design system's settings section. Shared with the Skills
 /// page so the two pages read as siblings.
 fn settings_group(
-  icon_markup : String,
+  icon_image : () -> @html.Html,
   title : String,
   rows : Array[@html.Html],
 ) -> @html.Html {
   @html.div(class="settings-group", [
-    @html.div(class="settings-group-head", [icon(icon_markup), @html.h2(title)]),
+    @html.div(class="settings-group-head", [icon(icon_image), @html.h2(title)]),
     @html.div(class="settings-group-card", rows),
   ])
 }
