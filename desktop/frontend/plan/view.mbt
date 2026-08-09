@@ -40,9 +40,8 @@ pub fn fold_progress(items : Array[@transcript.TranscriptItem]) -> @html.Html {
 
 ///|
 /// The standing plan, docked above the composer: one line naming the active
-/// step, expanding to the whole checklist. No change markers here — the panel
-/// answers "what is the plan", while a call's card answers "what did this
-/// update change".
+/// step, expanding to the whole checklist. Where a card reports one recorded
+/// call, this reports the conversation's — the last call that applied.
 ///
 /// The slot renders even with no plan to show, so the composer's child list
 /// keeps a fixed shape while a plan appears and clears mid-turn; an empty slot
@@ -97,18 +96,14 @@ fn progress_view(steps : Array[Step], mini? : Bool = false) -> @html.Html {
       "plan-progress-fill"
     }
     fills.push(
-      @html.div(
-        class=fill_class,
-        style=["width: \{completed * 100 / total}%"],
-        "",
-      ),
+      @html.div(class=fill_class, style=[fill_width(completed, total)], ""),
     )
   }
   if active_step(steps) is Some(_) {
     fills.push(
       @html.div(
         class="plan-progress-fill active",
-        style=["width: \{100 / total}%"],
+        style=[fill_width(1, total)],
         "",
       ),
     )
@@ -121,6 +116,21 @@ fn progress_view(steps : Array[Step], mini? : Bool = false) -> @html.Html {
       @html.span(class="plan-progress-count", "\{completed}/\{total}"),
     ],
   )
+}
+
+///|
+/// `part` of `total` as a CSS width, in tenths of a percent.
+///
+/// A whole percent truncated to nothing exactly where the bar had something
+/// to say: `decode` tolerates plans of up to `MAX_RENDERED_STEPS` steps so a
+/// newer engine's raised caps still render, and at 150 steps one step is
+/// `100 / 150 == 0` — an active plan drawn as an empty track, which is a
+/// state that is not true rather than a rounding error. Tenths keep the
+/// smallest share a plan can have (one step of `MAX_RENDERED_STEPS`) at 0.5%,
+/// and stay integer arithmetic, so no width is ever a float's idea of one.
+fn fill_width(part : Int, total : Int) -> String {
+  let tenths = part * 1000 / total
+  "width: \{tenths / 10}.\{tenths % 10}%"
 }
 
 ///|
