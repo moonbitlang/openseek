@@ -5,7 +5,7 @@
 
 ///|
 /// One usable workspace symbol in viewer coordinates. `path` stays in the
-/// host's workspace-relative form; `range` is one-based because the editor
+/// host's root-relative form; `range` is one-based because the editor
 /// open/reveal path consumes viewer coordinates rather than LSP wire values.
 priv struct WorkspaceSymbol {
   name : String
@@ -24,24 +24,18 @@ fn read_workspace_symbols(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
   query : String,
-  workspace~ : @common.Uri?,
+  root~ : @common.Uri?,
   generation? : Int,
 ) -> @cmd.Cmd {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
-      return @cmd.none
-    _ => ()
+  guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
+    return @cmd.none
   }
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.lsp_workspace_symbols,
-        {
-          session: owner.session,
-          query,
-          workspace: workspace.map(value => value.path),
-        },
+        { root: root.path, query },
       ) catch {
         _ => {
           let message = match generation {

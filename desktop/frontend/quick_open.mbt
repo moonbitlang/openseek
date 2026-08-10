@@ -35,7 +35,7 @@ fn quick_open_symbol_request(
     dispatch,
     owner,
     query,
-    workspace=model.session_workspace(owner.channel, owner.session),
+    root=model.conversation_root(model.active()),
     generation~,
   )
 }
@@ -50,16 +50,14 @@ priv enum QuickOpenFileRequestKind {
 fn quick_open_file_request(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  workspace : @common.Uri?,
+  root~ : @common.Uri?,
   cache_key : String,
   query : String,
   generation : Int,
   kind : QuickOpenFileRequestKind,
 ) -> @cmd.Cmd {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
-      return @cmd.none
-    _ => ()
+  guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
+    return @cmd.none
   }
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -67,8 +65,7 @@ fn quick_open_file_request(
         owner.channel,
         @commands.fs_search_files,
         {
-          session: owner.session,
-          workspace: workspace.map(value => value.path),
+          path: root.path,
           cache_key,
           query,
           max_results: match kind {
@@ -263,11 +260,14 @@ fn quick_open_with_file_candidates(
 }
 
 ///|
-fn quick_open_workspace(
+fn quick_open_root(
   model : Model,
   owner : @interop.ConversationKey,
 ) -> @common.Uri? {
-  model.session_workspace(owner.channel, owner.session)
+  guard model.find_conversation(owner.channel, owner.session) is Some(conv) else {
+    return None
+  }
+  model.conversation_root(conv)
 }
 
 ///|
@@ -290,7 +290,7 @@ fn query_active_file_cache(
   quick_open_file_request(
     dispatch,
     open.owner,
-    quick_open_workspace(model, open.owner),
+    root=quick_open_root(model, open.owner),
     cache_key,
     open.query(),
     open.generation,
@@ -309,10 +309,9 @@ fn ensure_file_query_cache(
   replace_loaded : Bool,
   query_now : Bool,
 ) -> (@cmd.Cmd, Model) {
-  let workspace = quick_open_workspace(model, open.owner)
+  let root = quick_open_root(model, open.owner)
   let previous = model.file_query_cache
-  let compatible = previous.owner == Some(open.owner) &&
-    previous.workspace == workspace
+  let compatible = previous.owner == Some(open.owner) && previous.root == root
   let cmds : Array[@cmd.Cmd] = []
   let mut cache = if compatible {
     previous
@@ -325,7 +324,7 @@ fn ensure_file_query_cache(
         cmds.push(clear_quick_open_file_cache(previous_owner, key))
       }
     }
-    { owner: Some(open.owner), workspace, active_key: None, loading_key: None }
+    { owner: Some(open.owner), root, active_key: None, loading_key: None }
   }
   if cache.loading_key is None && (cache.active_key is None || replace_loaded) {
     let cache_key = file_query_cache_key(open.owner, open.generation)
@@ -334,7 +333,7 @@ fn ensure_file_query_cache(
       quick_open_file_request(
         dispatch,
         open.owner,
-        workspace,
+        root~,
         cache_key,
         "",
         open.generation,
@@ -1291,12 +1290,12 @@ test "file cache keeps the previous key until replacement succeeds" {
   let dispatch = test_dispatch()
   let base = { ..test_model(), is_desktop: true }
   let owner = active_quick_open_owner(base)
-  let workspace = quick_open_workspace(base, owner)
+  let root = quick_open_root(base, owner)
   let seeded = {
     ..base,
     file_query_cache: {
       owner: Some(owner),
-      workspace,
+      root,
       active_key: Some("old-cache"),
       loading_key: None,
     },

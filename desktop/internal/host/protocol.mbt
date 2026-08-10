@@ -1,8 +1,8 @@
 // The wire types of the host ops: payloads the client sends with each
 // method and the replies it gets back, per docs/remote-protocol.md.
 // Engine/session/workspace payloads live with the API dispatcher; these are
-// the host-side methods' shapes. Optional fields are absent when unset; the
-// current frontend does not send historical blank sentinels.
+// the host-side methods' shapes. Filesystem operations name absolute targets.
+// LSP operations name one absolute root and paths relative to that root.
 
 ///|
 type InstallSkillPayload = @protocol.InstallSkillPayload
@@ -113,9 +113,7 @@ type GitOriginalFilePayload = @protocol.GitOriginalFilePayload
 type GitOriginalFileReply = @protocol.GitOriginalFileReply
 
 ///|
-/// `read_directory` lists `path`, resolved relative to the conversation's
-/// workspace; `""` lists the workspace root. The host derives the root from
-/// `session`, so the client never names an absolute path.
+/// `read_directory` lists the absolute resource path in `path`.
 type ReadDirPayload = @protocol.ReadDirPayload
 
 ///|
@@ -126,8 +124,9 @@ type DirEntry = @protocol.DirEntry
 type ReadDirReply = @protocol.ReadDirReply
 
 ///|
-/// `search_files` queries a connection-owned VS Code-style cache session.
-/// Cache keys are populated once and explicitly retired with clearCache.
+/// `search_files` queries an absolute root through a connection-owned
+/// VS Code-style cache session. Cache keys are populated once and explicitly
+/// retired with clearCache.
 type SearchFilesPayload = @protocol.SearchFilesPayload
 
 ///|
@@ -139,7 +138,7 @@ type CancelSearchFilesPayload = @protocol.CancelSearchFilesPayload
 type ClearFileSearchCachePayload = @protocol.ClearFileSearchCachePayload
 
 ///|
-/// Ranked workspace-relative paths, capped for Quick Open. `from_cache`
+/// Ranked root-relative paths, capped for Quick Open. `from_cache`
 /// distinguishes a newly populated session from a reused one.
 type SearchFilesReply = @protocol.SearchFilesReply
 
@@ -151,10 +150,9 @@ type ReadFilePayload = @protocol.ReadFilePayload
 type ReadFileReply = @protocol.ReadFileReply
 
 ///|
-/// `stat_files` asks for the mtime signatures of the open tabs' files, all
-/// resolved under the conversation's workspace like `read_file`. One op for
-/// the whole tab set: the frontend calls it on every coarse "something
-/// changed" push to decide which files to re-read.
+/// `stat_files` asks for the mtime signatures of the absolute paths supplied
+/// by the caller. One op covers the whole tab set: the frontend calls it on
+/// every coarse "something changed" push to decide which files to re-read.
 type StatFilesPayload = @protocol.StatFilesPayload
 
 ///|
@@ -182,11 +180,40 @@ test "file stat keeps the legacy missing-file sentinel on the wire" {
 type StatFilesReply = @protocol.StatFilesReply
 
 ///|
-/// `fs.watch` points this client connection's workspace watcher at the
-/// conversation's workspace root. Other desktop or remote connections keep
-/// their own watchers. Stopping is its own method, `fs.unwatch` — sent when
-/// this client's panel closes with no tabs open.
+/// `fs.watch` points this client connection's watcher at the absolute root in
+/// `path`. Other desktop or remote connections keep their own watchers.
+/// Stopping is its own method, `fs.unwatch`.
 type WatchWorkspacePayload = @protocol.WatchWorkspacePayload
+
+///|
+/// A wire resource path parsed into the host's native absolute path type.
+/// This validates the protocol's path spelling only; it does not derive or
+/// authorize a conversation workspace.
+priv struct WirePath {
+  absolute : @pathx.Absolute
+}
+
+///|
+fn WirePath::parse(path : String) -> WirePath raise HostError {
+  guard @pathx.Absolute::from_uri_path(path) is Some(absolute) else {
+    raise HostError("path is not absolute")
+  }
+  { absolute: absolute.normalize() }
+}
+
+///|
+/// Resolve the LSP protocol's relative `path` against its explicit `root`.
+/// Relative components retain their ordinary path meaning; this is address
+/// construction, not a workspace-containment permission check.
+fn WirePath::resolve(
+  self : WirePath,
+  path : String,
+) -> @pathx.Absolute raise HostError {
+  guard @pathx.Path(path).to_relative() is Some(relative) else {
+    raise HostError("path is not relative to root")
+  }
+  self.absolute.join(relative).normalize()
+}
 
 ///|
 /// Encode a host-native absolute path for the frontend resource URI. UNC is
@@ -215,7 +242,6 @@ priv struct FsEventPayload {
 /// attached, telling the frontend to stat/re-list everything in its selection;
 /// later batches carry the exact debounced events.
 priv struct FsChangedPayload {
-  session : String
   root : String
   baseline : Bool
   events : Array[FsEventPayload]
@@ -247,33 +273,29 @@ test "filesystem events keep their concrete kind and paths on the wire" {
 
 ///|
 /// A watcher that was accepted but could not attach, or later stopped while
-/// reading filesystem events. `session` lets the frontend discard a failure
-/// that raced a conversation switch.
+/// reading filesystem events. `root` identifies the watcher instance whose
+/// failure raced any later replacement.
 priv struct FsWatchFailedPayload {
-  session : String
   root : String
   message : String
 } derive(ToJson)
 
 ///|
-test "filesystem watcher failures retain their conversation on the wire" {
+test "filesystem watcher failures retain their root on the wire" {
   let payload : FsWatchFailedPayload = {
-    session: "s-1",
     root: "/work/project",
     message: "File watching stopped: too many open files",
   }
   assert_eq(ToJson::to_json(payload), {
-    "session": "s-1",
     "root": "/work/project",
     "message": "File watching stopped: too many open files",
   })
 }
 
 ///|
-/// `hover` asks for hover at a zero-based `line`/`character` in `path` — an
-/// absolute path, the request's whole address: the host maps it to its
-/// attached workspace and module root (where it runs `moon ide hover`), and
-/// rejects paths outside every attached directory.
+/// `hover` asks for hover at a zero-based `line`/`character` in `path`, which
+/// is relative to the explicit absolute `root`. The host finds the deepest
+/// Moon module containing that file beneath the supplied root.
 type LspHoverPayload = @protocol.LspHoverPayload
 
 ///|
@@ -295,10 +317,11 @@ type MoonIdeLocation = @protocol.MoonIdeLocation
 type MoonIdeLocationsReply = @protocol.MoonIdeLocationsReply
 
 ///|
-/// `lsp_open` tells the host the editor is now showing the file at absolute
-/// `path`, so it runs `moon check` over the file's module. The reply carries
-/// the file's diagnostics from that run; other files' changes from the same
-/// run — and later runs — arrive as `diagnostics` events.
+/// `lsp_open` tells the host the editor is now showing `path` relative to the
+/// explicit absolute `root`, so it runs `moon check` over the file's module.
+/// The reply carries the file's diagnostics from that run; other files'
+/// changes from the same run — and later runs — arrive as `diagnostics`
+/// events.
 type LspOpenPayload = @protocol.LspOpenPayload
 
 ///|
@@ -328,13 +351,12 @@ test "lsp_open replies distinguish no data from no problems" {
 }
 
 ///|
-/// A `diagnostics` event pushed to the webview: the absolute `path` whose
-/// diagnostics changed and the LSP-shaped `diagnostics` array — the same
+/// A `diagnostics` event pushed to the webview: absolute `root`, its relative
+/// `path`, and the LSP-shaped `diagnostics` array — the same
 /// shape `lsp_open` replies with, so the editor decodes both through one
-/// path. An empty array clears the file's markers. The path is the whole
-/// address (matching the viewer's model URI); no session is involved,
-/// mirroring `hover`.
+/// path. An empty array clears the file's markers.
 priv struct DiagnosticsPush {
+  root : String
   path : String
   diagnostics : Array[@protocol.LspDiagnostic]
 }
@@ -346,13 +368,12 @@ priv struct DiagnosticsPush {
 type LspHoverReply = @protocol.LspHoverReply
 
 ///|
-/// `workspace_symbols` searches the conversation workspace's symbols for
-/// `query` (fuzzy-matched by `moon ide workspace-symbols`). The host derives
-/// the workspace from `session`, so the client never names a path.
+/// `workspace_symbols` searches the explicit absolute `root` for `query`
+/// (fuzzy-matched by `moon ide workspace-symbols`).
 type WorkspaceSymbolsPayload = @protocol.WorkspaceSymbolsPayload
 
 ///|
-/// One row of a `workspace_symbols` reply. `path` is workspace-relative and
+/// One row of a `workspace_symbols` reply. `path` is root-relative and
 /// `range` is the symbol's zero-based range (the front-end shows it
 /// one-based) — all zeros when the row carried none; `kind` is the raw LSP
 /// `SymbolKind` number, forwarded for the front-end to label or icon as it

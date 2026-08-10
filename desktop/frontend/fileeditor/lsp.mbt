@@ -57,12 +57,17 @@ impl @language.HoverProvider for LspHoverProvider with fn provide_hover(
   // v1 covers MoonBit only; other languages have no tooling behind the op.
   guard model.language_id == "moonbit" else { return None }
   guard !token.is_cancellation_requested() else { return None }
-  guard model_uri_path(model.uri) is Some(path) else { return None }
-  // A registry-global provider has no Ctx; the document's own URI carries
-  // its channel in the authority, so the ask routes to the right host.
-  guard model_uri_channel(model.uri) is Some(channel) else { return None }
+  // The provider is registry-global, so use the document route recorded when
+  // Desktop placed this exact model in the Viewer.
+  guard model_uri_path(model.uri) is Some(absolute) &&
+    viewer_state.absolute == Some(absolute) &&
+    viewer_state.navigation is Some(context) &&
+    viewer_state.relative is Some(path) else {
+    return None
+  }
   let reply = request_hover(
-    channel~,
+    channel=context.owner.channel,
+    root=context.root,
     path~,
     // The viewer's Position is 1-based; the host op speaks 0-based LSP coords.
     line=position.line_number - 1,
@@ -84,16 +89,18 @@ fn register_hover_provider() -> Unit {
 }
 
 ///|
-/// Call the host `hover` op for the absolute `path` at a zero-based
-/// `line`/`character`.
+/// Call the host `hover` op for `path` relative to the explicit absolute
+/// `root`, at a zero-based `line`/`character`.
 async fn request_hover(
   channel~ : @interop.ChannelId,
-  path~ : @common.Uri,
+  root~ : @common.Uri,
+  path~ : @pathx.Relative,
   line~ : Int,
   character~ : Int,
 ) -> @protocol.LspHoverReply {
   @interop.bridge_request(channel, @commands.lsp_hover, {
-    path: path.path,
+    root: root.path,
+    path: path.0,
     line,
     character,
   })
@@ -152,11 +159,13 @@ fn request_diagnostics(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
   epoch : Int,
+  root : @common.Uri,
+  path : @pathx.Relative,
   absolute : @common.Uri,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = request_lsp_open(channel=owner.channel, path=absolute) catch {
+      let reply = request_lsp_open(channel=owner.channel, root~, path~) catch {
         _ => return
       }
       // An absent `diagnostics` field means the host's check could not run:
@@ -171,12 +180,16 @@ fn request_diagnostics(
 }
 
 ///|
-/// Call the host `lsp_open` op for the absolute `path`.
+/// Call the host `lsp_open` op for `path` relative to `root`.
 async fn request_lsp_open(
   channel~ : @interop.ChannelId,
-  path~ : @common.Uri,
+  root~ : @common.Uri,
+  path~ : @pathx.Relative,
 ) -> @protocol.LspDiagnosticsReply {
-  @interop.bridge_request(channel, @commands.lsp_open, { path: path.path })
+  @interop.bridge_request(channel, @commands.lsp_open, {
+    root: root.path,
+    path: path.0,
+  })
 }
 
 ///|

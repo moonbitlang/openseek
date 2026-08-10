@@ -1,36 +1,30 @@
 // The editor side-panel's filesystem calls: list a directory and read a file
-// under the active conversation's workspace, through the host's
-// `read_directory` / `read_file` ops. The host resolves every path against
-// the session's workspace and rejects escapes, so the panel only ever sees
-// that one conversation's tree. Each reply carries the full conversation
+// under the active conversation's concrete root, through the host's
+// `read_directory` / `read_file` ops. Each request sends the fully composed
+// absolute target. Each reply carries the full conversation
 // owner and path it answers so a reply that lost a device/session switch can
 // be discarded.
 
 ///|
-/// List `path` (relative to the conversation workspace; "" is the root) and
+/// List `path` (relative to `root`; "" is the root) and
 /// fold the entries back as `DirLoaded`.
 fn read_directory(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
   epoch : Int,
   path : @pathx.Relative,
-  workspace~ : @common.Uri?,
+  root~ : @common.Uri?,
 ) -> @cmd.Cmd {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
-      return @cmd.none
-    _ => ()
+  guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
+    return @cmd.none
   }
+  let target = @resource.join_relative(root, path)
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.fs_read_directory,
-        {
-          session: owner.session,
-          path: path.0,
-          workspace: workspace.map(value => value.path),
-        },
+        { path: target.path },
       ) catch {
         error => {
           scheduler.add(
@@ -73,35 +67,30 @@ pub fn read_file(
   review_generation? : Int,
   range~ : @common.Range?,
   annotation? : String,
-  workspace~ : @common.Uri?,
+  root~ : @common.Uri?,
 ) -> @cmd.Cmd {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
-      // Settle the request through the same typed failure path as an async
-      // bridge rejection. Review-loading tabs deliberately do not start an
-      // untagged duplicate read on activation, so a silent no-op here would
-      // otherwise strand the paired working side during a host migration.
-      return dispatch(
-        FileFailed(
-          owner~,
-          epoch~,
-          path~,
-          review_generation~,
-          message="workspace moved to another host before file read",
-        ),
-      )
-    _ => ()
+  guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
+    // Settle the request through the same typed failure path as an async
+    // bridge rejection. Review-loading tabs deliberately do not start an
+    // untagged duplicate read on activation, so a silent no-op here would
+    // otherwise strand the paired working side during a host migration.
+    return dispatch(
+      FileFailed(
+        owner~,
+        epoch~,
+        path~,
+        review_generation~,
+        message="file root moved to another host before file read",
+      ),
+    )
   }
+  let target = @resource.join_relative(root, path)
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.fs_read_file,
-        {
-          session: owner.session,
-          path: path.0,
-          workspace: workspace.map(value => value.path),
-        },
+        { path: target.path },
       ) catch {
         error => {
           scheduler.add(
@@ -208,22 +197,19 @@ fn FileContent::from_reply(
 /// Read one file for a cross-resource Peek preview without entering the tab
 /// state machine. This deliberately reuses the same `fs.read_file` wire op
 /// and decoder as ordinary file opening, so binary/oversized policy and
-/// workspace containment stay identical. Failures are unavailable previews,
+/// absolute-path addressing stay identical. Failures are unavailable previews,
 /// not panel errors, and therefore return `None` to the resolver.
 async fn read_file_snapshot(
   owner : @interop.ConversationKey,
   path : @pathx.Relative,
-  workspace~ : @common.Uri?,
+  root~ : @common.Uri?,
 ) -> FileContent? {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
-      return None
-    _ => ()
+  guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
+    return None
   }
+  let target = @resource.join_relative(root, path)
   let reply = @interop.bridge_request(owner.channel, @commands.fs_read_file, {
-    session: owner.session,
-    path: path.0,
-    workspace: workspace.map(value => value.path),
+    path: target.path,
   }) catch {
     _ => return None
   }
@@ -238,12 +224,10 @@ fn stat_files(
   owner : @interop.ConversationKey,
   epoch : Int,
   paths : Array[@pathx.Relative],
-  workspace~ : @common.Uri?,
+  root~ : @common.Uri?,
 ) -> @cmd.Cmd {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
-      return @cmd.none
-    _ => ()
+  guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
+    return @cmd.none
   }
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -253,26 +237,24 @@ fn stat_files(
       let reply = @interop.bridge_request_in_order(
         owner.channel,
         @commands.fs_stat_files,
-        {
-          session: owner.session,
-          paths: paths.map(path => path.0),
-          workspace: workspace.map(value => value.path),
-        },
+        { paths: paths.map(path => @resource.join_relative(root, path).path) },
       ) catch {
         _ => return
       }
       let stats : Array[FileStat] = []
       for stat in reply.stats {
-        if !stat.path.is_empty() {
-          stats.push({
-            path: Relative(stat.path),
-            sig: if stat.sig.is_empty() {
-              None
-            } else {
-              Some(stat.sig)
-            },
-          })
+        guard @resource.of_path(owner.channel, stat.path) is Some(absolute) &&
+          @resource.relative_to(absolute, root) is Some(path) else {
+          continue
         }
+        stats.push({
+          path,
+          sig: if stat.sig.is_empty() {
+            None
+          } else {
+            Some(stat.sig)
+          },
+        })
       }
       scheduler.add(dispatch(StatsLoaded(owner~, epoch~, stats~)))
     })
@@ -280,7 +262,7 @@ fn stat_files(
 }
 
 ///|
-/// Point the host's workspace watcher at `session`'s workspace, or park it
+/// Point the host's watcher at the selected absolute root, or park it
 /// (`fs.unwatch`) when the panel no longer needs one. Parking is best-effort,
 /// but a rejected watch is surfaced because it means live updates are off.
 fn watch_workspace(
@@ -289,11 +271,8 @@ fn watch_workspace(
   epoch : Int,
   watched : WatchedPaths?,
 ) -> @cmd.Cmd {
-  match watched {
-    Some({ workspace: Some(resource), .. }) if !@resource.belongs_to(
-        resource, channel,
-      ) => return @cmd.none
-    _ => ()
+  if watched is Some(watched) && !@resource.belongs_to(watched.root, channel) {
+    return @cmd.none
   }
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -310,8 +289,7 @@ fn watch_workspace(
       } else if watched is Some(watched) {
         ignore(
           @interop.bridge_request_in_order(channel, @commands.fs_watch, {
-            session: watched.owner.session,
-            workspace: watched.workspace.map(value => value.path),
+            path: watched.root.path,
             files: Some(watched.files.map(path => path.0)),
             directories: Some(watched.directories.map(path => path.0)),
           }) catch {
@@ -319,7 +297,8 @@ fn watch_workspace(
               scheduler.add(
                 dispatch(
                   FileWatchFailed(
-                    owner=watched.owner,
+                    channel=watched.owner.channel,
+                    root=watched.root,
                     epoch=Some(epoch),
                     message="File watching failed: \{@interop.bridge_error_text(error)}",
                   ),
@@ -353,7 +332,7 @@ test "a cross-host file read settles through its generation-fenced failure" {
       "main.mbt",
       review_generation=7,
       range=None,
-      workspace=Some(workspace),
+      root=Some(workspace),
     ),
   )
   assert_true(
@@ -364,7 +343,7 @@ test "a cross-host file read settles through its generation-fenced failure" {
         epoch=0,
         path=@pathx.Relative("src/main.mbt"),
         review_generation=Some(7),
-        message="workspace moved to another host before file read"
+        message="file root moved to another host before file read"
       )
     ),
   )

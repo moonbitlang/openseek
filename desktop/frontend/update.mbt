@@ -755,7 +755,7 @@ fn symbol_fetch_cmd(
     dispatch,
     owner,
     query,
-    workspace=model.session_workspace(owner.channel, owner.session),
+    root=model.conversation_root(model.active()),
   )
 }
 
@@ -1066,8 +1066,9 @@ fn apply_engine_event(
 
 ///|
 /// The file-editor package's view of the active conversation: which session
-/// the panel serves, the workspace hint its fs ops carry, and the viewer's
-/// theme. Recomputed per dispatch — it is only a projection of the model.
+/// the panel serves, the concrete checkout root its file/LSP ops address, the
+/// registered workspace its Git ops use, and the viewer's theme. Recomputed
+/// per dispatch — it is only a projection of the model.
 fn file_ctx(model : Model) -> @fileeditor.Ctx {
   let conv = model.active()
   let checkout = model.checkout_placement(conv)
@@ -1082,6 +1083,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // without ever treating the project root as a fallback checkout.
     owner: { channel: model.focused, session: conv.session_id },
     request_epoch: model.file_panel.request_epoch,
+    root: model.conversation_root(conv),
     workspace: conv.workspace,
     checkout,
     dark_mode: model.theme.is_dark(model.system_dark),
@@ -7845,6 +7847,7 @@ test "host path decoders reject relative placement and diagnostic paths" {
   )
   assert_true(
     diagnostics_msg(@interop.ChannelId::Local, {
+      root: "relative/workspace",
       path: "relative/file.mbt",
       diagnostics: [],
     })
@@ -15353,7 +15356,14 @@ test "file rows and location jumps cannot open while checkout placement is missi
       worktrees: [
         {
           workspace,
-          rows: [{ name: "wt", session: Some("desktop-test"), present: false }],
+          rows: [
+            {
+              name: "wt",
+              session: Some("desktop-test"),
+              path: None,
+              present: false,
+            },
+          ],
           generation: 1,
         },
       ],

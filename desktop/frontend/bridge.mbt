@@ -42,13 +42,14 @@ fn bridge_msg(
         FromDevice(channel, FilePanel(msg))
       })
     FsChanged(payload) => {
-      let changes : Array[@fileeditor.FileChange]? = if payload.baseline.unwrap_or(
-          false,
-        ) {
+      guard @resource.of_path(channel, payload.root) is Some(root) else {
+        return None
+      }
+      let changes : Array[@fileeditor.FileChange]? = if payload.baseline {
         None
-      } else if payload.events is Some(items) {
+      } else {
         let decoded : Array[@fileeditor.FileChange] = []
-        for item in items {
+        for item in payload.events {
           match item.kind_ {
             "modify" =>
               decoded.push(@fileeditor.Modified(@pathx.Relative(item.path)))
@@ -69,30 +70,27 @@ fn bridge_msg(
           }
         }
         Some(decoded)
-      } else {
-        // An older host sent only `{root}`; preserve its coarse refresh.
-        None
       }
-      Some(
-        FromDevice(
-          channel,
-          FilePanel(FsChanged(session=payload.session, changes~)),
-        ),
-      )
+      Some(FromDevice(channel, FilePanel(FsChanged(root~, changes~))))
     }
-    FsWatchFailed(payload) =>
+    FsWatchFailed(payload) => {
+      guard @resource.of_path(channel, payload.root) is Some(root) else {
+        return None
+      }
       Some(
         FromDevice(
           channel,
           FilePanel(
             FileWatchFailed(
-              owner={ channel, session: payload.session },
+              channel~,
+              root~,
               epoch=None,
               message=payload.message,
             ),
           ),
         ),
       )
+    }
     TerminalOutput(payload) =>
       terminal_output_msg(channel, payload).map(msg => Terminal(msg))
     TerminalExit(payload) =>
@@ -363,31 +361,29 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
     bridge_msg(
       channel,
       @protocol.Notification::FsChanged({
-        session: None,
-        root: None,
-        baseline: None,
-        events: None,
+        root: "/work/project",
+        baseline: true,
+        events: [],
       }),
     )
     is Some(
-      FromDevice(Remote("d1"), FilePanel(FsChanged(session=None, changes=None)))
+      FromDevice(Remote("d1"), FilePanel(FsChanged(root=_, changes=None)))
     ),
   )
   assert_true(
     bridge_msg(
       channel,
       @protocol.Notification::FsChanged({
-        session: Some("s-1"),
-        root: Some("/work/project"),
-        baseline: Some(false),
-        events: Some([
+        root: "/work/project",
+        baseline: false,
+        events: [
           { kind_: "modify", path: "src/main.mbt", old_path: None },
           {
             kind_: "rename",
             path: "src/new.mbt",
             old_path: Some("src/old.mbt"),
           },
-        ]),
+        ],
       }),
     )
     is Some(
@@ -395,7 +391,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
         Remote("d1"),
         FilePanel(
           FsChanged(
-            session=Some("s-1"),
+            root=_,
             changes=Some(
               [
                 Modified(Relative("src/main.mbt")),
@@ -415,7 +411,6 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
     bridge_msg(
       channel,
       @protocol.Notification::FsWatchFailed({
-        session: "s-1",
         root: "/work/project",
         message: "File watching stopped",
       }),
@@ -425,7 +420,8 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
         Remote("d1"),
         FilePanel(
           FileWatchFailed(
-            owner={ channel: Remote("d1"), session: "s-1" },
+            channel=Remote("d1"),
+            root=_,
             epoch=None,
             message="File watching stopped"
           )
@@ -887,15 +883,16 @@ fn durable_boundary_msg(
 
 ///|
 /// A `diagnostics` push: the host re-checked a file's module. The payload
-/// carries the absolute `path` and the LSP-shaped `diagnostics` array; the
-/// update filters it to the file on screen.
+/// carries an absolute root, a root-relative path, and the LSP-shaped
+/// `diagnostics` array; the update filters it to the file on screen.
 fn diagnostics_msg(
   channel : @interop.ChannelId,
   payload : @protocol.DiagnosticsPayload,
 ) -> @fileeditor.Msg? {
-  guard @resource.of_path(channel, payload.path) is Some(absolute) else {
+  guard @resource.of_path(channel, payload.root) is Some(root) else {
     return None
   }
+  let absolute = @resource.join_relative(root, @pathx.Relative(payload.path))
   Some(
     DiagnosticsPublished(channel~, absolute~, diagnostics=payload.diagnostics),
   )

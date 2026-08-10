@@ -113,16 +113,14 @@ test "Git original-file payloads pin a revision and accept legacy omission" {
 ///|
 test "file search payload and reply round-trip at the JSON boundary" {
   let raw_payload : Json = {
-    "session": "session-1",
-    "workspace": "/work/project",
+    "path": "/work/project",
     "cache_key": "quick-open:session-1:7",
     "query": "src main",
     "max_results": 512,
     "generation": 7,
   }
   let payload : @protocol.SearchFilesPayload = @json.from_json(raw_payload)
-  assert_eq(payload.session, "session-1")
-  assert_true(payload.workspace is Some("/work/project"))
+  assert_eq(payload.path, "/work/project")
   assert_eq(payload.cache_key, "quick-open:session-1:7")
   assert_eq(payload.query, "src main")
   assert_eq(payload.max_results, 512)

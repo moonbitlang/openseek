@@ -254,22 +254,17 @@ async fn manifest_mtime(dir : @pathx.Absolute) -> Int64? {
 }
 
 ///|
-/// Route hover by the file's absolute path and answer it with one
-/// `moon ide hover` run at the requested position. The path is the whole
-/// address: no session is involved, so the viewer can ask about any attached
-/// file.
+/// Route hover by an explicit absolute root plus a root-relative file path,
+/// then answer it with one `moon ide hover` run at the requested position.
 async fn lsp_hover_op(
   state : MoonCliState,
   payload : LspHoverPayload,
 ) -> LspHoverReply {
-  guard @pathx.Absolute::from_uri_path(payload.path) is Some(file) else {
-    raise HostError("path is not absolute")
+  let request_root = WirePath::parse(payload.root)
+  let file = request_root.resolve(payload.path)
+  guard moon_module_root(request_root.absolute, file) is Some(root) else {
+    return no_hover()
   }
-  guard @engine.attached_workspace_dir(file) is Some(dir) else {
-    raise HostError("path is outside every attached workspace")
-  }
-  let file = file.normalize()
-  guard moon_module_root(dir, file) is Some(root) else { return no_hover() }
   // The op speaks 0-based LSP positions; `--loc` is 1-based.
   let loc = "\{file.0}:\{payload.line + 1}:\{payload.character + 1}"
   guard state.run_moon(["ide", "hover", "--loc", loc, "--output-json"], root)
@@ -292,14 +287,9 @@ async fn lsp_open_op(
   state : MoonCliState,
   payload : LspOpenPayload,
 ) -> LspDiagnosticsReply {
-  guard @pathx.Absolute::from_uri_path(payload.path) is Some(file) else {
-    raise HostError("path is not absolute")
-  }
-  guard @engine.attached_workspace_dir(file) is Some(dir) else {
-    raise HostError("path is outside every attached workspace")
-  }
-  let file = file.normalize()
-  guard moon_module_root(dir, file) is Some(root) else {
+  let request_root = WirePath::parse(payload.root)
+  let file = request_root.resolve(payload.path)
+  guard moon_module_root(request_root.absolute, file) is Some(root) else {
     return { diagnostics: Some([]) }
   }
   guard state.run_moon(["check", "--output-json"], root)
@@ -319,7 +309,7 @@ async fn lsp_open_op(
     return { diagnostics: None }
   }
   let previous = state.published.get(root).unwrap_or([])
-  for push in diagnostics_pushes(previous, current) {
+  for push in diagnostics_pushes(request_root.absolute, previous, current) {
     ignore(state.diagnostics.try_put(push) catch { _ => false })
   }
   let paths : Array[@pathx.Absolute] = []
@@ -335,16 +325,26 @@ async fn lsp_open_op(
 /// diagnostics, plus an empty array for each file that had some last run and
 /// has none now.
 fn diagnostics_pushes(
+  request_root : @pathx.Absolute,
   previous : Array[@pathx.Absolute],
   current : Map[@pathx.Absolute, Array[@protocol.LspDiagnostic]],
 ) -> Array[DiagnosticsPush] raise HostError {
   let pushes : Array[DiagnosticsPush] = []
+  let root = request_root.resource_path()
   for path, items in current {
-    pushes.push({ path: path.resource_path(), diagnostics: items })
+    // `moon check` reports module files. Express only files addressable by the
+    // request root in the root-relative notification contract.
+    guard path.relative_to(root=request_root) is Some(relative) else {
+      continue
+    }
+    pushes.push({ root, path: relative.0, diagnostics: items })
   }
   for path in previous {
     if !current.contains(path) {
-      pushes.push({ path: path.resource_path(), diagnostics: [] })
+      guard path.relative_to(root=request_root) is Some(relative) else {
+        continue
+      }
+      pushes.push({ root, path: relative.0, diagnostics: [] })
     }
   }
   pushes
@@ -636,7 +636,10 @@ test "parse_check_output groups diagnostics per file in LSP shape" {
 }
 
 ///|
-test "diagnostics_pushes clears files that dropped out of the check" {
+test "diagnostics_pushes uses root-relative paths and clears dropped files" {
+  guard @pathx.Path("/w").to_absolute() is Some(root) else {
+    fail("expected an absolute request root")
+  }
   guard @pathx.Path("/w/a.mbt").to_absolute() is Some(a) &&
     @pathx.Path("/w/b.mbt").to_absolute() is Some(b) else {
     fail("expected absolute diagnostic fixture paths")
@@ -650,39 +653,33 @@ test "diagnostics_pushes clears files that dropped out of the check" {
   let current : Map[@pathx.Absolute, Array[@protocol.LspDiagnostic]] = Map([
     (a, [boom]),
   ])
-  let pushes = diagnostics_pushes([a, b], current)
+  let pushes = diagnostics_pushes(root, [a, b], current)
   assert_eq(pushes.length(), 2)
-  assert_eq(pushes[0].path, "/w/a.mbt")
+  assert_eq(pushes[0].root, "/w")
+  assert_eq(pushes[0].path, "a.mbt")
   assert_eq(pushes[0].diagnostics, [boom])
-  assert_eq(pushes[1].path, "/w/b.mbt")
+  assert_eq(pushes[1].root, "/w")
+  assert_eq(pushes[1].path, "b.mbt")
   assert_eq(pushes[1].diagnostics, [])
 }
 
 ///|
-/// Search the conversation workspace's symbols for `query` — the same fuzzy
+/// Search the explicit root's symbols for `query` — the same fuzzy
 /// match the LSP `workspace/symbol` request performs, served by
-/// `moon ide workspace-symbols`. Resolves the workspace from the session and
-/// fans the query across every module root, relativizing each result against
-/// the conversation workspace (the common ancestor) so rows from `<cwd>/a`
-/// and `<cwd>/b` come back as `a/...` and `b/...`. Sequential is fine for the
-/// usual one or two roots. Best-effort: a missing workspace, a failed run, or
+/// `moon ide workspace-symbols`. Fans the query across every module root,
+/// relativizing each result against the supplied root (the common ancestor)
+/// so rows from `<root>/a`
+/// and `<root>/b` come back as `a/...` and `b/...`. Sequential is fine for the
+/// usual one or two roots. Best-effort: a missing root, a failed run, or
 /// nothing matching all yield no symbols; an empty query is valid — it lists
 /// every symbol, which backs the bare `#` menu (capped like any other result).
 async fn workspace_symbols_op(
   state : MoonCliState,
   payload : WorkspaceSymbolsPayload,
 ) -> WorkspaceSymbolsReply {
-  guard @engine.resolve_in_workspace(
-      payload.session,
-      "",
-      workspace?=payload.workspace,
-    )
-    is Some(dir) else {
-    return { symbols: [] }
-  }
-  let workspace = dir
+  let workspace = WirePath::parse(payload.root).absolute
   let symbols : Array[SymbolItem] = []
-  for root in workspace_module_roots(dir) {
+  for root in workspace_module_roots(workspace) {
     if symbols.length() >= MaxSymbolResults {
       break
     }

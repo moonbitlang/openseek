@@ -1,8 +1,6 @@
-// Host-local filesystem ops backing the editor side-panel: list a directory
-// and read a file, both resolved under the conversation's workspace. Pure
-// request/response — none of this touches the engine pump. The host derives
-// the workspace root from the session id and rejects any path that escapes
-// it, so the webview can browse a conversation's directory but nothing else.
+// Host-local filesystem ops backing the editor side-panel. Each request names
+// its absolute target directly; none of these operations consult the engine
+// or derive a path from a conversation id.
 
 ///|
 /// Largest file the viewer will load. Bigger files return a notice instead of
@@ -11,17 +9,9 @@ const MaxReadFileBytes = 1048576
 
 ///|
 async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
-  guard @engine.resolve_in_workspace(
-      payload.session,
-      payload.path,
-      workspace?=payload.workspace,
-    )
-    is Some(dir) else {
-    raise HostError("path is outside the conversation workspace")
-  }
-  // A conversation's workspace directory is created lazily on its first run,
-  // so before then it does not exist yet. Treat that as an empty workspace
-  // rather than an error, so the panel can browse a new conversation.
+  let dir = WirePath::parse(payload.path).absolute
+  // A requested root can be created lazily by the engine. Treat a missing
+  // directory as empty so the panel can keep its ordinary loading behavior.
   if !@fs.exists(dir.to_string()) {
     return { entries: [] }
   }
@@ -52,14 +42,7 @@ async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
 
 ///|
 async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
-  guard @engine.resolve_in_workspace(
-      payload.session,
-      payload.path,
-      workspace?=payload.workspace,
-    )
-    is Some(file) else {
-    raise HostError("path is outside the conversation workspace")
-  }
+  let file = WirePath::parse(payload.path).absolute
   let native = file.to_string()
   let source = @fs.open(native, mode=ReadOnly) catch {
     error if @async.is_being_cancelled() => raise error
@@ -90,21 +73,13 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
 
 ///|
 /// The mtime signatures of the open tabs' files (see `StatFilesPayload`).
-/// A path that stopped resolving inside the workspace reads as missing
-/// rather than an error: to the panel, a file it can no longer address is a
-/// deleted file.
+/// A path that can no longer be stat'ed reads as missing rather than an error:
+/// to the panel, the file was deleted.
 async fn stat_files_op(payload : StatFilesPayload) -> StatFilesReply {
   let stats : Array[FileStat] = []
   for path in payload.paths {
-    let sig = match
-      @engine.resolve_in_workspace(
-        payload.session,
-        path,
-        workspace?=payload.workspace,
-      ) {
-      Some(file) => file_signature(file.to_string())
-      None => None
-    }
+    let file = WirePath::parse(path).absolute
+    let sig = file_signature(file.to_string())
     stats.push({ path, sig: sig.unwrap_or("") })
   }
   { stats, }

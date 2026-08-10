@@ -98,7 +98,13 @@ pub fn[G] spawn_host_pumps(
 ) -> Unit {
   group.spawn_bg(allow_failure=true, () => {
     state.moon.forward_diagnostics(async fn(push) {
-      emit(LspDiagnostics({ path: push.path, diagnostics: push.diagnostics }))
+      emit(
+        LspDiagnostics({
+          root: push.root,
+          path: push.path,
+          diagnostics: push.diagnostics,
+        }),
+      )
     })
   })
   group.spawn_bg(allow_failure=true, () => state.updates.run(emit))
@@ -145,27 +151,18 @@ pub async fn HostConnection::run(
       async fn(push) {
         emit(
           FsChanged({
-            session: Some(push.session),
-            root: Some(push.root),
-            baseline: Some(push.baseline),
-            events: Some(
-              push.events.map(event => {
-                kind_: event.kind_,
-                path: event.path,
-                old_path: event.old_path,
-              }),
-            ),
+            root: push.root,
+            baseline: push.baseline,
+            events: push.events.map(event => {
+              kind_: event.kind_,
+              path: event.path,
+              old_path: event.old_path,
+            }),
           }),
         )
       },
       async fn(failure) {
-        emit(
-          FsWatchFailed({
-            session: failure.session,
-            root: failure.root,
-            message: failure.message,
-          }),
-        )
+        emit(FsWatchFailed({ root: failure.root, message: failure.message }))
       },
     )
   })

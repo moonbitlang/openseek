@@ -33,7 +33,7 @@ pub fn open_file(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, range~ : @common.R
 
 pub fn panel_toggle_cmds(@cmd.Emit[Msg], State, Ctx, opening~ : Bool) -> (@cmd.Cmd, State)
 
-pub fn read_file(@cmd.Emit[Msg], @interop.ConversationKey, Int, @pathx.Relative, String, review_generation? : Int, range~ : @common.Range?, annotation? : String, workspace~ : @common.Uri?) -> @cmd.Cmd
+pub fn read_file(@cmd.Emit[Msg], @interop.ConversationKey, Int, @pathx.Relative, String, review_generation? : Int, range~ : @common.Range?, annotation? : String, root~ : @common.Uri?) -> @cmd.Cmd
 
 pub fn remove_editor_feedback(ModelUri, String) -> @cmd.Cmd
 
@@ -80,6 +80,7 @@ pub(all) struct ChangedFile {
 pub(all) struct Ctx {
   owner : @interop.ConversationKey
   request_epoch : Int
+  root : @common.Uri?
   workspace : @common.Uri?
   checkout : @interop.CheckoutPlacement?
   dark_mode : Bool
@@ -149,8 +150,8 @@ pub(all) enum Msg {
   OpenNavigationLocation(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, range~ : @common.Range)
   FileLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, name~ : String, file~ : FileContent, review_generation~ : Int?, range~ : @common.Range?, annotation~ : String?)
   FileFailed(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, review_generation~ : Int?, message~ : String)
-  FileWatchFailed(owner~ : @interop.ConversationKey, epoch~ : Int?, message~ : String)
-  FsChanged(session~ : String?, changes~ : Array[FileChange]?)
+  FileWatchFailed(channel~ : @interop.ChannelId, root~ : @common.Uri, epoch~ : Int?, message~ : String)
+  FsChanged(root~ : @common.Uri, changes~ : Array[FileChange]?)
   RunSettled(owner~ : @interop.ConversationKey)
   StatsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, stats~ : Array[FileStat])
   DiagnosticsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
@@ -185,6 +186,7 @@ pub(all) struct State {
   owner : @interop.ConversationKey?
   placement_known : Bool
   placement_workspace : @common.Uri?
+  placement_root : @common.Uri?
   placement_checkout : @interop.CheckoutPlacement?
   tree_open : Bool
   explorer_mode : ExplorerMode
@@ -230,7 +232,7 @@ pub fn TreeLayout::wire(Self) -> String
 
 pub(all) struct WatchedPaths {
   owner : @interop.ConversationKey
-  workspace : @common.Uri?
+  root : @common.Uri
   files : Array[@pathx.Relative]
   directories : Array[@pathx.Relative]
 } derive(Eq)

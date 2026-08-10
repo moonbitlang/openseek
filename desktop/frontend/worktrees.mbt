@@ -8,11 +8,14 @@
 
 ///|
 /// One registry row of `worktree.list` / `worktree.changed`, reduced to
-/// what the sidebar reads: the name (the glyph's tooltip), the bound
-/// session (the join key), and whether the checkout still exists on disk.
+/// what the sidebar and file root projection read: the name (the glyph's
+/// tooltip), the bound session (the join key), its concrete checkout path,
+/// and whether that checkout still exists on disk.
 priv struct WorktreeRow {
   name : String
   session : String?
+  // The host's concrete checkout root, already bound to its device channel.
+  path : @common.Uri?
   present : Bool
 } derive(Eq)
 
@@ -76,7 +79,7 @@ fn fetch_worktrees(
       scheduler.add(
         dispatch(
           WorktreesLoaded(
-            worktree_rows(reply.worktrees),
+            worktree_rows(channel, reply.worktrees),
             workspace~,
             connection_generation~,
             request_generation~,
@@ -339,7 +342,10 @@ fn repair_worktree_cmd(
 /// Reduce the typed registry rows shared by list replies and the host's
 /// post-commit broadcast to what the sidebar reads, dropping blank names
 /// and blank session ids a hand-edited registry file could carry.
-fn worktree_rows(infos : Array[@protocol.WorktreeInfo]) -> Array[WorktreeRow] {
+fn worktree_rows(
+  channel : @interop.ChannelId,
+  infos : Array[@protocol.WorktreeInfo],
+) -> Array[WorktreeRow] {
   let rows : Array[WorktreeRow] = []
   for info in infos {
     guard !info.name.is_empty() else { continue }
@@ -350,6 +356,7 @@ fn worktree_rows(infos : Array[@protocol.WorktreeInfo]) -> Array[WorktreeRow] {
       } else {
         None
       },
+      path: @resource.of_path(channel, info.path),
       present: info.present,
     })
   }
@@ -366,7 +373,7 @@ fn worktree_changed_msg(
   guard @resource.of_path(channel, payload.workspace) is Some(workspace) else {
     return None
   }
-  Some(WorktreesChanged(worktree_rows(payload.worktrees), workspace~))
+  Some(WorktreesChanged(worktree_rows(channel, payload.worktrees), workspace~))
 }
 
 ///|
@@ -425,6 +432,30 @@ fn Model::checkout_placement(
     Some(@interop.Worktree(name=row.name))
   } else {
     Some(@interop.MissingWorktree(name=row.name))
+  }
+}
+
+///|
+/// The concrete root used by file and language requests for this conversation.
+/// A started run reports `cwd`; before that, a project-root conversation can
+/// use its registered workspace and a durable worktree can use the registry's
+/// checkout path. Missing or unresolved placements deliberately have no root.
+fn Model::conversation_root(self : Model, conv : Conversation) -> @common.Uri? {
+  match self.checkout_placement(conv) {
+    Some(@interop.WorkspaceRoot) =>
+      match conv.cwd {
+        Some(root) => Some(root)
+        None => conv.workspace
+      }
+    Some(@interop.Worktree(_)) =>
+      if self.device_state(conv.device) is Some(dev) &&
+        worktree_row_for(dev, conv.workspace, conv.session_id) is Some(row) &&
+        row.path is Some(root) {
+        Some(root)
+      } else {
+        conv.cwd
+      }
+    Some(@interop.MissingWorktree(_)) | None => None
   }
 }
 
@@ -633,7 +664,7 @@ fn archive_discard_message(
 
 ///|
 fn test_worktree_rows() -> Array[WorktreeRow] {
-  [{ name: "wt", session: Some("desktop-wt"), present: true }]
+  [{ name: "wt", session: Some("desktop-wt"), path: None, present: true }]
 }
 
 ///|
@@ -670,6 +701,7 @@ test "worktree commit decoder carries the workspace and its rows" {
   inspect(rows.length(), content="1")
   inspect(rows[0].name, content="wt")
   assert_eq(rows[0].session, Some("s1"))
+  assert_true(rows[0].path is Some({ path: "/proj/.worktrees/wt", .. }))
   assert_true(rows[0].present)
   // A broadcast without its workspace is structurally unusable.
   assert_true(
@@ -888,7 +920,12 @@ test "a worktree the registry says is bound closes the choice" {
             workspace,
             generation: 1,
             rows: [
-              { name: "wt-1", session: Some("desktop-test"), present: true },
+              {
+                name: "wt-1",
+                session: Some("desktop-test"),
+                path: None,
+                present: true,
+              },
             ],
           },
         ],
@@ -954,7 +991,14 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
       worktrees: [
         {
           workspace,
-          rows: [{ name: "wt", session: Some("desktop-test"), present: true }],
+          rows: [
+            {
+              name: "wt",
+              session: Some("desktop-test"),
+              path: None,
+              present: true,
+            },
+          ],
           generation: 1,
         },
       ],
@@ -1022,7 +1066,14 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   let (_, gone) = update_dev(
     dispatch,
     WorktreesChanged(
-      [{ name: "wt", session: Some("desktop-test"), present: false }],
+      [
+        {
+          name: "wt",
+          session: Some("desktop-test"),
+          path: None,
+          present: false,
+        },
+      ],
       workspace~,
     ),
     bound,
@@ -1050,7 +1101,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   let (_, restored) = update_dev(
     dispatch,
     WorktreesChanged(
-      [{ name: "wt", session: Some("desktop-test"), present: true }],
+      [{ name: "wt", session: Some("desktop-test"), path: None, present: true }],
       workspace~,
     ),
     gone,
@@ -1276,7 +1327,7 @@ test "a broadcast for one workspace never fences a sibling's reply" {
   let (_, changed) = update_dev(
     dispatch,
     WorktreesChanged(
-      [{ name: "wt-a", session: Some("s-a"), present: true }],
+      [{ name: "wt-a", session: Some("s-a"), path: None, present: true }],
       workspace=a,
     ),
     model,
@@ -1284,7 +1335,7 @@ test "a broadcast for one workspace never fences a sibling's reply" {
   let (_, both) = update_dev(
     dispatch,
     WorktreesLoaded(
-      [{ name: "wt-b", session: Some("s-b"), present: true }],
+      [{ name: "wt-b", session: Some("s-b"), path: None, present: true }],
       workspace=b,
       connection_generation=0,
       request_generation=1,

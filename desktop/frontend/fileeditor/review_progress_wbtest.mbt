@@ -107,7 +107,7 @@ test "file events and run completion invalidate stale review progress" {
   let (_, unrelated) = update(
     test_emit(),
     FsChanged(
-      session=Some(ctx.owner.session),
+      root=ctx.test_root(),
       changes=Some([Modified(@pathx.Relative("README.md"))]),
     ),
     reviewed,
@@ -117,10 +117,7 @@ test "file events and run completion invalidate stale review progress" {
 
   let (_, touched) = update(
     test_emit(),
-    FsChanged(
-      session=Some(ctx.owner.session),
-      changes=Some([Modified(selected.path)]),
-    ),
+    FsChanged(root=ctx.test_root(), changes=Some([Modified(selected.path)])),
     unrelated,
     ctx,
   )

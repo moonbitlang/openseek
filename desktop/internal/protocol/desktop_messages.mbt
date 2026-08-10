@@ -209,15 +209,12 @@ pub(all) struct LaunchAppPayload {
 
 ///|
 pub(all) struct ReadDirPayload {
-  session : String
   path : String
-  workspace : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
 pub(all) struct SearchFilesPayload {
-  session : String
-  workspace : String?
+  path : String
   // One Quick Open cache session. The first request populates it; subsequent
   // queries reuse it until `fs.clear_file_search_cache` retires the key.
   cache_key : String
@@ -243,22 +240,17 @@ pub(all) struct ClearFileSearchCachePayload {
 
 ///|
 pub(all) struct ReadFilePayload {
-  session : String
   path : String
-  workspace : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
 pub(all) struct StatFilesPayload {
-  session : String
   paths : Array[String]
-  workspace : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
 pub(all) struct WatchWorkspacePayload {
-  session : String
-  workspace : String?
+  path : String
   files : Array[String]?
   directories : Array[String]?
 } derive(Debug, Eq, FromJson, ToJson)
@@ -303,11 +295,13 @@ pub(all) struct TerminalClosePayload {
 
 ///|
 pub(all) struct LspOpenPayload {
+  root : String
   path : String
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
 pub(all) struct LspHoverPayload {
+  root : String
   path : String
   line : Int
   character : Int
@@ -315,9 +309,8 @@ pub(all) struct LspHoverPayload {
 
 ///|
 pub(all) struct WorkspaceSymbolsPayload {
-  session : String
+  root : String
   query : String
-  workspace : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -534,6 +527,7 @@ pub(all) struct AuthStatusPayload {
 
 ///|
 pub(all) struct DiagnosticsPayload {
+  root : String
   path : String
   diagnostics : Array[LspDiagnostic]
 } derive(Debug, Eq, FromJson, ToJson)
@@ -552,15 +546,13 @@ pub(all) struct FsEventPayload {
 
 ///|
 pub(all) struct FsChangedPayload {
-  session : String?
-  root : String?
-  baseline : Bool?
-  events : Array[FsEventPayload]?
+  root : String
+  baseline : Bool
+  events : Array[FsEventPayload]
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
 pub(all) struct FsWatchFailedPayload {
-  session : String
   root : String
   message : String
 } derive(Debug, Eq, FromJson, ToJson)

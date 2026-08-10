@@ -167,6 +167,7 @@ pub(all) struct ConnectedPayload {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct DiagnosticsPayload {
+  root : String
   path : String
   diagnostics : Array[LspDiagnostic]
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
@@ -216,10 +217,9 @@ pub(all) struct FinishedPayload {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct FsChangedPayload {
-  session : String?
-  root : String?
-  baseline : Bool?
-  events : Array[FsEventPayload]?
+  root : String
+  baseline : Bool
+  events : Array[FsEventPayload]
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct FsEventPayload {
@@ -229,7 +229,6 @@ pub(all) struct FsEventPayload {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct FsWatchFailedPayload {
-  session : String
   root : String
   message : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
@@ -396,6 +395,7 @@ pub(all) struct LspDiagnosticsReply {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct LspHoverPayload {
+  root : String
   path : String
   line : Int
   character : Int
@@ -412,6 +412,7 @@ pub(all) struct LspHoverReply {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct LspOpenPayload {
+  root : String
   path : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
@@ -524,9 +525,7 @@ pub(all) struct OpenPathReply {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct ReadDirPayload {
-  session : String
   path : String
-  workspace : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct ReadDirReply {
@@ -534,9 +533,7 @@ pub(all) struct ReadDirReply {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct ReadFilePayload {
-  session : String
   path : String
-  workspace : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) enum ReadFileReply {
@@ -566,8 +563,7 @@ pub(all) struct RunsReply {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct SearchFilesPayload {
-  session : String
-  workspace : String?
+  path : String
   cache_key : String
   query : String
   max_results : Int
@@ -733,9 +729,7 @@ pub(all) struct StartedPayload {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct StatFilesPayload {
-  session : String
   paths : Array[String]
-  workspace : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct StatFilesReply {
@@ -847,8 +841,7 @@ pub(all) struct UpdateDownloadedPayload {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct WatchWorkspacePayload {
-  session : String
-  workspace : String?
+  path : String
   files : Array[String]?
   directories : Array[String]?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
@@ -858,9 +851,8 @@ pub(all) struct WorkspacePayload {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct WorkspaceSymbolsPayload {
-  session : String
+  root : String
   query : String
-  workspace : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct WorkspaceSymbolsReply {

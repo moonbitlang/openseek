@@ -5,20 +5,18 @@
 // model leases.
 
 ///|
-/// The active workspace identity needed by cross-resource navigation. The
-/// root is host-confirmed: either the attached workspace supplied by `Ctx`,
-/// or the root reconstructed from the absolute/relative pair returned by
-/// `fs.read_file`.
+/// The active root needed by cross-resource navigation: either the explicit
+/// checkout root supplied by `Ctx`, or the root reconstructed from the
+/// absolute/relative pair returned by `fs.read_file`.
 priv struct NavigationContext {
   owner : @interop.ConversationKey
   root : @common.Uri
 } derive(Eq)
 
 ///|
-/// Reconstruct the workspace root from one file's resource URI and its
-/// workspace-relative name. URI paths already use slash separators. This is
-/// lexical only;
-/// both values came from the same successful, workspace-contained read.
+/// Reconstruct the request root from one file's resource URI and its
+/// root-relative name. URI paths already use slash separators. This is
+/// lexical only; both values came from the same successful read request.
 fn navigation_root_from_file(
   absolute : @common.Uri,
   relative : @pathx.Relative,
@@ -34,17 +32,17 @@ fn navigation_root_from_file(
 }
 
 ///|
-/// Choose the root for the document now on screen. An explicit workspace is
+/// Choose the root for the document now on screen. An explicit root is
 /// accepted only when it maps the absolute file back to the exact relative
 /// name; otherwise the host-returned file pair wins (important for canonical
 /// paths behind symlinked workspace hints).
 fn navigation_context_for_file(
   owner : @interop.ConversationKey,
-  workspace : @common.Uri?,
+  root_hint : @common.Uri?,
   absolute : @common.Uri,
   relative : @pathx.Relative,
 ) -> NavigationContext? {
-  let root = match workspace {
+  let root = match root_hint {
     Some(root) if @resource.relative_to(absolute, root) == Some(relative) =>
       Some(root)
     _ => navigation_root_from_file(absolute, relative)
@@ -242,7 +240,7 @@ async fn resolve_navigation_preview(
   let file = read_file_snapshot(
     context.owner,
     relative,
-    workspace=Some(context.root),
+    root=Some(context.root),
   ) catch {
     _ => return None
   }

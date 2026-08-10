@@ -102,7 +102,8 @@ The frontend combines the channel identity and path as an `openseek:` URI.
 UNC paths are unsupported: the resource URI authority belongs to the owning
 device and cannot also encode a UNC server. The host rejects them at the
 protocol boundary. Fields described as **relative paths** remain
-slash-separated workspace-relative strings. `fs.browse` request input is the
+slash-separated strings relative to their operation's explicit root.
+`fs.browse` request input is the
 one user-entry exception: its editable value may use the target host's native
 syntax, start with `~`, or repeat a URI path from the preceding browse reply;
 an absent value selects the host home directory. Its absolute reply fields
@@ -446,23 +447,21 @@ Notifications:
 | `git.branch` | `{session, cwd?, base_hint?}` | `{branch?, diffstat?}` — the checked-out branch of the conversation's working directory (detached HEAD reads as its short hash), and the branch's whole line delta. `base_hint` is the branch this work merges into: the host measures from `origin/<base_hint>` when that ref exists, otherwise from `origin/HEAD`, and clients that know a pull request's base send it because nothing local can derive one. `diffstat` is `{added, removed, files, base?, partial}`, measured from where the branch left that ref all the way to the working tree — committed and uncommitted alike, untracked files included. `base` names the ref actually measured from and is absent when the repository offered none, leaving the count to cover uncommitted work alone; `partial` marks a count that stopped short of every untracked file, so it reads as a floor rather than a total. Both fields are absent when the directory is not a git repository or git is unavailable, and `diffstat` alone is absent when the diff itself failed |
 | `git.pull_request` | `{session, cwd?}` | `{pull_request?, compare_url?, branch?}` — what GitHub says about the branch that working directory has checked out, read through the user's own `gh` CLI. No `gh`, no authentication, no GitHub remote, and a detached HEAD all answer with nothing rather than an error. `branch` is the branch the host read from `HEAD`, so a checkout that moved mid-request is detectable. `pull_request` is `{number, title, state, draft, url, base, additions, deletions, changed_files, checks?}`, where `base` is the branch it merges into (the exact value for `git.branch`'s `base_hint`) and `checks` is `{passed, failed, pending}` over the head commit's rollup. `compare_url` is offered instead, for a branch with no pull request that the resolved repository already has |
 
-### fs.* — conversation-scoped file access
+### fs.* — absolute file access
 
-Paths in `fs.read_file` / `fs.read_directory` / `fs.stat_files` are relative
-to the conversation's workspace; the host derives the root from `session`
-(`workspace?` is the hint that lets a fresh conversation browse before its
-durable record exists). `fs.browse` is the exception: it lists the **host**
-filesystem for the workspace picker.
+Filesystem requests name their concrete absolute resource paths directly;
+they carry neither a conversation id nor a workspace hint. `fs.browse` keeps
+its picker-specific starting-point behavior.
 
 | method | params | result |
 |---|---|---|
-| `fs.read_file` | `{session, path, workspace?}` | `{kind: "content", content, absolute, sig}` \| `{kind: "binary"}` \| `{kind: "oversized"}` |
-| `fs.read_directory` | `{session, path, workspace?}` (`""` = workspace root) | `{entries: [{name, is_dir}]}`, directories first |
-| `fs.search_files` | `{session, workspace?, cache_key, query, max_results, generation}` | `{files: […], from_cache, limit_hit, cancelled}` — VS Code-style cache-session query; `max_results: 0` populates without returning rows, Quick Open requests at most 512 |
+| `fs.read_file` | `{path}` (absolute) | `{kind: "content", content, absolute, sig}` \| `{kind: "binary"}` \| `{kind: "oversized"}` |
+| `fs.read_directory` | `{path}` (absolute directory) | `{entries: [{name, is_dir}]}`, directories first |
+| `fs.search_files` | `{path, cache_key, query, max_results, generation}` (`path` absolute root) | `{files: […], from_cache, limit_hit, cancelled}` — VS Code-style cache-session query returning root-relative paths; `max_results: 0` populates without returning rows, Quick Open requests at most 512 |
 | `fs.cancel_search_files` | `{cache_key, generation}` | `{}` — cancels one query while allowing cache population to finish |
 | `fs.clear_file_search_cache` | `{cache_key}` | `{}` — retires one search cache session and its outstanding work |
-| `fs.stat_files` | `{session, paths, workspace?}` | `{stats: [{path, sig}]}` — `sig` is the opaque mtime signature `"{seconds}:{nanos}"`; `""` means the file is missing, retained for client compatibility |
-| `fs.watch` | `{session, workspace?, files?, directories?}` | `{}` — replaces the single workspace watcher with the open files and listed directories; each directory keeps its immediate children observable |
+| `fs.stat_files` | `{paths}` (absolute) | `{stats: [{path, sig}]}` — each `path` echoes its absolute input; `sig` is the opaque mtime signature `"{seconds}:{nanos}"`; `""` means the file is missing, retained for client compatibility |
+| `fs.watch` | `{path, files?, directories?}` (`path` absolute) | `{}` — replaces the connection's single watcher; `files` and `directories` are relative to `path`, and each directory keeps its immediate children observable |
 | `fs.unwatch` | `{}` | `{}` — stops watching when the panel is closed and it has no open tabs |
 | `fs.browse` | `{path?}` (absent = home; leading `~` expands) | `{path, parent?, entries}` — subdirectory names, sorted, dotfiles skipped |
 
@@ -470,8 +469,8 @@ Notification:
 
 | method | params |
 |---|---|
-| `fs.changed` | `{session, root, baseline, events: [{kind, path, old_path?}]}` — `baseline=true` follows watcher attachment; later batches use `modify` / `create` / `remove` / `rename` events with workspace-relative paths |
-| `fs.watch_failed` | `{session, root, message}` — the accepted watcher could not attach or later stopped; clients should fence the failure by session |
+| `fs.changed` | `{root, baseline, events: [{kind, path, old_path?}]}` — `root` is absolute; `baseline=true` follows watcher attachment; later batches use `modify` / `create` / `remove` / `rename` events with root-relative paths |
+| `fs.watch_failed` | `{root, message}` — the accepted watcher could not attach or later stopped; clients fence the failure by absolute root |
 
 `files` and `directories` are optional only for compatibility with older
 clients. When both are absent the host retains the previous pruned recursive
@@ -514,15 +513,15 @@ Notifications:
 
 | method | params | result |
 |---|---|---|
-| `lsp.open` | `{path}` (absolute) | `{diagnostics}` — the file's diagnostics from a fresh `moon check` of its module; other files' changes push as `lsp.diagnostics`. `diagnostics` absent = the check could not run; keep current markers |
-| `lsp.hover` | `{path, line, character}` (0-based) | `{value, markdown, has_range, start_line, start_character, end_line, end_character}` — empty `value` = no hover; served by `moon ide hover` |
-| `lsp.workspace_symbols` | `{session, query, workspace?}` | `{symbols: [{name, kind?, container?, path, range}]}` — served by `moon ide workspace-symbols` |
+| `lsp.open` | `{root, path}` (`root` absolute, `path` root-relative) | `{diagnostics}` — the file's diagnostics from a fresh `moon check` of its deepest containing module beneath `root`; other files' changes push as `lsp.diagnostics`. `diagnostics` absent = the check could not run; keep current markers |
+| `lsp.hover` | `{root, path, line, character}` (`root` absolute, `path` root-relative, position 0-based) | `{value, markdown, has_range, start_line, start_character, end_line, end_character}` — empty `value` = no hover; served by `moon ide hover` |
+| `lsp.workspace_symbols` | `{root, query}` (`root` absolute) | `{symbols: [{name, kind?, container?, path, range}]}` — served by `moon ide workspace-symbols`; result paths are root-relative |
 
 Notification:
 
 | method | params |
 |---|---|
-| `lsp.diagnostics` | `{path, diagnostics}` — same array shape as `lsp.open`'s reply; an empty array clears the file's markers |
+| `lsp.diagnostics` | `{root, path, diagnostics}` — `root` is absolute and `path` is root-relative; the diagnostics use the same array shape as `lsp.open`'s reply, and an empty array clears the file's markers |
 
 ### moonide.* — workspace navigation
 
@@ -698,7 +697,7 @@ changed and why:
 - **Most in-band sentinels were removed from the wire**: request `cwd` and
   reply `branch` are optional fields instead of `""`; the missing-file
   `sig: ""` reply remains for client compatibility. Stopping the watcher is `fs.unwatch`
-  instead of `fs.watch` with an empty session; `host.meta` carries no
+  instead of a sentinel `fs.watch`; `host.meta` carries no
   `capabilities` list (the method catalog is the capability surface).
 - **Device ids stopped being capabilities** (v2.1): originally the
   unguessable device id was the only barrier, minted per token by the

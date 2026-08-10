@@ -899,18 +899,18 @@ priv enum QuickOpenPhase {
 
 ///|
 /// Frontend half of VS Code's FileQueryCacheState. `active_key` remains usable
-/// while `loading_key` warms a replacement for the same workspace. A failed
+/// while `loading_key` warms a replacement for the same root. A failed
 /// replacement therefore cannot evict the last good cache.
 priv struct FileQueryCacheState {
   owner : @interop.ConversationKey?
-  workspace : @common.Uri?
+  root : @common.Uri?
   active_key : String?
   loading_key : String?
 } derive(Eq)
 
 ///|
 fn empty_file_query_cache() -> FileQueryCacheState {
-  { owner: None, workspace: None, active_key: None, loading_key: None }
+  { owner: None, root: None, active_key: None, loading_key: None }
 }
 
 ///|

@@ -264,7 +264,7 @@ pub fn request_viewer_remeasure() -> @cmd.Cmd {
 /// source Viewer remains mounted.
 fn show_file_in_viewer(
   owner : @interop.ConversationKey,
-  workspace : @common.Uri?,
+  root~ : @common.Uri?,
   name : String,
   content : String,
   absolute? : @common.Uri,
@@ -353,7 +353,7 @@ fn show_file_in_viewer(
     viewer_state.relative = relative
     viewer_state.navigation = match (absolute, relative) {
       (Some(absolute), Some(relative)) =>
-        navigation_context_for_file(owner, workspace, absolute, relative)
+        navigation_context_for_file(owner, root, absolute, relative)
       _ => None
     }
     // Commenting (select → inline input → composer chip) is for real files;

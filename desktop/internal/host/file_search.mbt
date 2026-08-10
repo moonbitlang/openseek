@@ -1,5 +1,5 @@
-// VS Code-shaped workspace file search. A cache key names one search session:
-// the first request scans the workspace once, later queries filter that cached
+// VS Code-shaped file search. A cache key names one search session: the first
+// request scans its absolute root once, later queries filter that cached
 // snapshot, and clearCache is the only operation that retires the session.
 // Discovery intentionally has one coordinator instead of a per-connection
 // worker pool; a future bundled ripgrep provider can replace this scanner
@@ -620,14 +620,7 @@ async fn search_files_op(
   service : FileSearchService,
   payload : SearchFilesPayload,
 ) -> SearchFilesReply {
-  guard @engine.resolve_in_workspace(
-      payload.session,
-      "",
-      workspace?=payload.workspace,
-    )
-    is Some(root) else {
-    raise HostError("path is outside the conversation workspace")
-  }
+  let root = WirePath::parse(payload.path).absolute
   service.search(
     root,
     payload.cache_key,
