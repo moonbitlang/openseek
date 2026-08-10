@@ -22,6 +22,7 @@ fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           theme=load_setting(ThemeStorageKey),
           model=load_setting(ModelStorageKey),
           conversation_models=load_setting(ConversationModelsStorageKey),
+          workspace_default_mode=load_setting(WorkspaceDefaultModeStorageKey),
         ),
       ),
     )
@@ -91,6 +92,79 @@ fn parse_conversation_models(text : String) -> Array[StoredConversationModel] {
     }
   }
   entries
+}
+
+///|
+/// Read the workspaces that default to Worktree. Corrupt rows are ignored;
+/// an absent or unusable value restores the safe Local default everywhere.
+fn WorkspaceDefaultMode::parse(text : String) -> WorkspaceDefaultMode {
+  let mode : WorkspaceDefaultMode = { worktrees: [] }
+  guard !text.trim().is_empty() else { return mode }
+  let json = @json.parse(text) catch { _ => return mode }
+  guard json is Array(rows) else { return mode }
+  for row in rows {
+    guard mode.worktrees.length() < WorkspaceDefaultModeLimit else { break }
+    if row is String(workspace) &&
+      !workspace.is_empty() &&
+      !mode.worktrees.contains(workspace) {
+      mode.worktrees.push(workspace)
+    }
+  }
+  mode
+}
+
+///|
+/// The default copied into a new conversation in `workspace`. Scratch chats
+/// have no workspace and therefore always remain Local.
+fn WorkspaceDefaultMode::for_workspace(
+  self : WorkspaceDefaultMode,
+  workspace : @common.Uri?,
+) -> Bool {
+  if workspace is Some(workspace) {
+    self.worktrees.contains(workspace.to_string())
+  } else {
+    false
+  }
+}
+
+///|
+/// Return a fresh preference value with this workspace moved to the front.
+/// Local is represented by removing the row, not by storing a second state.
+fn WorkspaceDefaultMode::with_mode(
+  self : WorkspaceDefaultMode,
+  workspace : @common.Uri,
+  worktree_mode : Bool,
+) -> WorkspaceDefaultMode {
+  let key = workspace.to_string()
+  let worktrees : Array[String] = []
+  if worktree_mode {
+    worktrees.push(key)
+  }
+  for existing in self.worktrees {
+    if existing != key && worktrees.length() < WorkspaceDefaultModeLimit {
+      worktrees.push(existing)
+    }
+  }
+  { worktrees, }
+}
+
+///|
+/// Persist one workspace's default without dumping the page's possibly stale
+/// in-memory list over choices made by another tab. The latest choice for the
+/// same workspace wins; unrelated rows are merged from storage first.
+fn WorkspaceDefaultMode::save(
+  workspace : @common.Uri,
+  worktree_mode : Bool,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    let stored = WorkspaceDefaultMode::parse(
+      load_setting(WorkspaceDefaultModeStorageKey),
+    ).with_mode(workspace, worktree_mode)
+    save_setting(
+      WorkspaceDefaultModeStorageKey,
+      stored.worktrees.to_json().stringify(),
+    )
+  })
 }
 
 ///|

@@ -1,6 +1,7 @@
 import {
   "moonbit-community/fuzzy_match",
   "moonbitlang/core/cmp",
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "moonbit-community/rabbita",

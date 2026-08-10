@@ -1299,7 +1299,14 @@ fn replace_archived_active(
     (Some(draft), None) => Some({ draft, })
     (_, existing) => existing
   }
-  let fresh = { ..fresh, task, mentions, workspace, goal_edit }
+  let fresh = {
+    ..fresh,
+    task,
+    mentions,
+    workspace,
+    worktree_mode: model.workspace_default_mode.for_workspace(workspace),
+    goal_edit,
+  }
   let fresh = if pending_initial {
     fresh.append_local_notice(
       Assistant(is_danger=true),
@@ -1420,7 +1427,8 @@ fn update_msg(
       tree_layout~,
       theme~,
       model=stored,
-      conversation_models=remembered
+      conversation_models=remembered,
+      workspace_default_mode=stored_workspace_default_mode
     ) => {
       let theme = Theme::parse(theme, model.theme)
       // Startup runs before any conversation exists, so adopting the stored
@@ -1438,6 +1446,9 @@ fn update_msg(
           theme,
           default_model,
           conversation_models: parse_conversation_models(remembered),
+          workspace_default_mode: WorkspaceDefaultMode::parse(
+            stored_workspace_default_mode,
+          ),
         },
       )
     }
@@ -2409,13 +2420,15 @@ fn update_msg(
       // the toggle stayed live through a placement chain the chip had
       // already committed to.
       let conv = model.active()
-      if model.can_choose_launch_mode(conv) {
+      if model.can_choose_launch_mode(conv) && conv.workspace is Some(workspace) {
+        let worktree_mode = !conv.worktree_mode
+        let workspace_default_mode = model.workspace_default_mode.with_mode(
+          workspace, worktree_mode,
+        )
+        let next = model.replace_conversation({ ..conv, worktree_mode, })
         (
-          @cmd.none,
-          model.replace_conversation({
-            ..conv,
-            worktree_mode: !conv.worktree_mode,
-          }),
+          WorkspaceDefaultMode::save(workspace, worktree_mode),
+          { ..next, workspace_default_mode, },
         )
       } else {
         (@cmd.none, model)
@@ -2501,15 +2514,25 @@ fn update_msg(
         model.device_state(owner.channel) is Some(dev) else {
         return (@cmd.none, model)
       }
+      let existing = model.find_conversation(owner.channel, owner.session)
       let activated = model.activate(owner.channel, owner.session)
       // A rotation creates the conversation, so stamp it with the workspace
-      // it was asked into; an existing conversation keeps its own.
+      // it was asked into and that workspace's saved default. An existing
+      // conversation keeps its own choice if the reply is replayed.
       let conversations = activated.conversations.map(conv => {
         if conv.device == owner.channel &&
           conv.session_id == owner.session &&
           conv.messages.length() == 0 &&
           !conv.is_running() {
-          { ..conv, workspace: dev.active_workspace }
+          {
+            ..conv,
+            workspace: dev.active_workspace,
+            worktree_mode: if existing is Some(existing) {
+              existing.worktree_mode
+            } else {
+              model.workspace_default_mode.for_workspace(dev.active_workspace)
+            },
+          }
         } else {
           conv
         }
@@ -11519,6 +11542,7 @@ test "loaded UI preferences parse their wire names" {
       theme="dark",
       model="deepseek-v4-flash",
       conversation_models="[{\"key\":\"local/desktop-test\",\"model\":\"deepseek-v4-pro\"}]",
+      workspace_default_mode="[\"openseek://local/proj\"]",
     ),
     test_model(),
   )
@@ -11527,6 +11551,11 @@ test "loaded UI preferences parse their wire names" {
   assert_true(restored.default_model is Low)
   // The stored conversation outranks the stored default for its own chat.
   assert_true(restored.active().engine_model is High)
+  assert_true(
+    restored.workspace_default_mode.for_workspace(
+      Some(@interop.ChannelId::Local.test_resource("/proj")),
+    ),
+  )
   // Unknown stored values fall back to the defaults.
   let (_, unknown) = update(
     dispatch,
@@ -11536,6 +11565,7 @@ test "loaded UI preferences parse their wire names" {
       theme="broken",
       model="",
       conversation_models="not json",
+      workspace_default_mode="not json",
     ),
     test_model(),
   )
@@ -11544,6 +11574,11 @@ test "loaded UI preferences parse their wire names" {
   assert_true(unknown.default_model is High)
   // A store that will not parse remembers nothing rather than wedging.
   assert_eq(unknown.conversation_models.length(), 0)
+  assert_false(
+    unknown.workspace_default_mode.for_workspace(
+      Some(@interop.ChannelId::Local.test_resource("/proj")),
+    ),
+  )
 }
 
 ///|
@@ -12682,7 +12717,8 @@ test "archive broadcast invalidates the active send target before list replies" 
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/work/archived")
   let mention : Mention = { ref_: Skill(name="draft-skill"), range: None }
-  let model = test_model()
+  let model = {
+    ..test_model()
     .replace_conversation({
       ..test_conversation(),
       task: "must not target archived session",
@@ -12698,7 +12734,11 @@ test "archive broadcast invalidates the active send target before list replies" 
         },
       ],
       worktrees: [{ workspace, rows: [], generation: 1 }],
-    })
+    }),
+    workspace_default_mode: test_model().workspace_default_mode.with_mode(
+      workspace, true,
+    ),
+  }
   let (_, invalidated) = update_dev(
     dispatch,
     SessionsChanged(
@@ -12716,6 +12756,7 @@ test "archive broadcast invalidates the active send target before list replies" 
   inspect(invalidated.active().session_id, content="desktop-fresh")
   assert_eq(invalidated.dev().active_workspace, Some(workspace))
   assert_eq(invalidated.active().workspace, Some(workspace))
+  assert_true(invalidated.active().worktree_mode)
   inspect(invalidated.active().task, content="must not target archived session")
   inspect(invalidated.active().mentions.length(), content="1")
   assert_true(

@@ -72,6 +72,15 @@ fn conversation_model_key(
 }
 
 ///|
+/// The page-local default launch mode for each workspace. Only Worktree
+/// defaults need a row: absence is the initial Local default. Workspace
+/// resource URIs include their device authority, so identical host paths on
+/// two devices remain independent preferences.
+priv struct WorkspaceDefaultMode {
+  worktrees : Array[String]
+} derive(Eq, Debug)
+
+///|
 test "engine models round-trip their wire names" {
   inspect(
     EngineModel::parse("deepseek-v4-pro").unwrap().label(),
@@ -149,6 +158,17 @@ const ConversationModelsStorageKey : String = "openseek.conversation_models"
 /// the least recently chosen conversation forgets and opens on the default,
 /// exactly like one the user never chose a tier for.
 const ConversationModelsLimit : Int = 200
+
+///|
+/// Workspaces whose next new conversation defaults to Worktree. Stored in
+/// the page's localStorage; the desktop webview and browser console therefore
+/// remember independently.
+const WorkspaceDefaultModeStorageKey : String = "openseek.workspace_default_mode"
+
+///|
+/// Detached workspaces keep their preference for a later reattach, but the
+/// localStorage value stays bounded like the per-conversation model list.
+const WorkspaceDefaultModeLimit : Int = 200
 
 ///|
 /// Obsolete: the update channel derives from the server selection now. The
@@ -1026,6 +1046,10 @@ priv struct Model {
   // default an unrelated chat has moved to since. Reopening recovers from
   // here; `default_model` is only for conversations this list has never held.
   conversation_models : Array[StoredConversationModel]
+  // Where a new conversation in each workspace starts. The conversation
+  // copies this preference when it is created; later changes do not move an
+  // already-open draft or a placement request in flight.
+  workspace_default_mode : WorkspaceDefaultMode
   max_steps : String
   // Whether the host has a key stored for each keyed provider. The key text
   // itself never reaches a client — the Settings page only needs presence
@@ -1352,7 +1376,8 @@ priv enum Msg {
     tree_layout~ : String,
     theme~ : String,
     model~ : String,
-    conversation_models~ : String
+    conversation_models~ : String,
+    workspace_default_mode~ : String
   )
   // The legacy localStorage engine settings, read at bridge time. The
   // desktop window migrates them up to the host once; a browser page only
@@ -2103,6 +2128,7 @@ fn initial_model() -> Model {
     focused: page_channel.unwrap_or(@interop.ChannelId::Local),
     default_model: High,
     conversation_models: [],
+    workspace_default_mode: { worktrees: [] },
     max_steps: DefaultMaxSteps,
     deepseek_key_saved: false,
     custom_key_saved: false,
