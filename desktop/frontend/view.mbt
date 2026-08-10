@@ -257,9 +257,10 @@ fn session_row(
 }
 
 ///|
-/// Sidebar rows. The desktop window lists its one Local device with no
-/// group chrome; the console renders one group per roster device — header,
-/// then that device's sections — in the roster's order.
+/// Sidebar rows. Both the desktop window and browser console render only the
+/// focused device's sections. The browser page initially gets that focus from
+/// its `?device=` selection; device identity and account controls do not belong
+/// in this scroll box.
 fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
   match model.console {
     None => {
@@ -273,19 +274,20 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
 }
 
 ///|
-/// The console sidebar: the roster's device groups, with the load/failure
-/// and no-devices states as plain rows in their place.
+/// The console sidebar for this page's focused device. Roster loading and
+/// failure states only replace the sections when no connected device can be
+/// rendered; an existing device remains usable while a refresh is in flight.
 fn console_session_rows(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   console : ConsoleState,
 ) -> Array[@html.Html] {
+  if model.focused_device() is Some(dev) {
+    return device_section_rows(dispatch, model, dev)
+  }
   let rows : Array[@html.Html] = []
   match console.roster_sync {
-    RosterLoading =>
-      if console.roster.is_empty() {
-        rows.push(dim_row("Loading devices…"))
-      }
+    RosterLoading => rows.push(dim_row("Loading device…"))
     RosterFailed(message) => rows.push(dim_row(message))
     RosterReady =>
       if console.roster.is_empty() {
@@ -294,25 +296,9 @@ fn console_session_rows(
             "No devices yet — open SeekMoon and sign in under Settings → Remote access.",
           ),
         )
+      } else {
+        rows.push(dim_row("No online device — reconnecting…"))
       }
-  }
-  for meta in console.roster {
-    rows.push(device_group_header(dispatch, model, console, meta))
-    if console.menu_open == Some(meta.id) && console.rename is None {
-      rows.push(device_menu(dispatch, console, meta))
-    }
-    match model.device_state(Remote(meta.id)) {
-      Some(dev) =>
-        for row in device_section_rows(dispatch, model, dev) {
-          rows.push(row)
-        }
-      None =>
-        // No channel: the device is offline (or just came online and its
-        // state lands with the next refresh) — the header dot says which.
-        rows.push(
-          dim_row("Offline — its chats will list again when it reconnects."),
-        )
-    }
   }
   rows
 }
@@ -325,142 +311,11 @@ fn dim_row(text : String) -> @html.Html {
 }
 
 ///|
-/// One roster device's group header: the online/bridge dot, the name, the
-/// connection state, and the "⋯" actions menu. Focus follows session and
-/// new-chat clicks inside the group, so the header itself is inert chrome.
-/// While renaming, the field replaces the identity block after the stable
-/// leading dot — the header's position in the list does not move, so the
-/// input keeps focus across re-renders.
-fn device_group_header(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-  console : ConsoleState,
-  meta : DeviceMeta,
-) -> @html.Html {
-  let dev = model.device_state(Remote(meta.id))
-  let connected = dev is Some(dev) && dev.bridge is Connected
-  let dot = if meta.online && connected {
-    "device-dot online"
-  } else {
-    "device-dot"
-  }
-  let children : Array[@html.Html] = [@html.span(class=dot, "")]
-  if console.rename is Some(rename) && rename.device == meta.id {
-    children.push(
-      @html.input(
-        class="device-rename",
-        value=rename.input,
-        autofocus=true,
-        on_input=dispatch.map(value => Console(RenameEdited(value))),
-        attrs=@html.Attrs::build().aria_label("Device name"),
-      ),
-    )
-    children.push(
-      @html.button(
-        class="device-menu-item",
-        disabled=console.busy || rename.input.trim().is_empty(),
-        on_click=dispatch(Console(RenameSubmitted)),
-        "Save",
-      ),
-    )
-    children.push(
-      @html.button(
-        class="device-menu-item",
-        on_click=dispatch(Console(RenameCancelled)),
-        "Cancel",
-      ),
-    )
-  } else {
-    children.push(@html.span(class="sidebar-label device-name", meta.name))
-    let status : String? = if !meta.online {
-      Some("offline")
-    } else {
-      match dev {
-        Some(dev) =>
-          match dev.bridge {
-            Connected => None
-            Connecting => Some("connecting…")
-            BridgeLost(_) => Some("reconnecting…")
-          }
-        None => Some("connecting…")
-      }
-    }
-    if status is Some(text) {
-      children.push(@html.span(class="device-status", text))
-    }
-    children.push(
-      @html.button(
-        class="row-archive device-menu-button",
-        type_="button",
-        disabled=console.busy,
-        title="Device actions",
-        attrs=@html.Attrs::build().aria_label("Actions for \{meta.name}"),
-        on_click=dispatch(Console(MenuToggled(meta.id))),
-        "⋯",
-      ),
-    )
-  }
-  let title = match meta.hostname {
-    Some(hostname) => "\{meta.name} — \{hostname}"
-    None => meta.name
-  }
-  @html.div(class="sidebar-heading device-heading", title~, children)
-}
-
-///|
-/// The "⋯" menu: Rename, and the two-click Remove — the confirmation
-/// replaces the Remove item in place.
-fn device_menu(
-  dispatch : @cmd.Emit[Msg],
-  console : ConsoleState,
-  meta : DeviceMeta,
-) -> @html.Html {
-  let items : Array[@html.Html] = [
-    @html.button(
-      class="device-menu-item",
-      disabled=console.busy,
-      on_click=dispatch(
-        Console(RenameStarted(device=meta.id, current=meta.name)),
-      ),
-      "Rename",
-    ),
-  ]
-  if console.confirm_delete is Some(pending) && pending == meta.id {
-    items.push(
-      @html.button(
-        class="device-menu-item danger",
-        disabled=console.busy,
-        on_click=dispatch(Console(DeleteConfirmed(meta.id))),
-        "Really remove?",
-      ),
-    )
-    items.push(
-      @html.button(
-        class="device-menu-item",
-        on_click=dispatch(Console(DeleteCancelled)),
-        "Keep",
-      ),
-    )
-  } else {
-    items.push(
-      @html.button(
-        class="device-menu-item danger",
-        disabled=console.busy,
-        on_click=dispatch(Console(DeleteAsked(meta.id))),
-        "Remove",
-      ),
-    )
-  }
-  @html.div(class="device-menu", items)
-}
-
-///|
 /// One device's sections: conversations that only exist in this app run (no
 /// turn has reached the store yet) first, then the engine's durable
 /// sessions, newest first. Rows stay clickable while runs are active —
 /// switching between conversations mid-run is the point of keeping them
-/// concurrent. The section-collapse flags are page-global, shared by every
-/// group on the console (a per-device fold is a possible follow-up).
+/// concurrent.
 fn device_section_rows(
   dispatch : @cmd.Emit[Msg],
   model : Model,
