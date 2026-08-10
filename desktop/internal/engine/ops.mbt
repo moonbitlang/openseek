@@ -709,20 +709,25 @@ pub async fn load_session(
   // The client's workspace hint says which registered store to read. A
   // detached workspace is rejected instead of silently probing the global
   // store, which could return a different history for the same session id.
-  let root = if payload.workspace is Some(hint) && !hint.trim().is_empty() {
+  let (root, cwd) = if payload.workspace is Some(hint) &&
+    !hint.trim().is_empty() {
     guard @pathx.Absolute::from_uri_path(hint) is Some(absolute) &&
       registered_workspace(absolute) is Some(workspace) else {
       raise EngineError("\{hint} is not a registered workspace")
     }
-    Some(workspace_session_root(workspace))
+    (
+      Some(workspace_session_root(workspace)),
+      session_tree_dir(workspace, session),
+    )
   } else {
-    session_store_root(session)
+    (session_store_root(session), session_cwd(session))
   }
   guard root is Some(root) else {
     raise EngineError(
       "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
     )
   }
+  let cwd = cwd.map(dir => dir.resource_path())
   // A followed session (a live engine is writing to it) is read through its
   // follower actor: the snapshot then comes out of the same serial loop
   // that broadcasts `session.event` commits, so the two can never disagree
@@ -732,6 +737,7 @@ pub async fn load_session(
     return {
       session: document,
       watermark: Some(session_max_sequence(document)),
+      cwd,
     }
   }
   // Name the missing-record states before spending an engine read that can
@@ -756,7 +762,7 @@ pub async fn load_session(
   let document : @protocol.SessionDocument = @json.from_json(json) catch {
     _ => raise EngineError("engine returned a malformed session")
   }
-  { session: document, watermark: Some(session_max_sequence(document)) }
+  { session: document, watermark: Some(session_max_sequence(document)), cwd }
 }
 
 ///|
@@ -1320,6 +1326,10 @@ async test "session load preserves a future item without hiding known events" {
   assert_eq(events.length(), 3)
   assert_true(events[1].item is Unknown(_))
   assert_eq(reply.watermark, Some(3))
+  guard reply.cwd is Some(cwd) else {
+    fail("scratch session load did not report its working directory")
+  }
+  assert_true(cwd.has_suffix("/OpenSeek/s-future"))
   @fs.rmdir(dir, recursive=true)
 }
 

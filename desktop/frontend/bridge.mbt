@@ -1130,10 +1130,11 @@ fn open_session(
     channel,
     session_id,
     workspace~,
-    on_loaded=view => {
+    on_loaded=(view, cwd) => {
       dispatch(
         SessionLoaded(
           session=session_id,
+          cwd~,
           items=view.items,
           watermark=view.watermark,
           event_boundaries=view.event_boundaries,
@@ -1171,10 +1172,11 @@ fn refresh_session(
     channel,
     session_id,
     workspace~,
-    on_loaded=view => {
+    on_loaded=(view, cwd) => {
       dispatch(
         SessionRefreshed(
           session=session_id,
+          cwd~,
           items=view.items,
           watermark=view.watermark,
           event_boundaries=view.event_boundaries,
@@ -1195,7 +1197,7 @@ fn load_session_cmd(
   channel : @interop.ChannelId,
   session_id : String,
   workspace~ : @common.Uri?,
-  on_loaded~ : (@transcript.SessionLoadView) -> @cmd.Cmd,
+  on_loaded~ : (@transcript.SessionLoadView, @common.Uri?) -> @cmd.Cmd,
   on_failed~ : (String) -> @cmd.Cmd,
 ) -> @cmd.Cmd {
   match workspace {
@@ -1214,7 +1216,20 @@ fn load_session_cmd(
           return
         }
       }
-      scheduler.add(on_loaded(@transcript.session_from_reply(reply)))
+      // `cwd` is host placement metadata rather than transcript content. Bind
+      // it to the request's device here, at the same protocol boundary that
+      // validates every other host-owned absolute path.
+      let cwd = match reply.cwd {
+        Some(path) => {
+          guard @resource.of_path(channel, path) is Some(cwd) else {
+            scheduler.add(on_failed("host returned a malformed session cwd"))
+            return
+          }
+          Some(cwd)
+        }
+        None => None
+      }
+      scheduler.add(on_loaded(@transcript.session_from_reply(reply), cwd))
     })
   })
 }

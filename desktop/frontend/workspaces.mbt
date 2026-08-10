@@ -426,6 +426,7 @@ test "opening a stored session adopts its workspace" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionLoaded(
+      cwd=None,
       session="desktop-w",
       items=[],
       watermark=0,

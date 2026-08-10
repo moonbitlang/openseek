@@ -675,6 +675,7 @@ test "re-asserting an unchanged goal waits for its own marker too" {
     let (_, next) = update_dev(
       dispatch,
       SessionRefreshed(
+        cwd=None,
         goal=Some({ text: "ship the feature", blocked: None }),
         goal_markers~,
         session="desktop-test",
@@ -729,6 +730,7 @@ test "a set is recorded even when the record has moved on since" {
   let (_, settled) = update_dev(
     dispatch,
     SessionRefreshed(
+      cwd=None,
       goal=Some({ text: "ship the feature", blocked: Some("needs a decision") }),
       goal_markers=[
         (2, GoalSet("ship the feature")),
@@ -983,6 +985,7 @@ test "a request in flight is reason enough to re-read the record" {
   let (_, empty) = update_dev(
     dispatch,
     SessionRefreshed(
+      cwd=None,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -1288,6 +1291,7 @@ test "a reload settles a request the transport never answered" {
     let (_, next) = update_dev(
       dispatch,
       SessionRefreshed(
+        cwd=None,
         goal~,
         goal_markers~,
         session="desktop-test",
