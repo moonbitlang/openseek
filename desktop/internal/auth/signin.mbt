@@ -68,13 +68,9 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
     () => {
       match
         @async.with_timeout_opt(SignInTimeoutMs, () => {
-          wait_for_code(
-            server,
-            oauth_state~,
-            console_url=console_url(server_url),
-          )
+          wait_for_code(server, oauth_state~)
         }) {
-        Some(code) => GotCode(code)
+        Some((code, conn)) => GotCode(code, conn)
         None => TimedOut
       }
     },
@@ -83,11 +79,14 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
       CancelledByUser
     },
   ])
-  let one_time_code = match outcome {
-    GotCode(code) => code
+  let (one_time_code, browser) = match outcome {
+    GotCode(code, conn) => (code, conn)
     TimedOut => raise AuthError("sign-in timed out waiting for the browser")
     CancelledByUser => raise AuthError("the sign-in was cancelled")
   }
+  // Keep the browser's loopback request open until registration returns its
+  // device id. Only then can the completion page point at one exact device.
+  defer browser.close()
 
   // Exchange = device registration. Once the relay may have committed the
   // device, cancelling the HTTP task can lose the only token authorized to
@@ -131,6 +130,18 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
   }
 
   self.commit_session(session)
+  let url = device_url(
+    session.server_url,
+    session.device_id,
+    app_version=self.app_version,
+  )
+  // Registration and the local commit have already succeeded. A browser tab
+  // closed during the exchange must not turn that committed sign-in into an
+  // auth failure, while task cancellation must still reach the caller.
+  respond_html(browser, 200, "OK", sign_in_done_page(url)) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => ()
+  }
 }
 
 ///|
@@ -158,33 +169,45 @@ async fn AuthStore::commit_session(
 ///|
 /// How the wait for the consent redirect ended.
 priv enum SignInWait {
-  GotCode(String)
+  GotCode(String, @http.ServerConnection)
   TimedOut
   CancelledByUser
 }
 
 ///|
-/// Accept loopback connections until one carries the consent redirect.
-/// Stray requests (favicon probes, forged or stale redirects) get a 404
-/// and the wait continues — a loopback guesser can neither cancel nor
-/// complete the flow. A denial from the consent page raises.
+/// Accept loopback connections until one carries the consent redirect. The
+/// granted connection stays open so `sign_in` can finish device registration
+/// before returning its device-specific completion page. Stray requests
+/// (favicon probes, forged or stale redirects) get a 404 and the wait
+/// continues — a loopback guesser can neither cancel nor complete the flow.
+/// A denial from the consent page raises.
 async fn wait_for_code(
   server : @http.Server,
   oauth_state~ : String,
-  console_url~ : String,
-) -> String {
+) -> (String, @http.ServerConnection) {
   for ;; {
     let (conn, _) = server.accept()
-    let outcome = serve_callback(conn, oauth_state~, console_url~) catch {
-      error if @async.is_being_cancelled() => raise error
+    let outcome = serve_callback(conn, oauth_state~) catch {
+      error if @async.is_being_cancelled() => {
+        conn.close()
+        raise error
+      }
       // A broken socket must not kill the flow; keep listening.
-      _ => continue
+      _ => {
+        conn.close()
+        continue
+      }
     }
     match outcome {
-      Granted(code) => return code
-      Denied(reason) =>
+      Granted(code) => return (code, conn)
+      Denied(reason) => {
+        conn.close()
         raise AuthError("the browser declined the sign-in: \{reason}")
-      Stray => continue
+      }
+      Stray => {
+        conn.close()
+        continue
+      }
     }
   }
 }
@@ -194,13 +217,13 @@ async fn wait_for_code(
 async fn serve_callback(
   conn : @http.ServerConnection,
   oauth_state~ : String,
-  console_url~ : String,
 ) -> Callback {
-  defer conn.close()
   let request = conn.read_request()
   let outcome = parse_callback(request.path, oauth_state~)
   match outcome {
-    Granted(_) => respond_html(conn, 200, "OK", sign_in_done_page(console_url))
+    // The caller holds this request until the code exchange supplies the
+    // registered device id needed by the completion URL.
+    Granted(_) => ()
     Denied(_) => respond_html(conn, 200, "OK", SignInDeniedPage)
     Stray => respond_html(conn, 404, "Not Found", "not found")
   }
@@ -230,12 +253,10 @@ async fn respond_html(
 const SignInPageStyle : String = "<style>:root{color-scheme:light dark;--paper:#fbfbf9;--surface:#ffffff;--ink:#16171a;--ink-2:#5c5f66;--line:#e9e8e3;--accent:#2a55cc}@media (prefers-color-scheme:dark){:root{--paper:#16181d;--surface:#1c1f26;--ink:#e9ebf0;--ink-2:#a3a8b4;--line:#2c313b;--accent:#9db8ff}}html{background:var(--paper)}body{font-family:\"Geist Mono\",\"SF Mono\",ui-monospace,\"Cascadia Mono\",Menlo,Consolas,monospace;background:var(--surface);color:var(--ink);max-width:26rem;margin:6rem auto;padding:2rem;border:1px solid var(--line);border-radius:10px}h1{font-size:1.05rem;margin:0 0 .75rem}p{margin:.5rem 0;color:var(--ink-2);font-size:.85rem;line-height:1.6}a{color:var(--accent)}</style>"
 
 ///|
-/// The post-consent landing page: confirm the sign-in, then send the
-/// browser on to the console. The one-second pause covers the desktop's
-/// code-for-token exchange, so the console already lists the new device
-/// when it loads.
-fn sign_in_done_page(console_url : String) -> String {
-  let href = html_attr_escape(console_url)
+/// The post-consent landing page is sent only after the code exchange and
+/// local commit finish, so its URL can identify the newly registered device.
+fn sign_in_done_page(device_url : String) -> String {
+  let href = html_attr_escape(device_url)
   "<!doctype html><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"1;url=\{href}\"><title>Signed in</title>" +
   SignInPageStyle +
   "<body><h1>You're signed in</h1><p>Taking you to your console…</p><p><a href=\"\{href}\">Continue</a></p>"

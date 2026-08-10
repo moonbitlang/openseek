@@ -75,10 +75,6 @@ test "url derivations" {
     content="https://relay.example/console/?device=d_abc",
   )
   inspect(
-    console_url("https://relay.example/"),
-    content="https://relay.example/console/",
-  )
-  inspect(
     origin_from_relay_url("wss://relay.example/v1/tunnel"),
     content="https://relay.example",
   )
@@ -293,27 +289,34 @@ async test "the loopback listener takes the matching redirect and ignores strays
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
     let port = server.addr.port()
-    let waiter = group.spawn(() => {
-      wait_for_code(
-        server,
-        oauth_state="st",
-        console_url=console_url("https://relay.example/"),
-      )
-    })
+    let waiter = group.spawn(() => wait_for_code(server, oauth_state="st"))
     // A stray (forged state) answers 404 and keeps the wait alive.
     let (stray, _) = @http.get(
       "http://127.0.0.1:\{port}/cb?code=x&state=forged",
     )
     assert_true(stray.code == 404)
-    let (granted, granted_data) = @http.get(
-      "http://127.0.0.1:\{port}/cb?code=one-time&state=st",
+    let browser = group.spawn(() => {
+      @http.get("http://127.0.0.1:\{port}/cb?code=one-time&state=st")
+    })
+    let (code, conn) = waiter.wait()
+    defer conn.close()
+    assert_true(code == "one-time")
+    respond_html(
+      conn,
+      200,
+      "OK",
+      sign_in_done_page(
+        device_url("https://relay.example", "d_abc", app_version="development"),
+      ),
     )
+    let (granted, granted_data) = browser.wait()
     assert_true(granted.code == 200)
-    // The done page bounces the browser on to the console.
+    // Registration supplies the device id before the browser is released.
     assert_true(
-      granted_data.text().contains("url=https://relay.example/console/"),
+      granted_data
+      .text()
+      .contains("url=https://relay.example/console/?device=d_abc"),
     )
-    assert_true(waiter.wait() == "one-time")
     group.return_immediately(())
   })
 }
