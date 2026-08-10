@@ -2922,9 +2922,20 @@ fn update_msg(
               }
               Browser(id~) => {
                 let cmds : Array[@cmd.Cmd] = [browser_close_view(dispatch, id)]
+                // Closing owns the native view's teardown. Retire its cached
+                // placement at the same transition so the outer browser sync
+                // does not enqueue a hide behind the close; the ordered bridge
+                // lane would then try to hide a view the host already removed.
+                // Clearing `geo` also makes a successor Browser tab re-measure.
+                let browser_pane = if model.browser_pane.shown == Some(id) {
+                  { shown: None, rect: None, geo: None }
+                } else {
+                  model.browser_pane
+                }
                 let model = {
                   ..model,
                   preview: @preview.close_page(model.preview, id),
+                  browser_pane,
                 }
                 if was_active && next_file is Some(path) {
                   cmds.push(@fileeditor.request_viewer_remeasure())
@@ -15417,6 +15428,33 @@ test "the launcher popup and tab close both retire the shown view" {
   assert_true(closed.browser_pane.shown is None)
   assert_true(@preview.page(closed.preview, 1) is None)
   assert_true(closed.dock.tabs.is_empty())
+}
+
+///|
+test "closing a background Browser tab keeps the shown view placement" {
+  let dispatch = test_dispatch()
+  let (_, first) = update(
+    dispatch,
+    ExternalLinkClicked("http://127.0.0.1:5173/one"),
+    desktop_model(),
+  )
+  let (_, second) = update(
+    dispatch,
+    ExternalLinkClicked("http://127.0.0.1:5173/two"),
+    first,
+  )
+  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700 }
+  let (_, shown) = update(dispatch, BrowserPaneMeasured(rect~), second)
+  assert_true(shown.browser_pane.shown == Some(2))
+  let (_, closed) = update(
+    dispatch,
+    Dock(TabClosed(@dock.DockTab::Browser(id=1))),
+    shown,
+  )
+  assert_true(closed.browser_pane.shown == Some(2))
+  assert_true(closed.browser_pane.rect == Some(rect))
+  assert_true(@preview.page(closed.preview, 1) is None)
+  assert_true(@preview.page(closed.preview, 2) is Some(_))
 }
 
 ///|
