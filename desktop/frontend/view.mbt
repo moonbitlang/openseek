@@ -2985,26 +2985,6 @@ fn console_gate_view(
                 "Refresh",
               ),
             )
-            // A link opened under the wrong relay account cannot recover by
-            // refreshing that same account. The ordinary account controls are
-            // behind this gate, so keep sign-out reachable in this one state.
-            if selected is None {
-              card.push(
-                @html.button(
-                  class="secondary",
-                  disabled=console.busy,
-                  on_click=dispatch(Console(SignOutClicked)),
-                  if console.busy {
-                    "Signing out…"
-                  } else {
-                    "Sign out"
-                  },
-                ),
-              )
-              if console.notice is Some(notice) {
-                card.push(@html.p(notice))
-              }
-            }
           }
         }
     }
@@ -3015,6 +2995,25 @@ fn console_gate_view(
         "Open this page from Remote access in SeekMoon so the URL identifies one device.",
       ),
     )
+  }
+  // Every signed-in gate hides the sidebar's account controls. Keep the
+  // account escape hatch here once, independent of why device access is gated.
+  if console.auth is AuthSignedIn(..) {
+    card.push(
+      @html.button(
+        class="secondary",
+        disabled=console.busy,
+        on_click=dispatch(Console(SignOutClicked)),
+        if console.busy {
+          "Signing out…"
+        } else {
+          "Sign out"
+        },
+      ),
+    )
+    if console.notice is Some(notice) {
+      card.push(@html.p(notice))
+    }
   }
   @html.section(class="portal", [
     @html.div(class="portal-inner", [
