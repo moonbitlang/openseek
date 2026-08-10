@@ -245,6 +245,7 @@ priv struct FsChangedPayload {
   root : String
   baseline : Bool
   events : Array[FsEventPayload]
+  generation : String?
 }
 
 ///|
@@ -273,22 +274,25 @@ test "filesystem events keep their concrete kind and paths on the wire" {
 
 ///|
 /// A watcher that was accepted but could not attach, or later stopped while
-/// reading filesystem events. `root` identifies the watcher instance whose
-/// failure raced any later replacement.
+/// reading filesystem events. `root` reports its location; `generation`
+/// identifies the exact client request whose failure raced a replacement.
 priv struct FsWatchFailedPayload {
   root : String
   message : String
+  generation : String?
 } derive(ToJson)
 
 ///|
-test "filesystem watcher failures retain their root on the wire" {
+test "filesystem watcher failures retain root and generation on the wire" {
   let payload : FsWatchFailedPayload = {
     root: "/work/project",
     message: "File watching stopped: too many open files",
+    generation: Some("page-a:7"),
   }
   assert_eq(ToJson::to_json(payload), {
     "root": "/work/project",
     "message": "File watching stopped: too many open files",
+    "generation": "page-a:7",
   })
 }
 

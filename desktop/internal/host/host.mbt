@@ -158,11 +158,18 @@ pub async fn HostConnection::run(
               path: event.path,
               old_path: event.old_path,
             }),
+            generation: push.generation,
           }),
         )
       },
       async fn(failure) {
-        emit(FsWatchFailed({ root: failure.root, message: failure.message }))
+        emit(
+          FsWatchFailed({
+            root: failure.root,
+            message: failure.message,
+            generation: failure.generation,
+          }),
+        )
       },
     )
   })

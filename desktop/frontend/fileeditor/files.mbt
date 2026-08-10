@@ -268,7 +268,7 @@ fn stat_files(
 fn watch_workspace(
   dispatch : @cmd.Emit[Msg],
   channel~ : @interop.ChannelId,
-  epoch : Int,
+  generation : String,
   watched : WatchedPaths?,
 ) -> @cmd.Cmd {
   if watched is Some(watched) && !@resource.belongs_to(watched.root, channel) {
@@ -292,6 +292,7 @@ fn watch_workspace(
             path: watched.root.path,
             files: Some(watched.files.map(path => path.0)),
             directories: Some(watched.directories.map(path => path.0)),
+            generation: Some(generation),
           }) catch {
             error => {
               scheduler.add(
@@ -299,7 +300,7 @@ fn watch_workspace(
                   FileWatchFailed(
                     channel=watched.owner.channel,
                     root=watched.root,
-                    epoch=Some(epoch),
+                    generation=Some(generation),
                     message="File watching failed: \{@interop.bridge_error_text(error)}",
                   ),
                 ),

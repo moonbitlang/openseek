@@ -1135,11 +1135,11 @@ priv struct Model {
   // This lives above individual conversations so pruning, archive removal,
   // and reopening cannot reuse a token that an older host reply still carries.
   transcript_request_generation : Int
-  // A page-lifetime namespace plus monotonic counter allocate globally unique
-  // submission ids without making `update` read randomness. Different windows
-  // get independent timestamp/random namespaces; replaying the same model is
-  // deterministic.
-  submission_namespace : String
+  // A page-lifetime namespace lets independent monotonic counters become
+  // globally unique identities without making `update` read randomness.
+  // Different windows get independent timestamp/random namespaces; replaying
+  // the same model remains deterministic.
+  page_namespace : String
   submission_sequence : Int
   // Every conversation with live client state this app run: the active one,
   // those still running in the background, and those visited and kept for an
@@ -2183,7 +2183,7 @@ fn initial_model() -> Model {
     active_session: "",
     loading_conversation: None,
     transcript_request_generation: 0,
-    submission_namespace: generated_session_id() + "-submission",
+    page_namespace: generated_session_id(),
     submission_sequence: 0,
     conversations: [],
     workspace_picker: None,
@@ -3087,7 +3087,7 @@ fn Model::allocate_submission_id(self : Model) -> (Model, String) {
   let sequence = self.submission_sequence + 1
   (
     { ..self, submission_sequence: sequence },
-    self.submission_namespace + "-" + sequence.to_string(),
+    self.page_namespace + "-submission-" + sequence.to_string(),
   )
 }
 

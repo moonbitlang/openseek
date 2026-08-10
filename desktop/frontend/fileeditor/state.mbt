@@ -246,9 +246,9 @@ pub(all) struct State {
   // across same-owner placement changes. Owner plus this generation rejects an
   // old A→B→A reply or one from an earlier checkout incarnation.
   changes_generation : Int
-  // Placement/conversation epoch carried by filesystem replies. Advancing
-  // this value on either boundary rejects reads, listings, stats, and watcher
-  // failures that outlived the checkout they addressed.
+  // Placement/conversation epoch carried by filesystem request replies.
+  // Advancing this value on either boundary rejects reads, listings, and
+  // stats that outlived the checkout they addressed.
   request_epoch : Int
   // Last settled Git comparison identity (the task base, or HEAD fallback).
   // The legacy field name stays internal; `changes_head_known` distinguishes
@@ -284,6 +284,10 @@ pub(all) struct State {
   // the full configuration makes opening/closing a tab or expanding/collapsing
   // a directory replace the watch even when the conversation did not change.
   watching : WatchedPaths?
+  // Monotonic counter of the most recently requested watcher configuration.
+  // Combined with `Ctx.watch_namespace`, it advances on every replacement or
+  // park independently of root and filesystem request epochs.
+  watch_generation : Int
   // A watcher can fail after `fs.watch` has already replied. Keep that
   // failure separate from directory/file requests so a later successful
   // directory listing does not hide the loss of live updates.
@@ -329,6 +333,7 @@ pub fn State::empty() -> State {
     placement_parked: false,
     explorer_was_visible: false,
     watching: None,
+    watch_generation: 0,
     watch_error: None,
     expanded: [],
     loading: [],
@@ -380,6 +385,9 @@ pub(all) struct Ctx {
   owner : @interop.ConversationKey
   // The current placement incarnation for filesystem request/reply fencing.
   request_epoch : Int
+  // Page-unique prefix for watcher identities. The native watcher outlives a
+  // page reload, so the counter alone is not enough to prevent reuse.
+  watch_namespace : String
   root : @common.Uri?
   workspace : @common.Uri?
   // `None` while this connection has not loaded the conversation's placement.
@@ -520,16 +528,22 @@ pub(all) enum Msg {
     message~ : String
   )
   // An `fs.watch` request rejection or an asynchronous watcher failure. The
-  // channel and absolute root fence both paths against watcher replacement.
+  // generation identifies the exact watcher configuration that produced it;
+  // `None` is an older host's unowned push and cannot safely change state.
   FileWatchFailed(
     channel~ : @interop.ChannelId,
     root~ : @common.Uri,
-    epoch~ : Int?,
+    generation~ : String?,
     message~ : String
   )
   // A new watcher sends `changes=None` once it is attached, requesting a full
   // baseline reconciliation. Later pushes contain the exact debounced events.
-  FsChanged(root~ : @common.Uri, changes~ : Array[FileChange]?)
+  // As with failures, an older host's missing generation is ignored.
+  FsChanged(
+    root~ : @common.Uri,
+    generation~ : String?,
+    changes~ : Array[FileChange]?
+  )
   // The conversation's agent run finished: the workspace has settled, so
   // re-check the active MoonBit file's module. The pruned watcher cannot see
   // edits outside open files and listed directories, and an agent turn

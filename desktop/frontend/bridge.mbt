@@ -71,7 +71,12 @@ fn bridge_msg(
         }
         Some(decoded)
       }
-      Some(FromDevice(channel, FilePanel(FsChanged(root~, changes~))))
+      Some(
+        FromDevice(
+          channel,
+          FilePanel(FsChanged(root~, generation=payload.generation, changes~)),
+        ),
+      )
     }
     FsWatchFailed(payload) => {
       guard @resource.of_path(channel, payload.root) is Some(root) else {
@@ -84,7 +89,7 @@ fn bridge_msg(
             FileWatchFailed(
               channel~,
               root~,
-              epoch=None,
+              generation=payload.generation,
               message=payload.message,
             ),
           ),
@@ -364,10 +369,14 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
         root: "/work/project",
         baseline: true,
         events: [],
+        generation: Some("page-a:7"),
       }),
     )
     is Some(
-      FromDevice(Remote("d1"), FilePanel(FsChanged(root=_, changes=None)))
+      FromDevice(
+        Remote("d1"),
+        FilePanel(FsChanged(root=_, generation=Some("page-a:7"), changes=None))
+      )
     ),
   )
   assert_true(
@@ -384,6 +393,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
             old_path: Some("src/old.mbt"),
           },
         ],
+        generation: Some("page-a:7"),
       }),
     )
     is Some(
@@ -392,6 +402,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
         FilePanel(
           FsChanged(
             root=_,
+            generation=Some("page-a:7"),
             changes=Some(
               [
                 Modified(Relative("src/main.mbt")),
@@ -413,6 +424,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
       @protocol.Notification::FsWatchFailed({
         root: "/work/project",
         message: "File watching stopped",
+        generation: Some("page-a:7"),
       }),
     )
     is Some(
@@ -422,7 +434,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
           FileWatchFailed(
             channel=Remote("d1"),
             root=_,
-            epoch=None,
+            generation=Some("page-a:7"),
             message="File watching stopped"
           )
         )

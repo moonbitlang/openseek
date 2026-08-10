@@ -32,6 +32,10 @@ priv struct FsWatchActor {
 priv struct FsWatchTarget {
   root : @pathx.Absolute
   interest : WatchInterest
+  // The client's identity for this exact configuration. It follows every
+  // asynchronous push so a replaced watcher cannot report against its
+  // successor, even when both use the same root.
+  generation : String?
 }
 
 ///|
@@ -193,7 +197,11 @@ async fn FsWatchRequest::apply(
         }
       }
       reply.put(None)
-      Some({ root: root.absolute, interest: WatchInterest(payload) })
+      Some({
+        root: root.absolute,
+        interest: WatchInterest(payload),
+        generation: payload.generation,
+      })
     }
   }
 }
@@ -210,13 +218,19 @@ async fn FsWatchTarget::watch(
     self.interest.ignores(@pathx.Relative(path).normalize())
   })
   defer watcher.close()
-  emit({ root: self.root.resource_path(), baseline: true, events: [] })
+  emit({
+    root: self.root.resource_path(),
+    baseline: true,
+    events: [],
+    generation: self.generation,
+  })
   for ;; {
     let events = watcher.wait()
     emit({
       root: self.root.resource_path(),
       baseline: false,
       events: events.map(FsEventPayload::from_event),
+      generation: self.generation,
     })
   }
 }
@@ -264,7 +278,11 @@ async fn FsWatchActor::run(
                 "root": target.root.to_string(),
                 "error": "\{error}",
               }
-            emit_failed({ root: target.root.resource_path(), message })
+            emit_failed({
+              root: target.root.resource_path(),
+              message,
+              generation: target.generation,
+            })
           }
         }
       })
@@ -284,6 +302,7 @@ test "watch interest retains selected files, listed children, and ancestors" {
     path: "/work/project",
     files: Some(["src/main.mbt", "node_modules/pkg/index.js"]),
     directories: Some(["", "docs"]),
+    generation: Some("page-a:7"),
   }
   let interest = WatchInterest(payload)
   // Root rows and one level under an expanded directory stay observable.
@@ -308,6 +327,7 @@ test "legacy watch payloads retain the recursive blacklist" {
     path: "/work/project",
     files: None,
     directories: None,
+    generation: None,
   }
   let interest = WatchInterest(payload)
   assert_true(interest.legacy_full_tree)
@@ -336,6 +356,25 @@ test "host connections keep filesystem watch request mailboxes isolated" {
 }
 
 ///|
+async test "watch requests retain their notification generation" {
+  let reply : @async.Queue[String?] = Queue(kind=Blocking(1))
+  let request = Watch(
+    {
+      path: "/work/project",
+      files: Some([]),
+      directories: Some([]),
+      generation: Some("page-a:9"),
+    },
+    reply~,
+  )
+  guard request.apply(None) is Some(target) else {
+    fail("valid watch request did not produce a target")
+  }
+  assert_eq(target.generation, Some("page-a:9"))
+  assert_true(reply.get() is None)
+}
+
+///|
 test "filesystem payloads carry absolute target paths" {
   let payload : StatFilesPayload = @json.from_json({
     "paths": ["/work/project/a.mbt", "/work/project/src/b.mbt"],
@@ -347,13 +386,16 @@ test "filesystem payloads carry absolute target paths" {
     "path": "/work/project",
     "files": ["src/main.mbt"],
     "directories": ["", "src"],
+    "generation": "page-a:7",
   })
   assert_true(selected.files is Some(["src/main.mbt"]))
   assert_true(selected.directories is Some(["", "src"]))
+  assert_eq(selected.generation, Some("page-a:7"))
   let bare : WatchWorkspacePayload = @json.from_json({ "path": "/work/project" })
   assert_eq(bare.path, "/work/project")
   assert_true(bare.files is None)
   assert_true(bare.directories is None)
+  assert_true(bare.generation is None)
 }
 
 ///|

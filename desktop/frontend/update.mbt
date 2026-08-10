@@ -688,15 +688,16 @@ fn open_editor_at(
     {
       ..@fileeditor.State::empty(),
       owner: Some(owner),
-      // Mirror fileeditor.sync's re-root invariants. In particular, the
-      // generation must outlive an A→B→A jump so an older A reply cannot
-      // collide with the next request after this eager re-root.
+      // Mirror fileeditor.sync's re-root invariants. In particular, request
+      // and watcher generations must outlive an A→B→A jump so older A work
+      // cannot collide with the next request or watch after this eager re-root.
       tree_open: previous_panel.tree_open,
       explorer_mode: previous_panel.explorer_mode,
       review_view_mode: previous_panel.review_view_mode,
       changes_generation: previous_panel.changes_generation,
       request_epoch: previous_panel.request_epoch + 1,
       review_generation: previous_panel.review_generation,
+      watch_generation: previous_panel.watch_generation,
       // Preserve the old host configuration until the post-dispatch sync can
       // explicitly retire or replace it.
       watching: previous_panel.watching,
@@ -1089,6 +1090,10 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // without ever treating the project root as a fallback checkout.
     owner: { channel: model.focused, session: conv.session_id },
     request_epoch: model.file_panel.request_epoch,
+    // The native bridge and its watcher survive a page reload. Namespace the
+    // panel's monotonic counter with this page's existing random identity so
+    // a reloaded frontend cannot reuse the outgoing page's watcher token.
+    watch_namespace: model.page_namespace + "-watch",
     root: model.conversation_root(conv),
     workspace: conv.workspace,
     checkout,
@@ -13865,6 +13870,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
       explorer_mode: @fileeditor.ExplorerChanges,
       review_view_mode: @fileeditor.ReviewUnifiedDiff,
       changes_generation: 7,
+      watch_generation: 11,
     },
   }
   let (_, next) = update(
@@ -13883,6 +13889,9 @@ test "chip jumps relativize legacy absolute paths against the roots" {
   // The eager re-root retains 7. The jump keeps the explorer hidden while the
   // file is active, so Changes waits until the pane is shown before refreshing.
   assert_true(next.file_panel.changes_generation == 7)
+  // The fresh watch spends the next page-lifetime identity; resetting the
+  // eager panel to zero would let an older generation 1 push collide here.
+  assert_eq(next.file_panel.watch_generation, 12)
   // Before the first run reports cwd, the attached workspace serves as root.
   let model = test_model()
     .replace_conversation({ ..test_conversation(), workspace: Some(workspace) })
