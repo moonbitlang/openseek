@@ -64,6 +64,18 @@ fn main {
     // WebSocket instead (docs/remote-protocol.md).
     let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760)
       .debug_level(1)
+      // Proton keeps its standard App/Edit/Window menus around custom menus,
+      // so adding Developer does not remove native editing shortcuts.
+      .menu(
+        @proton.MenuBar::new(menus=[
+          @proton.Menu::new("Developer", items=[
+            @proton.MenuItem::command(
+              @commands.app_open_devtools.name(),
+              "Open Developer Tools",
+            ),
+          ]),
+        ]),
+      )
       // Both command extensions are deliberately exposed to the configured
       // entry page; registration alone does not grant renderer access.
       .expose(@extension.openseek_extension(state, bridge, views))

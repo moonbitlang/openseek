@@ -400,6 +400,12 @@ pub let browser_reload : Command[
 ] = Command("browser.reload")
 
 ///|
+pub let app_open_devtools : Command[
+  @protocol.EmptyPayload,
+  @protocol.EmptyReply,
+] = Command("app.open_devtools")
+
+///|
 pub let browser_set_bounds : Command[
   @protocol.BrowserBoundsPayload,
   @protocol.EmptyReply,

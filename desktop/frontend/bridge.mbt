@@ -197,18 +197,20 @@ fn session_changed_msg(payload : @protocol.SessionChangedPayload) -> DeviceMsg? 
 let bridge_events_wired : Ref[Bool] = Ref(false)
 
 ///|
-/// Both bridge handles, present only when the surface the frontend relies
+/// All bridge handles, present only when the surface the frontend relies
 /// on is fully injected.
-fn bridge_handles() -> (@js.Value, @js.Value)? {
+fn bridge_handles() -> (@js.Value, @js.Value, @js.Value)? {
   guard @interop.openseek_api() is Some(api) &&
     @interop.moonbit_bridge_root() is Some(root) &&
     @interop.js_prop(root, "events") is Some(events) &&
+    @interop.js_prop(root, "app") is Some(app) &&
     @interop.js_prop(api, "host.connect") is Some(_) &&
     @interop.js_prop(api, "agent.start") is Some(_) &&
-    @interop.js_prop(events, "on") is Some(_) else {
+    @interop.js_prop(events, "on") is Some(_) &&
+    @interop.js_prop(app, "on") is Some(_) else {
     return None
   }
-  Some((api, events))
+  Some((api, events, app))
 }
 
 ///|
@@ -218,7 +220,7 @@ fn bridge_handles() -> (@js.Value, @js.Value)? {
 /// declared unavailable.
 fn install_proton_bridge(dispatch : @cmd.Emit[Msg], attempt : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    guard bridge_handles() is Some((api, events)) else {
+    guard bridge_handles() is Some((api, events, app)) else {
       if attempt > 120 {
         scheduler.add(
           dispatch(FromDevice(Local, BridgeUnavailable("Bridge unavailable"))),
@@ -232,7 +234,7 @@ fn install_proton_bridge(dispatch : @cmd.Emit[Msg], attempt : Int) -> @cmd.Cmd {
     }
     if !bridge_events_wired.val {
       bridge_events_wired.val = true
-      wire_proton_events(scheduler, dispatch, events)
+      wire_proton_events(scheduler, dispatch, events, app)
       open_host_connection(scheduler, dispatch, api)
     }
   })
@@ -467,6 +469,7 @@ fn wire_proton_events(
   scheduler : &@cmd.Scheduler,
   dispatch : @cmd.Emit[Msg],
   events : @js.Value,
+  app : @js.Value,
 ) -> Unit {
   fn on(name : String, decode : (Map[String, Json]) -> Msg?) -> Unit {
     let handler = (event : @js.Value) => {
@@ -495,6 +498,22 @@ fn wire_proton_events(
   // `NotificationKind` because the shared wire catalog must never carry it
   // to a relay client, which has no native views.
   on("openseek.browser.event", browser_event_msg)
+  // Proton forwards native menu commands as application events.
+  // Application events use `__MoonBit__.app.on`; the shared event hub above
+  // is reserved for extension events. Ignore unknown ids so another menu
+  // item cannot accidentally map to developer tools.
+  let menu_handler = (event : @js.Value) => {
+    guard event_payload(event) is Some(payload) &&
+      @jsonx.json_text(payload, "command_id") ==
+      Some(@commands.app_open_devtools.name()) else {
+      return
+    }
+    scheduler.add(dispatch(AppDeveloperToolsRequested))
+  }
+  let _ : @js.Value = app.apply_with_string("on", [
+    @js.Value::cast_from("menu.command"),
+    @js.Value::cast_from(menu_handler),
+  ])
   // Emitted by the notification extension when the user clicks a system
   // notification; the payload is the run id this frontend stamped on it.
   // Desktop-only by nature.

@@ -27,6 +27,8 @@ pub let app_launch : Command[@protocol.LaunchAppPayload, @protocol.LaunchAppRepl
 
 pub let app_list : Command[@protocol.EmptyPayload, @protocol.ListAppsReply]
 
+pub let app_open_devtools : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
+
 pub let auth_cancel : Command[@protocol.EmptyPayload, @protocol.AuthStatusPayload]
 
 pub let auth_connect : Command[@protocol.EmptyPayload, @protocol.AuthStatusPayload]

@@ -1599,6 +1599,9 @@ priv enum Msg {
   BrowserForward
   BrowserReload
   BrowserOpenExternal
+  // The native Developer menu always inspects the SeekMoon frontend page.
+  // Embedded Browser views can receive their own explicit action later.
+  AppDeveloperToolsRequested
   // The browser pane's on-screen rectangle, reported after a render by the
   // measurer or the pane's ResizeObserver; drives view bounds/visibility.
   BrowserPaneMeasured(rect~ : @preview.Rect)

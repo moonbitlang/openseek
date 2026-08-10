@@ -3038,6 +3038,16 @@ fn update_msg(
       }
       (open_external_link(dispatch, url), model)
     }
+    AppDeveloperToolsRequested =>
+      (
+        browser_op(
+          dispatch,
+          @commands.app_open_devtools,
+          @protocol.NoPayload,
+          quiet=false,
+        ),
+        model,
+      )
     BrowserPaneMeasured(rect~) => {
       // A rectangle for a view that already left the screen (or a zero
       // rectangle from the observer watching a hidden pane) is stale.

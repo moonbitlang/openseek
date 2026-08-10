@@ -193,6 +193,15 @@ fn BrowserViews::reload(
 }
 
 ///|
+/// Open Chromium's developer tools for the SeekMoon frontend page itself.
+fn BrowserViews::open_app_devtools(
+  self : BrowserViews,
+) -> @protocol.EmptyReply raise {
+  self.attached_window().browser().open_devtools()
+  Acknowledged
+}
+
+///|
 fn BrowserViews::set_bounds(
   self : BrowserViews,
   payload : @protocol.BrowserBoundsPayload,
@@ -254,6 +263,9 @@ fn browser_endpoints(views : BrowserViews) -> Array[@endpoint.Endpoint] {
     @endpoint.Endpoint::window(@commands.browser_reload, (_, payload) => {
       views.reload(payload)
     }),
+    @endpoint.Endpoint::window(@commands.app_open_devtools, (_, _) => {
+      views.open_app_devtools()
+    }),
     @endpoint.Endpoint::window(@commands.browser_set_bounds, (_, payload) => {
       views.set_bounds(payload)
     }),
@@ -291,6 +303,7 @@ test "browser ops refuse to run without a window; close tolerates it" {
   assert_true(raises(() => views.back({ id: 1 })))
   assert_true(raises(() => views.forward({ id: 1 })))
   assert_true(raises(() => views.reload({ id: 1 })))
+  assert_true(raises(() => views.open_app_devtools()))
   assert_true(
     raises(() => views.set_bounds({ id: 1, x: 0, y: 0, width: 10, height: 10 })),
   )
