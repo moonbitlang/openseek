@@ -460,6 +460,34 @@ fn Model::conversation_root(self : Model, conv : Conversation) -> @common.Uri? {
 }
 
 ///|
+/// Adopt the cwd carried by a `session.load` snapshot only while it still
+/// describes this conversation's current placement. A scratch conversation
+/// has no independent registry mapping, so its snapshot is the durable source
+/// of that root. Project conversations must still resolve to the same
+/// workspace or concrete worktree path; otherwise a load issued before a
+/// `worktree.changed` removal could restore the deleted checkout.
+fn Model::adopt_session_cwd(
+  self : Model,
+  conv : Conversation,
+  restored : @common.Uri?,
+) -> @common.Uri? {
+  guard restored is Some(root) else { return conv.cwd }
+  guard conv.workspace is Some(workspace) else { return Some(root) }
+  match self.checkout_placement(conv) {
+    Some(@interop.WorkspaceRoot) if root == workspace => Some(root)
+    Some(@interop.Worktree(_)) =>
+      if self.device_state(conv.device) is Some(dev) &&
+        worktree_row_for(dev, conv.workspace, conv.session_id) is Some(row) &&
+        row.path == Some(root) {
+        Some(root)
+      } else {
+        conv.cwd
+      }
+    _ => conv.cwd
+  }
+}
+
+///|
 fn DeviceState::with_worktrees(
   self : DeviceState,
   workspace : @common.Uri,

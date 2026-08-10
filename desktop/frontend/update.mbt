@@ -464,9 +464,10 @@ fn apply_session_snapshot(
     goal_markers~,
   )
   // A resumed run has no live `Started` event to replay. Restore the host's
-  // derived working directory with the durable snapshot; an older host that
-  // omits it must not erase a cwd already learned from a newer Started.
-  let conv = { ..conv, cwd: if cwd is Some(_) { cwd } else { conv.cwd } }
+  // derived working directory with the durable snapshot, but only if the
+  // current worktree registry still maps this conversation to that root. An
+  // older host that omits it must not erase a cwd learned from a newer Started.
+  let conv = { ..conv, cwd: model.adopt_session_cwd(conv, cwd) }
   let mut next = model.replace_conversation(conv)
   let commands : Array[@cmd.Cmd] = []
   let owner : @interop.ConversationKey = { channel, session }
@@ -7252,6 +7253,71 @@ test "completed scratch session load restores cwd before another Started" {
   assert_eq(restored.active().cwd, Some(cwd))
   assert_eq(restored.conversation_root(restored.active()), Some(cwd))
   assert_eq(file_ctx(restored).root, Some(cwd))
+}
+
+///|
+test "worktree removal fences an older session cwd snapshot" {
+  let dispatch = test_dispatch()
+  let workspace = @interop.ChannelId::Local.test_resource("/proj")
+  let checkout = @interop.ChannelId::Local.test_resource("/proj/.worktrees/wt")
+  let model = test_model()
+    .replace_conversation({
+      ..test_conversation(),
+      workspace: Some(workspace),
+      worktree: Some("wt"),
+      cwd: Some(checkout),
+      sync: test_reloading([]),
+    })
+    .with_dev(dev => {
+      ..dev,
+      workspaces: [workspace],
+      worktrees: [
+        {
+          workspace,
+          rows: [
+            {
+              name: "wt",
+              session: Some("desktop-test"),
+              path: Some(checkout),
+              present: true,
+            },
+          ],
+          generation: 1,
+        },
+      ],
+      worktrees_request_generation: 1,
+    })
+  // The registry broadcast wins first and turns this into a workspace-root
+  // conversation. Its cleared cwd is part of that same placement change.
+  let (_, unbound) = update_dev(
+    dispatch,
+    WorktreesChanged([], workspace~),
+    model,
+  )
+  assert_true(unbound.active().worktree is None)
+  assert_true(unbound.active().cwd is None)
+  assert_true(
+    unbound.checkout_placement(unbound.active()) is Some(@interop.WorkspaceRoot),
+  )
+  // The already-issued read may still return a valid transcript, but the cwd
+  // it captured before that broadcast must not prove its own old placement.
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionRefreshed(
+      session="desktop-test",
+      cwd=Some(checkout),
+      items=[{ kind: User, content: "current snapshot", ts: None }],
+      watermark=1,
+      event_boundaries=[],
+      goal=None,
+      goal_markers=[],
+      generation=1,
+    ),
+    unbound,
+  )
+  inspect(loaded.active().messages[0].content, content="current snapshot")
+  assert_true(loaded.active().cwd is None)
+  assert_eq(loaded.conversation_root(loaded.active()), Some(workspace))
 }
 
 ///|
