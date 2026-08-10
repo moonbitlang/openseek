@@ -197,30 +197,23 @@ fn session_changed_msg(payload : @protocol.SessionChangedPayload) -> DeviceMsg? 
 let bridge_events_wired : Ref[Bool] = Ref(false)
 
 ///|
-/// All bridge handles, present only when the surface the frontend relies
-/// on is fully injected.
-fn bridge_handles() -> (@js.Value, @js.Value, @js.Value)? {
-  guard @interop.openseek_api() is Some(api) &&
-    @interop.moonbit_bridge_root() is Some(root) &&
-    @interop.js_prop(root, "events") is Some(events) &&
-    @interop.js_prop(root, "app") is Some(app) &&
-    @interop.js_prop(api, "host.connect") is Some(_) &&
-    @interop.js_prop(api, "agent.start") is Some(_) &&
-    @interop.js_prop(events, "on") is Some(_) &&
-    @interop.js_prop(app, "on") is Some(_) else {
-    return None
-  }
-  Some((api, events, app))
-}
-
-///|
 /// Wait for proton to inject the bridge (it loads alongside this bundle),
 /// wire the notification events into messages once, and open the host
 /// connection. The 25ms retries add up to ~3 seconds before the bridge is
 /// declared unavailable.
 fn install_proton_bridge(dispatch : @cmd.Emit[Msg], attempt : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    guard bridge_handles() is Some((api, events, app)) else {
+    // The request API and the two event actors are separate injected objects.
+    // Do not wire a partially initialized page; retry until every method used
+    // below is available.
+    guard @interop.openseek_api() is Some(request_api) &&
+      @interop.moonbit_bridge_root() is Some(root) &&
+      @interop.js_prop(root, "events") is Some(extension_events) &&
+      @interop.js_prop(root, "app") is Some(application_events) &&
+      @interop.js_prop(request_api, "host.connect") is Some(_) &&
+      @interop.js_prop(request_api, "agent.start") is Some(_) &&
+      @interop.js_prop(extension_events, "on") is Some(_) &&
+      @interop.js_prop(application_events, "on") is Some(_) else {
       if attempt > 120 {
         scheduler.add(
           dispatch(FromDevice(Local, BridgeUnavailable("Bridge unavailable"))),
@@ -234,8 +227,10 @@ fn install_proton_bridge(dispatch : @cmd.Emit[Msg], attempt : Int) -> @cmd.Cmd {
     }
     if !bridge_events_wired.val {
       bridge_events_wired.val = true
-      wire_proton_events(scheduler, dispatch, events, app)
-      open_host_connection(scheduler, dispatch, api)
+      wire_proton_events(
+        scheduler, dispatch, extension_events, application_events,
+      )
+      open_host_connection(scheduler, dispatch, request_api)
     }
   })
 }
@@ -468,8 +463,8 @@ test "terminal pushes retain the channel that owns their host session" {
 fn wire_proton_events(
   scheduler : &@cmd.Scheduler,
   dispatch : @cmd.Emit[Msg],
-  events : @js.Value,
-  app : @js.Value,
+  extension_events : @js.Value,
+  application_events : @js.Value,
 ) -> Unit {
   fn on(name : String, decode : (Map[String, Json]) -> Msg?) -> Unit {
     let handler = (event : @js.Value) => {
@@ -477,7 +472,7 @@ fn wire_proton_events(
       guard decode(payload) is Some(msg) else { return }
       scheduler.add(dispatch(msg))
     }
-    let _ : @js.Value = events.apply_with_string("on", [
+    let _ : @js.Value = extension_events.apply_with_string("on", [
       @js.Value::cast_from(name),
       @js.Value::cast_from(handler),
     ])
@@ -510,7 +505,7 @@ fn wire_proton_events(
     }
     scheduler.add(dispatch(AppDeveloperToolsRequested))
   }
-  let _ : @js.Value = app.apply_with_string("on", [
+  let _ : @js.Value = application_events.apply_with_string("on", [
     @js.Value::cast_from("menu.command"),
     @js.Value::cast_from(menu_handler),
   ])
