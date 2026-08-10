@@ -934,7 +934,7 @@ fn tool_call_view(
     @html.text("→ "),
     @html.strong(call.name),
   ]
-  if briefs.get(call.id) is Some(brief) && !brief.trim().is_empty() {
+  if briefs.get(call.id) is Some(brief) {
     name_row.push(@html.span(class="tool-call-brief") <| " · \{brief}")
   }
   let plan_steps = plan_call_steps(call)
@@ -1193,26 +1193,13 @@ fn tool_call_briefs(session : @agent_session.Session) -> Map[String, String] {
   let briefs : Map[String, String] = Map([])
   for event in session.events() {
     if event.item() is Tool(result) {
-      if call_brief_display(result.brief(), result.is_error()) is Some(display) {
+      if @brief_display.call_text(result.brief(), result.is_error())
+        is Some(display) {
         briefs.set(result.tool_call_id(), display)
       }
     }
   }
   briefs
-}
-
-///|
-/// The folded-call brief text: the tool's one-line brief (if any) plus a red
-/// flag when its result errored, so a failed call (e.g. a missing-file `read`)
-/// stands out in the assistant's action list without expanding it. `None` when
-/// there is nothing to show (a successful call with no brief).
-fn call_brief_display(brief : String?, is_error : Bool) -> String? {
-  match (brief, is_error) {
-    (None, false) => None
-    (None, true) => Some("🚩")
-    (Some(text), false) => Some(text)
-    (Some(text), true) => Some("\{text} 🚩")
-  }
 }
 
 ///|
@@ -1636,7 +1623,8 @@ fn model_tool_call_briefs(
   for message in messages {
     guard message.role is Tool(id) else { continue }
     if model_shown_result(message, tool_results) is Some(result) &&
-      call_brief_display(result.brief(), result.is_error()) is Some(display) {
+      @brief_display.call_text(result.brief(), result.is_error())
+      is Some(display) {
       briefs.set(id, display)
     }
   }

@@ -1,0 +1,15 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek_protocol/brief_display"
+
+// Values
+pub fn call_text(String?, Bool) -> String?
+
+pub fn text(String?) -> String?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

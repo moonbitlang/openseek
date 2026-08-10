@@ -1032,11 +1032,8 @@ fn tool_activity_summary(items : Array[@transcript.TranscriptItem]) -> String {
   for item in items {
     guard item.kind is Tool(brief~, ..) else { continue }
     tools = tools + 1
-    if brief is Some(brief) {
-      let brief = brief.trim()
-      if !brief.is_empty() {
-        briefs.push(brief.to_owned())
-      }
+    if @brief_display.text(brief) is Some(brief) {
+      briefs.push(brief)
     }
   }
   if briefs.is_empty() {
@@ -1205,13 +1202,7 @@ fn tool_call_view(item : @transcript.TranscriptItem) -> @html.Html {
   guard item.kind is Tool(name~, arguments~, is_error~, brief~, ..) else {
     return @html.text("")
   }
-  let label = capitalize(
-    if brief is Some(brief) && !brief.trim().is_empty() {
-      brief
-    } else {
-      name
-    },
-  )
+  let label = capitalize(@brief_display.text(brief).unwrap_or(name))
   let error_class = if is_error { " error" } else { "" }
   let body : Array[@html.Html] = []
   // A `plan` call shows the checklist it recorded rather than its JSON, in

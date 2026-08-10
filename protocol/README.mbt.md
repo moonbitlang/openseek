@@ -11,6 +11,7 @@ portable:
 | Package | Contents | Targets | Deps |
 | --- | --- | --- | --- |
 | `bobzhang/openseek_protocol` | `Event`, `Usage`, `Command`, `SteerKind`, `to_json`, `parse` | js, wasm, wasm-gc, native | `core/json` |
+| `bobzhang/openseek_protocol/brief_display` | Canonical nonblank tool-result brief text and inline failure form | js, wasm, wasm-gc, native | none |
 | `bobzhang/openseek_protocol/emit` | `emit` (level + `to_json` + log) | native | `xlog`, above |
 
 Only the *writer* needs `@xlog`, which is native-only. Keeping it in its own
@@ -22,6 +23,11 @@ Being a module rather than a package is what lets a *different* module consume
 it: `desktop/moon.work` can list `"../protocol"` as a member and bind the
 working tree (a `moon.work` member wins over the registry, so there is no stale
 mooncakes snapshot).
+
+The small `brief_display` leaf is shared presentation policy rather than DOM:
+it normalizes the optional `ToolResult.brief` and owns the inline failure-marker
+form. The visualizer and desktop transcript keep separate layouts while using
+the same rules for whether brief text is meaningful and how it is padded.
 
 The stream doubles as the process log. `emit` routes through `@xlog`, whose
 handler writes one `Entry` per line and **hoists** structured fields to the top
