@@ -31,20 +31,27 @@ fn session_snapshot_command(
 /// nothing of the previous device's host bleeds through. The active
 /// conversation is the caller's to place afterwards (an activation or a
 /// rotation); until it does, nothing is selected. A no-op when focus is
-/// already there — or when the page does not hold the channel.
+/// already there — or when the page does not hold the channel. A browser
+/// console may select its inert `Local` default while its required remote
+/// device is unavailable; that transition only clears device-scoped state.
 fn focus_channel(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   channel : @interop.ChannelId,
 ) -> (@cmd.Cmd, Model) {
-  guard channel != model.focused && model.device_state(channel) is Some(dev) else {
-    return (@cmd.none, model)
-  }
-  (
+  guard channel != model.focused else { return (@cmd.none, model) }
+  let focus_cmd = if model.device_state(channel) is Some(dev) {
     @cmd.batch([
       fetch_host_settings(dispatch, channel, dev.connection_generation),
       fetch_installed_skills(dispatch, channel),
-    ]),
+    ])
+  } else if channel == @interop.ChannelId::Local && model.console is Some(_) {
+    @cmd.none
+  } else {
+    return (@cmd.none, model)
+  }
+  (
+    focus_cmd,
     {
       ..model.clear_host_settings(),
       focused: channel,
@@ -2402,7 +2409,11 @@ fn update_msg(
       // that project, and the workspace stays active for the next one. A new
       // loose chat unfolds the Chats section so its row is visible; a new
       // workspace chat unfolds the Workspaces section for the same reason.
-      // On the console, another device's ＋ first moves focus there.
+      // The explicit channel lets this handler move device selection before
+      // creating the chat. Current sidebar rows pass the selected channel.
+      guard model.device_state(channel) is Some(_) else {
+        return (@cmd.none, model)
+      }
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
       (
         @cmd.batch([focus_cmd, rotate_session(dispatch, channel)]),
@@ -2552,6 +2563,9 @@ fn update_msg(
     PickWorkspace(channel) => {
       // Focus moves for the surrounding UI, while the picker itself keeps
       // `channel` as its owner through every later navigation and confirm.
+      guard model.device_state(channel) is Some(_) else {
+        return (@cmd.none, model)
+      }
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
       let picker = opening_workspace_picker(channel)
       (
@@ -2709,9 +2723,10 @@ fn update_msg(
     }
     OpenSession(channel, session_id) =>
       // Selecting a conversation always returns to the chat — including
-      // re-selecting the active one from the Skills page. On the console a
-      // click in another device's group is also the focus switch: the
-      // focused-scoped mirrors refetch, then the open runs on that channel.
+      // re-selecting the active one from the Skills page. The explicit channel
+      // may also move device selection before the focused-scoped mirrors
+      // refetch and the conversation opens there; current sidebar rows pass
+      // the selected channel.
       if session_id.is_empty() {
         (@cmd.none, model)
       } else {
@@ -6859,10 +6874,14 @@ test "late reconnect ticks cannot act on removed or re-added devices" {
   let roster : Array[DeviceMeta] = [
     { id: "same", name: "Mac", hostname: None, online: true },
   ]
+  let console_model = {
+    ..console_test_model(),
+    console: Some(empty_console_state(Some("same"), None)),
+  }
   let (_, signed) = update(
     dispatch,
     Console(MeLoaded(login="o", avatar="")),
-    console_test_model(),
+    console_model,
   )
   let (_, first) = update(
     dispatch,

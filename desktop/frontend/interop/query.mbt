@@ -1,7 +1,7 @@
 // The page's own query string, for parameters that ride a navigation into
-// the console — `?device=` and `?workspace=`, minted by the relay's
-// redirect off the retired `/d/<device>/` routes, preselect where the
-// first conversation lands.
+// the console — required `?device=` fixes one browser page/tab to one device;
+// optional `?workspace=` chooses where that device's first conversation lands.
+// Retired `/d/<device>/` routes redirect into this query shape.
 
 ///|
 extern "js" fn js_decode_uri_component(value : String) -> String = "(v) => { try { return decodeURIComponent(v) } catch { return v } }"

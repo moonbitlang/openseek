@@ -258,9 +258,9 @@ fn session_row(
 
 ///|
 /// Sidebar rows. Both the desktop window and browser console render only the
-/// focused device's sections. The browser page initially gets that focus from
-/// its `?device=` selection; device identity and account controls do not belong
-/// in this scroll box.
+/// sections for one selected device channel. In the browser, `?device=` makes
+/// that selection a page/tab boundary: another device belongs in another page,
+/// not in this scroll box. Device identity and account controls stay outside it.
 fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
   match model.console {
     None => {
@@ -274,9 +274,10 @@ fn session_rows(dispatch : @cmd.Emit[Msg], model : Model) -> Array[@html.Html] {
 }
 
 ///|
-/// The console sidebar for this page's focused device. Roster loading and
-/// failure states only replace the sections when no connected device can be
-/// rendered; an existing device remains usable while a refresh is in flight.
+/// The console sidebar for this page/tab's query-selected device channel.
+/// Roster loading and failure states only replace the sections when that
+/// channel has no connected device state; an existing device remains usable
+/// while a refresh is in flight.
 fn console_session_rows(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -2893,48 +2894,107 @@ fn page_with_toggle(
 }
 
 ///|
-/// The console's pre-sign-in page: one full-screen card. Checking shows
-/// progress (or the failure with a retry); signed out shows the GitHub
-/// sign-in link. Signed in never reaches here.
+/// The console's full-screen gate. A missing `?device=` stops before sign-in;
+/// authentication gets its own progress/retry states, and a signed-in page
+/// stays here until its one query-selected device is available.
 fn console_gate_view(
   dispatch : @cmd.Emit[Msg],
   console : ConsoleState,
 ) -> @html.Html {
   let card : Array[@html.Html] = []
-  match console.auth {
-    AuthChecking => {
-      card.push(
-        @html.p(
-          match console.notice {
-            Some(notice) => notice
-            None => "Checking sign-in…"
-          },
-        ),
-      )
-      if console.notice is Some(_) {
+  if console.page_device is Some(id) {
+    match console.auth {
+      AuthChecking => {
         card.push(
-          @html.button(
-            class="primary",
-            on_click=dispatch(Console(RefreshClicked)),
-            "Try again",
+          @html.p(
+            match console.notice {
+              Some(notice) => notice
+              None => "Checking sign-in…"
+            },
+          ),
+        )
+        if console.notice is Some(_) {
+          card.push(
+            @html.button(
+              class="primary",
+              on_click=dispatch(Console(RefreshClicked)),
+              "Try again",
+            ),
+          )
+        }
+      }
+      AuthSignedOut => {
+        let mut return_to = "/console/?device=\{@uri.encode_component(id)}"
+        if console.preselect_workspace is Some(workspace) &&
+          @resource.path_for(workspace, Remote(id)) is Some(path) {
+          return_to = return_to + "&workspace=\{@uri.encode_component(path)}"
+        }
+        let login_url = "/v1/auth/login?return_to=\{@uri.encode_component(return_to)}"
+        card.push(@html.h2("Sign in"))
+        card.push(@html.p("Access this OpenSeek device from your browser."))
+        card.push(
+          @html.a(
+            class="portal-button-link",
+            href=login_url,
+            "Sign in with GitHub",
           ),
         )
       }
+      AuthSignedIn(..) =>
+        match console.roster_sync {
+          RosterLoading => card.push(@html.p("Checking device…"))
+          RosterFailed(message) => {
+            card.push(@html.h2("Can't load device"))
+            card.push(@html.p(message))
+            card.push(
+              @html.button(
+                class="primary",
+                on_click=dispatch(Console(RefreshClicked)),
+                "Try again",
+              ),
+            )
+          }
+          RosterReady => {
+            let mut selected : DeviceMeta? = None
+            for meta in console.roster {
+              if meta.id == id {
+                selected = Some(meta)
+                break
+              }
+            }
+            if selected is Some(meta) {
+              if meta.online {
+                card.push(@html.h2("Connecting to \{meta.name}…"))
+                card.push(@html.p("Waiting for this device's connection."))
+              } else {
+                card.push(@html.h2("\{meta.name} is offline"))
+                card.push(@html.p("Bring this device online, then refresh."))
+              }
+            } else {
+              card.push(@html.h2("Device unavailable"))
+              card.push(
+                @html.p(
+                  "This device is not available to the signed-in account.",
+                ),
+              )
+            }
+            card.push(
+              @html.button(
+                class="primary",
+                on_click=dispatch(Console(RefreshClicked)),
+                "Refresh",
+              ),
+            )
+          }
+        }
     }
-    AuthSignedOut => {
-      card.push(@html.h2("Sign in"))
-      card.push(
-        @html.p("Your OpenSeek devices and their workspaces, from any browser."),
-      )
-      card.push(
-        @html.a(
-          class="portal-button-link",
-          href="/v1/auth/login?return_to=%2F",
-          "Sign in with GitHub",
-        ),
-      )
-    }
-    AuthSignedIn(..) => ()
+  } else {
+    card.push(@html.h2("Device link required"))
+    card.push(
+      @html.p(
+        "Open this page from Remote access in SeekMoon so the URL identifies one device.",
+      ),
+    )
   }
   @html.section(class="portal", [
     @html.div(class="portal-inner", [
@@ -3059,10 +3119,15 @@ fn blank_browser_page() -> @preview.PageState {
 
 ///|
 fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  // A browser page is gated on the relay session: until `/v1/auth/me`
-  // answers signed-in, the console frame — sidebar, composer, overlays —
-  // stays unbuilt and the full-screen gate card is the page.
-  if model.console is Some(console) && !(console.auth is AuthSignedIn(..)) {
+  // A browser page is gated on both its relay session and its required
+  // query-selected device. Until both exist, the console frame — sidebar,
+  // composer, overlays — stays unbuilt and inert Local cannot receive UI work.
+  if model.console is Some(console) &&
+    (
+      console.page_device is None ||
+      !(console.auth is AuthSignedIn(..)) ||
+      model.focused_device() is None
+    ) {
     return console_gate_view(dispatch, console)
   }
   let content = match model.screen {
@@ -3143,9 +3208,8 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   }
   // On the desktop a lost connection covers everything: with no event
   // stream and every API call failing, the app behind it can do nothing,
-  // so an honest dead-end beats a half-broken UI. The console never gets
-  // the overlay — its other devices stay usable, so the drop reads as the
-  // group header's status plus the composer banner.
+  // so an honest dead-end beats a half-broken UI. The console keeps its last
+  // rendered device readable while its topbar and composer show reconnecting.
   if model.is_desktop && model.bridge_state() is BridgeLost(message) {
     children.push(bridge_lost_overlay(message))
   }

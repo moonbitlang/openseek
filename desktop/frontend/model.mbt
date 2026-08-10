@@ -1030,10 +1030,11 @@ priv struct Model {
   // survives sign-out, so re-adding the same relay device cannot collide with
   // a reconnect timer queued by its retired connection.
   websocket_epoch : Int
-  // The device channel every UI action targets — the Settings/Skills
-  // screens, the composer, and the active conversation. The desktop window
-  // is born with `Local`; a browser console starts on an inert `Local`
-  // default that nothing reads and focuses a device with its first roster.
+  // The device channel selected by in-app navigation — this is not DOM or
+  // window focus. Settings/Skills, the composer, and the active conversation
+  // all target it. The desktop window is born with `Local`; a browser console
+  // stays on an inert `Local` default until the roster verifies and connects
+  // the device required by its `?device=` query.
   focused : @interop.ChannelId
   // The tier a new conversation is born with: whatever was last picked in
   // the composer, persisted page-locally. The model a turn actually runs
@@ -1572,8 +1573,8 @@ priv enum Msg {
   // The channel is captured when rotation is requested, so a focus move can
   // fence the delayed id instead of activating it on the newly focused host.
   SessionRotated(@interop.ConversationKey)
-  // Open a conversation on one device's channel; clicking another
-  // device's row is also the console's focus switch.
+  // Open a conversation on one device's explicit channel, selecting that
+  // channel first when it differs from the current one.
   OpenSession(@interop.ChannelId, String)
   // The user clicked the system notification posted through Proton's
   // notification extension: jump to the conversation that owned that run.
@@ -1587,9 +1588,8 @@ priv enum Msg {
   // capture listener emits this for both Rabbita transcript links and the
   // editor hover's foreign DOM; browser pages keep native new-tab behavior.
   ExternalLinkClicked(String)
-  // Open the in-app folder picker against one device's host (browsing
-  // starts at that host's home directory); on the console this also
-  // focuses the device the picker will register the workspace on.
+  // Open the in-app folder picker against one device's host (browsing starts
+  // at that host's home directory), selecting its channel first if needed.
   PickWorkspace(@interop.ChannelId)
   // Browse into a directory: a subdirectory row, the parent, or the typed
   // path field on Enter.
@@ -1619,7 +1619,7 @@ priv enum Msg {
   // restores them.
   RemoveWorkspace(@interop.ChannelId, @common.Uri)
   // Start a fresh conversation in a device's workspace (`None` = the default
-  // store); on the console this also focuses that device.
+  // store), selecting its explicit channel first if needed.
   NewChatIn(@interop.ChannelId, @common.Uri?)
   // Flip the composer's launch mode for a conversation that has not begun:
   // workspace root, or a fresh host-named worktree (its execution
@@ -2096,14 +2096,14 @@ fn initial_model() -> Model {
     Some(width) => width <= NarrowBreakpoint
     None => false
   }
-  // A deep link may preselect the project (`?workspace=`) and, on the
-  // browser console, the device (`?device=`, minted by the relay's redirect
-  // off the retired `/d/<id>/` routes); the first conversation lands there.
+  // A browser console requires `?device=` (minted by the relay's redirect off
+  // retired `/d/<id>/` routes) as its page-lifetime device identity. An
+  // optional `?workspace=` places that device's first conversation.
   let page_channel = @interop.page_channel()
-  let preselect_device = @interop.page_query_param("device")
+  let page_device = @interop.page_query_param("device")
   let preselect_owner = match page_channel {
     Some(channel) => Some(channel)
-    None => preselect_device.map(id => @interop.ChannelId::Remote(id))
+    None => page_device.map(id => @interop.ChannelId::Remote(id))
   }
   let preselect_workspace = match
     (@interop.page_query_param("workspace"), preselect_owner) {
@@ -2142,11 +2142,11 @@ fn initial_model() -> Model {
     is_desktop,
     app_version: "development",
     // Every browser page is the console: it signs in against the relay and
-    // fetches the device roster before any channel opens.
+    // verifies its required query-selected device before that channel opens.
     console: if is_desktop {
       None
     } else {
-      Some(empty_console_state(preselect_device, preselect_workspace))
+      Some(empty_console_state(page_device, preselect_workspace))
     },
     system_dark: host_prefers_dark(),
     theme: System,
@@ -2196,8 +2196,8 @@ fn initial_model() -> Model {
 
 ///|
 /// The state of one connected channel; `None` for a channel this page does
-/// not hold — one the roster retired, or any channel before a browser
-/// console's first roster arrives.
+/// not hold — including a browser page's query-selected device before the
+/// roster verifies and connects it, or after that target is retired.
 fn Model::device_state(
   self : Model,
   channel : @interop.ChannelId,
@@ -2211,8 +2211,9 @@ fn Model::device_state(
 }
 
 ///|
-/// The focused channel's state — what the sidebar, Settings, and the
-/// composer act on.
+/// Resolve the channel selected in `focused` to its connected device state.
+/// This is application navigation state, not DOM or window focus. `None`
+/// means the selected channel is not currently present in `devices`.
 fn Model::focused_device(self : Model) -> DeviceState? {
   self.device_state(self.focused)
 }

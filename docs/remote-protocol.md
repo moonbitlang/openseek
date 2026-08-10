@@ -44,17 +44,17 @@ releases; JSON/WS APIs live under `/v1`:
 | Route | What |
 |---|---|
 | `GET /console/` | The server-selected Browser release |
-| `GET /console/releases/v<version>/index.html` | One published Browser bundle. Packaged Desktop links here with its installed version; `?device=<id>` preselects the focused device and `?workspace=<path>` the workspace its first conversation lands in |
-| `GET /d/<device>/…` | Retired: `302` to `/console/?device=<device>` with the original query appended, so old deep links keep their preselection |
+| `GET /console/releases/v<version>/index.html` | One published Browser bundle. `?device=<id>` is required and fixes the page/tab to that device; optional `?workspace=<path>` selects where its first conversation lands. Packaged Desktop links here with its installed version |
+| `GET /d/<device>/…` | Retired: `302` to `/console/?device=<device>` with the original query appended, so old deep links keep their device target |
 | `GET /healthz` | Relay liveness probe, `200 ok` |
 | `/v1/auth/*`, `/v1/devices…` | The relay's own auth and device APIs (see Authentication) |
 
 Everything else — commands, queries, and host-pushed events — travels over
-**one WebSocket per device**: `GET /v1/devices/<device>/ws`, upgraded from
-the same origin the bundle was served from and spliced through to the host.
-The frontend takes each `<device>` from the roster it fetches at
-`GET /v1/devices` (or the `?device=` preselect). Frames are JSON text,
-shaped as **JSON-RPC 2.0**:
+`GET /v1/devices/<device>/ws`, upgraded from the same origin the bundle was
+served from and spliced through to the host. A browser page takes its one
+`<device>` from the required `?device=` query and verifies it against
+`GET /v1/devices`; other roster devices need their own page/tab. Frames are
+JSON text, shaped as **JSON-RPC 2.0**:
 
 ```jsonc
 // client → host: request

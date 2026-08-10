@@ -1,9 +1,9 @@
 // The browser console's account layer: the relay session and the device
-// roster. A browser page at `/` signs in against the relay, fetches the
-// devices the account owns, and holds one channel per online device — the
-// roster, not the page path, decides which channels exist. The desktop
-// window has no console state at all: its one Local channel needs no
-// account and no roster.
+// roster. A browser page signs in against the relay, fetches the devices the
+// account owns, and holds only the channel named by its required `?device=`
+// query. The roster verifies that target and reports its availability; it
+// never makes the page fall through to another device. The desktop window has
+// no console state at all: its one Local channel needs no account or roster.
 
 ///|
 /// Who the relay says we are (`/v1/auth/me`).
@@ -39,16 +39,19 @@ priv struct DeviceMeta {
 /// A browser console page's account state. `None` on the desktop window.
 priv struct ConsoleState {
   auth : ConsoleAuth
-  // The account's devices in the relay's order — the sidebar's group order.
+  // The account's devices in the relay's order. The page uses this metadata
+  // only to verify and describe its one query-selected device.
   roster : Array[DeviceMeta]
   roster_sync : RosterSync
   // The newest `/v1/devices` request. Replies carry this generation so a
   // slower pre-mutation snapshot cannot overwrite a newer roster.
   roster_request_generation : Int
-  // `?device=` / `?workspace=` from the page's own query (the relay mints
-  // them redirecting the retired `/d/<id>/` deep links): where focus and
-  // the first conversation land. Consumed by the first roster application.
-  preselect_device : String?
+  // The required `?device=` from the page's own query. It remains for the
+  // page's lifetime: one browser page/tab owns one device and never falls
+  // through to another roster entry.
+  page_device : String?
+  // The optional `?workspace=` belongs to `page_device` and is consumed when
+  // that device first connects and receives its initial conversation.
   preselect_workspace : @common.Uri?
   // Whether the first roster application has run the console's deferred
   // boot half (session rotation, the transcript scroll watcher) — it waits
@@ -62,7 +65,7 @@ priv struct ConsoleState {
 
 ///|
 fn empty_console_state(
-  preselect_device : String?,
+  page_device : String?,
   preselect_workspace : @common.Uri?,
 ) -> ConsoleState {
   {
@@ -70,7 +73,7 @@ fn empty_console_state(
     roster: [],
     roster_sync: RosterLoading,
     roster_request_generation: 0,
-    preselect_device,
+    page_device,
     preselect_workspace,
     booted: false,
     busy: false,
@@ -175,12 +178,11 @@ fn update_console_msg(
 }
 
 ///|
-/// Fold one `/v1/devices` reply into the model: retire channels the relay
-/// no longer grants, connect newly listed online devices, and (re)place
-/// focus. The roster is the authority on which reconnect loops keep
-/// running. A retired channel loses its state here; if the same relay id is
-/// later re-added, its fresh WebSocket epoch also rejects the retired
-/// connection's delayed callbacks and reconnect timer.
+/// Fold one `/v1/devices` reply into the model. Only `page_device` may own a
+/// channel: every other roster entry stays metadata, and a missing, revoked,
+/// or offline target never falls through to another device. A retired target
+/// loses its state here; if the same relay id is later re-added, its fresh
+/// WebSocket epoch also rejects delayed callbacks from the retired connection.
 fn apply_roster(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -190,12 +192,20 @@ fn apply_roster(
   let commands : Array[@cmd.Cmd] = []
   let mut websocket_epoch = model.websocket_epoch
   let mut terminal_panel = model.terminal_panel
-  // Retire first: revoked or unshared devices close their socket (a
-  // command — update stays pure), drop their state and conversations, and
-  // dispose the PTYs that belonged to the retired WebSocket.
+  let page_channel : @interop.ChannelId? = console.page_device.map(id => {
+    @interop.ChannelId::Remote(id)
+  })
+  // Retire first: anything other than this page's target, or a target the
+  // roster no longer grants, closes its socket (a command — update stays
+  // pure), drops its state and conversations, and disposes its PTYs.
   let devices : Array[DeviceState] = []
   for dev in model.devices {
-    if dev.channel is Remote(id) && !metas.iter().any(meta => meta.id == id) {
+    let granted = if dev.channel is Remote(id) {
+      metas.iter().any(meta => meta.id == id)
+    } else {
+      false
+    }
+    if Some(dev.channel) != page_channel || !granted {
       commands.push(close_channel(dev.channel))
       let (terminal_cmd, next_terminal_panel) = @terminal.disconnect(
         terminal_panel,
@@ -210,47 +220,36 @@ fn apply_roster(
   let conversations = model.conversations.filter(conv => {
     devices.iter().any(dev => dev.channel == conv.device)
   })
-  // Connect listed online devices this page does not hold yet. Offline
-  // devices get no state — their group renders from the roster alone, and a
-  // later refresh that sees them online connects them here. A device already
-  // held keeps its reconnect loop; the relay's `online` flag is advisory.
-  for meta in metas {
-    let channel : @interop.ChannelId = Remote(meta.id)
-    if meta.online && !devices.iter().any(dev => dev.channel == channel) {
-      websocket_epoch += 1
-      devices.push({ ..empty_device_state(channel), websocket_epoch, })
-      commands.push(install_bridge(dispatch, channel, websocket_epoch))
-    }
-  }
-  // Focus: keep a focus the page still holds; otherwise prefer the deep
-  // link's `?device=` when the roster lists it online, then the roster's
-  // first online device. With no online device the inert `Local` default
-  // stays — nothing reads it.
-  let mut focused = model.focused
-  if !devices.iter().any(dev => dev.channel == focused) {
-    let mut preferred : String? = None
+  // Connect only the query-selected target when the roster reports it online.
+  // A held target keeps its reconnect loop when the advisory `online` flag
+  // drops; a page first opened while it is offline waits for a later refresh.
+  if console.page_device is Some(id) {
     for meta in metas {
-      if meta.online && console.preselect_device == Some(meta.id) {
-        preferred = Some(meta.id)
+      if meta.id == id && meta.online {
+        let channel : @interop.ChannelId = Remote(id)
+        if !devices.iter().any(dev => dev.channel == channel) {
+          websocket_epoch += 1
+          devices.push({ ..empty_device_state(channel), websocket_epoch, })
+          commands.push(install_bridge(dispatch, channel, websocket_epoch))
+        }
         break
       }
     }
-    if preferred is None {
-      for meta in metas {
-        if meta.online {
-          preferred = Some(meta.id)
-          break
-        }
-      }
-    }
-    if preferred is Some(id) {
-      focused = Remote(id)
-    }
+  }
+  // The browser's inert Local default is restored whenever its pinned target
+  // has no channel. The full console frame is gated then, so no UI action can
+  // accidentally treat Local as a usable browser device.
+  let focused = if page_channel is Some(channel) &&
+    devices.iter().any(dev => dev.channel == channel) {
+    channel
+  } else {
+    @interop.ChannelId::Local
   }
   let refocused = focused != model.focused
   let focus_held = devices.iter().any(dev => dev.channel == focused)
-  // The deep link's `?workspace=` lands on the newly focused device, so its
-  // first conversation opens in that project.
+  // The deep link's `?workspace=` lands on the pinned device when it first
+  // connects, so its initial conversation opens in that project.
+  let mut preselect_workspace = console.preselect_workspace
   if refocused &&
     console.preselect_workspace is Some(workspace) &&
     @resource.belongs_to(workspace, focused) {
@@ -260,9 +259,10 @@ fn apply_roster(
         break
       }
     }
+    preselect_workspace = None
   }
-  // The deferred boot half runs once a device can take focus; a later
-  // refocus (the focused device was revoked) re-rotates onto the survivor.
+  // The deferred boot half runs once the pinned device can take focus; if it
+  // disappears and later returns, refocusing re-rotates onto that same device.
   let mut booted = console.booted
   if focus_held {
     if !booted {
@@ -283,15 +283,14 @@ fn apply_roster(
       ..console,
       roster: metas,
       roster_sync: RosterReady,
-      preselect_device: None,
-      preselect_workspace: None,
+      preselect_workspace,
       booted,
     }),
   }
-  // Use the same focus transition as a click. Besides changing the channel,
-  // it clears every focused-host mirror and refetches settings, host
-  // capabilities, and installed skills; assigning `focused` directly here
-  // used to leave the revoked device's state visible on its survivor.
+  // Use the same focus transition as a device-scoped action. Besides changing
+  // the channel, it clears every focused-host mirror. Entering inert Local
+  // after the target disappears performs only that reset; returning to the
+  // target also refetches its settings, capabilities, and installed skills.
   let (focus_cmd, reconciled) = if refocused {
     focus_channel(dispatch, reconciled, focused)
   } else {
@@ -309,7 +308,7 @@ fn console_test_model() -> Model {
     ..initial_model(),
     devices: [],
     focused: @interop.ChannelId::Local,
-    console: Some(empty_console_state(None, None)),
+    console: Some(empty_console_state(Some("d_on"), None)),
   }
 }
 
@@ -322,7 +321,7 @@ fn console_test_roster() -> Array[DeviceMeta] {
 }
 
 ///|
-test "sign-in loads the roster and connects only the online devices" {
+test "sign-in loads the roster and connects only the page device" {
   let dispatch = test_dispatch()
   let (_, signed) = update(
     dispatch,
@@ -336,8 +335,8 @@ test "sign-in loads the roster and connects only the online devices" {
     Console(RosterLoaded(console_test_roster(), generation=1)),
     signed,
   )
-  // The online device gets a channel and focus; the offline one renders
-  // from the roster alone.
+  // The query-selected online device gets the page's only channel. Other
+  // roster entries remain metadata whether they are online or offline.
   inspect(listed.devices.length(), content="1")
   assert_true(listed.device_state(Remote("d_on")) is Some(_))
   assert_true(listed.device_state(Remote("d_off")) is None)
@@ -348,6 +347,37 @@ test "sign-in loads the roster and connects only the online devices" {
   inspect(console.roster[0].name, content="Mac")
   assert_true(console.roster[1].hostname is None)
   assert_true(console.booted)
+}
+
+///|
+test "a browser page without device never selects the first online roster entry" {
+  let dispatch = test_dispatch()
+  let model = {
+    ..console_test_model(),
+    console: Some(empty_console_state(None, None)),
+  }
+  let (_, signed) = update(
+    dispatch,
+    Console(MeLoaded(login="o", avatar="")),
+    model,
+  )
+  let (_, listed_once) = update(
+    dispatch,
+    Console(RosterLoaded(console_test_roster(), generation=1)),
+    signed,
+  )
+  let (_, listed_twice) = update(
+    dispatch,
+    Console(RosterLoaded(console_test_roster(), generation=1)),
+    signed,
+  )
+  inspect(listed_once.devices.length(), content="0")
+  assert_true(listed_once.focused == @interop.ChannelId::Local)
+  guard listed_once.console is Some(first) else { fail("console lost") }
+  guard listed_twice.console is Some(second) else { fail("console lost") }
+  assert_true(first.page_device is None)
+  assert_false(first.booted)
+  assert_true(first == second)
 }
 
 ///|
@@ -379,7 +409,7 @@ test "a 401 anywhere signs the console out and drops every channel" {
 }
 
 ///|
-test "the deep link's device and workspace preselect the first focus" {
+test "the page device is the only connection and receives the initial workspace" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Remote("d_two").test_resource(
     "/home/u/proj",
@@ -403,17 +433,19 @@ test "the deep link's device and workspace preselect the first focus" {
     signed,
   )
   assert_true(listed.focused == Remote("d_two"))
+  inspect(listed.devices.length(), content="1")
+  assert_true(listed.device_state(Remote("d_one")) is None)
   guard listed.device_state(Remote("d_two")) is Some(dev) else {
-    fail("preselected device not held")
+    fail("page device not held")
   }
   assert_eq(dev.active_workspace, Some(workspace))
   guard listed.console is Some(console) else { fail("console lost") }
-  assert_true(console.preselect_device is None)
+  assert_true(console.page_device == Some("d_two"))
   assert_true(console.preselect_workspace is None)
 }
 
 ///|
-test "a workspace deep link never moves to a fallback device" {
+test "an unavailable page device never falls through to an online device" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Remote("offline").test_resource(
     "/home/u/proj",
@@ -435,20 +467,26 @@ test "a workspace deep link never moves to a fallback device" {
     Console(RosterLoaded(metas, generation=1)),
     signed,
   )
-  assert_true(listed.focused == Remote("online"))
-  guard listed.device_state(Remote("online")) is Some(dev) else {
-    fail("fallback device not held")
-  }
-  assert_true(dev.active_workspace is None)
+  assert_true(listed.focused == @interop.ChannelId::Local)
+  inspect(listed.devices.length(), content="0")
+  assert_true(listed.device_state(Remote("online")) is None)
+  guard listed.console is Some(console) else { fail("console lost") }
+  assert_true(console.page_device == Some("offline"))
+  assert_eq(console.preselect_workspace, Some(workspace))
+  assert_false(console.booted)
 }
 
 ///|
-test "a refreshed roster retires revoked devices and refocuses a survivor" {
+test "a revoked page device is retired without connecting a survivor" {
   let dispatch = test_dispatch()
+  let model = {
+    ..console_test_model(),
+    console: Some(empty_console_state(Some("d_a"), None)),
+  }
   let (_, signed) = update(
     dispatch,
     Console(MeLoaded(login="o", avatar="")),
-    console_test_model(),
+    model,
   )
   let metas : Array[DeviceMeta] = [
     { id: "d_a", name: "A", hostname: None, online: true },
@@ -496,8 +534,9 @@ test "a refreshed roster retires revoked devices and refocuses a survivor" {
     Console(RosterLoaded(survivor, generation=1)),
     seeded,
   )
-  assert_true(refreshed.focused == Remote("d_b"))
+  assert_true(refreshed.focused == @interop.ChannelId::Local)
   assert_true(refreshed.device_state(Remote("d_a")) is None)
+  assert_true(refreshed.device_state(Remote("d_b")) is None)
   assert_eq(refreshed.installed_skills.length(), 0)
   assert_true(refreshed.api_provider is Openseek)
   inspect(refreshed.custom_api_url, content="")
@@ -520,10 +559,14 @@ test "a refreshed roster retires revoked devices and refocuses a survivor" {
 ///|
 test "an older roster reply cannot restore a device removed by a newer one" {
   let dispatch = test_dispatch()
+  let model = {
+    ..console_test_model(),
+    console: Some(empty_console_state(Some("d_a"), None)),
+  }
   let (_, signed) = update(
     dispatch,
     Console(MeLoaded(login="o", avatar="")),
-    console_test_model(),
+    model,
   )
   let original : Array[DeviceMeta] = [
     { id: "d_a", name: "A", hostname: None, online: true },
@@ -558,16 +601,21 @@ test "an older roster reply cannot restore a device removed by a newer one" {
   inspect(console.roster.length(), content="1")
   inspect(console.roster[0].id, content="d_b")
   assert_true(stale.device_state(Remote("d_a")) is None)
-  assert_true(stale.device_state(Remote("d_b")) is Some(_))
+  assert_true(stale.device_state(Remote("d_b")) is None)
+  assert_true(stale.focused == @interop.ChannelId::Local)
 }
 
 ///|
-test "opening another device's session moves focus and resets the mirrors" {
+test "an action for another roster device cannot move page focus" {
   let dispatch = test_dispatch()
+  let model = {
+    ..console_test_model(),
+    console: Some(empty_console_state(Some("d_a"), None)),
+  }
   let (_, signed) = update(
     dispatch,
     Console(MeLoaded(login="o", avatar="")),
-    console_test_model(),
+    model,
   )
   let metas : Array[DeviceMeta] = [
     { id: "d_a", name: "A", hostname: None, online: true },
@@ -579,40 +627,67 @@ test "opening another device's session moves focus and resets the mirrors" {
     signed,
   )
   assert_true(listed.focused == Remote("d_a"))
+  assert_true(listed.device_state(Remote("d_b")) is None)
   let seeded = {
-    ..listed.replace_conversation(
-      empty_conversation(@interop.ChannelId::Remote("d_b"), "s-b"),
-    ),
+    ..listed,
     api_provider: Custom,
     custom_api_url: "https://old.example/chat",
     host_settings_revision: 7,
   }
   let (_, opened) = update(dispatch, OpenSession(Remote("d_b"), "s-b"), seeded)
-  assert_true(opened.focused == Remote("d_b"))
-  inspect(opened.active_session, content="s-b")
-  // The focused-scoped mirror reset rode the switch.
-  assert_true(opened.api_provider is Openseek)
-  inspect(opened.custom_api_url, content="")
-  inspect(opened.host_settings_revision, content="-1")
-  // Re-opening on the already-focused device leaves the mirrors alone.
-  let (_, again) = update(dispatch, OpenSession(Remote("d_b"), "s-b"), {
-    ..opened,
-    api_provider: Custom,
-    custom_api_url: "https://kept.example/chat",
-    host_settings_revision: 8,
-  })
-  assert_true(again.api_provider is Custom)
-  inspect(again.custom_api_url, content="https://kept.example/chat")
-  inspect(again.host_settings_revision, content="8")
+  assert_true(opened.focused == Remote("d_a"))
+  assert_true(opened.active_session != "s-b")
+  assert_true(opened.api_provider is Custom)
+  inspect(opened.custom_api_url, content="https://old.example/chat")
+  inspect(opened.host_settings_revision, content="7")
+}
+
+///|
+test "new chat and workspace picker reject another roster device" {
+  let dispatch = test_dispatch()
+  let model = {
+    ..console_test_model(),
+    console: Some(empty_console_state(Some("d_a"), None)),
+  }
+  let (_, signed) = update(
+    dispatch,
+    Console(MeLoaded(login="o", avatar="")),
+    model,
+  )
+  let metas : Array[DeviceMeta] = [
+    { id: "d_a", name: "A", hostname: None, online: true },
+    { id: "d_b", name: "B", hostname: None, online: true },
+  ]
+  let (_, listed) = update(
+    dispatch,
+    Console(RosterLoaded(metas, generation=1)),
+    signed,
+  )
+  let (_, chat_once) = update(dispatch, NewChatIn(Remote("d_b"), None), listed)
+  let (_, chat_twice) = update(dispatch, NewChatIn(Remote("d_b"), None), listed)
+  let (_, picker_once) = update(dispatch, PickWorkspace(Remote("d_b")), listed)
+  let (_, picker_twice) = update(dispatch, PickWorkspace(Remote("d_b")), listed)
+  assert_true(chat_once.focused == Remote("d_a"))
+  assert_true(chat_twice.focused == Remote("d_a"))
+  assert_true(chat_once.active_session == listed.active_session)
+  assert_true(chat_twice.active_session == listed.active_session)
+  assert_true(picker_once.focused == Remote("d_a"))
+  assert_true(picker_twice.focused == Remote("d_a"))
+  assert_true(picker_once.workspace_picker is None)
+  assert_true(picker_twice.workspace_picker is None)
 }
 
 ///|
 test "a row click that raced its device's removal is dropped" {
   let dispatch = test_dispatch()
+  let model = {
+    ..console_test_model(),
+    console: Some(empty_console_state(Some("d_a"), None)),
+  }
   let (_, signed) = update(
     dispatch,
     Console(MeLoaded(login="o", avatar="")),
-    console_test_model(),
+    model,
   )
   let metas : Array[DeviceMeta] = [
     { id: "d_a", name: "A", hostname: None, online: true },
@@ -701,7 +776,7 @@ test "a roster failure reports without leaving the signed-in frame" {
 }
 
 ///|
-/// The signed-out reset, from a 401 anywhere: every device channel closes,
+/// The signed-out reset, from a 401 anywhere: the page's device channel closes,
 /// and the account layer returns to the gate card. `booted` stays true —
 /// the page-lifetime watchers survive; a fresh sign-in refocuses and
 /// re-rotates through `apply_roster`.

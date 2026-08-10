@@ -14,6 +14,7 @@ import {
   "moonbit-community/rabbita/svg",
   "moonbitlang/editor/base/common",
   "openseek_desktop/internal/jsonx",
+  "openseek_desktop/internal/uri",
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/internal/file_search_score",
   "openseek_desktop/internal/protocol",
