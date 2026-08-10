@@ -180,10 +180,22 @@ pub let fs_read_directory : Command[
 ] = Command("fs.read_directory")
 
 ///|
-pub let fs_list_files : Command[
-  @protocol.ListFilesPayload,
-  @protocol.ListFilesReply,
-] = Command("fs.list_files")
+pub let fs_search_files : Command[
+  @protocol.SearchFilesPayload,
+  @protocol.SearchFilesReply,
+] = Command("fs.search_files")
+
+///|
+pub let fs_cancel_search_files : Command[
+  @protocol.CancelSearchFilesPayload,
+  @protocol.EmptyReply,
+] = Command("fs.cancel_search_files")
+
+///|
+pub let fs_clear_file_search_cache : Command[
+  @protocol.ClearFileSearchCachePayload,
+  @protocol.EmptyReply,
+] = Command("fs.clear_file_search_cache")
 
 ///|
 pub let fs_stat_files : Command[

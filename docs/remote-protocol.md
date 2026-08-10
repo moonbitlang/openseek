@@ -456,7 +456,9 @@ filesystem for the workspace picker.
 |---|---|---|
 | `fs.read_file` | `{session, path, workspace?}` | `{kind: "content", content, absolute, sig}` \| `{kind: "binary"}` \| `{kind: "oversized"}` |
 | `fs.read_directory` | `{session, path, workspace?}` (`""` = workspace root) | `{entries: [{name, is_dir}]}`, directories first |
-| `fs.list_files` | `{session, workspace?}` | `{files: […], truncated}` — recursive snapshot for the fuzzy finder |
+| `fs.search_files` | `{session, workspace?, cache_key, query, max_results, generation}` | `{files: […], from_cache, limit_hit, cancelled}` — VS Code-style cache-session query; `max_results: 0` populates without returning rows, Quick Open requests at most 512 |
+| `fs.cancel_search_files` | `{cache_key, generation}` | `{}` — cancels one query while allowing cache population to finish |
+| `fs.clear_file_search_cache` | `{cache_key}` | `{}` — retires one search cache session and its outstanding work |
 | `fs.stat_files` | `{session, paths, workspace?}` | `{stats: [{path, sig}]}` — `sig` is the opaque mtime signature `"{seconds}:{nanos}"`; `""` means the file is missing, retained for client compatibility |
 | `fs.watch` | `{session, workspace?, files?, directories?}` | `{}` — replaces the single workspace watcher with the open files and listed directories; each directory keeps its immediate children observable |
 | `fs.unwatch` | `{}` | `{}` — stops watching when the panel is closed and it has no open tabs |

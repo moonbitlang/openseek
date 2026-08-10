@@ -637,9 +637,11 @@ pub(all) struct ReadDirReply {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-pub(all) struct ListFilesReply {
+pub(all) struct SearchFilesReply {
   files : Array[String]
-  truncated : Bool
+  from_cache : Bool
+  limit_hit : Bool
+  cancelled : Bool
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|

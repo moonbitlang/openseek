@@ -1222,7 +1222,7 @@ fn update(
   // The quick pick belongs to the focused conversation captured when it
   // opened. Device/session switches can arrive through many messages (and
   // background pushes), so fence it once here rather than in every branch.
-  let model = close_stale_quick_open(model)
+  let (quick_open_cmd, model) = close_stale_quick_open(dispatch, model)
   // The composer's git popover belongs to the checkout that was on screen,
   // and is fenced the same way and for the same reason. It cannot rely on its
   // click-away listener here: a switch by keyboard — Cmd+N, Quick Open — makes
@@ -1247,7 +1247,10 @@ fn update(
   let (model, panel_cmd) = sync_file_panel(dispatch, model)
   let (model, terminal_cmd) = sync_terminal_panel(dispatch, model)
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
-  (@cmd.batch([cmd, panel_cmd, terminal_cmd, browser_cmd]), model)
+  (
+    @cmd.batch([cmd, quick_open_cmd, panel_cmd, terminal_cmd, browser_cmd]),
+    model,
+  )
 }
 
 ///|
@@ -1598,6 +1601,28 @@ fn update_msg(
     QuickOpenOpen(mode) => open_quick_open(dispatch, model, mode)
     QuickOpenValueChanged(value) =>
       change_quick_open_value(dispatch, model, value)
+    QuickOpenFilesDue(owner~, query~, generation~) =>
+      begin_quick_open_file_request(dispatch, model, owner, query, generation)
+    QuickOpenFileCacheLoaded(owner~, cache_key~, generation~) =>
+      apply_quick_open_file_cache_loaded(
+        dispatch, model, owner, cache_key, generation,
+      )
+    QuickOpenFileCacheRequestFailed(owner~, cache_key~, generation~) =>
+      fail_quick_open_file_cache_load(model, owner, cache_key, generation)
+    QuickOpenFilesLoaded(
+      owner~,
+      cache_key~,
+      query~,
+      generation~,
+      files~,
+      from_cache~,
+      limit_hit~
+    ) =>
+      apply_quick_open_file_result(
+        model, owner, cache_key, query, generation, files, from_cache, limit_hit,
+      )
+    QuickOpenFilesRequestFailed(owner~, cache_key~, query~, generation~) =>
+      fail_quick_open_file_request(model, owner, cache_key, query, generation)
     QuickOpenDue(owner~, query~, generation~) =>
       begin_quick_open_symbol_request(dispatch, model, owner, query, generation)
     QuickOpenSymbolsLoaded(owner~, query~, generation~, items~) =>
@@ -1608,7 +1633,7 @@ fn update_msg(
     QuickOpenSelect(index) => select_quick_open_row(model, index)
     QuickOpenAccept => accept_quick_open(dispatch, model)
     QuickOpenPick(index) => pick_quick_open_row(dispatch, model, index)
-    QuickOpenDismiss => (@cmd.none, { ..model, quick_open: None })
+    QuickOpenDismiss => dismiss_quick_open(dispatch, model)
     ToggleModel => {
       // The chip switches the conversation on screen. The tier is pinned to
       // that conversation right away — a chat can be given a tier and left
@@ -2663,11 +2688,6 @@ fn update_msg(
         file_ctx(model),
       )
       let next = { ..model, file_panel: panel }
-      let next = match msg {
-        @fileeditor.FilesIndexed(..) => refresh_file_quick_open(next)
-        @fileeditor.FileIndexFailed(..) => fail_file_quick_open(next)
-        _ => next
-      }
       (cmd, next)
     }
     Dock(msg) => {

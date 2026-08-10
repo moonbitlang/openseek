@@ -51,12 +51,17 @@ struct HostState {
 /// cannot leak into another client.
 struct HostConnection {
   fs_watch : FsWatchActor
+  file_search : FileSearchService
   terminal : @terminal.TerminalState
 }
 
 ///|
 pub fn HostConnection::new() -> HostConnection {
-  { fs_watch: FsWatchActor::new(), terminal: @terminal.new_terminal_state() }
+  {
+    fs_watch: FsWatchActor::new(),
+    file_search: FileSearchService::new(),
+    terminal: @terminal.new_terminal_state(),
+  }
 }
 
 ///|
@@ -135,6 +140,7 @@ pub async fn HostConnection::run(
         }
       })
     })
+    group.spawn_bg(() => self.file_search.run())
     self.fs_watch.run(
       async fn(push) {
         emit(
@@ -190,8 +196,18 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.fs_read_directory, async fn(payload) {
       read_directory_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.fs_list_files, async fn(payload) {
-      list_files_op(payload)
+    @endpoint.Endpoint::remote(@commands.fs_search_files, async fn(payload) {
+      search_files_op(connection.file_search, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_cancel_search_files, async fn(
+      payload,
+    ) {
+      cancel_search_files_op(connection.file_search, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_clear_file_search_cache, async fn(
+      payload,
+    ) {
+      clear_file_search_cache_op(connection.file_search, payload)
     }),
     @endpoint.Endpoint::remote(@commands.fs_stat_files, async fn(payload) {
       stat_files_op(payload)

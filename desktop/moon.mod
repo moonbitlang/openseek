@@ -7,7 +7,7 @@ import {
   "bobzhang/openseek_protocol@0.1.0",
   "moonbit-community/cmark@0.4.4",
   "moonbit-community/pty@0.3.2",
-  "moonbit-community/fuzzy_match@0.2.5",
+  "moonbit-community/fuzzy_match@0.2.6",
   "moonbit-community/rabbita@0.13.1",
   "moonbitlang/x@0.4.49",
   "moonbitlang/async@0.20.4",

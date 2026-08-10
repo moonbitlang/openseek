@@ -1,8 +1,8 @@
 // Unified Quick Open ranking backed by moonbit-community/fuzzy_match. File
-// recall comes from the cached workspace index; MoonIDE owns symbol recall.
+// recall comes from the Host search session; MoonIDE owns symbol recall.
 
 ///|
-const MaxQuickOpenFileRows : Int = 200
+const MaxQuickOpenFileRows : Int = 512
 
 ///|
 /// Build one deduplicated file candidate list. The active file leads, then
@@ -38,31 +38,11 @@ fn rank_file_quick_open_items(
   query : String,
   candidates : Array[@pathx.Relative],
 ) -> Array[QuickOpenItem] {
-  let query = query.trim().to_owned()
-  if query.is_empty() {
-    return candidates[:candidates.length().min(MaxQuickOpenFileRows)].map(path => {
-      QuickOpenFile(path)
-    })
-  }
-  let matcher = @fuzzy_match.Query::new(query)
-  let scored : Array[(Int, Int, @pathx.Relative)] = []
-  for path in candidates {
-    let score = matcher.score(item=path.0)
-    if score != 0 {
-      scored.push((score, path.0.length(), path))
-    }
-  }
-  scored.sort_by((left, right) => {
-    if left.0 != right.0 {
-      left.0.compare(right.0)
-    } else if left.1 != right.1 {
-      left.1.compare(right.1)
-    } else {
-      left.2.0.lexical_compare(right.2.0)
-    }
-  })
-  let limit = scored.length().min(MaxQuickOpenFileRows)
-  scored[:limit].map(entry => QuickOpenFile(entry.2))
+  @file_search_score.rank_paths(
+    query,
+    candidates.map(path => path.0),
+    MaxQuickOpenFileRows,
+  ).map(path => QuickOpenFile(@pathx.Relative(path)))
 }
 
 ///|
@@ -157,13 +137,13 @@ test "file Quick Open fuzzy-matches the full relative path" {
 }
 
 ///|
-test "file Quick Open caps rendered rows at two hundred" {
+test "file Quick Open uses VS Code's 512-row cap" {
   let candidates : Array[@pathx.Relative] = []
-  for _ in 0..<250 {
+  for index = 0; index < 600; index = index + 1 {
     candidates.push(Relative("src/file-{index}.mbt"))
   }
-  assert_eq(rank_file_quick_open_items("", candidates).length(), 200)
-  assert_eq(rank_file_quick_open_items("file", candidates).length(), 200)
+  assert_eq(rank_file_quick_open_items("", candidates).length(), 512)
+  assert_eq(rank_file_quick_open_items("file", candidates).length(), 512)
 }
 
 ///|

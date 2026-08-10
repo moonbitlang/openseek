@@ -126,17 +126,22 @@ type DirEntry = @protocol.DirEntry
 type ReadDirReply = @protocol.ReadDirReply
 
 ///|
-/// `list_files` enumerates every file under the conversation's workspace
-/// (recursively, pruning the same churn directories the watcher skips) for
-/// Quick Open. One flat snapshot, not a live view — the frontend
-/// re-requests it on `fs_changed`.
-type ListFilesPayload = @protocol.ListFilesPayload
+/// `search_files` queries a connection-owned VS Code-style cache session.
+/// Cache keys are populated once and explicitly retired with clearCache.
+type SearchFilesPayload = @protocol.SearchFilesPayload
 
 ///|
-/// Reply to `list_files`: workspace-relative `/`-separated file paths, in
-/// depth-first lexicographic order. `truncated` is set when the walk hit the
-/// index cap and stopped, so the frontend knows the list is partial.
-type ListFilesReply = @protocol.ListFilesReply
+/// Cancel one interactive query without retiring its cache session.
+type CancelSearchFilesPayload = @protocol.CancelSearchFilesPayload
+
+///|
+/// Retire a cache session and all work still owned by it.
+type ClearFileSearchCachePayload = @protocol.ClearFileSearchCachePayload
+
+///|
+/// Ranked workspace-relative paths, capped for Quick Open. `from_cache`
+/// distinguishes a newly populated session from a reused one.
+type SearchFilesReply = @protocol.SearchFilesReply
 
 ///|
 type ReadFilePayload = @protocol.ReadFilePayload

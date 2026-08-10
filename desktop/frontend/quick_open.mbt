@@ -7,6 +7,12 @@
 const QuickOpenSymbolDebounceMs : Int = 150
 
 ///|
+const QuickOpenFileDebounceMs : Int = 100
+
+///|
+const QuickOpenMaxFileResults : Int = 512
+
+///|
 const QuickOpenInputId : String = "quick-open-input"
 
 ///|
@@ -32,6 +38,147 @@ fn quick_open_symbol_request(
     workspace=model.session_workspace(owner.channel, owner.session),
     generation~,
   )
+}
+
+///|
+priv enum QuickOpenFileRequestKind {
+  PopulateFileCache
+  QueryFileCache
+}
+
+///|
+fn quick_open_file_request(
+  dispatch : @cmd.Emit[Msg],
+  owner : @interop.ConversationKey,
+  workspace : @common.Uri?,
+  cache_key : String,
+  query : String,
+  generation : Int,
+  kind : QuickOpenFileRequestKind,
+) -> @cmd.Cmd {
+  match workspace {
+    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
+      return @cmd.none
+    _ => ()
+  }
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let reply = @interop.bridge_request(
+        owner.channel,
+        @commands.fs_search_files,
+        {
+          session: owner.session,
+          workspace: workspace.map(value => value.path),
+          cache_key,
+          query,
+          max_results: match kind {
+            PopulateFileCache => 0
+            QueryFileCache => QuickOpenMaxFileResults
+          },
+          generation,
+        },
+      ) catch {
+        _ => {
+          scheduler.add(
+            dispatch(
+              match kind {
+                PopulateFileCache =>
+                  QuickOpenFileCacheRequestFailed(
+                    owner~,
+                    cache_key~,
+                    generation~,
+                  )
+                QueryFileCache =>
+                  QuickOpenFilesRequestFailed(
+                    owner~,
+                    cache_key~,
+                    query~,
+                    generation~,
+                  )
+              },
+            ),
+          )
+          return
+        }
+      }
+      if reply.cancelled {
+        return
+      }
+      match kind {
+        PopulateFileCache =>
+          scheduler.add(
+            dispatch(QuickOpenFileCacheLoaded(owner~, cache_key~, generation~)),
+          )
+        QueryFileCache => {
+          let files = reply.files.filter_map(path => {
+            if path.is_empty() {
+              None
+            } else {
+              Some(@pathx.Relative(path))
+            }
+          })
+          scheduler.add(
+            dispatch(
+              QuickOpenFilesLoaded(
+                owner~,
+                cache_key~,
+                query~,
+                generation~,
+                files~,
+                from_cache=reply.from_cache,
+                limit_hit=reply.limit_hit,
+              ),
+            ),
+          )
+        }
+      }
+    })
+  })
+}
+
+///|
+fn cancel_quick_open_file_request(
+  _dispatch : @cmd.Emit[Msg],
+  model : Model,
+  open : QuickOpen,
+) -> @cmd.Cmd {
+  guard open.mode() is QuickOpenFiles &&
+    model.file_query_cache.active_key is Some(cache_key) else {
+    return @cmd.none
+  }
+  @cmd.custom_cmd(_scheduler => {
+    @js.async_run(() => {
+      ignore(
+        @interop.bridge_request(
+          open.owner.channel,
+          @commands.fs_cancel_search_files,
+          { cache_key, generation: open.generation },
+        ),
+      ) catch {
+        _ => ()
+      }
+    })
+  })
+}
+
+///|
+fn clear_quick_open_file_cache(
+  owner : @interop.ConversationKey,
+  cache_key : String,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(_scheduler => {
+    @js.async_run(() => {
+      ignore(
+        @interop.bridge_request(
+          owner.channel,
+          @commands.fs_clear_file_search_cache,
+          { cache_key, },
+        ),
+      ) catch {
+        _ => ()
+      }
+    })
+  })
 }
 
 ///|
@@ -83,81 +230,123 @@ fn quick_open_open_files(model : Model) -> Array[@pathx.Relative] {
 }
 
 ///|
-/// Project the current cached workspace file index into the latest file query.
-/// While the host index loads, already-open tabs remain useful immediate
-/// results. A failed cache reads as loading here because the actual failure
-/// reply is what transitions the popup to `QuickOpenFailed`; reopening or
-/// editing then pairs this projection with retryable `EnsureFileIndex`.
-fn quick_open_with_file_index(model : Model, open : QuickOpen) -> QuickOpen {
-  match model.file_panel.index {
-    @fileeditor.IndexReady(files~, truncated~) => {
-      let candidates = quick_open_file_candidates(
-        files,
-        quick_open_open_files(model),
-        @dock.active_file(model.dock),
-      )
-      {
-        ..open,
-        items: rank_file_quick_open_items(open.query(), candidates),
-        selected: 0,
-        phase: QuickOpenReady,
-        truncated,
+/// Paths retained from the most recent Host result. They are only fast,
+/// provisional candidates after the query changes; the debounced Host request
+/// restores global top-K correctness.
+fn quick_open_result_files(open : QuickOpen) -> Array[@pathx.Relative] {
+  open.items.filter_map(item => {
+    match item {
+      QuickOpenFile(path) => Some(path)
+      QuickOpenSymbol(_) => None
+    }
+  })
+}
+
+///|
+fn quick_open_with_file_candidates(
+  model : Model,
+  open : QuickOpen,
+  files : Array[@pathx.Relative],
+  phase : QuickOpenPhase,
+) -> QuickOpen {
+  let candidates = quick_open_file_candidates(
+    files,
+    quick_open_open_files(model),
+    @dock.active_file(model.dock),
+  )
+  {
+    ..open,
+    items: rank_file_quick_open_items(open.query(), candidates),
+    selected: 0,
+    phase,
+  }
+}
+
+///|
+fn quick_open_workspace(
+  model : Model,
+  owner : @interop.ConversationKey,
+) -> @common.Uri? {
+  model.session_workspace(owner.channel, owner.session)
+}
+
+///|
+fn file_query_cache_key(
+  owner : @interop.ConversationKey,
+  generation : Int,
+) -> String {
+  "quick-open:\{owner.session}:\{generation}"
+}
+
+///|
+fn query_active_file_cache(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  open : QuickOpen,
+) -> @cmd.Cmd {
+  guard model.file_query_cache.active_key is Some(cache_key) else {
+    return @cmd.none
+  }
+  quick_open_file_request(
+    dispatch,
+    open.owner,
+    quick_open_workspace(model, open.owner),
+    cache_key,
+    open.query(),
+    open.generation,
+    QueryFileCache,
+  )
+}
+
+///|
+/// Create the cache state for one picker run. A compatible loaded key remains
+/// active while a replacement warms. Re-entering the file provider inside the
+/// same picker does not start another replacement; reopening the picker does.
+fn ensure_file_query_cache(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  open : QuickOpen,
+  replace_loaded : Bool,
+  query_now : Bool,
+) -> (@cmd.Cmd, Model) {
+  let workspace = quick_open_workspace(model, open.owner)
+  let previous = model.file_query_cache
+  let compatible = previous.owner == Some(open.owner) &&
+    previous.workspace == workspace
+  let cmds : Array[@cmd.Cmd] = []
+  let mut cache = if compatible {
+    previous
+  } else {
+    if previous.owner is Some(previous_owner) {
+      if previous.active_key is Some(key) {
+        cmds.push(clear_quick_open_file_cache(previous_owner, key))
+      }
+      if previous.loading_key is Some(key) && previous.active_key != Some(key) {
+        cmds.push(clear_quick_open_file_cache(previous_owner, key))
       }
     }
-    @fileeditor.IndexEmpty | @fileeditor.IndexLoading =>
-      {
-        ..open,
-        items: rank_file_quick_open_items(
-          open.query(),
-          quick_open_file_candidates(
-            [],
-            quick_open_open_files(model),
-            @dock.active_file(model.dock),
-          ),
-        ),
-        selected: 0,
-        phase: QuickOpenLoading,
-        truncated: false,
-      }
-    @fileeditor.IndexFailed =>
-      {
-        ..open,
-        items: [],
-        selected: 0,
-        phase: QuickOpenLoading,
-        truncated: false,
-      }
+    { owner: Some(open.owner), workspace, active_key: None, loading_key: None }
   }
-}
-
-///|
-/// Rebuild an open file provider after the host index settles.
-fn refresh_file_quick_open(model : Model) -> Model {
-  guard model.quick_open is Some(open) && open.mode() is QuickOpenFiles else {
-    return model
+  if cache.loading_key is None && (cache.active_key is None || replace_loaded) {
+    let cache_key = file_query_cache_key(open.owner, open.generation)
+    cache = { ..cache, loading_key: Some(cache_key) }
+    cmds.push(
+      quick_open_file_request(
+        dispatch,
+        open.owner,
+        workspace,
+        cache_key,
+        "",
+        open.generation,
+        PopulateFileCache,
+      ),
+    )
   }
-  { ..model, quick_open: Some(quick_open_with_file_index(model, open)) }
-}
-
-///|
-/// Surface an initial file-index failure. Failed background refreshes retain a
-/// ready index in fileeditor and therefore never reach this state.
-fn fail_file_quick_open(model : Model) -> Model {
-  guard model.quick_open is Some(open) &&
-    open.mode() is QuickOpenFiles &&
-    model.file_panel.index is @fileeditor.IndexFailed else {
-    return model
+  let next = { ..model, file_query_cache: cache }
+  if query_now && cache.active_key is Some(_) {
+    cmds.push(query_active_file_cache(dispatch, next, open))
   }
-  {
-    ..model,
-    quick_open: Some({
-      ..open,
-      items: [],
-      selected: 0,
-      phase: QuickOpenFailed,
-      truncated: false,
-    }),
-  }
+  (@cmd.batch(cmds), next)
 }
 
 ///|
@@ -191,7 +380,6 @@ fn open_quick_open(
     selected: 0,
     phase: QuickOpenLoading,
     generation,
-    truncated: false,
   }
   let next_base = {
     ..model,
@@ -202,14 +390,17 @@ fn open_quick_open(
   }
   match mode {
     QuickOpenFiles => {
-      let next = refresh_file_quick_open(next_base)
-      (
-        @cmd.batch([
-          dispatch(FileEditor(@fileeditor.EnsureFileIndex)),
-          focus_quick_open_after_render(),
-        ]),
-        next,
+      let projected = quick_open_with_file_candidates(
+        next_base,
+        open,
+        [],
+        QuickOpenLoading,
       )
+      let next = { ..next_base, quick_open: Some(projected) }
+      let (cache_cmd, next) = ensure_file_query_cache(
+        dispatch, next, projected, true, true,
+      )
+      (@cmd.batch([cache_cmd, focus_quick_open_after_render()]), next)
     }
     QuickOpenSymbols =>
       (
@@ -223,9 +414,9 @@ fn open_quick_open(
 }
 
 ///|
-/// Replace the visible input. File queries filter the cached index immediately;
-/// symbol queries clear rows and arm a delayed request. Changing providers also
-/// increments the symbol generation so an old reply cannot land in file mode.
+/// Replace the visible input. File queries filter the latest bounded rows
+/// immediately; both providers then arm a delayed request. Changing providers
+/// also increments the generation so an old reply cannot land in another mode.
 fn change_quick_open_value(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -235,14 +426,19 @@ fn change_quick_open_value(
   if value == open.value {
     return (@cmd.none, model)
   }
+  let cancel = cancel_quick_open_file_request(dispatch, model, open)
   let generation = model.quick_open_generation + 1
+  let keeps_file_rows = open.mode() is QuickOpenFiles && !value.has_prefix("#")
   let next_open : QuickOpen = {
     ..open,
     value,
-    items: [],
+    items: if keeps_file_rows {
+      open.items
+    } else {
+      []
+    },
     selected: 0,
     generation,
-    truncated: false,
   }
   let next_base = {
     ..model,
@@ -251,8 +447,33 @@ fn change_quick_open_value(
   }
   match next_open.mode() {
     QuickOpenFiles => {
-      let next = refresh_file_quick_open(next_base)
-      (dispatch(FileEditor(@fileeditor.EnsureFileIndex)), next)
+      let projected = quick_open_with_file_candidates(
+        next_base,
+        next_open,
+        quick_open_result_files(next_open),
+        QuickOpenDebouncing,
+      )
+      let next = { ..next_base, quick_open: Some(projected) }
+      let (cache_cmd, next) = ensure_file_query_cache(
+        dispatch, next, projected, false, false,
+      )
+      (
+        @cmd.batch([
+          cancel,
+          cache_cmd,
+          @cmd.delay(
+            dispatch(
+              QuickOpenFilesDue(
+                owner=open.owner,
+                query=next_open.query(),
+                generation~,
+              ),
+            ),
+            QuickOpenFileDebounceMs,
+          ),
+        ]),
+        next,
+      )
     }
     QuickOpenSymbols => {
       let query = next_open.query()
@@ -261,14 +482,143 @@ fn change_quick_open_value(
         quick_open: Some({ ..next_open, phase: QuickOpenDebouncing }),
       }
       (
-        @cmd.delay(
-          dispatch(QuickOpenDue(owner=open.owner, query~, generation~)),
-          QuickOpenSymbolDebounceMs,
-        ),
+        @cmd.batch([
+          cancel,
+          @cmd.delay(
+            dispatch(QuickOpenDue(owner=open.owner, query~, generation~)),
+            QuickOpenSymbolDebounceMs,
+          ),
+        ]),
         next,
       )
     }
   }
+}
+
+///|
+/// Start a delayed Host file query only if no later keystroke, close, provider
+/// switch, or conversation switch has overtaken it.
+fn begin_quick_open_file_request(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  owner : @interop.ConversationKey,
+  query : String,
+  generation : Int,
+) -> (@cmd.Cmd, Model) {
+  guard model.quick_open is Some(open) &&
+    open.owner == owner &&
+    open.mode() is QuickOpenFiles &&
+    open.query() == query &&
+    open.generation == generation &&
+    open.phase is QuickOpenDebouncing else {
+    return (@cmd.none, model)
+  }
+  let next = { ..model, quick_open: Some({ ..open, phase: QuickOpenLoading }) }
+  (query_active_file_cache(dispatch, next, open), next)
+}
+
+///|
+/// A successful background population atomically replaces the active cache.
+/// The previous key is cleared only after this point, so a failed refresh can
+/// never destroy the last usable picker cache.
+fn apply_quick_open_file_cache_loaded(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  owner : @interop.ConversationKey,
+  cache_key : String,
+  _generation : Int,
+) -> (@cmd.Cmd, Model) {
+  let cache = model.file_query_cache
+  guard cache.owner == Some(owner) && cache.loading_key == Some(cache_key) else {
+    return (@cmd.none, model)
+  }
+  let cmds : Array[@cmd.Cmd] = []
+  if cache.active_key is Some(previous) && previous != cache_key {
+    cmds.push(clear_quick_open_file_cache(owner, previous))
+  }
+  let next_cache = { ..cache, active_key: Some(cache_key), loading_key: None }
+  let mut next = { ..model, file_query_cache: next_cache }
+  // The first picker run has no old cache to query. Once population settles,
+  // issue the current query. During a debounce, let the already-scheduled due
+  // message retain VS Code's typing delay.
+  if next.quick_open is Some(open) &&
+    open.owner == owner &&
+    open.mode() is QuickOpenFiles &&
+    !(open.phase is QuickOpenDebouncing) {
+    next = { ..next, quick_open: Some({ ..open, phase: QuickOpenLoading }) }
+    cmds.push(query_active_file_cache(dispatch, next, open))
+  }
+  (@cmd.batch(cmds), next)
+}
+
+///|
+fn fail_quick_open_file_cache_load(
+  model : Model,
+  owner : @interop.ConversationKey,
+  cache_key : String,
+  _generation : Int,
+) -> (@cmd.Cmd, Model) {
+  let cache = model.file_query_cache
+  guard cache.owner == Some(owner) && cache.loading_key == Some(cache_key) else {
+    return (@cmd.none, model)
+  }
+  let next = { ..model, file_query_cache: { ..cache, loading_key: None } }
+  let clear = clear_quick_open_file_cache(owner, cache_key)
+  guard cache.active_key is None &&
+    next.quick_open is Some(open) &&
+    open.owner == owner &&
+    open.mode() is QuickOpenFiles else {
+    return (clear, next)
+  }
+  (clear, { ..next, quick_open: Some({ ..open, phase: QuickOpenFailed }) })
+}
+
+///|
+/// Adopt only the exact current query from the currently active cache key.
+fn apply_quick_open_file_result(
+  model : Model,
+  owner : @interop.ConversationKey,
+  cache_key : String,
+  query : String,
+  generation : Int,
+  files : Array[@pathx.Relative],
+  _from_cache : Bool,
+  _limit_hit : Bool,
+) -> (@cmd.Cmd, Model) {
+  guard model.quick_open is Some(open) &&
+    open.owner == owner &&
+    open.mode() is QuickOpenFiles &&
+    model.file_query_cache.active_key == Some(cache_key) &&
+    open.query() == query &&
+    open.generation == generation else {
+    return (@cmd.none, model)
+  }
+  let ready = quick_open_with_file_candidates(
+    model,
+    open,
+    files,
+    QuickOpenReady,
+  )
+  (@cmd.none, { ..model, quick_open: Some(ready) })
+}
+
+///|
+fn fail_quick_open_file_request(
+  model : Model,
+  owner : @interop.ConversationKey,
+  cache_key : String,
+  query : String,
+  generation : Int,
+) -> (@cmd.Cmd, Model) {
+  guard model.quick_open is Some(open) &&
+    open.owner == owner &&
+    open.mode() is QuickOpenFiles &&
+    model.file_query_cache.active_key == Some(cache_key) &&
+    open.query() == query &&
+    open.generation == generation else {
+    return (@cmd.none, model)
+  }
+  (@cmd.none, { ..model, quick_open: Some({ ..open, phase: QuickOpenFailed }) })
 }
 
 ///|
@@ -329,7 +679,6 @@ fn apply_quick_open_symbol_result(
         }),
         selected: 0,
         phase: QuickOpenReady,
-        truncated: false,
       }),
     },
   )
@@ -359,7 +708,6 @@ fn fail_quick_open_symbol_request(
         items: [],
         selected: 0,
         phase: QuickOpenFailed,
-        truncated: false,
       }),
     },
   )
@@ -396,12 +744,29 @@ fn open_quick_open_item(
   model : Model,
   item : QuickOpenItem,
 ) -> (@cmd.Cmd, Model) {
+  let cancel = match model.quick_open {
+    Some(open) => cancel_quick_open_file_request(dispatch, model, open)
+    None => @cmd.none
+  }
   let prepared = { ..model, quick_open: None, screen: Chat }
-  match item {
+  let (open_cmd, next) = match item {
     QuickOpenFile(path) => open_editor_at(dispatch, prepared, path.0, None)
     QuickOpenSymbol(symbol) =>
       open_editor_at(dispatch, prepared, symbol.path, Some(symbol.range))
   }
+  (@cmd.batch([cancel, open_cmd]), next)
+}
+
+///|
+fn dismiss_quick_open(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> (@cmd.Cmd, Model) {
+  guard model.quick_open is Some(open) else { return (@cmd.none, model) }
+  (
+    cancel_quick_open_file_request(dispatch, model, open),
+    { ..model, quick_open: None },
+  )
 }
 
 ///|
@@ -430,13 +795,19 @@ fn pick_quick_open_row(
 ///|
 /// Conversation ownership is checked after every message, including pushes
 /// that switch the focused device/session without coming from the palette.
-fn close_stale_quick_open(model : Model) -> Model {
-  guard model.quick_open is Some(open) else { return model }
+fn close_stale_quick_open(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> (@cmd.Cmd, Model) {
+  guard model.quick_open is Some(open) else { return (@cmd.none, model) }
   let owner = active_quick_open_owner(model)
   if owner == open.owner {
-    model
+    (@cmd.none, model)
   } else {
-    { ..model, quick_open: None }
+    (
+      cancel_quick_open_file_request(dispatch, model, open),
+      { ..model, quick_open: None },
+    )
   }
 }
 
@@ -669,15 +1040,6 @@ fn quick_open_view(dispatch : @cmd.Emit[Msg], open : QuickOpen) -> @html.Html {
     QuickOpenDebouncing | QuickOpenLoading => "true"
     _ => "false"
   }
-  let footer = if mode is QuickOpenFiles && open.truncated {
-    @html.div(
-      class="quick-open-truncated",
-      attrs=@html.Attrs::build().role("status"),
-      "File index truncated; some matches may be missing.",
-    )
-  } else {
-    @html.nothing
-  }
   @html.div(class="quick-open-backdrop", on_click=dispatch(QuickOpenDismiss), [
     @html.div(
       class="quick-open-dialog",
@@ -714,7 +1076,6 @@ fn quick_open_view(dispatch : @cmd.Emit[Msg], open : QuickOpen) -> @html.Html {
             .aria_busy(list_busy),
           list_children,
         ),
-        footer,
       ],
     ),
   ])
@@ -803,7 +1164,7 @@ test "Quick Open prefixes providers and works in both shells" {
 }
 
 ///|
-test "file Quick Open shows live tabs first and adopts the indexed snapshot" {
+test "file Quick Open populates a cache session before adopting ranked rows" {
   let dispatch = test_dispatch()
   let base = { ..test_model(), is_desktop: true }
   let owner = active_quick_open_owner(base)
@@ -833,38 +1194,44 @@ test "file Quick Open shows live tabs first and adopts the indexed snapshot" {
   let seeded = {
     ..base,
     dock: { ..dock, owner: Some(owner) },
-    file_panel: {
-      ..base.file_panel,
-      owner: Some(owner),
-      docs,
-      index: @fileeditor.IndexLoading,
-    },
+    file_panel: { ..base.file_panel, owner: Some(owner), docs },
   }
   let (_, opened) = update(dispatch, QuickOpenOpen(QuickOpenFiles), seeded)
   guard opened.quick_open is Some(loading) else { fail("palette expected") }
+  guard opened.file_query_cache.loading_key is Some(cache_key) else {
+    fail("opening should populate a cache")
+  }
+  assert_true(opened.file_query_cache.active_key is None)
   assert_true(loading.phase is QuickOpenLoading)
   assert_eq(loading.items.map(item => item.detail()), [
     "src/active.mbt", "src/open.mbt",
   ])
+  let (_, populated) = update(
+    dispatch,
+    QuickOpenFileCacheLoaded(owner~, cache_key~, generation=loading.generation),
+    opened,
+  )
+  assert_eq(populated.file_query_cache.active_key, Some(cache_key))
+  assert_true(populated.file_query_cache.loading_key is None)
   let (_, indexed) = update(
     dispatch,
-    FileEditor(
-      @fileeditor.FilesIndexed(
-        owner~,
-        epoch=0,
-        files=[
-          Relative("src/open.mbt"),
-          Relative("src/other.mbt"),
-          Relative("src/active.mbt"),
-        ],
-        truncated=true,
-      ),
+    QuickOpenFilesLoaded(
+      owner~,
+      cache_key~,
+      query="",
+      generation=loading.generation,
+      files=[
+        Relative("src/open.mbt"),
+        Relative("src/other.mbt"),
+        Relative("src/active.mbt"),
+      ],
+      from_cache=true,
+      limit_hit=false,
     ),
-    opened,
+    populated,
   )
   guard indexed.quick_open is Some(ready) else { fail("palette expected") }
   assert_true(ready.phase is QuickOpenReady)
-  assert_true(ready.truncated)
   assert_eq(ready.items.map(item => item.detail()), [
     "src/active.mbt", "src/open.mbt", "src/other.mbt",
   ])
@@ -874,30 +1241,159 @@ test "file Quick Open shows live tabs first and adopts the indexed snapshot" {
 }
 
 ///|
-test "an initial file-index failure is visible and retryable" {
+test "an initial file cache failure is visible and retryable" {
   let dispatch = test_dispatch()
   let base = { ..test_model(), is_desktop: true }
   let owner = active_quick_open_owner(base)
-  let seeded = {
-    ..base,
-    file_panel: {
-      ..base.file_panel,
-      owner: Some(owner),
-      index: @fileeditor.IndexLoading,
-    },
+  let (_, opened) = update(dispatch, QuickOpenOpen(QuickOpenFiles), base)
+  guard opened.quick_open is Some(initial) else { fail("palette expected") }
+  guard opened.file_query_cache.loading_key is Some(cache_key) else {
+    fail("cache load expected")
   }
-  let (_, opened) = update(dispatch, QuickOpenOpen(QuickOpenFiles), seeded)
   let (_, failed) = update(
     dispatch,
-    FileEditor(@fileeditor.FileIndexFailed(owner~, epoch=0)),
+    QuickOpenFileCacheRequestFailed(
+      owner~,
+      cache_key~,
+      generation=initial.generation,
+    ),
     opened,
   )
   guard failed.quick_open is Some(failure) else { fail("palette expected") }
   assert_true(failure.phase is QuickOpenFailed)
-  assert_true(failed.file_panel.index is @fileeditor.IndexFailed)
+  assert_true(failed.file_query_cache.active_key is None)
+  assert_true(failed.file_query_cache.loading_key is None)
   let (_, retrying) = update(dispatch, QuickOpenValueChanged("src"), failed)
   guard retrying.quick_open is Some(pending) else { fail("palette expected") }
-  assert_true(pending.phase is QuickOpenLoading)
+  assert_true(pending.phase is QuickOpenDebouncing)
+  assert_true(retrying.file_query_cache.loading_key is Some(_))
+}
+
+///|
+test "reopening while cache population is running does not start another load" {
+  let dispatch = test_dispatch()
+  let base = { ..test_model(), is_desktop: true }
+  let (_, opened) = update(dispatch, QuickOpenOpen(QuickOpenFiles), base)
+  guard opened.file_query_cache.loading_key is Some(first_key) else {
+    fail("cache load expected")
+  }
+  let (_, dismissed) = update(dispatch, QuickOpenDismiss, opened)
+  assert_true(dismissed.quick_open is None)
+  let (_, reopened) = update(dispatch, QuickOpenOpen(QuickOpenFiles), dismissed)
+  guard reopened.quick_open is Some(second) else { fail("palette expected") }
+  assert_true(second.generation > 1)
+  assert_eq(reopened.file_query_cache.loading_key, Some(first_key))
+  assert_true(reopened.file_query_cache.active_key is None)
+}
+
+///|
+test "file cache keeps the previous key until replacement succeeds" {
+  let dispatch = test_dispatch()
+  let base = { ..test_model(), is_desktop: true }
+  let owner = active_quick_open_owner(base)
+  let workspace = quick_open_workspace(base, owner)
+  let seeded = {
+    ..base,
+    file_query_cache: {
+      owner: Some(owner),
+      workspace,
+      active_key: Some("old-cache"),
+      loading_key: None,
+    },
+  }
+  let (_, opened) = update(dispatch, QuickOpenOpen(QuickOpenFiles), seeded)
+  guard opened.quick_open is Some(initial) else { fail("palette expected") }
+  guard opened.file_query_cache.loading_key is Some(replacement) else {
+    fail("a replacement cache should warm on each picker run")
+  }
+  assert_eq(opened.file_query_cache.active_key, Some("old-cache"))
+  assert_true(initial.phase is QuickOpenLoading)
+  let (_, cached) = update(
+    dispatch,
+    QuickOpenFilesLoaded(
+      owner~,
+      cache_key="old-cache",
+      query="",
+      generation=initial.generation,
+      files=[Relative("src/main.mbt"), Relative("README.md")],
+      from_cache=true,
+      limit_hit=false,
+    ),
+    opened,
+  )
+  guard cached.quick_open is Some(ready) else { fail("palette expected") }
+  assert_true(ready.phase is QuickOpenReady)
+  assert_eq(ready.items.map(item => item.detail()), [
+    "src/main.mbt", "README.md",
+  ])
+  let (_, refresh_failed) = update(
+    dispatch,
+    QuickOpenFileCacheRequestFailed(
+      owner~,
+      cache_key=replacement,
+      generation=ready.generation,
+    ),
+    cached,
+  )
+  guard refresh_failed.quick_open is Some(still_ready) else {
+    fail("palette expected")
+  }
+  assert_true(still_ready.phase is QuickOpenReady)
+  assert_eq(still_ready.items.map(item => item.detail()), [
+    "src/main.mbt", "README.md",
+  ])
+  assert_eq(refresh_failed.file_query_cache.active_key, Some("old-cache"))
+  assert_true(refresh_failed.file_query_cache.loading_key is None)
+
+  let (_, changed) = update(
+    dispatch,
+    QuickOpenValueChanged("src"),
+    refresh_failed,
+  )
+  guard changed.quick_open is Some(debouncing) else { fail("palette expected") }
+  assert_true(debouncing.phase is QuickOpenDebouncing)
+  assert_eq(debouncing.items.map(item => item.detail()), ["src/main.mbt"])
+  let (_, stale) = update(
+    dispatch,
+    QuickOpenFilesLoaded(
+      owner~,
+      cache_key="old-cache",
+      query="",
+      generation=ready.generation,
+      files=[Relative("wrong.mbt")],
+      from_cache=true,
+      limit_hit=false,
+    ),
+    changed,
+  )
+  guard stale.quick_open is Some(still_debouncing) else {
+    fail("palette expected")
+  }
+  assert_true(still_debouncing.phase is QuickOpenDebouncing)
+  assert_eq(still_debouncing.items.map(item => item.detail()), ["src/main.mbt"])
+  let (_, loading) = update(
+    dispatch,
+    QuickOpenFilesDue(owner~, query="src", generation=debouncing.generation),
+    stale,
+  )
+  guard loading.quick_open is Some(in_flight) else { fail("palette expected") }
+  assert_true(in_flight.phase is QuickOpenLoading)
+  let (_, loaded) = update(
+    dispatch,
+    QuickOpenFilesLoaded(
+      owner~,
+      cache_key="old-cache",
+      query="src",
+      generation=in_flight.generation,
+      files=[Relative("src/current.mbt")],
+      from_cache=true,
+      limit_hit=false,
+    ),
+    loading,
+  )
+  guard loaded.quick_open is Some(current) else { fail("palette expected") }
+  assert_true(current.phase is QuickOpenReady)
+  assert_eq(current.items.map(item => item.detail()), ["src/current.mbt"])
 }
 
 ///|

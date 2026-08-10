@@ -4281,13 +4281,6 @@ select:focus {
   color: var(--del);
 }
 
-.quick-open-truncated {
-  padding: 7px 14px 9px;
-  border-top: 1px solid var(--line-2);
-  color: var(--ink-3);
-  font-size: 11px;
-}
-
 /* The codicon font/base class ships in viewer.css. These are the symbol
    codepoints registered by VS Code's codiconsLibrary.ts. */
 .quick-open-kind.codicon-symbol-file::before {

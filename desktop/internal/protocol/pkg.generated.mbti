@@ -128,6 +128,11 @@ pub(all) struct CancelReply {
   run_id : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
+pub(all) struct CancelSearchFilesPayload {
+  cache_key : String
+  generation : Int
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
 pub(all) enum CheckUpdateReply {
   UpToDate
   Available(version~ : String, installable~ : Bool, unavailable_reason~ : String?)
@@ -137,6 +142,10 @@ pub(all) enum CheckUpdateReply {
 } derive(Eq, @debug.Debug)
 pub impl ToJson for CheckUpdateReply
 pub impl @json.FromJson for CheckUpdateReply
+
+pub(all) struct ClearFileSearchCachePayload {
+  cache_key : String
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct CompactPayload {
   session : String
@@ -347,16 +356,6 @@ pub(all) struct ListAppsReply {
   apps : Array[AppEntry]
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
-pub(all) struct ListFilesPayload {
-  session : String
-  workspace : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-
-pub(all) struct ListFilesReply {
-  files : Array[String]
-  truncated : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-
 pub(all) struct LoadSessionPayload {
   session : String
   workspace : String?
@@ -545,6 +544,22 @@ pub(all) struct RunsPayload {
 pub(all) struct RunsReply {
   runs : Array[StartedPayload]
   settled : Array[RunSettlementPayload]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) struct SearchFilesPayload {
+  session : String
+  workspace : String?
+  cache_key : String
+  query : String
+  max_results : Int
+  generation : Int
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) struct SearchFilesReply {
+  files : Array[String]
+  from_cache : Bool
+  limit_hit : Bool
+  cancelled : Bool
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct SessionAssistantMessage {

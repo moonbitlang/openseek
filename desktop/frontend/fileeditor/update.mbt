@@ -993,11 +993,6 @@ fn FileChange::relist_candidates(self : FileChange) -> Array[@pathx.Relative] {
 }
 
 ///|
-fn FileChange::changes_file_list(self : FileChange) -> Bool {
-  !(self is Modified(_))
-}
-
-///|
 /// Whether the change involves a path that feeds `moon check` — a source or
 /// interface file, or a module/package manifest. Only these can move the
 /// module's diagnostics.
@@ -1047,22 +1042,20 @@ fn moonbit_check_input(path : @pathx.Relative) -> Bool {
 }
 
 ///|
-/// Reconcile the host's workspace watcher with what the panel and Quick Open
-/// need: follow the active session while the file body is visible, tabs remain
-/// open, or a workspace file index is live. Wraps every `sync` exit so the
-/// bookkeeping cannot be missed.
+/// Reconcile the host's workspace watcher with what the panel and open tabs
+/// need. Quick Open's search cache is intentionally independent: like VS Code,
+/// it refreshes when the picker opens instead of extending watcher lifetime.
 fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
-  let index_live = self.index is IndexLoading || self.index is IndexReady(..)
   if ctx.checkout is None ||
     ctx.checkout is Some(@interop.MissingWorktree(_)) ||
-    (!ctx.panel_open && ctx.open_files.is_empty() && !index_live) ||
+    (!ctx.panel_open && ctx.open_files.is_empty()) ||
     ctx.owner.session.is_empty() {
     return None
   }
   let files = ctx.open_files.copy()
   files.sort_by((left, right) => left.0.lexical_compare(right.0))
   let directories : Array[@pathx.Relative] = []
-  if ctx.panel_open || index_live {
+  if ctx.panel_open {
     directories.push(@pathx.Relative::root())
     for directory in self.expanded {
       if !directories.contains(directory) {
@@ -1514,7 +1507,6 @@ pub fn sync(
       docs,
       children: Map([]),
       loading: [],
-      index: IndexEmpty,
       error: None,
       changes_generation: state.changes_generation + 1,
       review_generation,
@@ -1868,22 +1860,6 @@ pub fn update(
           )
         }
       }
-    EnsureFileIndex =>
-      if state.owner != Some(ctx.owner) {
-        (@cmd.none, state)
-      } else if state.index is IndexEmpty || state.index is IndexFailed {
-        (
-          list_files(
-            dispatch,
-            ctx.owner,
-            ctx.request_epoch,
-            workspace=ctx.workspace,
-          ),
-          { ..state, index: IndexLoading },
-        )
-      } else {
-        (@cmd.none, state)
-      }
     DirLoaded(owner~, epoch~, path~, entries~) =>
       // Drop a reply whose conversation is no longer the panel's.
       if state.owner != Some(owner) || state.request_epoch != epoch {
@@ -1922,22 +1898,6 @@ pub fn update(
             error: Some(message),
           },
         )
-      }
-    FilesIndexed(owner~, epoch~, files~, truncated~) =>
-      if state.owner != Some(owner) || state.request_epoch != epoch {
-        (@cmd.none, state)
-      } else {
-        (@cmd.none, { ..state, index: IndexReady(files~, truncated~) })
-      }
-    FileIndexFailed(owner~, epoch~) =>
-      // Only a failed first fetch records a retryable failure; a failed refresh
-      // keeps serving the index it already has.
-      if state.owner != Some(owner) ||
-        state.request_epoch != epoch ||
-        !(state.index is IndexLoading) {
-        (@cmd.none, state)
-      } else {
-        (@cmd.none, { ..state, index: IndexFailed })
       }
     ChangesPollDue(owner~, generation~) =>
       if state.owner == Some(owner) &&
@@ -2405,7 +2365,6 @@ pub fn update(
         let cmds = []
         let stat_paths : Array[@pathx.Relative] = []
         let relist : Array[@pathx.Relative] = []
-        let mut refresh_index = false
         let mut moonbit_changed = false
         if changes is Some(changes) {
           for change in changes {
@@ -2425,9 +2384,6 @@ pub fn update(
                 relist.push(directory)
               }
             }
-            if change.changes_file_list() {
-              refresh_index = true
-            }
           }
         } else {
           for path in ctx.open_files {
@@ -2442,7 +2398,6 @@ pub fn update(
               relist.push(directory)
             }
           }
-          refresh_index = true
         }
         if !stat_paths.is_empty() {
           cmds.push(
@@ -2479,19 +2434,6 @@ pub fn update(
               owner,
               state.request_epoch,
               directory,
-              workspace=ctx.workspace,
-            ),
-          )
-        }
-        // Only structural events can change Quick Open's file index.
-        // Do not duplicate the initial request when attaching its watcher emits
-        // a baseline; only an already-usable snapshot refreshes in background.
-        if refresh_index && state.index is IndexReady(..) {
-          cmds.push(
-            list_files(
-              dispatch,
-              owner,
-              state.request_epoch,
               workspace=ctx.workspace,
             ),
           )
@@ -3515,18 +3457,6 @@ test "FileLoaded settles content into its document, active or not" {
     ctx,
   )
   assert_true(old_listing == epoch_state)
-  let (_, old_index) = update(
-    emit,
-    FilesIndexed(
-      owner=test_ctx().owner,
-      epoch=1,
-      files=[Relative("stale.mbt")],
-      truncated=false,
-    ),
-    epoch_state,
-    ctx,
-  )
-  assert_true(old_index == epoch_state)
   let (_, old_watch_failure) = update(
     emit,
     FileWatchFailed(
@@ -3589,7 +3519,6 @@ test "a closed panel still re-roots when the conversation switches" {
         [{ name: "a.mbt", path: Relative("a.mbt"), is_dir: false }],
       ),
     ]),
-    index: IndexReady(files=[Relative("a.mbt")], truncated=false),
     watching: Some({
       owner: test_ctx().owner,
       workspace: None,
@@ -3673,7 +3602,6 @@ test "a resolved placement change reroots documents and fences old replies" {
     children: Map([
       (@pathx.Relative::root(), [{ name: "reviewed.mbt", path, is_dir: false }]),
     ]),
-    index: IndexReady(files=[path], truncated=false),
     watching: Some({
       owner: test_ctx().owner,
       workspace: Some(old_workspace),
@@ -3698,7 +3626,6 @@ test "a resolved placement change reroots documents and fences old replies" {
     is Some({ state: TabLoading, review: None, stale: false, .. }),
   )
   assert_true(moved.children.is_empty())
-  assert_true(moved.index is IndexEmpty)
   assert_true(moved.changes is ChangeListIdle)
   assert_false(moved.changes_head_known)
   assert_true(
@@ -3806,13 +3733,9 @@ test "a missing checkout parks files and refuses editor actions until repair" {
     parked.docs.get(Relative("a.mbt")) is Some({ state: TabLoaded(..), .. }),
   )
   assert_true(parked.children.is_empty())
-  assert_true(parked.index is IndexEmpty)
   assert_true(parked.watching is None)
   assert_true(parked.placement_parked)
   assert_eq(parked.request_epoch, state.request_epoch + 1)
-  // A stale control event cannot start a file index request while missing.
-  let (_, refused) = update(emit, EnsureFileIndex, parked, missing)
-  assert_true(refused == parked)
   // Root/dock callers also use these public entry points directly, bypassing
   // the guarded message dispatcher. They enforce the same placement boundary.
   let (_, direct_open) = open_document(
@@ -4252,8 +4175,6 @@ test "an unresolved placement parks files and refuses editor actions" {
   assert_true(parked.owner is Some({ session: "", .. }))
   assert_true(parked.docs.is_empty())
   assert_true(parked.watching is None)
-  let (_, refused) = update(emit, EnsureFileIndex, parked, unresolved)
-  assert_true(refused == parked)
   let (_, selected) = update(
     emit,
     ExplorerModeSelected(ExplorerChanges),
@@ -4285,7 +4206,7 @@ test "ToggleTree flips the pane and RevealDirectory forces it open" {
 }
 
 ///|
-test "reopening Changes refreshes despite a Quick Open root watch" {
+test "reopening Changes refreshes after the explorer is hidden" {
   let state = {
     ..owned_state(),
     explorer_mode: ExplorerChanges,
@@ -4295,7 +4216,6 @@ test "reopening Changes refreshes despite a Quick Open root watch" {
       refreshing=false,
       refresh_again=false,
     ),
-    index: IndexReady(files=[Relative("nested/file.mbt")], truncated=false),
     watching: Some({
       owner: test_ctx().owner,
       workspace: None,
@@ -4306,7 +4226,7 @@ test "reopening Changes refreshes despite a Quick Open root watch" {
   let closed_ctx = { ..test_ctx(), panel_open: false }
   let (closed, _) = sync(test_emit(), state, closed_ctx)
   assert_false(closed.explorer_was_visible)
-  assert_true(closed.watching is Some({ directories: [Relative("")], .. }))
+  assert_true(closed.watching is None)
   let (refreshed, _) = sync(test_emit(), closed, test_ctx())
   assert_true(refreshed.explorer_was_visible)
   assert_true(

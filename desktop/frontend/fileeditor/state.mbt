@@ -152,24 +152,6 @@ pub(all) struct WatchedPaths {
 } derive(Eq)
 
 ///|
-/// The workspace file index behind unified Quick Open: every
-/// file under the workspace (the host walks it recursively, pruning churn
-/// directories and capping the count). Requested lazily when file Quick Open
-/// is first used, refreshed on `FsChanged`, and reset by a conversation switch
-/// like the rest of the workspace cache.
-pub(all) enum FileIndex {
-  // Never requested; opening file Quick Open asks for it.
-  IndexEmpty
-  // The first request is in flight.
-  IndexLoading
-  // The first request failed. A later Quick Open retries it.
-  IndexFailed
-  // `truncated` set means the walk hit the host's cap, so matches may be
-  // missing; Quick Open surfaces that limitation.
-  IndexReady(files~ : Array[@pathx.Relative], truncated~ : Bool)
-} derive(Eq)
-
-///|
 /// Which inventory the explorer pane shows. This is a panel preference, so it
 /// follows the user across conversation switches while each inventory's data
 /// remains scoped to its owning conversation.
@@ -294,7 +276,8 @@ pub(all) struct State {
   // Whether the explorer pane was visible on the preceding sync pass. This is
   // stricter than the enclosing dock being open: with a file active the tree
   // toggle (and narrow drill-down) can hide the explorer while the dock stays
-  // open. Quick Open may retain a shallow root watch in either hidden state.
+  // open. Retaining this transition bit keeps Changes refresh behavior
+  // independent from whether any file watcher remains active.
   explorer_was_visible : Bool
   // The paths the host's watcher currently follows (`None` = parked). Keeping
   // the full configuration makes opening/closing a tab or expanding/collapsing
@@ -317,8 +300,6 @@ pub(all) struct State {
   // The directory a breadcrumb click most recently revealed, flashed in the
   // tree until `HighlightCleared` fires.
   highlighted : @pathx.Relative?
-  // The workspace file list consumed by unified Quick Open.
-  index : FileIndex
   // The last directory/file failure, surfaced in the panel header;
   // `None` while nothing has failed.
   error : String?
@@ -352,7 +333,6 @@ pub fn State::empty() -> State {
     children: Map([]),
     docs: Map([]),
     highlighted: None,
-    index: IndexEmpty,
     error: None,
   }
 }
@@ -436,9 +416,6 @@ pub(all) enum Msg {
   // Expand or collapse a directory row in the file tree; the first expansion
   // lazily lists the directory through the host.
   DirToggle(@pathx.Relative)
-  // Ensure the workspace-wide file index exists for unified Quick Open.
-  // Loading/ready states make this idempotent; Failed retries.
-  EnsureFileIndex
   // A `read_directory` reply: `owner`/`path` say which request it answers so a
   // reply that lost a conversation switch can be dropped.
   DirLoaded(
@@ -453,17 +430,6 @@ pub(all) enum Msg {
     path~ : @pathx.Relative,
     message~ : String
   )
-  // A `list_files` reply: the workspace's files for unified Quick Open.
-  // `truncated` means the host's walk stopped at its cap.
-  FilesIndexed(
-    owner~ : @interop.ConversationKey,
-    epoch~ : Int,
-    files~ : Array[@pathx.Relative],
-    truncated~ : Bool
-  )
-  // A `list_files` request failed or returned garbage. An initial failure
-  // becomes `IndexFailed`; a failed background refresh retains a ready index.
-  FileIndexFailed(owner~ : @interop.ConversationKey, epoch~ : Int)
   // A `git.changes` reply. `head` carries the immutable comparison when the
   // host can identify one: the task baseline when present, otherwise resolved
   // HEAD for a modern root conversation. `None` means no commit exists or a

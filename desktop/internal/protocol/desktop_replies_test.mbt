@@ -109,3 +109,47 @@ test "Git original-file payloads pin a revision and accept legacy omission" {
   })
   @debug.assert_eq(legacy.revision, None)
 }
+
+///|
+test "file search payload and reply round-trip at the JSON boundary" {
+  let raw_payload : Json = {
+    "session": "session-1",
+    "workspace": "/work/project",
+    "cache_key": "quick-open:session-1:7",
+    "query": "src main",
+    "max_results": 512,
+    "generation": 7,
+  }
+  let payload : @protocol.SearchFilesPayload = @json.from_json(raw_payload)
+  assert_eq(payload.session, "session-1")
+  assert_true(payload.workspace is Some("/work/project"))
+  assert_eq(payload.cache_key, "quick-open:session-1:7")
+  assert_eq(payload.query, "src main")
+  assert_eq(payload.max_results, 512)
+  assert_eq(payload.generation, 7)
+  @debug.assert_eq(payload.to_json(), raw_payload)
+  let raw_reply : Json = {
+    "files": ["src/main.mbt", "src/main_test.mbt"],
+    "from_cache": true,
+    "limit_hit": false,
+    "cancelled": false,
+  }
+  let reply : @protocol.SearchFilesReply = @json.from_json(raw_reply)
+  assert_eq(reply.files, ["src/main.mbt", "src/main_test.mbt"])
+  assert_true(reply.from_cache)
+  assert_false(reply.limit_hit)
+  assert_false(reply.cancelled)
+  @debug.assert_eq(reply.to_json(), raw_reply)
+  let raw_cancel : Json = {
+    "cache_key": "quick-open:session-1:7",
+    "generation": 7,
+  }
+  let cancel : @protocol.CancelSearchFilesPayload = @json.from_json(raw_cancel)
+  assert_eq(cancel.cache_key, "quick-open:session-1:7")
+  assert_eq(cancel.generation, 7)
+  @debug.assert_eq(cancel.to_json(), raw_cancel)
+  let raw_clear : Json = { "cache_key": "quick-open:session-1:7" }
+  let clear : @protocol.ClearFileSearchCachePayload = @json.from_json(raw_clear)
+  assert_eq(clear.cache_key, "quick-open:session-1:7")
+  @debug.assert_eq(clear.to_json(), raw_clear)
+}

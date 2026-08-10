@@ -271,13 +271,16 @@ test "remote endpoint catalog has one entry per command name" {
     }
     names.push(name)
   }
-  assert_eq(names.length(), 54)
+  assert_eq(names.length(), 56)
   assert_true(names.contains("agent.start"))
   assert_true(names.contains("app.info"))
   assert_true(names.contains("git.changes"))
   assert_true(names.contains("git.pull_request"))
   assert_true(names.contains("git.original_file"))
   assert_true(names.contains("terminal.close"))
+  assert_true(names.contains("fs.search_files"))
+  assert_true(names.contains("fs.cancel_search_files"))
+  assert_true(names.contains("fs.clear_file_search_cache"))
   assert_true(names.contains("moonide.references"))
   assert_false(names.contains("host.connect"))
   assert_false(names.contains("shell.open_external"))

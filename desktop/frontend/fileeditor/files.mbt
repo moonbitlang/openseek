@@ -58,52 +58,6 @@ fn read_directory(
 }
 
 ///|
-/// Ask the host for the workspace's full file list (Quick Open's file index)
-/// and fold it back as `FilesIndexed`. Failures fold as `FileIndexFailed` so a
-/// later Quick Open can retry an initial failure.
-fn list_files(
-  dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
-  epoch : Int,
-  workspace~ : @common.Uri?,
-) -> @cmd.Cmd {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
-      return @cmd.none
-    _ => ()
-  }
-  @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
-      let reply = @interop.bridge_request(
-        owner.channel,
-        @commands.fs_list_files,
-        {
-          session: owner.session,
-          workspace: workspace.map(value => value.path),
-        },
-      ) catch {
-        _ => {
-          scheduler.add(dispatch(FileIndexFailed(owner~, epoch~)))
-          return
-        }
-      }
-      let files = reply.files.filter_map(path => {
-        if path.is_empty() {
-          None
-        } else {
-          Some(@pathx.Relative(path))
-        }
-      })
-      scheduler.add(
-        dispatch(
-          FilesIndexed(owner~, epoch~, files~, truncated=reply.truncated),
-        ),
-      )
-    })
-  })
-}
-
-///|
 /// Read `path` and fold its contents back as `FileLoaded`. `name` is the
 /// entry's display name, forwarded for the viewer's title and language guess.
 /// `range`, when present (a symbol jump's target), is forwarded for the

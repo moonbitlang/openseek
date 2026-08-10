@@ -721,9 +721,9 @@ priv enum QuickOpenItem {
 /// The shell's transient unified Quick Open. `value` is the exact text shown in
 /// the input, including the `#` provider prefix when symbols are active.
 /// Its owner fences results to one conversation; `generation` separates
-/// successive symbol queries even when their text is identical. The page-level
-/// counter lives on `Model`, so closing the palette cannot make an old reply
-/// current again.
+/// successive file and symbol queries even when their text is identical. The
+/// page-level counter lives on `Model`, so closing the palette cannot make an
+/// old reply current again.
 priv struct QuickOpen {
   owner : @interop.ConversationKey
   value : String
@@ -731,19 +731,33 @@ priv struct QuickOpen {
   selected : Int
   phase : QuickOpenPhase
   generation : Int
-  truncated : Bool
 } derive(Eq)
 
 ///|
-/// Symbol queries wait briefly while the user types; file filtering is local
-/// once the workspace index is ready. Ready deliberately includes an empty
-/// result; Failed is reserved for bridge/request failure.
+/// File and symbol queries wait briefly while the user types. Ready deliberately
+/// includes an empty result; Failed is reserved for bridge/request failure.
 priv enum QuickOpenPhase {
   QuickOpenDebouncing
   QuickOpenLoading
   QuickOpenReady
   QuickOpenFailed
 } derive(Eq)
+
+///|
+/// Frontend half of VS Code's FileQueryCacheState. `active_key` remains usable
+/// while `loading_key` warms a replacement for the same workspace. A failed
+/// replacement therefore cannot evict the last good cache.
+priv struct FileQueryCacheState {
+  owner : @interop.ConversationKey?
+  workspace : @common.Uri?
+  active_key : String?
+  loading_key : String?
+} derive(Eq)
+
+///|
+fn empty_file_query_cache() -> FileQueryCacheState {
+  { owner: None, workspace: None, active_key: None, loading_key: None }
+}
 
 ///|
 /// The mooncakes.io skill catalog as the Skills page sees it. One enum, so
@@ -1012,6 +1026,10 @@ priv struct Model {
   // hands the old checkout's outstanding replies a number the new one accepts.
   // Kept whole while the frontend runs, it can only ever be spent.
   git_request_generation : Int
+  // Search-provider cache state survives closing the picker. Reopening starts
+  // a fresh cache in the background and continues using the previous key until
+  // the replacement succeeds, matching VS Code's AnythingQuickAccess state.
+  file_query_cache : FileQueryCacheState
   // The desktop topbar's app launcher. Installed apps belong to the native
   // host, not a conversation or workspace, so this catalog is probed once
   // and kept while the frontend runs.
@@ -1243,6 +1261,38 @@ priv enum Msg {
   // Open unified Quick Open in the requested provider in either shell.
   QuickOpenOpen(QuickOpenMode)
   QuickOpenValueChanged(String)
+  // A delayed file query starts only if this owner/query/generation is still
+  // the palette's current state.
+  QuickOpenFilesDue(
+    owner~ : @interop.ConversationKey,
+    query~ : String,
+    generation~ : Int
+  )
+  QuickOpenFileCacheLoaded(
+    owner~ : @interop.ConversationKey,
+    cache_key~ : String,
+    generation~ : Int
+  )
+  QuickOpenFileCacheRequestFailed(
+    owner~ : @interop.ConversationKey,
+    cache_key~ : String,
+    generation~ : Int
+  )
+  QuickOpenFilesLoaded(
+    owner~ : @interop.ConversationKey,
+    cache_key~ : String,
+    query~ : String,
+    generation~ : Int,
+    files~ : Array[@pathx.Relative],
+    from_cache~ : Bool,
+    limit_hit~ : Bool
+  )
+  QuickOpenFilesRequestFailed(
+    owner~ : @interop.ConversationKey,
+    cache_key~ : String,
+    query~ : String,
+    generation~ : Int
+  )
   // A delayed symbol query starts only if this owner/query/generation is still
   // the palette's current state.
   QuickOpenDue(
@@ -1895,6 +1945,7 @@ fn initial_model() -> Model {
     quick_open: None,
     quick_open_generation: 0,
     git_request_generation: 0,
+    file_query_cache: empty_file_query_cache(),
     launcher: { open: false, apps: AppsNotFetched },
     git_details_open: false,
     dock: @dock.State::empty(),

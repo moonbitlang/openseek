@@ -197,9 +197,30 @@ pub(all) struct ReadDirPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-pub(all) struct ListFilesPayload {
+pub(all) struct SearchFilesPayload {
   session : String
   workspace : String?
+  // One Quick Open cache session. The first request populates it; subsequent
+  // queries reuse it until `fs.clear_file_search_cache` retires the key.
+  cache_key : String
+  query : String
+  // Zero warms the cache without returning rows; interactive queries use the
+  // picker limit. The Host applies its own hard upper bound.
+  max_results : Int
+  // Monotonic within the page. It identifies one cancellable query, not a
+  // cache generation.
+  generation : Int
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
+pub(all) struct CancelSearchFilesPayload {
+  cache_key : String
+  generation : Int
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
+pub(all) struct ClearFileSearchCachePayload {
+  cache_key : String
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
