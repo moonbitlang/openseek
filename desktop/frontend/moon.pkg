@@ -26,6 +26,7 @@ import {
   "openseek_desktop/frontend/preview",
   "openseek_desktop/frontend/resource",
   "openseek_desktop/frontend/transcript",
+  "openseek_desktop/frontend/crash_page",
 }
 
 supported_targets = "js"

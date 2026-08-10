@@ -120,6 +120,7 @@ fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? 
 ///|
 #warnings("-alert_unstable")
 pub fn boot() -> Unit {
+  @crash_page.install()
   let app = @rabbita.new(() => {
     let (state, emit) = @rabbita.create_state_with_init(
       // Init flows through `update` like any other message, as
