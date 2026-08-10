@@ -316,7 +316,10 @@ fn ensure_file_query_cache(
   let mut cache = if compatible {
     previous
   } else {
-    if previous.owner is Some(previous_owner) {
+    // Every Host cache key is created by a request with a concrete root. A
+    // rootless entry only records that Quick Open opened too early, so there
+    // is nothing to clear when Started later supplies that scratch root.
+    if previous.root is Some(_) && previous.owner is Some(previous_owner) {
       if previous.active_key is Some(key) {
         cmds.push(clear_quick_open_file_cache(previous_owner, key))
       }
@@ -346,6 +349,26 @@ fn ensure_file_query_cache(
     cmds.push(query_active_file_cache(dispatch, next, open))
   }
   (@cmd.batch(cmds), next)
+}
+
+///|
+/// Restart an open file picker when its conversation gains or changes its
+/// concrete root. This is the delayed half of opening Quick Open before a
+/// fresh scratch run has reported `Started.cwd`.
+fn Model::restart_quick_open_file_cache_after_root_change(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  owner : @interop.ConversationKey,
+  previous_root : @common.Uri?,
+) -> (@cmd.Cmd, Model) {
+  guard self.quick_open is Some(open) &&
+    open.owner == owner &&
+    open.mode() is QuickOpenFiles &&
+    quick_open_root(self, owner) is Some(current_root) &&
+    Some(current_root) != previous_root else {
+    return (@cmd.none, self)
+  }
+  ensure_file_query_cache(dispatch, self, open, true, true)
 }
 
 ///|
@@ -1160,6 +1183,46 @@ test "Quick Open prefixes providers and works in both shells" {
   }
   assert_true(browser_open.mode() is QuickOpenFiles)
   assert_eq(browser_open.value, "")
+}
+
+///|
+test "Started retries file Quick Open after a scratch root arrives" {
+  let dispatch = test_dispatch()
+  let base = { ..test_model(), is_desktop: true }
+  let owner = active_quick_open_owner(base)
+  let (_, opened) = update(dispatch, QuickOpenOpen(QuickOpenFiles), base)
+  guard opened.quick_open is Some(waiting) &&
+    opened.file_query_cache.loading_key is Some(cache_key) else {
+    fail("rootless Quick Open should wait for its file cache")
+  }
+  assert_eq(opened.file_query_cache.root, None)
+  let cwd = @interop.ChannelId::Local.test_resource("/work/scratch")
+  let started = Started(
+    run_id="scratch-run",
+    session=owner.session,
+    model=High,
+    max_steps=1000,
+    cwd=Some(cwd),
+    session_root=None,
+    task=Some("first scratch prompt"),
+    submission_id=None,
+  )
+  // The same message and model must produce the same plain-data state.
+  let (_, first) = update_dev(dispatch, started, opened)
+  let (_, second) = update_dev(dispatch, started, opened)
+  assert_true(first.file_query_cache == second.file_query_cache)
+  assert_true(first.quick_open == second.quick_open)
+  assert_eq(first.file_query_cache.root, Some(cwd))
+  assert_eq(first.file_query_cache.loading_key, Some(cache_key))
+  guard first.quick_open is Some(retrying) else {
+    fail("Started should leave the picker open")
+  }
+  assert_eq(retrying.generation, waiting.generation)
+  assert_true(retrying.phase is QuickOpenLoading)
+  // A duplicate Started has no root change and must not restart again.
+  let (_, duplicate) = update_dev(dispatch, started, first)
+  assert_true(duplicate.file_query_cache == first.file_query_cache)
+  assert_true(duplicate.quick_open == first.quick_open)
 }
 
 ///|

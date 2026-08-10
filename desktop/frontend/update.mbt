@@ -4410,6 +4410,7 @@ fn update_device_msg(
               .unwrap_or(selected_model),
           )
       }
+      let previous_root = model.conversation_root(existing)
       let existing = match dev.workspace_for_session_root(session_root) {
         Some(workspace) => { ..existing, workspace: Some(workspace) }
         None => existing
@@ -4587,7 +4588,11 @@ fn update_device_msg(
           ),
         )
       }
-      let updated = pinned
+      let owner : @interop.ConversationKey = { channel, session }
+      let (quick_open_cmd, updated) = pinned.restart_quick_open_file_cache_after_root_change(
+        dispatch, owner, previous_root,
+      )
+      commands.push(quick_open_cmd)
       // The model rode in on the conversation above; max steps is still one
       // global setting, so sync it only when this start belongs to the
       // conversation on screen. A slow background start (the user switched
