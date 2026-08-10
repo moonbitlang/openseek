@@ -3,10 +3,10 @@ name: Desktop release
 run-name: Desktop ${{ github.event_name == 'schedule' && 'stable' || inputs.channel }} v${{ github.event_name == 'schedule' && 'daily' || inputs.version }} by @${{ github.actor }}
 
 on:
-  # GitHub cron is UTC; these run at 12:00 and 18:30 in Asia/Shanghai.
+  # GitHub cron is UTC. These run every three hours at
+  # 00:00/03:00/06:00/09:00/12:00/15:00/18:00/21:00 in Asia/Shanghai.
   schedule:
-    - cron: "0 4 * * *"
-    - cron: "30 10 * * *"
+    - cron: "0 1,4,7,10,13,16,19,22 * * *"
   workflow_dispatch:
     inputs:
       channel:
@@ -29,12 +29,51 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
+  release-needed:
+    name: Check for updates
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.check.outputs.release }}
+    steps:
+      # Manual staging/stable dispatches are explicit release requests. A
+      # scheduled run only proceeds when main differs from the newest
+      # successful stable run; failed releases therefore retry the same SHA.
+      - name: Compare main with the latest stable release
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" != "schedule" ]]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "Manual ${{ inputs.channel }} release requested." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          previous_sha="$(
+            gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/desktop-release.yml/runs" \
+              -f status=success \
+              -f per_page=100 \
+              --jq '[.workflow_runs[] | select(.head_branch == "main" and (.display_title | startswith("Desktop stable ")))][0].head_sha // ""'
+          )"
+          if [[ -n "$previous_sha" && "$previous_sha" == "$GITHUB_SHA" ]]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "No commits since the latest successful stable release ($GITHUB_SHA)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "Stable update found: ${previous_sha:-none} -> $GITHUB_SHA." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   release-macos:
     name: Sign, notarize, and publish macOS
-    if: github.ref == 'refs/heads/main'
+    needs: release-needed
+    if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
     runs-on: macos-latest
     timeout-minutes: 120
     env:
