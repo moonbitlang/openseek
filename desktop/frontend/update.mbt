@@ -1371,6 +1371,12 @@ fn update(
   // opened. Device/session switches can arrive through many messages (and
   // background pushes), so fence it once here rather than in every branch.
   let (quick_open_cmd, model) = close_stale_quick_open(dispatch, model)
+  // A conversation's concrete root can change through Started, restored
+  // session data, or a worktree registry broadcast. Restart an open picker
+  // once here so every path gets the same stale-result fence.
+  let (quick_open_restart_cmd, model) = model.restart_quick_open_after_root_change(
+    dispatch, previous,
+  )
   // The composer's git popover belongs to the checkout that was on screen,
   // and is fenced the same way and for the same reason. It cannot rely on its
   // click-away listener here: a switch by keyboard — Cmd+N, Quick Open — makes
@@ -1407,7 +1413,8 @@ fn update(
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
-      cmd, quick_open_cmd, dock_mount_cmd, panel_cmd, terminal_cmd, browser_cmd,
+      cmd, quick_open_cmd, quick_open_restart_cmd, dock_mount_cmd, panel_cmd, terminal_cmd,
+      browser_cmd,
     ]),
     model,
   )
@@ -4410,7 +4417,6 @@ fn update_device_msg(
               .unwrap_or(selected_model),
           )
       }
-      let previous_root = model.conversation_root(existing)
       let existing = match dev.workspace_for_session_root(session_root) {
         Some(workspace) => { ..existing, workspace: Some(workspace) }
         None => existing
@@ -4588,11 +4594,7 @@ fn update_device_msg(
           ),
         )
       }
-      let owner : @interop.ConversationKey = { channel, session }
-      let (quick_open_cmd, updated) = pinned.restart_quick_open_file_cache_after_root_change(
-        dispatch, owner, previous_root,
-      )
-      commands.push(quick_open_cmd)
+      let updated = pinned
       // The model rode in on the conversation above; max steps is still one
       // global setting, so sync it only when this start belongs to the
       // conversation on screen. A slow background start (the user switched

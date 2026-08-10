@@ -1391,7 +1391,10 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let cwd = @interop.ChannelId::Local.test_resource("/proj/.worktrees/wt")
-  let model = test_model()
+  let owner = active_quick_open_owner(test_model())
+  let generation = 7
+  let old_key = file_query_cache_key(owner, generation)
+  let placed = test_model()
     .replace_conversation({
       ..test_conversation(),
       workspace: Some(workspace),
@@ -1405,11 +1408,29 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
       worktrees: [{ workspace, rows: test_worktree_rows(), generation: 1 }],
       worktrees_request_generation: 1,
     })
-  let (_, changed) = update_dev(
-    dispatch,
-    WorktreesChanged([], workspace~),
-    model,
-  )
+  let model = {
+    ..placed,
+    quick_open: Some({
+      owner,
+      value: "",
+      items: [QuickOpenFile(@pathx.Relative("old-only.mbt"))],
+      selected: 0,
+      phase: QuickOpenReady,
+      generation,
+    }),
+    quick_open_generation: generation,
+    file_query_cache: {
+      owner: Some(owner),
+      root: Some(cwd),
+      active_key: Some(old_key),
+      loading_key: None,
+    },
+  }
+  let changed_msg = WorktreesChanged([], workspace~)
+  let (_, repeated) = update_dev(dispatch, changed_msg, model)
+  let (_, changed) = update_dev(dispatch, changed_msg, model)
+  assert_true(changed.file_query_cache == repeated.file_query_cache)
+  assert_true(changed.quick_open == repeated.quick_open)
   inspect(changed.dev().worktrees_request_generation, content="2")
   assert_true(
     worktree_name_for(changed.dev(), Some(workspace), "desktop-wt") is None,
@@ -1421,6 +1442,30 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
   assert_true(changed.active().worktree is None)
   assert_true(changed.active().cwd is None)
   assert_true(changed.active().branch is None)
+  assert_eq(changed.file_query_cache.root, Some(workspace))
+  guard changed.file_query_cache.loading_key is Some(new_key) &&
+    changed.quick_open is Some(restarted) else {
+    fail("workspace file cache should restart")
+  }
+  assert_true(new_key != old_key)
+  assert_eq(restarted.generation, generation + 1)
+  assert_true(restarted.phase is QuickOpenLoading)
+  assert_eq(restarted.items.length(), 0)
+  let (_, stale_files) = update(
+    dispatch,
+    QuickOpenFilesLoaded(
+      owner~,
+      cache_key=old_key,
+      query="",
+      generation~,
+      files=[@pathx.Relative("stale.mbt")],
+      from_cache=true,
+      limit_hit=false,
+    ),
+    changed,
+  )
+  assert_true(stale_files.file_query_cache == changed.file_query_cache)
+  assert_true(stale_files.quick_open == changed.quick_open)
   let (_, stale) = update_dev(
     dispatch,
     WorktreesLoaded(

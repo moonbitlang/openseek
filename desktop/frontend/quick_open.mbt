@@ -35,7 +35,7 @@ fn quick_open_symbol_request(
     dispatch,
     owner,
     query,
-    root=model.conversation_root(model.active()),
+    root=quick_open_root(model, owner),
     generation~,
   )
 }
@@ -352,23 +352,71 @@ fn ensure_file_query_cache(
 }
 
 ///|
-/// Restart an open file picker when its conversation gains or changes its
-/// concrete root. This is the delayed half of opening Quick Open before a
-/// fresh scratch run has reported `Started.cwd`.
-fn Model::restart_quick_open_file_cache_after_root_change(
+/// Restart the current provider when its conversation root changes, including
+/// transitions to or from an unavailable root. The page-level update wrapper
+/// calls this after every message, so Started, session restoration, and
+/// worktree registry broadcasts share one transition. Advancing the generation
+/// also fences replies that were already in flight against the previous root.
+fn Model::restart_quick_open_after_root_change(
   self : Model,
   dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
-  previous_root : @common.Uri?,
+  previous : Model,
 ) -> (@cmd.Cmd, Model) {
-  guard self.quick_open is Some(open) &&
-    open.owner == owner &&
-    open.mode() is QuickOpenFiles &&
-    quick_open_root(self, owner) is Some(current_root) &&
-    Some(current_root) != previous_root else {
+  guard previous.quick_open is Some(previous_open) &&
+    self.quick_open is Some(open) &&
+    open.owner == previous_open.owner else {
     return (@cmd.none, self)
   }
-  ensure_file_query_cache(dispatch, self, open, true, true)
+  let previous_root = quick_open_root(previous, open.owner)
+  let current_root = quick_open_root(self, open.owner)
+  guard current_root != previous_root else { return (@cmd.none, self) }
+  let generation = self.quick_open_generation + 1
+  let restarted : QuickOpen = {
+    ..open,
+    items: [],
+    selected: 0,
+    phase: QuickOpenLoading,
+    generation,
+  }
+  let next = {
+    ..self,
+    quick_open: Some(restarted),
+    quick_open_generation: generation,
+  }
+  match restarted.mode() {
+    QuickOpenFiles => {
+      // Keep only currently open relative paths as provisional rows; Host
+      // results from the previous root must disappear immediately.
+      let projected = quick_open_with_file_candidates(
+        next,
+        restarted,
+        [],
+        QuickOpenLoading,
+      )
+      let next = { ..next, quick_open: Some(projected) }
+      let (cache_cmd, next) = ensure_file_query_cache(
+        dispatch, next, projected, true, true,
+      )
+      (
+        @cmd.batch([
+          cancel_quick_open_file_request(dispatch, self, open),
+          cache_cmd,
+        ]),
+        next,
+      )
+    }
+    QuickOpenSymbols =>
+      (
+        quick_open_symbol_request(
+          dispatch,
+          next,
+          restarted.owner,
+          restarted.query(),
+          generation,
+        ),
+        next,
+      )
+  }
 }
 
 ///|
@@ -1186,7 +1234,7 @@ test "Quick Open prefixes providers and works in both shells" {
 }
 
 ///|
-test "Started retries file Quick Open after a scratch root arrives" {
+test "Started retries file and symbol Quick Open after a scratch root arrives" {
   let dispatch = test_dispatch()
   let base = { ..test_model(), is_desktop: true }
   let owner = active_quick_open_owner(base)
@@ -1213,16 +1261,49 @@ test "Started retries file Quick Open after a scratch root arrives" {
   assert_true(first.file_query_cache == second.file_query_cache)
   assert_true(first.quick_open == second.quick_open)
   assert_eq(first.file_query_cache.root, Some(cwd))
-  assert_eq(first.file_query_cache.loading_key, Some(cache_key))
+  guard first.file_query_cache.loading_key is Some(restarted_key) else {
+    fail("Started should restart file-cache population")
+  }
+  assert_true(restarted_key != cache_key)
   guard first.quick_open is Some(retrying) else {
     fail("Started should leave the picker open")
   }
-  assert_eq(retrying.generation, waiting.generation)
+  assert_eq(retrying.generation, waiting.generation + 1)
   assert_true(retrying.phase is QuickOpenLoading)
   // A duplicate Started has no root change and must not restart again.
   let (_, duplicate) = update_dev(dispatch, started, first)
   assert_true(duplicate.file_query_cache == first.file_query_cache)
   assert_true(duplicate.quick_open == first.quick_open)
+  let (_, symbol_opened) = update(
+    dispatch,
+    QuickOpenOpen(QuickOpenSymbols),
+    base,
+  )
+  guard symbol_opened.quick_open is Some(symbol_waiting) else {
+    fail("rootless symbol Quick Open should remain open")
+  }
+  let (_, symbol_first) = update_dev(dispatch, started, symbol_opened)
+  let (_, symbol_second) = update_dev(dispatch, started, symbol_opened)
+  assert_true(symbol_first.quick_open == symbol_second.quick_open)
+  guard symbol_first.quick_open is Some(symbol_retrying) else {
+    fail("Started should leave the symbol picker open")
+  }
+  assert_eq(symbol_retrying.generation, symbol_waiting.generation + 1)
+  assert_eq(symbol_retrying.query(), symbol_waiting.query())
+  assert_true(symbol_retrying.phase is QuickOpenLoading)
+  let (_, stale) = update(
+    dispatch,
+    QuickOpenSymbolsLoaded(
+      owner~,
+      query=symbol_waiting.query(),
+      generation=symbol_waiting.generation,
+      items=[test_workspace_symbol("stale", "src/old.mbt")],
+    ),
+    symbol_first,
+  )
+  assert_true(stale.quick_open == symbol_first.quick_open)
+  let (_, symbol_duplicate) = update_dev(dispatch, started, symbol_first)
+  assert_true(symbol_duplicate.quick_open == symbol_first.quick_open)
 }
 
 ///|
