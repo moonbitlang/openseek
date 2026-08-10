@@ -339,6 +339,7 @@ test "legacy watch payloads retain the recursive blacklist" {
   assert_true(interest.legacy_full_tree)
   assert_true(interest.ignores(Relative("deps/node_modules")))
   assert_true(interest.ignores(Relative(".claude")))
+  assert_true(interest.ignores(Relative("sub/.claude")))
   assert_true(interest.ignores(Relative("packages/app/.codex")))
   assert_true(interest.ignores(Relative("packages/app/.cursor")))
   assert_true(interest.ignores(Relative("packages/app/.moonagent")))

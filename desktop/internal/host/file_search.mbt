@@ -666,6 +666,7 @@ async test "file scan keeps lexicographic DFS and skips ignored directories" {
     match dir.to_string() {
       path if path == root.to_string() =>
         [
+          test_scan_entry(".claude", true),
           test_scan_entry(".git", true),
           test_scan_entry("linked-dir", false),
           test_scan_entry("src", true),
@@ -711,10 +712,16 @@ async test "native file scan uses the same ignore and DFS semantics" {
       @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
     })
     @fs.mkdir("\{root}/a", recursive=true)
+    @fs.mkdir("\{root}/.claude/session", recursive=true)
     @fs.mkdir("\{root}/node_modules/pkg", recursive=true)
     @fs.write_file("\{root}/a/2.mbt", "", create_mode=CreateOrTruncate)
     @fs.write_file("\{root}/a/1.mbt", "", create_mode=CreateOrTruncate)
     @fs.write_file("\{root}/a.txt", "", create_mode=CreateOrTruncate)
+    @fs.write_file(
+      "\{root}/.claude/session/state.json",
+      "",
+      create_mode=CreateOrTruncate,
+    )
     @fs.write_file(
       "\{root}/node_modules/pkg/hidden.mbt",
       "",
