@@ -460,7 +460,7 @@ fn Viewer::show_agent_feedback_input(
   ic.pinned_range = Some(range)
   ic.anchor_position = Some(anchor)
   ic.prefer_below = prefer_below
-  widget.set_placeholder("Add Feedback")
+  widget.set_placeholder("Add feedback")
   widget.clear_input()
   widget.show()
   self.update_agent_feedback_input_position()

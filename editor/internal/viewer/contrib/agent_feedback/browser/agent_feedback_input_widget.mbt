@@ -1,8 +1,8 @@
 // The inline "Add Feedback" input, porting `AgentFeedbackInputWidget`
 // (`vscode/src/vs/sessions/contrib/agentFeedback/browser/
 // agentFeedbackEditorInputContribution.ts:44-242`): a floating overlay node
-// with an auto-growing textarea, a hidden measure span for width sizing, and
-// one icon action that swaps Add ↔ Add-and-Submit while Alt is held
+// with an auto-growing textarea and review-style Cancel/Add actions. The
+// primary action swaps Add ↔ Add-and-Submit while Alt is held
 // (upstream's `ModifierKeyEmitter` swap, driven here from the textarea's own
 // keydown/keyup since the widget owns the focus while typing). The widget is
 // a null-position overlay widget: the glue positions it by writing
@@ -11,11 +11,14 @@
 // Alt+Enter adds and submits, Escape cancels). The editor-keydown steal and
 // `Ctrl+I` focus routing of the upstream contribution go through the viewer's
 // keybinding registry instead. Dropped: the ActionBar/keybinding-label chrome
-// (a plain button) and the readonly-editor typing capture.
+// and the readonly-editor typing capture.
 
 ///|
 /// `_MIN_WIDTH` / `_MAX_WIDTH` / `_MAX_WIDTH_EDITOR_FRACTION`.
-let input_min_width_px : Double = 150.0
+let input_min_width_px : Double = 280.0
+
+///|
+let input_default_width_px : Double = 360.0
 
 ///|
 let input_max_width_px : Double = 400.0
@@ -24,8 +27,10 @@ let input_max_width_px : Double = 400.0
 let input_max_width_editor_fraction : Double = 0.9
 
 ///|
-/// The textarea line height the widget sizes against (`_lineHeight = 22`).
-let input_line_height_px : Double = 22.0
+let input_min_height_px : Double = 64.0
+
+///|
+let input_max_height_px : Double = 180.0
 
 ///|
 /// The glue-facing seam: submit/cancel routing plus the geometry reads the
@@ -52,7 +57,7 @@ struct AgentFeedbackInputWidget {
   host : AgentFeedbackInputWidgetHost
   root : @rdom.Element
   textarea : @rdom.Element
-  measure : @rdom.Element
+  cancel : @rdom.Element
   action : @rdom.Element
   mut showing_alt : Bool
 }
@@ -66,25 +71,31 @@ pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
   root.set_attribute("class", "agent-feedback-input-widget")
   root.set_attribute("style", "display:none")
   let textarea = document.create_element("textarea")
-  textarea.set_attribute("rows", "1")
-  textarea.set_attribute("placeholder", "Add Feedback")
+  textarea.set_attribute("rows", "3")
+  textarea.set_attribute("placeholder", "Add feedback")
+  textarea.set_attribute("aria-label", "Feedback")
   textarea.set_attribute("data-agent-feedback-input", "true")
   root.append_child(textarea.as_node())
-  let measure = document.create_element("span")
-  measure.set_attribute("class", "agent-feedback-input-measure")
-  root.append_child(measure.as_node())
   let actions = document.create_element("div")
   actions.set_attribute("class", "agent-feedback-input-actions")
+  let cancel = document.create_element("button")
+  cancel.set_attribute("type", "button")
+  cancel.set_attribute(
+    "class", "agent-feedback-input-action agent-feedback-input-action-cancel",
+  )
+  cancel.set_attribute("title", "Cancel feedback (Escape)")
+  cancel.set_inner_html("Cancel")
   let action = document.create_element("button")
   action.set_attribute("type", "button")
   action.set_attribute("data-agent-feedback-action", "add")
+  actions.append_child(cancel.as_node())
   actions.append_child(action.as_node())
   root.append_child(actions.as_node())
   let widget : AgentFeedbackInputWidget = {
     host,
     root,
     textarea,
-    measure,
+    cancel,
     action,
     showing_alt: false,
   }
@@ -101,21 +112,25 @@ pub fn AgentFeedbackInputWidget::get_dom_node(
 }
 
 ///|
-/// `_updateActionForAlt`: one button whose icon/title swap between Add
-/// (plus) and Add-and-Submit (send) with the Alt key.
+/// `_updateActionForAlt`: the primary button's label/title swap between Add
+/// and Add-and-Submit with the Alt key.
 fn AgentFeedbackInputWidget::render_action(
   self : AgentFeedbackInputWidget,
 ) -> Unit {
   if self.showing_alt {
     self.action.set_attribute(
-      "class", "agent-feedback-input-action agent-feedback-input-action-send",
+      "class", "agent-feedback-input-action agent-feedback-input-action-primary agent-feedback-input-action-send",
     )
     self.action.set_attribute("title", "Add Feedback and Submit (Alt+Enter)")
+    self.action.set_attribute("aria-label", "Add feedback and submit")
+    self.action.set_inner_html("Add &amp; submit")
   } else {
     self.action.set_attribute(
-      "class", "agent-feedback-input-action agent-feedback-input-action-add",
+      "class", "agent-feedback-input-action agent-feedback-input-action-primary agent-feedback-input-action-add",
     )
     self.action.set_attribute("title", "Add Feedback (Enter)")
+    self.action.set_attribute("aria-label", "Add feedback")
+    self.action.set_inner_html("Add feedback")
   }
   self.update_action_enabled()
 }
@@ -134,10 +149,16 @@ fn AgentFeedbackInputWidget::hook_events(
   self.root.add_event_listener("mousedown", event => {
     event.stop_propagation()
     if !input_event_targets(event, self.textarea) &&
-      !input_event_targets(event, self.action) {
+      !input_event_targets(event, self.action) &&
+      !input_event_targets(event, self.cancel) {
       event.prevent_default()
       @base_browser.focus_prevent_scroll(self.textarea)
     }
+  })
+  self.cancel.add_event_listener("click", event => {
+    event.prevent_default()
+    event.stop_propagation()
+    (self.host.on_cancel)()
   })
   self.action.add_event_listener("click", event => {
     event.prevent_default()
@@ -280,7 +301,7 @@ pub fn AgentFeedbackInputWidget::has_text(
 
 ///|
 /// The rendered size, for the glue's flip/clamp positioning (upstream read
-/// `offsetHeight`/`offsetWidth` with the same `30`/`150` fallbacks).
+/// `offsetHeight`/`offsetWidth` with review-card-sized fallbacks).
 pub fn AgentFeedbackInputWidget::measured_height(
   self : AgentFeedbackInputWidget,
 ) -> Double {
@@ -288,7 +309,7 @@ pub fn AgentFeedbackInputWidget::measured_height(
   if height > 0.0 {
     height
   } else {
-    30.0
+    112.0
   }
 }
 
@@ -300,7 +321,7 @@ pub fn AgentFeedbackInputWidget::measured_width(
   if width > 0.0 {
     width
   } else {
-    input_min_width_px
+    input_default_width_px
   }
 }
 
@@ -316,38 +337,17 @@ fn AgentFeedbackInputWidget::update_action_enabled(
 }
 
 ///|
-/// `_autoSize`: width from the measured text (clamped between an effective
-/// minimum and a maximum that never exceeds the editor content area), height
-/// from the textarea's scroll height. An empty input uses the placeholder only
-/// when that attribute exists.
+/// `_autoSize`: keep a stable review-card width that never exceeds the editor
+/// content area, and grow the textarea with its draft up to a practical cap.
 fn AgentFeedbackInputWidget::auto_size(self : AgentFeedbackInputWidget) -> Unit {
-  let value = self.value()
-  let text = if value.is_empty() &&
-    self.textarea.get_attribute("placeholder") is Some(placeholder) {
-    placeholder
-  } else {
-    value
-  }
-  self.measure.set_inner_html(@base_common.escape_html(text))
-  let text_width = input_scroll_width(self.measure)
   let max_width_cap = (self.host.content_width)() *
     input_max_width_editor_fraction
   let max_width = input_max_width_px.min(max_width_cap)
   let min_width = input_min_width_px.min(max_width)
-  let desired = (text_width + 10.0).max(min_width)
-  let width = desired.min(max_width)
-  @base_browser.set_style_property(
-    self.textarea,
-    "min-width",
-    "\{min_width.to_string()}px",
-  )
-  @base_browser.set_style_property(
-    self.textarea,
-    "width",
-    "\{width.to_string()}px",
-  )
+  let width = input_default_width_px.min(max_width).max(min_width)
+  @base_browser.set_style_property(self.root, "width", "\{width.to_string()}px")
   let height = input_textarea_grown_height(self.textarea)
-  let clamped_height = height.max(input_line_height_px)
+  let clamped_height = height.max(input_min_height_px).min(input_max_height_px)
   @base_browser.set_style_property(
     self.textarea,
     "height",
@@ -376,9 +376,6 @@ extern "js" fn input_set_textarea_value(
   element : @rdom.Element,
   value : String,
 ) -> Unit = "(el, v) => { el.value = v }"
-
-///|
-extern "js" fn input_scroll_width(element : @rdom.Element) -> Double = "(el) => el.scrollWidth ?? 0"
 
 ///|
 /// Resets the textarea height to `auto` and reports the content height —

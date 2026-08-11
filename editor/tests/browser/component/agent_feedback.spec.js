@@ -120,20 +120,37 @@ test('agent feedback: bubbles, glyph add flow, reply, remove, scroll', async ({ 
   const input = page.locator('.agent-feedback-input-widget textarea');
   await expect(input).toBeVisible();
   await expect(input).toBeFocused();
+  const cancelFeedback = page.locator(
+    '.agent-feedback-input-action-cancel',
+  );
+  const addFeedback = page.locator(
+    '.agent-feedback-input-action-primary',
+  );
+  await expect(cancelFeedback).toHaveText('Cancel');
+  await expect(addFeedback).toHaveText('Add feedback');
+  await expect(addFeedback).toBeDisabled();
   await input.fill('Needs a guard clause');
+  await expect(addFeedback).toBeEnabled();
   const singleLineHeight = (await boxOf(input)).height;
   await input.press('Shift+Enter');
   await expect(input).toHaveValue('Needs a guard clause\n');
   await expect(input).toBeFocused();
-  await expect.poll(async () => (await boxOf(input)).height)
-    .toBeGreaterThan(singleLineHeight);
   await expect.poll(async () => (await eventCounts(page)).added).toBe(0);
   await input.type('Keep the early return focused');
+  await input.press('Shift+Enter');
+  await input.type('Leave a concise note');
+  await input.press('Shift+Enter');
+  await expect.poll(async () => (await boxOf(input)).height)
+    .toBeGreaterThan(singleLineHeight);
+  await input.type('Avoid nested branching');
   await input.press('Enter');
   await expect.poll(async () => (await eventCounts(page)).added).toBe(1);
   await expect
     .poll(async () => (await eventCounts(page)).lastText)
-    .toBe('Needs a guard clause\nKeep the early return focused');
+    .toBe(
+      'Needs a guard clause\nKeep the early return focused\n' +
+        'Leave a concise note\nAvoid nested branching',
+    );
   await expect(page.locator('.agent-feedback-input-widget')).not.toBeVisible();
   await expect(widgets).toHaveCount(3);
 
