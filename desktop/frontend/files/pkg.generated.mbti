@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/files"
+
+import {
+  "moonbitlang/core/debug",
+  "openseek_desktop/frontend/pathx",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct Match {
+  path : @pathx.Relative
+  name : String
+} derive(Eq, @debug.Debug)
+
+pub struct Search {
+  candidates : Array[@pathx.Relative]
+}
+pub fn Search::Search(Array[@pathx.Relative], Array[@pathx.Relative], @pathx.Relative?) -> Self
+pub fn Search::rank(Self, String, limit? : Int) -> Array[Match]
+
+// Type aliases
+
+// Traits
