@@ -243,7 +243,7 @@ fn symbol_cache(
   names : Array[String],
 ) -> SymbolCache {
   let items = names.map(name => {
-    symbol_item(
+    CompletionItem::symbol(
       name,
       container=None,
       path="src/main.mbt",
@@ -421,7 +421,7 @@ test "hash menu is loading until the cache catches up to the query" {
 ///|
 test "symbol_item resolves a jump target only when the symbol has a path" {
   let range = @common.Range::Range(5, 4, 5, 15)
-  let placed = symbol_item(
+  let placed = CompletionItem::symbol(
     "parse_hover",
     container=None,
     path="src/main.mbt",
@@ -431,7 +431,12 @@ test "symbol_item resolves a jump target only when the symbol has a path" {
   assert_true(placed.range is Some(placed_range) && placed_range == range)
   // The reference anchors at the range's (one-based) start line.
   assert_eq(placed.detail, "src/main.mbt:5")
-  let unplaced = symbol_item("parse_hover", container=None, path="", range~)
+  let unplaced = CompletionItem::symbol(
+    "parse_hover",
+    container=None,
+    path="",
+    range~,
+  )
   assert_true(unplaced.path is None)
   assert_true(unplaced.range is None)
 }
@@ -516,7 +521,7 @@ test "a draft of chips alone is not sendable" {
 
 ///|
 test "typed symbols retain kind and project one-based completion rows" {
-  let symbols = SymbolsProjection({
+  let symbols = @symbols.decode({
     symbols: [
       {
         name: "parse_hover",
@@ -533,12 +538,12 @@ test "typed symbols retain kind and project one-based completion rows" {
         range: { start: { line: 0, col: 0 }, end: { line: 0, col: 0 } },
       },
     ],
-  }).symbols()
+  })
   // The blank-name row is dropped; one good row remains.
   assert_eq(symbols.length(), 1)
   assert_eq(symbols[0].name, "parse_hover")
   assert_eq(symbols[0].kind, Some(12))
-  let item = symbols[0].completion_item()
+  let item = CompletionItem::from_symbol(symbols[0])
   // Detail reads container · path:line (line shown one-based).
   assert_eq(item.detail, "Lsp · a/b.mbt:5")
   // The zero-based wire range arrives as one-based viewer coordinates.

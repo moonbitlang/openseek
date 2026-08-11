@@ -854,7 +854,7 @@ fn apply_symbol_reply(
   }
   let items : Array[CompletionItem] = []
   for symbol in symbols {
-    items.push(symbol.completion_item())
+    items.push(CompletionItem::from_symbol(symbol))
   }
   let cache : SymbolCache = {
     owner: Some(owner),

@@ -29,6 +29,7 @@ import {
   "openseek_desktop/frontend/plan",
   "openseek_desktop/frontend/preview",
   "openseek_desktop/frontend/resource",
+  "openseek_desktop/frontend/symbols",
   "openseek_desktop/frontend/transcript",
   "openseek_desktop/frontend/crash_page",
 }
