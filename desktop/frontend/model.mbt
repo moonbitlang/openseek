@@ -2101,6 +2101,27 @@ fn initial_model() -> Model {
   // optional `?workspace=` places that device's first conversation.
   let page_channel = @interop.page_channel()
   let page_device = @interop.page_query_param("device")
+  // Capture the browser's exact local path once before the first render.
+  // Packaged release pages must return to their versioned bundle after OAuth;
+  // reading `window.location` later from `view` would make rendering impure.
+  let login_return_to = if @interop.js_prop(@js.globalThis, "location")
+    is Some(location) {
+    let pathname : String? = @js.Cast::into(
+      (location.get_with_string("pathname") : @js.Value),
+    )
+    let search : String? = @js.Cast::into(
+      (location.get_with_string("search") : @js.Value),
+    )
+    if pathname is Some(pathname) &&
+      pathname.has_prefix("/") &&
+      !pathname.has_prefix("//") {
+      pathname + search.unwrap_or("")
+    } else {
+      "/console/"
+    }
+  } else {
+    "/console/"
+  }
   let preselect_owner = match page_channel {
     Some(channel) => Some(channel)
     None => page_device.map(id => @interop.ChannelId::Remote(id))
@@ -2146,7 +2167,9 @@ fn initial_model() -> Model {
     console: if is_desktop {
       None
     } else {
-      Some(empty_console_state(page_device, preselect_workspace))
+      Some(
+        empty_console_state(page_device, preselect_workspace, login_return_to~),
+      )
     },
     system_dark: host_prefers_dark(),
     theme: System,

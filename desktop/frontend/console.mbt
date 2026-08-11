@@ -50,6 +50,10 @@ priv struct ConsoleState {
   // page's lifetime: one browser page/tab owns one device and never falls
   // through to another roster entry.
   page_device : String?
+  // The exact page-local pathname and query to restore after OAuth. Packaged
+  // releases retain their versioned frontend instead of falling through to
+  // the relay's current `/console/` bundle.
+  login_return_to : String
   // The optional `?workspace=` belongs to `page_device` and is consumed when
   // that device first connects and receives its initial conversation.
   preselect_workspace : @common.Uri?
@@ -67,6 +71,7 @@ priv struct ConsoleState {
 fn empty_console_state(
   page_device : String?,
   preselect_workspace : @common.Uri?,
+  login_return_to? : String = "/console/",
 ) -> ConsoleState {
   {
     auth: AuthChecking,
@@ -74,11 +79,32 @@ fn empty_console_state(
     roster_sync: RosterLoading,
     roster_request_generation: 0,
     page_device,
+    login_return_to,
     preselect_workspace,
     booted: false,
     busy: false,
     notice: None,
   }
+}
+
+///|
+/// The same-origin OAuth entry that restores this browser page afterwards.
+/// Encoding the complete return target keeps its path and query as one value.
+fn ConsoleState::login_url(self : ConsoleState) -> String {
+  "/v1/auth/login?return_to=\{@uri.encode_component(self.login_return_to)}"
+}
+
+///|
+test "browser sign-in returns to the same versioned console URL" {
+  let console = empty_console_state(
+    Some("d_abc"),
+    None,
+    login_return_to="/console/releases/v0.1.16/index.html?device=d_abc&workspace=%2Fws%2Fproj",
+  )
+  assert_eq(
+    console.login_url(),
+    "/v1/auth/login?return_to=%2Fconsole%2Freleases%2Fv0.1.16%2Findex.html%3Fdevice%3Dd_abc%26workspace%3D%252Fws%252Fproj",
+  )
 }
 
 ///|

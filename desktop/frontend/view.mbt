@@ -2924,18 +2924,12 @@ fn console_gate_view(
         }
       }
       AuthSignedOut => {
-        let mut return_to = "/console/?device=\{@uri.encode_component(id)}"
-        if console.preselect_workspace is Some(workspace) &&
-          @resource.path_for(workspace, Remote(id)) is Some(path) {
-          return_to = return_to + "&workspace=\{@uri.encode_component(path)}"
-        }
-        let login_url = "/v1/auth/login?return_to=\{@uri.encode_component(return_to)}"
         card.push(@html.h2("Sign in"))
         card.push(@html.p("Access this OpenSeek device from your browser."))
         card.push(
           @html.a(
             class="portal-button-link",
-            href=login_url,
+            href=console.login_url(),
             "Sign in with GitHub",
           ),
         )
