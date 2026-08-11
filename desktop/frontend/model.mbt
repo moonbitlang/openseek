@@ -1175,6 +1175,8 @@ priv struct Model {
   conversations : Array[Conversation]
   // The in-app folder picker behind "Add a project"; None while closed.
   project_picker : ProjectPicker?
+  // A confirmed add waiting for its registry snapshot; None otherwise.
+  pending_project_adoption : ProjectAdoption?
   // Whether the transcript is scrolled to its bottom. Streaming output only
   // auto-follows while this holds — scrolling up to read history must not be
   // yanked back down by the next delta. Maintained by a DOM scroll watcher;
@@ -1332,23 +1334,20 @@ priv struct GoalEdit {
 } derive(Eq)
 
 ///|
-/// The in-app folder picker's state: the host directory currently shown,
-/// its parent (None at the filesystem root), its subdirectories, and the
-/// editable path field. `loading` marks a browse in flight; `error` keeps a
-/// failed navigation's message beside the previous listing, which stays
-/// usable. `channel` owns every browse and the eventual workspace mutation;
+/// The in-app folder picker's state: the host directory currently shown and
+/// its subdirectories. `loading` marks a browse in flight; a failed
+/// navigation pops a toast while the previous listing stays usable.
+/// `channel` owns every browse and the eventual project mutation;
 /// `generation` numbers that picker's latest request. Both ride on replies,
 /// so neither a superseded navigation nor a closed picker from another
 /// device can replace the current listing.
 priv struct ProjectPicker {
   channel : @interop.ChannelId
   // The last directory the host successfully listed. `None` only while the
-  // initial home listing is in flight; typed go-to text stays in `input`.
+  // initial home listing is in flight.
   path : @common.Uri?
   entries : Array[String]
-  input : String
   loading : Bool
-  error : String?
   generation : Int
 } derive(Eq)
 
@@ -1358,16 +1357,23 @@ priv struct ProjectPicker {
 /// A picker that just opened: nothing browsed yet, first listing (the home
 /// directory) on its way.
 fn opening_project_picker(channel : @interop.ChannelId) -> ProjectPicker {
-  {
-    channel,
-    path: None,
-    entries: [],
-    input: "",
-    loading: true,
-    error: None,
-    generation: 1,
-  }
+  { channel, path: None, entries: [], loading: true, generation: 1 }
 }
+
+///|
+/// Set when the picker's confirm sends `workspace.add`, then settled in two
+/// phases because focusing needs two facts that arrive on two channels in
+/// either order. The add's own reply is the causal answer to *which*
+/// registry row is ours (realpath can respell the picked directory): it
+/// fills `resolved`. The fenced registry snapshots own the sidebar list, so
+/// the focus itself — activate, fresh chat, scroll into view — waits until
+/// a snapshot actually contains the resolved row.
+priv struct ProjectAdoption {
+  channel : @interop.ChannelId
+  picked : @common.Uri
+  known : Array[@common.Uri]
+  resolved : @common.Uri?
+} derive(Eq)
 
 ///|
 /// The Local native host's installed-app catalog. `AppsLoading` makes the
@@ -1625,8 +1631,12 @@ priv enum Msg {
   // Open the in-app folder picker against one device's host (browsing starts
   // at that host's home directory), selecting its channel first if needed.
   PickProject(@interop.ChannelId)
-  // Browse into a directory: a subdirectory row, the parent, or the typed
-  // path field on Enter.
+  // The Cmd/Ctrl+O chord: open the folder picker for the focused device. A
+  // no-op while the picker is already open, so a repeat chord cannot yank
+  // the listing back to the home directory mid-navigation.
+  AddProjectRequested
+  // Browse into a directory: a subdirectory row, a breadcrumb ancestor, or
+  // a path pasted while the picker is open.
   ProjectPickerNavigate(String)
   // One directory's listing came back from the host; `generation` names
   // the browse request it answers, so a stale reply is dropped.
@@ -1636,15 +1646,13 @@ priv enum Msg {
     entries~ : Array[String],
     generation~ : Int
   )
-  // A navigation failed; the message shows in the picker and the previous
+  // A navigation failed; the message pops as a toast and the previous
   // listing stays usable.
   ProjectPickerFailed(
     channel~ : @interop.ChannelId,
     message~ : String,
     generation~ : Int
   )
-  // The picker's path field changed.
-  ProjectPickerInput(String)
   // Register the picker's current directory and close it.
   ProjectPickerConfirm
   ProjectPickerClose
@@ -1888,6 +1896,13 @@ priv enum DeviceMsg {
   // The host's canonical post-commit registry broadcast. Every client adopts
   // the same list in durable write order and invalidates older list replies.
   ProjectsChanged(Array[@common.Uri])
+  // Our own `workspace.add`'s reply: the canonical list right after the
+  // commit, produced under the registry lock. `added` echoes the request's
+  // directory, pairing the reply with the confirm that sent it — a reply
+  // for a superseded confirm must not resolve the current pending. It only
+  // resolves identity and never touches the fenced list state; an empty
+  // list means the reply could not be read as resources.
+  ProjectAddCommitted(added~ : String, paths~ : Array[@common.Uri])
   ProjectFailed(String)
   // One workspace's worktree registry — the reply to `worktree.list`, with
   // the same two-generation staleness fence as `ProjectsLoaded`.
@@ -2208,6 +2223,7 @@ fn initial_model() -> Model {
     submission_sequence: 0,
     conversations: [],
     project_picker: None,
+    pending_project_adoption: None,
     archive_confirm: None,
     transcript_pinned: true,
     screen: Chat,

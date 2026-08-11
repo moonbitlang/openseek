@@ -167,3 +167,46 @@ test "file search payload and reply round-trip at the JSON boundary" {
   assert_eq(clear.cache_key, "quick-open:session-1:7")
   @debug.assert_eq(clear.to_json(), raw_clear)
 }
+
+///|
+test "workspace replies keep success compatible and carry refusals" {
+  let success : @protocol.WorkspacesReply = Workspaces(["/home/u/proj"])
+  @debug.assert_eq(success.to_json(), { "workspaces": ["/home/u/proj"] })
+  let decoded : @protocol.WorkspacesReply = @json.from_json(success.to_json())
+  @debug.assert_eq(decoded, success)
+  let refusal : @protocol.WorkspacesReply = WorkspaceError(
+    "/w is a linked git worktree; attach the main checkout instead",
+  )
+  let decoded_refusal : @protocol.WorkspacesReply = @json.from_json(
+    refusal.to_json(),
+  )
+  @debug.assert_eq(decoded_refusal, refusal)
+}
+
+///|
+test "browse replies keep success compatible and carry refusals" {
+  let rooted : @protocol.BrowseDirectoryReply = Listing(path="/", parent=None, entries=[
+    "home",
+  ])
+  // A root listing omits `parent`, matching the retired struct encoding.
+  @debug.assert_eq(rooted.to_json(), { "path": "/", "entries": ["home"] })
+  let nested : @protocol.BrowseDirectoryReply = Listing(
+    path="/home/u",
+    parent=Some("/home"),
+    entries=[],
+  )
+  for reply in [rooted, nested] {
+    let decoded : @protocol.BrowseDirectoryReply = @json.from_json(
+      reply.to_json(),
+    )
+    @debug.assert_eq(decoded, reply)
+  }
+  let refusal : @protocol.BrowseDirectoryReply = BrowseError(
+    "no such directory: /gone",
+  )
+  @debug.assert_eq(refusal.to_json(), { "error": "no such directory: /gone" })
+  let decoded_refusal : @protocol.BrowseDirectoryReply = @json.from_json(
+    refusal.to_json(),
+  )
+  @debug.assert_eq(decoded_refusal, refusal)
+}

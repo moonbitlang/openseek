@@ -214,14 +214,24 @@ pub fn endpoints(
       @engine.list_workspaces()
     }),
     @endpoint.Endpoint::remote(@commands.workspace_add, async fn(payload) {
+      // A refusal travels inside the reply: the local bridge would flatten
+      // a raised error to "op ext:openseek/workspace.add failed".
       @engine.attach_workspace(payload.path, workspaces => {
         state.hub.publish(WorkspaceChanged({ workspaces, }))
-      })
+      }) catch {
+        error if @async.is_being_cancelled() => raise error
+        @engine.EngineError(message) => WorkspaceError(message)
+        error => raise error
+      }
     }),
     @endpoint.Endpoint::remote(@commands.workspace_remove, async fn(payload) {
       @engine.detach_workspace(state.manager, payload.path, workspaces => {
         state.hub.publish(WorkspaceChanged({ workspaces, }))
-      })
+      }) catch {
+        error if @async.is_being_cancelled() => raise error
+        @engine.EngineError(message) => WorkspaceError(message)
+        error => raise error
+      }
     }),
     @endpoint.Endpoint::remote(@commands.worktree_list, async fn(payload) {
       @engine.list_worktrees(payload.workspace)

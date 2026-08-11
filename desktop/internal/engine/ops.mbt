@@ -806,7 +806,7 @@ pub async fn scratch_root() -> String {
 
 ///|
 pub async fn list_workspaces() -> WorkspacesReply {
-  { workspaces: registered_workspaces().map(path => path.resource_path()) }
+  Workspaces(registered_workspaces().map(path => path.resource_path()))
 }
 
 ///|
@@ -820,7 +820,7 @@ pub async fn attach_workspace(
   let paths = add_workspace(absolute.0, paths => {
     on_committed(paths.map(path => path.resource_path()))
   })
-  { workspaces: paths.map(path => path.resource_path()) }
+  Workspaces(paths.map(path => path.resource_path()))
 }
 
 ///|
@@ -839,7 +839,7 @@ pub async fn detach_workspace(
   let paths = remove_workspace(absolute.0, paths => {
     on_committed(paths.map(path => path.resource_path()))
   })
-  { workspaces: paths.map(path => path.resource_path()) }
+  Workspaces(paths.map(path => path.resource_path()))
 }
 
 ///|
@@ -1530,7 +1530,7 @@ async test "workspace detach drains an idle writer and its follower first" {
       committed.val = true
     })
     assert_true(committed.val)
-    assert_eq(detached.workspaces, [])
+    assert_true(detached is Workspaces([]))
     assert_true(@fsx.exists(exited))
     assert_true(manager.followers.get("s-detach-idle") is None)
     guard manager.pump is Serving(sessions~) else {

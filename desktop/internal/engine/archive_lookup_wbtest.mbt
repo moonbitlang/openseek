@@ -27,7 +27,7 @@ async test "archive names the missing store after a workspace detach" {
   // The sidebar's remove button: detach commits and the registry forgets
   // the workspace, while the record stays on disk in the project store.
   let detached = detach_workspace(manager, workspace, fn(_) {  })
-  assert_eq(detached.workspaces.length(), 0)
+  assert_true(detached is Workspaces([]))
   // A stale sidebar can still offer the conversation; archiving it now
   // reports the record as unreachable instead of pretending it never
   // existed.
@@ -130,7 +130,7 @@ async test "loading a conversation from a detached workspace names that state" {
   let manager = new_engine_manager("unused")
   manager.pump = Serving(sessions=Map([]))
   let detached = detach_workspace(manager, workspace, fn(_) {  })
-  assert_eq(detached.workspaces.length(), 0)
+  assert_true(detached is Workspaces([]))
   // A stale client's transcript reload names the conversation without a
   // workspace hint; the reply must say the record is unreachable rather
   // than surface the engine's raw file error.

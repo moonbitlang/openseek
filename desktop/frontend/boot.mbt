@@ -53,8 +53,8 @@ fn app_shortcut_sub_loader(
 ///|
 /// Subscribe to application command chords in both the native webview and
 /// browser console. Apple platforms use Cmd; other platforms use Ctrl. P/T
-/// open Quick Open, N starts a chat, B toggles the left sidebar, and Shift+B
-/// toggles the right panel.
+/// open Quick Open, N starts a chat, O adds a project, B toggles the left
+/// sidebar, and Shift+B toggles the right panel.
 fn app_shortcut_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
   @sub.custom_sub(
     "app-shortcut-capture",
@@ -111,6 +111,7 @@ fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? 
     ("KeyP", false) => Some(QuickOpenOpen(QuickOpenFiles))
     ("KeyT", false) => Some(QuickOpenOpen(QuickOpenSymbols))
     ("KeyN", false) => Some(NewChat)
+    ("KeyO", false) => Some(AddProjectRequested)
     ("KeyB", false) => Some(ToggleSidebar)
     ("KeyB", true) => Some(Dock(@dock.TogglePanel))
     _ => None
@@ -158,6 +159,11 @@ pub fn boot() -> Unit {
           ),
           external_link_subscription(emit.map(url => ExternalLinkClicked(url))),
         ]
+        // The project picker's Enter/Escape/paste surface, only while its
+        // modal is open — same lifetime rule as the dismissal listeners.
+        if model.project_picker is Some(_) {
+          subs.push(project_picker_capture_subscription(emit))
+        }
         // Click-away dismissal, one listener per menu and only while that menu
         // is open: a document-wide listener should not outlive what it serves.
         if model.git_details_open {

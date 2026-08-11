@@ -18,6 +18,23 @@ fn scroll_transcript_after_render() -> @cmd.Cmd {
 }
 
 ///|
+/// Bring the sidebar's active project row into view on the render that
+/// applies it: the row a fresh add just activated can sit below the fold
+/// of a long sidebar. `nearest` keeps everything still when the row is
+/// already visible.
+fn reveal_active_project() -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => {
+      if @dom.document().query_selector(".workspace-row.active").to_option()
+        is Some(row) {
+        row.scroll_into_view_with_options(block="nearest")
+      }
+    },
+    kind=@cmd.after_render,
+  )
+}
+
+///|
 let transcript_scroll_watched : Ref[Bool] = Ref(false)
 
 ///|

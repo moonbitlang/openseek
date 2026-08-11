@@ -3305,13 +3305,14 @@ fn update_confirm_modal(
 ///|
 /// The in-app folder picker behind the sidebar's "Add a project", shaped
 /// like a system chooser: a clickable breadcrumb for the current directory
-/// (each segment navigates up to that level — there is no ".." row), a
-/// folder list that navigates on click, and a de-emphasized go-to-path
-/// field for typing a location directly (Enter navigates, which also
-/// validates; Escape closes). It renders the host machine's directories
-/// whichever gateway serves the page, so desktop and browser share the one
-/// flow. Clicks inside must not bubble to the backdrop, whose click closes
-/// the picker.
+/// (each segment navigates up to that level — there is no ".." row) and a
+/// folder list that navigates on click. The keyboard surface lives in the
+/// document-level capture pair (`project_picker_keys.mbt`): Enter adds the
+/// browsed directory, Escape closes, and a pasted path jumps straight to
+/// that location (a path that names no directory pops a toast). It renders
+/// the host machine's directories whichever gateway serves the page, so
+/// desktop and browser share the one flow. Clicks inside must not bubble
+/// to the backdrop, whose click closes the picker.
 fn project_picker_modal(
   dispatch : @cmd.Emit[Msg],
   picker : ProjectPicker,
@@ -3349,32 +3350,15 @@ fn project_picker_modal(
     @html.div(class="modal-title", "Add a project"),
     picker_breadcrumbs(dispatch, picker),
   ]
-  if picker.error is Some(message) {
-    children.push(@html.div(class="picker-error", message))
-  }
   children.push(@html.div(class="picker-list", rows))
-  children.push(
-    @html.div(class="picker-goto", [
-      @html.input(
-        input_type=@html.InputType::Text,
-        value=picker.input,
-        placeholder="Go to path…",
-        on_input=dispatch.map(value => ProjectPickerInput(value)),
-        attrs=@html.Attrs::build().on_keydown(event => {
-          match event.key() {
-            "Enter" => dispatch(ProjectPickerNavigate(picker.input))
-            "Escape" => dispatch(ProjectPickerClose)
-            _ => @cmd.none
-          }
-        }),
-      ),
-    ]),
-  )
   children.push(
     @html.div(class="modal-actions", [
       @html.button(on_click=dispatch(ProjectPickerClose), "Cancel"),
       @html.button(
         class="primary",
+        // While a navigation is in flight the shown listing is stale;
+        // update refuses the confirm too, this just says so visually.
+        disabled=picker.loading,
         on_click=dispatch(ProjectPickerConfirm),
         match picker.path {
           None => "Add this folder"

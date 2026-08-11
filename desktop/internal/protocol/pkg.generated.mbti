@@ -95,11 +95,12 @@ pub(all) struct BrowseDirectoryPayload {
   path : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
-pub(all) struct BrowseDirectoryReply {
-  path : String
-  parent : String?
-  entries : Array[String]
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub(all) enum BrowseDirectoryReply {
+  Listing(path~ : String, parent~ : String?, entries~ : Array[String])
+  BrowseError(String)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for BrowseDirectoryReply
+pub impl @json.FromJson for BrowseDirectoryReply
 
 pub(all) struct BrowserBoundsPayload {
   id : Int
@@ -865,9 +866,12 @@ pub(all) struct WorkspacesChangedPayload {
   workspaces : Array[String]
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
-pub(all) struct WorkspacesReply {
-  workspaces : Array[String]
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub(all) enum WorkspacesReply {
+  Workspaces(Array[String])
+  WorkspaceError(String)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for WorkspacesReply
+pub impl @json.FromJson for WorkspacesReply
 
 pub(all) struct WorktreeChangedPayload {
   workspace : String

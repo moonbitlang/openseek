@@ -376,9 +376,42 @@ pub(all) struct LoadSessionReply {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-pub(all) struct WorkspacesReply {
-  workspaces : Array[String]
-} derive(Debug, Eq, FromJson, ToJson)
+/// A workspace list, or a mutation's refusal reason with the registry left
+/// unchanged. Success keeps the legacy `{workspaces:[...]}` shape; the
+/// refusal rides in the reply body as `{error:"..."}` because the local
+/// bridge summarizes raised handler errors down to "op <name> failed".
+pub(all) enum WorkspacesReply {
+  Workspaces(Array[String])
+  WorkspaceError(String)
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for WorkspacesReply with fn to_json(self) {
+  match self {
+    Workspaces(workspaces) => { "workspaces": workspaces }
+    WorkspaceError(message) => { "error": message }
+  }
+}
+
+///|
+pub impl FromJson for WorkspacesReply with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected a workspaces reply"))
+  }
+  match fields.get("error") {
+    Some(String(message)) => WorkspaceError(message)
+    Some(_) =>
+      raise JsonDecodeError(
+        (path.add_key("error"), "workspace error must be a string"),
+      )
+    None => {
+      guard fields.get("workspaces") is Some(listed) else {
+        raise JsonDecodeError((path, "expected a workspaces list"))
+      }
+      Workspaces(@json.from_json(listed))
+    }
+  }
+}
 
 ///|
 /// One worktree as ops report it: the registry entry plus its derived
@@ -706,11 +739,63 @@ pub(all) struct StatFilesReply {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-pub(all) struct BrowseDirectoryReply {
-  path : String
-  parent : String?
-  entries : Array[String]
-} derive(Debug, Eq, FromJson, ToJson)
+/// One directory listing (`parent` is `None` at a filesystem root), or the
+/// reason there is none. Success keeps the legacy `{path,parent?,entries}`
+/// shape; the refusal rides in the reply body as `{error:"..."}` because
+/// the local bridge summarizes raised handler errors down to "op <name>
+/// failed".
+pub(all) enum BrowseDirectoryReply {
+  Listing(path~ : String, parent~ : String?, entries~ : Array[String])
+  BrowseError(String)
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for BrowseDirectoryReply with fn to_json(self) {
+  match self {
+    Listing(path~, parent~, entries~) => {
+      let fields : Map[String, Json] = {
+        "path": path.to_json(),
+        "entries": entries.to_json(),
+      }
+      if parent is Some(parent) {
+        fields["parent"] = parent.to_json()
+      }
+      Json::object(fields)
+    }
+    BrowseError(message) => { "error": message }
+  }
+}
+
+///|
+pub impl FromJson for BrowseDirectoryReply with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected a directory listing"))
+  }
+  match fields.get("error") {
+    Some(String(message)) => BrowseError(message)
+    Some(_) =>
+      raise JsonDecodeError(
+        (path.add_key("error"), "browse error must be a string"),
+      )
+    None => {
+      guard fields.get("path") is Some(String(listed)) else {
+        raise JsonDecodeError((path, "expected a directory path"))
+      }
+      let parent : String? = match fields.get("parent") {
+        Some(String(parent)) => Some(parent)
+        Some(_) =>
+          raise JsonDecodeError(
+            (path.add_key("parent"), "directory parent must be a string"),
+          )
+        None => None
+      }
+      guard fields.get("entries") is Some(entries) else {
+        raise JsonDecodeError((path, "expected directory entries"))
+      }
+      Listing(path=listed, parent~, entries=@json.from_json(entries))
+    }
+  }
+}
 
 ///|
 pub(all) struct TerminalOpenReply {

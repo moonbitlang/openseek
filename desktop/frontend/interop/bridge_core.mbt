@@ -54,11 +54,11 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request(
     Json::empty_object()
   } else {
     reply.to_json() catch {
-      _ => raise BridgeError("Malformed reply from {op}")
+      _ => raise BridgeError("Malformed reply from \{op}")
     }
   }
   @json.from_json(json) catch {
-    _ => raise BridgeError("Malformed reply from {op}")
+    _ => raise BridgeError("Malformed reply from \{op}")
   }
 }
 
@@ -175,11 +175,11 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(
       Json::empty_object()
     } else {
       reply.to_json() catch {
-        _ => raise BridgeError("Malformed reply from {op}")
+        _ => raise BridgeError("Malformed reply from \{op}")
       }
     }
     @json.from_json(json) catch {
-      _ => raise BridgeError("Malformed reply from {op}")
+      _ => raise BridgeError("Malformed reply from \{op}")
     }
   })
 }

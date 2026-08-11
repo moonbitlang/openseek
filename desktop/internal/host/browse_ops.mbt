@@ -13,7 +13,21 @@ type BrowseDirectoryPayload = @protocol.BrowseDirectoryPayload
 type BrowseDirectoryReply = @protocol.BrowseDirectoryReply
 
 ///|
+/// A refusal (bad path, not a directory, unreadable) travels inside the
+/// reply: the local bridge would flatten a raised error down to
+/// "op ext:openseek/fs.browse failed".
 async fn browse_directory_op(
+  payload : BrowseDirectoryPayload,
+) -> BrowseDirectoryReply {
+  browse_directory_listing(payload) catch {
+    error if @async.is_being_cancelled() => raise error
+    HostError(message) => BrowseError(message)
+    error => raise error
+  }
+}
+
+///|
+async fn browse_directory_listing(
   payload : BrowseDirectoryPayload,
 ) -> BrowseDirectoryReply {
   let requested = payload.path.unwrap_or("").trim().to_owned()
@@ -28,7 +42,7 @@ async fn browse_directory_op(
     absolute
   } else {
     @pathx.Path(
-      // The editable field is an operating-system boundary: accept the host's
+      // A pasted path is an operating-system boundary: accept the host's
       // ordinary spelling (`C:\...` on Windows), `~`, and the same relative
       // spellings the picker accepted before frontend resources were typed.
       requested,
@@ -77,7 +91,7 @@ async fn browse_directory_op(
     }
     Some(parent.resource_path())
   }
-  { path: encoded_dir, parent, entries }
+  Listing(path=encoded_dir, parent~, entries~)
 }
 
 ///|
@@ -85,11 +99,24 @@ async test "directory browsing accepts native input and returns URI paths" {
   let dir = @fs.tmpdir(prefix="openseek-browse-path-")
   @fsx.ensure_dir(Path(dir + "/child"))
   let absolute = @pathx.Path(dir).resolve().normalize()
-  let native = browse_directory_op({ path: Some(dir) })
-  assert_eq(native.path, absolute.resource_path())
-  assert_true(native.entries.contains("child"))
+  guard browse_directory_op({ path: Some(dir) }) is Listing(path~, entries~, ..) else {
+    fail("expected a listing for an existing directory")
+  }
+  assert_eq(path, absolute.resource_path())
+  assert_true(entries.contains("child"))
   // Navigation sends the path from the preceding reply back unchanged.
-  let resource = browse_directory_op({ path: Some(native.path) })
-  assert_eq(resource.path, native.path)
+  guard browse_directory_op({ path: Some(path) }) is Listing(path=again, ..) else {
+    fail("expected a listing for the resource path")
+  }
+  assert_eq(again, path)
   @fs.rmdir(dir, recursive=true)
+}
+
+///|
+async test "a bad browse path reports its refusal in the reply" {
+  guard browse_directory_op({ path: Some("/definitely/not/here-openseek") })
+    is BrowseError(message) else {
+    fail("expected a browse refusal")
+  }
+  assert_true(message.contains("no such directory"))
 }

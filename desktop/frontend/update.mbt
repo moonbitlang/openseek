@@ -258,6 +258,21 @@ fn adopt_projects(
   guard model.device_state(channel) is Some(dev) else {
     return (@cmd.none, model)
   }
+  // A pending add whose reply already resolved its registry row waits here
+  // for that row to exist: the snapshot that contains it consumes the
+  // pending and focuses. A snapshot without the row leaves it waiting —
+  // a list read begun before our commit is still current-generation and
+  // must not eat the focus the commit broadcast is about to deliver. An
+  // unresolved pending stays untouched too: a snapshot alone cannot say
+  // which row is ours (another client's commit broadcasts through this
+  // same path), so it must never be guessed from one.
+  let (focus_target, model) = match model.pending_project_adoption {
+    Some(pending) if pending.channel == channel &&
+      pending.resolved is Some(target) &&
+      paths.contains(target) =>
+      (Some(target), { ..model, pending_project_adoption: None })
+    _ => (None, model)
+  }
   let active_detached = channel == model.focused &&
     model.find_conversation(channel, model.active_session) is Some(active) &&
     active.workspace.project() is Some(workspace) &&
@@ -322,6 +337,32 @@ fn adopt_projects(
   })
   commands.push(refresh_cmd)
   if active_detached {
+    if focus_target is Some(project) {
+      // This snapshot both removed the active conversation's project and
+      // carries the row the user just added: the explicit add-and-focus
+      // wins over fallback selection. NewChatIn rotates the fresh chat; the
+      // dead session identity clears now so no render can address it while
+      // the rotation is in flight (same rule as the scratch fallback
+      // below).
+      let (focus_cmd, focused) = update(
+        dispatch,
+        NewChatIn(channel, Some(project)),
+        next,
+      )
+      commands.push(focus_cmd)
+      commands.push(reveal_active_project())
+      return (
+        @cmd.batch(commands),
+        {
+          ..focused,
+          active_session: "",
+          loading_conversation: None,
+          screen: Chat,
+          transcript_pinned: true,
+          completion: None,
+        },
+      )
+    }
     if sessions.get(0) is Some(fallback) {
       // The retained list is newest-first. Activate its first entry before
       // starting the reload so no render can address the detached session id
@@ -368,6 +409,19 @@ fn adopt_projects(
         completion: None,
       },
     )
+  }
+  if focus_target is Some(project) {
+    // The confirmed add just committed: focus its project the way the
+    // row's own ＋ does — activate it and start a fresh chat inside — and
+    // scroll the newly active row into a long sidebar's view.
+    let (focus_cmd, focused) = update(
+      dispatch,
+      NewChatIn(channel, Some(project)),
+      next,
+    )
+    commands.push(focus_cmd)
+    commands.push(reveal_active_project())
+    return (@cmd.batch(commands), focused)
   }
   (@cmd.batch(commands), next)
 }
@@ -2667,6 +2721,15 @@ fn update_msg(
         { ..model, project_picker: Some(picker) },
       )
     }
+    AddProjectRequested =>
+      // The chord acts on the focused device, like the sidebar section's ＋.
+      // While the picker is already open it does nothing: restarting the
+      // browse would yank the listing back to home mid-navigation.
+      if model.project_picker is Some(_) {
+        (@cmd.none, model)
+      } else {
+        update(dispatch, PickProject(model.focused), model)
+      }
     ProjectPickerNavigate(path) =>
       match model.project_picker {
         Some(picker) => {
@@ -2683,9 +2746,7 @@ fn update_msg(
       }
     ProjectPickerLoaded(channel~, path~, entries~, generation~) =>
       // A listing for a picker the user already closed — or one answering
-      // a navigation that has since been superseded — is dropped. The
-      // go-to field clears on arrival: the breadcrumb shows the location,
-      // and the field is for typing the next jump.
+      // a navigation that has since been superseded — is dropped.
       match model.project_picker {
         Some(picker) if picker.channel == channel &&
           picker.generation == generation =>
@@ -2697,9 +2758,7 @@ fn update_msg(
                 channel,
                 path: Some(path),
                 entries,
-                input: "",
                 loading: false,
-                error: None,
                 generation,
               }),
             },
@@ -2707,41 +2766,49 @@ fn update_msg(
         _ => (@cmd.none, model)
       }
     ProjectPickerFailed(channel~, message~, generation~) =>
+      // The failure pops as a toast — mainly a pasted path that names no
+      // directory — while the previous listing stays usable.
       match model.project_picker {
         Some(picker) if picker.channel == channel &&
-          picker.generation == generation =>
-          (
-            @cmd.none,
-            {
-              ..model,
-              project_picker: Some({
-                ..picker,
-                loading: false,
-                error: Some(message),
-              }),
-            },
+          picker.generation == generation => {
+          let (toast, model) = model.notify_error(
+            dispatch,
+            "Cannot open folder: \{message}",
           )
+          (
+            toast,
+            { ..model, project_picker: Some({ ..picker, loading: false }) },
+          )
+        }
         _ => (@cmd.none, model)
-      }
-    ProjectPickerInput(text) =>
-      match model.project_picker {
-        Some(picker) =>
-          (
-            @cmd.none,
-            { ..model, project_picker: Some({ ..picker, input: text }) },
-          )
-        None => (@cmd.none, model)
       }
     ProjectPickerConfirm =>
       match model.project_picker {
         // Confirm registers the directory the host last listed — always
-        // something it confirmed exists — never raw field text; Enter in
-        // the field navigates (and validates) first.
-        Some(picker) if picker.path is Some(path) =>
+        // something it confirmed exists — never raw pasted text; a paste
+        // navigates (and validates) first. While a navigation is in flight
+        // the shown listing is stale, so Enter must wait: confirming then
+        // would attach the previous directory, not the destination. The
+        // pending adoption later focuses the project the add committed.
+        Some(picker) if picker.path is Some(path) && !picker.loading => {
+          let known = match model.device_state(picker.channel) {
+            Some(dev) => dev.projects.copy()
+            None => []
+          }
           (
             add_project(dispatch, picker.channel, path.path),
-            { ..model, project_picker: None },
+            {
+              ..model,
+              project_picker: None,
+              pending_project_adoption: Some({
+                channel: picker.channel,
+                picked: path,
+                known,
+                resolved: None,
+              }),
+            },
           )
+        }
         _ => (@cmd.none, model)
       }
     ProjectPickerClose => (@cmd.none, { ..model, project_picker: None })
@@ -3926,8 +3993,65 @@ fn update_device_msg(
       })
       adopt_projects(dispatch, channel, next, paths)
     }
-    ProjectFailed(message) =>
+    ProjectAddCommitted(added~, paths~) => {
+      // Identity resolution for a pending add-and-focus. This reply is the
+      // canonical list right after our own commit, so the picked directory
+      // is in it — as picked, or under its realpath spelling, in which case
+      // it is the reply's one row we did not already know. Anything else
+      // (concurrent commits landed between our known snapshot and ours) is
+      // not provably ours: stand down rather than guess. `added` pairs the
+      // reply with its confirm: a reply for a directory the pending is not
+      // about answers a superseded confirm and is ignored outright — the
+      // current confirm's own reply is still on its way.
+      guard model.pending_project_adoption is Some(pending) &&
+        pending.channel == channel &&
+        pending.picked.path == added else {
+        return (@cmd.none, model)
+      }
+      let target = if paths.contains(pending.picked) {
+        Some(pending.picked)
+      } else {
+        match paths.filter(path => !pending.known.contains(path)) {
+          [added] => Some(added)
+          _ => None
+        }
+      }
+      guard target is Some(target) else {
+        return (@cmd.none, { ..model, pending_project_adoption: None })
+      }
+      if dev.projects.contains(target) {
+        // The commit broadcast beat this reply and the row already exists:
+        // focus it now, the way the row's own ＋ does.
+        let cleared = { ..model, pending_project_adoption: None }
+        let (focus_cmd, focused) = update(
+          dispatch,
+          NewChatIn(channel, Some(target)),
+          cleared,
+        )
+        (@cmd.batch([focus_cmd, reveal_active_project()]), focused)
+      } else {
+        // The row is not on this page yet; the snapshot that brings it
+        // finishes the focus.
+        (
+          @cmd.none,
+          {
+            ..model,
+            pending_project_adoption: Some({ ..pending, resolved: Some(target) }),
+          },
+        )
+      }
+    }
+    ProjectFailed(message) => {
+      // A failed mutation also settles any confirmed add still waiting to
+      // focus its project: nothing was committed on its behalf.
+      let model = if model.pending_project_adoption is Some(pending) &&
+        pending.channel == channel {
+        { ..model, pending_project_adoption: None }
+      } else {
+        model
+      }
       model.notify_error(dispatch, "Workspace error: \{message}")
+    }
     WorktreesLoaded(
       rows,
       workspace~,

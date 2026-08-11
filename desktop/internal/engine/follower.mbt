@@ -1188,7 +1188,7 @@ async test "workspace detach drains an orphaned pending follower before commit" 
         })
     })
     assert_true(committed_after_boundary.val)
-    assert_eq(detached.workspaces, [])
+    assert_true(detached is Workspaces([]))
     assert_true(follower.retired)
     assert_true(manager.followers.get(session) is None)
     let boundaries : Array[Int] = []
