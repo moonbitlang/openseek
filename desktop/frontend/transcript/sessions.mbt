@@ -688,9 +688,6 @@ test "session load derives an old host's missing watermark from event sequences"
     #|{"sequence":1,"item":{"kind":"user","payload":{"content":"question"}}},
     #|{"sequence":4,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
   let reply = session_reply(events)
-  // Placement metadata was added after the original load reply. Its absence
-  // must remain compatible with older hosts.
-  assert_eq(reply.cwd, None)
   let view = session_from_reply(reply)
   inspect(view.watermark, content="4")
   inspect(view.event_boundaries.length(), content="2")

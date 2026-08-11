@@ -373,10 +373,6 @@ pub(all) struct SessionDocument {
 pub(all) struct LoadSessionReply {
   session : SessionDocument
   watermark : Int?
-  // The host-derived directory this conversation runs in. This is placement
-  // metadata, not part of the durable transcript; absent keeps replies from
-  // older hosts decodable, and also represents a missing bound checkout.
-  cwd : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|

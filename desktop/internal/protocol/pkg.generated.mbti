@@ -383,7 +383,6 @@ pub(all) struct LoadSessionPayload {
 pub(all) struct LoadSessionReply {
   session : SessionDocument
   watermark : Int?
-  cwd : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct LspDiagnostic {

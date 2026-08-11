@@ -1828,7 +1828,6 @@ priv enum DeviceMsg {
   SessionsChanged(change~ : String, session~ : String, fresh_session~ : String?)
   SessionLoaded(
     session~ : String,
-    cwd~ : @common.Uri?,
     items~ : Array[@transcript.TranscriptItem],
     watermark~ : Int,
     event_boundaries~ : Array[(Int, Bool, Int)],
@@ -1844,7 +1843,6 @@ priv enum DeviceMsg {
   // but it never activates the conversation or steals the screen.
   SessionRefreshed(
     session~ : String,
-    cwd~ : @common.Uri?,
     items~ : Array[@transcript.TranscriptItem],
     watermark~ : Int,
     event_boundaries~ : Array[(Int, Bool, Int)],
