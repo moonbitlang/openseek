@@ -487,7 +487,7 @@ fn Model::checkout_placement(
 /// Scratch projects from the connected device root and session id; a Project
 /// uses its registered root after its worktree registry resolves; a Worktree
 /// uses the registry checkout path. Missing or unresolved placements have no
-/// root rather than falling back to a stale lifecycle-event cwd.
+/// root rather than consulting a second, independently changing root source.
 fn Model::conversation_root(self : Model, conv : Conversation) -> @common.Uri? {
   match conv.workspace {
     Scratch =>
@@ -1432,7 +1432,9 @@ test "a broadcast for one workspace never fences a sibling's reply" {
 test "a worktree commit broadcast supersedes lists and unbinds removed names" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
-  let cwd = @interop.ChannelId::Local.test_resource("/proj/.worktrees/wt")
+  let worktree_root = @interop.ChannelId::Local.test_resource(
+    "/proj/.worktrees/wt",
+  )
   let owner = active_quick_open_owner(test_model())
   let generation = 7
   let old_key = file_query_cache_key(owner, generation)
@@ -1463,7 +1465,7 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
     quick_open_generation: generation,
     file_query_cache: {
       owner: Some(owner),
-      root: Some(cwd),
+      root: Some(worktree_root),
       active_key: Some(old_key),
       loading_key: None,
     },

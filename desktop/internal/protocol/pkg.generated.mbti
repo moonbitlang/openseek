@@ -221,7 +221,7 @@ pub(all) struct FsChangedPayload {
   root : String
   baseline : Bool
   events : Array[FsEventPayload]
-  generation : String?
+  generation : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct FsEventPayload {
@@ -233,7 +233,7 @@ pub(all) struct FsEventPayload {
 pub(all) struct FsWatchFailedPayload {
   root : String
   message : String
-  generation : String?
+  generation : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct GitBranchPayload {
@@ -721,12 +721,10 @@ pub(all) struct StartReply {
 
 pub(all) struct StartedPayload {
   run_id : String
-  task : String?
   submission_id : String?
   engine : String?
   model : String?
   max_steps : Int?
-  cwd : String?
   session : String?
   session_root : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
@@ -845,9 +843,9 @@ pub(all) struct UpdateDownloadedPayload {
 
 pub(all) struct WatchWorkspacePayload {
   path : String
-  files : Array[String]?
-  directories : Array[String]?
-  generation : String?
+  files : Array[String]
+  directories : Array[String]
+  generation : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct WorkspacePayload {

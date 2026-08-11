@@ -251,11 +251,10 @@ pub(all) struct StatFilesPayload {
 ///|
 pub(all) struct WatchWorkspacePayload {
   path : String
-  files : Array[String]?
-  directories : Array[String]?
-  // Chosen by the client for one concrete watcher configuration. Optional so
-  // a newer host can still decode requests from an older browser release.
-  generation : String?
+  files : Array[String]
+  directories : Array[String]
+  // Chosen by the client for one concrete watcher configuration.
+  generation : String
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -367,12 +366,10 @@ pub(all) struct ConnectedPayload {
 ///|
 pub(all) struct StartedPayload {
   run_id : String
-  task : String?
   submission_id : String?
   engine : String?
   model : String?
   max_steps : Int?
-  cwd : String?
   session : String?
   session_root : String?
 } derive(Debug, Eq, FromJson, ToJson)
@@ -557,7 +554,7 @@ pub(all) struct FsChangedPayload {
   baseline : Bool
   events : Array[FsEventPayload]
   // Echoes the `fs.watch` request that owns this asynchronous notification.
-  generation : String?
+  generation : String
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -565,7 +562,7 @@ pub(all) struct FsWatchFailedPayload {
   root : String
   message : String
   // Echoes the `fs.watch` request that owns this asynchronous notification.
-  generation : String?
+  generation : String
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|

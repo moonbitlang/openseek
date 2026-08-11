@@ -627,12 +627,12 @@ fn accept_mention(
 }
 
 ///|
-/// A chip's raw jump path as the workspace-relative form the panel and the
-/// host's workspace-rooted ops speak. The steady state is the identity: chips
+/// A chip's raw jump path as the root-relative form the panel and the host's
+/// rooted ops speak. The steady state is the identity: chips
 /// minted since the panel started recording relative names are already
-/// relative. A legacy envelope can still carry an absolute path (minted
-/// before `cwd` was known); those are brought back inside against the
-/// conversation's roots, and `None` — an absolute path outside anything this
+/// relative. An older envelope can still carry an absolute path; those are
+/// brought back inside against the conversation root, and `None` — an
+/// absolute path outside anything this
 /// conversation knows — means there is nothing the panel could open.
 fn conversation_relative(
   model : Model,
@@ -768,16 +768,13 @@ fn symbol_fetch_cmd(
     return @cmd.none
   }
   let query = trigger.query
+  let root = model.conversation_root(model.active())
   if model.symbol_cache.owner == Some(owner) &&
+    model.symbol_cache.root == root &&
     model.symbol_cache.query == query {
     return @cmd.none
   }
-  read_workspace_symbols(
-    dispatch,
-    owner,
-    query,
-    root=model.conversation_root(model.active()),
-  )
+  read_workspace_symbols(dispatch, owner, query, root~)
 }
 
 ///|
@@ -788,12 +785,14 @@ fn symbol_fetch_cmd(
 fn apply_symbol_reply(
   model : Model,
   owner : @interop.ConversationKey,
+  root : @common.Uri,
   query : String,
   symbols : Array[WorkspaceSymbol],
 ) -> (@cmd.Cmd, Model) {
   let draft = model.active().task
   guard owner.channel == model.focused &&
     owner.session == model.active().session_id &&
+    model.conversation_root(model.active()) == Some(root) &&
     CompletionTrigger::parse(draft) is Some(trigger) &&
     trigger.kind is Symbols &&
     trigger.query == query else {
@@ -803,7 +802,12 @@ fn apply_symbol_reply(
   for symbol in symbols {
     items.push(symbol.completion_item())
   }
-  let cache : SymbolCache = { owner: Some(owner), query, items }
+  let cache : SymbolCache = {
+    owner: Some(owner),
+    root: Some(root),
+    query,
+    items,
+  }
   (
     @cmd.none,
     {
@@ -817,6 +821,46 @@ fn apply_symbol_reply(
       ),
     },
   )
+}
+
+///|
+/// Restart a live composer symbol query when the same conversation moves to a
+/// different concrete root. Clearing the cache immediately prevents rows from
+/// the previous checkout from remaining selectable while the new request is in
+/// flight; the root carried by replies fences work that was already underway.
+fn Model::restart_symbol_search_after_root_change(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  previous : Model,
+) -> (@cmd.Cmd, Model) {
+  guard self.focused == previous.focused &&
+    self.active_session == previous.active_session else {
+    return (@cmd.none, self)
+  }
+  let conv = self.active()
+  let previous_conv = previous.active()
+  guard self.conversation_root(conv) !=
+    previous.conversation_root(previous_conv) &&
+    CompletionTrigger::parse(conv.task) is Some(trigger) &&
+    trigger.kind is Symbols else {
+    return (@cmd.none, self)
+  }
+  let owner : @interop.ConversationKey = {
+    channel: self.focused,
+    session: conv.session_id,
+  }
+  let cache = empty_symbol_cache()
+  let next = {
+    ..self,
+    symbol_cache: cache,
+    completion: compute_completion(
+      conv.task,
+      self.installed_skills,
+      cache,
+      owner,
+    ),
+  }
+  (symbol_fetch_cmd(dispatch, next, conv.task, owner), next)
 }
 
 ///|
@@ -1385,10 +1429,13 @@ fn update(
   // opened. Device/session switches can arrive through many messages (and
   // background pushes), so fence it once here rather than in every branch.
   let (quick_open_cmd, model) = close_stale_quick_open(dispatch, model)
-  // A conversation's concrete root can change through Started, restored
-  // session data, or a worktree registry broadcast. Restart an open picker
-  // once here so every path gets the same stale-result fence.
+  // A conversation's concrete root can change through connection metadata,
+  // restored session data, or a worktree registry broadcast. Restart an open
+  // picker once here so every path gets the same stale-result fence.
   let (quick_open_restart_cmd, model) = model.restart_quick_open_after_root_change(
+    dispatch, previous,
+  )
+  let (symbol_restart_cmd, model) = model.restart_symbol_search_after_root_change(
     dispatch, previous,
   )
   // The composer's git popover belongs to the checkout that was on screen,
@@ -1427,8 +1474,8 @@ fn update(
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
-      cmd, quick_open_cmd, quick_open_restart_cmd, dock_mount_cmd, panel_cmd, terminal_cmd,
-      browser_cmd,
+      cmd, quick_open_cmd, quick_open_restart_cmd, symbol_restart_cmd, dock_mount_cmd,
+      panel_cmd, terminal_cmd, browser_cmd,
     ]),
     model,
   )
@@ -1778,11 +1825,12 @@ fn update_msg(
       } else {
         (@cmd.none, { ..model, completion: None })
       }
-    SymbolsLoaded(owner~, query~, items~) =>
-      apply_symbol_reply(model, owner, query, items)
+    SymbolsLoaded(owner~, root~, query~, items~) =>
+      apply_symbol_reply(model, owner, root, query, items)
     // A failed search reads as "no symbols": cache an empty result for the
     // query so the menu settles on "No symbols" rather than spinning.
-    SymbolsFailed(owner~, query~) => apply_symbol_reply(model, owner, query, [])
+    SymbolsFailed(owner~, root~, query~) =>
+      apply_symbol_reply(model, owner, root, query, [])
     QuickOpenOpen(mode) => open_quick_open(dispatch, model, mode)
     QuickOpenValueChanged(value) =>
       change_quick_open_value(dispatch, model, value)
@@ -4454,9 +4502,7 @@ fn update_device_msg(
       session~,
       model=selected_model,
       max_steps~,
-      cwd~,
       session_root~,
-      task~,
       submission_id~
     ) => {
       // A run another client started may reach us with no local conversation
@@ -4566,15 +4612,8 @@ fn update_device_msg(
       } else {
         conv
       }
-      // The prompt bubble itself is not appended here — not even from the
-      // pushed `task`: the durable transcript's only sources are snapshots
-      // and `session.event` commits, and the prompt's own commit (or the
-      // refresh below) brings it. `task` still rides on the event for
-      // clients that render run identity elsewhere.
-      ignore(task)
-      // Lifecycle cwd is not placement state. The connected scratch root and
-      // project/worktree registries are the single source for every request.
-      ignore(cwd)
+      // The prompt bubble is not appended at this lifecycle boundary. Durable
+      // transcript snapshots and `session.event` commits are its only sources.
       // A foreign run means the store holds a lifecycle boundary this client
       // cannot infer from item kinds: a delayed User may still belong to the
       // prior run as a steer. Re-read active and background conversations
@@ -4638,8 +4677,7 @@ fn update_device_msg(
       } else {
         (model.replace_conversation(conv), None)
       }
-      // Probe the root projected from the reconciled conversation, not the
-      // lifecycle event's transient cwd.
+      // Probe the root projected from the reconciled conversation.
       let (branch_cmd, updated) = probe_branch(
         dispatch,
         updated,
@@ -4785,9 +4823,7 @@ fn update_device_msg(
             session=run.session,
             model=run.model,
             max_steps=run.max_steps,
-            cwd=run.cwd,
             session_root=run.session_root,
-            task=run.task,
             submission_id=run.submission_id,
           ),
           next,
@@ -5988,9 +6024,7 @@ fn fresh_started_model(
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some(prompt),
       submission_id=Some(submission_id),
     ),
     test_model().replace_conversation(conv),
@@ -6015,9 +6049,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("first prompt"),
       submission_id=Some("first-start"),
     ),
     test_model().replace_conversation(first),
@@ -6070,9 +6102,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("second prompt"),
       submission_id=Some(second_submission),
     ),
     sending,
@@ -6117,9 +6147,7 @@ fn second_run_started_before_first_steer_receipt() -> Model? {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("second prompt"),
       submission_id=Some(second_submission),
     ),
     sending,
@@ -6536,7 +6564,12 @@ test "a symbol reply with the same session id but another channel is stale" {
   ]
   let (_, stale) = update(
     dispatch,
-    SymbolsLoaded(owner=remote_owner, query="parse", items~),
+    SymbolsLoaded(
+      owner=remote_owner,
+      root=remote_owner.channel.test_resource("/scratch/desktop-test"),
+      query="parse",
+      items~,
+    ),
     querying,
   )
   guard stale.completion is Some(stale_menu) else {
@@ -6545,7 +6578,12 @@ test "a symbol reply with the same session id but another channel is stale" {
   assert_true(stale_menu.loading)
   let (_, settled) = update(
     dispatch,
-    SymbolsLoaded(owner=local_owner, query="parse", items~),
+    SymbolsLoaded(
+      owner=local_owner,
+      root=local_owner.channel.test_resource("/scratch/desktop-test"),
+      query="parse",
+      items~,
+    ),
     stale,
   )
   guard settled.completion is Some(menu) else {
@@ -6688,9 +6726,7 @@ test "session list assigns a Started-first conversation to its durable workspace
       session="desktop-started-first",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("arrived before the list"),
       submission_id=None,
     ),
     test_model(),
@@ -6740,11 +6776,9 @@ test "Started places a foreign conversation from its host session root" {
       session="desktop-workspace-run",
       model=High,
       max_steps=1000,
-      cwd=Some(workspace),
       session_root=Some(
         @interop.ChannelId::Local.test_resource("/C:/work/core/.openseek"),
       ),
-      task=Some("arrived before the list"),
       submission_id=None,
     ),
     model,
@@ -8006,9 +8040,6 @@ test "session loaded adopts the store transcript and keeps live run state" {
 ///|
 test "started routes by session without replacing scratch placement" {
   let dispatch = test_dispatch()
-  let cwd = @interop.ChannelId::Local.test_resource(
-    "/home/u/Documents/OpenSeek/desktop-test",
-  )
   let (_, next) = update_dev(
     dispatch,
     Started(
@@ -8016,9 +8047,7 @@ test "started routes by session without replacing scratch placement" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=Some(cwd),
       session_root=None,
-      task=None,
       submission_id=None,
     ),
     test_model(),
@@ -8043,12 +8072,10 @@ test "started routes by session without replacing scratch placement" {
 test "started decoder preserves optional placement and submission id" {
   guard started_msg(@interop.ChannelId::Local, {
       run_id: "r7",
-      task: None,
       submission_id: Some("submission-7"),
       engine: None,
       model: Some("deepseek-v4-pro"),
       max_steps: Some(1000),
-      cwd: None,
       session: Some("desktop-test"),
       session_root: Some("/work/core/.openseek"),
     })
@@ -8065,14 +8092,12 @@ test "started decoder preserves optional placement and submission id" {
 test "host path decoders reject relative placement and diagnostic paths" {
   let payload : @protocol.StartedPayload = {
     run_id: "r7",
-    task: None,
     submission_id: None,
     engine: None,
     model: Some("deepseek-v4-pro"),
     max_steps: Some(1000),
-    cwd: Some("relative/workspace"),
     session: Some("desktop-test"),
-    session_root: None,
+    session_root: Some("relative/session-root"),
   }
   assert_true(started_msg(@interop.ChannelId::Local, payload) is None)
   assert_true(
@@ -8098,9 +8123,7 @@ test "started for an unknown session materializes its conversation" {
       session="desktop-ghost",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("fix the flaky test"),
       submission_id=None,
     ),
     test_model(),
@@ -8145,9 +8168,7 @@ test "a distinct started id replaces a stale open run as foreign" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("new foreign prompt"),
       submission_id=None,
     ),
     model,
@@ -8183,9 +8204,7 @@ test "a repeated started id is idempotent" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=None,
       submission_id=None,
     ),
     model,
@@ -8216,9 +8235,7 @@ test "a start failure cannot close a run opened by a winning push" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("the other client's prompt"),
       submission_id=Some("theirs"),
     ),
     starting,
@@ -8346,9 +8363,7 @@ test "a matching Started establishes the run without consuming its prompt" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("accepted prompt"),
       submission_id=Some("prompt-id"),
     ),
     failed,
@@ -8398,9 +8413,7 @@ test "an accepted start response opens the run without Started" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("prompt"),
       submission_id=Some("prompt-id"),
     ),
     gated,
@@ -8508,9 +8521,7 @@ test "an old-host Started without an id is settled by the exact start response" 
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("prompt"),
       submission_id=None,
     ),
     test_model().replace_conversation(conv),
@@ -8761,9 +8772,7 @@ test "a Started racing ahead of an older runs response stays open" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("new foreign run"),
       submission_id=Some("foreign-new"),
     ),
     test_model(),
@@ -8793,9 +8802,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
         session: "old-session",
         model: High,
         max_steps: 1000,
-        cwd: None,
         session_root: None,
-        task: Some("from the old engine epoch"),
         submission_id: None,
       },
     ],
@@ -9077,9 +9084,7 @@ test "one runs snapshot keeps an active successor after settling its predecessor
           session: "desktop-test",
           model: High,
           max_steps: 1000,
-          cwd: None,
           session_root: None,
-          task: Some("foreign successor"),
           submission_id: Some("foreign-submission"),
         },
       ],
@@ -9169,9 +9174,7 @@ test "an older positive runs row cannot replace a newer Started" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("newer run"),
       submission_id=None,
     ),
     finished,
@@ -9185,9 +9188,7 @@ test "an older positive runs row cannot replace a newer Started" {
           session: "desktop-test",
           model: High,
           max_steps: 1000,
-          cwd: None,
           session_root: None,
-          task: Some("older run"),
           submission_id: None,
         },
       ],
@@ -9221,9 +9222,7 @@ test "an older positive runs row cannot resurrect a finished run" {
           session: "desktop-test",
           model: High,
           max_steps: 1000,
-          cwd: None,
           session_root: None,
-          task: Some("already finished"),
           submission_id: None,
         },
       ],
@@ -9324,16 +9323,14 @@ test "a failed start response keeps its prompt through an empty snapshot" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=Some(@interop.ChannelId::Local.test_resource("/workspace")),
       session_root=None,
-      task=Some("prompt"),
       submission_id=Some("failed-start"),
     ),
     empty,
   )
   assert_true(late_started.active().run is NoRun(ended=Some(RunFailed)))
-  // A late lifecycle event cannot smuggle its transient cwd back into
-  // conversation placement. Scratch remains device-root plus session id.
+  // Lifecycle events do not change conversation placement. Scratch remains
+  // the connected device root plus the durable session id.
   assert_true(
     late_started.conversation_root(late_started.active()) is Some(resource) &&
     resource.path == "/scratch/desktop-test",
@@ -9355,9 +9352,7 @@ test "a failed response after durable Finished cannot resurrect its prompt" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("fast prompt"),
       submission_id=Some("fast-start"),
     ),
     test_model().replace_conversation(conv),
@@ -9464,9 +9459,7 @@ test "a newer Started retires an older unconfirmed start ledger entry" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("new prompt"),
       submission_id=Some("new-start"),
     ),
     test_model().replace_conversation(current),
@@ -9637,6 +9630,7 @@ test "an inline symbol reply rebuilds the live completion menu" {
     dispatch,
     SymbolsLoaded(
       owner={ channel: Local, session: "desktop-test" },
+      root=@interop.ChannelId::Local.test_resource("/scratch/desktop-test"),
       query="parse",
       items=[item],
     ),
@@ -9649,6 +9643,67 @@ test "an inline symbol reply rebuilds the live completion menu" {
   assert_eq(menu.items.length(), 1)
   assert_eq(menu.items[0].label, "parse_hover")
   assert_eq(menu.task_without_token, "Inspect ")
+}
+
+///|
+test "a composer symbol query restarts and fences replies when its root changes" {
+  let dispatch = test_dispatch()
+  let owner : @interop.ConversationKey = {
+    channel: Local,
+    session: "desktop-test",
+  }
+  let old_root = owner.channel.test_resource("/scratch/desktop-test")
+  let item : WorkspaceSymbol = {
+    name: "parse_old_symbol",
+    kind: Some(12),
+    container: None,
+    path: "src/old.mbt",
+    range: @common.Range::Range(1, 1, 1, 1),
+  }
+  let (_, querying) = update(dispatch, TaskChanged("#parse"), test_model())
+  let (_, loaded) = update(
+    dispatch,
+    SymbolsLoaded(owner~, root=old_root, query="parse", items=[item]),
+    querying,
+  )
+  guard loaded.completion is Some(ready) else {
+    fail("the first root should settle the symbol menu")
+  }
+  assert_false(ready.loading)
+  assert_eq(ready.items.length(), 1)
+
+  let connected_root = owner.channel.test_resource("/next-scratch")
+  let ready_msg = BridgeReady(scratch_root=connected_root)
+  let (_, rerooted) = update_dev(dispatch, ready_msg, loaded)
+  let (_, repeated) = update_dev(dispatch, ready_msg, loaded)
+  assert_true(rerooted.symbol_cache == repeated.symbol_cache)
+  assert_true(rerooted.completion == repeated.completion)
+  assert_true(rerooted.symbol_cache.owner is None)
+  guard rerooted.completion is Some(waiting) else {
+    fail("the changed root should keep the symbol menu open")
+  }
+  assert_true(waiting.loading)
+  assert_true(waiting.items.is_empty())
+
+  let (_, stale) = update(
+    dispatch,
+    SymbolsLoaded(owner~, root=old_root, query="parse", items=[item]),
+    rerooted,
+  )
+  assert_true(stale.symbol_cache.owner is None)
+  assert_true(stale.completion == rerooted.completion)
+
+  let new_root = owner.channel.test_resource("/next-scratch/desktop-test")
+  let (_, settled) = update(
+    dispatch,
+    SymbolsLoaded(owner~, root=new_root, query="parse", items=[item]),
+    stale,
+  )
+  guard settled.completion is Some(current) else {
+    fail("the new root should settle the symbol menu")
+  }
+  assert_false(current.loading)
+  assert_eq(settled.symbol_cache.root, Some(new_root))
 }
 
 ///|
@@ -10263,9 +10318,7 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("second question"),
       submission_id=None,
     ),
     finished,
@@ -10383,9 +10436,7 @@ test "a successor terminal cannot claim a setup-failed run's snapshot cut" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("next question"),
       submission_id=None,
     ),
     finished,
@@ -10514,9 +10565,7 @@ test "a foreign run gains a floor only after snapshot data follows the prior ter
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("current"),
       submission_id=None,
     ),
     test_model().replace_conversation(conv),
@@ -10578,9 +10627,7 @@ test "a foreign background run waits for a snapshot cut after Started" {
       session~,
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("current question"),
       submission_id=None,
     ),
     buffered_answer,
@@ -10955,9 +11002,7 @@ test "a successor step cannot retire an older steer before its RPC rejection" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("foreign next run"),
       submission_id=None,
     ),
     settled,
@@ -11013,9 +11058,7 @@ test "a runs snapshot cannot retire a steer submitted after its frontier" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("foreign next run"),
       submission_id=None,
     ),
     settled,
@@ -11495,9 +11538,7 @@ test "foreign Started reanchors a reconnected initial before retiring its owners
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("foreign prompt"),
       submission_id=Some("foreign-prompt"),
     ),
     bridged,
@@ -11565,9 +11606,7 @@ test "an exact zero abnormal EOF releases a fresh prompt for another send" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=Some("prompt before setup failure"),
       submission_id=Some("fresh-prompt"),
     ),
     test_model().replace_conversation(conv),
@@ -11924,9 +11963,7 @@ test "a start never overrides the tier picked for the next turn" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=None,
       submission_id=None,
     ),
     queued,
@@ -11964,9 +12001,7 @@ test "a run pins an inherited tier the user never clicked for" {
       session="desktop-test",
       model=High,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=None,
       submission_id=None,
     ),
     test_model(),
@@ -12077,9 +12112,7 @@ test "a conversation first met through a live run adopts its tier" {
       session="background-chat",
       model=Low,
       max_steps=1000,
-      cwd=None,
       session_root=None,
-      task=None,
       submission_id=None,
     ),
     test_model(),
@@ -15057,10 +15090,10 @@ test "reopening an active failed reload retries and preserves other local notice
 ///|
 test "stale and lower-watermark snapshots cannot overwrite current state" {
   let dispatch = test_dispatch()
-  let current_cwd = @interop.ChannelId::Local.test_resource("/work/current")
+  let current_root = @interop.ChannelId::Local.test_resource("/work/current")
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    workspace: Project(root=current_cwd),
+    workspace: Project(root=current_root),
     messages: [{ kind: User, content: "current", ts: None }],
     watermark: 5,
     sync: Reloading(
@@ -15087,7 +15120,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
   )
   inspect(stale.active().messages[0].content, content="current")
   inspect(stale.active().watermark, content="5")
-  assert_eq(stale.active().workspace, Project(root=current_cwd))
+  assert_eq(stale.active().workspace, Project(root=current_root))
   guard stale.active().sync is Reloading(generation=2, attempt=1, ..) else {
     fail("stale generation changed the active reload")
   }
@@ -15106,7 +15139,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
   )
   inspect(lower.active().messages[0].content, content="current")
   inspect(lower.active().watermark, content="5")
-  assert_eq(lower.active().workspace, Project(root=current_cwd))
+  assert_eq(lower.active().workspace, Project(root=current_root))
   guard lower.active().sync is Reloading(generation=2, attempt=2, buffered~, ..) else {
     fail("lower watermark did not retry the current generation")
   }

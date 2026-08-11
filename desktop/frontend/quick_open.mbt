@@ -317,8 +317,8 @@ fn ensure_file_query_cache(
     previous
   } else {
     // Every Host cache key is created by a request with a concrete root. A
-    // rootless entry only records that Quick Open opened too early, so there
-    // is nothing to clear when Started later supplies that scratch root.
+    // rootless entry only records that Quick Open opened before placement was
+    // available, so there is no Host cache to clear when a root later arrives.
     if previous.root is Some(_) && previous.owner is Some(previous_owner) {
       if previous.active_key is Some(key) {
         cmds.push(clear_quick_open_file_cache(previous_owner, key))
@@ -354,9 +354,10 @@ fn ensure_file_query_cache(
 ///|
 /// Restart the current provider when its conversation root changes, including
 /// transitions to or from an unavailable root. The page-level update wrapper
-/// calls this after every message, so Started, session restoration, and
-/// worktree registry broadcasts share one transition. Advancing the generation
-/// also fences replies that were already in flight against the previous root.
+/// calls this after every message, so conversation creation, connection
+/// readiness, session restoration, and worktree registry broadcasts share one
+/// transition. Advancing the generation also fences replies that were already
+/// in flight against the previous root.
 fn Model::restart_quick_open_after_root_change(
   self : Model,
   dispatch : @cmd.Emit[Msg],
@@ -1247,8 +1248,8 @@ test "BridgeReady retries file and symbol Quick Open after a scratch root arrive
     fail("rootless Quick Open should wait for its file cache")
   }
   assert_eq(opened.file_query_cache.root, None)
-  let cwd = @interop.ChannelId::Local.test_resource("/work/scratch")
-  let ready = BridgeReady(scratch_root=cwd)
+  let scratch_root = @interop.ChannelId::Local.test_resource("/work/scratch")
+  let ready = BridgeReady(scratch_root~)
   // The same message and model must produce the same plain-data state.
   let (_, first) = update_dev(dispatch, ready, opened)
   let (_, second) = update_dev(dispatch, ready, opened)

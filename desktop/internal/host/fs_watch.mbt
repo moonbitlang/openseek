@@ -35,7 +35,7 @@ priv struct FsWatchTarget {
   // The client's identity for this exact configuration. It follows every
   // asynchronous push so a replaced watcher cannot report against its
   // successor, even when both use the same root.
-  generation : String?
+  generation : String
 }
 
 ///|
@@ -44,7 +44,6 @@ priv struct FsWatchTarget {
 /// additionally keeps each selected directory's immediate children so create,
 /// remove, and rename events can be discovered without descending further.
 priv struct WatchInterest {
-  legacy_full_tree : Bool
   paths : Set[@pathx.Relative]
   directories : Set[@pathx.Relative]
 }
@@ -53,22 +52,14 @@ priv struct WatchInterest {
 fn WatchInterest::WatchInterest(
   payload : WatchWorkspacePayload,
 ) -> WatchInterest {
-  let interest = {
-    legacy_full_tree: payload.files is None && payload.directories is None,
-    paths: Set([]),
-    directories: Set([]),
+  let interest = { paths: Set([]), directories: Set([]) }
+  for path in payload.files {
+    interest.remember(@pathx.Relative(path).normalize())
   }
-  if payload.files is Some(files) {
-    for path in files {
-      interest.remember(@pathx.Relative(path).normalize())
-    }
-  }
-  if payload.directories is Some(directories) {
-    for path in directories {
-      let path = @pathx.Relative(path).normalize()
-      interest.directories.add(path)
-      interest.remember(path)
-    }
+  for path in payload.directories {
+    let path = @pathx.Relative(path).normalize()
+    interest.directories.add(path)
+    interest.remember(path)
   }
   interest
 }
@@ -93,44 +84,11 @@ fn WatchInterest::remember(
 }
 
 ///|
-/// Subtrees omitted by recursive snapshots and legacy full-tree watchers.
-/// Besides build and dependency output, agent/tool state directories are
-/// omitted: they can contain large caches or nested worktrees and are not
-/// useful Quick Open results. `.worktrees` keeps worktree agents' churn out
-/// of the main workspace; a worktree session's own watcher roots inside the
-/// checkout, where relative paths never carry that segment. Explicit watcher
-/// selections do not use this policy: an opened file must remain watchable
-/// even under one of these conventional directory names.
-fn @pathx.Relative::is_ignored_watch_path(self : @pathx.Relative) -> Bool {
-  match [..self.0.split("/")] {
-    [
-      ..,
-      ".git"
-      | ".claude"
-      | ".codex"
-      | ".cursor"
-      | ".moonagent"
-      | ".openseek"
-      | "target"
-      | "_build"
-      | "node_modules"
-      | ".mooncakes"
-      | ".repos"
-      | ".worktrees",
-    ] => true
-    _ => false
-  }
-}
-
-///|
 /// Keep selected paths, their ancestors, and one level below every selected
 /// directory. A child directory is opened so its own create/remove can be
 /// observed, but its descendants are ignored unless that directory is also
 /// selected or leads to an opened file.
 fn WatchInterest::ignores(self : WatchInterest, path : @pathx.Relative) -> Bool {
-  if self.legacy_full_tree {
-    return path.is_ignored_watch_path()
-  }
   if self.paths.contains(path) {
     return false
   }
@@ -300,9 +258,9 @@ async fn FsWatchActor::run(
 test "watch interest retains selected files, listed children, and ancestors" {
   let payload : WatchWorkspacePayload = {
     path: "/work/project",
-    files: Some(["src/main.mbt", "node_modules/pkg/index.js"]),
-    directories: Some(["", "docs"]),
-    generation: Some("page-a:7"),
+    files: ["src/main.mbt", "node_modules/pkg/index.js"],
+    directories: ["", "docs"],
+    generation: "page-a:7",
   }
   let interest = WatchInterest(payload)
   // Root rows and one level under an expanded directory stay observable.
@@ -322,30 +280,6 @@ test "watch interest retains selected files, listed children, and ancestors" {
 }
 
 ///|
-test "legacy watch payloads retain the recursive blacklist" {
-  let payload : WatchWorkspacePayload = {
-    path: "/work/project",
-    files: None,
-    directories: None,
-    generation: None,
-  }
-  let interest = WatchInterest(payload)
-  assert_true(interest.legacy_full_tree)
-  assert_true(interest.ignores(Relative("deps/node_modules")))
-  assert_true(interest.ignores(Relative(".claude")))
-  assert_true(interest.ignores(Relative("sub/.claude")))
-  assert_true(interest.ignores(Relative("packages/app/.codex")))
-  assert_true(interest.ignores(Relative("packages/app/.cursor")))
-  assert_true(interest.ignores(Relative("packages/app/.moonagent")))
-  assert_true(interest.ignores(Relative("packages/app/.openseek")))
-  assert_true(interest.ignores(Relative(".worktrees")))
-  assert_true(interest.ignores(Relative("sub/.worktrees")))
-  // Project-owned dot-directories remain searchable/watchable by default.
-  assert_false(interest.ignores(Relative(".github/workflows/check.yml")))
-  assert_false(interest.ignores(Relative("src/main.mbt")))
-}
-
-///|
 test "host connections keep filesystem watch request mailboxes isolated" {
   let first = HostConnection::new()
   let second = HostConnection::new()
@@ -361,16 +295,16 @@ async test "watch requests retain their notification generation" {
   let request = Watch(
     {
       path: "/work/project",
-      files: Some([]),
-      directories: Some([]),
-      generation: Some("page-a:9"),
+      files: [],
+      directories: [],
+      generation: "page-a:9",
     },
     reply~,
   )
   guard request.apply(None) is Some(target) else {
     fail("valid watch request did not produce a target")
   }
-  assert_eq(target.generation, Some("page-a:9"))
+  assert_eq(target.generation, "page-a:9")
   assert_true(reply.get() is None)
 }
 
@@ -388,14 +322,9 @@ test "filesystem payloads carry absolute target paths" {
     "directories": ["", "src"],
     "generation": "page-a:7",
   })
-  assert_true(selected.files is Some(["src/main.mbt"]))
-  assert_true(selected.directories is Some(["", "src"]))
-  assert_eq(selected.generation, Some("page-a:7"))
-  let bare : WatchWorkspacePayload = @json.from_json({ "path": "/work/project" })
-  assert_eq(bare.path, "/work/project")
-  assert_true(bare.files is None)
-  assert_true(bare.directories is None)
-  assert_true(bare.generation is None)
+  assert_eq(selected.files, ["src/main.mbt"])
+  assert_eq(selected.directories, ["", "src"])
+  assert_eq(selected.generation, "page-a:7")
 }
 
 ///|

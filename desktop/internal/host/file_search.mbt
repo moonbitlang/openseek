@@ -26,6 +26,30 @@ priv struct FileScanEntry {
 }
 
 ///|
+/// Quick Open skips dependency, cache, and checkout-management directories
+/// whose contents are noisy and expensive to index as user-authored files.
+fn @pathx.Relative::is_ignored_file_search_path(self : @pathx.Relative) -> Bool {
+  match [..self.0.split("/")] {
+    [
+      ..,
+      ".git"
+      | ".claude"
+      | ".codex"
+      | ".cursor"
+      | ".moonagent"
+      | ".openseek"
+      | "target"
+      | "_build"
+      | "node_modules"
+      | ".mooncakes"
+      | ".repos"
+      | ".worktrees",
+    ] => true
+    _ => false
+  }
+}
+
+///|
 /// File discovery is best-effort: a directory that disappears or becomes
 /// unreadable cannot fail the whole scan, while cancellation still stops it.
 async fn read_sorted_directory(dir : @pathx.Absolute) -> Array[FileScanEntry] {
@@ -72,7 +96,7 @@ async fn collect_directory_listing(
     }
     let relative = relative_child(prefix, entry.name)
     if entry.is_dir {
-      if @pathx.Relative(relative).is_ignored_watch_path() {
+      if @pathx.Relative(relative).is_ignored_file_search_path() {
         continue
       }
       let child = dir.join(Relative(entry.name))

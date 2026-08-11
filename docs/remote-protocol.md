@@ -78,7 +78,7 @@ Remote delivery trims high-volume transcript objects whose canonical form is
 delivered by `session.event`. This is the protocol baseline and applies only to
 named durable sessions. Session-less runs retain the complete legacy stream
 because they have no `session.event` source. For a durable run, the pushed
-`agent.started` remains with `task: ""`;
+`agent.started` carries lifecycle identity only;
 `reasoning_message` and `assistant_message` remain as stream-settlement signals
 with `content: ""`; `tool_result`, `auto_compaction_finished`, `agent_finished`,
 and `context_yield` are omitted. The separate `agent.finished` lifecycle
@@ -267,7 +267,7 @@ Notifications:
 
 | method | params |
 |---|---|
-| `agent.started` | `{run_id, task, submission_id?, session, engine, model, max_steps, cwd?, session_root?}` — `cwd` and `session_root` are host-derived placement facts, never client-selected paths. `task` is kept for old clients that synthesize the prompt bubble from it; current clients take the bubble from the prompt's own `session.event` commit |
+| `agent.started` | `{run_id, submission_id?, session, engine, model, max_steps, session_root?}` — `session_root` is a host-derived durable-store fact, never a client-selected path; the prompt bubble comes from its own `session.event` commit |
 | `agent.event` | `{run_id?, session, event: {…}}` — the engine's event object (`assistant_delta`, `tool_result`, `agent_finished`, …); for a correlated steer receipt the host adds its optional `submission_id`. `run_id` is absent for events emitted before any run of the engine process's lifetime (a compaction on a freshly spawned engine), which route by `session` |
 | `agent.error` | `{message, run_id?, exit_code?, diagnostics?}` |
 | `agent.finished` | `{run_id, status, answer?, exit_code?, durable_sequence?}` — `durable_sequence` is present when an abnormal process exit's follower final scan completed before lifecycle publication; it is the exact stored boundary even when the dead turn appended no Terminal |
@@ -298,9 +298,10 @@ commit exists **if and only if** its item is in the session's durable
 record, and `sequence` is the item's one-based position there — contiguous
 per session. Everything else on the wire is transient stream or lifecycle
 state: commit-aware clients may show deltas live, but full semantic messages,
-`agent.started`'s `task`, and steer receipts never append transcript items —
-their durable form arrives as a commit. A remote WebSocket receives the
-lightweight forms described above instead of duplicate full semantic payloads.
+transient lifecycle notifications, and steer receipts never append transcript
+items — their durable form arrives as a commit. A remote WebSocket receives
+the lightweight forms described above instead of duplicate full semantic
+payloads.
 
 Client algorithm, per session: keep a watermark `W`, starting at the
 snapshot's. For each `session.event`: `sequence ≤ W` → drop (re-broadcasts
@@ -461,7 +462,7 @@ its picker-specific starting-point behavior.
 | `fs.cancel_search_files` | `{cache_key, generation}` | `{}` — cancels one query while allowing cache population to finish |
 | `fs.clear_file_search_cache` | `{cache_key}` | `{}` — retires one search cache session and its outstanding work |
 | `fs.stat_files` | `{paths}` (absolute) | `{stats: [{path, sig}]}` — each `path` echoes its absolute input; `sig` is the opaque mtime signature `"{seconds}:{nanos}"`; `""` means the file is missing, retained for client compatibility |
-| `fs.watch` | `{path, files?, directories?, generation?}` (`path` absolute; `generation` string) | `{}` — replaces the connection's single watcher; `files` and `directories` are relative to `path`, each directory keeps its immediate children observable, and current clients use a page-unique namespace plus a monotonically increasing counter for `generation` |
+| `fs.watch` | `{path, files, directories, generation}` (`path` absolute; `generation` string) | `{}` — replaces the connection's single watcher; `files` and `directories` are relative to `path`, each directory keeps its immediate children observable, and clients use a page-unique namespace plus a monotonically increasing counter for `generation` |
 | `fs.unwatch` | `{}` | `{}` — stops watching when the panel is closed and it has no open tabs |
 | `fs.browse` | `{path?}` (absent = home; leading `~` expands) | `{path, parent?, entries}` — subdirectory names, sorted, dotfiles skipped |
 
@@ -469,16 +470,12 @@ Notification:
 
 | method | params |
 |---|---|
-| `fs.changed` | `{root, baseline, events: [{kind, path, old_path?}], generation?}` — `root` is absolute; `baseline=true` follows watcher attachment; later batches use `modify` / `create` / `remove` / `rename` events with root-relative paths; the string `generation` echoes the owning `fs.watch` request |
-| `fs.watch_failed` | `{root, message, generation?}` — the accepted watcher could not attach or later stopped; the string `generation` echoes the owning `fs.watch` request so a delayed failure cannot attach to a same-root replacement or a reloaded page that restarted its counter |
+| `fs.changed` | `{root, baseline, events: [{kind, path, old_path?}], generation}` — `root` is absolute; `baseline=true` follows watcher attachment; later batches use `modify` / `create` / `remove` / `rename` events with root-relative paths; the string `generation` echoes the owning `fs.watch` request |
+| `fs.watch_failed` | `{root, message, generation}` — the accepted watcher could not attach or later stopped; the string `generation` echoes the owning `fs.watch` request so a delayed failure cannot attach to a same-root replacement or a reloaded page that restarted its counter |
 
-`files`, `directories`, and `generation` are optional only for compatibility
-with older clients. When both path arrays are absent the host retains the
-previous pruned recursive watch; current clients always send both arrays,
-including empty arrays, plus a generation. Current clients ignore unowned
-notifications whose generation is absent. A watcher replacement emits a
-baseline after it has scanned the selected paths, so the client can reconcile
-changes that raced the replacement.
+The path arrays are always present, including when empty. A watcher replacement
+emits a baseline after it has scanned the selected paths, so the client can
+reconcile changes that raced the replacement.
 
 ### terminal.* — connection-scoped PTYs
 

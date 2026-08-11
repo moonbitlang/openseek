@@ -245,7 +245,7 @@ priv struct FsChangedPayload {
   root : String
   baseline : Bool
   events : Array[FsEventPayload]
-  generation : String?
+  generation : String
 }
 
 ///|
@@ -279,7 +279,7 @@ test "filesystem events keep their concrete kind and paths on the wire" {
 priv struct FsWatchFailedPayload {
   root : String
   message : String
-  generation : String?
+  generation : String
 } derive(ToJson)
 
 ///|
@@ -287,7 +287,7 @@ test "filesystem watcher failures retain root and generation on the wire" {
   let payload : FsWatchFailedPayload = {
     root: "/work/project",
     message: "File watching stopped: too many open files",
-    generation: Some("page-a:7"),
+    generation: "page-a:7",
   }
   assert_eq(ToJson::to_json(payload), {
     "root": "/work/project",

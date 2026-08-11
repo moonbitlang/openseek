@@ -528,20 +528,18 @@ pub(all) enum Msg {
     message~ : String
   )
   // An `fs.watch` request rejection or an asynchronous watcher failure. The
-  // generation identifies the exact watcher configuration that produced it;
-  // `None` is an older host's unowned push and cannot safely change state.
+  // generation identifies the exact watcher configuration that produced it.
   FileWatchFailed(
     channel~ : @interop.ChannelId,
     root~ : @common.Uri,
-    generation~ : String?,
+    generation~ : String,
     message~ : String
   )
   // A new watcher sends `changes=None` once it is attached, requesting a full
   // baseline reconciliation. Later pushes contain the exact debounced events.
-  // As with failures, an older host's missing generation is ignored.
   FsChanged(
     root~ : @common.Uri,
-    generation~ : String?,
+    generation~ : String,
     changes~ : Array[FileChange]?
   )
   // The conversation's agent run finished: the workspace has settled, so

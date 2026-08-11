@@ -94,25 +94,14 @@ pub async fn start_run(
     live.phase = Running(cancel_requested=false, compact_queued=false)
     live.steer_runs.begin_run()
     started_emitted = true
-    let cwd = match config.cwd {
-      Some(cwd) => {
-        guard cwd.to_absolute() is Some(cwd) else {
-          raise EngineError("run working directory is not absolute")
-        }
-        Some(cwd.resource_path())
-      }
-      None => None
-    }
     emit(
       sink,
       Started({
         run_id,
-        task: Some(config.task),
         submission_id,
         engine: Some(config.engine),
         model: Some(config.model),
         max_steps: Some(config.max_steps),
-        cwd,
         session: config.session,
         session_root: config.session_root.map(root => root.resource_path()),
       }),

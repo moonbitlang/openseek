@@ -250,7 +250,7 @@ fn symbol_cache(
       range=@common.Range::Range(1, 1, 1, 1),
     )
   })
-  { owner: Some(owner), query, items }
+  { owner: Some(owner), root: None, query, items }
 }
 
 ///|

@@ -47,8 +47,7 @@ priv struct ViewerHost {
   // The same file as the conversation names it — the workspace-relative path
   // the panel read it by. A comment filed on the shown document takes this
   // as its chip path, so the chip never has to reverse-engineer a relative
-  // name from the absolute one (which the frontend cannot do before the
-  // first run reports `cwd`). `None` when the viewer shows a notice or
+  // name from the absolute one. `None` when the viewer shows a notice or
   // nothing.
   mut relative : @pathx.Relative?
   // The active host/workspace route for Definition/References targets and

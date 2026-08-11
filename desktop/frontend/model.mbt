@@ -341,9 +341,7 @@ priv struct RecoveredRun {
   session : String
   model : EngineModel
   max_steps : Int
-  cwd : @common.Uri?
   session_root : @common.Uri?
-  task : String?
   submission_id : String?
 }
 
@@ -870,18 +868,19 @@ priv struct Completion {
 /// The last workspace-symbol results, cached so the `#` menu can show them
 /// without refetching while the query is unchanged. `session` records which
 /// conversation they belong to, so switching either device or session
-/// refetches rather than showing another workspace's symbols; `query` is the
-/// trigger text they answer, the key that decides whether a keystroke needs a
-/// fresh fetch.
+/// refetches rather than showing another workspace's symbols; `root` fences a
+/// worktree or project transition inside that conversation; `query` is the
+/// trigger text they answer.
 priv struct SymbolCache {
   owner : @interop.ConversationKey?
+  root : @common.Uri?
   query : String
   items : Array[CompletionItem]
 } derive(Eq)
 
 ///|
 fn empty_symbol_cache() -> SymbolCache {
-  { owner: None, query: "", items: [] }
+  { owner: None, root: None, query: "", items: [] }
 }
 
 ///|
@@ -1447,16 +1446,21 @@ priv enum Msg {
   // also carries its comment text, re-shown as an editor bubble over that
   // range.
   JumpToLocation(path~ : String, range~ : @common.Range?, annotation~ : String?)
-  // A `workspace_symbols` reply: `owner`/`query` say which request it answers
-  // so a reply that lost a device/session switch or later keystroke is dropped.
+  // A `workspace_symbols` reply: owner, root, and query say which request it
+  // answers so an overtaken device/session/root switch or keystroke is dropped.
   SymbolsLoaded(
     owner~ : @interop.ConversationKey,
+    root~ : @common.Uri,
     query~ : String,
     items~ : Array[WorkspaceSymbol]
   )
   // A failed search reads as "no symbols", so it carries no message to show —
-  // only the `owner`/`query` needed to settle the right menu.
-  SymbolsFailed(owner~ : @interop.ConversationKey, query~ : String)
+  // only the request identity needed to settle the right menu.
+  SymbolsFailed(
+    owner~ : @interop.ConversationKey,
+    root~ : @common.Uri,
+    query~ : String
+  )
   // Open unified Quick Open in the requested provider in either shell.
   QuickOpenOpen(QuickOpenMode)
   QuickOpenValueChanged(String)
@@ -1956,16 +1960,12 @@ priv enum DeviceMsg {
   )
   // The host accepted a prompt: `session` routes the event to its
   // conversation, and everything after a `started` routes by `run_id`.
-  // `task` is the prompt text — a client that did not send it (another
-  // window, a mid-run join) has no other live source for the prompt bubble.
   Started(
     run_id~ : String,
     session~ : String,
     model~ : EngineModel,
     max_steps~ : Int,
-    cwd~ : @common.Uri?,
     session_root~ : @common.Uri?,
-    task~ : String?,
     submission_id~ : String?
   )
   // One complete `agent.runs` reply. Replayed starts and the negative-set

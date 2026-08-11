@@ -373,10 +373,7 @@ fn notification_for_client(
       }
     }
     AgentStarted(payload) if payload.session is Some(session) &&
-      !session.is_empty() =>
-      // The prompt itself arrives as a durable commit. Keep the field so
-      // clients with a required-string decoder still accept the frame.
-      Some(AgentStarted({ ..payload, task: Some("") }))
+      !session.is_empty() => Some(AgentStarted(payload))
     _ => Some(notification)
   }
 }
@@ -617,27 +614,21 @@ test "remote delivery retains streaming runtime and error events" {
 }
 
 ///|
-test "remote lifecycle frames keep state and trim transcript text" {
+test "remote lifecycle frames keep state without transcript text" {
   let started = expect_notification(
     notification_for_client(
       AgentStarted({
         run_id: "run-1",
-        task: Some("large prompt"),
         submission_id: None,
         engine: None,
         model: None,
         max_steps: None,
-        cwd: None,
         session: Some("session-1"),
         session_root: None,
       }),
     ),
   )
-  assert_eq(started.params(), {
-    "run_id": "run-1",
-    "session": "session-1",
-    "task": "",
-  })
+  assert_eq(started.params(), { "run_id": "run-1", "session": "session-1" })
   let finished = expect_notification(
     notification_for_client(
       AgentFinished({
@@ -709,12 +700,10 @@ test "remote lifecycle frames keep state and trim transcript text" {
 test "remote delivery preserves session-less transcript events" {
   let started_notification : @protocol.Notification = AgentStarted({
     run_id: "run-ephemeral",
-    task: Some("ephemeral prompt"),
     submission_id: None,
     engine: None,
     model: None,
     max_steps: None,
-    cwd: None,
     session: None,
     session_root: None,
   })

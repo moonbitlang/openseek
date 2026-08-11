@@ -1990,12 +1990,10 @@ test "submission ids are non-blank and bounded by UTF-8 bytes" {
 test "started payload omits a missing submission id" {
   let payload : StartedPayload = {
     run_id: "r1",
-    task: Some("hello"),
     submission_id: None,
     engine: Some("openseek"),
     model: Some("model"),
     max_steps: Some(10),
-    cwd: None,
     session: None,
     session_root: None,
   }

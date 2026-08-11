@@ -41,7 +41,7 @@ fn read_workspace_symbols(
           let message = match generation {
             Some(generation) =>
               QuickOpenSymbolsRequestFailed(owner~, query~, generation~)
-            None => SymbolsFailed(owner~, query~)
+            None => SymbolsFailed(owner~, root~, query~)
           }
           scheduler.add(dispatch(message))
           return
@@ -51,7 +51,7 @@ fn read_workspace_symbols(
       let message = match generation {
         Some(generation) =>
           QuickOpenSymbolsLoaded(owner~, query~, generation~, items~)
-        None => SymbolsLoaded(owner~, query~, items~)
+        None => SymbolsLoaded(owner~, root~, query~, items~)
       }
       scheduler.add(dispatch(message))
     })

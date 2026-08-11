@@ -300,9 +300,7 @@ fn Hub::sink(
 test "a real engine connection retires old active runs before readiness" {
   let hub = Hub::new()
   let subscriber = hub.subscribe()
-  hub.publish(
-    AgentStarted(@json.from_json({ "run_id": "r-old", "task": "old" })),
-  )
+  hub.publish(AgentStarted(@json.from_json({ "run_id": "r-old" })))
   guard hub.runs().runs is [_] else {
     fail("expected one active run before reconnect")
   }
@@ -323,7 +321,7 @@ test "a real engine connection retires old active runs before readiness" {
 ///|
 test "an agent error does not retire a run before its finished boundary" {
   let hub = Hub::new()
-  hub.publish(AgentStarted(@json.from_json({ "run_id": "r1", "task": "work" })))
+  hub.publish(AgentStarted(@json.from_json({ "run_id": "r1" })))
   hub.publish(
     AgentError(@json.from_json({ "run_id": "r1", "message": "boom" })),
   )
@@ -347,7 +345,6 @@ test "a normal terminal-backed finish is replayable only to a matching caller" {
         "run_id": "r-normal",
         "session": "s-normal",
         "submission_id": "sub-normal",
-        "task": "work",
       }),
     ),
   )

@@ -375,13 +375,13 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
         root: "/work/project",
         baseline: true,
         events: [],
-        generation: Some("page-a:7"),
+        generation: "page-a:7",
       }),
     )
     is Some(
       FromDevice(
         Remote("d1"),
-        FilePanel(FsChanged(root=_, generation=Some("page-a:7"), changes=None))
+        FilePanel(FsChanged(root=_, generation="page-a:7", changes=None))
       )
     ),
   )
@@ -399,7 +399,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
             old_path: Some("src/old.mbt"),
           },
         ],
-        generation: Some("page-a:7"),
+        generation: "page-a:7",
       }),
     )
     is Some(
@@ -408,7 +408,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
         FilePanel(
           FsChanged(
             root=_,
-            generation=Some("page-a:7"),
+            generation="page-a:7",
             changes=Some(
               [
                 Modified(Relative("src/main.mbt")),
@@ -430,7 +430,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
       @protocol.Notification::FsWatchFailed({
         root: "/work/project",
         message: "File watching stopped",
-        generation: Some("page-a:7"),
+        generation: "page-a:7",
       }),
     )
     is Some(
@@ -440,7 +440,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
           FileWatchFailed(
             channel=Remote("d1"),
             root=_,
-            generation=Some("page-a:7"),
+            generation="page-a:7",
             message="File watching stopped"
           )
         )
@@ -712,26 +712,14 @@ fn started_msg(
   // `run_id`/`session`/`model`/`max_steps` are unconditional on this event
   // (the app's own start op always names a session); a payload missing one
   // — a blank model included, since no run ever ran on no model — is
-  // malformed and dropped. `cwd` and the durable `session_root` are
-  // genuinely optional, and the host resolved both itself, so this is the
-  // decode boundary where their absolute provenance is collapsed into the
-  // type.
+  // malformed and dropped. The durable `session_root` is genuinely optional,
+  // and the host resolved it itself, so this is the decode boundary where its
+  // absolute provenance is collapsed into the type.
   guard payload.session is Some(session) &&
     payload.model is Some(model) &&
     EngineModel::parse(model) is Some(model) &&
     payload.max_steps is Some(max_steps) else {
     return None
-  }
-  // Optional placement fields are still protocol input: if either is not a
-  // complete absolute path, reject the malformed event as a whole.
-  let cwd = match payload.cwd {
-    Some(path) => {
-      guard @resource.of_path(channel, path) is Some(absolute) else {
-        return None
-      }
-      Some(absolute)
-    }
-    None => None
   }
   let session_root = match payload.session_root {
     Some(path) => {
@@ -748,9 +736,7 @@ fn started_msg(
       session~,
       model~,
       max_steps~,
-      cwd~,
       session_root~,
-      task=payload.task,
       submission_id=payload.submission_id,
     ),
   )
@@ -770,15 +756,6 @@ fn RecoveredRun::from_started(
     payload.max_steps is Some(max_steps) else {
     return None
   }
-  let cwd = match payload.cwd {
-    Some(path) => {
-      guard @resource.of_path(channel, path) is Some(absolute) else {
-        return None
-      }
-      Some(absolute)
-    }
-    None => None
-  }
   let session_root = match payload.session_root {
     Some(path) => {
       guard @resource.of_path(channel, path) is Some(absolute) else {
@@ -793,9 +770,7 @@ fn RecoveredRun::from_started(
     session,
     model,
     max_steps,
-    cwd,
     session_root,
-    task: payload.task,
     submission_id: payload.submission_id,
   })
 }

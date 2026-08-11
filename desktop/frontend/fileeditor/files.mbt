@@ -290,9 +290,9 @@ fn watch_workspace(
         ignore(
           @interop.bridge_request_in_order(channel, @commands.fs_watch, {
             path: watched.root.path,
-            files: Some(watched.files.map(path => path.0)),
-            directories: Some(watched.directories.map(path => path.0)),
-            generation: Some(generation),
+            files: watched.files.map(path => path.0),
+            directories: watched.directories.map(path => path.0),
+            generation,
           }) catch {
             error => {
               scheduler.add(
@@ -300,7 +300,7 @@ fn watch_workspace(
                   FileWatchFailed(
                     channel=watched.owner.channel,
                     root=watched.root,
-                    generation=Some(generation),
+                    generation~,
                     message="File watching failed: \{@interop.bridge_error_text(error)}",
                   ),
                 ),
