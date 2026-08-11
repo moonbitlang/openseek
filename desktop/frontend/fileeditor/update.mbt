@@ -3234,16 +3234,18 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
     deleted_preview.unified_diff_content(),
     Some(("removed source", "")),
   )
-  assert_true(deleted_preview.review is Some({ view_mode: ReviewSource, .. }))
-  let (_, full_diff) = update(emit, ToggleReviewDiff, preview, ctx)
   assert_true(
-    full_diff.docs.get(deleted_path)
-    is Some({ review: Some({ view_mode: ReviewUnifiedDiff, .. }), .. }),
+    deleted_preview.review is Some({ view_mode: ReviewUnifiedDiff, .. }),
   )
-  let (_, source_again) = update(emit, ToggleReviewDiff, full_diff, ctx)
+  let (_, source) = update(emit, ToggleReviewDiff, preview, ctx)
   assert_true(
-    source_again.docs.get(deleted_path)
+    source.docs.get(deleted_path)
     is Some({ review: Some({ view_mode: ReviewSource, .. }), .. }),
+  )
+  let (_, full_diff_again) = update(emit, ToggleReviewDiff, source, ctx)
+  assert_true(
+    full_diff_again.docs.get(deleted_path)
+    is Some({ review: Some({ view_mode: ReviewUnifiedDiff, .. }), .. }),
   )
 
   // The HEAD request may beat the ordinary filesystem read. Its result stays

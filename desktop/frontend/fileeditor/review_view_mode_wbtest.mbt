@@ -1,4 +1,23 @@
 ///|
+test "new reviews default to the full diff" {
+  let path = @pathx.Relative("src/main.mbt")
+  let change = test_modified_change(path)
+  let state = owned_state()
+  assert_true(state.review_view_mode is ReviewUnifiedDiff)
+  let (_, opened) = open_changed_document(
+    test_emit(),
+    state,
+    { ..test_ctx(), open_files: [path], active_file: Some(path) },
+    change,
+    had_active=false,
+  )
+  assert_true(
+    opened.docs.get(path)
+    is Some({ review: Some({ view_mode: ReviewUnifiedDiff, .. }), .. }),
+  )
+}
+
+///|
 test "full diff remains selected when opening another changed file" {
   let first_path = @pathx.Relative("src/first.mbt")
   let second_path = @pathx.Relative("src/second.mbt")
@@ -23,7 +42,7 @@ test "full diff remains selected when opening another changed file" {
   let (_, full_diff) = update(
     test_emit(),
     ToggleReviewDiff,
-    { ..owned_state(), docs, },
+    { ..owned_state(), docs, review_view_mode: ReviewSource },
     first_ctx,
   )
   assert_true(full_diff.review_view_mode is ReviewUnifiedDiff)

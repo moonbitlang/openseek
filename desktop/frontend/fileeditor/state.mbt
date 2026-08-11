@@ -320,7 +320,7 @@ pub fn State::empty() -> State {
     placement_checkout: None,
     tree_open: true,
     explorer_mode: ExplorerFiles,
-    review_view_mode: ReviewSource,
+    review_view_mode: ReviewUnifiedDiff,
     changes: ChangeListIdle,
     reviewed_changes: [],
     changes_generation: 0,
