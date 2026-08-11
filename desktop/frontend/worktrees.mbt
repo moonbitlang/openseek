@@ -1635,8 +1635,20 @@ test "a removed worktree's probes cannot repopulate the composer" {
     })
   // A branch probe answers, which is also what starts the pull-request lookup:
   // both are now on record, and the second is still in flight.
-  let (_, described) = update_dev(dispatch, branch_reply("feature/x"), model)
+  let stale_diffstat : DiffStat = {
+    added: 12,
+    removed: 3,
+    files: 2,
+    base: Some("origin/main"),
+    partial: false,
+  }
+  let (_, described) = update_dev(
+    dispatch,
+    branch_reply("feature/x", diffstat=stale_diffstat),
+    model,
+  )
   assert_true(described.active().branch is Some("feature/x"))
+  assert_eq(described.active().diffstat, Some(stale_diffstat))
   assert_true(described.active().pull_request is Some(_))
   // The checkout is removed while a refresh of each is outstanding.
   let (_, swept) = update_dev(
@@ -1650,6 +1662,41 @@ test "a removed worktree's probes cannot repopulate the composer" {
   // Their answers arrive afterwards, describing a directory that is gone. A
   // generation left where it was would take both back.
   let (_, late_branch) = update_dev(dispatch, branch_reply("feature/x"), swept)
+  assert_true(late_branch.active().branch is None)
+  let (_, late_lookup) = update_dev(
+    dispatch,
+    pull_request_reply(
+      "feature/x",
+      generation=1,
+      pull_request=test_pull_request(),
+    ),
+    late_branch,
+  )
+  assert_true(late_lookup.active().pull_request is None)
+  // A reconnect list is equally authoritative. If another client removed the
+  // binding during the connection gap, the first fresh empty list must perform
+  // the same Git reset and generation fence as the broadcast above.
+  let list_reply = WorktreesLoaded(
+    [],
+    workspace~,
+    connection_generation=0,
+    request_generation=2,
+  )
+  let (_, listed) = update_dev(dispatch, list_reply, described)
+  let (_, replayed) = update_dev(dispatch, list_reply, described)
+  assert_true(listed.active().workspace is Project(_))
+  assert_true(listed.active().branch is None)
+  assert_true(listed.active().diffstat is None)
+  assert_true(listed.active().pull_request is None)
+  assert_eq(
+    listed.active().branch_generation,
+    replayed.active().branch_generation,
+  )
+  assert_eq(
+    listed.active().pull_request_generation,
+    replayed.active().pull_request_generation,
+  )
+  let (_, late_branch) = update_dev(dispatch, branch_reply("feature/x"), listed)
   assert_true(late_branch.active().branch is None)
   let (_, late_lookup) = update_dev(
     dispatch,

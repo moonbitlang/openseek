@@ -439,7 +439,7 @@ test "proton subscribes to canonical durable and workspace notifications" {
 }
 
 ///|
-test "opening a stored session adopts its workspace" {
+test "opening a stored session joins its project and loaded worktree" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let model = test_model().with_dev(dev => {
@@ -478,6 +478,34 @@ test "opening a stored session adopts its workspace" {
     opening,
   )
   assert_eq(loaded.active().workspace, Project(root=workspace))
+  let bound = model.with_dev(dev => {
+    dev.with_worktrees(
+      workspace,
+      [
+        {
+          name: "feature",
+          session: Some("desktop-w"),
+          path: None,
+          present: true,
+        },
+      ],
+      generation=1,
+    )
+  })
+  let (_, worktree_opening) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-w"),
+    bound,
+  )
+  guard worktree_opening.find_conversation(Local, "desktop-w") is Some(pending) else {
+    fail("expected the stored worktree conversation to be created")
+  }
+  assert_eq(pending.workspace, Worktree(project=workspace, name="feature"))
+  assert_eq(worktree_opening.dev().active_project, Some(workspace))
+  assert_true(
+    worktree_opening.loading_conversation
+    is Some({ channel: Local, session: "desktop-w" }),
+  )
 }
 
 ///|

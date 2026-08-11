@@ -145,21 +145,34 @@ fn open_session_on(
     }
     (@cmd.batch(commands), next)
   } else {
-    // The sidebar item says which store holds the session; opening it
-    // also makes its workspace the active one, so "New chat" follows.
+    // The sidebar item says which project store holds the session, while the
+    // already-loaded worktree registry may place it in a specific checkout.
+    // Join both snapshots before the conversation exists: no later registry
+    // reply is guaranteed after a user opens an already-listed session.
     let project = model.session_project(channel, session_id)
-    let (model, generation) = model.begin_transcript_reload(
-      empty_conversation(
-        channel,
-        session_id,
-        project?,
-        // Reopening a stored conversation recovers the tier it was left on,
-        // not whatever was picked last in some other chat.
-        model=model
-          .remembered_model(channel, session_id)
-          .unwrap_or(model.default_model),
-      ),
+    let conversation = empty_conversation(
+      channel,
+      session_id,
+      project?,
+      // Reopening a stored conversation recovers the tier it was left on,
+      // not whatever was picked last in some other chat.
+      model=model
+        .remembered_model(channel, session_id)
+        .unwrap_or(model.default_model),
     )
+    let conversation = if model.device_state(channel) is Some(dev) {
+      {
+        ..conversation,
+        workspace: dev.conversation_workspace(
+          project,
+          session_id,
+          conversation.workspace,
+        ),
+      }
+    } else {
+      conversation
+    }
+    let (model, generation) = model.begin_transcript_reload(conversation)
     let next = { ..model, screen: Chat, loading_conversation: Some(owner) }.with_active_project(
       project,
     )
@@ -3893,21 +3906,30 @@ fn update_device_msg(
         rows,
         generation=request_generation,
       )
-      let conversations = model.conversations.map(conv => {
+      let next = model.replace_device(next_dev)
+      // A fresh list can be the first proof that a binding disappeared while
+      // this client was disconnected. Spend one Git request number just like
+      // the live broadcast path: every conversation unbound by this snapshot
+      // must reject branch and pull-request answers still in flight for the
+      // checkout that no longer owns it.
+      let (fence, next) = next.mint_git_request()
+      let conversations = next.conversations.map(conv => {
         if conv.device == channel && conv.workspace.project() == Some(workspace) {
-          {
-            ..conv,
-            workspace: next_dev.conversation_workspace(
-              Some(workspace),
-              conv.session_id,
-              conv.workspace,
-            ),
+          let placement = next_dev.conversation_workspace(
+            Some(workspace),
+            conv.session_id,
+            conv.workspace,
+          )
+          if conv.workspace is Worktree(..) && placement is Project(..) {
+            { ..conv.forget_git(fence~), workspace: placement }
+          } else {
+            { ..conv, workspace: placement }
           }
         } else {
           conv
         }
       })
-      (@cmd.none, { ..model.replace_device(next_dev), conversations, })
+      (@cmd.none, { ..next, conversations, })
     }
     WorktreesFailed(
       workspace~,
