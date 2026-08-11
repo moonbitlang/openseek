@@ -317,9 +317,19 @@ fn adopt_projects(
         ..next.activate(channel, fallback.id),
         transcript_pinned: true,
       }.with_active_project(fallback.workspace)
+      // The session list names only the project store. Reconcile that broad
+      // placement with the registry and any already-known conversation before
+      // reloading: a retained Worktree must not be downgraded to Project, while
+      // a session not yet materialized on this page still initializes from its
+      // listed project.
+      let fallback_conv = activated.active()
       let activated = activated.replace_conversation({
-        ..activated.active(),
-        workspace: Workspace::from_project(fallback.workspace),
+        ..fallback_conv,
+        workspace: dev.conversation_workspace(
+          fallback.workspace,
+          fallback.id,
+          fallback_conv.workspace,
+        ),
       })
       let (fallback_cmd, next) = open_session_on(
         dispatch,

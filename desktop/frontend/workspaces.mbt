@@ -277,6 +277,46 @@ test "detaching the active workspace opens the newest remaining conversation" {
 }
 
 ///|
+test "detaching the active workspace preserves a fallback worktree" {
+  let dispatch = test_dispatch()
+  let gone = @interop.ChannelId::Local.test_resource("/gone")
+  let kept_project = @interop.ChannelId::Local.test_resource("/kept")
+  let fallback = {
+    ..empty_conversation(Local, "desktop-worktree"),
+    workspace: Worktree(project=kept_project, name="wt"),
+  }
+  let model = test_model()
+    .replace_conversation({
+      ..test_conversation(),
+      workspace: Project(root=gone),
+    })
+    .replace_conversation(fallback)
+    .with_dev(dev => {
+      ..dev,
+      projects: [gone, kept_project],
+      active_project: Some(gone),
+      sessions: [
+        {
+          id: fallback.session_id,
+          title: Some("kept worktree"),
+          workspace: Some(kept_project),
+          workspace_name: "kept",
+        },
+        {
+          id: "desktop-test",
+          title: Some("gone"),
+          workspace: Some(gone),
+          workspace_name: "gone",
+        },
+      ],
+    })
+  let (_, next) = update_dev(dispatch, ProjectsChanged([kept_project]), model)
+  assert_eq(next.active_session, fallback.session_id)
+  assert_eq(next.active().workspace, Worktree(project=kept_project, name="wt"))
+  assert_eq(next.dev().active_project, Some(kept_project))
+}
+
+///|
 test "detaching the last workspace rotates into a scratch conversation" {
   let dispatch = test_dispatch()
   let gone = @interop.ChannelId::Local.test_resource("/gone")
