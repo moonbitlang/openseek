@@ -331,7 +331,7 @@ fn parent_dir(path : String) -> String {
   // Everything before the last `/` or `\` — greedy prefix, then a separator,
   // then a separator-free tail. No separator (or one at index 0) means no
   // directory component.
-  lexscan path {
+  lexmatch path {
     (re"^(.|\n)*" as dir) + re"[/\\][^/\\]*$" => dir.to_owned()
     _ => ""
   }

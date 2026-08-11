@@ -49,7 +49,7 @@ pub impl @syntax.LineTokenizer for MoonConfigTokenizer with fn tokenize_line(
 /// the unread suffix. Equal-length rules intentionally prefer comments and
 /// package aliases before punctuation and ordinary identifiers.
 fn config_step(view : StringView) -> (@syntax.HighlightTag?, StringView) {
-  lexscan view with longest {
+  lexmatch view with longest {
     (re"^[ \t]+", after=rest) => (None, rest)
     (re"^//.*", after=rest) => (Some(Comment), rest)
     (re"^\"(?:\\.|[^\"\\])*\"", after=rest) =>

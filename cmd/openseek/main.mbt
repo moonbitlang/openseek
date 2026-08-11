@@ -509,7 +509,7 @@ async fn random_salt() -> String {
 
 ///|
 fn failure_message(error_text : String) -> String {
-  lexscan error_text {
+  lexmatch error_text {
     (re"^error: ", after=message) => message.to_owned()
     // `(.|\n)*` is greedy across lines, so the remainder follows the LAST
     // marker occurrence — the same piece the split-and-take-last form chose.

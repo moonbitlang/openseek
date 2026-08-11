@@ -200,7 +200,7 @@ fn redact_url(url : String) -> String {
   // `://` anywhere — matching the decoder's leniency and staying fail-closed
   // for malformed values like `/https://user:secret@host` — and drop a
   // `userinfo@` that precedes any `/` in what follows. The userinfo arm is
-  // start-anchored on purpose: an unanchored lexscan arm SEARCHES, and would
+  // start-anchored on purpose: an unanchored lexmatch arm SEARCHES, and would
   // redact an `@` sitting in the path.
   let kept = if url =~ (re"[?#]", before~, after=_) { before } else { url }
   let (prefix, rest) = if kept =~ (re"://", before~, after~) {
@@ -208,7 +208,7 @@ fn redact_url(url : String) -> String {
   } else {
     ("", kept)
   }
-  lexscan rest {
+  lexmatch rest {
     re"^[^/@]*@" + (re"(.|\n)*$" as tail) => "\{prefix}\{tail}"
     _ => "\{prefix}\{rest}"
   }

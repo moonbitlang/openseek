@@ -196,7 +196,7 @@ fn is_fd_redirect_op(op : String) -> Bool {
 
 ///|
 fn is_fd_word(word : String) -> Bool {
-  lexscan word {
+  lexmatch word {
     re"^[0-9]+$" => true
     _ => false
   }
@@ -221,7 +221,7 @@ fn is_env_assignment_word(word : String) -> Bool {
 
 ///|
 fn is_valid_env_name(name : String) -> Bool {
-  lexscan name {
+  lexmatch name {
     re"^[A-Za-z_][A-Za-z0-9_]*$" => true
     _ => false
   }

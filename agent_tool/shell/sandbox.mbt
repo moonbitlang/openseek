@@ -511,7 +511,7 @@ fn is_source_readonly_moon_subcommand(
 /// original strip-then-literal-match, not a looser prefix; the end anchor also
 /// makes the arms mutually exclusive (`>` backtracks to `>>` on `">>"`).
 fn redirect_writes_file(redirect : @shell_parse.Redirect) -> Bool {
-  lexscan redirect.op {
+  lexmatch redirect.op {
     re"^[0-9]*" + re">&$" => !is_fd_redirect_target(redirect.target)
     re"^[0-9]*" + re"(>|>\||>>|<>|&>|&>>)$" => true
     _ => false
@@ -520,7 +520,7 @@ fn redirect_writes_file(redirect : @shell_parse.Redirect) -> Bool {
 
 ///|
 fn is_fd_redirect_target(target : String) -> Bool {
-  lexscan target {
+  lexmatch target {
     re"^(-|[0-9]*)$" => true
     _ => false
   }
@@ -1476,7 +1476,7 @@ fn command_text_env_assignment_word(word : String) -> Bool {
 
 ///|
 fn command_text_valid_env_name(name : StringView) -> Bool {
-  lexscan name {
+  lexmatch name {
     re"^[A-Za-z_][A-Za-z0-9_]*$" => true
     _ => false
   }

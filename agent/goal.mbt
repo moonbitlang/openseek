@@ -340,7 +340,7 @@ fn decode_goal_status(arguments : Json) -> Result[@goal.GoalStatus, String] {
 /// Tool packages normally share `agent_tool/internal/error`, but the agent is
 /// outside that internal visibility boundary.
 fn goal_decode_failure_message(error_text : String) -> String {
-  lexscan error_text {
+  lexmatch error_text {
     // Greedy across lines to the LAST ` FAILED: ` marker — the same piece
     // rev_find chose.
     (re"^(.|\n)* FAILED: ", after=message) =>

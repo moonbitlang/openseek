@@ -1110,7 +1110,7 @@ fn sidebar_nested_rows(
 /// The parent session id a subrun child session id derives from
 /// (`<parent>-sr-N`), or `None` for every other id.
 fn subrun_parent_id(id : String) -> String? {
-  lexscan id {
+  lexmatch id {
     (re"^(.|\n)*" as parent) + re"-sr-[0-9]+$" => Some(parent.to_owned())
     _ => None
   }
@@ -1133,7 +1133,7 @@ fn sidebar_groups(rows : Array[SessionRow]) -> Array[String] {
 /// The directory portion of `p` (before the last `/` or `\`), or `""` when
 /// `p` has no directory component.
 fn parent_dir(p : String) -> String {
-  lexscan p {
+  lexmatch p {
     (re"^(.|\n)*" as dir) + re"[/\\][^/\\]*$" => dir.to_owned()
     _ => ""
   }
