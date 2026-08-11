@@ -1344,13 +1344,14 @@ test "a goal on an unbound worktree conversation creates the worktree first" {
   // own durable card retires the mode before the first prompt runs.
   let unbound : Conversation = {
     ..test_conversation(),
-    workspace: Some(workspace),
+    workspace: Project(root=workspace),
     worktree_mode: true,
   }
   assert_true(unbound.goal_creates_worktree() is Some(_))
   // Already bound: placement is settled, so the goal goes straight out.
   assert_true(
-    { ..unbound, worktree: Some("wt-1") }.goal_creates_worktree() is None,
+    { ..unbound, workspace: Worktree(project=workspace, name="wt-1") }.goal_creates_worktree()
+    is None,
   )
   // Local mode is a deliberate choice to run in the workspace itself.
   assert_true(

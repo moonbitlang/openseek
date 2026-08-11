@@ -54,6 +54,8 @@ pub async fn remove_worktree(EngineManager, String, String, Bool, (Array[@protoc
 
 pub async fn resolve_in_workspace(String, String, workspace? : String) -> @pathx.Absolute?
 
+pub async fn scratch_root() -> String
+
 pub async fn session_cwd(String) -> @pathx.Absolute?
 
 pub async fn session_review_base(String, workspace? : String) -> String?

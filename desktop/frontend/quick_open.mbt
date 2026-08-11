@@ -428,7 +428,7 @@ fn open_quick_open(
   model : Model,
   mode : QuickOpenMode,
 ) -> (@cmd.Cmd, Model) {
-  guard model.workspace_picker is None &&
+  guard model.project_picker is None &&
     model.archive_confirm is None &&
     !(model.update_ux is ConfirmingRestart(..)) &&
     !(model.bridge_state() is BridgeLost(_)) else {
@@ -1234,9 +1234,12 @@ test "Quick Open prefixes providers and works in both shells" {
 }
 
 ///|
-test "Started retries file and symbol Quick Open after a scratch root arrives" {
+test "BridgeReady retries file and symbol Quick Open after a scratch root arrives" {
   let dispatch = test_dispatch()
-  let base = { ..test_model(), is_desktop: true }
+  let base = {
+    ..test_model().with_dev(dev => { ..dev, bridge: Connecting }),
+    is_desktop: true,
+  }
   let owner = active_quick_open_owner(base)
   let (_, opened) = update(dispatch, QuickOpenOpen(QuickOpenFiles), base)
   guard opened.quick_open is Some(waiting) &&
@@ -1245,33 +1248,27 @@ test "Started retries file and symbol Quick Open after a scratch root arrives" {
   }
   assert_eq(opened.file_query_cache.root, None)
   let cwd = @interop.ChannelId::Local.test_resource("/work/scratch")
-  let started = Started(
-    run_id="scratch-run",
-    session=owner.session,
-    model=High,
-    max_steps=1000,
-    cwd=Some(cwd),
-    session_root=None,
-    task=Some("first scratch prompt"),
-    submission_id=None,
-  )
+  let ready = BridgeReady(scratch_root=cwd)
   // The same message and model must produce the same plain-data state.
-  let (_, first) = update_dev(dispatch, started, opened)
-  let (_, second) = update_dev(dispatch, started, opened)
+  let (_, first) = update_dev(dispatch, ready, opened)
+  let (_, second) = update_dev(dispatch, ready, opened)
   assert_true(first.file_query_cache == second.file_query_cache)
   assert_true(first.quick_open == second.quick_open)
-  assert_eq(first.file_query_cache.root, Some(cwd))
+  assert_true(
+    first.file_query_cache.root is Some(root) &&
+    root.path == "/work/scratch/desktop-test",
+  )
   guard first.file_query_cache.loading_key is Some(restarted_key) else {
-    fail("Started should restart file-cache population")
+    fail("BridgeReady should restart file-cache population")
   }
   assert_true(restarted_key != cache_key)
   guard first.quick_open is Some(retrying) else {
-    fail("Started should leave the picker open")
+    fail("BridgeReady should leave the picker open")
   }
   assert_eq(retrying.generation, waiting.generation + 1)
   assert_true(retrying.phase is QuickOpenLoading)
-  // A duplicate Started has no root change and must not restart again.
-  let (_, duplicate) = update_dev(dispatch, started, first)
+  // A duplicate ready notification has no root change and must not restart.
+  let (_, duplicate) = update_dev(dispatch, ready, first)
   assert_true(duplicate.file_query_cache == first.file_query_cache)
   assert_true(duplicate.quick_open == first.quick_open)
   let (_, symbol_opened) = update(
@@ -1282,11 +1279,11 @@ test "Started retries file and symbol Quick Open after a scratch root arrives" {
   guard symbol_opened.quick_open is Some(symbol_waiting) else {
     fail("rootless symbol Quick Open should remain open")
   }
-  let (_, symbol_first) = update_dev(dispatch, started, symbol_opened)
-  let (_, symbol_second) = update_dev(dispatch, started, symbol_opened)
+  let (_, symbol_first) = update_dev(dispatch, ready, symbol_opened)
+  let (_, symbol_second) = update_dev(dispatch, ready, symbol_opened)
   assert_true(symbol_first.quick_open == symbol_second.quick_open)
   guard symbol_first.quick_open is Some(symbol_retrying) else {
-    fail("Started should leave the symbol picker open")
+    fail("BridgeReady should leave the symbol picker open")
   }
   assert_eq(symbol_retrying.generation, symbol_waiting.generation + 1)
   assert_eq(symbol_retrying.query(), symbol_waiting.query())
@@ -1302,7 +1299,7 @@ test "Started retries file and symbol Quick Open after a scratch root arrives" {
     symbol_first,
   )
   assert_true(stale.quick_open == symbol_first.quick_open)
-  let (_, symbol_duplicate) = update_dev(dispatch, started, symbol_first)
+  let (_, symbol_duplicate) = update_dev(dispatch, ready, symbol_first)
   assert_true(symbol_duplicate.quick_open == symbol_first.quick_open)
 }
 

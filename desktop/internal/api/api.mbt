@@ -115,6 +115,13 @@ pub fn ApiState::manager(self : ApiState) -> @engine.EngineManager {
 }
 
 ///|
+/// Device-native Scratch base for transports that publish their own initial
+/// `agent.connected` notification outside the engine event pump.
+pub async fn scratch_root() -> String {
+  @engine.scratch_root()
+}
+
+///|
 /// The commands shared by the embedded page and remote WebSocket. A generic
 /// Endpoint constructor checks each payload/reply pair, then erases those
 /// types only inside the two transport closures it creates.

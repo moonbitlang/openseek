@@ -56,7 +56,7 @@ priv struct ConsoleState {
   login_return_to : String
   // The optional `?workspace=` belongs to `page_device` and is consumed when
   // that device first connects and receives its initial conversation.
-  preselect_workspace : @common.Uri?
+  preselect_project : @common.Uri?
   // Whether the first roster application has run the console's deferred
   // boot half (session rotation, the transcript scroll watcher) — it waits
   // for a device to focus, since no transcript DOM exists before sign-in.
@@ -70,7 +70,7 @@ priv struct ConsoleState {
 ///|
 fn empty_console_state(
   page_device : String?,
-  preselect_workspace : @common.Uri?,
+  preselect_project : @common.Uri?,
   login_return_to? : String = "/console/",
 ) -> ConsoleState {
   {
@@ -80,7 +80,7 @@ fn empty_console_state(
     roster_request_generation: 0,
     page_device,
     login_return_to,
-    preselect_workspace,
+    preselect_project,
     booted: false,
     busy: false,
     notice: None,
@@ -275,17 +275,17 @@ fn apply_roster(
   let focus_held = devices.iter().any(dev => dev.channel == focused)
   // The deep link's `?workspace=` lands on the pinned device when it first
   // connects, so its initial conversation opens in that project.
-  let mut preselect_workspace = console.preselect_workspace
+  let mut preselect_project = console.preselect_project
   if refocused &&
-    console.preselect_workspace is Some(workspace) &&
+    console.preselect_project is Some(workspace) &&
     @resource.belongs_to(workspace, focused) {
     for index in 0..<devices.length() {
       if devices[index].channel == focused {
-        devices[index] = { ..devices[index], active_workspace: Some(workspace) }
+        devices[index] = { ..devices[index], active_project: Some(workspace) }
         break
       }
     }
-    preselect_workspace = None
+    preselect_project = None
   }
   // The deferred boot half runs once the pinned device can take focus; if it
   // disappears and later returns, refocusing re-rotates onto that same device.
@@ -309,7 +309,7 @@ fn apply_roster(
       ..console,
       roster: metas,
       roster_sync: RosterReady,
-      preselect_workspace,
+      preselect_project,
       booted,
     }),
   }
@@ -464,10 +464,10 @@ test "the page device is the only connection and receives the initial workspace"
   guard listed.device_state(Remote("d_two")) is Some(dev) else {
     fail("page device not held")
   }
-  assert_eq(dev.active_workspace, Some(workspace))
+  assert_eq(dev.active_project, Some(workspace))
   guard listed.console is Some(console) else { fail("console lost") }
   assert_true(console.page_device == Some("d_two"))
-  assert_true(console.preselect_workspace is None)
+  assert_true(console.preselect_project is None)
 }
 
 ///|
@@ -498,7 +498,7 @@ test "an unavailable page device never falls through to an online device" {
   assert_true(listed.device_state(Remote("online")) is None)
   guard listed.console is Some(console) else { fail("console lost") }
   assert_true(console.page_device == Some("offline"))
-  assert_eq(console.preselect_workspace, Some(workspace))
+  assert_eq(console.preselect_project, Some(workspace))
   assert_false(console.booted)
 }
 
@@ -691,16 +691,16 @@ test "new chat and workspace picker reject another roster device" {
   )
   let (_, chat_once) = update(dispatch, NewChatIn(Remote("d_b"), None), listed)
   let (_, chat_twice) = update(dispatch, NewChatIn(Remote("d_b"), None), listed)
-  let (_, picker_once) = update(dispatch, PickWorkspace(Remote("d_b")), listed)
-  let (_, picker_twice) = update(dispatch, PickWorkspace(Remote("d_b")), listed)
+  let (_, picker_once) = update(dispatch, PickProject(Remote("d_b")), listed)
+  let (_, picker_twice) = update(dispatch, PickProject(Remote("d_b")), listed)
   assert_true(chat_once.focused == Remote("d_a"))
   assert_true(chat_twice.focused == Remote("d_a"))
   assert_true(chat_once.active_session == listed.active_session)
   assert_true(chat_twice.active_session == listed.active_session)
   assert_true(picker_once.focused == Remote("d_a"))
   assert_true(picker_twice.focused == Remote("d_a"))
-  assert_true(picker_once.workspace_picker is None)
-  assert_true(picker_twice.workspace_picker is None)
+  assert_true(picker_once.project_picker is None)
+  assert_true(picker_twice.project_picker is None)
 }
 
 ///|

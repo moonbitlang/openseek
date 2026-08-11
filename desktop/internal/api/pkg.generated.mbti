@@ -14,6 +14,8 @@ import {
 // Values
 pub fn endpoints(ApiState, @host.HostConnection) -> Array[@endpoint.Endpoint]
 
+pub async fn scratch_root() -> String
+
 // Errors
 
 // Types and methods

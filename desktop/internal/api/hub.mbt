@@ -306,7 +306,7 @@ test "a real engine connection retires old active runs before readiness" {
   guard hub.runs().runs is [_] else {
     fail("expected one active run before reconnect")
   }
-  hub.engine_connected({ ready: Some(true) })
+  hub.engine_connected({ ready: Some(true), scratch_root: "/scratch" })
   guard hub.runs().runs is [] else {
     fail("old active run survived a new engine pump")
   }

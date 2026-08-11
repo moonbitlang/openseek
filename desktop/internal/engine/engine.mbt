@@ -1139,7 +1139,7 @@ async fn EngineActor::run_generation(
 
   manager.pump = Serving(sessions~)
   defer reset()
-  emit(sink, Connected({ ready: Some(true) }))
+  emit(sink, Connected({ ready: Some(true), scratch_root: scratch_root() }))
   @async.with_task_group(group => {
     for ;; {
       match manager.commands.get() {

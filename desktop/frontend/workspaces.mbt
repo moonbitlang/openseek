@@ -1,11 +1,11 @@
-// The sidebar's workspace flow: `pick_workspace` opens the system folder
-// chooser, `list_workspaces` reads the attached project directories back,
-// and `add_workspace`/`remove_workspace` change the registry. Each durable
+// The sidebar's project flow: `pick_project` opens the in-app folder
+// chooser, `list_projects` reads the attached project directories back,
+// and `add_project`/`remove_project` change the registry. Each durable
 // mutation broadcasts its canonical updated list to every client while the
 // host still holds the registry's serialization lock.
 
 ///|
-fn fetch_workspaces(
+fn fetch_projects(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   connection_generation : Int,
@@ -14,7 +14,7 @@ fn fetch_workspaces(
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      // A host without the op just reads as "no workspaces attached".
+      // A host without the op just reads as "no projects attached".
       let reply = @interop.bridge_request(
         channel,
         @commands.workspace_list,
@@ -22,18 +22,16 @@ fn fetch_workspaces(
       ) catch {
         _ => return
       }
-      let workspaces : Array[@common.Uri] = []
+      let projects : Array[@common.Uri] = []
+      // Translate the existing wire name at the protocol boundary; frontend
+      // state consistently calls this registered directory list projects.
       for path in reply.workspaces {
         guard @resource.of_path(channel, path) is Some(resource) else { return }
-        workspaces.push(resource)
+        projects.push(resource)
       }
       scheduler.add(
         dispatch(
-          WorkspacesLoaded(
-            workspaces,
-            connection_generation~,
-            request_generation~,
-          ),
+          ProjectsLoaded(projects, connection_generation~, request_generation~),
         ),
       )
     })
@@ -41,21 +39,21 @@ fn fetch_workspaces(
 }
 
 ///|
-fn add_workspace(
+fn add_project(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   path : String,
 ) -> @cmd.Cmd {
-  workspace_action(dispatch, channel, @commands.workspace_add, { path, })
+  project_action(dispatch, channel, @commands.workspace_add, { path, })
 }
 
 ///|
-fn remove_workspace(
+fn remove_project(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   path : String,
 ) -> @cmd.Cmd {
-  workspace_action(dispatch, channel, @commands.workspace_remove, { path, })
+  project_action(dispatch, channel, @commands.workspace_remove, { path, })
 }
 
 ///|
@@ -80,7 +78,7 @@ fn browse_directory(
         error => {
           scheduler.add(
             dispatch(
-              WorkspacePickerFailed(
+              ProjectPickerFailed(
                 channel~,
                 message=@interop.bridge_error_text(error),
                 generation~,
@@ -93,14 +91,12 @@ fn browse_directory(
       if @resource.of_path(channel, reply.path) is Some(path) {
         let entries = reply.entries.filter(name => !name.is_empty())
         scheduler.add(
-          dispatch(
-            WorkspacePickerLoaded(channel~, path~, entries~, generation~),
-          ),
+          dispatch(ProjectPickerLoaded(channel~, path~, entries~, generation~)),
         )
       } else {
         scheduler.add(
           dispatch(
-            WorkspacePickerFailed(
+            ProjectPickerFailed(
               channel~,
               message="malformed directory listing",
               generation~,
@@ -125,7 +121,7 @@ fn @common.Uri::picker_child_path(self : @common.Uri, name : String) -> String {
 }
 
 ///|
-fn workspace_action(
+fn project_action(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   command : @commands.Command[
@@ -136,13 +132,13 @@ fn workspace_action(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      workspace_action_into(scheduler, dispatch, channel, command, payload)
+      project_action_into(scheduler, dispatch, channel, command, payload)
     })
   })
 }
 
 ///|
-async fn workspace_action_into(
+async fn project_action_into(
   scheduler : &@cmd.Scheduler,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -155,9 +151,7 @@ async fn workspace_action_into(
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   let _ = @interop.bridge_request(channel, command, payload) catch {
     error => {
-      scheduler.add(
-        dispatch(WorkspaceFailed(@interop.bridge_error_text(error))),
-      )
+      scheduler.add(dispatch(ProjectFailed(@interop.bridge_error_text(error))))
       return
     }
   }
@@ -167,19 +161,19 @@ async fn workspace_action_into(
 }
 
 // Tests below cover the update handlers that place conversations into
-// workspaces. Display labels are derived from resource URIs in `@resource`.
+// projects. Display labels are derived from resource URIs in `@resource`.
 
 ///|
-test "a workspace new chat rotates into that workspace" {
+test "a project new chat rotates into that project" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/home/u/proj")
-  let model = test_model().with_dev(dev => { ..dev, workspaces: [workspace] })
+  let model = test_model().with_dev(dev => { ..dev, projects: [workspace] })
   let (_, chosen) = update(
     dispatch,
     NewChatIn(@interop.ChannelId::Local, Some(workspace)),
     model,
   )
-  assert_eq(chosen.dev().active_workspace, Some(workspace))
+  assert_eq(chosen.dev().active_project, Some(workspace))
   // The rotation lands like any other; the fresh conversation carries the
   // active workspace, and the next plain "New chat" stays there.
   let (_, rotated) = update(
@@ -187,9 +181,9 @@ test "a workspace new chat rotates into that workspace" {
     SessionRotated({ channel: @interop.ChannelId::Local, session: "desktop-ws" }),
     chosen,
   )
-  assert_eq(rotated.active().workspace, Some(workspace))
+  assert_eq(rotated.active().workspace, Project(root=workspace))
   inspect(rotated.active_session, content="desktop-ws")
-  assert_eq(rotated.dev().active_workspace, Some(workspace))
+  assert_eq(rotated.dev().active_project, Some(workspace))
 }
 
 ///|
@@ -200,7 +194,7 @@ test "a scratch rotation leaves the conversation in the default store" {
     SessionRotated({ channel: @interop.ChannelId::Local, session: "desktop-s" }),
     test_model(),
   )
-  assert_true(next.active().workspace is None)
+  assert_true(next.active().workspace is Scratch)
 }
 
 ///|
@@ -209,10 +203,13 @@ test "detaching the active workspace opens the newest remaining conversation" {
   let gone = @interop.ChannelId::Local.test_resource("/gone")
   let kept_workspace = @interop.ChannelId::Local.test_resource("/kept")
   let model = test_model()
-    .replace_conversation({ ..test_conversation(), workspace: Some(gone) })
+    .replace_conversation({
+      ..test_conversation(),
+      workspace: Project(root=gone),
+    })
     .with_dev(dev => {
       ..dev,
-      active_workspace: Some(gone),
+      active_project: Some(gone),
       sessions: [
         {
           id: "desktop-kept",
@@ -230,26 +227,26 @@ test "detaching the active workspace opens the newest remaining conversation" {
     })
   let (_, next) = update_dev(
     dispatch,
-    WorkspacesLoaded(
+    ProjectsLoaded(
       [kept_workspace],
       connection_generation=0,
       request_generation=0,
     ),
     model,
   )
-  inspect(next.dev().workspaces.length(), content="1")
+  inspect(next.dev().projects.length(), content="1")
   inspect(next.dev().sessions_request_generation, content="1")
   inspect(next.dev().sessions.length(), content="1")
   inspect(next.active_session, content="desktop-kept")
-  assert_eq(next.active().workspace, Some(kept_workspace))
+  assert_eq(next.active().workspace, Project(root=kept_workspace))
   assert_true(next.active().sync is Reloading(..))
   assert_true(next.find_conversation(Local, "desktop-test") is None)
-  assert_eq(next.dev().active_workspace, Some(kept_workspace))
+  assert_eq(next.dev().active_project, Some(kept_workspace))
   // The handler is pure: replaying the same message from the same model makes
   // the same selection and starts the same generation.
   let (_, replayed) = update_dev(
     dispatch,
-    WorkspacesLoaded(
+    ProjectsLoaded(
       [kept_workspace],
       connection_generation=0,
       request_generation=0,
@@ -262,12 +259,12 @@ test "detaching the active workspace opens the newest remaining conversation" {
   let attached = test_model()
     .replace_conversation({
       ..test_conversation(),
-      workspace: Some(kept_workspace),
+      workspace: Project(root=kept_workspace),
     })
-    .with_dev(dev => { ..dev, active_workspace: Some(kept_workspace) })
+    .with_dev(dev => { ..dev, active_project: Some(kept_workspace) })
   let (_, kept) = update_dev(
     dispatch,
-    WorkspacesLoaded(
+    ProjectsLoaded(
       [kept_workspace],
       connection_generation=0,
       request_generation=0,
@@ -275,8 +272,8 @@ test "detaching the active workspace opens the newest remaining conversation" {
     attached,
   )
   inspect(kept.dev().sessions_request_generation, content="1")
-  assert_eq(kept.active().workspace, Some(kept_workspace))
-  assert_eq(kept.dev().active_workspace, Some(kept_workspace))
+  assert_eq(kept.active().workspace, Project(root=kept_workspace))
+  assert_eq(kept.dev().active_project, Some(kept_workspace))
 }
 
 ///|
@@ -284,11 +281,14 @@ test "detaching the last workspace rotates into a scratch conversation" {
   let dispatch = test_dispatch()
   let gone = @interop.ChannelId::Local.test_resource("/gone")
   let model = test_model()
-    .replace_conversation({ ..test_conversation(), workspace: Some(gone) })
+    .replace_conversation({
+      ..test_conversation(),
+      workspace: Project(root=gone),
+    })
     .with_dev(dev => {
       ..dev,
-      workspaces: [gone],
-      active_workspace: Some(gone),
+      projects: [gone],
+      active_project: Some(gone),
       sessions: [
         {
           id: "desktop-test",
@@ -298,10 +298,10 @@ test "detaching the last workspace rotates into a scratch conversation" {
         },
       ],
     })
-  let (_, detached) = update_dev(dispatch, WorkspacesChanged([]), model)
+  let (_, detached) = update_dev(dispatch, ProjectsChanged([]), model)
   inspect(detached.active_session, content="")
   inspect(detached.dev().sessions.length(), content="0")
-  assert_true(detached.dev().active_workspace is None)
+  assert_true(detached.dev().active_project is None)
   assert_true(detached.conversations.is_empty())
   let (_, stale) = update(
     dispatch,
@@ -325,7 +325,7 @@ test "detaching the last workspace rotates into a scratch conversation" {
     stale,
   )
   inspect(rotated.active_session, content="desktop-scratch")
-  assert_true(rotated.active().workspace is None)
+  assert_true(rotated.active().workspace is Scratch)
 }
 
 ///|
@@ -335,23 +335,23 @@ test "an older workspace reply cannot replace a newer same-connection reply" {
   let old = @interop.ChannelId::Local.test_resource("/old")
   let model = test_model().with_dev(dev => {
     ..dev,
-    workspaces_request_generation: 2,
+    projects_request_generation: 2,
   })
   let (_, newest) = update_dev(
     dispatch,
-    WorkspacesLoaded([current], connection_generation=0, request_generation=2),
+    ProjectsLoaded([current], connection_generation=0, request_generation=2),
     model,
   )
-  inspect(newest.dev().workspaces.length(), content="1")
-  assert_eq(newest.dev().workspaces[0], current)
+  inspect(newest.dev().projects.length(), content="1")
+  assert_eq(newest.dev().projects[0], current)
   inspect(newest.dev().sessions_request_generation, content="1")
   let (_, stale) = update_dev(
     dispatch,
-    WorkspacesLoaded([old], connection_generation=0, request_generation=1),
+    ProjectsLoaded([old], connection_generation=0, request_generation=1),
     newest,
   )
-  inspect(stale.dev().workspaces.length(), content="1")
-  assert_eq(stale.dev().workspaces[0], current)
+  inspect(stale.dev().projects.length(), content="1")
+  assert_eq(stale.dev().projects[0], current)
   inspect(stale.dev().sessions_request_generation, content="1")
 }
 
@@ -362,20 +362,20 @@ test "a workspace commit broadcast supersedes list replies and refreshes session
   let new_ = @interop.ChannelId::Local.test_resource("/new")
   let model = test_model().with_dev(dev => {
     ..dev,
-    workspaces: [current],
-    workspaces_request_generation: 2,
+    projects: [current],
+    projects_request_generation: 2,
   })
-  let (_, changed) = update_dev(dispatch, WorkspacesChanged([new_]), model)
-  inspect(changed.dev().workspaces_request_generation, content="3")
-  inspect(changed.dev().workspaces.length(), content="1")
-  assert_eq(changed.dev().workspaces[0], new_)
+  let (_, changed) = update_dev(dispatch, ProjectsChanged([new_]), model)
+  inspect(changed.dev().projects_request_generation, content="3")
+  inspect(changed.dev().projects.length(), content="1")
+  assert_eq(changed.dev().projects[0], new_)
   inspect(changed.dev().sessions_request_generation, content="1")
   let (_, stale) = update_dev(
     dispatch,
-    WorkspacesLoaded([current], connection_generation=0, request_generation=2),
+    ProjectsLoaded([current], connection_generation=0, request_generation=2),
     changed,
   )
-  assert_eq(stale.dev().workspaces[0], new_)
+  assert_eq(stale.dev().projects[0], new_)
 }
 
 ///|
@@ -384,7 +384,7 @@ test "workspace commit decoder carries the canonical registry list" {
       @interop.ChannelId::Local,
       @protocol.Notification::WorkspaceChanged({ workspaces: ["/one", "/two"] }),
     )
-    is Some(FromDevice(_, WorkspacesChanged(paths))) else {
+    is Some(FromDevice(_, ProjectsChanged(paths))) else {
     fail("expected a workspace change")
   }
   inspect(paths.length(), content="2")
@@ -418,7 +418,7 @@ test "opening a stored session adopts its workspace" {
     OpenSession(@interop.ChannelId::Local, "desktop-w"),
     model,
   )
-  assert_eq(opening.dev().active_workspace, Some(workspace))
+  assert_eq(opening.dev().active_project, Some(workspace))
   assert_true(
     opening.loading_conversation
     is Some({ channel: Local, session: "desktop-w" }),
@@ -437,7 +437,7 @@ test "opening a stored session adopts its workspace" {
     ),
     opening,
   )
-  assert_eq(loaded.active().workspace, Some(workspace))
+  assert_eq(loaded.active().workspace, Project(root=workspace))
 }
 
 ///|
@@ -445,16 +445,16 @@ test "the picker opens loading and adopts the first listing" {
   let dispatch = test_dispatch()
   let (_, opened) = update(
     dispatch,
-    PickWorkspace(@interop.ChannelId::Local),
+    PickProject(@interop.ChannelId::Local),
     test_model(),
   )
-  guard opened.workspace_picker is Some(opening) else {
+  guard opened.project_picker is Some(opening) else {
     fail("picker did not open")
   }
   assert_true(opening.loading)
   let (_, loaded) = update(
     dispatch,
-    WorkspacePickerLoaded(
+    ProjectPickerLoaded(
       channel=Local,
       path=@interop.ChannelId::Local.test_resource("/home/u"),
       entries=["proj"],
@@ -462,7 +462,7 @@ test "the picker opens loading and adopts the first listing" {
     ),
     opened,
   )
-  guard loaded.workspace_picker is Some(picker) else {
+  guard loaded.project_picker is Some(picker) else {
     fail("picker closed by its own listing")
   }
   assert_true(picker.path is Some(path) && path.path == "/home/u")
@@ -476,7 +476,7 @@ test "a listing for a closed picker is dropped" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
-    WorkspacePickerLoaded(
+    ProjectPickerLoaded(
       channel=Local,
       path=@interop.ChannelId::Local.test_resource("/home/u"),
       entries=[],
@@ -484,7 +484,7 @@ test "a listing for a closed picker is dropped" {
     ),
     test_model(),
   )
-  assert_true(next.workspace_picker is None)
+  assert_true(next.project_picker is None)
 }
 
 ///|
@@ -495,19 +495,25 @@ test "a listing from the previous device cannot replace a reopened picker" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(first), bridge: Connected },
-      { ..empty_device_state(second), bridge: Connected },
+      {
+        ..empty_device_state(first),
+        bridge: Connected(scratch_root=first.test_resource("/scratch")),
+      },
+      {
+        ..empty_device_state(second),
+        bridge: Connected(scratch_root=second.test_resource("/scratch")),
+      },
     ],
     focused: first,
   }
-  let (_, first_open) = update(dispatch, PickWorkspace(first), model)
-  let (_, closed) = update(dispatch, WorkspacePickerClose, first_open)
-  let (_, second_open) = update(dispatch, PickWorkspace(second), closed)
+  let (_, first_open) = update(dispatch, PickProject(first), model)
+  let (_, closed) = update(dispatch, ProjectPickerClose, first_open)
+  let (_, second_open) = update(dispatch, PickProject(second), closed)
   // Both opens use generation 1. The channel is the other half of the reply
   // identity, so the first device's late home listing is still stale.
   let (_, stale) = update(
     dispatch,
-    WorkspacePickerLoaded(
+    ProjectPickerLoaded(
       channel=first,
       path=first.test_resource("/from-a"),
       entries=["wrong"],
@@ -515,7 +521,7 @@ test "a listing from the previous device cannot replace a reopened picker" {
     ),
     second_open,
   )
-  guard stale.workspace_picker is Some(picker) else {
+  guard stale.project_picker is Some(picker) else {
     fail("current picker closed by a stale listing")
   }
   assert_true(picker.channel == second)
@@ -523,7 +529,7 @@ test "a listing from the previous device cannot replace a reopened picker" {
   assert_true(picker.path is None)
   let (_, current) = update(
     dispatch,
-    WorkspacePickerLoaded(
+    ProjectPickerLoaded(
       channel=second,
       path=second.test_resource("/from-b"),
       entries=[],
@@ -531,7 +537,7 @@ test "a listing from the previous device cannot replace a reopened picker" {
     ),
     stale,
   )
-  guard current.workspace_picker is Some(picker) else {
+  guard current.project_picker is Some(picker) else {
     fail("current picker closed by its own listing")
   }
   assert_true(picker.channel == second)
@@ -543,12 +549,12 @@ test "a failed navigation keeps the listing and shows the error" {
   let dispatch = test_dispatch()
   let (_, opened) = update(
     dispatch,
-    PickWorkspace(@interop.ChannelId::Local),
+    PickProject(@interop.ChannelId::Local),
     test_model(),
   )
   let (_, loaded) = update(
     dispatch,
-    WorkspacePickerLoaded(
+    ProjectPickerLoaded(
       channel=Local,
       path=@interop.ChannelId::Local.test_resource("/home/u"),
       entries=["proj"],
@@ -558,14 +564,14 @@ test "a failed navigation keeps the listing and shows the error" {
   )
   let (_, failed) = update(
     dispatch,
-    WorkspacePickerFailed(
+    ProjectPickerFailed(
       channel=Local,
       message="no such directory",
       generation=1,
     ),
     loaded,
   )
-  guard failed.workspace_picker is Some(picker) else {
+  guard failed.project_picker is Some(picker) else {
     fail("picker closed by a failed navigation")
   }
   assert_true(picker.path is Some(path) && path.path == "/home/u")
@@ -578,12 +584,12 @@ test "confirming registers the browsed directory and closes the picker" {
   let dispatch = test_dispatch()
   let (_, opened) = update(
     dispatch,
-    PickWorkspace(@interop.ChannelId::Local),
+    PickProject(@interop.ChannelId::Local),
     test_model(),
   )
   let (_, loaded) = update(
     dispatch,
-    WorkspacePickerLoaded(
+    ProjectPickerLoaded(
       channel=Local,
       path=@interop.ChannelId::Local.test_resource("/home/u/proj"),
       entries=[],
@@ -591,13 +597,13 @@ test "confirming registers the browsed directory and closes the picker" {
     ),
     opened,
   )
-  let (_, confirmed) = update(dispatch, WorkspacePickerConfirm, loaded)
-  assert_true(confirmed.workspace_picker is None)
-  inspect(confirmed.dev().workspaces_request_generation, content="0")
+  let (_, confirmed) = update(dispatch, ProjectPickerConfirm, loaded)
+  assert_true(confirmed.project_picker is None)
+  inspect(confirmed.dev().projects_request_generation, content="0")
   // Confirming before anything was browsed has nothing to register and
   // keeps the picker open.
-  let (_, early) = update(dispatch, WorkspacePickerConfirm, opened)
-  assert_true(early.workspace_picker is Some(_))
+  let (_, early) = update(dispatch, ProjectPickerConfirm, opened)
+  assert_true(early.project_picker is Some(_))
 }
 
 ///|
@@ -619,7 +625,7 @@ test "a workspace failure pops a toast" {
   let dispatch = test_dispatch()
   let (_, next) = update_dev(
     dispatch,
-    WorkspaceFailed("not a directory"),
+    ProjectFailed("not a directory"),
     test_model(),
   )
   inspect(next.notifications.length(), content="1")
@@ -634,12 +640,12 @@ test "typing in the picker's path field only changes the field" {
   let dispatch = test_dispatch()
   let (_, opened) = update(
     dispatch,
-    PickWorkspace(@interop.ChannelId::Local),
+    PickProject(@interop.ChannelId::Local),
     test_model(),
   )
   let (_, loaded) = update(
     dispatch,
-    WorkspacePickerLoaded(
+    ProjectPickerLoaded(
       channel=Local,
       path=@interop.ChannelId::Local.test_resource("/home/u"),
       entries=[],
@@ -647,8 +653,8 @@ test "typing in the picker's path field only changes the field" {
     ),
     opened,
   )
-  let (_, typed) = update(dispatch, WorkspacePickerInput("~/proj"), loaded)
-  guard typed.workspace_picker is Some(picker) else {
+  let (_, typed) = update(dispatch, ProjectPickerInput("~/proj"), loaded)
+  guard typed.project_picker is Some(picker) else {
     fail("picker closed by typing")
   }
   inspect(picker.input, content="~/proj")
@@ -660,19 +666,19 @@ test "a listing for a superseded navigation is dropped" {
   let dispatch = test_dispatch()
   let (_, opened) = update(
     dispatch,
-    PickWorkspace(@interop.ChannelId::Local),
+    PickProject(@interop.ChannelId::Local),
     test_model(),
   )
   let (_, navigated) = update(
     dispatch,
-    WorkspacePickerNavigate("/home/u/proj"),
+    ProjectPickerNavigate("/home/u/proj"),
     opened,
   )
   // The reply to the original open (generation 1) lands after a navigation
   // bumped the picker to generation 2: it must not move the picker back.
   let (_, stale) = update(
     dispatch,
-    WorkspacePickerLoaded(
+    ProjectPickerLoaded(
       channel=Local,
       path=@interop.ChannelId::Local.test_resource("/home/u"),
       entries=["proj"],
@@ -680,14 +686,14 @@ test "a listing for a superseded navigation is dropped" {
     ),
     navigated,
   )
-  guard stale.workspace_picker is Some(picker) else {
+  guard stale.project_picker is Some(picker) else {
     fail("picker closed by a stale listing")
   }
   assert_true(picker.loading)
   assert_true(picker.path is None)
   let (_, current) = update(
     dispatch,
-    WorkspacePickerLoaded(
+    ProjectPickerLoaded(
       channel=Local,
       path=@interop.ChannelId::Local.test_resource("/home/u/proj"),
       entries=[],
@@ -695,7 +701,7 @@ test "a listing for a superseded navigation is dropped" {
     ),
     stale,
   )
-  guard current.workspace_picker is Some(picker) else {
+  guard current.project_picker is Some(picker) else {
     fail("picker closed by the current listing")
   }
   assert_true(picker.path is Some(path) && path.path == "/home/u/proj")

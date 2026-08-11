@@ -356,23 +356,23 @@ fn device_section_rows(
     false
   }
   // Two sections, matching the projects-then-chats shape chat apps settled
-  // on: "Workspaces" lists each attached project as a folder row with its
+  // on: "Projects" lists each attached project as a folder row with its
   // conversations nested beneath, "Chats" holds the default store's loose
   // conversations. The section headings share one style; the ＋ on each adds
-  // to that section (a workspace, or a chat outside any workspace).
+  // to that section (a project, or a Scratch chat).
   rows.push(
     section_heading(
       dispatch,
-      "Workspaces",
-      PickWorkspace(dev.channel),
-      action_title="Add a workspace",
-      toggle=ToggleWorkspacesSection,
-      collapsed=model.workspaces_collapsed,
+      "Projects",
+      PickProject(dev.channel),
+      action_title="Add a project",
+      toggle=ToggleProjectsSection,
+      collapsed=model.projects_collapsed,
     ),
   )
-  if !model.workspaces_collapsed {
-    for path in dev.workspaces {
-      rows.push(workspace_row(dispatch, model, dev, path))
+  if !model.projects_collapsed {
+    for path in dev.projects {
+      rows.push(project_row(dispatch, model, dev, path))
       let before = rows.length()
       push_group_rows(
         rows,
@@ -399,7 +399,7 @@ fn device_section_rows(
       dispatch,
       "Chats",
       NewChatIn(dev.channel, None),
-      action_title="New chat outside any workspace",
+      action_title="New Scratch chat",
       toggle=ToggleChatsSection,
       collapsed=model.chats_collapsed,
     ),
@@ -456,16 +456,17 @@ fn push_group_rows(
   let composing = model.composing_new_chat()
   for conv in model.conversations.rev_iter() {
     if conv.device != dev.channel ||
-      conv.workspace != workspace ||
+      conv.workspace.project() != workspace ||
       listed(conv.session_id) ||
       archived(conv.session_id) {
       continue
     }
     // A fresh worktree conversation knows its binding locally; once the
     // first turn is durable the registry mapping takes over.
-    let worktree = match conv.worktree {
-      Some(name) => Some(name)
-      None => worktree_name_for(dev, workspace, conv.session_id)
+    let worktree = if conv.workspace.worktree_name() is Some(name) {
+      Some(name)
+    } else {
+      worktree_name_for(dev, workspace, conv.session_id)
     }
     if conv.worth_keeping() {
       rows.push(
@@ -571,7 +572,7 @@ fn push_group_rows(
 }
 
 ///|
-/// A section heading in the chat list — "Workspaces" or "Chats" — with a
+/// A section heading in the chat list — "Projects" or "Chats" — with a
 /// hover-revealed ＋ that adds to that section. Both sections share this one
 /// style, so the two labels always match. `toggle`, when given, makes the
 /// heading itself clickable to fold the section (the ＋ stops propagation, so
@@ -610,19 +611,19 @@ fn section_heading(
 }
 
 ///|
-/// One attached workspace: a folder row (full path in the tooltip) with its
+/// One attached project: a folder row (full path in the tooltip) with its
 /// conversations nested beneath it. Hover controls start a new chat in the
 /// project or detach it (registry only; the folder and its sessions stay).
-/// The active workspace — where a plain "New chat" lands — reads as the
+/// The active project — where a plain "New chat" lands — reads as the
 /// darker label.
-fn workspace_row(
+fn project_row(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   dev : DeviceState,
   path : @common.Uri,
 ) -> @html.Html {
   let mut class = "workspace-row"
-  if dev.channel == model.focused && dev.active_workspace == Some(path) {
+  if dev.channel == model.focused && dev.active_project == Some(path) {
     class = class + " active"
   }
   @html.div(class~, title=path.path, [
@@ -631,17 +632,17 @@ fn workspace_row(
     @html.button(
       class="row-archive",
       type_="button",
-      title="Detach this workspace — its files and sessions stay",
+      title="Detach this project — its files and sessions stay",
       attrs=@html.Attrs::build().on_click(event => {
         event.stop_propagation()
-        dispatch(RemoveWorkspace(dev.channel, path))
+        dispatch(RemoveProject(dev.channel, path))
       }),
       icon(icon_close),
     ),
     @html.button(
       class="row-archive",
       type_="button",
-      title="New chat in this workspace",
+      title="New chat in this project",
       attrs=@html.Attrs::build().on_click(event => {
         event.stop_propagation()
         dispatch(NewChatIn(dev.channel, Some(path)))
@@ -1804,7 +1805,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     !conv.has_unresolved_run_tail_notice()
   let checkout_ready = checkout is Some(@interop.WorkspaceRoot) ||
     checkout is Some(@interop.Worktree(_))
-  let has_input = model.bridge_state() is Connected &&
+  let has_input = model.bridge_state() is Connected(..) &&
     model.api_ready() &&
     transcript_ready &&
     checkout_ready &&
@@ -2715,8 +2716,8 @@ fn run_indicator(model : Model) -> @html.Html {
 ///|
 /// The workspace line appears once the host has reported it via `started`;
 /// before the conversation's first run only the session id is known.
-fn session_tooltip(conv : Conversation) -> String {
-  if conv.cwd is Some(cwd) {
+fn session_tooltip(model : Model, conv : Conversation) -> String {
+  if model.conversation_root(conv) is Some(cwd) {
     "session \{conv.session_id}\nworkspace \{cwd.path}"
   } else {
     "session \{conv.session_id}"
@@ -2836,13 +2837,13 @@ fn topbar_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   items.push(
     @html.span(
       class="topbar-title",
-      title=session_tooltip(conv),
+      title=session_tooltip(model, conv),
       conversation_title(conv),
     ),
   )
   // The conversation's attached project; a scratch conversation has no chip.
   // The git branch is not shown here — it lives in the composer's status row.
-  if conv.workspace is Some(workspace) {
+  if conv.workspace.project() is Some(workspace) {
     items.push(
       @html.span(class="topbar-workspace", title=workspace.path, [
         icon(icon_folder),
@@ -3240,8 +3241,8 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if model.update_ux is ConfirmingRestart(version~) {
     children.push(update_confirm_modal(dispatch, version))
   }
-  if model.workspace_picker is Some(picker) {
-    children.push(workspace_picker_modal(dispatch, picker))
+  if model.project_picker is Some(picker) {
+    children.push(project_picker_modal(dispatch, picker))
   }
   if model.archive_confirm is Some(confirm) {
     children.push(archive_discard_modal(dispatch, confirm))
@@ -3302,7 +3303,7 @@ fn update_confirm_modal(
 }
 
 ///|
-/// The in-app folder picker behind the sidebar's "Add a workspace", shaped
+/// The in-app folder picker behind the sidebar's "Add a project", shaped
 /// like a system chooser: a clickable breadcrumb for the current directory
 /// (each segment navigates up to that level — there is no ".." row), a
 /// folder list that navigates on click, and a de-emphasized go-to-path
@@ -3311,9 +3312,9 @@ fn update_confirm_modal(
 /// whichever gateway serves the page, so desktop and browser share the one
 /// flow. Clicks inside must not bubble to the backdrop, whose click closes
 /// the picker.
-fn workspace_picker_modal(
+fn project_picker_modal(
   dispatch : @cmd.Emit[Msg],
-  picker : WorkspacePicker,
+  picker : ProjectPicker,
 ) -> @html.Html {
   let rows : Array[@html.Html] = []
   for name in picker.entries {
@@ -3324,7 +3325,7 @@ fn workspace_picker_modal(
     rows.push(
       @html.div(
         class="picker-row",
-        on_click=dispatch(WorkspacePickerNavigate(target)),
+        on_click=dispatch(ProjectPickerNavigate(target)),
         [
           @html.span(class="picker-row-icon", icon(icon_folder)),
           @html.span(class="picker-row-name", name),
@@ -3345,7 +3346,7 @@ fn workspace_picker_modal(
     )
   }
   let children : Array[@html.Html] = [
-    @html.div(class="modal-title", "Add a workspace"),
+    @html.div(class="modal-title", "Add a project"),
     picker_breadcrumbs(dispatch, picker),
   ]
   if picker.error is Some(message) {
@@ -3358,11 +3359,11 @@ fn workspace_picker_modal(
         input_type=@html.InputType::Text,
         value=picker.input,
         placeholder="Go to path…",
-        on_input=dispatch.map(value => WorkspacePickerInput(value)),
+        on_input=dispatch.map(value => ProjectPickerInput(value)),
         attrs=@html.Attrs::build().on_keydown(event => {
           match event.key() {
-            "Enter" => dispatch(WorkspacePickerNavigate(picker.input))
-            "Escape" => dispatch(WorkspacePickerClose)
+            "Enter" => dispatch(ProjectPickerNavigate(picker.input))
+            "Escape" => dispatch(ProjectPickerClose)
             _ => @cmd.none
           }
         }),
@@ -3371,10 +3372,10 @@ fn workspace_picker_modal(
   )
   children.push(
     @html.div(class="modal-actions", [
-      @html.button(on_click=dispatch(WorkspacePickerClose), "Cancel"),
+      @html.button(on_click=dispatch(ProjectPickerClose), "Cancel"),
       @html.button(
         class="primary",
-        on_click=dispatch(WorkspacePickerConfirm),
+        on_click=dispatch(ProjectPickerConfirm),
         match picker.path {
           None => "Add this folder"
           Some(path) => "Add \u{201c}\{@resource.label(path)}\u{201d}"
@@ -3382,7 +3383,7 @@ fn workspace_picker_modal(
       ),
     ]),
   )
-  @html.div(class="modal-backdrop", on_click=dispatch(WorkspacePickerClose), [
+  @html.div(class="modal-backdrop", on_click=dispatch(ProjectPickerClose), [
     @html.div(
       class="modal picker-modal",
       attrs=@html.Attrs::build().on_click(event => {
@@ -3401,7 +3402,7 @@ fn workspace_picker_modal(
 /// at `/`. UNC never reaches this UI because the backend rejects it.
 fn picker_breadcrumbs(
   dispatch : @cmd.Emit[Msg],
-  picker : WorkspacePicker,
+  picker : ProjectPicker,
 ) -> @html.Html {
   let crumbs : Array[@html.Html] = []
   guard picker.path is Some(resource) else {
@@ -3427,7 +3428,7 @@ fn picker_breadcrumbs(
         } else {
           "picker-crumb"
         },
-        on_click=dispatch(WorkspacePickerNavigate("/")),
+        on_click=dispatch(ProjectPickerNavigate("/")),
         "/",
       ),
     )
@@ -3451,7 +3452,7 @@ fn picker_breadcrumbs(
         } else {
           "picker-crumb"
         },
-        on_click=dispatch(WorkspacePickerNavigate(prefix)),
+        on_click=dispatch(ProjectPickerNavigate(prefix)),
         segment,
       ),
     )

@@ -164,6 +164,7 @@ pub(all) struct CompactReply {
 
 pub(all) struct ConnectedPayload {
   ready : Bool?
+  scratch_root : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct DiagnosticsPayload {

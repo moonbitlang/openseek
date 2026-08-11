@@ -809,6 +809,17 @@ fn @pathx.Absolute::resource_path(
 }
 
 ///|
+/// Device-native base for Scratch conversation directories, encoded in the
+/// resource-path form the frontend binds to a channel. Readiness fails when
+/// this cannot be resolved, so `agent.connected` never carries an empty root.
+pub async fn scratch_root() -> String {
+  guard workspace_root() is Some(root) && root.to_absolute() is Some(root) else {
+    raise EngineError("cannot determine the scratch workspace root")
+  }
+  root.resource_path()
+}
+
+///|
 pub async fn list_workspaces() -> WorkspacesReply {
   { workspaces: registered_workspaces().map(path => path.resource_path()) }
 }

@@ -141,7 +141,12 @@ fn device_msg(
   notification : @protocol.Notification,
 ) -> DeviceMsg? {
   match notification {
-    AgentConnected(_) => Some(BridgeReady)
+    AgentConnected(payload) => {
+      guard @resource.of_path(channel, payload.scratch_root) is Some(root) else {
+        return None
+      }
+      Some(BridgeReady(scratch_root=root))
+    }
     AgentStarted(payload) => started_msg(channel, payload)
     AgentEvent(payload) => engine_msg(payload)
     AgentError(payload) => error_msg(payload)
@@ -160,13 +165,14 @@ fn device_msg(
     SessionChanged(payload) => session_changed_msg(payload)
     WorkspaceChanged(payload) => {
       let paths : Array[@common.Uri] = []
+      // The wire contract still calls registered projects `workspaces`.
       for path in payload.workspaces {
         guard @resource.of_path(channel, path) is Some(resource) else {
           return None
         }
         paths.push(resource)
       }
-      Some(WorkspacesChanged(paths))
+      Some(ProjectsChanged(paths))
     }
     WorktreeChanged(payload) => worktree_changed_msg(channel, payload)
     SettingsChanged(payload) =>
@@ -537,7 +543,7 @@ fn wire_proton_events(
 /// structured clones of the host's JSON, so the round trip back through
 /// JSON is lossless; an event without a decodable payload is dropped —
 /// except a payload-less notification, which reads as empty fields
-/// (`agent.connected` carries none).
+/// and is then accepted only if that notification's typed payload permits it.
 fn event_payload(event : @js.Value) -> Map[String, Json]? {
   guard @interop.js_prop(event, "payload") is Some(payload) else {
     return Some(Map([]))

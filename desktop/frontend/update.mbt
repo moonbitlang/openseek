@@ -16,7 +16,7 @@ fn session_snapshot_command(
   generation : Int,
   activate_on_success : Bool,
 ) -> @cmd.Cmd {
-  let workspace = model.session_workspace(channel, session)
+  let workspace = model.session_project(channel, session)
   if activate_on_success {
     open_session(dispatch, channel, session, workspace~, generation~)
   } else {
@@ -134,7 +134,7 @@ fn open_session_on(
         None
       },
       completion: None,
-    }.with_active_workspace(conv.workspace)
+    }.with_active_project(conv.workspace.project())
     let commands = [scroll_transcript_after_render()]
     if generation is Some(generation) {
       commands.push(
@@ -147,12 +147,12 @@ fn open_session_on(
   } else {
     // The sidebar item says which store holds the session; opening it
     // also makes its workspace the active one, so "New chat" follows.
-    let workspace = model.session_workspace(channel, session_id)
+    let project = model.session_project(channel, session_id)
     let (model, generation) = model.begin_transcript_reload(
       empty_conversation(
         channel,
         session_id,
-        workspace?,
+        project?,
         // Reopening a stored conversation recovers the tier it was left on,
         // not whatever was picked last in some other chat.
         model=model
@@ -160,8 +160,8 @@ fn open_session_on(
           .unwrap_or(model.default_model),
       ),
     )
-    let next = { ..model, screen: Chat, loading_conversation: Some(owner) }.with_active_workspace(
-      workspace,
+    let next = { ..model, screen: Chat, loading_conversation: Some(owner) }.with_active_project(
+      project,
     )
     if generation is Some(generation) {
       (
@@ -236,7 +236,7 @@ fn request_archived_refresh(
 /// records stay on disk and return when the directory is attached again. If
 /// the active conversation leaves, select the newest remaining durable chat,
 /// or rotate into a fresh scratch chat when none remains.
-fn adopt_workspaces(
+fn adopt_projects(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   model : Model,
@@ -247,11 +247,11 @@ fn adopt_workspaces(
   }
   let active_detached = channel == model.focused &&
     model.find_conversation(channel, model.active_session) is Some(active) &&
-    active.workspace is Some(workspace) &&
+    active.workspace.project() is Some(workspace) &&
     !paths.contains(workspace)
-  let active_workspace = if dev.active_workspace is None ||
-    (dev.active_workspace is Some(active) && paths.contains(active)) {
-    dev.active_workspace
+  let active_project = if dev.active_project is None ||
+    (dev.active_project is Some(active) && paths.contains(active)) {
+    dev.active_project
   } else {
     None
   }
@@ -271,7 +271,7 @@ fn adopt_workspaces(
       ),
     )
   }
-  let worktrees = dev.worktrees.filter(group => paths.contains(group.workspace))
+  let worktrees = dev.worktrees.filter(group => paths.contains(group.project))
   // The old whole-session snapshot can outlive the workspace commit
   // broadcast. Prune it immediately so neither the sidebar nor fallback
   // selection can retain a conversation whose store is no longer attached.
@@ -281,8 +281,8 @@ fn adopt_workspaces(
   })
   let conversations = model.conversations.filter(conv => {
     conv.device != channel ||
-    conv.workspace is None ||
-    (conv.workspace is Some(workspace) && paths.contains(workspace))
+    conv.workspace is Scratch ||
+    (conv.workspace.project() is Some(project) && paths.contains(project))
   })
   let loading_conversation = if model.loading_conversation is Some(owner) &&
     owner.channel == channel &&
@@ -299,8 +299,8 @@ fn adopt_workspaces(
     ..model.replace_device({
       ..dev,
       sessions,
-      workspaces: paths,
-      active_workspace,
+      projects: paths,
+      active_project,
       worktrees,
       worktrees_request_generation,
     }),
@@ -316,10 +316,10 @@ fn adopt_workspaces(
       let activated = {
         ..next.activate(channel, fallback.id),
         transcript_pinned: true,
-      }.with_active_workspace(fallback.workspace)
+      }.with_active_project(fallback.workspace)
       let activated = activated.replace_conversation({
         ..activated.active(),
-        workspace: fallback.workspace,
+        workspace: Workspace::from_project(fallback.workspace),
       })
       let (fallback_cmd, next) = open_session_on(
         dispatch,
@@ -463,11 +463,11 @@ fn apply_session_snapshot(
     goal~,
     goal_markers~,
   )
-  // A resumed run has no live `Started` event to replay. Restore the host's
-  // derived working directory with the durable snapshot, but only if the
-  // current worktree registry still maps this conversation to that root. An
-  // older host that omits it must not erase a cwd learned from a newer Started.
-  let conv = { ..conv, cwd: model.adopt_session_cwd(conv, cwd) }
+  // Placement is reconstructed from the connected scratch root plus the
+  // project and worktree registries. Snapshot cwd is legacy protocol data;
+  // retaining a second frontend root would let delayed loads undo a newer
+  // registry transition.
+  ignore(cwd)
   let mut next = model.replace_conversation(conv)
   let commands : Array[@cmd.Cmd] = []
   let owner : @interop.ConversationKey = { channel, session }
@@ -479,14 +479,12 @@ fn apply_session_snapshot(
       completion: None,
     }
     commands.push(scroll_transcript_after_render())
-    // The host derives the resumed workspace from the session id, so the
-    // branch probe sends no cwd.
     let (branch_cmd, probed) = probe_branch(
       dispatch,
       next,
       channel,
       session,
-      None,
+      next.conversation_root(next.active()),
     )
     next = probed
     commands.push(branch_cmd)
@@ -620,6 +618,7 @@ fn accept_mention(
 /// conversation's roots, and `None` — an absolute path outside anything this
 /// conversation knows — means there is nothing the panel could open.
 fn conversation_relative(
+  model : Model,
   conv : Conversation,
   path : String,
 ) -> @pathx.Relative? {
@@ -628,12 +627,10 @@ fn conversation_relative(
     // workspace-relative interpretation.
     return Some(Relative(path))
   }
-  for root in [conv.cwd, conv.workspace] {
-    if root is Some(root) &&
-      @resource.relative_to(absolute, root) is Some(rest) &&
-      !rest.is_root() {
-      return Some(rest)
-    }
+  if model.conversation_root(conv) is Some(root) &&
+    @resource.relative_to(absolute, root) is Some(rest) &&
+    !rest.is_root() {
+    return Some(rest)
   }
   None
 }
@@ -704,7 +701,7 @@ fn open_editor_at(
       docs,
     }
   }
-  guard conversation_relative(conv, path) is Some(relative) else {
+  guard conversation_relative(model, conv, path) is Some(relative) else {
     return (
       @fileeditor.mount_cmds(femit),
       {
@@ -836,7 +833,7 @@ fn run_slash_command(
             session=conv.session_id,
             model=conv.engine_model,
             max_steps=model.max_steps,
-            workspace?=conv.workspace,
+            workspace?=conv.workspace.project(),
           ),
           {
             ..model.replace_conversation({
@@ -907,7 +904,7 @@ fn send_goal(
     session=conv.session_id,
     model=conv.engine_model,
     max_steps=model.max_steps,
-    workspace?=conv.workspace,
+    workspace?=conv.workspace.project(),
     command,
     text,
   )
@@ -1095,7 +1092,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // a reloaded frontend cannot reuse the outgoing page's watcher token.
     watch_namespace: model.page_namespace + "-watch",
     root: model.conversation_root(conv),
-    workspace: conv.workspace,
+    workspace: conv.workspace.project(),
     checkout,
     dark_mode: model.theme.is_dark(model.system_dark),
     tree_layout: model.tree_layout,
@@ -1120,13 +1117,13 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
 fn terminal_ctx(model : Model) -> @terminal.Ctx {
   let conv = model.active()
   let connected = match model.device_state(conv.device) {
-    Some(dev) => dev.bridge is Connected && dev.reconnect_failures == 0
+    Some(dev) => dev.bridge is Connected(..) && dev.reconnect_failures == 0
     None => false
   }
   {
     channel: conv.device,
     session: conv.session_id,
-    workspace: conv.workspace,
+    workspace: conv.workspace.project(),
     checkout: model.checkout_placement(conv),
     dark_mode: model.theme.is_dark(model.system_dark),
     connected,
@@ -1182,7 +1179,7 @@ fn sync_file_panel(
 /// this predicate forgets renders with the browser pane punched through it,
 /// swallowing the clicks that land there.
 fn covering_overlay(model : Model) -> Bool {
-  model.workspace_picker is Some(_) ||
+  model.project_picker is Some(_) ||
   model.archive_confirm is Some(_) ||
   model.quick_open is Some(_) ||
   model.update_ux is ConfirmingRestart(_) ||
@@ -1323,7 +1320,7 @@ fn replace_archived_active(
     ..fresh,
     task,
     mentions,
-    workspace,
+    workspace: Workspace::from_project(workspace),
     worktree_mode: model.workspace_default_mode.for_workspace(workspace),
     goal_edit,
   }
@@ -1336,7 +1333,7 @@ fn replace_archived_active(
     fresh
   }
   {
-    ..activated.replace_conversation(fresh).with_active_workspace(workspace),
+    ..activated.replace_conversation(fresh).with_active_project(workspace),
     screen: Chat,
     loading_conversation: None,
     transcript_pinned: true,
@@ -2154,11 +2151,8 @@ fn update_msg(
     }
     ToggleChatsSection =>
       (@cmd.none, { ..model, chats_collapsed: !model.chats_collapsed })
-    ToggleWorkspacesSection =>
-      (
-        @cmd.none,
-        { ..model, workspaces_collapsed: !model.workspaces_collapsed },
-      )
+    ToggleProjectsSection =>
+      (@cmd.none, { ..model, projects_collapsed: !model.projects_collapsed })
     ToggleSubruns(channel, session_id) => {
       let expanded = if model.subruns_expanded(channel, session_id) {
         model.expanded_subruns.filter(entry => {
@@ -2285,7 +2279,7 @@ fn update_msg(
       // context without an instruction and stay in the composer.
       let task = compose_prompt(conv.mentions, conv.task).trim().to_owned()
       if !conv.draft_sendable() ||
-        !(model.bridge_state() is Connected) ||
+        !(model.bridge_state() is Connected(..)) ||
         !model.api_ready() ||
         checkout is None ||
         checkout is Some(@interop.MissingWorktree(_)) {
@@ -2379,7 +2373,8 @@ fn update_msg(
         // (the host names it, binds this conversation) and starts inside
         // it, as one command; every other submit is a plain start — a
         // bound session's cwd comes from the host's registry.
-        let start_cmd = if fresh_worktree && conv.workspace is Some(workspace) {
+        let start_cmd = if fresh_worktree &&
+          conv.workspace is Project(root=workspace) {
           start_in_new_worktree(
             dispatch,
             model.focused,
@@ -2399,7 +2394,7 @@ fn update_msg(
             conv.engine_model,
             model.max_steps,
             conv.session_id,
-            workspace=conv.workspace,
+            workspace=conv.workspace.project(),
           )
         }
         (
@@ -2440,7 +2435,7 @@ fn update_msg(
       // A workspace section's own "new chat": the fresh conversation lands in
       // that project, and the workspace stays active for the next one. A new
       // loose chat unfolds the Chats section so its row is visible; a new
-      // workspace chat unfolds the Workspaces section for the same reason.
+      // project chat unfolds the Projects section for the same reason.
       // The explicit channel lets this handler move device selection before
       // creating the chat. Current sidebar rows pass the selected channel.
       guard model.device_state(channel) is Some(_) else {
@@ -2450,10 +2445,10 @@ fn update_msg(
       (
         @cmd.batch([focus_cmd, rotate_session(dispatch, channel)]),
         {
-          ..model.with_active_workspace(workspace),
+          ..model.with_active_project(workspace),
           loading_conversation: None,
           chats_collapsed: model.chats_collapsed && workspace is Some(_),
-          workspaces_collapsed: model.workspaces_collapsed && workspace is None,
+          projects_collapsed: model.projects_collapsed && workspace is None,
         },
       )
     }
@@ -2463,7 +2458,8 @@ fn update_msg(
       // the toggle stayed live through a placement chain the chip had
       // already committed to.
       let conv = model.active()
-      if model.can_choose_launch_mode(conv) && conv.workspace is Some(workspace) {
+      if model.can_choose_launch_mode(conv) &&
+        conv.workspace is Project(root=workspace) {
         let worktree_mode = !conv.worktree_mode
         let workspace_default_mode = model.workspace_default_mode.with_mode(
           workspace, worktree_mode,
@@ -2480,7 +2476,7 @@ fn update_msg(
     RetryWorktreePlacement => {
       let conv = model.active()
       guard model.checkout_placement(conv) is None &&
-        conv.workspace is Some(workspace) &&
+        conv.workspace.project() is Some(workspace) &&
         model.device_state(conv.device) is Some(dev) else {
         return (@cmd.none, model)
       }
@@ -2502,7 +2498,7 @@ fn update_msg(
     RepairWorktree => {
       let conv = model.active()
       guard model.checkout_placement(conv) is Some(@interop.MissingWorktree(_)) &&
-        conv.workspace is Some(workspace) else {
+        conv.workspace is Worktree(project=workspace, ..) else {
         return (@cmd.none, model)
       }
       (
@@ -2569,11 +2565,11 @@ fn update_msg(
           !conv.is_running() {
           {
             ..conv,
-            workspace: dev.active_workspace,
+            workspace: Workspace::from_project(dev.active_project),
             worktree_mode: if existing is Some(existing) {
               existing.worktree_mode
             } else {
-              model.workspace_default_mode.for_workspace(dev.active_workspace)
+              model.workspace_default_mode.for_workspace(dev.active_project)
             },
           }
         } else {
@@ -2592,49 +2588,49 @@ fn update_msg(
         },
       )
     }
-    PickWorkspace(channel) => {
+    PickProject(channel) => {
       // Focus moves for the surrounding UI, while the picker itself keeps
       // `channel` as its owner through every later navigation and confirm.
       guard model.device_state(channel) is Some(_) else {
         return (@cmd.none, model)
       }
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
-      let picker = opening_workspace_picker(channel)
+      let picker = opening_project_picker(channel)
       (
         @cmd.batch([
           focus_cmd,
           browse_directory(dispatch, channel, "", generation=picker.generation),
         ]),
-        { ..model, workspace_picker: Some(picker) },
+        { ..model, project_picker: Some(picker) },
       )
     }
-    WorkspacePickerNavigate(path) =>
-      match model.workspace_picker {
+    ProjectPickerNavigate(path) =>
+      match model.project_picker {
         Some(picker) => {
           let generation = picker.generation + 1
           (
             browse_directory(dispatch, picker.channel, path, generation~),
             {
               ..model,
-              workspace_picker: Some({ ..picker, loading: true, generation }),
+              project_picker: Some({ ..picker, loading: true, generation }),
             },
           )
         }
         None => (@cmd.none, model)
       }
-    WorkspacePickerLoaded(channel~, path~, entries~, generation~) =>
+    ProjectPickerLoaded(channel~, path~, entries~, generation~) =>
       // A listing for a picker the user already closed — or one answering
       // a navigation that has since been superseded — is dropped. The
       // go-to field clears on arrival: the breadcrumb shows the location,
       // and the field is for typing the next jump.
-      match model.workspace_picker {
+      match model.project_picker {
         Some(picker) if picker.channel == channel &&
           picker.generation == generation =>
           (
             @cmd.none,
             {
               ..model,
-              workspace_picker: Some({
+              project_picker: Some({
                 channel,
                 path: Some(path),
                 entries,
@@ -2647,15 +2643,15 @@ fn update_msg(
           )
         _ => (@cmd.none, model)
       }
-    WorkspacePickerFailed(channel~, message~, generation~) =>
-      match model.workspace_picker {
+    ProjectPickerFailed(channel~, message~, generation~) =>
+      match model.project_picker {
         Some(picker) if picker.channel == channel &&
           picker.generation == generation =>
           (
             @cmd.none,
             {
               ..model,
-              workspace_picker: Some({
+              project_picker: Some({
                 ..picker,
                 loading: false,
                 error: Some(message),
@@ -2664,31 +2660,31 @@ fn update_msg(
           )
         _ => (@cmd.none, model)
       }
-    WorkspacePickerInput(text) =>
-      match model.workspace_picker {
+    ProjectPickerInput(text) =>
+      match model.project_picker {
         Some(picker) =>
           (
             @cmd.none,
-            { ..model, workspace_picker: Some({ ..picker, input: text }) },
+            { ..model, project_picker: Some({ ..picker, input: text }) },
           )
         None => (@cmd.none, model)
       }
-    WorkspacePickerConfirm =>
-      match model.workspace_picker {
+    ProjectPickerConfirm =>
+      match model.project_picker {
         // Confirm registers the directory the host last listed — always
         // something it confirmed exists — never raw field text; Enter in
         // the field navigates (and validates) first.
         Some(picker) if picker.path is Some(path) =>
           (
-            add_workspace(dispatch, picker.channel, path.path),
-            { ..model, workspace_picker: None },
+            add_project(dispatch, picker.channel, path.path),
+            { ..model, project_picker: None },
           )
         _ => (@cmd.none, model)
       }
-    WorkspacePickerClose => (@cmd.none, { ..model, workspace_picker: None })
-    RemoveWorkspace(channel, path) =>
+    ProjectPickerClose => (@cmd.none, { ..model, project_picker: None })
+    RemoveProject(channel, path) =>
       if @resource.belongs_to(path, channel) {
-        (remove_workspace(dispatch, channel, path.path), model)
+        (remove_project(dispatch, channel, path.path), model)
       } else {
         (@cmd.none, model)
       }
@@ -2795,13 +2791,18 @@ fn update_msg(
       }
     }
     OpenFile(path) => {
-      // A relative path is taken against the active conversation's working
-      // directory: its `cwd` for a live run, or — when resumed without one —
-      // the directory the host derives from the session id. Absolute paths
-      // open directly. No workspace containment — the agent surfaced it.
+      // A relative path is taken against the active conversation's projected
+      // workspace root. Absolute paths open directly; the agent surfaced it,
+      // so this operation intentionally applies no workspace containment.
       let conv = model.active()
       (
-        open_file(dispatch, model.focused, conv.session_id, cwd=conv.cwd, path),
+        open_file(
+          dispatch,
+          model.focused,
+          conv.session_id,
+          cwd=model.conversation_root(conv),
+          path,
+        ),
         model,
       )
     }
@@ -2819,7 +2820,13 @@ fn update_msg(
       // its reply, re-runs the pull-request lookup, which is the same path
       // every run boundary takes, in-flight fencing and all.
       let conv = model.active()
-      probe_branch(dispatch, model, conv.device, conv.session_id, conv.cwd)
+      probe_branch(
+        dispatch,
+        model,
+        conv.device,
+        conv.session_id,
+        model.conversation_root(conv),
+      )
     }
     CloseGitDetails => (@cmd.none, { ..model, git_details_open: false })
     CloseLauncher =>
@@ -2864,7 +2871,12 @@ fn update_msg(
     LaunchApp(app) => {
       let conv = model.active()
       (
-        launch_app(dispatch, conv.session_id, cwd=conv.cwd, app),
+        launch_app(
+          dispatch,
+          conv.session_id,
+          cwd=model.conversation_root(conv),
+          app,
+        ),
         { ..model, launcher: { ..model.launcher, open: false } },
       )
     }
@@ -3232,7 +3244,8 @@ fn update_msg(
         | OutputRendered(channel~, id=_, sequence=_)
         | SessionExited(channel~, id=_, code=_) =>
           match model.device_state(channel) {
-            Some(dev) => dev.bridge is Connected && dev.reconnect_failures == 0
+            Some(dev) =>
+              dev.bridge is Connected(..) && dev.reconnect_failures == 0
             None => false
           }
         _ => true
@@ -3362,11 +3375,11 @@ fn update_device_msg(
         // device is refreshed when focus moves to it.
         (@cmd.none, model)
       }
-    BridgeReady => {
+    BridgeReady(scratch_root~) => {
       let connection_generation = dev.connection_generation + 1
       let sessions_request_generation = dev.sessions_request_generation + 1
       let archived_request_generation = dev.archived_request_generation + 1
-      let workspaces_request_generation = dev.workspaces_request_generation + 1
+      let projects_request_generation = dev.projects_request_generation + 1
       // Capture the exact per-session lifecycle frontier before issuing the
       // unversioned runs snapshot. A live Started or Finished received before
       // its reply then wins over both stale positive rows and stale absence.
@@ -3382,8 +3395,8 @@ fn update_device_msg(
         fetch_archived(
           dispatch, channel, connection_generation, archived_request_generation,
         ),
-        fetch_workspaces(
-          dispatch, channel, connection_generation, workspaces_request_generation,
+        fetch_projects(
+          dispatch, channel, connection_generation, projects_request_generation,
         ),
       ]
       // The focused-scoped half: the host-settings mirror and installed
@@ -3442,12 +3455,12 @@ fn update_device_msg(
       })
       let model = model.replace_device({
         ..dev,
-        bridge: Connected,
+        bridge: Connected(scratch_root~),
         reconnect_failures: 0,
         connection_generation,
         sessions_request_generation,
         archived_request_generation,
-        workspaces_request_generation,
+        projects_request_generation,
         archive_overrides: [],
         // Worktree notifications are not replayed across a connection gap.
         // Keep every workspace blocked until this connection returns a fresh
@@ -3771,27 +3784,34 @@ fn update_device_msg(
       // the default store.
       let conversations = model.conversations.map(conv => {
         if conv.device == channel {
-          let mut workspace = conv.workspace
+          let mut project = conv.workspace.project()
           for item in items {
             if item.id == conv.session_id {
-              workspace = item.workspace
+              project = item.workspace
             }
           }
-          { ..conv, workspace, }
+          {
+            ..conv,
+            workspace: dev.conversation_workspace(
+              project,
+              conv.session_id,
+              conv.workspace,
+            ),
+          }
         } else {
           conv
         }
       })
-      let mut active_workspace = dev.active_workspace
+      let mut active_project = dev.active_project
       if channel == model.focused {
         for item in items {
           if item.id == model.active_session {
-            active_workspace = item.workspace
+            active_project = item.workspace
           }
         }
       }
       let mut next = {
-        ..model.replace_device({ ..dev, sessions: items, active_workspace }),
+        ..model.replace_device({ ..dev, sessions: items, active_project }),
         conversations,
       }
       let commands : Array[@cmd.Cmd] = []
@@ -3822,28 +3842,28 @@ fn update_device_msg(
       }
       (@cmd.batch(commands), next)
     }
-    WorkspacesLoaded(paths, connection_generation~, request_generation~) => {
+    ProjectsLoaded(paths, connection_generation~, request_generation~) => {
       guard connection_generation == dev.connection_generation &&
-        request_generation == dev.workspaces_request_generation else {
+        request_generation == dev.projects_request_generation else {
         return (@cmd.none, model)
       }
       // The registry snapshot is also the authority for what this page may
-      // keep open. `adopt_workspaces` drops conversations from detached
+      // keep open. `adopt_projects` drops conversations from detached
       // stores; their durable records remain on disk and return through the
       // next session list after the workspace is attached again.
-      adopt_workspaces(dispatch, channel, model, paths)
+      adopt_projects(dispatch, channel, model, paths)
     }
-    WorkspacesChanged(paths) => {
+    ProjectsChanged(paths) => {
       // The post-commit broadcast is newer than every list request issued so
       // far. Advance the token before applying it, so an older list reply can
       // never roll any client back after this canonical mutation order.
       let next = model.replace_device({
         ..dev,
-        workspaces_request_generation: dev.workspaces_request_generation + 1,
+        projects_request_generation: dev.projects_request_generation + 1,
       })
-      adopt_workspaces(dispatch, channel, next, paths)
+      adopt_projects(dispatch, channel, next, paths)
     }
-    WorkspaceFailed(message) =>
+    ProjectFailed(message) =>
       model.notify_error(dispatch, "Workspace error: \{message}")
     WorktreesLoaded(
       rows,
@@ -3858,12 +3878,26 @@ fn update_device_msg(
         request_generation > dev.worktree_generation(workspace) else {
         return (@cmd.none, model)
       }
-      (
-        @cmd.none,
-        model.replace_device(
-          dev.with_worktrees(workspace, rows, generation=request_generation),
-        ),
+      let next_dev = dev.with_worktrees(
+        workspace,
+        rows,
+        generation=request_generation,
       )
+      let conversations = model.conversations.map(conv => {
+        if conv.device == channel && conv.workspace.project() == Some(workspace) {
+          {
+            ..conv,
+            workspace: next_dev.conversation_workspace(
+              Some(workspace),
+              conv.session_id,
+              conv.workspace,
+            ),
+          }
+        } else {
+          conv
+        }
+      })
+      (@cmd.none, { ..model.replace_device(next_dev), conversations, })
     }
     WorktreesFailed(
       workspace~,
@@ -3888,14 +3922,15 @@ fn update_device_msg(
       // far; advance the mint and stamp this workspace's rows with the new
       // token so an older reply for it can never roll the broadcast back.
       let worktrees_request_generation = dev.worktrees_request_generation + 1
-      let next = model.replace_device({
+      let next_dev = {
         ..dev.with_worktrees(
           workspace,
           rows,
           generation=worktrees_request_generation,
         ),
         worktrees_request_generation,
-      })
+      }
+      let next = model.replace_device(next_dev)
       // Every conversation this broadcast unbinds is unbound at the same
       // instant, so one spent request number fences all of their probes.
       let (fence, next) = next.mint_git_request()
@@ -3904,18 +3939,21 @@ fn update_device_msg(
       // later Unarchive still surfaces Repair. Stand down any staged confirm
       // only when the placement itself disappeared.
       let conversations = next.conversations.map(conv => {
-        if conv.device == channel &&
-          conv.worktree is Some(name) &&
-          conv.workspace == Some(workspace) &&
-          !rows.iter().any(row => row.name == name) {
-          // The checkout is gone, so every placement derived from it goes
-          // too: a kept cwd would aim OpenFile/LaunchApp at a deleted
-          // directory and the composer would keep showing the dead branch,
-          // its uncommitted lines, and its pull request. All re-derive from
-          // the host on the next run or open — and `forget_git` retires the
-          // probes already in flight, which would otherwise answer for the
-          // deleted directory and put every one of those fields back.
-          { ..conv.forget_git(fence~), worktree: None, cwd: None }
+        if conv.device == channel && conv.workspace.project() == Some(workspace) {
+          let placement = next_dev.conversation_workspace(
+            Some(workspace),
+            conv.session_id,
+            conv.workspace,
+          )
+          if conv.workspace is Worktree(..) && placement is Project(..) {
+            // The checkout is gone, so every placement derived from it goes
+            // too. `forget_git` retires probes already in flight for the removed
+            // checkout; the enum transition simultaneously makes every file,
+            // LSP, terminal and launcher root re-project to the project.
+            { ..conv.forget_git(fence~), workspace: placement }
+          } else {
+            { ..conv, workspace: placement }
+          }
         } else {
           conv
         }
@@ -3926,7 +3964,7 @@ fn update_device_msg(
       let archive_confirm = match next.archive_confirm {
         Some(confirm) if confirm.channel == channel &&
           next.find_conversation(channel, confirm.session) is Some(conv) &&
-          conv.workspace == Some(workspace) &&
+          conv.workspace.project() == Some(workspace) &&
           !rows.iter().any(row => row.session == Some(confirm.session)) => None
         other => other
       }
@@ -3936,14 +3974,15 @@ fn update_device_msg(
       // The chain's checkout exists: bind the composing conversation, so
       // the chip shows and a retried submit reuses the same environment.
       guard model.find_conversation(channel, session) is Some(conv) &&
-        conv.workspace == Some(workspace) else {
+        conv.workspace is Project(root=current) &&
+        current == workspace else {
         return (@cmd.none, model)
       }
       (
         @cmd.none,
         model.replace_conversation({
           ..conv,
-          worktree: Some(name),
+          workspace: Worktree(project=workspace, name~),
           worktree_mode: false,
         }),
       )
@@ -3997,7 +4036,7 @@ fn update_device_msg(
       // device's archived list must not displace it even when a session id
       // collides across devices.
       if channel == next.focused && archived_now(next.active_session) {
-        let mut workspace = next.session_workspace(channel, next.active_session)
+        let mut workspace = next.session_project(channel, next.active_session)
         for item in items {
           if item.id == next.active_session {
             workspace = item.workspace
@@ -4033,14 +4072,14 @@ fn update_device_msg(
       // prunes detached conversations and refreshes the live list) and the
       // archived list, so the state that made the click possible heals
       // instead of failing identically forever.
-      let workspaces_request_generation = dev.workspaces_request_generation + 1
-      let refresh = fetch_workspaces(
+      let projects_request_generation = dev.projects_request_generation + 1
+      let refresh = fetch_projects(
         dispatch,
         channel,
         dev.connection_generation,
-        workspaces_request_generation,
+        projects_request_generation,
       )
-      let model = model.replace_device({ ..dev, workspaces_request_generation, })
+      let model = model.replace_device({ ..dev, projects_request_generation, })
       let (archived, model) = request_archived_refresh(dispatch, channel, model)
       let (toast, model) = model.notify_error(
         dispatch,
@@ -4088,7 +4127,7 @@ fn update_device_msg(
       // Invalidate the live target before either async list reply. Keeping a
       // placeholder archived entry also blocks a late session.event from
       // rematerializing it during this window.
-      let workspace = model.session_workspace(channel, session)
+      let workspace = model.session_project(channel, session)
       let sessions = dev.sessions.filter(item => item.id != session)
       let conversations = model.conversations.filter(conv => {
         conv.device != channel || conv.session_id != session
@@ -4203,7 +4242,7 @@ fn update_device_msg(
           empty_conversation(
             channel,
             session,
-            workspace?=model.session_workspace(channel, session),
+            project?=model.session_project(channel, session),
             model=model
               .remembered_model(channel, session)
               .unwrap_or(model.default_model),
@@ -4280,8 +4319,8 @@ fn update_device_msg(
       // A live Started can overtake the store write and the BridgeReady list
       // request can therefore miss a newly-created session. Sequence one is
       // the first durable proof that the record exists; refresh the list so
-      // older hosts without Started.session_root, and clients that learned
-      // the commit first, still converge on the store's workspace grouping.
+      // clients that learned the commit first still converge on the store's
+      // project grouping.
       if refresh_sessions {
         let (sessions, next) = request_sessions_refresh(dispatch, channel, next)
         (@cmd.batch([commit_cmd, sessions]), next)
@@ -4378,7 +4417,13 @@ fn update_device_msg(
         conv.diffstat_hint != Some(answer.base) else {
         return (@cmd.none, model)
       }
-      probe_branch(dispatch, model, channel, session, conv.cwd)
+      probe_branch(
+        dispatch,
+        model,
+        channel,
+        session,
+        model.conversation_root(conv),
+      )
     }
     Started(
       run_id~,
@@ -4405,7 +4450,7 @@ fn update_device_msg(
           empty_conversation(
             channel,
             session,
-            workspace?=model.session_workspace(channel, session),
+            project?=model.session_project(channel, session),
             // A conversation this page is meeting for the first time takes
             // the tier its run is on — better evidence than the default,
             // and no choice exists yet to contradict it. A remembered choice
@@ -4417,8 +4462,16 @@ fn update_device_msg(
               .unwrap_or(selected_model),
           )
       }
-      let existing = match dev.workspace_for_session_root(session_root) {
-        Some(workspace) => { ..existing, workspace: Some(workspace) }
+      let existing = match dev.project_for_session_root(session_root) {
+        Some(project) =>
+          {
+            ..existing,
+            workspace: dev.conversation_workspace(
+              Some(project),
+              session,
+              existing.workspace,
+            ),
+          }
         None => existing
       }
       let owned = submission_id is Some(id) &&
@@ -4495,6 +4548,9 @@ fn update_device_msg(
       // refresh below) brings it. `task` still rides on the event for
       // clients that render run identity elsewhere.
       ignore(task)
+      // Lifecycle cwd is not placement state. The connected scratch root and
+      // project/worktree registries are the single source for every request.
+      ignore(cwd)
       // A foreign run means the store holds a lifecycle boundary this client
       // cannot infer from item kinds: a delayed User may still belong to the
       // prior run as a steer. Re-read active and background conversations
@@ -4552,24 +4608,20 @@ fn update_device_msg(
         // intends to send. The chip means "what your next turn runs on", so
         // only the chip changes it.
         last_run_id: Some(run_id),
-        // A started run always reports its directory, but a malformed
-        // event decodes as `None`; keeping the previous root beats
-        // forgetting one we already knew.
-        cwd: if cwd is Some(_) {
-          cwd
-        } else {
-          conv.cwd
-        },
       }
       let (updated, generation) = if refresh {
         model.begin_transcript_reload(conv)
       } else {
         (model.replace_conversation(conv), None)
       }
-      // The run's workspace directory now exists, so the branch chip can be
-      // probed (and refreshed — a rerun may follow a checkout).
+      // Probe the root projected from the reconciled conversation, not the
+      // lifecycle event's transient cwd.
       let (branch_cmd, updated) = probe_branch(
-        dispatch, updated, channel, session, cwd,
+        dispatch,
+        updated,
+        channel,
+        session,
+        updated.conversation_root(conv),
       )
       let commands = [branch_cmd]
       if generation is Some(generation) {
@@ -5009,7 +5061,7 @@ fn update_device_msg(
           updated,
           channel,
           session,
-          settled.cwd,
+          updated.conversation_root(settled),
         )
         let commands = [branch_cmd]
         if generation is Some(generation) {
@@ -5160,7 +5212,7 @@ fn update_device_msg(
             rejected
           }
           let updated = model.replace_conversation(next)
-          if conv.workspace is Some(workspace) &&
+          if conv.workspace.project() is Some(workspace) &&
             updated.device_state(channel) is Some(dev) {
             // A checkout deleted outside the app cannot publish a registry
             // notification. Any rejected workspace start is a cheap, reliable
@@ -5425,7 +5477,7 @@ fn update_device_msg(
           next,
           channel,
           conv.session_id,
-          conv.cwd,
+          next.conversation_root(conv),
         )
         next = probed
         let commands = [sessions, branch_cmd]
@@ -5598,6 +5650,32 @@ fn @interop.ChannelId::test_resource(
 }
 
 ///|
+/// Test-only connected state with the same required scratch root carried by a
+/// real `agent.connected` notification.
+fn @interop.ChannelId::test_connected(self : @interop.ChannelId) -> BridgeState {
+  // This literal is valid by construction; retain a total test fixture so
+  // every test using `test_model` does not acquire a synthetic error effect.
+  let root = match @resource.of_path(self, "/scratch") {
+    Some(root) => root
+    None => @common.Uri::file("/scratch")
+  }
+  Connected(scratch_root=root)
+}
+
+///|
+/// Test-only ready message paired with `test_connected`.
+fn @interop.ChannelId::test_bridge_ready(
+  self : @interop.ChannelId,
+) -> DeviceMsg {
+  guard self.test_connected() is Connected(scratch_root~) else {
+    // `test_connected` has only one result, but spelling the match keeps this
+    // constructor synchronized if BridgeState gains another test fixture.
+    return BridgeReady(scratch_root=@common.Uri::file("/scratch"))
+  }
+  BridgeReady(scratch_root~)
+}
+
+///|
 fn test_conversation() -> Conversation {
   empty_conversation(@interop.ChannelId::Local, "desktop-test")
 }
@@ -5625,7 +5703,10 @@ fn test_model() -> Model {
     // here runs desktop-shaped, on an explicit Local channel.
     ,
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
+      {
+        ..empty_device_state(@interop.ChannelId::Local),
+        bridge: @interop.ChannelId::Local.test_connected(),
+      },
     ],
     focused: @interop.ChannelId::Local,
     console: None,
@@ -5786,7 +5867,7 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
     "1000",
     conv.session_id,
     "test-submission",
-    workspace=conv.workspace,
+    workspace=conv.workspace.project(),
   )
   let json = payload.to_json()
   guard json is Object(fields) else { return None }
@@ -6396,8 +6477,11 @@ test "a delayed rotation cannot steal focus from another channel" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
-      { ..empty_device_state(remote), bridge: Connected },
+      {
+        ..empty_device_state(@interop.ChannelId::Local),
+        bridge: @interop.ChannelId::Local.test_connected(),
+      },
+      { ..empty_device_state(remote), bridge: remote.test_connected() },
     ],
   }
   let (_, next) = update(
@@ -6491,7 +6575,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
     is Some(provisional) else {
     fail("commit did not materialize its conversation")
   }
-  assert_true(provisional.workspace is None)
+  assert_true(provisional.workspace is Scratch)
   let (_, listed) = update(
     dispatch,
     sessions_loaded(
@@ -6511,8 +6595,8 @@ test "session list assigns a commit-first conversation to its durable workspace"
     is Some(reconciled) else {
     fail("listed conversation disappeared")
   }
-  assert_eq(reconciled.workspace, Some(workspace))
-  assert_eq(listed.dev().active_workspace, Some(workspace))
+  assert_eq(reconciled.workspace, Project(root=workspace))
+  assert_eq(listed.dev().active_project, Some(workspace))
   assert_true(encoded_start_workspace(reconciled) is Some("/work/foreign"))
 }
 
@@ -6522,17 +6606,20 @@ test "a background session list updates only its channel's same-id workspace" {
   let remote : @interop.ChannelId = Remote("d-remote")
   let local_conv = {
     ..empty_conversation(@interop.ChannelId::Local, "shared"),
-    workspace: Some(@interop.ChannelId::Local.test_resource("/local")),
+    workspace: Project(root=@interop.ChannelId::Local.test_resource("/local")),
   }
   let remote_conv = {
     ..empty_conversation(remote, "shared"),
-    workspace: Some(remote.test_resource("/remote-old")),
+    workspace: Project(root=remote.test_resource("/remote-old")),
   }
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
-      { ..empty_device_state(remote), bridge: Connected },
+      {
+        ..empty_device_state(@interop.ChannelId::Local),
+        bridge: @interop.ChannelId::Local.test_connected(),
+      },
+      { ..empty_device_state(remote), bridge: remote.test_connected() },
     ],
     active_session: "shared",
     conversations: [local_conv, remote_conv],
@@ -6562,10 +6649,12 @@ test "a background session list updates only its channel's same-id workspace" {
     fail("same-id conversations disappeared")
   }
   assert_true(
-    local_conv.workspace is Some(workspace) && workspace.path == "/local",
+    local_conv.workspace is Project(root=workspace) &&
+    workspace.path == "/local",
   )
   assert_true(
-    remote_conv.workspace is Some(workspace) && workspace.path == "/remote-new",
+    remote_conv.workspace is Project(root=workspace) &&
+    workspace.path == "/remote-new",
   )
 }
 
@@ -6594,7 +6683,7 @@ test "session list assigns a Started-first conversation to its durable workspace
     is Some(provisional) else {
     fail("Started did not materialize its conversation")
   }
-  assert_true(provisional.workspace is None)
+  assert_true(provisional.workspace is Scratch)
   let (_, listed) = update(
     dispatch,
     sessions_loaded([
@@ -6614,7 +6703,7 @@ test "session list assigns a Started-first conversation to its durable workspace
     is Some(reconciled) else {
     fail("listed conversation disappeared")
   }
-  assert_eq(reconciled.workspace, Some(workspace))
+  assert_eq(reconciled.workspace, Project(root=workspace))
   assert_true(
     encoded_start_workspace(reconciled) is Some("/work/started-first"),
   )
@@ -6624,7 +6713,7 @@ test "session list assigns a Started-first conversation to its durable workspace
 test "Started places a foreign conversation from its host session root" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/C:/work/core")
-  let model = test_model().with_dev(dev => { ..dev, workspaces: [workspace] })
+  let model = test_model().with_dev(dev => { ..dev, projects: [workspace] })
   let (_, started) = update_dev(
     dispatch,
     Started(
@@ -6648,7 +6737,7 @@ test "Started places a foreign conversation from its host session root" {
     is Some(foreign) else {
     fail("Started did not materialize its conversation")
   }
-  assert_eq(foreign.workspace, Some(workspace))
+  assert_eq(foreign.workspace, Project(root=workspace))
   inspect(started.active_session, content="desktop-test")
 }
 
@@ -6725,7 +6814,11 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
     messages: [{ kind: User, content: "kept", ts: None }],
     watermark: 1,
   })
-  let (_, refreshing) = update_dev(dispatch, BridgeReady, model)
+  let (_, refreshing) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    model,
+  )
   guard refreshing.active().sync is Reloading(generation=1, attempt=1, ..) else {
     fail("expected the first reconnect refresh")
   }
@@ -6739,7 +6832,11 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
     ),
     refreshing,
   )
-  let (_, reconnected_again) = update_dev(dispatch, BridgeReady, buffered)
+  let (_, reconnected_again) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    buffered,
+  )
   guard reconnected_again.active().sync
     is Reloading(generation=1, attempt=1, buffered=commits, ..) else {
     fail("a second reconnect started another generation")
@@ -6764,7 +6861,11 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
   let model = test_model()
     .replace_conversation(active)
     .replace_conversation(background)
-  let (_, next) = update_dev(dispatch, BridgeReady, model)
+  let (_, next) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    model,
+  )
   for conv in next.conversations {
     inspect(conv.streaming_response, content="")
     assert_true(conv.compaction is NotCompacting)
@@ -6782,7 +6883,11 @@ test "BridgeReady clears focused host settings until the refetch lands" {
     setup_api_key: "old-key",
     host_settings_revision: 7,
   }
-  let (_, next) = update_dev(dispatch, BridgeReady, model)
+  let (_, next) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    model,
+  )
   assert_false(next.host_settings_loaded())
   assert_true(next.api_provider is Openseek)
   inspect(next.custom_api_url, content="")
@@ -6807,13 +6912,20 @@ test "BridgeReady resets only conversations owned by its channel" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
-      { ..empty_device_state(background), bridge: Connected },
+      {
+        ..empty_device_state(@interop.ChannelId::Local),
+        bridge: @interop.ChannelId::Local.test_connected(),
+      },
+      { ..empty_device_state(background), bridge: background.test_connected() },
     ],
     active_session: "shared",
     conversations: [local_conv, remote],
   }
-  let (_, next) = update(dispatch, FromDevice(background, BridgeReady), model)
+  let (_, next) = update(
+    dispatch,
+    FromDevice(background, background.test_bridge_ready()),
+    model,
+  )
   guard next.find_conversation(@interop.ChannelId::Local, "shared")
     is Some(kept) &&
     next.find_conversation(background, "shared") is Some(reset) else {
@@ -6831,7 +6943,9 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
   let channel : @interop.ChannelId = Remote("d1")
   let model = {
     ..initial_model(),
-    devices: [{ ..empty_device_state(channel), bridge: Connected }],
+    devices: [
+      { ..empty_device_state(channel), bridge: channel.test_connected() },
+    ],
     focused: channel,
     terminal_panel: {
       ..@terminal.State::empty(),
@@ -6866,7 +6980,7 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
     one,
   )
   inspect(two.dev().reconnect_failures, content="2")
-  assert_true(two.bridge_state() is Connected)
+  assert_true(two.bridge_state() is Connected(..))
   let (_, three) = update(
     dispatch,
     FromDevice(channel, ChannelDown(websocket_epoch=0)),
@@ -6890,9 +7004,13 @@ test "BridgeReady resets the reconnect failure count" {
     ],
     focused: channel,
   }
-  let (_, next) = update(dispatch, FromDevice(channel, BridgeReady), model)
+  let (_, next) = update(
+    dispatch,
+    FromDevice(channel, channel.test_bridge_ready()),
+    model,
+  )
   inspect(next.dev().reconnect_failures, content="0")
-  assert_true(next.bridge_state() is Connected)
+  assert_true(next.bridge_state() is Connected(..))
 }
 
 ///|
@@ -6971,7 +7089,7 @@ test "BridgeReady fences an awaiting initial after disconnected canonical items"
   )
   let (_, reconnected) = update_dev(
     dispatch,
-    BridgeReady,
+    @interop.ChannelId::Local.test_bridge_ready(),
     test_model().replace_conversation(conv),
   )
   assert_true(reconnected.active().input_ledger[0].state is Unconfirmed)
@@ -7021,7 +7139,7 @@ test "BridgeReady fences an awaiting steer after disconnected canonical items" {
   )
   let (_, reconnected) = update_dev(
     dispatch,
-    BridgeReady,
+    @interop.ChannelId::Local.test_bridge_ready(),
     running_model().replace_conversation(conv),
   )
   assert_true(reconnected.active().input_ledger[0].state is Unconfirmed)
@@ -7076,7 +7194,11 @@ test "an explicit rejected fresh start does not force reconnect reloads" {
     test_model().replace_conversation(conv),
   )
   inspect(rejected.active().input_ledger.length(), content="0")
-  let (_, reconnected) = update_dev(dispatch, BridgeReady, rejected)
+  let (_, reconnected) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    rejected,
+  )
   assert_true(reconnected.active().sync is Synced)
   inspect(reconnected.transcript_request_generation, content="0")
 }
@@ -7098,7 +7220,11 @@ test "an unconfirmed empty start forces reconnect recovery" {
     ),
     test_model().replace_conversation(conv),
   )
-  let (_, reconnected) = update_dev(dispatch, BridgeReady, uncertain)
+  let (_, reconnected) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    uncertain,
+  )
   guard reconnected.active().sync is Reloading(generation=1, ..) else {
     fail("unconfirmed start did not force a durable reload")
   }
@@ -7219,7 +7345,7 @@ test "open session tracks the latest load and ignores stale replies" {
 }
 
 ///|
-test "completed scratch session load restores cwd before another Started" {
+test "completed scratch session root comes from the connected device" {
   let dispatch = test_dispatch()
   let session = "desktop-restored-scratch"
   let (_, listed) = update(
@@ -7243,7 +7369,10 @@ test "completed scratch session load restores cwd before another Started" {
     is Some(before) else {
     fail("scratch conversation was not materialized for loading")
   }
-  assert_true(loading.conversation_root(before) is None)
+  assert_true(
+    loading.conversation_root(before) is Some(root) &&
+    root.path == "/scratch/desktop-restored-scratch",
+  )
   let cwd = @interop.ChannelId::Local.test_resource(
     "/Users/example/Documents/OpenSeek/desktop-restored-scratch",
   )
@@ -7262,9 +7391,17 @@ test "completed scratch session load restores cwd before another Started" {
     loading,
   )
   assert_eq(restored.active_session, session)
-  assert_eq(restored.active().cwd, Some(cwd))
-  assert_eq(restored.conversation_root(restored.active()), Some(cwd))
-  assert_eq(file_ctx(restored).root, Some(cwd))
+  // Stored cwd is legacy snapshot data. Scratch placement is stable because
+  // its root comes from the current device connection plus the session id.
+  assert_true(restored.active().workspace is Scratch)
+  assert_true(
+    restored.conversation_root(restored.active()) is Some(root) &&
+    root.path == "/scratch/desktop-restored-scratch",
+  )
+  assert_true(
+    file_ctx(restored).root is Some(root) &&
+    root.path == "/scratch/desktop-restored-scratch",
+  )
 }
 
 ///|
@@ -7275,17 +7412,15 @@ test "worktree removal fences an older session cwd snapshot" {
   let model = test_model()
     .replace_conversation({
       ..test_conversation(),
-      workspace: Some(workspace),
-      worktree: Some("wt"),
-      cwd: Some(checkout),
+      workspace: Worktree(project=workspace, name="wt"),
       sync: test_reloading([]),
     })
     .with_dev(dev => {
       ..dev,
-      workspaces: [workspace],
+      projects: [workspace],
       worktrees: [
         {
-          workspace,
+          project: workspace,
           rows: [
             {
               name: "wt",
@@ -7300,14 +7435,14 @@ test "worktree removal fences an older session cwd snapshot" {
       worktrees_request_generation: 1,
     })
   // The registry broadcast wins first and turns this into a workspace-root
-  // conversation. Its cleared cwd is part of that same placement change.
+  // conversation. The obsolete checkout is no longer represented in its
+  // workspace value.
   let (_, unbound) = update_dev(
     dispatch,
     WorktreesChanged([], workspace~),
     model,
   )
-  assert_true(unbound.active().worktree is None)
-  assert_true(unbound.active().cwd is None)
+  assert_true(unbound.active().workspace is Project(root=_))
   assert_true(
     unbound.checkout_placement(unbound.active()) is Some(@interop.WorkspaceRoot),
   )
@@ -7328,7 +7463,7 @@ test "worktree removal fences an older session cwd snapshot" {
     unbound,
   )
   inspect(loaded.active().messages[0].content, content="current snapshot")
-  assert_true(loaded.active().cwd is None)
+  assert_true(loaded.active().workspace is Project(root=_))
   assert_eq(loaded.conversation_root(loaded.active()), Some(workspace))
 }
 
@@ -7347,8 +7482,11 @@ test "same-id session loads are fenced by channel owner" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
-      { ..empty_device_state(remote), bridge: Connected },
+      {
+        ..empty_device_state(@interop.ChannelId::Local),
+        bridge: @interop.ChannelId::Local.test_connected(),
+      },
+      { ..empty_device_state(remote), bridge: remote.test_connected() },
     ],
     active_session: "shared",
     conversations: [local_conv, remote_conv],
@@ -7855,7 +7993,7 @@ test "session loaded swaps the active conversation onto the stored session" {
   inspect(once.active().streaming_response, content="")
   inspect(once.active().usage_tokens, content="0")
   inspect(once.active().watcher_status, content="")
-  assert_true(once.active().cwd is None)
+  assert_true(once.active().workspace is Scratch)
   assert_true(once.display_status() is Ready)
   inspect(twice.active().messages.length(), content="2")
 }
@@ -7928,7 +8066,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
 }
 
 ///|
-test "started routes by session and records the host's workspace" {
+test "started routes by session without replacing scratch placement" {
   let dispatch = test_dispatch()
   let cwd = @interop.ChannelId::Local.test_resource(
     "/home/u/Documents/OpenSeek/desktop-test",
@@ -7947,7 +8085,11 @@ test "started routes by session and records the host's workspace" {
     ),
     test_model(),
   )
-  assert_eq(next.active().cwd, Some(cwd))
+  assert_true(next.active().workspace is Scratch)
+  assert_true(
+    next.conversation_root(next.active()) is Some(root) &&
+    root.path == "/scratch/desktop-test",
+  )
   inspect(next.active().is_running(), content="true")
   guard next.active().run is Open(run_id="r7", ..) else {
     fail("expected the run id to be recorded")
@@ -8579,7 +8721,7 @@ test "reconnect runs snapshot settles only its captured Starting submission" {
   )
   let (_, bridged) = update_dev(
     dispatch,
-    BridgeReady,
+    @interop.ChannelId::Local.test_bridge_ready(),
     test_model().replace_conversation(conv),
   )
   assert_true(bridged.active().input_ledger[0].state is Unconfirmed)
@@ -8597,7 +8739,11 @@ test "reconnect runs snapshot settles only its captured Starting submission" {
 ///|
 test "an old empty runs snapshot cannot close a start sent after reconnect" {
   let dispatch = test_dispatch()
-  let (_, ready) = update_dev(dispatch, BridgeReady, test_model())
+  let (_, ready) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    test_model(),
+  )
   let (_, drafted) = update(dispatch, TaskChanged("new prompt"), ready)
   let (_, sent) = update(dispatch, Send, drafted)
   assert_true(sent.active().run is Starting(..))
@@ -8699,7 +8845,11 @@ test "a Started racing ahead of an older runs response stays open" {
 ///|
 test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
   let dispatch = test_dispatch()
-  let (_, generation_one) = update_dev(dispatch, BridgeReady, test_model())
+  let (_, generation_one) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    test_model(),
+  )
   let stale = RunsLoaded(
     runs=[
       {
@@ -8718,7 +8868,11 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
     frontier=generation_one.run_snapshot_frontier(@interop.ChannelId::Local),
     connection_generation=generation_one.dev().connection_generation,
   )
-  let (_, generation_two) = update_dev(dispatch, BridgeReady, generation_one)
+  let (_, generation_two) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    generation_one,
+  )
   // The current generation's empty answer wins first. The delayed older
   // answer must then be rejected whole, before replaying its Started row.
   let (_, current) = update_dev(
@@ -8756,7 +8910,11 @@ test "runs settlement restores a Starting prompt that reached exact-zero EOF off
     ),
   )
   let frontier = before.run_snapshot_frontier(@interop.ChannelId::Local)
-  let (_, bridged) = update_dev(dispatch, BridgeReady, before)
+  let (_, bridged) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    before,
+  )
   assert_true(bridged.active().sync is Reloading(..))
   let (_, recovered) = update_dev(
     dispatch,
@@ -8901,7 +9059,11 @@ test "runs settlement recovers a transport-undelivered prompt by submission id" 
       ..
     },
   )
-  let (_, bridged) = update_dev(dispatch, BridgeReady, undelivered)
+  let (_, bridged) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    undelivered,
+  )
   let (_, recovered) = update_dev(
     dispatch,
     RunsLoaded(
@@ -8934,7 +9096,11 @@ test "runs settlement restores an Open prompt whose zero boundary was missed" {
     "offline-open", "run-offline-open", "restore open after reconnect",
   )
   let frontier = before.run_snapshot_frontier(@interop.ChannelId::Local)
-  let (_, bridged) = update_dev(dispatch, BridgeReady, before)
+  let (_, bridged) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    before,
+  )
   let (_, recovered) = update_dev(
     dispatch,
     RunsLoaded(
@@ -9231,8 +9397,11 @@ test "a failed start response keeps its prompt through an empty snapshot" {
     empty,
   )
   assert_true(late_started.active().run is NoRun(ended=Some(RunFailed)))
+  // A late lifecycle event cannot smuggle its transient cwd back into
+  // conversation placement. Scratch remains device-root plus session id.
   assert_true(
-    late_started.active().cwd is Some(resource) && resource.path == "/workspace",
+    late_started.conversation_root(late_started.active()) is Some(resource) &&
+    resource.path == "/scratch/desktop-test",
   )
 }
 
@@ -9607,7 +9776,11 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
   )
   assert_true(direct.active().messages[0].ts is Some(1781144351123))
   // The same stamp survives the buffer a reconnect drains commits through.
-  let (_, reconnecting) = update_dev(dispatch, BridgeReady, running_model())
+  let (_, reconnecting) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    running_model(),
+  )
   let (_, buffered) = update_dev(
     dispatch,
     stamped("desktop-test", 1, 1781144352000),
@@ -11398,7 +11571,7 @@ test "foreign Started reanchors a reconnected initial before retiring its owners
   ).bind_initial_submission_to_run("old-prompt", "r7")
   let (_, bridged) = update_dev(
     dispatch,
-    BridgeReady,
+    @interop.ChannelId::Local.test_bridge_ready(),
     running_model().replace_conversation(conv),
   )
   assert_true(bridged.active().input_ledger[0].state is Unconfirmed)
@@ -11589,7 +11762,11 @@ test "BridgeReady does not probe a record disproved by exact-zero EOF" {
     started,
   )
   let generation = recovered.transcript_request_generation
-  let (_, reconnected) = update_dev(dispatch, BridgeReady, recovered)
+  let (_, reconnected) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    recovered,
+  )
   assert_true(reconnected.active().sync is Synced)
   assert_eq(reconnected.transcript_request_generation, generation)
   inspect(reconnected.active().task, content="restore across reconnect")
@@ -12104,8 +12281,11 @@ test "a background device's pushes leave the focused mirrors alone" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
-      { ..empty_device_state(background), bridge: Connected },
+      {
+        ..empty_device_state(@interop.ChannelId::Local),
+        bridge: @interop.ChannelId::Local.test_connected(),
+      },
+      { ..empty_device_state(background), bridge: background.test_connected() },
     ],
   }
   // A settings.changed broadcast from the background device: the form (and
@@ -12297,7 +12477,10 @@ test "background settings replies cannot alter the focused host mirror" {
     ..home,
     devices: [
       home.devices[0],
-      { ..empty_device_state(Remote("d_b")), bridge: Connected },
+      {
+        ..empty_device_state(Remote("d_b")),
+        bridge: @interop.ChannelId::Remote("d_b").test_connected(),
+      },
     ],
     focused: Remote("d_b"),
     api_provider: Custom,
@@ -12951,7 +13134,7 @@ test "archive broadcast invalidates the active send target before list replies" 
           workspace_name: "archived",
         },
       ],
-      worktrees: [{ workspace, rows: [], generation: 1 }],
+      worktrees: [{ project: workspace, rows: [], generation: 1 }],
     }),
     workspace_default_mode: test_model().workspace_default_mode.with_mode(
       workspace, true,
@@ -12972,8 +13155,8 @@ test "archive broadcast invalidates the active send target before list replies" 
     is None,
   )
   inspect(invalidated.active().session_id, content="desktop-fresh")
-  assert_eq(invalidated.dev().active_workspace, Some(workspace))
-  assert_eq(invalidated.active().workspace, Some(workspace))
+  assert_eq(invalidated.dev().active_project, Some(workspace))
+  assert_eq(invalidated.active().workspace, Project(root=workspace))
   assert_true(invalidated.active().worktree_mode)
   inspect(invalidated.active().task, content="must not target archived session")
   inspect(invalidated.active().mentions.length(), content="1")
@@ -13112,8 +13295,11 @@ test "a background archive removes only its channel's same-id conversation" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
-      { ..empty_device_state(remote), bridge: Connected },
+      {
+        ..empty_device_state(@interop.ChannelId::Local),
+        bridge: @interop.ChannelId::Local.test_connected(),
+      },
+      { ..empty_device_state(remote), bridge: remote.test_connected() },
     ],
     active_session: "shared",
     conversations: [local_conv, remote_conv],
@@ -13173,7 +13359,11 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
   let model = test_model()
     .with_archive_override(@interop.ChannelId::Local, "desktop-old", true)
     .with_dev(dev => { ..dev, archived: [item] })
-  let (_, ready) = update_dev(dispatch, BridgeReady, model)
+  let (_, ready) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    model,
+  )
   inspect(ready.dev().connection_generation, content="1")
   inspect(ready.dev().archive_overrides.length(), content="0")
   let (_, live) = update_dev(
@@ -13651,7 +13841,10 @@ test "installed skills replies are scoped to their source device" {
     ..home,
     devices: [
       home.devices[0],
-      { ..empty_device_state(Remote("d_b")), bridge: Connected },
+      {
+        ..empty_device_state(Remote("d_b")),
+        bridge: @interop.ChannelId::Remote("d_b").test_connected(),
+      },
     ],
     focused: Remote("d_b"),
     installed_skills: [],
@@ -13860,11 +14053,16 @@ test "original-revision diff comment chip does not navigate into the working fil
 test "chip jumps relativize legacy absolute paths against the roots" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/work/project")
-  // Preferred root: the run-reported cwd.
-  let model = test_model().replace_conversation({
-    ..test_conversation(),
-    cwd: Some(workspace),
-  })
+  // A project conversation uses its project root.
+  let model = test_model()
+    .replace_conversation({
+      ..test_conversation(),
+      workspace: Project(root=workspace),
+    })
+    .with_dev(dev => {
+      ..dev,
+      worktrees: [{ project: workspace, rows: [], generation: 1 }],
+    })
   let model = {
     ..model,
     file_panel: {
@@ -13899,12 +14097,16 @@ test "chip jumps relativize legacy absolute paths against the roots" {
   // The fresh watch spends the next page-lifetime identity; resetting the
   // eager panel to zero would let an older generation 1 push collide here.
   assert_eq(next.file_panel.watch_generation, 12)
-  // Before the first run reports cwd, the attached workspace serves as root.
+  // The registry can still be loading; once loaded, the project root remains
+  // the conversation root when no worktree row binds this session.
   let model = test_model()
-    .replace_conversation({ ..test_conversation(), workspace: Some(workspace) })
+    .replace_conversation({
+      ..test_conversation(),
+      workspace: Project(root=workspace),
+    })
     .with_dev(dev => {
       ..dev,
-      worktrees: [{ workspace, rows: [], generation: 1 }],
+      worktrees: [{ project: workspace, rows: [], generation: 1 }],
     })
   let (_, next) = update(
     dispatch,
@@ -14958,7 +15160,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
   let stale_cwd = @interop.ChannelId::Local.test_resource("/work/stale")
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    cwd: Some(current_cwd),
+    workspace: Project(root=current_cwd),
     messages: [{ kind: User, content: "current", ts: None }],
     watermark: 5,
     sync: Reloading(
@@ -14986,7 +15188,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
   )
   inspect(stale.active().messages[0].content, content="current")
   inspect(stale.active().watermark, content="5")
-  assert_eq(stale.active().cwd, Some(current_cwd))
+  assert_eq(stale.active().workspace, Project(root=current_cwd))
   guard stale.active().sync is Reloading(generation=2, attempt=1, ..) else {
     fail("stale generation changed the active reload")
   }
@@ -15006,7 +15208,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
   )
   inspect(lower.active().messages[0].content, content="current")
   inspect(lower.active().watermark, content="5")
-  assert_eq(lower.active().cwd, Some(current_cwd))
+  assert_eq(lower.active().workspace, Project(root=current_cwd))
   guard lower.active().sync is Reloading(generation=2, attempt=2, buffered~, ..) else {
     fail("lower watermark did not retry the current generation")
   }
@@ -15548,15 +15750,14 @@ test "file rows and location jumps cannot open while checkout placement is missi
   let model = desktop_model()
     .replace_conversation({
       ..test_conversation(),
-      workspace: Some(workspace),
-      worktree: Some("wt"),
+      workspace: Worktree(project=workspace, name="wt"),
     })
     .with_dev(dev => {
       ..dev,
-      workspaces: [workspace],
+      projects: [workspace],
       worktrees: [
         {
-          workspace,
+          project: workspace,
           rows: [
             {
               name: "wt",
@@ -15866,11 +16067,11 @@ test "full-screen modals hide the native view and closing restores it" {
   assert_true(model.browser_pane.shown == Some(1))
   // The workspace picker's modal covers the pane; native views z-order
   // above HTML, so the view must hide first.
-  let (_, covered) = update(dispatch, PickWorkspace(Local), model)
-  assert_true(covered.workspace_picker is Some(_))
+  let (_, covered) = update(dispatch, PickProject(Local), model)
+  assert_true(covered.project_picker is Some(_))
   assert_true(covered.browser_pane.shown is None)
   // Closing the modal re-measures; the next measurement re-places the view.
-  let (_, closed) = update(dispatch, WorkspacePickerClose, covered)
+  let (_, closed) = update(dispatch, ProjectPickerClose, covered)
   let (_, restored) = update(dispatch, BrowserPaneMeasured(rect~), closed)
   assert_true(restored.browser_pane.shown == Some(1))
   // The topbar app launcher covers the pane too, and so does the composer's

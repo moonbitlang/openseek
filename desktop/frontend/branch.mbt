@@ -589,7 +589,7 @@ fn probe_pull_request(
       channel,
       conv.session_id,
       branch,
-      conv.cwd,
+      model.conversation_root(conv),
       generation~,
     ),
     model.replace_conversation({

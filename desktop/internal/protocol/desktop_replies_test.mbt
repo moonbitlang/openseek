@@ -15,6 +15,22 @@ test "unknown session items preserve their complete wire object" {
 }
 
 ///|
+test "agent connected requires a concrete scratch root" {
+  assert_true(
+    @protocol.Notification::from_wire("agent.connected", { "ready": true })
+    is None,
+  )
+  guard @protocol.Notification::from_wire("agent.connected", {
+      "ready": true,
+      "scratch_root": "/scratch",
+    })
+    is Some(AgentConnected(payload)) else {
+    fail("connected notification with a scratch root did not decode")
+  }
+  assert_eq(payload.scratch_root, "/scratch")
+}
+
+///|
 test "new payload shapes fall back to a raw session item" {
   let raw : Json = {
     "kind": "terminal",

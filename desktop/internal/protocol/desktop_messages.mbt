@@ -358,6 +358,10 @@ pub(all) struct BrowserVisiblePayload {
 ///|
 pub(all) struct ConnectedPayload {
   ready : Bool?
+  // Device-native scratch base encoded as a frontend resource path. A host
+  // cannot announce readiness without it: every Scratch conversation derives
+  // its concrete filesystem and language-server root from this value.
+  scratch_root : String
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
