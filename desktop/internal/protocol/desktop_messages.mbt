@@ -16,7 +16,9 @@ pub(all) struct StartPayload {
   submission_id : String?
   model : String?
   max_steps : Int?
-  session : String?
+  // Every desktop run belongs to a durable conversation. The engine rejects
+  // a blank id before it acquires that conversation's record lease.
+  session : String
   // A registered workspace directory; absent means a scratch workspace. A
   // session bound to one of the workspace's worktrees (`worktree.create`
   // binds at creation) runs in that checkout — the start itself never names
@@ -370,14 +372,16 @@ pub(all) struct StartedPayload {
   engine : String?
   model : String?
   max_steps : Int?
-  session : String?
+  session : String
   session_root : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
 pub(all) struct AgentEventPayload {
   run_id : String?
-  session : String?
+  // Engine events always belong to the durable session that owns the process;
+  // only `run_id` may be absent for between-turn lifecycle events.
+  session : String
   event : AgentStreamEvent
 } derive(Debug, Eq, FromJson, ToJson)
 

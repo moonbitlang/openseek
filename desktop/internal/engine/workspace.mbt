@@ -14,7 +14,7 @@ const WorkspaceDirName = "OpenSeek"
 /// from a fresh app launch — lands in the same directory without recording it
 /// anywhere. `None` when the id is unsafe as a path component, no home
 /// directory is known, or a bound checkout is missing. The run-config caller
-/// distinguishes that last state and rejects it before considering HOME.
+/// rejects every unavailable root instead of moving the run elsewhere.
 async fn session_workspace_dir(session : String) -> @pathx.Path? {
   if workspace_of_session(session) is Some(workspace) {
     // A session bound to one of the workspace's worktrees works in that

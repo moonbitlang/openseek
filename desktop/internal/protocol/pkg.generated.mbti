@@ -33,7 +33,7 @@ pub impl @json.FromJson for AgentErrorPayload
 
 pub(all) struct AgentEventPayload {
   run_id : String?
-  session : String?
+  session : String
   event : AgentStreamEvent
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
@@ -709,7 +709,7 @@ pub(all) struct StartPayload {
   submission_id : String?
   model : String?
   max_steps : Int?
-  session : String?
+  session : String
   workspace : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
@@ -725,7 +725,7 @@ pub(all) struct StartedPayload {
   engine : String?
   model : String?
   max_steps : Int?
-  session : String?
+  session : String
   session_root : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 

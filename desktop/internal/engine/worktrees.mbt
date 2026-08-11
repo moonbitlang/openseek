@@ -1093,7 +1093,7 @@ async test "a bound session routes every start through its checkout" {
     submission_id: None,
     model: None,
     max_steps: None,
-    session: Some("s-bind"),
+    session: "s-bind",
     workspace: Some(ws.to_string()),
   })
   assert_eq(
@@ -1112,7 +1112,7 @@ async test "a bound session routes every start through its checkout" {
     submission_id: None,
     model: None,
     max_steps: None,
-    session: Some("s-bind"),
+    session: "s-bind",
     workspace: None,
   })
   assert_eq(
@@ -1188,7 +1188,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
       submission_id: None,
       model: None,
       max_steps: None,
-      session: Some("s-wt-run"),
+      session: "s-wt-run",
       workspace: Some(ws.to_string()),
     })
     assert_eq(reply.status, "accepted")
@@ -1399,7 +1399,7 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
         submission_id: None,
         model: None,
         max_steps: None,
-        session: Some("s-vanish"),
+        session: "s-vanish",
         workspace: Some(repo.to_string()),
       }),
     )
@@ -1417,7 +1417,7 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
         submission_id: None,
         model: None,
         max_steps: None,
-        session: Some("s-vanish"),
+        session: "s-vanish",
         workspace: None,
       }),
     )

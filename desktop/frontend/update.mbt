@@ -8076,7 +8076,7 @@ test "started decoder preserves optional placement and submission id" {
       engine: None,
       model: Some("deepseek-v4-pro"),
       max_steps: Some(1000),
-      session: Some("desktop-test"),
+      session: "desktop-test",
       session_root: Some("/work/core/.openseek"),
     })
     is Some(Started(session_root~, submission_id~, ..)) else {
@@ -8096,7 +8096,7 @@ test "host path decoders reject relative placement and diagnostic paths" {
     engine: None,
     model: Some("deepseek-v4-pro"),
     max_steps: Some(1000),
-    session: Some("desktop-test"),
+    session: "desktop-test",
     session_root: Some("relative/session-root"),
   }
   assert_true(started_msg(@interop.ChannelId::Local, payload) is None)

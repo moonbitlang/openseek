@@ -75,10 +75,8 @@ larger than 1 MiB is closed with WebSocket code 1009; operation payloads carry
 prompts, paths, and settings, never transcript snapshots or file contents.
 
 Remote delivery trims high-volume transcript objects whose canonical form is
-delivered by `session.event`. This is the protocol baseline and applies only to
-named durable sessions. Session-less runs retain the complete legacy stream
-because they have no `session.event` source. For a durable run, the pushed
-`agent.started` carries lifecycle identity only;
+delivered by `session.event`. Every Desktop API run names a durable session, so
+the pushed `agent.started` carries lifecycle identity only;
 `reasoning_message` and `assistant_message` remain as stream-settlement signals
 with `content: ""`; `tool_result`, `auto_compaction_finished`, `agent_finished`,
 and `context_yield` are omitted. The separate `agent.finished` lifecycle
@@ -256,11 +254,11 @@ echoes.
 
 | method | params | result |
 |---|---|---|
-| `agent.start` | `{task, submission_id?, model?, max_steps?, session?, workspace?}` — no credentials or store path: the host resolves settings and durable placement; `workspace` is honored only when registered. A session bound to one of the workspace's worktrees (`worktree.create` binds at creation) runs in that checkout — the start never names or mutates worktrees | `{run_id, status, …}` — `accepted` after the complete prompt command is written; a post-`started` write failure returns `failed`, while pre-`started` failures use the error response |
+| `agent.start` | `{task, session, submission_id?, model?, max_steps?, workspace?}` — `session` is a required non-blank durable conversation id. No credentials or store path are accepted: the host resolves settings and durable placement; `workspace` is honored only when registered. A session bound to one of the workspace's worktrees (`worktree.create` binds at creation) runs in that checkout — the start never names or mutates worktrees | `{run_id, status, …}` — `accepted` after the complete prompt command is written; a post-`started` write failure returns `failed`, while pre-`started` failures use the error response |
 | `agent.cancel` | `{run_id?}` (absent = the latest run) | cancel outcome |
 | `agent.steer` | `{text, run_id?, submission_id?}` | steer outcome |
 | `agent.compact` | `{session, model?, max_steps?, workspace?}` — `agent.start` minus `task`: a conversation resumed after a restart has no live process, and compacting spawns one with these settings | compaction outcome |
-| `agent.goal` | `{session, text?, auto?, model?, max_steps?, workspace?}` — sets the session's standing goal to `text`, or clears it when `text` is absent; the engine settings match `agent.compact`'s, and a blank `session` is refused rather than falling through to the session-less slot. `auto` arms the engine's autonomous continuation and is **currently rejected**: serve announces the turns it starts with `goal_continue`, which this host does not yet fold into a run's lifecycle, so an autonomous turn would leave the engine looking idle to `agent.start` | `{delivered}` — delivery, not durability: the command reached a live engine's stdin. The goal itself is confirmed by the `[goal]` / `[goal cleared]` runtime-notice arriving as a `session.event` commit, which is also what clients should render from; the engine's `goal_updated` stream event duplicates it |
+| `agent.goal` | `{session, text?, auto?, model?, max_steps?, workspace?}` — sets the session's standing goal to `text`, or clears it when `text` is absent; the engine settings match `agent.compact`'s, and a blank `session` is refused before engine lookup. `auto` arms the engine's autonomous continuation and is **currently rejected**: serve announces the turns it starts with `goal_continue`, which this host does not yet fold into a run's lifecycle, so an autonomous turn would leave the engine looking idle to `agent.start` | `{delivered}` — delivery, not durability: the command reached a live engine's stdin. The goal itself is confirmed by the `[goal]` / `[goal cleared]` runtime-notice arriving as a `session.event` commit, which is also what clients should render from; the engine's `goal_updated` stream event duplicates it |
 | `agent.runs` | `{known?: [{session, run_id?, submission_id?}]}` — each selector must carry a run or submission id; `{}` remains valid | `{runs: […], settled: […]}` — every in-flight run's `agent.started` params plus selector-matched `{run_id, session, submission_id?, status, exit_code?, durable_sequence?}` lifecycle settlements. Normal Terminal-backed statuses are immediately replayable; abnormal statuses appear only with an exact durable sequence. Active and settled state are captured atomically |
 
 Notifications:

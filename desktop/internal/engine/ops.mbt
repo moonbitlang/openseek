@@ -23,9 +23,13 @@ pub async fn start_run(
   // before run_config probes live/workspace stores. Otherwise an unarchive
   // can move the record between that probe and the archived check, leaving a
   // stale global session_root that forks the conversation.
-  let key = payload.session
-    .map(session => session.trim().to_owned())
-    .unwrap_or("")
+  let key = payload.session.trim().to_owned()
+  // The record lease is acquired before `run_config`, so reject a blank key
+  // here as well as at that standalone config boundary. There is no shared
+  // empty-session engine slot in the desktop host.
+  guard !key.is_empty() else {
+    raise EngineError("session id must not be empty")
+  }
   let record_guard = manager.begin_record_op(key)
   defer manager.end_record_op(key, record_guard)
   let config = run_config(manager, payload)
@@ -377,10 +381,8 @@ pub async fn goal_run(
   defer (if placement_locked { manager.workspace_lifecycle_lock.release() })
   let session = payload.session.trim().to_owned()
   // Checked before the slot lookup, not inside the spawn path: an engine
-  // already accepting on this key skips `goal_config` and its guard, and the
-  // blank key is the session-less slot a session-less `agent.start` owns —
-  // so a malformed request would steer that scratch conversation instead of
-  // being refused.
+  // already accepting on this key skips `goal_config` and its guard. Reject
+  // malformed requests at the public operation boundary as well.
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
   }
@@ -905,7 +907,7 @@ async test "start echoes the client submission id in Started" {
   )
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nwhile IFS= read -r line; do :; done\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nwhile IFS= read -r line; do :; done\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
@@ -920,6 +922,9 @@ async test "start echoes the client submission id in Started" {
     }),
   )
   let emitted : Array[EngineEvent] = []
+  // Starts are durable now, so each test owns a fresh conversation record and
+  // scratch directory instead of sharing a fixed id across test processes.
+  let session = "s-" + mint_run_id()
   let sink = EventSink(fn(event) { emitted.push(event) })
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
@@ -934,7 +939,7 @@ async test "start echoes the client submission id in Started" {
         submission_id: Some("submission-start"),
         model: None,
         max_steps: None,
-        session: None,
+        session,
         workspace: None,
       }),
     )
@@ -968,7 +973,7 @@ async test "setup failure retires the writer before an immediate next start" {
   )
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  IFS= read -r line || exit 0\n  printf '%s\\n' '{\"event\":\"agent_setup_failed\",\"error\":\"boom\"}'\n  sleep 1\n  printf '%s\\n' '{\"event\":\"turn_failed\",\"error\":\"append failed\"}'\n  printf '' > '\{old_done}'\n  exit 0\nfi\nif [ ! -f '\{old_done}' ]; then printf '' > '\{overlapped}'; fi\nwhile IFS= read -r line; do\n  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  IFS= read -r line || exit 0\n  printf '%s\\n' '{\"event\":\"agent_setup_failed\",\"error\":\"boom\"}'\n  sleep 1\n  printf '%s\\n' '{\"event\":\"turn_failed\",\"error\":\"append failed\"}'\n  printf '' > '\{old_done}'\n  exit 0\nfi\nif [ ! -f '\{old_done}' ]; then printf '' > '\{overlapped}'; fi\nwhile IFS= read -r line; do\n  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
@@ -983,6 +988,7 @@ async test "setup failure retires the writer before an immediate next start" {
     }),
   )
   let emitted : Array[EngineEvent] = []
+  let session = "s-" + mint_run_id()
   let sink = EventSink(fn(event) { emitted.push(event) })
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
@@ -996,7 +1002,7 @@ async test "setup failure retires the writer before an immediate next start" {
       submission_id: None,
       model: None,
       max_steps: None,
-      session: None,
+      session,
       workspace: None,
     })
     assert_true(
@@ -1007,6 +1013,11 @@ async test "setup failure retires the writer before an immediate next start" {
       })
       is Some(_),
     )
+    guard manager.serving().get(session) is Some(slot) &&
+      slot.engine is Some(live) else {
+      fail("missing first engine after setup failure")
+    }
+    assert_false(live.accepts_commands)
     let cancelled = cancel_run(manager, { run_id: Some(first.run_id) })
     assert_false(cancelled.cancelled)
     let second = start_run(sink, manager, {
@@ -1014,7 +1025,7 @@ async test "setup failure retires the writer before an immediate next start" {
       submission_id: None,
       model: None,
       max_steps: None,
-      session: None,
+      session,
       workspace: None,
     })
     assert_eq(second.status, "accepted")
@@ -1058,7 +1069,7 @@ async test "cancelling a backpressured prompt retires its partial writer" {
   // suspends inside WriteToProcess after Started is already public.
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nsleep 30\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nsleep 30\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
@@ -1073,6 +1084,7 @@ async test "cancelling a backpressured prompt retires its partial writer" {
     }),
   )
   let emitted : Array[EngineEvent] = []
+  let session = "s-" + mint_run_id()
   let started : Ref[String?] = Ref(None)
   let sink = EventSink(fn(event) {
     if event is Started(payload) {
@@ -1094,7 +1106,7 @@ async test "cancelling a backpressured prompt retires its partial writer" {
           submission_id: None,
           model: None,
           max_steps: None,
-          session: None,
+          session,
           workspace: None,
         }),
       )
@@ -1202,7 +1214,7 @@ async test "named session retries after its first prompt creates no record" {
           submission_id: None,
           model: None,
           max_steps: None,
-          session: Some(session),
+          session,
           workspace: None,
         }),
       )
@@ -1239,7 +1251,7 @@ async test "named session retries after its first prompt creates no record" {
       submission_id: None,
       model: None,
       max_steps: None,
-      session: Some(session),
+      session,
       workspace: None,
     })
     assert_eq(second.status, "accepted")
@@ -1416,7 +1428,7 @@ async test "workspace detach refuses a running conversation without hiding it" {
       submission_id: None,
       model: None,
       max_steps: None,
-      session: Some("s-detach-running"),
+      session: "s-detach-running",
       workspace: Some(workspace.to_string()),
     })
     assert_eq(reply.status, "accepted")
@@ -1502,7 +1514,7 @@ async test "workspace detach drains an idle writer and its follower first" {
       submission_id: None,
       model: None,
       max_steps: None,
-      session: Some("s-detach-idle"),
+      session: "s-detach-idle",
       workspace: Some(workspace.to_string()),
     })
     assert_true(
@@ -1571,82 +1583,4 @@ async test "a goal request is refused before it can reach the wrong engine" {
       workspace: None,
     }).contains("not supported yet"),
   )
-}
-
-///|
-/// The blank session only matters when an engine is already accepting on it:
-/// that is the one path where `goal_run` skips `goal_config`, whose guard
-/// would otherwise have caught it. So this stands up the session-less slot
-/// for real — a session-less start — and then asks it to take a goal.
-#cfg(not(platform="windows"))
-async test "a blank goal session cannot steer the session-less engine" {
-  let dir = @fs.tmpdir(prefix="openseek-goal-blank-session-")
-  let root : @pathx.Path = Path(dir)
-  let engine = root.join("bin/engine.sh")
-  let seed = root.join("bin/toolchains/moonbit/macos-arm64")
-  let runtime = root.join("runtime")
-  prepare_fake_moonbit_seed(seed, version="0.10.0-test")
-  prepare_fake_bundled_moonbit_home(
-    runtime.join("toolchains/moonbit/macos-arm64"),
-    version="0.10.0-test",
-  )
-  @fs.write_file(
-    engine.to_string(),
-    "#!/bin/sh\nwhile IFS= read -r line; do :; done\n",
-    create_mode=CreateOrTruncate,
-  )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
-  let manager = actor.manager()
-  ignore(
-    update_settings(manager, {
-      provider: Some("custom"),
-      custom_api_url: Some("https://example.invalid/chat/completions"),
-      deepseek_api_key: None,
-      custom_api_key: None,
-    }),
-  )
-  let sink = EventSink(fn(_) { () })
-  @async.with_task_group(group => {
-    group.spawn_bg(no_wait=true, allow_failure=true, () => {
-      actor.run(sink, fn(_) { () })
-    })
-    while manager.pump is Stopped {
-      @async.sleep(1)
-    }
-    // A start with no session owns the slot keyed by "".
-    ignore(
-      start_run(sink, manager, {
-        task: "hello",
-        submission_id: None,
-        model: None,
-        max_steps: None,
-        session: None,
-        workspace: None,
-      }),
-    )
-    assert_true(manager.serving().get("") is Some(_))
-    for blank in ["", "   "] {
-      let detail = try {
-        ignore(
-          goal_run(manager, {
-            session: blank,
-            text: Some("ship it"),
-            auto: None,
-            model: None,
-            max_steps: None,
-            workspace: None,
-          }),
-        )
-        "no error"
-      } catch {
-        EngineError(detail) => detail
-        error if @async.is_being_cancelled() => raise error
-        error => "\{error}"
-      }
-      assert_true(detail.contains("session id must not be empty"))
-    }
-    group.return_immediately(())
-  })
-  @fs.rmdir(dir, recursive=true)
 }

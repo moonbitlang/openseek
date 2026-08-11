@@ -24,7 +24,7 @@ priv struct RunConfig {
   max_steps : Int
   engine : String
   cwd : @pathx.Path?
-  session : String?
+  session : String
   session_root : @pathx.Absolute?
 }
 
@@ -72,12 +72,16 @@ async fn run_config(
 ) -> RunConfig {
   let task = payload.task.trim().to_owned()
   guard !task.is_empty() else { raise EngineError("task must not be empty") }
+  let session = payload.session.trim().to_owned()
+  guard !session.is_empty() else {
+    raise EngineError("session id must not be empty")
+  }
   serve_config(
     task,
     manager,
     model?=payload.model,
     max_steps?=payload.max_steps,
-    session?=payload.session.map(session => session.trim().to_owned()),
+    session~,
     workspace?=payload.workspace,
   )
 }
@@ -143,7 +147,7 @@ async fn serve_config(
   manager : EngineManager,
   model? : String,
   max_steps? : Int,
-  session? : String,
+  session~ : String,
   workspace? : String,
 ) -> RunConfig {
   let engine = manager.engine
@@ -183,55 +187,26 @@ async fn serve_config(
       // hint on every turn, not only the binding one). A binding whose
       // checkout vanished refuses here rather than moving the agent into the
       // main tree behind the user's back.
-      match session {
-        Some(session) => Some(session_run_dir(dir, session).to_path())
-        None => Some(dir.to_path())
-      }
+      Some(session_run_dir(dir, session).to_path())
+      // A resumed project conversation recovers its registered project from
+      // the durable record. Use the throwing resolver here so a retained
+      // binding whose checkout vanished names that worktree instead of being
+      // flattened into an unspecified missing cwd.
+    } else if workspace_of_session(session) is Some(dir) {
+      Some(session_run_dir(dir, session).to_path())
     } else {
-      resolved_run_cwd(session)
+      session_workspace_dir(session)
     },
     session,
     session_root: if workspace is Some(dir) {
       Some(workspace_session_root(dir))
-    } else if session is Some(session) {
+    } else {
       // A hint-less client resuming an existing workspace conversation must
       // keep using that workspace's store. Only genuinely new sessions fall
       // back to the global root; otherwise one id forks into two histories.
       session_store_root(session)
-    } else {
-      None
     },
   }
-}
-
-///|
-/// Engine working directory for a run. A named conversation gets its own
-/// workspace directory derived from its durable session id (created on demand
-/// by `start_run`), so the agent's files land somewhere the user can find and
-/// resuming the session returns to them. A hint-less workspace resume first
-/// recovers that workspace from the durable record, which also lets a retained
-/// missing-worktree binding refuse the run instead of falling through to HOME.
-/// Only a genuinely scratch/session-less run falls back to the user's home
-/// directory: inheriting the host's own cwd would hand the agent whatever
-/// directory the app happened to be launched from (`/` under Finder), which is
-/// never a sensible place to work in.
-async fn resolved_run_cwd(session : String?) -> @pathx.Path? {
-  if session is Some(session) {
-    if workspace_of_session(session) is Some(workspace) {
-      return Some(session_run_dir(workspace, session).to_path())
-    }
-    if session_workspace_dir(session) is Some(dir) {
-      return Some(dir)
-    }
-  }
-  @home.dir()
-}
-
-///|
-/// The manager's map key for a run: its durable session id, or the one shared
-/// slot for session-less runs (the desktop client always names a session).
-fn session_key(config : RunConfig) -> String {
-  config.session.unwrap_or("")
 }
 
 ///|
@@ -246,7 +221,7 @@ fn engine_fingerprint(config : RunConfig) -> String {
     config.model,
     config.max_steps.to_string(),
     config.cwd.map(cwd => cwd.to_string()).unwrap_or(""),
-    config.session.unwrap_or(""),
+    config.session,
     config.session_root.map(root => root.to_string()).unwrap_or(""),
   ].join("\u{0}")
 }
@@ -261,7 +236,7 @@ test "a different endpoint cannot reuse a live engine process" {
     max_steps: 1000,
     engine: "openseek",
     cwd: None,
-    session: None,
+    session: "s-fingerprint",
     session_root: None,
   }
   let custom = {
@@ -328,11 +303,36 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
     submission_id: None,
     model: None,
     max_steps: None,
-    session: None,
+    session: "s-default",
     workspace: None,
   })
   assert_true(config.api_url is Some(OpenseekProxyUrl))
   assert_eq(config.api_key, PlaceholderApiKey)
+}
+
+///|
+async test "run config rejects a blank session" {
+  let manager = new_engine_manager("openseek")
+  for session in ["", "   "] {
+    let detail = try {
+      ignore(
+        run_config(manager, {
+          task: "hello",
+          submission_id: None,
+          model: None,
+          max_steps: None,
+          session,
+          workspace: None,
+        }),
+      )
+      "no error"
+    } catch {
+      EngineError(detail) => detail
+      error if @async.is_being_cancelled() => raise error
+      error => "\{error}"
+    }
+    assert_true(detail.contains("session id must not be empty"))
+  }
 }
 
 ///|
@@ -365,7 +365,7 @@ async test "host chooses durable placement from workspace state" {
     submission_id: None,
     model: None,
     max_steps: None,
-    session: Some("s-workspace"),
+    session: "s-workspace",
     workspace: None,
   })
   assert_eq(
@@ -378,7 +378,7 @@ async test "host chooses durable placement from workspace state" {
     submission_id: None,
     model: None,
     max_steps: None,
-    session: Some("s-global"),
+    session: "s-global",
     workspace: None,
   })
   assert_eq(fresh.session_root.map(root => root.to_string()), Some(global_root))
@@ -387,7 +387,7 @@ async test "host chooses durable placement from workspace state" {
     submission_id: None,
     model: None,
     max_steps: None,
-    session: Some("s-attached"),
+    session: "s-attached",
     workspace: Some(workspace_resource),
   })
   assert_eq(

@@ -490,19 +490,19 @@ fn EngineManager::kick_follower(self : EngineManager, session : String) -> Unit 
 /// Make sure a follower is watching `config.session` before its engine can
 /// write, and only return once its baseline scan is done. Runs inside the
 /// pump's spawn path, so the follower task lives in the same task group as
-/// the engines. A session-less config gets no follower — there is no durable
-/// record to follow. The returned identity is present only when this call
-/// installed a new follower; its caller owns startup rollback until the
-/// engine reader and consumer have both been scheduled.
+/// the engines. The returned identity is present only when this call installed
+/// a new follower; its caller owns startup rollback until the engine reader
+/// and consumer have both been scheduled. A session root can still be absent
+/// only when the durable store cannot be resolved; in that case there is no
+/// record for a follower to scan.
 async fn[G] ensure_follower(
   sink~ : EventSink,
   group~ : @async.TaskGroup[G],
   manager~ : EngineManager,
   config~ : RunConfig,
 ) -> SessionFollower? {
-  guard config.session is Some(session) && config.session_root is Some(root) else {
-    return None
-  }
+  guard config.session_root is Some(root) else { return None }
+  let session = config.session
   // A predecessor draining its final scan removes itself from the map when
   // done; wait for that rather than racing it with a second broadcaster for
   // the same session (per-session commit order is the design's backbone).
@@ -751,7 +751,7 @@ fn follower_test_config(
     max_steps: 1,
     engine,
     cwd: None,
-    session: Some(session),
+    session,
     session_root: Some(root),
   }
 }

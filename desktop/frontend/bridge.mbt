@@ -715,7 +715,8 @@ fn started_msg(
   // malformed and dropped. The durable `session_root` is genuinely optional,
   // and the host resolved it itself, so this is the decode boundary where its
   // absolute provenance is collapsed into the type.
-  guard payload.session is Some(session) &&
+  let session = payload.session
+  guard !session.is_empty() &&
     payload.model is Some(model) &&
     EngineModel::parse(model) is Some(model) &&
     payload.max_steps is Some(max_steps) else {
@@ -750,7 +751,8 @@ fn RecoveredRun::from_started(
   channel : @interop.ChannelId,
   payload : @protocol.StartedPayload,
 ) -> RecoveredRun? {
-  guard payload.session is Some(session) &&
+  let session = payload.session
+  guard !session.is_empty() &&
     payload.model is Some(model) &&
     EngineModel::parse(model) is Some(model) &&
     payload.max_steps is Some(max_steps) else {
@@ -817,13 +819,14 @@ fn session_event_msg(payload : @protocol.SessionCommitPayload) -> DeviceMsg? {
 
 ///|
 fn engine_msg(payload : @protocol.AgentEventPayload) -> DeviceMsg? {
+  guard !payload.session.is_empty() else { return None }
   guard @transcript.decode_engine_event(payload.event) is Some(event) else {
     return None
   }
   // `run_id` is absent for events the engine emits before any run of its
   // process lifetime (a compaction on a freshly spawned engine); those still
   // route by `session`.
-  Some(Engine(payload.run_id, event, session=payload.session))
+  Some(Engine(payload.run_id, event, session=Some(payload.session)))
 }
 
 ///|
@@ -1015,8 +1018,9 @@ async fn request_agent_start(
 }
 
 ///|
-/// The start payload. Optional fields are trimmed and omitted when blank —
-/// the host documents that a present field always carries non-blank text.
+/// The start payload. Optional fields are trimmed and omitted when blank.
+/// `session` is required: every frontend conversation is minted with a
+/// durable id before it can submit a prompt, and the host rejects a blank id.
 /// It carries no `cwd` (`workspace`, the conversation's attached project,
 /// is the only placement the host takes; everything else it derives from
 /// the session id) and no credentials — the endpoint is
@@ -1035,11 +1039,7 @@ fn start_payload(
     submission_id: Some(submission_id),
     model: Some(selected_model.wire()),
     max_steps: parsed_max_steps(max_steps),
-    session: if session.is_empty() {
-      None
-    } else {
-      Some(session)
-    },
+    session,
     workspace: workspace.map(value => value.path),
   }
 }

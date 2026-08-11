@@ -1212,14 +1212,14 @@ async fn[G] handle_spawn_command(
   }
   // Only this conversation's previous process is replaced; engines serving
   // other sessions keep running their own turns.
-  let slot = slot_for(sessions, session_key(config))
+  let slot = slot_for(sessions, config.session)
   if slot.engine is Some(old) {
     // Closing stdin requests EOF; do not overlap the old writer with its
     // replacement. Its consumer clears the slot before publishing `exited`.
     old.close_and_wait() catch {
       error if @async.is_being_cancelled() => raise error
       error => {
-        manager.prune_slot(session_key(config))
+        manager.prune_slot(config.session)
         return Some(EngineError("failed to stop old engine: \{error}"))
       }
     }
@@ -1231,10 +1231,10 @@ async fn[G] handle_spawn_command(
   // replacement must join that exact drain before initializing the successor,
   // even when both roots match. This makes one writer plus one follower
   // generation the indivisible lifecycle unit.
-  stop_follower(manager, session_key(config), writer_exited=true) catch {
+  stop_follower(manager, config.session, writer_exited=true) catch {
     error if @async.is_being_cancelled() => raise error
     error => {
-      manager.prune_slot(session_key(config))
+      manager.prune_slot(config.session)
       return Some(EngineError("failed to start engine: \{error}"))
     }
   }
@@ -1244,7 +1244,7 @@ async fn[G] handle_spawn_command(
   start_serve_engine(sink~, group~, manager~, slot~, config~) catch {
     error if @async.is_being_cancelled() => raise error
     error => {
-      manager.prune_slot(session_key(config))
+      manager.prune_slot(config.session)
       return Some(EngineError("failed to start engine: \{error}"))
     }
   }
@@ -1345,13 +1345,13 @@ async fn engine_process_env(
   } else {
     env.remove("OPENSEEK_API_URL")
   }
-  // A named session puts the engine in durable-session mode, so the
-  // conversation survives the process and is shared with the CLI/TUI.
-  if config.session is Some(session) {
-    env["OPENSEEK_SESSION"] = session
-    if config.session_root is Some(root) {
-      env["OPENSEEK_SESSION_ROOT"] = root.to_string()
-    }
+  // Desktop engines always run in durable-session mode, so the conversation
+  // survives the process and is shared with the CLI/TUI.
+  env["OPENSEEK_SESSION"] = config.session
+  if config.session_root is Some(root) {
+    env["OPENSEEK_SESSION_ROOT"] = root.to_string()
+  } else {
+    env.remove("OPENSEEK_SESSION_ROOT")
   }
   add_moonbit_path_for_native_engine(env, config, runtime_dir)
   env
@@ -1373,11 +1373,7 @@ async fn[G] start_serve_engine(
   // fails (including a wrong-root predecessor whose final drain failed),
   // there is no process to leak and no new writer can overlap the old root.
   let startup_follower = ensure_follower(sink~, group~, manager~, config~)
-  let engine_follower = if config.session is Some(session) {
-    manager.followers.get(session)
-  } else {
-    None
-  }
+  let engine_follower = manager.followers.get(config.session)
   let mut startup_engine : ServeEngine? = None
   let mut startup_committed = false
   // Everything through scheduling both stream tasks is one initialization
@@ -1416,7 +1412,7 @@ async fn[G] start_serve_engine(
       "event": "desktop_engine_spawn",
       "program": program,
       "cwd": config.cwd.map(cwd => cwd.to_string()).unwrap_or(""),
-      "session_key": session_key(config),
+      "session_key": config.session,
       "runtime_dir": manager.runtime_dir
       .map(dir => dir.to_string())
       .unwrap_or(""),
@@ -1437,7 +1433,7 @@ async fn[G] start_serve_engine(
       @xlog.warn() <?
         {
           "event": "desktop_engine_process_task_cancelled",
-          "session_key": session_key(config),
+          "session_key": config.session,
           "pid": pid,
         }
       graceful_cancel(pid)
@@ -1448,11 +1444,11 @@ async fn[G] start_serve_engine(
     {
       "event": "desktop_engine_spawned",
       "program": program,
-      "session_key": session_key(config),
+      "session_key": config.session,
       "pid": process.pid,
     }
   let engine : ServeEngine = {
-    session_key: session_key(config),
+    session_key: config.session,
     session_root: config.session_root,
     spec_key: engine_fingerprint(config),
     writer,
@@ -1586,7 +1582,7 @@ async fn ServeEngine::run(
                   sink,
                   StreamEvent({
                     run_id,
-                    session: Some(engine.session_key),
+                    session: engine.session_key,
                     event: { event, submission_id },
                   }),
                 )
@@ -1622,7 +1618,7 @@ async fn ServeEngine::run(
                 sink,
                 StreamEvent({
                   run_id,
-                  session: Some(engine.session_key),
+                  session: engine.session_key,
                   event: { event, submission_id },
                 }),
               )
@@ -1808,7 +1804,7 @@ async fn emit_compaction_failed(
     sink,
     StreamEvent({
       run_id: engine.latest_run,
-      session: Some(engine.session_key),
+      session: engine.session_key,
       event: {
         event: (CompactionFailed(error=reason) : @wire.Event),
         submission_id: None,
@@ -1994,7 +1990,7 @@ test "started payload omits a missing submission id" {
     engine: Some("openseek"),
     model: Some("model"),
     max_steps: Some(10),
-    session: None,
+    session: "s-started",
     session_root: None,
   }
   guard payload.to_json() is Object(fields) else {
@@ -2108,7 +2104,7 @@ async test "native engine env has one authoritative bundled moon path" {
     max_steps: 1,
     engine: engine.to_string(),
     cwd: None,
-    session: None,
+    session: "s-env",
     session_root: None,
   }
   let env = engine_process_env(config, Some(runtime)) catch {
@@ -2120,6 +2116,8 @@ async test "native engine env has one authoritative bundled moon path" {
     }
   }
   @fs.rmdir(root.to_string(), recursive=true)
+  assert_eq(env["OPENSEEK_SESSION"], "s-env")
+  assert_true(env.get("OPENSEEK_SESSION_ROOT") is None)
   let moon_bin = moon_home.join("bin").to_string()
   let expected_path = if ambient_path is Some(path) && !path.is_empty() {
     "\{moon_bin}\{@env.path_sep}\{path}"
@@ -2204,7 +2202,7 @@ async test "engine startup rolls back follower on pre-spawn failure" {
     max_steps: 1,
     engine: dir + "/missing/openseek",
     cwd: None,
-    session: Some("s-startup-failure"),
+    session: "s-startup-failure",
     session_root: Some(@pathx.Path(dir + "/root").resolve()),
   }
   @async.with_task_group(group => {
@@ -2319,7 +2317,7 @@ fn pump_test_config(session : String) -> RunConfig {
     max_steps: 1,
     engine: "unused",
     cwd: None,
-    session: Some(session),
+    session,
     session_root: Some(@pathx.Path("/tmp/openseek-pump-test").resolve()),
   }
 }
