@@ -118,6 +118,7 @@ fn lines_text(lines : @cmark.Seq[@cmark.Node[String]]) -> String {
 }
 
 ///|
+#warnings("-alert_xss_vulnerable")
 fn code_block(block : @cmark.CodeBlock) -> @html.Html {
   let language = match block.info_string {
     Some(info) =>
@@ -127,8 +128,22 @@ fn code_block(block : @cmark.CodeBlock) -> @html.Html {
       }
     None => ""
   }
+  let source = lines_text(block.code)
+  if language == "uml" || language == "plantuml" {
+    match @editor_viewer.render_uml_diagram_svg(source) {
+      Some(svg) =>
+        return @html.div(
+          class="chat-markdown-diagram moonbit-viewer-markdown-diagram",
+          attrs=@html.Attrs::build()
+            .data_set("diagram-language", "uml")
+            .inner_html(svg),
+          ([] : Array[@html.Html]),
+        )
+      None => ()
+    }
+  }
   let code_class = if language.is_empty() { "" } else { "language-" + language }
-  @html.pre([@html.code(class=code_class, lines_text(block.code))])
+  @html.pre([@html.code(class=code_class, source)])
 }
 
 ///|

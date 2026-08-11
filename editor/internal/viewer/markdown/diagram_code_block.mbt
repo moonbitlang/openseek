@@ -26,7 +26,9 @@ fn render_diagram_code_block(code_block : MarkdownCodeBlock) -> String? {
         wrap_diagram_svg("diago", svg)
       })
     Some("uml") | Some("plantuml") =>
-      render_uml_svg(code_block.code).map(svg => wrap_diagram_svg("uml", svg))
+      render_uml_diagram_svg(code_block.code).map(svg => {
+        wrap_diagram_svg("uml", svg)
+      })
     _ => None
   }
 }
@@ -45,7 +47,7 @@ fn render_diago_svg(source : String) -> String? {
 ///|
 /// Uses CSS-backed paint values so one synchronous UML SVG follows the host's
 /// current foreground and surface colors without a theme-time rerender.
-fn render_uml_svg(source : String) -> String? {
+pub fn render_uml_diagram_svg(source : String) -> String? {
   let foreground = "var(--vscode-editor-foreground, #1f2328)"
   let muted = "var(--vscode-descriptionForeground, #6e7781)"
   let surface = "var(--vscode-editorWidget-background, var(--vscode-editor-background, #ffffff))"

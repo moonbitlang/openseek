@@ -23,6 +23,8 @@ import {
 // Values
 pub fn overlay_widget(String, @dom.Element) -> @browser.OverlayWidget
 
+pub fn render_uml_diagram_svg(String) -> String?
+
 pub fn view_zone(Int, @dom.Element, after_column? : Int, after_column_affinity? : @model.PositionAffinity, show_in_hidden_areas? : Bool, ignore_hidden_area_source? : String, ordinal? : Int, suppress_mouse_down? : Bool, height_in_lines? : Double, height_in_px? : Double, min_width_in_px? : Double, margin_dom_node? : @dom.Element, on_dom_node_top? : (Double) -> Unit raise, on_computed_height? : (Double) -> Unit raise) -> @browser.ViewZone
 
 // Errors

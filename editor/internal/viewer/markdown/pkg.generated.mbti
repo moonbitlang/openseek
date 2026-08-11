@@ -21,6 +21,8 @@ pub fn render_markdown(String, language_id? : String, code_block_renderer? : (Ma
 
 pub fn render_tokenized_code_block(MarkdownCodeBlock, String?) -> String
 
+pub fn render_uml_diagram_svg(String) -> String?
+
 // Errors
 
 // Types and methods

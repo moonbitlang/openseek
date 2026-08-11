@@ -393,6 +393,36 @@
   background: none;
   font-size: inherit;
 }
+
+/* UML/PlantUML fences compile synchronously through the shared Viewer
+   renderer. Bind its VS Code-flavoured paint variables to the chat palette so
+   generated SVGs follow both explicit and system themes. */
+.msg-content.markdown .chat-markdown-diagram {
+  --vscode-editor-foreground: var(--color-text-primary);
+  --vscode-descriptionForeground: var(--color-text-secondary);
+  --vscode-editorWidget-background: var(--color-bg-surface);
+  --vscode-editor-background: var(--color-bg-surface);
+  --vscode-editorHoverWidget-background: var(--color-bg-subtle);
+
+  min-width: 0;
+  margin: 0.7em 0;
+  box-sizing: border-box;
+  max-width: 100%;
+  max-height: min(50vh, 480px);
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+}
+.msg-content.markdown .chat-markdown-diagram > svg {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: min(50vh, 456px);
+  margin-inline: auto;
+}
 /* Plain-text fallback when the markdown parser rejects an input. */
 .msg-content.markdown pre.markdown-fallback {
   margin: 0;

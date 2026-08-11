@@ -4,6 +4,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/js",
   "moonbitlang/editor/base/common",
+  "moonbitlang/editor/viewer" @editor_viewer,
 }
 
 import {
