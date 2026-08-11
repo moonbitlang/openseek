@@ -1,0 +1,10 @@
+import {
+  "openseek_desktop/frontend/pathx",
+  "openseek_desktop/internal/file_search_score",
+}
+
+supported_targets = "js"
+
+import {
+  "moonbitlang/core/debug",
+} for "test"

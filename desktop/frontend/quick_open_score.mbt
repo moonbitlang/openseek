@@ -1,49 +1,5 @@
-// Unified Quick Open ranking backed by moonbit-community/fuzzy_match. File
-// recall comes from the Host search session; MoonIDE owns symbol recall.
-
-///|
-const MaxQuickOpenFileRows : Int = 512
-
-///|
-/// Build one deduplicated file candidate list. The active file leads, then
-/// other open tabs in tab-strip order, then the host index. Callers omit
-/// deleted tabs before passing `open_files`.
-fn quick_open_file_candidates(
-  indexed_files : Array[@pathx.Relative],
-  open_files : Array[@pathx.Relative],
-  active : @pathx.Relative?,
-) -> Array[@pathx.Relative] {
-  let candidates : Array[@pathx.Relative] = []
-  if active is Some(path) && open_files.contains(path) {
-    candidates.push(path)
-  }
-  for path in open_files {
-    if !candidates.contains(path) {
-      candidates.push(path)
-    }
-  }
-  for path in indexed_files {
-    if !candidates.contains(path) {
-      candidates.push(path)
-    }
-  }
-  candidates
-}
-
-///|
-/// Blank file queries preserve the candidate order above. Non-blank queries
-/// match the full workspace-relative path, then sort by score, shorter path,
-/// and lexical path — the previous file-tree finder semantics.
-fn rank_file_quick_open_items(
-  query : String,
-  candidates : Array[@pathx.Relative],
-) -> Array[QuickOpenItem] {
-  @file_search_score.rank_paths(
-    query,
-    candidates.map(path => path.0),
-    MaxQuickOpenFileRows,
-  ).map(path => QuickOpenFile(@pathx.Relative(path)))
-}
+// Workspace-symbol ranking for Quick Open. File ranking lives in the shared
+// frontend/files package and uses the Host search cache's path policy.
 
 ///|
 /// `Query::score` returns zero for a non-match and a smaller positive score for
@@ -103,47 +59,6 @@ test "fuzzy-match ranking promotes an exact workspace symbol" {
   let ranked = rank_symbol_quick_open_items("Array::unsafe_get", backend_order)
   assert_eq(ranked[0].name, "Array::unsafe_get")
   assert_eq(ranked.length(), backend_order.length())
-}
-
-///|
-test "blank file Quick Open puts active and open files before the index" {
-  let candidates = quick_open_file_candidates(
-    [Relative("a.mbt"), Relative("src/open.mbt"), Relative("z.mbt")],
-    [Relative("src/open.mbt"), Relative("other.mbt")],
-    Some(Relative("other.mbt")),
-  )
-  assert_eq(candidates.map(path => path.0), [
-    "other.mbt", "src/open.mbt", "a.mbt", "z.mbt",
-  ])
-  let rows = rank_file_quick_open_items("", candidates)
-  assert_true(
-    rows
-    is [
-      QuickOpenFile(Relative("other.mbt")),
-      QuickOpenFile(Relative("src/open.mbt")),
-      ..,
-    ],
-  )
-}
-
-///|
-test "file Quick Open fuzzy-matches the full relative path" {
-  let rows = rank_file_quick_open_items("deep", [
-    Relative("list_bin.txt"),
-    Relative("deep/lib.mbt"),
-    Relative("unrelated.mbt"),
-  ])
-  assert_true(rows is [QuickOpenFile(Relative("deep/lib.mbt"))])
-}
-
-///|
-test "file Quick Open uses VS Code's 512-row cap" {
-  let candidates : Array[@pathx.Relative] = []
-  for index = 0; index < 600; index = index + 1 {
-    candidates.push(Relative("src/file-{index}.mbt"))
-  }
-  assert_eq(rank_file_quick_open_items("", candidates).length(), 512)
-  assert_eq(rank_file_quick_open_items("file", candidates).length(), 512)
 }
 
 ///|

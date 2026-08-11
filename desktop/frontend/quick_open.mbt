@@ -246,14 +246,16 @@ fn quick_open_with_file_candidates(
   files : Array[@pathx.Relative],
   phase : QuickOpenPhase,
 ) -> QuickOpen {
-  let candidates = quick_open_file_candidates(
+  let search = @files.Search(
     files,
     quick_open_open_files(model),
     @dock.active_file(model.dock),
   )
   {
     ..open,
-    items: rank_file_quick_open_items(open.query(), candidates),
+    items: search
+    .rank(open.query(), limit=512)
+    .map(file => QuickOpenFile(file.path)),
     selected: 0,
     phase,
   }
