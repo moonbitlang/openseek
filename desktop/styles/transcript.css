@@ -84,22 +84,25 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  /* Bounded by the real transcript height: a long conversation compresses
-     its ticks (flex-shrink against this cap) instead of overflowing, and a
-     terminal-squeezed sliver of a pane gets a vanishing rail rather than
-     ticks clipped out of reach. No overflow clipping: the preview popover
-     hangs outside the rail's own box. */
+  /* Bounded by the real transcript height; past the cap the rail scrolls
+     (the wheel, or the active-tick reveal) instead of compressing its
+     ticks into an unreadable bar. The scrollbar stays hidden — this is
+     18px of gutter. Scrolling means clipping, which is why the preview
+     popover renders as the nav's child, never inside this box. */
   max-height: calc(100cqh - 32px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.overview-rail::-webkit-scrollbar {
+  display: none;
 }
 .overview-tick {
-  position: relative;
   display: flex;
-  flex: 0 1 auto;
-  height: 8px;
-  /* No shrink floor: an extreme conversation compresses into a dense bar
-     instead of overflowing the rail's cap, where the scroller would clip
-     the later turns out of reach entirely. */
-  min-height: 0;
+  /* Fixed-height rows: a conversation past the rail's cap scrolls (see the
+     rail) rather than compressing, so every tick keeps a hittable size at
+     any length. */
+  flex: none;
+  height: 6px;
 }
 /* The button is the full row — a hover target the size of the dash alone
    is unhittable — and the dash it shows is drawn by its ::before. */
@@ -119,7 +122,7 @@
    state comes from opacity so one semantic text family carries both themes. */
 .overview-tick-button::before {
   content: "";
-  width: 9px;
+  width: 7px;
   height: 2px;
   max-height: 100%;
   border-radius: 1px;
@@ -132,22 +135,26 @@
 }
 .overview-tick:hover .overview-tick-button::before,
 .overview-tick.hovered .overview-tick-button::before {
-  width: 14px;
+  width: 12px;
   background: var(--color-text-secondary);
   opacity: 1;
 }
 .overview-tick.active .overview-tick-button::before {
-  width: 14px;
+  width: 12px;
   background: var(--color-accent);
   opacity: 1;
 }
 /* The hovered tick's preview: the prompt, its send time, and the answer it
    got. Preview only — pointer events pass through, so it can never trap the
-   pointer or cover the text beneath from a click. */
+   pointer or cover the text beneath from a click. The nav's child, hung
+   from the hovered tick's enter-time anchor (its inline CSS variable,
+   measured against the nav): the scrolling rail would clip a popover
+   nested in its ticks. 10px = the rail's -20px inset plus the old 30px
+   tick-to-preview gap. */
 .overview-preview {
   position: absolute;
-  left: 30px;
-  top: -10px;
+  left: 10px;
+  top: calc(var(--overview-preview-anchor, 0px) - 10px);
   width: min(360px, 44cqw);
   padding: 10px 12px;
   border: 1px solid var(--color-border);
@@ -158,10 +165,12 @@
   z-index: 7;
 }
 /* A tick measured (at hover time) to lack downward room opens its preview
-   upward instead of running past the scroller's clipping bottom edge. */
+   upward instead of running past the scroller's clipping bottom edge: the
+   anchor is then the tick's bottom edge, and the translate hangs the
+   popover above it. */
 .overview-preview.flip {
-  top: auto;
-  bottom: -10px;
+  top: calc(var(--overview-preview-anchor, 0px) + 10px);
+  transform: translateY(-100%);
 }
 .overview-preview-prompt {
   font-size: var(--font-size-md);

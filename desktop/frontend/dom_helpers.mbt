@@ -92,6 +92,38 @@ fn scroll_turn_into_view(
 }
 
 ///|
+/// Keep the overview rail's scrolled window on the active tick, on the
+/// render that moved the highlight: a rail taller than its cap scrolls, and
+/// the turn a stream append or a long jump activates can sit outside that
+/// window. Hand-computed nearest-edge writes against the rail alone — a
+/// scroll_into_view would walk the transcript scroller too and nudge the
+/// conversation the watcher just settled. Never fires from the user's own
+/// rail wheeling: that scrolls no transcript, so no ActiveChanged report.
+fn reveal_active_overview_tick() -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => {
+      guard @dom.document().query_selector(".overview-rail").to_option()
+        is Some(rail) else {
+        return
+      }
+      guard rail.query_selector(".overview-tick.active") is Some(tick) else {
+        return
+      }
+      let rail_rect = rail.get_bounding_client_rect()
+      let tick_rect = tick.get_bounding_client_rect()
+      let above = tick_rect.get_top() - rail_rect.get_top()
+      let below = tick_rect.get_bottom() - rail_rect.get_bottom()
+      if above < 0 {
+        rail.set_scroll_top(rail.get_scroll_top() + above)
+      } else if below > 0 {
+        rail.set_scroll_top(rail.get_scroll_top() + below)
+      }
+    },
+    kind=@cmd.after_render,
+  )
+}
+
+///|
 /// The turn the transcript viewport currently reads: the last user bubble
 /// whose top sits above the upper third of the scroller — the turn whose
 /// answer flows under the reading line. `None` above the first bubble.

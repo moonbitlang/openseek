@@ -17,37 +17,44 @@ pub fn rail(
 ) -> @html.Html {
   let ticks : Array[@html.Html] = []
   for entry in entries {
-    // `Some(flip)` while this tick owns the popover; the flip was measured
-    // when the pointer entered it.
-    let hover_flip = if state.hover is Some(hover) && hover.key == entry.key {
-      Some(hover.flip)
-    } else {
-      None
-    }
     let mut tick_class = "overview-tick"
     if state.active == Some(entry.key) {
       tick_class += " active"
     }
-    if hover_flip is Some(_) {
+    if state.hover is Some(hover) && hover.key == entry.key {
       tick_class += " hovered"
     }
-    let children : Array[@html.Html] = [
-      @html.button(
-        class="overview-tick-button",
-        type_="button",
-        on_click=emit(Clicked(entry.key)),
-        attrs=@html.Attrs::build()
-          .aria_label(entry.text)
-          .on_mouseenter(event => {
-            emit(Entered(entry.key, flip=preview_should_flip(event)))
-          }),
-        "",
-      ),
-    ]
-    if hover_flip is Some(flip) {
-      children.push(preview(entry, clock, flip~))
+    ticks.push(
+      @html.div(class=tick_class, [
+        @html.button(
+          class="overview-tick-button",
+          type_="button",
+          on_click=emit(Clicked(entry.key)),
+          attrs=@html.Attrs::build()
+            .aria_label(entry.text)
+            .on_mouseenter(event => {
+              let (flip, anchor) = preview_measure(event)
+              emit(Entered(entry.key, flip~, anchor~))
+            }),
+          "",
+        ),
+      ]),
+    )
+  }
+  // The popover is the nav's child, not the hovered tick's: the rail is a
+  // scroll container, and a scroll container clips everything inside it.
+  // The hover's enter-time anchor replaces the tick position it can no
+  // longer inherit.
+  let children : Array[@html.Html] = [@html.div(class="overview-rail", ticks)]
+  if state.hover is Some(hover) {
+    for entry in entries {
+      if entry.key == hover.key {
+        children.push(
+          preview(entry, clock, flip=hover.flip, anchor=hover.anchor),
+        )
+        break
+      }
     }
-    ticks.push(@html.div(class=tick_class, children))
   }
   @html.nav(
     class="transcript-overview",
@@ -55,7 +62,7 @@ pub fn rail(
     attrs=@html.Attrs::build()
       .aria_label("Conversation overview")
       .on_mouseleave(_ => emit(Left)),
-    [@html.div(class="overview-rail", ticks)],
+    children,
   )
 }
 
@@ -66,20 +73,32 @@ pub fn rail(
 const PREVIEW_RESERVE : Double = 170
 
 ///|
-/// Whether this tick's preview must open upward, measured where the answer
-/// lives — the tick's real position against its scroller at enter time. A
-/// turn count cannot answer this: available room depends on the viewport
-/// and the rail's position, not on how many turns there are. Flip only when
-/// a downward preview cannot fit AND up has more room than down, so a pane
-/// too short in both directions keeps the default.
-fn preview_should_flip(event : @dom.MouseEvent) -> Bool {
-  guard event.target().to_element() is Some(tick) else { return false }
-  guard tick.closest(".transcript") is Some(scroller) else { return false }
+/// Whether this tick's preview must open upward, and the tick edge it hangs
+/// from, measured where the answer lives — the tick's real position against
+/// its scroller at enter time. A turn count cannot answer the flip:
+/// available room depends on the viewport and the rail's position, not on
+/// how many turns there are. Flip only when a downward preview cannot fit
+/// AND up has more room than down, so a pane too short in both directions
+/// keeps the default. The anchor is the flip's hanging edge — top down,
+/// bottom up — relative to the nav the popover renders in.
+fn preview_measure(event : @dom.MouseEvent) -> (Bool, Double) {
+  guard event.target().to_element() is Some(tick) else { return (false, 0) }
+  guard tick.closest(".transcript") is Some(scroller) else { return (false, 0) }
+  guard tick.closest(".transcript-overview") is Some(nav) else {
+    return (false, 0)
+  }
   let tick_rect = tick.get_bounding_client_rect()
   let scroller_rect = scroller.get_bounding_client_rect()
+  let nav_top = nav.get_bounding_client_rect().get_top()
   let below = scroller_rect.get_bottom() - tick_rect.get_bottom()
   let above = tick_rect.get_top() - scroller_rect.get_top()
-  below < PREVIEW_RESERVE && above > below
+  let flip = below < PREVIEW_RESERVE && above > below
+  let anchor = if flip {
+    tick_rect.get_bottom() - nav_top
+  } else {
+    tick_rect.get_top() - nav_top
+  }
+  (flip, anchor)
 }
 
 ///|
@@ -87,6 +106,7 @@ fn preview(
   entry : Entry,
   clock : (Double) -> String,
   flip~ : Bool,
+  anchor~ : Double,
 ) -> @html.Html {
   let children : Array[@html.Html] = [
     @html.div(class="overview-preview-prompt", clamp_preview(entry.text)),
@@ -104,6 +124,7 @@ fn preview(
   }
   @html.div(
     class=if flip { "overview-preview flip" } else { "overview-preview" },
+    style=["--overview-preview-anchor: \{anchor}px"],
     attrs=@html.Attrs::build().role("tooltip"),
     children,
   )

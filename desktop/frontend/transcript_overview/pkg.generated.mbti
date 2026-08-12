@@ -28,10 +28,11 @@ pub(all) struct Entry {
 pub(all) struct Hover {
   key : TurnKey
   flip : Bool
+  anchor : Double
 } derive(Eq, @debug.Debug)
 
 pub(all) enum Msg {
-  Entered(TurnKey, flip~ : Bool)
+  Entered(TurnKey, flip~ : Bool, anchor~ : Double)
   Left
   Clicked(TurnKey)
   ActiveChanged(TurnKey?)
