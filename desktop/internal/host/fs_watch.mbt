@@ -94,15 +94,18 @@ fn WatchInterest::remember(
 /// observed, but its descendants are ignored unless that directory is also
 /// selected or leads to an opened file.
 fn WatchInterest::ignores(self : WatchInterest, path : @pathx.Relative) -> Bool {
+  // Open files and their ancestors are explicit selections. Keep them even
+  // under a conventionally ignored directory without admitting that
+  // directory's unrelated siblings.
+  if self.paths.contains(path) {
+    return false
+  }
   // A live workspace index needs structural events from directories that have
   // no indexed file yet and from paths beyond the bounded frontend result.
   // Reuse file search's directory policy so dependency/build churn remains
   // pruned even though the native watcher itself is recursive.
   if self.recursive {
     return path.is_ignored_file_search_path()
-  }
-  if self.paths.contains(path) {
-    return false
   }
   for directory in self.directories {
     if directory.is_root() {
@@ -296,14 +299,17 @@ test "watch interest retains selected files, listed children, and ancestors" {
 test "recursive watch interest covers non-indexed workspace directories" {
   let interest = WatchInterest({
     path: "/work/project",
-    files: [],
+    files: ["node_modules/pkg/index.js"],
     directories: [],
     recursive: Some(true),
     generation: "page-a:8",
   })
   assert_false(interest.ignores(Relative("empty/deep/new.mbt")))
   assert_false(interest.ignores(Relative("beyond-result-cap/new.mbt")))
-  assert_true(interest.ignores(Relative("node_modules")))
+  assert_false(interest.ignores(Relative("node_modules")))
+  assert_false(interest.ignores(Relative("node_modules/pkg")))
+  assert_false(interest.ignores(Relative("node_modules/pkg/index.js")))
+  assert_true(interest.ignores(Relative("node_modules/other")))
   assert_true(interest.ignores(Relative("_build")))
 }
 

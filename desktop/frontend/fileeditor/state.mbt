@@ -159,8 +159,10 @@ pub(all) struct WatchedPaths {
 pub enum FileIndex {
   // No consumer has requested this workspace root yet.
   IndexEmpty
-  // The first request is in flight.
-  IndexLoading
+  // The first request is in flight. A watcher event can arrive after the
+  // recursive watch starts but before that request settles; `refresh_again`
+  // preserves one follow-up scan across that race.
+  IndexLoading(refresh_again~ : Bool)
   // The first request failed. A later EnsureFileIndex retries it.
   IndexFailed
   // `truncated` means the Host stopped at its response cap. A ready snapshot

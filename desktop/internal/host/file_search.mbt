@@ -29,9 +29,8 @@ priv struct FileScanEntry {
 /// Quick Open skips dependency, cache, and checkout-management directories
 /// whose contents are noisy and expensive to index as user-authored files.
 fn @pathx.Relative::is_ignored_file_search_path(self : @pathx.Relative) -> Bool {
-  match [..self.0.split("/")] {
-    [
-      ..,
+  for segment in self.0.split("/") {
+    match segment {
       ".git"
       | ".claude"
       | ".codex"
@@ -43,10 +42,11 @@ fn @pathx.Relative::is_ignored_file_search_path(self : @pathx.Relative) -> Bool 
       | "node_modules"
       | ".mooncakes"
       | ".repos"
-      | ".worktrees",
-    ] => true
-    _ => false
+      | ".worktrees" => return true
+      _ => ()
+    }
   }
+  false
 }
 
 ///|

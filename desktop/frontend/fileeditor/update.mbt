@@ -1065,6 +1065,9 @@ fn moonbit_check_input(path : @pathx.Relative) -> Bool {
 /// latch one follow-up while that request is in flight.
 fn FileIndex::invalidate(self : FileIndex) -> (FileIndex, Bool) {
   match self {
+    IndexLoading(refresh_again=false) =>
+      (IndexLoading(refresh_again=true), false)
+    IndexLoading(refresh_again=true) => (self, false)
     IndexReady(files~, truncated~, refreshing=false, ..) =>
       (
         IndexReady(files~, truncated~, refreshing=true, refresh_again=false),
@@ -1088,10 +1091,15 @@ fn FileIndex::loaded(
   truncated : Bool,
 ) -> (FileIndex, Bool) {
   match self {
-    IndexLoading =>
+    IndexLoading(refresh_again~) =>
       (
-        IndexReady(files~, truncated~, refreshing=false, refresh_again=false),
-        false,
+        IndexReady(
+          files~,
+          truncated~,
+          refreshing=refresh_again,
+          refresh_again=false,
+        ),
+        refresh_again,
       )
     IndexReady(refreshing=true, refresh_again~, ..) =>
       (
@@ -1112,7 +1120,7 @@ fn FileIndex::loaded(
 /// background failure retains the previous snapshot and any coalesced retry.
 fn FileIndex::failed(self : FileIndex) -> (FileIndex, Bool) {
   match self {
-    IndexLoading => (IndexFailed, false)
+    IndexLoading(..) => (IndexFailed, false)
     IndexReady(files~, truncated~, refreshing=true, refresh_again~) =>
       (
         IndexReady(
@@ -1134,7 +1142,8 @@ fn FileIndex::failed(self : FileIndex) -> (FileIndex, Bool) {
 /// bounded result can still invalidate the cached path set.
 fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
   guard ctx.root is Some(root) else { return None }
-  let index_live = self.index is IndexLoading || self.index is IndexReady(..)
+  let index_live = self.index is IndexLoading(..) ||
+    self.index is IndexReady(..)
   if ctx.checkout is None ||
     ctx.checkout is Some(@interop.MissingWorktree(_)) ||
     (!ctx.panel_open && ctx.open_files.is_empty() && !index_live) ||
@@ -1998,7 +2007,7 @@ pub fn update(
       } else if state.index is IndexEmpty || state.index is IndexFailed {
         (
           list_files(dispatch, ctx.owner, ctx.request_epoch, root=ctx.root),
-          { ..state, index: IndexLoading },
+          { ..state, index: IndexLoading(refresh_again=false) },
         )
       } else {
         (@cmd.none, state)
@@ -2582,7 +2591,11 @@ pub fn update(
               relist.push(directory)
             }
           }
-          refresh_index = true
+          // Replacing an equivalent recursive watcher because the shallow
+          // explorer selection changed emits a baseline too. The live index
+          // already covers the same root, so only the initial scan needs to
+          // remember that the watcher became active concurrently.
+          refresh_index = state.index is IndexLoading(..)
         }
         if !stat_paths.is_empty() {
           cmds.push(
@@ -2624,11 +2637,11 @@ pub fn update(
             ),
           )
         }
-        // Only structural events can change the path set. Do not duplicate an
-        // initial load when the newly attached watcher emits its baseline. A
-        // ready snapshot stays usable during one refresh; later watcher bursts
-        // coalesce into one follow-up instead of repeatedly clearing the Host
-        // cache underneath an active scan.
+        // Structural events change the path set. The first watcher baseline is
+        // latched while the initial scan runs, closing the scan/watch install
+        // race; later replacement baselines do not rescan an equivalent
+        // recursive root. A ready snapshot stays usable during one refresh,
+        // and later structural bursts coalesce into one follow-up.
         let (index, start_refresh) = if refresh_index {
           state.index.invalidate()
         } else {
@@ -2932,7 +2945,7 @@ test "file index requests retry failures and fence stale replies" {
   let ctx = test_ctx()
   let state = owned_state()
   let (_, loading) = update(emit, EnsureFileIndex, state, ctx)
-  assert_true(loading.index is IndexLoading)
+  assert_true(loading.index is IndexLoading(refresh_again=false))
   let (_, duplicate) = update(emit, EnsureFileIndex, loading, ctx)
   assert_true(duplicate == loading)
   let (_, stale) = update(
@@ -2955,7 +2968,7 @@ test "file index requests retry failures and fence stale replies" {
   )
   assert_true(failed.index is IndexFailed)
   let (_, retrying) = update(emit, EnsureFileIndex, failed, ctx)
-  assert_true(retrying.index is IndexLoading)
+  assert_true(retrying.index is IndexLoading(refresh_again=false))
   let (_, ready) = update(
     emit,
     FilesIndexed(
@@ -2983,6 +2996,54 @@ test "file index requests retry failures and fence stale replies" {
     ctx,
   )
   assert_true(refresh_failed == ready)
+}
+
+///|
+test "watcher changes during the initial file index scan schedule one follow-up" {
+  let emit = test_emit()
+  let ctx = test_ctx()
+  let (_, loading) = update(emit, EnsureFileIndex, owned_state(), ctx)
+  let changed = FsChanged(
+    root=ctx.test_root(),
+    generation=ctx.watch_identity(loading.watch_generation),
+    changes=Some([Created(Relative("src/new.mbt"))]),
+  )
+  let (_, latched) = update(emit, changed, loading, ctx)
+  assert_true(latched.index is IndexLoading(refresh_again=true))
+  let (_, following_up) = update(
+    emit,
+    FilesIndexed(
+      owner=ctx.owner,
+      epoch=ctx.request_epoch,
+      files=[Relative("src/old.mbt")],
+      truncated=false,
+    ),
+    latched,
+    ctx,
+  )
+  assert_true(
+    following_up.index is IndexReady(refreshing=true, refresh_again=false, ..),
+  )
+  let (_, settled) = update(
+    emit,
+    FilesIndexed(
+      owner=ctx.owner,
+      epoch=ctx.request_epoch,
+      files=[Relative("src/old.mbt"), Relative("src/new.mbt")],
+      truncated=false,
+    ),
+    following_up,
+    ctx,
+  )
+  assert_true(
+    settled.index
+    is IndexReady(
+      files=[Relative("src/old.mbt"), Relative("src/new.mbt")],
+      refreshing=false,
+      refresh_again=false,
+      ..
+    ),
+  )
 }
 
 ///|
@@ -6836,6 +6897,12 @@ test "watcher baseline re-lists the root and expanded, listed directories" {
     ..owned_state(),
     children,
     expanded: [Relative("src"), Relative("never-listed")],
+    index: IndexReady(
+      files=[Relative("src/main.mbt")],
+      truncated=false,
+      refreshing=false,
+      refresh_again=false,
+    ),
   }
   let baseline = FsChanged(
     root=test_ctx().test_root(),
@@ -6848,6 +6915,11 @@ test "watcher baseline re-lists the root and expanded, listed directories" {
   assert_true(next.loading.contains(Relative("")))
   assert_true(next.loading.contains(Relative("src")))
   assert_false(next.loading.contains(Relative("never-listed")))
+  // Replacing the watcher after shallow explorer selection changes keeps the
+  // same recursive root coverage and must not start another full index scan.
+  assert_true(
+    next.index is IndexReady(refreshing=false, refresh_again=false, ..),
+  )
   // A second push while the lists are in flight stacks nothing.
   let (_, again) = update(emit, baseline, next, test_ctx())
   assert_eq(again.loading.length(), next.loading.length())

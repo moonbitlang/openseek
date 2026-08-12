@@ -125,7 +125,7 @@ pub(all) struct FileEntry {
 
 pub enum FileIndex {
   IndexEmpty
-  IndexLoading
+  IndexLoading(refresh_again~ : Bool)
   IndexFailed
   IndexReady(files~ : Array[@pathx.Relative], truncated~ : Bool, refreshing~ : Bool, refresh_again~ : Bool)
 } derive(Eq)
