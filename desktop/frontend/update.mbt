@@ -1087,25 +1087,31 @@ fn apply_engine_event(
       // concurrent sub-runs open entirely below the fold.
       (true, { ..conv, subruns, })
     }
-    // Closed: drop the lane and say what it cost, which is the one place
-    // those numbers are ever reported.
+    // Closed: always drop the lane. A captured sub-run already settles as the
+    // durable tool brief, so repeating its status here would leave two
+    // completion rows. Only an abnormal terminal status needs a local notice.
     //
-    // The cost goes in the retained OVERLAY, not in `messages`. Nothing
-    // durable records a sub-run, and the finish of the enclosing run starts
-    // a snapshot whose `adopt_snapshot` replaces `messages` wholesale with
-    // durable items — a bubble there would be erased seconds after it
-    // appeared, which is the whole report gone.
+    // The error goes in the retained OVERLAY, not in `messages`: the finish of
+    // the enclosing run starts a snapshot whose `adopt_snapshot` replaces
+    // `messages` wholesale, which would erase a non-durable error bubble.
     SubrunClosed(id~, status~, steps~, tokens~) => {
       let closed = conv.subruns.filter(lane => lane.id == id)
-      let kind = match closed {
-        [lane, ..] => lane.kind
-        [] => "subrun"
+      let conv = { ..conv, subruns: conv.subruns.filter(lane => lane.id != id) }
+      if status == "captured" {
+        (true, conv)
+      } else {
+        let kind = match closed {
+          [lane, ..] => lane.kind
+          [] => "subrun"
+        }
+        (
+          true,
+          conv.append_local_notice(
+            Assistant(is_danger=true),
+            "\{kind} \{id}: \{status} · \{steps} step(s) · \{compact_count(tokens)} tok",
+          ),
+        )
       }
-      let conv = { ..conv, subruns: conv.subruns.filter(lane => lane.id != id) }.append_local_notice(
-        Assistant(is_danger=status != "captured"),
-        "\{kind} \{id}: \{status} · \{steps} step(s) · \{compact_count(tokens)} tok",
-      )
-      (true, conv)
     }
     Usage(prompt_tokens~, completion_tokens~) =>
       (false, { ..conv, usage_tokens: prompt_tokens + completion_tokens })
@@ -5951,10 +5957,10 @@ test "a lane outlives neither its run nor a missing finish bracket" {
 }
 
 ///|
-/// The cost report is the only place a sub-run's steps and tokens are ever
-/// shown, and nothing durable records them — so it has to survive the
-/// snapshot the enclosing run's finish kicks off, which replaces `messages`.
-test "a sub-run's cost is reported in the retained overlay" {
+/// A captured sub-run already has a durable tool brief, so closing its live
+/// lane must not add a second completion row. An abnormal close has no
+/// successful tool brief to explain it and remains visible as a local notice.
+test "sub-run completion reports only abnormal terminal status" {
   let conv = { ..test_conversation(), run: Open(run_id="r1", stage=Opened) }
   let (_, opened) = apply_engine_event(
     conv,
@@ -5968,11 +5974,26 @@ test "a sub-run's cost is reported in the retained overlay" {
   )
   assert_true(grew)
   inspect(closed.visible_subruns().length(), content="0")
-  // In the overlay, not in `messages`.
+  // The successful tool brief is the only completion row.
   inspect(closed.messages.length(), content="0")
+  inspect(closed.overlay.length(), content="0")
+  let (_, reopened) = apply_engine_event(
+    closed,
+    SubrunOpened(id="sr-2", kind="review", label="check the change"),
+    Some("r1"),
+  )
+  let (failure_grew, failed) = apply_engine_event(
+    reopened,
+    SubrunClosed(id="sr-2", status="failed", steps=4, tokens=901),
+    Some("r1"),
+  )
+  assert_true(failure_grew)
+  inspect(failed.visible_subruns().length(), content="0")
+  // The failed tool has no successful brief, so its terminal state survives
+  // in the retained overlay.
   inspect(
-    closed.overlay.map(notice => notice.content).join("; "),
-    content="explore sr-1: captured · 37 step(s) · 12.4k tok",
+    failed.overlay.map(notice => notice.content).join("; "),
+    content="review sr-2: failed · 4 step(s) · 901 tok",
   )
 }
 
