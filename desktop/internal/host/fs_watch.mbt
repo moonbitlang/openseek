@@ -32,10 +32,13 @@ priv struct FsWatchActor {
 priv struct FsWatchTarget {
   root : @pathx.Absolute
   interest : WatchInterest
-  // The client's accepted identity for this watcher. Equivalent recursive
-  // selections advance it without replacing the watcher; every later push
-  // then follows the identity acknowledged to the frontend.
+  // Change-event identity for this root incarnation. Equivalent requests and
+  // same-root replacements retain it, so events already queued during a
+  // replacement remain valid without crossing a root or owner boundary.
   generation : Ref[String]
+  // Unlike same-root change events, failures belong to one concrete watcher.
+  // Equivalent requests advance this token without replacing the watcher.
+  failure_generation : Ref[String]
   // Cleared before reporting a watcher failure, so an equivalent request that
   // races with that report rebuilds instead of acknowledging a dead watcher.
   alive : Ref[Bool]
@@ -157,7 +160,10 @@ async fn FsWatchRequest::keeps_active_watcher(
       if target.alive.val &&
         root.absolute == target.root &&
         interest == target.interest {
-        target.generation.val = payload.generation
+        target.generation.val = payload.event_generation.unwrap_or(
+          payload.generation,
+        )
+        target.failure_generation.val = payload.generation
         reply.put(None)
         true
       } else {
@@ -220,7 +226,8 @@ async fn FsWatchRequest::apply(
       Some({
         root: root.absolute,
         interest: WatchInterest(payload),
-        generation: Ref(payload.generation),
+        generation: Ref(payload.event_generation.unwrap_or(payload.generation)),
+        failure_generation: Ref(payload.generation),
         alive: Ref(true),
       })
     }
@@ -306,7 +313,7 @@ async fn FsWatchActor::run(
             emit_failed({
               root: target.root.resource_path(),
               message,
-              generation: target.generation.val,
+              generation: target.failure_generation.val,
             })
           }
         }
@@ -338,7 +345,8 @@ test "watch interest retains selected files, listed children, and ancestors" {
     files: ["src/main.mbt", "node_modules/pkg/index.js"],
     directories: ["", "docs"],
     recursive: Some(false),
-    generation: "page-a:7",
+    generation: "page-a:failure-7",
+    event_generation: Some("page-a:7"),
   }
   let interest = WatchInterest(payload)
   // Root rows and one level under an expanded directory stay observable.
@@ -364,7 +372,8 @@ test "recursive watch interest covers non-indexed workspace directories" {
     files: ["node_modules/pkg/index.js"],
     directories: ["node_modules/vendor"],
     recursive: Some(true),
-    generation: "page-a:8",
+    generation: "page-a:failure-8",
+    event_generation: Some("page-a:8"),
   })
   assert_false(interest.ignores(Relative("empty/deep/new.mbt")))
   assert_false(interest.ignores(Relative("beyond-result-cap/new.mbt")))
@@ -387,14 +396,16 @@ test "recursive watch interest ignores shallow non-pruned selections" {
     files: ["src/main.mbt"],
     directories: ["", "src"],
     recursive: Some(true),
-    generation: "page-a:8",
+    generation: "page-a:failure-8",
+    event_generation: Some("page-a:8"),
   })
   let navigated = WatchInterest({
     path: "/work/project",
     files: ["docs/guide.md"],
     directories: ["", "docs"],
     recursive: Some(true),
-    generation: "page-a:9",
+    generation: "page-a:failure-9",
+    event_generation: Some("page-a:9"),
   })
   assert_eq(initial, navigated)
 }
@@ -426,20 +437,22 @@ async test "a failed watcher is rebuilt by an equivalent request" {
       files: [],
       directories: [],
       recursive: Some(true),
-      generation: "page-a:failed-1",
+      generation: "page-a:failed-instance-1",
+      event_generation: Some("page-a:failed-1"),
     })
     let first = @async.with_timeout(1000, () => failures.get())
-    assert_eq(first.generation, "page-a:failed-1")
+    assert_eq(first.generation, "page-a:failed-instance-1")
     @async.pause()
     actor.watch({
       path: file,
       files: [],
       directories: [],
       recursive: Some(true),
-      generation: "page-a:failed-2",
+      generation: "page-a:failed-instance-2",
+      event_generation: Some("page-a:failed-2"),
     })
     let second = @async.with_timeout(1000, () => failures.get())
-    assert_eq(second.generation, "page-a:failed-2")
+    assert_eq(second.generation, "page-a:failed-instance-2")
     group.return_immediately(())
   })
 }
@@ -453,7 +466,8 @@ async test "equivalent recursive watch requests retain the watcher and advance i
       files: ["src/main.mbt"],
       directories: ["", "src"],
       recursive: Some(true),
-      generation: "page-a:9",
+      generation: "page-a:failure-9",
+      event_generation: Some("page-a:9"),
     },
     reply~,
   )
@@ -469,12 +483,14 @@ async test "equivalent recursive watch requests retain the watcher and advance i
       files: ["docs/guide.md"],
       directories: ["", "docs"],
       recursive: Some(true),
-      generation: "page-a:10",
+      generation: "page-a:failure-10",
+      event_generation: Some("page-a:10"),
     },
     reply=next_reply,
   )
   assert_true(navigated.keeps_active_watcher(target))
   assert_eq(target.generation.val, "page-a:10")
+  assert_eq(target.failure_generation.val, "page-a:failure-10")
   assert_true(next_reply.get() is None)
 }
 
@@ -491,12 +507,14 @@ test "filesystem payloads carry absolute target paths" {
     "files": ["src/main.mbt"],
     "directories": ["", "src"],
     "recursive": true,
-    "generation": "page-a:7",
+    "generation": "page-a:failure-7",
+    "event_generation": "page-a:7",
   })
   assert_eq(selected.files, ["src/main.mbt"])
   assert_eq(selected.directories, ["", "src"])
   assert_eq(selected.recursive, Some(true))
-  assert_eq(selected.generation, "page-a:7")
+  assert_eq(selected.generation, "page-a:failure-7")
+  assert_eq(selected.event_generation, Some("page-a:7"))
   let legacy : WatchWorkspacePayload = @json.from_json({
     "path": "/work/project",
     "files": [],
@@ -504,6 +522,7 @@ test "filesystem payloads carry absolute target paths" {
     "generation": "page-a:6",
   })
   assert_true(legacy.recursive is None)
+  assert_true(legacy.event_generation is None)
 }
 
 ///|

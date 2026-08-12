@@ -1175,6 +1175,14 @@ fn Ctx::watch_identity(self : Ctx, generation : Int) -> String {
 }
 
 ///|
+/// Same-root watcher replacements retain this identity, so concrete events in
+/// the ordered request/ack interval remain valid. Placement epochs and the
+/// page namespace still fence events from another root or frontend lifetime.
+fn Ctx::watch_event_identity(self : Ctx, epoch : Int) -> String {
+  self.watch_namespace + ":event:" + epoch.to_string()
+}
+
+///|
 fn with_watch(
   dispatch : @cmd.Emit[Msg],
   state : State,
@@ -1186,21 +1194,13 @@ fn with_watch(
     (state, cmd)
   } else {
     let commands = [cmd]
-    // Selection-only changes within one conversation and root keep their
-    // identity. Events from either side of a Host reconfiguration still
-    // describe that same root, and retaining the identity prevents events in
-    // the request/ack interval from being dropped. Owner/root transitions and
-    // parking spend a fresh identity to fence genuinely stale pushes.
-    let same_owner_root = state.watching is Some(current) &&
-      want is Some(next) &&
-      current.owner == next.owner &&
-      current.root == next.root
-    let watch_generation = if same_owner_root {
-      state.watch_generation
-    } else {
-      state.watch_generation + 1
-    }
+    // Every desired configuration gets a distinct failure identity so an old
+    // watcher cannot report against its replacement. Change events use the
+    // placement epoch below: same-root events remain valid through the ordered
+    // replacement gap, while a root/owner transition changes that epoch.
+    let watch_generation = state.watch_generation + 1
     let watch_identity = ctx.watch_identity(watch_generation)
+    let event_identity = ctx.watch_event_identity(state.request_epoch)
     // A watcher is host-local. Moving across channels must explicitly retire
     // the old host; placing a new watch on another socket cannot replace it.
     if state.watching is Some(current) &&
@@ -1212,7 +1212,8 @@ fn with_watch(
         watch_workspace(
           dispatch,
           channel=current.owner.channel,
-          watch_identity,
+          failure_generation=watch_identity,
+          event_generation=event_identity,
           None,
         ),
       )
@@ -1222,7 +1223,8 @@ fn with_watch(
         watch_workspace(
           dispatch,
           channel=next.owner.channel,
-          watch_identity,
+          failure_generation=watch_identity,
+          event_generation=event_identity,
           Some(next),
         ),
       )
@@ -1555,7 +1557,8 @@ pub fn sync(
         watch_workspace(
           dispatch,
           channel=current.owner.channel,
-          reroot_watch_identity,
+          failure_generation=reroot_watch_identity,
+          event_generation=ctx.watch_event_identity(request_epoch),
           None,
         ),
       )
@@ -2551,7 +2554,7 @@ pub fn update(
       if state.owner is Some(owner) &&
         owner.channel == ctx.owner.channel &&
         ctx.root == Some(root) &&
-        generation == ctx.watch_identity(state.watch_generation) {
+        generation == ctx.watch_event_identity(state.request_epoch) {
         let reviewed_changes = match changes {
           Some(changes) =>
             state.reviewed_changes.filter(change => !change.touched_by(changes))
@@ -3016,7 +3019,7 @@ test "watcher changes during the initial file index scan schedule one follow-up"
   let (_, loading) = update(emit, EnsureFileIndex, owned_state(), ctx)
   let changed = FsChanged(
     root=ctx.test_root(),
-    generation=ctx.watch_identity(loading.watch_generation),
+    generation=ctx.watch_event_identity(loading.request_epoch),
     changes=Some([Created(Relative("src/new.mbt"))]),
   )
   let (_, latched) = update(emit, changed, loading, ctx)
@@ -3072,7 +3075,7 @@ test "structural watcher bursts coalesce file index refreshes" {
   }
   let changed = FsChanged(
     root=ctx.test_root(),
-    generation=ctx.watch_identity(ready.watch_generation),
+    generation=ctx.watch_event_identity(ready.request_epoch),
     changes=Some([Created(Relative("src/new.mbt"))]),
   )
   let (_, refreshing) = update(emit, changed, ready, ctx)
@@ -4924,7 +4927,7 @@ test "watcher events latch a follow-up during the initial change load" {
     emit,
     FsChanged(
       root=test_ctx().test_root(),
-      generation=test_ctx().watch_identity(state.watch_generation),
+      generation=test_ctx().watch_event_identity(state.request_epoch),
       changes=Some([Modified(Relative("src/main.mbt"))]),
     ),
     state,
@@ -6232,7 +6235,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
     emit,
     FsChanged(
       root=test_ctx().test_root(),
-      generation=test_ctx().watch_identity(state.watch_generation),
+      generation=test_ctx().watch_event_identity(state.request_epoch),
       changes=Some([Modified(Relative("src/main.mbt"))]),
     ),
     state,
@@ -6252,7 +6255,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
     emit,
     FsChanged(
       root=test_ctx().test_root(),
-      generation=test_ctx().watch_identity(refreshing.watch_generation),
+      generation=test_ctx().watch_event_identity(refreshing.request_epoch),
       changes=Some([Modified(Relative("src/other.mbt"))]),
     ),
     refreshing,
@@ -6332,7 +6335,7 @@ test "hidden explorer parks event-driven change refreshes until reopen" {
     emit,
     FsChanged(
       root=test_ctx().test_root(),
-      generation=test_ctx().watch_identity(state.watch_generation),
+      generation=test_ctx().watch_event_identity(state.request_epoch),
       changes=Some([]),
     ),
     state,
@@ -6521,7 +6524,7 @@ test "change-list failures stay isolated from file errors and watcher retries" {
     emit,
     FsChanged(
       root=test_ctx().test_root(),
-      generation=test_ctx().watch_identity(failed.watch_generation),
+      generation=test_ctx().watch_event_identity(failed.request_epoch),
       changes=Some([Modified(Relative("src/main.mbt"))]),
     ),
     failed,
@@ -6917,7 +6920,7 @@ test "watcher replacement baseline re-lists directories and refreshes the index"
   }
   let baseline = FsChanged(
     root=test_ctx().test_root(),
-    generation=test_ctx().watch_identity(state.watch_generation),
+    generation=test_ctx().watch_event_identity(state.request_epoch),
     changes=None,
   )
   let (_, next) = update(emit, baseline, state, test_ctx())
@@ -6951,7 +6954,7 @@ test "concrete watcher events refresh only affected listed directories" {
   }
   let message = FsChanged(
     root=test_ctx().test_root(),
-    generation=test_ctx().watch_identity(state.watch_generation),
+    generation=test_ctx().watch_event_identity(state.request_epoch),
     changes=Some([Created(Relative("src/new.mbt"))]),
   )
   let (_, first) = update(emit, message, state, test_ctx())
@@ -6964,7 +6967,7 @@ test "concrete watcher events refresh only affected listed directories" {
     emit,
     FsChanged(
       root=test_ctx().test_resource("/previous-root"),
-      generation=test_ctx().watch_identity(state.watch_generation),
+      generation=test_ctx().watch_event_identity(state.request_epoch),
       changes=Some([Created(Relative("docs/new.md"))]),
     ),
     state,
@@ -7027,23 +7030,35 @@ test "sync reconciles the watcher with the panel and its open files" {
       }
     ),
   )
-  assert_eq(replaced.watch_generation, attached_generation)
+  assert_eq(replaced.watch_generation, attached_generation + 1)
+  let (_, after_old_failure) = update(
+    emit,
+    FileWatchFailed(
+      channel=test_ctx().owner.channel,
+      root=test_ctx().test_root(),
+      generation=test_ctx().watch_identity(attached_generation),
+      message="replaced watcher stopped",
+    ),
+    replaced,
+    selected_ctx,
+  )
+  assert_true(after_old_failure.watch_error is None)
   // Closed panel with files still open: keep watching (staleness tracking).
   let still_ctx = {
     ..test_ctx(),
     panel_open: false,
     open_files: [Relative("a.mbt")],
   }
-  let closed = { ..replaced, children: Map([]), loading: [] }
+  let closed = { ..after_old_failure, children: Map([]), loading: [] }
   let (still, _) = sync(emit, closed, still_ctx)
   assert_true(
     still.watching is Some({ files: [Relative("a.mbt")], directories: [], .. }),
   )
-  assert_eq(still.watch_generation, attached_generation)
+  assert_eq(still.watch_generation, attached_generation + 2)
   // Closed panel, nothing open: park the watcher.
   let (parked, _) = sync(emit, still, { ..test_ctx(), panel_open: false })
   assert_true(parked.watching is None)
-  assert_eq(parked.watch_generation, attached_generation + 1)
+  assert_eq(parked.watch_generation, attached_generation + 3)
 }
 
 ///|
@@ -7105,9 +7120,8 @@ test "same-root conversation switch fences every old watcher push" {
   assert_eq(switched.watch_generation, old_generation + 1)
   assert_true(switched.watching is Some({ owner, .. }) && owner == next_owner)
 
-  // Both generations watch the same absolute root. Only the generation can
-  // tell a notification already queued by the outgoing watcher from one sent
-  // by the replacement.
+  // Both watchers use the same absolute root. Placement epochs fence concrete
+  // change events; per-configuration generations independently fence failures.
   let ready = {
     ..switched,
     children: Map([(@pathx.Relative::root(), [])]),
@@ -7117,7 +7131,7 @@ test "same-root conversation switch fences every old watcher push" {
     emit,
     FsChanged(
       root=next_ctx.test_root(),
-      generation=test_ctx().watch_identity(old_generation),
+      generation=test_ctx().watch_event_identity(state.request_epoch),
       changes=None,
     ),
     ready,

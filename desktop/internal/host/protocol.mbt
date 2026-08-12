@@ -240,7 +240,8 @@ priv struct FsEventPayload {
 ///|
 /// A filesystem change batch. A new watcher emits `baseline=true` once it is
 /// attached, telling the frontend to stat/re-list everything in its selection;
-/// later batches carry the exact debounced events.
+/// later batches carry the exact debounced events. `generation` identifies the
+/// root incarnation and can therefore survive a same-root watcher replacement.
 priv struct FsChangedPayload {
   root : String
   baseline : Bool
@@ -275,7 +276,7 @@ test "filesystem events keep their concrete kind and paths on the wire" {
 ///|
 /// A watcher that was accepted but could not attach, or later stopped while
 /// reading filesystem events. `root` reports its location; `generation`
-/// identifies the exact client request whose failure raced a replacement.
+/// identifies the exact concrete watcher whose failure raced a replacement.
 priv struct FsWatchFailedPayload {
   root : String
   message : String

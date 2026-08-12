@@ -108,7 +108,7 @@ test "file events and run completion invalidate stale review progress" {
     test_emit(),
     FsChanged(
       root=ctx.test_root(),
-      generation=ctx.watch_identity(state.watch_generation),
+      generation=ctx.watch_event_identity(state.request_epoch),
       changes=Some([Modified(@pathx.Relative("README.md"))]),
     ),
     reviewed,
@@ -120,7 +120,7 @@ test "file events and run completion invalidate stale review progress" {
     test_emit(),
     FsChanged(
       root=ctx.test_root(),
-      generation=ctx.watch_identity(state.watch_generation),
+      generation=ctx.watch_event_identity(state.request_epoch),
       changes=Some([Modified(selected.path)]),
     ),
     unrelated,

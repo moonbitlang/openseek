@@ -259,8 +259,13 @@ pub(all) struct WatchWorkspacePayload {
   // index is live. Shallow mode remains sufficient for open files and the
   // explorer's explicitly listed directories.
   recursive : Bool?
-  // Chosen by the client for one concrete watcher configuration.
+  // Concrete watcher/failure identity. Clients change it for every desired
+  // configuration so a replaced watcher's delayed failure is stale.
   generation : String
+  // Change-event identity. New clients may retain it across same-root watcher
+  // replacements because every concrete event still describes that root.
+  // Absent for backward compatibility, in which case `generation` is used.
+  event_generation : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -561,7 +566,8 @@ pub(all) struct FsChangedPayload {
   root : String
   baseline : Bool
   events : Array[FsEventPayload]
-  // Echoes the `fs.watch` request that owns this asynchronous notification.
+  // Identifies the watched root incarnation. Same-root replacement events may
+  // deliberately retain it across multiple `fs.watch` requests.
   generation : String
 } derive(Debug, Eq, FromJson, ToJson)
 
@@ -569,7 +575,7 @@ pub(all) struct FsChangedPayload {
 pub(all) struct FsWatchFailedPayload {
   root : String
   message : String
-  // Echoes the `fs.watch` request that owns this asynchronous notification.
+  // Identifies the concrete watcher that produced this failure.
   generation : String
 } derive(Debug, Eq, FromJson, ToJson)
 
