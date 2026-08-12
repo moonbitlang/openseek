@@ -1521,13 +1521,19 @@ fn update(
   }
   // The overview rail's hover/active keys are per-session event sequences —
   // the same numbers name different turns in another conversation — so a
-  // switch resets them here, however it happened. The next scroll (every
-  // open path re-scrolls the transcript) reports the fresh active turn.
-  let model = if model.active_session != previous.active_session ||
+  // switch resets them here, however it happened. The explicit recompute is
+  // not redundant with the scroll watcher: a conversation that fits its
+  // viewport produces no scroll event at all, and one whose visible anchor
+  // string matches the previous session's would be swallowed by the
+  // watcher's change guard.
+  let (overview_cmd, model) = if model.active_session != previous.active_session ||
     model.focused != previous.focused {
-    { ..model, transcript_overview: @transcript_overview.State::empty() }
+    (
+      report_visible_turn_after_render(dispatch),
+      { ..model, transcript_overview: @transcript_overview.State::empty() },
+    )
   } else {
-    model
+    (@cmd.none, model)
   }
   // The resize handle belongs to the whole right panel, even when its first
   // active tab is a Browser page and the file body stays hidden. File-opening
@@ -1545,7 +1551,7 @@ fn update(
   (
     @cmd.batch([
       cmd, quick_open_cmd, quick_open_restart_cmd, symbol_restart_cmd, dock_mount_cmd,
-      panel_cmd, terminal_cmd, browser_cmd,
+      overview_cmd, panel_cmd, terminal_cmd, browser_cmd,
     ]),
     model,
   )

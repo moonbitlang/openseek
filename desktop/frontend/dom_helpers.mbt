@@ -77,6 +77,41 @@ fn visible_turn_anchor(transcript : @dom.Element) -> String? {
 }
 
 ///|
+/// The last anchor the scroll watcher reported, shared with
+/// `report_visible_turn_after_render` so a recompute keeps the watcher's
+/// change guard honest — anchors are per-session strings, and two sessions'
+/// turns can carry the same one.
+let transcript_turn_anchor : Ref[String?] = Ref(None)
+
+///|
+/// Recompute the overview's active turn on the render that applied a
+/// conversation switch. Scroll events only fire when scrollTop actually
+/// changes, so an opened conversation that fits its viewport — or one whose
+/// visible anchor string happens to match the previous session's — would
+/// otherwise keep an empty or stale highlight.
+fn report_visible_turn_after_render(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    scheduler => {
+      guard @dom.document().get_element_by_id("transcript").to_option()
+        is Some(transcript) else {
+        return
+      }
+      let anchor = visible_turn_anchor(transcript)
+      transcript_turn_anchor.val = anchor
+      let key = if anchor is Some(id) {
+        @transcript_overview.TurnKey::from_anchor(id)
+      } else {
+        None
+      }
+      scheduler.add(
+        dispatch(TranscriptOverview(@transcript_overview.ActiveChanged(key))),
+      )
+    },
+    kind=@cmd.after_render,
+  )
+}
+
+///|
 let transcript_scroll_watched : Ref[Bool] = Ref(false)
 
 ///|
@@ -93,7 +128,6 @@ fn watch_transcript_scroll(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
     guard !transcript_scroll_watched.val else { return }
     transcript_scroll_watched.val = true
     let mut pinned = true
-    let mut turn_anchor : String? = None
     @interop.add_capture_listener(@js.Cast::from(@dom.document()), "scroll", event => {
       guard event.target().to_element() is Some(element) else { return }
       guard element.get_property("id").to_option() is Some("transcript") else {
@@ -113,8 +147,8 @@ fn watch_transcript_scroll(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       // The overview rail's active-turn highlight, reported the same
       // change-guarded way as the pin.
       let anchor = visible_turn_anchor(element)
-      if anchor != turn_anchor {
-        turn_anchor = anchor
+      if anchor != transcript_turn_anchor.val {
+        transcript_turn_anchor.val = anchor
         let key = if anchor is Some(id) {
           @transcript_overview.TurnKey::from_anchor(id)
         } else {
