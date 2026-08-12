@@ -5,6 +5,7 @@
 struct Input {
   focused : @interop.ChannelId
   active_session : String
+  submission_generation : Int
   items : Array[@transcript.TranscriptItem]
   streaming_response : String
   subruns : Array[@transcript.SubrunLane]
@@ -14,11 +15,19 @@ struct Input {
 pub fn Input::Input(
   focused~ : @interop.ChannelId,
   active_session~ : String,
+  submission_generation~ : Int,
   items~ : Array[@transcript.TranscriptItem],
   streaming_response~ : String,
   subruns~ : Array[@transcript.SubrunLane],
 ) -> Input {
-  { focused, active_session, items, streaming_response, subruns }
+  {
+    focused,
+    active_session,
+    submission_generation,
+    items,
+    streaming_response,
+    subruns,
+  }
 }
 
 ///|
@@ -35,7 +44,7 @@ priv struct Model {
   overview : @transcript_overview.State
   focused : @interop.ChannelId
   active_session : String
-  item_count : Int
+  submission_generation : Int
   mounted : Bool
 } derive(Eq)
 
@@ -73,13 +82,13 @@ fn Model::update(
       let navigated = remounted ||
         self.focused != input.focused ||
         self.active_session != input.active_session
-      // A newly appended user item is the local equivalent of React's
-      // "sent a message" state transition: even a reader who had scrolled up
-      // follows their own new turn. Other growth follows only while pinned.
-      let sent = !navigated &&
-        input.items.length() > self.item_count &&
-        input.items[self.item_count:].any(item => item.kind is User)
-      let pinned = navigated || sent || self.pinned
+      // Submission generation changes synchronously when Send accepts either
+      // a prompt or a steer, before its durable User item arrives. Re-pin on
+      // that explicit signal so early streamed work is immediately visible;
+      // another client's later User item must not impersonate a local send.
+      let submitted = !navigated &&
+        input.submission_generation != self.submission_generation
+      let pinned = navigated || submitted || self.pinned
       let next = {
         pinned,
         overview: if navigated {
@@ -89,7 +98,7 @@ fn Model::update(
         },
         focused: input.focused,
         active_session: input.active_session,
-        item_count: input.items.length(),
+        submission_generation: input.submission_generation,
         mounted,
       }
       let commands : Array[@cmd.Cmd] = []
@@ -142,7 +151,7 @@ pub fn component(
           overview: @transcript_overview.State::empty(),
           focused: input.focused,
           active_session: input.active_session,
-          item_count: input.items.length(),
+          submission_generation: input.submission_generation,
           mounted: false,
         },
         @cmd.none,
@@ -418,7 +427,11 @@ extern "js" fn install_transcript_observer(
   #|     childList: true,
   #|     characterData: true,
   #|     subtree: true,
-  #|     attributeFilter: ["data-transcript-channel", "data-transcript-session"],
+  #|     attributeFilter: [
+  #|       "data-transcript-channel",
+  #|       "data-transcript-session",
+  #|       "data-transcript-submission",
+  #|     ],
   #|   });
   #|   return { mutation, resize };
   #| }
@@ -431,6 +444,7 @@ test "local pinned transitions are pure" {
   let input = Input(
     focused=Local,
     active_session="desktop-test",
+    submission_generation=0,
     items=[],
     streaming_response="",
     subruns=[],
@@ -440,7 +454,7 @@ test "local pinned transitions are pure" {
     overview: @transcript_overview.State::empty(),
     focused: Local,
     active_session: "desktop-test",
-    item_count: 0,
+    submission_generation: 0,
     mounted: true,
   }
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
@@ -450,7 +464,7 @@ test "local pinned transitions are pure" {
   assert_false(second.pinned)
   let (grown, _) = first.update(input, ContentRendered(mounted=true), emit)
   assert_false(grown.pinned)
-  let (sent, _) = first.update(
+  let (received, _) = first.update(
     {
       ..input,
       items: [{ kind: User, content: "new turn", ts: None, sequence: None }],
@@ -458,7 +472,13 @@ test "local pinned transitions are pure" {
     ContentRendered(mounted=true),
     emit,
   )
-  assert_true(sent.pinned)
+  assert_false(received.pinned)
+  let (submitted, _) = first.update(
+    { ..input, submission_generation: 1 },
+    ContentRendered(mounted=true),
+    emit,
+  )
+  assert_true(submitted.pinned)
   let (jumped, _) = grown.update(input, JumpToLatest, emit)
   assert_true(jumped.pinned)
   let (navigated, _) = grown.update(
@@ -475,6 +495,7 @@ test "an overview click unpins and highlights inside the component" {
   let input = Input(
     focused=Local,
     active_session="desktop-test",
+    submission_generation=0,
     items=[],
     streaming_response="",
     subruns=[],
@@ -484,7 +505,7 @@ test "an overview click unpins and highlights inside the component" {
     overview: @transcript_overview.State::empty(),
     focused: Local,
     active_session: "desktop-test",
-    item_count: 0,
+    submission_generation: 0,
     mounted: true,
   }
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
@@ -498,6 +519,7 @@ test "a conversation switch clears component-owned overview state" {
   let input = Input(
     focused=Local,
     active_session="desktop-test",
+    submission_generation=0,
     items=[],
     streaming_response="",
     subruns=[],
@@ -514,7 +536,7 @@ test "a conversation switch clears component-owned overview state" {
     },
     focused: Local,
     active_session: "desktop-test",
-    item_count: 0,
+    submission_generation: 0,
     mounted: true,
   }
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)

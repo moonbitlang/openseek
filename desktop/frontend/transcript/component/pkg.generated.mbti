@@ -22,7 +22,7 @@ pub(all) struct Actions {
 }
 
 type Input derive(Eq)
-pub fn Input::Input(focused~ : @interop.ChannelId, active_session~ : String, items~ : Array[@transcript.TranscriptItem], streaming_response~ : String, subruns~ : Array[@transcript.SubrunLane]) -> Self
+pub fn Input::Input(focused~ : @interop.ChannelId, active_session~ : String, submission_generation~ : Int, items~ : Array[@transcript.TranscriptItem], streaming_response~ : String, subruns~ : Array[@transcript.SubrunLane]) -> Self
 
 // Type aliases
 

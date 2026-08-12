@@ -686,7 +686,11 @@ fn transcript_view(
       .id("transcript")
       .class("transcript")
       .data_set("transcript-channel", input.focused.uri_authority())
-      .data_set("transcript-session", input.active_session),
+      .data_set("transcript-session", input.active_session)
+      .data_set(
+        "transcript-submission",
+        input.submission_generation.to_string(),
+      ),
     children,
   )
 }

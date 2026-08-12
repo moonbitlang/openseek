@@ -34,6 +34,7 @@ test "transcript markup exposes conversation identity" {
   let input = Input(
     focused=@interop.ChannelId::Remote("relay-a"),
     active_session="same-markup-chat",
+    submission_generation=7,
     items=[],
     streaming_response="",
     subruns=[],
@@ -50,6 +51,7 @@ test "transcript markup exposes conversation identity" {
   let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
   assert_true(markup.contains("data-transcript-channel=\"remote.relay-a\""))
   assert_true(markup.contains("data-transcript-session=\"same-markup-chat\""))
+  assert_true(markup.contains("data-transcript-submission=\"7\""))
 }
 
 ///|
