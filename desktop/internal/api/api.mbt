@@ -243,10 +243,13 @@ pub fn endpoints(
     ) {
       // The store commit and its broadcast are one shielded linearization
       // point inside the engine, the `workspace.add` pattern.
+      let worktree_mode = payload.worktree_mode
+      let checkout_submodules = payload.checkout_submodules
       @engine.update_workspace_settings(
         payload.workspace,
-        payload.worktree_mode,
         settings => state.hub.publish(WorkspaceSettingsChanged(settings)),
+        worktree_mode?,
+        checkout_submodules?,
       )
     }),
     @endpoint.Endpoint::remote(@commands.worktree_list, async fn(payload) {

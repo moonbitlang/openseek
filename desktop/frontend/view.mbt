@@ -1684,9 +1684,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 
 ///|
 /// One workspace's settings page, shown in the main area like Settings and
-/// reached from the project row's "…" menu. Its one setting today is the
-/// launch-mode default new conversations copy; the composer's chip stays
-/// the per-conversation override and never writes back here.
+/// reached from the project row's "…" menu. These settings affect future
+/// worktree lifecycle operations; the composer's chip remains a per-chat
+/// launch-mode override and never writes back here.
 fn workspace_settings_page(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -1702,6 +1702,10 @@ fn workspace_settings_page(
     None => None
   }
   let worktree_mode = row is Some(row) && row.worktree_mode
+  // Missing is the historical behavior, but the disabled control makes it
+  // clear that no authoritative workspace snapshot has landed yet.
+  let checkout_submodules = row is None ||
+    (row is Some(row) && row.checkout_submodules)
   let conversation_rows : Array[@html.Html] = [
     setting_row(
       "New chats",
@@ -1725,6 +1729,37 @@ fn workspace_settings_page(
       desc="Where a new chat starts: the workspace itself, or a fresh git worktree bound to that chat. The composer's chip still changes a single chat.",
     ),
   ]
+  let worktree_rows : Array[@html.Html] = [
+    setting_row(
+      "Submodules",
+      [
+        setting_select(
+          @html.select(
+            on_change=dispatch.map(value => {
+              WorkspaceSubmodulesChosen(channel, workspace, value)
+            }),
+            attrs=@html.Attrs::build()
+              .aria_label("Submodules in worktrees")
+              .data_set("focus-owner", "")
+              .disabled(row is None),
+            [
+              @html.option(
+                value="checkout",
+                selected=checkout_submodules,
+                "Initialize",
+              ),
+              @html.option(
+                value="skip",
+                selected=!checkout_submodules,
+                "Leave uninitialized",
+              ),
+            ],
+          ),
+        ),
+      ],
+      desc="For new or repaired worktrees in this workspace, mirror the top-level submodules already initialized in its main checkout.",
+    ),
+  ]
   @html.section(class="settings-page", [
     @html.div(class="settings-page-inner", [
       @html.div(class="settings-header", [
@@ -1734,6 +1769,7 @@ fn workspace_settings_page(
       ]),
       @html.div(class="settings", [
         settings_group(icon_worktree, "Conversations", conversation_rows),
+        settings_group(icon_worktree, "Worktrees", worktree_rows),
       ]),
     ]),
   ])

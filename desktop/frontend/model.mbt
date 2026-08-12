@@ -1652,6 +1652,9 @@ priv enum Msg {
   // The workspace settings page's launch-mode select. Carries the raw
   // select value ("local" | "worktree"); update decides what it means.
   WorkspaceDefaultModeChosen(@interop.ChannelId, @common.Uri, String)
+  // Whether new or repaired worktrees for this workspace populate the
+  // top-level submodules initialized in the main checkout.
+  WorkspaceSubmodulesChosen(@interop.ChannelId, @common.Uri, String)
   // Start a fresh conversation in a device's project (`None` = Scratch),
   // selecting its explicit channel first if needed.
   NewChatIn(@interop.ChannelId, @common.Uri?)
@@ -1908,12 +1911,17 @@ priv enum DeviceMsg {
   WorkspaceSettingsLoaded(
     workspace~ : @common.Uri,
     worktree_mode~ : Bool,
+    checkout_submodules~ : Bool,
     connection_generation~ : Int,
     request_generation~ : Int
   )
   // The post-commit `workspace.settings_changed` broadcast for one
   // workspace: every client adopts the committed state in write order.
-  WorkspaceSettingsChanged(workspace~ : @common.Uri, worktree_mode~ : Bool)
+  WorkspaceSettingsChanged(
+    workspace~ : @common.Uri,
+    worktree_mode~ : Bool,
+    checkout_submodules~ : Bool
+  )
   // A `workspace.settings_set` this client sent failed; the message pops as
   // a toast and the workspace's settings are re-read.
   WorkspaceSettingsSaveFailed(workspace~ : @common.Uri, message~ : String)

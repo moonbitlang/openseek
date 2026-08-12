@@ -1,9 +1,9 @@
 // Per-workspace desktop settings: `<workspace>/.openseek/settings.json`,
 // desktop-owned like `worktrees.json` beside it. The file travels with the
 // workspace directory, so every client of this host — and a reattach after
-// a detach — sees the same choices. One setting today: whether a NEW
-// conversation starts in a fresh bound git worktree instead of the
-// workspace root. Absence of the file or field is the safe Local default.
+// a detach — sees the same choices. The file controls where new conversations
+// start and whether OpenSeek populates new or repaired worktrees with the
+// top-level submodules already initialized in the main checkout.
 
 ///|
 const WorkspaceSettingsFile = "settings.json"
@@ -58,6 +58,11 @@ fn workspace_settings_payload(
   {
     workspace: workspace.resource_path(),
     worktree_mode: settings_worktree_mode(fields),
+    // Preserve the historical behavior unless this workspace explicitly
+    // disables submodule provisioning.
+    checkout_submodules: Some(
+      !(fields.get("checkout_submodules") is Some(False)),
+    ),
   }
 }
 
@@ -98,15 +103,16 @@ pub async fn workspace_settings(
 }
 
 ///|
-/// Set where a new conversation in `workspace` starts and broadcast the
-/// committed state. The write and `on_committed` callback are one finite,
+/// Patch one workspace's settings and broadcast the committed state. The
+/// write and `on_committed` callback are one finite,
 /// cancellation-shielded linearization point under the lock — the
 /// `workspaces.json` pattern — so every client learns of commits in the
 /// same total order even if the requester disconnects before its reply.
 pub async fn update_workspace_settings(
   workspace : String,
-  worktree_mode : Bool,
   on_committed : (@protocol.WorkspaceSettingsPayload) -> Unit,
+  worktree_mode? : Bool,
+  checkout_submodules? : Bool,
 ) -> @protocol.WorkspaceSettingsPayload {
   guard @pathx.Absolute::from_uri_path(workspace) is Some(absolute) &&
     registered_workspace(absolute) is Some(dir) else {
@@ -115,7 +121,12 @@ pub async fn update_workspace_settings(
   workspace_settings_lock.acquire()
   defer workspace_settings_lock.release()
   let fields = read_workspace_settings_unlocked(dir)
-  fields["worktree_mode"] = worktree_mode.to_json()
+  if worktree_mode is Some(worktree_mode) {
+    fields["worktree_mode"] = worktree_mode.to_json()
+  }
+  if checkout_submodules is Some(checkout_submodules) {
+    fields["checkout_submodules"] = checkout_submodules.to_json()
+  }
   let payload = workspace_settings_payload(dir, fields)
   @async.protect_from_cancel(() => {
     write_workspace_settings(dir, fields)
@@ -147,22 +158,43 @@ test "workspace settings parse tolerantly and keep unknown fields" {
   fields["worktree_mode"] = true.to_json()
   assert_true(settings_worktree_mode(fields))
   assert_true(fields.get("future") is Some(_))
+  guard @pathx.Absolute::from_uri_path("/repo") is Some(workspace) else {
+    fail("expected an absolute workspace path")
+  }
+  let payload = workspace_settings_payload(workspace, fields)
+  assert_eq(payload.checkout_submodules, Some(true))
+  fields["checkout_submodules"] = false.to_json()
+  assert_eq(
+    workspace_settings_payload(workspace, fields).checkout_submodules,
+    Some(false),
+  )
 }
 
 ///|
-async test "workspace settings survive a write/read round trip" {
+async test "workspace settings survive a write/read round trip independently" {
   let dir = @fs.tmpdir(prefix="openseek-workspace-settings-")
   guard @pathx.Path(dir).to_absolute() is Some(workspace) else {
     fail("expected an absolute temporary workspace path")
   }
+  let sibling = workspace.join("sibling")
   assert_false(
     settings_worktree_mode(read_workspace_settings_unlocked(workspace)),
   )
   let fields = read_workspace_settings_unlocked(workspace)
   fields["worktree_mode"] = true.to_json()
+  fields["checkout_submodules"] = false.to_json()
   write_workspace_settings(workspace, fields)
   let reread = read_workspace_settings_unlocked(workspace)
   assert_true(settings_worktree_mode(reread))
+  assert_eq(reread.get("checkout_submodules"), Some(false.to_json()))
+  // The file lives below one workspace root, so an adjacent workspace keeps
+  // both defaults when only this workspace is edited.
+  let sibling_payload = workspace_settings_payload(
+    sibling,
+    read_workspace_settings_unlocked(sibling),
+  )
+  assert_false(sibling_payload.worktree_mode)
+  assert_eq(sibling_payload.checkout_submodules, Some(true))
   @fs.rmdir(dir, recursive=true) catch {
     _ => ()
   }

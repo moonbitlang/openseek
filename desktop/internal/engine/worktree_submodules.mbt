@@ -182,6 +182,27 @@ async test "worktree lifecycle mirrors initialized submodules" {
   )
   assert_eq(removed.worktrees.length(), 0)
   assert_false(@fsx.exists(checkout.to_path()))
+  // This workspace setting leaves even an initialized main-checkout
+  // submodule untouched in subsequent worktrees.
+  ignore(
+    update_workspace_settings(
+      repo.to_string(),
+      fn(_) {  },
+      checkout_submodules=false,
+    ),
+  )
+  let skipped = create_worktree(
+    manager,
+    repo.to_string(),
+    "s-without-submodules",
+    fn(_) {  },
+    name="without-submodules",
+  )
+  assert_eq(skipped.name, "without-submodules")
+  let skipped_checkout = repo.join(".worktrees/without-submodules")
+  assert_false(
+    @fsx.exists(skipped_checkout.join("deps/required/.git").to_path()),
+  )
   @fs.rmdir(root.to_string(), recursive=true)
 }
 

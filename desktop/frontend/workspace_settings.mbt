@@ -1,10 +1,10 @@
 // Per-workspace desktop settings, mirrored from the workspace's own
-// `.openseek/settings.json` on its host. One setting today: whether a NEW
-// conversation starts in a fresh bound git worktree instead of the
-// workspace root. The mirror refreshes with the project list and is
-// replaced wholesale by the `workspace.settings_changed` broadcast; the
-// settings page edits it through `workspace.settings_set`, and the
-// composer chip stays a per-conversation override that never writes here.
+// `.openseek/settings.json` on its host. It controls where a NEW conversation
+// starts and whether worktree creation populates submodules. The mirror
+// refreshes with the project list and is replaced wholesale by the
+// `workspace.settings_changed` broadcast; the settings page edits it through
+// `workspace.settings_set`, and the composer chip stays a per-conversation
+// override that never writes here.
 
 ///|
 /// One project's settings mirror, keyed like `ProjectWorktrees` and fenced
@@ -13,6 +13,7 @@
 priv struct ProjectSettings {
   project : @common.Uri
   worktree_mode : Bool
+  checkout_submodules : Bool
   generation : Int
 } derive(Eq)
 
@@ -50,6 +51,7 @@ fn fetch_workspace_settings(
           WorkspaceSettingsLoaded(
             workspace~,
             worktree_mode=reply.worktree_mode,
+            checkout_submodules=reply.checkout_submodules.unwrap_or(true),
             connection_generation~,
             request_generation~,
           ),
@@ -78,7 +80,8 @@ fn save_workspace_settings(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   workspace : @common.Uri,
-  worktree_mode : Bool,
+  worktree_mode? : Bool,
+  checkout_submodules? : Bool,
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
@@ -90,7 +93,7 @@ fn save_workspace_settings(
       let _ : @protocol.WorkspaceSettingsPayload = @interop.bridge_request_in_order(
         channel,
         @commands.workspace_settings_set,
-        { workspace: workspace.path, worktree_mode },
+        { workspace: workspace.path, worktree_mode, checkout_submodules },
         lane=workspace_settings_lane(channel, workspace),
       ) catch {
         error => {
@@ -120,7 +123,11 @@ fn workspace_settings_changed_msg(
     return None
   }
   Some(
-    WorkspaceSettingsChanged(workspace~, worktree_mode=payload.worktree_mode),
+    WorkspaceSettingsChanged(
+      workspace~,
+      worktree_mode=payload.worktree_mode,
+      checkout_submodules=payload.checkout_submodules.unwrap_or(true),
+    ),
   )
 }
 
@@ -130,9 +137,16 @@ fn DeviceState::with_workspace_settings(
   project : @common.Uri,
   worktree_mode : Bool,
   generation~ : Int,
+  checkout_submodules? : Bool,
 ) -> DeviceState {
+  let checkout_submodules = checkout_submodules.unwrap_or_else(() => {
+    self
+    .workspace_settings_row(project)
+    .map(row => row.checkout_submodules)
+    .unwrap_or(true)
+  })
   let rows = self.workspace_settings.filter(row => row.project != project)
-  rows.push({ project, worktree_mode, generation })
+  rows.push({ project, worktree_mode, checkout_submodules, generation })
   { ..self, workspace_settings: rows }
 }
 
@@ -211,6 +225,7 @@ test "a settings reply lands once and an older token cannot roll it back" {
     WorkspaceSettingsLoaded(
       workspace~,
       worktree_mode=true,
+      checkout_submodules=true,
       connection_generation=0,
       request_generation=1,
     ),
@@ -224,6 +239,7 @@ test "a settings reply lands once and an older token cannot roll it back" {
     WorkspaceSettingsLoaded(
       workspace~,
       worktree_mode=false,
+      checkout_submodules=true,
       connection_generation=0,
       request_generation=1,
     ),
@@ -235,18 +251,26 @@ test "a settings reply lands once and an older token cannot roll it back" {
     WorkspaceSettingsLoaded(
       workspace=sibling,
       worktree_mode=true,
+      checkout_submodules=false,
       connection_generation=0,
       request_generation=1,
     ),
     stale,
   )
   assert_true(both.default_worktree_mode(Local, Some(sibling)))
+  guard both.dev().workspace_settings_row(workspace) is Some(primary) &&
+    both.dev().workspace_settings_row(sibling) is Some(secondary) else {
+    fail("expected independent workspace settings rows")
+  }
+  assert_true(primary.checkout_submodules)
+  assert_false(secondary.checkout_submodules)
   // A dead connection's reply is rejected outright.
   let (_, dead) = update_dev(
     dispatch,
     WorkspaceSettingsLoaded(
       workspace~,
       worktree_mode=false,
+      checkout_submodules=true,
       connection_generation=7,
       request_generation=9,
     ),
@@ -262,7 +286,11 @@ test "a settings commit broadcast supersedes list replies" {
   let attached = test_model().with_dev(dev => { ..dev, projects: [workspace] })
   let (_, changed) = update_dev(
     dispatch,
-    WorkspaceSettingsChanged(workspace~, worktree_mode=true),
+    WorkspaceSettingsChanged(
+      workspace~,
+      worktree_mode=true,
+      checkout_submodules=true,
+    ),
     attached,
   )
   assert_true(changed.default_worktree_mode(Local, Some(workspace)))
@@ -273,6 +301,7 @@ test "a settings commit broadcast supersedes list replies" {
     WorkspaceSettingsLoaded(
       workspace~,
       worktree_mode=false,
+      checkout_submodules=true,
       connection_generation=0,
       request_generation=1,
     ),
@@ -297,6 +326,7 @@ test "the settings page select applies optimistically" {
     WorkspaceSettingsLoaded(
       workspace~,
       worktree_mode=false,
+      checkout_submodules=true,
       connection_generation=0,
       request_generation=1,
     ),
@@ -315,6 +345,7 @@ test "the settings page select applies optimistically" {
     WorkspaceSettingsLoaded(
       workspace~,
       worktree_mode=false,
+      checkout_submodules=true,
       connection_generation=0,
       request_generation=1,
     ),
@@ -327,6 +358,45 @@ test "the settings page select applies optimistically" {
     chosen,
   )
   assert_false(back.default_worktree_mode(Local, Some(workspace)))
+}
+
+///|
+test "the workspace submodule select preserves its launch mode" {
+  let dispatch = test_dispatch()
+  let workspace = @interop.ChannelId::Local.test_resource("/proj")
+  let attached = test_model().with_dev(dev => { ..dev, projects: [workspace] })
+  let (_, loaded) = update_dev(
+    dispatch,
+    WorkspaceSettingsLoaded(
+      workspace~,
+      worktree_mode=true,
+      checkout_submodules=true,
+      connection_generation=0,
+      request_generation=1,
+    ),
+    attached,
+  )
+  let (_, chosen) = update(
+    dispatch,
+    WorkspaceSubmodulesChosen(Local, workspace, "skip"),
+    loaded,
+  )
+  guard chosen.dev().workspace_settings_row(workspace) is Some(row) else {
+    fail("expected the workspace settings row")
+  }
+  assert_true(row.worktree_mode)
+  assert_false(row.checkout_submodules)
+  // Unknown select values are ignored and cannot mutate either field.
+  let (_, unknown) = update(
+    dispatch,
+    WorkspaceSubmodulesChosen(Local, workspace, "unknown"),
+    chosen,
+  )
+  guard unknown.dev().workspace_settings_row(workspace) is Some(unchanged) else {
+    fail("expected the workspace settings row")
+  }
+  assert_true(unchanged.worktree_mode)
+  assert_false(unchanged.checkout_submodules)
 }
 
 ///|
@@ -358,6 +428,7 @@ test "a failed save pops a toast and re-reads under a fresh token" {
     WorkspaceSettingsLoaded(
       workspace~,
       worktree_mode=false,
+      checkout_submodules=true,
       connection_generation=0,
       request_generation=minted + 1,
     ),
@@ -376,6 +447,7 @@ test "a reconnect clears the settings mirror until fresh reads land" {
     WorkspaceSettingsLoaded(
       workspace~,
       worktree_mode=true,
+      checkout_submodules=true,
       connection_generation=0,
       request_generation=1,
     ),
@@ -402,7 +474,11 @@ test "a straggler reply for a detached workspace is rejected" {
   let attached = test_model().with_dev(dev => { ..dev, projects: [workspace] })
   let (_, seen) = update_dev(
     dispatch,
-    WorkspaceSettingsChanged(workspace~, worktree_mode=true),
+    WorkspaceSettingsChanged(
+      workspace~,
+      worktree_mode=true,
+      checkout_submodules=true,
+    ),
     attached,
   )
   assert_true(seen.default_worktree_mode(Local, Some(workspace)))
@@ -418,6 +494,7 @@ test "a straggler reply for a detached workspace is rejected" {
     WorkspaceSettingsLoaded(
       workspace~,
       worktree_mode=true,
+      checkout_submodules=true,
       connection_generation=0,
       request_generation=1,
     ),
@@ -427,7 +504,11 @@ test "a straggler reply for a detached workspace is rejected" {
   // A broadcast racing the detach commit is dropped the same way.
   let (_, ghost) = update_dev(
     dispatch,
-    WorkspaceSettingsChanged(workspace~, worktree_mode=true),
+    WorkspaceSettingsChanged(
+      workspace~,
+      worktree_mode=true,
+      checkout_submodules=true,
+    ),
     detached,
   )
   assert_true(ghost.dev().workspace_settings.is_empty())
@@ -440,13 +521,24 @@ test "settings commit decoder carries the workspace identity" {
       @protocol.Notification::WorkspaceSettingsChanged({
         workspace: "/proj",
         worktree_mode: true,
+        checkout_submodules: Some(false),
       }),
     )
-    is Some(FromDevice(_, WorkspaceSettingsChanged(workspace~, worktree_mode~))) else {
+    is Some(
+      FromDevice(
+        _,
+        WorkspaceSettingsChanged(
+          workspace~,
+          worktree_mode~,
+          checkout_submodules~
+        )
+      )
+    ) else {
     fail("expected a workspace settings change")
   }
   inspect(workspace.path, content="/proj")
   assert_true(worktree_mode)
+  assert_false(checkout_submodules)
 }
 
 ///|

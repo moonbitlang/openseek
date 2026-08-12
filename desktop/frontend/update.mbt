@@ -2847,12 +2847,44 @@ fn update_msg(
       // newer token still. The failure path re-reads the disk state.
       let request_generation = dev.workspace_settings_request_generation + 1
       (
-        save_workspace_settings(dispatch, channel, workspace, worktree_mode),
+        save_workspace_settings(dispatch, channel, workspace, worktree_mode~),
         model.replace_device({
           ..dev.with_workspace_settings(
             workspace,
             worktree_mode,
             generation=request_generation,
+          ),
+          workspace_settings_request_generation: request_generation,
+        }),
+      )
+    }
+    WorkspaceSubmodulesChosen(channel, workspace, value) => {
+      guard model.device_state(channel) is Some(dev) &&
+        dev.workspace_settings_row(workspace) is Some(row) else {
+        return (@cmd.none, model)
+      }
+      let checkout_submodules = match value {
+        "checkout" => true
+        "skip" => false
+        _ => return (@cmd.none, model)
+      }
+      // Preserve the workspace's launch mode locally and patch only the
+      // submodule field on disk. The generation fence has the same job as
+      // the launch-mode edit above: an older read cannot undo this choice.
+      let request_generation = dev.workspace_settings_request_generation + 1
+      (
+        save_workspace_settings(
+          dispatch,
+          channel,
+          workspace,
+          checkout_submodules~,
+        ),
+        model.replace_device({
+          ..dev.with_workspace_settings(
+            workspace,
+            row.worktree_mode,
+            generation=request_generation,
+            checkout_submodules~,
           ),
           workspace_settings_request_generation: request_generation,
         }),
@@ -4116,6 +4148,7 @@ fn update_device_msg(
     WorkspaceSettingsLoaded(
       workspace~,
       worktree_mode~,
+      checkout_submodules~,
       connection_generation~,
       request_generation~
     ) => {
@@ -4137,11 +4170,12 @@ fn update_device_msg(
             workspace,
             worktree_mode,
             generation=request_generation,
+            checkout_submodules~,
           ),
         ),
       )
     }
-    WorkspaceSettingsChanged(workspace~, worktree_mode~) => {
+    WorkspaceSettingsChanged(workspace~, worktree_mode~, checkout_submodules~) => {
       // A broadcast can race the detach commit the same way a reply can
       // (the hub orders them per client, so an attach is always processed
       // before settings broadcasts that follow it).
@@ -4158,6 +4192,7 @@ fn update_device_msg(
             workspace,
             worktree_mode,
             generation=workspace_settings_request_generation,
+            checkout_submodules~,
           ),
           workspace_settings_request_generation,
         }),
