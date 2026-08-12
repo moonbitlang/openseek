@@ -162,8 +162,15 @@ pub enum FileIndex {
   IndexLoading
   // The first request failed. A later EnsureFileIndex retries it.
   IndexFailed
-  // `truncated` means the Host stopped at its response cap.
-  IndexReady(files~ : Array[@pathx.Relative], truncated~ : Bool)
+  // `truncated` means the Host stopped at its response cap. A ready snapshot
+  // remains usable while one refresh runs; watcher bursts coalesce into at
+  // most one follow-up scan.
+  IndexReady(
+    files~ : Array[@pathx.Relative],
+    truncated~ : Bool,
+    refreshing~ : Bool,
+    refresh_again~ : Bool
+  )
 } derive(Eq)
 
 ///|

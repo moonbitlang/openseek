@@ -1060,9 +1060,96 @@ fn moonbit_check_input(path : @pathx.Relative) -> Bool {
 }
 
 ///|
+/// Directories whose immediate children cover every path represented by a
+/// ready snapshot. Selecting each ancestor matters because the Host watcher
+/// deliberately prunes descendants below unselected directories.
+fn FileIndex::watched_directories(self : FileIndex) -> Array[@pathx.Relative] {
+  let directories = [@pathx.Relative::root()]
+  if self is IndexReady(files~, ..) {
+    for file in files {
+      for directory in ancestor_paths(file) {
+        if !directories.contains(directory) {
+          directories.push(directory)
+        }
+      }
+    }
+  }
+  directories
+}
+
+///|
+/// Mark a ready snapshot stale after a structural watcher event. The Bool
+/// tells the caller to start the single allowed refresh; later events only
+/// latch one follow-up while that request is in flight.
+fn FileIndex::invalidate(self : FileIndex) -> (FileIndex, Bool) {
+  match self {
+    IndexReady(files~, truncated~, refreshing=false, ..) =>
+      (
+        IndexReady(files~, truncated~, refreshing=true, refresh_again=false),
+        true,
+      )
+    IndexReady(files~, truncated~, refreshing=true, ..) =>
+      (
+        IndexReady(files~, truncated~, refreshing=true, refresh_again=true),
+        false,
+      )
+    _ => (self, false)
+  }
+}
+
+///|
+/// Settle a successful Host scan. The Bool asks the caller to spend a watcher
+/// event that arrived while the completed request was running.
+fn FileIndex::loaded(
+  self : FileIndex,
+  files : Array[@pathx.Relative],
+  truncated : Bool,
+) -> (FileIndex, Bool) {
+  match self {
+    IndexLoading =>
+      (
+        IndexReady(files~, truncated~, refreshing=false, refresh_again=false),
+        false,
+      )
+    IndexReady(refreshing=true, refresh_again~, ..) =>
+      (
+        IndexReady(
+          files~,
+          truncated~,
+          refreshing=refresh_again,
+          refresh_again=false,
+        ),
+        refresh_again,
+      )
+    _ => (self, false)
+  }
+}
+
+///|
+/// Settle a failed Host scan. Initial failure is retryable from empty; a
+/// background failure retains the previous snapshot and any coalesced retry.
+fn FileIndex::failed(self : FileIndex) -> (FileIndex, Bool) {
+  match self {
+    IndexLoading => (IndexFailed, false)
+    IndexReady(files~, truncated~, refreshing=true, refresh_again~) =>
+      (
+        IndexReady(
+          files~,
+          truncated~,
+          refreshing=refresh_again,
+          refresh_again=false,
+        ),
+        refresh_again,
+      )
+    _ => (self, false)
+  }
+}
+
+///|
 /// Reconcile the Host watcher with the panel, open tabs, and the workspace
-/// snapshot. A live snapshot keeps a shallow root watch while the panel is
-/// hidden so structural changes can refresh its cached path set.
+/// snapshot. A ready snapshot keeps every represented parent directory live,
+/// even while the panel is hidden, so collapsed descendants still invalidate
+/// the cached path set.
 fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
   guard ctx.root is Some(root) else { return None }
   let index_live = self.index is IndexLoading || self.index is IndexReady(..)
@@ -1074,9 +1161,15 @@ fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
   }
   let files = ctx.open_files.copy()
   files.sort_by((left, right) => left.0.lexical_compare(right.0))
-  let directories : Array[@pathx.Relative] = []
-  if ctx.panel_open || index_live {
-    directories.push(@pathx.Relative::root())
+  let directories = if index_live {
+    self.index.watched_directories()
+  } else {
+    []
+  }
+  if ctx.panel_open {
+    if !directories.contains(@pathx.Relative::root()) {
+      directories.push(@pathx.Relative::root())
+    }
     for directory in self.expanded {
       if !directories.contains(directory) {
         directories.push(directory)
@@ -1975,17 +2068,25 @@ pub fn update(
       if state.owner != Some(owner) || state.request_epoch != epoch {
         (@cmd.none, state)
       } else {
-        (@cmd.none, { ..state, index: IndexReady(files~, truncated~) })
+        let (index, retry) = state.index.loaded(files, truncated)
+        let cmd = if retry {
+          list_files(dispatch, owner, epoch, root=ctx.root)
+        } else {
+          @cmd.none
+        }
+        (cmd, { ..state, index, })
       }
     FileIndexFailed(owner~, epoch~) =>
-      // Only a failed first fetch records a retryable failure. A refresh runs
-      // while the old snapshot stays Ready, so its failure preserves it.
-      if state.owner != Some(owner) ||
-        state.request_epoch != epoch ||
-        !(state.index is IndexLoading) {
+      if state.owner != Some(owner) || state.request_epoch != epoch {
         (@cmd.none, state)
       } else {
-        (@cmd.none, { ..state, index: IndexFailed })
+        let (index, retry) = state.index.failed()
+        let cmd = if retry {
+          list_files(dispatch, owner, epoch, root=ctx.root)
+        } else {
+          @cmd.none
+        }
+        (cmd, { ..state, index, })
       }
     ChangesPollDue(owner~, generation~) =>
       if state.owner == Some(owner) &&
@@ -2538,14 +2639,21 @@ pub fn update(
           )
         }
         // Only structural events can change the path set. Do not duplicate an
-        // initial load when the newly attached watcher emits its baseline;
-        // background refreshes retain the ready snapshot until a reply lands.
-        if refresh_index && state.index is IndexReady(..) {
+        // initial load when the newly attached watcher emits its baseline. A
+        // ready snapshot stays usable during one refresh; later watcher bursts
+        // coalesce into one follow-up instead of repeatedly clearing the Host
+        // cache underneath an active scan.
+        let (index, start_refresh) = if refresh_index {
+          state.index.invalidate()
+        } else {
+          (state.index, false)
+        }
+        if start_refresh {
           cmds.push(
             list_files(dispatch, owner, state.request_epoch, root=ctx.root),
           )
         }
-        let next = { ..state, loading, reviewed_changes }
+        let next = { ..state, loading, reviewed_changes, index }
         // Any content event can change Git status, not just a structural one.
         // Refresh only after Changes has been requested and while its explorer
         // or a review is live; reopening performs its own full refresh. The
@@ -2874,7 +2982,13 @@ test "file index requests retry failures and fence stale replies" {
     ctx,
   )
   assert_true(
-    ready.index is IndexReady(files=[Relative("src/main.mbt")], truncated=true),
+    ready.index
+    is IndexReady(
+      files=[Relative("src/main.mbt")],
+      truncated=true,
+      refreshing=false,
+      refresh_again=false
+    ),
   )
   let (_, refresh_failed) = update(
     emit,
@@ -2883,6 +2997,74 @@ test "file index requests retry failures and fence stale replies" {
     ctx,
   )
   assert_true(refresh_failed == ready)
+}
+
+///|
+test "structural watcher bursts coalesce file index refreshes" {
+  let emit = test_emit()
+  let ctx = test_ctx()
+  let ready = {
+    ..owned_state(),
+    index: IndexReady(
+      files=[Relative("src/old.mbt")],
+      truncated=false,
+      refreshing=false,
+      refresh_again=false,
+    ),
+  }
+  let changed = FsChanged(
+    root=ctx.test_root(),
+    generation=ctx.watch_identity(ready.watch_generation),
+    changes=Some([Created(Relative("src/new.mbt"))]),
+  )
+  let (_, refreshing) = update(emit, changed, ready, ctx)
+  assert_true(
+    refreshing.index is IndexReady(refreshing=true, refresh_again=false, ..),
+  )
+  let (_, coalesced) = update(emit, changed, refreshing, ctx)
+  assert_true(
+    coalesced.index is IndexReady(refreshing=true, refresh_again=true, ..),
+  )
+  let (_, following_up) = update(
+    emit,
+    FilesIndexed(
+      owner=ctx.owner,
+      epoch=ctx.request_epoch,
+      files=[Relative("src/new.mbt")],
+      truncated=false,
+    ),
+    coalesced,
+    ctx,
+  )
+  assert_true(
+    following_up.index
+    is IndexReady(
+      files=[Relative("src/new.mbt")],
+      refreshing=true,
+      refresh_again=false,
+      ..
+    ),
+  )
+  let (_, settled) = update(
+    emit,
+    FilesIndexed(
+      owner=ctx.owner,
+      epoch=ctx.request_epoch,
+      files=[Relative("src/new.mbt"), Relative("src/last.mbt")],
+      truncated=false,
+    ),
+    following_up,
+    ctx,
+  )
+  assert_true(
+    settled.index
+    is IndexReady(
+      files=[Relative("src/new.mbt"), Relative("src/last.mbt")],
+      refreshing=false,
+      refresh_again=false,
+      ..
+    ),
+  )
 }
 
 ///|
@@ -3797,7 +3979,12 @@ test "a resolved placement change reroots documents and fences old replies" {
     children: Map([
       (@pathx.Relative::root(), [{ name: "reviewed.mbt", path, is_dir: false }]),
     ]),
-    index: IndexReady(files=[path], truncated=false),
+    index: IndexReady(
+      files=[path],
+      truncated=false,
+      refreshing=false,
+      refresh_again=false,
+    ),
     watching: Some({
       owner: test_ctx().owner,
       root: old_workspace,
@@ -3913,7 +4100,12 @@ test "a missing checkout parks files and refuses editor actions until repair" {
     ..owned_state(),
     docs,
     review_generation: 4,
-    index: IndexReady(files=[Relative("a.mbt")], truncated=false),
+    index: IndexReady(
+      files=[Relative("a.mbt")],
+      truncated=false,
+      refreshing=false,
+      refresh_again=false,
+    ),
     watching: Some({
       owner: present.owner,
       root: present.test_root(),
@@ -4411,10 +4603,15 @@ test "ToggleTree flips the pane and RevealDirectory forces it open" {
 }
 
 ///|
-test "a ready file index keeps a shallow root watch while the panel is hidden" {
+test "a ready file index watches represented parents while the panel is hidden" {
   let state = {
     ..owned_state(),
-    index: IndexReady(files=[Relative("nested/file.mbt")], truncated=false),
+    index: IndexReady(
+      files=[Relative("nested/deep/file.mbt")],
+      truncated=false,
+      refreshing=false,
+      refresh_again=false,
+    ),
   }
   let hidden = { ..test_ctx(), panel_open: false }
   let (watched, _) = sync(test_emit(), state, hidden)
@@ -4425,7 +4622,7 @@ test "a ready file index keeps a shallow root watch while the panel is hidden" {
         owner: { channel: Local, session: "desktop-test" },
         root: _,
         files: [],
-        directories: [Relative("")],
+        directories: [Relative(""), Relative("nested"), Relative("nested/deep")],
       }
     ),
   )

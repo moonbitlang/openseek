@@ -29,7 +29,9 @@ pub fn Request::Request(
 ///|
 /// Read a bounded snapshot from the same Host file-search service as Ctrl+P.
 /// The cache key includes the conversation and concrete root, so moving from
-/// a project checkout to a worktree cannot reuse the previous snapshot.
+/// a project checkout to a worktree cannot reuse the previous snapshot. Each
+/// request clears that key first: this API represents a filesystem refresh,
+/// not another query ranked against the Host's previous snapshot.
 pub fn Request::run(
   self : Request,
   loaded : (Array[@pathx.Relative], Bool) -> @cmd.Cmd,
@@ -41,6 +43,18 @@ pub fn Request::run(
   let cache_key = "workspace-file-index:\{self.session}:\{root.path}"
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
+      ignore(
+        @interop.bridge_request(
+          self.channel,
+          @commands.fs_clear_file_search_cache,
+          { cache_key, },
+        ),
+      ) catch {
+        _ => {
+          scheduler.add(failed())
+          return
+        }
+      }
       let reply = @interop.bridge_request(
         self.channel,
         @commands.fs_search_files,

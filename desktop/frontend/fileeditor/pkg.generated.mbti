@@ -127,7 +127,7 @@ pub enum FileIndex {
   IndexEmpty
   IndexLoading
   IndexFailed
-  IndexReady(files~ : Array[@pathx.Relative], truncated~ : Bool)
+  IndexReady(files~ : Array[@pathx.Relative], truncated~ : Bool, refreshing~ : Bool, refresh_again~ : Bool)
 } derive(Eq)
 
 pub(all) struct FileStat {
