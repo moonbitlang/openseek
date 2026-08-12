@@ -8,8 +8,9 @@ struct Input {
 } derive(Eq)
 
 ///|
-/// One host transport generation the terminal must listen to. `attempt`
-/// advances only when reconnect backoff expires, not when the socket drops.
+/// One device's current host transport generation. The entry remains while
+/// its socket is temporarily down and disappears only when the device itself
+/// is removed; `attempt` advances when reconnect backoff expires.
 struct Connection {
   channel : @interop.ChannelId
   websocket_epoch : Int
@@ -57,14 +58,12 @@ priv enum ComponentMsg {
 }
 
 ///|
-/// A signed-out console has no live device channels. Closing the panel here
-/// prevents a later sign-in from silently reopening it when `sync` creates a
-/// replacement shell for the newly connected device.
-fn State::close_without_live_channels(
-  self : State,
-  live_channels : Array[@interop.ChannelId],
-) -> State {
-  if live_channels.is_empty() {
+/// A signed-out console has no devices. Close the panel at that ownership
+/// boundary, but preserve the user's visibility choice while retained devices
+/// reconnect; their old PTYs are still retired through `live_channels`
+/// reconciliation.
+fn State::close_without_devices(self : State, device_count : Int) -> State {
+  if device_count == 0 {
     { ..self, open: false }
   } else {
     self
@@ -113,7 +112,7 @@ pub fn component(
             )
           }
         }
-        state = state.close_without_live_channels(input.live_channels)
+        state = state.close_without_devices(input.connections.length())
         let (state, sync_command) = sync(emit, state, input.ctx)
         commands.push(sync_command)
         if state.open != was_open {
@@ -212,10 +211,10 @@ fn Input::sync_key(self : Input) -> String {
 }
 
 ///|
-test "terminal closes when the console loses every live channel" {
+test "terminal visibility distinguishes disconnect from device removal" {
   let open = { ..State::empty(), open: true }
-  let closed = open.close_without_live_channels([])
-  assert_false(closed.open)
-  let connected = open.close_without_live_channels([@interop.Local])
-  assert_true(connected.open)
+  let disconnected = open.close_without_devices(1)
+  assert_true(disconnected.open)
+  let signed_out = open.close_without_devices(0)
+  assert_false(signed_out.open)
 }
