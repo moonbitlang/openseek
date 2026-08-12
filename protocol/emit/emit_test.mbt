@@ -78,6 +78,7 @@ fn all_events() -> Array[@protocol.Event] {
     MaxStepsExhausted,
     TurnFailed(error="turn boom"),
     AssistantDelta(content="Hel"),
+    ReasoningDelta(content="think"),
     AssistantMessage(content="Hello"),
     ReasoningMessage(content="thinking"),
     Usage(usage=usage_sample()),

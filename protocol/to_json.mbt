@@ -34,6 +34,8 @@ pub fn Event::to_json(self : Event) -> Json {
     TurnFailed(error~) => { "event": "turn_failed", "error": error }
     AssistantDelta(content~) =>
       { "event": "assistant_delta", "content": content }
+    ReasoningDelta(content~) =>
+      { "event": "reasoning_delta", "content": content }
     AssistantMessage(content~) =>
       { "event": "assistant_message", "content": content }
     ReasoningMessage(content~) =>

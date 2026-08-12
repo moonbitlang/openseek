@@ -99,5 +99,6 @@ it.
 
 That is a guard on the caller's side, not a property of this package. The real
 issue is that the stream has no identity apart from the log: it is also why
-`reasoning_delta` could be dropped for log noise and silently take the clients'
-live-thinking view with it. Giving the protocol its own sink is the fix.
+`reasoning_delta` was once dropped for log noise and silently took the clients'
+live-thinking view with it. The typed event and its clients have since been
+restored, but giving the protocol its own sink is still the structural fix.

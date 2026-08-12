@@ -56,7 +56,8 @@ What that caught, once the readers were made exhaustive:
 
 - **`reasoning_delta`** had not been emitted since 2026-06-21 (a85d5682), yet the
   TUI and the desktop both still decoded it and rendered a live "thinking" view
-  from it — under tests that passed on fabricated lines.
+  from it — under tests that passed on fabricated lines. It was later restored
+  as a typed transient event, with both clients covered from the shared decoder.
 - **`runtime_update`** had not been emitted since 2026-07-05 (4b1ec831), yet the
   desktop host still decoded it, likewise under a passing test.
 - The desktop host **synthesized `compaction_failed` with `reason`** while the
@@ -147,9 +148,10 @@ contract too.
 
 ## Known gaps
 
-- **The stream still has no identity apart from the log, and that has already
-  cost a feature.** `reasoning_delta` was dropped for log noise (a85d5682) and
-  silently took the clients' live-thinking view with it, because there is no way
-  to send a reader something without also writing it to the log file. The engine
-  now pins its own level so `MOON_XLOG` cannot silence the protocol, but that is
-  a guard, not a fix: a real one gives the protocol its own sink.
+- **The stream still has no identity apart from the log.** `reasoning_delta` was
+  once dropped for log noise (a85d5682) and silently took the clients'
+  live-thinking view with it. The typed protocol made that coupling explicit and
+  the event is emitted again, but there is still no way to send a reader a
+  transient fragment without also writing it to the log file. The engine pins
+  its own level so `MOON_XLOG` cannot silence the protocol; a real separation
+  still needs a protocol sink distinct from diagnostic logging.

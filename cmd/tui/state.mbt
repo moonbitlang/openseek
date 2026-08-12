@@ -99,9 +99,11 @@ priv struct State {
   // Incremental assistant text currently arriving from `assistant_delta`
   // events. Cleared once the final assistant message is committed.
   mut streaming_response : String?
+  // Incremental thinking-mode text arriving from `reasoning_delta` events.
   // Shown only until the first content delta arrives, so the activity line
   // moves during the (often long) reasoning phase instead of sitting on
   // "Working (Ns)".
+  mut streaming_reasoning : String?
   // Steering input sent to the engine but not yet confirmed (no
   // steer_applied/steer_dropped back). Shown on the activity line so the
   // moment of pressing Enter is acknowledged immediately — the transcript
@@ -138,6 +140,7 @@ fn State::new(config : AppConfig) -> State {
     pending_steers: [],
     step_response: None,
     streaming_response: None,
+    streaming_reasoning: None,
     usage: None,
     schedule: None,
     goal: None,
@@ -154,6 +157,7 @@ fn State::start_run(self : State, started_ms : Int64) -> Int {
   self.run = Running(started_ms)
   self.step_response = None
   self.streaming_response = None
+  self.streaming_reasoning = None
   self.run_id
 }
 
@@ -178,6 +182,7 @@ fn State::finish_run(self : State) -> Unit {
   self.pending_steers.clear()
   self.step_response = None
   self.streaming_response = None
+  self.streaming_reasoning = None
 }
 
 ///|

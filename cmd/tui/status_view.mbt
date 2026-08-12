@@ -189,6 +189,19 @@ fn format_activity_text(state : State, cols~ : Int) -> @doc.Text? {
     )
     return Some(Text(spans + steer_segment))
   }
+  // Thinking-mode runs spend their first (often long) stretch emitting only
+  // reasoning deltas; show their tail dimmed so the line moves from the first
+  // token rather than sitting on "Working (Ns)" until content starts.
+  if state.streaming_reasoning is Some(reasoning) && !reasoning.is_blank() {
+    let spans = streaming_activity_spans(
+      "Thinking ",
+      reasoning,
+      cols~,
+      dim_preview=true,
+      reserved~,
+    )
+    return Some(Text(spans + steer_segment))
+  }
   let elapsed = format_elapsed_compact(
     elapsed_seconds(started_ms, @env.now().reinterpret_as_int64()),
   )

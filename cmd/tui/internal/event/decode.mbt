@@ -25,6 +25,7 @@ pub fn decode_event(object : Json) -> AgentEvent? {
   match event {
     AgentStep(_) => Some(AgentStep)
     AssistantDelta(content~) => Some(AssistantDelta(content))
+    ReasoningDelta(content~) => Some(ReasoningDelta(content))
     ReasoningMessage(content~) => Some(ReasoningMessage(content))
     SteerApplied(kind~, content~) =>
       match kind {

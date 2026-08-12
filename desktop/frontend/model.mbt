@@ -558,12 +558,13 @@ priv struct Conversation {
   // probe must not rewind it — see `Conversation::forget_pull_request`.
   pull_request_generation : Int
   watcher_status : String
-  // Live text of the in-flight assistant turn, accumulated from
-  // `assistant_delta` events and cleared by ordered full semantic, step,
-  // run-lifecycle, or reconnect boundaries. Follower commits are not run/step
-  // tagged and therefore never clear a potentially newer stream. Empty means
-  // not streaming.
+  // Live text of the in-flight assistant turn, accumulated from transient
+  // delta events and cleared by ordered full semantic, step, run-lifecycle,
+  // or reconnect boundaries. Follower commits are not run/step tagged and
+  // therefore never clear a potentially newer stream. Empty means not
+  // streaming.
   streaming_response : String
+  streaming_reasoning : String
   // Local submissions awaiting exact id-bearing host receipts. Initial prompt
   // and steer entries share the ledger; steer state is also the sole source
   // for pending UI and provisional failures. Canonical User text never claims
@@ -2119,6 +2120,7 @@ fn empty_conversation(
     pull_request_generation: 0,
     watcher_status: "",
     streaming_response: "",
+    streaming_reasoning: "",
     input_ledger: [],
     messages: [],
     watermark: 0,
@@ -3021,7 +3023,7 @@ fn Conversation::visible_subruns(self : Conversation) -> Array[SubrunLane] {
 
 ///|
 fn Conversation::clear_streams(self : Conversation) -> Conversation {
-  { ..self, streaming_response: "" }
+  { ..self, streaming_response: "", streaming_reasoning: "" }
 }
 
 ///|

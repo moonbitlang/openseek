@@ -10,7 +10,7 @@ fn decode(line : String) -> @openseek_protocol.Event? {
 }
 
 ///|
-test "decodes a streaming delta" {
+test "decodes streaming answer and reasoning deltas" {
   debug_inspect(
     decode(
       (
@@ -19,6 +19,16 @@ test "decodes a streaming delta" {
     ),
     content=(
       #|Some(AssistantDelta(content="Hel"))
+    ),
+  )
+  debug_inspect(
+    decode(
+      (
+        #|{"timestamp":"t","level":"INFO","source":"s","event":"reasoning_delta","content":"think"}
+      ),
+    ),
+    content=(
+      #|Some(ReasoningDelta(content="think"))
     ),
   )
 }

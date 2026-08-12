@@ -12,6 +12,10 @@ test "decode maps each engine event kind" {
     is Some(AssistantDelta("tok")),
   )
   assert_true(
+    @event.decode_event({ "event": "reasoning_delta", "content": "think" })
+    is Some(ReasoningDelta("think")),
+  )
+  assert_true(
     @event.decode_event({
       "event": "reasoning_message",
       "content": "full thought",

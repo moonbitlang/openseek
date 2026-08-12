@@ -69,6 +69,7 @@ pub fn decode_event(object : Json) -> AgentEvent? {
     SubrunStarted(..)
     | SubrunFinished(..)
     | AssistantDelta(..)
+    | ReasoningDelta(..)
     | ReasoningMessage(..)
     | BackgroundNotice(..)
     | SessionError(..)

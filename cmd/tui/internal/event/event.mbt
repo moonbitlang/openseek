@@ -35,6 +35,7 @@ pub(all) struct ToolResultEvent {
 pub(all) enum AgentEvent {
   AgentStep
   AssistantDelta(String)
+  ReasoningDelta(String)
   ReasoningMessage(String)
   SteerApplied(@agent_runtime.SteerInput)
   SteerDropped(String)

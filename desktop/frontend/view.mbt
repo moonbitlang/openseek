@@ -1398,6 +1398,20 @@ fn streaming_response_view(
 }
 
 ///|
+/// The in-flight reasoning stream: muted plain text in the activity indent,
+/// with no role label or avatar. Partial reasoning is deliberately not parsed
+/// as markdown on every delta; the durable completed thought uses the normal
+/// activity renderer once its session commit arrives.
+fn streaming_reasoning_view(content : String, streaming~ : Bool) -> @html.Html {
+  let msg_class = if streaming { "msg streaming" } else { "msg" }
+  @html.div(class="activity-row", [
+    @html.div(class=msg_class, [
+      @html.div(class="msg-content activity-thinking", content),
+    ]),
+  ])
+}
+
+///|
 fn transcript_view(
   dispatch : @cmd.Emit[Msg],
   conv : Conversation,
@@ -1456,6 +1470,16 @@ fn transcript_view(
       }
       items.push(activity_view(run, on_open))
     }
+  }
+  // Reasoning remains visible beside an answer that has started streaming;
+  // only the fragment stream still receiving text carries the caret.
+  if !conv.streaming_reasoning.is_empty() {
+    items.push(
+      streaming_reasoning_view(
+        conv.streaming_reasoning,
+        streaming=conv.streaming_response.is_empty(),
+      ),
+    )
   }
   if !conv.streaming_response.is_empty() {
     items.push(streaming_response_view(conv.streaming_response, on_open))
@@ -3578,6 +3602,20 @@ test "every message names its speaker to assistive technology" {
   assert_true(
     streaming.contains("<span class=\"visually-hidden\">OpenSeek</span>"),
   )
+}
+
+///|
+#warnings("-alert_unstable")
+test "live reasoning renders as muted plain text" {
+  let rendered = @rabbita.render_to_string(() => {
+    @rabbita.Val::constant(
+      streaming_reasoning_view("check <partial>", streaming=true),
+    )
+  })
+  assert_true(rendered.contains("class=\"msg streaming\""))
+  assert_true(rendered.contains("activity-thinking"))
+  assert_true(rendered.contains("check &lt;partial&gt;"))
+  assert_false(rendered.contains("class=\"msg-content markdown"))
 }
 
 ///|

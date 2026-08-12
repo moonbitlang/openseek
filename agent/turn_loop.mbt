@@ -427,11 +427,18 @@ async fn AgentLoop::chat(self : Self, step : Int) -> @deepseek.ChatResponse {
   let response = self.client.chat(
     self.messages,
     tools=self.tools.function_tools(),
-    stream=StreamHandler(on_content_delta=delta => {
-      if delta != "" {
-        @emit.emit(AssistantDelta(content=delta))
-      }
-    }),
+    stream=StreamHandler(
+      on_content_delta=delta => {
+        if delta != "" {
+          @emit.emit(AssistantDelta(content=delta))
+        }
+      },
+      on_reasoning_delta=delta => {
+        if delta != "" {
+          @emit.emit(ReasoningDelta(content=delta))
+        }
+      },
+    ),
   )
   response.log_and_reasoning_content()
 }

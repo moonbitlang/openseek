@@ -20,6 +20,10 @@ pub(all) enum Event {
   MaxStepsExhausted
   TurnFailed(error~ : String)
   AssistantDelta(content~ : String)
+  /// One transient thinking fragment from the provider stream. Readers use
+  /// these only for live progress; `ReasoningMessage` and the durable session
+  /// item remain the complete reasoning record once the response settles.
+  ReasoningDelta(content~ : String)
   AssistantMessage(content~ : String)
   ReasoningMessage(content~ : String)
   Usage(usage~ : Usage)

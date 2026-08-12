@@ -1059,11 +1059,20 @@ fn apply_engine_event(
           { ..conv, streaming_response: conv.streaming_response + content },
         )
       }
+    ReasoningDelta(content) =>
+      if content.is_empty() {
+        (false, conv)
+      } else {
+        (
+          true,
+          { ..conv, streaming_reasoning: conv.streaming_reasoning + content },
+        )
+      }
     // Full semantic events never append transcript items: the store commit is
-    // the sole source of the durable reasoning/answer item. The current wire
-    // protocol has no live reasoning stream, while the full assistant event
-    // settles the live response.
-    ReasoningMessage(_) => (false, conv)
+    // the sole source of the durable reasoning/answer item. The completed
+    // reasoning event only settles its transient preview; the following store
+    // commit supplies the folded durable thought exactly once.
+    ReasoningMessage(_) => (false, { ..conv, streaming_reasoning: "" })
     AssistantMessage(_) => (false, conv.clear_streams())
     RuntimeUpdate(content) => {
       let update = @transcript.parse_runtime_update(content)
@@ -6295,6 +6304,45 @@ test "assistant deltas accumulate into the streaming response" {
 }
 
 ///|
+test "reasoning deltas accumulate only in the transient thinking stream" {
+  let dispatch = test_dispatch()
+  let (_, first) = update_dev(
+    dispatch,
+    Engine(Some("r7"), ReasoningDelta("I"), session=None),
+    running_model(),
+  )
+  let (_, second) = update_dev(
+    dispatch,
+    Engine(Some("r7"), ReasoningDelta(" think"), session=None),
+    first,
+  )
+  inspect(second.active().streaming_reasoning, content="I think")
+  inspect(second.active().streaming_response, content="")
+  inspect(second.active().messages.length(), content="0")
+}
+
+///|
+test "update is pure: replaying a reasoning delta is idempotent" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    streaming_reasoning: "partial",
+  })
+  let (_, once) = update_dev(
+    dispatch,
+    Engine(Some("r7"), ReasoningDelta("!"), session=None),
+    model,
+  )
+  let (_, twice) = update_dev(
+    dispatch,
+    Engine(Some("r7"), ReasoningDelta("!"), session=None),
+    model,
+  )
+  inspect(once.active().streaming_reasoning, content="partial!")
+  inspect(twice.active().streaming_reasoning, content="partial!")
+}
+
+///|
 test "update is pure: replaying a delta on the same model is idempotent" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
@@ -6329,12 +6377,16 @@ test "deltas from an unknown run are dropped" {
 ///|
 test "reasoning message waits for its durable commit" {
   let dispatch = test_dispatch()
-  let model = running_model()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    streaming_reasoning: "partial thought",
+  })
   let (_, next) = update_dev(
     dispatch,
     Engine(Some("r7"), ReasoningMessage("full thought"), session=None),
     model,
   )
+  inspect(next.active().streaming_reasoning, content="")
   inspect(next.active().messages.length(), content="0")
   inspect(next.active().overlay.length(), content="0")
 }
@@ -6345,6 +6397,7 @@ test "assistant message only settles the transient response" {
   let model = running_model().replace_conversation({
     ..running_conversation(),
     streaming_response: "answ",
+    streaming_reasoning: "thought",
   })
   let (_, next) = update_dev(
     dispatch,
@@ -6352,6 +6405,7 @@ test "assistant message only settles the transient response" {
     model,
   )
   inspect(next.active().streaming_response, content="")
+  inspect(next.active().streaming_reasoning, content="")
   inspect(next.active().messages.length(), content="0")
   inspect(next.active().overlay.length(), content="0")
 }
@@ -6379,6 +6433,7 @@ test "a new agent step clears the live stream" {
   let model = running_model().replace_conversation({
     ..running_conversation(),
     streaming_response: "left",
+    streaming_reasoning: "thinking",
   })
   let (_, next) = update_dev(
     dispatch,
@@ -6386,6 +6441,7 @@ test "a new agent step clears the live stream" {
     model,
   )
   inspect(next.active().streaming_response, content="")
+  inspect(next.active().streaming_reasoning, content="")
 }
 
 ///|
@@ -6394,6 +6450,7 @@ test "finished run clears any leftover stream" {
   let model = running_model().replace_conversation({
     ..running_conversation(),
     streaming_response: "leftover",
+    streaming_reasoning: "thinking",
   })
   let (_, next) = update_dev(
     dispatch,
@@ -6406,6 +6463,7 @@ test "finished run clears any leftover stream" {
     model,
   )
   inspect(next.active().streaming_response, content="")
+  inspect(next.active().streaming_reasoning, content="")
   inspect(next.active().is_running(), content="false")
 }
 
@@ -15377,6 +15435,7 @@ test "a delayed assistant commit never clears a newer live delta" {
   let model = running_model().replace_conversation({
     ..running_conversation(),
     streaming_response: "newer turn fragment",
+    streaming_reasoning: "newer reasoning fragment",
   })
   let (_, committed) = update_dev(
     dispatch,
@@ -15393,6 +15452,10 @@ test "a delayed assistant commit never clears a newer live delta" {
     model,
   )
   inspect(committed.active().streaming_response, content="newer turn fragment")
+  inspect(
+    committed.active().streaming_reasoning,
+    content="newer reasoning fragment",
+  )
 }
 
 ///|
@@ -15403,6 +15466,7 @@ test "a delayed terminal commit never clears a newer live delta" {
     messages: [{ kind: User, content: "older prompt", ts: None }],
     watermark: 1,
     streaming_response: "next turn fragment",
+    streaming_reasoning: "next turn reasoning",
   })
   let (_, committed) = update_dev(
     dispatch,
@@ -15415,6 +15479,7 @@ test "a delayed terminal commit never clears a newer live delta" {
     model,
   )
   inspect(committed.active().streaming_response, content="next turn fragment")
+  inspect(committed.active().streaming_reasoning, content="next turn reasoning")
 }
 
 ///|

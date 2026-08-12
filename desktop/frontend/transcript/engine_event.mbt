@@ -9,6 +9,7 @@ pub(all) enum EngineEvent {
   // numbered it (1f761102, the commit that introduced both).
   AgentStep(Int?)
   AssistantDelta(String)
+  ReasoningDelta(String)
   ReasoningMessage(String)
   AssistantMessage(String)
   RuntimeUpdate(String)
@@ -68,6 +69,7 @@ pub fn decode_engine_event(
   match stream.event {
     AgentStep(step~) => Some(AgentStep(Some(step)))
     AssistantDelta(content~) => Some(AssistantDelta(content))
+    ReasoningDelta(content~) => Some(ReasoningDelta(content))
     ReasoningMessage(content~) => Some(ReasoningMessage(content))
     AssistantMessage(content~) => Some(AssistantMessage(content))
     // A background job's completion notice (the `moon_check --watch` stream),
@@ -178,6 +180,12 @@ test "decode recognizes the streaming events" {
     )
     is Some(AssistantDelta("abc")) else {
     fail("assistant_delta not decoded")
+  }
+  guard decode_engine_event(
+      event_fields({ "event": "reasoning_delta", "content": "think" }),
+    )
+    is Some(ReasoningDelta("think")) else {
+    fail("reasoning_delta not decoded")
   }
   guard decode_engine_event(
       event_fields({ "event": "reasoning_message", "content": "all" }),

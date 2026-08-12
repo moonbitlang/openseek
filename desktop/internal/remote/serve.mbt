@@ -566,6 +566,7 @@ test "remote delivery retains streaming runtime and error events" {
   let events : Array[@wire.Event] = [
     AgentStep(step=1),
     AssistantDelta(content="delta"),
+    ReasoningDelta(content="thinking"),
     ReasoningMessage(content="reasoning"),
     Usage(usage={
       prompt_tokens: 1,

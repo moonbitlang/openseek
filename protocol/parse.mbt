@@ -57,6 +57,8 @@ pub fn parse(line : Json) -> Event? {
     "turn_failed" => text(fields, "error").map(error => TurnFailed(error~))
     "assistant_delta" =>
       text(fields, "content").map(content => AssistantDelta(content~))
+    "reasoning_delta" =>
+      text(fields, "content").map(content => ReasoningDelta(content~))
     "assistant_message" =>
       text(fields, "content").map(content => AssistantMessage(content~))
     "reasoning_message" =>

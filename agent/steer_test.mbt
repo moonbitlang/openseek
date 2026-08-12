@@ -335,7 +335,7 @@ async fn reasoning_log_test_server(group : @async.TaskGroup[Unit]) -> String? {
 }
 
 ///|
-async test "streaming reasoning deltas are skipped in logs" {
+async test "streaming reasoning deltas reach the engine event stream" {
   @async.with_task_group() <| group => {
     guard reasoning_log_test_server(group) is Some(url) else { return }
     let entries : Array[Json] = []
@@ -366,7 +366,7 @@ async test "streaming reasoning deltas are skipped in logs" {
       fail("expected a completed one-step turn")
     }
     let event_names = entries.map(log_event)
-    assert_false(event_names.contains("reasoning_delta"))
+    assert_eq(event_names.filter(name => name == "reasoning_delta").length(), 2)
     assert_true(event_names.contains("reasoning_message"))
     assert_true(event_names.contains("assistant_delta"))
     assert_true(event_names.contains("assistant_message"))
