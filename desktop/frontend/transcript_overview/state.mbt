@@ -4,8 +4,10 @@
 
 ///|
 pub(all) struct State {
-  // The tick the pointer is on, owning the preview popover.
-  hover : TurnKey?
+  // The tick the pointer is on (owning the preview popover), and whether
+  // its preview opens upward — measured from the tick's real position at
+  // enter time, so only a tick genuinely out of downward room flips.
+  hover : (TurnKey, Bool)?
   // The turn the transcript viewport currently reads, highlighted on the
   // rail. Reported by the root's scroll watcher.
   active : TurnKey?
@@ -18,10 +20,11 @@ pub fn State::empty() -> State {
 
 ///|
 pub(all) enum Msg {
-  // The pointer entered a tick: its preview popover opens. The popover
-  // closes on `Left` — leaving the whole rail — rather than per tick, so
-  // sliding along the rail never blanks the preview between ticks.
-  Entered(TurnKey)
+  // The pointer entered a tick: its preview popover opens, upward when the
+  // enter-time measurement says a downward one would leave the scroller.
+  // The popover closes on `Left` — leaving the whole rail — rather than per
+  // tick, so sliding along the rail never blanks the preview between ticks.
+  Entered(TurnKey, flip~ : Bool)
   Left
   // A tick was clicked. The highlight moves eagerly on the click's own
   // render; the scroll watcher would only confirm it after the jump settles.
@@ -33,7 +36,7 @@ pub(all) enum Msg {
 ///|
 pub fn update(msg : Msg, state : State) -> State {
   match msg {
-    Entered(key) => { ..state, hover: Some(key) }
+    Entered(key, flip~) => { ..state, hover: Some((key, flip)) }
     Left => { ..state, hover: None }
     Clicked(key) => { ..state, active: Some(key) }
     ActiveChanged(key) => { ..state, active: key }

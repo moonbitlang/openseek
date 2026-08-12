@@ -26,14 +26,14 @@ pub(all) struct Entry {
 } derive(Eq, @debug.Debug)
 
 pub(all) enum Msg {
-  Entered(TurnKey)
+  Entered(TurnKey, flip~ : Bool)
   Left
   Clicked(TurnKey)
   ActiveChanged(TurnKey?)
 }
 
 pub(all) struct State {
-  hover : TurnKey?
+  hover : (TurnKey, Bool)?
   active : TurnKey?
 } derive(Eq, @debug.Debug)
 pub fn State::empty() -> Self

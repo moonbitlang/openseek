@@ -95,7 +95,10 @@ test "the state machine's transitions are idempotent" {
   for
     msg in (
       [
-        @transcript_overview.Entered(@transcript_overview.Durable(3)),
+        @transcript_overview.Entered(
+          @transcript_overview.Durable(3),
+          flip=false,
+        ),
         @transcript_overview.Left,
         @transcript_overview.Clicked(@transcript_overview.Local(2)),
         @transcript_overview.ActiveChanged(
@@ -112,10 +115,11 @@ test "the state machine's transitions are idempotent" {
 test "hover opens on enter, survives a click, and closes on leaving the rail" {
   let key = @transcript_overview.Durable(7)
   let state = @transcript_overview.update(
-    @transcript_overview.Entered(key),
+    @transcript_overview.Entered(key, flip=true),
     @transcript_overview.State::empty(),
   )
-  @debug.assert_eq(state.hover, Some(key))
+  // The enter-time flip measurement rides along with the hover.
+  @debug.assert_eq(state.hover, Some((key, true)))
   let clicked = @transcript_overview.update(
     @transcript_overview.Clicked(key),
     state,
@@ -123,7 +127,7 @@ test "hover opens on enter, survives a click, and closes on leaving the rail" {
   // The click highlights eagerly and keeps the popover: the pointer is
   // still on the tick.
   @debug.assert_eq(clicked.active, Some(key))
-  @debug.assert_eq(clicked.hover, Some(key))
+  @debug.assert_eq(clicked.hover, Some((key, true)))
   let left = @transcript_overview.update(@transcript_overview.Left, clicked)
   @debug.assert_eq(left.hover, None)
   @debug.assert_eq(left.active, Some(key))
@@ -177,7 +181,7 @@ test "the active turn's tick is marked and the popover renders only hovered" {
   assert_false(plain.contains("overview-tick active"))
   assert_false(plain.contains("overview-preview"))
   let state : @transcript_overview.State = {
-    hover: Some(@transcript_overview.Durable(1)),
+    hover: Some((@transcript_overview.Durable(1), false)),
     active: Some(@transcript_overview.Durable(4)),
   }
   let marked = render(two_entries(), state)
@@ -187,6 +191,17 @@ test "the active turn's tick is marked and the popover renders only hovered" {
   assert_true(marked.contains("10:00"))
   assert_true(marked.contains("overview-preview-reply"))
   assert_true(marked.contains("first answer"))
+  assert_false(marked.contains("overview-preview flip"))
   // The unhovered second turn renders no popover of its own.
   assert_false(marked.contains("second question</div>"))
+}
+
+///|
+test "a hover measured out of downward room opens its preview upward" {
+  let state : @transcript_overview.State = {
+    hover: Some((@transcript_overview.Durable(1), true)),
+    active: None,
+  }
+  let markup = render(two_entries(), state)
+  assert_true(markup.contains("overview-preview flip"))
 }
