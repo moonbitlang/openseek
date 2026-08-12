@@ -480,7 +480,7 @@ fn retry_session_snapshot(
     )
     let next = model.replace_conversation(failed)
     let scroll = if failed.overlay.length() > conv.overlay.length() {
-      scroll_if_active(next, channel, session)
+      scroll_if_active(dispatch, next, channel, session)
     } else {
       @cmd.none
     }
@@ -567,12 +567,9 @@ fn apply_session_snapshot(
     next = probed
     commands.push(branch_cmd)
   } else {
-    commands.push(scroll_if_active(next, channel, session))
-    if channel == next.focused && session == next.active_session {
-      commands.push(
-        report_visible_turn_after_render(dispatch, skip_unchanged=true),
-      )
-    }
+    // `scroll_if_active` also recomputes the overview's active turn for the
+    // on-screen conversation.
+    commands.push(scroll_if_active(dispatch, next, channel, session))
   }
   if gapped || reload_after_current {
     guard next.find_conversation(channel, session) is Some(conv) else {
@@ -596,18 +593,29 @@ fn apply_session_snapshot(
 /// screen — a background conversation's stream must not yank the visible
 /// scroll position around — and only while the user is at the bottom:
 /// someone who scrolled up to read history stays where they are.
+///
+/// Every on-screen transcript change also recomputes the overview's active
+/// turn: a commit can move a bubble across the reading line while the
+/// scroll write clamps (or is skipped) and fires no event. The recompute
+/// dispatches only when the turn actually changed.
 fn scroll_if_active(
+  dispatch : @cmd.Emit[Msg],
   model : Model,
   channel : @interop.ChannelId,
   session_id : String,
 ) -> @cmd.Cmd {
-  if channel == model.focused &&
-    session_id == model.active_session &&
-    model.transcript_pinned {
+  guard channel == model.focused && session_id == model.active_session else {
+    return @cmd.none
+  }
+  let follow = if model.transcript_pinned {
     scroll_transcript_after_render()
   } else {
     @cmd.none
   }
+  @cmd.batch([
+    follow,
+    report_visible_turn_after_render(dispatch, skip_unchanged=true),
+  ])
 }
 
 ///|
@@ -3934,7 +3942,7 @@ fn update_device_msg(
           (@cmd.none, model)
         } else {
           (
-            scroll_if_active(model, channel, session),
+            scroll_if_active(dispatch, model, channel, session),
             model.replace_conversation(next),
           )
         }
@@ -3953,7 +3961,7 @@ fn update_device_msg(
         )
         if removed {
           (
-            scroll_if_active(model, channel, session),
+            scroll_if_active(dispatch, model, channel, session),
             model.replace_conversation(next),
           )
         } else {
@@ -4554,7 +4562,7 @@ fn update_device_msg(
               let (changed, next) = conv.apply_commit(sequence, item, ts?)
               (
                 if changed {
-                  scroll_if_active(model, channel, session)
+                  scroll_if_active(dispatch, model, channel, session)
                 } else {
                   @cmd.none
                 },
@@ -5222,7 +5230,7 @@ fn update_device_msg(
         let (transcript_grew, next) = apply_engine_event(conv, event, run_id)
         (
           if transcript_grew {
-            scroll_if_active(model, channel, conv.session_id)
+            scroll_if_active(dispatch, model, channel, conv.session_id)
           } else {
             @cmd.none
           },
@@ -5445,7 +5453,7 @@ fn update_device_msg(
             ),
           ]
           if changed {
-            commands.push(scroll_if_active(model, channel, session))
+            commands.push(scroll_if_active(dispatch, model, channel, session))
           }
           (@cmd.batch(commands), updated)
         }
@@ -5479,7 +5487,7 @@ fn update_device_msg(
             let request_generation = dev.worktrees_request_generation + 1
             (
               @cmd.batch([
-                scroll_if_active(model, channel, session),
+                scroll_if_active(dispatch, model, channel, session),
                 fetch_worktrees(
                   dispatch,
                   channel,
@@ -5494,7 +5502,7 @@ fn update_device_msg(
               }),
             )
           } else {
-            (scroll_if_active(model, channel, session), updated)
+            (scroll_if_active(dispatch, model, channel, session), updated)
           }
         }
       } else {
@@ -5532,7 +5540,7 @@ fn update_device_msg(
           conv.append_local_notice(Assistant(is_danger=true), content)
         }
         (
-          scroll_if_active(model, channel, conv.session_id),
+          scroll_if_active(dispatch, model, channel, conv.session_id),
           model.replace_conversation(
             if next.run is NoRun(..) {
               { ..next, run: NoRun(ended=Some(RunErrored)) }
@@ -5548,7 +5556,7 @@ fn update_device_msg(
     CompactRejected(session~, message~) =>
       if model.find_conversation(channel, session) is Some(conv) {
         (
-          scroll_if_active(model, channel, conv.session_id),
+          scroll_if_active(dispatch, model, channel, conv.session_id),
           model.replace_conversation({
             ..conv.append_local_notice(Assistant(is_danger=true), message),
             compaction: NotCompacting,
@@ -5591,7 +5599,7 @@ fn update_device_msg(
           { ..reported, goal_pending: None }
         }
         (
-          scroll_if_active(model, channel, conv.session_id),
+          scroll_if_active(dispatch, model, channel, conv.session_id),
           model.replace_conversation(restored),
         )
       } else {
@@ -5623,7 +5631,7 @@ fn update_device_msg(
           "Goal delivery could not be confirmed (" + message + ")" + detail,
         )
         (
-          scroll_if_active(model, channel, conv.session_id),
+          scroll_if_active(dispatch, model, channel, conv.session_id),
           model.replace_conversation(reported),
         )
       } else {
@@ -5796,7 +5804,9 @@ fn update_device_msg(
           }
         }
         if base.overlay.length() > conv.overlay.length() {
-          commands.push(scroll_if_active(model, channel, conv.session_id))
+          commands.push(
+            scroll_if_active(dispatch, model, channel, conv.session_id),
+          )
         }
         (@cmd.batch(commands), next)
       } else {
