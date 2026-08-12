@@ -1237,6 +1237,30 @@ fn with_watch(
 }
 
 ///|
+/// Park this panel's watcher on its current Host connection before another
+/// device takes focus. Keeping the old owner/root state intact lets the normal
+/// sync pass retire its file-index cache at the same boundary.
+pub fn State::retire_watcher(
+  self : State,
+  dispatch : @cmd.Emit[Msg],
+  ctx : Ctx,
+) -> (State, @cmd.Cmd) {
+  guard self.watching is Some(current) else { return (self, @cmd.none) }
+  let watch_generation = self.watch_generation + 1
+  let watch_identity = ctx.watch_identity(watch_generation)
+  (
+    { ..self, watching: None, watch_generation, watch_error: None },
+    watch_workspace(
+      dispatch,
+      channel=current.owner.channel,
+      failure_generation=watch_identity,
+      event_generation=ctx.watch_event_identity(ctx.request_epoch),
+      None,
+    ),
+  )
+}
+
+///|
 const ChangesPollDelayMilliseconds = 3000
 
 ///|
@@ -1500,6 +1524,20 @@ pub fn sync(
     same_owner &&
     state.placement_parked &&
     !placement_identity_changed
+  // The Host file-search service retains complete snapshots by cache key.
+  // Clear the outgoing key exactly when this panel retires its index; keeping
+  // it while BridgeReady merely replaces the connection is harmless because
+  // that new HostConnection starts with an empty service.
+  let retire_index_cmd = if (
+      owner_changed || placement_identity_changed || parking_existing_owner
+    ) &&
+    !(state.index is IndexEmpty) &&
+    state.owner is Some(old_owner) &&
+    state.placement_root is Some(old_root) {
+    @files.Request(old_owner.channel, old_owner.session, Some(old_root)).retire()
+  } else {
+    @cmd.none
+  }
   // Every filesystem request in this reconciliation carries the incarnation
   // it addresses. Compute a boundary's next epoch before scheduling any work;
   // the root projection catches up from the returned state on the next pass.
@@ -1788,7 +1826,9 @@ pub fn sync(
   } else {
     (@cmd.none, state)
   }
-  let pending_cmd = @cmd.batch([reroot_cmd, restore_cmd, changes_cmd])
+  let pending_cmd = @cmd.batch([
+    retire_index_cmd, reroot_cmd, restore_cmd, changes_cmd,
+  ])
   // A closed panel re-roots (above) and keeps the watcher placed, but the tree
   // itself can wait for the reopen. Unresolved placement takes the same early
   // exit even if the dock is visible: no host path may fall back to root.

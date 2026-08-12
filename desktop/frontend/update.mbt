@@ -50,8 +50,12 @@ fn focus_channel(
   } else {
     return (@cmd.none, model)
   }
+  let (file_panel, unwatch_cmd) = model.file_panel.retire_watcher(
+    dispatch.map(msg => FileEditor(msg)),
+    file_ctx(model),
+  )
   (
-    focus_cmd,
+    @cmd.batch([focus_cmd, unwatch_cmd]),
     {
       ..model.clear_host_settings(),
       focused: channel,
@@ -59,9 +63,10 @@ fn focus_channel(
       loading_conversation: None,
       installed_skills: [],
       completion: None,
-      // Forgetting what was watched makes the post-dispatch panel sync
-      // re-root `fs.watch` against the newly focused host.
-      file_panel: { ..model.file_panel, watching: None },
+      // The old HostConnection is already parked. Preserve the remaining
+      // owner/root state until the post-dispatch sync retires its file-index
+      // cache and re-roots against the newly focused host.
+      file_panel,
     },
   )
 }
@@ -7240,6 +7245,54 @@ test "BridgeReady reattaches a live file index watcher" {
   assert_true(
     next.file_panel.index is @fileeditor.IndexReady(refreshing=false, ..),
   )
+}
+
+///|
+test "device focus retires the outgoing watcher and file index" {
+  let dispatch = test_dispatch()
+  let remote : @interop.ChannelId = Remote("remote-device")
+  let model = test_model()
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-test",
+  }
+  let root = @interop.ChannelId::Local.test_resource("/scratch/desktop-test")
+  let devices = model.devices.copy()
+  devices.push({ ..empty_device_state(remote), bridge: remote.test_connected() })
+  let conversations = model.conversations.copy()
+  conversations.push(empty_conversation(remote, "remote-session"))
+  let panel = {
+    ..model.file_panel,
+    owner: Some(owner),
+    placement_known: true,
+    placement_workspace: None,
+    placement_root: Some(root),
+    placement_checkout: Some(@interop.WorkspaceRoot),
+    watching: Some({ owner, root, files: [], directories: [], recursive: true }),
+    watch_generation: 7,
+  }
+  let model = { ..model, devices, conversations, file_panel: panel }
+  let (_, loading) = @fileeditor.update(
+    dispatch.map(msg => FileEditor(msg)),
+    @fileeditor.EnsureFileIndex,
+    panel,
+    file_ctx(model),
+  )
+  assert_true(loading.index is @fileeditor.IndexLoading(_))
+  let (_, next) = update(dispatch, OpenSession(remote, "remote-session"), {
+    ..model,
+    file_panel: loading,
+  })
+  // The old Local HostConnection receives `fs.unwatch` before the common sync
+  // replaces its owner. That sync also retires the in-flight Local index key;
+  // the new remote conversation starts without either resource.
+  assert_eq(next.focused, remote)
+  assert_true(
+    next.file_panel.owner is Some({ channel: Remote("remote-device"), .. }),
+  )
+  assert_true(next.file_panel.watching is None)
+  assert_eq(next.file_panel.watch_generation, 8)
+  assert_true(next.file_panel.index is @fileeditor.IndexEmpty)
 }
 
 ///|

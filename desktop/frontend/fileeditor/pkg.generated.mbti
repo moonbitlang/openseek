@@ -225,6 +225,7 @@ pub(all) struct State {
   error : String?
 } derive(Eq)
 pub fn State::empty() -> Self
+pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
 
 pub(all) enum TabState {
   TabLoading

@@ -27,6 +27,11 @@ pub fn Request::Request(
 }
 
 ///|
+fn Request::cache_key(self : Request, root : @common.Uri) -> String {
+  "workspace-file-index:\{self.session}:\{root.path}"
+}
+
+///|
 /// Read a bounded snapshot from the same Host file-search service as Ctrl+P.
 /// The cache key includes the conversation and concrete root, so moving from
 /// a project checkout to a worktree cannot reuse the previous snapshot. Each
@@ -40,7 +45,7 @@ pub fn Request::run(
   guard self.root is Some(root) && @resource.belongs_to(root, self.channel) else {
     return failed()
   }
-  let cache_key = "workspace-file-index:\{self.session}:\{root.path}"
+  let cache_key = self.cache_key(root)
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       // Clear and repopulate one Host cache key as an indivisible sequence.
@@ -90,6 +95,36 @@ pub fn Request::run(
         scheduler.add(loaded(paths, reply.limit_hit))
       }) catch {
         _ => scheduler.add(failed())
+      }
+    })
+  })
+}
+
+///|
+/// Retire the Host snapshot after this conversation/root stops owning an
+/// index. The same per-key lane orders the clear after any scan already in
+/// flight, so an A→B→A transition cannot let the retired A scan repopulate its
+/// cache after cleanup. Retirement is best-effort because the old connection
+/// may already be gone; the frontend state has moved on either way.
+pub fn Request::retire(self : Request) -> @cmd.Cmd {
+  guard self.root is Some(root) && @resource.belongs_to(root, self.channel) else {
+    return @cmd.none
+  }
+  let cache_key = self.cache_key(root)
+  @cmd.custom_cmd(_scheduler => {
+    @js.async_run(() => {
+      @interop.in_ordered_lane(cache_key, () => {
+        ignore(
+          @interop.bridge_request(
+            self.channel,
+            @commands.fs_clear_file_search_cache,
+            { cache_key, },
+          ),
+        ) catch {
+          _ => ()
+        }
+      }) catch {
+        _ => ()
       }
     })
   })
