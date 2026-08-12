@@ -443,19 +443,18 @@ pub(all) struct WorktreeCreateReply {
 ///|
 pub(all) struct OpenPathEditorTarget {
   // Slash-separated path relative to the conversation's resolved checkout.
-  // Older hosts returned a slash-rooted resource path; the frontend keeps
-  // accepting that form so mixed-version remote connections remain usable.
   path : String
-  line : Int
+  // Absent for an ordinary file reference; present for a parsed
+  // `:line[:column]` or `#Lline` suffix.
+  line : Int?
   column : Int?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
 pub(all) struct OpenPathReply {
-  // True only when the host handed a path to the system opener.
+  // True only when the host handed a non-text path to the system opener.
   opened : Bool
-  // Present when a missing `path:line[:column]` literal resolved to a real
-  // workspace file and should instead open in the built-in editor.
+  // Present when a viewer-sized UTF-8 file should open in the built-in editor.
   editor_target : OpenPathEditorTarget?
 } derive(Debug, Eq, FromJson, ToJson)
 

@@ -522,7 +522,7 @@ pub(all) struct OpenExternalReply {
 
 pub(all) struct OpenPathEditorTarget {
   path : String
-  line : Int
+  line : Int?
   column : Int?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 

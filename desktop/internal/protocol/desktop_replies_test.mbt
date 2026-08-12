@@ -69,15 +69,24 @@ test "Git original-file replies round-trip through their manual codec" {
 }
 
 ///|
-test "open-path replies accept legacy opener results and editor targets" {
-  let legacy : @protocol.OpenPathReply = @json.from_json({ "opened": true })
-  @debug.assert_eq(legacy, { opened: true, editor_target: None })
-  let target : @protocol.OpenPathReply = {
+test "open-path replies distinguish system and editor targets" {
+  let system : @protocol.OpenPathReply = { opened: true, editor_target: None }
+  let ordinary : @protocol.OpenPathReply = {
     opened: false,
-    editor_target: Some({ path: "src/main.mbt", line: 2738, column: Some(17) }),
+    editor_target: Some({ path: "README.md", line: None, column: None }),
   }
-  let decoded : @protocol.OpenPathReply = @json.from_json(target.to_json())
-  @debug.assert_eq(decoded, target)
+  let positioned : @protocol.OpenPathReply = {
+    opened: false,
+    editor_target: Some({
+      path: "src/main.mbt",
+      line: Some(2738),
+      column: Some(17),
+    }),
+  }
+  for reply in [system, ordinary, positioned] {
+    let decoded : @protocol.OpenPathReply = @json.from_json(reply.to_json())
+    @debug.assert_eq(decoded, reply)
+  }
 }
 
 ///|

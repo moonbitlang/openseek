@@ -3,11 +3,6 @@
 // or derive a path from a conversation id.
 
 ///|
-/// Largest file the viewer will load. Bigger files return a notice instead of
-/// reading the whole thing into memory.
-const MaxReadFileBytes = 1048576
-
-///|
 async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
   let dir = WirePath::parse(payload.path).absolute
   // A requested root can be created lazily by the engine. Treat a missing
@@ -51,7 +46,7 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
   defer source.close()
   // Check the size before reading anything: a multi-gigabyte build artifact
   // must produce the notice, not a host-sized allocation.
-  if source.size() > MaxReadFileBytes.to_int64() {
+  if source.size() > @openpath.MaxEditorFileBytes.to_int64() {
     return Oversized
   }
   let data = source.read_all() catch {

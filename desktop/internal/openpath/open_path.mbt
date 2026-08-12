@@ -1,21 +1,27 @@
-// Conservative resolution of transcript file references. A trailing
-// `:line[:column]` or `#Lline` is only treated as an editor position after the
-// literal path is known not to exist and the path before it is a regular file.
+// Resolution of transcript file references. UTF-8 text that the built-in
+// viewer can load becomes an editor target; other existing paths go to the
+// system opener. A trailing `:line[:column]` or `#Lline` is only treated as an
+// editor position after the literal path is known not to exist.
+
+///|
+/// Keep routing and loading on the same size boundary. Larger files cannot be
+/// displayed by the built-in viewer, even when their bytes happen to be text.
+pub const MaxEditorFileBytes = 1048576
 
 ///|
 /// One literal path surfaced by the agent and clicked by the user.
 pub(all) struct Reference(String) derive(Debug, Eq)
 
 ///|
-/// What the host should do with a transcript file reference.
+/// Where the host should send a transcript file reference.
 pub(all) enum Resolution {
-  // Preserve the literal path. This covers ordinary paths, real filenames
-  // ending in `:<number>` or `#L<number>`, and missing paths whose
-  // system-opener error remains the most truthful result.
+  // Existing UTF-8 text within the built-in viewer's size limit. Position is
+  // absent for an ordinary path and for a real filename ending in a suffix.
+  EditorPath(path~ : String, line~ : Int?, column~ : Int?)
+  // An existing directory, binary file, or file too large for the viewer.
   SystemPath(String)
-  // The literal path was absent, while this suffix-free regular file exists.
-  // The frontend can therefore open its editor at the parsed position.
-  EditorPath(path~ : String, line~ : Int, column~ : Int?)
+  // Neither the literal path nor a parsed suffix-free candidate exists.
+  MissingPath(String)
 } derive(Debug, Eq)
 
 ///|
@@ -26,32 +32,52 @@ priv struct EditorCandidate {
 }
 
 ///|
+/// One existing literal or suffix-free path and its optional editor position.
+priv struct ExistingPath {
+  path : String
+  line : Int?
+  column : Int?
+}
+
+///|
 /// Resolve this reference without letting suffix syntax override a real path.
-/// Filesystem errors other than a definite absence preserve the literal path:
-/// permissions or a transient stat failure must not silently redirect a click
-/// to a different file.
+/// Filesystem errors propagate to the host: an unreadable path must not be
+/// silently reinterpreted as a different file.
 pub async fn Reference::resolve(self : Reference) -> Resolution {
+  if @fs.exists(self.0) {
+    let existing : ExistingPath = { path: self.0, line: None, column: None }
+    return existing.resolve()
+  }
   guard self.editor_candidate() is Some(candidate) else {
-    return SystemPath(self.0)
+    return MissingPath(self.0)
   }
-  let literal_exists = Some(@fs.exists(self.0)) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => None
+  guard @fs.exists(candidate.path) else { return MissingPath(candidate.path) }
+  let existing : ExistingPath = {
+    path: candidate.path,
+    line: Some(candidate.line),
+    column: candidate.column,
   }
-  guard literal_exists == Some(false) else { return SystemPath(self.0) }
-  let candidate_kind = Some(@fs.kind(candidate.path)) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => None
+  existing.resolve()
+}
+
+///|
+/// Apply the built-in viewer's actual content contract. Reading is bounded by
+/// the same size limit as the viewer, and invalid UTF-8 is a binary file.
+async fn ExistingPath::resolve(self : ExistingPath) -> Resolution {
+  guard @fs.kind(self.path) is Regular else { return SystemPath(self.path) }
+  let source = @fs.open(self.path, mode=ReadOnly)
+  defer source.close()
+  guard source.size() <= MaxEditorFileBytes.to_int64() else {
+    return SystemPath(self.path)
   }
-  if candidate_kind == Some(Regular) {
-    EditorPath(
-      path=candidate.path,
-      line=candidate.line,
-      column=candidate.column,
-    )
-  } else {
-    SystemPath(self.0)
-  }
+  let data = source.read_all()
+  let raw = data.binary()
+  guard raw.find(b"\x00") is None else { return SystemPath(self.path) }
+  let text = data.text() catch { _ => return SystemPath(self.path) }
+  // A PDF can be entirely ASCII and therefore valid UTF-8, but it is still a
+  // formatted binary document rather than source text for the editor.
+  guard !text.has_prefix("%PDF-") else { return SystemPath(self.path) }
+  EditorPath(path=self.path, line=self.line, column=self.column)
 }
 
 ///|

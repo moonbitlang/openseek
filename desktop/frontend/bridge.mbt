@@ -1521,10 +1521,10 @@ fn close_window() -> @cmd.Cmd {
 }
 
 ///|
-/// Ask the host to open a transcript-referenced file in the system's default
-/// app. A relative `path` is taken against the conversation's working
-/// directory — `cwd` when known, else derived by the host from `session`. A
-/// failure (no opener, missing file) pops an error toast.
+/// Ask the host to route a transcript-referenced path. Viewer-sized UTF-8 text
+/// inside the checkout returns an editor target; other existing paths use the
+/// system default app. A relative path is taken against the conversation's
+/// working directory. Missing paths and outside text surface as errors.
 fn open_file(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,

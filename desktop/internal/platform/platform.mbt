@@ -18,24 +18,16 @@ pub fn is_darwin() -> Bool {
 extern "C" fn windows_open(target : String) -> Int = "moonbit_openseek_desktop_platform_open"
 
 ///|
-/// Hand `path` to the platform's default opener, returning its exit code. The
-/// opener returns as soon as it has handed the file off (LaunchServices on
-/// macOS, the desktop portal on Linux), so the code reports the hand-off, not
-/// the opened app's lifetime. `path` should already be absolute.
+/// Hand a non-text path to the platform's default opener, returning its exit
+/// code. The opener returns as soon as it has handed the file off
+/// (LaunchServices on macOS, the desktop portal on Linux), so the code reports
+/// the hand-off, not the opened app's lifetime. `path` should already be
+/// absolute.
 pub async fn open_path(path : String) -> Int {
   if @sys.win32 || @sys.win64 {
     windows_open(path)
   } else if is_darwin() {
-    // Respect the file's app association, but fall back to the default text
-    // editor for types with none — source files like `.mbt` have no associated
-    // app, and plain `open` rejects them with "no application knows how to
-    // open" (exit non-zero) rather than showing their contents.
-    let code = @process.run("open", [path])
-    if code == 0 {
-      code
-    } else {
-      @process.run("open", ["-t", path])
-    }
+    @process.run("open", [path])
   } else {
     @process.run("xdg-open", [path])
   }
@@ -43,8 +35,7 @@ pub async fn open_path(path : String) -> Int {
 
 ///|
 /// Open a URL in the system's default browser, returning the opener's exit
-/// code. Unlike `open_path` there is no text-editor fallback — a URL that
-/// the opener rejects should fail, not land in an editor.
+/// code. A URL that the opener rejects fails like any other target.
 pub async fn open_url(url : String) -> Int {
   if @sys.win32 || @sys.win64 {
     windows_open(url)

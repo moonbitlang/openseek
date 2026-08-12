@@ -6,6 +6,7 @@ import {
 }
 
 // Values
+pub const MaxEditorFileBytes : Int = 1048576
 
 // Errors
 
@@ -14,8 +15,9 @@ pub(all) struct Reference(String) derive(Eq, @debug.Debug)
 pub async fn Reference::resolve(Self) -> Resolution
 
 pub(all) enum Resolution {
+  EditorPath(path~ : String, line~ : Int?, column~ : Int?)
   SystemPath(String)
-  EditorPath(path~ : String, line~ : Int, column~ : Int?)
+  MissingPath(String)
 } derive(Eq, @debug.Debug)
 
 // Type aliases

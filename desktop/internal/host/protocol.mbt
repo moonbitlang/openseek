@@ -11,17 +11,17 @@ type InstallSkillPayload = @protocol.InstallSkillPayload
 type UninstallSkillPayload = @protocol.UninstallSkillPayload
 
 ///|
-/// Open a transcript-referenced file in the user's system. `path` is the
-/// literal path the webview displayed; a relative one is taken against the
-/// conversation's working directory — `cwd` when the frontend has it (a live
-/// run), otherwise derived from `session` (a resumed conversation). No
-/// workspace containment is applied — the user clicked a path the agent itself
-/// surfaced.
+/// Open a transcript-referenced path. Viewer-sized UTF-8 text inside the
+/// checkout returns a built-in editor target; other existing paths use the
+/// system opener. A relative path is taken against the conversation's working
+/// directory — `cwd` when the frontend has it, otherwise derived from
+/// `session`.
 type OpenPathPayload = @protocol.OpenPathPayload
 
 ///|
-/// Reply to `open_path`: either the file was handed to the system opener, or a
-/// suffix-free workspace file and position should open in the built-in editor.
+/// Reply to `open_path`: either an existing non-text path was handed to the
+/// system opener, or a checkout-relative text file and optional position
+/// should open in the built-in editor.
 type OpenPathReply = @protocol.OpenPathReply
 
 ///|

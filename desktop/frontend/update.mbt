@@ -1601,8 +1601,8 @@ fn update(
 
 ///|
 /// Whether this root message calls `open_editor_at` synchronously. `OpenFile`
-/// is deliberately absent: it only begins a host lookup, so opening the panel
-/// for that message must still restore any document already active there.
+/// is deliberately absent: it only begins a host lookup. `OpenFileAt` opens
+/// the panel later, after the host has classified the target as editable text.
 fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
   self
   is (JumpToMention(_) | JumpToLocation(..) | QuickOpenPick(_) | OpenFileAt(..))
@@ -3086,17 +3086,15 @@ fn update_msg(
     }
     OpenFile(path) => {
       // A relative path is taken against the active conversation's projected
-      // workspace root. Absolute paths open directly; the agent surfaced it,
-      // so this operation intentionally applies no workspace containment.
+      // checkout root. The host keeps text editor targets inside that root;
+      // non-text paths may still use the system opener.
       let conv = model.active()
       // Spend the token before starting host work. This synchronously makes
       // every older host reply and positioned read stale, even if this click
-      // ultimately opens a literal path through the system instead.
+      // ultimately opens a non-text path through the system instead.
       let generation = model.file_panel.file_link_generation + 1
       let model = {
         ..model,
-        right_panel_open: true,
-        right_panel_menu_open: false,
         file_panel: { ..model.file_panel, file_link_generation: generation },
       }
       (
@@ -3118,12 +3116,18 @@ fn update_msg(
         generation == model.file_panel.file_link_generation else {
         return (@cmd.none, model)
       }
-      let column = column.unwrap_or(1)
+      let range = match line {
+        Some(line) => {
+          let column = column.unwrap_or(1)
+          Some(@common.Range::Range(line, column, line, column))
+        }
+        None => None
+      }
       open_editor_at(
         dispatch,
         model,
         path,
-        Some(@common.Range::Range(line, column, line, column)),
+        range,
         file_link_generation=generation,
       )
     }
@@ -3622,7 +3626,7 @@ fn update_msg(
       // which a native view (with its own cookie jar) is not.
       if model.is_desktop && model.screen is Chat && @preview.is_web_url(url) {
         // Opening or reusing a Browser tab is a newer dock navigation than a
-        // transcript file link still waiting on `host.open_path`. Spend the
+        // transcript text-file link still waiting on `host.open_path`. Spend the
         // shared token before either branch so its delayed reply cannot put a
         // file back over the URL the user chose later.
         let model = model.begin_editor_navigation()
@@ -14491,7 +14495,7 @@ test "only synchronous file-open messages suppress panel reactivation" {
   )
   assert_true(QuickOpenPick(0).opens_file_before_panel_reconciliation())
   assert_true(
-    OpenFileAt(owner~, generation=1, path="a.mbt", line=1, column=None).opens_file_before_panel_reconciliation(),
+    OpenFileAt(owner~, generation=1, path="a.mbt", line=Some(1), column=None).opens_file_before_panel_reconciliation(),
   )
   // This only starts the asynchronous host lookup. The later OpenFileAt is
   // the message that actually opens the document.
@@ -14569,6 +14573,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
     first_pending,
   )
   assert_eq(latest_pending.file_panel.file_link_generation, 2)
+  // Routing is asynchronous: a path that later goes to the system must not
+  // open an empty panel while the host is still classifying it.
+  assert_false(latest_pending.right_panel_open)
   // Closing the right panel is a newer user decision than the pending host
   // lookup;
   // its delayed reply cannot reopen the panel.
@@ -14581,7 +14588,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
       owner~,
       generation=2,
       path="src/main.mbt",
-      line=2738,
+      line=Some(2738),
       column=Some(17),
     ),
     panel_closed,
@@ -14607,7 +14614,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
       owner~,
       generation=2,
       path="src/main.mbt",
-      line=2738,
+      line=Some(2738),
       column=Some(17),
     ),
     panel_opened,
@@ -14623,7 +14630,13 @@ test "update is pure: a resolved transcript position opens its owning file" {
   // The first host reply is stale as soon as the second click happens.
   let (_, old_host_reply) = update(
     dispatch,
-    OpenFileAt(owner~, generation=1, path="src/main.mbt", line=1, column=None),
+    OpenFileAt(
+      owner~,
+      generation=1,
+      path="src/main.mbt",
+      line=Some(1),
+      column=None,
+    ),
     latest_pending,
   )
   assert_true(old_host_reply.dock.active is None)
@@ -14631,12 +14644,13 @@ test "update is pure: a resolved transcript position opens its owning file" {
     owner~,
     generation=2,
     path="src/main.mbt",
-    line=2738,
+    line=Some(2738),
     column=Some(17),
   )
   let (_, first) = update(dispatch, msg, latest_pending)
   let (_, second) = update(dispatch, msg, latest_pending)
   assert_true(@dock.active_file(first.dock) is Some(Relative("src/main.mbt")))
+  assert_true(first.right_panel_open)
   assert_true(@dock.active_file(second.dock) is Some(Relative("src/main.mbt")))
   assert_true(first.file_panel.docs.contains(Relative("src/main.mbt")))
   assert_true(second.file_panel.docs.contains(Relative("src/main.mbt")))
@@ -14815,7 +14829,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
       owner~,
       generation=pending_generation,
       path="src/main.mbt",
-      line=40,
+      line=Some(40),
       column=None,
     ),
     inactive_closed,
@@ -14839,7 +14853,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
       owner~,
       generation=2,
       path="src/main.mbt",
-      line=2738,
+      line=Some(2738),
       column=Some(17),
     ),
     tree_opened,
@@ -14851,21 +14865,6 @@ test "update is pure: a resolved transcript position opens its owning file" {
   assert_false(
     delayed_transcript_reply.file_panel.docs.contains(Relative("src/main.mbt")),
   )
-  // Mixed-version remote connections may still receive the older absolute
-  // target. Keep accepting it when it remains inside the resolved checkout.
-  let (_, legacy) = update(
-    dispatch,
-    OpenFileAt(
-      owner~,
-      generation=2,
-      path="/work/project/.worktrees/wt-4/src/main.mbt",
-      line=2738,
-      column=Some(17),
-    ),
-    latest_pending,
-  )
-  assert_true(@dock.active_file(legacy.dock) is Some(Relative("src/main.mbt")))
-  assert_true(legacy.file_panel.docs.contains(Relative("src/main.mbt")))
   // A delayed reply from another conversation cannot open a tab here.
   let (_, stale) = update(
     dispatch,
@@ -14873,7 +14872,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
       owner={ ..owner, session: "another-session" },
       generation=2,
       path="/work/project/src/main.mbt",
-      line=1,
+      line=Some(1),
       column=None,
     ),
     latest_pending,
