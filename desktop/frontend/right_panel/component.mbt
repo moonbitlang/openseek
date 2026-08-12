@@ -132,17 +132,19 @@ pub fn component(
 }
 
 ///|
-test "right-panel local state closes its menu with the panel" {
+test "right-panel local state opens externally and closes with one toggle" {
   let state : Model = { open: false, menu_open: false }
-  let opened = state.update(External(TogglePanel), false)
-  let opened_again = state.update(External(TogglePanel), false)
+  let opened = state.update(External(OpenPanel), false)
+  let opened_again = state.update(External(OpenPanel), false)
   assert_true(opened.open)
   assert_true(opened_again.open)
+  let closed = opened.update(External(TogglePanel), false)
+  assert_false(closed.open)
   let menu = opened.update(ToggleMenu, false)
   assert_true(menu.menu_open)
-  let closed = menu.update(External(TogglePanel), false)
-  assert_false(closed.open)
-  assert_false(closed.menu_open)
+  let menu_closed = menu.update(External(TogglePanel), false)
+  assert_false(menu_closed.open)
+  assert_false(menu_closed.menu_open)
   let linked = state.update(External(ExternalLink("https://example.com")), true)
   assert_true(linked.open)
 }

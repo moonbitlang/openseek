@@ -207,9 +207,15 @@ pub fn boot() -> Unit {
       },
     )
     let ui_emit : @cmd.Emit[Msg] = @cmd.Emit(msg => {
+      // Editor-bound UI messages must update the component's local visibility
+      // before the root handles them. In particular, OpenFile completes later
+      // as OpenFileAt, so waiting for the root Model would desynchronize the
+      // next panel toggle from the visible layout.
       let panel_command = match msg {
-        JumpToMention(_) | JumpToLocation(..) | QuickOpenPick(_) =>
-          right_panel_emit(@right_panel.OpenPanel)
+        OpenFile(_)
+        | JumpToMention(_)
+        | JumpToLocation(..)
+        | QuickOpenPick(_) => right_panel_emit(@right_panel.OpenPanel)
         _ => @cmd.none
       }
       @cmd.batch([panel_command, emit(msg)])
