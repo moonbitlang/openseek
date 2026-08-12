@@ -40,8 +40,9 @@ fn terminal_sub_loader(
 }
 
 ///|
-/// The observer watches one explicit data attribute, not arbitrary DOM growth.
-/// Rabbita updates it as the parent `Val[Input]` changes.
+/// The observer watches one explicit data attribute plus terminal-panel mounts
+/// and removals. Rabbita updates the attribute as the parent `Val[Input]`
+/// changes; removals must also reconcile channels whose shell disappeared.
 extern "js" fn install_terminal_listeners(
   on_toggle : () -> Unit,
   on_input : () -> Unit,
@@ -57,7 +58,7 @@ extern "js" fn install_terminal_listeners(
   #|       if (record.type === "attributes") {
   #|         return record.attributeName === "data-terminal-input";
   #|       }
-  #|       return [...record.addedNodes].some((node) =>
+  #|       return [...record.addedNodes, ...record.removedNodes].some((node) =>
   #|         node.nodeType === Node.ELEMENT_NODE &&
   #|         (node.matches?.(".terminal-panel") ||
   #|          node.querySelector?.(".terminal-panel")),

@@ -36,13 +36,14 @@ priv struct Model {
   focused : @interop.ChannelId
   active_session : String
   item_count : Int
+  mounted : Bool
 } derive(Eq)
 
 ///|
 priv enum Msg {
   Pinned(Bool)
   JumpToLatest
-  ContentRendered
+  ContentRendered(mounted~ : Bool)
   Overview(@transcript_overview.Msg)
 }
 
@@ -63,8 +64,14 @@ fn Model::update(
           report_visible_turn_after_render(emit, skip_unchanged=true),
         ]),
       )
-    ContentRendered => {
-      let navigated = self.focused != input.focused ||
+    ContentRendered(mounted~) => {
+      // The component outlives the Chat DOM while Skills, Settings, or the
+      // signed-out console gate is shown. A newly mounted scroller therefore
+      // resets scroll and overview state even when the conversation identity
+      // itself did not change.
+      let remounted = mounted && !self.mounted
+      let navigated = remounted ||
+        self.focused != input.focused ||
         self.active_session != input.active_session
       // A newly appended user item is the local equivalent of React's
       // "sent a message" state transition: even a reader who had scrolled up
@@ -83,6 +90,7 @@ fn Model::update(
         focused: input.focused,
         active_session: input.active_session,
         item_count: input.items.length(),
+        mounted,
       }
       let commands : Array[@cmd.Cmd] = []
       if pinned {
@@ -135,6 +143,7 @@ pub fn component(
           focused: input.focused,
           active_session: input.active_session,
           item_count: input.items.length(),
+          mounted: false,
         },
         @cmd.none,
       )
@@ -159,6 +168,9 @@ pub fn component(
 fn scroll_after_render() -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
+      // A forced tail jump must also reset the subscription's DOM cache. A
+      // remounted short transcript may clamp without emitting a scroll event.
+      transcript_pinned_watch.val = true
       if @dom.document().get_element_by_id("transcript").to_option()
         is Some(transcript) {
         transcript.set_scroll_top(transcript.get_scroll_height())
@@ -342,8 +354,8 @@ fn transcript_sub_loader(
         }
       }
       target.add_event_listener_with_options("scroll", listener, capture=true)
-      let observer = install_transcript_observer(() => {
-        scheduler.add(emit(ContentRendered))
+      let observer = install_transcript_observer(mounted => {
+        scheduler.add(emit(ContentRendered(mounted~)))
       })
       Some({
         unload: _ => {
@@ -368,10 +380,12 @@ fn transcript_sub_loader(
 /// Observe content and geometry owned by `#transcript`. The document observer
 /// follows Rabbita replacements; the resize observer covers terminal drags and
 /// window geometry changes that do not mutate transcript children.
-extern "js" fn install_transcript_observer(on_change : () -> Unit) -> @js.Value =
+extern "js" fn install_transcript_observer(
+  on_change : (Bool) -> Unit,
+) -> @js.Value =
   #| (onChange) => {
   #|   let current = null;
-  #|   const resize = new ResizeObserver(() => onChange());
+  #|   const resize = new ResizeObserver(() => onChange(true));
   #|   const attach = () => {
   #|     const transcript = document.getElementById("transcript");
   #|     if (transcript === current) return transcript;
@@ -381,7 +395,12 @@ extern "js" fn install_transcript_observer(on_change : () -> Unit) -> @js.Value 
   #|     return transcript;
   #|   };
   #|   const mutation = new MutationObserver((records) => {
+  #|     const previous = current;
   #|     const transcript = attach();
+  #|     if (transcript !== previous) {
+  #|       onChange(Boolean(transcript));
+  #|       return;
+  #|     }
   #|     if (!transcript) return;
   #|     const changed = records.some((record) =>
   #|       record.target === transcript ||
@@ -390,7 +409,7 @@ extern "js" fn install_transcript_observer(on_change : () -> Unit) -> @js.Value 
   #|         node === transcript || (node.nodeType === 1 && node.contains(transcript))
   #|       )
   #|     );
-  #|     if (changed) onChange();
+  #|     if (changed) onChange(true);
   #|   });
   #|   attach();
   #|   mutation.observe(document.documentElement, {
@@ -419,20 +438,21 @@ test "local pinned transitions are pure" {
     focused: Local,
     active_session: "desktop-test",
     item_count: 0,
+    mounted: true,
   }
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let (first, _) = state.update(input, Pinned(false), emit)
   let (second, _) = state.update(input, Pinned(false), emit)
   assert_false(first.pinned)
   assert_false(second.pinned)
-  let (grown, _) = first.update(input, ContentRendered, emit)
+  let (grown, _) = first.update(input, ContentRendered(mounted=true), emit)
   assert_false(grown.pinned)
   let (sent, _) = first.update(
     {
       ..input,
       items: [{ kind: User, content: "new turn", ts: None, sequence: None }],
     },
-    ContentRendered,
+    ContentRendered(mounted=true),
     emit,
   )
   assert_true(sent.pinned)
@@ -440,7 +460,7 @@ test "local pinned transitions are pure" {
   assert_true(jumped.pinned)
   let (navigated, _) = grown.update(
     { ..input, active_session: "another-session" },
-    ContentRendered,
+    ContentRendered(mounted=true),
     emit,
   )
   assert_true(navigated.pinned)
@@ -462,6 +482,7 @@ test "an overview click unpins and highlights inside the component" {
     focused: Local,
     active_session: "desktop-test",
     item_count: 0,
+    mounted: true,
   }
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let (next, _) = state.update(input, Overview(Clicked(key)), emit)
@@ -491,14 +512,26 @@ test "a conversation switch clears component-owned overview state" {
     focused: Local,
     active_session: "desktop-test",
     item_count: 0,
+    mounted: true,
   }
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let (next, _) = state.update(
     { ..input, active_session: "desktop-other" },
-    ContentRendered,
+    ContentRendered(mounted=true),
     emit,
   )
   assert_true(next.pinned)
   @debug.assert_eq(next.overview.hover, None)
   @debug.assert_eq(next.overview.active, None)
+  let (removed, _) = state.update(input, ContentRendered(mounted=false), emit)
+  let (remounted, _) = removed.update(
+    input,
+    ContentRendered(mounted=true),
+    emit,
+  )
+  assert_false(removed.mounted)
+  assert_true(remounted.mounted)
+  assert_true(remounted.pinned)
+  @debug.assert_eq(remounted.overview.hover, None)
+  @debug.assert_eq(remounted.overview.active, None)
 }
