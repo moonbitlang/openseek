@@ -43,6 +43,11 @@ pub(all) struct TranscriptItem {
   // that never became a durable event, and for records written before the
   // store stamped them — the view simply shows no time for those.
   ts : Double?
+  // The durable event sequence this row came from, `None` for a client-local
+  // row. One event can append several rows (reasoning, answer, tool calls),
+  // which then share its sequence — but at most one of them is a User row,
+  // so the sequence is a stable identity for a user turn.
+  sequence : Int?
 } derive(Eq)
 
 ///|

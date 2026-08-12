@@ -1235,6 +1235,7 @@ fn speaker_label(name : String) -> @html.Html {
 /// caller wires one.
 fn user_message_view(
   content : String,
+  anchor? : String,
   on_jump? : (MentionTarget) -> @cmd.Cmd,
 ) -> @html.Html {
   let body : Array[@html.Html] = [speaker_label("You")]
@@ -1280,7 +1281,9 @@ fn user_message_view(
     None =>
       body.push(@html.div(class="msg-content", inline_code_nodes(content)))
   }
-  @html.div(class="msg user", [@html.div(class="user-bubble", body)])
+  // The id is the turn's overview anchor: the rail's jump command and the
+  // scroll watcher's active-turn report both resolve it.
+  @html.div(class="msg user", id?=anchor, [@html.div(class="user-bubble", body)])
 }
 
 ///|
@@ -1324,10 +1327,11 @@ fn turn_rule_view(ts? : Double) -> @html.Html {
 fn transcript_item_view(
   item : @transcript.TranscriptItem,
   on_open : (String) -> @cmd.Cmd,
+  anchor? : String,
   on_jump? : (MentionTarget) -> @cmd.Cmd,
 ) -> @html.Html {
   match item.kind {
-    User => user_message_view(item.content, on_jump?)
+    User => user_message_view(item.content, anchor?, on_jump?)
     Assistant(is_danger~) => {
       // Errors and abort notices are plain text; only real assistant replies
       // are markdown.
@@ -1402,6 +1406,7 @@ fn transcript_view(
   dispatch : @cmd.Emit[Msg],
   conv : Conversation,
   pinned~ : Bool,
+  overview~ : @transcript_overview.State,
   on_open : (String) -> @cmd.Cmd,
 ) -> @html.Html {
   let items : Array[@html.Html] = []
@@ -1431,8 +1436,14 @@ fn transcript_view(
     let mut index = 0
     while index < visible.length() {
       guard visible[index].kind is (Tool(..) | Reasoning) else {
+        let item = visible[index]
+        let anchor = if item.kind is User {
+          Some(@transcript_overview.TurnKey::of(item, index~).anchor())
+        } else {
+          None
+        }
         items.push(
-          transcript_item_view(visible[index], on_open, on_jump=target => {
+          transcript_item_view(item, on_open, anchor?, on_jump=target => {
             dispatch(
               JumpToLocation(
                 path=target.file,
@@ -1442,8 +1453,8 @@ fn transcript_view(
             )
           }),
         )
-        if visible[index].kind is User {
-          items.push(turn_rule_view(ts?=visible[index].ts))
+        if item.kind is User {
+          items.push(turn_rule_view(ts?=item.ts))
         }
         index = index + 1
         continue
@@ -1466,7 +1477,18 @@ fn transcript_view(
   for lane in conv.visible_subruns() {
     items.push(subrun_lane_view(lane))
   }
-  let children = [@html.div(id="stream", class="stream", items)]
+  // The overview rail leads the scroller: sticky-top only works from the
+  // content's head, and rendering it unconditionally keeps the stream at a
+  // stable child index (it hides itself below two turns).
+  let children = [
+    @transcript_overview.rail(
+      @transcript_overview.entries(visible, display=user_display_text),
+      overview,
+      dispatch.map(msg => TranscriptOverview(msg)),
+      clock=ms => js_clock_label(ms),
+    ),
+    @html.div(id="stream", class="stream", items),
+  ]
   // Reading history unpins auto-follow (see `watch_transcript_scroll`); the
   // floating button is the way back to the live tail. Sticky inside the
   // scroller with zero height, so it never adds scroll length.
@@ -3100,6 +3122,7 @@ fn view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           dispatch,
           model.active(),
           pinned=model.transcript_pinned,
+          overview=model.transcript_overview,
           path => dispatch(OpenFile(path)),
         ),
         composer_view(dispatch, model),
@@ -3400,6 +3423,7 @@ fn tool_item(
     ),
     content: "output",
     ts: None,
+    sequence: None,
   }
 }
 
@@ -3553,12 +3577,18 @@ test "every message names its speaker to assistive technology" {
   }
   // The bubble, the alignment, and the rule are CSS only; the name has to
   // survive somewhere a screen reader reaches.
-  let user = render({ kind: User, content: "question", ts: None })
+  let user = render({
+    kind: User,
+    content: "question",
+    ts: None,
+    sequence: None,
+  })
   assert_true(user.contains("<span class=\"visually-hidden\">You</span>"))
   let assistant = render({
     kind: Assistant(is_danger=false),
     content: "answer",
     ts: None,
+    sequence: None,
   })
   assert_true(
     assistant.contains("<span class=\"visually-hidden\">OpenSeek</span>"),
@@ -3568,6 +3598,7 @@ test "every message names its speaker to assistive technology" {
     kind: Assistant(is_danger=true),
     content: "failed",
     ts: None,
+    sequence: None,
   })
   assert_true(
     danger.contains("<span class=\"visually-hidden\">OpenSeek</span>"),
@@ -3588,6 +3619,7 @@ test "user message URLs are clickable but inline code stays inert" {
       kind: User,
       content: "open https://example.com/docs, not `https://code.example`",
       ts: None,
+      sequence: None,
     },
     _ => @cmd.none,
   )
@@ -3613,6 +3645,7 @@ test "a tool row renders recorded arguments before its result" {
     ),
     content: "test failed",
     ts: None,
+    sequence: None,
   })
   let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
   guard markup.split_once("Arguments") is Some((_, after_arguments)) else {
@@ -3640,6 +3673,7 @@ test "a plan row renders its checklist instead of the arguments JSON" {
     ),
     content: "Plan updated: 0/2 done · in progress: fix the parser.",
     ts: None,
+    sequence: None,
   })
   let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
   assert_true(markup.contains("plan-steps"))
@@ -3658,6 +3692,7 @@ test "a plan row renders its checklist instead of the arguments JSON" {
     ),
     content: "error: plan requires arguments.steps[0].status to be one of pending|in_progress|completed",
     ts: None,
+    sequence: None,
   })
   let failed_markup = @rabbita.render_to_string(() => {
     @rabbita.Val::constant(failed)
@@ -3682,6 +3717,7 @@ test "a folded run carries the plan it ended on" {
     ),
     content: "",
     ts: None,
+    sequence: None,
   }
   let rendered = activity_view([tool_item("read"), plan_item], _ => @cmd.none)
   let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
@@ -3709,6 +3745,7 @@ test "a tool row clamps large arguments before rendering" {
     ),
     content: "",
     ts: None,
+    sequence: None,
   })
   let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
   assert_true(markup.contains("UTF-16 code units skipped"))

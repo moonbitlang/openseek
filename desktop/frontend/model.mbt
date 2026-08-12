@@ -1182,6 +1182,11 @@ priv struct Model {
   // yanked back down by the next delta. Maintained by a DOM scroll watcher;
   // explicit user actions (sending, switching conversations) re-pin it.
   transcript_pinned : Bool
+  // The transcript overview rail's hover and active-turn keys. Global UI for
+  // the on-screen transcript like `transcript_pinned`, not conversation
+  // state — and its keys are per-session event sequences, so `update` resets
+  // it on any conversation switch.
+  transcript_overview : @transcript_overview.State
   // The Skills page: the registry catalog, the local library's contents,
   // the search filter, entries with an install/uninstall in flight (keyed
   // by the catalog entry's source label or the installed entry's id), and
@@ -1691,6 +1696,10 @@ priv enum Msg {
   // The floating "jump to latest" button: scroll the transcript back to its
   // tail and re-pin auto-follow.
   JumpToLatest
+  // The overview rail's pure messages (hover, click, the scroll watcher's
+  // active-turn report), routed to the `transcript_overview` package; this
+  // update commands the click's cross-package half (jump and unpin).
+  TranscriptOverview(@transcript_overview.Msg)
   // The host's dark-mode preference changed. It updates the palette only while
   // no explicit Light/Dark choice has been saved.
   ColorSchemeChanged(Bool)
@@ -2226,6 +2235,7 @@ fn initial_model() -> Model {
     pending_project_adoption: None,
     archive_confirm: None,
     transcript_pinned: true,
+    transcript_overview: @transcript_overview.State::empty(),
     screen: Chat,
     skills_catalog: CatalogIdle,
     installed_skills: [],
@@ -3908,7 +3918,12 @@ fn Conversation::visible_items(
     for index in 0..<self.messages.length() {
       for notice in self.overlay {
         if notice.anchor is AfterMessages(boundary) && boundary == index {
-          visible.push({ kind: notice.kind, content: notice.content, ts: None })
+          visible.push({
+            kind: notice.kind,
+            content: notice.content,
+            ts: None,
+            sequence: None,
+          })
         }
       }
       visible.push(self.messages[index])
@@ -3920,9 +3935,19 @@ fn Conversation::visible_items(
         | SnapshotCut(..)
         | UncertainTail
         | DurableTail(_) =>
-          visible.push({ kind: notice.kind, content: notice.content, ts: None })
+          visible.push({
+            kind: notice.kind,
+            content: notice.content,
+            ts: None,
+            sequence: None,
+          })
         AfterMessages(boundary) if boundary >= self.messages.length() =>
-          visible.push({ kind: notice.kind, content: notice.content, ts: None })
+          visible.push({
+            kind: notice.kind,
+            content: notice.content,
+            ts: None,
+            sequence: None,
+          })
         _ => ()
       }
     }
@@ -4127,7 +4152,7 @@ fn Conversation::apply_commit(
   // A canonical User is transcript data, never local-submission ownership.
   // It is not a run boundary: the same kind also stores in-run steering.
   let messages = self.messages.copy()
-  let changed = @transcript.apply_session_item(messages, item, ts?)
+  let changed = @transcript.apply_session_item(messages, item, ts?, sequence~)
   // Unknown terminal payloads render nothing but still close the durable run.
   let terminal = item.is_terminal()
   // A `[goal]` marker commit is the durable confirmation of a goal

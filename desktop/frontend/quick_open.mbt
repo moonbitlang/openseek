@@ -1720,7 +1720,7 @@ test "switching conversations closes Quick Open" {
   let dispatch = test_dispatch()
   let second = {
     ..empty_conversation(@interop.ChannelId::Local, "desktop-second"),
-    messages: [{ kind: User, content: "earlier", ts: None }],
+    messages: [{ kind: User, content: "earlier", ts: None, sequence: None }],
   }
   let desktop = {
     ..test_model().replace_conversation(second),

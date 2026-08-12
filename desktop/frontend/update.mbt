@@ -1519,6 +1519,16 @@ fn update(
   } else {
     model
   }
+  // The overview rail's hover/active keys are per-session event sequences —
+  // the same numbers name different turns in another conversation — so a
+  // switch resets them here, however it happened. The next scroll (every
+  // open path re-scrolls the transcript) reports the fresh active turn.
+  let model = if model.active_session != previous.active_session ||
+    model.focused != previous.focused {
+    { ..model, transcript_overview: @transcript_overview.State::empty() }
+  } else {
+    model
+  }
   // The resize handle belongs to the whole right panel, even when its first
   // active tab is a Browser page and the file body stays hidden. File-opening
   // paths already mount it through the fileeditor package; cover every other
@@ -2908,6 +2918,23 @@ fn update_msg(
     // watcher would only confirm it after the scroll settles.
     JumpToLatest =>
       (scroll_transcript_after_render(), { ..model, transcript_pinned: true })
+    TranscriptOverview(msg) => {
+      let model = {
+        ..model,
+        transcript_overview: @transcript_overview.update(
+          msg,
+          model.transcript_overview,
+        ),
+      }
+      match msg {
+        // Jumping into history is reading history: unpin eagerly like
+        // JumpToLatest pins eagerly, so the next streamed delta cannot yank
+        // the view back down before the scroll watcher reports.
+        Clicked(key) =>
+          (scroll_turn_into_view(key), { ..model, transcript_pinned: false })
+        _ => (@cmd.none, model)
+      }
+    }
     ColorSchemeChanged(dark) => {
       let model = { ..model, system_dark: dark }
       match model.theme {
@@ -6456,8 +6483,13 @@ test "finished run reloads the named durable session for an old host" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "question", ts: None },
-        { kind: Assistant(is_danger=false), content: "done", ts: None },
+        { kind: User, content: "question", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "done",
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark=3,
       event_boundaries=[(3, true, 2)],
@@ -6622,7 +6654,7 @@ test "session rotation activates a fresh conversation, keeping the old one" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..running_conversation(),
-    messages: [{ kind: User, content: "hi", ts: None }],
+    messages: [{ kind: User, content: "hi", ts: None, sequence: None }],
   })
   let (_, next) = update(
     dispatch,
@@ -6942,7 +6974,7 @@ test "sessions failure pops a toast without touching the transcript" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "hi", ts: None }],
+    messages: [{ kind: User, content: "hi", ts: None, sequence: None }],
   })
   let (_, next) = update_dev(dispatch, SessionsFailed("engine exploded"), model)
   inspect(next.notifications.length(), content="1")
@@ -6972,7 +7004,9 @@ test "open session keeps live state on screen while re-reading the store" {
     ..empty_conversation(@interop.ChannelId::Local, "desktop-bg"),
     run: Open(run_id="r9", stage=Opened),
     streaming_response: "mid-stream",
-    messages: [{ kind: User, content: "background task", ts: None }],
+    messages: [
+      { kind: User, content: "background task", ts: None, sequence: None },
+    ],
   }
   let model = running_model().replace_conversation(background)
   let (_, once) = update(
@@ -7007,7 +7041,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "kept", ts: None }],
+    messages: [{ kind: User, content: "kept", ts: None, sequence: None }],
     watermark: 1,
   })
   let (_, refreshing) = update_dev(
@@ -7277,7 +7311,9 @@ test "BridgeReady fences an awaiting initial after disconnected canonical items"
     {
       ..test_conversation(),
       run: Starting(submission_id="reconnect-prompt"),
-      messages: [{ kind: User, content: "before disconnect", ts: None }],
+      messages: [
+        { kind: User, content: "before disconnect", ts: None, sequence: None },
+      ],
       watermark: 1,
     },
     "reconnect-prompt",
@@ -7300,12 +7336,18 @@ test "BridgeReady fences an awaiting initial after disconnected canonical items"
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "before disconnect", ts: None },
-        { kind: User, content: "canonical prompt from the gap", ts: None },
+        { kind: User, content: "before disconnect", ts: None, sequence: None },
+        {
+          kind: User,
+          content: "canonical prompt from the gap",
+          ts: None,
+          sequence: None,
+        },
         {
           kind: Assistant(is_danger=false),
           content: "canonical answer from the gap",
           ts: None,
+          sequence: None,
         },
       ],
       watermark=3,
@@ -7327,7 +7369,9 @@ test "BridgeReady fences an awaiting steer after disconnected canonical items" {
   let conv = with_pending_steers(
     {
       ..running_conversation(),
-      messages: [{ kind: User, content: "before disconnect", ts: None }],
+      messages: [
+        { kind: User, content: "before disconnect", ts: None, sequence: None },
+      ],
       watermark: 1,
     },
     ["steer sent near disconnect"],
@@ -7349,12 +7393,18 @@ test "BridgeReady fences an awaiting steer after disconnected canonical items" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "before disconnect", ts: None },
-        { kind: User, content: "canonical steer from the gap", ts: None },
+        { kind: User, content: "before disconnect", ts: None, sequence: None },
+        {
+          kind: User,
+          content: "canonical steer from the gap",
+          ts: None,
+          sequence: None,
+        },
         {
           kind: Assistant(is_danger=false),
           content: "canonical output from the gap",
           ts: None,
+          sequence: None,
         },
       ],
       watermark=3,
@@ -7494,7 +7544,7 @@ test "open session tracks the latest load and ignores stale replies" {
     is Some({ channel: Local, session: "desktop-b" }),
   )
   let a_items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "old selection", ts: None },
+    { kind: User, content: "old selection", ts: None, sequence: None },
   ]
   let (_, after_a) = update_dev(
     dispatch,
@@ -7515,7 +7565,7 @@ test "open session tracks the latest load and ignores stale replies" {
     is Some({ channel: Local, session: "desktop-b" }),
   )
   let b_items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "latest selection", ts: None },
+    { kind: User, content: "latest selection", ts: None, sequence: None },
   ]
   let (_, after_b) = update_dev(
     dispatch,
@@ -7597,11 +7647,11 @@ test "same-id session loads are fenced by channel owner" {
   let remote : @interop.ChannelId = Remote("d-remote")
   let local_conv = {
     ..empty_conversation(@interop.ChannelId::Local, "shared"),
-    messages: [{ kind: User, content: "local", ts: None }],
+    messages: [{ kind: User, content: "local", ts: None, sequence: None }],
   }
   let remote_conv = {
     ..empty_conversation(remote, "shared"),
-    messages: [{ kind: User, content: "remote", ts: None }],
+    messages: [{ kind: User, content: "remote", ts: None, sequence: None }],
   }
   let model = {
     ..test_model(),
@@ -7642,6 +7692,7 @@ test "same-id session loads are fenced by channel owner" {
             kind: Assistant(is_danger=false),
             content: "remote loaded",
             ts: None,
+            sequence: None,
           },
         ],
         watermark=1,
@@ -7710,6 +7761,7 @@ test "reselecting a synced active session reloads idle external writes" {
           kind: Assistant(is_danger=false),
           content: "written elsewhere",
           ts: None,
+          sequence: None,
         },
       ],
       watermark=1,
@@ -7780,7 +7832,9 @@ test "pruning and reopening cannot reuse a transcript request token" {
       goal=None,
       goal_markers=[],
       session="desktop-pruned",
-      items=[{ kind: User, content: "late old snapshot", ts: None }],
+      items=[
+        { kind: User, content: "late old snapshot", ts: None, sequence: None },
+      ],
       watermark=9,
       event_boundaries=[],
       generation=1,
@@ -7804,7 +7858,9 @@ test "pruning and reopening cannot reuse a transcript request token" {
       goal=None,
       goal_markers=[],
       session="desktop-pruned",
-      items=[{ kind: User, content: "fresh snapshot", ts: None }],
+      items=[
+        { kind: User, content: "fresh snapshot", ts: None, sequence: None },
+      ],
       watermark=1,
       event_boundaries=[],
       generation=2,
@@ -7852,7 +7908,14 @@ test "archive removal and reopening cannot reuse a transcript request token" {
       goal=None,
       goal_markers=[],
       session="desktop-archived",
-      items=[{ kind: User, content: "late archived snapshot", ts: None }],
+      items=[
+        {
+          kind: User,
+          content: "late archived snapshot",
+          ts: None,
+          sequence: None,
+        },
+      ],
       watermark=4,
       event_boundaries=[],
       generation=1,
@@ -8067,7 +8130,7 @@ test "session loaded swaps the active conversation onto the stored session" {
     usage_tokens: 42,
     watcher_status: "running",
     streaming_response: "leftover",
-    messages: [{ kind: User, content: "old chat", ts: None }],
+    messages: [{ kind: User, content: "old chat", ts: None, sequence: None }],
   })
   let (_, loading) = update(
     dispatch,
@@ -8075,8 +8138,13 @@ test "session loaded swaps the active conversation onto the stored session" {
     model,
   )
   let items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "stored question", ts: None },
-    { kind: Assistant(is_danger=false), content: "stored answer", ts: None },
+    { kind: User, content: "stored question", ts: None, sequence: None },
+    {
+      kind: Assistant(is_danger=false),
+      content: "stored answer",
+      ts: None,
+      sequence: None,
+    },
   ]
   let (_, once) = update_dev(
     dispatch,
@@ -8120,7 +8188,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
   let dispatch = test_dispatch()
   let model = running_model()
   let items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "stored", ts: None },
+    { kind: User, content: "stored", ts: None, sequence: None },
   ]
   // The active conversation runs; loading some other stored session is fine.
   let (_, loading_other) = update(
@@ -8572,13 +8640,14 @@ test "an accepted start response opens the run without Started" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "external prompt", ts: None },
+        { kind: User, content: "external prompt", ts: None, sequence: None },
         {
           kind: Assistant(is_danger=false),
           content: "external answer",
           ts: None,
+          sequence: None,
         },
-        { kind: User, content: "prompt", ts: None },
+        { kind: User, content: "prompt", ts: None, sequence: None },
       ],
       watermark=4,
       event_boundaries=[
@@ -8635,7 +8704,14 @@ test "accepted start remains recoverable when the engine fails before User appen
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "external writer only", ts: None }],
+      items=[
+        {
+          kind: User,
+          content: "external writer only",
+          ts: None,
+          sequence: None,
+        },
+      ],
       watermark=1,
       event_boundaries=[(1, false, 1)],
       generation=1,
@@ -9641,7 +9717,9 @@ test "a background run finishes without disturbing the conversation on screen" {
   let second = {
     ..empty_conversation(@interop.ChannelId::Local, "desktop-second"),
     run: Open(run_id="r8", stage=Opened),
-    messages: [{ kind: User, content: "background ask", ts: None }],
+    messages: [
+      { kind: User, content: "background ask", ts: None, sequence: None },
+    ],
   }
   let model = running_model().replace_conversation(second)
   let (_, next) = update_dev(
@@ -9703,7 +9781,7 @@ test "the composer draft stays with its conversation across a switch" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..empty_conversation(@interop.ChannelId::Local, "desktop-second"),
-    messages: [{ kind: User, content: "earlier", ts: None }],
+    messages: [{ kind: User, content: "earlier", ts: None, sequence: None }],
   })
   let (_, drafted) = update(dispatch, TaskChanged("half a thought"), model)
   let (_, switched) = update(
@@ -9961,7 +10039,7 @@ test "a snapshot never settles a local steer by text" {
   let conv = with_pending_steers(
     {
       ..running_conversation(),
-      messages: [{ kind: User, content: "same", ts: None }],
+      messages: [{ kind: User, content: "same", ts: None, sequence: None }],
       watermark: 1,
       sync: test_reloading([]),
     },
@@ -9974,7 +10052,7 @@ test "a snapshot never settles a local steer by text" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "same", ts: None }],
+      items=[{ kind: User, content: "same", ts: None, sequence: None }],
       watermark=1,
       event_boundaries=[],
       generation=1,
@@ -10163,7 +10241,7 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
   let conv = with_pending_steers(
     {
       ..running_conversation(),
-      messages: [{ kind: User, content: "question", ts: None }],
+      messages: [{ kind: User, content: "question", ts: None, sequence: None }],
       watermark: 1,
     },
     ["late steer"],
@@ -10209,8 +10287,13 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "question", ts: None },
-        { kind: Assistant(is_danger=false), content: "answer", ts: None },
+        { kind: User, content: "question", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "answer",
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark=3,
       event_boundaries=[(3, true, 2)],
@@ -10245,7 +10328,7 @@ test "a snapshot freezes a prior run-tail notice before its next turn" {
   let conv = with_pending_steers(
     {
       ..running_conversation(),
-      messages: [{ kind: User, content: "question", ts: None }],
+      messages: [{ kind: User, content: "question", ts: None, sequence: None }],
       watermark: 1,
     },
     ["late steer"],
@@ -10262,10 +10345,20 @@ test "a snapshot freezes a prior run-tail notice before its next turn" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "question", ts: None },
-        { kind: Assistant(is_danger=false), content: "first answer", ts: None },
-        { kind: User, content: "next question", ts: None },
-        { kind: Assistant(is_danger=false), content: "next answer", ts: None },
+        { kind: User, content: "question", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "first answer",
+          ts: None,
+          sequence: None,
+        },
+        { kind: User, content: "next question", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "next answer",
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark=7,
       event_boundaries=[(3, true, 2), (7, true, 4)],
@@ -10288,7 +10381,7 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
   let conv = with_pending_steers(
     {
       ..running_conversation(),
-      messages: [{ kind: User, content: "question", ts: None }],
+      messages: [{ kind: User, content: "question", ts: None, sequence: None }],
       watermark: 1,
       sync: test_reloading([]),
     },
@@ -10341,9 +10434,14 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "question", ts: None },
-        { kind: User, content: "late steer", ts: None },
-        { kind: Assistant(is_danger=false), content: "answer", ts: None },
+        { kind: User, content: "question", ts: None, sequence: None },
+        { kind: User, content: "late steer", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "answer",
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark=4,
       event_boundaries=[(4, true, 3)],
@@ -10365,8 +10463,13 @@ test "an unknown terminal before Finished still owns the run-tail notice" {
     {
       ..running_conversation(),
       messages: [
-        { kind: User, content: "question", ts: None },
-        { kind: Assistant(is_danger=false), content: "answer", ts: None },
+        { kind: User, content: "question", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "answer",
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark: 2,
     },
@@ -10398,8 +10501,13 @@ test "an unknown terminal before Finished still owns the run-tail notice" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "question", ts: None },
-        { kind: Assistant(is_danger=false), content: "answer", ts: None },
+        { kind: User, content: "question", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "answer",
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark=3,
       event_boundaries=[(3, true, 2)],
@@ -10420,8 +10528,13 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
     {
       ..running_conversation(),
       messages: [
-        { kind: User, content: "first question", ts: None },
-        { kind: Assistant(is_danger=false), content: "first answer", ts: None },
+        { kind: User, content: "first question", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "first answer",
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark: 2,
       run_durable_floor: Some(0),
@@ -10499,8 +10612,13 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "first question", ts: None },
-        { kind: Assistant(is_danger=false), content: "first answer", ts: None },
+        { kind: User, content: "first question", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "first answer",
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark=2,
       event_boundaries=[(1, false, 1), (2, false, 2)],
@@ -10517,10 +10635,20 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "first question", ts: None },
-        { kind: Assistant(is_danger=false), content: "first answer", ts: None },
-        { kind: User, content: "second question", ts: None },
-        { kind: Assistant(is_danger=false), content: "second answer", ts: None },
+        { kind: User, content: "first question", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "first answer",
+          ts: None,
+          sequence: None,
+        },
+        { kind: User, content: "second question", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "second answer",
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark=5,
       event_boundaries=[
@@ -10611,8 +10739,13 @@ test "a successor terminal cannot claim a setup-failed run's snapshot cut" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "next question", ts: None },
-        { kind: Assistant(is_danger=false), content: "next answer", ts: None },
+        { kind: User, content: "next question", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "next answer",
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark=3,
       event_boundaries=[(1, true, 0), (2, false, 1), (3, true, 2)],
@@ -10655,11 +10788,12 @@ test "an offline successor snapshot fences without claiming its terminal" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "offline successor", ts: None },
+        { kind: User, content: "offline successor", ts: None, sequence: None },
         {
           kind: Assistant(is_danger=false),
           content: "successor answer",
           ts: None,
+          sequence: None,
         },
       ],
       watermark=3,
@@ -10695,7 +10829,12 @@ test "a foreign run gains a floor only after snapshot data follows the prior ter
   let conv = {
     ..test_conversation(),
     messages: [
-      { kind: Assistant(is_danger=false), content: "previous", ts: None },
+      {
+        kind: Assistant(is_danger=false),
+        content: "previous",
+        ts: None,
+        sequence: None,
+      },
     ],
     watermark: 2,
     last_terminal_sequence: 2,
@@ -10721,8 +10860,13 @@ test "a foreign run gains a floor only after snapshot data follows the prior ter
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: Assistant(is_danger=false), content: "previous", ts: None },
-        { kind: User, content: "current", ts: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "previous",
+          ts: None,
+          sequence: None,
+        },
+        { kind: User, content: "current", ts: None, sequence: None },
       ],
       watermark=3,
       event_boundaries=[(2, true, 1)],
@@ -10836,8 +10980,9 @@ test "a foreign background run waits for a snapshot cut after Started" {
           kind: Assistant(is_danger=false),
           content: "previous answer",
           ts: None,
+          sequence: None,
         },
-        { kind: User, content: "current question", ts: None },
+        { kind: User, content: "current question", ts: None, sequence: None },
       ],
       watermark=4,
       event_boundaries=[
@@ -10989,6 +11134,7 @@ test "a late durable EOF finalizes an unconfirmed steer without a terminal" {
           kind: Assistant(is_danger=false),
           content: "partial answer",
           ts: None,
+          sequence: None,
         },
       ],
       watermark=2,
@@ -11221,7 +11367,9 @@ test "a runs snapshot cannot retire a steer submitted after its frontier" {
   // only reason this conversation survives a switch.
   let other = {
     ..empty_conversation(@interop.ChannelId::Local, "desktop-other"),
-    messages: [{ kind: User, content: "other conversation", ts: None }],
+    messages: [
+      { kind: User, content: "other conversation", ts: None, sequence: None },
+    ],
   }
   let (_, switched) = update(
     dispatch,
@@ -11383,7 +11531,14 @@ test "a late normal Finished upgrades a runs-settled uncertain steer" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: Assistant(is_danger=false), content: "answer", ts: None }],
+      items=[
+        {
+          kind: Assistant(is_danger=false),
+          content: "answer",
+          ts: None,
+          sequence: None,
+        },
+      ],
       watermark=2,
       event_boundaries=[(1, true, 0), (2, true, 1)],
       generation=2,
@@ -11547,7 +11702,14 @@ test "runs settlement causally freezes bound initial prompts from open and idle 
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "open-run durable tail", ts: None }],
+      items=[
+        {
+          kind: User,
+          content: "open-run durable tail",
+          ts: None,
+          sequence: None,
+        },
+      ],
       watermark=1,
       event_boundaries=[(1, false, 1)],
       generation=1,
@@ -11593,6 +11755,7 @@ test "runs settlement causally freezes bound initial prompts from open and idle 
           kind: Assistant(is_danger=false),
           content: "idle-run durable tail",
           ts: None,
+          sequence: None,
         },
       ],
       watermark=1,
@@ -11639,7 +11802,7 @@ test "an initial warning freezes between a snapshot and its buffered successor" 
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "snapshot W", ts: None }],
+      items=[{ kind: User, content: "snapshot W", ts: None, sequence: None }],
       watermark=1,
       event_boundaries=[(1, false, 1)],
       generation=1,
@@ -11702,7 +11865,9 @@ test "foreign Started reanchors a reconnected initial before retiring its owners
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "old durable prompt", ts: None }],
+      items=[
+        { kind: User, content: "old durable prompt", ts: None, sequence: None },
+      ],
       watermark=1,
       event_boundaries=[(1, false, 1)],
       generation=1,
@@ -11719,7 +11884,9 @@ test "foreign Started reanchors a reconnected initial before retiring its owners
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "old durable prompt", ts: None }],
+      items=[
+        { kind: User, content: "old durable prompt", ts: None, sequence: None },
+      ],
       watermark=1,
       event_boundaries=[(1, false, 1)],
       generation=2,
@@ -13369,11 +13536,11 @@ test "a background archive removes only its channel's same-id conversation" {
   let remote : @interop.ChannelId = Remote("d-remote")
   let local_conv = {
     ..empty_conversation(@interop.ChannelId::Local, "shared"),
-    messages: [{ kind: User, content: "local", ts: None }],
+    messages: [{ kind: User, content: "local", ts: None, sequence: None }],
   }
   let remote_conv = {
     ..empty_conversation(remote, "shared"),
-    messages: [{ kind: User, content: "remote", ts: None }],
+    messages: [{ kind: User, content: "remote", ts: None, sequence: None }],
   }
   let model = {
     ..test_model(),
@@ -14940,7 +15107,9 @@ test "a replayed commit at or below the watermark is dropped" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "already there", ts: None }],
+    messages: [
+      { kind: User, content: "already there", ts: None, sequence: None },
+    ],
     watermark: 2,
   })
   let (_, next) = update_dev(
@@ -15027,8 +15196,13 @@ test "a snapshot drains buffered commits in sequence order" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "one", ts: None },
-        { kind: Assistant(is_danger=false), content: "two", ts: None },
+        { kind: User, content: "one", ts: None, sequence: None },
+        {
+          kind: Assistant(is_danger=false),
+          content: "two",
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark=2,
       event_boundaries=[],
@@ -15059,8 +15233,8 @@ test "a snapshot already containing the buffered commits drops them" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "one", ts: None },
-        { kind: User, content: "dup", ts: None },
+        { kind: User, content: "one", ts: None, sequence: None },
+        { kind: User, content: "dup", ts: None, sequence: None },
       ],
       watermark=2,
       event_boundaries=[],
@@ -15088,7 +15262,7 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "one", ts: None }],
+      items=[{ kind: User, content: "one", ts: None, sequence: None }],
       watermark=2,
       event_boundaries=[],
       generation=1,
@@ -15108,7 +15282,7 @@ test "background retries preserve buffered commits until a later success" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "kept", ts: None }],
+    messages: [{ kind: User, content: "kept", ts: None, sequence: None }],
     watermark: 1,
     sync: test_reloading([
       { sequence: 3, ts: None, item: @protocol.User({ content: "x" }) },
@@ -15154,7 +15328,7 @@ test "background retries preserve buffered commits until a later success" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "kept", ts: None }],
+      items=[{ kind: User, content: "kept", ts: None, sequence: None }],
       watermark=1,
       event_boundaries=[],
       generation=2,
@@ -15174,7 +15348,7 @@ test "reopening an active failed reload retries and preserves other local notice
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "kept", ts: None }],
+    messages: [{ kind: User, content: "kept", ts: None, sequence: None }],
     watermark: 1,
     sync: ReloadFailed(generation=1, buffered=[
       { sequence: 2, ts: None, item: @protocol.User({ content: "two" }) },
@@ -15215,7 +15389,7 @@ test "reopening an active failed reload retries and preserves other local notice
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "kept", ts: None }],
+      items=[{ kind: User, content: "kept", ts: None, sequence: None }],
       watermark=1,
       event_boundaries=[],
       generation=2,
@@ -15237,7 +15411,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
   let model = test_model().replace_conversation({
     ..test_conversation(),
     workspace: Project(root=current_root),
-    messages: [{ kind: User, content: "current", ts: None }],
+    messages: [{ kind: User, content: "current", ts: None, sequence: None }],
     watermark: 5,
     sync: Reloading(
       generation=2,
@@ -15254,7 +15428,9 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "stale generation", ts: None }],
+      items=[
+        { kind: User, content: "stale generation", ts: None, sequence: None },
+      ],
       watermark=9,
       event_boundaries=[],
       generation=1,
@@ -15273,7 +15449,9 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "older snapshot", ts: None }],
+      items=[
+        { kind: User, content: "older snapshot", ts: None, sequence: None },
+      ],
       watermark=4,
       event_boundaries=[],
       generation=2,
@@ -15421,7 +15599,9 @@ test "a delayed terminal commit never clears a newer live delta" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
-    messages: [{ kind: User, content: "older prompt", ts: None }],
+    messages: [
+      { kind: User, content: "older prompt", ts: None, sequence: None },
+    ],
     watermark: 1,
     streaming_response: "next turn fragment",
   })
@@ -15443,7 +15623,7 @@ test "a fixed local notice stays before later durable turns" {
   let dispatch = test_dispatch()
   let conv = {
     ..test_conversation(),
-    messages: [{ kind: User, content: "question", ts: None }],
+    messages: [{ kind: User, content: "question", ts: None, sequence: None }],
     watermark: 1,
   }.append_local_notice(Assistant(is_danger=true), "local failure")
   let (_, committed) = update_dev(
@@ -16178,4 +16358,42 @@ test "full-screen modals hide the native view and closing restores it" {
   )
   assert_true(searching.quick_open is Some(_))
   assert_true(searching.browser_pane.shown is None)
+}
+
+///|
+test "an overview click unpins auto-follow and highlights eagerly" {
+  let key = @transcript_overview.Durable(3)
+  let (_, next) = update(
+    test_dispatch(),
+    TranscriptOverview(@transcript_overview.Clicked(key)),
+    test_model(),
+  )
+  // Jumping into history is reading history: the next streamed delta must
+  // not yank the view back down.
+  assert_false(next.transcript_pinned)
+  @debug.assert_eq(next.transcript_overview.active, Some(key))
+}
+
+///|
+test "the overview's turn keys do not survive a conversation switch" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation(
+    empty_conversation(@interop.ChannelId::Local, "desktop-bg"),
+  )
+  let model = {
+    ..model,
+    transcript_overview: {
+      hover: None,
+      active: Some(@transcript_overview.Durable(3)),
+    },
+  }
+  let (_, switched) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "desktop-bg"),
+    model,
+  )
+  inspect(switched.active_session, content="desktop-bg")
+  // Sequences are per-session — the same number names a different turn in
+  // the arriving conversation, so the highlight must not carry across.
+  @debug.assert_eq(switched.transcript_overview.active, None)
 }

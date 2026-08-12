@@ -35,6 +35,48 @@ fn reveal_active_project() -> @cmd.Cmd {
 }
 
 ///|
+/// Scroll one user turn's bubble to the top of the transcript on the render
+/// that applied the overview click. Hand-computed against the transcript's
+/// own scrollTop rather than `scroll_into_view`: that walks every scrollable
+/// ancestor, and the app shell above the transcript must not move.
+fn scroll_turn_into_view(key : @transcript_overview.TurnKey) -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => {
+      guard @dom.document().get_element_by_id("transcript").to_option()
+        is Some(transcript) else {
+        return
+      }
+      guard @dom.document().get_element_by_id(key.anchor()).to_option()
+        is Some(bubble) else {
+        return
+      }
+      let offset = bubble.get_bounding_client_rect().get_top() -
+        transcript.get_bounding_client_rect().get_top()
+      transcript.set_scroll_top(transcript.get_scroll_top() + offset - 10.0)
+    },
+    kind=@cmd.after_render,
+  )
+}
+
+///|
+/// The turn the transcript viewport currently reads: the last user bubble
+/// whose top sits above the upper third of the scroller — the turn whose
+/// answer flows under the reading line. `None` above the first bubble.
+fn visible_turn_anchor(transcript : @dom.Element) -> String? {
+  let reference = transcript.get_bounding_client_rect().get_top() +
+    transcript.get_client_height() * 0.35
+  let mut current : String? = None
+  for bubble in transcript.query_selector_all(".msg.user") {
+    if bubble.get_bounding_client_rect().get_top() <= reference {
+      current = bubble.get_attribute("id")
+    } else {
+      break
+    }
+  }
+  current
+}
+
+///|
 let transcript_scroll_watched : Ref[Bool] = Ref(false)
 
 ///|
@@ -51,6 +93,7 @@ fn watch_transcript_scroll(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
     guard !transcript_scroll_watched.val else { return }
     transcript_scroll_watched.val = true
     let mut pinned = true
+    let mut turn_anchor : String? = None
     @interop.add_capture_listener(@js.Cast::from(@dom.document()), "scroll", event => {
       guard event.target().to_element() is Some(element) else { return }
       guard element.get_property("id").to_option() is Some("transcript") else {
@@ -66,6 +109,20 @@ fn watch_transcript_scroll(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       if at_bottom != pinned {
         pinned = at_bottom
         scheduler.add(dispatch(TranscriptPinned(at_bottom)))
+      }
+      // The overview rail's active-turn highlight, reported the same
+      // change-guarded way as the pin.
+      let anchor = visible_turn_anchor(element)
+      if anchor != turn_anchor {
+        turn_anchor = anchor
+        let key = if anchor is Some(id) {
+          @transcript_overview.TurnKey::from_anchor(id)
+        } else {
+          None
+        }
+        scheduler.add(
+          dispatch(TranscriptOverview(@transcript_overview.ActiveChanged(key))),
+        )
       }
     })
   })

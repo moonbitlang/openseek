@@ -20,6 +20,7 @@ fn plan_call(
     ),
     content: "",
     ts: None,
+    sequence: None,
   }
 }
 
@@ -38,6 +39,7 @@ fn unpaired_result() -> @transcript.TranscriptItem {
     ),
     content: "Plan updated.",
     ts: None,
+    sequence: None,
   }
 }
 
@@ -148,6 +150,7 @@ test "classify names every state a plan call can be observed in" {
       ),
       content: "",
       ts: None,
+      sequence: None,
     })
     is None,
   )

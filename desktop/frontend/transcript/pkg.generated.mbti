@@ -10,7 +10,7 @@ import {
 // Values
 pub fn apply_goal_marker(GoalStanding?, GoalMarker) -> GoalStanding?
 
-pub fn apply_session_item(Array[TranscriptItem], @protocol.SessionItem, ts? : Double) -> Bool
+pub fn apply_session_item(Array[TranscriptItem], @protocol.SessionItem, ts? : Double, sequence? : Int) -> Bool
 
 pub fn apps_from_reply(@protocol.ListAppsReply) -> Array[LauncherAppItem]
 
@@ -140,6 +140,7 @@ pub(all) struct TranscriptItem {
   kind : ItemKind
   content : String
   ts : Double?
+  sequence : Int?
 } derive(Eq)
 
 // Type aliases

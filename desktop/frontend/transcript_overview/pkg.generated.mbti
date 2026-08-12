@@ -1,0 +1,51 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/transcript_overview"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
+  "openseek_desktop/frontend/transcript",
+}
+
+// Values
+pub fn entries(Array[@transcript.TranscriptItem], display~ : (String) -> String) -> Array[Entry]
+
+pub fn rail(Array[Entry], State, @cmd.Emit[Msg], clock~ : (Double) -> String) -> @html.Html
+
+pub fn update(Msg, State) -> State
+
+// Errors
+
+// Types and methods
+pub(all) struct Entry {
+  key : TurnKey
+  text : String
+  ts : Double?
+  reply : String?
+} derive(Eq, @debug.Debug)
+
+pub(all) enum Msg {
+  Entered(TurnKey)
+  Left
+  Clicked(TurnKey)
+  ActiveChanged(TurnKey?)
+}
+
+pub(all) struct State {
+  hover : TurnKey?
+  active : TurnKey?
+} derive(Eq, @debug.Debug)
+pub fn State::empty() -> Self
+
+pub(all) enum TurnKey {
+  Durable(Int)
+  Local(Int)
+} derive(Eq, @debug.Debug)
+pub fn TurnKey::anchor(Self) -> String
+pub fn TurnKey::from_anchor(String) -> Self?
+pub fn TurnKey::of(@transcript.TranscriptItem, index~ : Int) -> Self
+
+// Type aliases
+
+// Traits

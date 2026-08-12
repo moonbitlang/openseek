@@ -5,6 +5,11 @@
   overflow: auto;
   padding: 24px 24px 22px;
   background: transparent;
+  /* The overview rail's container: its cq units measure this scroller's
+     own viewport, so the rail centers and bounds itself against the real
+     transcript height whatever the topbar, composer, or terminal do. Safe
+     to contain: the grid row sizes this element, not its content. */
+  container-type: size;
 }
 
 .stream {
@@ -51,6 +56,148 @@
   background: var(--accent-soft);
   color: var(--accent-ink);
   border-color: var(--accent-line);
+}
+
+/* ---------- transcript overview ---------- */
+/* The rail of user-turn ticks over the transcript's left gutter. Sticky
+   first child of the scroller with zero height (the jump-latest trick), so
+   it never adds scroll length; the rail hangs from it into the gutter the
+   centered stream leaves free. */
+.transcript-overview {
+  position: sticky;
+  top: 0;
+  height: 0;
+  overflow: visible;
+  z-index: 6;
+}
+.overview-rail {
+  position: absolute;
+  /* Centered on the transcript's own viewport — `.transcript` is the size
+     container, so no chrome arithmetic. The sticky wrapper pins this to
+     the viewport top; 50cqh is its middle. */
+  top: 50cqh;
+  transform: translateY(-50%);
+  /* Into the scroller's own 24px padding, flush with its left edge — the
+     rail must not depend on the centered stream leaving a gutter, because
+     at common window widths it leaves none. */
+  left: -20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  /* Bounded by the real transcript height: a long conversation compresses
+     its ticks (flex-shrink against this cap) instead of overflowing, and a
+     terminal-squeezed sliver of a pane gets a vanishing rail rather than
+     ticks clipped out of reach. No overflow clipping: the preview popover
+     hangs outside the rail's own box. */
+  max-height: calc(100cqh - 32px);
+}
+.overview-tick {
+  position: relative;
+  display: flex;
+  flex: 0 1 auto;
+  height: 8px;
+  /* No shrink floor: an extreme conversation compresses into a dense bar
+     instead of overflowing the rail's cap, where the scroller would clip
+     the later turns out of reach entirely. */
+  min-height: 0;
+}
+/* The button is the full row — a hover target the size of the dash alone
+   is unhittable — and the dash it shows is drawn by its ::before. */
+.overview-tick-button {
+  width: 18px;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: grid;
+  align-items: center;
+  justify-items: start;
+}
+/* Text-gray tones, not hairline tones: `--line` is tuned for borders and
+   disappears against the dark paper. The muted resting state comes from
+   opacity so one token family carries both themes. */
+.overview-tick-button::before {
+  content: "";
+  width: 9px;
+  height: 2px;
+  max-height: 100%;
+  border-radius: 1px;
+  background: var(--ink-3);
+  opacity: 0.5;
+  transition:
+    width 0.12s ease,
+    background 0.12s ease,
+    opacity 0.12s ease;
+}
+.overview-tick:hover .overview-tick-button::before,
+.overview-tick.hovered .overview-tick-button::before {
+  width: 14px;
+  background: var(--ink-2);
+  opacity: 1;
+}
+.overview-tick.active .overview-tick-button::before {
+  width: 14px;
+  background: var(--accent);
+  opacity: 1;
+}
+/* The hovered tick's preview: the prompt, its send time, and the answer it
+   got. Preview only — pointer events pass through, so it can never trap the
+   pointer or cover the text beneath from a click. */
+.overview-preview {
+  position: absolute;
+  left: 30px;
+  top: -10px;
+  width: min(360px, 44cqw);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  pointer-events: none;
+  z-index: 7;
+}
+/* A tick measured (at hover time) to lack downward room opens its preview
+   upward instead of running past the scroller's clipping bottom edge. */
+.overview-preview.flip {
+  top: auto;
+  bottom: -10px;
+}
+.overview-preview-prompt {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.overview-preview-time {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.overview-preview-reply {
+  margin-top: 7px;
+  padding-left: 8px;
+  border-left: 2px solid var(--line);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+/* The rail lives in the scroller's padding, so it survives any width the
+   desktop layout produces; only a phone-narrow column drops it. */
+@container (max-width: 700px) {
+  .transcript-overview {
+    display: none;
+  }
 }
 
 /* empty state */

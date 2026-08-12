@@ -215,7 +215,14 @@ pub fn session_from_reply(
     if event.sequence > derived_watermark {
       derived_watermark = event.sequence
     }
-    ignore(apply_session_item(items, event.item, ts?=event.ts))
+    ignore(
+      apply_session_item(
+        items,
+        event.item,
+        ts?=event.ts,
+        sequence=event.sequence,
+      ),
+    )
     // The standing goal replays from the same durable markers the cards
     // above come from, so a resumed conversation shows exactly the goal the
     // engine holds — see `goal.mbt`.
@@ -255,11 +262,13 @@ pub fn transcript_from_session(
 /// snapshots and live commits, so both paths agree by construction. `ts` is
 /// the committing event's stamp, carried onto every row the item appends so
 /// the view can date a turn; a store (or fixture) written without one leaves
-/// the rows undated.
+/// the rows undated. `sequence` is the committing event's sequence, likewise
+/// carried onto every appended row as its durable identity.
 pub fn apply_session_item(
   items : Array[TranscriptItem],
   item : @desktop_protocol.SessionItem,
   ts? : Double,
+  sequence? : Int,
 ) -> Bool {
   let before = items.length()
   let mut updated_existing = false
@@ -267,7 +276,7 @@ pub fn apply_session_item(
     @desktop_protocol.User(payload) => {
       let content = payload.content.trim().to_owned()
       if !content.is_empty() {
-        items.push({ kind: User, content, ts })
+        items.push({ kind: User, content, ts, sequence })
       }
     }
     @desktop_protocol.Assistant(payload) => {
@@ -277,12 +286,12 @@ pub fn apply_session_item(
       if payload.reasoning_content is Some(reasoning) {
         let reasoning = reasoning.trim().to_owned()
         if !reasoning.is_empty() {
-          items.push({ kind: Reasoning, content: reasoning, ts })
+          items.push({ kind: Reasoning, content: reasoning, ts, sequence })
         }
       }
       let content = payload.content.trim().to_owned()
       if !content.is_empty() {
-        items.push({ kind: Assistant(is_danger=false), content, ts })
+        items.push({ kind: Assistant(is_danger=false), content, ts, sequence })
       }
       // Tool calls belong after this assistant event's reasoning and visible
       // prose, in the exact order the model emitted them. Their results arrive
@@ -299,6 +308,7 @@ pub fn apply_session_item(
           ),
           content: "",
           ts,
+          sequence,
         })
       }
     }
@@ -336,9 +346,10 @@ pub fn apply_session_item(
             brief=payload.brief,
           ),
           content: payload.content,
-          // The row keeps the call's own stamp: it is one tool call, dated
-          // when the agent made it, not when its output came back.
+          // The row keeps the call's own stamp and sequence: it is one tool
+          // call, dated when the agent made it, not when its output came back.
           ts: items[index].ts,
+          sequence: items[index].sequence,
         }
         updated_existing = true
       } else {
@@ -359,6 +370,7 @@ pub fn apply_session_item(
           ),
           content: payload.content,
           ts,
+          sequence,
         })
       }
     }
@@ -381,6 +393,7 @@ pub fn apply_session_item(
               ),
               content: goal_body(text),
               ts,
+              sequence,
             })
           Some(GoalCleared) =>
             items.push({
@@ -394,6 +407,7 @@ pub fn apply_session_item(
               ),
               content: "",
               ts,
+              sequence,
             })
           Some(GoalBlocked(reason)) =>
             items.push({
@@ -407,6 +421,7 @@ pub fn apply_session_item(
               ),
               content: goal_body(reason),
               ts,
+              sequence,
             })
           Some(GoalUnblocked) =>
             items.push({
@@ -420,6 +435,7 @@ pub fn apply_session_item(
               ),
               content: "",
               ts,
+              sequence,
             })
           // The remaining goal-family notices are transport (the baseline
           // pairing record) or model-directed text (reminders, checks) —
@@ -440,6 +456,7 @@ pub fn apply_session_item(
                   ),
                   content: update.diagnostics.join("\n"),
                   ts,
+                  sequence,
                 })
               }
             }
@@ -448,11 +465,11 @@ pub fn apply_session_item(
     @desktop_protocol.Summary(payload) => {
       let content = payload.content.trim().to_owned()
       if !content.is_empty() {
-        items.push({ kind: Summary, content, ts })
+        items.push({ kind: Summary, content, ts, sequence })
       }
     }
     @desktop_protocol.Terminal(terminal) =>
-      SessionTerminalProjection(terminal).append_to(items, ts?)
+      SessionTerminalProjection(terminal).append_to(items, ts?, sequence?)
     @desktop_protocol.UnknownTerminal(_) => ()
     @desktop_protocol.Unknown(_) => ()
   }
@@ -468,6 +485,7 @@ fn SessionTerminalProjection::append_to(
   self : SessionTerminalProjection,
   items : Array[TranscriptItem],
   ts? : Double,
+  sequence? : Int,
 ) -> Unit {
   let (kind, message) = match self.0 {
     @desktop_protocol.Finished(message) => ("finished", message)
@@ -481,7 +499,12 @@ fn SessionTerminalProjection::append_to(
     // message; only a differing terminal message adds a bubble.
     "finished" =>
       if !message.is_empty() && !ends_with_assistant(items, message) {
-        items.push({ kind: Assistant(is_danger=false), content: message, ts })
+        items.push({
+          kind: Assistant(is_danger=false),
+          content: message,
+          ts,
+          sequence,
+        })
       }
     "aborted" =>
       items.push({
@@ -492,6 +515,7 @@ fn SessionTerminalProjection::append_to(
           "aborted: \{message}"
         },
         ts,
+        sequence,
       })
     "interrupted" =>
       items.push({
@@ -502,6 +526,7 @@ fn SessionTerminalProjection::append_to(
           "cancelled: \{message}"
         },
         ts,
+        sequence,
       })
     "failed" =>
       items.push({
@@ -512,6 +537,7 @@ fn SessionTerminalProjection::append_to(
           message
         },
         ts,
+        sequence,
       })
     _ => ()
   }
@@ -710,11 +736,15 @@ test "projected rows carry their event's stamp, tool rows the call's own" {
   let items = session_from_reply(session_reply(events)).items
   inspect(items.length(), content="3")
   assert_true(items[0].ts is Some(1781144351123))
+  assert_true(items[0].sequence is Some(1))
   assert_true(items[1].ts is Some(1781144352000))
+  assert_true(items[1].sequence is Some(2))
   // The result filled the call row in place; the row is dated when the call
-  // was made, not when its output came back.
+  // was made, not when its output came back — and keeps that event's
+  // sequence for the same reason.
   assert_true(items[2].kind is Tool(has_result=true, ..))
   assert_true(items[2].ts is Some(1781144352000))
+  assert_true(items[2].sequence is Some(2))
 }
 
 ///|
@@ -723,6 +753,8 @@ test "rows from a store written without stamps stay undated" {
     #|{"sequence":1,"item":{"kind":"user","payload":{"content":"question"}}}
   let items = session_from_reply(session_reply(events)).items
   assert_true(items[0].ts is None)
+  // The stamp is optional in old stores; the sequence never is.
+  assert_true(items[0].sequence is Some(1))
 }
 
 ///|
