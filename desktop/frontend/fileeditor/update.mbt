@@ -1060,24 +1060,6 @@ fn moonbit_check_input(path : @pathx.Relative) -> Bool {
 }
 
 ///|
-/// Directories whose immediate children cover every path represented by a
-/// ready snapshot. Selecting each ancestor matters because the Host watcher
-/// deliberately prunes descendants below unselected directories.
-fn FileIndex::watched_directories(self : FileIndex) -> Array[@pathx.Relative] {
-  let directories = [@pathx.Relative::root()]
-  if self is IndexReady(files~, ..) {
-    for file in files {
-      for directory in ancestor_paths(file) {
-        if !directories.contains(directory) {
-          directories.push(directory)
-        }
-      }
-    }
-  }
-  directories
-}
-
-///|
 /// Mark a ready snapshot stale after a structural watcher event. The Bool
 /// tells the caller to start the single allowed refresh; later events only
 /// latch one follow-up while that request is in flight.
@@ -1147,9 +1129,9 @@ fn FileIndex::failed(self : FileIndex) -> (FileIndex, Bool) {
 
 ///|
 /// Reconcile the Host watcher with the panel, open tabs, and the workspace
-/// snapshot. A ready snapshot keeps every represented parent directory live,
-/// even while the panel is hidden, so collapsed descendants still invalidate
-/// the cached path set.
+/// snapshot. A live index asks the Host to retain non-ignored descendants even
+/// while the panel is hidden, so empty directories and paths beyond the
+/// bounded result can still invalidate the cached path set.
 fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
   guard ctx.root is Some(root) else { return None }
   let index_live = self.index is IndexLoading || self.index is IndexReady(..)
@@ -1161,11 +1143,7 @@ fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
   }
   let files = ctx.open_files.copy()
   files.sort_by((left, right) => left.0.lexical_compare(right.0))
-  let directories = if index_live {
-    self.index.watched_directories()
-  } else {
-    []
-  }
+  let directories = []
   if ctx.panel_open {
     if !directories.contains(@pathx.Relative::root()) {
       directories.push(@pathx.Relative::root())
@@ -1177,7 +1155,7 @@ fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
     }
     directories.sort_by((left, right) => left.0.lexical_compare(right.0))
   }
-  Some({ owner: ctx.owner, root, files, directories })
+  Some({ owner: ctx.owner, root, files, directories, recursive: index_live })
 }
 
 ///|
@@ -3935,6 +3913,7 @@ test "a closed panel still re-roots when the conversation switches" {
       root: test_ctx().test_root(),
       files: [Relative("a.mbt")],
       directories: [],
+      recursive: false,
     }),
   }
   // The new conversation has nothing open and the panel is closed.
@@ -3971,6 +3950,7 @@ test "a closed panel still re-roots when the conversation switches" {
         root: _,
         files: [Relative("a.mbt")],
         directories: [],
+        recursive: false,
       }
     ),
   )
@@ -4025,6 +4005,7 @@ test "a resolved placement change reroots documents and fences old replies" {
       root: old_workspace,
       files: [path],
       directories: [@pathx.Relative::root()],
+      recursive: true,
     }),
   }
   let worktree_ctx : Ctx = {
@@ -4056,6 +4037,7 @@ test "a resolved placement change reroots documents and fences old replies" {
         root: _,
         files: [@pathx.Relative("reviewed.mbt")],
         directories: [@pathx.Relative("")],
+        recursive: false,
       }
     ),
   )
@@ -4146,6 +4128,7 @@ test "a missing checkout parks files and refuses editor actions until repair" {
       root: present.test_root(),
       files: [Relative("a.mbt")],
       directories: [@pathx.Relative::root()],
+      recursive: true,
     }),
   }
   let missing : Ctx = {
@@ -4300,6 +4283,7 @@ test "a missing checkout settles an in-flight Changes request for retry" {
       root: present.test_root(),
       files: [],
       directories: [@pathx.Relative::root()],
+      recursive: false,
     }),
   }
   let missing : Ctx = {
@@ -4373,6 +4357,7 @@ test "checkout recovery restarts a review whose paired replies were parked" {
       root: present.test_root(),
       files: [path],
       directories: [@pathx.Relative::root()],
+      recursive: false,
     }),
   }
   let missing : Ctx = {
@@ -4592,6 +4577,7 @@ test "an unresolved placement parks files and refuses editor actions" {
       root: present.test_root(),
       files: [Relative("a.mbt")],
       directories: [@pathx.Relative::root()],
+      recursive: false,
     }),
   }
   let unresolved : Ctx = {
@@ -4638,7 +4624,7 @@ test "ToggleTree flips the pane and RevealDirectory forces it open" {
 }
 
 ///|
-test "a ready file index watches represented parents while the panel is hidden" {
+test "a ready file index watches non-ignored descendants while hidden" {
   let state = {
     ..owned_state(),
     index: IndexReady(
@@ -4657,7 +4643,8 @@ test "a ready file index watches represented parents while the panel is hidden" 
         owner: { channel: Local, session: "desktop-test" },
         root: _,
         files: [],
-        directories: [Relative(""), Relative("nested"), Relative("nested/deep")],
+        directories: [],
+        recursive: true,
       }
     ),
   )
@@ -4679,6 +4666,7 @@ test "reopening Changes refreshes after the explorer is hidden" {
       root: test_ctx().test_root(),
       files: [],
       directories: [@pathx.Relative::root()],
+      recursive: false,
     }),
   }
   let closed_ctx = { ..test_ctx(), panel_open: false }
@@ -4712,6 +4700,7 @@ test "showing a hidden explorer refreshes Changes before polling resumes" {
       root: test_ctx().test_root(),
       files: [],
       directories: [@pathx.Relative::root()],
+      recursive: false,
     }),
   }
   let (hidden, _) = sync(test_emit(), state, hidden_ctx)
@@ -4744,6 +4733,7 @@ test "reopening Changes latches a follow-up for an in-flight refresh" {
       root: test_ctx().test_root(),
       files: [],
       directories: [@pathx.Relative::root()],
+      recursive: false,
     }),
   }
   let (refreshed, _) = sync(test_emit(), state, test_ctx())
@@ -4767,6 +4757,7 @@ test "reopening Changes latches a follow-up for the initial load" {
       root: test_ctx().test_root(),
       files: [],
       directories: [@pathx.Relative::root()],
+      recursive: false,
     }),
   }
   let (refreshed, _) = sync(test_emit(), state, test_ctx())
@@ -6396,6 +6387,7 @@ test "a hidden review accepts its file-only watch without a refresh loop" {
       root: test_ctx().test_root(),
       files: [path],
       directories: [],
+      recursive: false,
     }),
     changes: ChangeListReady(
       repository=true,
@@ -6929,6 +6921,7 @@ test "sync reconciles the watcher with the panel and its open files" {
         root: _,
         files: [],
         directories: [Relative("")],
+        recursive: false,
       }
     ),
   )
@@ -7011,6 +7004,7 @@ test "same-root conversation switch fences every old watcher push" {
       root: test_ctx().test_root(),
       files: [],
       directories: [@pathx.Relative::root()],
+      recursive: false,
     }),
     watch_generation: old_generation,
   }

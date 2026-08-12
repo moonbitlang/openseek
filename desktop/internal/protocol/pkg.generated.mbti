@@ -846,6 +846,7 @@ pub(all) struct WatchWorkspacePayload {
   path : String
   files : Array[String]
   directories : Array[String]
+  recursive : Bool?
   generation : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 

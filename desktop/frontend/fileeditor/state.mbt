@@ -149,6 +149,7 @@ pub(all) struct WatchedPaths {
   root : @common.Uri
   files : Array[@pathx.Relative]
   directories : Array[@pathx.Relative]
+  recursive : Bool
 } derive(Eq)
 
 ///|

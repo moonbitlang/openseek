@@ -255,6 +255,10 @@ pub(all) struct WatchWorkspacePayload {
   path : String
   files : Array[String]
   directories : Array[String]
+  // Keep every non-ignored descendant observable while a workspace-wide file
+  // index is live. Shallow mode remains sufficient for open files and the
+  // explorer's explicitly listed directories.
+  recursive : Bool?
   // Chosen by the client for one concrete watcher configuration.
   generation : String
 } derive(Debug, Eq, FromJson, ToJson)

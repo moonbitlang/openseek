@@ -46,13 +46,18 @@ priv struct FsWatchTarget {
 priv struct WatchInterest {
   paths : Set[@pathx.Relative]
   directories : Set[@pathx.Relative]
+  recursive : Bool
 }
 
 ///|
 fn WatchInterest::WatchInterest(
   payload : WatchWorkspacePayload,
 ) -> WatchInterest {
-  let interest = { paths: Set([]), directories: Set([]) }
+  let interest = {
+    paths: Set([]),
+    directories: Set([]),
+    recursive: payload.recursive.unwrap_or(false),
+  }
   for path in payload.files {
     interest.remember(@pathx.Relative(path).normalize())
   }
@@ -89,6 +94,13 @@ fn WatchInterest::remember(
 /// observed, but its descendants are ignored unless that directory is also
 /// selected or leads to an opened file.
 fn WatchInterest::ignores(self : WatchInterest, path : @pathx.Relative) -> Bool {
+  // A live workspace index needs structural events from directories that have
+  // no indexed file yet and from paths beyond the bounded frontend result.
+  // Reuse file search's directory policy so dependency/build churn remains
+  // pruned even though the native watcher itself is recursive.
+  if self.recursive {
+    return path.is_ignored_file_search_path()
+  }
   if self.paths.contains(path) {
     return false
   }
@@ -260,6 +272,7 @@ test "watch interest retains selected files, listed children, and ancestors" {
     path: "/work/project",
     files: ["src/main.mbt", "node_modules/pkg/index.js"],
     directories: ["", "docs"],
+    recursive: Some(false),
     generation: "page-a:7",
   }
   let interest = WatchInterest(payload)
@@ -280,6 +293,21 @@ test "watch interest retains selected files, listed children, and ancestors" {
 }
 
 ///|
+test "recursive watch interest covers non-indexed workspace directories" {
+  let interest = WatchInterest({
+    path: "/work/project",
+    files: [],
+    directories: [],
+    recursive: Some(true),
+    generation: "page-a:8",
+  })
+  assert_false(interest.ignores(Relative("empty/deep/new.mbt")))
+  assert_false(interest.ignores(Relative("beyond-result-cap/new.mbt")))
+  assert_true(interest.ignores(Relative("node_modules")))
+  assert_true(interest.ignores(Relative("_build")))
+}
+
+///|
 test "host connections keep filesystem watch request mailboxes isolated" {
   let first = HostConnection::new()
   let second = HostConnection::new()
@@ -297,6 +325,7 @@ async test "watch requests retain their notification generation" {
       path: "/work/project",
       files: [],
       directories: [],
+      recursive: Some(false),
       generation: "page-a:9",
     },
     reply~,
@@ -320,11 +349,20 @@ test "filesystem payloads carry absolute target paths" {
     "path": "/work/project",
     "files": ["src/main.mbt"],
     "directories": ["", "src"],
+    "recursive": true,
     "generation": "page-a:7",
   })
   assert_eq(selected.files, ["src/main.mbt"])
   assert_eq(selected.directories, ["", "src"])
+  assert_eq(selected.recursive, Some(true))
   assert_eq(selected.generation, "page-a:7")
+  let legacy : WatchWorkspacePayload = @json.from_json({
+    "path": "/work/project",
+    "files": [],
+    "directories": [],
+    "generation": "page-a:6",
+  })
+  assert_true(legacy.recursive is None)
 }
 
 ///|
