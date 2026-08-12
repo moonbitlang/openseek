@@ -904,7 +904,7 @@ async fn delete_worktree_checkout(
         "worktree \{name} is locked; unlock it before \{action}",
       )
     }
-    preserve_submodule_commits(workspace, name, target, gitlinks)
+    preserve_submodule_commits(workspace, name, target)
     @fs.rmdir(target.to_string(), recursive=true)
     ignore(git_in(workspace, ["worktree", "prune"]))
   } else {
