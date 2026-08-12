@@ -50,6 +50,24 @@ fn @pathx.Relative::is_ignored_file_search_path(self : @pathx.Relative) -> Bool 
 }
 
 ///|
+/// A recursive watcher must observe an ignored basename long enough to tell
+/// whether it is a regular file or a directory. Keep that entry itself and
+/// prune only descendants; the scanner then applies the full basename rule
+/// after it has learned that the entry is a directory.
+fn @pathx.Relative::is_ignored_file_search_descendant(
+  self : @pathx.Relative,
+) -> Bool {
+  let mut ignored_ancestor = false
+  for segment in self.0.split("/") {
+    if ignored_ancestor && !segment.is_empty() {
+      return true
+    }
+    ignored_ancestor = @pathx.Relative(segment.to_owned()).is_ignored_file_search_path()
+  }
+  false
+}
+
+///|
 /// File discovery is best-effort: a directory that disappears or becomes
 /// unreadable cannot fail the whole scan, while cancellation still stops it.
 async fn read_sorted_directory(dir : @pathx.Absolute) -> Array[FileScanEntry] {
@@ -675,6 +693,18 @@ async fn clear_file_search_cache_op(
 ///|
 fn test_scan_entry(name : String, is_dir : Bool) -> FileScanEntry {
   { name, is_dir }
+}
+
+///|
+test "recursive watcher pruning keeps ignored basenames and skips descendants" {
+  assert_false(@pathx.Relative("target").is_ignored_file_search_descendant())
+  assert_false(@pathx.Relative("src/.git").is_ignored_file_search_descendant())
+  assert_true(
+    @pathx.Relative("target/cache").is_ignored_file_search_descendant(),
+  )
+  assert_true(
+    @pathx.Relative("src/.git/config").is_ignored_file_search_descendant(),
+  )
 }
 
 ///|

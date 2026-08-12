@@ -36,6 +36,9 @@ priv struct FsWatchTarget {
   // selections advance it without replacing the watcher; every later push
   // then follows the identity acknowledged to the frontend.
   generation : Ref[String]
+  // Cleared before reporting a watcher failure, so an equivalent request that
+  // races with that report rebuilds instead of acknowledging a dead watcher.
+  alive : Ref[Bool]
 }
 
 ///|
@@ -126,7 +129,7 @@ fn WatchInterest::ignores(self : WatchInterest, path : @pathx.Relative) -> Bool 
   // Reuse file search's directory policy so dependency/build churn remains
   // pruned even though the native watcher itself is recursive.
   if self.recursive {
-    return path.is_ignored_file_search_path()
+    return path.is_ignored_file_search_descendant()
   }
   true
 }
@@ -151,7 +154,9 @@ async fn FsWatchRequest::keeps_active_watcher(
         }
       }
       let interest = WatchInterest(payload)
-      if root.absolute == target.root && interest == target.interest {
+      if target.alive.val &&
+        root.absolute == target.root &&
+        interest == target.interest {
         target.generation.val = payload.generation
         reply.put(None)
         true
@@ -216,6 +221,7 @@ async fn FsWatchRequest::apply(
         root: root.absolute,
         interest: WatchInterest(payload),
         generation: Ref(payload.generation),
+        alive: Ref(true),
       })
     }
   }
@@ -269,7 +275,10 @@ async fn FsWatchActor::run(
 ) -> Unit {
   let mut root : FsWatchTarget? = None
   for ;; {
-    root = self.requests.get().apply(root)
+    if root is None {
+      root = self.requests.get().apply(root)
+      continue
+    }
     guard root is Some(target) else { continue }
     let request = @async.with_task_group(group => {
       group.spawn_bg(() => {
@@ -286,6 +295,7 @@ async fn FsWatchActor::run(
         } catch {
           error if @async.is_being_cancelled() => raise error
           error => {
+            target.alive.val = false
             let message = "File watching stopped: \{error}"
             @xlog.warn(category="filesystem") <?
               {
@@ -300,6 +310,7 @@ async fn FsWatchActor::run(
             })
           }
         }
+        target.alive.val = false
       })
       let next = for ;; {
         let next = self.requests.get()
@@ -311,6 +322,9 @@ async fn FsWatchActor::run(
       group.return_immediately(next)
       next
     })
+    // Apply the replacement now. The next loop iteration starts it directly;
+    // waiting for another mailbox item here would leave the accepted target
+    // dormant until a third frontend transition.
     root = request.apply(root)
   }
 }
@@ -360,7 +374,10 @@ test "recursive watch interest covers non-indexed workspace directories" {
   assert_true(interest.ignores(Relative("node_modules/other")))
   assert_false(interest.ignores(Relative("node_modules/vendor/new.js")))
   assert_true(interest.ignores(Relative("node_modules/vendor/deep/new.js")))
-  assert_true(interest.ignores(Relative("_build")))
+  // An ignored basename itself remains observable because it can be a regular
+  // file. If it is a directory, only its descendants are pruned.
+  assert_false(interest.ignores(Relative("_build")))
+  assert_true(interest.ignores(Relative("_build/cache")))
 }
 
 ///|
@@ -390,6 +407,41 @@ test "host connections keep filesystem watch request mailboxes isolated" {
   assert_true(first.fs_watch.requests.try_put(Unwatch(reply~)))
   assert_true(first.fs_watch.requests.try_get() is Some(Unwatch(..)))
   assert_true(second.fs_watch.requests.try_get() is None)
+}
+
+///|
+async test "a failed watcher is rebuilt by an equivalent request" {
+  @async.with_task_group(group => {
+    let dir = @fs.tmpdir(prefix="openseek-fs-watch-restart-")
+    group.add_defer(() => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    })
+    let file = "\{dir}/not-a-directory"
+    @fs.write_file(file, "", create_mode=CreateOrTruncate)
+    let actor = FsWatchActor::new()
+    let failures : @async.Queue[FsWatchFailedPayload] = Queue(kind=Blocking(2))
+    group.spawn_bg(() => actor.run(_ => (), failure => failures.put(failure)))
+    actor.watch({
+      path: file,
+      files: [],
+      directories: [],
+      recursive: Some(true),
+      generation: "page-a:failed-1",
+    })
+    let first = @async.with_timeout(1000, () => failures.get())
+    assert_eq(first.generation, "page-a:failed-1")
+    @async.pause()
+    actor.watch({
+      path: file,
+      files: [],
+      directories: [],
+      recursive: Some(true),
+      generation: "page-a:failed-2",
+    })
+    let second = @async.with_timeout(1000, () => failures.get())
+    assert_eq(second.generation, "page-a:failed-2")
+    group.return_immediately(())
+  })
 }
 
 ///|

@@ -43,46 +43,54 @@ pub fn Request::run(
   let cache_key = "workspace-file-index:\{self.session}:\{root.path}"
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      ignore(
-        @interop.bridge_request(
+      // Clear and repopulate one Host cache key as an indivisible sequence.
+      // A conversation can return A→B→A while the first A scan is unresolved;
+      // without this lane, its stale clear may overtake and cancel the current
+      // A search even though the caller correctly rejects the stale reply.
+      @interop.in_ordered_lane(cache_key, () => {
+        ignore(
+          @interop.bridge_request(
+            self.channel,
+            @commands.fs_clear_file_search_cache,
+            { cache_key, },
+          ),
+        ) catch {
+          _ => {
+            scheduler.add(failed())
+            return
+          }
+        }
+        let reply = @interop.bridge_request(
           self.channel,
-          @commands.fs_clear_file_search_cache,
-          { cache_key, },
-        ),
-      ) catch {
-        _ => {
+          @commands.fs_search_files,
+          {
+            path: root.path,
+            cache_key,
+            query: "",
+            max_results: MaxIndexedFiles,
+            generation: 0,
+          },
+        ) catch {
+          _ => {
+            scheduler.add(failed())
+            return
+          }
+        }
+        if reply.cancelled {
           scheduler.add(failed())
           return
         }
+        let paths = reply.files.filter_map(path => {
+          if path.is_empty() {
+            None
+          } else {
+            Some(@pathx.Relative(path))
+          }
+        })
+        scheduler.add(loaded(paths, reply.limit_hit))
+      }) catch {
+        _ => scheduler.add(failed())
       }
-      let reply = @interop.bridge_request(
-        self.channel,
-        @commands.fs_search_files,
-        {
-          path: root.path,
-          cache_key,
-          query: "",
-          max_results: MaxIndexedFiles,
-          generation: 0,
-        },
-      ) catch {
-        _ => {
-          scheduler.add(failed())
-          return
-        }
-      }
-      if reply.cancelled {
-        scheduler.add(failed())
-        return
-      }
-      let paths = reply.files.filter_map(path => {
-        if path.is_empty() {
-          None
-        } else {
-          Some(@pathx.Relative(path))
-        }
-      })
-      scheduler.add(loaded(paths, reply.limit_hit))
     })
   })
 }
