@@ -2508,9 +2508,17 @@ pub fn update(
     RunSettled(owner~) =>
       if state.owner == Some(owner) {
         // A completed agent run can write files outside the pruned watcher.
-        // Git status alone cannot prove their content is unchanged, so review
-        // progress is conservatively reset at this authoritative boundary.
-        let state = { ..state, reviewed_changes: [] }
+        // Git status alone cannot prove their content or path set is unchanged,
+        // so review progress and a ready file index are conservatively
+        // invalidated at this authoritative boundary. FileIndex coalesces a
+        // second settled run while its refresh is still in flight.
+        let (index, start_index_refresh) = state.index.invalidate()
+        let state = { ..state, reviewed_changes: [], index }
+        let index_cmd = if start_index_refresh {
+          list_files(dispatch, owner, state.request_epoch, root=ctx.root)
+        } else {
+          @cmd.none
+        }
         let diagnostics = match
           active_moonbit_diagnostics(
             dispatch,
@@ -2538,7 +2546,7 @@ pub fn update(
         } else {
           (@cmd.none, state)
         }
-        (@cmd.batch([diagnostics, changes_cmd]), next)
+        (@cmd.batch([diagnostics, changes_cmd, index_cmd]), next)
       } else {
         (@cmd.none, state)
       }
@@ -3064,6 +3072,33 @@ test "structural watcher bursts coalesce file index refreshes" {
       refresh_again=false,
       ..
     ),
+  )
+}
+
+///|
+test "settled agent runs refresh the file index beyond watcher coverage" {
+  let emit = test_emit()
+  let ctx = { ..test_ctx(), panel_open: false }
+  let ready = {
+    ..owned_state(),
+    index: IndexReady(
+      files=[Relative("src/old.mbt")],
+      truncated=true,
+      refreshing=false,
+      refresh_again=false,
+    ),
+  }
+  let settled = RunSettled(owner=ctx.owner)
+  let (_, refreshing) = update(emit, settled, ready, ctx)
+  assert_true(
+    refreshing.index is IndexReady(refreshing=true, refresh_again=false, ..),
+  )
+  // The same input has the same result; the update performs no direct effect.
+  let (_, repeated_from_ready) = update(emit, settled, ready, ctx)
+  assert_true(repeated_from_ready == refreshing)
+  let (_, coalesced) = update(emit, settled, refreshing, ctx)
+  assert_true(
+    coalesced.index is IndexReady(refreshing=true, refresh_again=true, ..),
   )
 }
 
