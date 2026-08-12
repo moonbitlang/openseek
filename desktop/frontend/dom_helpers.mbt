@@ -71,6 +71,21 @@ fn scroll_turn_into_view(
         4.0
       transcript_pinned_watch.val = at_bottom
       scheduler.add(dispatch(TranscriptPinned(at_bottom)))
+      // The same clamped write also fires no event for the highlight: the
+      // click's eager `active` and the watcher's anchor cache would both
+      // drift from the turn the viewport actually reads. Report the settled
+      // truth for both — after a jump that did move, it simply confirms the
+      // clicked turn.
+      let anchor = visible_turn_anchor(transcript)
+      transcript_turn_anchor.val = anchor
+      let key = if anchor is Some(id) {
+        @transcript_overview.TurnKey::from_anchor(id)
+      } else {
+        None
+      }
+      scheduler.add(
+        dispatch(TranscriptOverview(@transcript_overview.ActiveChanged(key))),
+      )
     },
     kind=@cmd.after_render,
   )
@@ -80,18 +95,29 @@ fn scroll_turn_into_view(
 /// The turn the transcript viewport currently reads: the last user bubble
 /// whose top sits above the upper third of the scroller — the turn whose
 /// answer flows under the reading line. `None` above the first bubble.
+///
+/// Bubbles come back in document order with ascending tops, so a binary
+/// search keeps this at a handful of geometry reads per scroll event; a
+/// linear walk would read nearly every bubble whenever the user is near the
+/// tail of a long conversation.
 fn visible_turn_anchor(transcript : @dom.Element) -> String? {
   let reference = transcript.get_bounding_client_rect().get_top() +
     transcript.get_client_height() * 0.35
-  let mut current : String? = None
-  for bubble in transcript.query_selector_all(".msg.user") {
-    if bubble.get_bounding_client_rect().get_top() <= reference {
-      current = bubble.get_attribute("id")
+  let bubbles = transcript.query_selector_all(".msg.user")
+  let mut low = 0
+  let mut high = bubbles.length() - 1
+  let mut found : Int? = None
+  while low <= high {
+    let middle = low + (high - low) / 2
+    if bubbles[middle].get_bounding_client_rect().get_top() <= reference {
+      found = Some(middle)
+      low = middle + 1
     } else {
-      break
+      high = middle - 1
     }
   }
-  current
+  guard found is Some(index) else { return None }
+  bubbles[index].get_attribute("id")
 }
 
 ///|
