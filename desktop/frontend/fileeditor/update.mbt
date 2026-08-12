@@ -1186,10 +1186,20 @@ fn with_watch(
     (state, cmd)
   } else {
     let commands = [cmd]
-    // Every desired-configuration transition owns a fresh identity, including
-    // parking. Host pushes can be delayed beyond the ordered watch request,
-    // so root equality alone cannot tell an old same-root watcher apart.
-    let watch_generation = state.watch_generation + 1
+    // Selection-only changes within one conversation and root keep their
+    // identity. Events from either side of a Host reconfiguration still
+    // describe that same root, and retaining the identity prevents events in
+    // the request/ack interval from being dropped. Owner/root transitions and
+    // parking spend a fresh identity to fence genuinely stale pushes.
+    let same_owner_root = state.watching is Some(current) &&
+      want is Some(next) &&
+      current.owner == next.owner &&
+      current.root == next.root
+    let watch_generation = if same_owner_root {
+      state.watch_generation
+    } else {
+      state.watch_generation + 1
+    }
     let watch_identity = ctx.watch_identity(watch_generation)
     // A watcher is host-local. Moving across channels must explicitly retire
     // the old host; placing a new watch on another socket cannot replace it.
@@ -2591,11 +2601,12 @@ pub fn update(
               relist.push(directory)
             }
           }
-          // Replacing an equivalent recursive watcher because the shallow
-          // explorer selection changed emits a baseline too. The live index
-          // already covers the same root, so only the initial scan needs to
-          // remember that the watcher became active concurrently.
-          refresh_index = state.index is IndexLoading(..)
+          // The Host keeps an equivalent recursive watcher attached across
+          // shallow explorer selection changes, so those transitions emit no
+          // baseline. A received baseline therefore marks an initial attach or
+          // an actual watcher replacement and must close that replacement gap.
+          refresh_index = state.index is IndexLoading(..) ||
+            state.index is IndexReady(..)
         }
         if !stat_paths.is_empty() {
           cmds.push(
@@ -2637,11 +2648,11 @@ pub fn update(
             ),
           )
         }
-        // Structural events change the path set. The first watcher baseline is
-        // latched while the initial scan runs, closing the scan/watch install
-        // race; later replacement baselines do not rescan an equivalent
-        // recursive root. A ready snapshot stays usable during one refresh,
-        // and later structural bursts coalesce into one follow-up.
+        // Structural events change the path set. Watcher baselines latch a
+        // follow-up during the initial scan or refresh a ready snapshot after
+        // a real replacement; the Host suppresses baselines when it keeps an
+        // equivalent recursive watcher attached. A ready snapshot stays usable
+        // during one refresh, and later structural bursts coalesce once.
         let (index, start_refresh) = if refresh_index {
           state.index.invalidate()
         } else {
@@ -6888,7 +6899,7 @@ test "a vanished review retries a failed ordinary read" {
 }
 
 ///|
-test "watcher baseline re-lists the root and expanded, listed directories" {
+test "watcher replacement baseline re-lists directories and refreshes the index" {
   let emit = test_emit()
   let children : Map[@pathx.Relative, Array[FileEntry]] = Map([])
   children[Relative("")] = []
@@ -6915,10 +6926,11 @@ test "watcher baseline re-lists the root and expanded, listed directories" {
   assert_true(next.loading.contains(Relative("")))
   assert_true(next.loading.contains(Relative("src")))
   assert_false(next.loading.contains(Relative("never-listed")))
-  // Replacing the watcher after shallow explorer selection changes keeps the
-  // same recursive root coverage and must not start another full index scan.
+  // Equivalent recursive selections never emit a baseline. If one arrives,
+  // the Host replaced the watcher and the index must close that observation
+  // gap with a refresh.
   assert_true(
-    next.index is IndexReady(refreshing=false, refresh_again=false, ..),
+    next.index is IndexReady(refreshing=true, refresh_again=false, ..),
   )
   // A second push while the lists are in flight stacks nothing.
   let (_, again) = update(emit, baseline, next, test_ctx())
@@ -6999,6 +7011,7 @@ test "sync reconciles the watcher with the panel and its open files" {
   )
   // Issuing a new watch attempt retires the previous failure.
   assert_true(watched.watch_error is None)
+  let attached_generation = watched.watch_generation
   // Opening a file or expanding a directory replaces the same conversation's
   // watcher with the new exact selection.
   let selected_ctx = { ..test_ctx(), open_files: [Relative("a.mbt")] }
@@ -7014,6 +7027,7 @@ test "sync reconciles the watcher with the panel and its open files" {
       }
     ),
   )
+  assert_eq(replaced.watch_generation, attached_generation)
   // Closed panel with files still open: keep watching (staleness tracking).
   let still_ctx = {
     ..test_ctx(),
@@ -7025,9 +7039,11 @@ test "sync reconciles the watcher with the panel and its open files" {
   assert_true(
     still.watching is Some({ files: [Relative("a.mbt")], directories: [], .. }),
   )
+  assert_eq(still.watch_generation, attached_generation)
   // Closed panel, nothing open: park the watcher.
   let (parked, _) = sync(emit, still, { ..test_ctx(), panel_open: false })
   assert_true(parked.watching is None)
+  assert_eq(parked.watch_generation, attached_generation + 1)
 }
 
 ///|

@@ -32,10 +32,10 @@ priv struct FsWatchActor {
 priv struct FsWatchTarget {
   root : @pathx.Absolute
   interest : WatchInterest
-  // The client's identity for this exact configuration. It follows every
-  // asynchronous push so a replaced watcher cannot report against its
-  // successor, even when both use the same root.
-  generation : String
+  // The client's accepted identity for this watcher. Equivalent recursive
+  // selections advance it without replacing the watcher; every later push
+  // then follows the identity acknowledged to the frontend.
+  generation : Ref[String]
 }
 
 ///|
@@ -47,7 +47,7 @@ priv struct WatchInterest {
   paths : Set[@pathx.Relative]
   directories : Set[@pathx.Relative]
   recursive : Bool
-}
+} derive(Debug, Eq)
 
 ///|
 fn WatchInterest::WatchInterest(
@@ -59,12 +59,20 @@ fn WatchInterest::WatchInterest(
     recursive: payload.recursive.unwrap_or(false),
   }
   for path in payload.files {
-    interest.remember(@pathx.Relative(path).normalize())
+    let path = @pathx.Relative(path).normalize()
+    // A recursive watcher already covers ordinary workspace paths. Retain
+    // only explicit selections beneath a pruned directory; this makes shallow
+    // explorer changes compare equal without losing deliberately opened files.
+    if !interest.recursive || path.is_ignored_file_search_path() {
+      interest.remember(path)
+    }
   }
   for path in payload.directories {
     let path = @pathx.Relative(path).normalize()
-    interest.directories.add(path)
-    interest.remember(path)
+    if !interest.recursive || path.is_ignored_file_search_path() {
+      interest.directories.add(path)
+      interest.remember(path)
+    }
   }
   interest
 }
@@ -100,13 +108,9 @@ fn WatchInterest::ignores(self : WatchInterest, path : @pathx.Relative) -> Bool 
   if self.paths.contains(path) {
     return false
   }
-  // A live workspace index needs structural events from directories that have
-  // no indexed file yet and from paths beyond the bounded frontend result.
-  // Reuse file search's directory policy so dependency/build churn remains
-  // pruned even though the native watcher itself is recursive.
-  if self.recursive {
-    return path.is_ignored_file_search_path()
-  }
+  // An explicitly expanded directory also retains its immediate children.
+  // This check precedes recursive pruning so an ignored directory can still
+  // keep its visible explorer listing current.
   for directory in self.directories {
     if directory.is_root() {
       if !path.0.contains("/") {
@@ -117,7 +121,45 @@ fn WatchInterest::ignores(self : WatchInterest, path : @pathx.Relative) -> Bool 
       return false
     }
   }
+  // A live workspace index needs structural events from directories that have
+  // no indexed file yet and from paths beyond the bounded frontend result.
+  // Reuse file search's directory policy so dependency/build churn remains
+  // pruned even though the native watcher itself is recursive.
+  if self.recursive {
+    return path.is_ignored_file_search_path()
+  }
   true
+}
+
+///|
+/// Reuse an attached watcher when the resolved root and effective pruning
+/// rules have not changed. If a client advances its generation, update the
+/// target before acknowledging so later concrete events carry the accepted
+/// identity. No replacement baseline is needed because the watcher never
+/// stopped and its observed path set is unchanged.
+async fn FsWatchRequest::keeps_active_watcher(
+  self : FsWatchRequest,
+  target : FsWatchTarget,
+) -> Bool {
+  match self {
+    Unwatch(..) => false
+    Watch(payload, reply~) => {
+      let root = WirePath::parse(payload.path) catch {
+        error => {
+          reply.put(Some("\{error}"))
+          return true
+        }
+      }
+      let interest = WatchInterest(payload)
+      if root.absolute == target.root && interest == target.interest {
+        target.generation.val = payload.generation
+        reply.put(None)
+        true
+      } else {
+        false
+      }
+    }
+  }
 }
 
 ///|
@@ -173,7 +215,7 @@ async fn FsWatchRequest::apply(
       Some({
         root: root.absolute,
         interest: WatchInterest(payload),
-        generation: payload.generation,
+        generation: Ref(payload.generation),
       })
     }
   }
@@ -195,7 +237,7 @@ async fn FsWatchTarget::watch(
     root: self.root.resource_path(),
     baseline: true,
     events: [],
-    generation: self.generation,
+    generation: self.generation.val,
   })
   for ;; {
     let events = watcher.wait()
@@ -203,7 +245,7 @@ async fn FsWatchTarget::watch(
       root: self.root.resource_path(),
       baseline: false,
       events: events.map(FsEventPayload::from_event),
-      generation: self.generation,
+      generation: self.generation.val,
     })
   }
 }
@@ -254,12 +296,18 @@ async fn FsWatchActor::run(
             emit_failed({
               root: target.root.resource_path(),
               message,
-              generation: target.generation,
+              generation: target.generation.val,
             })
           }
         }
       })
-      let next = self.requests.get()
+      let next = for ;; {
+        let next = self.requests.get()
+        if next.keeps_active_watcher(target) {
+          continue
+        }
+        break next
+      }
       group.return_immediately(next)
       next
     })
@@ -300,7 +348,7 @@ test "recursive watch interest covers non-indexed workspace directories" {
   let interest = WatchInterest({
     path: "/work/project",
     files: ["node_modules/pkg/index.js"],
-    directories: [],
+    directories: ["node_modules/vendor"],
     recursive: Some(true),
     generation: "page-a:8",
   })
@@ -310,7 +358,28 @@ test "recursive watch interest covers non-indexed workspace directories" {
   assert_false(interest.ignores(Relative("node_modules/pkg")))
   assert_false(interest.ignores(Relative("node_modules/pkg/index.js")))
   assert_true(interest.ignores(Relative("node_modules/other")))
+  assert_false(interest.ignores(Relative("node_modules/vendor/new.js")))
+  assert_true(interest.ignores(Relative("node_modules/vendor/deep/new.js")))
   assert_true(interest.ignores(Relative("_build")))
+}
+
+///|
+test "recursive watch interest ignores shallow non-pruned selections" {
+  let initial = WatchInterest({
+    path: "/work/project",
+    files: ["src/main.mbt"],
+    directories: ["", "src"],
+    recursive: Some(true),
+    generation: "page-a:8",
+  })
+  let navigated = WatchInterest({
+    path: "/work/project",
+    files: ["docs/guide.md"],
+    directories: ["", "docs"],
+    recursive: Some(true),
+    generation: "page-a:9",
+  })
+  assert_eq(initial, navigated)
 }
 
 ///|
@@ -324,14 +393,14 @@ test "host connections keep filesystem watch request mailboxes isolated" {
 }
 
 ///|
-async test "watch requests retain their notification generation" {
+async test "equivalent recursive watch requests retain the watcher and advance its generation" {
   let reply : @async.Queue[String?] = Queue(kind=Blocking(1))
   let request = Watch(
     {
       path: "/work/project",
-      files: [],
-      directories: [],
-      recursive: Some(false),
+      files: ["src/main.mbt"],
+      directories: ["", "src"],
+      recursive: Some(true),
       generation: "page-a:9",
     },
     reply~,
@@ -339,8 +408,22 @@ async test "watch requests retain their notification generation" {
   guard request.apply(None) is Some(target) else {
     fail("valid watch request did not produce a target")
   }
-  assert_eq(target.generation, "page-a:9")
+  assert_eq(target.generation.val, "page-a:9")
   assert_true(reply.get() is None)
+  let next_reply : @async.Queue[String?] = Queue(kind=Blocking(1))
+  let navigated = Watch(
+    {
+      path: "/work/project",
+      files: ["docs/guide.md"],
+      directories: ["", "docs"],
+      recursive: Some(true),
+      generation: "page-a:10",
+    },
+    reply=next_reply,
+  )
+  assert_true(navigated.keeps_active_watcher(target))
+  assert_eq(target.generation.val, "page-a:10")
+  assert_true(next_reply.get() is None)
 }
 
 ///|
