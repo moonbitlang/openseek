@@ -53,6 +53,7 @@ pub(all) struct Actions {
 priv struct Model {
   open : Bool
   menu_open : Bool
+  owner : @interop.ConversationKey?
 } derive(Eq)
 
 ///|
@@ -67,6 +68,7 @@ priv enum ComponentMsg {
   External(Msg)
   ToggleMenu
   CloseMenu
+  InputRendered
 }
 
 ///|
@@ -76,16 +78,32 @@ fn Model::update(
   external_opens : Bool,
 ) -> Model {
   match msg {
-    External(TogglePanel) => { open: !self.open, menu_open: false }
-    External(OpenPanel) => { open: true, menu_open: false }
+    External(TogglePanel) => { ..self, open: !self.open, menu_open: false }
+    External(OpenPanel) => { ..self, open: true, menu_open: false }
     ToggleMenu => { ..self, menu_open: !self.menu_open }
     CloseMenu => { ..self, menu_open: false }
+    InputRendered => self
     External(ExternalLink(_)) =>
       if external_opens {
-        { open: true, menu_open: false }
+        { ..self, open: true, menu_open: false }
       } else {
         self
       }
+  }
+}
+
+///|
+/// The launcher belongs to the conversation that opened it. Durable dock data
+/// can switch owners without a panel message, so the rendered input marker
+/// closes an old owner's menu before the new conversation is shown.
+fn Model::reconcile_owner(
+  self : Model,
+  owner : @interop.ConversationKey?,
+) -> Model {
+  if self.owner == owner {
+    self
+  } else {
+    { ..self, menu_open: false, owner }
   }
 }
 
@@ -95,20 +113,25 @@ pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
 ) -> (@rabbita.Val[@html.Html], @cmd.Emit[Msg]) {
-  let initial : Model = { open: false, menu_open: false }
   let (state, component_emit) = @rabbita.create_state_with_input(
     input~,
-    init=(_, _) => (initial, @cmd.none),
+    init=(_, input) => {
+      ({ open: false, menu_open: false, owner: input.dock.owner }, @cmd.none)
+    },
     update=(state, input, msg, _) => {
-      let next = state.update(
-        msg,
-        input.is_desktop &&
-        input.panel_available &&
-        msg is External(ExternalLink(url)) &&
-        @preview.is_web_url(url),
-      )
+      let next = if msg is InputRendered {
+        state.reconcile_owner(input.dock.owner)
+      } else {
+        state.update(
+          msg,
+          input.is_desktop &&
+          input.panel_available &&
+          msg is External(ExternalLink(url)) &&
+          @preview.is_web_url(url),
+        )
+      }
       let commands : Array[@cmd.Cmd] = []
-      if next != state {
+      if next.open != state.open || next.menu_open != state.menu_open {
         commands.push(
           (actions.visibility)({ open: next.open, menu_open: next.menu_open }),
         )
@@ -133,7 +156,7 @@ pub fn component(
 
 ///|
 test "right-panel local state opens externally and closes with one toggle" {
-  let state : Model = { open: false, menu_open: false }
+  let state : Model = { open: false, menu_open: false, owner: None }
   let opened = state.update(External(OpenPanel), false)
   let opened_again = state.update(External(OpenPanel), false)
   assert_true(opened.open)
@@ -147,4 +170,22 @@ test "right-panel local state opens externally and closes with one toggle" {
   assert_false(menu_closed.menu_open)
   let linked = state.update(External(ExternalLink("https://example.com")), true)
   assert_true(linked.open)
+}
+
+///|
+test "right-panel launcher closes when the dock owner changes" {
+  let first : @interop.ConversationKey = {
+    channel: @interop.Local,
+    session: "first",
+  }
+  let second : @interop.ConversationKey = {
+    channel: @interop.Local,
+    session: "second",
+  }
+  let open : Model = { open: true, menu_open: true, owner: Some(first) }
+  let unchanged = open.reconcile_owner(Some(first))
+  assert_true(unchanged.menu_open)
+  let switched = open.reconcile_owner(Some(second))
+  assert_false(switched.menu_open)
+  assert_eq(switched.owner, Some(second))
 }

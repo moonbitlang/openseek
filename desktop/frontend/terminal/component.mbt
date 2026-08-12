@@ -57,6 +57,21 @@ priv enum ComponentMsg {
 }
 
 ///|
+/// A signed-out console has no live device channels. Closing the panel here
+/// prevents a later sign-in from silently reopening it when `sync` creates a
+/// replacement shell for the newly connected device.
+fn State::close_without_live_channels(
+  self : State,
+  live_channels : Array[@interop.ChannelId],
+) -> State {
+  if live_channels.is_empty() {
+    { ..self, open: false }
+  } else {
+    self
+  }
+}
+
+///|
 /// Build the terminal state machine and return both independently updating
 /// Html and Rabbita's real emitter. There is no late-installed nullable
 /// reference between the host notification source and this component.
@@ -78,6 +93,7 @@ pub fn component(
       let state = model.terminal
       if component_msg is InputRendered {
         let commands : Array[@cmd.Cmd] = []
+        let was_open = state.open
         let mut state = state
         for channel in model.live_channels {
           if !input.live_channels.contains(channel) {
@@ -97,8 +113,12 @@ pub fn component(
             )
           }
         }
+        state = state.close_without_live_channels(input.live_channels)
         let (state, sync_command) = sync(emit, state, input.ctx)
         commands.push(sync_command)
+        if state.open != was_open {
+          commands.push((actions.visibility)(state.open))
+        }
         return (
           {
             terminal: state,
@@ -189,4 +209,13 @@ fn Input::sync_key(self : Input) -> String {
     live,
     connections,
   ].join("|")
+}
+
+///|
+test "terminal closes when the console loses every live channel" {
+  let open = { ..State::empty(), open: true }
+  let closed = open.close_without_live_channels([])
+  assert_false(closed.open)
+  let connected = open.close_without_live_channels([@interop.Local])
+  assert_true(connected.open)
 }

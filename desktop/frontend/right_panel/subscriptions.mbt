@@ -31,6 +31,7 @@ fn panel_sub_loader(
         () => scheduler.add(emit(External(TogglePanel))),
         () => if menu_open { scheduler.add(emit(CloseMenu)) },
         url => scheduler.add(emit(External(ExternalLink(url)))),
+        () => scheduler.add(emit(InputRendered)),
       )
       Some({
         unload: _ => remove_panel_listeners(listeners),
@@ -55,8 +56,9 @@ extern "js" fn install_panel_listeners(
   on_toggle : () -> Unit,
   on_close_menu : () -> Unit,
   on_external : (String) -> Unit,
+  on_input : () -> Unit,
 ) -> @js.Value =
-  #| (onToggle, onCloseMenu, onExternal) => {
+  #| (onToggle, onCloseMenu, onExternal, onInput) => {
   #|   const apple = /Mac|iPhone|iPad|iPod/i.test(
   #|     navigator.userAgentData?.platform || navigator.platform || "",
   #|   );
@@ -96,9 +98,26 @@ extern "js" fn install_panel_listeners(
   #|       anchor.rel = "noopener noreferrer";
   #|     }
   #|   };
+  #|   const ownerSelector = "[data-panel-owner-channel]";
+  #|   const containsOwner = (node) => node.nodeType === 1 &&
+  #|     (node.matches?.(ownerSelector) || node.querySelector?.(ownerSelector));
+  #|   const observer = new MutationObserver((records) => {
+  #|     const inputChanged = records.some((record) =>
+  #|       record.type === "attributes" ||
+  #|       [...record.addedNodes].some(containsOwner) ||
+  #|       [...record.removedNodes].some(containsOwner)
+  #|     );
+  #|     if (inputChanged) onInput();
+  #|   });
   #|   document.addEventListener("keydown", keydown, true);
   #|   document.addEventListener("click", click, true);
-  #|   return { keydown, click };
+  #|   observer.observe(document.documentElement, {
+  #|     attributes: true,
+  #|     attributeFilter: ["data-panel-owner-channel", "data-panel-owner-session"],
+  #|     childList: true,
+  #|     subtree: true,
+  #|   });
+  #|   return { keydown, click, observer };
   #| }
 
 ///|
@@ -106,4 +125,5 @@ extern "js" fn remove_panel_listeners(listeners : @js.Value) -> Unit =
   #| (listeners) => {
   #|   document.removeEventListener("keydown", listeners.keydown, true);
   #|   document.removeEventListener("click", listeners.click, true);
+  #|   listeners.observer.disconnect();
   #| }

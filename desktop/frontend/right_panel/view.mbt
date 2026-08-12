@@ -78,10 +78,19 @@ fn panel_view(
     reload: actions.browser_reload,
     open_external: actions.browser_open_external,
   }
+  let (owner_channel, owner_session) = match input.dock.owner {
+    Some(owner) => (owner.channel.uri_authority(), owner.session)
+    None => ("", "")
+  }
   @html.div(
-    class=@fileeditor.editor_classes(input.file_panel, input.file_ctx) +
-      " " +
-      mode,
+    attrs=@html.Attrs::build()
+      .class(
+        @fileeditor.editor_classes(input.file_panel, input.file_ctx) +
+        " " +
+        mode,
+      )
+      .data_set("panel-owner-channel", owner_channel)
+      .data_set("panel-owner-session", owner_session),
     [
       @fileeditor.resize_handle_view(),
       @dock.tabs_bar(

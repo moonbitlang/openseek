@@ -6,6 +6,7 @@ import {
   "moonbit-community/rabbita/sub",
   "openseek_desktop/frontend/dock",
   "openseek_desktop/frontend/fileeditor",
+  "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/preview",
 }
 
