@@ -1066,6 +1066,7 @@ fn quick_open_view(dispatch : @cmd.Emit[Msg], open : QuickOpen) -> @html.Html {
     .aria_expanded("true")
     .aria_autocomplete("list")
     .aria_keyshortcuts("Meta+P Control+P Meta+T Control+T")
+    .data_set("focus-owner", "")
   let input_attrs = if active_id.is_empty() {
     base_input_attrs
   } else {
@@ -1667,6 +1668,38 @@ test "Quick Open selection wraps and empty acceptance is a no-op" {
   let (_, empty) = update(dispatch, QuickOpenValueChanged("#none"), hovered)
   let (_, unchanged) = update(dispatch, QuickOpenAccept, empty)
   assert_true(unchanged.quick_open == empty.quick_open)
+}
+
+///|
+#warnings("-alert_unstable")
+test "Quick Open keeps its separator neutral while owning input focus" {
+  let dispatch = test_dispatch()
+  let (_, opened) = update(dispatch, QuickOpenOpen(QuickOpenFiles), {
+    ..test_model(),
+    is_desktop: true,
+  })
+  guard opened.quick_open is Some(open) else { fail("palette expected") }
+  let markup = @rabbita.render_to_string(() => {
+    @rabbita.Val::constant(quick_open_view(dispatch, open))
+  })
+  // The wrapper's bottom border is a structural separator, not a focus ring.
+  assert_true(markup.contains("<div class=\"quick-open-input-wrap\">"))
+  assert_true(markup.contains("data-focus-owner=\"\""))
+  assert_false(markup.contains("data-focus-target=\"\""))
+  for tag in ["<input", "<textarea", "<select"] {
+    let parts = markup.split(tag).collect()
+    for index, part in parts {
+      if index > 0 {
+        guard part.split_once(">") is Some((opening, _)) else {
+          fail("unterminated form element in rendered markup")
+        }
+        assert_true(
+          opening.contains("data-focus-owner") ||
+          opening.contains("data-focus-target"),
+        )
+      }
+    }
+  }
 }
 
 ///|

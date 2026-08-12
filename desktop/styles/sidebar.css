@@ -11,9 +11,9 @@ aside {
   min-width: 0;
   min-height: 0;
   padding-bottom: 14px;
-  border-right: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink-2);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
 }
 
 /* The sidebar's own 46px header, matching the topbar so the sidebar
@@ -25,7 +25,7 @@ aside {
   align-items: center;
   height: 46px;
   padding: 0 18px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--color-border);
 }
 
 /* New chat holds the header's right edge. The -4px mirrors the
@@ -66,8 +66,8 @@ aside {
 .sidebar-heading {
   padding: 0 8px;
   margin-bottom: 4px;
-  color: var(--ink-3);
-  font-size: 10.5px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   font-weight: 500;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -80,8 +80,8 @@ aside {
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  color: var(--ink-2);
-  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 .console-avatar {
   flex: none;
@@ -101,12 +101,12 @@ aside {
   padding: 2px 6px;
   border: none;
   background: none;
-  color: var(--ink-3);
-  font-size: 11px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   cursor: pointer;
 }
 .console-account-action:hover {
-  color: var(--ink-1);
+  color: var(--color-text-primary);
 }
 .console-account-action:disabled {
   opacity: 0.5;
@@ -114,8 +114,8 @@ aside {
 }
 .console-notice {
   padding: 2px 8px 6px;
-  color: var(--warn);
-  font-size: 11px;
+  color: var(--color-warning);
+  font-size: var(--font-size-xs);
 }
 
 .conversation-row {
@@ -126,8 +126,8 @@ aside {
   min-height: 32px;
   padding: 0 8px;
   border-radius: var(--radius-sm);
-  color: var(--ink-2);
-  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
   cursor: pointer;
 }
 .conversation-row > .sidebar-label {
@@ -135,16 +135,16 @@ aside {
 }
 
 .conversation-row:hover {
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
 
 .conversation-row.active {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
 }
 
 .conversation-row.error {
-  color: var(--del);
+  color: var(--color-danger);
   cursor: default;
 }
 
@@ -160,9 +160,9 @@ aside {
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-tight);
   cursor: pointer;
   visibility: hidden;
 }
@@ -170,8 +170,8 @@ aside {
   visibility: visible;
 }
 .row-archive:hover {
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
-  color: var(--ink);
+  background: var(--color-hover-subtle);
+  color: var(--color-text-primary);
 }
 /* A conversation row's trailing slot: two right-aligned groups — what the
    row is (status glyphs) and what can be done to it (buttons) — stacked in
@@ -245,8 +245,8 @@ aside {
   min-height: 32px;
   padding: 0 8px;
   border-radius: var(--radius-sm);
-  color: var(--ink-2);
-  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
 }
 .workspace-row > .sidebar-label {
   flex: 1 1 auto;
@@ -255,13 +255,13 @@ aside {
   white-space: nowrap;
 }
 .workspace-row > .sidebar-icon {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 .workspace-row:hover {
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
 .workspace-row.active {
-  color: var(--ink);
+  color: var(--color-text-primary);
   font-weight: 500;
 }
 .workspace-row:hover .row-archive {
@@ -282,7 +282,7 @@ aside {
   place-items: center;
   width: 14px;
   height: 14px;
-  color: var(--accent);
+  color: var(--color-accent);
 }
 .worktree-mark .icon {
   width: 12px;
@@ -296,26 +296,26 @@ aside {
   gap: 4px;
   margin: 0;
   padding: 1px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
   font: inherit;
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
   white-space: nowrap;
 }
 button.composer-worktree {
   cursor: pointer;
 }
 button.composer-worktree:hover {
-  border-color: var(--accent-line);
-  color: var(--ink);
+  border-color: var(--color-accent-border);
+  color: var(--color-text-primary);
 }
 .composer-worktree.on {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
 }
 .composer-worktree .icon {
   width: 12px;
@@ -329,7 +329,7 @@ button.composer-worktree:hover {
   padding-left: 16px;
 }
 .conversation-row.placeholder {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
   cursor: default;
 }
 .conversation-row.placeholder:hover {
@@ -346,15 +346,15 @@ button.composer-worktree:hover {
   gap: 8px;
   min-width: 0;
   padding: 4px 2px;
-  color: var(--ink-3);
-  font-size: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 .subrun-mark {
   flex: 0 0 auto;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--color-accent);
   animation: subrun-pulse 1.6s ease-in-out infinite;
 }
 @keyframes subrun-pulse {
@@ -363,7 +363,7 @@ button.composer-worktree:hover {
 }
 .subrun-name {
   flex: 0 0 auto;
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
   font-weight: 600;
 }
 .subrun-detail {
@@ -396,7 +396,7 @@ button.composer-worktree:hover {
   border: 0;
   border-radius: 3px;
   background: transparent;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
   cursor: pointer;
 }
 .row-twisty .icon {
@@ -409,8 +409,8 @@ button.composer-worktree:hover {
   transform: none;
 }
 button.row-twisty:hover {
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
-  color: var(--ink);
+  background: var(--color-hover-subtle);
+  color: var(--color-text-primary);
 }
 .row-twisty.spacer {
   cursor: inherit;
@@ -421,13 +421,13 @@ button.row-twisty:hover {
    a conversation of its own. */
 .conversation-row.subrun {
   padding-left: 28px;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 .conversation-row.subrun.nested {
   padding-left: 36px;
 }
 .conversation-row.subrun.active {
-  color: var(--accent-ink);
+  color: var(--color-accent-strong);
 }
 
 /* The in-app folder picker behind "Add a workspace" (extends the
@@ -442,9 +442,9 @@ button.row-twisty:hover {
   gap: 1px;
   margin-top: 12px;
   padding: 4px 6px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
   min-height: 20px;
 }
 .picker-crumb {
@@ -452,9 +452,9 @@ button.row-twisty:hover {
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--font-size-md);
   cursor: pointer;
   max-width: 160px;
   white-space: nowrap;
@@ -462,23 +462,23 @@ button.row-twisty:hover {
   text-overflow: ellipsis;
 }
 .picker-crumb:hover {
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
 }
 .picker-crumb.current {
-  color: var(--ink);
+  color: var(--color-text-primary);
   font-weight: 600;
 }
 .picker-crumb-sep {
-  color: var(--ink-3, var(--ink-2));
-  font-size: 12px;
+  color: var(--color-text-muted, var(--color-text-secondary));
+  font-size: var(--font-size-sm);
   user-select: none;
 }
 .picker-list {
   margin-top: 10px;
   height: 280px;
   overflow-y: auto;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
 }
 .picker-row {
@@ -486,19 +486,19 @@ button.row-twisty:hover {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  font-size: 13px;
-  color: var(--ink);
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
 }
 .picker-row:hover {
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
 .picker-row-icon {
   display: inline-flex;
   flex: none;
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
 }
 .picker-row-name {
   overflow: hidden;
@@ -506,8 +506,8 @@ button.row-twisty:hover {
 }
 .picker-empty {
   padding: 10px;
-  font-size: 12.5px;
-  color: var(--ink-2);
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
 }
 
 /* The collapsed group holding archived conversations, at the tail of
@@ -534,16 +534,16 @@ button.row-twisty:hover {
   gap: 4px;
 }
 .archived-rows .conversation-row {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 
 .sidebar-icon {
   display: grid;
   place-items: center;
   width: 20px;
-  color: var(--accent);
+  color: var(--color-accent);
   font-size: 14px;
-  line-height: 1;
+  line-height: var(--line-height-tight);
 }
 
 .sidebar-label {
@@ -571,22 +571,22 @@ button.row-twisty:hover {
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
   padding: 0 8px;
   text-align: left;
   cursor: pointer;
 }
 
 .sidebar-button .sidebar-icon {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 
 .sidebar-button.active {
-  background: var(--surface-2);
-  color: var(--ink);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
 }
 
 button.sidebar-button:not(:disabled):hover {
-  background: var(--surface-2);
-  color: var(--ink);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
 }

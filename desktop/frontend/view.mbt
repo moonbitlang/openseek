@@ -1925,11 +1925,11 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             TaskChanged(value)
           }
         }),
-        attrs=if goal_mode {
+        attrs=(if goal_mode {
           goal_attrs(dispatch)
         } else {
           task_attrs(dispatch, model.completion is Some(_))
-        },
+        }).data_set("focus-target", ""),
         "",
       ),
     ]),
@@ -1949,7 +1949,11 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // focus-holding textarea subtree.
   let children : Array[@html.Html] = [
     @html.div(class="composer-context", context),
-    @html.div(class="composer-inner", inner),
+    @html.div(
+      class="composer-inner",
+      attrs=@html.Attrs::build().data_set("focus-owner", ""),
+      inner,
+    ),
   ]
   @html.section(class="composer", children)
 }
@@ -1963,7 +1967,9 @@ fn provider_select(
   let control = @html.select(
     disabled~,
     on_change=dispatch.map(value => ProviderChanged(value)),
-    attrs=@html.Attrs::build().aria_label("API endpoint"),
+    attrs=@html.Attrs::build()
+      .aria_label("API endpoint")
+      .data_set("focus-owner", ""),
     [
       @html.option(
         value="openseek",
@@ -1993,7 +1999,9 @@ fn corner_select(
 ) -> @html.Html {
   let control = @html.select(
     on_change=dispatch.map(value => NotificationCornerChanged(value)),
-    attrs=@html.Attrs::build().aria_label("Notification corner"),
+    attrs=@html.Attrs::build()
+      .aria_label("Notification corner")
+      .data_set("focus-owner", ""),
     [
       @html.option(
         value="bottom-right",
@@ -2023,7 +2031,9 @@ fn tree_layout_select(
 ) -> @html.Html {
   let control = @html.select(
     on_change=dispatch.map(value => TreeLayoutChanged(value)),
-    attrs=@html.Attrs::build().aria_label("File tree layout"),
+    attrs=@html.Attrs::build()
+      .aria_label("File tree layout")
+      .data_set("focus-owner", ""),
     [
       @html.option(
         value="right-sidebar",
@@ -2214,14 +2224,16 @@ fn update_check_controls(
       controls.push(@html.button(class="primary", "Update to \{version}"))
     DownloadingUpdate(version~, progress~) => {
       let (fill_class, fill_style) = match progress.percentage() {
-        Some(percent) => ("update-progress-fill", ["width: \{percent}%"])
+        Some(percent) =>
+          ("update-progress-fill", ["--progress-width: \{percent}%"])
         None => ("update-progress-fill indeterminate", [])
       }
       controls.push(
         @html.div(class="update-progress", [
           @html.span(class="update-status", progress.status_text(version)),
-          // A CSS div keeps this available on the current Rabbita element
-          // surface; the adjacent text is the accessible progress value.
+          // The runtime supplies only the measured percentage. CSS owns the
+          // width property and appearance; the adjacent text is the
+          // accessible progress value.
           @html.div(class="update-progress-track", [
             @html.div(class=fill_class, style=fill_style, ""),
           ]),
@@ -2277,7 +2289,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           value=model.max_steps,
           placeholder="1000",
           on_input=dispatch.map(value => MaxStepsChanged(value)),
-          attrs=@html.Attrs::build().aria_label("Max steps"),
+          attrs=@html.Attrs::build()
+            .aria_label("Max steps")
+            .data_set("focus-owner", ""),
         ),
       ],
       desc="How many agent steps one turn may take.",
@@ -2302,6 +2316,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             on_input=dispatch.map(value => CustomApiUrlChanged(value)),
             attrs=@html.Attrs::build()
               .aria_label("Endpoint URL")
+              .data_set("focus-owner", "")
               .disabled(!settings_loaded),
           ),
         ],
@@ -2338,6 +2353,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             on_input=dispatch.map(value => SetupApiKeyChanged(value)),
             attrs=@html.Attrs::build()
               .aria_label("API key")
+              .data_set("focus-owner", "")
               .disabled(!settings_loaded),
           ),
           @html.button(
@@ -2365,7 +2381,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           setting_select(
             @html.select(
               on_change=dispatch.map(value => ThemeChanged(value)),
-              attrs=@html.Attrs::build().aria_label("Theme"),
+              attrs=@html.Attrs::build()
+                .aria_label("Theme")
+                .data_set("focus-owner", ""),
               [
                 @html.option(
                   value="system",
@@ -2562,15 +2580,20 @@ fn skills_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         "Playbooks the agent reads when a task matches. Skills apply to new chats.",
       ),
     ]),
-    @html.div(class="skills-search", [
-      icon(icon_search),
-      @html.input(
-        input_type=@html.InputType::Search,
-        value=model.skills_query,
-        placeholder="Search skills…",
-        on_input=dispatch.map(value => SkillsQueryChanged(value)),
-      ),
-    ]),
+    @html.div(
+      class="skills-search",
+      attrs=@html.Attrs::build().data_set("focus-owner", ""),
+      [
+        icon(icon_search),
+        @html.input(
+          input_type=@html.InputType::Search,
+          value=model.skills_query,
+          placeholder="Search skills…",
+          on_input=dispatch.map(value => SkillsQueryChanged(value)),
+          attrs=@html.Attrs::build().data_set("focus-target", ""),
+        ),
+      ],
+    ),
   ]
   if !model.skills_notice.is_empty() {
     sections.push(@html.div(class="skills-notice danger", model.skills_notice))
@@ -2634,6 +2657,69 @@ fn skills_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @html.section(class="skills-page", [
     @html.div(class="skills-page-inner", sections),
   ])
+}
+
+///|
+#warnings("-alert_unstable")
+test "settings, skills, and composer declare form focus ownership" {
+  let dispatch = test_dispatch()
+  let settings_markup = @rabbita.render_to_string(() => {
+    @rabbita.Val::constant(settings_page(dispatch, test_model()))
+  })
+  // Settings fields own their existing borders directly; there is no nested
+  // target that could draw a second frame.
+  assert_true(settings_markup.contains("data-focus-owner=\"\""))
+  assert_false(settings_markup.contains("data-focus-target=\"\""))
+  let skills_markup = @rabbita.render_to_string(() => {
+    @rabbita.Val::constant(skills_page(dispatch, test_model()))
+  })
+  assert_true(skills_markup.contains("class=\"skills-search\""))
+  assert_true(skills_markup.contains("data-focus-owner=\"\""))
+  assert_true(skills_markup.contains("data-focus-target=\"\""))
+  let composer_markup = @rabbita.render_to_string(() => {
+    @rabbita.Val::constant(composer_view(dispatch, test_model()))
+  })
+  assert_true(composer_markup.contains("class=\"composer-inner\""))
+  assert_true(composer_markup.contains("data-focus-owner=\"\""))
+  assert_true(composer_markup.contains("data-focus-target=\"\""))
+  let address_markup = @rabbita.render_to_string(() => {
+    @rabbita.Val::constant(
+      @preview.toolbar_view(
+        { url: None, input: "", title: "", loading: false, failure: None },
+        {
+          input: dispatch.map(value => TaskChanged(value)),
+          submit: @cmd.none,
+          back: @cmd.none,
+          forward: @cmd.none,
+          reload: @cmd.none,
+          open_external: @cmd.none,
+        },
+      ),
+    )
+  })
+  assert_true(address_markup.contains("class=\"browser-address\""))
+  assert_true(address_markup.contains("data-focus-owner=\"\""))
+  assert_false(address_markup.contains("data-focus-target=\"\""))
+  // Every rendered form element must choose one side of the contract. A
+  // composite also has a separate owner on its wrapper, which is why counting
+  // markers alone would not prove that the nested control was marked.
+  for
+    markup in [settings_markup, skills_markup, composer_markup, address_markup] {
+    for tag in ["<input", "<textarea", "<select"] {
+      let parts = markup.split(tag).collect()
+      for index, part in parts {
+        if index > 0 {
+          guard part.split_once(">") is Some((opening, _)) else {
+            fail("unterminated form element in rendered markup")
+          }
+          assert_true(
+            opening.contains("data-focus-owner") ||
+            opening.contains("data-focus-target"),
+          )
+        }
+      }
+    }
+  }
 }
 
 ///|

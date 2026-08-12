@@ -2,12 +2,11 @@
 /* ---------- notifications ---------- */
 /* Transient error toasts, stacked in whichever window corner Settings
    picked. Only rendered while something is up, so it never eats clicks
-   meant for the app. Above the narrow editor overlay (45) and the
-   drawer (52) — a toast must survive a full-screen panel — but below
-   the modal (60), which demands the answer first. */
+   meant for the app. It survives the narrow editor and sidebar, while a
+   modal still stays above it and demands the answer first. */
 .notifications {
   position: fixed;
-  z-index: 55;
+  z-index: var(--z-notification);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -36,13 +35,13 @@
 .notification {
   cursor: pointer;
   padding: 10px 14px;
-  border: 1px solid var(--del-line);
-  border-radius: var(--radius);
-  background: var(--del-bg);
-  color: var(--del);
-  box-shadow: var(--shadow-pop);
-  font-size: 12.5px;
-  line-height: 1.5;
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  box-shadow: var(--shadow-overlay);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
   overflow-wrap: anywhere;
   animation: notification-in 160ms ease-out;
 }
@@ -61,59 +60,63 @@
 .bridge-lost-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: var(--z-connection-lost);
   display: grid;
   place-items: center;
   padding: 24px;
-  background: color-mix(in srgb, var(--ink) 32%, transparent);
+  background: var(--color-backdrop);
 }
 .bridge-lost-card {
   width: min(440px, 100%);
   padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-pop);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-overlay);
 }
 .bridge-lost-title {
-  font-size: 16px;
+  font-size: var(--font-size-lg);
   font-weight: 600;
-  color: var(--ink);
+  color: var(--color-text-primary);
 }
 .bridge-lost-body {
   margin-top: 10px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--ink-2);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text-secondary);
 }
 
 /* ---------- confirmation modal ---------- */
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--z-modal);
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--ink) 24%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-text-primary) 24%,
+    transparent
+  );
 }
 .modal {
   width: min(420px, calc(100vw - 48px));
   padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-pop);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-overlay);
 }
 .modal-title {
-  font-size: 15px;
+  font-size: var(--font-size-lg);
   font-weight: 600;
-  color: var(--ink);
+  color: var(--color-text-primary);
 }
 .modal-body {
   margin-top: 8px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--ink-2);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text-secondary);
 }
 .modal-actions {
   display: flex;
@@ -123,25 +126,25 @@
 }
 .modal-actions button {
   padding: 6px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
   cursor: pointer;
 }
 .modal-actions button:hover {
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
 /* Re-assert the accent fill: the generic .modal-actions button rule
    above outranks button.primary by document order. */
 .modal-actions button.primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 .modal-actions button.primary:hover {
-  background: var(--accent-ink);
-  border-color: var(--accent-ink);
+  background: var(--color-accent-strong);
+  border-color: var(--color-accent-strong);
 }
 /* The standing-goal banner above the composer input (the compaction
    notice's slot) and the composer's goal-editing mode. */
@@ -152,27 +155,27 @@
   max-width: 820px;
   margin: 0 auto 8px;
   padding: 6px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  color: var(--ink-2);
-  font-size: 12.5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
 }
 .composer-goal.blocked {
-  border-color: var(--warn);
-  color: var(--warn);
+  border-color: var(--color-warning);
+  color: var(--color-warning);
 }
 /* Goal mode: the row that tells the user what the input under it is for.
    Accent-tinted so it reads as an active mode, not a passive status. */
 .composer-goal.editing {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
 }
 /* Sent but not yet durably confirmed: quieter than a standing goal, since
    the record may still never carry it. */
 .composer-goal.pending {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 /* Nothing to say — collapsed rather than removed, so the row keeps its
    child index and the textarea below it keeps its focus. */
@@ -194,29 +197,29 @@
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   cursor: pointer;
 }
 .composer-goal-action:hover {
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
 }
 .composer-goal.editing .composer-goal-action {
-  color: var(--accent-ink);
+  color: var(--color-accent-strong);
 }
 .composer-goal.editing .composer-goal-action:hover {
-  background: var(--surface);
+  background: var(--color-bg-surface);
 }
 /* Inline outcome text in the Settings updates row. */
 .update-status {
   align-self: center;
-  font-size: 12.5px;
-  color: var(--ink-2);
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
 }
 .update-status.update-error {
-  color: var(--del);
+  color: var(--color-danger);
 }
 
 /* Real package byte progress. The status remains readable without the bar;
@@ -231,13 +234,14 @@
   width: 100%;
   height: 5px;
   overflow: hidden;
-  border-radius: 999px;
-  background: var(--line-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-border-subtle);
 }
 .update-progress-fill {
+  width: var(--progress-width, 0%);
   height: 100%;
   border-radius: inherit;
-  background: var(--accent);
+  background: var(--color-accent);
   transition: width 120ms linear;
 }
 .update-progress-fill.indeterminate {
@@ -252,12 +256,6 @@
     transform: translateX(300%);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .update-progress-fill.indeterminate {
-    animation: none;
-  }
-}
-
 /* ---------- portal (the relay sign-in shell) ---------- */
 /* Only the sign-in card survives here: the device-list portal was replaced
    by the multi-device console, and its rules went with it. Full-screen on
@@ -265,7 +263,7 @@
 .portal {
   height: 100%;
   overflow: auto;
-  background: var(--paper);
+  background: var(--color-bg-canvas);
 }
 .portal-inner {
   max-width: 720px;
@@ -285,9 +283,9 @@
   font-size: 20px;
 }
 .portal-card {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
   padding: 28px;
   margin-top: 8vh;
   display: flex;
@@ -297,24 +295,24 @@
 }
 .portal-card h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--font-size-lg);
 }
 .portal-card p {
   margin: 0;
-  color: var(--ink-2);
-  font-size: 13.5px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
 }
-/* The darker accent as fill: plain --accent under 13px text sits just below
+/* The darker accent as fill: plain --color-accent under 13px text sits just below
    the 4.5:1 contrast floor in both palettes. The paired foreground token
    follows explicit data-theme overrides as well as the OS default. */
 .portal-button-link {
   display: inline-block;
   padding: 8px 14px;
   border-radius: var(--radius-sm);
-  background: var(--accent-ink);
-  color: var(--on-accent-ink);
+  background: var(--color-accent-strong);
+  color: var(--color-on-accent-strong);
   text-decoration: none;
-  font-size: 13px;
+  font-size: var(--font-size-md);
 }
 .portal-button-link:hover {
   filter: brightness(0.94);
@@ -326,22 +324,24 @@
 .quick-open-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  z-index: var(--z-quick-open);
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding: clamp(64px, calc(50vh - 220px), 160px) 16px 16px;
-  background: color-mix(in srgb, #000 13%, transparent);
+  /* Quick Open uses the shared backdrop hue at a softer opacity than modal
+     surfaces, without introducing another one-use theme token. */
+  background: color-mix(in srgb, var(--color-backdrop) 40%, transparent);
 }
 
 .quick-open-dialog {
   width: min(520px, 100%);
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: var(--shadow-pop);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-overlay);
 }
 
 .quick-open-input-wrap {
@@ -350,14 +350,14 @@
   gap: 10px;
   min-height: 52px;
   padding: 0 15px;
-  border-bottom: 1px solid var(--line-2);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .quick-open-input-wrap > .icon {
   flex: 0 0 auto;
   width: 17px;
   height: 17px;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 
 .quick-open-input-wrap input {
@@ -365,21 +365,20 @@
   flex: 1 1 auto;
   padding: 13px 0;
   border: 0;
-  outline: 0;
   background: transparent;
-  color: var(--ink);
-  font: 14px/1.45 var(--mono);
+  color: var(--color-text-primary);
+  font: var(--font-size-md) / var(--line-height-normal) var(--font-family-ui);
 }
 
 .quick-open-input-wrap input::placeholder {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 
 .quick-open-group-label {
   padding: 11px 14px 6px;
-  color: var(--ink-3);
-  font-size: 11px;
-  font-weight: 650;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
   letter-spacing: 0.02em;
 }
 
@@ -397,26 +396,26 @@
   min-height: 42px;
   padding: 7px 9px;
   border-radius: 8px;
-  color: color-mix(in srgb, var(--ink) 76%, transparent);
+  color: color-mix(in srgb, var(--color-text-primary) 76%, transparent);
   cursor: default;
 }
 
 .quick-open-row:hover,
 .quick-open-row.selected {
-  background: var(--surface-2);
-  color: var(--ink);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
 }
 
 .quick-open-kind {
   flex: 0 0 18px;
   width: 18px;
-  color: var(--ink-3);
-  font-size: 16px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-lg);
 }
 
 .quick-open-row.selected .quick-open-kind,
 .quick-open-row:hover .quick-open-kind {
-  color: var(--accent-ink);
+  color: var(--color-accent-strong);
 }
 
 .quick-open-row-text {
@@ -433,7 +432,7 @@
   flex: 0 1 auto;
   overflow: hidden;
   color: inherit;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -443,8 +442,8 @@
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  color: var(--ink-2);
-  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -454,13 +453,13 @@
   display: grid;
   place-items: center;
   padding: 16px;
-  color: var(--ink-3);
-  font-size: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
   text-align: center;
 }
 
 .quick-open-empty.error {
-  color: var(--del);
+  color: var(--color-danger);
 }
 
 /* The codicon font/base class ships in viewer.css. These are the symbol

@@ -12,20 +12,20 @@
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink-3);
-  font-size: 16px;
-  line-height: 1;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-tight);
   cursor: pointer;
 }
 
 button.panel-toggle:not(:disabled):hover {
-  background: var(--surface-2);
-  color: var(--ink);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
 }
 
 .panel-toggle.active {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
 }
 
 /* The editor part: a tab strip of open files over the viewer, with the
@@ -37,8 +37,8 @@ button.panel-toggle:not(:disabled):hover {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-left: 1px solid var(--line);
-  background: var(--surface);
+  border-left: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
   /* Own stacking context so the opaque editor always paints above the
      conversation column, never the other way around. */
   position: relative;
@@ -58,8 +58,8 @@ button.panel-toggle:not(:disabled):hover {
   flex: 0 0 auto;
   height: 46px;
   padding: 0 18px 0 12px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
 }
 
 /* The tabs scroll horizontally rather than wrapping; the scrollbar is
@@ -87,25 +87,25 @@ button.panel-toggle:not(:disabled):hover {
   flex: 0 0 auto;
   max-width: 200px;
   padding: 4px 4px 4px 10px;
-  font-size: 12px;
-  color: var(--ink-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
   border-radius: var(--radius-sm);
   cursor: pointer;
   white-space: nowrap;
 }
 .editor-tab:hover {
-  background: var(--surface-2);
-  color: var(--ink);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
 }
 .editor-tab.active {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
 }
 /* A tab whose file vanished from disk keeps its place, struck through
    until the file reappears or the tab is closed. */
 .editor-tab.deleted .tab-name {
   text-decoration: line-through;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 .tab-name {
   min-width: 0;
@@ -120,19 +120,19 @@ button.panel-toggle:not(:disabled):hover {
   height: 16px;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: transparent;
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-tight);
   cursor: pointer;
 }
 .editor-tab .tab-close:hover {
-  background: color-mix(in srgb, var(--ink) 12%, transparent);
-  color: var(--ink);
+  background: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+  color: var(--color-text-primary);
 }
 .editor-tab.active .tab-close {
-  color: var(--accent-ink);
+  color: var(--color-accent-strong);
 }
 
 /* The viewer and the toggleable file-tree panel split the column below
@@ -170,9 +170,9 @@ button.panel-toggle:not(:disabled):hover {
   justify-content: center;
   padding: 24px;
   text-align: center;
-  font-size: 13px;
-  color: var(--ink-2);
-  background: var(--surface);
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-surface);
 }
 .viewer-notice.hidden {
   display: none;
@@ -192,8 +192,8 @@ button.panel-toggle:not(:disabled):hover {
   flex: 0 0 clamp(96px, var(--tree-height, 32%), calc(100% - 120px));
   min-height: 0;
   overflow: hidden;
-  border-top: 1px solid var(--line);
-  background: var(--surface);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
 }
 .editor:not(.tree-open) .file-tree-pane {
   display: none;
@@ -211,7 +211,7 @@ button.panel-toggle:not(:disabled):hover {
   flex: 0 0 clamp(180px, var(--tree-width, 260px), calc(100% - 240px));
   min-width: 0;
   border-top: none;
-  border-left: 1px solid var(--line);
+  border-left: 1px solid var(--color-border);
 }
 
 /* Drag-to-resize handle on the panel's viewer-facing seam — the
@@ -236,7 +236,7 @@ button.panel-toggle:not(:disabled):hover {
 .tree-resize-handle:hover,
 html.is-resizing-row .tree-resize-handle,
 html.is-resizing-col .tree-resize-handle {
-  background: var(--accent-soft);
+  background: var(--color-accent-soft);
 }
 html.is-resizing-row {
   cursor: row-resize;
@@ -267,7 +267,7 @@ html.is-resizing-col * {
 }
 .editor-resize-handle:hover,
 html.is-resizing .editor-resize-handle {
-  background: var(--accent-soft);
+  background: var(--color-accent-soft);
 }
 .content:not(.panel-open) .editor-resize-handle {
   display: none;
@@ -302,9 +302,9 @@ html.is-resizing * {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: var(--surface);
-  color: var(--ink-2);
-  font-size: 13px;
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
 }
 .editor.mode-picker.mode-review .viewer-stack::after {
   content: "Select a changed file to review";
@@ -324,12 +324,12 @@ html.is-resizing * {
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
   cursor: pointer;
 }
 .tab-add:hover {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
 }
 .tab-add.hidden {
   display: none;
@@ -340,11 +340,11 @@ html.is-resizing * {
   left: 12px;
   min-width: 260px;
   padding: 5px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-pop);
-  z-index: 31;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-overlay);
+  z-index: var(--z-menu);
 }
 /* The empty strip's centered launcher pane, same rows as the popup. */
 .dock-launcher {
@@ -372,14 +372,14 @@ html.is-resizing * {
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink);
-  font-size: 13px;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
 }
 .dock-launcher-row:hover {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
 }
 .dock-launcher-row .icon {
   flex: 0 0 auto;
@@ -389,12 +389,12 @@ html.is-resizing * {
   height: 16px;
 }
 .dock-launcher-name {
-  font-weight: 550;
+  font-weight: 600;
 }
 .dock-launcher-hint {
   margin-left: auto;
-  color: var(--ink-3);
-  font-size: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 /* The browser chrome: toolbar + failure line + the pane the native web
    contents view overlays. The pane element renders nothing itself — the
@@ -415,7 +415,7 @@ html.is-resizing * {
   gap: 6px;
   flex: 0 0 auto;
   padding: 7px 10px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--color-border);
 }
 .browser-nav-button {
   flex: 0 0 auto;
@@ -427,12 +427,12 @@ html.is-resizing * {
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
   cursor: pointer;
 }
 .browser-nav-button:hover {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
 }
 .browser-nav-button.loading .icon svg {
   animation: browser-reload-spin 1s linear infinite;
@@ -452,22 +452,18 @@ html.is-resizing * {
   flex: 1 1 auto;
   min-width: 0;
   padding: 5px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--ink);
-  font-size: 13px;
-}
-.browser-address:focus {
-  outline: none;
-  border-color: var(--accent);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
 }
 .browser-failure {
   flex: 0 0 auto;
   padding: 6px 12px;
-  border-bottom: 1px solid var(--line);
-  color: var(--del);
-  font-size: 12px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
 }
 .browser-failure.hidden {
   display: none;
@@ -478,14 +474,14 @@ html.is-resizing * {
   /* Native views always paint above HTML. Keep their measured rectangle to
      the right of the editor's resize handle so the handle remains clickable. */
   margin-left: var(--editor-resize-handle-width);
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
 .file-panel-error {
   flex: 0 0 auto;
   padding: 8px 12px;
-  font-size: 12px;
-  color: var(--danger, #c0392b);
-  background: var(--surface-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+  background: var(--color-bg-subtle);
 }
 
 .explorer-tabs {
@@ -493,7 +489,7 @@ html.is-resizing * {
   flex: 0 0 auto;
   gap: 2px;
   padding: 7px 8px 4px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .explorer-tab {
@@ -502,31 +498,31 @@ html.is-resizing * {
   gap: 6px;
   padding: 3px 7px;
   border: 0;
-  border-radius: 4px;
-  color: var(--ink-2);
+  border-radius: var(--radius-xs);
+  color: var(--color-text-secondary);
   background: transparent;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   cursor: pointer;
 }
 
 .explorer-tab:hover {
-  color: var(--ink);
-  background: var(--surface-2);
+  color: var(--color-text-primary);
+  background: var(--color-bg-subtle);
 }
 
 .explorer-tab.active {
-  color: var(--accent-ink);
-  background: var(--accent-soft);
+  color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
 }
 
 .explorer-count {
   min-width: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  color: var(--ink-2);
-  background: color-mix(in srgb, var(--ink) 9%, transparent);
-  font-size: 10px;
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-text-primary) 9%, transparent);
+  font-size: var(--font-size-xs);
   line-height: 16px;
   text-align: center;
 }
@@ -544,19 +540,20 @@ html.is-resizing * {
 
 .file-panel-empty {
   padding: 12px;
-  font-size: 12px;
-  color: var(--ink-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 .tree-row {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding-left: var(--tree-indent, 8px);
   padding-top: 3px;
   padding-bottom: 3px;
   padding-right: 10px;
-  font-size: 13px;
-  color: var(--ink);
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -565,19 +562,19 @@ html.is-resizing * {
 }
 
 .tree-row:hover {
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
 
 .tree-row.selected {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
 }
 
 /* A breadcrumb's `RevealDirectory` target, flashed until
    `HighlightCleared` removes the class; the transition above eases it
    back out. */
 .tree-row.highlighted {
-  background: var(--accent-soft);
+  background: var(--color-accent-soft);
 }
 
 .change-row {
@@ -589,16 +586,16 @@ html.is-resizing * {
   padding: 4px 10px 4px 12px;
   border: 0;
   border-radius: 0;
-  color: var(--ink);
+  color: var(--color-text-primary);
   background: transparent;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   text-align: left;
   cursor: pointer;
 }
 
 .change-row:hover {
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
 
 .change-row.disabled {
@@ -610,24 +607,24 @@ html.is-resizing * {
 }
 
 .change-row.selected {
-  color: var(--accent-ink);
-  background: var(--accent-soft);
+  color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
 }
 
 .change-row.reviewed .change-path {
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
 }
 
 .change-row.reviewed .change-action {
-  border-color: color-mix(in srgb, var(--success, #268744) 35%, var(--line));
-  color: var(--success, #268744);
-  background: color-mix(in srgb, var(--success, #268744) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-success) 35%, var(--color-border));
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 8%, transparent);
 }
 
 .review-progress-summary {
   padding: 4px 12px 6px;
-  color: var(--ink-3);
-  font-size: 11px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
 }
 
 .change-path {
@@ -646,50 +643,50 @@ html.is-resizing * {
 }
 
 .change-status.added {
-  color: var(--success, #268744);
+  color: var(--color-success);
 }
 
 .change-status.deleted,
 .change-status.unmerged {
-  color: var(--danger, #c0392b);
+  color: var(--color-danger);
 }
 
 .change-status.renamed {
-  color: var(--accent-ink);
+  color: var(--color-accent-strong);
 }
 
 .change-status.modified {
-  color: var(--warning, #a36800);
+  color: var(--color-warning);
 }
 
 .change-action {
   flex: 0 0 auto;
   padding: 1px 6px;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
-  border-radius: 999px;
-  color: var(--accent-ink);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  font-size: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, var(--color-border));
+  border-radius: var(--radius-pill);
+  color: var(--color-accent-strong);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  font-size: var(--font-size-xs);
   line-height: 16px;
 }
 
 .change-row:hover .change-action:not(.unavailable),
 .change-row:focus-visible .change-action:not(.unavailable) {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent) 55%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
 }
 
 .change-action.unavailable {
-  border-color: var(--line);
-  color: var(--ink-3);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
   background: transparent;
 }
 
 .tree-chevron {
   flex: 0 0 auto;
   width: 12px;
-  color: var(--ink-2);
-  font-size: 10px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
 }
 
 .tree-dir .tree-name {
@@ -717,9 +714,9 @@ html.is-resizing * {
   flex: 0 0 auto;
   height: 34px;
   padding: 0 18px 0 12px;
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--ink-3);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -739,15 +736,15 @@ html.is-resizing * {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
   cursor: pointer;
 }
 .crumb:hover {
-  color: var(--ink);
+  color: var(--color-text-primary);
   text-decoration: underline;
 }
 .crumb-file {
-  color: var(--ink);
+  color: var(--color-text-primary);
   font-weight: 500;
   cursor: default;
 }
@@ -756,7 +753,7 @@ html.is-resizing * {
 }
 .crumb-sep {
   flex: 0 0 auto;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 
 /* The changed-file row is the review action; this badge names the active
@@ -768,11 +765,11 @@ html.is-resizing * {
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 2px 7px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
-  border-radius: 999px;
-  color: var(--accent-ink);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  font-size: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+  border-radius: var(--radius-pill);
+  color: var(--color-accent-strong);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  font-size: var(--font-size-xs);
   line-height: 16px;
 }
 .review-badge.hidden {
@@ -794,28 +791,28 @@ html.is-resizing * {
   height: 20px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--ink-2);
+  border-radius: var(--radius-xs);
+  color: var(--color-text-secondary);
   background: transparent;
   font: inherit;
-  font-size: 16px;
-  line-height: 1;
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-tight);
   cursor: pointer;
 }
 .review-nav-button:hover:not(:disabled) {
-  border-color: var(--line);
-  color: var(--ink);
-  background: var(--surface-2);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+  background: var(--color-bg-subtle);
 }
 .review-nav-button:disabled {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
   cursor: default;
   opacity: 0.45;
 }
 .review-nav-position {
   min-width: 38px;
-  color: var(--ink-3);
-  font-size: 10px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   text-align: center;
 }
 .review-badge-action {
@@ -824,8 +821,8 @@ html.is-resizing * {
   cursor: pointer;
 }
 .review-badge-action:hover {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 
 .review-progress {
@@ -834,9 +831,9 @@ html.is-resizing * {
   cursor: pointer;
 }
 .review-progress.reviewed {
-  border-color: color-mix(in srgb, var(--success, #268744) 45%, var(--line));
-  color: var(--success, #268744);
-  background: color-mix(in srgb, var(--success, #268744) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-success) 45%, var(--color-border));
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 10%, transparent);
 }
 
 .viewer-host {

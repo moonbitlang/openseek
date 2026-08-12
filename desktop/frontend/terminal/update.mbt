@@ -46,10 +46,7 @@ fn open_new_tab(
     shown: Some(key),
   }
   (
-    @cmd.batch([
-      terminal_resizer.mount(),
-      mount_tab(dispatch, key, ctx.dark_mode),
-    ]),
+    @cmd.batch([terminal_resizer.mount(), mount_tab(dispatch, key)]),
     state.remember_active(group, key),
   )
 }
@@ -387,7 +384,7 @@ pub fn sync(
       commands.push(apply_shown(None))
     }
     if theme_changed {
-      commands.push(apply_theme(ctx.dark_mode))
+      commands.push(apply_theme())
     }
     return (
       { ..state, shown: None, synced_dark_mode: Some(ctx.dark_mode) },
@@ -402,7 +399,7 @@ pub fn sync(
       commands.push(apply_shown(None))
     }
     if theme_changed {
-      commands.push(apply_theme(ctx.dark_mode))
+      commands.push(apply_theme())
     }
     return (
       { ..state, synced_dark_mode: Some(ctx.dark_mode) },
@@ -414,7 +411,7 @@ pub fn sync(
     let theme_changed = state.synced_dark_mode != Some(ctx.dark_mode)
     let state = { ..state, synced_dark_mode: Some(ctx.dark_mode) }
     if theme_changed {
-      return (state, @cmd.batch([cmd, apply_theme(ctx.dark_mode)]))
+      return (state, @cmd.batch([cmd, apply_theme()]))
     }
     return (state, cmd)
   }
@@ -429,8 +426,7 @@ pub fn sync(
   match (shown_changed, theme_changed) {
     (false, false) => (state, @cmd.none)
     (true, false) => (state, apply_shown(desired))
-    (false, true) => (state, apply_theme(ctx.dark_mode))
-    (true, true) =>
-      (state, @cmd.batch([apply_shown(desired), apply_theme(ctx.dark_mode)]))
+    (false, true) => (state, apply_theme())
+    (true, true) => (state, @cmd.batch([apply_shown(desired), apply_theme()]))
   }
 }

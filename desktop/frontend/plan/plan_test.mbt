@@ -298,7 +298,7 @@ test "a card renders the meter over the checklist" {
   let rendered = markup(@plan.card(steps))
   // Two of four completed, with the in-progress step's own slice of the bar.
   assert_true(rendered.contains("plan-progress-count\">2/4"))
-  assert_true(rendered.contains("width: 50.0%"))
+  assert_true(rendered.contains("--plan-progress-width: 50.0%"))
   assert_true(rendered.contains("plan-progress-fill active"))
   // Every step is a row, in the order the call recorded them.
   assert_true(rendered.contains("plan-step completed"))
@@ -335,8 +335,8 @@ test "a large plan's smallest share still draws" {
   let rendered = markup(@plan.card(steps))
   // 1/200 completed and one step in progress: both draw at 0.5%, not 0%.
   assert_true(rendered.contains("plan-progress-count\">1/200"))
-  assert_false(rendered.contains("width: 0.0%"))
-  assert_true(rendered.contains("width: 0.5%"))
+  assert_false(rendered.contains("--plan-progress-width: 0.0%"))
+  assert_true(rendered.contains("--plan-progress-width: 0.5%"))
 }
 
 ///|

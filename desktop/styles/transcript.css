@@ -43,19 +43,19 @@
   width: 34px;
   height: 34px;
   transform: translateY(-42px);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--ink-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
   font-size: 15px;
-  line-height: 1;
+  line-height: var(--line-height-tight);
   cursor: pointer;
-  box-shadow: var(--shadow-pop);
+  box-shadow: var(--shadow-overlay);
 }
 .jump-latest:hover {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  border-color: var(--accent-line);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+  border-color: var(--color-accent-border);
 }
 
 /* ---------- transcript overview ---------- */
@@ -114,16 +114,16 @@
   align-items: center;
   justify-items: start;
 }
-/* Text-gray tones, not hairline tones: `--line` is tuned for borders and
-   disappears against the dark paper. The muted resting state comes from
-   opacity so one token family carries both themes. */
+/* Text-gray tones, not border tones: the border palette is intentionally too
+   quiet for a navigation mark against the dark canvas. The muted resting
+   state comes from opacity so one semantic text family carries both themes. */
 .overview-tick-button::before {
   content: "";
   width: 9px;
   height: 2px;
   max-height: 100%;
   border-radius: 1px;
-  background: var(--ink-3);
+  background: var(--color-text-muted);
   opacity: 0.5;
   transition:
     width 0.12s ease,
@@ -133,12 +133,12 @@
 .overview-tick:hover .overview-tick-button::before,
 .overview-tick.hovered .overview-tick-button::before {
   width: 14px;
-  background: var(--ink-2);
+  background: var(--color-text-secondary);
   opacity: 1;
 }
 .overview-tick.active .overview-tick-button::before {
   width: 14px;
-  background: var(--accent);
+  background: var(--color-accent);
   opacity: 1;
 }
 /* The hovered tick's preview: the prompt, its send time, and the answer it
@@ -150,10 +150,10 @@
   top: -10px;
   width: min(360px, 44cqw);
   padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-pop);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-overlay);
   pointer-events: none;
   z-index: 7;
 }
@@ -164,9 +164,9 @@
   bottom: -10px;
 }
 .overview-preview-prompt {
-  font-size: 12.5px;
+  font-size: var(--font-size-md);
   font-weight: 600;
-  color: var(--ink);
+  color: var(--color-text-primary);
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -175,16 +175,16 @@
 }
 .overview-preview-time {
   margin-top: 3px;
-  font-size: 11px;
-  color: var(--ink-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
 }
 .overview-preview-reply {
   margin-top: 7px;
   padding-left: 8px;
-  border-left: 2px solid var(--line);
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--ink-2);
+  border-left: 2px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
@@ -216,23 +216,23 @@
   width: 52px;
   height: 52px;
   border-radius: var(--radius-lg);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-line);
-  color: var(--accent);
+  background: var(--color-accent-soft);
+  border: 1px solid var(--color-accent-border);
+  color: var(--color-accent);
 }
 .empty-badge .icon {
   width: 30px;
   height: 30px;
 }
 .empty-title {
-  font-size: 16px;
-  color: var(--ink);
+  font-size: var(--font-size-lg);
+  color: var(--color-text-primary);
 }
 .empty-sub {
   max-width: 400px;
-  color: var(--ink-3);
-  font-size: 12.5px;
-  line-height: 1.6;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
 }
 
 /* messages */
@@ -257,9 +257,9 @@
   min-width: 0;
   max-width: 85%;
   padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
 }
 
 /* In the accessibility tree, out of the layout: speaker names and the
@@ -283,14 +283,14 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--ink-3);
-  font-size: 11.5px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 .turn-rule::before {
   content: "";
   flex: 1;
   height: 1px;
-  background: var(--line);
+  background: var(--color-border);
 }
 
 .msg-body {
@@ -302,17 +302,17 @@
   /* Let the content box shrink so a wide child (a <pre>) scrolls
      internally rather than widening the message. */
   min-width: 0;
-  color: var(--ink);
-  font-size: 13.5px;
-  line-height: 1.62;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
 .msg-content.danger {
-  border-left: 2px solid var(--del);
-  border-radius: 4px;
-  background: var(--del-bg);
+  border-left: 2px solid var(--color-danger);
+  border-radius: var(--radius-xs);
+  background: var(--color-danger-soft);
   padding: 8px 12px;
 }
 
@@ -370,12 +370,12 @@
   margin: 0.55em 0;
   padding: 10px 13px;
   overflow: auto;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--code);
-  font-size: 12px;
-  line-height: 1.55;
+  background: var(--color-bg-surface);
+  color: var(--color-code);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
   white-space: pre;
 }
 .msg-content.markdown pre code {
@@ -396,14 +396,14 @@
 }
 
 .msg-content.markdown pre.raw-html {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
   white-space: pre-wrap;
 }
 .msg-content.markdown blockquote {
   margin: 0.55em 0;
   padding: 2px 12px;
-  border-left: 3px solid var(--line-2);
-  color: var(--ink-2);
+  border-left: 3px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
 }
 .msg-content.markdown table {
   /* Scroll a wide table horizontally inside the message (like a code
@@ -416,43 +416,43 @@
   overflow-x: auto;
   margin: 0.55em 0;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: var(--font-size-md);
 }
 .msg-content.markdown th,
 .msg-content.markdown td {
   padding: 4px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
 }
 .msg-content.markdown th {
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
   font-weight: 600;
 }
 .msg-content.markdown hr {
   margin: 0.9em 0;
   border: none;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--color-border);
 }
 .msg-content a {
-  color: var(--accent);
+  color: var(--color-accent);
 }
 .msg-content.markdown img {
   max-width: 100%;
 }
 .msg-content.markdown .footnote {
   margin: 0.45em 0;
-  color: var(--ink-3);
-  font-size: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 .msg-content.markdown .footnote-label {
   margin-right: 6px;
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
 }
 
 /* live streaming bubble: a blinking caret after the latest text */
 .msg.streaming .msg-content::after {
   content: "▍";
   margin-left: 2px;
-  color: var(--accent);
+  color: var(--color-accent);
   animation: caretBlink 1s steps(1) infinite;
 }
 
@@ -464,10 +464,10 @@
 
 
 .inline-code {
-  border-radius: 4px;
-  background: var(--surface-2);
-  color: var(--ink-2);
-  border: 1px solid var(--line-2);
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-subtle);
   padding: 0.08em 0.34em;
   font-size: 0.92em;
   overflow-wrap: anywhere;
@@ -485,7 +485,7 @@
   background: none;
   font: inherit;
   text-align: left;
-  color: var(--accent);
+  color: var(--color-accent);
   cursor: pointer;
   vertical-align: baseline;
 }
@@ -495,14 +495,14 @@
   text-underline-offset: 2px;
 }
 .file-link .inline-code {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
   text-decoration: none;
 }
 .file-link:hover .inline-code,
 .file-link:focus-visible .inline-code {
-  background: var(--accent);
-  color: var(--bg, #fff);
+  background: var(--color-accent);
+  color: var(--bg, var(--color-on-accent));
 }
 
 /* One turn's work (thinking + tool calls), folded behind a single
@@ -532,12 +532,12 @@
   display: flex;
   align-items: baseline;
   gap: 10px;
-  color: var(--ink-3);
-  font-size: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
   letter-spacing: 0.02em;
 }
 .activity-summary:hover {
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
 }
 .activity-text {
   min-width: 0;
@@ -553,8 +553,8 @@
 }
 .activity-failed {
   flex: 0 0 auto;
-  color: var(--del);
-  font-size: 11px;
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
 }
 
 .activity-body {
@@ -572,15 +572,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--ink-3);
-  font-size: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
   letter-spacing: 0.02em;
 }
 .summary-card-label::-webkit-details-marker {
   display: none;
 }
 .summary-card-label:hover {
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
 }
 .summary-card-icon {
   flex: none;
@@ -599,16 +599,16 @@
 }
 .summary-card-body {
   padding: 10px 0 4px;
-  font-size: 13px;
-  color: var(--ink-2);
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
 }
 
 /* Reasoning inside the work log — and the live stream before it commits
    (`reasoning_view`): full-width muted prose, never a labelled
    "Thinking" row of its own. */
 .activity-thinking {
-  color: var(--ink-2);
-  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
 }
 
 /* A burst of consecutive tool calls: a gray one-line summary that
@@ -617,11 +617,11 @@
   display: flex;
   align-items: baseline;
   gap: 10px;
-  color: var(--ink-3);
-  font-size: 12.5px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
 }
 .tool-line-summary:hover {
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
 }
 .tool-line-text::after {
   content: " ▸";
@@ -639,15 +639,15 @@
    the result output. */
 .tool-call-label,
 .tool-call-summary {
-  color: var(--ink-3);
-  font-size: 12.5px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
 }
 .tool-call-summary:hover {
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
 }
 .tool-call-label.error,
 .tool-call.error > .tool-call-summary {
-  color: var(--del);
+  color: var(--color-danger);
 }
 
 /* Arguments and output grow the page instead of scrolling in place: the
@@ -658,8 +658,8 @@
 }
 .tool-call-section-label {
   margin-top: 6px;
-  color: var(--ink-3);
-  font-size: 10px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -668,15 +668,15 @@
   margin: 6px 0 8px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--code);
-  font-size: 12px;
-  line-height: 1.55;
+  background: var(--color-bg-subtle);
+  color: var(--color-code);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .tool-call.error .tool-call-output {
-  background: var(--del-bg);
+  background: var(--color-danger-soft);
 }
 
 /* ---------- plan ----------
@@ -688,7 +688,7 @@
   margin: 8px 0 0;
   padding: 0;
   list-style: none;
-  font-size: 12.5px;
+  font-size: var(--font-size-md);
 }
 .plan-step {
   display: flex;
@@ -700,38 +700,38 @@
 .plan-step .step-icon {
   flex: none;
   width: 14px;
-  color: var(--ink-3);
-  font-size: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
   text-align: center;
 }
 .plan-step.completed .step-icon {
-  color: var(--add);
+  color: var(--color-success);
 }
 .plan-step.in_progress .step-icon {
-  color: var(--accent);
+  color: var(--color-accent);
 }
 /* a status this build does not know reads as its literal word: disguising it
    as a pending ring would misreport e.g. a blocked step as untouched */
 .plan-step .step-status {
   flex: none;
   padding: 0 5px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  color: var(--ink-3);
-  font-size: 11px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
 }
 .plan-step .step-num {
   flex: none;
-  color: var(--ink-3);
-  font-size: 11.5px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 .plan-step .step-title {
   min-width: 0;
-  color: var(--ink);
+  color: var(--color-text-primary);
   overflow-wrap: anywhere;
 }
 .plan-step.completed .step-title {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
   text-decoration: line-through;
 }
 .plan-step.in_progress .step-title {
@@ -750,27 +750,28 @@
   display: flex;
   flex: 0 1 200px;
   height: 5px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-subtle);
   overflow: hidden;
 }
 .plan-progress-fill {
   flex: none;
+  width: var(--plan-progress-width, 0%);
   height: 100%;
-  background: var(--accent);
+  background: var(--color-accent);
   transition: width 0.2s ease;
 }
 .plan-progress-fill.active {
-  background: var(--accent-line);
+  background: var(--color-accent-border);
 }
 .plan-progress-fill.complete {
-  background: var(--add);
+  background: var(--color-success);
 }
 .plan-progress-count {
   flex: none;
-  color: var(--ink-3);
-  font-size: 11px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
 }
 .plan-progress.mini {
   flex: none;
@@ -782,7 +783,7 @@
   height: 4px;
 }
 .plan-cleared {
-  color: var(--ink-3);
-  font-size: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
   font-style: italic;
 }

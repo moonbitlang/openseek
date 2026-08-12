@@ -1051,6 +1051,46 @@ async test "application stylesheet assembles without development imports" {
   assert_true(css.contains("/* ---------- terminal panel ---------- */"))
   assert_true(css.contains("/* ---------- narrow (phone) layout ---------- */"))
   assert_true(!css.contains("@import"))
+  // Keep the semantic-token migration closed over every packaged source. This
+  // catches a new component copied from an older stylesheet before undefined
+  // custom properties silently erase its colors, borders, or shadows.
+  for
+    retired in [
+      "mono", "paper", "surface", "surface-2", "ink", "ink-2", "ink-3", "line", "line-2",
+      "accent", "accent-ink", "on-accent-ink", "accent-soft", "accent-line", "add",
+      "add-bg", "add-line", "del", "del-bg", "del-line", "warn", "tool", "tool-bg",
+      "tool-line", "code", "radius", "shadow", "shadow-pop",
+    ] {
+    assert_false(css.contains("--\{retired}:"))
+    assert_false(css.contains("var(--\{retired})"))
+    assert_false(css.contains("var(--\{retired},"))
+  }
+}
+
+///|
+async test "form field focus styling stays in the base stylesheet" {
+  let ws = locate_workspace()
+  let base = @asyncfs.read_file(ws.at("styles/base.css")).text()
+  assert_true(base.contains("[data-focus-owner]:focus"))
+  assert_true(
+    base.contains("[data-focus-owner]:has([data-focus-target]:focus)"),
+  )
+  assert_true(base.contains("[data-focus-target]:focus"))
+  // Discrete actions may use :focus-visible in their component stylesheet.
+  // Form fields and composite wrappers go through the marker contract above;
+  // keeping these older patterns out prevents a second border from returning.
+  for source in app_css_sources() {
+    if source != "styles/base.css" {
+      let component = @asyncfs.read_file(ws.at(source)).text()
+      guard !component.contains("input:focus") &&
+        !component.contains("textarea:focus") &&
+        !component.contains("select:focus") &&
+        !component.contains(":focus-within") &&
+        !component.contains(":focus {") else {
+        fail("form field focus styling must stay in styles/base.css: " + source)
+      }
+    }
+  }
 }
 
 ///|

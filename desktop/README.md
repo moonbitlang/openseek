@@ -238,6 +238,9 @@ Mermaid and xterm archives are downloaded, checksum-verified, and extracted
 once under ignored `target/` directories; they are reused until their pinned
 versions change.
 
+Desktop CSS conventions, including token scope and the single-owner form focus
+contract, live in [`styles/README.md`](styles/README.md).
+
 The host recognizes its `_build/native/<profile>/build/openseek_desktop`
 location and derives the checkout HTML, matching engine, and worktree-local
 `desktop/target/dev-state` from it. Packaged layouts are checked first. The

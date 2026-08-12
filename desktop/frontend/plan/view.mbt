@@ -119,7 +119,8 @@ fn progress_view(steps : Array[Step], mini? : Bool = false) -> @html.Html {
 }
 
 ///|
-/// `part` of `total` as a CSS width, in tenths of a percent.
+/// `part` of `total` as the progress fill's local CSS variable, in tenths of a
+/// percent. The stylesheet owns the actual width property.
 ///
 /// A whole percent truncated to nothing exactly where the bar had something
 /// to say: `decode` tolerates plans of up to `MAX_RENDERED_STEPS` steps so a
@@ -130,7 +131,7 @@ fn progress_view(steps : Array[Step], mini? : Bool = false) -> @html.Html {
 /// and stay integer arithmetic, so no width is ever a float's idea of one.
 fn fill_width(part : Int, total : Int) -> String {
   let tenths = part * 1000 / total
-  "width: \{tenths / 10}.\{tenths % 10}%"
+  "--plan-progress-width: \{tenths / 10}.\{tenths % 10}%"
 }
 
 ///|

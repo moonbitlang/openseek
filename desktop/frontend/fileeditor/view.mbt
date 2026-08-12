@@ -971,7 +971,8 @@ fn review_badge(
 }
 
 ///|
-/// One visible hierarchical tree row. `depth` drives indentation.
+/// One visible hierarchical tree row. `depth` supplies a local CSS variable;
+/// the stylesheet owns the padding property.
 fn tree_row(
   dispatch : @cmd.Emit[Msg],
   state : State,
@@ -979,7 +980,7 @@ fn tree_row(
   entry : FileEntry,
   depth : Int,
 ) -> @html.Html {
-  let pad = "padding-left: \{8 + depth * 14}px"
+  let indent_style = "--tree-indent: \{8 + depth * 14}px"
   if entry.is_dir {
     let chevron = if state.expanded.contains(entry.path) {
       "▾"
@@ -993,7 +994,7 @@ fn tree_row(
       } else {
         "tree-row tree-dir"
       },
-      style=[pad],
+      style=[indent_style],
       on_click=dispatch(DirToggle(entry.path)),
       attrs=@html.Attrs::build().data_set("path", entry.path.0),
       [
@@ -1008,7 +1009,7 @@ fn tree_row(
       } else {
         "tree-row tree-file"
       },
-      style=[pad],
+      style=[indent_style],
       on_click=dispatch(FileSelected(path=entry.path, name=entry.name)),
       attrs=@html.Attrs::build().data_set("path", entry.path.0),
       [@html.span(class="tree-name", entry.name)],

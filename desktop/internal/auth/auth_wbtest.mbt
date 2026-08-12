@@ -311,12 +311,15 @@ async test "the loopback listener takes the matching redirect and ignores strays
     )
     let (granted, granted_data) = browser.wait()
     assert_true(granted.code == 200)
+    let granted_page = granted_data.text()
     // Registration supplies the device id before the browser is released.
     assert_true(
-      granted_data
-      .text()
-      .contains("url=https://relay.example/console/?device=d_abc"),
+      granted_page.contains("url=https://relay.example/console/?device=d_abc"),
     )
+    // The loopback page is self-contained, but its palette stays on the same
+    // semantic contract as the app instead of reviving the retired short names.
+    assert_true(granted_page.contains("--color-bg-canvas"))
+    assert_false(granted_page.contains("--paper"))
     group.return_immediately(())
   })
 }

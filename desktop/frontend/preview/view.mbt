@@ -106,6 +106,7 @@ pub fn toolbar_view(page : PageState, actions : ToolbarActions) -> @html.Html {
       attrs=@html.Attrs::build()
         .id(AddressInputId)
         .class("browser-address")
+        .data_set("focus-owner", "")
         .on_keydown(event => {
           match event.key() {
             "Enter" => actions.submit

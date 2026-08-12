@@ -18,7 +18,7 @@ main {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--paper);
+  background: var(--color-bg-canvas);
 }
 
 /* ---------- top bar ---------- */
@@ -28,8 +28,8 @@ main {
   gap: 10px;
   height: var(--topbar-height);
   padding: 0 18px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
 }
 
 .topbar-toggle {
@@ -41,14 +41,14 @@ main {
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
   font-size: 15px;
-  line-height: 1;
+  line-height: var(--line-height-tight);
   cursor: pointer;
 }
 .topbar-toggle:hover {
-  background: var(--surface-2);
-  color: var(--ink);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
 }
 
 /* The sidebar toggle's fallback on screens without a topbar (Skills,
@@ -69,8 +69,8 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
-  color: var(--ink);
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
 }
 
 .topbar-workspace {
@@ -81,8 +81,8 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11.5px;
-  color: var(--ink-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
 }
 .topbar-workspace .icon {
   width: 12px;
@@ -95,12 +95,12 @@ main {
   align-items: center;
   gap: 7px;
   margin-left: auto;
-  font-size: 11.5px;
-  color: var(--ink-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 .run-status.accent .run-text {
-  color: var(--accent-ink);
+  color: var(--color-accent-strong);
 }
 
 .run-text {
@@ -121,24 +121,24 @@ main {
   gap: 3px;
   height: 28px;
   padding: 0 7px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--ink-3);
-  font-size: 13px;
-  line-height: 1;
+  background: var(--color-bg-surface);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-tight);
   cursor: pointer;
 }
 .launcher-button:hover,
 .launcher-button.open {
-  background: var(--surface-2);
-  color: var(--ink);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
 }
 .launcher-button:disabled {
   opacity: 0.4;
   cursor: default;
   background: transparent;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 .launcher-caret {
   font-size: 9px;
@@ -151,11 +151,11 @@ main {
   max-height: min(70vh, 460px);
   overflow-y: auto;
   padding: 5px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-pop);
-  z-index: 31;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-overlay);
+  z-index: var(--z-menu);
 }
 .launcher-item {
   display: flex;
@@ -166,28 +166,28 @@ main {
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink);
-  font-size: 13px;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
   text-align: left;
   cursor: pointer;
 }
 .launcher-item:hover {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
 }
 .launcher-icon {
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   object-fit: contain;
 }
 .launcher-icon.letter {
   display: grid;
   place-items: center;
-  background: var(--surface-2);
-  color: var(--ink-3);
-  font-size: 12px;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
   font-weight: 600;
 }
 .launcher-name {
@@ -198,31 +198,31 @@ main {
 }
 .launcher-empty {
   padding: 9px 10px;
-  color: var(--ink-3);
-  font-size: 12.5px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
 }
 .launcher-empty.danger {
-  color: var(--del);
+  color: var(--color-danger);
 }
 
 .run-dot {
   width: 7px;
   height: 7px;
-  border-radius: 99px;
-  background: var(--ink-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-text-muted);
   flex: 0 0 auto;
 }
 .run-dot.ok {
-  background: var(--add);
+  background: var(--color-success);
 }
 .run-dot.warn {
-  background: var(--warn);
+  background: var(--color-warning);
 }
 .run-dot.danger {
-  background: var(--del);
+  background: var(--color-danger);
 }
 .run-dot.accent {
-  background: var(--accent);
+  background: var(--color-accent);
 }
 .run-dot.pulse {
   animation: pulseDot 1.6s ease-out infinite;

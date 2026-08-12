@@ -47,22 +47,22 @@ fn xterm_module() -> @js.Value? {
 }
 
 ///|
-/// The emulator's color theme for the app's light/dark scheme.
-fn terminal_theme(dark_mode : Bool) -> @js.Object {
-  // Concrete values of the app's `--surface`/`--ink` design tokens (xterm
-  // takes colors, not CSS variables).
-  let theme = @js.Object::new()
-  if dark_mode {
-    theme["background"] = "#1c1f26"
-    theme["foreground"] = "#e9ebf0"
-    theme["cursor"] = "#e9ebf0"
-  } else {
-    theme["background"] = "#ffffff"
-    theme["foreground"] = "#16171a"
-    theme["cursor"] = "#16171a"
-  }
-  theme
-}
+/// The emulator cannot consume CSS variables directly, so resolve the live
+/// typography and palette at the boundary instead of duplicating them here.
+extern "js" fn terminal_style() -> @js.Value =
+  #|() => {
+  #|  const style = getComputedStyle(document.documentElement);
+  #|  const foreground = style.getPropertyValue("--color-text-primary").trim();
+  #|  return {
+  #|    fontFamily: style.getPropertyValue("--font-family-ui").trim(),
+  #|    fontSize: Number.parseFloat(style.getPropertyValue("--font-size-md")),
+  #|    theme: {
+  #|      background: style.getPropertyValue("--color-bg-surface").trim(),
+  #|      foreground,
+  #|      cursor: foreground,
+  #|    },
+  #|  };
+  #|}
 
 ///|
 fn no_args() -> Array[@js.Value] {
@@ -111,11 +111,7 @@ fn refit_visible() -> Unit {
 /// exists), make it the visible one, and report its grid size through
 /// `EmulatorReady`. Idempotent: the update loop decides whether a ready
 /// report should spawn a session, so re-reports are harmless.
-fn mount_tab(
-  dispatch : @cmd.Emit[Msg],
-  key : Int,
-  dark_mode : Bool,
-) -> @cmd.Cmd {
+fn mount_tab(dispatch : @cmd.Emit[Msg], key : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
       guard xterm_module() is Some(module_) else { return }
@@ -134,11 +130,12 @@ fn mount_tab(
           [element],
         )
         let options = @js.Object::new()
+        let style = terminal_style()
         options["cursorBlink"] = true
-        options["fontSize"] = 13
-        options["fontFamily"] = "\"Geist Mono\", Menlo, monospace"
+        options["fontSize"] = (style.get_with_string("fontSize") : @js.Value)
+        options["fontFamily"] = (style.get_with_string("fontFamily") : @js.Value)
         options["scrollback"] = 10000
-        options["theme"] = terminal_theme(dark_mode).to_value()
+        options["theme"] = (style.get_with_string("theme") : @js.Value)
         let ctor : @js.Value = module_.get_with_string("Terminal")
         let term : @js.Value = ctor.new([options.to_value()])
         let fit_ctor : @js.Value = module_.get_with_string("FitAddon")
@@ -249,14 +246,19 @@ fn apply_shown(key : Int?) -> @cmd.Cmd {
 /// Apply the app's current color scheme to every emulator that already
 /// exists. Newly mounted tabs receive the same theme in `mount_tab`; this
 /// command covers tabs that survive a later light/dark switch.
-fn apply_theme(dark_mode : Bool) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
-    let theme = terminal_theme(dark_mode).to_value()
-    for _, entry in term_host.entries {
-      let options : @js.Value = entry.term.get_with_string("options")
-      options.set_with_string("theme", theme)
-    }
-  })
+fn apply_theme() -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _scheduler => {
+      let theme : @js.Value = terminal_style().get_with_string("theme")
+      for _, entry in term_host.entries {
+        let options : @js.Value = entry.term.get_with_string("options")
+        options.set_with_string("theme", theme)
+      }
+    },
+    // Theme::apply writes data-theme through the same command batch. Read the
+    // computed variables only after that root attribute has landed.
+    kind=@cmd.after_render,
+  )
 }
 
 ///|

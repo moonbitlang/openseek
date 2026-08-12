@@ -23,11 +23,11 @@ body,
 }
 
 body {
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--mono);
-  font-size: 13.5px;
-  line-height: 1.55;
+  background: var(--color-bg-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
   letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -40,8 +40,23 @@ select {
   font: inherit;
 }
 
+/* A form field has exactly one focus-border owner. A plain input owns itself;
+   a composite field puts the owner on its bordered wrapper and marks the
+   nested text control as the target. Explicit data attributes keep this rule
+   out of the embedded Viewer even though it shares the document. */
+[data-focus-owner]:focus,
+[data-focus-owner]:has([data-focus-target]:focus) {
+  border-color: var(--color-focus-ring);
+  outline: none;
+}
+
+/* Composite targets leave all focus drawing to their owner. */
+[data-focus-target]:focus {
+  outline: none;
+}
+
 ::selection {
-  background: var(--accent-soft);
+  background: var(--color-accent-soft);
 }
 
 /* quiet scrollbars */
@@ -50,13 +65,21 @@ select {
   height: 9px;
 }
 ::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--ink) 14%, transparent);
-  border-radius: 99px;
+  background: color-mix(
+    in srgb,
+    var(--color-text-primary) 14%,
+    transparent
+  );
+  border-radius: var(--radius-pill);
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--ink) 26%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-text-primary) 26%,
+    transparent
+  );
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-track {
@@ -103,7 +126,7 @@ select {
 
 @keyframes pulseDot {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 45%, transparent);
   }
   70% {
     box-shadow: 0 0 0 6px transparent;

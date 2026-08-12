@@ -1,8 +1,8 @@
 
 /* ---------- composer ---------- */
 .composer {
-  border-top: 1px solid var(--line);
-  background: var(--paper);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-canvas);
   padding: 16px 24px 18px;
 }
 
@@ -39,11 +39,16 @@
   gap: 8px;
   max-width: 820px;
   margin: 0 auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
   padding: 8px 10px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-surface);
+}
+
+.composer :is(button, a, summary):focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .composer-input {
@@ -110,11 +115,11 @@
   gap: 5px;
   max-width: 260px;
   padding: 2px 4px 2px 8px;
-  border: 1px solid var(--accent-line);
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  font-size: 12px;
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+  font-size: var(--font-size-sm);
 }
 /* Wraps the glyph+label: a plain span for a chip with no jump target, or
    a reset `<button>` (same layout) for one that opens the editor panel
@@ -140,7 +145,7 @@
 }
 .mention-glyph {
   flex: none;
-  font-family: var(--mono);
+  font-family: var(--font-family-ui);
   font-weight: 600;
   opacity: 0.75;
 }
@@ -148,7 +153,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--mono);
+  font-family: var(--font-family-ui);
 }
 .mention-remove {
   flex: none;
@@ -159,15 +164,15 @@
   height: 16px;
   padding: 0;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--accent-ink);
-  font-size: 13px;
-  line-height: 1;
+  color: var(--color-accent-strong);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-tight);
   cursor: pointer;
 }
 .mention-remove:hover {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
 /* chips re-rendered inside a sent message (parsed back out of its
    <user_mentions> envelope): same chip chrome, no remove button, so the
@@ -185,18 +190,18 @@
   left: 0;
   right: 0;
   bottom: calc(100% + 8px);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-pop);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-overlay);
   overflow: hidden;
   z-index: 20;
 }
 .completion-hint {
   padding: 6px 12px;
-  border-bottom: 1px solid var(--line-2);
-  color: var(--ink-3);
-  font-size: 11px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -214,16 +219,16 @@
   cursor: pointer;
 }
 .completion-item.selected {
-  background: var(--accent-soft);
+  background: var(--color-accent-soft);
 }
 .completion-label {
   flex: none;
-  color: var(--ink);
-  font-family: var(--mono);
-  font-size: 12.5px;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-ui);
+  font-size: var(--font-size-md);
 }
 .completion-item.selected .completion-label {
-  color: var(--accent-ink);
+  color: var(--color-accent-strong);
 }
 .completion-detail {
   flex: 1;
@@ -231,14 +236,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--ink-3);
-  font-size: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 /* state line for a # menu whose results are still loading or empty */
 .completion-empty {
   padding: 7px 10px;
-  color: var(--ink-3);
-  font-size: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 
 /* transient notice docked above the composer (e.g. compaction) */
@@ -248,11 +253,11 @@
   max-width: 820px;
   margin: 0 auto 8px;
   padding: 6px 12px;
-  border: 1px solid var(--warn);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  color: var(--ink-1);
-  font-size: 12.5px;
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
 }
 .composer-banner.hidden {
   display: none;
@@ -265,11 +270,11 @@
   max-width: 820px;
   margin: 0 auto 8px;
   padding: 6px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  color: var(--ink-2);
-  font-size: 12.5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
 }
 .composer-notice-icon {
   flex: none;
@@ -285,15 +290,15 @@
 }
 .composer-notice-btn {
   flex: none;
-  border-color: var(--line);
-  background: var(--surface);
-  color: var(--ink);
+  border-color: var(--color-border);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   white-space: nowrap;
 }
 .composer-notice-btn:not(:disabled):hover {
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
 
 /* the standing plan, docked above the composer: one line naming the active
@@ -306,17 +311,17 @@
 .plan-panel {
   max-width: 820px;
   margin: 0 auto 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
   padding: 6px 10px 8px;
 }
 .plan-panel-summary {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--ink-2);
-  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
   cursor: pointer;
   list-style: none;
   user-select: none;
@@ -325,11 +330,11 @@
   display: none;
 }
 .plan-panel-summary:hover {
-  color: var(--ink);
+  color: var(--color-text-primary);
 }
 .plan-panel-icon {
   flex: none;
-  color: var(--accent);
+  color: var(--color-accent);
 }
 .plan-panel-title {
   flex: none;
@@ -347,8 +352,8 @@
 }
 .plan-panel-caret {
   flex: none;
-  color: var(--ink-3);
-  font-size: 11px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
 }
 .plan-panel:not([open]) .plan-panel-caret::after {
   content: "▸";
@@ -367,7 +372,7 @@
   overflow-y: auto;
   margin-top: 6px;
   padding-top: 6px;
-  border-top: 1px solid var(--line-2);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 /* steering input not yet folded into the running turn: a panel docked
@@ -375,9 +380,9 @@
 .pending-steers {
   max-width: 820px;
   margin: 0 auto 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
   padding: 4px 10px;
 }
 .pending-steer-row {
@@ -386,15 +391,15 @@
   gap: 8px;
   min-width: 0;
   padding: 4px 0;
-  color: var(--ink-2);
-  font-size: 12.5px;
-  line-height: 1.5;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
 }
 .pending-steer-row + .pending-steer-row {
-  border-top: 1px solid var(--line-2);
+  border-top: 1px solid var(--color-border-subtle);
 }
 .pending-steer-icon {
-  color: var(--accent);
+  color: var(--color-accent);
   flex: none;
 }
 .pending-steer-text {
@@ -406,8 +411,8 @@
 }
 .pending-steer-state {
   flex: none;
-  color: var(--ink-3);
-  font-size: 11px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   animation: caretBlink 1.4s steps(1) infinite;
 }
 
@@ -423,22 +428,19 @@
   background: transparent;
   padding: 6px 6px 2px;
   resize: none;
-  color: var(--ink);
-  font-size: 13.5px;
-  line-height: 1.6;
-}
-.composer textarea:focus {
-  outline: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
 }
 .composer textarea::placeholder {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 
 .composer-toolbar {
   display: flex;
   align-items: center;
   padding-top: 8px;
-  border-top: 1px solid var(--line-2);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .composer-controls {
@@ -479,13 +481,13 @@
   overflow: hidden;
   white-space: nowrap;
   /* Same box as `.composer-model`, so the two chips sit at one height. */
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: transparent;
   padding: 4px 9px;
-  color: var(--ink-2);
-  font-size: 11.5px;
-  line-height: 1.4;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
@@ -493,8 +495,8 @@
    differently read as an accident. */
 .composer-git-button:hover,
 .composer-git-button.open {
-  border-color: var(--accent);
-  color: var(--ink-1);
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
 }
 .composer-git-label {
   min-width: 0;
@@ -518,19 +520,19 @@
    label — one mark carrying two meanings is what made the old chip unreadable. */
 .composer-git-button.passed .composer-git-glyph,
 .composer-git-glyph.passed {
-  color: var(--add);
+  color: var(--color-success);
 }
 .composer-git-button.failed .composer-git-glyph,
 .composer-git-glyph.failed {
-  color: var(--del);
+  color: var(--color-danger);
 }
 .composer-git-button.pending .composer-git-glyph,
 .composer-git-glyph.pending {
-  color: var(--warn);
+  color: var(--color-warning);
 }
 .composer-git-button.none .composer-git-glyph,
 .composer-git-glyph.none {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 
 /* Opens upward, from the composer's left edge: the composer sits at the bottom
@@ -547,13 +549,13 @@
   left: 0;
   width: min(420px, 100%);
   padding: 5px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-pop);
-  font-size: 11.5px;
-  line-height: 1.4;
-  z-index: 31;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-overlay);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  z-index: var(--z-menu);
 }
 .composer-git-row,
 .composer-git-link {
@@ -563,16 +565,16 @@
   width: 100%;
   padding: 6px 8px;
   border-radius: var(--radius-sm);
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
   text-decoration: none;
 }
 .composer-git-link:hover {
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
 .composer-git-key {
   flex: none;
   width: 62px;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 .composer-git-value {
   flex: 0 1 auto;
@@ -580,7 +582,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--ink);
+  color: var(--color-text-primary);
 }
 /* Secondary text is pushed to the right and gives up its width first. */
 .composer-git-note {
@@ -591,13 +593,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: right;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 .composer-git-out {
   display: inline-flex;
   align-items: center;
   flex: none;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 .composer-git-out .icon {
   width: 11px;
@@ -606,7 +608,7 @@
 .composer-git-rule {
   height: 1px;
   margin: 4px 8px;
-  background: var(--line-2);
+  background: var(--color-border-subtle);
 }
 .composer-git-diff {
   display: inline-flex;
@@ -614,7 +616,7 @@
   flex: none;
 }
 .composer-git-clean {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 .composer-diff-added,
 .composer-diff-removed {
@@ -622,10 +624,10 @@
   font-variant-numeric: tabular-nums;
 }
 .composer-diff-added {
-  color: var(--add);
+  color: var(--color-success);
 }
 .composer-diff-removed {
-  color: var(--del);
+  color: var(--color-danger);
 }
 
 /* The model chip is the tier control: one click flips the conversation
@@ -637,20 +639,20 @@
   max-width: 260px;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: 4px 9px;
   background: transparent;
-  color: var(--ink-2);
-  font-size: 11.5px;
-  line-height: 1.4;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
 }
 .composer-model:hover {
-  border-color: var(--accent);
-  color: var(--ink-1);
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
 }
 .composer-model > span {
   overflow: hidden;
@@ -659,7 +661,7 @@
 }
 .composer-model::before {
   content: "✦";
-  color: var(--accent);
+  color: var(--color-accent);
 }
 
 .icon-button {
@@ -671,35 +673,35 @@
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
-  color: var(--ink-2);
+  color: var(--color-text-secondary);
   padding: 0;
-  font-size: 16px;
-  line-height: 1;
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-tight);
   cursor: pointer;
 }
 .icon-button:not(:disabled):hover {
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
 
 .send-button {
   border-color: transparent;
-  background: var(--accent);
-  color: #fff;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 .send-button:not(:disabled):hover {
-  background: var(--accent-ink);
+  background: var(--color-accent-strong);
 }
 .send-button:disabled {
-  background: var(--surface-2);
-  color: var(--ink-3);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-muted);
 }
 
 .stop-button {
-  border-color: var(--del-line);
-  background: var(--del-bg);
-  color: var(--del);
-  font-size: 13px;
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-size-md);
 }
 .stop-button:not(:disabled):hover {
-  background: color-mix(in srgb, var(--del-bg) 78%, var(--del));
+  background: color-mix(in srgb, var(--color-danger-soft) 78%, var(--color-danger));
 }

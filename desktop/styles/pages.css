@@ -10,7 +10,7 @@ button {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink);
+  color: var(--color-text-primary);
   cursor: pointer;
 }
 button:disabled {
@@ -18,15 +18,24 @@ button:disabled {
   opacity: 0.5;
 }
 
+/* These opt-in app controls have no enclosing focus surface, so they draw the
+   shared keyboard ring themselves. Component controls define theirs locally. */
+button.secondary:focus-visible,
+button.primary:focus-visible,
+a.setting-link:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
 button.secondary {
-  border-color: var(--line);
-  background: var(--surface);
-  color: var(--ink);
+  border-color: var(--color-border);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
 }
 button.secondary:not(:disabled):hover {
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
 
 /* A Device page is navigation, so it remains an anchor while matching the
@@ -36,42 +45,37 @@ a.setting-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   line-height: 1.2;
   text-decoration: none;
 }
 a.setting-link:hover {
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
-a.setting-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
 /* The accent-filled call to action, button.secondary's counterpart:
    Save API key, the self-update controls, modal confirms. As a
    sidebar-button it keeps the sidebar's geometry, only the fill. */
 button.primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 button.primary:not(.sidebar-button) {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
 }
 button.primary .sidebar-icon {
-  color: #fff;
+  color: var(--color-on-accent);
 }
 button.primary:not(:disabled):hover {
-  background: var(--accent-ink);
-  border-color: var(--accent-ink);
-  color: #fff;
+  background: var(--color-accent-strong);
+  border-color: var(--color-accent-strong);
+  color: var(--color-on-accent);
 }
 button.primary:disabled {
   opacity: 0.7;
@@ -97,8 +101,8 @@ button.primary:disabled {
 }
 
 .page-eyebrow {
-  color: var(--ink-3);
-  font-size: 10.5px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   font-weight: 500;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -110,22 +114,18 @@ button.primary:disabled {
   margin-bottom: 4px;
 }
 
-.settings-header h1 {
-  font-size: 26px;
-  letter-spacing: -0.02em;
-}
-
+.settings-header h1,
 h1,
 h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   line-height: 1.3;
 }
 
 .settings-subtitle {
-  color: var(--ink-3);
-  font-size: 12.5px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
 }
 
 .settings {
@@ -148,19 +148,19 @@ h2 {
 .settings-group-head .icon {
   width: 15px;
   height: 15px;
-  color: var(--accent);
+  color: var(--color-accent);
 }
 
 .settings-group-head h2 {
-  font-size: 14px;
+  font-size: var(--font-size-md);
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
 .settings-group-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 2px 18px;
 }
 
@@ -174,7 +174,7 @@ h2 {
 
 .setting-row + .setting-row,
 .settings-group-card .skill-row + .skill-row {
-  border-top: 1px solid var(--line-2);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .setting-row.stack {
@@ -191,13 +191,13 @@ h2 {
 }
 
 .setting-name {
-  font-size: 13px;
+  font-size: var(--font-size-md);
 }
 
 .setting-desc {
-  color: var(--ink-3);
-  font-size: 11.5px;
-  line-height: 1.5;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
 }
 
 /* A row's controls sit on one line, hugging the right edge; a lone
@@ -222,34 +222,25 @@ h2 {
   align-self: flex-end;
 }
 
-/* App-wide form-control default, `width: 100%` included — settings forms
-   and the pickers rely on it. A control that must NOT fill its row (an
-   inline chip input, say) has to override these explicitly. */
-input,
-textarea,
-select {
+/* Settings and Skills own these form defaults. Keep them scoped to the page
+   shells so later-loaded app CSS cannot restyle inputs inside the Viewer. */
+.settings-page :where(input, textarea, select),
+.skills-page :where(input, textarea, select) {
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--ink);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
   padding: 9px 10px;
-  font-size: 13px;
+  font-size: var(--font-size-md);
   letter-spacing: -0.01em;
-}
-
-input:focus,
-textarea:focus,
-select:focus {
-  outline: none;
-  border-color: var(--accent);
 }
 
 .setting-control select,
 .setting-control input {
   padding: 7px 10px;
-  font-size: 12.5px;
+  font-size: var(--font-size-md);
 }
 
 .setting-select {
@@ -269,7 +260,7 @@ select:focus {
   /* The codicon path ends 3px before its 16px view box edge. */
   right: 7px;
   display: inline-flex;
-  color: var(--ink);
+  color: var(--color-text-primary);
   pointer-events: none;
   transform: translateY(-50%);
 }
@@ -302,8 +293,8 @@ select:focus {
 }
 
 .skills-subtitle {
-  color: var(--ink-3);
-  font-size: 12.5px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
 }
 
 .skills-search {
@@ -311,15 +302,11 @@ select:focus {
   align-items: center;
   gap: 10px;
   max-width: 420px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 9px 13px;
-  color: var(--ink-3);
-}
-
-.skills-search:focus-within {
-  border-color: var(--accent-line);
+  color: var(--color-text-muted);
 }
 
 .skills-search .icon {
@@ -335,12 +322,8 @@ select:focus {
   border-radius: 0;
 }
 
-.skills-search input:focus {
-  outline: none;
-}
-
 .skill-check {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -351,10 +334,10 @@ select:focus {
   width: 30px;
   height: 30px;
   flex-shrink: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: var(--surface-2);
-  color: var(--ink-2);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
 }
 
 .skill-avatar .icon {
@@ -377,19 +360,19 @@ select:focus {
 }
 
 .skill-name {
-  font-size: 13px;
+  font-size: var(--font-size-md);
   overflow-wrap: anywhere;
 }
 
 .skill-desc {
-  color: var(--ink-3);
-  font-size: 11.5px;
-  line-height: 1.5;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
 }
 
 .skill-meta {
-  color: var(--ink-3);
-  font-size: 11px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
 }
 
 .skill-action {
@@ -399,8 +382,8 @@ select:focus {
 
 .skills-empty,
 .skills-notice {
-  color: var(--ink-3);
-  font-size: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 
 .settings-group-card .skills-empty {
@@ -408,21 +391,21 @@ select:focus {
 }
 
 .pill {
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
   padding: 3px 9px;
-  background: var(--surface-2);
-  color: var(--ink-2);
-  font-size: 11px;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
   white-space: nowrap;
 }
 
 .ok {
-  color: var(--add);
+  color: var(--color-success);
 }
 .warn {
-  color: var(--warn);
+  color: var(--color-warning);
 }
 .danger {
-  color: var(--del);
+  color: var(--color-danger);
 }

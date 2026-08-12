@@ -249,8 +249,56 @@ async fn respond_html(
 /// The console's look (desktop/index.html) reduced to what a static
 /// loopback page needs: paper surfaces, hairline border, mono stack. The
 /// bundled Geist Mono lives on the relay origin, so these pages fall back
-/// to the system mono fonts of the same stack.
-const SignInPageStyle : String = "<style>:root{color-scheme:light dark;--paper:#fbfbf9;--surface:#ffffff;--ink:#16171a;--ink-2:#5c5f66;--line:#e9e8e3;--accent:#2a55cc}@media (prefers-color-scheme:dark){:root{--paper:#16181d;--surface:#1c1f26;--ink:#e9ebf0;--ink-2:#a3a8b4;--line:#2c313b;--accent:#9db8ff}}html{background:var(--paper)}body{font-family:\"Geist Mono\",\"SF Mono\",ui-monospace,\"Cascadia Mono\",Menlo,Consolas,monospace;background:var(--surface);color:var(--ink);max-width:26rem;margin:6rem auto;padding:2rem;border:1px solid var(--line);border-radius:10px}h1{font-size:1.05rem;margin:0 0 .75rem}p{margin:.5rem 0;color:var(--ink-2);font-size:.85rem;line-height:1.6}a{color:var(--accent)}</style>"
+/// to the system mono fonts of the same stack. This response cannot load the
+/// app stylesheet, so it owns a small self-contained copy of the semantic
+/// palette while keeping the same names and values.
+const SignInPageStyle : String =
+  #|<style>
+  #|  :root {
+  #|    color-scheme: light dark;
+  #|    --color-bg-canvas: #fbfbf9;
+  #|    --color-bg-surface: #ffffff;
+  #|    --color-text-primary: #16171a;
+  #|    --color-text-secondary: #5c5f66;
+  #|    --color-border: #e9e8e3;
+  #|    --color-accent-strong: #2a55cc;
+  #|    --font-family-ui: "Geist Mono", "SF Mono", ui-monospace,
+  #|      "Cascadia Mono", Menlo, Consolas, monospace;
+  #|    --font-size-md: 13px;
+  #|    --font-size-lg: 16px;
+  #|    --line-height-relaxed: 1.6;
+  #|    --radius-md: 9px;
+  #|  }
+  #|  @media (prefers-color-scheme: dark) {
+  #|    :root {
+  #|      --color-bg-canvas: #16181d;
+  #|      --color-bg-surface: #1c1f26;
+  #|      --color-text-primary: #e9ebf0;
+  #|      --color-text-secondary: #a3a8b4;
+  #|      --color-border: #2c313b;
+  #|      --color-accent-strong: #9db8ff;
+  #|    }
+  #|  }
+  #|  html { background: var(--color-bg-canvas); }
+  #|  body {
+  #|    max-width: 26rem;
+  #|    margin: 6rem auto;
+  #|    padding: 2rem;
+  #|    border: 1px solid var(--color-border);
+  #|    border-radius: var(--radius-md);
+  #|    background: var(--color-bg-surface);
+  #|    color: var(--color-text-primary);
+  #|    font-family: var(--font-family-ui);
+  #|  }
+  #|  h1 { margin: 0 0 0.75rem; font-size: var(--font-size-lg); }
+  #|  p {
+  #|    margin: 0.5rem 0;
+  #|    color: var(--color-text-secondary);
+  #|    font-size: var(--font-size-md);
+  #|    line-height: var(--line-height-relaxed);
+  #|  }
+  #|  a { color: var(--color-accent-strong); }
+  #|</style>
 
 ///|
 /// The post-consent landing page is sent only after the code exchange and

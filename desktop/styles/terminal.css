@@ -10,8 +10,8 @@
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  background: var(--surface);
-  border-top: 1px solid var(--line);
+  background: var(--color-bg-surface);
+  border-top: 1px solid var(--color-border);
 }
 .terminal-panel.open {
   display: flex;
@@ -28,7 +28,7 @@
 }
 .terminal-resize-handle:hover,
 html.is-resizing-terminal .terminal-resize-handle {
-  background: var(--accent-soft);
+  background: var(--color-accent-soft);
 }
 html.is-resizing-terminal {
   cursor: row-resize;
@@ -42,25 +42,25 @@ html.is-resizing-terminal * {
   align-items: center;
   gap: 10px;
   padding: 6px 12px;
-  border-bottom: 1px solid var(--line-2);
-  color: var(--ink-2);
-  font: 500 12px/1.4 var(--mono);
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  font: 500 var(--font-size-sm)/var(--line-height-normal) var(--font-family-ui);
 }
 .terminal-title {
   margin-right: 4px;
-  color: var(--ink);
+  color: var(--color-text-primary);
 }
 .terminal-tab {
   display: flex;
   align-items: center;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  background: var(--color-bg-subtle);
 }
 .terminal-tab.active {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
 }
 .terminal-tab-select {
   display: flex;
@@ -69,57 +69,57 @@ html.is-resizing-terminal * {
   padding: 3px 4px 3px 8px;
   border: 0;
   background: none;
-  color: var(--ink-2);
-  font: 500 11px/1.4 var(--mono);
+  color: var(--color-text-secondary);
+  font: 500 var(--font-size-xs)/var(--line-height-normal) var(--font-family-ui);
   cursor: pointer;
 }
 .terminal-tab.active .terminal-tab-select {
-  color: var(--accent-ink);
+  color: var(--color-accent-strong);
 }
 .terminal-tab-failed {
-  color: var(--del);
+  color: var(--color-danger);
 }
 .terminal-tab-close {
   padding: 3px 6px 3px 2px;
   border: 0;
   background: none;
-  color: var(--ink-3);
-  font: 500 10px/1 var(--mono);
+  color: var(--color-text-muted);
+  font: 500 10px/1 var(--font-family-ui);
   cursor: pointer;
 }
 .terminal-tab-close:hover {
-  color: var(--ink);
+  color: var(--color-text-primary);
 }
 .terminal-new {
   padding: 2px 6px;
   border: 0;
   border-radius: var(--radius-sm);
   background: none;
-  color: var(--ink-3);
-  font: 500 14px/1 var(--mono);
+  color: var(--color-text-muted);
+  font: 500 14px/1 var(--font-family-ui);
   cursor: pointer;
 }
 .terminal-new:hover {
-  background: var(--surface-2);
-  color: var(--ink);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
 }
 .terminal-status {
   margin-left: auto;
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 .terminal-status.terminal-error {
-  color: var(--del);
+  color: var(--color-danger);
 }
 .terminal-close {
   margin-left: auto;
   border: 0;
   background: none;
-  color: var(--ink-3);
-  font: 500 12px/1 var(--mono);
+  color: var(--color-text-muted);
+  font: 500 var(--font-size-sm)/var(--line-height-tight) var(--font-family-ui);
   cursor: pointer;
 }
 .terminal-close:hover {
-  color: var(--ink);
+  color: var(--color-text-primary);
 }
 .terminal-host {
   position: relative;

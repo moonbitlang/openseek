@@ -9,8 +9,8 @@
 .sidebar-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 51;
-  background: color-mix(in srgb, var(--ink) 32%, transparent);
+  z-index: var(--z-sidebar-backdrop);
+  background: var(--color-backdrop);
 }
 
 @media (max-width: 760px) {
@@ -41,9 +41,9 @@
   .app > aside {
     position: fixed;
     inset: 0 auto 0 0;
-    z-index: 52;
+    z-index: var(--z-sidebar-drawer);
     width: min(320px, 86vw);
-    box-shadow: var(--shadow-pop);
+    box-shadow: var(--shadow-overlay);
   }
 
   /* The topbar keeps only what a phone needs: the toggle, the title,
@@ -71,7 +71,7 @@
   .content.panel-open .editor {
     position: fixed;
     inset: 0;
-    z-index: 45;
+    z-index: var(--z-editor-overlay);
     border-left: 0;
   }
   /* Drill-down: exactly one of tree/viewer shows. Opening a file
@@ -115,7 +115,7 @@
   .setting-control input,
   .setting-control select,
   .composer textarea {
-    font-size: 16px;
+    font-size: var(--font-size-lg);
   }
   .topbar,
   .sidebar-header,
@@ -151,5 +151,21 @@
   .portal-header {
     flex-wrap: wrap;
     gap: 10px;
+  }
+}
+
+/* Keep status changes visible without forcing motion on users who disable it
+   at the operating-system level. Static color and text still show each state. */
+@media (prefers-reduced-motion: reduce) {
+  .pending-steer-state,
+  .subrun-mark,
+  .notification,
+  .update-progress-fill.indeterminate,
+  .msg,
+  .msg.streaming .msg-content::after,
+  .activity-row,
+  .browser-nav-button.loading .icon svg,
+  .run-dot.pulse {
+    animation: none;
   }
 }
