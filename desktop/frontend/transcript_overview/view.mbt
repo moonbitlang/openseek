@@ -37,10 +37,13 @@ pub fn rail(
       ),
     ]
     if hovered {
-      // A bottom-half tick sits near the scroller's lower edge, where a
-      // downward popover would be clipped by the transcript's overflow —
-      // those open upward instead.
-      children.push(preview(entry, clock, flip=index * 2 >= entries.length()))
+      // A long rail's bottom-half ticks sit near the scroller's lower edge,
+      // where a downward popover would be clipped by the transcript's
+      // overflow — those open upward instead. A short rail floats
+      // mid-viewport with room below; flipping there would make adjacent
+      // previews open in opposite directions for no reason.
+      let flip = entries.length() >= 24 && index * 2 >= entries.length()
+      children.push(preview(entry, clock, flip~))
     }
     ticks.push(@html.div(class=tick_class, children))
   }

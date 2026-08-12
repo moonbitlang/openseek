@@ -39,9 +39,18 @@ fn reveal_active_project() -> @cmd.Cmd {
 /// that applied the overview click. Hand-computed against the transcript's
 /// own scrollTop rather than `scroll_into_view`: that walks every scrollable
 /// ancestor, and the app shell above the transcript must not move.
-fn scroll_turn_into_view(key : @transcript_overview.TurnKey) -> @cmd.Cmd {
+///
+/// The click's handler unpins eagerly, but a transcript that still fits its
+/// viewport clamps the write to the same scrollTop — no scroll event, so the
+/// watcher would never restore the pin and streaming would silently stop
+/// following. Report the definitive at-bottom state from the settled
+/// position instead of trusting the eager guess.
+fn scroll_turn_into_view(
+  dispatch : @cmd.Emit[Msg],
+  key : @transcript_overview.TurnKey,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _ => {
+    scheduler => {
       guard @dom.document().get_element_by_id("transcript").to_option()
         is Some(transcript) else {
         return
@@ -53,6 +62,15 @@ fn scroll_turn_into_view(key : @transcript_overview.TurnKey) -> @cmd.Cmd {
       let offset = bubble.get_bounding_client_rect().get_top() -
         transcript.get_bounding_client_rect().get_top()
       transcript.set_scroll_top(transcript.get_scroll_top() + offset - 10.0)
+      let client_height : Double = @js.Cast::from(transcript).get_with_string(
+        "clientHeight",
+      )
+      let at_bottom = transcript.get_scroll_height() -
+        transcript.get_scroll_top() -
+        client_height <=
+        4.0
+      transcript_pinned_watch.val = at_bottom
+      scheduler.add(dispatch(TranscriptPinned(at_bottom)))
     },
     kind=@cmd.after_render,
   )
@@ -122,6 +140,13 @@ fn report_visible_turn_after_render(
 }
 
 ///|
+/// The watcher's last at-bottom state, shared with `scroll_turn_into_view`
+/// for the same reason as `transcript_turn_anchor`: a clamped jump produces
+/// no scroll event, so the correction it dispatches must also resync the
+/// watcher's change guard or the next real scroll would be swallowed.
+let transcript_pinned_watch : Ref[Bool] = Ref(true)
+
+///|
 let transcript_scroll_watched : Ref[Bool] = Ref(false)
 
 ///|
@@ -137,7 +162,6 @@ fn watch_transcript_scroll(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     guard !transcript_scroll_watched.val else { return }
     transcript_scroll_watched.val = true
-    let mut pinned = true
     @interop.add_capture_listener(@js.Cast::from(@dom.document()), "scroll", event => {
       guard event.target().to_element() is Some(element) else { return }
       guard element.get_property("id").to_option() is Some("transcript") else {
@@ -150,8 +174,8 @@ fn watch_transcript_scroll(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         element.get_scroll_top() -
         client_height <=
         4.0
-      if at_bottom != pinned {
-        pinned = at_bottom
+      if at_bottom != transcript_pinned_watch.val {
+        transcript_pinned_watch.val = at_bottom
         scheduler.add(dispatch(TranscriptPinned(at_bottom)))
       }
       // The overview rail's active-turn highlight, reported the same

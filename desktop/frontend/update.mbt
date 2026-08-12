@@ -2942,9 +2942,14 @@ fn update_msg(
       match msg {
         // Jumping into history is reading history: unpin eagerly like
         // JumpToLatest pins eagerly, so the next streamed delta cannot yank
-        // the view back down before the scroll watcher reports.
+        // the view back down before the scroll watcher reports. The jump
+        // command re-reports the settled at-bottom state, which restores the
+        // pin when the click could not actually move a short transcript.
         Clicked(key) =>
-          (scroll_turn_into_view(key), { ..model, transcript_pinned: false })
+          (
+            scroll_turn_into_view(dispatch, key),
+            { ..model, transcript_pinned: false },
+          )
         _ => (@cmd.none, model)
       }
     }
@@ -3427,12 +3432,25 @@ fn update_msg(
         _ => true
       }
       guard owner_live else { return (@cmd.none, model) }
+      let terminal_was_open = model.terminal_panel.open
       let (cmd, panel) = @terminal.update(
         dispatch.map(msg => Terminal(msg)),
         msg,
         model.terminal_panel,
         terminal_ctx(model),
       )
+      // The terminal opening, closing, or resizing moves the overview's 35%
+      // reading line across bubbles without any scroll event; recompute the
+      // active turn when the pane geometry moved (dispatching only when the
+      // turn actually changed).
+      let cmd = if panel.open != terminal_was_open || msg is ViewportResized(..) {
+        @cmd.batch([
+          cmd,
+          report_visible_turn_after_render(dispatch, skip_unchanged=true),
+        ])
+      } else {
+        cmd
+      }
       let model = { ..model, terminal_panel: panel }
       // A rejected input means those keystrokes were lost; keep the session
       // alive, but surface the transport error on the app's toast rail.
