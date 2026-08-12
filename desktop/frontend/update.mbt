@@ -1521,13 +1521,16 @@ fn update(
   }
   // The overview rail's hover/active keys are per-session event sequences —
   // the same numbers name different turns in another conversation — so a
-  // switch resets them here, however it happened. The explicit recompute is
-  // not redundant with the scroll watcher: a conversation that fits its
-  // viewport produces no scroll event at all, and one whose visible anchor
-  // string matches the previous session's would be swallowed by the
-  // watcher's change guard.
+  // switch resets them here, however it happened. Returning to Chat from
+  // Skills/Settings resets too: the transcript DOM is rebuilt while the keys
+  // (and a hover whose mouseleave never fired) survive on the model. The
+  // explicit recompute is not redundant with the scroll watcher: a
+  // conversation that fits its viewport produces no scroll event at all,
+  // and one whose visible anchor string matches the previous session's
+  // would be swallowed by the watcher's change guard.
   let (overview_cmd, model) = if model.active_session != previous.active_session ||
-    model.focused != previous.focused {
+    model.focused != previous.focused ||
+    (model.screen is Chat && !(previous.screen is Chat)) {
     (
       report_visible_turn_after_render(dispatch),
       { ..model, transcript_overview: @transcript_overview.State::empty() },
@@ -16402,4 +16405,27 @@ test "the overview's turn keys do not survive a conversation switch" {
   // Sequences are per-session — the same number names a different turn in
   // the arriving conversation, so the highlight must not carry across.
   @debug.assert_eq(switched.transcript_overview.active, None)
+}
+
+///|
+test "returning to Chat reinitializes the overview" {
+  // The same conversation, reselected from the Skills page: the session does
+  // not change, but the transcript DOM is rebuilt — stale keys (and a hover
+  // whose mouseleave never fired during the unmount) must not survive.
+  let model = {
+    ..test_model(),
+    screen: Skills,
+    transcript_overview: {
+      hover: Some(@transcript_overview.Durable(2)),
+      active: Some(@transcript_overview.Durable(3)),
+    },
+  }
+  let (_, back) = update(
+    test_dispatch(),
+    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    model,
+  )
+  assert_true(back.screen is Chat)
+  @debug.assert_eq(back.transcript_overview.hover, None)
+  @debug.assert_eq(back.transcript_overview.active, None)
 }
