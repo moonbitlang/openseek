@@ -137,6 +137,29 @@ test "a completed singleton tool uses one brief disclosure" {
 
 ///|
 #warnings("-alert_unstable")
+test "a mixed activity does not repeat its singleton tool disclosure" {
+  let rendered = activity_view(
+    [
+      {
+        kind: Reasoning,
+        content: "checking the diff",
+        ts: None,
+        sequence: None,
+      },
+      tool_item("shell", brief="moon fmt · git diff"),
+    ],
+    _ => @cmd.none,
+  )
+  let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
+  assert_true(
+    markup.contains("<span class=\"activity-text\">Moon fmt · git diff</span>"),
+  )
+  assert_false(markup.contains("tool-call-summary"))
+  assert_true(markup.contains("<pre class=\"tool-call-output\">output</pre>"))
+}
+
+///|
+#warnings("-alert_unstable")
 test "the turn rule dates itself only from a real stamp" {
   let render = rule => {
     @rabbita.render_to_string(() => @rabbita.Val::constant(rule))

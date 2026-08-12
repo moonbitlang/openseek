@@ -121,6 +121,36 @@ fn flatten_tool_activity(items : Array[@transcript.TranscriptItem]) -> Bool {
 }
 
 ///|
+/// A mixed activity card already promotes its only successful tool's brief to
+/// the outer summary. Return that tool so the expanded body can show its
+/// arguments/output directly instead of repeating the same disclosure label.
+/// Keep failed and plan calls nested: their badge and progress affordances
+/// belong to the ordinary tool-card rendering.
+fn inline_singleton_tool(
+  items : Array[@transcript.TranscriptItem],
+) -> @transcript.TranscriptItem? {
+  let mut tool : @transcript.TranscriptItem? = None
+  let mut has_reasoning = false
+  for item in items {
+    match item.kind {
+      Reasoning => has_reasoning = true
+      Tool(name~, is_error~, ..) if name != "plan" && !is_error =>
+        if tool is Some(_) {
+          return None
+        } else {
+          tool = Some(item)
+        }
+      _ => return None
+    }
+  }
+  if has_reasoning {
+    tool
+  } else {
+    None
+  }
+}
+
+///|
 fn capitalize(text : String) -> String {
   // `[first, .. rest]` binds the first Unicode scalar and the true remainder.
   // The old `iter().next()` + `text[1:]` mixed a scalar with a code-unit slice:
@@ -176,6 +206,7 @@ fn activity_view(
   if flatten_tool_activity(items) {
     return @html.div(class="activity-row", [tool_line_view(items)])
   }
+  let inline_tool = inline_singleton_tool(items)
   let log : Array[@html.Html] = []
   let mut index = 0
   while index < items.length() {
@@ -185,7 +216,11 @@ fn activity_view(
         tools.push(items[index])
         index = index + 1
       }
-      log.push(tool_line_view(tools))
+      if inline_tool is Some(tool) && tools.length() == 1 {
+        log.push(inline_tool_call_view(tool))
+      } else {
+        log.push(tool_line_view(tools))
+      }
     } else {
       // Reasoning; callers never pass user messages, assistant prose, or
       // error bubbles.
@@ -255,6 +290,20 @@ fn tool_line_view(tools : Array[@transcript.TranscriptItem]) -> @html.Html {
 /// sessions may have no recorded arguments; unmatched results keep their old
 /// output-only presentation.
 fn tool_call_view(item : @transcript.TranscriptItem) -> @html.Html {
+  tool_call_view_mode(item, show_label=true)
+}
+
+///|
+/// The enclosing activity summary already names this singleton tool.
+fn inline_tool_call_view(item : @transcript.TranscriptItem) -> @html.Html {
+  tool_call_view_mode(item, show_label=false)
+}
+
+///|
+fn tool_call_view_mode(
+  item : @transcript.TranscriptItem,
+  show_label~ : Bool,
+) -> @html.Html {
   guard item.kind is Tool(name~, arguments~, is_error~, brief~, ..) else {
     return @html.text("")
   }
@@ -305,7 +354,14 @@ fn tool_call_view(item : @transcript.TranscriptItem) -> @html.Html {
     )
   }
   if body.is_empty() {
+    if !show_label {
+      return @html.text("")
+    }
     @html.div(class="tool-call-label" + error_class, label)
+  } else if !show_label {
+    // The enclosing activity disclosure already carries this one tool's
+    // label. Keep the class so the existing section/pre styling still applies.
+    @html.div(class="tool-call" + error_class, body)
   } else {
     @html.details(
       class="tool-call" + error_class,
