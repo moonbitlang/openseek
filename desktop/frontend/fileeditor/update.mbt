@@ -2920,7 +2920,19 @@ pub fn update(
         owner.channel == channel &&
         ctx.root == Some(root) &&
         generation == ctx.watch_identity(state.watch_generation) {
-        (@cmd.none, { ..state, watch_error: Some(message) })
+        // Forget the dead concrete watcher so the common post-dispatch sync
+        // issues an equivalent `fs.watch` request; the Host actor can then
+        // rebuild the watcher whose `alive` flag it cleared before reporting.
+        // A recursive watcher failure also opens an observation gap, so keep
+        // the current snapshot usable while refreshing it. A replacement
+        // baseline that arrives during this scan latches one follow-up.
+        let (index, start_index_refresh) = state.index.invalidate()
+        let cmd = if start_index_refresh {
+          list_files(dispatch, owner, state.request_epoch, root=ctx.root)
+        } else {
+          @cmd.none
+        }
+        (cmd, { ..state, watching: None, index, watch_error: Some(message) })
       } else {
         (@cmd.none, state)
       }
@@ -7190,6 +7202,52 @@ test "watcher failures are visible only in their owning conversation" {
     test_ctx(),
   )
   assert_true(unchanged.watch_error is Some("File watching stopped"))
+}
+
+///|
+test "a recursive watcher failure reattaches and refreshes its index" {
+  let emit = test_emit()
+  let ctx = { ..test_ctx(), panel_open: false }
+  let generation = 5
+  let watched = {
+    ..owned_state(),
+    index: IndexReady(
+      files=[Relative("src/old.mbt")],
+      truncated=false,
+      refreshing=false,
+      refresh_again=false,
+    ),
+    watching: Some({
+      owner: ctx.owner,
+      root: ctx.test_root(),
+      files: [],
+      directories: [],
+      recursive: true,
+    }),
+    watch_generation: generation,
+  }
+  let (_, failed) = update(
+    emit,
+    FileWatchFailed(
+      channel=ctx.owner.channel,
+      root=ctx.test_root(),
+      generation=ctx.watch_identity(generation),
+      message="File watching stopped",
+    ),
+    watched,
+    ctx,
+  )
+  assert_true(failed.watching is None)
+  assert_true(
+    failed.index is IndexReady(refreshing=true, refresh_again=false, ..),
+  )
+  assert_true(failed.watch_error is Some("File watching stopped"))
+  let (reattached, _) = sync(emit, failed, ctx)
+  assert_true(reattached.watching is Some({ recursive: true, .. }))
+  assert_eq(reattached.watch_generation, generation + 1)
+  // Issuing the replacement retires the displayed failure; a later baseline
+  // validates the reattached watcher and coalesces any scan-gap retry.
+  assert_true(reattached.watch_error is None)
 }
 
 ///|
