@@ -123,6 +123,13 @@ pub(all) struct FileEntry {
   is_dir : Bool
 } derive(Eq)
 
+pub enum FileIndex {
+  IndexEmpty
+  IndexLoading
+  IndexFailed
+  IndexReady(files~ : Array[@pathx.Relative], truncated~ : Bool)
+} derive(Eq)
+
 pub(all) struct FileStat {
   path : @pathx.Relative
   sig : String?
@@ -137,8 +144,11 @@ pub(all) enum Msg {
   ToggleTree
   ExplorerModeSelected(ExplorerMode)
   DirToggle(@pathx.Relative)
+  EnsureFileIndex
   DirLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, entries~ : Array[FileEntry])
   DirFailed(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, message~ : String)
+  FilesIndexed(owner~ : @interop.ConversationKey, epoch~ : Int, files~ : Array[@pathx.Relative], truncated~ : Bool)
+  FileIndexFailed(owner~ : @interop.ConversationKey, epoch~ : Int)
   ChangesLoaded(owner~ : @interop.ConversationKey, generation~ : Int, repository~ : Bool, head~ : String?, files~ : Array[ChangedFile])
   ChangesFailed(owner~ : @interop.ConversationKey, generation~ : Int, message~ : String)
   ChangesPollDue(owner~ : @interop.ConversationKey, generation~ : Int)
@@ -151,8 +161,8 @@ pub(all) enum Msg {
   OpenNavigationLocation(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, range~ : @common.Range)
   FileLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, name~ : String, file~ : FileContent, review_generation~ : Int?, range~ : @common.Range?, annotation~ : String?)
   FileFailed(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, review_generation~ : Int?, message~ : String)
-  FileWatchFailed(channel~ : @interop.ChannelId, root~ : @common.Uri, generation~ : String?, message~ : String)
-  FsChanged(root~ : @common.Uri, generation~ : String?, changes~ : Array[FileChange]?)
+  FileWatchFailed(channel~ : @interop.ChannelId, root~ : @common.Uri, generation~ : String, message~ : String)
+  FsChanged(root~ : @common.Uri, generation~ : String, changes~ : Array[FileChange]?)
   RunSettled(owner~ : @interop.ConversationKey)
   StatsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, stats~ : Array[FileStat])
   DiagnosticsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
@@ -211,6 +221,7 @@ pub(all) struct State {
   children : Map[@pathx.Relative, Array[FileEntry]]
   docs : Map[@pathx.Relative, Doc]
   highlighted : @pathx.Relative?
+  index : FileIndex
   error : String?
 } derive(Eq)
 pub fn State::empty() -> Self

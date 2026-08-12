@@ -152,6 +152,21 @@ pub(all) struct WatchedPaths {
 } derive(Eq)
 
 ///|
+/// A lazily requested snapshot of one concrete workspace root. The Host walks
+/// the root recursively, pruning churn directories and capping the result;
+/// owner/root transitions reset it with the rest of the file-panel cache.
+pub enum FileIndex {
+  // No consumer has requested this workspace root yet.
+  IndexEmpty
+  // The first request is in flight.
+  IndexLoading
+  // The first request failed. A later EnsureFileIndex retries it.
+  IndexFailed
+  // `truncated` means the Host stopped at its response cap.
+  IndexReady(files~ : Array[@pathx.Relative], truncated~ : Bool)
+} derive(Eq)
+
+///|
 /// Which inventory the explorer pane shows. This is a panel preference, so it
 /// follows the user across conversation switches while each inventory's data
 /// remains scoped to its owning conversation.
@@ -305,6 +320,8 @@ pub(all) struct State {
   // The directory a breadcrumb click most recently revealed, flashed in the
   // tree until `HighlightCleared` fires.
   highlighted : @pathx.Relative?
+  // The workspace-wide file snapshot used by completion consumers.
+  index : FileIndex
   // The last directory/file failure, surfaced in the panel header;
   // `None` while nothing has failed.
   error : String?
@@ -340,6 +357,7 @@ pub fn State::empty() -> State {
     children: Map([]),
     docs: Map([]),
     highlighted: None,
+    index: IndexEmpty,
     error: None,
   }
 }
@@ -428,6 +446,9 @@ pub(all) enum Msg {
   // Expand or collapse a directory row in the file tree; the first expansion
   // lazily lists the directory through the host.
   DirToggle(@pathx.Relative)
+  // Ensure the current workspace's file snapshot exists. Loading and ready
+  // states make this idempotent; a failed first request is retryable.
+  EnsureFileIndex
   // A `read_directory` reply: `owner`/`path` say which request it answers so a
   // reply that lost a conversation switch can be dropped.
   DirLoaded(
@@ -442,6 +463,17 @@ pub(all) enum Msg {
     path~ : @pathx.Relative,
     message~ : String
   )
+  // A workspace snapshot reply. The owner/epoch pair rejects a result that
+  // outlived a conversation or concrete-root transition.
+  FilesIndexed(
+    owner~ : @interop.ConversationKey,
+    epoch~ : Int,
+    files~ : Array[@pathx.Relative],
+    truncated~ : Bool
+  )
+  // A request failed or was cancelled. A failed background refresh keeps the
+  // previously ready snapshot; only an initial fetch becomes IndexFailed.
+  FileIndexFailed(owner~ : @interop.ConversationKey, epoch~ : Int)
   // A `git.changes` reply. `head` carries the immutable comparison when the
   // host can identify one: a task or branch baseline when present, otherwise
   // resolved HEAD. `None` means no commit exists or a legacy host omitted the

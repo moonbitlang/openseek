@@ -52,6 +52,24 @@ fn read_directory(
 }
 
 ///|
+/// Load the bounded workspace snapshot used by file-completion consumers.
+/// The request carries this panel incarnation's owner and epoch so the update
+/// loop can reject a reply that outlived a conversation or worktree switch.
+fn list_files(
+  dispatch : @cmd.Emit[Msg],
+  owner : @interop.ConversationKey,
+  epoch : Int,
+  root~ : @common.Uri?,
+) -> @cmd.Cmd {
+  @files.Request(owner.channel, owner.session, root).run(
+    (files, truncated) => {
+      dispatch(FilesIndexed(owner~, epoch~, files~, truncated~))
+    },
+    () => dispatch(FileIndexFailed(owner~, epoch~)),
+  )
+}
+
+///|
 /// Read `path` and fold its contents back as `FileLoaded`. `name` is the
 /// entry's display name, forwarded for the viewer's title and language guess.
 /// `range`, when present (a symbol jump's target), is forwarded for the

@@ -2,7 +2,10 @@
 package "openseek_desktop/frontend/files"
 
 import {
+  "moonbit-community/rabbita/cmd",
   "moonbitlang/core/debug",
+  "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/pathx",
 }
 
@@ -15,6 +18,10 @@ pub(all) struct Match {
   path : @pathx.Relative
   name : String
 } derive(Eq, @debug.Debug)
+
+type Request
+pub fn Request::Request(@interop.ChannelId, String, @common.Uri?) -> Self
+pub fn Request::run(Self, (Array[@pathx.Relative], Bool) -> @cmd.Cmd, () -> @cmd.Cmd) -> @cmd.Cmd
 
 pub struct Search {
   candidates : Array[@pathx.Relative]

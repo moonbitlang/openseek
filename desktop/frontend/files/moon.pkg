@@ -1,5 +1,11 @@
 import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/js",
+  "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/pathx",
+  "openseek_desktop/frontend/resource",
+  "openseek_desktop/internal/commands",
   "openseek_desktop/internal/file_search_score",
 }
 
