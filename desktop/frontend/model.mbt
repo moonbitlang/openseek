@@ -1499,7 +1499,6 @@ priv enum Msg {
   )
   QuickOpenMove(Int)
   QuickOpenSelect(Int)
-  QuickOpenAccept
   QuickOpenPick(Int)
   QuickOpenDismiss
   // The composer's model chip: flip the conversation on screen to the other

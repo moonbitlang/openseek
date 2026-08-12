@@ -843,17 +843,6 @@ fn dismiss_quick_open(
 }
 
 ///|
-fn accept_quick_open(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-) -> (@cmd.Cmd, Model) {
-  guard model.quick_open is Some(open) && open.current() is Some(item) else {
-    return (@cmd.none, model)
-  }
-  open_quick_open_item(dispatch, model, item)
-}
-
-///|
 fn pick_quick_open_row(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -949,7 +938,10 @@ fn symbol_kind_icon_class(kind : Int?) -> String {
 }
 
 ///|
-fn quick_open_key_attrs(dispatch : @cmd.Emit[Msg]) -> @html.Attrs {
+fn quick_open_key_attrs(
+  dispatch : @cmd.Emit[Msg],
+  selected : Int?,
+) -> @html.Attrs {
   @html.Attrs::build().on_keydown(event => {
     if event.is_composing() {
       return @cmd.none
@@ -965,7 +957,13 @@ fn quick_open_key_attrs(dispatch : @cmd.Emit[Msg]) -> @html.Attrs {
       }
       "Enter" => {
         event.prevent_default()
-        dispatch(QuickOpenAccept)
+        // Keyboard and pointer acceptance use the same validated row message.
+        // boot.mbt opens the right-panel component for that message before the
+        // root opens the editor, keeping both visibility states synchronized.
+        match selected {
+          Some(index) => dispatch(QuickOpenPick(index))
+          None => @cmd.none
+        }
       }
       "Escape" => {
         event.prevent_default()
@@ -1058,7 +1056,12 @@ fn quick_open_view(dispatch : @cmd.Emit[Msg], open : QuickOpen) -> @html.Html {
     "Search symbols"
   }
   let group_label = if mode is QuickOpenFiles { "Files" } else { "Symbols" }
-  let base_input_attrs = quick_open_key_attrs(dispatch)
+  let selected = if open.current() is Some(_) {
+    Some(open.selected)
+  } else {
+    None
+  }
+  let base_input_attrs = quick_open_key_attrs(dispatch, selected)
     .id(QuickOpenInputId)
     .role("combobox")
     .aria_label(dialog_label)
@@ -1666,7 +1669,7 @@ test "Quick Open selection wraps and empty acceptance is a no-op" {
   guard hovered.quick_open is Some(second) else { fail("palette expected") }
   assert_eq(second.selected, 1)
   let (_, empty) = update(dispatch, QuickOpenValueChanged("#none"), hovered)
-  let (_, unchanged) = update(dispatch, QuickOpenAccept, empty)
+  let (_, unchanged) = update(dispatch, QuickOpenPick(0), empty)
   assert_true(unchanged.quick_open == empty.quick_open)
 }
 
@@ -1716,7 +1719,7 @@ test "accepting files and symbols uses the shared editor open path" {
       phase: QuickOpenReady,
     }),
   }
-  let (_, file_accepted) = update(dispatch, QuickOpenAccept, file_ready)
+  let (_, file_accepted) = update(dispatch, QuickOpenPick(0), file_ready)
   assert_true(file_accepted.quick_open is None)
   assert_true(file_accepted.screen is Chat)
   assert_true(
@@ -1740,7 +1743,7 @@ test "accepting files and symbols uses the shared editor open path" {
     ),
     symbol_opened,
   )
-  let (_, accepted) = update(dispatch, QuickOpenAccept, ready)
+  let (_, accepted) = update(dispatch, QuickOpenPick(0), ready)
   assert_true(accepted.quick_open is None)
   assert_true(accepted.screen is Chat)
   assert_true(accepted.right_panel_open)

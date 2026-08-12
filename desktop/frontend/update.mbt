@@ -1919,7 +1919,6 @@ fn update_msg(
       fail_quick_open_symbol_request(model, owner, query, generation)
     QuickOpenMove(delta) => move_quick_open_selection(model, delta)
     QuickOpenSelect(index) => select_quick_open_row(model, index)
-    QuickOpenAccept => accept_quick_open(dispatch, model)
     QuickOpenPick(index) => pick_quick_open_row(dispatch, model, index)
     QuickOpenDismiss => dismiss_quick_open(dispatch, model)
     ToggleModel => {
