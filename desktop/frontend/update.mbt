@@ -550,6 +550,13 @@ fn apply_session_snapshot(
       completion: None,
     }
     commands.push(scroll_transcript_after_render())
+    // The scroll write initializes the overview's active turn through the
+    // scroll watcher — except when the adopted transcript fits its viewport
+    // and the write clamps to the same scrollTop, firing nothing. The
+    // guarded recompute covers exactly that case.
+    commands.push(
+      report_visible_turn_after_render(dispatch, skip_unchanged=true),
+    )
     let (branch_cmd, probed) = probe_branch(
       dispatch,
       next,
@@ -561,6 +568,11 @@ fn apply_session_snapshot(
     commands.push(branch_cmd)
   } else {
     commands.push(scroll_if_active(next, channel, session))
+    if channel == next.focused && session == next.active_session {
+      commands.push(
+        report_visible_turn_after_render(dispatch, skip_unchanged=true),
+      )
+    }
   }
   if gapped || reload_after_current {
     guard next.find_conversation(channel, session) is Some(conv) else {
