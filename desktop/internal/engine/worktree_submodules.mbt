@@ -285,3 +285,59 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   assert_false(second.present)
   @fs.rmdir(root.to_string(), recursive=true)
 }
+
+///|
+#cfg(not(platform="windows"))
+async test "gitlink deletion fallback refuses a replaced checkout" {
+  archive_env_test_lock.acquire()
+  defer archive_env_test_lock.release()
+  let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+  let root = worktree_test_root("openseek-worktree-replaced-")
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
+  defer restore_session_root_env(previous)
+  @fsx.ensure_dir(root.join("global").to_path())
+  let repo = root.join("repo")
+  prepare_git_repo(repo)
+  ignore(add_workspace(repo.to_string(), fn(_) {  }))
+  let manager = new_engine_manager("openseek")
+  manager.pump = Serving(sessions=Map([]))
+  ignore(create_worktree(manager, repo.to_string(), "s-replaced", fn(_) {  }))
+  @fsx.ensure_dir(
+    workspace_session_root(repo).join("sessions").join("s-replaced").to_path(),
+  )
+  // Externally delete the checkout and drop an unrelated repository with a
+  // staged gitlink at the same path. Its gitlinks route deletion into the
+  // recursive fallback, which must then refuse: the target is a standalone
+  // repository, not this workspace's linked worktree.
+  let target = repo.join(".worktrees/wt-1")
+  @fs.rmdir(target.to_string(), recursive=true)
+  @fsx.ensure_dir(target.to_path())
+  ignore(git_in(target, ["init", "-q"]))
+  let sha = git_in(repo, ["rev-parse", "HEAD"])
+  ignore(
+    git_in(target, [
+      "update-index",
+      "--add",
+      "--cacheinfo",
+      "160000,\{sha},vendored",
+    ]),
+  )
+  assert_true(
+    remove_refusal(manager, repo.to_string(), "wt-1", true).contains(
+      "another tool may own it",
+    ),
+  )
+  let archive_detail = try {
+    ignore(archive_session(manager, "s-replaced", _ => (), force=true))
+    "no error"
+  } catch {
+    EngineError(detail) => detail
+    error if @async.is_being_cancelled() => raise error
+    error => "\{error}"
+  }
+  assert_true(archive_detail.contains("another tool may own it"))
+  // The unrelated repository survives untouched, registry entry and all.
+  assert_true(@fsx.is_dir(target.join(".git").to_path()))
+  assert_eq(list_worktrees(repo.to_string()).worktrees.length(), 1)
+  @fs.rmdir(root.to_string(), recursive=true)
+}

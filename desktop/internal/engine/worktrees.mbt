@@ -872,19 +872,36 @@ async fn worktree_lock_reason(dir : @pathx.Absolute, name : String) -> String? {
 /// applied its dirty-checkout policy; an external `git worktree lock` stays
 /// authoritative on the fallback path, where Git cannot enforce it itself.
 /// `action` names the caller's operation in that refusal.
+///
+/// Direct deletion only ever hits this repository's own linked checkout:
+/// the registered path may have been deleted externally and re-occupied by
+/// an unrelated repository, which Git's own `worktree remove` would refuse
+/// but a recursive delete would not. A standalone clone answers
+/// `git_dir == common_dir`, and a linked worktree of some other repository
+/// roots its common dir elsewhere, so the target must resolve to this
+/// workspace's git dir before anything is deleted.
 async fn delete_worktree_checkout(
   workspace : @pathx.Absolute,
   name : String,
   force : Bool,
   action : String,
 ) -> Unit {
-  if checkout_has_gitlinks(worktree_dir(workspace, name)) {
+  let target = worktree_dir(workspace, name)
+  if checkout_has_gitlinks(target) {
+    guard git_dir_pair(target) is Some((git_dir, common_dir)) &&
+      git_dir != common_dir &&
+      git_dir_pair(workspace) is Some((_, workspace_git_dir)) &&
+      common_dir == workspace_git_dir else {
+      raise EngineError(
+        "\{target} is not a worktree of this repository; another tool may own it",
+      )
+    }
     guard worktree_lock_reason(workspace, name) is None else {
       raise EngineError(
         "worktree \{name} is locked; unlock it before \{action}",
       )
     }
-    @fs.rmdir(worktree_dir(workspace, name).to_string(), recursive=true)
+    @fs.rmdir(target.to_string(), recursive=true)
     ignore(git_in(workspace, ["worktree", "prune"]))
   } else {
     let args = ["worktree", "remove"]
