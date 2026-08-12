@@ -5,7 +5,7 @@
 fn panel_view(
   input : Input,
   model : Model,
-  emit : @cmd.Emit[Msg],
+  emit : @cmd.Emit[ComponentMsg],
   actions : Actions,
 ) -> @html.Html {
   let chips : Array[@dock.TabChip] = input.dock.tabs.map(tab => {
@@ -91,7 +91,7 @@ fn panel_view(
         launcher,
         menu_open=model.menu_open,
         toggle_menu=emit(ToggleMenu),
-        toggle_panel=emit(TogglePanel),
+        toggle_panel=emit(External(TogglePanel)),
       ),
       @fileeditor.breadcrumb_view(
         actions.file_editor,

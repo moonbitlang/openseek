@@ -24,7 +24,7 @@ fn workspace_label(ctx : Ctx) -> String {
 /// Create a tab bound to the active conversation's workspace and mount its
 /// emulator (whose ready report spawns the session).
 fn open_new_tab(
-  dispatch : @cmd.Emit[Msg],
+  dispatch : @cmd.Emit[TerminalMsg],
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
@@ -103,19 +103,16 @@ fn State::retire_missing_session(
 }
 
 ///|
-pub fn update(
-  dispatch : @cmd.Emit[Msg],
-  msg : Msg,
+fn update(
+  dispatch : @cmd.Emit[TerminalMsg],
+  msg : TerminalMsg,
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
   let checkout_ready = ctx.checkout is Some(@interop.WorkspaceRoot) ||
     ctx.checkout is Some(@interop.Worktree(_))
   match msg {
-    // The component calls `sync` immediately after this no-op transition.
-    Sync => (@cmd.none, state)
-    Disconnect(channel) => disconnect(state, channel)
-    ToggleTerminal =>
+    External(ToggleTerminal) =>
       if state.open {
         // Hide only — every shell keeps running for the panel's return.
         (@cmd.none, { ..state, open: false })
@@ -238,10 +235,7 @@ pub fn update(
         state.tab_by_key(key) is Some(tab) &&
         tab.status is TabRunning &&
         tab.id is Some(id) {
-        (
-          send_input(dispatch, tab.workspace.channel(), key, id, data, false),
-          state,
-        )
+        (send_input(dispatch, tab.workspace.channel(), id, data, false), state)
       } else {
         // Typing into an exited/unopened terminal has nowhere to go.
         (@cmd.none, state)
@@ -254,17 +248,14 @@ pub fn update(
         state.tab_by_key(key) is Some(tab) &&
         tab.status is TabRunning &&
         tab.id is Some(id) {
-        (
-          send_input(dispatch, tab.workspace.channel(), key, id, data, true),
-          state,
-        )
+        (send_input(dispatch, tab.workspace.channel(), id, data, true), state)
       } else {
         // Typing into an exited/unopened terminal has nowhere to go.
         (@cmd.none, state)
       }
     // The main package pops the toast; the panel's own state has nothing to
     // record for a lost keystroke.
-    InputFailed(key=_, message=_) => (@cmd.none, state)
+    InputFailed(message=_) => (@cmd.none, state)
     ViewportResized(key~, cols~, rows~) =>
       if checkout_ready &&
         state.tab_by_key(key) is Some(tab) &&
@@ -274,7 +265,7 @@ pub fn update(
       } else {
         (@cmd.none, state)
       }
-    Output(channel~, id~, sequence~, data~) =>
+    External(Output(channel~, id~, sequence~, data~)) =>
       match state.tab_by_id(channel, id) {
         Some(tab) =>
           (write_to_tab(dispatch, channel, tab.key, id, sequence, data), state)
@@ -295,7 +286,7 @@ pub fn update(
       }
     OutputRendered(channel~, id~, sequence~) =>
       (TerminalAck::{ channel, id, sequence }.send(), state)
-    SessionExited(channel~, id~, code=_) =>
+    External(SessionExited(channel~, id~, code=_)) =>
       match state.tab_by_id(channel, id) {
         // The shell ended (Ctrl+D, `exit`, or a crash): its tab retires,
         // and the visible group's last tab takes the panel with it.
@@ -334,10 +325,7 @@ pub fn update(
 /// the browser dials again. Keeping another channel's same-numbered tab is
 /// safe because both model lookup and the imperative pre-open buffer use the
 /// `(channel, id)` pair.
-pub fn disconnect(
-  state : State,
-  channel : @interop.ChannelId,
-) -> (@cmd.Cmd, State) {
+fn disconnect(state : State, channel : @interop.ChannelId) -> (@cmd.Cmd, State) {
   let commands : Array[@cmd.Cmd] = [term_host.clear_pending(channel)]
   let retired_keys : Array[Int] = []
   for tab in state.tabs {
@@ -371,8 +359,8 @@ pub fn disconnect(
 /// workspace group — and so which tab's emulator — belongs on screen; and
 /// with the panel open, landing in a workspace that has no shell yet starts
 /// its first one, so every workspace greets the user with its own terminal.
-pub fn sync(
-  dispatch : @cmd.Emit[Msg],
+fn sync(
+  dispatch : @cmd.Emit[TerminalMsg],
   state : State,
   ctx : Ctx,
 ) -> (State, @cmd.Cmd) {

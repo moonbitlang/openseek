@@ -25,7 +25,7 @@ pub(all) enum AnnotationSide {
   OriginalRevision
 } derive(Eq, @debug.Debug)
 
-pub(all) struct MentionMessage {
+pub struct MentionMessage {
   mentions : Array[MentionRef]
   task : String
 } derive(@debug.Debug)
@@ -37,7 +37,7 @@ pub(all) enum MentionRef {
   Annotation(file~ : String, start_line~ : Int, end_line~ : Int, quote~ : String, comment~ : String, side~ : AnnotationSide)
 } derive(Eq, @debug.Debug)
 
-pub(all) struct Target {
+pub struct Target {
   file : String
   range : @common.Range?
   annotation : String?

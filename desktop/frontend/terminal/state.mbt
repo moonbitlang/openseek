@@ -13,7 +13,7 @@
 /// registered project and worktree name, while a scratch group is keyed by
 /// its conversation. This prevents a worktree chat from ever displaying or
 /// driving a shell whose cwd belongs to the main checkout.
-pub(all) enum WorkspaceKey {
+priv enum WorkspaceKey {
   Project(@interop.ChannelId, @common.Uri)
   Worktree(@interop.ChannelId, @common.Uri, String)
   Scratch(@interop.ChannelId, String)
@@ -28,7 +28,7 @@ fn WorkspaceKey::channel(self : WorkspaceKey) -> @interop.ChannelId {
 }
 
 ///|
-pub(all) enum TabStatus {
+priv enum TabStatus {
   /// `terminal_open` is in flight.
   TabOpening
   TabRunning
@@ -42,7 +42,7 @@ pub(all) enum TabStatus {
 /// session); `id` is the host's session id once `terminal_open` replies.
 /// `session`/`workspace_path` are the binding the tab was opened with —
 /// restarts reuse them, so a tab never migrates between workspaces.
-pub(all) struct Tab {
+priv struct Tab {
   key : Int
   id : Int?
   workspace : WorkspaceKey
@@ -53,7 +53,7 @@ pub(all) struct Tab {
 } derive(Eq)
 
 ///|
-pub(all) struct State {
+priv struct State {
   open : Bool
   next_key : Int
   tabs : Array[Tab]
@@ -77,7 +77,7 @@ pub(all) struct State {
 } derive(Eq)
 
 ///|
-pub fn State::empty() -> State {
+fn State::empty() -> State {
   {
     open: false,
     next_key: 1,
@@ -92,7 +92,7 @@ pub fn State::empty() -> State {
 ///|
 /// The terminal package's view of the active conversation, recomputed per
 /// dispatch by the main package (mirrors `@fileeditor.Ctx`).
-pub(all) struct Ctx {
+pub struct Ctx {
   /// The host connection that owns every terminal opened from this context.
   channel : @interop.ChannelId
   session : String
@@ -107,6 +107,19 @@ pub(all) struct Ctx {
   /// create their replacements on the dead transport.
   connected : Bool
 } derive(Eq)
+
+///|
+/// Construct the terminal's read-only view of the active conversation.
+pub fn Ctx::Ctx(
+  channel~ : @interop.ChannelId,
+  session~ : String,
+  workspace~ : @common.Uri?,
+  checkout~ : @interop.CheckoutPlacement?,
+  dark_mode~ : Bool,
+  connected~ : Bool,
+) -> Ctx {
+  { channel, session, workspace, checkout, dark_mode, connected }
+}
 
 ///|
 /// The workspace group the active conversation belongs to, once its placement
@@ -209,14 +222,25 @@ fn State::remember_active(
 
 ///|
 pub(all) enum Msg {
-  /// Reconcile the panel after an application-owned input changes. The
-  /// component receives the latest input through `create_state_with_input`;
-  /// this message lets its state machine run commands for that new input.
-  Sync
-  /// The owning host connection ended; every PTY id from it is invalid.
-  Disconnect(@interop.ChannelId)
   /// Show/hide the panel (every shell keeps running while hidden).
   ToggleTerminal
+  /// `terminal_output` event: base64 of raw PTY bytes plus the host-assigned
+  /// sequence echoed by the acknowledgement.
+  Output(
+    channel~ : @interop.ChannelId,
+    id~ : Int,
+    sequence~ : Int,
+    data~ : String
+  )
+  /// `terminal_exit` event: the shell ended, so its tab retires.
+  SessionExited(channel~ : @interop.ChannelId, id~ : Int, code~ : Int)
+}
+
+///|
+/// Browser and command callbacks stay private to the terminal component. Only
+/// the three messages accepted from the application appear in `Msg`.
+priv enum TerminalMsg {
+  External(Msg)
   /// Open one more terminal in the active conversation's workspace.
   NewTerminal
   TabSelected(key~ : Int)
@@ -240,19 +264,9 @@ pub(all) enum Msg {
   /// main package surfaces the message as an error toast (the panel has no
   /// toast rail of its own); the tab's status is untouched — a lost
   /// keystroke does not make the session failed.
-  InputFailed(key~ : Int, message~ : String)
+  InputFailed(message~ : String)
   /// One tab's emulator re-fit to a new grid size.
   ViewportResized(key~ : Int, cols~ : Int, rows~ : Int)
-  /// `terminal_output` event: base64 of raw PTY bytes plus the host-assigned
-  /// sequence echoed by the acknowledgement.
-  Output(
-    channel~ : @interop.ChannelId,
-    id~ : Int,
-    sequence~ : Int,
-    data~ : String
-  )
   /// An emulator finished rendering a chunk; flow-control ack.
   OutputRendered(channel~ : @interop.ChannelId, id~ : Int, sequence~ : Int)
-  /// `terminal_exit` event: the shell ended, so its tab retires.
-  SessionExited(channel~ : @interop.ChannelId, id~ : Int, code~ : Int)
 }

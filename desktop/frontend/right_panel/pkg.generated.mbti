@@ -39,12 +39,10 @@ pub fn Input::Input(dock~ : @dock.State, file_panel~ : @fileeditor.State, previe
 pub(all) enum Msg {
   TogglePanel
   OpenPanel
-  ToggleMenu
-  CloseMenu
   ExternalLink(String)
 }
 
-pub(all) struct Visibility {
+pub struct Visibility {
   open : Bool
   menu_open : Bool
 } derive(Eq)

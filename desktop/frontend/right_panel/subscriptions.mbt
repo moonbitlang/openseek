@@ -1,12 +1,15 @@
 ///|
 priv suberror PanelSubscription {
-  PanelSubscription(Bool, @cmd.Emit[Msg])
+  PanelSubscription(Bool, @cmd.Emit[ComponentMsg])
 }
 
 ///|
 /// The panel owns every document-level event that changes its local Model:
 /// Shift+Cmd/Ctrl+B, click-away menu dismissal, and captured external links.
-fn panel_subscriptions(model : Model, emit : @cmd.Emit[Msg]) -> @sub.Sub {
+fn panel_subscriptions(
+  model : Model,
+  emit : @cmd.Emit[ComponentMsg],
+) -> @sub.Sub {
   @sub.custom_sub(
     "right-panel-events",
     @sub.Local,
@@ -25,9 +28,9 @@ fn panel_sub_loader(
       let mut menu_open = menu_open
       let mut emit = emit
       let listeners = install_panel_listeners(
-        () => scheduler.add(emit(TogglePanel)),
+        () => scheduler.add(emit(External(TogglePanel))),
         () => if menu_open { scheduler.add(emit(CloseMenu)) },
-        url => scheduler.add(emit(ExternalLink(url))),
+        url => scheduler.add(emit(External(ExternalLink(url)))),
       )
       Some({
         unload: _ => remove_panel_listeners(listeners),

@@ -78,7 +78,7 @@ fn list_files(
 /// navigation. Its content may still settle a loading background tab so the
 /// tab is not stranded. `annotation` (an annotation chip's comment) rides
 /// along the same way, re-shown as an editor bubble over that range.
-pub fn read_file(
+fn read_file(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
   epoch : Int,

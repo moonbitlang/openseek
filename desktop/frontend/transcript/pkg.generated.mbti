@@ -24,8 +24,6 @@ pub fn market_source_label(MarketSkillItem) -> String
 
 pub fn parse_runtime_update(String) -> RuntimeUpdateView
 
-pub fn runtime_update_title(RuntimeUpdateView) -> String
-
 pub fn session_from_reply(@protocol.LoadSessionReply) -> SessionLoadView
 
 pub fn session_tree(Array[SessionListItem]) -> Array[SessionTreeRow]
@@ -37,8 +35,6 @@ pub fn skills_catalog_from_reply(@protocol.SkillsCatalogReply) -> Array[MarketSk
 pub fn subrun_label(String) -> String?
 
 pub fn subrun_parent(String) -> String?
-
-pub fn transcript_from_session(@protocol.LoadSessionReply) -> Array[TranscriptItem]
 
 // Errors
 

@@ -219,13 +219,8 @@ pub fn boot() -> Unit {
       external_link: right_panel_emit.map(url => @right_panel.ExternalLink(url)),
       error: emit.map(message => HostActionFailed(message)),
       visibility: emit.map(open => TerminalVisibilityChanged(open)),
-      connect: (terminal_emit, connection) => {
-        install_bridge(
-          emit,
-          terminal_emit,
-          connection.channel,
-          connection.websocket_epoch,
-        )
+      connect: (terminal_emit, channel, websocket_epoch) => {
+        install_bridge(emit, terminal_emit, channel, websocket_epoch)
       },
     })
     let transcript_input = state.map(model => model.transcript_input())

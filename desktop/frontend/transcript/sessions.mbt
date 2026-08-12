@@ -246,7 +246,7 @@ pub fn session_from_reply(
 
 ///|
 /// The items half of `session_from_reply`.
-pub fn transcript_from_session(
+fn transcript_from_session(
   reply : @desktop_protocol.LoadSessionReply,
 ) -> Array[TranscriptItem] {
   session_from_reply(reply).items

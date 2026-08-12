@@ -64,7 +64,7 @@ pub(all) enum MentionRef {
 ///|
 /// A `<user_mentions>` envelope parsed back into its parts: the chips and the
 /// typed task text (possibly empty — a draft of chips alone still sends).
-pub(all) struct MentionMessage {
+pub struct MentionMessage {
   mentions : Array[MentionRef]
   task : String
 } derive(Debug)
@@ -88,7 +88,7 @@ pub fn MentionMessage::display_text(self : MentionMessage) -> String {
 /// The editor location represented by a mention chip. Skills and unresolved
 /// symbols have no target; comments on the original revision deliberately do
 /// not point into the working file.
-pub(all) struct Target {
+pub struct Target {
   file : String
   range : @common.Range?
   annotation : String?

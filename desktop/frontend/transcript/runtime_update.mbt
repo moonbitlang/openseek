@@ -37,7 +37,7 @@ pub fn parse_runtime_update(content : String) -> RuntimeUpdateView {
 }
 
 ///|
-pub fn runtime_update_title(update : RuntimeUpdateView) -> String {
+fn runtime_update_title(update : RuntimeUpdateView) -> String {
   if update.status.is_empty() {
     "moon_check"
   } else {

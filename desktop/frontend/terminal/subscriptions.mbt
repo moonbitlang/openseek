@@ -24,7 +24,7 @@ fn terminal_sub_loader(
     TerminalSubscription(emit) => {
       let mut emit = emit
       let listeners = install_terminal_listeners(
-        () => scheduler.add(emit(Terminal(ToggleTerminal))),
+        () => scheduler.add(emit(Terminal(External(ToggleTerminal)))),
         () => scheduler.add(emit(InputRendered)),
       )
       Some({

@@ -33,8 +33,6 @@ pub fn open_file(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, file_link_generati
 
 pub fn panel_toggle_cmds(@cmd.Emit[Msg], State, Ctx, opening~ : Bool) -> (@cmd.Cmd, State)
 
-pub fn read_file(@cmd.Emit[Msg], @interop.ConversationKey, Int, @pathx.Relative, String, file_link_generation? : Int, review_generation? : Int, range~ : @common.Range?, annotation? : String, root~ : @common.Uri?) -> @cmd.Cmd
-
 pub fn remove_editor_feedback(ModelUri, String) -> @cmd.Cmd
 
 pub fn request_viewer_remeasure() -> @cmd.Cmd

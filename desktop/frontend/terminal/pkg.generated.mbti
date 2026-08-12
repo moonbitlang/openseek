@@ -12,14 +12,6 @@ import {
 // Values
 pub fn component(@rabbita.Val[Input], Actions) -> (@rabbita.Val[@html.Html], @cmd.Emit[Msg])
 
-pub fn disconnect(State, @interop.ChannelId) -> (@cmd.Cmd, State)
-
-pub fn panel_view(@cmd.Emit[Msg], State, Ctx, String) -> @html.Html
-
-pub fn sync(@cmd.Emit[Msg], State, Ctx) -> (State, @cmd.Cmd)
-
-pub fn update(@cmd.Emit[Msg], Msg, State, Ctx) -> (@cmd.Cmd, State)
-
 // Errors
 
 // Types and methods
@@ -27,17 +19,13 @@ pub(all) struct Actions {
   external_link : @cmd.Emit[String]
   error : @cmd.Emit[String]
   visibility : @cmd.Emit[Bool]
-  connect : (@cmd.Emit[Msg], Connection) -> @cmd.Cmd
+  connect : (@cmd.Emit[Msg], @interop.ChannelId, Int) -> @cmd.Cmd
 }
 
-pub(all) struct Connection {
-  channel : @interop.ChannelId
-  websocket_epoch : Int
-  attempt : Int
-} derive(Eq)
+type Connection derive(Eq)
 pub fn Connection::Connection(channel~ : @interop.ChannelId, websocket_epoch~ : Int, attempt~ : Int) -> Self
 
-pub(all) struct Ctx {
+pub struct Ctx {
   channel : @interop.ChannelId
   session : String
   workspace : @common.Uri?
@@ -45,62 +33,16 @@ pub(all) struct Ctx {
   dark_mode : Bool
   connected : Bool
 } derive(Eq)
+pub fn Ctx::Ctx(channel~ : @interop.ChannelId, session~ : String, workspace~ : @common.Uri?, checkout~ : @interop.CheckoutPlacement?, dark_mode~ : Bool, connected~ : Bool) -> Self
 
 type Input derive(Eq)
 pub fn Input::Input(ctx~ : Ctx, live_channels~ : Array[@interop.ChannelId], connections~ : Array[Connection]) -> Self
 
 pub(all) enum Msg {
-  Sync
-  Disconnect(@interop.ChannelId)
   ToggleTerminal
-  NewTerminal
-  TabSelected(key~ : Int)
-  TabClosed(key~ : Int)
-  EmulatorReady(key~ : Int, cols~ : Int, rows~ : Int)
-  Opened(channel~ : @interop.ChannelId, key~ : Int, id~ : Int)
-  OpenFailed(key~ : Int, message~ : String)
-  UserInput(key~ : Int, data~ : String)
-  LinkActivated(url~ : String)
-  BinaryInput(key~ : Int, data~ : String)
-  InputFailed(key~ : Int, message~ : String)
-  ViewportResized(key~ : Int, cols~ : Int, rows~ : Int)
   Output(channel~ : @interop.ChannelId, id~ : Int, sequence~ : Int, data~ : String)
-  OutputRendered(channel~ : @interop.ChannelId, id~ : Int, sequence~ : Int)
   SessionExited(channel~ : @interop.ChannelId, id~ : Int, code~ : Int)
 }
-
-pub(all) struct State {
-  open : Bool
-  next_key : Int
-  tabs : Array[Tab]
-  active : Array[(WorkspaceKey, Int)]
-  shown : Int?
-  exited_before_open : Array[(@interop.ChannelId, Int)]
-  synced_dark_mode : Bool?
-} derive(Eq)
-pub fn State::empty() -> Self
-
-pub(all) struct Tab {
-  key : Int
-  id : Int?
-  workspace : WorkspaceKey
-  workspace_label : String
-  session : String
-  workspace_path : @common.Uri?
-  status : TabStatus
-} derive(Eq)
-
-pub(all) enum TabStatus {
-  TabOpening
-  TabRunning
-  TabFailed(message~ : String)
-} derive(Eq)
-
-pub(all) enum WorkspaceKey {
-  Project(@interop.ChannelId, @common.Uri)
-  Worktree(@interop.ChannelId, @common.Uri, String)
-  Scratch(@interop.ChannelId, String)
-} derive(Eq)
 
 // Type aliases
 

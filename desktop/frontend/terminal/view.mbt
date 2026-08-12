@@ -4,7 +4,11 @@
 // emulators are never torn down (see host.mbt).
 
 ///|
-fn tab_view(dispatch : @cmd.Emit[Msg], tab : Tab, active : Bool) -> @html.Html {
+fn tab_view(
+  dispatch : @cmd.Emit[TerminalMsg],
+  tab : Tab,
+  active : Bool,
+) -> @html.Html {
   let classes = StringBuilder::new()
   classes.write_string("terminal-tab")
   if active {
@@ -37,8 +41,8 @@ fn tab_view(dispatch : @cmd.Emit[Msg], tab : Tab, active : Bool) -> @html.Html {
 }
 
 ///|
-pub fn panel_view(
-  dispatch : @cmd.Emit[Msg],
+fn panel_view(
+  dispatch : @cmd.Emit[TerminalMsg],
   state : State,
   ctx : Ctx,
   sync_key : String,
@@ -101,7 +105,7 @@ pub fn panel_view(
     @html.button(
       class="terminal-close",
       title="Hide terminal (Ctrl+`)",
-      on_click=dispatch(ToggleTerminal),
+      on_click=dispatch(External(ToggleTerminal)),
       "✕",
     ),
   )

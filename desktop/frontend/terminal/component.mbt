@@ -10,7 +10,7 @@ struct Input {
 ///|
 /// One host transport generation the terminal must listen to. `attempt`
 /// advances only when reconnect backoff expires, not when the socket drops.
-pub(all) struct Connection {
+struct Connection {
   channel : @interop.ChannelId
   websocket_epoch : Int
   attempt : Int
@@ -40,7 +40,7 @@ pub(all) struct Actions {
   external_link : @cmd.Emit[String]
   error : @cmd.Emit[String]
   visibility : @cmd.Emit[Bool]
-  connect : (@cmd.Emit[Msg], Connection) -> @cmd.Cmd
+  connect : (@cmd.Emit[Msg], @interop.ChannelId, Int) -> @cmd.Cmd
 }
 
 ///|
@@ -52,7 +52,7 @@ priv struct ComponentModel {
 
 ///|
 priv enum ComponentMsg {
-  Terminal(Msg)
+  Terminal(TerminalMsg)
   InputRendered
 }
 
@@ -74,6 +74,7 @@ pub fn component(
     },
     update=(model, input, component_msg, component_emit) => {
       let emit = component_emit.map(msg => Terminal(msg))
+      let external_emit = component_emit.map(msg => Terminal(External(msg)))
       let state = model.terminal
       if component_msg is InputRendered {
         let commands : Array[@cmd.Cmd] = []
@@ -87,7 +88,13 @@ pub fn component(
         }
         for connection in input.connections {
           if !model.connections.contains(connection) {
-            commands.push((actions.connect)(emit, connection))
+            commands.push(
+              (actions.connect)(
+                external_emit,
+                connection.channel,
+                connection.websocket_epoch,
+              ),
+            )
           }
         }
         let (state, sync_command) = sync(emit, state, input.ctx)
@@ -111,9 +118,9 @@ pub fn component(
       // that happens to reuse the same numeric id.
       let owner_live = match msg {
         Opened(channel~, key=_, id=_)
-        | Output(channel~, id=_, sequence=_, data=_)
         | OutputRendered(channel~, id=_, sequence=_)
-        | SessionExited(channel~, id=_, code=_) =>
+        | External(Output(channel~, id=_, sequence=_, data=_))
+        | External(SessionExited(channel~, id=_, code=_)) =>
           input.live_channels.contains(channel)
         _ => true
       }
@@ -122,7 +129,7 @@ pub fn component(
       let (command, state) = update(emit, msg, state, input.ctx)
       let (state, sync_command) = sync(emit, state, input.ctx)
       let error_command = match msg {
-        InputFailed(key=_, message~) => (actions.error)(message)
+        InputFailed(message~) => (actions.error)(message)
         _ => @cmd.none
       }
       let visibility_command = if state.open != was_open {
@@ -142,7 +149,7 @@ pub fn component(
     state.view2(input, (model, input) => {
       panel_view(emit, model.terminal, input.ctx, input.sync_key())
     }),
-    emit,
+    component_emit.map(msg => Terminal(External(msg))),
   )
 }
 

@@ -11,7 +11,7 @@ const AckRetryDelayMs = 100
 
 ///|
 fn open_session(
-  dispatch : @cmd.Emit[Msg],
+  dispatch : @cmd.Emit[TerminalMsg],
   channel : @interop.ChannelId,
   key : Int,
   session : String,
@@ -48,9 +48,8 @@ fn open_session(
 
 ///|
 fn send_input(
-  dispatch : @cmd.Emit[Msg],
+  dispatch : @cmd.Emit[TerminalMsg],
   channel : @interop.ChannelId,
-  key : Int,
   id : Int,
   data : String,
   binary : Bool,
@@ -73,9 +72,7 @@ fn send_input(
         }) catch {
           error => {
             scheduler.add(
-              dispatch(
-                InputFailed(key~, message=@interop.bridge_error_text(error)),
-              ),
+              dispatch(InputFailed(message=@interop.bridge_error_text(error))),
             )
             return
           }

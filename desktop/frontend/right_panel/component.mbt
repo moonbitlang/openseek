@@ -24,7 +24,7 @@ pub fn Input::Input(
 
 ///|
 /// The panel reports only the visibility that affects the root layout.
-pub(all) struct Visibility {
+pub struct Visibility {
   open : Bool
   menu_open : Bool
 } derive(Eq)
@@ -59,19 +59,28 @@ priv struct Model {
 pub(all) enum Msg {
   TogglePanel
   OpenPanel
-  ToggleMenu
-  CloseMenu
   ExternalLink(String)
 }
 
 ///|
-fn Model::update(self : Model, msg : Msg, external_opens : Bool) -> Model {
+priv enum ComponentMsg {
+  External(Msg)
+  ToggleMenu
+  CloseMenu
+}
+
+///|
+fn Model::update(
+  self : Model,
+  msg : ComponentMsg,
+  external_opens : Bool,
+) -> Model {
   match msg {
-    TogglePanel => { open: !self.open, menu_open: false }
-    OpenPanel => { open: true, menu_open: false }
+    External(TogglePanel) => { open: !self.open, menu_open: false }
+    External(OpenPanel) => { open: true, menu_open: false }
     ToggleMenu => { ..self, menu_open: !self.menu_open }
     CloseMenu => { ..self, menu_open: false }
-    ExternalLink(_) =>
+    External(ExternalLink(_)) =>
       if external_opens {
         { open: true, menu_open: false }
       } else {
@@ -87,7 +96,7 @@ pub fn component(
   actions : Actions,
 ) -> (@rabbita.Val[@html.Html], @cmd.Emit[Msg]) {
   let initial : Model = { open: false, menu_open: false }
-  let (state, emit) = @rabbita.create_state_with_input(
+  let (state, component_emit) = @rabbita.create_state_with_input(
     input~,
     init=(_, _) => (initial, @cmd.none),
     update=(state, input, msg, _) => {
@@ -95,7 +104,7 @@ pub fn component(
         msg,
         input.is_desktop &&
         input.panel_available &&
-        msg is ExternalLink(url) &&
+        msg is External(ExternalLink(url)) &&
         @preview.is_web_url(url),
       )
       let commands : Array[@cmd.Cmd] = []
@@ -107,7 +116,7 @@ pub fn component(
       if !state.open && next.open {
         commands.push(actions.opened)
       }
-      if msg is ExternalLink(url) {
+      if msg is External(ExternalLink(url)) {
         commands.push((actions.external_link)(url))
       }
       (next, @cmd.batch(commands))
@@ -115,23 +124,25 @@ pub fn component(
     subscriptions=(state, _, emit) => panel_subscriptions(state, emit),
   )
   (
-    state.view2(input, (state, input) => panel_view(input, state, emit, actions)),
-    emit,
+    state.view2(input, (state, input) => {
+      panel_view(input, state, component_emit, actions)
+    }),
+    component_emit.map(msg => External(msg)),
   )
 }
 
 ///|
 test "right-panel local state closes its menu with the panel" {
   let state : Model = { open: false, menu_open: false }
-  let opened = state.update(TogglePanel, false)
-  let opened_again = state.update(TogglePanel, false)
+  let opened = state.update(External(TogglePanel), false)
+  let opened_again = state.update(External(TogglePanel), false)
   assert_true(opened.open)
   assert_true(opened_again.open)
   let menu = opened.update(ToggleMenu, false)
   assert_true(menu.menu_open)
-  let closed = menu.update(TogglePanel, false)
+  let closed = menu.update(External(TogglePanel), false)
   assert_false(closed.open)
   assert_false(closed.menu_open)
-  let linked = state.update(ExternalLink("https://example.com"), true)
+  let linked = state.update(External(ExternalLink("https://example.com")), true)
   assert_true(linked.open)
 }

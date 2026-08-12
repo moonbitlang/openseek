@@ -1271,14 +1271,14 @@ fn terminal_ctx(model : Model) -> @terminal.Ctx {
     Some(dev) => dev.bridge is Connected(..) && dev.reconnect_failures == 0
     None => false
   }
-  {
-    channel: conv.device,
-    session: conv.session_id,
-    workspace: conv.workspace.project(),
-    checkout: model.checkout_placement(conv),
-    dark_mode: model.theme.is_dark(model.system_dark),
-    connected,
-  }
+  @terminal.Ctx(
+    channel=conv.device,
+    session=conv.session_id,
+    workspace=conv.workspace.project(),
+    checkout=model.checkout_placement(conv),
+    dark_mode=model.theme.is_dark(model.system_dark),
+    connected~,
+  )
 }
 
 ///|
