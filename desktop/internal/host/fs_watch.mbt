@@ -69,13 +69,13 @@ fn WatchInterest::WatchInterest(
     // A recursive watcher already covers ordinary workspace paths. Retain
     // only explicit selections beneath a pruned directory; this makes shallow
     // explorer changes compare equal without losing deliberately opened files.
-    if !interest.recursive || path.is_ignored_file_search_path() {
+    if !interest.recursive || @file_search_policy.excludes_directory(path.0) {
       interest.remember(path)
     }
   }
   for path in payload.directories {
     let path = @pathx.Relative(path).normalize()
-    if !interest.recursive || path.is_ignored_file_search_path() {
+    if !interest.recursive || @file_search_policy.excludes_directory(path.0) {
       interest.directories.add(path)
       interest.remember(path)
     }
@@ -132,7 +132,7 @@ fn WatchInterest::ignores(self : WatchInterest, path : @pathx.Relative) -> Bool 
   // Reuse file search's directory policy so dependency/build churn remains
   // pruned even though the native watcher itself is recursive.
   if self.recursive {
-    return path.is_ignored_file_search_descendant()
+    return @file_search_policy.excludes_descendant(path.0)
   }
   true
 }

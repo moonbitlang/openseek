@@ -1002,10 +1002,18 @@ fn FileChange::relist_candidates(self : FileChange) -> Array[@pathx.Relative] {
 }
 
 ///|
-/// Content-only edits preserve the workspace path set; every other watcher
-/// event can add, remove, or move a path in the cached snapshot.
+/// Content-only edits preserve the workspace path set. Structural changes
+/// below a directory excluded by file discovery cannot affect its snapshot;
+/// a rename still matters when either side crosses that policy boundary.
 fn FileChange::changes_file_list(self : FileChange) -> Bool {
-  !(self is Modified(_))
+  match self {
+    Modified(_) => false
+    Created(path) | Removed(path) =>
+      !@file_search_policy.excludes_descendant(path.0)
+    Renamed(old~, new~) =>
+      !@file_search_policy.excludes_descendant(old.0) ||
+      !@file_search_policy.excludes_descendant(new.0)
+  }
 }
 
 ///|
@@ -3257,6 +3265,15 @@ test "only structural watcher events change the file index path set" {
   assert_true(Removed(Relative("src/old.mbt")).changes_file_list())
   assert_true(
     Renamed(old=Relative("src/old.mbt"), new=Relative("src/new.mbt")).changes_file_list(),
+  )
+  assert_false(Created(Relative("node_modules/pkg/new.js")).changes_file_list())
+  assert_false(Removed(Relative("target/cache/output")).changes_file_list())
+  assert_true(Created(Relative("node_modules")).changes_file_list())
+  assert_true(
+    Renamed(
+      old=Relative("node_modules/pkg/hidden.js"),
+      new=Relative("src/visible.js"),
+    ).changes_file_list(),
   )
 }
 
