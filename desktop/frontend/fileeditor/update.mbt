@@ -2554,7 +2554,12 @@ pub fn update(
       if state.owner is Some(owner) &&
         owner.channel == ctx.owner.channel &&
         ctx.root == Some(root) &&
-        generation == ctx.watch_event_identity(state.request_epoch) {
+        (
+          generation == ctx.watch_event_identity(state.request_epoch) ||
+          // Hosts predating `event_generation` echo the concrete watcher
+          // generation for both changes and failures.
+          generation == ctx.watch_identity(state.watch_generation)
+        ) {
         let reviewed_changes = match changes {
           Some(changes) =>
             state.reviewed_changes.filter(change => !change.touched_by(changes))
@@ -6962,6 +6967,19 @@ test "concrete watcher events refresh only affected listed directories" {
   // Rabbita purity: the same message and model produce the same state.
   let (_, second) = update(emit, message, state, test_ctx())
   assert_true(first.loading == second.loading)
+  // A host predating the separate event identity still echoes the current
+  // concrete watcher generation for change batches.
+  let (_, legacy) = update(
+    emit,
+    FsChanged(
+      root=test_ctx().test_root(),
+      generation=test_ctx().watch_identity(state.watch_generation),
+      changes=Some([Created(Relative("docs/new.mbt"))]),
+    ),
+    state,
+    test_ctx(),
+  )
+  assert_true(legacy.loading == [Relative("docs")])
   // A late batch from the previous conversation is ignored.
   let (_, stale) = update(
     emit,
