@@ -16,7 +16,7 @@ pub fn rail(
   clock~ : (Double) -> String,
 ) -> @html.Html {
   let ticks : Array[@html.Html] = []
-  for entry in entries {
+  for index, entry in entries {
     let hovered = state.hover == Some(entry.key)
     let mut tick_class = "overview-tick"
     if state.active == Some(entry.key) {
@@ -37,7 +37,10 @@ pub fn rail(
       ),
     ]
     if hovered {
-      children.push(preview(entry, clock))
+      // A bottom-half tick sits near the scroller's lower edge, where a
+      // downward popover would be clipped by the transcript's overflow —
+      // those open upward instead.
+      children.push(preview(entry, clock, flip=index * 2 >= entries.length()))
     }
     ticks.push(@html.div(class=tick_class, children))
   }
@@ -52,7 +55,11 @@ pub fn rail(
 }
 
 ///|
-fn preview(entry : Entry, clock : (Double) -> String) -> @html.Html {
+fn preview(
+  entry : Entry,
+  clock : (Double) -> String,
+  flip~ : Bool,
+) -> @html.Html {
   let children : Array[@html.Html] = [
     @html.div(class="overview-preview-prompt", clamp_preview(entry.text)),
   ]
@@ -68,7 +75,7 @@ fn preview(entry : Entry, clock : (Double) -> String) -> @html.Html {
     )
   }
   @html.div(
-    class="overview-preview",
+    class=if flip { "overview-preview flip" } else { "overview-preview" },
     attrs=@html.Attrs::build().role("tooltip"),
     children,
   )

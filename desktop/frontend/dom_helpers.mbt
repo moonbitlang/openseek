@@ -85,11 +85,18 @@ let transcript_turn_anchor : Ref[String?] = Ref(None)
 
 ///|
 /// Recompute the overview's active turn on the render that applied a
-/// conversation switch. Scroll events only fire when scrollTop actually
-/// changes, so an opened conversation that fits its viewport — or one whose
-/// visible anchor string happens to match the previous session's — would
-/// otherwise keep an empty or stale highlight.
-fn report_visible_turn_after_render(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+/// conversation switch or a viewport resize. Scroll events only fire when
+/// scrollTop actually changes, so an opened conversation that fits its
+/// viewport — or one whose visible anchor string happens to match the
+/// previous session's — would otherwise keep an empty or stale highlight.
+/// `skip_unchanged` suppresses the dispatch when the anchor is already what
+/// the watcher last reported: right for a resize (state and cache are in
+/// sync, only a moved reading line matters), wrong for a switch (the state
+/// was just reset, so even an unchanged anchor must be re-reported).
+fn report_visible_turn_after_render(
+  dispatch : @cmd.Emit[Msg],
+  skip_unchanged? : Bool = false,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
       guard @dom.document().get_element_by_id("transcript").to_option()
@@ -97,6 +104,9 @@ fn report_visible_turn_after_render(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         return
       }
       let anchor = visible_turn_anchor(transcript)
+      if skip_unchanged && anchor == transcript_turn_anchor.val {
+        return
+      }
       transcript_turn_anchor.val = anchor
       let key = if anchor is Some(id) {
         @transcript_overview.TurnKey::from_anchor(id)

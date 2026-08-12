@@ -190,3 +190,18 @@ test "the active turn's tick is marked and the popover renders only hovered" {
   // The unhovered second turn renders no popover of its own.
   assert_false(marked.contains("second question</div>"))
 }
+
+///|
+test "a bottom-half tick opens its preview upward" {
+  let top = render(two_entries(), {
+    hover: Some(@transcript_overview.Durable(1)),
+    active: None,
+  })
+  assert_true(top.contains("overview-preview"))
+  assert_false(top.contains("overview-preview flip"))
+  let bottom = render(two_entries(), {
+    hover: Some(@transcript_overview.Durable(4)),
+    active: None,
+  })
+  assert_true(bottom.contains("overview-preview flip"))
+}

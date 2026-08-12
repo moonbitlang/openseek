@@ -2282,6 +2282,10 @@ fn update_msg(
       if desired_browser_view(model) is Some(_) {
         cmds.push(measure_browser_pane(dispatch))
       }
+      // A vertical resize moves the overview's 35% reading line across
+      // bubbles without any scroll event; recompute the active turn, but
+      // only dispatch when it actually moved.
+      cmds.push(report_visible_turn_after_render(dispatch, skip_unchanged=true))
       let cmd = @cmd.batch(cmds)
       if narrow == model.narrow {
         (cmd, model)
