@@ -8,7 +8,7 @@ import {
   "moonbit-community/cmark@0.4.5",
   "moonbit-community/pty@0.3.2",
   "moonbit-community/fuzzy_match@0.2.6",
-  "moonbit-community/rabbita@0.14.2",
+  "moonbit-community/rabbita@0.14.3",
   "moonbitlang/x@0.4.49",
   "moonbitlang/async@0.20.4",
   "moonbit-community/proton@0.1.14",
