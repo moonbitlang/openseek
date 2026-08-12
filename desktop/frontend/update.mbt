@@ -7236,7 +7236,7 @@ test "BridgeReady reattaches a live file index watcher" {
   )
   // BridgeReady forgets the old HostConnection's watcher before the common
   // post-dispatch sync. A live hidden index then places the same recursive
-  // selection on the new HostConnection with a fresh failure identity.
+  // selection on the new HostConnection with a fresh watcher identity.
   assert_true(
     next.file_panel.watching is Some({ root: next_root, .. }) &&
     next_root == root,

@@ -1162,8 +1162,14 @@ fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
   }
   let files = ctx.open_files.copy()
   files.sort_by((left, right) => left.0.lexical_compare(right.0))
-  let directories = []
-  if ctx.panel_open {
+  let recursive = index_live
+  let files = if recursive {
+    files.filter(path => @file_search_policy.excludes_directory(path.0))
+  } else {
+    files
+  }
+  let directories = if ctx.panel_open {
+    let directories = []
     if !directories.contains(@pathx.Relative::root()) {
       directories.push(@pathx.Relative::root())
     }
@@ -1173,8 +1179,15 @@ fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
       }
     }
     directories.sort_by((left, right) => left.0.lexical_compare(right.0))
+    if recursive {
+      directories.filter(path => @file_search_policy.excludes_directory(path.0))
+    } else {
+      directories
+    }
+  } else {
+    []
   }
-  Some({ owner: ctx.owner, root, files, directories, recursive: index_live })
+  Some({ owner: ctx.owner, root, files, directories, recursive })
 }
 
 ///|
@@ -1182,14 +1195,6 @@ fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
 /// the counter unique across frontend reloads.
 fn Ctx::watch_identity(self : Ctx, generation : Int) -> String {
   self.watch_namespace + ":" + generation.to_string()
-}
-
-///|
-/// Same-root watcher replacements retain this identity, so concrete events in
-/// the ordered request/ack interval remain valid. Placement epochs and the
-/// page namespace still fence events from another root or frontend lifetime.
-fn Ctx::watch_event_identity(self : Ctx, epoch : Int) -> String {
-  self.watch_namespace + ":event:" + epoch.to_string()
 }
 
 ///|
@@ -1204,13 +1209,13 @@ fn with_watch(
     (state, cmd)
   } else {
     let commands = [cmd]
-    // Every desired configuration gets a distinct failure identity so an old
-    // watcher cannot report against its replacement. Change events use the
-    // placement epoch below: same-root events remain valid through the ordered
-    // replacement gap, while a root/owner transition changes that epoch.
+    // Every effective configuration gets one identity for both baseline/change
+    // events and later watcher failures. Recursive selections are normalized
+    // by `watched_paths`, so an equivalent Host watcher is never renamed while
+    // it is active. A real replacement emits a full baseline before its
+    // request succeeds, closing the old-to-new observation gap.
     let watch_generation = state.watch_generation + 1
     let watch_identity = ctx.watch_identity(watch_generation)
-    let event_identity = ctx.watch_event_identity(state.request_epoch)
     // A watcher is host-local. Moving across channels must explicitly retire
     // the old host; placing a new watch on another socket cannot replace it.
     if state.watching is Some(current) &&
@@ -1222,8 +1227,7 @@ fn with_watch(
         watch_workspace(
           dispatch,
           channel=current.owner.channel,
-          failure_generation=watch_identity,
-          event_generation=event_identity,
+          generation=watch_identity,
           None,
         ),
       )
@@ -1233,8 +1237,7 @@ fn with_watch(
         watch_workspace(
           dispatch,
           channel=next.owner.channel,
-          failure_generation=watch_identity,
-          event_generation=event_identity,
+          generation=watch_identity,
           Some(next),
         ),
       )
@@ -1263,8 +1266,7 @@ pub fn State::retire_watcher(
     watch_workspace(
       dispatch,
       channel=current.owner.channel,
-      failure_generation=watch_identity,
-      event_generation=ctx.watch_event_identity(ctx.request_epoch),
+      generation=watch_identity,
       None,
     ),
   )
@@ -1605,8 +1607,7 @@ pub fn sync(
         watch_workspace(
           dispatch,
           channel=current.owner.channel,
-          failure_generation=reroot_watch_identity,
-          event_generation=ctx.watch_event_identity(request_epoch),
+          generation=reroot_watch_identity,
           None,
         ),
       )
@@ -2577,7 +2578,17 @@ pub fn update(
         // invalidated at this authoritative boundary. FileIndex coalesces a
         // second settled run while its refresh is still in flight.
         let (index, start_index_refresh) = state.index.invalidate()
-        let state = { ..state, reviewed_changes: [], index }
+        // A missing worktree root rejects watcher activation immediately. The
+        // run-settled boundary is authoritative evidence that setup may now
+        // have created it, so permit exactly one new attempt here. Ordinary
+        // sync messages retain the failed desired configuration and cannot
+        // spin an unbounded request/failure loop.
+        let watching = if state.watch_error is Some(_) {
+          None
+        } else {
+          state.watching
+        }
+        let state = { ..state, reviewed_changes: [], index, watching }
         let index_cmd = if start_index_refresh {
           list_files(dispatch, owner, state.request_epoch, root=ctx.root)
         } else {
@@ -2618,12 +2629,7 @@ pub fn update(
       if state.owner is Some(owner) &&
         owner.channel == ctx.owner.channel &&
         ctx.root == Some(root) &&
-        (
-          generation == ctx.watch_event_identity(state.request_epoch) ||
-          // Hosts predating `event_generation` echo the concrete watcher
-          // generation for both changes and failures.
-          generation == ctx.watch_identity(state.watch_generation)
-        ) {
+        generation == ctx.watch_identity(state.watch_generation) {
         let reviewed_changes = match changes {
           Some(changes) =>
             state.reviewed_changes.filter(change => !change.touched_by(changes))
@@ -2673,9 +2679,9 @@ pub fn update(
               relist.push(directory)
             }
           }
-          // The Host keeps an equivalent recursive watcher attached across
-          // shallow explorer selection changes, so those transitions emit no
-          // baseline. A received baseline therefore marks an initial attach or
+          // Recursive selections omit shallow explorer paths already covered
+          // by the workspace-wide watcher, so those transitions issue no new
+          // request. A received baseline therefore marks an initial attach or
           // an actual watcher replacement and must close that replacement gap.
           refresh_index = state.index is IndexLoading(..) ||
             state.index is IndexReady(..)
@@ -2722,9 +2728,9 @@ pub fn update(
         }
         // Structural events change the path set. Watcher baselines latch a
         // follow-up during the initial scan or refresh a ready snapshot after
-        // a real replacement; the Host suppresses baselines when it keeps an
-        // equivalent recursive watcher attached. A ready snapshot stays usable
-        // during one refresh, and later structural bursts coalesce once.
+        // a real replacement; normalized equivalent recursive selections do
+        // not issue replacement requests. A ready snapshot stays usable during
+        // one refresh, and later structural bursts coalesce once.
         let (index, start_refresh) = if refresh_index {
           state.index.invalidate()
         } else {
@@ -2928,19 +2934,20 @@ pub fn update(
         owner.channel == channel &&
         ctx.root == Some(root) &&
         generation == ctx.watch_identity(state.watch_generation) {
-        // Forget the dead concrete watcher so the common post-dispatch sync
-        // issues an equivalent `fs.watch` request; the Host actor can then
-        // rebuild the watcher whose `alive` flag it cleared before reporting.
-        // A recursive watcher failure also opens an observation gap, so keep
-        // the current snapshot usable while refreshing it. A replacement
-        // baseline that arrives during this scan latches one follow-up.
+        // The Host reports request-time activation failures through the
+        // `fs.watch` reply and reserves this event for a watcher that stopped
+        // after it was active. Keep the failed configuration recorded so the
+        // ordinary sync pass cannot create an unbounded retry loop. A later
+        // effective configuration change starts a fresh generation.
+        // Refresh the current snapshot once because the stopped watcher opens
+        // an observation gap even though it remains useful for reads.
         let (index, start_index_refresh) = state.index.invalidate()
         let cmd = if start_index_refresh {
           list_files(dispatch, owner, state.request_epoch, root=ctx.root)
         } else {
           @cmd.none
         }
-        (cmd, { ..state, watching: None, index, watch_error: Some(message) })
+        (cmd, { ..state, index, watch_error: Some(message) })
       } else {
         (@cmd.none, state)
       }
@@ -3122,7 +3129,7 @@ test "watcher changes during the initial file index scan schedule one follow-up"
   let (_, loading) = update(emit, EnsureFileIndex, owned_state(), ctx)
   let changed = FsChanged(
     root=ctx.test_root(),
-    generation=ctx.watch_event_identity(loading.request_epoch),
+    generation=ctx.watch_identity(loading.watch_generation),
     changes=Some([Created(Relative("src/new.mbt"))]),
   )
   let (_, latched) = update(emit, changed, loading, ctx)
@@ -3178,7 +3185,7 @@ test "structural watcher bursts coalesce file index refreshes" {
   }
   let changed = FsChanged(
     root=ctx.test_root(),
-    generation=ctx.watch_event_identity(ready.request_epoch),
+    generation=ctx.watch_identity(ready.watch_generation),
     changes=Some([Created(Relative("src/new.mbt"))]),
   )
   let (_, refreshing) = update(emit, changed, ready, ctx)
@@ -5039,7 +5046,7 @@ test "watcher events latch a follow-up during the initial change load" {
     emit,
     FsChanged(
       root=test_ctx().test_root(),
-      generation=test_ctx().watch_event_identity(state.request_epoch),
+      generation=test_ctx().watch_identity(state.watch_generation),
       changes=Some([Modified(Relative("src/main.mbt"))]),
     ),
     state,
@@ -6347,7 +6354,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
     emit,
     FsChanged(
       root=test_ctx().test_root(),
-      generation=test_ctx().watch_event_identity(state.request_epoch),
+      generation=test_ctx().watch_identity(state.watch_generation),
       changes=Some([Modified(Relative("src/main.mbt"))]),
     ),
     state,
@@ -6367,7 +6374,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
     emit,
     FsChanged(
       root=test_ctx().test_root(),
-      generation=test_ctx().watch_event_identity(refreshing.request_epoch),
+      generation=test_ctx().watch_identity(refreshing.watch_generation),
       changes=Some([Modified(Relative("src/other.mbt"))]),
     ),
     refreshing,
@@ -6447,7 +6454,7 @@ test "hidden explorer parks event-driven change refreshes until reopen" {
     emit,
     FsChanged(
       root=test_ctx().test_root(),
-      generation=test_ctx().watch_event_identity(state.request_epoch),
+      generation=test_ctx().watch_identity(state.watch_generation),
       changes=Some([]),
     ),
     state,
@@ -6636,7 +6643,7 @@ test "change-list failures stay isolated from file errors and watcher retries" {
     emit,
     FsChanged(
       root=test_ctx().test_root(),
-      generation=test_ctx().watch_event_identity(failed.request_epoch),
+      generation=test_ctx().watch_identity(failed.watch_generation),
       changes=Some([Modified(Relative("src/main.mbt"))]),
     ),
     failed,
@@ -7032,7 +7039,7 @@ test "watcher replacement baseline re-lists directories and refreshes the index"
   }
   let baseline = FsChanged(
     root=test_ctx().test_root(),
-    generation=test_ctx().watch_event_identity(state.request_epoch),
+    generation=test_ctx().watch_identity(state.watch_generation),
     changes=None,
   )
   let (_, next) = update(emit, baseline, state, test_ctx())
@@ -7041,15 +7048,44 @@ test "watcher replacement baseline re-lists directories and refreshes the index"
   assert_true(next.loading.contains(Relative("")))
   assert_true(next.loading.contains(Relative("src")))
   assert_false(next.loading.contains(Relative("never-listed")))
-  // Equivalent recursive selections never emit a baseline. If one arrives,
-  // the Host replaced the watcher and the index must close that observation
-  // gap with a refresh.
+  // Equivalent recursive selections never issue a replacement. If a baseline
+  // arrives, the Host activated a new watcher and the index must close that
+  // observation gap with a refresh.
   assert_true(
     next.index is IndexReady(refreshing=true, refresh_again=false, ..),
   )
   // A second push while the lists are in flight stacks nothing.
   let (_, again) = update(emit, baseline, next, test_ctx())
   assert_eq(again.loading.length(), next.loading.length())
+}
+
+///|
+test "recursive watcher configuration omits paths already covered by its index" {
+  let state = {
+    ..owned_state(),
+    expanded: [Relative("src"), Relative("node_modules/vendor")],
+    index: IndexReady(
+      files=[Relative("src/main.mbt")],
+      truncated=false,
+      refreshing=false,
+      refresh_again=false,
+    ),
+  }
+  let ctx = {
+    ..test_ctx(),
+    open_files: [
+      Relative("src/main.mbt"),
+      Relative("node_modules/pkg/index.js"),
+    ],
+  }
+  guard state.watched_paths(ctx) is Some(watched) else {
+    fail("live index did not request a recursive watcher")
+  }
+  assert_true(watched.recursive)
+  // Ordinary selections are already included by the recursive watcher. Only
+  // explicit paths under pruned directories affect its native filter.
+  assert_true(watched.files == [Relative("node_modules/pkg/index.js")])
+  assert_true(watched.directories == [Relative("node_modules/vendor")])
 }
 
 ///|
@@ -7066,7 +7102,7 @@ test "concrete watcher events refresh only affected listed directories" {
   }
   let message = FsChanged(
     root=test_ctx().test_root(),
-    generation=test_ctx().watch_event_identity(state.request_epoch),
+    generation=test_ctx().watch_identity(state.watch_generation),
     changes=Some([Created(Relative("src/new.mbt"))]),
   )
   let (_, first) = update(emit, message, state, test_ctx())
@@ -7074,9 +7110,8 @@ test "concrete watcher events refresh only affected listed directories" {
   // Rabbita purity: the same message and model produce the same state.
   let (_, second) = update(emit, message, state, test_ctx())
   assert_true(first.loading == second.loading)
-  // A host predating the separate event identity still echoes the current
-  // concrete watcher generation for change batches.
-  let (_, legacy) = update(
+  // Another concrete batch with the current watcher identity is accepted.
+  let (_, current) = update(
     emit,
     FsChanged(
       root=test_ctx().test_root(),
@@ -7086,13 +7121,13 @@ test "concrete watcher events refresh only affected listed directories" {
     state,
     test_ctx(),
   )
-  assert_true(legacy.loading == [Relative("docs")])
+  assert_true(current.loading == [Relative("docs")])
   // A late batch from the previous conversation is ignored.
   let (_, stale) = update(
     emit,
     FsChanged(
       root=test_ctx().test_resource("/previous-root"),
-      generation=test_ctx().watch_event_identity(state.request_epoch),
+      generation=test_ctx().watch_identity(state.watch_generation),
       changes=Some([Created(Relative("docs/new.md"))]),
     ),
     state,
@@ -7222,7 +7257,7 @@ test "watcher failures are visible only in their owning conversation" {
 }
 
 ///|
-test "a recursive watcher failure reattaches and refreshes its index" {
+test "a recursive watcher failure stops retries and refreshes its index" {
   let emit = test_emit()
   let ctx = { ..test_ctx(), panel_open: false }
   let generation = 5
@@ -7254,17 +7289,57 @@ test "a recursive watcher failure reattaches and refreshes its index" {
     watched,
     ctx,
   )
-  assert_true(failed.watching is None)
+  assert_true(failed.watching is Some({ recursive: true, .. }))
   assert_true(
     failed.index is IndexReady(refreshing=true, refresh_again=false, ..),
   )
   assert_true(failed.watch_error is Some("File watching stopped"))
-  let (reattached, _) = sync(emit, failed, ctx)
-  assert_true(reattached.watching is Some({ recursive: true, .. }))
-  assert_eq(reattached.watch_generation, generation + 1)
-  // Issuing the replacement retires the displayed failure; a later baseline
-  // validates the reattached watcher and coalesces any scan-gap retry.
-  assert_true(reattached.watch_error is None)
+  let (stopped, _) = sync(emit, failed, ctx)
+  // An unchanged desired configuration cannot create a request/failure loop.
+  assert_true(stopped.watching is Some({ recursive: true, .. }))
+  assert_eq(stopped.watch_generation, generation)
+  assert_true(stopped.watch_error is Some("File watching stopped"))
+  // A real policy change starts one fresh concrete watcher generation.
+  let retry_ctx = { ..ctx, open_files: [Relative("node_modules/pkg/index.js")] }
+  let (retried, _) = sync(emit, stopped, retry_ctx)
+  assert_true(
+    retried.watching
+    is Some({ files: [Relative("node_modules/pkg/index.js")], .. }),
+  )
+  assert_eq(retried.watch_generation, generation + 1)
+  assert_true(retried.watch_error is None)
+}
+
+///|
+test "a settled run retries one failed watcher activation" {
+  let emit = test_emit()
+  let ctx = { ..test_ctx(), panel_open: false }
+  let generation = 5
+  let watched = {
+    ..owned_state(),
+    index: IndexReady(
+      files=[],
+      truncated=false,
+      refreshing=false,
+      refresh_again=false,
+    ),
+    watching: Some({
+      owner: ctx.owner,
+      root: ctx.test_root(),
+      files: [],
+      directories: [],
+      recursive: true,
+    }),
+    watch_generation: generation,
+    watch_error: Some("watch root did not exist"),
+  }
+  let (_, settled) = update(emit, RunSettled(owner=ctx.owner), watched, ctx)
+  assert_true(settled.watching is None)
+  assert_true(settled.watch_error is Some("watch root did not exist"))
+  let (retried, _) = sync(emit, settled, ctx)
+  assert_true(retried.watching is Some({ recursive: true, .. }))
+  assert_eq(retried.watch_generation, generation + 1)
+  assert_true(retried.watch_error is None)
 }
 
 ///|
@@ -7302,7 +7377,7 @@ test "same-root conversation switch fences every old watcher push" {
     emit,
     FsChanged(
       root=next_ctx.test_root(),
-      generation=test_ctx().watch_event_identity(state.request_epoch),
+      generation=test_ctx().watch_identity(state.watch_generation),
       changes=None,
     ),
     ready,

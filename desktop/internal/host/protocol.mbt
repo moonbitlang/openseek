@@ -274,9 +274,10 @@ test "filesystem events keep their concrete kind and paths on the wire" {
 }
 
 ///|
-/// A watcher that was accepted but could not attach, or later stopped while
-/// reading filesystem events. `root` reports its location; `generation`
-/// identifies the exact concrete watcher whose failure raced a replacement.
+/// A watcher that stopped after its request had successfully activated it.
+/// Construction failures are returned by `fs.watch` itself. `root` reports
+/// the active location; `generation` identifies the exact concrete watcher
+/// whose failure may race a replacement.
 priv struct FsWatchFailedPayload {
   root : String
   message : String

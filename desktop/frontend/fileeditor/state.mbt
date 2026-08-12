@@ -307,17 +307,18 @@ pub(all) struct State {
   // open. Retaining this transition bit keeps Changes refresh behavior
   // independent from whether any file watcher remains active.
   explorer_was_visible : Bool
-  // The paths the host's watcher currently follows (`None` = parked). Keeping
-  // the full configuration makes opening/closing a tab or expanding/collapsing
-  // a directory replace the watch even when the conversation did not change.
+  // The effective paths most recently requested from the Host (`None` =
+  // parked). Recursive selections omit ordinary paths already covered by the
+  // workspace-wide watch, so equality means the native watch policy is truly
+  // unchanged rather than merely producing an equivalent Host filter.
   watching : WatchedPaths?
   // Monotonic counter of the most recently requested watcher configuration.
   // Combined with `Ctx.watch_namespace`, it advances on every replacement or
   // park independently of root and filesystem request epochs.
   watch_generation : Int
-  // A watcher can fail after `fs.watch` has already replied. Keep that
-  // failure separate from directory/file requests so a later successful
-  // directory listing does not hide the loss of live updates.
+  // `fs.watch` can reject activation, and an active watcher can later stop.
+  // Keep either failure separate from directory/file requests so a later
+  // successful listing does not hide the loss of live updates.
   watch_error : String?
   // Directory paths the user has expanded, and those with a `read_directory`
   // in flight; plain arrays since a workspace tree is small.

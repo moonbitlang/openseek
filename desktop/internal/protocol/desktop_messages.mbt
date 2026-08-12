@@ -262,10 +262,6 @@ pub(all) struct WatchWorkspacePayload {
   // Concrete watcher/failure identity. Clients change it for every desired
   // configuration so a replaced watcher's delayed failure is stale.
   generation : String
-  // Change-event identity. New clients may retain it across same-root watcher
-  // replacements because every concrete event still describes that root.
-  // Absent for backward compatibility, in which case `generation` is used.
-  event_generation : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -566,8 +562,7 @@ pub(all) struct FsChangedPayload {
   root : String
   baseline : Bool
   events : Array[FsEventPayload]
-  // Identifies the watched root incarnation. Same-root replacement events may
-  // deliberately retain it across multiple `fs.watch` requests.
+  // Identifies the concrete activated watcher that produced this batch.
   generation : String
 } derive(Debug, Eq, FromJson, ToJson)
 

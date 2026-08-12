@@ -460,7 +460,7 @@ its picker-specific starting-point behavior.
 | `fs.cancel_search_files` | `{cache_key, generation}` | `{}` — cancels one query while allowing cache population to finish |
 | `fs.clear_file_search_cache` | `{cache_key}` | `{}` — retires one search cache session and its outstanding work |
 | `fs.stat_files` | `{paths}` (absolute) | `{stats: [{path, sig}]}` — each `path` echoes its absolute input; `sig` is the opaque mtime signature `"{seconds}:{nanos}"`; `""` means the file is missing, retained for client compatibility |
-| `fs.watch` | `{path, files, directories, generation}` (`path` absolute; `generation` string) | `{}` — replaces the connection's single watcher; `files` and `directories` are relative to `path`, each directory keeps its immediate children observable, and clients use a page-unique namespace plus a monotonically increasing counter for `generation` |
+| `fs.watch` | `{path, files, directories, generation}` (`path` absolute; `generation` string) | `{}` — replaces the connection's single watcher; success means the native watcher has scanned its initial tree and emitted its baseline, while setup failure rejects this request; `files` and `directories` are relative to `path`, each directory keeps its immediate children observable, and clients use a page-unique namespace plus a monotonically increasing counter for `generation` |
 | `fs.unwatch` | `{}` | `{}` — stops watching when the panel is closed and it has no open tabs |
 | `fs.browse` | `{path?}` (absent = home; leading `~` expands) | `{path, parent?, entries}` — subdirectory names, sorted, dotfiles skipped |
 
@@ -469,11 +469,11 @@ Notification:
 | method | params |
 |---|---|
 | `fs.changed` | `{root, baseline, events: [{kind, path, old_path?}], generation}` — `root` is absolute; `baseline=true` follows watcher attachment; later batches use `modify` / `create` / `remove` / `rename` events with root-relative paths; the string `generation` echoes the owning `fs.watch` request |
-| `fs.watch_failed` | `{root, message, generation}` — the accepted watcher could not attach or later stopped; the string `generation` echoes the owning `fs.watch` request so a delayed failure cannot attach to a same-root replacement or a reloaded page that restarted its counter |
+| `fs.watch_failed` | `{root, message, generation}` — a watcher stopped after its `fs.watch` request had successfully activated it; setup failures reject `fs.watch` directly, and the string `generation` keeps a delayed runtime failure from attaching to a replacement or reloaded page |
 
 The path arrays are always present, including when empty. A watcher replacement
-emits a baseline after it has scanned the selected paths, so the client can
-reconcile changes that raced the replacement.
+emits a baseline after it has scanned the selected paths and before its request
+returns, so the client can reconcile changes that raced the replacement.
 
 ### terminal.* — connection-scoped PTYs
 

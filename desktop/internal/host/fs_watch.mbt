@@ -2,10 +2,10 @@
 // client connection points its own actor at an absolute root through
 // `fs.watch` (and parks it with `fs.unwatch`); the actor
 // runs one recursive `@fs.Watcher` pruned to the file editor's current open
-// files and listed directories. It pushes concrete `fs.changed` events back
-// to that connection on every change, or an
-// `fs.watch_failed` notification when the accepted watcher cannot keep
-// running.
+// files and listed directories. A `fs.watch` request succeeds only after the
+// native watcher and its baseline are ready. It then pushes concrete
+// `fs.changed` events back to that connection on every change, or an
+// `fs.watch_failed` notification when an active watcher later stops.
 // `FsWatchActor` owns both the desired-root mailbox and the active watcher
 // resource.
 
@@ -32,16 +32,22 @@ priv struct FsWatchActor {
 priv struct FsWatchTarget {
   root : @pathx.Absolute
   interest : WatchInterest
-  // Change-event identity for this root incarnation. Equivalent requests and
-  // same-root replacements retain it, so events already queued during a
-  // replacement remain valid without crossing a root or owner boundary.
-  generation : Ref[String]
-  // Unlike same-root change events, failures belong to one concrete watcher.
-  // Equivalent requests advance this token without replacing the watcher.
-  failure_generation : Ref[String]
+  // One concrete watcher identity. Replacements always receive a new token
+  // and a new baseline, so late events and failures from the old instance are
+  // stale at the frontend without a second identity.
+  generation : String
   // Cleared before reporting a watcher failure, so an equivalent request that
   // races with that report rebuilds instead of acknowledging a dead watcher.
   alive : Ref[Bool]
+}
+
+///|
+/// A target whose native watcher and initial filesystem snapshot both exist.
+/// Keeping this as a separate type makes it impossible for the actor to reply
+/// successfully with only a parsed target.
+priv struct FsWatchActive {
+  target : FsWatchTarget
+  watcher : @fs.Watcher
 }
 
 ///|
@@ -138,11 +144,10 @@ fn WatchInterest::ignores(self : WatchInterest, path : @pathx.Relative) -> Bool 
 }
 
 ///|
-/// Reuse an attached watcher when the resolved root and effective pruning
-/// rules have not changed. If a client advances its generation, update the
-/// target before acknowledging so later concrete events carry the accepted
-/// identity. No replacement baseline is needed because the watcher never
-/// stopped and its observed path set is unchanged.
+/// A repeated request is idempotent only when it names the same concrete
+/// generation and effective pruning rules. A different generation always
+/// activates a replacement and emits its own baseline; renaming an active
+/// watcher would otherwise lose events between the request and reply.
 async fn FsWatchRequest::keeps_active_watcher(
   self : FsWatchRequest,
   target : FsWatchTarget,
@@ -159,11 +164,8 @@ async fn FsWatchRequest::keeps_active_watcher(
       let interest = WatchInterest(payload)
       if target.alive.val &&
         root.absolute == target.root &&
-        interest == target.interest {
-        target.generation.val = payload.event_generation.unwrap_or(
-          payload.generation,
-        )
-        target.failure_generation.val = payload.generation
+        interest == target.interest &&
+        payload.generation == target.generation {
         reply.put(None)
         true
       } else {
@@ -202,14 +204,14 @@ async fn FsWatchActor::unwatch(self : FsWatchActor) -> Unit {
 }
 
 ///|
-/// Apply one mailbox request against the current root. A failed watch leaves
-/// the existing watcher in place, matching the old operation's behavior,
-/// while a successful watch or unwatch acknowledges only after the actor has
-/// chosen its next state.
-async fn FsWatchRequest::apply(
+/// Activate one ordered mailbox request. `Watch` replies only after the native
+/// watcher has scanned its initial tree and the baseline has been emitted;
+/// constructor failures return through this request instead of pretending an
+/// active watcher later stopped.
+async fn FsWatchRequest::activate(
   self : FsWatchRequest,
-  current : FsWatchTarget?,
-) -> FsWatchTarget? {
+  emit : async (FsChangedPayload) -> Unit,
+) -> FsWatchActive? {
   match self {
     Unwatch(reply~) => {
       reply.put(None)
@@ -219,87 +221,107 @@ async fn FsWatchRequest::apply(
       let root = WirePath::parse(payload.path) catch {
         error => {
           reply.put(Some("\{error}"))
-          return current
+          return None
+        }
+      }
+      let target : FsWatchTarget = {
+        root: root.absolute,
+        interest: WatchInterest(payload),
+        generation: payload.generation,
+        alive: Ref(true),
+      }
+      let active = target.activate(emit) catch {
+        error if @async.is_being_cancelled() => raise error
+        error => {
+          target.alive.val = false
+          @xlog.warn(category="filesystem") <?
+            {
+              "event": "watch_activation_failed",
+              "root": target.root.to_string(),
+              "error": "\{error}",
+            }
+          reply.put(Some("\{error}"))
+          return None
         }
       }
       reply.put(None)
-      Some({
-        root: root.absolute,
-        interest: WatchInterest(payload),
-        generation: Ref(payload.event_generation.unwrap_or(payload.generation)),
-        failure_generation: Ref(payload.generation),
-        alive: Ref(true),
-      })
+      Some(active)
     }
   }
 }
 
 ///|
-/// Watch one target until cancelled. Construction scans only the selected
-/// paths; once attached, the baseline closes the replacement race and later
-/// notifications preserve `Watcher::wait`'s concrete debounced events.
-async fn FsWatchTarget::watch(
+/// Construct the native watcher and publish its baseline as one activation
+/// step. If baseline delivery fails, close the resource before propagating the
+/// request failure; callers can never observe a half-active target.
+async fn FsWatchTarget::activate(
   self : FsWatchTarget,
   emit : async (FsChangedPayload) -> Unit,
-) -> Unit {
+) -> FsWatchActive {
   let watcher = @fs.Watcher::Watcher(self.root.to_string(), ignored_paths=path => {
     self.interest.ignores(@pathx.Relative(path).normalize())
   })
-  defer watcher.close()
-  emit({
-    root: self.root.resource_path(),
-    baseline: true,
-    events: [],
-    generation: self.generation.val,
-  })
-  for ;; {
-    let events = watcher.wait()
+  try {
     emit({
       root: self.root.resource_path(),
+      baseline: true,
+      events: [],
+      generation: self.generation,
+    })
+    { target: self, watcher }
+  } catch {
+    error => {
+      watcher.close()
+      raise error
+    }
+  }
+}
+
+///|
+/// Forward concrete events from an already activated watcher until it stops
+/// or the actor cancels it for an ordered replacement.
+async fn FsWatchActive::watch(
+  self : FsWatchActive,
+  emit : async (FsChangedPayload) -> Unit,
+) -> Unit {
+  defer self.watcher.close()
+  for ;; {
+    let events = self.watcher.wait()
+    emit({
+      root: self.target.root.resource_path(),
       baseline: false,
       events: events.map(FsEventPayload::from_event),
-      generation: self.generation.val,
+      generation: self.target.generation,
     })
   }
 }
 
 ///|
 /// The actor loop: hold one watcher on the latest requested root, swapping when a
-/// new request arrives. Each watcher runs in a child task group whose body
-/// blocks on the next request — `return_immediately` then cancels the
-/// blocked `wait` deterministically (`Watcher::close` alone is not
-/// documented to wake it). A missing root (workspace directories are
-/// created lazily on the first run) is polled until it appears, so the
-/// watcher attaches by itself once the first run creates the directory.
-/// Watcher failures are logged and pushed to the file editor instead of being
-/// silently discarded. Cancellation is different: replacing or parking a
-/// watcher deliberately cancels the old child, so that error must propagate
-/// as cancellation and must not reach the UI.
+/// new request arrives. Activation happens in the actor before a watcher enters
+/// this active state, so the request cannot race a later construction failure.
+/// Each active watcher runs in a child task group whose body blocks on the next
+/// request — `return_immediately` then cancels the blocked `wait`
+/// deterministically (`Watcher::close` alone is not documented to wake it).
+/// Runtime failures are logged and pushed to the file editor. Cancellation is
+/// different: replacing or parking a watcher deliberately cancels the old
+/// child, so that error must propagate and must not reach the UI.
 async fn FsWatchActor::run(
   self : FsWatchActor,
   emit_changed : async (FsChangedPayload) -> Unit,
   emit_failed : async (FsWatchFailedPayload) -> Unit,
 ) -> Unit {
-  let mut root : FsWatchTarget? = None
+  let mut active : FsWatchActive? = None
   for ;; {
-    if root is None {
-      root = self.requests.get().apply(root)
+    if active is None {
+      active = self.requests.get().activate(emit_changed)
       continue
     }
-    guard root is Some(target) else { continue }
+    guard active is Some(watcher) else { continue }
+    let target = watcher.target
     let request = @async.with_task_group(group => {
       group.spawn_bg(() => {
-        try {
-          if !@fs.exists(target.root.to_string()) {
-            for ;; {
-              @async.sleep(2000)
-              if @fs.exists(target.root.to_string()) {
-                break
-              }
-            }
-          }
-          target.watch(emit_changed)
-        } catch {
+        watcher.watch(emit_changed) catch {
           error if @async.is_being_cancelled() => raise error
           error => {
             target.alive.val = false
@@ -313,7 +335,7 @@ async fn FsWatchActor::run(
             emit_failed({
               root: target.root.resource_path(),
               message,
-              generation: target.failure_generation.val,
+              generation: target.generation,
             })
           }
         }
@@ -329,10 +351,9 @@ async fn FsWatchActor::run(
       group.return_immediately(next)
       next
     })
-    // Apply the replacement now. The next loop iteration starts it directly;
-    // waiting for another mailbox item here would leave the accepted target
-    // dormant until a third frontend transition.
-    root = request.apply(root)
+    // Activate the replacement now. The native constructor and baseline must
+    // both finish before this exact request task receives success.
+    active = request.activate(emit_changed)
   }
 }
 
@@ -345,8 +366,7 @@ test "watch interest retains selected files, listed children, and ancestors" {
     files: ["src/main.mbt", "node_modules/pkg/index.js"],
     directories: ["", "docs"],
     recursive: Some(false),
-    generation: "page-a:failure-7",
-    event_generation: Some("page-a:7"),
+    generation: "page-a:7",
   }
   let interest = WatchInterest(payload)
   // Root rows and one level under an expanded directory stay observable.
@@ -372,8 +392,7 @@ test "recursive watch interest covers non-indexed workspace directories" {
     files: ["node_modules/pkg/index.js"],
     directories: ["node_modules/vendor"],
     recursive: Some(true),
-    generation: "page-a:failure-8",
-    event_generation: Some("page-a:8"),
+    generation: "page-a:8",
   })
   assert_false(interest.ignores(Relative("empty/deep/new.mbt")))
   assert_false(interest.ignores(Relative("beyond-result-cap/new.mbt")))
@@ -396,16 +415,14 @@ test "recursive watch interest ignores shallow non-pruned selections" {
     files: ["src/main.mbt"],
     directories: ["", "src"],
     recursive: Some(true),
-    generation: "page-a:failure-8",
-    event_generation: Some("page-a:8"),
+    generation: "page-a:8",
   })
   let navigated = WatchInterest({
     path: "/work/project",
     files: ["docs/guide.md"],
     directories: ["", "docs"],
     recursive: Some(true),
-    generation: "page-a:failure-9",
-    event_generation: Some("page-a:9"),
+    generation: "page-a:9",
   })
   assert_eq(initial, navigated)
 }
@@ -421,7 +438,7 @@ test "host connections keep filesystem watch request mailboxes isolated" {
 }
 
 ///|
-async test "a failed watcher is rebuilt by an equivalent request" {
+async test "watch activation fails through its request and can be retried" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-fs-watch-restart-")
     group.add_defer(() => {
@@ -430,68 +447,83 @@ async test "a failed watcher is rebuilt by an equivalent request" {
     let file = "\{dir}/not-a-directory"
     @fs.write_file(file, "", create_mode=CreateOrTruncate)
     let actor = FsWatchActor::new()
+    let changes : @async.Queue[FsChangedPayload] = Queue(kind=Blocking(2))
     let failures : @async.Queue[FsWatchFailedPayload] = Queue(kind=Blocking(2))
-    group.spawn_bg(() => actor.run(_ => (), failure => failures.put(failure)))
+    group.spawn_bg(() => {
+      actor.run(change => changes.put(change), failure => failures.put(failure))
+    })
+    let mut rejected = false
     actor.watch({
       path: file,
       files: [],
       directories: [],
       recursive: Some(true),
-      generation: "page-a:failed-instance-1",
-      event_generation: Some("page-a:failed-1"),
-    })
-    let first = @async.with_timeout(1000, () => failures.get())
-    assert_eq(first.generation, "page-a:failed-instance-1")
-    @async.pause()
+      generation: "page-a:failed-1",
+    }) catch {
+      HostError(_) => rejected = true
+      error => raise error
+    }
+    assert_true(rejected)
+    assert_true(changes.try_get() is None)
+    // Setup failure is synchronous request failure, not an asynchronous
+    // failure from a watcher that never became active.
+    assert_true(failures.try_get() is None)
+    @fs.remove(file)
+    @fs.mkdir(file)
     actor.watch({
       path: file,
       files: [],
       directories: [],
       recursive: Some(true),
-      generation: "page-a:failed-instance-2",
-      event_generation: Some("page-a:failed-2"),
+      generation: "page-a:ready-2",
     })
-    let second = @async.with_timeout(1000, () => failures.get())
-    assert_eq(second.generation, "page-a:failed-instance-2")
+    guard changes.try_get() is Some(baseline) else {
+      fail("successful watch returned before its baseline")
+    }
+    assert_true(baseline.baseline)
+    assert_eq(baseline.generation, "page-a:ready-2")
     group.return_immediately(())
   })
 }
 
 ///|
-async test "equivalent recursive watch requests retain the watcher and advance its generation" {
-  let reply : @async.Queue[String?] = Queue(kind=Blocking(1))
-  let request = Watch(
-    {
-      path: "/work/project",
+async test "only an identical generation retains its active watcher" {
+  @async.with_task_group(group => {
+    let dir = @fs.tmpdir(prefix="openseek-fs-watch-idempotent-")
+    group.add_defer(() => {
+      @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+    })
+    let actor = FsWatchActor::new()
+    let changes : @async.Queue[FsChangedPayload] = Queue(kind=Blocking(2))
+    group.spawn_bg(() => actor.run(change => changes.put(change), _ => ()))
+    let payload : WatchWorkspacePayload = {
+      path: dir,
       files: ["src/main.mbt"],
       directories: ["", "src"],
       recursive: Some(true),
-      generation: "page-a:failure-9",
-      event_generation: Some("page-a:9"),
-    },
-    reply~,
-  )
-  guard request.apply(None) is Some(target) else {
-    fail("valid watch request did not produce a target")
-  }
-  assert_eq(target.generation.val, "page-a:9")
-  assert_true(reply.get() is None)
-  let next_reply : @async.Queue[String?] = Queue(kind=Blocking(1))
-  let navigated = Watch(
-    {
-      path: "/work/project",
-      files: ["docs/guide.md"],
+      generation: "page-a:9",
+    }
+    actor.watch(payload)
+    assert_true(changes.try_get() is Some({ baseline: true, .. }))
+    actor.watch(payload)
+    // Repeating the exact accepted request does not replace the native
+    // watcher or emit another baseline.
+    assert_true(changes.try_get() is None)
+    actor.watch({
+      ..payload,
+      files: ["docs/guide.mbt"],
       directories: ["", "docs"],
-      recursive: Some(true),
-      generation: "page-a:failure-10",
-      event_generation: Some("page-a:10"),
-    },
-    reply=next_reply,
-  )
-  assert_true(navigated.keeps_active_watcher(target))
-  assert_eq(target.generation.val, "page-a:10")
-  assert_eq(target.failure_generation.val, "page-a:failure-10")
-  assert_true(next_reply.get() is None)
+      generation: "page-a:10",
+    })
+    // The recursive filter is equivalent, but a new concrete identity still
+    // activates a replacement and closes its event gap with a baseline.
+    guard changes.try_get() is Some(replacement) else {
+      fail("new generation returned without a replacement baseline")
+    }
+    assert_true(replacement.baseline)
+    assert_eq(replacement.generation, "page-a:10")
+    group.return_immediately(())
+  })
 }
 
 ///|
@@ -507,14 +539,12 @@ test "filesystem payloads carry absolute target paths" {
     "files": ["src/main.mbt"],
     "directories": ["", "src"],
     "recursive": true,
-    "generation": "page-a:failure-7",
-    "event_generation": "page-a:7",
+    "generation": "page-a:7",
   })
   assert_eq(selected.files, ["src/main.mbt"])
   assert_eq(selected.directories, ["", "src"])
   assert_eq(selected.recursive, Some(true))
-  assert_eq(selected.generation, "page-a:failure-7")
-  assert_eq(selected.event_generation, Some("page-a:7"))
+  assert_eq(selected.generation, "page-a:7")
   let legacy : WatchWorkspacePayload = @json.from_json({
     "path": "/work/project",
     "files": [],
@@ -522,7 +552,6 @@ test "filesystem payloads carry absolute target paths" {
     "generation": "page-a:6",
   })
   assert_true(legacy.recursive is None)
-  assert_true(legacy.event_generation is None)
 }
 
 ///|
