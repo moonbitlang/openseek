@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/symbols"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbitlang/core/debug",
+  "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/internal/protocol",
+}
+
+// Values
+pub fn decode(@protocol.WorkspaceSymbolsReply) -> Array[Symbol]
+
+pub fn search(@interop.ChannelId, String, root~ : @common.Uri, loaded~ : (Array[Symbol]) -> @cmd.Cmd, failed~ : @cmd.Cmd) -> @cmd.Cmd
+
+// Errors
+
+// Types and methods
+pub(all) struct Symbol {
+  name : String
+  kind : Int?
+  container : String?
+  path : String
+  range : @common.Range
+} derive(Eq, @debug.Debug)
+pub fn Symbol::detail(Self) -> String
+
+// Type aliases
+
+// Traits
