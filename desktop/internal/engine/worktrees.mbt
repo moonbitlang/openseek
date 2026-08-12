@@ -295,12 +295,7 @@ async fn archive_bound_worktree_checkout(
         return Some({ worktree: entry.name, dirty_paths, dirty_path_count })
       }
     }
-    let args = ["worktree", "remove"]
-    if force {
-      args.push("--force")
-    }
-    args.push("\{WorktreesDirName}/\{entry.name}")
-    ignore(git_in(workspace, args))
+    delete_worktree_checkout(workspace, entry.name, force, "archiving")
   } else {
     // The checkout is already gone; drop git's stale bookkeeping for it.
     ignore(git_probe(workspace, ["worktree", "prune"]))
@@ -870,6 +865,38 @@ async fn worktree_lock_reason(dir : @pathx.Absolute, name : String) -> String? {
 }
 
 ///|
+/// Delete a registered worktree's checkout, routing around Git's gitlink
+/// refusal: `git worktree remove` refuses every tree containing a submodule
+/// gitlink, initialized or not, `--force` included — so such checkouts are
+/// deleted directly and their bookkeeping pruned. The caller has already
+/// applied its dirty-checkout policy; an external `git worktree lock` stays
+/// authoritative on the fallback path, where Git cannot enforce it itself.
+/// `action` names the caller's operation in that refusal.
+async fn delete_worktree_checkout(
+  workspace : @pathx.Absolute,
+  name : String,
+  force : Bool,
+  action : String,
+) -> Unit {
+  if checkout_has_gitlinks(worktree_dir(workspace, name)) {
+    guard worktree_lock_reason(workspace, name) is None else {
+      raise EngineError(
+        "worktree \{name} is locked; unlock it before \{action}",
+      )
+    }
+    @fs.rmdir(worktree_dir(workspace, name).to_string(), recursive=true)
+    ignore(git_in(workspace, ["worktree", "prune"]))
+  } else {
+    let args = ["worktree", "remove"]
+    if force {
+      args.push("--force")
+    }
+    args.push("\{WorktreesDirName}/\{name}")
+    ignore(git_in(workspace, args))
+  }
+}
+
+///|
 /// Remove a worktree's checkout and registry entry. The branch
 /// `openseek/<name>` always survives — committed work is never lost by
 /// deleting a worktree; uncommitted changes are, and only behind `force`.
@@ -929,26 +956,7 @@ pub async fn remove_worktree(
         )
       }
     }
-    if checkout_has_gitlinks(target) {
-      // Git refuses `worktree remove` for any tree containing a submodule
-      // gitlink, initialized or not. The target is app-owned and registered;
-      // the non-force path proved it clean above, while an external lock still
-      // blocks deletion.
-      guard worktree_lock_reason(dir, name) is None else {
-        raise EngineError(
-          "worktree \{name} is locked; unlock it before removal",
-        )
-      }
-      @fs.rmdir(target.to_string(), recursive=true)
-      ignore(git_in(dir, ["worktree", "prune"]))
-    } else {
-      let args = ["worktree", "remove"]
-      if force {
-        args.push("--force")
-      }
-      args.push("\{WorktreesDirName}/\{name}")
-      ignore(git_in(dir, args))
-    }
+    delete_worktree_checkout(dir, name, force, "removal")
   } else {
     // The checkout is already gone; drop git's stale bookkeeping for it.
     ignore(git_probe(dir, ["worktree", "prune"]))

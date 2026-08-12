@@ -195,3 +195,93 @@ async test "worktree lifecycle mirrors initialized submodules" {
   assert_false(@fsx.exists(checkout.to_path()))
   @fs.rmdir(root.to_string(), recursive=true)
 }
+
+///|
+#cfg(not(platform="windows"))
+async test "archive deletes a submodule checkout that git worktree remove refuses" {
+  archive_env_test_lock.acquire()
+  defer archive_env_test_lock.release()
+  let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+  let root = worktree_test_root("openseek-worktree-sub-archive-")
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
+  defer restore_session_root_env(previous)
+  @fsx.ensure_dir(root.join("global").to_path())
+  let dep = root.join("dep")
+  prepare_git_repo(dep)
+  let repo = root.join("repo")
+  prepare_git_repo(repo)
+  ignore(git_in(repo, ["config", "protocol.file.allow", "always"]))
+  ignore(
+    git_in(repo, [
+      "-c",
+      "protocol.file.allow=always",
+      "submodule",
+      "add",
+      "-q",
+      dep.to_string(),
+      "deps/one",
+    ]),
+  )
+  ignore(
+    git_in(repo, [
+      "-c", "user.email=test@example.com", "-c", "user.name=test", "-c", "commit.gpgsign=false",
+      "commit", "-q", "-am", "add submodule",
+    ]),
+  )
+  ignore(add_workspace(repo.to_string(), fn(_) {  }))
+  let manager = new_engine_manager("openseek")
+  manager.pump = Serving(sessions=Map([]))
+  // A dirty checkout still confirms first, and the confirmed force retry
+  // must delete the checkout even though `git worktree remove --force`
+  // refuses over the gitlink.
+  ignore(create_worktree(manager, repo.to_string(), "s-sub-dirty", fn(_) {  }))
+  @fsx.ensure_dir(
+    workspace_session_root(repo).join("sessions").join("s-sub-dirty").to_path(),
+  )
+  let dirty_checkout = repo.join(".worktrees/wt-1")
+  assert_true(@fsx.exists(dirty_checkout.join("deps/one/.git").to_path()))
+  @fs.write_file(
+    dirty_checkout.join("junk.txt").to_string(),
+    b"x",
+    create_mode=CreateOrTruncate,
+  )
+  guard archive_session(manager, "s-sub-dirty", _ => ()) is NeedsForce(refusal) else {
+    fail("dirty submodule checkout must ask for confirmation")
+  }
+  assert_eq(refusal.worktree, "wt-1")
+  assert_eq(refusal.dirty_paths, ["junk.txt"])
+  guard archive_session(manager, "s-sub-dirty", _ => (), force=true)
+    is Archived(_) else {
+    fail("forced archive must delete the submodule checkout")
+  }
+  assert_false(@fsx.exists(dirty_checkout.to_path()))
+  // A clean submodule checkout archives in one go, exactly like a clean
+  // plain worktree.
+  ignore(create_worktree(manager, repo.to_string(), "s-sub-clean", fn(_) {  }))
+  @fsx.ensure_dir(
+    workspace_session_root(repo).join("sessions").join("s-sub-clean").to_path(),
+  )
+  let clean_checkout = repo.join(".worktrees/wt-2")
+  assert_true(@fsx.exists(clean_checkout.join("deps/one/.git").to_path()))
+  guard archive_session(manager, "s-sub-clean", _ => ()) is Archived(_) else {
+    fail("clean submodule checkout must archive without confirmation")
+  }
+  assert_false(@fsx.exists(clean_checkout.to_path()))
+  // Branches and placements survive, and git's worktree bookkeeping is
+  // pruned rather than left stale.
+  assert_true(
+    git_probe(repo, [
+      "show-ref", "--verify", "--quiet", "refs/heads/openseek/wt-1",
+    ])
+    is Some(_),
+  )
+  assert_false(
+    git_in(repo, ["worktree", "list", "--porcelain"]).contains(".worktrees/"),
+  )
+  guard list_worktrees(repo.to_string()).worktrees is [first, second] else {
+    fail("both worktree placements must survive archive")
+  }
+  assert_false(first.present)
+  assert_false(second.present)
+  @fs.rmdir(root.to_string(), recursive=true)
+}
