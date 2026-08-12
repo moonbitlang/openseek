@@ -1118,6 +1118,8 @@ fn FileIndex::loaded(
 ///|
 /// Settle a failed Host scan. Initial failure is retryable from empty; a
 /// background failure retains the previous snapshot and any coalesced retry.
+/// If its one immediate retry was already spent, keep a stale latch for the
+/// next consumer instead of retrying forever or making the snapshot permanent.
 fn FileIndex::failed(self : FileIndex) -> (FileIndex, Bool) {
   match self {
     IndexLoading(..) => (IndexFailed, false)
@@ -1127,7 +1129,7 @@ fn FileIndex::failed(self : FileIndex) -> (FileIndex, Bool) {
           files~,
           truncated~,
           refreshing=refresh_again,
-          refresh_again=false,
+          refresh_again=!refresh_again,
         ),
         refresh_again,
       )
@@ -2061,6 +2063,20 @@ pub fn update(
         (
           list_files(dispatch, ctx.owner, ctx.request_epoch, root=ctx.root),
           { ..state, index: IndexLoading(refresh_again=false) },
+        )
+      } else if state.index
+        is IndexReady(files~, truncated~, refreshing=false, refresh_again=true) {
+        (
+          list_files(dispatch, ctx.owner, ctx.request_epoch, root=ctx.root),
+          {
+            ..state,
+            index: IndexReady(
+              files~,
+              truncated~,
+              refreshing=true,
+              refresh_again=false,
+            ),
+          },
         )
       } else {
         (@cmd.none, state)
@@ -3055,6 +3071,28 @@ test "file index requests retry failures and fence stale replies" {
     ctx,
   )
   assert_true(refresh_failed == ready)
+  let refreshing = {
+    ..ready,
+    index: IndexReady(
+      files=[Relative("src/main.mbt")],
+      truncated=true,
+      refreshing=true,
+      refresh_again=false,
+    ),
+  }
+  let (_, stale) = update(
+    emit,
+    FileIndexFailed(owner=ctx.owner, epoch=ctx.request_epoch),
+    refreshing,
+    ctx,
+  )
+  assert_true(
+    stale.index is IndexReady(refreshing=false, refresh_again=true, ..),
+  )
+  let (_, retrying_stale) = update(emit, EnsureFileIndex, stale, ctx)
+  assert_true(
+    retrying_stale.index is IndexReady(refreshing=true, refresh_again=false, ..),
+  )
 }
 
 ///|

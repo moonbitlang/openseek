@@ -32,6 +32,14 @@ fn Request::cache_key(self : Request, root : @common.Uri) -> String {
 }
 
 ///|
+/// Host cache keys are local to one connection, but ordered lanes are shared
+/// by the whole page. Include the channel here so an unresolved remote scan
+/// cannot delay an independent host that happens to use the same path/session.
+fn Request::lane_key(self : Request, cache_key : String) -> String {
+  "\{self.channel.uri_authority()}\u{0}file-search\u{0}\{cache_key}"
+}
+
+///|
 /// Read a bounded snapshot from the same Host file-search service as Ctrl+P.
 /// The cache key includes the conversation and concrete root, so moving from
 /// a project checkout to a worktree cannot reuse the previous snapshot. Each
@@ -46,13 +54,14 @@ pub fn Request::run(
     return failed()
   }
   let cache_key = self.cache_key(root)
+  let lane_key = self.lane_key(cache_key)
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       // Clear and repopulate one Host cache key as an indivisible sequence.
       // A conversation can return A→B→A while the first A scan is unresolved;
       // without this lane, its stale clear may overtake and cancel the current
       // A search even though the caller correctly rejects the stale reply.
-      @interop.in_ordered_lane(cache_key, () => {
+      @interop.in_ordered_lane(lane_key, () => {
         ignore(
           @interop.bridge_request(
             self.channel,
@@ -111,9 +120,10 @@ pub fn Request::retire(self : Request) -> @cmd.Cmd {
     return @cmd.none
   }
   let cache_key = self.cache_key(root)
+  let lane_key = self.lane_key(cache_key)
   @cmd.custom_cmd(_scheduler => {
     @js.async_run(() => {
-      @interop.in_ordered_lane(cache_key, () => {
+      @interop.in_ordered_lane(lane_key, () => {
         ignore(
           @interop.bridge_request(
             self.channel,

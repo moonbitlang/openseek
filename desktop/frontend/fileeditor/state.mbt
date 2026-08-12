@@ -167,7 +167,9 @@ pub enum FileIndex {
   IndexFailed
   // `truncated` means the Host stopped at its response cap. A ready snapshot
   // remains usable while one refresh runs; watcher bursts coalesce into at
-  // most one follow-up scan.
+  // most one follow-up scan. When `refreshing` is false, `refresh_again` marks
+  // a failed refresh whose stale snapshot must be retried by the next
+  // EnsureFileIndex consumer.
   IndexReady(
     files~ : Array[@pathx.Relative],
     truncated~ : Bool,
