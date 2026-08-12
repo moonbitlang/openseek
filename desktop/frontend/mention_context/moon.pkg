@@ -1,6 +1,7 @@
 import {
   "moonbitlang/core/debug",
   "moonbitlang/core/string",
+  "moonbitlang/editor/base/common",
 }
 
 supported_targets = "js"

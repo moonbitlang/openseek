@@ -168,6 +168,9 @@ pub fn tabs_bar(
   state : State,
   chips : Array[TabChip],
   actions : LauncherActions,
+  menu_open~ : Bool,
+  toggle_menu~ : @cmd.Cmd,
+  toggle_panel~ : @cmd.Cmd,
 ) -> @html.Html {
   let tabs : Array[@html.Html] = []
   for chip in chips {
@@ -207,17 +210,17 @@ pub fn tabs_bar(
     @html.button(
       class=if chips.is_empty() { "tab-add hidden" } else { "tab-add" },
       title="New tab",
-      on_click=dispatch(MenuToggled),
+      on_click=toggle_menu,
       icon(icon_add),
     ),
     @html.button(
       class="panel-toggle",
       title="Hide panel",
-      on_click=dispatch(TogglePanel),
+      on_click=toggle_panel,
       icon(icon_layout_sidebar_right),
     ),
   ]
-  if state.menu_open {
+  if menu_open {
     // No backdrop element: the frontend package installs a click-away
     // dismissal that does not consume the click that closes it.
     children.push(@html.div(class="dock-menu", launcher_rows(actions)))

@@ -444,7 +444,7 @@ pub(all) struct Ctx {
   panel_open : Bool
   open_files : Array[@pathx.Relative]
   active_file : @pathx.Relative?
-}
+} derive(Eq)
 
 ///|
 pub(all) enum Msg {

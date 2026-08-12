@@ -3,12 +3,19 @@ package "openseek_desktop/frontend/mention_context"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/editor/base/common",
 }
 
 // Values
 pub fn encode(Array[MentionRef], String) -> String
 
+pub fn glyph(MentionRef) -> String
+
+pub fn label(MentionRef) -> String
+
 pub fn parse(String) -> MentionMessage?
+
+pub fn target(MentionRef) -> Target?
 
 // Errors
 
@@ -22,11 +29,18 @@ pub(all) struct MentionMessage {
   mentions : Array[MentionRef]
   task : String
 } derive(@debug.Debug)
+pub fn MentionMessage::display_text(Self) -> String
 
 pub(all) enum MentionRef {
   Skill(name~ : String)
   Symbol(name~ : String, file~ : String, line~ : Int)
   Annotation(file~ : String, start_line~ : Int, end_line~ : Int, quote~ : String, comment~ : String, side~ : AnnotationSide)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Target {
+  file : String
+  range : @common.Range?
+  annotation : String?
 } derive(Eq, @debug.Debug)
 
 // Type aliases

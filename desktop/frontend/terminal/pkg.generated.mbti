@@ -2,6 +2,7 @@
 package "openseek_desktop/frontend/terminal"
 
 import {
+  "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/editor/base/common",
@@ -9,9 +10,11 @@ import {
 }
 
 // Values
+pub fn component(@rabbita.Val[Input], Actions) -> (@rabbita.Val[@html.Html], @cmd.Emit[Msg])
+
 pub fn disconnect(State, @interop.ChannelId) -> (@cmd.Cmd, State)
 
-pub fn panel_view(@cmd.Emit[Msg], State, Ctx) -> @html.Html
+pub fn panel_view(@cmd.Emit[Msg], State, Ctx, String) -> @html.Html
 
 pub fn sync(@cmd.Emit[Msg], State, Ctx) -> (State, @cmd.Cmd)
 
@@ -20,6 +23,20 @@ pub fn update(@cmd.Emit[Msg], Msg, State, Ctx) -> (@cmd.Cmd, State)
 // Errors
 
 // Types and methods
+pub(all) struct Actions {
+  external_link : @cmd.Emit[String]
+  error : @cmd.Emit[String]
+  visibility : @cmd.Emit[Bool]
+  connect : (@cmd.Emit[Msg], Connection) -> @cmd.Cmd
+}
+
+pub(all) struct Connection {
+  channel : @interop.ChannelId
+  websocket_epoch : Int
+  attempt : Int
+} derive(Eq)
+pub fn Connection::Connection(channel~ : @interop.ChannelId, websocket_epoch~ : Int, attempt~ : Int) -> Self
+
 pub(all) struct Ctx {
   channel : @interop.ChannelId
   session : String
@@ -27,9 +44,14 @@ pub(all) struct Ctx {
   checkout : @interop.CheckoutPlacement?
   dark_mode : Bool
   connected : Bool
-}
+} derive(Eq)
+
+type Input derive(Eq)
+pub fn Input::Input(ctx~ : Ctx, live_channels~ : Array[@interop.ChannelId], connections~ : Array[Connection]) -> Self
 
 pub(all) enum Msg {
+  Sync
+  Disconnect(@interop.ChannelId)
   ToggleTerminal
   NewTerminal
   TabSelected(key~ : Int)

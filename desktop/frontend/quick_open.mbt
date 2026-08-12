@@ -1743,7 +1743,7 @@ test "accepting files and symbols uses the shared editor open path" {
   let (_, accepted) = update(dispatch, QuickOpenAccept, ready)
   assert_true(accepted.quick_open is None)
   assert_true(accepted.screen is Chat)
-  assert_true(accepted.dock.open)
+  assert_true(accepted.right_panel_open)
   assert_true(
     @dock.active_file(accepted.dock) is Some(Relative("src/main.mbt")),
   )

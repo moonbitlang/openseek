@@ -1070,11 +1070,12 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
     stale: false,
   }
   let review_dock = @dock.open_file(
-    { ..bound.dock, owner: Some(owner), open: true },
+    { ..bound.dock, owner: Some(owner) },
     review_path,
   )
   let bound = {
     ..bound,
+    right_panel_open: true,
     dock: review_dock,
     file_panel: {
       ..bound.file_panel,

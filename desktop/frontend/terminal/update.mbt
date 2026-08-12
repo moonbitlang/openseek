@@ -112,6 +112,9 @@ pub fn update(
   let checkout_ready = ctx.checkout is Some(@interop.WorkspaceRoot) ||
     ctx.checkout is Some(@interop.Worktree(_))
   match msg {
+    // The component calls `sync` immediately after this no-op transition.
+    Sync => (@cmd.none, state)
+    Disconnect(channel) => disconnect(state, channel)
     ToggleTerminal =>
       if state.open {
         // Hide only — every shell keeps running for the panel's return.

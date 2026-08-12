@@ -113,7 +113,8 @@ fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? 
     ("KeyN", false) => Some(NewChat)
     ("KeyO", false) => Some(AddProjectRequested)
     ("KeyB", false) => Some(ToggleSidebar)
-    ("KeyB", true) => Some(Dock(@dock.TogglePanel))
+    // The right-panel component owns Shift+B and updates its own Model.
+    ("KeyB", true) => None
     _ => None
   }
 }
@@ -133,31 +134,15 @@ pub fn boot() -> Unit {
       },
       // The narrow-layout flag must track the window: rotating a phone or
       // resizing a desktop window across the breakpoint re-lays the app out.
-      // Ctrl+` follows the terminal buttons' existing toggle path. Application
-      // command chords use a separate capture subscription because they must
-      // beat embedded editors and browser defaults.
+      // Component-owned chords (Shift+B and Ctrl+`) live with their local
+      // Models. Application command chords use a separate capture subscription
+      // because they must beat embedded editors and browser defaults.
       subscriptions=(model, emit) => {
         let subs : Array[@sub.Sub] = [
           @sub.on_resize(
             emit.map(viewport => ViewportResized(width=viewport.width)),
           ),
           app_shortcut_subscription(emit),
-          @sub.on_key_down(
-            @cmd.Emit((keyboard : @rabbita/common.Keyboard) => {
-              if keyboard.code() == "Backquote" &&
-                keyboard.ctrl_key() &&
-                !keyboard.shift_key() &&
-                !keyboard.alt_key() &&
-                !keyboard.meta_key() &&
-                !keyboard.is_composing() &&
-                !keyboard.repeat() {
-                emit(Terminal(ToggleTerminal))
-              } else {
-                @cmd.none
-              }
-            }),
-          ),
-          external_link_subscription(emit.map(url => ExternalLinkClicked(url))),
         ]
         // The project picker's Enter/Escape/paste surface, only while its
         // modal is open — same lifetime rule as the dismissal listeners.
@@ -184,15 +169,6 @@ pub fn boot() -> Unit {
             ),
           )
         }
-        if model.dock.menu_open {
-          subs.push(
-            dismiss_subscription(
-              "dock-menu-dismiss",
-              trigger=".tab-add",
-              emit.map((_ : Unit) => CloseDockMenu),
-            ),
-          )
-        }
         if model.project_menu is Some(_) {
           subs.push(
             dismiss_subscription(
@@ -205,7 +181,80 @@ pub fn boot() -> Unit {
         @sub.batch(subs)
       },
     )
-    state.view(model => view(emit, model))
+    let right_panel_input = state.map(model => model.right_panel_input())
+    let (right_panel_html, right_panel_emit) = @right_panel.component(
+      right_panel_input,
+      {
+        dock: emit.map(msg => Dock(msg)),
+        file_editor: emit.map(msg => FileEditor(msg)),
+        browser_tab: emit(BrowserTabRequested),
+        files: emit(FilePickerRequested),
+        review: emit(ReviewRequested),
+        browser_input: emit.map(value => BrowserAddressEdited(value)),
+        browser_submit: emit(BrowserNavigateSubmitted),
+        browser_back: emit(BrowserBack),
+        browser_forward: emit(BrowserForward),
+        browser_reload: emit(BrowserReload),
+        browser_open_external: emit(BrowserOpenExternal),
+        external_link: emit.map(url => ExternalLinkClicked(url)),
+        opened: @fileeditor.mount_cmds(emit.map(msg => FileEditor(msg))),
+        visibility: emit.map(visibility => {
+          RightPanelVisibilityChanged(
+            open=visibility.open,
+            menu_open=visibility.menu_open,
+          )
+        }),
+      },
+    )
+    let ui_emit : @cmd.Emit[Msg] = @cmd.Emit(msg => {
+      let panel_command = match msg {
+        JumpToMention(_) | JumpToLocation(..) | QuickOpenPick(_) =>
+          right_panel_emit(@right_panel.OpenPanel)
+        _ => @cmd.none
+      }
+      @cmd.batch([panel_command, emit(msg)])
+    })
+    let terminal_input = state.map(model => model.terminal_input())
+    let (terminal_html, terminal_emit) = @terminal.component(terminal_input, {
+      external_link: right_panel_emit.map(url => @right_panel.ExternalLink(url)),
+      error: emit.map(message => HostActionFailed(message)),
+      visibility: emit.map(open => TerminalVisibilityChanged(open)),
+      connect: (terminal_emit, connection) => {
+        install_bridge(
+          emit,
+          terminal_emit,
+          connection.channel,
+          connection.websocket_epoch,
+        )
+      },
+    })
+    let transcript_input = state.map(model => model.transcript_input())
+    let transcript_html = @transcript_component.component(transcript_input, {
+      open: ui_emit.map(path => OpenFile(path)),
+      jump: ui_emit.map(target => {
+        JumpToLocation(
+          path=target.file,
+          range=target.range,
+          annotation=target.annotation,
+        )
+      }),
+    })
+    state.view4(terminal_html, transcript_html, right_panel_html, (
+      model,
+      terminal_html,
+      transcript_html,
+      right_panel_html,
+    ) => {
+      view(
+        ui_emit,
+        terminal_emit(@terminal.ToggleTerminal),
+        right_panel_emit(@right_panel.TogglePanel),
+        model,
+        terminal_html,
+        transcript_html,
+        right_panel_html,
+      )
+    })
   })
   app.mount("app")
 }

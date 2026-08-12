@@ -5,17 +5,11 @@
 
 ///|
 pub(all) enum Msg {
-  // Show or hide the whole right panel.
-  TogglePanel
   // A tab in the strip was clicked: put its body on screen.
   TabActivated(DockTab)
   // A tab's close button was clicked. Closing the active tab activates its
   // right neighbor, else its left, else none.
   TabClosed(DockTab)
-  // Open or close the strip's `+` launcher menu popup. The rows themselves
-  // dispatch root messages (opening a tab crosses packages), and the root
-  // closes the menu with `close_menu` as part of handling them.
-  MenuToggled
 }
 
 ///|
@@ -26,8 +20,6 @@ fn tab_index(state : State, tab : DockTab) -> Int? {
 ///|
 pub fn update(msg : Msg, state : State) -> State {
   match msg {
-    TogglePanel => { ..state, open: !state.open, menu_open: false }
-    MenuToggled => { ..state, menu_open: !state.menu_open }
     TabActivated(tab) =>
       if tab_index(state, tab) is Some(_) {
         { ..state, active: Some(tab) }
@@ -68,14 +60,6 @@ pub fn open_file(state : State, path : @pathx.Relative) -> State {
     tabs
   }
   { ..state, tabs, active: Some(tab) }
-}
-
-///|
-/// Close the `+` launcher menu — the root's half of handling a menu row
-/// click, whose real work (allocating a page, opening the picker) crosses
-/// packages.
-pub fn close_menu(state : State) -> State {
-  { ..state, menu_open: false }
 }
 
 ///|
@@ -146,5 +130,5 @@ pub fn sync(state : State, owner : @interop.ConversationKey) -> State {
     Some(parked) => (parked.tabs.copy(), parked.active)
     None => ([], (None : DockTab?))
   }
-  { ..state, owner: Some(owner), tabs, active, menu_open: false, remembered }
+  { owner: Some(owner), tabs, active, remembered }
 }

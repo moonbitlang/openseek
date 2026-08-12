@@ -132,7 +132,6 @@ fn open_session_on(
     let next = {
       ..model.activate(channel, session_id),
       screen: Chat,
-      transcript_pinned: true,
       loading_conversation: if generation is Some(_) {
         Some(owner)
       } else {
@@ -140,7 +139,7 @@ fn open_session_on(
       },
       completion: None,
     }.with_active_project(conv.workspace.project())
-    let commands = [scroll_transcript_after_render()]
+    let commands : Array[@cmd.Cmd] = []
     if generation is Some(generation) {
       commands.push(
         session_snapshot_command(
@@ -392,7 +391,6 @@ fn adopt_projects(
           active_session: "",
           loading_conversation: None,
           screen: Chat,
-          transcript_pinned: true,
           completion: None,
         },
       )
@@ -401,10 +399,9 @@ fn adopt_projects(
       // The retained list is newest-first. Activate its first entry before
       // starting the reload so no render can address the detached session id
       // as an empty scratch conversation while the snapshot is in flight.
-      let activated = {
-        ..next.activate(channel, fallback.id),
-        transcript_pinned: true,
-      }.with_active_project(fallback.workspace)
+      let activated = next
+        .activate(channel, fallback.id)
+        .with_active_project(fallback.workspace)
       // The session list names only the project store. Reconcile that broad
       // placement with the registry and any already-known conversation before
       // reloading: a retained Worktree must not be downgraded to Project, while
@@ -439,7 +436,6 @@ fn adopt_projects(
         active_session: "",
         loading_conversation: None,
         screen: Chat,
-        transcript_pinned: true,
         completion: None,
       },
     )
@@ -513,11 +509,7 @@ fn retry_session_snapshot(
       TranscriptRefreshFailedNotice,
     )
     let next = model.replace_conversation(failed)
-    let scroll = if failed.overlay.length() > conv.overlay.length() {
-      scroll_if_active(dispatch, next, channel, session)
-    } else {
-      @cmd.none
-    }
+    let scroll = @cmd.none
     let owner : @interop.ConversationKey = { channel, session }
     if activate_on_success && model.loading_conversation == Some(owner) {
       let (toast, next) = next.notify_error(dispatch, message)
@@ -579,18 +571,9 @@ fn apply_session_snapshot(
   if activate_on_success && model.loading_conversation == Some(owner) {
     next = {
       ..next.activate(channel, session),
-      transcript_pinned: true,
       loading_conversation: None,
       completion: None,
     }
-    commands.push(scroll_transcript_after_render())
-    // The scroll write initializes the overview's active turn through the
-    // scroll watcher — except when the adopted transcript fits its viewport
-    // and the write clamps to the same scrollTop, firing nothing. The
-    // guarded recompute covers exactly that case.
-    commands.push(
-      report_visible_turn_after_render(dispatch, skip_unchanged=true),
-    )
     let (branch_cmd, probed) = probe_branch(
       dispatch,
       next,
@@ -600,10 +583,6 @@ fn apply_session_snapshot(
     )
     next = probed
     commands.push(branch_cmd)
-  } else {
-    // `scroll_if_active` also recomputes the overview's active turn for the
-    // on-screen conversation.
-    commands.push(scroll_if_active(dispatch, next, channel, session))
   }
   if gapped || reload_after_current {
     guard next.find_conversation(channel, session) is Some(conv) else {
@@ -620,36 +599,6 @@ fn apply_session_snapshot(
     }
   }
   (@cmd.batch(commands), next)
-}
-
-///|
-/// Scroll the transcript only when `session_id` is the conversation on
-/// screen — a background conversation's stream must not yank the visible
-/// scroll position around — and only while the user is at the bottom:
-/// someone who scrolled up to read history stays where they are.
-///
-/// Every on-screen transcript change also recomputes the overview's active
-/// turn: a commit can move a bubble across the reading line while the
-/// scroll write clamps (or is skipped) and fires no event. The recompute
-/// dispatches only when the turn actually changed.
-fn scroll_if_active(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-  channel : @interop.ChannelId,
-  session_id : String,
-) -> @cmd.Cmd {
-  guard channel == model.focused && session_id == model.active_session else {
-    return @cmd.none
-  }
-  let follow = if model.transcript_pinned {
-    scroll_transcript_after_render()
-  } else {
-    @cmd.none
-  }
-  @cmd.batch([
-    follow,
-    report_visible_turn_after_render(dispatch, skip_unchanged=true),
-  ])
 }
 
 ///|
@@ -854,7 +803,8 @@ fn open_editor_at(
       @fileeditor.mount_cmds(femit),
       {
         ..model,
-        dock: { ..dock, open: true },
+        dock,
+        right_panel_open: true,
         file_panel: {
           ..panel,
           error: Some("\{path} is outside the conversation workspace"),
@@ -866,11 +816,11 @@ fn open_editor_at(
   // An explicit open while the picker is the active tab fulfills it, the
   // same as a pick from its tree.
   let dock = if dock.active is Some(FilePicker) {
-    { ..@dock.resolve_pick(dock, relative), open: true }
+    @dock.resolve_pick(dock, relative)
   } else {
-    { ..@dock.open_file(dock, relative), open: true }
+    @dock.open_file(dock, relative)
   }
-  let model = { ..model, dock, file_panel: panel }
+  let model = { ..model, dock, file_panel: panel, right_panel_open: true }
   let (cmd, panel) = @fileeditor.open_file(
     femit,
     panel,
@@ -1302,7 +1252,9 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // dock can instead show its browser or empty-strip launcher. CSS hides the
     // file body in all three cases. Report actual visibility so the file
     // subsystem parks its workspace watches and Changes refreshes off-screen.
-    panel_open: model.dock.open && model.screen is Chat && file_body_visible,
+    panel_open: model.right_panel_open &&
+    model.screen is Chat &&
+    file_body_visible,
     open_files: @dock.file_paths(model.dock),
     active_file: @dock.active_file(model.dock),
   }
@@ -1327,23 +1279,6 @@ fn terminal_ctx(model : Model) -> @terminal.Ctx {
     dark_mode: model.theme.is_dark(model.system_dark),
     connected,
   }
-}
-
-///|
-/// Reconcile the terminal panel's emulator display with the active
-/// conversation after every message (see `@terminal.sync`) — a conversation
-/// switch changes which workspace's terminals belong on screen without
-/// producing any terminal message.
-fn sync_terminal_panel(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-) -> (Model, @cmd.Cmd) {
-  let (panel, cmd) = @terminal.sync(
-    dispatch.map(msg => Terminal(msg)),
-    model.terminal_panel,
-    terminal_ctx(model),
-  )
-  ({ ..model, terminal_panel: panel }, cmd)
 }
 
 ///|
@@ -1397,8 +1332,8 @@ fn covering_overlay(model : Model) -> Bool {
 fn desired_browser_view(model : Model) -> Int? {
   guard model.is_desktop &&
     model.screen is Chat &&
-    model.dock.open &&
-    !model.dock.menu_open &&
+    model.right_panel_open &&
+    !model.right_panel_menu_open &&
     !model.launcher.open &&
     !model.git_details_open &&
     !(model.narrow && model.sidebar_open) &&
@@ -1419,7 +1354,7 @@ fn browser_geometry(model : Model) -> BrowserGeometry {
     desired: desired_browser_view(model),
     sidebar_open: model.sidebar_open,
     narrow: model.narrow,
-    terminal_open: model.terminal_panel.open,
+    terminal_open: model.terminal_open,
     tree_layout: model.tree_layout,
   }
 }
@@ -1535,7 +1470,6 @@ fn replace_archived_active(
     ..activated.replace_conversation(fresh).with_active_project(workspace),
     screen: Chat,
     loading_conversation: None,
-    transcript_pinned: true,
     completion: None,
   }
 }
@@ -1597,42 +1531,12 @@ fn update(
   } else {
     model
   }
-  // The overview rail's hover/active keys are per-session event sequences —
-  // the same numbers name different turns in another conversation — so a
-  // switch resets them here, however it happened. Returning to Chat from
-  // Skills/Settings resets too: the transcript DOM is rebuilt while the keys
-  // (and a hover whose mouseleave never fired) survive on the model. The
-  // explicit recompute is not redundant with the scroll watcher: a
-  // conversation that fits its viewport produces no scroll event at all,
-  // and one whose visible anchor string matches the previous session's
-  // would be swallowed by the watcher's change guard.
-  let (overview_cmd, model) = if model.active_session != previous.active_session ||
-    model.focused != previous.focused ||
-    (model.screen is Chat && !(previous.screen is Chat)) {
-    (
-      report_visible_turn_after_render(dispatch),
-      { ..model, transcript_overview: @transcript_overview.State::empty() },
-    )
-  } else {
-    (@cmd.none, model)
-  }
-  // The resize handle belongs to the whole right panel, even when its first
-  // active tab is a Browser page and the file body stays hidden. File-opening
-  // paths already mount it through the fileeditor package; cover every other
-  // closed-to-open transition here so a fresh project's first transcript link
-  // installs the drag listeners too.
-  let dock_mount_cmd = if !previous.dock.open && model.dock.open {
-    @fileeditor.mount_cmds(dispatch.map(msg => FileEditor(msg)))
-  } else {
-    @cmd.none
-  }
   let (model, panel_cmd) = sync_file_panel(dispatch, model)
-  let (model, terminal_cmd) = sync_terminal_panel(dispatch, model)
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
-      cmd, quick_open_cmd, quick_open_restart_cmd, symbol_restart_cmd, dock_mount_cmd,
-      overview_cmd, panel_cmd, terminal_cmd, browser_cmd,
+      cmd, quick_open_cmd, quick_open_restart_cmd, symbol_restart_cmd, panel_cmd,
+      browser_cmd,
     ]),
     model,
   )
@@ -1647,10 +1551,9 @@ fn update_msg(
   match msg {
     Init =>
       // A browser console boots by asking the relay who is signed in; the
-      // bridge, the session rotation, and the transcript scroll watcher
-      // wait for the first roster (`apply_roster`) — before sign-in there
-      // is no channel to install and no transcript DOM to watch. The
-      // desktop window boots its one Local channel directly.
+      // bridge and session rotation wait for the first roster (`apply_roster`)
+      // because there is no channel to install before sign-in. Component
+      // subscriptions own their transcript and terminal DOM lifetimes.
       match model.console {
         Some(_) =>
           (
@@ -1669,9 +1572,7 @@ fn update_msg(
         None =>
           (
             @cmd.batch([
-              install_bridge(dispatch, model.focused, 0),
               load_saved_settings(dispatch),
-              watch_transcript_scroll(dispatch),
               watch_color_scheme(dispatch),
               rotate_session(dispatch, model.focused),
             ]),
@@ -1784,7 +1685,7 @@ fn update_msg(
       guard conv.mentions.get(index) is Some(mention) else {
         return (@cmd.none, model)
       }
-      guard mention_target(mention.ref_) is Some(target) else {
+      guard @mention_context.target(mention.ref_) is Some(target) else {
         return (@cmd.none, model)
       }
       // A draft chip still holds the full resolved range (columns included);
@@ -2347,7 +2248,8 @@ fn update_msg(
       // so any resize while a document is up remeasures it — same-side
       // resizes included (a rotation changes the host without crossing the
       // breakpoint).
-      let cmds = if model.dock.open && @dock.active_file(model.dock) is Some(_) {
+      let cmds = if model.right_panel_open &&
+        @dock.active_file(model.dock) is Some(_) {
         [@fileeditor.request_viewer_remeasure()]
       } else {
         []
@@ -2359,10 +2261,6 @@ fn update_msg(
       if desired_browser_view(model) is Some(_) {
         cmds.push(measure_browser_pane(dispatch))
       }
-      // A vertical resize moves the overview's 35% reading line across
-      // bubbles without any scroll event; recompute the active turn, but
-      // only dispatch when it actually moved.
-      cmds.push(report_visible_turn_after_render(dispatch, skip_unchanged=true))
       let cmd = @cmd.batch(cmds)
       if narrow == model.narrow {
         (cmd, model)
@@ -2536,20 +2434,16 @@ fn update_msg(
             conv.mentions,
           )
           (
-            @cmd.batch([
-              steer_openseek(
-                dispatch,
-                model.focused,
-                conv.session_id,
-                submission_id,
-                task,
-                run_id,
-              ),
-              scroll_transcript_after_render(),
-            ]),
+            steer_openseek(
+              dispatch,
+              model.focused,
+              conv.session_id,
+              submission_id,
+              task,
+              run_id,
+            ),
             {
               ..model.replace_conversation({ ..conv, task: "", mentions: [] }),
-              transcript_pinned: true,
               completion: None,
             },
           )
@@ -2620,16 +2514,7 @@ fn update_msg(
             workspace=conv.workspace.project(),
           )
         }
-        (
-          @cmd.batch([start_cmd, scroll_transcript_after_render()]),
-          // Submitting is an explicit jump to the conversation's tail, so it
-          // re-pins a transcript the user had scrolled away from.
-          {
-            ..model.replace_conversation(next),
-            transcript_pinned: true,
-            completion: None,
-          },
-        )
+        (start_cmd, { ..model.replace_conversation(next), completion: None })
       }
     }
     Stop => {
@@ -2806,7 +2691,6 @@ fn update_msg(
           ..activated,
           conversations,
           screen: Chat,
-          transcript_pinned: true,
           loading_conversation: None,
           completion: None,
         },
@@ -3053,46 +2937,6 @@ fn update_msg(
         let (cmd, model) = open_session_on(dispatch, channel, model, session_id)
         (@cmd.batch([focus_cmd, cmd]), model)
       }
-    TranscriptPinned(pinned) =>
-      (@cmd.none, { ..model, transcript_pinned: pinned })
-    // Pin eagerly so the button hides on the click's own render; the scroll
-    // watcher would only confirm it after the scroll settles.
-    JumpToLatest =>
-      (scroll_transcript_after_render(), { ..model, transcript_pinned: true })
-    TranscriptOverview(msg) => {
-      let previous_active = model.transcript_overview.active
-      let model = {
-        ..model,
-        transcript_overview: @transcript_overview.update(
-          msg,
-          model.transcript_overview,
-        ),
-      }
-      match msg {
-        // Jumping into history is reading history: unpin eagerly like
-        // JumpToLatest pins eagerly, so the next streamed delta cannot yank
-        // the view back down before the scroll watcher reports. The jump
-        // command re-reports the settled at-bottom state, which restores the
-        // pin when the click could not actually move a short transcript.
-        // No rail reveal here: the clicked tick is under the pointer, and
-        // scrolling the rail beneath it would hand the hover to a neighbor.
-        Clicked(key) =>
-          (
-            scroll_turn_into_view(dispatch, key),
-            { ..model, transcript_pinned: false },
-          )
-        // A moved highlight also scrolls the rail's own window onto it —
-        // a rail past its height cap scrolls instead of compressing, so
-        // the reading turn can sit outside the visible run of ticks.
-        ActiveChanged(_) =>
-          if model.transcript_overview.active == previous_active {
-            (@cmd.none, model)
-          } else {
-            (reveal_active_overview_tick(), model)
-          }
-        _ => (@cmd.none, model)
-      }
-    }
     ColorSchemeChanged(dark) => {
       let model = { ..model, system_dark: dark }
       match model.theme {
@@ -3177,8 +3021,37 @@ fn update_msg(
     CloseGitDetails => (@cmd.none, { ..model, git_details_open: false })
     CloseLauncher =>
       (@cmd.none, { ..model, launcher: { ..model.launcher, open: false } })
-    CloseDockMenu =>
-      (@cmd.none, { ..model, dock: @dock.close_menu(model.dock) })
+    RightPanelVisibilityChanged(open~, menu_open~) => {
+      let changed = open != model.right_panel_open
+      // Closing the panel, or reopening it onto an existing tab, is newer
+      // than a positioned transcript click whose host lookup is still in
+      // flight. Advance the shared navigation token before applying the
+      // component-owned visibility projection.
+      let presents_existing_tab = !model.right_panel_open &&
+        open &&
+        model.dock.active is Some(_)
+      let model = if (model.right_panel_open && !open) || presents_existing_tab {
+        model.begin_editor_navigation()
+      } else {
+        model
+      }
+      let model = {
+        ..model,
+        right_panel_open: open,
+        right_panel_menu_open: menu_open,
+      }
+      if changed {
+        let (cmd, panel) = @fileeditor.panel_toggle_cmds(
+          dispatch.map(msg => FileEditor(msg)),
+          model.file_panel,
+          file_ctx(model),
+          opening=open,
+        )
+        (cmd, { ..model, file_panel: panel })
+      } else {
+        (@cmd.none, model)
+      }
+    }
     ToggleLauncher => {
       let opening = !model.launcher.open
       // The launcher exists only in the desktop window, whose one native
@@ -3330,31 +3203,6 @@ fn update_msg(
       let model = { ..model, dock, }
       let femit = dispatch.map(msg => FileEditor(msg))
       match msg {
-        TogglePanel => {
-          // Hiding the dock, or revealing an existing tab in it, is newer than
-          // a positioned transcript click. Its delayed host reply must not
-          // undo the destination the user just chose to hide or reveal. An
-          // empty dock opening has no destination and does not spend a token.
-          let presents_existing_tab = !before.open &&
-            dock.open &&
-            dock.active is Some(_)
-          let model = if (before.open && !dock.open) || presents_existing_tab {
-            model.begin_editor_navigation()
-          } else {
-            model
-          }
-          let (cmd, panel) = @fileeditor.panel_toggle_cmds(
-            femit,
-            model.file_panel,
-            file_ctx(model),
-            opening=dock.open,
-          )
-          (cmd, { ..model, file_panel: panel })
-        }
-        MenuToggled =>
-          // Pure UI state; the browser sync pass hides the native view
-          // while the popup would overlap it.
-          (@cmd.none, model)
         TabActivated(_) =>
           if dock.active != before.active {
             // A tab selection is newer than any transcript link still waiting
@@ -3472,13 +3320,16 @@ fn update_msg(
     BrowserTabRequested => {
       let model = model.begin_editor_navigation()
       let (preview, id) = @preview.open_page(model.preview)
-      let dock = @dock.close_menu(@dock.open_browser(model.dock, id))
-      (focus_browser_address(), { ..model, preview, dock })
+      let dock = @dock.open_browser(model.dock, id)
+      (
+        focus_browser_address(),
+        { ..model, preview, dock, right_panel_menu_open: false },
+      )
     }
     FilePickerRequested => {
       let model = model.begin_editor_navigation()
-      let dock = @dock.close_menu(@dock.open_picker(model.dock))
-      let next = { ..model, dock, }
+      let dock = @dock.open_picker(model.dock)
+      let next = { ..model, dock, right_panel_menu_open: false }
       let (cmd, file_panel) = @fileeditor.update(
         dispatch.map(msg => FileEditor(msg)),
         @fileeditor.ExplorerModeSelected(ExplorerFiles),
@@ -3489,8 +3340,8 @@ fn update_msg(
     }
     ReviewRequested => {
       let model = model.begin_editor_navigation()
-      let dock = @dock.close_menu(@dock.open_picker(model.dock))
-      let next = { ..model, dock, }
+      let dock = @dock.open_picker(model.dock)
+      let next = { ..model, dock, right_panel_menu_open: false }
       let (cmd, file_panel) = @fileeditor.update(
         dispatch.map(msg => FileEditor(msg)),
         @fileeditor.ExplorerModeSelected(ExplorerChanges),
@@ -3610,62 +3461,8 @@ fn update_msg(
         { ..model, browser_pane: { ..pane, shown: Some(id), rect: Some(rect) } },
       )
     }
-    Terminal(msg) => {
-      // xterm is an imperative widget rather than document anchor markup, so
-      // its web-links addon reports activation as a terminal message. Feed it
-      // back through the exact conversation-link route: desktop Chat opens or
-      // reuses a dock browser tab, while other hosts/screens open externally.
-      if msg is LinkActivated(url~) {
-        return update(dispatch, ExternalLinkClicked(url), model)
-      }
-      // Host-originated replies and notifications can already be queued when
-      // a WebSocket closes. Their terminal ids belong to the dead connection,
-      // not to a later connection for the same relay device, so ignore them
-      // from the first loss onward. User actions carry a tab key instead and
-      // continue through the terminal state machine normally.
-      let owner_live = match msg {
-        Opened(channel~, key=_, id=_)
-        | Output(channel~, id=_, sequence=_, data=_)
-        | OutputRendered(channel~, id=_, sequence=_)
-        | SessionExited(channel~, id=_, code=_) =>
-          match model.device_state(channel) {
-            Some(dev) =>
-              dev.bridge is Connected(..) && dev.reconnect_failures == 0
-            None => false
-          }
-        _ => true
-      }
-      guard owner_live else { return (@cmd.none, model) }
-      let terminal_was_open = model.terminal_panel.open
-      let (cmd, panel) = @terminal.update(
-        dispatch.map(msg => Terminal(msg)),
-        msg,
-        model.terminal_panel,
-        terminal_ctx(model),
-      )
-      // The terminal opening, closing, or resizing moves the overview's 35%
-      // reading line across bubbles without any scroll event; recompute the
-      // active turn when the pane geometry moved (dispatching only when the
-      // turn actually changed).
-      let cmd = if panel.open != terminal_was_open || msg is ViewportResized(..) {
-        @cmd.batch([
-          cmd,
-          report_visible_turn_after_render(dispatch, skip_unchanged=true),
-        ])
-      } else {
-        cmd
-      }
-      let model = { ..model, terminal_panel: panel }
-      // A rejected input means those keystrokes were lost; keep the session
-      // alive, but surface the transport error on the app's toast rail.
-      match msg {
-        InputFailed(key=_, message~) => {
-          let (toast, next) = model.notify_error(dispatch, message)
-          (@cmd.batch([cmd, toast]), next)
-        }
-        _ => (cmd, model)
-      }
-    }
+    TerminalVisibilityChanged(open) =>
+      (@cmd.none, { ..model, terminal_open: open })
     HostActionFailed(message) => model.notify_error(dispatch, message)
     OpenFileFailed(owner~, generation~, message~) => {
       let conv = model.active()
@@ -3711,13 +3508,16 @@ fn update_msg(
         }
         match reuse {
           Some(id) => {
-            let dock = { ..@dock.open_browser(model.dock, id), open: true }
-            (@cmd.none, { ..model, dock, })
+            let dock = @dock.open_browser(model.dock, id)
+            (@cmd.none, { ..model, dock, right_panel_open: true })
           }
           None => {
             let (preview, id) = @preview.open_page(model.preview, url~)
-            let dock = { ..@dock.open_browser(model.dock, id), open: true }
-            (browser_open(dispatch, id, url), { ..model, preview, dock })
+            let dock = @dock.open_browser(model.dock, id)
+            (
+              browser_open(dispatch, id, url),
+              { ..model, preview, dock, right_panel_open: true },
+            )
           }
         }
       } else {
@@ -3957,19 +3757,8 @@ fn update_device_msg(
         },
       )
     }
-    BridgeUnavailable(message) => {
-      let (terminal_cmd, terminal_panel) = @terminal.disconnect(
-        model.terminal_panel,
-        channel,
-      )
-      (
-        terminal_cmd,
-        {
-          ..model.replace_device({ ..dev, bridge: BridgeLost(message) }),
-          terminal_panel,
-        },
-      )
-    }
+    BridgeUnavailable(message) =>
+      (@cmd.none, model.replace_device({ ..dev, bridge: BridgeLost(message) }))
     ChannelDown(websocket_epoch~) => {
       // A close callback may already be queued when sign-out retires a
       // device. If the same relay id is later re-added, it owns a new epoch
@@ -3988,34 +3777,25 @@ fn update_device_msg(
       } else {
         dev.bridge
       }
-      // The whole HostConnection owns the PTY task group. Its first socket
-      // loss therefore invalidates every terminal id immediately, even
-      // though the rest of the UI tolerates two short reconnect failures
-      // before presenting BridgeLost.
-      let (terminal_cmd, terminal_panel) = @terminal.disconnect(
-        model.terminal_panel,
-        channel,
-      )
       (
-        @cmd.batch([
-          @cmd.delay(
-            dispatch(FromDevice(channel, ReconnectDue(websocket_epoch~))),
-            reconnect_delay(failures),
-          ),
-          terminal_cmd,
-        ]),
-        {
-          ..model.replace_device({ ..dev, bridge, reconnect_failures: failures }),
-          terminal_panel,
-        },
+        @cmd.delay(
+          dispatch(FromDevice(channel, ReconnectDue(websocket_epoch~))),
+          reconnect_delay(failures),
+        ),
+        model.replace_device({ ..dev, bridge, reconnect_failures: failures }),
       )
     }
     ReconnectDue(websocket_epoch~) => {
       guard websocket_epoch == dev.websocket_epoch else {
         return (@cmd.none, model)
       }
-      guard channel is Remote(device) else { return (@cmd.none, model) }
-      (connect_ws(dispatch, device, websocket_epoch), model)
+      (
+        @cmd.none,
+        model.replace_device({
+          ..dev,
+          reconnect_attempt: dev.reconnect_attempt + 1,
+        }),
+      )
     }
     FilePanel(msg) => {
       // The file panel serves the focused conversation; a background
@@ -4145,10 +3925,7 @@ fn update_device_msg(
         if !changed {
           (@cmd.none, model)
         } else {
-          (
-            scroll_if_active(dispatch, model, channel, session),
-            model.replace_conversation(next),
-          )
+          (@cmd.none, model.replace_conversation(next))
         }
       } else {
         (@cmd.none, model)
@@ -4164,10 +3941,7 @@ fn update_device_msg(
           steer_dropped_notice(text),
         )
         if removed {
-          (
-            scroll_if_active(dispatch, model, channel, session),
-            model.replace_conversation(next),
-          )
+          (@cmd.none, model.replace_conversation(next))
         } else {
           (@cmd.none, model)
         }
@@ -4841,7 +4615,7 @@ fn update_device_msg(
               let (changed, next) = conv.apply_commit(sequence, item, ts?)
               (
                 if changed {
-                  scroll_if_active(dispatch, model, channel, session)
+                  @cmd.none
                 } else {
                   @cmd.none
                 },
@@ -5509,7 +5283,7 @@ fn update_device_msg(
         let (transcript_grew, next) = apply_engine_event(conv, event, run_id)
         (
           if transcript_grew {
-            scroll_if_active(dispatch, model, channel, conv.session_id)
+            @cmd.none
           } else {
             @cmd.none
           },
@@ -5732,7 +5506,7 @@ fn update_device_msg(
             ),
           ]
           if changed {
-            commands.push(scroll_if_active(dispatch, model, channel, session))
+            commands.push(@cmd.none)
           }
           (@cmd.batch(commands), updated)
         }
@@ -5766,7 +5540,7 @@ fn update_device_msg(
             let request_generation = dev.worktrees_request_generation + 1
             (
               @cmd.batch([
-                scroll_if_active(dispatch, model, channel, session),
+                @cmd.none,
                 fetch_worktrees(
                   dispatch,
                   channel,
@@ -5781,7 +5555,7 @@ fn update_device_msg(
               }),
             )
           } else {
-            (scroll_if_active(dispatch, model, channel, session), updated)
+            (@cmd.none, updated)
           }
         }
       } else {
@@ -5819,7 +5593,7 @@ fn update_device_msg(
           conv.append_local_notice(Assistant(is_danger=true), content)
         }
         (
-          scroll_if_active(dispatch, model, channel, conv.session_id),
+          @cmd.none,
           model.replace_conversation(
             if next.run is NoRun(..) {
               { ..next, run: NoRun(ended=Some(RunErrored)) }
@@ -5835,7 +5609,7 @@ fn update_device_msg(
     CompactRejected(session~, message~) =>
       if model.find_conversation(channel, session) is Some(conv) {
         (
-          scroll_if_active(dispatch, model, channel, conv.session_id),
+          @cmd.none,
           model.replace_conversation({
             ..conv.append_local_notice(Assistant(is_danger=true), message),
             compaction: NotCompacting,
@@ -5877,10 +5651,7 @@ fn update_device_msg(
         } else {
           { ..reported, goal_pending: None }
         }
-        (
-          scroll_if_active(dispatch, model, channel, conv.session_id),
-          model.replace_conversation(restored),
-        )
+        (@cmd.none, model.replace_conversation(restored))
       } else {
         (@cmd.none, model)
       }
@@ -5909,10 +5680,7 @@ fn update_device_msg(
           Assistant(is_danger=true),
           "Goal delivery could not be confirmed (" + message + ")" + detail,
         )
-        (
-          scroll_if_active(dispatch, model, channel, conv.session_id),
-          model.replace_conversation(reported),
-        )
+        (@cmd.none, model.replace_conversation(reported))
       } else {
         (@cmd.none, model)
       }
@@ -6083,9 +5851,7 @@ fn update_device_msg(
           }
         }
         if base.overlay.length() > conv.overlay.length() {
-          commands.push(
-            scroll_if_active(dispatch, model, channel, conv.session_id),
-          )
+          commands.push(@cmd.none)
         }
         (@cmd.batch(commands), next)
       } else {
@@ -7621,37 +7387,24 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
       { ..empty_device_state(channel), bridge: channel.test_connected() },
     ],
     focused: channel,
-    terminal_panel: {
-      ..@terminal.State::empty(),
-      next_key: 2,
-      tabs: [
-        {
-          key: 1,
-          id: Some(1),
-          workspace: @terminal.Project(
-            channel,
-            channel.test_resource("/remote"),
-          ),
-          workspace_label: "remote",
-          session: "remote-session",
-          workspace_path: Some(channel.test_resource("/remote")),
-          status: @terminal.TabRunning,
-        },
-      ],
-    },
   }
   let (_, one) = update(
     dispatch,
     FromDevice(channel, ChannelDown(websocket_epoch=0)),
     model,
   )
-  // The first socket loss destroys this HostConnection's PTYs even though
-  // the general page does not escalate to BridgeLost until the third loss.
-  assert_true(one.terminal_panel.tabs.is_empty())
+  let (_, due) = update(
+    dispatch,
+    FromDevice(channel, ReconnectDue(websocket_epoch=0)),
+    one,
+  )
+  inspect(due.dev().reconnect_attempt, content="1")
+  // Terminal retirement is covered by the terminal component's disconnect
+  // test; the application state owns only the reconnect policy now.
   let (_, two) = update(
     dispatch,
     FromDevice(channel, ChannelDown(websocket_epoch=0)),
-    one,
+    due,
   )
   inspect(two.dev().reconnect_failures, content="2")
   assert_true(two.bridge_state() is Connected(..))
@@ -13319,15 +13072,6 @@ test "sidebar navigation leaves the settings page" {
 }
 
 ///|
-test "the scroll watcher's report lands on the model" {
-  let dispatch = test_dispatch()
-  let (_, away) = update(dispatch, TranscriptPinned(false), test_model())
-  inspect(away.transcript_pinned, content="false")
-  let (_, back) = update(dispatch, TranscriptPinned(true), away)
-  inspect(back.transcript_pinned, content="true")
-}
-
-///|
 /// A `git.branch` reply for the test conversation.
 fn branch_reply(
   branch : String,
@@ -13789,15 +13533,31 @@ test "every click-away menu closes without reopening on a second dismissal" {
   // Dismissing does not discard the catalog the launcher already probed, so
   // reopening it does not go back to the host for a list it has.
   assert_true(dropped.launcher.apps is AppsLoading)
-  // The dock strip's `+` menu, which needs its panel open first (the same
-  // setup the launcher-row test uses).
-  let (_, docked) = update(dispatch, Dock(TogglePanel), desktop_model())
-  let (_, menued) = update(dispatch, Dock(MenuToggled), docked)
-  assert_true(menued.dock.menu_open)
-  let (_, unmenued) = update(dispatch, CloseDockMenu, menued)
-  assert_false(unmenued.dock.menu_open)
-  let (_, unmenued_twice) = update(dispatch, CloseDockMenu, unmenued)
-  assert_false(unmenued_twice.dock.menu_open)
+  // The right-panel component reports its local open/menu state to the root
+  // because native browser visibility and file watches depend on it.
+  let (_, docked) = update(
+    dispatch,
+    RightPanelVisibilityChanged(open=true, menu_open=false),
+    desktop_model(),
+  )
+  let (_, menued) = update(
+    dispatch,
+    RightPanelVisibilityChanged(open=true, menu_open=true),
+    docked,
+  )
+  assert_true(menued.right_panel_menu_open)
+  let (_, unmenued) = update(
+    dispatch,
+    RightPanelVisibilityChanged(open=true, menu_open=false),
+    menued,
+  )
+  assert_false(unmenued.right_panel_menu_open)
+  let (_, unmenued_twice) = update(
+    dispatch,
+    RightPanelVisibilityChanged(open=true, menu_open=false),
+    unmenued,
+  )
+  assert_false(unmenued_twice.right_panel_menu_open)
 }
 
 ///|
@@ -14275,92 +14035,14 @@ test "theme settings switch fixed palettes and are idempotent" {
 }
 
 ///|
-test "update is pure: a pinned-state change is idempotent" {
+test "a transcript stream grows without application-owned scroll state" {
   let dispatch = test_dispatch()
-  let (_, first) = update(dispatch, TranscriptPinned(false), test_model())
-  let (_, second) = update(dispatch, TranscriptPinned(false), test_model())
-  inspect(first.transcript_pinned, content="false")
-  inspect(second.transcript_pinned, content="false")
-}
-
-///|
-test "an unpinned transcript stays unpinned while a stream grows" {
-  // The pinned flag is the scroll gate; a delta to the active conversation
-  // must not flip it back, or the next render would yank the reader down.
-  let dispatch = test_dispatch()
-  let model = { ..running_model(), transcript_pinned: false }
   let (_, next) = update_dev(
     dispatch,
     Engine(Some("r7"), AssistantDelta("more"), session=None),
-    model,
+    running_model(),
   )
-  inspect(next.transcript_pinned, content="false")
   inspect(next.active().streaming_response, content="more")
-}
-
-///|
-test "explicit user actions re-pin the transcript" {
-  let dispatch = test_dispatch()
-
-  // Sending a prompt jumps to the tail.
-  let unpinned = {
-    ..test_model().replace_conversation({ ..test_conversation(), task: "do it" }),
-    transcript_pinned: false,
-  }
-  let (_, sent) = update(dispatch, Send, unpinned)
-  inspect(sent.transcript_pinned, content="true")
-
-  // Steering a running turn does too.
-  let steering = {
-    ..running_model().replace_conversation({
-      ..running_conversation(),
-      task: "and this",
-    }),
-    transcript_pinned: false,
-  }
-  let (_, steered) = update(dispatch, Send, steering)
-  inspect(steered.transcript_pinned, content="true")
-
-  // Switching to a conversation that has live state lands at its tail.
-  let two = {
-    ..test_model().replace_conversation(
-      empty_conversation(@interop.ChannelId::Local, "desktop-other"),
-    ),
-    transcript_pinned: false,
-  }
-  let (_, switched) = update(
-    dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-other"),
-    two,
-  )
-  inspect(switched.transcript_pinned, content="true")
-
-  // So does loading a stored session or rotating to a fresh one.
-  let (_, loading_old) = update(
-    dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-old"),
-    { ..test_model(), transcript_pinned: false },
-  )
-  let (_, loaded) = update_dev(
-    dispatch,
-    SessionLoaded(
-      goal=None,
-      goal_markers=[],
-      session="desktop-old",
-      items=[],
-      watermark=0,
-      event_boundaries=[],
-      generation=1,
-    ),
-    loading_old,
-  )
-  inspect(loaded.transcript_pinned, content="true")
-  let (_, rotated) = update(
-    dispatch,
-    SessionRotated({ channel: Local, session: "desktop-fresh" }),
-    { ..test_model(), transcript_pinned: false },
-  )
-  inspect(rotated.transcript_pinned, content="true")
 }
 
 ///|
@@ -14576,17 +14258,11 @@ test "file editor context reports the file body actual visibility" {
   let path = @pathx.Relative("src/main.mbt")
   let file_model = {
     ..model,
-    dock: {
-      ..model.dock,
-      open: true,
-      tabs: [File(path~)],
-      active: Some(File(path~)),
-    },
+    right_panel_open: true,
+    dock: { ..model.dock, tabs: [File(path~)], active: Some(File(path~)) },
   }
   assert_true(file_ctx(file_model).panel_open)
-  assert_false(
-    file_ctx({ ..file_model, dock: { ..file_model.dock, open: false } }).panel_open,
-  )
+  assert_false(file_ctx({ ..file_model, right_panel_open: false }).panel_open)
   let picker_model = {
     ..file_model,
     dock: { ..file_model.dock, tabs: [FilePicker], active: Some(FilePicker) },
@@ -14622,7 +14298,7 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
     mentions: [mention],
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
-  assert_true(next.dock.open)
+  assert_true(next.right_panel_open)
   assert_true(@dock.active_file(next.dock) is Some(Relative("src/main.mbt")))
   assert_eq(next.file_panel.file_link_generation, 1)
   // The document table follows the strip: the jumped-to file has an entry.
@@ -14680,15 +14356,17 @@ test "update is pure: a resolved transcript position opens its owning file" {
     first_pending,
   )
   assert_eq(latest_pending.file_panel.file_link_generation, 2)
-  // Closing the dock is a newer user decision than the pending host lookup;
+  // Closing the right panel is a newer user decision than the pending host
+  // lookup;
   // its delayed reply cannot reopen the panel.
-  let open_pending = {
-    ..latest_pending,
-    dock: { ..latest_pending.dock, open: true },
-  }
-  let (_, dock_closed) = update(dispatch, Dock(TogglePanel), open_pending)
-  assert_false(dock_closed.dock.open)
-  assert_eq(dock_closed.file_panel.file_link_generation, 3)
+  let open_pending = { ..latest_pending, right_panel_open: true }
+  let (_, panel_closed) = update(
+    dispatch,
+    RightPanelVisibilityChanged(open=false, menu_open=false),
+    open_pending,
+  )
+  assert_false(panel_closed.right_panel_open)
+  assert_eq(panel_closed.file_panel.file_link_generation, 3)
   let (_, after_closed_reply) = update(
     dispatch,
     OpenFileAt(
@@ -14698,24 +14376,26 @@ test "update is pure: a resolved transcript position opens its owning file" {
       line=2738,
       column=Some(17),
     ),
-    dock_closed,
+    panel_closed,
   )
-  assert_false(after_closed_reply.dock.open)
+  assert_false(after_closed_reply.right_panel_open)
   assert_true(after_closed_reply.dock.active is None)
   // Revealing an existing tab is also a newer dock navigation. The pending
   // reply cannot replace the file the user chose to bring back on screen.
   let hidden_pending = {
     ..latest_pending,
-    dock: {
-      ..@dock.open_file(latest_pending.dock, Relative("README.md")),
-      open: false,
-    },
+    dock: @dock.open_file(latest_pending.dock, Relative("README.md")),
+    right_panel_open: false,
   }
-  let (_, dock_opened) = update(dispatch, Dock(TogglePanel), hidden_pending)
-  assert_true(dock_opened.dock.open)
-  assert_eq(dock_opened.file_panel.file_link_generation, 3)
+  let (_, panel_opened) = update(
+    dispatch,
+    RightPanelVisibilityChanged(open=true, menu_open=false),
+    hidden_pending,
+  )
+  assert_true(panel_opened.right_panel_open)
+  assert_eq(panel_opened.file_panel.file_link_generation, 3)
   assert_true(
-    @dock.active_file(dock_opened.dock) is Some(Relative("README.md")),
+    @dock.active_file(panel_opened.dock) is Some(Relative("README.md")),
   )
   let (_, after_opened_reply) = update(
     dispatch,
@@ -14726,7 +14406,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
       line=2738,
       column=Some(17),
     ),
-    dock_opened,
+    panel_opened,
   )
   assert_true(
     @dock.active_file(after_opened_reply.dock) is Some(Relative("README.md")),
@@ -15007,7 +14687,7 @@ test "JumpToMention is a no-op for a chip without a resolved location" {
     mentions: [mention],
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
-  assert_false(next.dock.open)
+  assert_false(next.right_panel_open)
   assert_true(next.dock.active is None)
 }
 
@@ -15115,7 +14795,7 @@ test "original-revision diff comment chip does not navigate into the working fil
     mentions: [original_comment],
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
-  assert_false(next.dock.open)
+  assert_false(next.right_panel_open)
   assert_true(next.dock.active is None)
 }
 
@@ -15213,7 +14893,6 @@ test "RevealDirectory(\"\") opens the tree pane without a highlight" {
   }
   let dock = {
     ..@dock.open_file(model.dock, Relative("README.md")),
-    open: true,
     owner: Some(owner),
   }
   let panel = {
@@ -15225,7 +14904,7 @@ test "RevealDirectory(\"\") opens the tree pane without a highlight" {
   let (_, next) = update(
     dispatch,
     FileEditor(RevealDirectory(@pathx.Relative::root())),
-    { ..model, dock, file_panel: panel },
+    { ..model, dock, file_panel: panel, right_panel_open: true },
   )
   // The active tab stays put — revealing the tree must not close the file.
   assert_true(@dock.active_file(next.dock) is Some(Relative("README.md")))
@@ -16735,7 +16414,11 @@ test "auth status payloads decode by shape" {
 /// long done before a tab can open.
 fn desktop_model() -> Model {
   let model = { ..test_model(), is_desktop: true }
-  let (_, model) = update(test_dispatch(), TranscriptPinned(true), model)
+  let (_, model) = update(
+    test_dispatch(),
+    TerminalVisibilityChanged(false),
+    model,
+  )
   model
 }
 
@@ -16743,11 +16426,19 @@ fn desktop_model() -> Model {
 test "launcher rows open Browse, Files, and Review destinations" {
   let dispatch = test_dispatch()
   let model = desktop_model()
-  let (_, model) = update(dispatch, Dock(TogglePanel), model)
-  let (_, model) = update(dispatch, Dock(MenuToggled), model)
-  assert_true(model.dock.menu_open)
+  let (_, model) = update(
+    dispatch,
+    RightPanelVisibilityChanged(open=true, menu_open=false),
+    model,
+  )
+  let (_, model) = update(
+    dispatch,
+    RightPanelVisibilityChanged(open=true, menu_open=true),
+    model,
+  )
+  assert_true(model.right_panel_menu_open)
   let (_, model) = update(dispatch, BrowserTabRequested, model)
-  assert_false(model.dock.menu_open)
+  assert_false(model.right_panel_menu_open)
   assert_true(@dock.active_browser(model.dock) == Some(1))
   let page = @preview.page(model.preview, 1).unwrap()
   assert_true(page.url is None)
@@ -16771,7 +16462,11 @@ test "launcher rows open Browse, Files, and Review destinations" {
 test "a tree pick fulfills the active picker in place" {
   let dispatch = test_dispatch()
   let model = desktop_model()
-  let (_, model) = update(dispatch, Dock(TogglePanel), model)
+  let (_, model) = update(
+    dispatch,
+    RightPanelVisibilityChanged(open=true, menu_open=false),
+    model,
+  )
   let (_, model) = update(dispatch, FilePickerRequested, model)
   let (_, model) = update(
     dispatch,
@@ -16788,7 +16483,11 @@ test "a tree pick fulfills the active picker in place" {
 test "a changed row opens the file tab in review mode" {
   let dispatch = test_dispatch()
   let model = desktop_model()
-  let (_, model) = update(dispatch, Dock(TogglePanel), model)
+  let (_, model) = update(
+    dispatch,
+    RightPanelVisibilityChanged(open=true, menu_open=false),
+    model,
+  )
   let (_, model) = update(dispatch, FilePickerRequested, model)
   let path = @pathx.Relative("src/main.mbt")
   let (_, model) = update(
@@ -16904,18 +16603,18 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
     ExternalLinkClicked("http://127.0.0.1:5173/"),
     model,
   )
-  assert_true(model.dock.open)
+  assert_true(model.right_panel_open)
   assert_eq(model.file_panel.file_link_generation, generation + 1)
   assert_true(@dock.active_browser(model.dock) == Some(1))
   assert_true(
     @preview.page(model.preview, 1).unwrap().url ==
     Some("http://127.0.0.1:5173/"),
   )
-  // xterm's link addon enters through a terminal message but follows the same
-  // navigation path as a transcript anchor.
+  // The terminal component forwards its semantic link action to this same
+  // application policy; exercise the policy directly here.
   let (_, model) = update(
     dispatch,
-    Terminal(@terminal.LinkActivated(url="https://terminal.example/docs")),
+    ExternalLinkClicked("https://terminal.example/docs"),
     model,
   )
   assert_eq(model.dock.tabs.length(), 2)
@@ -17002,7 +16701,11 @@ test "a remote console routes loopback links to the system browser too" {
 test "submitting the address bar normalizes the draft and commits it" {
   let dispatch = test_dispatch()
   let model = desktop_model()
-  let (_, model) = update(dispatch, Dock(TogglePanel), model)
+  let (_, model) = update(
+    dispatch,
+    RightPanelVisibilityChanged(open=true, menu_open=false),
+    model,
+  )
   let (_, model) = update(dispatch, BrowserTabRequested, model)
   let (_, model) = update(
     dispatch,
@@ -17105,7 +16808,11 @@ test "the launcher popup and tab close both retire the shown view" {
   let (_, model) = update(dispatch, BrowserPaneMeasured(rect~), model)
   assert_true(model.browser_pane.shown == Some(1))
   // The popup overlaps the pane, so the native view must hide under it.
-  let (_, covered) = update(dispatch, Dock(MenuToggled), model)
+  let (_, covered) = update(
+    dispatch,
+    RightPanelVisibilityChanged(open=true, menu_open=true),
+    model,
+  )
   assert_true(covered.browser_pane.shown is None)
   // Closing the tab drops the page and the placement.
   let (_, closed) = update(
@@ -17196,69 +16903,4 @@ test "full-screen modals hide the native view and closing restores it" {
   )
   assert_true(searching.quick_open is Some(_))
   assert_true(searching.browser_pane.shown is None)
-}
-
-///|
-test "an overview click unpins auto-follow and highlights eagerly" {
-  let key = @transcript_overview.Durable(3)
-  let (_, next) = update(
-    test_dispatch(),
-    TranscriptOverview(@transcript_overview.Clicked(key)),
-    test_model(),
-  )
-  // Jumping into history is reading history: the next streamed delta must
-  // not yank the view back down.
-  assert_false(next.transcript_pinned)
-  @debug.assert_eq(next.transcript_overview.active, Some(key))
-}
-
-///|
-test "the overview's turn keys do not survive a conversation switch" {
-  let dispatch = test_dispatch()
-  let model = test_model().replace_conversation(
-    empty_conversation(@interop.ChannelId::Local, "desktop-bg"),
-  )
-  let model = {
-    ..model,
-    transcript_overview: {
-      hover: None,
-      active: Some(@transcript_overview.Durable(3)),
-    },
-  }
-  let (_, switched) = update(
-    dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-bg"),
-    model,
-  )
-  inspect(switched.active_session, content="desktop-bg")
-  // Sequences are per-session — the same number names a different turn in
-  // the arriving conversation, so the highlight must not carry across.
-  @debug.assert_eq(switched.transcript_overview.active, None)
-}
-
-///|
-test "returning to Chat reinitializes the overview" {
-  // The same conversation, reselected from the Skills page: the session does
-  // not change, but the transcript DOM is rebuilt — stale keys (and a hover
-  // whose mouseleave never fired during the unmount) must not survive.
-  let model = {
-    ..test_model(),
-    screen: Skills,
-    transcript_overview: {
-      hover: Some({
-        key: @transcript_overview.Durable(2),
-        flip: false,
-        anchor: 0,
-      }),
-      active: Some(@transcript_overview.Durable(3)),
-    },
-  }
-  let (_, back) = update(
-    test_dispatch(),
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
-    model,
-  )
-  assert_true(back.screen is Chat)
-  @debug.assert_eq(back.transcript_overview.hover, None)
-  @debug.assert_eq(back.transcript_overview.active, None)
 }

@@ -5,7 +5,6 @@
 using @icons {
   icon,
   icon_add,
-  icon_arrow_down,
   icon_arrow_up,
   icon_chevron_down,
   icon_close,
@@ -18,7 +17,6 @@ using @icons {
   icon_layout_sidebar_left,
   icon_layout_sidebar_right,
   icon_link_external,
-  icon_logo,
   icon_package,
   icon_pull_request,
   icon_search,

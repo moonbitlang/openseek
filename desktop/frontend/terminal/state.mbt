@@ -106,7 +106,7 @@ pub(all) struct Ctx {
   /// again. The old connection's PTYs are already gone, so `sync` must not
   /// create their replacements on the dead transport.
   connected : Bool
-}
+} derive(Eq)
 
 ///|
 /// The workspace group the active conversation belongs to, once its placement
@@ -209,6 +209,12 @@ fn State::remember_active(
 
 ///|
 pub(all) enum Msg {
+  /// Reconcile the panel after an application-owned input changes. The
+  /// component receives the latest input through `create_state_with_input`;
+  /// this message lets its state machine run commands for that new input.
+  Sync
+  /// The owning host connection ended; every PTY id from it is invalid.
+  Disconnect(@interop.ChannelId)
   /// Show/hide the panel (every shell keeps running while hidden).
   ToggleTerminal
   /// Open one more terminal in the active conversation's workspace.

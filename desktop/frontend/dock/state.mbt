@@ -35,18 +35,12 @@ pub(all) struct RememberedStrip {
 /// empty (an empty strip shows the panel's placeholder body; from M2 on, the
 /// launcher menu).
 pub(all) struct State {
-  // Whether the right panel is expanded. The panel is always rendered (the
-  // viewer host element must stay put) and merely hidden by CSS when closed.
-  open : Bool
   // Which conversation the live strip belongs to; `None` before the first
   // sync. Switching conversations parks the strip under this key.
   owner : @interop.ConversationKey?
   // The strip, in opening order, and the tab whose body is on screen.
   tabs : Array[DockTab]
   active : DockTab?
-  // Whether the strip's `+` launcher menu popup is open. Transient UI, never
-  // parked with a strip.
-  menu_open : Bool
   // Strips parked by conversation switches, restored when their conversation
   // returns to the screen.
   remembered : Map[@interop.ConversationKey, RememberedStrip]
@@ -54,14 +48,7 @@ pub(all) struct State {
 
 ///|
 pub fn State::empty() -> State {
-  {
-    open: false,
-    owner: None,
-    tabs: [],
-    active: None,
-    menu_open: false,
-    remembered: Map([]),
-  }
+  { owner: None, tabs: [], active: None, remembered: Map([]) }
 }
 
 ///|

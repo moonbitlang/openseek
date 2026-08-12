@@ -6,16 +6,46 @@
 // decoders below.
 
 ///|
+/// Decode one host notification into the state that owns it. Terminal output
+/// uses the terminal component's real emitter; everything else uses the app
+/// emitter. No additional Rabbita state or message-forwarding model is built.
+fn host_notification(
+  terminal : @cmd.Emit[@terminal.Msg],
+  app_emit : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  notification : @protocol.Notification,
+) -> @cmd.Cmd {
+  match notification {
+    TerminalOutput(payload) =>
+      match terminal_output_msg(channel, payload) {
+        Some(msg) => terminal(msg)
+        None => @cmd.none
+      }
+    TerminalExit(payload) =>
+      match terminal_exit_msg(channel, payload) {
+        Some(msg) => terminal(msg)
+        None => @cmd.none
+      }
+    _ =>
+      match bridge_msg(channel, notification) {
+        Some(msg) => app_emit(msg)
+        None => @cmd.none
+      }
+  }
+}
+
+///|
 /// Wire a host's notification stream into messages, once, over the
 /// channel's transport.
 fn install_bridge(
-  dispatch : @cmd.Emit[Msg],
+  app_emit : @cmd.Emit[Msg],
+  terminal : @cmd.Emit[@terminal.Msg],
   channel : @interop.ChannelId,
   websocket_epoch : Int,
 ) -> @cmd.Cmd {
   match channel {
-    Local => install_proton_bridge(dispatch, 0)
-    Remote(device) => connect_ws(dispatch, device, websocket_epoch)
+    Local => install_proton_bridge(app_emit, terminal, 0)
+    Remote(device) => connect_ws(app_emit, terminal, device, websocket_epoch)
   }
 }
 
@@ -96,10 +126,9 @@ fn bridge_msg(
         ),
       )
     }
-    TerminalOutput(payload) =>
-      terminal_output_msg(channel, payload).map(msg => Terminal(msg))
-    TerminalExit(payload) =>
-      terminal_exit_msg(channel, payload).map(msg => Terminal(msg))
+    // Terminal notifications go straight to the terminal component emitter
+    // and never enter the application message enum.
+    TerminalOutput(_) | TerminalExit(_) => None
     UpdateDownloaded(_) =>
       if channel is Local {
         Some(UpdateDownloaded)
@@ -221,7 +250,11 @@ let bridge_events_wired : Ref[Bool] = Ref(false)
 /// wire the notification events into messages once, and open the host
 /// connection. The 25ms retries add up to ~3 seconds before the bridge is
 /// declared unavailable.
-fn install_proton_bridge(dispatch : @cmd.Emit[Msg], attempt : Int) -> @cmd.Cmd {
+fn install_proton_bridge(
+  dispatch : @cmd.Emit[Msg],
+  terminal : @cmd.Emit[@terminal.Msg],
+  attempt : Int,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     // The request API and the two event actors are separate injected objects.
     // Do not wire a partially initialized page; retry until every method used
@@ -240,7 +273,7 @@ fn install_proton_bridge(dispatch : @cmd.Emit[Msg], attempt : Int) -> @cmd.Cmd {
         )
       } else {
         scheduler.add(
-          @cmd.delay(install_proton_bridge(dispatch, attempt + 1), 25),
+          @cmd.delay(install_proton_bridge(dispatch, terminal, attempt + 1), 25),
         )
       }
       return
@@ -248,7 +281,7 @@ fn install_proton_bridge(dispatch : @cmd.Emit[Msg], attempt : Int) -> @cmd.Cmd {
     if !bridge_events_wired.val {
       bridge_events_wired.val = true
       wire_proton_events(
-        scheduler, dispatch, extension_events, application_events,
+        scheduler, dispatch, terminal, extension_events, application_events,
       )
       open_host_connection(scheduler, dispatch, request_api)
     }
@@ -473,14 +506,12 @@ test "terminal pushes retain the channel that owns their host session" {
     data: "YQ==",
   }
   assert_true(
-    bridge_msg(Local, @protocol.Notification::TerminalOutput(payload))
-    is Some(Terminal(Output(channel=Local, id=1, sequence=2, data="YQ=="))),
+    terminal_output_msg(Local, payload)
+    is Some(Output(channel=Local, id=1, sequence=2, data="YQ==")),
   )
   assert_true(
-    bridge_msg(Remote("d1"), @protocol.Notification::TerminalOutput(payload))
-    is Some(
-      Terminal(Output(channel=Remote("d1"), id=1, sequence=2, data="YQ=="))
-    ),
+    terminal_output_msg(Remote("d1"), payload)
+    is Some(Output(channel=Remote("d1"), id=1, sequence=2, data="YQ==")),
   )
 }
 
@@ -488,6 +519,7 @@ test "terminal pushes retain the channel that owns their host session" {
 fn wire_proton_events(
   scheduler : &@cmd.Scheduler,
   dispatch : @cmd.Emit[Msg],
+  terminal : @cmd.Emit[@terminal.Msg],
   extension_events : @js.Value,
   application_events : @js.Value,
 ) -> Unit {
@@ -505,13 +537,18 @@ fn wire_proton_events(
 
   for kind_ in proton_event_methods() {
     let method_ = kind_.wire_name()
-    on("openseek." + method_, payload => {
-      guard @protocol.Notification::from_wire(method_, Json::object(payload))
+    let handler = (event : @js.Value) => {
+      guard event_payload(event) is Some(payload) &&
+        @protocol.Notification::from_wire(method_, Json::object(payload))
         is Some(notification) else {
-        return None
+        return
       }
-      bridge_msg(Local, notification)
-    })
+      scheduler.add(host_notification(terminal, dispatch, Local, notification))
+    }
+    let _ : @js.Value = extension_events.apply_with_string("on", [
+      @js.Value::cast_from("openseek." + method_),
+      @js.Value::cast_from(handler),
+    ])
   }
   // Native view events describe this window's own browser tabs. Like
   // `notification.click` below, the event is window-local: it has no
@@ -572,6 +609,7 @@ const WsLostAfter = 3
 /// successful connection (the host's `agent.connected`) resets the count.
 fn connect_ws(
   dispatch : @cmd.Emit[Msg],
+  terminal : @cmd.Emit[@terminal.Msg],
   device : String,
   websocket_epoch : Int,
 ) -> @cmd.Cmd {
@@ -580,9 +618,9 @@ fn connect_ws(
     @interop.ws_connect(
       device,
       on_notification=notification => {
-        if bridge_msg(channel, notification) is Some(msg) {
-          scheduler.add(dispatch(msg))
-        }
+        scheduler.add(
+          host_notification(terminal, dispatch, channel, notification),
+        )
       },
       on_down=() => {
         scheduler.add(

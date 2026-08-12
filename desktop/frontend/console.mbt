@@ -217,7 +217,6 @@ fn apply_roster(
 ) -> (@cmd.Cmd, Model) {
   let commands : Array[@cmd.Cmd] = []
   let mut websocket_epoch = model.websocket_epoch
-  let mut terminal_panel = model.terminal_panel
   let page_channel : @interop.ChannelId? = console.page_device.map(id => {
     @interop.ChannelId::Remote(id)
   })
@@ -233,12 +232,6 @@ fn apply_roster(
     }
     if Some(dev.channel) != page_channel || !granted {
       commands.push(close_channel(dev.channel))
-      let (terminal_cmd, next_terminal_panel) = @terminal.disconnect(
-        terminal_panel,
-        dev.channel,
-      )
-      commands.push(terminal_cmd)
-      terminal_panel = next_terminal_panel
     } else {
       devices.push(dev)
     }
@@ -256,7 +249,6 @@ fn apply_roster(
         if !devices.iter().any(dev => dev.channel == channel) {
           websocket_epoch += 1
           devices.push({ ..empty_device_state(channel), websocket_epoch, })
-          commands.push(install_bridge(dispatch, channel, websocket_epoch))
         }
         break
       }
@@ -293,7 +285,6 @@ fn apply_roster(
   if focus_held {
     if !booted {
       booted = true
-      commands.push(watch_transcript_scroll(dispatch))
       commands.push(rotate_session(dispatch, focused))
     } else if refocused {
       commands.push(rotate_session(dispatch, focused))
@@ -304,7 +295,6 @@ fn apply_roster(
     devices,
     websocket_epoch,
     conversations,
-    terminal_panel,
     console: Some({
       ..console,
       roster: metas,
@@ -811,15 +801,8 @@ fn console_signed_out(
   console : ConsoleState,
 ) -> (@cmd.Cmd, Model) {
   let commands : Array[@cmd.Cmd] = []
-  let mut terminal_panel = model.terminal_panel
   for dev in model.devices {
     commands.push(close_channel(dev.channel))
-    let (terminal_cmd, next_terminal_panel) = @terminal.disconnect(
-      terminal_panel,
-      dev.channel,
-    )
-    commands.push(terminal_cmd)
-    terminal_panel = next_terminal_panel
   }
   (
     @cmd.batch(commands),
@@ -830,7 +813,6 @@ fn console_signed_out(
       active_session: "",
       loading_conversation: None,
       conversations: [],
-      terminal_panel: { ..terminal_panel, open: false, shown: None },
       console: Some({
         ..console,
         auth: AuthSignedOut,

@@ -37,14 +37,6 @@ test "open_file re-activates an existing tab without duplicating it" {
 }
 
 ///|
-test "TogglePanel flips the panel" {
-  let state = @dock.update(@dock.TogglePanel, @dock.State::empty())
-  assert_true(state.open)
-  let state = @dock.update(@dock.TogglePanel, state)
-  assert_true(!state.open)
-}
-
-///|
 test "TabActivated switches to a present tab and ignores an absent one" {
   let state = @dock.State::empty()
     |> @dock.open_file(@pathx.Relative("a.mbt"))
@@ -193,19 +185,6 @@ test "closing the picker activates a neighbor like any tab" {
   let state = @dock.update(TabClosed(@dock.DockTab::FilePicker), state)
   assert_true(state.tabs == [file_tab("a.mbt")])
   assert_true(state.active == Some(file_tab("a.mbt")))
-}
-
-///|
-test "menu toggles, closes with the panel, and never parks" {
-  let state = @dock.State::empty() |> @dock.open_browser(1)
-  let state = @dock.update(MenuToggled, state)
-  assert_true(state.menu_open)
-  assert_false(@dock.close_menu(state).menu_open)
-  let toggled = @dock.update(TogglePanel, state)
-  assert_false(toggled.menu_open)
-  // A conversation switch drops the popup with the strip it rode on.
-  let state = @dock.sync(state, owner("s1"))
-  assert_false(state.menu_open)
 }
 
 ///|

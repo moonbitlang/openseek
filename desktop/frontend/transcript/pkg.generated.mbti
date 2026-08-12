@@ -136,6 +136,15 @@ pub struct SessionTreeRow {
   children : Array[SessionListItem]
 } derive(Eq)
 
+pub(all) struct SubrunLane {
+  id : String
+  kind : String
+  label : String
+  steps : Int
+  activity : String
+  run : String?
+} derive(Eq)
+
 pub(all) struct TranscriptItem {
   kind : ItemKind
   content : String

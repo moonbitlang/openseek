@@ -1,0 +1,54 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/right_panel"
+
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/dock",
+  "openseek_desktop/frontend/fileeditor",
+  "openseek_desktop/frontend/preview",
+}
+
+// Values
+pub fn component(@rabbita.Val[Input], Actions) -> (@rabbita.Val[@html.Html], @cmd.Emit[Msg])
+
+// Errors
+
+// Types and methods
+pub(all) struct Actions {
+  dock : @cmd.Emit[@dock.Msg]
+  file_editor : @cmd.Emit[@fileeditor.Msg]
+  browser_tab : @cmd.Cmd
+  files : @cmd.Cmd
+  review : @cmd.Cmd
+  browser_input : @cmd.Emit[String]
+  browser_submit : @cmd.Cmd
+  browser_back : @cmd.Cmd
+  browser_forward : @cmd.Cmd
+  browser_reload : @cmd.Cmd
+  browser_open_external : @cmd.Cmd
+  external_link : @cmd.Emit[String]
+  opened : @cmd.Cmd
+  visibility : @cmd.Emit[Visibility]
+}
+
+type Input derive(Eq)
+pub fn Input::Input(dock~ : @dock.State, file_panel~ : @fileeditor.State, preview~ : @preview.State, file_ctx~ : @fileeditor.Ctx, is_desktop~ : Bool, panel_available~ : Bool) -> Self
+
+pub(all) enum Msg {
+  TogglePanel
+  OpenPanel
+  ToggleMenu
+  CloseMenu
+  ExternalLink(String)
+}
+
+pub(all) struct Visibility {
+  open : Bool
+  menu_open : Bool
+} derive(Eq)
+
+// Type aliases
+
+// Traits

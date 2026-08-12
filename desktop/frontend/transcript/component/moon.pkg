@@ -1,0 +1,19 @@
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dom",
+  "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/js",
+  "moonbit-community/rabbita/sub",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+  "openseek_desktop/frontend/icons",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/markdown",
+  "openseek_desktop/frontend/mention_context",
+  "openseek_desktop/frontend/plan",
+  "openseek_desktop/frontend/transcript",
+  "openseek_desktop/frontend/transcript_overview",
+}
+
+supported_targets = "js"

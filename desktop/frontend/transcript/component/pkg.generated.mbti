@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/transcript/component"
+
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/mention_context",
+  "openseek_desktop/frontend/transcript",
+}
+
+// Values
+pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
+
+// Errors
+
+// Types and methods
+pub(all) struct Actions {
+  open : @cmd.Emit[String]
+  jump : @cmd.Emit[@mention_context.Target]
+}
+
+type Input derive(Eq)
+pub fn Input::Input(focused~ : @interop.ChannelId, active_session~ : String, items~ : Array[@transcript.TranscriptItem], streaming_response~ : String, subruns~ : Array[@transcript.SubrunLane]) -> Self
+
+// Type aliases
+
+// Traits

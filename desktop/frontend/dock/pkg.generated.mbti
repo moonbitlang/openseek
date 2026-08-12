@@ -13,8 +13,6 @@ pub fn active_browser(State) -> Int?
 
 pub fn active_file(State) -> @pathx.Relative?
 
-pub fn close_menu(State) -> State
-
 pub fn file_paths(State) -> Array[@pathx.Relative]
 
 pub fn launcher_pane(LauncherActions) -> @html.Html
@@ -29,7 +27,7 @@ pub fn resolve_pick(State, @pathx.Relative) -> State
 
 pub fn sync(State, @interop.ConversationKey) -> State
 
-pub fn tabs_bar(@cmd.Emit[Msg], State, Array[TabChip], LauncherActions) -> @html.Html
+pub fn tabs_bar(@cmd.Emit[Msg], State, Array[TabChip], LauncherActions, menu_open~ : Bool, toggle_menu~ : @cmd.Cmd, toggle_panel~ : @cmd.Cmd) -> @html.Html
 
 pub fn update(Msg, State) -> State
 
@@ -49,10 +47,8 @@ pub(all) struct LauncherActions {
 }
 
 pub(all) enum Msg {
-  TogglePanel
   TabActivated(DockTab)
   TabClosed(DockTab)
-  MenuToggled
 }
 
 pub(all) struct RememberedStrip {
@@ -61,11 +57,9 @@ pub(all) struct RememberedStrip {
 } derive(Eq)
 
 pub(all) struct State {
-  open : Bool
   owner : @interop.ConversationKey?
   tabs : Array[DockTab]
   active : DockTab?
-  menu_open : Bool
   remembered : Map[@interop.ConversationKey, RememberedStrip]
 } derive(Eq)
 pub fn State::empty() -> Self

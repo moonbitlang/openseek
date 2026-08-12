@@ -378,30 +378,6 @@ priv enum SettlementFrontierMatch {
 }
 
 ///|
-/// One sub-run in flight, as the conversation shows it while its tool call
-/// blocks. Born at the `subrun_started` bracket, refreshed by the host's
-/// `subrun.progress` pushes, and gone at the finish — which is also the only
-/// place its cost is reported, since nothing durable records a sub-run.
-///
-/// `steps` and `activity` stay at 0/"" until the child gets far enough to
-/// have any: the host reads them from the child's own record, which exists
-/// only under a durable parent, so a scratch conversation shows the lane
-/// without them rather than not at all.
-pub(all) struct SubrunLane {
-  id : String
-  kind : String
-  label : String
-  steps : Int
-  activity : String
-  // The run that launched it. A lane is only ever meaningful inside its own
-  // turn, and the finish bracket that would retire it is not replayed: a
-  // connection that drops across it, or an engine that dies before emitting
-  // it, would otherwise leave a pulsing lane behind forever. Ownership makes
-  // that unrepresentable instead of relying on catching every settle path.
-  run : String?
-} derive(Eq)
-
-///|
 /// The directory context a conversation belongs to.
 ///
 /// `Scratch` has no registered project. Its concrete directory is projected
@@ -515,7 +491,7 @@ priv struct Conversation {
   // Sub-runs this conversation's open turn has in flight, in the order they
   // started. Live-only: nothing persists a sub-run's progress, so a reload
   // mid-turn shows the tool call pending with no lane under it.
-  subruns : Array[SubrunLane]
+  subruns : Array[@transcript.SubrunLane]
   // The git branch checked out in the workspace, reported by the host's
   // `workspace_branch` op — display only (composer chip). `None` until a probe
   // answers (or when it fails); `Some("")` when the workspace is not a
@@ -976,6 +952,9 @@ priv struct DeviceState {
   // callbacks and reconnect timers carry the old value and are ignored.
   // The desktop's non-WebSocket Local channel always uses 0.
   websocket_epoch : Int
+  // Advances when reconnect backoff expires. The terminal component observes
+  // this transport input and opens exactly one socket for each attempt.
+  reconnect_attempt : Int
   // Consecutive WebSocket losses since the last successful connection.
   // Drives the reconnect backoff and the BridgeLost threshold; always 0 for
   // the proton channel, whose bridge never reconnects.
@@ -1029,6 +1008,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     channel,
     bridge: Connecting,
     websocket_epoch: 0,
+    reconnect_attempt: 0,
     reconnect_failures: 0,
     connection_generation: 0,
     sessions_request_generation: 0,
@@ -1129,6 +1109,15 @@ priv struct Model {
   // On the narrow layout the sidebar is a full-screen drawer instead of a
   // column, and starts closed.
   sidebar_open : Bool
+  // Cross-component layout projections reported by the right-panel component.
+  // The component owns these booleans; the shell reads them for its grid,
+  // dismissal subscription, and native Browser geometry.
+  right_panel_open : Bool
+  right_panel_menu_open : Bool
+  // The terminal component owns its tabs and PTY lifecycle. This one-bit
+  // projection belongs to the shell because visibility changes both the app
+  // grid and the native Browser pane geometry.
+  terminal_open : Bool
   // Whether the sidebar's "Chats" section (the default store's loose
   // conversations) is folded down to its heading; clicking the heading flips
   // it.
@@ -1175,16 +1164,6 @@ priv struct Model {
   project_menu : ProjectMenu?
   // A confirmed add waiting for its registry snapshot; None otherwise.
   pending_project_adoption : ProjectAdoption?
-  // Whether the transcript is scrolled to its bottom. Streaming output only
-  // auto-follows while this holds — scrolling up to read history must not be
-  // yanked back down by the next delta. Maintained by a DOM scroll watcher;
-  // explicit user actions (sending, switching conversations) re-pin it.
-  transcript_pinned : Bool
-  // The transcript overview rail's hover and active-turn keys. Global UI for
-  // the on-screen transcript like `transcript_pinned`, not conversation
-  // state — and its keys are per-session event sequences, so `update` resets
-  // it on any conversation switch.
-  transcript_overview : @transcript_overview.State
   // The Skills page: the registry catalog, the local library's contents,
   // the search filter, entries with an install/uninstall in flight (keyed
   // by the catalog entry's source label or the installed entry's id), and
@@ -1252,10 +1231,6 @@ priv struct Model {
   // view is visible, at which bounds, and the geometry signature the last
   // measurement was requested for (see `sync_browser_view`).
   browser_pane : BrowserPane
-  // The integrated terminal. Each tab retains the device channel that owns
-  // its PTY, so the desktop uses Local while a browser uses its relay-backed
-  // Remote channel without session-id collisions between devices.
-  terminal_panel : @terminal.State
   // Transient error toasts, oldest first, and the id the next toast will
   // take. Ids only ever grow, so a toast's auto-dismiss timer can never
   // collide with a later toast.
@@ -1703,16 +1678,6 @@ priv enum Msg {
   ArchiveSession(@interop.ChannelId, String)
   // Restore an archived conversation into its device's live list.
   UnarchiveSession(@interop.ChannelId, String)
-  // The transcript's at-bottom state changed (the user scrolled away from,
-  // or back to, the tail). Reported by the DOM scroll watcher.
-  TranscriptPinned(Bool)
-  // The floating "jump to latest" button: scroll the transcript back to its
-  // tail and re-pin auto-follow.
-  JumpToLatest
-  // The overview rail's pure messages (hover, click, the scroll watcher's
-  // active-turn report), routed to the `transcript_overview` package; this
-  // update commands the click's cross-package half (jump and unpin).
-  TranscriptOverview(@transcript_overview.Msg)
   // The host's dark-mode preference changed. It updates the palette only while
   // no explicit Light/Dark choice has been saved.
   ColorSchemeChanged(Bool)
@@ -1741,7 +1706,7 @@ priv enum Msg {
   // its toggle on purpose: a dismissal must never reopen what it closed.
   CloseGitDetails
   CloseLauncher
-  CloseDockMenu
+  RightPanelVisibilityChanged(open~ : Bool, menu_open~ : Bool)
   LauncherLoaded(Array[@transcript.LauncherAppItem])
   LauncherFailed(String)
   // Launch one detected app (by its id) on the active conversation's workspace.
@@ -1791,9 +1756,8 @@ priv enum Msg {
   // `FileSelected` (which dock tab a tree click opens is the strip's
   // business).
   FileEditor(@fileeditor.Msg)
-  // The integrated terminal panel's own messages, routed to the `terminal`
-  // package's update.
-  Terminal(@terminal.Msg)
+  // The terminal reports only the shell-layout projection of its local state.
+  TerminalVisibilityChanged(Bool)
   // A message produced by one device channel's connection — its lifecycle,
   // its notification stream, and every reply fenced by its connection
   // generation — tagged with the channel it came from.
@@ -2262,6 +2226,9 @@ fn initial_model() -> Model {
     theme: System,
     narrow,
     sidebar_open: !narrow,
+    right_panel_open: false,
+    right_panel_menu_open: false,
+    terminal_open: false,
     chats_collapsed: false,
     projects_collapsed: false,
     expanded_subruns: [],
@@ -2275,8 +2242,6 @@ fn initial_model() -> Model {
     project_menu: None,
     pending_project_adoption: None,
     archive_confirm: None,
-    transcript_pinned: true,
-    transcript_overview: @transcript_overview.State::empty(),
     screen: Chat,
     skills_catalog: CatalogIdle,
     installed_skills: [],
@@ -2295,7 +2260,6 @@ fn initial_model() -> Model {
     file_panel: @fileeditor.State::empty(),
     preview: @preview.State::empty(),
     browser_pane: { shown: None, rect: None, geo: None },
-    terminal_panel: @terminal.State::empty(),
     notifications: [],
     notification_seq: 0,
     notification_corner: BottomRight,
@@ -3065,7 +3029,9 @@ fn Conversation::is_running(self : Conversation) -> Bool {
 /// right now. An idle conversation shows none, and a lane stranded by a
 /// missing finish bracket cannot outlive its turn — the next run's lanes
 /// carry the next run's id.
-fn Conversation::visible_subruns(self : Conversation) -> Array[SubrunLane] {
+fn Conversation::visible_subruns(
+  self : Conversation,
+) -> Array[@transcript.SubrunLane] {
   guard self.run is Open(run_id~, ..) else { return [] }
   self.subruns.filter(lane => lane.run is Some(owner) && owner == run_id)
 }

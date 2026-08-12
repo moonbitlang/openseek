@@ -70,6 +70,101 @@ pub(all) struct MentionMessage {
 } derive(Debug)
 
 ///|
+/// The compact text shared by transcript previews and sidebar labels. It
+/// preserves the typed task while replacing the wire envelope with the same
+/// glyph and label shown by each mention chip.
+pub fn MentionMessage::display_text(self : MentionMessage) -> String {
+  let parts : Array[String] = []
+  if !self.task.is_empty() {
+    parts.push(self.task)
+  }
+  for mention in self.mentions {
+    parts.push(glyph(mention) + label(mention))
+  }
+  parts.join(" ")
+}
+
+///|
+/// The editor location represented by a mention chip. Skills and unresolved
+/// symbols have no target; comments on the original revision deliberately do
+/// not point into the working file.
+pub(all) struct Target {
+  file : String
+  range : @common.Range?
+  annotation : String?
+} derive(Eq, Debug)
+
+///|
+/// The short marker displayed before a mention's label.
+pub fn glyph(mention : MentionRef) -> String {
+  match mention {
+    Skill(_) => "$"
+    Symbol(_) => "#"
+    Annotation(_) => "✎"
+  }
+}
+
+///|
+/// Human-readable text for one mention chip.
+pub fn label(mention : MentionRef) -> String {
+  match mention {
+    Skill(name~) => name
+    Symbol(name~, ..) => name
+    Annotation(file~, start_line~, end_line~, side~, ..) => {
+      let suffix = if side is OriginalRevision { " (original)" } else { "" }
+      "\{file}:\{start_line}-\{end_line}\{suffix}"
+    }
+  }
+}
+
+///|
+/// Resolve a mention into the working-file location its chip may open.
+pub fn target(mention : MentionRef) -> Target? {
+  match mention {
+    Skill(_) => None
+    Symbol(file~, line~, ..) =>
+      if file.is_empty() {
+        None
+      } else {
+        Some({
+          file,
+          range: if line >= 1 {
+            Some(@common.Range::Range(line, 1, line, 1))
+          } else {
+            None
+          },
+          annotation: None,
+        })
+      }
+    Annotation(side=OriginalRevision, ..) => None
+    Annotation(
+      file~,
+      start_line~,
+      end_line~,
+      comment~,
+      side=WorkingRevision,
+      ..
+    ) =>
+      Some({
+        file,
+        range: Some(
+          @common.Range::Range(
+            start_line,
+            1,
+            if end_line >= start_line {
+              end_line
+            } else {
+              start_line
+            },
+            1,
+          ),
+        ),
+        annotation: Some(comment),
+      })
+  }
+}
+
+///|
 /// Encode the composer draft into the outgoing prompt: the typed task first,
 /// then one element per chip inside the `<user_mentions>` block. A draft with
 /// no chips is passed through untouched, so ordinary prompts stay ordinary.

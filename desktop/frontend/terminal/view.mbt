@@ -41,6 +41,7 @@ pub fn panel_view(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
+  sync_key : String,
 ) -> @html.Html {
   // Always render the grab strip so its position and the terminal host's
   // sibling index remain stable across open/close renders. Its listeners are
@@ -111,7 +112,9 @@ pub fn panel_view(
     ([] : Array[@html.Html]),
   )
   @html.div(
-    class=if state.open { "terminal-panel open" } else { "terminal-panel" },
+    attrs=@html.Attrs::build()
+      .class(if state.open { "terminal-panel open" } else { "terminal-panel" })
+      .data_set("terminal-input", sync_key),
     [resize_handle, @html.div(class="terminal-titlebar", items), host],
   )
 }
