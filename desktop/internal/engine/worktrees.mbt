@@ -879,7 +879,9 @@ async fn worktree_lock_reason(dir : @pathx.Absolute, name : String) -> String? {
 /// but a recursive delete would not. A standalone clone answers
 /// `git_dir == common_dir`, and a linked worktree of some other repository
 /// roots its common dir elsewhere, so the target must resolve to this
-/// workspace's git dir before anything is deleted.
+/// workspace's git dir before anything is deleted. Submodule commits held
+/// only by the checkout's private clones are preserved into the workspace's
+/// clones first — deletion prunes the worktree gitdir those clones live in.
 async fn delete_worktree_checkout(
   workspace : @pathx.Absolute,
   name : String,
@@ -887,7 +889,8 @@ async fn delete_worktree_checkout(
   action : String,
 ) -> Unit {
   let target = worktree_dir(workspace, name)
-  if checkout_has_gitlinks(target) {
+  let gitlinks = checkout_gitlink_paths(target)
+  if !gitlinks.is_empty() {
     guard git_dir_pair(target) is Some((git_dir, common_dir)) &&
       git_dir != common_dir &&
       git_dir_pair(workspace) is Some((_, workspace_git_dir)) &&
@@ -901,6 +904,7 @@ async fn delete_worktree_checkout(
         "worktree \{name} is locked; unlock it before \{action}",
       )
     }
+    preserve_submodule_commits(workspace, name, target, gitlinks)
     @fs.rmdir(target.to_string(), recursive=true)
     ignore(git_in(workspace, ["worktree", "prune"]))
   } else {

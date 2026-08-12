@@ -61,15 +61,87 @@ async fn provision_initialized_submodules(
 }
 
 ///|
-async fn checkout_has_gitlinks(checkout : @pathx.Absolute) -> Bool {
+/// Every gitlink path of `checkout`: the index's, plus HEAD's — a staged
+/// removal can hide a committed gitlink from the index while Git still
+/// treats the worktree as containing submodules.
+async fn checkout_gitlink_paths(checkout : @pathx.Absolute) -> Array[String] {
   let index = git_output_text(checkout, ["ls-files", "--stage", "-z", "--"])
-  if !gitlink_paths(index).is_empty() {
-    return true
+  let paths = gitlink_paths(index)
+  // An unborn HEAD (a repository with no commits yet) has no committed tree
+  // to inspect; only the index can carry gitlinks then.
+  guard git_probe(checkout, ["ls-tree", "-r", "-z", "HEAD"]) is Some(tree) else {
+    return paths
   }
-  // A staged removal can hide a committed gitlink from the index while Git
-  // still treats the worktree as containing submodules.
-  let tree = git_output_text(checkout, ["ls-tree", "-r", "-z", "HEAD"])
-  !gitlink_paths(tree).is_empty()
+  for path in gitlink_paths(tree) {
+    if !paths.contains(path) {
+      paths.push(path)
+    }
+  }
+  paths
+}
+
+///|
+/// Preserve submodule commits that exist only inside `checkout` before it is
+/// deleted. A linked worktree's submodule clones live under the worktree's
+/// private gitdir (`.git/worktrees/<id>/modules/...`), which the deletion's
+/// `worktree prune` destroys — while the surviving branch keeps gitlinks
+/// pointing at whatever those clones held. Any top-level submodule HEAD not
+/// already present in the workspace's own clone of the same submodule is
+/// fetched there and anchored under `refs/openseek/preserved/<sha>` so gc
+/// cannot reap it; that keeps the retained branch's gitlinks resolvable, the
+/// promise the removal flow makes. A submodule initialized only inside the
+/// checkout has no durable clone to preserve into and is skipped, as is one
+/// whose clone cannot even report a HEAD. A failed transfer refuses the
+/// deletion rather than proceeding to destroy the only copy.
+async fn preserve_submodule_commits(
+  workspace : @pathx.Absolute,
+  name : String,
+  checkout : @pathx.Absolute,
+  gitlinks : Array[String],
+) -> Unit {
+  for path in gitlinks {
+    let source = checkout.join(path)
+    let initialized = @fsx.exists(source.join(".git").to_path()) catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => false
+    }
+    guard initialized else { continue }
+    guard git_probe(source, ["rev-parse", "HEAD"]) is Some(sha) &&
+      !sha.is_empty() else {
+      continue
+    }
+    let destination = workspace.join(path)
+    let has_destination = @fsx.exists(destination.join(".git").to_path()) catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => false
+    }
+    guard has_destination else { continue }
+    if git_probe(destination, ["cat-file", "-e", "\{sha}^{commit}"]) is Some(_) {
+      continue
+    }
+    try {
+      ignore(
+        git_in(destination, ["fetch", "--quiet", source.to_string(), "HEAD"]),
+      )
+      ignore(
+        git_in(destination, [
+          "update-ref",
+          "refs/openseek/preserved/\{sha}",
+          sha,
+        ]),
+      )
+    } catch {
+      error if @async.is_being_cancelled() => raise error
+      EngineError(detail) =>
+        raise EngineError(
+          "could not preserve \{path} commits of worktree \{name}: \{detail}",
+        )
+      error =>
+        raise EngineError(
+          "could not preserve \{path} commits of worktree \{name}: \{error}",
+        )
+    }
+  }
 }
 
 ///|
@@ -256,17 +328,47 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   }
   assert_false(@fsx.exists(dirty_checkout.to_path()))
   // A clean submodule checkout archives in one go, exactly like a clean
-  // plain worktree.
+  // plain worktree — and commits that exist only inside its private
+  // submodule clone are preserved into the workspace's clone first, so the
+  // retained branch's gitlink stays resolvable after the clone is pruned.
   ignore(create_worktree(manager, repo.to_string(), "s-sub-clean", fn(_) {  }))
   @fsx.ensure_dir(
     workspace_session_root(repo).join("sessions").join("s-sub-clean").to_path(),
   )
   let clean_checkout = repo.join(".worktrees/wt-2")
   assert_true(@fsx.exists(clean_checkout.join("deps/one/.git").to_path()))
+  ignore(
+    git_in(clean_checkout.join("deps/one"), [
+      "-c", "user.email=test@example.com", "-c", "user.name=test", "-c", "commit.gpgsign=false",
+      "commit", "-q", "--allow-empty", "-m", "worktree-only",
+    ]),
+  )
+  let salvaged = git_in(clean_checkout.join("deps/one"), ["rev-parse", "HEAD"])
+  ignore(git_in(clean_checkout, ["add", "deps/one"]))
+  ignore(
+    git_in(clean_checkout, [
+      "-c", "user.email=test@example.com", "-c", "user.name=test", "-c", "commit.gpgsign=false",
+      "commit", "-q", "-m", "bump gitlink",
+    ]),
+  )
+  assert_true(
+    git_probe(repo.join("deps/one"), ["cat-file", "-e", salvaged]) is None,
+  )
   guard archive_session(manager, "s-sub-clean", _ => ()) is Archived(_) else {
     fail("clean submodule checkout must archive without confirmation")
   }
   assert_false(@fsx.exists(clean_checkout.to_path()))
+  assert_true(
+    git_probe(repo.join("deps/one"), ["cat-file", "-e", "\{salvaged}^{commit}"])
+    is Some(_),
+  )
+  assert_eq(
+    git_probe(repo.join("deps/one"), [
+      "rev-parse",
+      "refs/openseek/preserved/\{salvaged}",
+    ]),
+    Some(salvaged),
+  )
   // Branches and placements survive, and git's worktree bookkeeping is
   // pruned rather than left stale.
   assert_true(
