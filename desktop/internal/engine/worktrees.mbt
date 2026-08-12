@@ -295,7 +295,7 @@ async fn archive_bound_worktree_checkout(
         return Some({ worktree: entry.name, dirty_paths, dirty_path_count })
       }
     }
-    delete_worktree_checkout(workspace, entry.name, force, "archiving")
+    delete_worktree_checkout(workspace, entry.name)
   } else {
     // The checkout is already gone; drop git's stale bookkeeping for it.
     ignore(git_probe(workspace, ["worktree", "prune"]))
@@ -782,9 +782,11 @@ async fn restore_worktree_checkout(
 
 ///|
 /// Best-effort removal of an app-created checkout while preserving its branch.
-/// `git worktree remove` refuses every repository whose tree contains a
-/// gitlink, even when that submodule is uninitialized, so deletion plus prune
-/// is the only generic cleanup path.
+/// Deliberately not `git worktree remove --force`: rollback must only delete
+/// what THIS invocation provably created, and Git's validation does not
+/// check the branch — `worktree_checked_out_on` does, leaving a path another
+/// process claimed in the race window alone. Unforced removal is no
+/// alternative either: it refuses any tree containing a gitlink.
 async fn rollback_worktree_checkout(
   dir : @pathx.Absolute,
   name : String,
@@ -865,56 +867,30 @@ async fn worktree_lock_reason(dir : @pathx.Absolute, name : String) -> String? {
 }
 
 ///|
-/// Delete a registered worktree's checkout, routing around Git's gitlink
-/// refusal: `git worktree remove` refuses every tree containing a submodule
-/// gitlink, initialized or not, `--force` included — so such checkouts are
-/// deleted directly and their bookkeeping pruned. The caller has already
-/// applied its dirty-checkout policy; an external `git worktree lock` stays
-/// authoritative on the fallback path, where Git cannot enforce it itself.
-/// `action` names the caller's operation in that refusal.
-///
-/// Direct deletion only ever hits this repository's own linked checkout:
-/// the registered path may have been deleted externally and re-occupied by
-/// an unrelated repository, which Git's own `worktree remove` would refuse
-/// but a recursive delete would not. A standalone clone answers
-/// `git_dir == common_dir`, and a linked worktree of some other repository
-/// roots its common dir elsewhere, so the target must resolve to this
-/// workspace's git dir before anything is deleted. Submodule commits held
-/// only by the checkout's private clones are preserved into the workspace's
-/// clones first — deletion prunes the worktree gitdir those clones live in.
+/// Delete a registered worktree's checkout with `git worktree remove
+/// --force` — always forced, because plain `worktree remove` refuses ANY
+/// checkout containing a submodule gitlink, initialized or not, even a
+/// perfectly clean one. The caller's porcelain dirty check (and its
+/// discard-confirmation dialog) is the one cleanliness policy; Git's own
+/// would add nothing but the gitlink refusal. Everything else worth
+/// enforcing, Git still enforces under a single `--force`: it validates
+/// that the path really is this repository's linked worktree (a directory
+/// re-occupied by some other repository fails validation and survives),
+/// refuses an externally locked worktree (that takes a second `--force`,
+/// never passed here), and cleans up the checkout's admin directory —
+/// submodule clones under it included, Git's native `--force` semantics.
 async fn delete_worktree_checkout(
   workspace : @pathx.Absolute,
   name : String,
-  force : Bool,
-  action : String,
 ) -> Unit {
-  let target = worktree_dir(workspace, name)
-  let gitlinks = checkout_gitlink_paths(target)
-  if !gitlinks.is_empty() {
-    guard git_dir_pair(target) is Some((git_dir, common_dir)) &&
-      git_dir != common_dir &&
-      git_dir_pair(workspace) is Some((_, workspace_git_dir)) &&
-      common_dir == workspace_git_dir else {
-      raise EngineError(
-        "\{target} is not a worktree of this repository; another tool may own it",
-      )
-    }
-    guard worktree_lock_reason(workspace, name) is None else {
-      raise EngineError(
-        "worktree \{name} is locked; unlock it before \{action}",
-      )
-    }
-    preserve_submodule_commits(workspace, name, target)
-    @fs.rmdir(target.to_string(), recursive=true)
-    ignore(git_in(workspace, ["worktree", "prune"]))
-  } else {
-    let args = ["worktree", "remove"]
-    if force {
-      args.push("--force")
-    }
-    args.push("\{WorktreesDirName}/\{name}")
-    ignore(git_in(workspace, args))
-  }
+  ignore(
+    git_in(workspace, [
+      "worktree",
+      "remove",
+      "--force",
+      "\{WorktreesDirName}/\{name}",
+    ]),
+  )
 }
 
 ///|
@@ -977,7 +953,7 @@ pub async fn remove_worktree(
         )
       }
     }
-    delete_worktree_checkout(dir, name, force, "removal")
+    delete_worktree_checkout(dir, name)
   } else {
     // The checkout is already gone; drop git's stale bookkeeping for it.
     ignore(git_probe(dir, ["worktree", "prune"]))
