@@ -16,7 +16,7 @@ pub fn rail(
   clock~ : (Double) -> String,
 ) -> @html.Html {
   let ticks : Array[@html.Html] = []
-  for index, entry in entries {
+  for entry in entries {
     let hovered = state.hover == Some(entry.key)
     let mut tick_class = "overview-tick"
     if state.active == Some(entry.key) {
@@ -37,13 +37,7 @@ pub fn rail(
       ),
     ]
     if hovered {
-      // A long rail's bottom-half ticks sit near the scroller's lower edge,
-      // where a downward popover would be clipped by the transcript's
-      // overflow — those open upward instead. A short rail floats
-      // mid-viewport with room below; flipping there would make adjacent
-      // previews open in opposite directions for no reason.
-      let flip = entries.length() >= 24 && index * 2 >= entries.length()
-      children.push(preview(entry, clock, flip~))
+      children.push(preview(entry, clock))
     }
     ticks.push(@html.div(class=tick_class, children))
   }
@@ -58,11 +52,12 @@ pub fn rail(
 }
 
 ///|
-fn preview(
-  entry : Entry,
-  clock : (Double) -> String,
-  flip~ : Bool,
-) -> @html.Html {
+/// The preview always opens downward. On a rail long enough to reach its
+/// height cap (≈50+ turns), the last ticks' previews can run past the
+/// scroller's bottom edge — accepted: a direction that flips by position
+/// made every ordinary conversation's previews inconsistent, which is the
+/// worse trade.
+fn preview(entry : Entry, clock : (Double) -> String) -> @html.Html {
   let children : Array[@html.Html] = [
     @html.div(class="overview-preview-prompt", clamp_preview(entry.text)),
   ]
@@ -78,7 +73,7 @@ fn preview(
     )
   }
   @html.div(
-    class=if flip { "overview-preview flip" } else { "overview-preview" },
+    class="overview-preview",
     attrs=@html.Attrs::build().role("tooltip"),
     children,
   )

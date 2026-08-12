@@ -190,33 +190,3 @@ test "the active turn's tick is marked and the popover renders only hovered" {
   // The unhovered second turn renders no popover of its own.
   assert_false(marked.contains("second question</div>"))
 }
-
-///|
-test "only a long rail's bottom-half ticks open their preview upward" {
-  // A short rail floats mid-viewport with room below — no flipping.
-  let bottom_of_two = render(two_entries(), {
-    hover: Some(@transcript_overview.Durable(4)),
-    active: None,
-  })
-  assert_true(bottom_of_two.contains("overview-preview"))
-  assert_false(bottom_of_two.contains("overview-preview flip"))
-  let many : Array[@transcript_overview.Entry] = []
-  for index in 0..<24 {
-    many.push({
-      key: @transcript_overview.Durable(index),
-      text: "turn \{index}",
-      ts: None,
-      reply: None,
-    })
-  }
-  let top_of_many = render(many, {
-    hover: Some(@transcript_overview.Durable(0)),
-    active: None,
-  })
-  assert_false(top_of_many.contains("overview-preview flip"))
-  let bottom_of_many = render(many, {
-    hover: Some(@transcript_overview.Durable(23)),
-    active: None,
-  })
-  assert_true(bottom_of_many.contains("overview-preview flip"))
-}
