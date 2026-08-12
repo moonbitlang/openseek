@@ -16450,7 +16450,7 @@ test "returning to Chat reinitializes the overview" {
     ..test_model(),
     screen: Skills,
     transcript_overview: {
-      hover: Some((@transcript_overview.Durable(2), false)),
+      hover: Some({ key: @transcript_overview.Durable(2), flip: false }),
       active: Some(@transcript_overview.Durable(3)),
     },
   }

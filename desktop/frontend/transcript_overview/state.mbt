@@ -3,11 +3,18 @@
 // root update's to command off the same message.
 
 ///|
+/// The tick the pointer is on, owning the preview popover. `flip` is
+/// measured from the tick's real position when the pointer entered it:
+/// the preview opens upward only when a downward one would leave the
+/// scroller while up has more room.
+pub(all) struct Hover {
+  key : TurnKey
+  flip : Bool
+} derive(Eq, Debug)
+
+///|
 pub(all) struct State {
-  // The tick the pointer is on (owning the preview popover), and whether
-  // its preview opens upward — measured from the tick's real position at
-  // enter time, so only a tick genuinely out of downward room flips.
-  hover : (TurnKey, Bool)?
+  hover : Hover?
   // The turn the transcript viewport currently reads, highlighted on the
   // rail. Reported by the root's scroll watcher.
   active : TurnKey?
@@ -36,7 +43,7 @@ pub(all) enum Msg {
 ///|
 pub fn update(msg : Msg, state : State) -> State {
   match msg {
-    Entered(key, flip~) => { ..state, hover: Some((key, flip)) }
+    Entered(key, flip~) => { ..state, hover: Some({ key, flip }) }
     Left => { ..state, hover: None }
     Clicked(key) => { ..state, active: Some(key) }
     ActiveChanged(key) => { ..state, active: key }

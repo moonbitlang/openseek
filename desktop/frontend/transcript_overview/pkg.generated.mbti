@@ -25,6 +25,11 @@ pub(all) struct Entry {
   reply : String?
 } derive(Eq, @debug.Debug)
 
+pub(all) struct Hover {
+  key : TurnKey
+  flip : Bool
+} derive(Eq, @debug.Debug)
+
 pub(all) enum Msg {
   Entered(TurnKey, flip~ : Bool)
   Left
@@ -33,7 +38,7 @@ pub(all) enum Msg {
 }
 
 pub(all) struct State {
-  hover : (TurnKey, Bool)?
+  hover : Hover?
   active : TurnKey?
 } derive(Eq, @debug.Debug)
 pub fn State::empty() -> Self

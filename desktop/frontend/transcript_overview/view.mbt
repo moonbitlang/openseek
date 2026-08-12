@@ -19,8 +19,8 @@ pub fn rail(
   for entry in entries {
     // `Some(flip)` while this tick owns the popover; the flip was measured
     // when the pointer entered it.
-    let hover_flip = if state.hover is Some((key, flip)) && key == entry.key {
-      Some(flip)
+    let hover_flip = if state.hover is Some(hover) && hover.key == entry.key {
+      Some(hover.flip)
     } else {
       None
     }
