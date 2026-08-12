@@ -29,6 +29,30 @@ test "capitalize is Unicode-safe on a non-BMP first char" {
 }
 
 ///|
+#warnings("-alert_unstable")
+test "transcript markup exposes conversation identity" {
+  let input = Input(
+    focused=@interop.ChannelId::Remote("relay-a"),
+    active_session="same-markup-chat",
+    items=[],
+    streaming_response="",
+    subruns=[],
+  )
+  let rendered = transcript_view(
+    input,
+    pinned=true,
+    overview=@transcript_overview.State::empty(),
+    overview_emit=@cmd.Emit(_ => @cmd.none),
+    _ => @cmd.none,
+    _ => @cmd.none,
+    on_jump_latest=@cmd.none,
+  )
+  let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
+  assert_true(markup.contains("data-transcript-channel=\"remote.relay-a\""))
+  assert_true(markup.contains("data-transcript-session=\"same-markup-chat\""))
+}
+
+///|
 test "a tool group's summary recognizes every cmd/openseek built-in" {
   inspect(tool_group_summary([tool_item("read")]), content="Read 1 file")
   inspect(

@@ -377,9 +377,10 @@ fn transcript_sub_loader(
 }
 
 ///|
-/// Observe content and geometry owned by `#transcript`. The document observer
-/// follows Rabbita replacements; the resize observer covers terminal drags and
-/// window geometry changes that do not mutate transcript children.
+/// Observe content, identity, and geometry owned by `#transcript`. The
+/// identity attributes change even when two conversations have identical
+/// markup; the document observer also follows Rabbita replacements, while the
+/// resize observer covers geometry changes that do not mutate children.
 extern "js" fn install_transcript_observer(
   on_change : (Bool) -> Unit,
 ) -> @js.Value =
@@ -413,9 +414,11 @@ extern "js" fn install_transcript_observer(
   #|   });
   #|   attach();
   #|   mutation.observe(document.documentElement, {
+  #|     attributes: true,
   #|     childList: true,
   #|     characterData: true,
   #|     subtree: true,
+  #|     attributeFilter: ["data-transcript-channel", "data-transcript-session"],
   #|   });
   #|   return { mutation, resize };
   #| }
