@@ -7179,6 +7179,70 @@ test "BridgeReady clears focused host settings until the refetch lands" {
 }
 
 ///|
+test "BridgeReady reattaches a live file index watcher" {
+  let dispatch = test_dispatch()
+  let model = test_model()
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-test",
+  }
+  let root = @interop.ChannelId::Local.test_resource("/scratch/desktop-test")
+  let watched : @fileeditor.WatchedPaths = {
+    owner,
+    root,
+    files: [],
+    directories: [],
+    recursive: true,
+  }
+  let panel = {
+    ..model.file_panel,
+    owner: Some(owner),
+    placement_known: true,
+    placement_workspace: None,
+    placement_root: Some(root),
+    placement_checkout: Some(@interop.WorkspaceRoot),
+    watching: Some(watched),
+    watch_generation: 7,
+  }
+  let model = { ..model, file_panel: panel }
+  let file_emit = dispatch.map(msg => FileEditor(msg))
+  let (_, loading) = @fileeditor.update(
+    file_emit,
+    @fileeditor.EnsureFileIndex,
+    panel,
+    file_ctx(model),
+  )
+  let (_, ready) = @fileeditor.update(
+    file_emit,
+    @fileeditor.FilesIndexed(
+      owner~,
+      epoch=loading.request_epoch,
+      files=[],
+      truncated=false,
+    ),
+    loading,
+    file_ctx(model),
+  )
+  let model = { ..model, file_panel: ready }
+  let (_, next) = update_dev(
+    dispatch,
+    @interop.ChannelId::Local.test_bridge_ready(),
+    model,
+  )
+  // BridgeReady forgets the old HostConnection's watcher before the common
+  // post-dispatch sync. A live hidden index then places the same recursive
+  // selection on the new HostConnection with a fresh failure identity.
+  assert_true(
+    next.file_panel.watching is Some({ root: next_root, .. }) &&
+    next_root == root,
+  )
+  assert_eq(next.file_panel.watch_generation, 8)
+  assert_true(
+    next.file_panel.index is @fileeditor.IndexReady(refreshing=false, ..),
+  )
+}
+
+///|
 test "BridgeReady resets only conversations owned by its channel" {
   let dispatch = test_dispatch()
   let background : @interop.ChannelId = Remote("d-bg")
