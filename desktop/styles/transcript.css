@@ -547,8 +547,8 @@
 /* One turn's work (thinking + tool calls), folded behind a single
    summary line. Flush with the agent's prose, not indented: the work is
    the agent's, and an indent under a user bubble would read as the
-   user's. Borderless on purpose: the work log is typography, not
-   chrome — prose for reasoning, gray one-liners for tool calls. */
+   user's. The summary stays borderless; once opened, a quiet guide line
+   groups the revealed work without turning it into a card. */
 .activity-row {
   min-width: 0;
   animation: riseIn 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -565,6 +565,25 @@
 .tool-line-summary::-webkit-details-marker,
 .tool-call-summary::-webkit-details-marker {
   display: none;
+}
+
+/* The visible guide belongs to the body, while this empty part of the native
+   summary extends its hit area over the guide. A click therefore toggles only
+   the details element that owns that line, including when disclosures nest. */
+.activity,
+.tool-line {
+  position: relative;
+}
+.activity[open] > .activity-summary::before,
+.tool-line[open] > .tool-line-summary::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 1.5em;
+  bottom: 0;
+  left: -5px;
+  width: 12px;
+  cursor: pointer;
 }
 
 .activity-summary {
@@ -599,7 +618,8 @@
 .activity-body {
   display: grid;
   gap: 14px;
-  padding: 12px 0 4px;
+  padding: 12px 0 4px 16px;
+  border-left: 2px solid var(--color-border);
 }
 
 /* compaction checkpoint between turns: a quiet labeled fold with the
@@ -672,6 +692,7 @@
   display: grid;
   gap: 4px;
   padding: 6px 0 2px 16px;
+  border-left: 2px solid var(--color-border);
 }
 
 /* One call inside a burst: its brief, expandable to recorded arguments and
