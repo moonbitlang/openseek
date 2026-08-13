@@ -15,19 +15,22 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
     }
     None => @engine.session_cwd(payload.session)
   }
-  guard base is Some(root) else {
+  let path = @pathx.Path(payload.path).expand_home()
+  // Absolute system targets do not need a conversation checkout. Relative
+  // paths still need one so they never fall back to the host process's cwd.
+  if base is None && !path.is_host_absolute() {
     raise HostError("This conversation has no working directory")
   }
-  let target = @engine.open_target(
-    Some(root),
-    @pathx.Path(payload.path).expand_home(),
-  )
+  let target = @engine.open_target(base, path)
   guard !target.0.is_empty() else { raise HostError("Empty path") }
   let resolution = @openpath.Reference(target.0).resolve()
   if resolution is MissingPath(path) {
     raise HostError("File does not exist: \{path}")
   }
   if resolution is EditorPath(path~, line~, column~) {
+    guard base is Some(root) else {
+      raise HostError("This conversation has no working directory")
+    }
     // The built-in editor is checkout-rooted. Return the relative path we
     // already proved belongs to this exact cwd. Check both the lexical path
     // and its real target so an in-checkout symlink cannot expose text outside
@@ -65,6 +68,37 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
   }
   guard code == 0 else { raise HostError("Could not open \{system_path}") }
   { opened: true, editor_target: None }
+}
+
+///|
+async test "open_path only requires a working directory for relative or editor paths" {
+  let root = @fs.tmpdir(prefix="openseek-host-open-without-cwd-")
+  let missing_path = "\{root}/missing.bin"
+  let mut absolute_was_resolved = false
+  ignore(open_path_op({ session: "", cwd: None, path: missing_path })) catch {
+    HostError(message) =>
+      absolute_was_resolved = message.has_prefix("File does not exist:")
+    _ => ()
+  }
+  assert_true(absolute_was_resolved)
+  let mut relative_requires_cwd = false
+  ignore(open_path_op({ session: "", cwd: None, path: "missing.bin" })) catch {
+    HostError(message) =>
+      relative_requires_cwd = message ==
+        "This conversation has no working directory"
+    _ => ()
+  }
+  assert_true(relative_requires_cwd)
+  let text_path = "\{root}/source.mbt"
+  @fs.write_file(text_path, "fn main {}", create_mode=CreateOrTruncate)
+  let mut editor_requires_cwd = false
+  ignore(open_path_op({ session: "", cwd: None, path: text_path })) catch {
+    HostError(message) =>
+      editor_requires_cwd = message ==
+        "This conversation has no working directory"
+    _ => ()
+  }
+  assert_true(editor_requires_cwd)
 }
 
 ///|
