@@ -1584,10 +1584,14 @@ fn update_msg(
       notification_corner~,
       tree_layout~,
       theme~,
+      font~,
+      font_size~,
       model=stored,
       conversation_models=remembered
     ) => {
       let theme = Theme::parse(theme, model.theme)
+      let app_font = AppFont::parse(font, model.app_font)
+      let app_font_size = AppFontSize::parse(font_size, model.app_font_size)
       // Startup runs before any conversation exists, so adopting the stored
       // tiers here is enough — every conversation minted afterwards reads
       // them.
@@ -1595,12 +1599,18 @@ fn update_msg(
         model.default_model,
       )
       (
-        theme.apply(model.system_dark),
+        @cmd.batch([
+          theme.apply(model.system_dark),
+          app_font.apply(),
+          app_font_size.apply(),
+        ]),
         {
           ..model,
           notification_corner: NotificationCorner::parse(notification_corner),
           tree_layout: @fileeditor.TreeLayout::parse(tree_layout),
           theme,
+          app_font,
+          app_font_size,
           default_model,
           conversation_models: parse_conversation_models(remembered),
         },
@@ -2983,6 +2993,28 @@ fn update_msg(
         (
           @cmd.batch([theme.apply(model.system_dark), theme.save()]),
           { ..model, theme, },
+        )
+      }
+    }
+    FontChanged(value) => {
+      let app_font = AppFont::parse(value, model.app_font)
+      if app_font == model.app_font {
+        (@cmd.none, model)
+      } else {
+        (
+          @cmd.batch([app_font.apply(), app_font.save()]),
+          { ..model, app_font, },
+        )
+      }
+    }
+    FontSizeChanged(value) => {
+      let app_font_size = AppFontSize::parse(value, model.app_font_size)
+      if app_font_size == model.app_font_size {
+        (@cmd.none, model)
+      } else {
+        (
+          @cmd.batch([app_font_size.apply(), app_font_size.save()]),
+          { ..model, app_font_size, },
         )
       }
     }
@@ -12446,6 +12478,8 @@ test "loaded UI preferences parse their wire names" {
       notification_corner="top-left",
       tree_layout="",
       theme="dark",
+      font="menlo",
+      font_size="large",
       model="deepseek-v4-flash",
       conversation_models="[{\"key\":\"local/desktop-test\",\"model\":\"deepseek-v4-pro\"}]",
     ),
@@ -12453,6 +12487,8 @@ test "loaded UI preferences parse their wire names" {
   )
   assert_true(restored.notification_corner is TopLeft)
   assert_true(restored.theme is Dark)
+  assert_true(restored.app_font is Menlo)
+  assert_true(restored.app_font_size is Large)
   assert_true(restored.default_model is Low)
   // The stored conversation outranks the stored default for its own chat.
   assert_true(restored.active().engine_model is High)
@@ -12463,6 +12499,8 @@ test "loaded UI preferences parse their wire names" {
       notification_corner="",
       tree_layout="",
       theme="broken",
+      font="broken",
+      font_size="broken",
       model="",
       conversation_models="not json",
     ),
@@ -12470,6 +12508,8 @@ test "loaded UI preferences parse their wire names" {
   )
   assert_true(unknown.notification_corner is BottomRight)
   assert_true(unknown.theme is System)
+  assert_true(unknown.app_font is GeistMono)
+  assert_true(unknown.app_font_size is Medium)
   assert_true(unknown.default_model is High)
   // A store that will not parse remembers nothing rather than wedging.
   assert_eq(unknown.conversation_models.length(), 0)
@@ -14066,6 +14106,38 @@ test "theme settings switch fixed palettes and are idempotent" {
   assert_true(light.theme is Light)
   let (_, unchanged) = update(dispatch, ThemeChanged("unknown"), system)
   assert_true(unchanged.theme is System)
+}
+
+///|
+test "font settings switch every text surface and are idempotent" {
+  let dispatch = test_dispatch()
+  let model = test_model()
+  let (_, first) = update(dispatch, FontChanged("system-mono"), model)
+  let (_, second) = update(dispatch, FontChanged("system-mono"), model)
+  assert_true(first.app_font is SystemMono)
+  assert_true(second.app_font is SystemMono)
+  let (_, menlo) = update(dispatch, FontChanged("menlo"), first)
+  assert_true(menlo.app_font is Menlo)
+  let (_, bundled) = update(dispatch, FontChanged("geist-mono"), menlo)
+  assert_true(bundled.app_font is GeistMono)
+  let (_, unchanged) = update(dispatch, FontChanged("unknown"), model)
+  assert_true(unchanged.app_font is GeistMono)
+}
+
+///|
+test "font-size settings switch every text surface and are idempotent" {
+  let dispatch = test_dispatch()
+  let model = test_model()
+  let (_, first) = update(dispatch, FontSizeChanged("small"), model)
+  let (_, second) = update(dispatch, FontSizeChanged("small"), model)
+  assert_true(first.app_font_size is Small)
+  assert_true(second.app_font_size is Small)
+  let (_, large) = update(dispatch, FontSizeChanged("large"), first)
+  assert_true(large.app_font_size is Large)
+  let (_, medium) = update(dispatch, FontSizeChanged("medium"), large)
+  assert_true(medium.app_font_size is Medium)
+  let (_, unchanged) = update(dispatch, FontSizeChanged("unknown"), model)
+  assert_true(unchanged.app_font_size is Medium)
 }
 
 ///|

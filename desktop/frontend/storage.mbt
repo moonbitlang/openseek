@@ -23,6 +23,8 @@ fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           notification_corner=load_setting(NotificationCornerStorageKey),
           tree_layout=load_setting(TreeLayoutStorageKey),
           theme=load_setting(ThemeStorageKey),
+          font=load_setting(AppFontStorageKey),
+          font_size=load_setting(AppFontSizeStorageKey),
           model=load_setting(ModelStorageKey),
           conversation_models=load_setting(ConversationModelsStorageKey),
         ),
@@ -101,6 +103,18 @@ fn parse_conversation_models(text : String) -> Array[StoredConversationModel] {
 /// System state, while an explicit System choice survives subsequent reloads.
 fn Theme::save(self : Theme) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(ThemeStorageKey, self.wire()))
+}
+
+///|
+/// Persist the monospace family used by every app-owned text surface.
+fn AppFont::save(self : AppFont) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(AppFontStorageKey, self.wire()))
+}
+
+///|
+/// Persist the type scale used by every app-owned text surface.
+fn AppFontSize::save(self : AppFontSize) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(AppFontSizeStorageKey, self.wire()))
 }
 
 ///|

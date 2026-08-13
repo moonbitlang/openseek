@@ -62,6 +62,12 @@ priv struct ViewerHost {
   // Monotonic model version; the viewer treats a new version as a new
   // document.
   mut version : Int
+  // Desired family survives before the Viewer mounts, so startup settings and
+  // a later first file open cannot race back to the editor package default.
+  mut font_family : String
+  // Desired size has the same pre-mount lifetime as the family. The Viewer
+  // consumes pixels as a Double and re-measures whenever this value changes.
+  mut font_size : Double
   // Each open tab's last scroll position, keyed by workspace-relative path,
   // saved as the viewer switches away and restored when the tab returns.
   // Scroll is DOM state, so it lives here beside the viewer rather than in
@@ -79,6 +85,8 @@ let viewer_state : ViewerHost = {
   relative: None,
   navigation: None,
   version: 0,
+  font_family: "\"Geist Mono\", \"SF Mono\", ui-monospace, \"Cascadia Mono\", Menlo, Consolas, monospace",
+  font_size: 13.0,
   view_states: Map([]),
 }
 
@@ -144,6 +152,8 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           options=@viewer.ViewerOptions(
             theme="light",
             placeholder="Select a file to view",
+            font_family=viewer_state.font_family,
+            font_size=viewer_state.font_size,
           ),
         )
         viewer_state.viewer = Some(viewer)
@@ -204,6 +214,32 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
     },
     kind=@cmd.after_render,
   )
+}
+
+///|
+/// Retain the selected family for future mounts and update an attached Viewer
+/// through its public options API. Updating options re-measures glyph widths
+/// and recomputes wrapping before the next render.
+pub fn apply_font_family(font_family : String) -> @cmd.Cmd {
+  @cmd.custom_cmd(_scheduler => {
+    viewer_state.font_family = font_family
+    if viewer_state.viewer is Some(viewer) {
+      viewer.update_options(viewer.get_options().with_font_family(font_family))
+    }
+  })
+}
+
+///|
+/// Retain the selected size for future mounts and update an attached Viewer.
+/// ViewerOptions owns the rebuild decision, including glyph measurement and
+/// wrapping changes caused by the new pixel size.
+pub fn apply_font_size(font_size : Double) -> @cmd.Cmd {
+  @cmd.custom_cmd(_scheduler => {
+    viewer_state.font_size = font_size
+    if viewer_state.viewer is Some(viewer) {
+      viewer.update_options(viewer.get_options().with_font_size(font_size))
+    }
+  })
 }
 
 ///|

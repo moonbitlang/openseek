@@ -131,6 +131,16 @@ const TreeLayoutStorageKey : String = "openseek.tree_layout"
 const ThemeStorageKey : String = "openseek.theme"
 
 ///|
+/// The page-local monospace family shared by the app chrome, editor, and
+/// terminal. The value is a fixed choice rather than arbitrary CSS so stored
+/// input can never become a style injection surface.
+const AppFontStorageKey : String = "openseek.font"
+
+///|
+/// The page-local type scale shared by the app chrome, editor, and terminal.
+const AppFontSizeStorageKey : String = "openseek.font_size"
+
+///|
 /// The tier new conversations are born with — the last one picked in the
 /// composer, and the fallback for a conversation nothing remembers.
 const ModelStorageKey : String = "openseek.model"
@@ -197,6 +207,89 @@ fn Theme::wire(self : Theme) -> String {
     System => "system"
     Light => "light"
     Dark => "dark"
+  }
+}
+
+///|
+/// The monospace family selected in Settings. Geist remains the bundled,
+/// offline-safe default; the other choices use fonts supplied by the OS.
+priv enum AppFont {
+  GeistMono
+  SystemMono
+  Menlo
+} derive(Eq)
+
+///|
+/// Unknown or absent stored values retain the current choice, so a stale
+/// localStorage value cannot silently replace the app's bundled default.
+fn AppFont::parse(value : String, fallback : AppFont) -> AppFont {
+  match value {
+    "geist-mono" => GeistMono
+    "system-mono" => SystemMono
+    "menlo" => Menlo
+    _ => fallback
+  }
+}
+
+///|
+fn AppFont::wire(self : AppFont) -> String {
+  match self {
+    GeistMono => "geist-mono"
+    SystemMono => "system-mono"
+    Menlo => "menlo"
+  }
+}
+
+///|
+/// The concrete CSS family list also feeds xterm and the editor's measured
+/// font option, whose imperative widgets cannot inherit the app variable.
+fn AppFont::css_family(self : AppFont) -> String {
+  match self {
+    GeistMono =>
+      "\"Geist Mono\", \"SF Mono\", ui-monospace, \"Cascadia Mono\", Menlo, Consolas, monospace"
+    SystemMono =>
+      "ui-monospace, \"SF Mono\", \"Cascadia Mono\", Menlo, Consolas, monospace"
+    Menlo => "Menlo, Monaco, \"Courier New\", monospace"
+  }
+}
+
+///|
+/// The base text size selected in Settings. The CSS token scale derives the
+/// surrounding app sizes from this choice; the editor and terminal receive
+/// the pixel value directly because their layout engines measure glyphs.
+priv enum AppFontSize {
+  Small
+  Medium
+  Large
+} derive(Eq)
+
+///|
+/// Unknown or absent stored values retain the current choice, so older builds
+/// and corrupt localStorage values preserve the readable default.
+fn AppFontSize::parse(value : String, fallback : AppFontSize) -> AppFontSize {
+  match value {
+    "small" => Small
+    "medium" => Medium
+    "large" => Large
+    _ => fallback
+  }
+}
+
+///|
+fn AppFontSize::wire(self : AppFontSize) -> String {
+  match self {
+    Small => "small"
+    Medium => "medium"
+    Large => "large"
+  }
+}
+
+///|
+fn AppFontSize::pixels(self : AppFontSize) -> Double {
+  match self {
+    Small => 12.0
+    Medium => 13.0
+    Large => 14.0
   }
 }
 
@@ -1098,6 +1191,10 @@ priv struct Model {
   // The Settings selection. Its effective palette drives the app root,
   // embedded viewer, and terminal together.
   theme : Theme
+  // The Settings selection shared by app chrome, editor text, and terminals.
+  app_font : AppFont
+  // The Settings type scale shared by app chrome, editor text, and terminals.
+  app_font_size : AppFontSize
   // Whether the viewport is phone-narrow (at most `NarrowBreakpoint` wide).
   // Seeded from the window at startup and kept fresh by the resize
   // subscription; the value must agree with index.html's one mobile media
@@ -1389,6 +1486,8 @@ priv enum Msg {
     notification_corner~ : String,
     tree_layout~ : String,
     theme~ : String,
+    font~ : String,
+    font_size~ : String,
     model~ : String,
     conversation_models~ : String
   )
@@ -1559,6 +1658,10 @@ priv enum Msg {
   ToggleSidebar
   // A Settings selection fixes the page to Light or Dark and persists it.
   ThemeChanged(String)
+  // A Settings selection changes all app-owned monospace text and persists it.
+  FontChanged(String)
+  // A Settings selection changes the shared app/editor/terminal type scale.
+  FontSizeChanged(String)
   // The window was resized; `width` decides the narrow (phone) layout.
   ViewportResized(width~ : Int)
   // The sidebar's "Chats" heading was clicked — fold or unfold the section.
@@ -2230,6 +2333,8 @@ fn initial_model() -> Model {
     },
     system_dark: host_prefers_dark(),
     theme: System,
+    app_font: GeistMono,
+    app_font_size: Medium,
     narrow,
     sidebar_open: !narrow,
     right_panel_open: false,

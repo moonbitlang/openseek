@@ -136,6 +136,8 @@ pub fn ViewerOptions::ViewerOptions(soft_wrap? : Bool, tab_size? : Int, wrapping
 pub fn ViewerOptions::default() -> Self
 pub fn ViewerOptions::line_height(Self) -> Double
 pub fn ViewerOptions::soft_wrap(Self) -> Bool
+pub fn ViewerOptions::with_font_family(Self, String) -> Self
+pub fn ViewerOptions::with_font_size(Self, Double) -> Self
 pub fn ViewerOptions::with_line_decorations_width(Self, Int) -> Self
 pub fn ViewerOptions::with_line_height(Self, Double) -> Self
 pub fn ViewerOptions::with_line_numbers_min_chars(Self, Int) -> Self

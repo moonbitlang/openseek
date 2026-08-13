@@ -1627,6 +1627,68 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         desc="Used by the app, editor, and terminal. System follows the OS appearance.",
       ),
       setting_row(
+        "Font",
+        [
+          setting_select(
+            @html.select(
+              on_change=dispatch.map(value => FontChanged(value)),
+              attrs=@html.Attrs::build()
+                .aria_label("Font")
+                .data_set("focus-owner", ""),
+              [
+                @html.option(
+                  value="geist-mono",
+                  selected=model.app_font is GeistMono,
+                  "Geist Mono",
+                ),
+                @html.option(
+                  value="system-mono",
+                  selected=model.app_font is SystemMono,
+                  "System monospace",
+                ),
+                @html.option(
+                  value="menlo",
+                  selected=model.app_font is Menlo,
+                  "Menlo",
+                ),
+              ],
+            ),
+          ),
+        ],
+        desc="Used by the app, editor, and terminal.",
+      ),
+      setting_row(
+        "Font size",
+        [
+          setting_select(
+            @html.select(
+              on_change=dispatch.map(value => FontSizeChanged(value)),
+              attrs=@html.Attrs::build()
+                .aria_label("Font size")
+                .data_set("focus-owner", ""),
+              [
+                @html.option(
+                  value="small",
+                  selected=model.app_font_size is Small,
+                  "Small (12px)",
+                ),
+                @html.option(
+                  value="medium",
+                  selected=model.app_font_size is Medium,
+                  "Medium (13px)",
+                ),
+                @html.option(
+                  value="large",
+                  selected=model.app_font_size is Large,
+                  "Large (14px)",
+                ),
+              ],
+            ),
+          ),
+        ],
+        desc="Scales text in the app, editor, and terminal.",
+      ),
+      setting_row(
         "Notification corner",
         [corner_select(dispatch, model.notification_corner)],
         desc="Where error notifications pop up.",

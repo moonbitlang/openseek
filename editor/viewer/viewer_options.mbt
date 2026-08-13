@@ -178,6 +178,24 @@ pub fn ViewerOptions::with_theme(
 }
 
 ///|
+/// Returns a copy with the measured editor font family changed.
+pub fn ViewerOptions::with_font_family(
+  self : ViewerOptions,
+  font_family : String,
+) -> ViewerOptions {
+  { ..self, font_family, }
+}
+
+///|
+/// Returns a copy with the measured editor font size changed.
+pub fn ViewerOptions::with_font_size(
+  self : ViewerOptions,
+  font_size : Double,
+) -> ViewerOptions {
+  { ..self, font_size, }
+}
+
+///|
 /// Returns a copy with `renderWhitespace` changed.
 pub fn ViewerOptions::with_render_whitespace(
   self : ViewerOptions,

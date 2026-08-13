@@ -78,6 +78,46 @@
   --z-connection-lost: 80;
 }
 
+/* Font choices are fixed Settings values. Geist remains the bundled default;
+   system monospace and Menlo deliberately fall back through installed fonts. */
+:root[data-font="system-mono"] {
+  --font-family-ui: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
+    monospace;
+}
+
+:root[data-font="menlo"] {
+  --font-family-ui: Menlo, Monaco, "Courier New", monospace;
+}
+
+/* Medium is the token scale declared on :root. Small and Large shift the four
+   shared steps together, preserving the hierarchy between labels and body
+   text while the selected base size remains exactly 12px or 14px. */
+:root[data-font-size="small"] {
+  --font-size-xs: 10px;
+  --font-size-sm: 11px;
+  --font-size-md: 12px;
+  --font-size-lg: 15px;
+}
+
+:root[data-font-size="large"] {
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 17px;
+}
+
+/* The app stylesheet loads after the Viewer theme. Its chrome and unified diff
+   follow the app tokens, while the measured code view also receives concrete
+   values through ViewerOptions so glyph widths and wrapping remain correct. */
+.editor-shell {
+  --editor-font-family: var(--font-family-ui);
+  --editor-font-size: var(--font-size-md);
+  --editor-line-height: var(--line-height-relaxed);
+  --monaco-monospace-font: var(--font-family-ui);
+  --ui-font-family: var(--font-family-ui);
+  --ui-font-size: var(--font-size-md);
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --color-bg-canvas: #16181d;

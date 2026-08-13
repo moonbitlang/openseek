@@ -13,6 +13,10 @@ import {
 // Values
 pub fn activate(@cmd.Emit[Msg], State, Ctx, @pathx.Relative) -> (@cmd.Cmd, State)
 
+pub fn apply_font_family(String) -> @cmd.Cmd
+
+pub fn apply_font_size(Double) -> @cmd.Cmd
+
 pub fn basename(@pathx.Relative) -> String
 
 pub fn body_view(@cmd.Emit[Msg], State, Ctx) -> @html.Html

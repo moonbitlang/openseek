@@ -23,3 +23,19 @@ test "viewer options derive soft wrap columns from measured glyphs" {
   assert_eq(view_model_options.soft_wrap_column, 10)
   assert_eq(view_model_options.tab_size, 4)
 }
+
+///|
+test "viewer font-family updates preserve the remaining options" {
+  let updated = ViewerOptions(placeholder="Choose a file").with_font_family(
+    "Example Mono, monospace",
+  )
+  assert_eq(updated.font_family, "Example Mono, monospace")
+  assert_eq(updated.placeholder, "Choose a file")
+}
+
+///|
+test "viewer font-size updates preserve the remaining options" {
+  let updated = ViewerOptions(placeholder="Choose a file").with_font_size(14.0)
+  assert_eq(updated.font_size, 14.0)
+  assert_eq(updated.placeholder, "Choose a file")
+}
