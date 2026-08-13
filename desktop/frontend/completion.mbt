@@ -180,8 +180,9 @@ fn Model::completion_files(
     trigger.marker() == "@" else {
     return ([], false)
   }
+  let can_index = self.conversation_root(self.active()) is Some(_)
   let loading = match self.file_panel.index {
-    @fileeditor.IndexEmpty | @fileeditor.IndexLoading(_) => true
+    @fileeditor.IndexEmpty | @fileeditor.IndexLoading(_) => can_index
     @fileeditor.IndexReady(truncated=true, ..) => true
     @fileeditor.IndexFailed | @fileeditor.IndexReady(truncated=false, ..) =>
       false
@@ -710,7 +711,7 @@ test "compose_prompt folds the chips into a parseable envelope after the text" {
     content=(
       #|look at this
       #|
-      #|<user_mentions>
+      #|<user_mentions attributes="xml">
       #|<symbol name="parse_hover" file="a.mbt" line="5"/>
       #|<skill name="review-pr"/>
       #|</user_mentions>

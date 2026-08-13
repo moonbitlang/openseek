@@ -28,7 +28,7 @@ test "encode lays out the task first, then the tagged mention block" {
     content=(
       #|look at this
       #|
-      #|<user_mentions>
+      #|<user_mentions attributes="xml">
       #|<skill name="review-pr"/>
       #|<file path="src/main.mbt"/>
       #|<symbol name="parse_hover" file="src/hover.mbt" line="5"/>
@@ -53,7 +53,7 @@ test "encode of chips alone omits the task block" {
   inspect(
     @mention_context.encode([Skill(name="review-pr")], "  "),
     content=(
-      #|<user_mentions>
+      #|<user_mentions attributes="xml">
       #|<skill name="review-pr"/>
       #|</user_mentions>
     ),
@@ -100,6 +100,18 @@ test "attribute escaping preserves structural filename characters" {
     fail("escaped attributes should remain a well-formed envelope")
   }
   @debug.assert_eq(parsed.mentions, mentions)
+}
+
+///|
+test "legacy raw attributes are not entity-decoded" {
+  let content =
+    #|<user_mentions>
+    #|<file path="src/literal&amp;&#10;.mbt"/>
+    #|</user_mentions>
+  guard @mention_context.parse(content) is Some(parsed) else {
+    fail("legacy mention envelopes should remain readable")
+  }
+  @debug.assert_eq(parsed.mentions, [File(path="src/literal&amp;&#10;.mbt")])
 }
 
 ///|

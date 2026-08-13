@@ -1849,6 +1849,7 @@ fn update_msg(
             )
           })
         Some(trigger) if trigger.marker() == "@" &&
+          root is Some(_) &&
           (
             model.file_panel.index is @fileeditor.IndexEmpty ||
             model.file_panel.index is @fileeditor.IndexFailed
@@ -10544,6 +10545,25 @@ test "truncated file completion settles from the complete Host cache" {
   }
   assert_false(local_menu.menu.loading())
   assert_eq(local_menu.menu.length(), 1)
+}
+
+///|
+test "file completion settles while its checkout root is unavailable" {
+  let dispatch = test_dispatch()
+  let base = test_model()
+  let rootless = base.replace_device({ ..base.dev(), bridge: Connecting })
+  assert_true(rootless.conversation_root(rootless.active()) is None)
+  let (_, searching) = update(
+    dispatch,
+    TaskChanged("Inspect @missing"),
+    rootless,
+  )
+  guard searching.completion is Some(menu) else {
+    fail("a rootless @ token should still expose a settled empty menu")
+  }
+  assert_true(menu.kind is Files)
+  assert_false(menu.menu.loading())
+  assert_eq(menu.menu.length(), 0)
 }
 
 ///|

@@ -16,7 +16,7 @@
 //
 //   look at this
 //
-//   <user_mentions>
+//   <user_mentions attributes="xml">
 //   <skill name="review-pr"/>
 //   <file path="src/main.mbt"/>
 //   <symbol name="parse_hover" file="a.mbt" line="5"/>
@@ -95,7 +95,10 @@ fn MentionAttribute::encode(text : String) -> MentionAttribute {
 }
 
 ///|
-fn MentionAttribute::decode(wire : String) -> String {
+fn MentionAttribute::decode(wire : String, encoded : Bool) -> String {
+  if !encoded {
+    return wire
+  }
   wire
   .replace_all(old="&quot;", new="\"")
   .replace_all(old="&lt;", new="<")
@@ -218,7 +221,7 @@ pub fn encode(mentions : Array[MentionRef], task : String) -> String {
   if !task.is_empty() {
     parts <+ "\{task}\n\n"
   }
-  parts <+ "<user_mentions>\n"
+  parts <+ "<user_mentions attributes=\"xml\">\n"
   for mention in mentions {
     write_mention(parts, mention)
   }
@@ -292,13 +295,19 @@ pub fn parse(content : String) -> MentionMessage? {
   // The task text is arbitrary, so the envelope's opener is the last one —
   // matched from the end inward, as the closing tag was.
   let mut open_index = None
+  let mut attributes_encoded = false
   for index, line in head {
     if line == "<user_mentions>" {
       open_index = Some(index)
+      attributes_encoded = false
+    } else if line == "<user_mentions attributes=\"xml\">" {
+      open_index = Some(index)
+      attributes_encoded = true
     }
   }
   guard open_index is Some(open) else { return None }
-  guard parse_mention_block(head[open + 1:]) is Some(mentions) else {
+  guard parse_mention_block(head[open + 1:], attributes_encoded)
+    is Some(mentions) else {
     return None
   }
   Some({ mentions, task: head[:open].join("\n").trim().to_owned() })
@@ -327,7 +336,10 @@ let annotation_pattern : Regex = re"^<annotation file=\"(?<file>[^\"]+)\" lines=
 /// The lines between `<user_mentions>` and `</user_mentions>` as chips, or
 /// `None` when anything in the block is not a well-formed mention element.
 /// An empty block is malformed — `encode` never writes one.
-fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
+fn parse_mention_block(
+  lines : ArrayView[String],
+  attributes_encoded : Bool,
+) -> Array[MentionRef]? {
   guard !lines.is_empty() else { return None }
   let mentions : Array[MentionRef] = []
   let mut index = 0
@@ -335,13 +347,19 @@ fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
     let line = lines[index]
     if skill_pattern.execute(line) is Some(matched) {
       guard matched.named_group("name") is Some(name) else { return None }
-      mentions.push(Skill(name=MentionAttribute::decode(name.to_owned())))
+      mentions.push(
+        Skill(
+          name=MentionAttribute::decode(name.to_owned(), attributes_encoded),
+        ),
+      )
       index += 1
       continue
     }
     if file_pattern.execute(line) is Some(matched) {
       guard matched.named_group("path") is Some(path) else { return None }
-      mentions.push(File(path=MentionAttribute::decode(path.to_owned())))
+      mentions.push(
+        File(path=MentionAttribute::decode(path.to_owned(), attributes_encoded)),
+      )
       index += 1
       continue
     }
@@ -358,8 +376,8 @@ fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
       }
       mentions.push(
         Symbol(
-          name=MentionAttribute::decode(name.to_owned()),
-          file=MentionAttribute::decode(file),
+          name=MentionAttribute::decode(name.to_owned(), attributes_encoded),
+          file=MentionAttribute::decode(file, attributes_encoded),
           line=line_number,
         ),
       )
@@ -397,7 +415,7 @@ fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
       }
       mentions.push(
         Annotation(
-          file=MentionAttribute::decode(file.to_owned()),
+          file=MentionAttribute::decode(file.to_owned(), attributes_encoded),
           start_line~,
           end_line~,
           quote~,
