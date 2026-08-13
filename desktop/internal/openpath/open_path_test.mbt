@@ -2,11 +2,9 @@
 
 ///|
 async test "existing files win before editor positions" {
-  let dir = "_build/openpath-resolution-test"
-  if @fs.exists(dir) {
-    @fs.rmdir(dir, recursive=true)
-  }
-  @fs.mkdir(dir, recursive=true)
+  // `tmpdir` is unique even when Moon runs packages concurrently, unlike a
+  // shared `_build` parent that several tests may try to create at once.
+  let dir = @fs.tmpdir(prefix="openseek-openpath-resolution-")
   let base = "\{dir}/source.mbt"
   let literal = "\{base}:2738"
   @fs.write_file(base, "base", create_mode=CreateOrTruncate)

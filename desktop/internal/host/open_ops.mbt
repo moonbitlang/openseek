@@ -69,11 +69,9 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
 
 ///|
 async test "open_path returns workspace editor positions without a system open" {
-  let dir = "_build/host-open-path-editor-test"
-  if @fs.exists(dir) {
-    @fs.rmdir(dir, recursive=true)
-  }
-  @fs.mkdir(dir, recursive=true)
+  // A kernel-created directory keeps concurrent package tests from racing to
+  // create the shared `_build` parent.
+  let dir = @fs.tmpdir(prefix="openseek-host-open-editor-")
   let file = "\{dir}/source.mbt"
   @fs.write_file(file, "fn main {}", create_mode=CreateOrTruncate)
   let cwd = @pathx.Path(@fs.realpath(dir))
@@ -127,11 +125,9 @@ async test "open_path returns workspace editor positions without a system open" 
 
 ///|
 async test "open_path rejects missing and outside text files" {
-  let dir = "_build/host-open-path-boundary-test"
-  if @fs.exists(dir) {
-    @fs.rmdir(dir, recursive=true)
-  }
-  @fs.mkdir(dir, recursive=true)
+  let root = @fs.tmpdir(prefix="openseek-host-open-boundary-")
+  let dir = "\{root}/workspace"
+  @fs.mkdir(dir)
   let cwd = @pathx.Path(@fs.realpath(dir))
     .to_absolute()
     .unwrap()
@@ -149,7 +145,7 @@ async test "open_path rejects missing and outside text files" {
     _ => ()
   }
   assert_true(missing)
-  let outside = "_build/host-open-path-outside.txt"
+  let outside = "\{root}/outside.txt"
   @fs.write_file(outside, "outside", create_mode=CreateOrTruncate)
   let outside = @fs.realpath(outside)
   let mut escaped = false
