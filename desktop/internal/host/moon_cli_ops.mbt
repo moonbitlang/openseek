@@ -162,6 +162,7 @@ async fn MoonCliState::run_moon(
       inherit_env=config.env is None,
       stdin?,
       cwd=cwd.0,
+      no_console_window=true,
     )
     (code, stdout.text(), stderr.text())
   }) catch {

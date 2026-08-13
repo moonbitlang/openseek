@@ -343,6 +343,7 @@ async fn git_output_text(dir : @pathx.Absolute, args : Array[String]) -> String 
     "git",
     args,
     cwd=dir.to_string(),
+    no_console_window=true,
   ) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise EngineError("failed to run git: \{error}")
@@ -424,6 +425,7 @@ async fn git_probe(dir : @pathx.Absolute, args : Array[String]) -> String? {
     "git",
     args,
     cwd=dir.to_string(),
+    no_console_window=true,
   ) catch {
     error if @async.is_being_cancelled() => raise error
     _ => return None
@@ -439,7 +441,12 @@ async fn git_probe(dir : @pathx.Absolute, args : Array[String]) -> String? {
 /// `@async.protect_from_cancel` — no cancellation error can surface there —
 /// and are already propagating the failure that triggered the rollback.
 async fn git_rollback(dir : @pathx.Absolute, args : Array[String]) -> Unit {
-  let _ = @process.collect_output("git", args, cwd=dir.to_string()) catch {
+  let _ = @process.collect_output(
+    "git",
+    args,
+    cwd=dir.to_string(),
+    no_console_window=true,
+  ) catch {
     _ => return
   }
 }

@@ -58,7 +58,11 @@ pub async fn open_url(url : String) -> Int {
 /// The machine's hostname, for labeling this device on a relay; `None` when
 /// the probe fails. `hostname` ships with macOS, Linux, and Windows alike.
 pub async fn machine_hostname() -> String? {
-  let (code, output) = @process.collect_stdout("hostname", []) catch {
+  let (code, output) = @process.collect_stdout(
+    "hostname",
+    [],
+    no_console_window=true,
+  ) catch {
     error if @async.is_being_cancelled() => raise error
     _ => return None
   }

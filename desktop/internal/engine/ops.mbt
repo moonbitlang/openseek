@@ -540,6 +540,7 @@ async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String 
     extra_env={ "OPENSEEK_DIR": "." },
     inherit_env=true,
     stdin=child_stdin,
+    no_console_window=true,
   ) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise EngineError("failed to run engine: \{error}")
@@ -586,6 +587,7 @@ async fn session_show_output(
       stdin=child_stdin,
       stdout=child_stdout,
       stderr=child_stderr,
+      no_console_window=true,
       cancel_handler=@process.hard_cancel(),
       no_wait=false,
     )

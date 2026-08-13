@@ -72,6 +72,7 @@ async fn bundle_moonbit(
     extra_env=moonbit_process_env(moon_home),
     stdin=child_stdin,
     cwd=core_dir.to_string().view(),
+    no_console_window=true,
   )
   if code != 0 {
     fail(
