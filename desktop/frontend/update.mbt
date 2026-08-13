@@ -1648,6 +1648,11 @@ fn update(
     (@cmd.none, model)
   }
   let (model, panel_cmd) = sync_file_panel(dispatch, model)
+  // File completion consumes the panel's shared index, so restart it only
+  // after the panel has dropped the previous root's snapshot.
+  let (file_completion_restart_cmd, model) = model.restart_file_completion_after_root_change(
+    dispatch, previous,
+  )
   // The launcher menu belongs to one dock owner. Conversation changes are
   // already explicit root transitions, so close it here instead of observing a
   // rendered owner marker through the DOM.
@@ -1674,7 +1679,7 @@ fn update(
   (
     @cmd.batch([
       cmd, quick_open_cmd, quick_open_restart_cmd, symbol_restart_cmd, panel_visibility_cmd,
-      panel_cmd, terminal_cmd, browser_cmd,
+      panel_cmd, file_completion_restart_cmd, terminal_cmd, browser_cmd,
     ]),
     model,
   )
@@ -10399,18 +10404,20 @@ test "file index completion refreshes and accepts a workspace file" {
   assert_true(pending.kind is Files)
   assert_true(pending.menu.loading())
   assert_eq(pending.menu.length(), 0)
-  let (_, loaded) = update(
-    dispatch,
-    FileEditor(
-      @fileeditor.FilesIndexed(
-        owner~,
-        epoch=searching.file_panel.request_epoch,
-        files=[@pathx.Relative("src/main.mbt")],
-        truncated=false,
-      ),
+  let indexed = FileEditor(
+    @fileeditor.FilesIndexed(
+      owner~,
+      epoch=searching.file_panel.request_epoch,
+      files=[@pathx.Relative("src/main.mbt")],
+      truncated=false,
     ),
-    searching,
   )
+  let (_, dismissed) = update(dispatch, CompletionDismiss, searching)
+  let (_, stayed_closed) = update(dispatch, indexed, dismissed)
+  let (_, stayed_closed_again) = update(dispatch, indexed, dismissed)
+  assert_true(stayed_closed.completion is None)
+  assert_true(stayed_closed.completion == stayed_closed_again.completion)
+  let (_, loaded) = update(dispatch, indexed, searching)
   guard loaded.completion is Some(menu) else {
     fail("the file-index reply should rebuild completion")
   }
@@ -10447,22 +10454,76 @@ test "file index failure settles an empty completion menu" {
     ..base,
     file_panel: loading,
   })
-  let (_, failed) = update(
-    dispatch,
-    FileEditor(
-      @fileeditor.FileIndexFailed(
-        owner~,
-        epoch=searching.file_panel.request_epoch,
-      ),
+  let failed_reply = FileEditor(
+    @fileeditor.FileIndexFailed(
+      owner~,
+      epoch=searching.file_panel.request_epoch,
     ),
-    searching,
   )
+  let (_, dismissed) = update(dispatch, CompletionDismiss, searching)
+  let (_, stayed_closed) = update(dispatch, failed_reply, dismissed)
+  let (_, stayed_closed_again) = update(dispatch, failed_reply, dismissed)
+  assert_true(stayed_closed.completion is None)
+  assert_true(stayed_closed.completion == stayed_closed_again.completion)
+  let (_, failed) = update(dispatch, failed_reply, searching)
   guard failed.completion is Some(menu) else {
     fail("a live @ token should retain its settled empty menu")
   }
   assert_true(menu.kind is Files)
   assert_false(menu.menu.loading())
   assert_eq(menu.menu.length(), 0)
+}
+
+///|
+test "a live file completion restarts when its checkout root changes" {
+  let dispatch = test_dispatch()
+  let owner : @interop.ConversationKey = {
+    channel: Local,
+    session: "desktop-test",
+  }
+  let base = test_model()
+  let file_emit = dispatch.map(msg => FileEditor(msg))
+  let (synced, _) = @fileeditor.sync(file_emit, base.file_panel, file_ctx(base))
+  let (_, loading) = @fileeditor.update(
+    file_emit,
+    @fileeditor.EnsureFileIndex,
+    synced,
+    file_ctx(base),
+  )
+  let (_, ready) = @fileeditor.update(
+    file_emit,
+    @fileeditor.FilesIndexed(
+      owner~,
+      epoch=loading.request_epoch,
+      files=[@pathx.Relative("src/old.mbt")],
+      truncated=false,
+    ),
+    loading,
+    file_ctx(base),
+  )
+  let (_, showing_old) = update(dispatch, TaskChanged("Inspect @old"), {
+    ..base,
+    file_panel: ready,
+  })
+  guard showing_old.completion is Some(old_menu) else {
+    fail("the old root should have a file completion menu")
+  }
+  assert_false(old_menu.menu.loading())
+  assert_eq(old_menu.menu.length(), 1)
+
+  let ready_msg = BridgeReady(
+    scratch_root=owner.channel.test_resource("/next-scratch"),
+  )
+  let (_, rerooted) = update_dev(dispatch, ready_msg, showing_old)
+  let (_, rerooted_again) = update_dev(dispatch, ready_msg, showing_old)
+  assert_true(rerooted.completion == rerooted_again.completion)
+  assert_true(rerooted.file_panel.index is @fileeditor.IndexEmpty)
+  guard rerooted.completion is Some(waiting) else {
+    fail("the new root should keep the file completion menu open")
+  }
+  assert_true(waiting.kind is Files)
+  assert_true(waiting.menu.loading())
+  assert_eq(waiting.menu.length(), 0)
 }
 
 ///|

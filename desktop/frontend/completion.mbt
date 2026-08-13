@@ -190,10 +190,14 @@ fn Model::completion_files(
 ///|
 /// Rebuild a visible `@` menu after the shared file index settles. Reading the
 /// current draft again prevents a late index reply from reviving an obsolete
-/// or already accepted token.
+/// or already accepted token. The menu itself is part of that identity: Esc
+/// dismisses it without changing the draft, so a later index reply must not
+/// recreate it from the still-present token.
 fn Model::refresh_file_completion(self : Model) -> Model {
   let text = self.active().task
-  guard @composer.Trigger::parse(text, inline_markers="$#@") is Some(trigger) &&
+  guard self.completion is Some(completion) &&
+    completion.kind is Files &&
+    @composer.Trigger::parse(text, inline_markers="$#@") is Some(trigger) &&
     trigger.marker() == "@" else {
     return self
   }
@@ -213,6 +217,39 @@ fn Model::refresh_file_completion(self : Model) -> Model {
       files_loading~,
     ),
   }
+}
+
+///|
+/// Restart a visible file query when its conversation moves to a different
+/// concrete checkout root. This runs after the file panel has re-rooted, so
+/// rebuilding the menu drops paths from the previous index and the follow-up
+/// request addresses the new root. A dismissed menu remains dismissed.
+fn Model::restart_file_completion_after_root_change(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  previous : Model,
+) -> (@cmd.Cmd, Model) {
+  guard self.focused == previous.focused &&
+    self.active_session == previous.active_session else {
+    return (@cmd.none, self)
+  }
+  let conv = self.active()
+  let previous_conv = previous.active()
+  guard self.conversation_root(conv) !=
+    previous.conversation_root(previous_conv) &&
+    self.completion is Some(completion) &&
+    completion.kind is Files &&
+    @composer.Trigger::parse(conv.task, inline_markers="$#@") is Some(trigger) &&
+    trigger.marker() == "@" else {
+    return (@cmd.none, self)
+  }
+  let next = self.refresh_file_completion()
+  let command = match next.file_panel.index {
+    @fileeditor.IndexEmpty | @fileeditor.IndexFailed =>
+      dispatch(FileEditor(@fileeditor.EnsureFileIndex))
+    @fileeditor.IndexLoading(_) | @fileeditor.IndexReady(..) => @cmd.none
+  }
+  (command, next)
 }
 
 ///|
