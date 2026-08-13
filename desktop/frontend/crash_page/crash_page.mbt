@@ -104,7 +104,15 @@ pub extern "js" fn install() -> Unit =
   #|    constructor() {
   #|      this.crashed = false;
   #|      window.addEventListener("error", (event) => {
-  #|        this.show(event.error ?? event.message);
+  #|        // Browser diagnostics such as ResizeObserver loop notifications
+  #|        // are delivered as `error` events without an exception object.
+  #|        // Keep them visible for diagnosis, but reserve the crash page for
+  #|        // actual uncaught JavaScript exceptions.
+  #|        if (event.error == null) {
+  #|          console.warn(event.message);
+  #|          return;
+  #|        }
+  #|        this.show(event.error);
   #|      });
   #|      window.addEventListener("unhandledrejection", (event) => {
   #|        this.show(event.reason);
