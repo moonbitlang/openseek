@@ -19,9 +19,10 @@
 // the transport — end of stream, a failed send, or either task being
 // cancelled — closes the client, ending both tasks and failing every
 // outstanding and future request with `Closed`. This client advertises no
-// capabilities; it answers a peer `ping` with an empty result and any other
-// peer request with "method not found", and does not otherwise act on
-// peer-initiated requests. `request` has no built-in deadline — a caller that
+// capabilities by default; it answers a peer `ping` with an empty result and
+// any other peer request with "method not found". A caller may install a
+// non-blocking request handler and answer accepted requests later through
+// `respond`/`respond_error`. `request` has no built-in deadline — a caller that
 // needs one wraps the call in `@async.with_timeout`.
 
 ///|
@@ -44,6 +45,11 @@ pub(open) trait Transport {
 /// cannot grow it without bound while the writer is backpressured. Generous
 /// enough that ordinary request/notify traffic never approaches it.
 const OutboxCapacity : Int = 1024
+
+///|
+/// JSON-RPC server error used when an installed peer-request handler cannot
+/// accept more work without blocking the reader.
+const ServerBusy : Int = -32000
 
 ///|
 /// A JSON-RPC client. Build it with `Client::new`, spawn `run_message_pump` and
@@ -72,6 +78,14 @@ struct Client {
   // blocking stalls routing) and must not abort (an abort is uncatchable and
   // takes down the process — the reader cannot contain it).
   mut on_notification : (String, Json) -> Unit
+  // Called for each non-ping peer request. Returning true transfers ownership
+  // to the caller, which must eventually answer through `respond` or
+  // `respond_error`. Returning false reports a bounded-queue overload. The
+  // default rejects every method as unimplemented.
+  mut on_request : (PeerRequest) -> Bool
+  // Distinguishes the default receiver from an installed receiver rejecting
+  // work because its bounded queue is full.
+  mut accepts_requests : Bool
 }
 
 ///|
@@ -87,6 +101,8 @@ pub fn[T : Transport] Client::new(transport : T) -> Client {
     next_id: 1,
     closed: false,
     on_notification: (_, _) => (),
+    on_request: _ => false,
+    accepts_requests: false,
   }
 }
 
@@ -126,6 +142,31 @@ pub async fn Client::notify(
 ) -> Unit {
   guard !self.closed else { return }
   self.enqueue(build_notification(method_, params))
+}
+
+///|
+/// Answer a peer-initiated request with a successful result. This uses the
+/// regular bounded outbox, so it may wait for writer backpressure but never
+/// writes concurrently with another client task.
+pub async fn Client::respond(
+  self : Client,
+  request : PeerRequest,
+  result : Json,
+) -> Unit {
+  guard !self.closed else { return }
+  self.enqueue(build_success_reply(request.id, result))
+}
+
+///|
+/// Answer a peer-initiated request with a JSON-RPC error.
+pub async fn Client::respond_error(
+  self : Client,
+  request : PeerRequest,
+  code~ : Int,
+  message~ : String,
+) -> Unit {
+  guard !self.closed else { return }
+  self.enqueue(build_error_reply(request.id, code, message))
 }
 
 ///|
@@ -227,15 +268,22 @@ async fn Client::dispatch(self : Client, message : Json) -> Unit {
       if self.pending.get(reply_id) is Some(target) {
         target.put(outcome)
       }
-    PeerRequest(peer_id, method_) => {
-      let reply = if method_ == "ping" {
-        build_success_reply(peer_id, Json::empty_object())
+    PeerRequest(request) => {
+      let reply = if request.method_ == "ping" {
+        Some(build_success_reply(request.id, Json::empty_object()))
+      } else if !self.accepts_requests {
+        Some(build_error_reply(request.id, MethodNotFound, "Method not found"))
+      } else if (self.on_request)(request) {
+        None
       } else {
-        build_error_reply(peer_id)
+        // A rejected request means the installed bounded receiver is full.
+        Some(build_error_reply(request.id, ServerBusy, "Server busy"))
       }
       // Non-blocking: never let answering a peer stall the read loop or grow the
       // outbox without bound.
-      self.try_enqueue(reply)
+      if reply is Some(reply) {
+        self.try_enqueue(reply)
+      }
     }
     Notification(method_, params) => (self.on_notification)(method_, params)
     Unknown => ()

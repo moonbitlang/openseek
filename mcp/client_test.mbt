@@ -324,7 +324,7 @@ async test "call_tool raises on a JSON-RPC error reply" {
       |> ignore
       "no error raised"
     } catch {
-      @jsonrpc.Failed(code~, message~) => "failed \{code} \{message}"
+      @jsonrpc.Failed(code~, message~, data=_) => "failed \{code} \{message}"
       error if @async.is_being_cancelled() => raise error
       _ => "other error"
     }

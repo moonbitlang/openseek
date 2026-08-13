@@ -111,7 +111,7 @@ async fn request_outcome(client : Client, method_ : String) -> String {
     client.request(method_~, params=Json::empty_object()) |> ignore
     "no error raised"
   } catch {
-    Failed(code~, message~) => "failed \{code} \{message}"
+    Failed(code~, message~, data=_) => "failed \{code} \{message}"
     Closed => "closed"
     error if @async.is_being_cancelled() => raise error
     _ => "other error"
@@ -308,6 +308,88 @@ async test "a peer ping is answered with an empty success" {
     let reply = transport.outbound.get()
     assert_true(reply is { "id": Number(42, ..), "result": _, .. })
     assert_true(!(reply is { "error": _, .. }))
+  })
+}
+
+///|
+async test "a peer method has no owner until a request handler is installed" {
+  @async.with_task_group(group => {
+    let transport = new_transport()
+    let client = Client::new(transport)
+    spawn_client(group, client)
+    transport.inbound.put({
+      "jsonrpc": "2.0",
+      "id": 41,
+      "method": "item/tool/requestUserInput",
+    })
+    let reply = transport.outbound.get()
+    assert_true(
+      reply
+      is {
+        "id": Number(41, ..),
+        "error": {
+          "code": Number(-32601, ..),
+          "message": "Method not found",
+          ..
+        },
+        ..
+      },
+    )
+  })
+}
+
+///|
+async test "an accepted peer request can be answered asynchronously" {
+  @async.with_task_group(group => {
+    let transport = new_transport()
+    let client = Client::new(transport)
+    let requests : @async.Queue[PeerRequest] = Queue(kind=Blocking(1))
+    client.set_request_handler(request => {
+      requests.try_put(request) catch {
+        _ => false
+      }
+    })
+    spawn_client(group, client)
+    transport.inbound.put({
+      "jsonrpc": "2.0",
+      "id": 43,
+      "method": "item/commandExecution/requestApproval",
+      "params": { "reason": "needs approval" },
+    })
+    let request = requests.get()
+    assert_eq(request.method_name(), "item/commandExecution/requestApproval")
+    assert_true(request.params() is { "reason": "needs approval", .. })
+    client.respond(request, { "decision": "decline" })
+    let reply = transport.outbound.get()
+    assert_true(
+      reply
+      is { "id": Number(43, ..), "result": { "decision": "decline", .. }, .. },
+    )
+  })
+}
+
+///|
+async test "a rejected peer request receives server busy without blocking routing" {
+  @async.with_task_group(group => {
+    let transport = new_transport()
+    let client = Client::new(transport)
+    client.set_request_handler(_ => false)
+    spawn_client(group, client)
+    transport.inbound.put({
+      "jsonrpc": "2.0",
+      "id": 44,
+      "method": "item/tool/requestUserInput",
+      "params": Json::empty_object(),
+    })
+    let reply = transport.outbound.get()
+    assert_true(
+      reply
+      is {
+        "id": Number(44, ..),
+        "error": { "code": Number(-32000, ..), "message": "Server busy", .. },
+        ..
+      },
+    )
   })
 }
 

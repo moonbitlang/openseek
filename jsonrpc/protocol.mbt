@@ -7,8 +7,9 @@
 /// object, or the transport ended before any reply arrived.
 pub suberror ResponseError {
   /// The peer answered with a JSON-RPC error object, carrying its `code` and
-  /// `message`.
-  Failed(code~ : Int, message~ : String)
+  /// `message`. `data` retains the optional protocol-defined diagnostic value
+  /// instead of discarding the only structured context supplied by the peer.
+  Failed(code~ : Int, message~ : String, data~ : Json?)
   /// The transport ended before a reply to the request arrived.
   Closed
 }
@@ -16,8 +17,12 @@ pub suberror ResponseError {
 ///|
 pub impl Show for ResponseError with fn output(self, logger) {
   match self {
-    Failed(code~, message~) =>
+    Failed(code~, message~, data~) => {
       logger.write_string("JSON-RPC error \{code}: \{message}")
+      if data is Some(data) {
+        logger.write_string("; data=" + data.stringify())
+      }
+    }
     Closed => logger.write_string("transport closed before a reply")
   }
 }
@@ -52,19 +57,24 @@ fn build_success_reply(id : Json, result : Json) -> Json {
 const MethodNotFound : Int = -32601
 
 ///|
-/// Build a "method not found" error reply echoing a peer request's id. This
-/// client advertises no capabilities, so any request the peer sends us (other
-/// than `ping`) gets this — a proper JSON-RPC error rather than a misleading
-/// empty success, while still answering so the peer does not block.
-fn build_error_reply(id : Json) -> Json {
+/// Build an error reply echoing a peer request's id.
+fn build_error_reply(id : Json, code : Int, message : String) -> Json {
   {
     "jsonrpc": "2.0",
     "id": id,
-    "error": {
-      "code": Json::number(MethodNotFound.to_double()),
-      "message": "Method not found",
-    },
+    "error": { "code": Json::number(code.to_double()), "message": message },
   }
+}
+
+///|
+/// One request initiated by the peer. Callers may read the id for correlation,
+/// but the opaque type keeps construction inside this package; answers still
+/// go through `Client::respond` or `Client::respond_error`, preserving the
+/// single-writer transport rule.
+struct PeerRequest {
+  id : Json
+  method_ : String
+  params : Json
 }
 
 ///|
@@ -73,10 +83,9 @@ fn build_error_reply(id : Json) -> Json {
 /// answer, or a notification we hand to the notification handler.
 priv enum Incoming {
   Reply(Int, Result[Json, ResponseError])
-  // A peer-initiated request; carries the raw id to echo back and the method so
-  // the client can answer `ping` with a success and everything else with an
-  // error.
-  PeerRequest(Json, String)
+  // A peer-initiated request. An installed request handler may take ownership
+  // and answer it asynchronously; otherwise the client answers with an error.
+  PeerRequest(PeerRequest)
   // A peer-initiated notification: its method and params.
   Notification(String, Json)
   // Neither — malformed, or a reply with a non-numeric/non-integer id we never
@@ -93,7 +102,8 @@ fn classify_incoming(message : Json) -> Incoming {
     // `id` — even the discouraged `null` — is a request whose reply must echo
     // that id. So any message that carries an `id` member is a peer request.
     match message {
-      { "id": id, .. } => PeerRequest(id, method_)
+      { "id": id, "params": params, .. } => PeerRequest({ id, method_, params })
+      { "id": id, .. } => PeerRequest({ id, method_, params: Json::null() })
       { "params": params, .. } => Notification(method_, params)
       _ => Notification(method_, Json::null())
     }
@@ -152,5 +162,9 @@ fn parse_error(error : Json) -> ResponseError {
     { "message": String(message), .. } => message
     _ => ""
   }
-  Failed(code~, message~)
+  let data = match error {
+    { "data": data, .. } => Some(data)
+    _ => None
+  }
+  Failed(code~, message~, data~)
 }

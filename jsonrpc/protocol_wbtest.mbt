@@ -26,7 +26,7 @@ test "build_notification omits the id" {
 
 ///|
 test "build_error_reply answers a peer request with a method-not-found error" {
-  let reply = build_error_reply(Json::number(5))
+  let reply = build_error_reply(Json::number(5), -32601, "Method not found")
   assert_true(
     reply
     is {
@@ -60,13 +60,18 @@ test "classify_incoming parses an error reply into a typed failure" {
   let message : Json = {
     "jsonrpc": "2.0",
     "id": 4,
-    "error": { "code": -32601, "message": "method not found" },
+    "error": {
+      "code": -32601,
+      "message": "method not found",
+      "data": { "method": "thread/resume" },
+    },
   }
   match classify_incoming(message) {
-    Reply(id, Err(Failed(code~, message~))) => {
+    Reply(id, Err(Failed(code~, message~, data~))) => {
       assert_eq(id, 4)
       assert_eq(code, -32601)
       assert_eq(message, "method not found")
+      assert_true(data is Some({ "method": "thread/resume", .. }))
     }
     _ => fail("expected a failed Reply")
   }
@@ -80,9 +85,10 @@ test "parse_error defaults code and message when the peer omits them" {
       "id": 8,
       "error": Json::empty_object(),
     }) {
-    Reply(_, Err(Failed(code~, message~))) => {
+    Reply(_, Err(Failed(code~, message~, data~))) => {
       assert_eq(code, 0)
       assert_eq(message, "")
+      assert_true(data is None)
     }
     _ => fail("expected a failed Reply")
   }
@@ -96,9 +102,10 @@ test "classify_incoming distinguishes peer requests from notifications" {
     "method": "roots/list",
   }
   match classify_incoming(peer_request) {
-    PeerRequest(id, method_) => {
-      assert_true(id is Number(9, ..))
-      assert_eq(method_, "roots/list")
+    PeerRequest(request) => {
+      assert_true(request.id is Number(9, ..))
+      assert_eq(request.method_, "roots/list")
+      assert_true(request.params is Null)
     }
     _ => fail("expected a PeerRequest")
   }
@@ -122,9 +129,10 @@ test "classify_incoming prefers error over result when a reply has both" {
       "result": Json::null(),
       "error": { "code": -1, "message": "boom" },
     }) {
-    Reply(5, Err(Failed(code~, message~))) => {
+    Reply(5, Err(Failed(code~, message~, data~))) => {
       assert_eq(code, -1)
       assert_eq(message, "boom")
+      assert_true(data is None)
     }
     _ => fail("expected the error to win over the result")
   }
@@ -150,9 +158,9 @@ test "classify_incoming treats a present null id as a peer request" {
   // that must be answered (echoing the null id).
   match
     classify_incoming({ "jsonrpc": "2.0", "id": Json::null(), "method": "ping" }) {
-    PeerRequest(id, method_) => {
-      assert_true(id is Null)
-      assert_eq(method_, "ping")
+    PeerRequest(request) => {
+      assert_true(request.id is Null)
+      assert_eq(request.method_, "ping")
     }
     _ => fail("expected a present null id to be a peer request")
   }
