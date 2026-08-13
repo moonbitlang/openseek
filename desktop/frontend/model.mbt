@@ -1226,6 +1226,13 @@ priv struct Model {
   // nested conversations) is folded down to its heading; clicking the heading
   // flips it.
   projects_collapsed : Bool
+  // Project folder rows fold independently inside the Projects section. The
+  // key includes the owning device because remote channels can expose the
+  // same filesystem spelling without referring to the same project.
+  collapsed_projects : Array[(@interop.ChannelId, @common.Uri)]
+  // Projects whose per-window chat preview was expanded through "Show more".
+  // The default absence keeps each open project to its five newest chats.
+  expanded_project_chats : Array[(@interop.ChannelId, @common.Uri)]
   // The conversations whose sub-run transcripts are unfolded in the sidebar,
   // as (device, session id) — session ids are only unique within a channel.
   // Sidebar-only view state, held for the window's lifetime and never
@@ -1706,6 +1713,12 @@ priv enum Msg {
   ToggleChatsSection
   // The sidebar's "Projects" heading was clicked — fold or unfold the section.
   ToggleProjectsSection
+  // A project folder row was clicked — fold or unfold only that project's
+  // nested chats without changing which project receives new conversations.
+  ToggleProjectSection(@interop.ChannelId, @common.Uri)
+  // The project's "Show more" row was clicked — reveal every remaining chat
+  // for that project for the rest of this window lifetime.
+  ShowMoreProjectChats(@interop.ChannelId, @common.Uri)
   // A conversation row's disclosure was clicked — show or hide the sub-run
   // transcripts folded under it. The row's own click still opens the session,
   // so the two controls never fight over one gesture.
@@ -2416,6 +2429,8 @@ fn initial_model() -> Model {
     terminal: @terminal.State::empty(),
     chats_collapsed: false,
     projects_collapsed: false,
+    collapsed_projects: [],
+    expanded_project_chats: [],
     expanded_subruns: [],
     active_session: "",
     loading_conversation: None,
@@ -2819,6 +2834,30 @@ fn Model::subruns_expanded(
   self.expanded_subruns
   .iter()
   .any(entry => entry.0 == channel && entry.1 == session_id)
+}
+
+///|
+/// Whether one project's nested chats are folded to its folder row.
+fn Model::project_collapsed(
+  self : Model,
+  channel : @interop.ChannelId,
+  project : @common.Uri,
+) -> Bool {
+  self.collapsed_projects
+  .iter()
+  .any(entry => entry.0 == channel && entry.1 == project)
+}
+
+///|
+/// Whether one project has revealed the chats beyond its default preview.
+fn Model::project_chats_expanded(
+  self : Model,
+  channel : @interop.ChannelId,
+  project : @common.Uri,
+) -> Bool {
+  self.expanded_project_chats
+  .iter()
+  .any(entry => entry.0 == channel && entry.1 == project)
 }
 
 ///|

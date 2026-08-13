@@ -294,6 +294,12 @@ fn dim_row(text : String) -> @html.Html {
 }
 
 ///|
+/// Match the compact project preview used by Codex's sidebar: enough recent
+/// chats to resume normal work without letting one busy project bury every
+/// neighbouring project.
+const ProjectChatPreviewLimit : Int = 5
+
+///|
 /// One device's sections: conversations that only exist in this app run (no
 /// turn has reached the store yet) first, then the engine's durable
 /// sessions, newest first. Rows stay clickable while runs are active —
@@ -344,9 +350,13 @@ fn device_section_rows(
   )
   if !model.projects_collapsed {
     for path in dev.projects {
-      rows.push(project_row(dispatch, model, dev, path))
-      let before = rows.length()
-      push_group_rows(
+      let collapsed = model.project_collapsed(dev.channel, path)
+      rows.push(project_row(dispatch, model, dev, path, collapsed~))
+      if collapsed {
+        continue
+      }
+      let expanded = model.project_chats_expanded(dev.channel, path)
+      let total = push_group_rows(
         rows,
         dispatch,
         model,
@@ -355,13 +365,24 @@ fn device_section_rows(
         listed~,
         archived~,
         nested=true,
+        max_conversations=if expanded { 0 } else { ProjectChatPreviewLimit },
       )
-      if rows.length() == before {
+      if total == 0 {
         rows.push(
           @html.div(class="conversation-row nested placeholder", [
             @html.span(class="row-twisty spacer", ""),
             @html.span(class="sidebar-label", "No chats yet"),
           ]),
+        )
+      } else if total > ProjectChatPreviewLimit && !expanded {
+        rows.push(
+          @html.button(
+            class="project-show-more",
+            type_="button",
+            title="Show all \{total} chats in this project",
+            on_click=dispatch(ShowMoreProjectChats(dev.channel, path)),
+            "Show more",
+          ),
         )
       }
     }
@@ -380,7 +401,15 @@ fn device_section_rows(
     }.render(),
   )
   if !model.chats_collapsed {
-    push_group_rows(rows, dispatch, model, dev, None, listed~, archived~)
+    let _ = push_group_rows(
+      rows,
+      dispatch,
+      model,
+      dev,
+      None,
+      listed~,
+      archived~,
+    )
   }
   // Archived conversations fold behind a collapsed group at the end of the
   // list. Their records live in the store's `archived` twin, so they come
@@ -424,7 +453,8 @@ fn push_group_rows(
   listed~ : (String) -> Bool,
   archived~ : (String) -> Bool,
   nested? : Bool = false,
-) -> Unit {
+  max_conversations? : Int = 0,
+) -> Int {
   // Conversations worth keeping get a row, plus the one fresh "New chat" on
   // screen: it owns a row from the moment its ＋ was clicked, so the rotation
   // has visible feedback in the list; the row takes the real title at the
@@ -433,6 +463,7 @@ fn push_group_rows(
   // is kept precisely so it can be returned to, and a row is the only way
   // back to it.
   let composing = model.composing_new_chat()
+  let mut count = 0
   for conv in model.conversations.rev_iter() {
     if conv.device != dev.channel ||
       conv.workspace.project() != workspace ||
@@ -447,28 +478,27 @@ fn push_group_rows(
     } else {
       worktree_name_for(dev, workspace, conv.session_id)
     }
-    if conv.worth_keeping() {
-      rows.push(
-        session_row(
-          dispatch,
-          model,
-          dev.channel,
-          conv.session_id,
-          conversation_title(conv),
-          nested~,
-          worktree?,
-        ),
-      )
-    } else if composing &&
+    let worth_keeping = conv.worth_keeping()
+    let visible_new_chat = composing &&
       conv.device == model.focused &&
-      conv.session_id == model.active_session {
+      conv.session_id == model.active_session
+    if !worth_keeping && !visible_new_chat {
+      continue
+    }
+    let visible = max_conversations <= 0 || count < max_conversations
+    count = count + 1
+    if visible {
       rows.push(
         session_row(
           dispatch,
           model,
           dev.channel,
           conv.session_id,
-          "New chat",
+          if worth_keeping {
+            conversation_title(conv)
+          } else {
+            "New chat"
+          },
           nested~,
           worktree?,
         ),
@@ -500,6 +530,11 @@ fn push_group_rows(
   // sweep persists enough of them to bury the real chats. The parent row's
   // twisty shows them in place, the way a tree unfolds a directory.
   for row in @transcript.session_tree(durable) {
+    let visible = max_conversations <= 0 || count < max_conversations
+    count = count + 1
+    if !visible {
+      continue
+    }
     let expanded = model.subruns_expanded(dev.channel, row.item.id)
     rows.push(
       session_row(
@@ -548,6 +583,7 @@ fn push_group_rows(
       }
     }
   }
+  count
 }
 
 ///|
@@ -561,11 +597,14 @@ fn project_row(
   model : Model,
   dev : DeviceState,
   path : @common.Uri,
+  collapsed~ : Bool,
 ) -> @html.Html {
   @sidebar.WorkspaceRow::{
     title: path.path,
     label: @resource.label(path),
     active: dev.channel == model.focused && dev.active_project == Some(path),
+    collapsed,
+    toggle: dispatch(ToggleProjectSection(dev.channel, path)),
     menu: Some({
       title: "More actions",
       open: model.project_menu == Some({ channel: dev.channel, project: path }),
@@ -2818,6 +2857,46 @@ test "archived families collapse while a live orphan child stays archivable" {
   })
   assert_true(orphan_markup.contains("chat-sr-1"))
   assert_true(orphan_markup.contains("Archive — tuck this chat away"))
+}
+
+///|
+#warnings("-alert_unstable")
+test "project chat preview shows five rows, then expands or folds as one group" {
+  let project = @interop.ChannelId::Local.test_resource("/work/alpha")
+  let sessions : Array[@transcript.SessionListItem] = []
+  for number = 1; number <= 6; number = number + 1 {
+    sessions.push({
+      id: "chat-\{number}",
+      title: Some("Project chat \{number}"),
+      workspace: Some(project),
+      workspace_name: "alpha",
+    })
+  }
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    projects: [project],
+    sessions,
+  })
+  fn render(model : Model) -> String raise {
+    let dev = model.dev()
+    @rabbita.render_to_string(() => {
+      @rabbita.Val::constant(
+        @html.div(device_section_rows(test_dispatch(), model, dev)),
+      )
+    })
+  }
+
+  let preview = render(model)
+  assert_true(preview.contains("Project chat 5"))
+  assert_false(preview.contains("Project chat 6"))
+  assert_true(preview.contains(">Show more</button>"))
+  let expanded = render({ ..model, expanded_project_chats: [(Local, project)] })
+  assert_true(expanded.contains("Project chat 6"))
+  assert_false(expanded.contains(">Show more</button>"))
+  let collapsed = render({ ..model, collapsed_projects: [(Local, project)] })
+  assert_false(collapsed.contains("Project chat 1"))
+  assert_false(collapsed.contains(">Show more</button>"))
+  assert_true(collapsed.contains("aria-expanded=\"false\""))
 }
 
 ///|

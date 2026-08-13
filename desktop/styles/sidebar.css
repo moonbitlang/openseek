@@ -233,10 +233,9 @@ aside {
   content: " ▸";
 }
 
-/* An attached workspace: a folder row with its conversations nested
-   beneath. Not clickable itself — the hover controls do the work —
-   and the active workspace (where a plain "New chat" lands) reads as
-   the darker label. */
+/* An attached workspace: a folder row whose main disclosure button folds its
+   conversations. The hover controls remain separate siblings, so opening the
+   action menu or starting a chat cannot also toggle the project. */
 .workspace-row {
   display: flex;
   align-items: center;
@@ -248,14 +247,35 @@ aside {
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
 }
-.workspace-row > .sidebar-label {
+.workspace-disclosure {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.workspace-disclosure > .sidebar-label {
   flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.workspace-row > .sidebar-icon {
+.workspace-disclosure > .sidebar-icon {
   color: var(--color-text-muted);
+}
+.workspace-disclosure:focus-visible,
+.project-show-more:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
 }
 .workspace-row:hover {
   background: var(--color-bg-subtle);
@@ -382,6 +402,23 @@ button.composer-worktree:hover {
    workspace's. */
 .conversation-row.nested {
   padding-left: 16px;
+}
+.project-show-more {
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px 0 36px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-size-md);
+  text-align: left;
+  cursor: pointer;
+}
+.project-show-more:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
 }
 .conversation-row.placeholder {
   color: var(--color-text-muted);

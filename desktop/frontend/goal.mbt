@@ -876,9 +876,15 @@ test "a kept goal draft is a conversation you can get back to" {
     }
     guard model.focused_device() is Some(dev) else { fail("no device") }
     let rows : Array[@html.Html] = []
-    push_group_rows(rows, dispatch, model, dev, None, listed=_ => false, archived=_ => {
-      false
-    })
+    let _ = push_group_rows(
+      rows,
+      dispatch,
+      model,
+      dev,
+      None,
+      listed=_ => false,
+      archived=_ => false,
+    )
     let markup = @rabbita.render_to_string(() => {
       @rabbita.Val::constant(@html.div(rows))
     })

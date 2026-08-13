@@ -190,13 +190,19 @@ pub(all) struct WorkspaceRow {
   title : String
   label : String
   active : Bool
+  collapsed : Bool
+  toggle : @cmd.Cmd
   menu : WorkspaceMenu?
   actions : Array[WorkspaceAction]
 }
 
 ///|
 pub fn WorkspaceRow::render(self : WorkspaceRow) -> @html.Html {
-  let mut class = "workspace-row"
+  let mut class = if self.collapsed {
+    "workspace-row collapsible collapsed"
+  } else {
+    "workspace-row collapsible"
+  }
   if self.active {
     class = class + " active"
   }
@@ -206,8 +212,17 @@ pub fn WorkspaceRow::render(self : WorkspaceRow) -> @html.Html {
     class = class + " menu-open"
   }
   let children : Array[@html.Html] = [
-    @html.span(class="sidebar-icon", @icons.icon(@icons.icon_folder)),
-    @html.span(class="sidebar-label", self.label),
+    @html.button(
+      class="workspace-disclosure",
+      type_="button",
+      title=self.title,
+      on_click=self.toggle,
+      attrs=@html.Attrs::build().aria_expanded((!self.collapsed).to_string()),
+      [
+        @html.span(class="sidebar-icon", @icons.icon(@icons.icon_folder)),
+        @html.span(class="sidebar-label", self.label),
+      ],
+    ),
   ]
   if self.menu is Some(menu) {
     children.push(

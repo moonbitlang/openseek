@@ -2595,6 +2595,35 @@ fn update_msg(
       (@cmd.none, { ..model, chats_collapsed: !model.chats_collapsed })
     ToggleProjectsSection =>
       (@cmd.none, { ..model, projects_collapsed: !model.projects_collapsed })
+    ToggleProjectSection(channel, project) => {
+      guard @resource.belongs_to(project, channel) else {
+        return (@cmd.none, model)
+      }
+      let collapsed_projects = if model.project_collapsed(channel, project) {
+        model.collapsed_projects.filter(entry => {
+          !(entry.0 == channel && entry.1 == project)
+        })
+      } else {
+        [..model.collapsed_projects, (channel, project)]
+      }
+      (@cmd.none, { ..model, collapsed_projects, project_menu: None })
+    }
+    ShowMoreProjectChats(channel, project) => {
+      guard @resource.belongs_to(project, channel) &&
+        !model.project_chats_expanded(channel, project) else {
+        return (@cmd.none, model)
+      }
+      (
+        @cmd.none,
+        {
+          ..model,
+          expanded_project_chats: [
+            ..model.expanded_project_chats,
+            (channel, project),
+          ],
+        },
+      )
+    }
     ToggleSubruns(channel, session_id) => {
       let expanded = if model.subruns_expanded(channel, session_id) {
         model.expanded_subruns.filter(entry => {
@@ -2874,6 +2903,13 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
+      let collapsed_projects = match workspace {
+        Some(project) =>
+          model.collapsed_projects.filter(entry => {
+            !(entry.0 == channel && entry.1 == project)
+          })
+        None => model.collapsed_projects
+      }
       (
         @cmd.batch([focus_cmd, rotate_session(dispatch, channel)]),
         {
@@ -2881,6 +2917,7 @@ fn update_msg(
           loading_conversation: None,
           chats_collapsed: model.chats_collapsed && workspace is Some(_),
           projects_collapsed: model.projects_collapsed && workspace is None,
+          collapsed_projects,
         },
       )
     }
@@ -3133,7 +3170,16 @@ fn update_msg(
         // itself leaves with the registry commit broadcast.
         (
           remove_project(dispatch, channel, path.path),
-          { ..model, project_menu: None },
+          {
+            ..model,
+            project_menu: None,
+            collapsed_projects: model.collapsed_projects.filter(entry => {
+              !(entry.0 == channel && entry.1 == path)
+            }),
+            expanded_project_chats: model.expanded_project_chats.filter(entry => {
+              !(entry.0 == channel && entry.1 == path)
+            }),
+          },
         )
       } else {
         (@cmd.none, model)
@@ -6740,6 +6786,52 @@ test "a conversation's sub-run twisty toggles only its own row" {
   assert_false(opened.subruns_expanded(Remote("dev"), "a"))
   let (_, closed) = update(dispatch, ToggleSubruns(Local, "a"), opened)
   assert_false(closed.subruns_expanded(Local, "a"))
+}
+
+///|
+test "project disclosure and chat preview state are scoped to one project" {
+  let dispatch = test_dispatch()
+  let project = @interop.ChannelId::Local.test_resource("/work/alpha")
+  let neighbour = @interop.ChannelId::Local.test_resource("/work/beta")
+  let model = test_model()
+  assert_false(model.project_collapsed(Local, project))
+  assert_false(model.project_chats_expanded(Local, project))
+  let (_, collapsed) = update(
+    dispatch,
+    ToggleProjectSection(Local, project),
+    model,
+  )
+  assert_true(collapsed.project_collapsed(Local, project))
+  assert_false(collapsed.project_collapsed(Local, neighbour))
+  assert_false(collapsed.project_collapsed(Remote("dev"), project))
+  let (_, expanded) = update(
+    dispatch,
+    ShowMoreProjectChats(Local, project),
+    collapsed,
+  )
+  assert_true(expanded.project_chats_expanded(Local, project))
+  assert_false(expanded.project_chats_expanded(Local, neighbour))
+  let (_, reopened) = update(
+    dispatch,
+    ToggleProjectSection(Local, project),
+    expanded,
+  )
+  assert_false(reopened.project_collapsed(Local, project))
+  assert_true(reopened.project_chats_expanded(Local, project))
+}
+
+///|
+test "new project chat unfolds its project and the Projects section" {
+  let dispatch = test_dispatch()
+  let project = @interop.ChannelId::Local.test_resource("/work/alpha")
+  let model = {
+    ..test_model(),
+    projects_collapsed: true,
+    collapsed_projects: [(Local, project)],
+  }
+  let (_, opened) = update(dispatch, NewChatIn(Local, Some(project)), model)
+  assert_false(opened.projects_collapsed)
+  assert_false(opened.project_collapsed(Local, project))
 }
 
 ///|

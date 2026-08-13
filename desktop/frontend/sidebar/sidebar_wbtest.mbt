@@ -61,6 +61,8 @@ test "workspace menu button precedes the actions, and its body only renders open
         title: "/workspace",
         label: "workspace",
         active: false,
+        collapsed: true,
+        toggle: @cmd.none,
         menu: Some({
           title: "More actions",
           open: false,
@@ -82,12 +84,16 @@ test "workspace menu button precedes the actions, and its body only renders open
   assert_true(more < create)
   assert_false(closed.contains("workspace-menu\""))
   assert_false(closed.contains("menu-open"))
+  assert_true(closed.contains("workspace-row collapsible collapsed"))
+  assert_true(closed.contains("aria-expanded=\"false\""))
   let open = @rabbita.render_to_string(() => {
     @rabbita.Val::constant(
       WorkspaceRow::{
         title: "/workspace",
         label: "workspace",
         active: false,
+        collapsed: false,
+        toggle: @cmd.none,
         menu: Some({
           title: "More actions",
           open: true,
@@ -98,7 +104,8 @@ test "workspace menu button precedes the actions, and its body only renders open
       }.render(),
     )
   })
-  assert_true(open.contains("workspace-row menu-open"))
+  assert_true(open.contains("workspace-row collapsible menu-open"))
+  assert_true(open.contains("aria-expanded=\"true\""))
   assert_true(open.contains("workspace-menu-button open"))
   assert_true(open.contains("workspace-menu\""))
 }
