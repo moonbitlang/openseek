@@ -118,7 +118,14 @@ fn conversation_title(conv : Conversation) -> String {
   }
   let task = conv.task.trim().to_owned()
   if task.is_empty() {
-    "SeekMoon"
+    // The live draft text is component-local, so the root knows only that it
+    // exists. Keep the row's pre-submit label truthful without mirroring the
+    // text on every key; the durable User item supplies the real title.
+    if conv.composer_draft_present {
+      "New chat"
+    } else {
+      "SeekMoon"
+    }
   } else {
     task
   }
@@ -883,7 +890,10 @@ fn user_display_text(text : String) -> String {
 /// highlighted row marked for the keyboard and clickable by mouse. A pointer
 /// press accepts a row; `mousedown` (not `click`) is used so the textarea does
 /// not blur the menu away before the selection registers.
-fn Completion::view(self : Completion, dispatch : @cmd.Emit[Msg]) -> @html.Html {
+fn Completion::view(
+  self : Completion,
+  emit : @cmd.Emit[ComposerComponentMsg],
+) -> @html.Html {
   // A `#` menu opens before its results arrive, so an empty list is a state to
   // narrate — searching, or genuinely nothing — not an empty box.
   let hint = match self.kind {
@@ -908,7 +918,7 @@ fn Completion::view(self : Completion, dispatch : @cmd.Emit[Msg]) -> @html.Html 
         _ => "No symbols"
       }
     },
-  }.render(index => dispatch(CompletionPick(index)))
+  }.render(index => emit(ComposerCompletionPick(index)))
 }
 
 ///|
@@ -919,9 +929,9 @@ fn Completion::view(self : Completion, dispatch : @cmd.Emit[Msg]) -> @html.Html 
 /// tray to nothing. A chip with a resolved location is also clickable,
 /// opening (or refocusing) the editor side-panel on that spot; a comment
 /// chip's tooltip is the comment itself.
-fn Conversation::mention_chips(
-  self : Conversation,
-  dispatch : @cmd.Emit[Msg],
+fn ComposerDraft::mention_chips(
+  self : ComposerDraft,
+  emit : @cmd.Emit[ComposerComponentMsg],
 ) -> Array[@html.Html] {
   let chips : Array[@html.Html] = []
   for index, mention in self.mentions {
@@ -938,11 +948,11 @@ fn Conversation::mention_chips(
           @mention_context.label(mention.ref_)
         },
         jump: if target is Some(_) {
-          Some(dispatch(JumpToMention(index)))
+          Some(emit(ComposerMentionJumped(index)))
         } else {
           None
         },
-        remove: Some((dispatch(RemoveMention(index)), icon(icon_close))),
+        remove: Some((emit(ComposerMentionRemoved(index)), icon(icon_close))),
       }.render(),
     )
   }
@@ -995,13 +1005,22 @@ fn Conversation::archived_read_only_view(
 }
 
 ///|
-fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+fn ComposerEntry::view(
+  self : ComposerEntry,
+  emit : @cmd.Emit[ComposerComponentMsg],
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> @html.Html {
   let conv = model.active()
   let checkout = model.checkout_placement(conv)
   // Goal mode: `/goal` (or the banner's Edit) rebinds the composer's one
   // textarea to the goal draft for this conversation — the prompt draft
   // survives untouched underneath, and the same DOM node keeps focus.
-  let goal_editor = conv.goal_edit
+  let goal_editor = if conv.goal_edit is Some(_) {
+    Some({ draft: self.goal_draft.unwrap_or("") })
+  } else {
+    None
+  }
   let goal_mode = goal_editor is Some(_)
   let transcript_ready = conv.sync is Synced &&
     !conv.has_unresolved_run_tail_notice()
@@ -1011,7 +1030,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     model.api_ready() &&
     transcript_ready &&
     checkout_ready &&
-    conv.draft_sendable()
+    !self.draft.task.is_blank()
   // A compacting conversation cannot accept a prompt either: the serve
   // engine would queue it behind the compaction, where Stop cannot reach it.
   // Every unsettled phase — requested, queued, or running — holds the gate.
@@ -1042,7 +1061,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       class_name: "icon-button send-button",
       title: "Set the standing goal (Enter)",
       disabled: editor.draft.is_blank(),
-      command: dispatch(SubmitGoal),
+      command: emit(ComposerSubmitRequested),
       content: icon(icon_arrow_up),
     }
   } else if conv.is_running() {
@@ -1068,7 +1087,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         class_name: "icon-button send-button",
         title: "Steer the running task",
         disabled: false,
-        command: dispatch(Send),
+        command: emit(ComposerSubmitRequested),
         content: icon(icon_arrow_up),
       }
     }
@@ -1078,7 +1097,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       class_name: "icon-button send-button",
       title: "Send",
       disabled: !can_send,
-      command: dispatch(Send),
+      command: emit(ComposerSubmitRequested),
       content: icon(icon_arrow_up),
     }
   }
@@ -1155,15 +1174,16 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       conv.goal,
       editing=goal_editor,
       pending=conv.goal_pending.map(pending => pending.request),
+      cancel_edit=emit(ComposerGoalCancelled),
     ),
   )
   @composer.View::{
     before_inner: context,
-    mentions: conv.mention_chips(dispatch),
+    mentions: self.draft.mention_chips(emit),
     value: if goal_editor is Some(editor) {
       editor.draft
     } else {
-      conv.task
+      self.draft.task
     },
     placeholder: if goal_mode {
       "Describe the standing goal for this conversation — Enter sets it, Esc cancels."
@@ -1173,25 +1193,15 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       "Ask OpenSeek to inspect, edit, or explain this workspace."
     },
     disabled: false,
-    input: dispatch.map(value => {
-      if goal_mode {
-        GoalDraftEdited(value)
-      } else {
-        TaskChanged(value)
-      }
-    }),
+    input: emit.map(value => ComposerTextChanged(value)),
     keyboard: @composer.KeyboardActions::{
-      menu_open: !goal_mode && model.completion is Some(_),
-      navigate: delta => dispatch(CompletionMove(delta)),
-      accept: dispatch(CompletionAccept),
-      dismiss: dispatch(CompletionDismiss),
-      submit: if goal_mode {
-        dispatch(SubmitGoal)
-      } else {
-        dispatch(Send)
-      },
+      menu_open: !goal_mode && self.completion is Some(_),
+      navigate: delta => emit(ComposerCompletionMove(delta)),
+      accept: emit(ComposerCompletionAccept),
+      dismiss: emit(ComposerCompletionDismiss),
+      submit: emit(ComposerSubmitRequested),
       cancel: if goal_mode {
-        Some(dispatch(CloseGoalEditor))
+        Some(emit(ComposerGoalCancelled))
       } else {
         None
       },
@@ -1201,7 +1211,7 @@ fn composer_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     overlay: if goal_mode {
       None
     } else {
-      model.completion.map(completion => completion.view(dispatch))
+      self.completion.map(completion => completion.view(emit))
     },
   }.render()
 }
@@ -2121,8 +2131,14 @@ test "settings, skills, and composer declare form focus ownership" {
   assert_true(skills_markup.contains("class=\"skills-search\""))
   assert_true(skills_markup.contains("data-focus-owner=\"\""))
   assert_true(skills_markup.contains("data-focus-target=\"\""))
+  let composer_model = test_model()
+  let composer_emit : @cmd.Emit[ComposerComponentMsg] = @cmd.Emit(_ => @cmd.none)
   let composer_markup = @rabbita.render_to_string(() => {
-    @rabbita.Val::constant(composer_view(dispatch, test_model()))
+    @rabbita.Val::constant(
+      ComposerEntry(composer_model).view(
+        composer_emit, dispatch, composer_model,
+      ),
+    )
   })
   assert_true(composer_markup.contains("class=\"composer-inner\""))
   assert_true(composer_markup.contains("data-focus-owner=\"\""))
@@ -2548,6 +2564,7 @@ fn view(
   terminal_html : @html.Html,
   transcript_html : @html.Html,
   right_panel_html : @html.Html,
+  composer_html : @html.Html,
 ) -> @html.Html {
   // A browser page is gated on both its relay session and its required
   // query-selected device. Until both exist, the console frame — sidebar,
@@ -2568,7 +2585,7 @@ fn view(
         if model.active().is_archived_read_only() {
           model.active().archived_read_only_view(dispatch)
         } else {
-          composer_view(dispatch, model)
+          composer_html
         },
       ]
     Skills => page_with_toggle(dispatch, model, skills_page(dispatch, model))

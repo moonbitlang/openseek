@@ -1659,6 +1659,17 @@ fn update(
 ) -> (@cmd.Cmd, Model) {
   let previous = model
   let (cmd, model) = update_msg(dispatch, msg, model)
+  let composer_context_changed = model.active_session != previous.active_session ||
+    model.focused != previous.focused ||
+    model.screen != previous.screen
+  let model = if composer_context_changed {
+    {
+      ..model,
+      composer_context_generation: previous.composer_context_generation + 1,
+    }
+  } else {
+    model
+  }
   // On the narrow layout the sidebar is a full-screen drawer, so any
   // navigation that lands somewhere else — switching or creating a
   // conversation, opening Skills or Settings — closes it; centralizing the
@@ -1780,7 +1791,11 @@ fn update(
 /// the panel later, after the host has classified the target as editable text.
 fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
   self
-  is (JumpToMention(_) | JumpToLocation(..) | QuickOpenPick(_) | OpenFileAt(..))
+  is (ComposerAction(ComposerMentionOpened(_))
+  | JumpToMention(_)
+  | JumpToLocation(..)
+  | QuickOpenPick(_)
+  | OpenFileAt(..))
 }
 
 ///|
@@ -1897,6 +1912,66 @@ fn update_msg(
       } else {
         (clear_legacy_engine_settings(), model)
       }
+    ComposerAction(action) =>
+      match action {
+        ComposerDraftSubmitted(draft) => {
+          let conv = model.active()
+          update_msg(
+            dispatch,
+            Send,
+            model.replace_conversation({
+              ..conv,
+              task: draft.task,
+              mentions: draft.mentions,
+              composer_draft_present: true,
+            }),
+          )
+        }
+        ComposerDraftPresenceChanged(owner~, present~) =>
+          if model.find_conversation(owner.channel, owner.session) is Some(conv) {
+            (
+              @cmd.none,
+              model.replace_conversation({
+                ..conv,
+                composer_draft_present: present,
+              }),
+            )
+          } else {
+            (@cmd.none, model)
+          }
+        ComposerSlashCommand(command) =>
+          run_slash_command(dispatch, model, command)
+        ComposerMentionOpened(mention) => {
+          guard @mention_context.target(mention.ref_) is Some(target) else {
+            return (@cmd.none, model)
+          }
+          let range = if mention.range is Some(_) {
+            mention.range
+          } else {
+            target.range
+          }
+          open_editor_at(
+            dispatch,
+            model,
+            target.file,
+            range,
+            annotation?=target.annotation,
+          )
+        }
+        ComposerGoalSubmitted(draft, prompt_present~) => {
+          let conv = model.active()
+          guard conv.goal_edit is Some(_) else { return (@cmd.none, model) }
+          update_msg(
+            dispatch,
+            SubmitGoal,
+            model.replace_conversation({
+              ..conv,
+              goal_edit: Some({ draft, }),
+              composer_draft_present: prompt_present,
+            }),
+          )
+        }
+      }
     TaskChanged(value) => {
       if model.active().is_archived_read_only() {
         return (@cmd.none, model)
@@ -1981,28 +2056,7 @@ fn update_msg(
       )
     FileCompletionFailed(owner~, root~, query~, generation~) =>
       model.apply_file_completion_reply(owner, root, query, generation, None)
-    CompletionMove(delta) =>
-      if model.completion is Some(menu) {
-        (
-          @cmd.none,
-          {
-            ..model,
-            completion: Some({ ..menu, menu: menu.menu.shifted(delta) }),
-          },
-        )
-      } else {
-        (@cmd.none, model)
-      }
     CompletionDismiss => (@cmd.none, { ..model, completion: None })
-    RemoveMention(index) => {
-      let conv = model.active()
-      guard conv.mentions.get(index) is Some(_) else {
-        return (@cmd.none, model)
-      }
-      let mentions = conv.mentions.copy()
-      let _ = mentions.remove(index)
-      (@cmd.none, model.replace_conversation({ ..conv, mentions, }))
-    }
     JumpToMention(index) => {
       let conv = model.active()
       guard conv.mentions.get(index) is Some(mention) else {
@@ -2193,12 +2247,6 @@ fn update_msg(
     }
     CompletionAccept =>
       if model.completion is Some(menu) && menu.menu.current() is Some(item) {
-        accept_completion(dispatch, model, menu, item)
-      } else {
-        (@cmd.none, { ..model, completion: None })
-      }
-    CompletionPick(index) =>
-      if model.completion is Some(menu) && menu.menu.get(index) is Some(item) {
         accept_completion(dispatch, model, menu, item)
       } else {
         (@cmd.none, { ..model, completion: None })
@@ -2799,7 +2847,12 @@ fn update_msg(
               run_id,
             ),
             {
-              ..model.replace_conversation({ ..conv, task: "", mentions: [] }),
+              ..model.replace_conversation({
+                ..conv,
+                task: "",
+                mentions: [],
+                composer_draft_present: false,
+              }),
               completion: None,
             },
           )
@@ -2834,6 +2887,7 @@ fn update_msg(
           ..conv,
           task: "",
           mentions: [],
+          composer_draft_present: false,
           run: Starting(submission_id~),
           // The store may have advanced through an external CLI while this
           // page was idle. Only the real Started seam's causal snapshot may

@@ -1,6 +1,6 @@
 // The standing goal's UI: one row above the composer input carrying both
 // the goal-editing mode behind `/goal` and the goal the durable `[goal]`
-// markers left standing (see `composer_view`). The mirror itself lives on
+// markers left standing (see `ComposerEntry::view`). The mirror itself lives on
 // `Conversation.goal` and is written only by durable commits/snapshots —
 // see `apply_commit` — so nothing here ever claims a goal the engine has
 // not persisted.
@@ -25,6 +25,7 @@ fn goal_banner(
   goal : @transcript.GoalStanding?,
   editing~ : GoalEdit?,
   pending~ : GoalRequest?,
+  cancel_edit? : @cmd.Cmd,
 ) -> @html.Html {
   // Editing wins over the mirror: while the composer is the goal's editor,
   // what it is about to write matters more than what stands today, and two
@@ -47,7 +48,7 @@ fn goal_banner(
         class="composer-goal-action",
         type_="button",
         title="Stop editing the standing goal — the goal itself is left alone (Esc)",
-        on_click=dispatch(CloseGoalEditor),
+        on_click=cancel_edit.unwrap_or(dispatch(CloseGoalEditor)),
         icon(icon_close),
       ),
     ])

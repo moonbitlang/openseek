@@ -544,13 +544,19 @@ priv struct Conversation {
   // afterwards: a start is always older than the composer, so echoing one
   // back would undo a choice the user has already made for the next turn.
   engine_model : EngineModel
-  // Composer draft, kept per conversation so switching away (and back)
-  // neither loses the text nor sends it to the wrong session.
+  // Root-authored prompt snapshot for submission and delivery recovery. The
+  // live textarea value is component-local and is copied here atomically only
+  // when the user submits; a rejection may write recovered text back here.
   task : String
-  // Mention chips attached to the draft (`$` skills, `#` symbols), part of the
-  // draft and so likewise per conversation. Expanded into the prompt on send,
-  // then cleared with the text.
+  // Root-authored mention snapshot paired with `task`. Editor comments and
+  // recovery can add chips here; ordinary local chip edits stay in the
+  // component until submission.
   mentions : Array[Mention]
+  // Whether the component-local composer currently holds unsent writing.
+  // Only empty/non-empty transitions update this flag; the text itself stays
+  // outside the root Model. It keeps a fresh conversation reachable when the
+  // user switches away without putting every keystroke through root update.
+  composer_draft_present : Bool
   // Where this conversation's run stands; see `RunPhase`. Replaces the old
   // `running`/`active_run_id`/`status` trio, whose redundant encodings could
   // drift apart (running with no id was "starting" only by convention).
@@ -1360,6 +1366,11 @@ priv struct Model {
   // replies carry it so a newer keystroke, dismissal, or conversation switch
   // cannot revive an obsolete completion.
   completion_debounce : @composer.Debounce
+  // Advances only when navigation changes which composer is visible. Local
+  // component entries use it to dismiss an old completion menu while keeping
+  // each conversation's unsent draft; textarea edits never touch this field or
+  // any other part of the root Model.
+  composer_context_generation : Int
   // Cmd/Ctrl+P/T unified Quick Open in the native window and browser console.
   // It is global UI for the focused conversation, not durable conversation
   // state. The monotonic counter fences symbol replies across close and reopen,
@@ -1579,6 +1590,9 @@ priv enum Msg {
     api_key~ : String,
     custom_api_key~ : String
   )
+  // Deliberate actions emitted by the component-local input composer. Raw
+  // keystrokes never enter this root message loop.
+  ComposerAction(ComposerRootAction)
   TaskChanged(String)
   // Start a symbol lookup only if the composer still has this exact delayed
   // draft generation after its 150 ms pause.
@@ -1609,18 +1623,12 @@ priv enum Msg {
     query~ : String,
     generation~ : Int
   )
-  // Move the completion menu's highlight by a delta (−1 up, +1 down), wrapping
-  // at the ends. Ignored when the menu is closed.
-  CompletionMove(Int)
+  // Root completion remains only as a compatibility seam for delivery and
+  // focused update tests. Visible dismissal is component-local.
+  CompletionDismiss
   // Accept the highlighted completion: run the slash command or insert the
   // skill mention into the composer.
   CompletionAccept
-  // Accept a specific completion row by index, for a mouse click on the menu.
-  CompletionPick(Int)
-  // Close the completion menu without acting (Escape, or a click away).
-  CompletionDismiss
-  // Remove a mention chip from the active conversation's draft, by index.
-  RemoveMention(Int)
   // Jump the editor side-panel to a mention chip's resolved location, by
   // index. A no-op for a chip with no `path` (a skill, or an unresolved
   // symbol).
@@ -2394,6 +2402,7 @@ fn empty_conversation(
     engine_model: model,
     task: "",
     mentions: [],
+    composer_draft_present: false,
     run: NoRun(ended=None),
     last_run_id: None,
     last_terminal_sequence: 0,
@@ -2536,6 +2545,7 @@ fn initial_model() -> Model {
     completion: None,
     symbol_cache: empty_symbol_cache(),
     completion_debounce: @composer.Debounce(),
+    composer_context_generation: 0,
     quick_open: None,
     quick_open_generation: 0,
     git_request_generation: 0,
@@ -3289,6 +3299,7 @@ fn Conversation::is_archived_read_only(self : Conversation) -> Bool {
 fn Conversation::draft_empty(self : Conversation) -> Bool {
   self.task.is_blank() &&
   self.mentions.is_empty() &&
+  !self.composer_draft_present &&
   !(self.goal_edit is Some(edit) && !edit.draft.is_blank()) &&
   self.goal_pending is None
 }
