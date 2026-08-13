@@ -33,8 +33,8 @@
 // Tags sit alone on their own lines, flush left, and element bodies are
 // verbatim lines between them — quoted code must survive the round trip, so
 // nothing is indented or escaped. `parse` also accepts a `<symbol ...>` with
-// a body (truncated source ahead of `</symbol>`), so the encoder can start
-// embedding symbol content later without breaking older messages. We accept
+// a body (truncated source ahead of `</symbol>`), so the wire form can carry
+// truncated symbol source when available. We accept
 // that a task whose own tail happens to spell a well-formed envelope would be
 // misread on re-render; the blast radius is a cosmetic chip row on one
 // message, not corruption — the engine stores the text verbatim and never
@@ -95,10 +95,7 @@ fn MentionAttribute::encode(text : String) -> MentionAttribute {
 }
 
 ///|
-fn MentionAttribute::decode(wire : String, encoded : Bool) -> String {
-  if !encoded {
-    return wire
-  }
+fn MentionAttribute::decode(wire : String) -> String {
   wire
   .replace_all(old="&quot;", new="\"")
   .replace_all(old="&lt;", new="<")
@@ -285,7 +282,9 @@ fn write_body(parts : StringBuilder, body : String) -> Unit {
 /// message). The structure is validated strictly — the closing tag must be
 /// the last line (one trailing blank tolerated), an opener must precede it,
 /// and everything between must parse as mention elements — so a prompt that
-/// merely mentions the tags is not misread as chips.
+/// merely mentions the tags is not misread as chips. Only the current
+/// `attributes="xml"` opener is recognized; an unmarked envelope is ordinary
+/// message text rather than a second wire format.
 pub fn parse(content : String) -> MentionMessage? {
   let lines = [
     for raw in content.split("\n") => raw.trim_end(chars="\r").to_owned()
@@ -295,19 +294,13 @@ pub fn parse(content : String) -> MentionMessage? {
   // The task text is arbitrary, so the envelope's opener is the last one —
   // matched from the end inward, as the closing tag was.
   let mut open_index = None
-  let mut attributes_encoded = false
   for index, line in head {
-    if line == "<user_mentions>" {
+    if line == "<user_mentions attributes=\"xml\">" {
       open_index = Some(index)
-      attributes_encoded = false
-    } else if line == "<user_mentions attributes=\"xml\">" {
-      open_index = Some(index)
-      attributes_encoded = true
     }
   }
   guard open_index is Some(open) else { return None }
-  guard parse_mention_block(head[open + 1:], attributes_encoded)
-    is Some(mentions) else {
+  guard parse_mention_block(head[open + 1:]) is Some(mentions) else {
     return None
   }
   Some({ mentions, task: head[:open].join("\n").trim().to_owned() })
@@ -328,18 +321,15 @@ let symbol_pattern : Regex = re"^<symbol name=\"(?<name>[^\"]+)\"( file=\"(?<fil
 
 ///|
 /// `<annotation file="..." lines="start-end">`, optionally marked as an
-/// original-revision line, opening the quote/comment body. The omitted side is
-/// the working revision for compatibility with existing stored transcripts.
+/// original-revision line, opening the quote/comment body. An omitted side
+/// denotes the working revision written by `encode`.
 let annotation_pattern : Regex = re"^<annotation file=\"(?<file>[^\"]+)\" lines=\"(?<start>[0-9]+)-(?<end>[0-9]+)\"( side=\"(?<side>original)\")?>$"
 
 ///|
 /// The lines between `<user_mentions>` and `</user_mentions>` as chips, or
 /// `None` when anything in the block is not a well-formed mention element.
 /// An empty block is malformed — `encode` never writes one.
-fn parse_mention_block(
-  lines : ArrayView[String],
-  attributes_encoded : Bool,
-) -> Array[MentionRef]? {
+fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
   guard !lines.is_empty() else { return None }
   let mentions : Array[MentionRef] = []
   let mut index = 0
@@ -347,19 +337,13 @@ fn parse_mention_block(
     let line = lines[index]
     if skill_pattern.execute(line) is Some(matched) {
       guard matched.named_group("name") is Some(name) else { return None }
-      mentions.push(
-        Skill(
-          name=MentionAttribute::decode(name.to_owned(), attributes_encoded),
-        ),
-      )
+      mentions.push(Skill(name=MentionAttribute::decode(name.to_owned())))
       index += 1
       continue
     }
     if file_pattern.execute(line) is Some(matched) {
       guard matched.named_group("path") is Some(path) else { return None }
-      mentions.push(
-        File(path=MentionAttribute::decode(path.to_owned(), attributes_encoded)),
-      )
+      mentions.push(File(path=MentionAttribute::decode(path.to_owned())))
       index += 1
       continue
     }
@@ -376,8 +360,8 @@ fn parse_mention_block(
       }
       mentions.push(
         Symbol(
-          name=MentionAttribute::decode(name.to_owned(), attributes_encoded),
-          file=MentionAttribute::decode(file, attributes_encoded),
+          name=MentionAttribute::decode(name.to_owned()),
+          file=MentionAttribute::decode(file),
           line=line_number,
         ),
       )
@@ -415,7 +399,7 @@ fn parse_mention_block(
       }
       mentions.push(
         Annotation(
-          file=MentionAttribute::decode(file.to_owned(), attributes_encoded),
+          file=MentionAttribute::decode(file.to_owned()),
           start_line~,
           end_line~,
           quote~,
