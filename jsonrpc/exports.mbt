@@ -26,10 +26,12 @@ pub fn Client::set_notification_handler(
 /// receiver runs on the reader task and therefore must not block. Return true
 /// only after transferring the request into caller-owned bounded state; that
 /// caller must later answer it with `respond` or `respond_error`. Returning
-/// false immediately answers with a server-busy error.
+/// false immediately answers with a server-busy error. If the receiver raises,
+/// the client answers that request with an internal error and keeps routing
+/// unrelated traffic.
 pub fn Client::set_request_handler(
   self : Client,
-  handler : (PeerRequest) -> Bool,
+  handler : (PeerRequest) -> Bool raise,
 ) -> Unit {
   self.on_request = handler
   self.accepts_requests = true

@@ -21,7 +21,7 @@ pub async fn Client::respond_error(Self, PeerRequest, code~ : Int, message~ : St
 pub async fn Client::run_message_pump(Self) -> Unit
 pub async fn Client::run_writer(Self) -> Unit
 pub fn Client::set_notification_handler(Self, (String, Json) -> Unit) -> Unit
-pub fn Client::set_request_handler(Self, (PeerRequest) -> Bool) -> Unit
+pub fn Client::set_request_handler(Self, (PeerRequest) -> Bool raise) -> Unit
 
 type PeerRequest
 pub fn PeerRequest::id(Self) -> Json

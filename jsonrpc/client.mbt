@@ -52,6 +52,12 @@ const OutboxCapacity : Int = 1024
 const ServerBusy : Int = -32000
 
 ///|
+/// JSON-RPC standard error used when an installed peer-request handler fails.
+/// The handler runs on the reader task, so its error must become a reply rather
+/// than escape and close the client with every unrelated request still pending.
+const InternalError : Int = -32603
+
+///|
 /// A JSON-RPC client. Build it with `Client::new`, spawn `run_message_pump` and
 /// `run_writer`, then issue `request`/`notify`. Requests may be concurrent;
 /// replies are matched by id.
@@ -82,7 +88,7 @@ struct Client {
   // to the caller, which must eventually answer through `respond` or
   // `respond_error`. Returning false reports a bounded-queue overload. The
   // default rejects every method as unimplemented.
-  mut on_request : (PeerRequest) -> Bool
+  mut on_request : (PeerRequest) -> Bool raise
   // Distinguishes the default receiver from an installed receiver rejecting
   // work because its bounded queue is full.
   mut accepts_requests : Bool
@@ -273,11 +279,26 @@ async fn Client::dispatch(self : Client, message : Json) -> Unit {
         Some(build_success_reply(request.id, Json::empty_object()))
       } else if !self.accepts_requests {
         Some(build_error_reply(request.id, MethodNotFound, "Method not found"))
-      } else if (self.on_request)(request) {
-        None
       } else {
-        // A rejected request means the installed bounded receiver is full.
-        Some(build_error_reply(request.id, ServerBusy, "Server busy"))
+        let accepted : Result[Bool, Error] = try
+          (self.on_request)(request)
+        catch {
+          error if @async.is_being_cancelled() => raise error
+          error => Err(error)
+        } noraise {
+          value => Ok(value)
+        }
+        match accepted {
+          Ok(true) => None
+          // A rejected request means the installed bounded receiver is full.
+          Ok(false) =>
+            Some(build_error_reply(request.id, ServerBusy, "Server busy"))
+          // A handler owns application decoding and queue admission. Contain
+          // either failure here so malformed peer input cannot tear down the
+          // JSON-RPC connection and fail unrelated requests with `Closed`.
+          Err(_) =>
+            Some(build_error_reply(request.id, InternalError, "Internal error"))
+        }
       }
       // Non-blocking: never let answering a peer stall the read loop or grow the
       // outbox without bound.

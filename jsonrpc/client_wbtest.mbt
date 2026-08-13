@@ -394,6 +394,41 @@ async test "a rejected peer request receives server busy without blocking routin
 }
 
 ///|
+async test "a failing peer request handler receives internal error and keeps routing" {
+  @async.with_task_group(group => {
+    let transport = new_transport()
+    let client = Client::new(transport)
+    client.set_request_handler(fn(_) raise { fail("malformed peer parameters") })
+    spawn_client(group, client)
+    transport.inbound.put({
+      "jsonrpc": "2.0",
+      "id": 45,
+      "method": "item/tool/requestUserInput",
+      "params": { "unexpected": true },
+    })
+    let failure = transport.outbound.get()
+    assert_true(
+      failure
+      is {
+        "id": Number(45, ..),
+        "error": { "code": Number(-32603, ..), "message": "Internal error", .. },
+        ..
+      },
+    )
+    group.spawn_bg(no_wait=true, allow_failure=true, () => {
+      let request = transport.outbound.get()
+      transport.inbound.put(reply_for(request))
+    })
+    let result = client.request(
+      method_="still-alive",
+      params=Json::empty_object(),
+    )
+    assert_true(result is { "method": "still-alive", .. })
+    assert_false(client.is_closed())
+  })
+}
+
+///|
 async test "a request fails with Closed when the transport ends without a reply" {
   @async.with_task_group(group => {
     let transport = new_transport()
