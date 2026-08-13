@@ -17,6 +17,7 @@
 //
 //   <user_mentions>
 //   <skill name="review-pr"/>
+//   <file path="src/main.mbt"/>
 //   <symbol name="parse_hover" file="a.mbt" line="5"/>
 //   <annotation file="a.mbt" lines="12-20">
 //   <quote>
@@ -50,6 +51,7 @@ pub(all) enum AnnotationSide {
 ///|
 pub(all) enum MentionRef {
   Skill(name~ : String)
+  File(path~ : String)
   Symbol(name~ : String, file~ : String, line~ : Int)
   Annotation(
     file~ : String,
@@ -99,6 +101,7 @@ pub struct Target {
 pub fn glyph(mention : MentionRef) -> String {
   match mention {
     Skill(_) => "$"
+    File(_) => "@"
     Symbol(_) => "#"
     Annotation(_) => "✎"
   }
@@ -109,6 +112,7 @@ pub fn glyph(mention : MentionRef) -> String {
 pub fn label(mention : MentionRef) -> String {
   match mention {
     Skill(name~) => name
+    File(path~) => path
     Symbol(name~, ..) => name
     Annotation(file~, start_line~, end_line~, side~, ..) => {
       let suffix = if side is OriginalRevision { " (original)" } else { "" }
@@ -122,6 +126,7 @@ pub fn label(mention : MentionRef) -> String {
 pub fn target(mention : MentionRef) -> Target? {
   match mention {
     Skill(_) => None
+    File(path~) => Some({ file: path, range: None, annotation: None })
     Symbol(file~, line~, ..) =>
       if file.is_empty() {
         None
@@ -189,6 +194,7 @@ pub fn encode(mentions : Array[MentionRef], task : String) -> String {
 fn write_mention(parts : StringBuilder, mention : MentionRef) -> Unit {
   match mention {
     Skill(name~) => parts <+ "<skill name=\"\{name}\"/>\n"
+    File(path~) => parts <+ "<file path=\"\{path}\"/>\n"
     Symbol(name~, file~, line~) =>
       if file.is_empty() {
         parts <+ "<symbol name=\"\{name}\"/>\n"
@@ -257,6 +263,10 @@ pub fn parse(content : String) -> MentionMessage? {
 let skill_pattern : Regex = re"^<skill name=\"(?<name>[^\"]+)\"/>$"
 
 ///|
+/// `<file path="..."/>`, alone on its line.
+let file_pattern : Regex = re"^<file path=\"(?<path>[^\"]+)\"/>$"
+
+///|
 /// `<symbol name="..."/>` with an optional resolved location, self-closing or
 /// opening a body of truncated source (`tail` is `/>` or `>`).
 let symbol_pattern : Regex = re"^<symbol name=\"(?<name>[^\"]+)\"( file=\"(?<file>[^\"]+)\" line=\"(?<line>[0-9]+)\")?(?<tail>/>|>)$"
@@ -280,6 +290,12 @@ fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
     if skill_pattern.execute(line) is Some(matched) {
       guard matched.named_group("name") is Some(name) else { return None }
       mentions.push(Skill(name=name.to_owned()))
+      index += 1
+      continue
+    }
+    if file_pattern.execute(line) is Some(matched) {
+      guard matched.named_group("path") is Some(path) else { return None }
+      mentions.push(File(path=path.to_owned()))
       index += 1
       continue
     }

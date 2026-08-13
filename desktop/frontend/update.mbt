@@ -625,7 +625,7 @@ fn is_steer_receipt(event : @transcript.EngineEvent) -> Bool {
 
 ///|
 /// Apply an accepted completion row: a slash command runs its action, while a
-/// skill mention or symbol reference becomes a chip in the composer's mention
+/// skill, symbol, or file reference becomes a chip in the composer's mention
 /// tray (its expansion is spliced into the prompt on send). Either way the menu
 /// closes and only the typed trigger token is removed from the textarea.
 fn accept_completion(
@@ -659,6 +659,17 @@ fn accept_completion(
         task=menu.menu.draft_without_token(),
       )
     }
+    Files =>
+      if item.path is Some(path) {
+        accept_mention(
+          model,
+          File(path~),
+          range=None,
+          task=menu.menu.draft_without_token(),
+        )
+      } else {
+        (@cmd.none, { ..model, completion: None })
+      }
   }
 }
 
@@ -1807,7 +1818,9 @@ fn update_msg(
         empty_symbol_cache()
       }
       let completion_debounce = model.completion_debounce.advanced()
-      let command = match @composer.Trigger::parse(value, inline_markers="$#") {
+      let (files, files_loading) = model.completion_files(value)
+      let command = match
+        @composer.Trigger::parse(value, inline_markers="$#@") {
         Some(trigger) if trigger.marker() == "#" &&
           (
             model.symbol_cache.owner != Some(owner) ||
@@ -1817,6 +1830,11 @@ fn update_msg(
           completion_debounce.delayed(generation => {
             dispatch(CompletionDue(owner~, query=trigger.query(), generation~))
           })
+        Some(trigger) if trigger.marker() == "@" &&
+          (
+            model.file_panel.index is @fileeditor.IndexEmpty ||
+            model.file_panel.index is @fileeditor.IndexFailed
+          ) => dispatch(FileEditor(@fileeditor.EnsureFileIndex))
         _ => @cmd.none
       }
       (
@@ -1830,6 +1848,8 @@ fn update_msg(
             model.installed_skills,
             symbol_cache,
             owner,
+            files~,
+            files_loading~,
           ),
         },
       )
@@ -3431,6 +3451,12 @@ fn update_msg(
         file_ctx(model),
       )
       let next = { ..model, file_panel: panel }
+      let next = match msg {
+        @fileeditor.EnsureFileIndex
+        | @fileeditor.FilesIndexed(..)
+        | @fileeditor.FileIndexFailed(..) => next.refresh_file_completion()
+        _ => next
+      }
       (cmd, next)
     }
     Dock(msg) => {
@@ -10347,6 +10373,96 @@ test "update is pure: accepting an inline skill preserves prompt text" {
     twice.active().mentions[0].ref_ is Skill(name="review-pr"),
   )
   assert_true(once.completion is None && twice.completion is None)
+}
+
+///|
+test "file index completion refreshes and accepts a workspace file" {
+  let dispatch = test_dispatch()
+  let owner : @interop.ConversationKey = {
+    channel: Local,
+    session: "desktop-test",
+  }
+  let base = test_model()
+  let file_emit = dispatch.map(msg => FileEditor(msg))
+  let (synced, _) = @fileeditor.sync(file_emit, base.file_panel, file_ctx(base))
+  let (_, loading) = @fileeditor.update(
+    file_emit,
+    @fileeditor.EnsureFileIndex,
+    synced,
+    file_ctx(base),
+  )
+  let model = { ..base, file_panel: loading }
+  let (_, searching) = update(dispatch, TaskChanged("Inspect @main"), model)
+  guard searching.completion is Some(pending) else {
+    fail("the inline file token should open completion")
+  }
+  assert_true(pending.kind is Files)
+  assert_true(pending.menu.loading())
+  assert_eq(pending.menu.length(), 0)
+  let (_, loaded) = update(
+    dispatch,
+    FileEditor(
+      @fileeditor.FilesIndexed(
+        owner~,
+        epoch=searching.file_panel.request_epoch,
+        files=[@pathx.Relative("src/main.mbt")],
+        truncated=false,
+      ),
+    ),
+    searching,
+  )
+  guard loaded.completion is Some(menu) else {
+    fail("the file-index reply should rebuild completion")
+  }
+  assert_false(menu.menu.loading())
+  assert_eq(menu.menu.length(), 1)
+  guard menu.menu.get(0) is Some(file) else { fail("file row expected") }
+  assert_eq(file.label, "main.mbt")
+  assert_eq(file.path, Some("src/main.mbt"))
+  let (_, accepted) = update(dispatch, CompletionAccept, loaded)
+  assert_eq(accepted.active().task, "Inspect ")
+  assert_true(
+    accepted.active().mentions ==
+    [{ ref_: File(path="src/main.mbt"), range: None }],
+  )
+}
+
+///|
+test "file index failure settles an empty completion menu" {
+  let dispatch = test_dispatch()
+  let owner : @interop.ConversationKey = {
+    channel: Local,
+    session: "desktop-test",
+  }
+  let base = test_model()
+  let file_emit = dispatch.map(msg => FileEditor(msg))
+  let (synced, _) = @fileeditor.sync(file_emit, base.file_panel, file_ctx(base))
+  let (_, loading) = @fileeditor.update(
+    file_emit,
+    @fileeditor.EnsureFileIndex,
+    synced,
+    file_ctx(base),
+  )
+  let (_, searching) = update(dispatch, TaskChanged("Inspect @missing"), {
+    ..base,
+    file_panel: loading,
+  })
+  let (_, failed) = update(
+    dispatch,
+    FileEditor(
+      @fileeditor.FileIndexFailed(
+        owner~,
+        epoch=searching.file_panel.request_epoch,
+      ),
+    ),
+    searching,
+  )
+  guard failed.completion is Some(menu) else {
+    fail("a live @ token should retain its settled empty menu")
+  }
+  assert_true(menu.kind is Files)
+  assert_false(menu.menu.loading())
+  assert_eq(menu.menu.length(), 0)
 }
 
 ///|

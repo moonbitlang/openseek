@@ -33,6 +33,7 @@ pub fn MentionMessage::display_text(Self) -> String
 
 pub(all) enum MentionRef {
   Skill(name~ : String)
+  File(path~ : String)
   Symbol(name~ : String, file~ : String, line~ : Int)
   Annotation(file~ : String, start_line~ : Int, end_line~ : Int, quote~ : String, comment~ : String, side~ : AnnotationSide)
 } derive(Eq, @debug.Debug)

@@ -1,8 +1,8 @@
 // The composer's completion menu: a leading `/` lists built-in conversation
-// commands, while a trailing `$` or `#` token lists installed skills or
-// workspace symbols after ordinary prompt text. All three filter as the user
-// types and are driven from the model so the keyboard (↑/↓, Enter/Tab, Esc)
-// and the popup view stay in sync.
+// commands, while a trailing `$`, `#`, or `@` token lists installed skills,
+// workspace symbols, or workspace files after ordinary prompt text. All four
+// filter as the user types and are driven from the model so the keyboard
+// (↑/↓, Enter/Tab, Esc) and the popup view stay in sync.
 
 ///|
 /// The built-in slash commands, in menu order. `command` is the id
@@ -38,6 +38,7 @@ fn CompletionKind::of_trigger(trigger : @composer.Trigger) -> CompletionKind? {
     "/" => Some(SlashCommands)
     "$" => Some(SkillMentions)
     "#" => Some(Symbols)
+    "@" => Some(Files)
     _ => None
   }
 }
@@ -45,12 +46,12 @@ fn CompletionKind::of_trigger(trigger : @composer.Trigger) -> CompletionKind? {
 ///|
 /// Build the composer completion menu for a draft, or `None` when the draft
 /// has no live trigger. The menu opens on a leading `/` command or a trailing
-/// `$`/`#` token after any whitespace. Once the user types whitespace past the
+/// `$`/`#`/`@` token after any whitespace. Once the user types whitespace past the
 /// token, the mention/reference is complete and the menu closes. The highlight
 /// resets to the first row on every rebuild, since filtering reorders what is
 /// shown.
 ///
-/// Symbols differ from the other two: their rows are fetched asynchronously and
+/// Symbols differ from local skill/file rows: they are fetched asynchronously and
 /// arrive via `SymbolsLoaded`, so they come from `symbols` (cached against
 /// conversation owner) rather than being computed here. The menu still opens immediately
 /// for a `#` query — empty and `loading` until the cache catches up.
@@ -59,8 +60,10 @@ fn compute_completion(
   installed : Array[@transcript.InstalledSkillItem],
   symbols : SymbolCache,
   owner : @interop.ConversationKey,
+  files? : Array[@files.Match] = [],
+  files_loading? : Bool = false,
 ) -> Completion? {
-  guard @composer.Trigger::parse(text, inline_markers="$#") is Some(trigger) &&
+  guard @composer.Trigger::parse(text, inline_markers="$#@") is Some(trigger) &&
     CompletionKind::of_trigger(trigger) is Some(kind) else {
     return None
   }
@@ -129,6 +132,86 @@ fn compute_completion(
         ),
       })
     }
+    Files => {
+      let items = files.map(file => CompletionItem::{
+        label: file.name,
+        detail: file.path.0,
+        command: "",
+        insert: file.path.0,
+        path: Some(file.path.0),
+        range: None,
+      })
+      Some({
+        kind: Files,
+        menu: @composer.Menu(
+          items,
+          loading=files_loading,
+          draft_without_token=trigger.draft_without_token(),
+        ),
+      })
+    }
+  }
+}
+
+///|
+/// Build the bounded file candidate set shared by composer `@` and Ctrl+P.
+/// The workspace index supplies paths; open tabs remain immediately useful
+/// while that index is loading.
+fn Model::file_search(self : Model) -> @files.Search {
+  let indexed = match self.file_panel.index {
+    @fileeditor.IndexReady(files~, ..) => files
+    _ => []
+  }
+  @files.Search(
+    indexed,
+    quick_open_open_files(self),
+    @dock.active_file(self.dock),
+  )
+}
+
+///|
+/// Rank an active `@` query through the same candidate ordering and fuzzy
+/// matcher as Ctrl+P. Other completion providers receive no file rows.
+fn Model::completion_files(
+  self : Model,
+  text : String,
+) -> (Array[@files.Match], Bool) {
+  guard @composer.Trigger::parse(text, inline_markers="$#@") is Some(trigger) &&
+    trigger.marker() == "@" else {
+    return ([], false)
+  }
+  let loading = match self.file_panel.index {
+    @fileeditor.IndexEmpty | @fileeditor.IndexLoading(_) => true
+    @fileeditor.IndexFailed | @fileeditor.IndexReady(..) => false
+  }
+  (self.file_search().rank(trigger.query()), loading)
+}
+
+///|
+/// Rebuild a visible `@` menu after the shared file index settles. Reading the
+/// current draft again prevents a late index reply from reviving an obsolete
+/// or already accepted token.
+fn Model::refresh_file_completion(self : Model) -> Model {
+  let text = self.active().task
+  guard @composer.Trigger::parse(text, inline_markers="$#@") is Some(trigger) &&
+    trigger.marker() == "@" else {
+    return self
+  }
+  let (files, files_loading) = self.completion_files(text)
+  let owner : @interop.ConversationKey = {
+    channel: self.focused,
+    session: self.active().session_id,
+  }
+  {
+    ..self,
+    completion: compute_completion(
+      text,
+      self.installed_skills,
+      self.symbol_cache,
+      owner,
+      files~,
+      files_loading~,
+    ),
   }
 }
 
@@ -265,6 +348,27 @@ test "skill completion follows prompt text and preserves that text" {
     fail("a skill token after a newline should open the menu")
   }
   assert_eq(after_newline.menu.draft_without_token(), "First line\n")
+}
+
+///|
+test "at trigger lists the same ranked workspace file matches as Ctrl+P" {
+  let owner : @interop.ConversationKey = { channel: Local, session: "s1" }
+  guard compute_completion(
+      "Inspect @main",
+      [],
+      empty_symbol_cache(),
+      owner,
+      files=[{ path: @pathx.Relative("src/main.mbt"), name: "main.mbt" }],
+      files_loading=false,
+    )
+    is Some(menu) else {
+    fail("an @ token should open the file menu")
+  }
+  assert_true(menu.kind is Files)
+  assert_eq(menu.menu.draft_without_token(), "Inspect ")
+  guard menu.menu.get(0) is Some(file) else { fail("file row expected") }
+  assert_eq(file.label, "main.mbt")
+  assert_eq(file.path, Some("src/main.mbt"))
 }
 
 ///|

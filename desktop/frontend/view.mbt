@@ -813,6 +813,7 @@ fn Completion::view(self : Completion, dispatch : @cmd.Emit[Msg]) -> @html.Html 
     SlashCommands => "Commands"
     SkillMentions => "Skills"
     Symbols => "Symbols"
+    Files => "Files"
   }
   let rows : Array[@composer.CompletionRow] = []
   for _, item in self.menu {
@@ -825,14 +826,17 @@ fn Completion::view(self : Completion, dispatch : @cmd.Emit[Msg]) -> @html.Html 
     empty: if self.menu.loading() {
       "Searching…"
     } else {
-      "No symbols"
+      match self.kind {
+        Files => "No files"
+        _ => "No symbols"
+      }
     },
   }.render(index => dispatch(CompletionPick(index)))
 }
 
 ///|
 /// The chips above the textarea for the draft's mentions (`$` skills, `#`
-/// symbols, `✎` editor comments), each removable by its `×`. Always rendered
+/// symbols, `@` files, `✎` editor comments), each removable by its `×`. Always rendered
 /// (empty when there are no chips) so the textarea keeps a stable child index
 /// and never loses focus when a chip comes or goes; CSS collapses the empty
 /// tray to nothing. A chip with a resolved location is also clickable,

@@ -863,11 +863,13 @@ priv enum Screen {
 /// Which trigger opened the composer's completion menu: `/` lists built-in
 /// commands that act on the conversation, `$` lists installed skills whose
 /// name is inserted into the prompt, `#` lists workspace symbols (fetched
-/// through the host's symbol search) whose reference is inserted.
+/// through the host's symbol search), and `@` lists files from the shared
+/// workspace index used by Ctrl+P.
 priv enum CompletionKind {
   SlashCommands
   SkillMentions
   Symbols
+  Files
 } derive(Eq)
 
 ///|
@@ -881,12 +883,8 @@ priv struct CompletionItem {
   // skills. For a skill, `insert` carries the text dropped into the composer.
   command : String
   insert : String
-  // A symbol row's resolved location — workspace-relative path and the
-  // symbol's full range (one-based, viewer coordinates) — so the chip it
-  // becomes can jump there and select the named code. `None` for slash
-  // commands, skills, and symbols the search could not place in a file. A
-  // symbol placed without a range yields an empty range anchored at its
-  // line.
+  // A symbol or file row's workspace-relative location. Symbols also carry
+  // their full one-based range; a file row deliberately leaves `range` empty.
   path : String?
   range : @common.Range?
 } derive(Eq)
@@ -908,9 +906,8 @@ priv struct Mention {
 /// The composer's open completion menu: the trigger that opened it, the
 /// currently matching rows, which row is highlighted, and the exact draft text
 /// before the live token. Absent when the composer has no live trigger.
-/// `loading` is set only for a `#` menu whose results for the current query have
-/// not arrived yet, so the empty menu can say "Searching…" rather than
-/// "No symbols".
+/// `loading` marks a `#` query or workspace-file index still in flight, so an
+/// empty menu can distinguish "Searching…" from a settled empty provider.
 priv struct Completion {
   kind : CompletionKind
   menu : @composer.Menu[CompletionItem]

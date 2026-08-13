@@ -9,6 +9,7 @@ test "encode lays out the task first, then the tagged mention block" {
   let content = @mention_context.encode(
     [
       Skill(name="review-pr"),
+      File(path="src/main.mbt"),
       Symbol(name="parse_hover", file="src/hover.mbt", line=5),
       Symbol(name="unplaced", file="", line=0),
       Annotation(
@@ -29,6 +30,7 @@ test "encode lays out the task first, then the tagged mention block" {
       #|
       #|<user_mentions>
       #|<skill name="review-pr"/>
+      #|<file path="src/main.mbt"/>
       #|<symbol name="parse_hover" file="src/hover.mbt" line="5"/>
       #|<symbol name="unplaced"/>
       #|<annotation file="src/hover.mbt" lines="12-13">
@@ -62,6 +64,7 @@ test "encode of chips alone omits the task block" {
 test "parse round-trips what encode wrote" {
   let mentions : Array[@mention_context.MentionRef] = [
     Skill(name="review-pr"),
+    File(path="src/main.mbt"),
     Symbol(name="parse_hover", file="src/hover.mbt", line=5),
     Symbol(name="unplaced", file="", line=0),
     Annotation(
