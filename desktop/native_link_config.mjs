@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -81,6 +82,35 @@ function hasMsvcEnvironment(env) {
   ].some((name) => envValue(env, name).trim().length > 0);
 }
 
+function hasMsvcToolchain(env) {
+  // Moon discovers MSVC through vswhere even when the shell carries no VC
+  // environment, so a plain PowerShell prompt must reach the same verdict.
+  const programFilesX86 = envValue(env, "ProgramFiles(x86)").trim();
+  if (programFilesX86.length === 0) {
+    return false;
+  }
+  const vswhere = path.join(
+    programFilesX86,
+    "Microsoft Visual Studio",
+    "Installer",
+    "vswhere.exe",
+  );
+  if (!fs.existsSync(vswhere)) {
+    return false;
+  }
+  try {
+    const installations = execFileSync(vswhere, [
+      "-latest",
+      "-products", "*",
+      "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+      "-property", "installationPath",
+    ], { encoding: "utf8" });
+    return installations.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function detectedLinkStyle(env) {
   const explicit = envValue(env, "OPENSEEK_DESKTOP_LINK_STYLE").trim().toLowerCase();
   switch (explicit) {
@@ -105,7 +135,7 @@ function detectedLinkStyle(env) {
     return compilerStyle;
   }
   const isWindows = process.platform === "win32" || env.OS === "Windows_NT";
-  if (isWindows && hasMsvcEnvironment(env)) {
+  if (isWindows && (hasMsvcEnvironment(env) || hasMsvcToolchain(env))) {
     return "msvc-driver";
   }
   if (commandExists(env, "clang")) {
