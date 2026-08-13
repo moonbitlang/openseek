@@ -182,9 +182,131 @@ fn Model::completion_files(
   }
   let loading = match self.file_panel.index {
     @fileeditor.IndexEmpty | @fileeditor.IndexLoading(_) => true
-    @fileeditor.IndexFailed | @fileeditor.IndexReady(..) => false
+    @fileeditor.IndexReady(truncated=true, ..) => true
+    @fileeditor.IndexFailed | @fileeditor.IndexReady(truncated=false, ..) =>
+      false
   }
   (self.file_search().rank(trigger.query()), loading)
+}
+
+///|
+/// Query the complete Host file snapshot only while the delayed `@` request
+/// still names the visible conversation, root, draft, and generation. The
+/// file panel owns population of this cache; completion only needs the
+/// interactive query when that panel reports a truncated local snapshot.
+fn Model::begin_file_completion_request(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  owner : @interop.ConversationKey,
+  root : @common.Uri,
+  query : String,
+  generation : Int,
+) -> (@cmd.Cmd, Model) {
+  guard self.completion_debounce.accepts(generation) &&
+    owner.channel == self.focused &&
+    owner.session == self.active().session_id &&
+    self.conversation_root(self.active()) == Some(root) &&
+    self.file_panel.index is @fileeditor.IndexReady(truncated=true, ..) &&
+    @composer.Trigger::parse(self.active().task, inline_markers="$#@")
+    is Some(trigger) &&
+    trigger.marker() == "@" &&
+    trigger.query() == query &&
+    self.completion is Some(completion) &&
+    completion.kind is Files &&
+    completion.menu.loading() else {
+    return (@cmd.none, self)
+  }
+  (
+    @files.Request(owner.channel, owner.session, Some(root)).search_cached(
+      query,
+      generation,
+      (files, _limit_hit) => {
+        dispatch(
+          FileCompletionLoaded(owner~, root~, query~, generation~, files~),
+        )
+      },
+      () => dispatch(FileCompletionFailed(owner~, root~, query~, generation~)),
+    ),
+    self,
+  )
+}
+
+///|
+/// Settle the exact live `@` request with Host-ranked candidates. A failed
+/// query falls back to the bounded local snapshot instead of discarding useful
+/// rows; in both cases the spinner stops, while stale replies are ignored.
+fn Model::apply_file_completion_reply(
+  self : Model,
+  owner : @interop.ConversationKey,
+  root : @common.Uri,
+  query : String,
+  generation : Int,
+  remote_files : Array[@pathx.Relative]?,
+) -> (@cmd.Cmd, Model) {
+  let draft = self.active().task
+  guard self.completion_debounce.accepts(generation) &&
+    owner.channel == self.focused &&
+    owner.session == self.active().session_id &&
+    self.conversation_root(self.active()) == Some(root) &&
+    @composer.Trigger::parse(draft, inline_markers="$#@") is Some(trigger) &&
+    trigger.marker() == "@" &&
+    trigger.query() == query &&
+    self.completion is Some(completion) &&
+    completion.kind is Files &&
+    completion.menu.loading() else {
+    return (@cmd.none, self)
+  }
+  let matches = match remote_files {
+    Some(files) =>
+      @files.Search(
+        files,
+        quick_open_open_files(self),
+        @dock.active_file(self.dock),
+      ).rank(query)
+    None => self.file_search().rank(query)
+  }
+  (
+    @cmd.none,
+    {
+      ..self,
+      completion: compute_completion(
+        draft,
+        self.installed_skills,
+        self.symbol_cache,
+        owner,
+        files=matches,
+        files_loading=false,
+      ),
+    },
+  )
+}
+
+///|
+/// Continue a live `@` query after the panel's initial index request reveals
+/// that its local snapshot was truncated. The current debounce generation is
+/// reused because no keystroke occurred while the index was loading.
+fn Model::file_completion_query_after_index(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+) -> @cmd.Cmd {
+  guard self.file_panel.index is @fileeditor.IndexReady(truncated=true, ..) &&
+    self.completion is Some(completion) &&
+    completion.kind is Files &&
+    completion.menu.loading() &&
+    @composer.Trigger::parse(self.active().task, inline_markers="$#@")
+    is Some(trigger) &&
+    trigger.marker() == "@" &&
+    self.conversation_root(self.active()) is Some(root) else {
+    return @cmd.none
+  }
+  dispatch(
+    FileCompletionDue(
+      owner={ channel: self.focused, session: self.active().session_id },
+      root~,
+      query=trigger.query(),
+      generation=self.completion_debounce.generation(),
+    ),
+  )
 }
 
 ///|

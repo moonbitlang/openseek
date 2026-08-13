@@ -110,6 +110,62 @@ pub fn Request::run(
 }
 
 ///|
+/// Rank one interactive query against the complete Host snapshot populated by
+/// `run`. The initial reply may expose only `MaxIndexedFiles` paths, but the
+/// cache retains the whole scan; querying that cache keeps a truncated
+/// composer index from claiming that an unlisted workspace file does not
+/// exist. Sharing the ordered lane with refreshes prevents a query from
+/// landing between their clear and repopulate steps.
+pub fn Request::search_cached(
+  self : Request,
+  query : String,
+  generation : Int,
+  loaded : (Array[@pathx.Relative], Bool) -> @cmd.Cmd,
+  failed : () -> @cmd.Cmd,
+) -> @cmd.Cmd {
+  guard self.root is Some(root) && @resource.belongs_to(root, self.channel) else {
+    return failed()
+  }
+  let cache_key = self.cache_key(root)
+  let lane_key = self.lane_key(cache_key)
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      @interop.in_ordered_lane(lane_key, () => {
+        let reply = @interop.bridge_request(
+          self.channel,
+          @commands.fs_search_files,
+          {
+            path: root.path,
+            cache_key,
+            query,
+            max_results: MaxIndexedFiles,
+            generation,
+          },
+        ) catch {
+          _ => {
+            scheduler.add(failed())
+            return
+          }
+        }
+        if reply.cancelled {
+          return
+        }
+        let paths = reply.files.filter_map(path => {
+          if path.is_empty() {
+            None
+          } else {
+            Some(@pathx.Relative(path))
+          }
+        })
+        scheduler.add(loaded(paths, reply.limit_hit))
+      }) catch {
+        _ => scheduler.add(failed())
+      }
+    })
+  })
+}
+
+///|
 /// Retire the Host snapshot after this conversation/root stops owning an
 /// index. The same per-key lane orders the clear after any scan already in
 /// flight, so an A→B→A transition cannot let the retired A scan repopulate its

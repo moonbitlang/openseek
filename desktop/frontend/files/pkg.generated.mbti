@@ -23,6 +23,7 @@ type Request
 pub fn Request::Request(@interop.ChannelId, String, @common.Uri?) -> Self
 pub fn Request::retire(Self) -> @cmd.Cmd
 pub fn Request::run(Self, (Array[@pathx.Relative], Bool) -> @cmd.Cmd, () -> @cmd.Cmd) -> @cmd.Cmd
+pub fn Request::search_cached(Self, String, Int, (Array[@pathx.Relative], Bool) -> @cmd.Cmd, () -> @cmd.Cmd) -> @cmd.Cmd
 
 pub struct Search {
   candidates : Array[@pathx.Relative]

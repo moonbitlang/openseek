@@ -1504,6 +1504,28 @@ priv enum Msg {
     query~ : String,
     generation~ : Int
   )
+  // A truncated workspace snapshot answers common `@` queries immediately,
+  // then this delayed request ranks the same query against the Host's complete
+  // cached scan. Root and generation fence conversation moves and keystrokes.
+  FileCompletionDue(
+    owner~ : @interop.ConversationKey,
+    root~ : @common.Uri,
+    query~ : String,
+    generation~ : Int
+  )
+  FileCompletionLoaded(
+    owner~ : @interop.ConversationKey,
+    root~ : @common.Uri,
+    query~ : String,
+    generation~ : Int,
+    files~ : Array[@pathx.Relative]
+  )
+  FileCompletionFailed(
+    owner~ : @interop.ConversationKey,
+    root~ : @common.Uri,
+    query~ : String,
+    generation~ : Int
+  )
   // Move the completion menu's highlight by a delta (−1 up, +1 down), wrapping
   // at the ends. Ignored when the menu is closed.
   CompletionMove(Int)

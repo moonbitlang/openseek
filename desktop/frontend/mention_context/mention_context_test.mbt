@@ -86,6 +86,23 @@ test "parse round-trips what encode wrote" {
 }
 
 ///|
+test "attribute escaping preserves structural filename characters" {
+  let mentions : Array[@mention_context.MentionRef] = [
+    File(path="src/report\"old&amp;.mbt"),
+    Symbol(name="render<preview>", file="src/line\nbreak.mbt", line=7),
+  ]
+  let encoded = @mention_context.encode(mentions, "inspect these")
+  assert_true(
+    encoded.contains("<file path=\"src/report&quot;old&amp;amp;.mbt\"/>"),
+  )
+  assert_true(encoded.contains("file=\"src/line&#10;break.mbt\""))
+  guard @mention_context.parse(encoded) is Some(parsed) else {
+    fail("escaped attributes should remain a well-formed envelope")
+  }
+  @debug.assert_eq(parsed.mentions, mentions)
+}
+
+///|
 test "parse round-trips an annotation with empty bodies" {
   let mentions : Array[@mention_context.MentionRef] = [
     Annotation(

@@ -1836,6 +1836,19 @@ fn update_msg(
             dispatch(CompletionDue(owner~, query=trigger.query(), generation~))
           })
         Some(trigger) if trigger.marker() == "@" &&
+          model.file_panel.index is @fileeditor.IndexReady(truncated=true, ..) &&
+          root is Some(root) =>
+          completion_debounce.delayed(generation => {
+            dispatch(
+              FileCompletionDue(
+                owner~,
+                root~,
+                query=trigger.query(),
+                generation~,
+              ),
+            )
+          })
+        Some(trigger) if trigger.marker() == "@" &&
           (
             model.file_panel.index is @fileeditor.IndexEmpty ||
             model.file_panel.index is @fileeditor.IndexFailed
@@ -1861,6 +1874,20 @@ fn update_msg(
     }
     CompletionDue(owner~, query~, generation~) =>
       model.begin_completion_symbol_request(dispatch, owner, query, generation)
+    FileCompletionDue(owner~, root~, query~, generation~) =>
+      model.begin_file_completion_request(
+        dispatch, owner, root, query, generation,
+      )
+    FileCompletionLoaded(owner~, root~, query~, generation~, files~) =>
+      model.apply_file_completion_reply(
+        owner,
+        root,
+        query,
+        generation,
+        Some(files),
+      )
+    FileCompletionFailed(owner~, root~, query~, generation~) =>
+      model.apply_file_completion_reply(owner, root, query, generation, None)
     CompletionMove(delta) =>
       if model.completion is Some(menu) {
         (
@@ -3462,7 +3489,12 @@ fn update_msg(
         | @fileeditor.FileIndexFailed(..) => next.refresh_file_completion()
         _ => next
       }
-      (cmd, next)
+      let completion_cmd = match msg {
+        @fileeditor.FilesIndexed(..) =>
+          next.file_completion_query_after_index(dispatch)
+        _ => @cmd.none
+      }
+      (@cmd.batch([cmd, completion_cmd]), next)
     }
     Dock(msg) => {
       // The strip machine is pure; the cross-package effects of the
@@ -10432,6 +10464,86 @@ test "file index completion refreshes and accepts a workspace file" {
     accepted.active().mentions ==
     [{ ref_: File(path="src/main.mbt"), range: None }],
   )
+}
+
+///|
+test "truncated file completion settles from the complete Host cache" {
+  let dispatch = test_dispatch()
+  let owner : @interop.ConversationKey = {
+    channel: Local,
+    session: "desktop-test",
+  }
+  let base = test_model()
+  guard base.conversation_root(base.active()) is Some(root) else {
+    fail("test conversation should have a concrete root")
+  }
+  let file_emit = dispatch.map(msg => FileEditor(msg))
+  let (synced, _) = @fileeditor.sync(file_emit, base.file_panel, file_ctx(base))
+  let (_, loading) = @fileeditor.update(
+    file_emit,
+    @fileeditor.EnsureFileIndex,
+    synced,
+    file_ctx(base),
+  )
+  let (_, truncated) = @fileeditor.update(
+    file_emit,
+    @fileeditor.FilesIndexed(
+      owner~,
+      epoch=loading.request_epoch,
+      files=[@pathx.Relative("src/visible.mbt")],
+      truncated=true,
+    ),
+    loading,
+    file_ctx(base),
+  )
+  let indexed = { ..base, file_panel: truncated }
+  let (_, searching) = update(dispatch, TaskChanged("Inspect @hidden"), indexed)
+  guard searching.completion is Some(pending) else {
+    fail("truncated indexes should keep the file menu open")
+  }
+  assert_true(pending.kind is Files)
+  assert_true(pending.menu.loading())
+  assert_eq(pending.menu.length(), 0)
+  let (_, loaded) = update(
+    dispatch,
+    FileCompletionLoaded(
+      owner~,
+      root~,
+      query="hidden",
+      generation=searching.completion_debounce.generation(),
+      files=[@pathx.Relative("other/hidden.mbt")],
+    ),
+    searching,
+  )
+  guard loaded.completion is Some(menu) else {
+    fail("the complete cache result should settle file completion")
+  }
+  assert_false(menu.menu.loading())
+  guard menu.menu.get(0) is Some(file) else {
+    fail("a file outside the truncated snapshot should be selectable")
+  }
+  assert_eq(file.path, Some("other/hidden.mbt"))
+
+  let (_, local_searching) = update(
+    dispatch,
+    TaskChanged("Inspect @visible"),
+    indexed,
+  )
+  let (_, fallback) = update(
+    dispatch,
+    FileCompletionFailed(
+      owner~,
+      root~,
+      query="visible",
+      generation=local_searching.completion_debounce.generation(),
+    ),
+    local_searching,
+  )
+  guard fallback.completion is Some(local_menu) else {
+    fail("a failed cache query should retain bounded local matches")
+  }
+  assert_false(local_menu.menu.loading())
+  assert_eq(local_menu.menu.length(), 1)
 }
 
 ///|
