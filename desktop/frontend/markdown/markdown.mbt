@@ -287,9 +287,25 @@ fn MarkdownRender::push_inline(
     // from destinations that pass the same safety filter as links.
     Image(node) => {
       let alt = plain_text(node.v.text)
-      match self.link_destination(node.v) {
-        Some(url) => out.push(@html.img(src=url, alt~))
-        None => out.push(@html.text(alt))
+      if self.local_image_destination(node.v) is Some(path) {
+        // Local paths must not resolve against the page's `proton://app/`
+        // origin. Leave `src` empty and let the transcript's viewport observer
+        // read bounded bytes from the owning host only when this node is seen.
+        out.push(
+          @html.img(
+            class="transcript-image pending",
+            alt~,
+            title=path,
+            loading="lazy",
+            decoding="async",
+            attrs=@html.Attrs::build().data_set("transcript-image", path),
+          ),
+        )
+      } else {
+        match self.link_destination(node.v) {
+          Some(url) => out.push(@html.img(src=url, alt~, loading="lazy"))
+          None => out.push(@html.text(alt))
+        }
       }
     }
     // Raw HTML is shown as text, not injected; see the module comment.
@@ -517,6 +533,73 @@ fn MarkdownRender::file_destination(
   } else {
     None
   }
+}
+
+///|
+/// A local raster image destination. Explicit `file://` URIs use the same
+/// local-host rules as file links. Plain URI-reference paths are percent
+/// decoded and may be absolute or relative (including `..`); their extension
+/// is only a rendering hint because the host later verifies the byte signature.
+fn MarkdownRender::local_image_destination(
+  self : MarkdownRender,
+  link : @cmark.InlineLink,
+) -> String? {
+  guard self.raw_link_destination(link) is Some(destination) else {
+    return None
+  }
+  if FileReference(destination).local_file_uri_path() is Some(path) {
+    return if LocalImagePath(path).has_raster_extension() {
+      Some(path)
+    } else {
+      None
+    }
+  }
+  if @cmark.InlineLink::is_unsafe(destination) ||
+    destination.contains("://") ||
+    destination.has_prefix("//") ||
+    destination.contains_any(chars="?#") {
+    return None
+  }
+  // `Uri::parse` requires a scheme in strict mode and promotes a missing one
+  // to `file:` otherwise. A private scheme lets it percent-decode the path
+  // without changing whether that path was absolute or relative.
+  let uri = @common.Uri::parse("openseek-local:" + destination, strict=true) catch {
+    _ => return None
+  }
+  guard uri.scheme == "openseek-local" &&
+    uri.authority.is_empty() &&
+    uri.query.is_empty() &&
+    uri.fragment.is_empty() else {
+    return None
+  }
+  if LocalImagePath(uri.path).has_raster_extension() {
+    Some(uri.path)
+  } else {
+    None
+  }
+}
+
+///|
+/// A model-authored path that is a candidate for host-backed image loading.
+priv struct LocalImagePath(String)
+
+///|
+fn LocalImagePath::has_raster_extension(self : LocalImagePath) -> Bool {
+  guard !self.0.is_blank() &&
+    !self.0.contains_any(chars="\t\r\n") &&
+    !self.0.has_suffix("/") else {
+    return false
+  }
+  let base = match self.0.rev_split_once("/") {
+    Some((_, base)) => base.to_owned()
+    None => self.0
+  }
+  guard file_extension(base) is Some(ext) else { return false }
+  ext.equal_ignore_ascii_case("png") ||
+  ext.equal_ignore_ascii_case("jpg") ||
+  ext.equal_ignore_ascii_case("jpeg") ||
+  ext.equal_ignore_ascii_case("gif") ||
+  ext.equal_ignore_ascii_case("webp")
 }
 
 ///|

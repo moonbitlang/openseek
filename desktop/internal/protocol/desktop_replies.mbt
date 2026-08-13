@@ -712,6 +712,7 @@ pub(all) struct SearchFilesReply {
 pub(all) enum ReadFileReply {
   Binary
   Oversized
+  BinaryContent(data_base64~ : String, media_type~ : String)
   Content(content~ : String, absolute~ : String, sig~ : String)
 } derive(Debug, Eq)
 
@@ -720,6 +721,12 @@ pub impl ToJson for ReadFileReply with fn to_json(self) {
   match self {
     Binary => { "kind": "binary" }
     Oversized => { "kind": "oversized" }
+    BinaryContent(data_base64~, media_type~) =>
+      {
+        "kind": "binary_content",
+        "data_base64": data_base64,
+        "media_type": media_type,
+      }
     Content(content~, absolute~, sig~) =>
       {
         "kind": "content",
@@ -738,6 +745,13 @@ pub impl FromJson for ReadFileReply with fn from_json(json, path) {
   match kind_ {
     "binary" => Binary
     "oversized" => Oversized
+    "binary_content" => {
+      guard fields.get("data_base64") is Some(String(data_base64)) &&
+        fields.get("media_type") is Some(String(media_type)) else {
+        raise JsonDecodeError((path, "malformed binary file content reply"))
+      }
+      BinaryContent(data_base64~, media_type~)
+    }
     "content" => {
       guard fields.get("content") is Some(String(content)) &&
         fields.get("absolute") is Some(String(absolute)) &&

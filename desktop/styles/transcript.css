@@ -477,6 +477,13 @@
 .msg-content.markdown img {
   max-width: 100%;
 }
+.msg-content.markdown .transcript-image.pending {
+  min-width: 1px;
+  min-height: 1px;
+}
+.msg-content.markdown .transcript-image.unavailable {
+  color: var(--color-text-muted);
+}
 .msg-content.markdown .footnote {
   margin: 0.45em 0;
   color: var(--color-text-muted);

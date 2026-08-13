@@ -6,6 +6,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
   @transcript_component.Input(
     focused=self.focused,
     active_session=self.active_session,
+    root=self.conversation_root(conversation),
     submission_generation=self.submission_sequence,
     items=conversation.visible_transcript_rows(),
     streaming_response=conversation.streaming_response,

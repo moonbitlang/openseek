@@ -112,7 +112,7 @@ fn read_file(
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.fs_read_file,
-        { path: target.path },
+        { path: target.path, root: None },
       ) catch {
         error => {
           scheduler.add(
@@ -208,6 +208,9 @@ fn FileContent::from_reply(
   match reply {
     @protocol.Binary => Some(Binary)
     @protocol.Oversized => Some(Oversized)
+    // Supported raster files carry display bytes for transcript rendering.
+    // The text editor still presents them through its ordinary binary notice.
+    @protocol.BinaryContent(..) => Some(Binary)
     @protocol.Content(content~, absolute~, sig~) => {
       // Bind the backend resource path to the device that produced the reply.
       guard @resource.of_path(channel, absolute) is Some(absolute) else {
@@ -235,6 +238,7 @@ async fn read_file_snapshot(
   let target = @resource.join_relative(root, path)
   let reply = @interop.bridge_request(owner.channel, @commands.fs_read_file, {
     path: target.path,
+    root: None,
   }) catch {
     _ => return None
   }

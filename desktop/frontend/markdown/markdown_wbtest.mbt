@@ -78,6 +78,31 @@ test "raw html stays text instead of markup" {
 
 ///|
 #warnings("-alert_unstable")
+test "local raster images wait for the transcript host loader" {
+  let rendered = @html.div(
+    markdown_nodes(
+      "![relative](../../Downloads/meetup.png) ![escaped](My%20Plot.png) ![absolute](</Users/me/My Image.JPG>) ![file](file:///Users/me/My%20Image.webp) ![web](https://example.com/image.png) ![svg](./diagram.svg)",
+    ),
+  )
+  let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
+  assert_true(
+    markup.contains("data-transcript-image=\"../../Downloads/meetup.png\""),
+  )
+  assert_true(markup.contains("data-transcript-image=\"My Plot.png\""))
+  assert_true(
+    markup.contains("data-transcript-image=\"/Users/me/My Image.JPG\""),
+  )
+  assert_true(
+    markup.contains("data-transcript-image=\"/Users/me/My Image.webp\""),
+  )
+  assert_true(markup.contains("src=\"https://example.com/image.png\""))
+  // SVG and web URLs stay under the renderer's existing destination policy;
+  // only byte-signature-checked raster files enter the host read path.
+  assert_true(markup.contains("src=\"./diagram.svg\""))
+}
+
+///|
+#warnings("-alert_unstable")
 test "markdown links do not navigate the app frame" {
   let node = link_node("https://example.com", [@html.text("example")])
   let expected =

@@ -14,6 +14,9 @@ pub(all) struct VisibleRow {
 struct Input {
   focused : @interop.ChannelId
   active_session : String
+  // The concrete project or worktree root sent alongside relative Markdown
+  // image paths so the owning host, rather than the frontend, resolves them.
+  root : @common.Uri?
   submission_generation : Int
   items : Array[VisibleRow]
   streaming_response : String
@@ -25,6 +28,7 @@ struct Input {
 pub fn Input::Input(
   focused~ : @interop.ChannelId,
   active_session~ : String,
+  root~ : @common.Uri?,
   submission_generation~ : Int,
   items~ : Array[VisibleRow],
   streaming_response~ : String,
@@ -34,6 +38,7 @@ pub fn Input::Input(
   {
     focused,
     active_session,
+    root,
     submission_generation,
     items,
     streaming_response,
@@ -56,6 +61,8 @@ priv struct Model {
   overview : @transcript_overview.State
   focused : @interop.ChannelId
   active_session : String
+  image_owner : ImageOwner
+  images : ImageCache
   submission_generation : Int
   mounted : Bool
 } derive(Eq)
@@ -65,6 +72,8 @@ priv enum Msg {
   Pinned(Bool)
   JumpToLatest
   ContentRendered(mounted~ : Bool)
+  ImageRequested(String)
+  ImageResolved(ImageOwner, String, ImageReadResult)
   Overview(@transcript_overview.Msg)
 }
 
@@ -75,6 +84,15 @@ fn Model::update(
   msg : Msg,
   emit : @cmd.Emit[Msg],
 ) -> (Model, @cmd.Cmd) {
+  // A conversation switch can reach the component through input before its
+  // DOM mutation notification. Never project the previous owner's data URLs
+  // into that intermediate render.
+  let image_owner = input.image_owner()
+  let self = if self.image_owner == image_owner {
+    self
+  } else {
+    { ..self, image_owner, images: ImageCache::empty() }
+  }
   match msg {
     Pinned(pinned) => ({ ..self, pinned, }, @cmd.none)
     JumpToLatest =>
@@ -110,6 +128,8 @@ fn Model::update(
         },
         focused: input.focused,
         active_session: input.active_session,
+        image_owner,
+        images: self.images,
         submission_generation: input.submission_generation,
         mounted,
       }
@@ -120,7 +140,17 @@ fn Model::update(
       commands.push(
         report_visible_turn_after_render(emit, skip_unchanged=!navigated),
       )
+      commands.push(self.images.apply_after_render())
       (next, @cmd.batch(commands))
+    }
+    ImageRequested(path) => {
+      let (images, command) = self.images.begin_read(image_owner, path, emit)
+      ({ ..self, images, }, @cmd.batch([command, images.apply_after_render()]))
+    }
+    ImageResolved(owner, path, result) => {
+      guard owner == image_owner else { return (self, @cmd.none) }
+      let images = self.images.settle(path, result)
+      ({ ..self, images, }, images.apply_after_render())
     }
     Overview(msg) => {
       let previous_active = self.overview.active
@@ -163,6 +193,8 @@ pub fn component(
           overview: @transcript_overview.State::empty(),
           focused: input.focused,
           active_session: input.active_session,
+          image_owner: input.image_owner(),
+          images: ImageCache::empty(),
           submission_generation: input.submission_generation,
           mounted: false,
         },
@@ -371,9 +403,10 @@ fn transcript_sub_loader(
         }
       }
       target.add_event_listener_with_options("scroll", listener, capture=true)
-      let observers = TranscriptObservers::install(mounted => {
-        scheduler.add(emit(ContentRendered(mounted~)))
-      })
+      let observers = TranscriptObservers::install(
+        mounted => scheduler.add(emit(ContentRendered(mounted~))),
+        path => scheduler.add(emit(ImageRequested(path))),
+      )
       Some({
         unload: _ => {
           target.remove_event_listener_with_options(
@@ -397,18 +430,29 @@ fn transcript_sub_loader(
 /// Observe the transcript through Rabbita's typed DOM bindings. The document
 /// observer only follows mount/replacement; content and identity changes are
 /// observed directly on the current transcript, so unrelated page mutations
-/// cannot feed back into component updates.
+/// cannot feed back into component updates. The image observer scans only the
+/// mounted transcript and requests a bounded host read once an image is seen.
 priv struct TranscriptObservers {
   document : @dom.MutationObserver
   content : @dom.MutationObserver
   resize : @dom.ResizeObserver
+  images : TranscriptImageObserver
 }
 
 ///|
-fn TranscriptObservers::install(on_change : (Bool) -> Unit) -> Self {
+fn TranscriptObservers::install(
+  on_change : (Bool) -> Unit,
+  on_image : (String) -> Unit,
+) -> Self {
   let mut current : @dom.Element? = None
   let resize = @dom.ResizeObserver::new((_, _) => on_change(true))
-  let content = @dom.MutationObserver::new((_, _) => on_change(true))
+  let images = TranscriptImageObserver::install(on_image)
+  let content = @dom.MutationObserver::new((_, _) => {
+    on_change(true)
+    if current is Some(element) {
+      images.scan(element)
+    }
+  })
   let attach = () => {
     let next = @dom.document().get_element_by_id("transcript").to_option()
     let changed = match (current, next) {
@@ -420,6 +464,7 @@ fn TranscriptObservers::install(on_change : (Bool) -> Unit) -> Self {
     guard changed else { return }
     content.disconnect()
     resize.disconnect()
+    images.disconnect()
     current = next
     match next {
       Some(element) => {
@@ -430,10 +475,12 @@ fn TranscriptObservers::install(on_change : (Bool) -> Unit) -> Self {
           character_data=true,
           subtree=true,
           attribute_filter=[
-            "data-transcript-channel", "data-transcript-session", "data-transcript-submission",
+            "data-transcript-channel", "data-transcript-session", "data-transcript-root",
+            "data-transcript-submission",
           ],
         )
         resize.observe(element)
+        images.scan(element)
       }
       None => ()
     }
@@ -445,7 +492,7 @@ fn TranscriptObservers::install(on_change : (Bool) -> Unit) -> Self {
   }
   // The component may already be mounted when its subscription starts.
   attach()
-  { document, content, resize }
+  { document, content, resize, images }
 }
 
 ///|
@@ -453,6 +500,7 @@ fn TranscriptObservers::disconnect(self : Self) -> Unit {
   self.document.disconnect()
   self.content.disconnect()
   self.resize.disconnect()
+  self.images.disconnect()
 }
 
 ///|
@@ -460,6 +508,7 @@ test "local pinned transitions are pure" {
   let input = Input(
     focused=Local,
     active_session="desktop-test",
+    root=None,
     submission_generation=0,
     items=[],
     streaming_response="",
@@ -471,6 +520,8 @@ test "local pinned transitions are pure" {
     overview: @transcript_overview.State::empty(),
     focused: Local,
     active_session: "desktop-test",
+    image_owner: input.image_owner(),
+    images: ImageCache::empty(),
     submission_generation: 0,
     mounted: true,
   }
@@ -517,6 +568,7 @@ test "an overview click unpins and highlights inside the component" {
   let input = Input(
     focused=Local,
     active_session="desktop-test",
+    root=None,
     submission_generation=0,
     items=[],
     streaming_response="",
@@ -528,6 +580,8 @@ test "an overview click unpins and highlights inside the component" {
     overview: @transcript_overview.State::empty(),
     focused: Local,
     active_session: "desktop-test",
+    image_owner: input.image_owner(),
+    images: ImageCache::empty(),
     submission_generation: 0,
     mounted: true,
   }
@@ -542,6 +596,7 @@ test "a conversation switch clears component-owned overview state" {
   let input = Input(
     focused=Local,
     active_session="desktop-test",
+    root=None,
     submission_generation=0,
     items=[],
     streaming_response="",
@@ -560,6 +615,8 @@ test "a conversation switch clears component-owned overview state" {
     },
     focused: Local,
     active_session: "desktop-test",
+    image_owner: input.image_owner(),
+    images: ImageCache::empty(),
     submission_generation: 0,
     mounted: true,
   }

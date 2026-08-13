@@ -69,6 +69,30 @@ test "Git original-file replies round-trip through their manual codec" {
 }
 
 ///|
+test "file reads use one absolute path and may return image bytes" {
+  let request : @protocol.ReadFilePayload = @json.from_json({
+    "path": "/work/readme.md",
+  })
+  assert_eq(request.path, "/work/readme.md")
+  assert_eq(request.root, None)
+  @debug.assert_eq(request.to_json(), { "path": "/work/readme.md" })
+  let relative : @protocol.ReadFilePayload = {
+    path: "../image.png",
+    root: Some("/work/project"),
+  }
+  @debug.assert_eq(relative.to_json(), {
+    "path": "../image.png",
+    "root": "/work/project",
+  })
+  let reply = @protocol.BinaryContent(
+    data_base64="iVBORw0KGgo=",
+    media_type="image/png",
+  )
+  let decoded : @protocol.ReadFileReply = @json.from_json(reply.to_json())
+  @debug.assert_eq(decoded, reply)
+}
+
+///|
 test "open-path replies distinguish system, editor, and directory targets" {
   let legacy : @protocol.OpenPathReply = @json.from_json({ "opened": true })
   @debug.assert_eq(legacy, {

@@ -1,8 +1,9 @@
 // The wire types of the host ops: payloads the client sends with each
 // method and the replies it gets back, per docs/remote-protocol.md.
 // Engine/session/workspace payloads live with the API dispatcher; these are
-// the host-side methods' shapes. Filesystem operations name absolute targets.
-// LSP operations name one absolute root and paths relative to that root.
+// the host-side methods' shapes. Filesystem operations name absolute targets,
+// except read_file may pair a relative path with an explicit absolute root.
+// LSP operations likewise name one absolute root and relative paths.
 
 ///|
 type InstallSkillPayload = @protocol.InstallSkillPayload
@@ -203,9 +204,9 @@ fn WirePath::parse(path : String) -> WirePath raise HostError {
 }
 
 ///|
-/// Resolve the LSP protocol's relative `path` against its explicit `root`.
-/// Relative components retain their ordinary path meaning; this is address
-/// construction, not a workspace-containment permission check.
+/// Resolve a protocol-relative `path` against its explicit `root`. Relative
+/// components retain their ordinary path meaning; this constructs an address
+/// and deliberately does not enforce workspace containment.
 fn WirePath::resolve(
   self : WirePath,
   path : String,

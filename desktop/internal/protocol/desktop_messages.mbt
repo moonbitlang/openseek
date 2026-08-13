@@ -242,7 +242,10 @@ pub(all) struct ClearFileSearchCachePayload {
 
 ///|
 pub(all) struct ReadFilePayload {
+  // Without `root`, `path` is absolute. With `root`, `root` is absolute and
+  // `path` is relative to it; the host validates that pair before opening.
   path : String
+  root : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|

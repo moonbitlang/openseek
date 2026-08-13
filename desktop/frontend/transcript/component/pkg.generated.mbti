@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/transcript",
@@ -22,7 +23,7 @@ pub(all) struct Actions {
 }
 
 type Input derive(Eq)
-pub fn Input::Input(focused~ : @interop.ChannelId, active_session~ : String, submission_generation~ : Int, items~ : Array[VisibleRow], streaming_response~ : String, streaming_identity~ : String, subruns~ : Array[@transcript.SubrunLane]) -> Self
+pub fn Input::Input(focused~ : @interop.ChannelId, active_session~ : String, root~ : @common.Uri?, submission_generation~ : Int, items~ : Array[VisibleRow], streaming_response~ : String, streaming_identity~ : String, subruns~ : Array[@transcript.SubrunLane]) -> Self
 
 pub(all) struct VisibleRow {
   item : @transcript.TranscriptItem

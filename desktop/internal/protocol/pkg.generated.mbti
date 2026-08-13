@@ -552,11 +552,13 @@ pub(all) struct ReadDirReply {
 
 pub(all) struct ReadFilePayload {
   path : String
+  root : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) enum ReadFileReply {
   Binary
   Oversized
+  BinaryContent(data_base64~ : String, media_type~ : String)
   Content(content~ : String, absolute~ : String, sig~ : String)
 } derive(Eq, @debug.Debug)
 pub impl ToJson for ReadFileReply

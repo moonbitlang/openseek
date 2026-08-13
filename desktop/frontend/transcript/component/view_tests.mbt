@@ -31,9 +31,17 @@ test "capitalize is Unicode-safe on a non-BMP first char" {
 ///|
 #warnings("-alert_unstable")
 test "transcript markup exposes conversation identity" {
+  guard @resource.of_path(
+      @interop.ChannelId::Remote("relay-a"),
+      "/work/project",
+    )
+    is Some(root) else {
+    fail("expected a remote transcript root")
+  }
   let input = Input(
     focused=@interop.ChannelId::Remote("relay-a"),
     active_session="same-markup-chat",
+    root=Some(root),
     submission_generation=7,
     items=[],
     streaming_response="",
@@ -52,6 +60,11 @@ test "transcript markup exposes conversation identity" {
   let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
   assert_true(markup.contains("data-transcript-channel=\"remote.relay-a\""))
   assert_true(markup.contains("data-transcript-session=\"same-markup-chat\""))
+  assert_true(
+    markup.contains(
+      "data-transcript-root=\"openseek://remote.relay-a/work/project\"",
+    ),
+  )
   assert_true(markup.contains("data-transcript-submission=\"7\""))
 }
 
@@ -73,6 +86,7 @@ test "transcript stream children use stable typed keys in display order" {
   let input = Input(
     focused=@interop.ChannelId::Local,
     active_session="desktop-test",
+    root=None,
     submission_generation=1,
     items=[
       {
@@ -135,6 +149,7 @@ test "transcript stream section key scopes equal session ids by channel" {
   let local_input = Input(
     focused=@interop.ChannelId::Local,
     active_session="desktop-test",
+    root=None,
     submission_generation=0,
     items=[],
     streaming_response="",

@@ -37,7 +37,11 @@ async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
 
 ///|
 async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
-  let file = WirePath::parse(payload.path).absolute
+  let file = if payload.root is Some(root) {
+    WirePath::parse(root).resolve(payload.path)
+  } else {
+    WirePath::parse(payload.path).absolute
+  }
   let native = file.to_string()
   let source = @fs.open(native, mode=ReadOnly) catch {
     error if @async.is_being_cancelled() => raise error
@@ -59,11 +63,73 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
     error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to read file: \{error}")
   }
+  // Return supported raster files as bounded display bytes. The extension and
+  // model-provided MIME are not trusted; a signature decides whether bytes may
+  // enter a data URL. The same one-megabyte cap above bounds bridge pressure.
+  let bytes = data.binary()
+  if bytes.image_media_type() is Some(media_type) {
+    return BinaryContent(data_base64=@base64.encode(bytes), media_type~)
+  }
   // `text()` raises on invalid UTF-8 — treat that as a binary file the
   // read-only viewer cannot render.
   let content = data.text() catch { _ => return Binary }
   let absolute = file.resource_path()
   Content(content~, absolute~, sig="\{seconds}:\{nanos}")
+}
+
+///|
+/// MIME for the small raster formats the transcript can render safely from a
+/// `data:` URL. Signatures, rather than filename extensions, decide whether
+/// bytes are allowed into that URL.
+fn Bytes::image_media_type(self : Bytes) -> String? {
+  match self {
+    [b'\x89', b'P', b'N', b'G', b'\r', b'\n', b'\x1a', b'\n', ..] =>
+      Some("image/png")
+    [b'\xff', b'\xd8', b'\xff', ..] => Some("image/jpeg")
+    [b'G', b'I', b'F', b'8', b'7', b'a', ..]
+    | [b'G', b'I', b'F', b'8', b'9', b'a', ..] => Some("image/gif")
+    [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] =>
+      Some("image/webp")
+    _ => None
+  }
+}
+
+///|
+async test "binary file reads expose only recognized raster signatures" {
+  let dir = "_build/host-read-file-image-test"
+  if @fs.exists(dir) {
+    @fs.rmdir(dir, recursive=true)
+  }
+  @fs.mkdir(dir, recursive=true)
+  let image = "\{dir}/image.png"
+  @fs.write_file(image, b"\x89PNG\r\n\x1a\nsmall", create_mode=CreateOrTruncate)
+  let absolute = @pathx.Path(@fs.realpath(image))
+    .to_absolute()
+    .unwrap()
+    .to_uri_path()
+    .unwrap()
+  assert_eq(
+    read_file_op({ path: absolute, root: None }),
+    BinaryContent(data_base64="iVBORw0KGgpzbWFsbA==", media_type="image/png"),
+  )
+  let root = @pathx.Path(@fs.realpath(dir))
+    .to_absolute()
+    .unwrap()
+    .to_uri_path()
+    .unwrap()
+  assert_eq(
+    read_file_op({ path: "image.png", root: Some(root) }),
+    BinaryContent(data_base64="iVBORw0KGgpzbWFsbA==", media_type="image/png"),
+  )
+  let disguised = "\{dir}/not-an-image.png"
+  @fs.write_file(disguised, b"\xffnot an image", create_mode=CreateOrTruncate)
+  let disguised_absolute = @pathx.Path(@fs.realpath(disguised))
+    .to_absolute()
+    .unwrap()
+    .to_uri_path()
+    .unwrap()
+  assert_eq(read_file_op({ path: disguised_absolute, root: None }), Binary)
+  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
