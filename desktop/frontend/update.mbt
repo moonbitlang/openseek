@@ -14576,10 +14576,11 @@ test "update is pure: a resolved transcript position opens its owning file" {
   // Routing is asynchronous: a path that later goes to the system must not
   // open an empty panel while the host is still classifying it.
   assert_false(latest_pending.right_panel_open)
-  // Closing the right panel is a newer user decision than the pending host
-  // lookup;
-  // its delayed reply cannot reopen the panel.
-  let (_, panel_closed) = update(dispatch, ToggleRightPanel, latest_pending)
+  // The panel may already be showing another document while this host lookup
+  // is pending. Closing that open panel is a newer user decision; its delayed
+  // reply cannot reopen the panel.
+  let panel_open_pending = { ..latest_pending, right_panel_open: true }
+  let (_, panel_closed) = update(dispatch, ToggleRightPanel, panel_open_pending)
   assert_false(panel_closed.right_panel_open)
   assert_eq(panel_closed.file_panel.file_link_generation, 3)
   let (_, after_closed_reply) = update(
