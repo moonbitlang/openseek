@@ -17,6 +17,7 @@ import {
   "moonbitlang/async/process",
   "moonbitlang/core/debug",
   "moonbitlang/core/env",
+  "tonyfettes/platform",
   "tonyfettes/xlog",
 }
 

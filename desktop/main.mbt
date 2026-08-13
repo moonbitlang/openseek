@@ -63,11 +63,17 @@ fn main {
     // entry serves from. The window is bridge-only: it makes no HTTP requests
     // at all. Remote browsers use the same method catalog over the relay
     // WebSocket instead (docs/remote-protocol.md).
-    let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760)
-      .debug_level(1)
-      // Proton keeps its standard App/Edit/Window menus around custom menus,
-      // so adding Developer does not remove native editing shortcuts.
-      .menu(
+    let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760).debug_level(
+      1,
+    )
+    // Proton keeps its standard App/Edit/Window menus around custom menus,
+    // so adding Developer does not remove native editing shortcuts. The
+    // Windows engine has no native app menus and fails the run on any menu
+    // bar, so the Developer menu stays macOS/Linux-only.
+    let app = if @platform.win32 || @platform.win64 {
+      app
+    } else {
+      app.menu(
         @proton.MenuBar::new(menus=[
           @proton.Menu::new("Developer", items=[
             @proton.MenuItem::command(
@@ -77,6 +83,8 @@ fn main {
           ]),
         ]),
       )
+    }
+    let app = app
       // Both command extensions are deliberately exposed to the configured
       // entry page; registration alone does not grant renderer access.
       .expose(@extension.openseek_extension(state, bridge, views))
