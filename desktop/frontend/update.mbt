@@ -3491,7 +3491,7 @@ fn update_msg(
         _ => next
       }
       let completion_cmd = match msg {
-        @fileeditor.FilesIndexed(..) =>
+        @fileeditor.FilesIndexed(..) | @fileeditor.FileIndexFailed(..) =>
           next.file_completion_query_after_index(dispatch)
         _ => @cmd.none
       }

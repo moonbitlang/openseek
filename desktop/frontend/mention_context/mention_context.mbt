@@ -16,7 +16,7 @@
 //
 //   look at this
 //
-//   <user_mentions attributes="xml">
+//   <user_mentions>
 //   <skill name="review-pr"/>
 //   <file path="src/main.mbt"/>
 //   <symbol name="parse_hover" file="a.mbt" line="5"/>
@@ -218,7 +218,7 @@ pub fn encode(mentions : Array[MentionRef], task : String) -> String {
   if !task.is_empty() {
     parts <+ "\{task}\n\n"
   }
-  parts <+ "<user_mentions attributes=\"xml\">\n"
+  parts <+ "<user_mentions>\n"
   for mention in mentions {
     write_mention(parts, mention)
   }
@@ -282,9 +282,8 @@ fn write_body(parts : StringBuilder, body : String) -> Unit {
 /// message). The structure is validated strictly — the closing tag must be
 /// the last line (one trailing blank tolerated), an opener must precede it,
 /// and everything between must parse as mention elements — so a prompt that
-/// merely mentions the tags is not misread as chips. Only the current
-/// `attributes="xml"` opener is recognized; an unmarked envelope is ordinary
-/// message text rather than a second wire format.
+/// merely mentions the tags is not misread as chips. Attributes always use
+/// `MentionAttribute` encoding; there is only one wire format.
 pub fn parse(content : String) -> MentionMessage? {
   let lines = [
     for raw in content.split("\n") => raw.trim_end(chars="\r").to_owned()
@@ -295,7 +294,7 @@ pub fn parse(content : String) -> MentionMessage? {
   // matched from the end inward, as the closing tag was.
   let mut open_index = None
   for index, line in head {
-    if line == "<user_mentions attributes=\"xml\">" {
+    if line == "<user_mentions>" {
       open_index = Some(index)
     }
   }

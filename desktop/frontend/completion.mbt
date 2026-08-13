@@ -283,9 +283,10 @@ fn Model::apply_file_completion_reply(
 }
 
 ///|
-/// Continue a live `@` query after the panel's initial index request reveals
-/// that its local snapshot was truncated. The current debounce generation is
-/// reused because no keystroke occurred while the index was loading.
+/// Continue a live `@` query after an index event leaves the panel with a
+/// truncated local snapshot. This covers both initial success and a failed
+/// background refresh that retains its previous snapshot. The current
+/// debounce generation is reused because no keystroke occurred meanwhile.
 fn Model::file_completion_query_after_index(
   self : Model,
   dispatch : @cmd.Emit[Msg],
@@ -711,7 +712,7 @@ test "compose_prompt folds the chips into a parseable envelope after the text" {
     content=(
       #|look at this
       #|
-      #|<user_mentions attributes="xml">
+      #|<user_mentions>
       #|<symbol name="parse_hover" file="a.mbt" line="5"/>
       #|<skill name="review-pr"/>
       #|</user_mentions>

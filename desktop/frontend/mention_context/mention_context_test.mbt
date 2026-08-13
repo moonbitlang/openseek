@@ -28,7 +28,7 @@ test "encode lays out the task first, then the tagged mention block" {
     content=(
       #|look at this
       #|
-      #|<user_mentions attributes="xml">
+      #|<user_mentions>
       #|<skill name="review-pr"/>
       #|<file path="src/main.mbt"/>
       #|<symbol name="parse_hover" file="src/hover.mbt" line="5"/>
@@ -53,7 +53,7 @@ test "encode of chips alone omits the task block" {
   inspect(
     @mention_context.encode([Skill(name="review-pr")], "  "),
     content=(
-      #|<user_mentions attributes="xml">
+      #|<user_mentions>
       #|<skill name="review-pr"/>
       #|</user_mentions>
     ),
@@ -103,15 +103,6 @@ test "attribute escaping preserves structural filename characters" {
 }
 
 ///|
-test "parse rejects an unmarked mention envelope" {
-  let content =
-    #|<user_mentions>
-    #|<file path="src/literal&amp;&#10;.mbt"/>
-    #|</user_mentions>
-  assert_true(@mention_context.parse(content) is None)
-}
-
-///|
 test "parse round-trips an annotation with empty bodies" {
   let mentions : Array[@mention_context.MentionRef] = [
     Annotation(
@@ -156,7 +147,7 @@ test "original-revision annotation side survives the prompt round trip" {
 
 ///|
 test "parse tolerates a trailing newline and CRLF line ends" {
-  let content = "task\r\n\r\n<user_mentions attributes=\"xml\">\r\n<skill name=\"review-pr\"/>\r\n</user_mentions>\r\n"
+  let content = "task\r\n\r\n<user_mentions>\r\n<skill name=\"review-pr\"/>\r\n</user_mentions>\r\n"
   guard @mention_context.parse(content) is Some(parsed) else {
     fail("expected envelope")
   }
@@ -167,7 +158,7 @@ test "parse tolerates a trailing newline and CRLF line ends" {
 ///|
 test "parse accepts a symbol carrying a body of truncated source" {
   let content =
-    #|<user_mentions attributes="xml">
+    #|<user_mentions>
     #|<symbol name="parse_hover" file="src/hover.mbt" line="5">
     #|fn parse_hover() {
     #|  ...
@@ -194,29 +185,24 @@ test "parse rejects everything that is not a well-formed envelope" {
   assert_true(@mention_context.parse("task\n</user_mentions>") is None)
   // An empty mention block.
   assert_true(
-    @mention_context.parse(
-      "<user_mentions attributes=\"xml\">\n</user_mentions>",
-    )
-    is None,
+    @mention_context.parse("<user_mentions>\n</user_mentions>") is None,
   )
   // A line that is not a mention element.
   assert_true(
-    @mention_context.parse(
-      "<user_mentions attributes=\"xml\">\nnot a mention\n</user_mentions>",
-    )
+    @mention_context.parse("<user_mentions>\nnot a mention\n</user_mentions>")
     is None,
   )
   // A skill with no name.
   assert_true(
     @mention_context.parse(
-      "<user_mentions attributes=\"xml\">\n<skill name=\"\"/>\n</user_mentions>",
+      "<user_mentions>\n<skill name=\"\"/>\n</user_mentions>",
     )
     is None,
   )
   // A symbol with a body but no closing tag.
   assert_true(
     @mention_context.parse(
-      "<user_mentions attributes=\"xml\">\n<symbol name=\"x\">\nbody\n</user_mentions>",
+      "<user_mentions>\n<symbol name=\"x\">\nbody\n</user_mentions>",
     )
     is None,
   )
@@ -224,7 +210,7 @@ test "parse rejects everything that is not a well-formed envelope" {
   assert_true(
     @mention_context.parse(
       (
-        #|<user_mentions attributes="xml">
+        #|<user_mentions>
         #|<annotation file="a.mbt" lines="1-2">
         #|<quote>
         #|q
@@ -241,15 +227,12 @@ test "parse rejects everything that is not a well-formed envelope" {
 test "parse takes the last opener when the task text spells one" {
   let content = @mention_context.encode(
     [Skill(name="review-pr")],
-    "quoting the marker:\n<user_mentions attributes=\"xml\">",
+    "quoting the marker:\n<user_mentions>",
   )
   guard @mention_context.parse(content) is Some(parsed) else {
     fail("expected envelope")
   }
   // The quoted opener stays in the task; only the real block parses as chips.
-  assert_eq(
-    parsed.task,
-    "quoting the marker:\n<user_mentions attributes=\"xml\">",
-  )
+  assert_eq(parsed.task, "quoting the marker:\n<user_mentions>")
   @debug.assert_eq(parsed.mentions, [Skill(name="review-pr")])
 }
