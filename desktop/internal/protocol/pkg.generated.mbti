@@ -870,7 +870,7 @@ pub(all) struct WorkspaceSettingsGetPayload {
 pub(all) struct WorkspaceSettingsPayload {
   workspace : String
   worktree_mode : Bool
-  checkout_submodules : Bool?
+  checkout_submodules : Bool
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct WorkspaceSettingsSetPayload {

@@ -266,6 +266,7 @@ test "desktop notifications round-trip at the wire edge" {
   let settings = Notification::from_wire("workspace.settings_changed", {
     "workspace": "/home/u/proj",
     "worktree_mode": true,
+    "checkout_submodules": false,
   })
   guard settings is Some(settings) else {
     fail("workspace settings notification was rejected")
@@ -274,6 +275,7 @@ test "desktop notifications round-trip at the wire edge" {
   assert_eq(settings.params(), {
     "workspace": "/home/u/proj",
     "worktree_mode": true,
+    "checkout_submodules": false,
   })
   assert_eq(Notification::from_wire("future.event", {}), None)
 }

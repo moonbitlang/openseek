@@ -505,13 +505,12 @@ pub(all) struct WorkspaceSettingsSetPayload {
 /// One workspace's desktop-owned settings: the reply to both settings
 /// methods and the `workspace.settings_changed` payload. `worktree_mode` is
 /// where a NEW conversation in this workspace starts — the workspace root,
-/// or a fresh git worktree bound to that conversation. The optional
-/// `checkout_submodules` keeps new clients compatible with a host from before
-/// that setting; absence means the historical enabled behavior.
+/// or a fresh git worktree bound to that conversation. The frontend and host
+/// ship together, so reply and broadcast fields evolve in lockstep.
 pub(all) struct WorkspaceSettingsPayload {
   workspace : String
   worktree_mode : Bool
-  checkout_submodules : Bool?
+  checkout_submodules : Bool
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -522,15 +521,6 @@ pub(all) struct SettingsStatusPayload {
   has_deepseek_key : Bool
   has_custom_key : Bool
 } derive(Debug, Eq, FromJson, ToJson)
-
-///|
-test "workspace settings accept hosts from before submodule provisioning setting" {
-  let settings : WorkspaceSettingsPayload = @json.from_json({
-    "workspace": "/repo",
-    "worktree_mode": false,
-  })
-  assert_true(settings.checkout_submodules is None)
-}
 
 ///|
 /// Immutable identity of the installed desktop package. The native host reads

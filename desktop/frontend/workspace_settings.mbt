@@ -36,8 +36,8 @@ fn fetch_workspace_settings(
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      // A host without the op (or a failed read) dispatches nothing: the
-      // workspace keeps the Local default until a later fetch answers.
+      // A failed read dispatches nothing: the workspace keeps the Local
+      // default until a later fetch answers.
       // Unlike a worktree list, nothing downstream is blocked on it.
       let reply : @protocol.WorkspaceSettingsPayload = @interop.bridge_request(
         channel,
@@ -51,7 +51,7 @@ fn fetch_workspace_settings(
           WorkspaceSettingsLoaded(
             workspace~,
             worktree_mode=reply.worktree_mode,
-            checkout_submodules=reply.checkout_submodules.unwrap_or(true),
+            checkout_submodules=reply.checkout_submodules,
             connection_generation~,
             request_generation~,
           ),
@@ -126,7 +126,7 @@ fn workspace_settings_changed_msg(
     WorkspaceSettingsChanged(
       workspace~,
       worktree_mode=payload.worktree_mode,
-      checkout_submodules=payload.checkout_submodules.unwrap_or(true),
+      checkout_submodules=payload.checkout_submodules,
     ),
   )
 }
@@ -521,7 +521,7 @@ test "settings commit decoder carries the workspace identity" {
       @protocol.Notification::WorkspaceSettingsChanged({
         workspace: "/proj",
         worktree_mode: true,
-        checkout_submodules: Some(false),
+        checkout_submodules: false,
       }),
     )
     is Some(

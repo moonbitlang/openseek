@@ -1694,9 +1694,8 @@ fn workspace_settings_page(
   workspace : @common.Uri,
 ) -> @html.Html {
   // The settings mirror for this workspace; absent until the first
-  // authoritative read on this connection lands. An older host without
-  // per-workspace settings never answers, and the select stays disabled
-  // rather than pretending a choice would stick.
+  // authoritative read on this connection lands. Until then, the controls
+  // stay disabled rather than pretending a choice would stick.
   let row = match model.device_state(channel) {
     Some(dev) => dev.workspace_settings_row(workspace)
     None => None

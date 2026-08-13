@@ -609,9 +609,7 @@ pub async fn create_worktree(
   // concurrent page edit applies to the next create or repair instead of
   // changing this checkout halfway through.
   let workspace_settings = workspace_settings(dir.to_string())
-  let checkout_submodules = workspace_settings.checkout_submodules.unwrap_or(
-    true,
-  )
+  let checkout_submodules = workspace_settings.checkout_submodules
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
   let entries = read_worktrees_unlocked(dir)

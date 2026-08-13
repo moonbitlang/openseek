@@ -60,9 +60,7 @@ fn workspace_settings_payload(
     worktree_mode: settings_worktree_mode(fields),
     // Preserve the historical behavior unless this workspace explicitly
     // disables submodule provisioning.
-    checkout_submodules: Some(
-      !(fields.get("checkout_submodules") is Some(False)),
-    ),
+    checkout_submodules: !(fields.get("checkout_submodules") is Some(False)),
   }
 }
 
@@ -162,11 +160,10 @@ test "workspace settings parse tolerantly and keep unknown fields" {
     fail("expected an absolute workspace path")
   }
   let payload = workspace_settings_payload(workspace, fields)
-  assert_eq(payload.checkout_submodules, Some(true))
+  assert_true(payload.checkout_submodules)
   fields["checkout_submodules"] = false.to_json()
-  assert_eq(
+  assert_false(
     workspace_settings_payload(workspace, fields).checkout_submodules,
-    Some(false),
   )
 }
 
@@ -194,7 +191,7 @@ async test "workspace settings survive a write/read round trip independently" {
     read_workspace_settings_unlocked(sibling),
   )
   assert_false(sibling_payload.worktree_mode)
-  assert_eq(sibling_payload.checkout_submodules, Some(true))
+  assert_true(sibling_payload.checkout_submodules)
   @fs.rmdir(dir, recursive=true) catch {
     _ => ()
   }
