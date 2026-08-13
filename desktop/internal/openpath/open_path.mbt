@@ -62,7 +62,8 @@ pub async fn Reference::resolve(self : Reference) -> Resolution {
 
 ///|
 /// Apply the built-in viewer's actual content contract. Reading is bounded by
-/// the same size limit as the viewer, and invalid UTF-8 is a binary file.
+/// the same size limit as the viewer; the shared file-kind policy keeps this
+/// routing decision identical to the host's eventual file reply.
 async fn ExistingPath::resolve(self : ExistingPath) -> Resolution {
   guard @fs.kind(self.path) is Regular else { return SystemPath(self.path) }
   let source = @fs.open(self.path, mode=ReadOnly)
@@ -71,13 +72,11 @@ async fn ExistingPath::resolve(self : ExistingPath) -> Resolution {
     return SystemPath(self.path)
   }
   let data = source.read_all()
-  let raw = data.binary()
-  guard raw.find(b"\x00") is None else { return SystemPath(self.path) }
-  let text = data.text() catch { _ => return SystemPath(self.path) }
-  // A PDF can be entirely ASCII and therefore valid UTF-8, but it is still a
-  // formatted binary document rather than source text for the editor.
-  guard !text.has_prefix("%PDF-") else { return SystemPath(self.path) }
-  EditorPath(path=self.path, line=self.line, column=self.column)
+  match @filekind.classify(data.binary()) {
+    Utf8Text(_) =>
+      EditorPath(path=self.path, line=self.line, column=self.column)
+    RasterImage(_) | Binary => SystemPath(self.path)
+  }
 }
 
 ///|

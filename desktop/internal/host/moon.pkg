@@ -8,6 +8,7 @@ import {
   "openseek_desktop/internal/file_search_score",
   "openseek_desktop/internal/file_search_policy",
   "openseek_desktop/internal/fsx",
+  "openseek_desktop/internal/filekind",
   "openseek_desktop/internal/home",
   "openseek_desktop/internal/moonbit",
   "openseek_desktop/internal/openpath",

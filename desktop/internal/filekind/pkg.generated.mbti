@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/filekind"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn classify(BytesView) -> Classification
+
+// Errors
+
+// Types and methods
+pub enum Classification {
+  Utf8Text(String)
+  RasterImage(media_type~ : String)
+  Binary
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

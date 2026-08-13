@@ -63,34 +63,18 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
     error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to read file: \{error}")
   }
-  // Return supported raster files as bounded display bytes. The extension and
-  // model-provided MIME are not trusted; a signature decides whether bytes may
-  // enter a data URL. The same one-megabyte cap above bounds bridge pressure.
+  // Classify the bytes already read from this handle. The shared policy trusts
+  // raster signatures rather than extensions and returns decoded text without
+  // making callers perform a second UTF-8 pass.
   let bytes = data.binary()
-  if bytes.image_media_type() is Some(media_type) {
-    return BinaryContent(data_base64=@base64.encode(bytes), media_type~)
-  }
-  // `text()` raises on invalid UTF-8 — treat that as a binary file the
-  // read-only viewer cannot render.
-  let content = data.text() catch { _ => return Binary }
-  let absolute = file.resource_path()
-  Content(content~, absolute~, sig="\{seconds}:\{nanos}")
-}
-
-///|
-/// MIME for the small raster formats the transcript can render safely from a
-/// `data:` URL. Signatures, rather than filename extensions, decide whether
-/// bytes are allowed into that URL.
-fn Bytes::image_media_type(self : Bytes) -> String? {
-  match self {
-    [b'\x89', b'P', b'N', b'G', b'\r', b'\n', b'\x1a', b'\n', ..] =>
-      Some("image/png")
-    [b'\xff', b'\xd8', b'\xff', ..] => Some("image/jpeg")
-    [b'G', b'I', b'F', b'8', b'7', b'a', ..]
-    | [b'G', b'I', b'F', b'8', b'9', b'a', ..] => Some("image/gif")
-    [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] =>
-      Some("image/webp")
-    _ => None
+  match @filekind.classify(bytes) {
+    RasterImage(media_type~) =>
+      BinaryContent(data_base64=@base64.encode(bytes), media_type~)
+    Utf8Text(content) => {
+      let absolute = file.resource_path()
+      Content(content~, absolute~, sig="\{seconds}:\{nanos}")
+    }
+    Binary => Binary
   }
 }
 
