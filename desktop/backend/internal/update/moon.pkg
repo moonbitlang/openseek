@@ -1,0 +1,20 @@
+import {
+  "openseek_desktop/backend/internal/platform",
+  "openseek_desktop/backend/internal/pathx",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/io",
+  "moonbitlang/async/process",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/string",
+  "moonbitlang/x/crypto",
+}
+
+import {
+  "moonbitlang/async/socket",
+} for "wbtest"
+
+warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"

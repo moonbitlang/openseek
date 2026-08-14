@@ -1,0 +1,94 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/engine"
+
+import {
+  "moonbitlang/core/debug",
+  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/backend/internal/worktree",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub fn approve_run(EngineManager, @protocol.ApprovalPayload) -> @protocol.ApprovalReply
+
+pub async fn archive_session(EngineManager, String, (String, String) -> Unit, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveReply
+
+pub async fn archived_sessions(EngineManager) -> @protocol.SessionsReply
+
+pub async fn attach_workspace(String, (Array[String]) -> Unit) -> @protocol.WorkspacesReply
+
+pub fn cancel_run(EngineManager, @protocol.CancelPayload) -> @protocol.CancelReply raise EngineError
+
+pub async fn compact_run(EngineManager, @protocol.CompactPayload) -> @protocol.CompactReply
+
+pub async fn delete_archived_session(EngineManager, String, String, (String, String) -> Unit, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionsReply
+
+pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) -> @protocol.WorkspacesReply
+
+pub async fn engine_command(String) -> String
+
+pub async fn export_session_html(EngineManager, @protocol.SessionExportPayload, String, String) -> String
+
+pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalReply
+
+pub async fn list_sessions(EngineManager) -> @protocol.SessionsReply
+
+pub async fn list_workspaces() -> @protocol.WorkspacesReply
+
+pub async fn load_archived_session(EngineManager, @protocol.LoadSessionPayload) -> @protocol.LoadSessionReply
+
+pub async fn load_session(EngineManager, @protocol.LoadSessionPayload) -> @protocol.LoadSessionReply
+
+pub async fn migrate_global_store() -> Int
+
+pub fn new_engine_actor(String, runtime_dir? : @pathx.Path) -> EngineActor
+
+pub async fn remote_server_base(EngineManager) -> String?
+
+pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
+
+pub async fn start_run(EventSink, EngineManager, @protocol.StartPayload) -> @protocol.StartReply
+
+pub fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply
+
+pub async fn unarchive_session(EngineManager, String, (String, String) -> Unit) -> @protocol.SessionsReply
+
+pub async fn update_settings(EngineManager, SettingsPatch, legacy_migration? : Bool, on_committed? : (@protocol.SettingsStatusPayload) -> Unit) -> @protocol.SettingsStatusPayload
+
+// Errors
+pub(all) suberror EngineError {
+  EngineError(String)
+} derive(@debug.Debug)
+pub fn EngineError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+type EngineActor
+pub fn EngineActor::manager(Self) -> EngineManager
+pub async fn EngineActor::run(Self, EventSink, (String) -> Unit) -> Unit
+
+pub(all) enum EngineEvent {
+  Connected(@protocol.ConnectedPayload)
+  Started(@protocol.StartedPayload)
+  StreamEvent(@protocol.AgentEventPayload)
+  Error(@protocol.AgentErrorPayload)
+  Finished(@protocol.FinishedPayload)
+  SessionCommit(@protocol.SessionCommitPayload)
+  SubrunProgress(@protocol.SubrunProgressPayload)
+}
+
+type EngineManager
+pub fn EngineManager::worktree_host(Self) -> @worktree.WorktreeHost
+
+pub(all) struct EventSink((EngineEvent) -> Unit)
+
+pub(all) struct SettingsPatch {
+  provider : String?
+  custom_api_url : String?
+  deepseek_api_key : String?
+  glm_api_key : String?
+  custom_api_key : String?
+}
+
+// Type aliases
+
+// Traits

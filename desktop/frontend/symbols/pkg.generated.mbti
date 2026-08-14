@@ -7,15 +7,15 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/interop",
-  "openseek_desktop/internal/protocol",
+  "openseek_desktop/protocol",
 }
 
 // Values
 pub fn decode(@protocol.WorkspaceSymbolsReply) -> Array[Symbol]
 
-pub fn search(@interop.ChannelId, String, root~ : @common.Uri, loaded~ : (Array[Symbol]) -> @cmd.Cmd, failed~ : @cmd.Cmd) -> @cmd.Cmd
+pub fn search(@interop.ConversationKey, String, root~ : @common.Uri, loaded~ : (Array[Symbol]) -> @cmd.Cmd, failed~ : @cmd.Cmd) -> @cmd.Cmd
 
-pub fn searching(@interop.ChannelId, String, root~ : @common.Uri, loaded~ : (Array[Symbol]) -> @cmd.Cmd, failed~ : @cmd.Cmd) -> @sub.Sub
+pub fn searching(@interop.ConversationKey, String, root~ : @common.Uri, loaded~ : (Array[Symbol]) -> @cmd.Cmd, failed~ : @cmd.Cmd) -> @sub.Sub
 
 // Errors
 
@@ -28,6 +28,9 @@ pub(all) struct Symbol {
   range : @common.Range
 } derive(Eq, @debug.Debug)
 pub fn Symbol::detail(Self) -> String
+pub fn Symbol::equal(Self, Self) -> Bool
+pub fn Symbol::not_equal(Self, Self) -> Bool
+pub fn Symbol::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

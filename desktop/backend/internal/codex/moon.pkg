@@ -1,0 +1,18 @@
+import {
+  "bobzhang/openseek/jsonrpc",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/io",
+  "moonbitlang/async/os_error",
+  "moonbitlang/async/process",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/backend/internal/processx",
+  "tonyfettes/platform",
+  "tonyfettes/xlog",
+}
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"

@@ -25,12 +25,18 @@ pub(all) struct Entry {
   reply : String?
   failed : Bool
 } derive(Eq, @debug.Debug)
+pub fn Entry::equal(Self, Self) -> Bool
+pub fn Entry::not_equal(Self, Self) -> Bool
+pub fn Entry::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Hover {
   key : TurnKey
   flip : Bool
   anchor : Double
 } derive(Eq, @debug.Debug)
+pub fn Hover::equal(Self, Self) -> Bool
+pub fn Hover::not_equal(Self, Self) -> Bool
+pub fn Hover::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Msg {
   Entered(TurnKey, flip~ : Bool, anchor~ : Double)
@@ -44,14 +50,20 @@ pub(all) struct State {
   active : TurnKey?
 } derive(Eq, @debug.Debug)
 pub fn State::empty() -> Self
+pub fn State::equal(Self, Self) -> Bool
+pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::to_repr(Self) -> @debug.Repr
 
 pub(all) enum TurnKey {
   Durable(Int)
   Local(Int)
 } derive(Eq, @debug.Debug)
 pub fn TurnKey::anchor(Self) -> String
+pub fn TurnKey::equal(Self, Self) -> Bool
 pub fn TurnKey::from_anchor(String) -> Self?
+pub fn TurnKey::not_equal(Self, Self) -> Bool
 pub fn TurnKey::of(@transcript.TranscriptItem, index~ : Int) -> Self
+pub fn TurnKey::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -7,7 +7,7 @@ import {
   "moonbit-community/rabbita/js",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
-  "openseek_desktop/internal/commands",
+  "openseek_desktop/commands",
   "openseek_desktop/frontend/files",
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/interop",

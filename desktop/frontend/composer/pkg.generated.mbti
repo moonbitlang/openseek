@@ -13,7 +13,7 @@ import {
   "openseek_desktop/frontend/skills",
   "openseek_desktop/frontend/subrun",
   "openseek_desktop/frontend/transcript",
-  "openseek_desktop/internal/protocol",
+  "openseek_desktop/protocol",
 }
 
 // Values

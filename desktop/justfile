@@ -3,5 +3,5 @@ default:
 
 # Build the Desktop browser application and run its Playwright suite.
 test-browser:
-    moon run package/browser --target native
+    moon -C backend run package/browser --target native
     npm --prefix e2e test

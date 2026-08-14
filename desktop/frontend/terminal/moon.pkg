@@ -7,8 +7,8 @@ import {
   "moonbitlang/core/string",
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/internal/terminal_input",
-  "openseek_desktop/internal/protocol",
-  "openseek_desktop/internal/commands",
+  "openseek_desktop/protocol",
+  "openseek_desktop/commands",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/resource",
 }

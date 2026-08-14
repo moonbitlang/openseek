@@ -1,0 +1,18 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/subrun"
+
+import {
+  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub async fn follow_progress(root~ : @pathx.Absolute, parent_session~ : String, id~ : String, publish~ : async (@protocol.SubrunProgressPayload) -> Unit) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

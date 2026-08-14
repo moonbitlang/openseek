@@ -39,9 +39,9 @@ shows the automatic checkpoint consistently with a reloaded durable session.
 
 ## Target Files And Surfaces
 
-- `desktop/internal/event/event.mbt`, `decode.mbt`, and `decode_test.mbt`:
+- `desktop/backend/internal/event/event.mbt`, `decode.mbt`, and `decode_test.mbt`:
   represent and decode the host-side `ContextYield` terminal.
-- `desktop/internal/engine/api.mbt`, `engine.mbt`, and `engine_wbtest.mbt`:
+- `desktop/backend/internal/engine/api.mbt`, `engine.mbt`, and `engine_wbtest.mbt`:
   emit the distinct run status, close the serve-engine run, and cover terminal
   classification.
 - `desktop/frontend/transcript/engine_event.mbt` and
@@ -59,7 +59,7 @@ shows the automatic checkpoint consistently with a reloaded durable session.
 
 ## API And Interface Diff
 
-- `desktop/internal/event.AgentEvent` gains `ContextYield(String)`.
+- `desktop/backend/internal/event.AgentEvent` gains `ContextYield(String)`.
 - `desktop/frontend/transcript.EngineEvent` gains
   `AutoCompactionFinished(String)` and `ContextYield(String)`.
 - The host's private `RunStatus` and frontend's private `RunOutcome` each gain a
@@ -90,8 +90,8 @@ events through the frontend's normalized event enum and pure update branches.
   compaction phase change.
 - Add a durable-session transcript test proving the reloaded Summary and
   guidance match the live transcript.
-- Run `moon -C desktop check --target native --deny-warn` and
-  `moon -C desktop check --target js --deny-warn`.
-- Run focused package tests, then `moon -C desktop test --release`.
-- Run `moon -C desktop fmt` and default-target `moon -C desktop info`, review
+- Run `moon -C desktop/backend check --target native --deny-warn` and
+  `moon -C desktop/frontend check --target js --deny-warn`.
+- Run focused package tests, then `moon test --release` from the workspace root.
+- Run workspace-root `moon fmt` and default-target `moon info`, then review
   generated interface diffs, and re-run the checks affected by formatting.

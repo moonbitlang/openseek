@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/session_record"
+
+import {
+  "moonbitlang/core/debug",
+  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub async fn read_document(@pathx.Absolute, String) -> @protocol.SessionDocument
+
+pub async fn read_text(@pathx.Absolute, String) -> String
+
+pub fn record_path(@pathx.Absolute, String) -> @pathx.Path
+
+// Errors
+pub(all) suberror RecordError {
+  Absent(String)
+  Unreadable(String)
+} derive(@debug.Debug)
+pub fn RecordError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+type Tail
+pub fn Tail::Tail(@pathx.Absolute, String) -> Self
+pub fn Tail::document(Self) -> @protocol.SessionDocument
+pub async fn Tail::poll(Self) -> Array[@protocol.SessionEvent]
+pub fn Tail::watermark(Self) -> Int
+
+// Type aliases
+
+// Traits

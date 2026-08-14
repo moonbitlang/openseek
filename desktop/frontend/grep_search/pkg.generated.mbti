@@ -8,7 +8,7 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/interop",
-  "openseek_desktop/internal/protocol",
+  "openseek_desktop/protocol",
 }
 
 // Values
@@ -17,20 +17,37 @@ pub fn focus_query_after_render() -> @cmd.Cmd
 // Errors
 
 // Types and methods
+type EditorHighlights derive(Eq, @debug.Debug)
+pub fn EditorHighlights::equal(Self, Self) -> Bool
+pub fn EditorHighlights::not_equal(Self, Self) -> Bool
+pub fn EditorHighlights::ranges(Self) -> Array[@common.Range]
+pub fn EditorHighlights::to_repr(Self) -> @debug.Repr
+
 pub(all) struct Input {
   owner : @interop.ConversationKey
   root : @common.Uri?
 } derive(Eq)
 pub fn Input::Input(owner~ : @interop.ConversationKey, root~ : @common.Uri?) -> Self
+pub fn Input::equal(Self, Self) -> Bool
+pub fn Input::not_equal(Self, Self) -> Bool
+
+type Mode derive(Eq, @debug.Debug)
+pub fn Mode::equal(Self, Self) -> Bool
+pub fn Mode::not_equal(Self, Self) -> Bool
+pub fn Mode::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Msg {
   QueryChanged(String)
+  ModeChanged(Mode)
   ToggleCaseSensitive
   ToggleWholeWord
   ToggleRegex
   ToggleDetails
   IncludeChanged(String)
   ExcludeChanged(String)
+  PatternChanged(Int, String)
+  AddPattern
+  RemovePattern(Int)
   Submit
   Refresh
   ClearResults
@@ -39,22 +56,40 @@ pub(all) enum Msg {
   ToggleFile(String)
   RequestStarted(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int)
   Loaded(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int, reply~ : @protocol.SearchTextReply)
+  SemanticLoaded(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int, reply~ : @protocol.SearchSemanticReply)
+  SemanticProgress(root~ : String, session_key~ : String, generation~ : Int, matches~ : Array[@protocol.SemanticSearchHit], match_count~ : Int, file_count~ : Int)
   RequestFailed(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int, code~ : String, message~ : String)
 }
 
 type Page derive(Eq)
+pub fn Page::equal(Self, Self) -> Bool
+pub fn Page::not_equal(Self, Self) -> Bool
 
 type Phase derive(Eq, @debug.Debug)
+pub fn Phase::equal(Self, Self) -> Bool
+pub fn Phase::not_equal(Self, Self) -> Bool
+pub fn Phase::to_repr(Self) -> @debug.Repr
+
+type SearchRequestIdentity derive(Eq)
+
+type SearchResultSummary derive(Eq)
+
+type SemanticSearchState derive(Eq)
 
 pub struct State {
   // private fields
 } derive(Eq)
+pub fn State::editor_highlights(Self, String) -> EditorHighlights?
 pub fn State::empty() -> Self
+pub fn State::equal(Self, Self) -> Bool
 pub fn State::explorer_view(Self, Input, @cmd.Emit[Msg], (String, @common.Range) -> @cmd.Cmd) -> @html.Html
 pub fn State::handle(Self, Msg, Input) -> Self
+pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::park(Self) -> Self
 pub fn State::reset_checkout(Self) -> Self
 pub fn State::subscription(Self, Input, @cmd.Emit[Msg]) -> @sub.Sub
+
+type TextSearchState derive(Eq)
 
 // Type aliases
 

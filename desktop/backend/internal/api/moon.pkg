@@ -1,0 +1,23 @@
+import {
+  // Imported for the engine event constructors the hub matches on.
+  "bobzhang/openseek_protocol",
+  "openseek_desktop/backend/internal/auth",
+  "openseek_desktop/commands",
+  "openseek_desktop/backend/internal/codex",
+  "openseek_desktop/backend/internal/engine",
+  "openseek_desktop/backend/internal/endpoint",
+  "openseek_desktop/backend/internal/host",
+  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/protocol",
+  "openseek_desktop/backend/internal/work_dir",
+  "openseek_desktop/backend/internal/workspaces",
+  "openseek_desktop/backend/internal/worktree",
+  "openseek_desktop/backend/internal/worktree",
+  "moonbitlang/async",
+  "moonbitlang/core/json",
+  "tonyfettes/xlog",
+}
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"

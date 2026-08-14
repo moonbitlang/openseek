@@ -20,6 +20,9 @@ pub(all) struct Action {
   title : String
   disabled : Bool
 } derive(Eq, @debug.Debug)
+pub fn Action::equal(Self, Self) -> Bool
+pub fn Action::not_equal(Self, Self) -> Bool
+pub fn Action::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Actions {
   primary : (Id) -> @cmd.Cmd
@@ -33,6 +36,9 @@ pub(all) enum Entry {
   Conversation(@conversation.Input)
   Placeholder(Placeholder)
 } derive(Eq, @debug.Debug)
+pub fn Entry::equal(Self, Self) -> Bool
+pub fn Entry::not_equal(Self, Self) -> Bool
+pub fn Entry::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Id {
   source : String
@@ -40,8 +46,13 @@ pub(all) struct Id {
 } derive(Eq, Hash, @debug.Debug)
 pub fn Id::Id(source~ : String, channel~ : String) -> Self
 pub fn Id::channel(Self) -> String
+pub fn Id::equal(Self, Self) -> Bool
+pub fn Id::hash(Self) -> Int
+pub fn Id::hash_combine(Self, Hasher) -> Unit
 pub fn Id::key(Self) -> String
+pub fn Id::not_equal(Self, Self) -> Bool
 pub fn Id::source(Self) -> String
+pub fn Id::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Input {
   id : Id
@@ -51,7 +62,10 @@ pub(all) struct Input {
   action : Action?
   entries : Array[Entry]
 } derive(Eq, @debug.Debug)
+pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::id(Self) -> Id
+pub fn Input::not_equal(Self, Self) -> Bool
+pub fn Input::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Placeholder {
   id : String
@@ -60,6 +74,9 @@ pub(all) struct Placeholder {
   nested : Bool
   openable : Bool
 } derive(Eq, @debug.Debug)
+pub fn Placeholder::equal(Self, Self) -> Bool
+pub fn Placeholder::not_equal(Self, Self) -> Bool
+pub fn Placeholder::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

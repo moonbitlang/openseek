@@ -1,0 +1,13 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/package/internal/pe"
+
+// Values
+pub async fn set_windows_gui_subsystem(String) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

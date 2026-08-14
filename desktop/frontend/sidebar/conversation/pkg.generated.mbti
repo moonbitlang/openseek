@@ -30,9 +30,14 @@ pub(all) struct Id {
 pub fn Id::Id(source~ : String, channel~ : String, conversation~ : String, root? : String) -> Self
 pub fn Id::channel(Self) -> String
 pub fn Id::conversation(Self) -> String
+pub fn Id::equal(Self, Self) -> Bool
+pub fn Id::hash(Self) -> Int
+pub fn Id::hash_combine(Self, Hasher) -> Unit
 pub fn Id::key(Self) -> String
+pub fn Id::not_equal(Self, Self) -> Bool
 pub fn Id::root(Self) -> String?
 pub fn Id::source(Self) -> String
+pub fn Id::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Input {
   id : Id
@@ -48,7 +53,10 @@ pub(all) struct Input {
   trailing : Array[TrailingAction]
   children : Array[Input]
 } derive(Eq, @debug.Debug)
+pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::id(Self) -> Id
+pub fn Input::not_equal(Self, Self) -> Bool
+pub fn Input::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RunMark {
   NoRunMark
@@ -56,12 +64,18 @@ pub(all) enum RunMark {
   CompletedMark
   FailedMark
 } derive(Eq, @debug.Debug)
+pub fn RunMark::equal(Self, Self) -> Bool
+pub fn RunMark::not_equal(Self, Self) -> Bool
+pub fn RunMark::to_repr(Self) -> @debug.Repr
 
 pub(all) enum TrailingAction {
   Archive(title~ : String)
   Restore(title~ : String)
   Delete(title~ : String)
 } derive(Eq, @debug.Debug)
+pub fn TrailingAction::equal(Self, Self) -> Bool
+pub fn TrailingAction::not_equal(Self, Self) -> Bool
+pub fn TrailingAction::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

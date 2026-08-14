@@ -143,8 +143,8 @@ not secrets — the barrier is ownership:
 The relay's server implementation and HTTP surface (OAuth routes, the devices
 API, and schema) live in the openseek-api repository; its
 `docs/relay-auth-design.md` specifies that account layer. This repository keeps
-only the desktop-side connection code in `desktop/internal/remote` and the four
-control-frame definitions in `desktop/tunnel`.
+only the desktop-side connection code in `desktop/backend/internal/remote` and
+the four control-frame definitions in `desktop/backend/tunnel`.
 
 ## Errors
 

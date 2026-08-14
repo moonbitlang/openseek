@@ -1,0 +1,16 @@
+import {
+  "openseek_desktop/backend/package/internal/moonbit",
+  "openseek_desktop/backend/package/internal/packaging",
+  "openseek_desktop/backend/package/internal/ripgrep_assets",
+  "openseek_desktop/backend/package/internal/xterm_assets",
+  "moonbitlang/async",
+  "moonbitlang/core/argparse",
+  "moonbitlang/async/process",
+  "moonbitlang/core/debug",
+}
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "native"
+
+pkgtype(kind: "executable")

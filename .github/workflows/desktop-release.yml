@@ -87,14 +87,15 @@ jobs:
         uses: actions/checkout@v5
 
       # Proton 0.2 installs its immutable runtime and versioned helper in the
-      # shared user-level store selected by the dependency in desktop/moon.mod.
+      # shared user-level store selected by the dependency in
+      # desktop/backend/moon.mod.
       - name: Cache Proton runtime
         uses: actions/cache@v4
         with:
           path: |
             ~/.proton/store
             ~/.proton/helpers
-          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/moon.mod') }}
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/backend/moon.mod') }}
 
       # The packager stages the seed toolchain pinned by
       # `desktop/.moonbit-version` from archives downloaded into this directory.
@@ -244,7 +245,7 @@ jobs:
       - name: Build, sign, and notarize macOS artifacts
         shell: bash
         run: |
-          moon -C desktop run --target native package/macos -- \
+          moon -C desktop/backend run --target native package/macos -- \
             --release \
             --target dmg \
             --target zip \
@@ -268,7 +269,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          moon -C desktop run --target native package/browser -- --release
+          moon -C desktop/backend run --target native package/browser -- --release
           test -f desktop/dist/browser/index.html
           test -f desktop/dist/browser/browser.js
           COPYFILE_DISABLE=1 tar \
