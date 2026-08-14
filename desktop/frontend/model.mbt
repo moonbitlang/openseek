@@ -1384,6 +1384,10 @@ priv struct Model {
   // the component; this only tells it which fresh owner replaces the archived
   // owner and lets delayed root actions reach that same conversation.
   composer_entry_replacement : ComposerEntryReplacement?
+  // Every newly observed archive appends its exact owner. The composer consumes
+  // this page-lifetime log in order, so a background session cannot regain an
+  // old component-local draft when the same session id is later unarchived.
+  composer_entry_retirements : Array[@interop.ConversationKey]
   // Cmd/Ctrl+P/T unified Quick Open in the native window and browser console.
   // It is global UI for the focused conversation, not durable conversation
   // state. The monotonic counter fences symbol replies across close and reopen,
@@ -2560,6 +2564,7 @@ fn initial_model() -> Model {
     completion_debounce: @composer.Debounce(),
     composer_context_generation: 0,
     composer_entry_replacement: None,
+    composer_entry_retirements: [],
     quick_open: None,
     quick_open_generation: 0,
     git_request_generation: 0,
@@ -3051,9 +3056,20 @@ fn Model::with_archive_override(
   disposition : ArchiveDisposition,
 ) -> Model {
   guard self.device_state(channel) is Some(dev) else { return self }
+  // Leaving the live state — stored or deleted — makes the composer's cached
+  // entry unaddressable, so the transition also records a retirement that
+  // expires stale composer actions for this owner.
+  let newly_retired = !(disposition is ArchiveLive) &&
+    dev.archive_override(key) is (None | Some(ArchiveLive))
   let overrides = dev.archive_overrides.filter(item => item.key != key)
   overrides.push({ key, disposition })
-  self.replace_device({ ..dev, archive_overrides: overrides })
+  let model = self.replace_device({ ..dev, archive_overrides: overrides })
+  if !newly_retired {
+    return model
+  }
+  let composer_entry_retirements = model.composer_entry_retirements.copy()
+  composer_entry_retirements.push({ channel, session: key.session })
+  { ..model, composer_entry_retirements, }
 }
 
 ///|

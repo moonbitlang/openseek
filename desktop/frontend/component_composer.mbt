@@ -369,13 +369,55 @@ fn ComposerEntry::reconciled(
 ///|
 priv struct ComposerComponentModel {
   entries : Array[ComposerEntry]
+  // Number of root archive facts already applied to the local cache. The root
+  // keeps the facts append-only so even an archive/unarchive pair between two
+  // subscription ticks cannot revive the retired entry.
+  applied_retirements : Int
 } derive(Eq)
 
 ///|
 fn ComposerComponentModel::ComposerComponentModel(
   input : Model,
 ) -> ComposerComponentModel {
-  { entries: [ComposerEntry(input)] }
+  {
+    entries: [ComposerEntry(input)],
+    applied_retirements: input.composer_entry_retirements.length(),
+  }
+}
+
+///|
+/// Whether an archive observed since the last local update retired `owner`.
+/// Rendering uses this check before the subscription message can mutate the
+/// cache, which keeps a quickly unarchived session from flashing stale text.
+fn ComposerComponentModel::owner_has_pending_retirement(
+  self : ComposerComponentModel,
+  input : Model,
+  owner : @interop.ConversationKey,
+) -> Bool {
+  for
+    index in self.applied_retirements..<input.composer_entry_retirements.length() {
+    if input.composer_entry_retirements[index] == owner {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Consume every archive fact the root appended since the last component
+/// update. Applying the whole tail avoids losing one of several background
+/// archives that arrive within a single subscription interval.
+fn ComposerComponentModel::with_retirements_applied(
+  self : ComposerComponentModel,
+  input : Model,
+) -> ComposerComponentModel {
+  let mut entries = self.entries
+  for
+    index in self.applied_retirements..<input.composer_entry_retirements.length() {
+    let retired = input.composer_entry_retirements[index]
+    entries = entries.filter(entry => entry.owner != retired)
+  }
+  { entries, applied_retirements: input.composer_entry_retirements.length() }
 }
 
 ///|
@@ -393,7 +435,9 @@ fn ComposerComponentModel::active(
   for entry in self.entries {
     // An unarchived record may reuse its old session id, but its former local
     // entry moved to the fresh replacement and must not be selected again.
-    if entry.owner == owner && !owner_was_replaced {
+    if entry.owner == owner &&
+      !owner_was_replaced &&
+      !self.owner_has_pending_retirement(input, owner) {
       return entry.reconciled(input)
     }
   }
@@ -426,11 +470,11 @@ fn ComposerComponentModel::with_entry(
   for index, existing in entries {
     if existing.owner == entry.owner {
       entries[index] = entry
-      return { entries, }
+      return { ..self, entries, }
     }
   }
   entries.push(entry)
-  { entries, }
+  { ..self, entries, }
 }
 
 ///|
@@ -450,7 +494,7 @@ fn ComposerComponentModel::with_active_entry(
     existing.owner != replacement.archived && existing.owner != entry.owner
   })
   entries.push(entry)
-  { entries, }
+  { ..self, entries, }
 }
 
 ///|
@@ -469,6 +513,9 @@ priv enum ComposerComponentMsg {
   // Archive replacement changes the visible owner through component input;
   // storing it once retires the cached archived identity without user input.
   ComposerEntryTransferred
+  // Background archives do not change the visible composer input. This tick
+  // consumes their root-owned retirement facts without mirroring draft text.
+  ComposerEntriesRetired
   // Input changes do not call component update. This subscription message
   // stores a newly reconciled concrete root and starts its symbol lookup.
   ComposerSymbolRootChanged
@@ -766,6 +813,9 @@ fn ComposerComponentModel::update(
 ) -> (ComposerComponentModel, @cmd.Cmd) {
   let entry = self.active(input)
   let self = self.with_active_entry(input, entry)
+  // Select first so an active archive can move its entry to the replacement
+  // owner; applying the archive log then removes only the retired identity.
+  let self = self.with_retirements_applied(input)
   match msg {
     ComposerTextChanged(value) => {
       let (next, command) = entry.edited(input, value, emit, root_emit)
@@ -804,6 +854,7 @@ fn ComposerComponentModel::update(
       self.commit_entry_change(entry, next, command, root_emit)
     }
     ComposerEntryTransferred => (self, @cmd.none)
+    ComposerEntriesRetired => (self, @cmd.none)
     ComposerSymbolRootChanged => {
       guard @composer.Trigger::parse(entry.draft.task, inline_markers="$#")
         is Some(trigger) &&
@@ -1132,6 +1183,9 @@ fn ComposerComponentModel::subscriptions(
     session: conv.session_id,
   }
   let root = input.conversation_root(conv)
+  if self.applied_retirements < input.composer_entry_retirements.length() {
+    return @sub.every(150, emit(ComposerEntriesRetired))
+  }
   if input.composer_entry_replacement is Some(replacement) &&
     replacement.fresh == owner &&
     self.entries.iter().any(stored => stored.owner == replacement.archived) {
@@ -1541,6 +1595,81 @@ test "composer caches an independent local draft for each conversation" {
   assert_eq(drafted_b.active(input_b).draft.task, "draft B")
   assert_eq(input_a.active().task, "")
   assert_eq(input_b.active().task, "")
+}
+
+///|
+test "background archive retires its cached draft before unarchive" {
+  let conversation_a = empty_conversation(
+    @interop.ChannelId::Local,
+    "composer-a",
+  )
+  let conversation_b = empty_conversation(
+    @interop.ChannelId::Local,
+    "composer-b",
+  )
+  let input_a = {
+    ..test_model(),
+    active_session: "composer-a",
+    conversations: [conversation_a, conversation_b],
+  }
+  let input_b = {
+    ..input_a,
+    active_session: "composer-b",
+    composer_context_generation: 1,
+  }
+  let component_emit : @cmd.Emit[ComposerComponentMsg] = @cmd.Emit(_ => {
+    @cmd.none
+  })
+  let root_emit = test_dispatch()
+  let (drafted_a, _) = ComposerComponentModel(input_a).update(
+    input_a,
+    ComposerTextChanged("discarded draft"),
+    component_emit,
+    root_emit,
+  )
+  let (cached, _) = drafted_a.update(
+    input_b,
+    ComposerTextChanged("kept draft"),
+    component_emit,
+    root_emit,
+  )
+  let (_, archived) = update(
+    root_emit,
+    archived_loaded([archived_item("composer-a")]),
+    input_b,
+  )
+  inspect(archived.composer_entry_retirements.length(), content="1")
+  let (_, unarchived) = update_dev(
+    root_emit,
+    SessionsChanged(
+      change="unarchived",
+      session="composer-a",
+      fresh_session=None,
+    ),
+    archived,
+  )
+  let reopened = {
+    ..unarchived,
+    active_session: "composer-a",
+    conversations: [conversation_a, conversation_b],
+    composer_context_generation: 2,
+  }
+  // The append-only archive fact closes the gap before the subscription tick:
+  // rendering and an immediate edit both start from a new empty entry.
+  assert_eq(cached.active(reopened).draft.task, "")
+  let (redrafted, _) = cached.update(
+    reopened,
+    ComposerTextChanged("new draft"),
+    component_emit,
+    root_emit,
+  )
+  assert_eq(redrafted.active(reopened).draft.task, "new draft")
+  assert_eq(
+    redrafted.applied_retirements,
+    reopened.composer_entry_retirements.length(),
+  )
+  let back_to_b = { ..reopened, active_session: "composer-b" }
+  assert_eq(redrafted.active(back_to_b).draft.task, "kept draft")
 }
 
 ///|
