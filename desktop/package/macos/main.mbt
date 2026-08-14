@@ -11,11 +11,6 @@ const PackageAssetDir : String = PackageInputRoot + "/assets"
 const PackageBinDir : String = PackageInputRoot + "/bin"
 
 ///|
-/// Proton's default package-build target for the identifier declared in
-/// `proton.project.json`. Keep this path in sync if that identifier changes.
-const ProtonPackageBuildTargetDir : String = "target/proton-package-build/community-moonbit-proton-openseek-desktop"
-
-///|
 const SigningEntitlementsPath : String = "package/macos/SeekMoon.entitlements"
 
 ///|
@@ -157,10 +152,10 @@ fn PackageOptions::proton_args(
 
 ///|
 /// Build the application-specific inputs Proton cannot infer from
-/// `proton.project.json`. The native host is written to Proton's
-/// identifier-scoped
-/// package target in the selected mode so `package --no-build` consumes this
-/// checkout's host without copying or changing its executable mode.
+/// `proton.project.json`. The native host builds into the workspace's
+/// default `_build` tree in the selected mode, which is where
+/// `package --no-build` looks the executable up since lepus #116 removed
+/// the identifier-scoped package target directories.
 async fn @packaging.Workspace::build_package_inputs(
   self : @packaging.Workspace,
   release~ : Bool,
@@ -177,12 +172,7 @@ async fn @packaging.Workspace::build_package_inputs(
     self,
     @xterm_assets.macos_arm64_target(),
   )
-  @packaging.build_native_host(
-    self,
-    release~,
-    extra_args=["--target-dir", self.repo_at(ProtonPackageBuildTargetDir)],
-    extra_env=build_env,
-  )
+  @packaging.build_native_host(self, release~, extra_env=build_env)
   @packaging.build_engine(self, release~, extra_env={
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
   })
