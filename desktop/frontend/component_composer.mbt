@@ -573,7 +573,12 @@ priv enum ComposerComponentMsg {
 /// The small set of actions whose ownership really is above the component.
 /// Unlike keystrokes, each represents one deliberate user operation.
 priv enum ComposerRootAction {
-  ComposerDraftSubmitted(ComposerDraft)
+  // Submission can be delivered after navigation changes the active record,
+  // so it carries the same owner identity as every other draft mutation.
+  ComposerDraftSubmitted(
+    owner~ : @interop.ConversationKey,
+    draft~ : ComposerDraft
+  )
   ComposerDraftPresenceChanged(
     owner~ : @interop.ConversationKey,
     present~ : Bool,
@@ -966,7 +971,11 @@ fn ComposerComponentModel::update(
               ),
             ),
           }),
-          root_emit(ComposerAction(ComposerDraftSubmitted(entry.draft))),
+          root_emit(
+            ComposerAction(
+              ComposerDraftSubmitted(owner=entry.owner, draft=entry.draft),
+            ),
+          ),
         )
       }
     ComposerCompletionDue(owner~, root~, query~, generation~) => {
@@ -1725,19 +1734,19 @@ test "empty local draft clears its matching root recovery snapshot" {
     ..test_conversation(),
     compaction: Compacting,
   })
+  let owner : @interop.ConversationKey = {
+    channel: input.focused,
+    session: input.active_session,
+  }
   let dispatch = test_dispatch()
   let (_, rejected) = update(
     dispatch,
-    ComposerAction(ComposerDraftSubmitted(draft)),
+    ComposerAction(ComposerDraftSubmitted(owner~, draft~)),
     input,
   )
   inspect(rejected.active().task, content="rejected prompt")
   inspect(rejected.active().mentions.length(), content="1")
   assert_true(rejected.active().composer_draft_present)
-  let owner : @interop.ConversationKey = {
-    channel: rejected.focused,
-    session: rejected.active_session,
-  }
   let (_, cleared) = update(
     dispatch,
     ComposerAction(
@@ -1752,6 +1761,49 @@ test "empty local draft clears its matching root recovery snapshot" {
   assert_eq(cleared.active().task, "")
   assert_true(cleared.active().mentions.is_empty())
   assert_true(cleared.active().draft_empty())
+}
+
+///|
+test "queued draft submission stays bound to its composer owner" {
+  let origin = {
+    ..test_conversation(),
+    compaction: Compacting,
+    composer_draft_present: true,
+  }
+  let current = empty_conversation(
+    @interop.ChannelId::Local,
+    "composer-submit-current",
+  )
+  let input = {
+    ..test_model(),
+    active_session: current.session_id,
+    conversations: [origin, current],
+  }
+  let owner : @interop.ConversationKey = {
+    channel: origin.device,
+    session: origin.session_id,
+  }
+  let draft : ComposerDraft = { task: "originating draft", mentions: [] }
+  let action = ComposerAction(ComposerDraftSubmitted(owner~, draft~))
+  let (_, once) = update(test_dispatch(), action, input)
+  let (_, twice) = update(test_dispatch(), action, input)
+  // The owner is compacting, so its send is rejected and its draft remains.
+  // The conversation selected after the click must not receive or send it.
+  assert_eq(once.active_session, current.session_id)
+  assert_eq(once.active().task, "")
+  assert_true(once.active().run is NoRun(..))
+  guard once.find_conversation(owner.channel, owner.session) is Some(first) &&
+    twice.find_conversation(owner.channel, owner.session) is Some(second) else {
+    fail("the originating conversation must remain addressable")
+  }
+  assert_eq(first.task, draft.task)
+  assert_true(first.composer_draft_present)
+  assert_true(first.compaction is Compacting)
+  // Repeating the handler on the same snapshot produces the same plain state.
+  assert_eq(second.task, first.task)
+  assert_eq(second.mentions, first.mentions)
+  assert_eq(second.composer_draft_present, first.composer_draft_present)
+  assert_eq(twice.submission_sequence, once.submission_sequence)
 }
 
 ///|
@@ -1871,14 +1923,17 @@ test "archive replacement carries the component-local prompt and goal" {
 
 ///|
 test "archive replacements queue every component draft handoff" {
-  let conversation_a = empty_conversation(
-    @interop.ChannelId::Local,
-    "composer-queue-a",
-  )
-  let conversation_b = empty_conversation(
-    @interop.ChannelId::Local,
-    "composer-queue-b",
-  )
+  // These root bits are the presence actions emitted by the two edits below.
+  // The test does not execute Cmd values, so it records that acknowledged
+  // state directly before exercising the two archive rotations.
+  let conversation_a = {
+    ..empty_conversation(@interop.ChannelId::Local, "composer-queue-a"),
+    composer_draft_present: true,
+  }
+  let conversation_b = {
+    ..empty_conversation(@interop.ChannelId::Local, "composer-queue-b"),
+    composer_draft_present: true,
+  }
   let input_a = {
     ..test_model(),
     active_session: "composer-queue-a",

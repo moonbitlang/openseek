@@ -1924,17 +1924,33 @@ fn update_msg(
       }
     ComposerAction(action) =>
       match action {
-        ComposerDraftSubmitted(draft) => {
-          let conv = model.active()
-          update_msg(
-            dispatch,
-            Send,
-            model.replace_conversation({
+        ComposerDraftSubmitted(owner~, draft~) => {
+          guard model.conversation_for_composer_action(owner) is Some(conv) else {
+            return (@cmd.none, model)
+          }
+          let original_focus = model.focused
+          let original_session = model.active_session
+          // `Send` reads the selected conversation synchronously. Select the
+          // action owner only for that update, then restore visible navigation
+          // while retaining the targeted conversation's submission state.
+          let target = {
+            ..model.replace_conversation({
               ..conv,
               task: draft.task,
               mentions: draft.mentions,
               composer_draft_present: true,
             }),
+            focused: conv.device,
+            active_session: conv.session_id,
+          }
+          let (command, submitted) = update_msg(dispatch, Send, target)
+          (
+            command,
+            {
+              ..submitted,
+              focused: original_focus,
+              active_session: original_session,
+            },
           )
         }
         ComposerDraftPresenceChanged(owner~, present~, cleared_source~) =>
