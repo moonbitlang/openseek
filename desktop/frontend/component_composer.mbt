@@ -430,14 +430,11 @@ fn ComposerComponentModel::active(
     channel: input.focused,
     session: conv.session_id,
   }
-  let owner_was_replaced = input.composer_entry_replacement is Some(replacement) &&
-    replacement.archived == owner
   for entry in self.entries {
-    // An unarchived record may reuse its old session id, but its former local
-    // entry moved to the fresh replacement and must not be selected again.
-    if entry.owner == owner &&
-      !owner_was_replaced &&
-      !self.owner_has_pending_retirement(input, owner) {
+    // An unarchived record may reuse its old session id. Ignore the old entry
+    // until its particular archive fact is consumed, then allow new edits
+    // under that owner instead of permanently blacklisting the session id.
+    if entry.owner == owner && !self.owner_has_pending_retirement(input, owner) {
       return entry.reconciled(input)
     }
   }
@@ -1817,6 +1814,13 @@ test "archive replacement carries the component-local prompt and goal" {
   // entry cannot resurrect text that now belongs to the fresh conversation.
   assert_eq(with_goal.active(reopened).draft.task, "")
   assert_eq(moved.active(reopened).draft.task, "")
+  let (redrafted, _) = moved.update(
+    reopened,
+    ComposerTextChanged("new unarchived draft"),
+    component_emit,
+    root_emit,
+  )
+  assert_eq(redrafted.active(reopened).draft.task, "new unarchived draft")
 }
 
 ///|
