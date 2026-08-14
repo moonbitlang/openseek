@@ -388,8 +388,12 @@ fn ComposerComponentModel::active(
     channel: input.focused,
     session: conv.session_id,
   }
+  let owner_was_replaced = input.composer_entry_replacement is Some(replacement) &&
+    replacement.archived == owner
   for entry in self.entries {
-    if entry.owner == owner {
+    // An unarchived record may reuse its old session id, but its former local
+    // entry moved to the fresh replacement and must not be selected again.
+    if entry.owner == owner && !owner_was_replaced {
       return entry.reconciled(input)
     }
   }
@@ -430,6 +434,26 @@ fn ComposerComponentModel::with_entry(
 }
 
 ///|
+/// Store the visible entry and retire the archived identity it replaced. This
+/// turns archive handoff into a move even when the first event under the fresh
+/// owner is an unrelated completion or input message.
+fn ComposerComponentModel::with_active_entry(
+  self : ComposerComponentModel,
+  input : Model,
+  entry : ComposerEntry,
+) -> ComposerComponentModel {
+  guard input.composer_entry_replacement is Some(replacement) &&
+    replacement.fresh == entry.owner else {
+    return self.with_entry(entry)
+  }
+  let entries = self.entries.filter(existing => {
+    existing.owner != replacement.archived && existing.owner != entry.owner
+  })
+  entries.push(entry)
+  { entries, }
+}
+
+///|
 priv enum ComposerComponentMsg {
   ComposerTextChanged(String)
   ComposerCompletionDue(
@@ -442,6 +466,9 @@ priv enum ComposerComponentMsg {
   ComposerCompletionAccept
   ComposerCompletionPick(Int)
   ComposerCompletionDismiss
+  // Archive replacement changes the visible owner through component input;
+  // storing it once retires the cached archived identity without user input.
+  ComposerEntryTransferred
   // Input changes do not call component update. This subscription message
   // stores a newly reconciled concrete root and starts its symbol lookup.
   ComposerSymbolRootChanged
@@ -490,7 +517,8 @@ priv enum ComposerRootAction {
   ComposerDraftSubmitted(ComposerDraft)
   ComposerDraftPresenceChanged(
     owner~ : @interop.ConversationKey,
-    present~ : Bool
+    present~ : Bool,
+    cleared_source~ : ComposerDraft?
   )
   // Editor and diff comments are root-authored mentions. Removing their chip
   // must clear that root snapshot too, or archive recovery can restore it.
@@ -737,6 +765,7 @@ fn ComposerComponentModel::update(
   root_emit : @cmd.Emit[Msg],
 ) -> (ComposerComponentModel, @cmd.Cmd) {
   let entry = self.active(input)
+  let self = self.with_active_entry(input, entry)
   match msg {
     ComposerTextChanged(value) => {
       let (next, command) = entry.edited(input, value, emit, root_emit)
@@ -774,6 +803,7 @@ fn ComposerComponentModel::update(
       let (next, command) = entry.accept_completion(item, root_emit)
       self.commit_entry_change(entry, next, command, root_emit)
     }
+    ComposerEntryTransferred => (self, @cmd.none)
     ComposerSymbolRootChanged => {
       guard @composer.Trigger::parse(entry.draft.task, inline_markers="$#")
         is Some(trigger) &&
@@ -1066,11 +1096,17 @@ fn ComposerComponentModel::commit_entry_change(
   root_emit : @cmd.Emit[Msg],
 ) -> (ComposerComponentModel, @cmd.Cmd) {
   let presence = if previous.holds_draft() != entry.holds_draft() {
+    let cleared_source = if entry.holds_draft() {
+      None
+    } else {
+      Some(entry.source)
+    }
     root_emit(
       ComposerAction(
         ComposerDraftPresenceChanged(
           owner=entry.owner,
           present=entry.holds_draft(),
+          cleared_source~,
         ),
       ),
     )
@@ -1096,6 +1132,11 @@ fn ComposerComponentModel::subscriptions(
     session: conv.session_id,
   }
   let root = input.conversation_root(conv)
+  if input.composer_entry_replacement is Some(replacement) &&
+    replacement.fresh == owner &&
+    self.entries.iter().any(stored => stored.owner == replacement.archived) {
+    return @sub.every(150, emit(ComposerEntryTransferred))
+  }
   for stored in self.entries {
     if stored.owner == owner &&
       stored.root != root &&
@@ -1511,7 +1552,9 @@ test "composer retention uses one root bit instead of mirrored text" {
   }
   let (_, retained) = update(
     test_dispatch(),
-    ComposerAction(ComposerDraftPresenceChanged(owner~, present=true)),
+    ComposerAction(
+      ComposerDraftPresenceChanged(owner~, present=true, cleared_source=None),
+    ),
     input,
   )
   assert_eq(retained.active().task, "")
@@ -1526,10 +1569,49 @@ test "composer retention uses one root bit instead of mirrored text" {
   )
   let (_, released) = update(
     test_dispatch(),
-    ComposerAction(ComposerDraftPresenceChanged(owner~, present=false)),
+    ComposerAction(
+      ComposerDraftPresenceChanged(owner~, present=false, cleared_source=None),
+    ),
     retained,
   )
   assert_false(released.active().composer_draft_present)
+}
+
+///|
+test "empty local draft clears its matching root recovery snapshot" {
+  let mention : Mention = { ref_: Skill(name="recovered"), range: None }
+  let draft : ComposerDraft = { task: "rejected prompt", mentions: [mention] }
+  let input = test_model().replace_conversation({
+    ..test_conversation(),
+    compaction: Compacting,
+  })
+  let dispatch = test_dispatch()
+  let (_, rejected) = update(
+    dispatch,
+    ComposerAction(ComposerDraftSubmitted(draft)),
+    input,
+  )
+  inspect(rejected.active().task, content="rejected prompt")
+  inspect(rejected.active().mentions.length(), content="1")
+  assert_true(rejected.active().composer_draft_present)
+  let owner : @interop.ConversationKey = {
+    channel: rejected.focused,
+    session: rejected.active_session,
+  }
+  let (_, cleared) = update(
+    dispatch,
+    ComposerAction(
+      ComposerDraftPresenceChanged(
+        owner~,
+        present=false,
+        cleared_source=Some(draft),
+      ),
+    ),
+    rejected,
+  )
+  assert_eq(cleared.active().task, "")
+  assert_true(cleared.active().mentions.is_empty())
+  assert_true(cleared.active().draft_empty())
 }
 
 ///|
@@ -1554,7 +1636,9 @@ test "archive replacement carries the component-local prompt and goal" {
   )
   let (_, retained) = update(
     root_emit,
-    ComposerAction(ComposerDraftPresenceChanged(owner~, present=true)),
+    ComposerAction(
+      ComposerDraftPresenceChanged(owner~, present=true, cleared_source=None),
+    ),
     input,
   )
   let goal_input = retained.replace_conversation({
@@ -1581,6 +1665,29 @@ test "archive replacement carries the component-local prompt and goal" {
   inspect(carried.draft.task, content="local prompt")
   assert_eq(carried.goal_draft, Some("local goal"))
   assert_true(replaced.active().composer_draft_present)
+  let (moved, _) = with_goal.update(
+    replaced,
+    ComposerEntryTransferred,
+    component_emit,
+    root_emit,
+  )
+  assert_false(moved.entries.iter().any(entry => entry.owner == owner))
+  assert_true(
+    moved.entries.iter().any(entry => entry.owner.session == "desktop-fresh"),
+  )
+  let reopened = {
+    ..replaced,
+    active_session: "desktop-test",
+    conversations: [
+      empty_conversation(@interop.ChannelId::Local, "desktop-test"),
+      replaced.active(),
+    ],
+    composer_context_generation: replaced.composer_context_generation + 1,
+  }
+  // Unarchiving the old id starts from its root snapshot; the moved local
+  // entry cannot resurrect text that now belongs to the fresh conversation.
+  assert_eq(with_goal.active(reopened).draft.task, "")
+  assert_eq(moved.active(reopened).draft.task, "")
 }
 
 ///|

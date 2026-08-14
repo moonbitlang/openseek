@@ -1935,12 +1935,28 @@ fn update_msg(
             }),
           )
         }
-        ComposerDraftPresenceChanged(owner~, present~) =>
+        ComposerDraftPresenceChanged(owner~, present~, cleared_source~) =>
           if model.conversation_for_composer_action(owner) is Some(conv) {
+            let task = if !present &&
+              cleared_source is Some(source) &&
+              conv.task == source.task {
+              ""
+            } else {
+              conv.task
+            }
+            let mentions = if !present &&
+              cleared_source is Some(source) &&
+              conv.mentions == source.mentions {
+              []
+            } else {
+              conv.mentions
+            }
             (
               @cmd.none,
               model.replace_conversation({
                 ..conv,
+                task,
+                mentions,
                 composer_draft_present: present,
               }),
             )
