@@ -1,0 +1,64 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/update"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub async fn apply_staged(staged_app~ : String, bundle_path~ : String) -> Unit
+
+pub async fn check_for_update(current~ : String) -> UpdateInfo?
+
+pub async fn cleanup_leftovers(work_dir~ : String, bundle_path~ : String) -> Unit
+
+pub async fn self_update_unavailable_reason(bundle_path~ : String) -> String?
+
+pub async fn stage_update(UpdateInfo, work_dir~ : String, bundle_path~ : String, on_progress~ : async (Int, Int?) -> Unit) -> StagedUpdate
+
+pub async fn take_relaunch_target(work_dir~ : String) -> String?
+
+pub async fn write_relaunch_marker(work_dir~ : String, bundle_path~ : String) -> Unit
+
+// Errors
+pub suberror ManifestError {
+  MalformedManifest(reason~ : String)
+  MalformedArtifact(version~ : String, reason~ : String)
+}
+
+pub suberror Unreachable {
+  Unreachable(reason~ : String)
+}
+
+pub(all) suberror UpdateError {
+  UpdateError(String)
+}
+pub fn UpdateError::output(Self, &Logger) -> Unit
+pub fn UpdateError::to_string(Self) -> String
+pub impl Show for UpdateError
+
+// Types and methods
+pub struct PackageInfo {
+  url : String
+  sha256 : String
+} derive(Eq, @debug.Debug)
+pub fn PackageInfo::equal(Self, Self) -> Bool
+pub fn PackageInfo::not_equal(Self, Self) -> Bool
+pub fn PackageInfo::to_repr(Self) -> @debug.Repr
+
+pub struct StagedUpdate {
+  version : String
+  app_path : String
+}
+
+pub struct UpdateInfo {
+  version : String
+  artifact : PackageInfo?
+} derive(Eq, @debug.Debug)
+pub fn UpdateInfo::equal(Self, Self) -> Bool
+pub fn UpdateInfo::not_equal(Self, Self) -> Bool
+pub fn UpdateInfo::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

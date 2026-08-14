@@ -80,7 +80,7 @@ jobs:
           path: |
             ~/.proton/store
             ~/.proton/helpers
-          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/moon.mod') }}
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/backend/moon.mod') }}
 
       - name: Cache MoonBit toolchain seed
         uses: actions/cache@v4
@@ -91,16 +91,16 @@ jobs:
       - name: Assemble Proton CEF runtime
         working-directory: desktop
         run: |
-          $manifest = Get-Content moon.mod -Raw
+          $manifest = Get-Content backend/moon.mod -Raw
           if ($manifest -notmatch '"moonbit-community/proton@([^"]+)"') {
-            throw 'desktop/moon.mod does not pin Proton'
+            throw 'desktop/backend/moon.mod does not pin Proton'
           }
           moonx "moonbit-community/proton_cli@$($Matches[1])" cef setup
 
       - name: Build Windows app
         env:
           CL: /bigobj
-        run: moon run ./desktop/package/windows --target native -- --release --target app
+        run: moon run ./desktop/backend/package/windows --target native -- --release --target app
 
       - name: Test Windows background job paths and retained reads
         env:
@@ -112,7 +112,7 @@ jobs:
             Select-Object -ExpandProperty DirectoryName -Unique
           if (-not $runtimeDirs) { throw 'Packaged app contains no runtime DLLs' }
           $env:PATH = ($runtimeDirs -join ';') + ';' + $env:PATH
-          moon test desktop/internal/engine/jobs_wbtest.mbt --target native
+          moon test desktop/backend/internal/engine/jobs_wbtest.mbt --target native
 
       - name: Upload Windows app
         uses: actions/upload-artifact@v4
@@ -153,7 +153,7 @@ jobs:
       - name: Resolve pinned Proton version
         id: proton
         run: |
-          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/moon.mod)"
+          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/backend/moon.mod)"
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -190,7 +190,7 @@ jobs:
         working-directory: desktop
         # The Moon entrypoint remains a compatibility CLI. CI can call the same
         # build program directly because the job already prepared Proton.
-        run: node package/build.mjs browser
+        run: node backend/package/build.mjs browser
 
       - name: Run Desktop E2E tests
         working-directory: desktop/e2e

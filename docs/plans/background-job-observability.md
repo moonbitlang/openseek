@@ -23,8 +23,8 @@ Durable logs survive engine shutdown. Processes keep their current session-owned
 | `protocol/event.mbt`, `protocol/command.mbt` | Completion is prose in `BackgroundNotice`; no structured job events, list command or controller stop command. | A UI would otherwise have to parse tool text or ask the model to poll. |
 | `desktop/frontend/transcript/component/job_wait.mbt` | Extracts descriptions from tool briefs and renders waiting labels. | Helpful presentation, but not authoritative job tracking. |
 | `cmd/openseek/serve.mbt:621` | Builds tools once, outside individual turns. | A job can remain alive after a turn finishes; job state must not be attached only to the active turn. |
-| `desktop/internal/workflow/tail.mbt` | Already follows files using byte offsets and bounded reads. | Useful design precedent. Its newline-only delivery and silent read errors are unsuitable for a user log viewer without changes. |
-| `desktop/internal/host/fs_ops.mbt:39` | Can read absolute host paths, but reads the whole file subject to the editor size cap. | Paths are supported; efficient incremental log reads are the missing API. |
+| `desktop/backend/internal/workflow/tail.mbt` | Already follows files using byte offsets and bounded reads. | Useful design precedent. Its newline-only delivery and silent read errors are unsuitable for a user log viewer without changes. |
+| `desktop/backend/internal/host/fs_ops.mbt:39` | Can read absolute host paths, but reads the whole file subject to the editor size cap. | Paths are supported; efficient incremental log reads are the missing API. |
 | `desktop/frontend/right_panel/view.mbt:144` | Hosts a workflow panel alongside editor/browser surfaces. | Natural placement for a Jobs surface. |
 
 The current limits are 20,000,000 retained characters per job and a 30-minute runtime deadline. Preserve them initially and display the reason when they stop a job. These are not byte limits, and the character count must not be used as a file cursor.

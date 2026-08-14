@@ -1,0 +1,13 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/package/internal/cli"
+
+// Values
+pub async fn run(String) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

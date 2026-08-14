@@ -176,17 +176,34 @@ export class Release {
     if (!/^\d+\.\d+\.\d+$/.test(version)) {
       throw new Error(`release version must be three dot-separated numbers: ${version}`);
     }
-    // OpenSeek's shared build program reads moon.mod, while Proton 0.2 reads
-    // package.version from the project config; both must agree before packaging.
-    const modulePath = join(this.desktop, "moon.mod");
-    const module = await readFile(modulePath, "utf8");
-    if (!/^version = "[^"]+"$/m.test(module)) throw new Error("moon.mod has no version line");
-    await writeFile(modulePath, module.replace(/^version = "[^"]+"$/m, `version = "${version}"`));
+    // The root contracts and both consumers are released together. Keep their
+    // module versions and the two workspace dependency pins on the same value.
+    for (const relative of ["moon.mod", "backend/moon.mod", "frontend/moon.mod"]) {
+      const modulePath = join(this.desktop, relative);
+      let module = await readFile(modulePath, "utf8");
+      if (!/^version = "[^"]+"$/m.test(module)) throw new Error(`${relative} has no version line`);
+      module = module.replace(/^version = "[^"]+"$/m, `version = "${version}"`);
+      if (relative !== "moon.mod") {
+        if (!/"openseek_desktop@[^"]+"/.test(module)) {
+          throw new Error(`${relative} has no openseek_desktop dependency`);
+        }
+        module = module.replace(/"openseek_desktop@[^"]+"/, `"openseek_desktop@${version}"`);
+      }
+      await writeFile(modulePath, module);
+    }
     const configPath = join(this.desktop, "proton.project.json");
     const config = JSON.parse(await readFile(configPath, "utf8"));
     config.package.version = version;
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
-    if (await this.moduleVersion() !== version) throw new Error("moon.mod did not take the version");
+    for (const relative of ["moon.mod", "backend/moon.mod", "frontend/moon.mod"]) {
+      const module = await readFile(join(this.desktop, relative), "utf8");
+      if (!module.includes(`version = "${version}"`)) {
+        throw new Error(`${relative} did not take the version`);
+      }
+      if (relative !== "moon.mod" && !module.includes(`"openseek_desktop@${version}"`)) {
+        throw new Error(`${relative} did not take the openseek_desktop dependency`);
+      }
+    }
     if (JSON.parse(await readFile(configPath, "utf8")).package.version !== version) {
       throw new Error("proton.project.json did not take the version");
     }

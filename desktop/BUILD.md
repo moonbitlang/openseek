@@ -1,20 +1,20 @@
 # Desktop build
 
 The Desktop build has one sequential implementation:
-`package/build.mjs`. It runs on Node 22 and uses only Node's standard library
+`backend/package/build.mjs`. It runs on Node 22 and uses only Node's standard library
 plus the project tools already required by the build (`moon`, `moonx`, `curl`,
 and `tar`).
 
 | Owner | Responsibility |
 | --- | --- |
 | Moon | Compile the host, engine, and JavaScript frontends. |
-| `package/build.mjs` | Download verified browser/native inputs, generate browser assets, and stage SeekMoon resources. |
+| `backend/package/build.mjs` | Download verified browser/native inputs, generate browser assets, and stage SeekMoon resources. |
 | Proton | Run development CEF, create packages, sign, and notarize. |
 
-The packages at `package/macos`, `package/windows`, `package/linux`,
-`package/browser`, and `package/dev` preserve the existing `moon run`
+The packages at `backend/package/macos`, `backend/package/windows`, `backend/package/linux`,
+`backend/package/browser`, and `backend/package/dev` preserve the existing `moon run`
 commands. Each contains only a main function that forwards untouched arguments
-through `package/internal/cli`; all parsing and build decisions live in
+through `backend/package/internal/cli`; all parsing and build decisions live in
 `build.mjs`.
 
 ## Commands
@@ -29,7 +29,7 @@ just desktop-package
 just desktop-dev
 
 # Browser console
-moon run ./desktop/package/browser
+moon run ./desktop/backend/package/browser
 
 # Static checks for the build program and Moon entry packages
 just desktop-build-scripts-check
@@ -39,22 +39,22 @@ The platform commands remain compatible:
 
 ```sh
 # macOS; defaults to a debug app and opens it
-moon run ./desktop/package/macos
-moon run ./desktop/package/macos -- \
+moon run ./desktop/backend/package/macos
+moon run ./desktop/backend/package/macos -- \
   --release --no-open --target dmg --target zip \
   --sign "Developer ID Application: Name (TEAMID)" \
   --notarize openseek
 
 # Windows; defaults to ZIP and installer
-moon run ./desktop/package/windows
-moon run ./desktop/package/windows --target native -- --release --target app --target installer
+moon run ./desktop/backend/package/windows
+moon run ./desktop/backend/package/windows --target native -- --release --target app --target installer
 
 # Linux AppImage
-moon run ./desktop/package/linux -- --release
+moon run ./desktop/backend/package/linux -- --release
 
 # Browser release and development host
-moon run ./desktop/package/browser -- --release
-moon run ./desktop/package/dev
+moon run ./desktop/backend/package/browser -- --release
+moon run ./desktop/backend/package/dev
 ```
 
 Windows installer builds require NSIS (`makensis.exe` on `PATH`). Only the
@@ -85,7 +85,7 @@ Package commands perform these steps:
 6. staging of the fixed `seekmoon/` tree;
 7. one `proton_cli package` invocation for the requested formats.
 
-`package/dev` builds the frontend, viz, and engine, then calls
+`backend/package/dev` builds the frontend, viz, and engine, then calls
 `proton_cli dev --no-frontend --setup`. Proton supplies the CEF environment and
 runs the Desktop package; there is no second development launcher.
 

@@ -6,9 +6,14 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "openseek_desktop/frontend/action_menu",
 }
 
 // Values
+pub const RenameEditorId : String = "sidebar-conversation-rename-editor"
+
+pub const RenameInputId : String = "sidebar-conversation-rename"
+
 pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[Array[(String, @html.Html)]]
 
 // Errors
@@ -19,20 +24,42 @@ pub(all) struct Actions {
   archive : (Id) -> @cmd.Cmd
   restore : (Id) -> @cmd.Cmd
   delete : (Id) -> @cmd.Cmd
+  rename : (Id, String) -> @cmd.Cmd
+  rename_changed : (Id, String) -> @cmd.Cmd
+  rename_submit : (Id) -> @cmd.Cmd
+  rename_cancel : (Id) -> @cmd.Cmd
 }
 
+pub(all) enum ConversationSource {
+  OpenSeekLive
+  OpenSeekArchived
+  CodexLive
+  CodexArchived
+  CodexDraft
+} derive(Eq, Hash, @debug.Debug)
+pub fn ConversationSource::equal(Self, Self) -> Bool
+pub fn ConversationSource::hash(Self) -> Int
+pub fn ConversationSource::hash_combine(Self, Hasher) -> Unit
+pub fn ConversationSource::not_equal(Self, Self) -> Bool
+pub fn ConversationSource::to_repr(Self) -> @debug.Repr
+
 pub(all) struct Id {
-  source : String
+  source : ConversationSource
   channel : String
   conversation : String
   root : String?
 } derive(Eq, Hash, @debug.Debug)
-pub fn Id::Id(source~ : String, channel~ : String, conversation~ : String, root? : String) -> Self
+pub fn Id::Id(source~ : ConversationSource, channel~ : String, conversation~ : String, root? : String) -> Self
 pub fn Id::channel(Self) -> String
 pub fn Id::conversation(Self) -> String
+pub fn Id::equal(Self, Self) -> Bool
+pub fn Id::hash(Self) -> Int
+pub fn Id::hash_combine(Self, Hasher) -> Unit
 pub fn Id::key(Self) -> String
+pub fn Id::not_equal(Self, Self) -> Bool
 pub fn Id::root(Self) -> String?
-pub fn Id::source(Self) -> String
+pub fn Id::source(Self) -> ConversationSource
+pub fn Id::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Input {
   id : Id
@@ -41,27 +68,62 @@ pub(all) struct Input {
   nested : Bool
   subrun : Bool
   active : Bool
+  loading : Bool
+  load_failed : Bool
   running : Bool
   openable : Bool
   worktree : String?
   run_mark : RunMark
   trailing : Array[TrailingAction]
+  rename : RenameInput?
   children : Array[Input]
 } derive(Eq, @debug.Debug)
+pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::id(Self) -> Id
+pub fn Input::menu_entries(Self, Actions) -> Array[@action_menu.Entry]?
+pub fn Input::not_equal(Self, Self) -> Bool
+pub fn Input::to_repr(Self) -> @debug.Repr
+
+pub(all) struct RenameInput {
+  draft : String
+  saving : Bool
+  error : String?
+} derive(Eq, @debug.Debug)
+pub fn RenameInput::equal(Self, Self) -> Bool
+pub fn RenameInput::not_equal(Self, Self) -> Bool
+pub fn RenameInput::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RunMark {
   NoRunMark
   RunningMark
+  NeedsInputMark
   CompletedMark
   FailedMark
+  StoppedMark
+  EndedMark
 } derive(Eq, @debug.Debug)
+pub fn RunMark::equal(Self, Self) -> Bool
+pub fn RunMark::for_task(running~ : Bool, needs_input~ : Bool, unseen_outcome~ : RunOutcome?) -> Self
+pub fn RunMark::not_equal(Self, Self) -> Bool
+pub fn RunMark::to_repr(Self) -> @debug.Repr
+
+pub(all) enum RunOutcome {
+  Completed
+  Failed
+  Stopped
+  Ended
+} derive(Eq)
+pub fn RunOutcome::equal(Self, Self) -> Bool
+pub fn RunOutcome::not_equal(Self, Self) -> Bool
 
 pub(all) enum TrailingAction {
   Archive(title~ : String)
   Restore(title~ : String)
   Delete(title~ : String)
 } derive(Eq, @debug.Debug)
+pub fn TrailingAction::equal(Self, Self) -> Bool
+pub fn TrailingAction::not_equal(Self, Self) -> Bool
+pub fn TrailingAction::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

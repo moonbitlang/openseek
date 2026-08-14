@@ -60,10 +60,11 @@ flowchart LR
   Session --> Viewer[Existing session viewer]
 ```
 
-The host service lives in `desktop/internal/engine/schedules.mbt`, beside the
+The host service lives in `desktop/backend/internal/engine/schedules.mbt`, beside the
 existing run configuration and process environment helpers. It does not add
 scheduling, deduplication, or a new execution protocol to the core agent/CLI.
-The primary host starts it from `desktop/main.mbt`; `internal/api` exposes
+The primary host starts it from `desktop/backend/main.mbt`;
+`desktop/backend/internal/api` exposes
 `schedules.list`, `schedules.save`, and `schedules.action`. Explicit protocol
 codecs reject malformed configuration and unknown timing/status variants.
 

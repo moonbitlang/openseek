@@ -13,7 +13,7 @@
 
 - For a one-shot command that collects stdout and stderr but must not read
   input, use `@processx.collect_output_no_stdin` from
-  `desktop/internal/processx` instead of `@process.collect_output`.
+  `desktop/backend/internal/processx` instead of `@process.collect_output`.
 - `collect_output_no_stdin` gives the child a valid stdin handle that is
   already at EOF and always suppresses creation of a console window. Both are
   required for Windows GUI builds: inheriting a missing standard-input handle

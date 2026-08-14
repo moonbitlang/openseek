@@ -1,8 +1,0 @@
-import {
-  "openseek_desktop/package/internal/cli",
-  "moonbitlang/async",
-}
-
-supported_targets = "native"
-
-pkgtype(kind: "executable")

@@ -1,0 +1,86 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/workflow"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn child_closed(Array[Run], id~ : String, status~ : String, steps~ : Int, tokens~ : Int) -> Array[Run]
+
+pub fn child_opened(Array[Run], id~ : String, kind~ : String, label~ : String) -> Array[Run]
+
+pub fn closed(Array[Run], id~ : String) -> Array[Run]
+
+pub fn entry(Array[Run], Entry) -> Array[Run]
+
+pub fn opened(Array[Run], id~ : String, session~ : String, first_child~ : Int, child_count~ : Int) -> Array[Run]
+
+pub fn panel(Array[Run], Actions) -> @html.Html
+
+pub fn row_status(Row, closed~ : Bool) -> (String, String)
+
+// Errors
+
+// Types and methods
+pub(all) struct Actions {
+  open_child : (String) -> @cmd.Cmd
+}
+
+pub(all) struct Entry {
+  workflow : String
+  session : String
+  child : String
+  kind : String
+  label : String
+  phase : String?
+  status : String
+  steps : Int
+  prompt_tokens : Int
+  completion_tokens : Int
+  cost_usd : Double?
+  started_at : Double?
+  finished_at : Double?
+} derive(Eq, @debug.Debug)
+pub fn Entry::equal(Self, Self) -> Bool
+pub fn Entry::not_equal(Self, Self) -> Bool
+pub fn Entry::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Row {
+  child : String
+  ordinal : Int
+  kind : String
+  label : String
+  phase : String?
+  status : String?
+  steps : Int
+  tokens : Int
+  cost_usd : Double?
+  started_at : Double?
+  finished_at : Double?
+} derive(Eq, @debug.Debug)
+pub fn Row::equal(Self, Self) -> Bool
+pub fn Row::not_equal(Self, Self) -> Bool
+pub fn Row::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Run {
+  id : String
+  session : String
+  first_child : Int
+  child_count : Int
+  closed : Bool
+  rows : Array[Row]
+} derive(Eq, @debug.Debug)
+pub fn Run::cost_usd(Self) -> Double?
+pub fn Run::equal(Self, Self) -> Bool
+pub fn Run::not_equal(Self, Self) -> Bool
+pub fn Run::ordered_rows(Self) -> Array[Row]
+pub fn Run::running(Self) -> Int
+pub fn Run::to_repr(Self) -> @debug.Repr
+pub fn Run::tokens(Self) -> Int
+
+// Type aliases
+
+// Traits

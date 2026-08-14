@@ -1,0 +1,79 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/jobs"
+
+import {
+  "bobzhang/openseek_protocol",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/sub",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub fn panel(State, @cmd.Emit[Msg]) -> @html.Html
+
+pub fn reconcile(@cmd.Emit[Msg], State, Owner?, Bool) -> (@cmd.Cmd, State)
+
+pub fn subscriptions(State, @cmd.Emit[Msg]) -> @sub.Sub
+
+pub fn update(@cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
+
+// Errors
+
+// Types and methods
+pub(all) enum Msg {
+  Poll
+  More
+  Select(String, String)
+  ToggleFollow
+  ToggleHistory
+  Pause
+  Reload
+  Stop
+  Listed(Int, Int, Result[@protocol.JobsListReply, String])
+  Read(Int, Int, Result[@protocol.JobReadReply, String])
+  Stopped(Int, (String, String), Result[@protocol.JobStopReply, String])
+}
+
+pub(all) struct Owner {
+  channel : @interop.ChannelId
+  scope : @protocol.JobsScope
+} derive(Eq)
+pub fn Owner::equal(Self, Self) -> Bool
+pub fn Owner::not_equal(Self, Self) -> Bool
+
+pub(all) struct State {
+  owner : Owner?
+  active : Bool
+  epoch : Int
+  jobs : Array[@protocol.JobView]
+  history_expanded : Bool
+  selected : (String, String)?
+  listing : Bool
+  next_offset : Int?
+  error : String?
+  warnings : Array[String]
+  text : String
+  cursor : Int64?
+  reading : Bool
+  read_serial : Int
+  reading_state : @openseek_protocol.JobState?
+  eof_state : @openseek_protocol.JobState?
+  read_budget : Int
+  catching_up : Bool
+  reload_pending : Bool
+  manual_read : Bool
+  read_error : String?
+  follow : Bool
+  clipped : Bool
+  control_error : String?
+  stopping : Bool
+} derive(Eq)
+pub fn State::empty() -> Self
+pub fn State::equal(Self, Self) -> Bool
+pub fn State::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

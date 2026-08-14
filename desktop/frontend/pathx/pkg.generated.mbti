@@ -12,9 +12,16 @@ import {
 // Types and methods
 pub(all) struct Relative(String) derive(Eq, Hash, @debug.Debug)
 pub fn Relative::contains(Self, Self) -> Bool
+pub fn Relative::equal(Self, Self) -> Bool
+pub fn Relative::hash(Self) -> Int
+pub fn Relative::hash_combine(Self, Hasher) -> Unit
 pub fn Relative::is_root(Self) -> Bool
 pub fn Relative::normalize(Self) -> Self
+pub fn Relative::not_equal(Self, Self) -> Bool
+pub fn Relative::output(Self, &Logger) -> Unit
 pub fn Relative::root() -> Self
+pub fn Relative::to_repr(Self) -> @debug.Repr
+pub fn Relative::to_string(Self) -> String
 pub impl Show for Relative
 
 // Type aliases

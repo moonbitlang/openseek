@@ -1,0 +1,49 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/fsx"
+
+import {
+  "openseek_desktop/backend/internal/pathx",
+}
+
+// Values
+pub async fn copy_dir(@pathx.Path, @pathx.Path) -> Unit
+
+pub async fn copy_file(@pathx.Path, @pathx.Path) -> Unit
+
+pub async fn ensure_dir(@pathx.Path) -> Unit
+
+pub async fn exists(@pathx.Path) -> Bool
+
+pub async fn is_dir(@pathx.Path) -> Bool
+
+pub async fn is_executable_file(@pathx.Path) -> Bool
+
+pub async fn read_text(@pathx.Path) -> String
+
+pub async fn read_text_if_exists(@pathx.Path) -> String?
+
+pub async fn remove_if_exists(@pathx.Path) -> Unit
+
+pub async fn rmdir(@pathx.Path, recursive? : Bool) -> Unit
+
+pub async fn try_read_text(@pathx.Path) -> String?
+
+pub async fn write_bytes(@pathx.Path, Bytes) -> Unit
+
+pub async fn write_text(@pathx.Path, String) -> Unit
+
+// Errors
+
+// Types and methods
+type Directory
+pub async fn Directory::collect(Self) -> Array[DirectoryEntry]
+pub async fn Directory::next(Self) -> DirectoryEntry?
+pub async fn Directory::try_open(@pathx.Path) -> Self?
+
+type DirectoryEntry
+pub fn DirectoryEntry::is_dir(Self) -> Bool
+pub fn DirectoryEntry::name(Self) -> String
+
+// Type aliases
+
+// Traits

@@ -6,7 +6,7 @@ import {
 }
 
 async fn main {
-  guard @fs.exists("desktop/package/build.mjs") && @fs.exists("share/workflow") else {
+  guard @fs.exists("desktop/backend/package/build.mjs") && @fs.exists("share/workflow") else {
     fail("Run this command from the OpenSeek repository root")
   }
   let requested = match @env.args() {

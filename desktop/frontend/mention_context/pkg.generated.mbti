@@ -24,12 +24,16 @@ pub(all) enum AnnotationSide {
   WorkingRevision
   OriginalRevision
 } derive(Eq, @debug.Debug)
+pub fn AnnotationSide::equal(Self, Self) -> Bool
+pub fn AnnotationSide::not_equal(Self, Self) -> Bool
+pub fn AnnotationSide::to_repr(Self) -> @debug.Repr
 
 pub struct MentionMessage {
   mentions : Array[MentionRef]
   task : String
 } derive(@debug.Debug)
 pub fn MentionMessage::display_text(Self) -> String
+pub fn MentionMessage::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MentionRef {
   Skill(name~ : String)
@@ -37,12 +41,18 @@ pub(all) enum MentionRef {
   Symbol(name~ : String, file~ : String, line~ : Int)
   Annotation(file~ : String, start_line~ : Int, end_line~ : Int, quote~ : String, comment~ : String, side~ : AnnotationSide)
 } derive(Eq, @debug.Debug)
+pub fn MentionRef::equal(Self, Self) -> Bool
+pub fn MentionRef::not_equal(Self, Self) -> Bool
+pub fn MentionRef::to_repr(Self) -> @debug.Repr
 
 pub struct Target {
   file : String
   range : @common.Range?
   annotation : String?
 } derive(Eq, @debug.Debug)
+pub fn Target::equal(Self, Self) -> Bool
+pub fn Target::not_equal(Self, Self) -> Bool
+pub fn Target::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

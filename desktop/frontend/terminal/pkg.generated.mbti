@@ -53,9 +53,7 @@ pub(all) enum Msg {
   ViewportResized(key~ : String, cols~ : Int, rows~ : Int)
 }
 
-pub struct State {
-  // private fields
-} derive(Eq)
+type State derive(Eq)
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(Self, @cmd.Emit[Msg], Msg, Input) -> (@cmd.Cmd, Self)

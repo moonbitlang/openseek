@@ -1,5 +1,5 @@
 import {
-  "openseek_desktop/internal/uri",
+  "openseek_desktop/uri",
   "moonbit-community/cmark/cmark",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",

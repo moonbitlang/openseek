@@ -62,7 +62,7 @@ jobs:
       - name: Resolve pinned Proton version
         id: proton
         run: |
-          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/moon.mod)"
+          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/backend/moon.mod)"
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -128,7 +128,7 @@ jobs:
         run: moon update
 
       # Proton comes from the registry, so the version it is pinned to lives in
-      # desktop/moon.mod and nowhere else. Read it back here rather than
+      # desktop/backend/moon.mod and nowhere else. Read it back here rather than
       # repeating it, and reuse it for both the CEF cache key and the CLI.
       # The wasm row links nothing from Proton, so it needs no CEF runtime and
       # skips this and the two store steps below. It does still need the
@@ -137,7 +137,7 @@ jobs:
         if: matrix.target != 'wasm'
         id: proton
         run: |
-          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/moon.mod)"
+          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/backend/moon.mod)"
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -299,7 +299,7 @@ jobs:
       - name: Resolve pinned Proton version
         id: proton
         run: |
-          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/moon.mod)"
+          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/backend/moon.mod)"
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 

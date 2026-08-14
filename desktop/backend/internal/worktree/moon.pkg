@@ -1,0 +1,22 @@
+import {
+  "moonbitlang/core/env" @sys,
+  "openseek_desktop/backend/internal/entropy",
+  "openseek_desktop/backend/internal/fsx",
+  "openseek_desktop/backend/internal/gitx",
+  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/protocol",
+  "openseek_desktop/backend/internal/session_store",
+  "openseek_desktop/backend/internal/workspaces",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
+}
+
+import {
+  "openseek_desktop/backend/internal/processx",
+  "tonyfettes/platform",
+} for "wbtest"
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"

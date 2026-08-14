@@ -1,0 +1,17 @@
+import {
+  "openseek_desktop/backend/internal/env",
+  "openseek_desktop/backend/internal/fsx",
+  "openseek_desktop/backend/internal/home",
+  "openseek_desktop/backend/internal/pathx",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+  "moonbitlang/async/semaphore",
+  "moonbitlang/core/env" @sys,
+  "moonbitlang/core/string",
+  "tonyfettes/xlog",
+}
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"

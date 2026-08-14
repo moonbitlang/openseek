@@ -141,14 +141,14 @@ jobs:
           node-version: 22
 
       # Proton 0.2 installs its immutable runtime and versioned helper in the
-      # shared user-level store selected by the dependency in desktop/moon.mod.
+      # shared user-level store selected by the dependency in desktop/backend/moon.mod.
       - name: Cache Proton runtime
         uses: actions/cache@v4
         with:
           path: |
             ~/.proton/store
             ~/.proton/helpers
-          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/moon.mod') }}
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/backend/moon.mod') }}
 
       # The packager stages the seed toolchain pinned by
       # `desktop/.moonbit-version` from archives downloaded into this directory.
@@ -158,8 +158,8 @@ jobs:
           path: desktop/target/moonbit/cache
           key: moonbit-seed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/.moonbit-version') }}
 
-      # Stamp only this runner's checkout. OpenSeek's shared build program uses
-      # moon.mod, while Proton 0.2 reads package.version from the project config.
+      # Stamp only this runner's checkout. The three Desktop module manifests
+      # and Proton's package.version must agree before packaging.
       - name: Stamp release version
         shell: bash
         run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
@@ -228,7 +228,7 @@ jobs:
       - name: Build, sign, and notarize macOS artifacts
         shell: bash
         run: |
-          moon -C desktop run package/macos --target native -- \
+          moon -C desktop/backend run package/macos --target native -- \
             --release \
             --no-open \
             --target dmg \
@@ -253,7 +253,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          moon -C desktop run package/browser --target native -- --release
+          moon -C desktop/backend run package/browser --target native -- --release
           test -f desktop/dist/browser/index.html
           test -f desktop/dist/browser/browser.js
           COPYFILE_DISABLE=1 tar \
@@ -336,7 +336,7 @@ jobs:
           path: |
             ~/.proton/store
             ~/.proton/helpers
-          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/moon.mod') }}
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/backend/moon.mod') }}
 
       - name: Cache MoonBit toolchain seed
         uses: actions/cache@v4
@@ -347,14 +347,14 @@ jobs:
       - name: Assemble Proton CEF runtime
         working-directory: desktop
         run: |
-          $manifest = Get-Content moon.mod -Raw
+          $manifest = Get-Content backend/moon.mod -Raw
           if ($manifest -notmatch '"moonbit-community/proton@([^"]+)"') {
-            throw 'desktop/moon.mod does not pin Proton'
+            throw 'desktop/backend/moon.mod does not pin Proton'
           }
           moonx "moonbit-community/proton_cli@$($Matches[1])" cef setup
 
-      # After the cache steps: stamping edits moon.mod, whose hash keys the
-      # Proton runtime cache.
+      # After the cache steps: stamping edits backend/moon.mod, whose hash keys
+      # the Proton runtime cache.
       - name: Stamp release version
         shell: bash
         run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
@@ -365,7 +365,7 @@ jobs:
           CL: /bigobj
         # Keep the unpacked application for the version check below. Proton
         # removes it after packaging when only the installer is requested.
-        run: moon run ./desktop/package/windows --target native -- --release --target app --target installer
+        run: moon run ./desktop/backend/package/windows --target native -- --release --target app --target installer
 
       # Proton names the installer after the executable. The release keeps
       # the platform in the filename, matching the other download names.

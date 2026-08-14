@@ -1,0 +1,67 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/action_menu"
+
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+}
+
+// Values
+pub fn button_attrs(String) -> @html.Attrs
+
+pub fn[Input : Eq] component(@rabbita.Val[Input], (Input, String) -> Definition?) -> @rabbita.Val[@html.Html]
+
+pub fn context_attrs(String) -> @html.Attrs
+
+pub fn context_component(@rabbita.Val[ContextInput], ContextActions) -> @rabbita.Val[@html.Html]
+
+// Errors
+
+// Types and methods
+pub(all) enum ClientPlatform {
+  Web
+  MacOS
+  Windows
+  Linux
+} derive(Eq)
+pub fn ClientPlatform::equal(Self, Self) -> Bool
+pub fn ClientPlatform::not_equal(Self, Self) -> Bool
+
+pub(all) struct ContextActions {
+  open_link : (String) -> @cmd.Cmd
+  open_external_link : (String) -> @cmd.Cmd
+  open_file : (String) -> @cmd.Cmd
+  reveal_file : (String) -> @cmd.Cmd
+}
+
+pub(all) struct ContextInput {
+  platform : ClientPlatform
+  open_web_links_in_app : Bool
+  reveal_files : Bool
+} derive(Eq)
+pub fn ContextInput::equal(Self, Self) -> Bool
+pub fn ContextInput::not_equal(Self, Self) -> Bool
+
+pub(all) struct Definition {
+  label : String
+  entries : Array[Entry]
+}
+
+pub(all) enum Entry {
+  Action(Item)
+  Separator
+}
+
+pub(all) struct Item {
+  label : String
+  title : String
+  icon : @html.Html?
+  enabled : Bool
+  destructive : Bool
+  command : @cmd.Cmd
+}
+
+// Type aliases
+
+// Traits

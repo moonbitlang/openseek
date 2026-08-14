@@ -133,6 +133,35 @@ test("artifact checks preserve non-missing filesystem errors", async t => {
   await assert.rejects(new Release().localArtifact({ file: "SeekMoon.app.zip" }), actual => actual === error);
 });
 
+test("stamp keeps all Desktop module versions aligned", async t => {
+  const release = new Release();
+  release.desktop = await fs.mkdtemp(join(tmpdir(), "openseek-release-stamp-"));
+  release.dist = join(release.desktop, "dist");
+  t.after(() => fs.rm(release.desktop, { recursive: true, force: true }));
+  await fs.mkdir(join(release.desktop, "backend"));
+  await fs.mkdir(join(release.desktop, "frontend"));
+  await fs.writeFile(join(release.desktop, "moon.mod"), 'name = "openseek_desktop"\nversion = "0.1.5"\n');
+  for (const member of ["backend", "frontend"]) {
+    await fs.writeFile(
+      join(release.desktop, member, "moon.mod"),
+      `name = "openseek_desktop/${member}"\nversion = "0.1.5"\nimport { "openseek_desktop@0.1.5" }\n`,
+    );
+  }
+  await fs.writeFile(
+    join(release.desktop, "proton.project.json"),
+    JSON.stringify({ package: { version: "0.1.5" } }),
+  );
+  await release.stamp("0.2.0");
+  assert.equal(await release.moduleVersion(), "0.2.0");
+  for (const member of ["backend", "frontend"]) {
+    const module = await fs.readFile(join(release.desktop, member, "moon.mod"), "utf8");
+    assert.match(module, /^version = "0\.2\.0"$/m);
+    assert.match(module, /"openseek_desktop@0\.2\.0"/);
+  }
+  const config = JSON.parse(await fs.readFile(join(release.desktop, "proton.project.json"), "utf8"));
+  assert.equal(config.package.version, "0.2.0");
+});
+
 test("missing artifacts have a useful message and retain the filesystem cause", async t => {
   const error = Object.assign(new Error("no such file"), { code: "ENOENT" });
   const mocked = t.mock.method(fs, "stat", async () => { throw error; });

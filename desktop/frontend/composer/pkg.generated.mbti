@@ -13,7 +13,7 @@ import {
   "openseek_desktop/frontend/skills",
   "openseek_desktop/frontend/subrun",
   "openseek_desktop/frontend/transcript",
-  "openseek_desktop/internal/protocol",
+  "openseek_desktop/protocol",
 }
 
 // Values
@@ -24,6 +24,7 @@ pub fn component(@rabbita.Val[Input], @cmd.Emit[Action]) -> @rabbita.Val[@html.H
 // Types and methods
 pub(all) enum Action {
   DraftSubmitted(identity~ : Identity, draft~ : Draft)
+  FollowupSubmitted(identity~ : Identity, draft~ : Draft, choice~ : FollowupChoice)
   DraftPresenceChanged(identity~ : Identity, present~ : Bool, cleared_source~ : Draft?)
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
   SlashCommand(identity~ : Identity, command~ : String)
@@ -48,7 +49,9 @@ pub(all) enum Action {
   GitDetailsToggled(identity~ : Identity)
   WorktreeModeToggled(identity~ : Identity)
   ApiSetupRequested(identity~ : Identity)
-  ArchivedInputDismissed(identity~ : Identity)
+  QueuedInputEditRequested(identity~ : Identity, id~ : String)
+  QueuedInputSteerRequested(identity~ : Identity, id~ : String)
+  QueuedInputDeleteRequested(identity~ : Identity, id~ : String)
   WorktreePlacementRetried(identity~ : Identity)
   MissingWorktreeRebuildRequested(identity~ : Identity)
   MissingWorktreeArchiveRequested(identity~ : Identity)
@@ -75,8 +78,8 @@ pub(all) enum ContextComponent {
   ApiSetupNotice(text~ : String)
   ApprovalRequest(ApprovalNotice)
   CodexRequests(requests~ : Array[CodexRequestInput])
-  ArchivedInputNotice(text~ : String)
   PendingSteerPanel(items~ : Array[String])
+  QueuedInputPanel(items~ : Array[QueuedInput])
   CompactionNotice(queued~ : Bool)
   WorktreePlacementNotice
   MissingWorktreeNoticeComponent(MissingWorktreeNotice)
@@ -102,6 +105,14 @@ pub(all) enum FileIndex {
 pub fn FileIndex::equal(Self, Self) -> Bool
 pub fn FileIndex::not_equal(Self, Self) -> Bool
 pub fn FileIndex::to_repr(Self) -> @debug.Repr
+
+pub(all) enum FollowupChoice {
+  SteerNow
+  QueueNext
+} derive(Eq, @debug.Debug)
+pub fn FollowupChoice::equal(Self, Self) -> Bool
+pub fn FollowupChoice::not_equal(Self, Self) -> Bool
+pub fn FollowupChoice::to_repr(Self) -> @debug.Repr
 
 type GitChanges derive(Eq)
 pub fn GitChanges::GitChanges(added~ : Int, removed~ : Int, files~ : Int, partial~ : Bool, base? : String) -> Self
@@ -163,12 +174,12 @@ pub(all) struct Input {
   draft : Draft
   goal : GoalInput
   run : RunHeartbeat?
+  turn_id : String?
   slash_commands : Array[SlashCommand]
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int
   submission_sequence : Int
-  replacements : Array[Replacement]
   retirements : Array[@interop.ConversationKey]
   file_candidates : Array[@pathx.Relative]
   open_files : Array[@pathx.Relative]
@@ -237,11 +248,26 @@ pub fn Presentation::not_equal(Self, Self) -> Bool
 
 pub(all) enum PrimaryAction {
   Send(available~ : Bool)
-  Running(steer_available~ : Bool, can_stop~ : Bool)
+  Running(steer_available~ : Bool, can_stop~ : Bool, submit~ : RunningSubmit, queue_available~ : Bool)
 } derive(Eq, @debug.Debug)
 pub fn PrimaryAction::equal(Self, Self) -> Bool
 pub fn PrimaryAction::not_equal(Self, Self) -> Bool
 pub fn PrimaryAction::to_repr(Self) -> @debug.Repr
+
+pub(all) struct QueuedInput {
+  id : String
+  content : String
+  state : QueuedInputState
+} derive(Eq)
+pub fn QueuedInput::equal(Self, Self) -> Bool
+pub fn QueuedInput::not_equal(Self, Self) -> Bool
+
+pub(all) enum QueuedInputState {
+  Queueing
+  Queued(editing~ : Bool, interactive~ : Bool)
+} derive(Eq)
+pub fn QueuedInputState::equal(Self, Self) -> Bool
+pub fn QueuedInputState::not_equal(Self, Self) -> Bool
 
 pub(all) struct ReasoningSelect {
   id : String
@@ -251,15 +277,6 @@ pub(all) struct ReasoningSelect {
   open : Bool
   title : String
 } derive(Eq)
-
-pub(all) struct Replacement {
-  archived : @interop.ConversationKey
-  fresh : @interop.ConversationKey
-  archive_generation : Int
-} derive(Eq, @debug.Debug)
-pub fn Replacement::equal(Self, Self) -> Bool
-pub fn Replacement::not_equal(Self, Self) -> Bool
-pub fn Replacement::to_repr(Self) -> @debug.Repr
 
 pub(all) struct RunHeartbeat {
   stage : RunStage
@@ -281,6 +298,15 @@ pub(all) enum RunStage {
 pub fn RunStage::equal(Self, Self) -> Bool
 pub fn RunStage::not_equal(Self, Self) -> Bool
 pub fn RunStage::to_repr(Self) -> @debug.Repr
+
+pub(all) enum RunningSubmit {
+  Steer
+  Queue
+  SaveQueue
+} derive(Eq, @debug.Debug)
+pub fn RunningSubmit::equal(Self, Self) -> Bool
+pub fn RunningSubmit::not_equal(Self, Self) -> Bool
+pub fn RunningSubmit::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SlashCommand {
   label : String

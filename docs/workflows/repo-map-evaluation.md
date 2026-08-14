@@ -205,7 +205,7 @@ rebasing, `moon test agent_tool/mbtx --target native` passed all 85 tests.
 Repository-wide `just check` and `just test` remain blocked by pre-existing
 tuple-pattern loop syntax errors in existing tests (including
 `deepseek/client/openrouter_wbtest.mbt` after rebasing,
-`desktop/internal/uri/uri_test.mbt` and
+`desktop/uri/uri_test.mbt` and
 `editor/viewer/diff_provider/moondiff/*test.mbt`). No such files were changed.
 
 The offline workflow fixtures now live in the native MoonBit package

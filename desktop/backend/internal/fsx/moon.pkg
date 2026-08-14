@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/os_error",
+  "moonbitlang/async/fs",
+  "openseek_desktop/backend/internal/pathx",
+  "tonyfettes/platform",
+}
+
+supported_targets = "+native"

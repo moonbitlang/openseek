@@ -1,7 +1,7 @@
 {
   "identifier": "community.moonbit.proton.openseek-desktop",
   "backend": {
-    "path": ".",
+    "path": "backend",
     "package": "."
   },
   "package": {
@@ -9,8 +9,8 @@
     "version": "0.1.5",
     "formats": ["app", "zip"],
     "icons": [
-      "package/macos/AppIcon.icns",
-      "package/linux/appicon.png"
+      "backend/package/macos/AppIcon.icns",
+      "backend/package/linux/appicon.png"
     ],
     "resources": ["seekmoon/**"],
     "sign": {

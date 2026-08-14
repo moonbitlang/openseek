@@ -2,8 +2,8 @@ import {
   "bobzhang/openseek_protocol" @protocol,
   "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
-  "openseek_desktop/internal/protocol" @desktop_protocol,
-  "openseek_desktop/internal/jsonx",
+  "openseek_desktop/protocol" @desktop_protocol,
+  "openseek_desktop/frontend/internal/jsonx",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/resource",
 }
