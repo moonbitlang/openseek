@@ -1190,6 +1190,15 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
 }
 
 ///|
+/// The last active conversation replaced after it was archived. The composer
+/// uses this one identity handoff to keep its local entry while the root moves
+/// the visible conversation to the fresh session id.
+priv struct ComposerEntryReplacement {
+  archived : @interop.ConversationKey
+  fresh : @interop.ConversationKey
+} derive(Eq)
+
+///|
 priv struct Model {
   // Connected device channels in stable order: the desktop window's one
   // Local host, or a browser console's roster devices — empty there until
@@ -1371,6 +1380,10 @@ priv struct Model {
   // each conversation's unsent draft; textarea edits never touch this field or
   // any other part of the root Model.
   composer_context_generation : Int
+  // The most recent archive rotation. Component-local draft text remains in
+  // the component; this only tells it which fresh owner replaces the archived
+  // owner and lets delayed root actions reach that same conversation.
+  composer_entry_replacement : ComposerEntryReplacement?
   // Cmd/Ctrl+P/T unified Quick Open in the native window and browser console.
   // It is global UI for the focused conversation, not durable conversation
   // state. The monotonic counter fences symbol replies across close and reopen,
@@ -2546,6 +2559,7 @@ fn initial_model() -> Model {
     symbol_cache: empty_symbol_cache(),
     completion_debounce: @composer.Debounce(),
     composer_context_generation: 0,
+    composer_entry_replacement: None,
     quick_open: None,
     quick_open_generation: 0,
     git_request_generation: 0,
@@ -3139,6 +3153,24 @@ fn Model::active(self : Model) -> Conversation {
         .unwrap_or(self.default_model),
     )
   }
+}
+
+///|
+/// Resolve a component action against the conversation that currently owns
+/// its local entry. A command queued just before archive replacement still
+/// names the archived owner, so that one identity maps to the fresh record.
+fn Model::conversation_for_composer_action(
+  self : Model,
+  owner : @interop.ConversationKey,
+) -> Conversation? {
+  if self.find_conversation(owner.channel, owner.session) is Some(conv) {
+    return Some(conv)
+  }
+  guard self.composer_entry_replacement is Some(replacement) &&
+    replacement.archived == owner else {
+    return None
+  }
+  self.find_conversation(replacement.fresh.channel, replacement.fresh.session)
 }
 
 ///|

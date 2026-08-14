@@ -393,6 +393,23 @@ fn ComposerComponentModel::active(
       return entry.reconciled(input)
     }
   }
+  // Archiving replaces the active session id while this component still owns
+  // the live textarea. Move that one cached entry to the fresh owner, then use
+  // the normal three-way reconciliation to combine it with root-side salvage.
+  if input.composer_entry_replacement is Some(replacement) &&
+    replacement.fresh == owner {
+    for entry in self.entries {
+      if entry.owner == replacement.archived {
+        return {
+          ..entry,
+          owner,
+          completion: None,
+          symbol_cache: empty_symbol_cache(),
+          pending_submission: None,
+        }.reconciled(input)
+      }
+    }
+  }
   ComposerEntry(input)
 }
 
@@ -471,6 +488,12 @@ priv enum ComposerRootAction {
   ComposerDraftPresenceChanged(
     owner~ : @interop.ConversationKey,
     present~ : Bool
+  )
+  // Editor and diff comments are root-authored mentions. Removing their chip
+  // must clear that root snapshot too, or archive recovery can restore it.
+  ComposerRootMentionRemoved(
+    owner~ : @interop.ConversationKey,
+    mention~ : Mention
   )
   ComposerSlashCommand(String)
   ComposerMentionOpened(Mention)
@@ -748,13 +771,21 @@ fn ComposerComponentModel::update(
       let (next, command) = entry.accept_completion(item, root_emit)
       self.commit_entry_change(entry, next, command, root_emit)
     }
-    ComposerMentionRemoved(index) =>
+    ComposerMentionRemoved(index) => {
+      guard entry.draft.mentions.get(index) is Some(mention) else {
+        return (self.with_entry(entry), @cmd.none)
+      }
       self.commit_entry_change(
         entry,
         { ..entry, draft: entry.draft.without_mention(index) },
-        @cmd.none,
+        root_emit(
+          ComposerAction(
+            ComposerRootMentionRemoved(owner=entry.owner, mention~),
+          ),
+        ),
         root_emit,
       )
+    }
     ComposerMentionJumped(index) => {
       guard entry.draft.mentions.get(index) is Some(mention) else {
         return (self.with_entry(entry), @cmd.none)
@@ -1383,6 +1414,89 @@ test "composer retention uses one root bit instead of mirrored text" {
     retained,
   )
   assert_false(released.active().composer_draft_present)
+}
+
+///|
+test "archive replacement carries the component-local prompt and goal" {
+  let input = test_model().with_dev(dev => {
+    ..dev,
+    sessions: [archived_item("desktop-test")],
+  })
+  let owner : @interop.ConversationKey = {
+    channel: input.focused,
+    session: input.active_session,
+  }
+  let component_emit : @cmd.Emit[ComposerComponentMsg] = @cmd.Emit(_ => {
+    @cmd.none
+  })
+  let root_emit = test_dispatch()
+  let (drafted, _) = ComposerComponentModel(input).update(
+    input,
+    ComposerTextChanged("local prompt"),
+    component_emit,
+    root_emit,
+  )
+  let (_, retained) = update(
+    root_emit,
+    ComposerAction(ComposerDraftPresenceChanged(owner~, present=true)),
+    input,
+  )
+  let goal_input = retained.replace_conversation({
+    ..retained.active(),
+    goal_edit: Some({ draft: "root goal" }),
+  })
+  let (with_goal, _) = drafted.update(
+    goal_input,
+    ComposerTextChanged("local goal"),
+    component_emit,
+    root_emit,
+  )
+  let (_, replaced) = update_dev(
+    root_emit,
+    SessionsChanged(
+      change="archived",
+      session="desktop-test",
+      fresh_session=Some("desktop-fresh"),
+    ),
+    goal_input,
+  )
+  let carried = with_goal.active(replaced)
+  inspect(carried.owner.session, content="desktop-fresh")
+  inspect(carried.draft.task, content="local prompt")
+  assert_eq(carried.goal_draft, Some("local goal"))
+  assert_true(replaced.active().composer_draft_present)
+}
+
+///|
+test "removed root mention stays removed across archive replacement" {
+  let mention : Mention = { ref_: Skill(name="review"), range: None }
+  let input = test_model()
+    .replace_conversation({ ..test_conversation(), mentions: [mention] })
+    .with_dev(dev => { ..dev, sessions: [archived_item("desktop-test")] })
+  let owner : @interop.ConversationKey = {
+    channel: input.focused,
+    session: input.active_session,
+  }
+  let dispatch = test_dispatch()
+  let (_, replaced) = update_dev(
+    dispatch,
+    SessionsChanged(
+      change="archived",
+      session="desktop-test",
+      fresh_session=Some("desktop-fresh"),
+    ),
+    input,
+  )
+  inspect(replaced.active().mentions.length(), content="1")
+  // A removal queued by the old component owner must land on the fresh root
+  // snapshot instead of reviving the chip on the next reconciliation.
+  let (_, removed) = update(
+    dispatch,
+    ComposerAction(ComposerRootMentionRemoved(owner~, mention~)),
+    replaced,
+  )
+  inspect(removed.active().mentions.length(), content="0")
+  assert_true(removed.active().draft_empty())
 }
 
 ///|

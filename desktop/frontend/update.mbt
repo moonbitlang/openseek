@@ -1631,6 +1631,10 @@ fn replace_archived_active(
     ..fresh,
     task,
     mentions,
+    // The component still owns the text, but this bit keeps the replacement
+    // reachable until that local entry is submitted or cleared.
+    composer_draft_present: archived_conv.composer_draft_present ||
+    fresh.composer_draft_present,
     workspace: Workspace::from_project(workspace),
     worktree_mode: model.default_worktree_mode(channel, workspace),
     goal_edit,
@@ -1648,6 +1652,10 @@ fn replace_archived_active(
     screen: Chat,
     loading_conversation: None,
     completion: None,
+    composer_entry_replacement: Some({
+      archived: { channel, session },
+      fresh: { channel, session: fresh_session },
+    }),
   }
 }
 
@@ -1928,7 +1936,7 @@ fn update_msg(
           )
         }
         ComposerDraftPresenceChanged(owner~, present~) =>
-          if model.find_conversation(owner.channel, owner.session) is Some(conv) {
+          if model.conversation_for_composer_action(owner) is Some(conv) {
             (
               @cmd.none,
               model.replace_conversation({
@@ -1939,6 +1947,20 @@ fn update_msg(
           } else {
             (@cmd.none, model)
           }
+        ComposerRootMentionRemoved(owner~, mention~) => {
+          guard model.conversation_for_composer_action(owner) is Some(conv) else {
+            return (@cmd.none, model)
+          }
+          (
+            @cmd.none,
+            model.replace_conversation({
+              ..conv,
+              mentions: conv.mentions.filter(existing => {
+                existing.ref_ != mention.ref_
+              }),
+            }),
+          )
+        }
         ComposerSlashCommand(command) =>
           run_slash_command(dispatch, model, command)
         ComposerMentionOpened(mention) => {
