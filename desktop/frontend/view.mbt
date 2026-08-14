@@ -479,13 +479,13 @@ fn push_group_rows(
       worktree_name_for(dev, workspace, conv.session_id)
     }
     let worth_keeping = conv.worth_keeping()
-    let visible_new_chat = composing &&
-      conv.device == model.focused &&
+    let active = conv.device == model.focused &&
       conv.session_id == model.active_session
+    let visible_new_chat = composing && active
     if !worth_keeping && !visible_new_chat {
       continue
     }
-    let visible = max_conversations <= 0 || count < max_conversations
+    let visible = max_conversations <= 0 || count < max_conversations || active
     count = count + 1
     if visible {
       rows.push(
@@ -530,7 +530,12 @@ fn push_group_rows(
   // sweep persists enough of them to bury the real chats. The parent row's
   // twisty shows them in place, the way a tree unfolds a directory.
   for row in @transcript.session_tree(durable) {
-    let visible = max_conversations <= 0 || count < max_conversations
+    // An older active conversation stays visible beside the five-row preview;
+    // otherwise notification navigation or a list refresh could leave the
+    // conversation on screen with no selected sidebar row.
+    let active = dev.channel == model.focused &&
+      row.item.id == model.active_session
+    let visible = max_conversations <= 0 || count < max_conversations || active
     count = count + 1
     if !visible {
       continue
@@ -2890,6 +2895,9 @@ test "project chat preview shows five rows, then expands or folds as one group" 
   assert_true(preview.contains("Project chat 5"))
   assert_false(preview.contains("Project chat 6"))
   assert_true(preview.contains(">Show more</button>"))
+  let active = render({ ..model, active_session: "chat-6" })
+  assert_true(active.contains("Project chat 6"))
+  assert_true(active.contains(">Show more</button>"))
   let expanded = render({ ..model, expanded_project_chats: [(Local, project)] })
   assert_true(expanded.contains("Project chat 6"))
   assert_false(expanded.contains(">Show more</button>"))

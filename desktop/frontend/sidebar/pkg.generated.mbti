@@ -67,6 +67,8 @@ pub(all) struct WorkspaceRow {
   title : String
   label : String
   active : Bool
+  collapsed : Bool
+  toggle : @cmd.Cmd
   menu : WorkspaceMenu?
   actions : Array[WorkspaceAction]
 }
