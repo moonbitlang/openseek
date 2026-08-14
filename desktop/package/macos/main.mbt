@@ -12,7 +12,7 @@ const PackageBinDir : String = PackageInputRoot + "/bin"
 
 ///|
 /// Proton's default package-build target for the identifier declared in
-/// `moon.proton`. Keep this path in sync if that identifier changes.
+/// `proton.project.json`. Keep this path in sync if that identifier changes.
 const ProtonPackageBuildTargetDir : String = "target/proton-package-build/community-moonbit-proton-openseek-desktop"
 
 ///|
@@ -132,7 +132,7 @@ fn PackageOptions::proton_args(
     workspace.dir(),
     "package",
     "--config",
-    "moon.proton",
+    "proton.project.json",
     "--no-build",
     "--target",
     "app",
@@ -157,7 +157,8 @@ fn PackageOptions::proton_args(
 
 ///|
 /// Build the application-specific inputs Proton cannot infer from
-/// `moon.proton`. The native host is written to Proton's identifier-scoped
+/// `proton.project.json`. The native host is written to Proton's
+/// identifier-scoped
 /// package target in the selected mode so `package --no-build` consumes this
 /// checkout's host without copying or changing its executable mode.
 async fn @packaging.Workspace::build_package_inputs(

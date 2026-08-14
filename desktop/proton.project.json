@@ -1,0 +1,46 @@
+{
+  "product_name": "SeekMoon",
+  "identifier": "community.moonbit.proton.openseek-desktop",
+  "window": {
+    "title": "SeekMoon",
+    "width": 1120,
+    "height": 760,
+    "size_hint": "none"
+  },
+  "entry": {
+    "kind": "asset",
+    "value": "target/proton-package-input/assets/index.html"
+  },
+  "debug": true,
+  "backend": {
+    "path": ".",
+    "package": "openseek_desktop"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "zip"],
+    "icon": ["package/macos/AppIcon.icns"],
+    "resources": ["target/proton-package-input/**"],
+    "sign": {
+      "binaries": [
+        "target/proton-package-input/bin/openseek",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/internal/tcc",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moon",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moon-cram",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moon-ide",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moon-lsp",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moon-wasm-opt",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moon_cove_report",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moonc",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/mooncake",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moondoc",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moonfmt",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/mooninfo",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moonrun",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/lib/libLLVM.dylib",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/lib/libbinaryen.dylib"
+      ]
+    },
+    "output": "dist"
+  }
+}
