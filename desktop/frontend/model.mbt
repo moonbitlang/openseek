@@ -1190,9 +1190,9 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
 }
 
 ///|
-/// The last active conversation replaced after it was archived. The composer
-/// uses this one identity handoff to keep its local entry while the root moves
-/// the visible conversation to the fresh session id.
+/// One active conversation replaced after it was archived. The root records
+/// every identity handoff so the composer can move all local entries that
+/// accumulate before its next subscription tick.
 priv struct ComposerEntryReplacement {
   archived : @interop.ConversationKey
   fresh : @interop.ConversationKey
@@ -1380,10 +1380,10 @@ priv struct Model {
   // each conversation's unsent draft; textarea edits never touch this field or
   // any other part of the root Model.
   composer_context_generation : Int
-  // The most recent archive rotation. Component-local draft text remains in
-  // the component; this only tells it which fresh owner replaces the archived
-  // owner and lets delayed root actions reach that same conversation.
-  composer_entry_replacement : ComposerEntryReplacement?
+  // Every archive rotation appends its identity handoff. Component-local draft
+  // text remains in the component; this ordered page-lifetime log keeps two
+  // rotations between subscription ticks from overwriting each other.
+  composer_entry_replacements : Array[ComposerEntryReplacement]
   // Every newly observed archive appends its exact owner. The composer consumes
   // this page-lifetime log in order, so a background session cannot regain an
   // old component-local draft when the same session id is later unarchived.
@@ -2563,7 +2563,7 @@ fn initial_model() -> Model {
     symbol_cache: empty_symbol_cache(),
     completion_debounce: @composer.Debounce(),
     composer_context_generation: 0,
-    composer_entry_replacement: None,
+    composer_entry_replacements: [],
     composer_entry_retirements: [],
     quick_open: None,
     quick_open_generation: 0,
@@ -3182,11 +3182,17 @@ fn Model::conversation_for_composer_action(
   if self.find_conversation(owner.channel, owner.session) is Some(conv) {
     return Some(conv)
   }
-  guard self.composer_entry_replacement is Some(replacement) &&
-    replacement.archived == owner else {
-    return None
+  // Newest first preserves the old single-handoff behavior when an unarchived
+  // session id is later archived again during the same page lifetime.
+  for replacement in self.composer_entry_replacements.rev_iter() {
+    if replacement.archived == owner {
+      return self.find_conversation(
+        replacement.fresh.channel,
+        replacement.fresh.session,
+      )
+    }
   }
-  self.find_conversation(replacement.fresh.channel, replacement.fresh.session)
+  None
 }
 
 ///|

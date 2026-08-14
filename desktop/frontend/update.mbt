@@ -1647,15 +1647,17 @@ fn replace_archived_active(
   } else {
     fresh
   }
+  let composer_entry_replacements = model.composer_entry_replacements.copy()
+  composer_entry_replacements.push({
+    archived: { channel, session },
+    fresh: { channel, session: fresh_session },
+  })
   {
     ..activated.replace_conversation(fresh).with_active_project(workspace),
     screen: Chat,
     loading_conversation: None,
     completion: None,
-    composer_entry_replacement: Some({
-      archived: { channel, session },
-      fresh: { channel, session: fresh_session },
-    }),
+    composer_entry_replacements,
   }
 }
 
