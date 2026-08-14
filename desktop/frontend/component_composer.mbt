@@ -442,6 +442,9 @@ priv enum ComposerComponentMsg {
   ComposerCompletionAccept
   ComposerCompletionPick(Int)
   ComposerCompletionDismiss
+  // Input changes do not call component update. This subscription message
+  // stores a newly reconciled concrete root and starts its symbol lookup.
+  ComposerSymbolRootChanged
   ComposerMentionRemoved(Int)
   ComposerMentionJumped(Int)
   ComposerGoalCancelled
@@ -771,6 +774,29 @@ fn ComposerComponentModel::update(
       let (next, command) = entry.accept_completion(item, root_emit)
       self.commit_entry_change(entry, next, command, root_emit)
     }
+    ComposerSymbolRootChanged => {
+      guard @composer.Trigger::parse(entry.draft.task, inline_markers="$#")
+        is Some(trigger) &&
+        trigger.marker() == "#" &&
+        entry.root is Some(root) &&
+        entry.completion is Some(completion) &&
+        completion.kind is Symbols &&
+        completion.menu.loading() else {
+        return (self.with_entry(entry), @cmd.none)
+      }
+      let completion_debounce = entry.completion_debounce.advanced()
+      (
+        self.with_entry({ ..entry, completion_debounce, }),
+        emit(
+          ComposerCompletionDue(
+            owner=entry.owner,
+            root=Some(root),
+            query=trigger.query(),
+            generation=completion_debounce.generation(),
+          ),
+        ),
+      )
+    }
     ComposerMentionRemoved(index) => {
       guard entry.draft.mentions.get(index) is Some(mention) else {
         return (self.with_entry(entry), @cmd.none)
@@ -1055,15 +1081,32 @@ fn ComposerComponentModel::commit_entry_change(
 }
 
 ///|
-/// Watch root-owned file-index input only while a visible `@` menu is waiting.
+/// Watch only the root-owned inputs that can advance a visible completion.
 /// `create_state_with_input` deliberately does not turn input changes into
-/// messages, so this bounded subscription gives the local state machine a
-/// chance to observe index completion without sending textarea edits upward.
+/// messages, so a bounded subscription stores a changed symbol root once or
+/// observes file-index completion without sending textarea edits upward.
 fn ComposerComponentModel::subscriptions(
   self : ComposerComponentModel,
   input : Model,
   emit : @cmd.Emit[ComposerComponentMsg],
 ) -> @sub.Sub {
+  let conv = input.active()
+  let owner : @interop.ConversationKey = {
+    channel: input.focused,
+    session: conv.session_id,
+  }
+  let root = input.conversation_root(conv)
+  for stored in self.entries {
+    if stored.owner == owner &&
+      stored.root != root &&
+      stored.completion is Some(completion) &&
+      completion.kind is Symbols &&
+      @composer.Trigger::parse(stored.draft.task, inline_markers="$#")
+      is Some(trigger) &&
+      trigger.marker() == "#" {
+      return @sub.every(150, emit(ComposerSymbolRootChanged))
+    }
+  }
   let entry = self.active(input)
   if entry.completion is Some(completion) &&
     completion.kind is Files &&
@@ -1122,6 +1165,79 @@ test "composer typing is pure and does not mutate the root draft" {
   assert_eq(twice.active(input).draft.task, "a local draft")
   assert_eq(input.active().task, "")
   assert_eq(input.submission_sequence, 0)
+}
+
+///|
+test "isolated composer restarts symbol completion after its root changes" {
+  let input = test_model()
+  let owner : @interop.ConversationKey = {
+    channel: input.focused,
+    session: input.active_session,
+  }
+  let component_emit : @cmd.Emit[ComposerComponentMsg] = @cmd.Emit(_ => {
+    @cmd.none
+  })
+  let root_emit = test_dispatch()
+  let (typed, _) = ComposerComponentModel(input).update(
+    input,
+    ComposerTextChanged("Inspect #parse"),
+    component_emit,
+    root_emit,
+  )
+  let before = typed.active(input)
+  guard before.root is Some(old_root) && before.completion is Some(old_menu) else {
+    fail("the old root should have a live symbol completion")
+  }
+  assert_true(old_menu.kind is Symbols)
+  assert_true(old_menu.menu.loading())
+  let (_, rerooted) = update_dev(
+    root_emit,
+    BridgeReady(scratch_root=owner.channel.test_resource("/next-scratch")),
+    input,
+  )
+  let reconciled = typed.active(rerooted)
+  guard reconciled.root is Some(new_root) else {
+    fail("the component should reconcile the new concrete root")
+  }
+  assert_true(new_root != old_root)
+  assert_true(reconciled.symbol_cache.owner is None)
+  guard reconciled.completion is Some(waiting) else {
+    fail("the new root should keep the symbol completion open")
+  }
+  assert_true(waiting.kind is Symbols)
+  assert_true(waiting.menu.loading())
+  let (restarted, _) = typed.update(
+    rerooted,
+    ComposerSymbolRootChanged,
+    component_emit,
+    root_emit,
+  )
+  let current = restarted.active(rerooted)
+  assert_eq(
+    current.completion_debounce.generation(),
+    before.completion_debounce.generation() + 1,
+  )
+  let generation = current.completion_debounce.generation()
+  let item : WorkspaceSymbol = {
+    name: "parse_current",
+    kind: Some(12),
+    container: None,
+    path: "src/current.mbt",
+    range: @common.Range::Range(1, 1, 1, 8),
+  }
+  let (settled, _) = restarted.update(
+    rerooted,
+    ComposerSymbolsLoaded(owner~, root=new_root, query="parse", generation~, items=[
+      item,
+    ]),
+    component_emit,
+    root_emit,
+  )
+  guard settled.active(rerooted).completion is Some(menu) else {
+    fail("the restarted lookup should settle the new-root menu")
+  }
+  assert_false(menu.menu.loading())
+  assert_eq(menu.menu.length(), 1)
 }
 
 ///|
