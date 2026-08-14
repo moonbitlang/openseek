@@ -886,82 +886,6 @@ fn user_display_text(text : String) -> String {
 }
 
 ///|
-/// The completion menu floating above the composer: one row per match, the
-/// highlighted row marked for the keyboard and clickable by mouse. A pointer
-/// press accepts a row; `mousedown` (not `click`) is used so the textarea does
-/// not blur the menu away before the selection registers.
-fn Completion::view(
-  self : Completion,
-  emit : @cmd.Emit[ComposerComponentMsg],
-) -> @html.Html {
-  // A `#` menu opens before its results arrive, so an empty list is a state to
-  // narrate — searching, or genuinely nothing — not an empty box.
-  let hint = match self.kind {
-    SlashCommands => "Commands"
-    SkillMentions => "Skills"
-    Symbols => "Symbols"
-    Files => "Files"
-  }
-  let rows : Array[@composer.CompletionRow] = []
-  for _, item in self.menu {
-    rows.push({ label: item.label, detail: item.detail })
-  }
-  @composer.CompletionView::{
-    rows,
-    selected: self.menu.selected(),
-    hint,
-    empty: if self.menu.loading() {
-      "Searching…"
-    } else {
-      match self.kind {
-        Files => "No files"
-        _ => "No symbols"
-      }
-    },
-  }.render(index => emit(ComposerCompletionPick(index)))
-}
-
-///|
-/// The chips above the textarea for the draft's mentions (`$` skills, `#`
-/// symbols, `@` files, `✎` editor comments), each removable by its `×`. Always rendered
-/// (empty when there are no chips) so the textarea keeps a stable child index
-/// and never loses focus when a chip comes or goes; CSS collapses the empty
-/// tray to nothing. A chip with a resolved location is also clickable,
-/// opening (or refocusing) the editor side-panel on that spot; a comment
-/// chip's tooltip is the comment itself.
-fn ComposerDraft::mention_chips(
-  self : ComposerDraft,
-  emit : @cmd.Emit[ComposerComponentMsg],
-) -> Array[@html.Html] {
-  let chips : Array[@html.Html] = []
-  for index, mention in self.mentions {
-    let target = @mention_context.target(mention.ref_)
-    chips.push(
-      @composer.MentionChip::{
-        glyph: @mention_context.glyph(mention.ref_),
-        label: @mention_context.label(mention.ref_),
-        title: if mention.ref_ is Annotation(comment~, ..) {
-          comment
-        } else if target is Some(target) {
-          "Jump to \{target.file}"
-        } else {
-          @mention_context.label(mention.ref_)
-        },
-        jump: if target is Some(_) {
-          Some(emit(ComposerMentionJumped(index)))
-        } else {
-          None
-        },
-        remove: Some((emit(ComposerMentionRemoved(index)), icon(icon_close))),
-      }.render(),
-    )
-  }
-  chips
-}
-
-///|
-
-///|
 /// The console's connection banner: a permanent first child of the composer's
 /// context row whose class flips visibility. Keeping that row stable preserves
 /// the plan panel's DOM state while the connection changes. Desktop keeps the
@@ -1002,218 +926,6 @@ fn Conversation::archived_read_only_view(
       ),
     ]),
   ])
-}
-
-///|
-fn ComposerEntry::view(
-  self : ComposerEntry,
-  emit : @cmd.Emit[ComposerComponentMsg],
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-) -> @html.Html {
-  let conv = model.active()
-  let checkout = model.checkout_placement(conv)
-  // Goal mode: `/goal` (or the banner's Edit) rebinds the composer's one
-  // textarea to the goal draft for this conversation — the prompt draft
-  // survives untouched underneath, and the same DOM node keeps focus.
-  let goal_editor = if conv.goal_edit is Some(_) {
-    Some({ draft: self.goal_draft.unwrap_or("") })
-  } else {
-    None
-  }
-  let goal_mode = goal_editor is Some(_)
-  let transcript_ready = conv.sync is Synced &&
-    !conv.has_unresolved_run_tail_notice()
-  let checkout_ready = checkout is Some(@interop.WorkspaceRoot) ||
-    checkout is Some(@interop.Worktree(_))
-  let has_input = model.bridge_state() is Connected(..) &&
-    model.api_ready() &&
-    transcript_ready &&
-    checkout_ready &&
-    !self.draft.task.is_blank()
-  // A compacting conversation cannot accept a prompt either: the serve
-  // engine would queue it behind the compaction, where Stop cannot reach it.
-  // Every unsettled phase — requested, queued, or running — holds the gate.
-  let can_send = !conv.is_running() &&
-    conv.compaction is NotCompacting &&
-    has_input
-  // The left status group: the conversation's model, then one git chip — the
-  // branch's pull request, or the branch itself, tinted by CI — which opens
-  // the rest (changes, base, links out) in a popover rather than spending the
-  // row's remaining width on it.
-  let status : Array[@html.Html] = [conv.engine_model.composer_select(dispatch)]
-  if git_chip(dispatch, model, conv) is Some(chip) {
-    status.push(chip)
-  }
-  // The launch mode: a fresh workspace conversation chooses between the
-  // workspace itself and a fresh host-named worktree (its 1:1 execution
-  // environment) here before its first prompt.
-  if worktree_mode_chip(dispatch, model, conv) is Some(chip) {
-    status.push(chip)
-  }
-  let action = if goal_editor is Some(editor) {
-    // Goal mode replaces the send/steer cluster: the input edits the
-    // standing goal, so the only action left here is Set — cancelling rides
-    // the status group's lit chip, clearing rides the banner's ✕. No
-    // run/compaction gate: a goal is welcome in every engine phase.
-    @composer.Action::{
-      id: "goal-set",
-      class_name: "icon-button send-button",
-      title: "Set the standing goal (Enter)",
-      disabled: editor.draft.is_blank(),
-      command: emit(ComposerSubmitRequested),
-      content: icon(icon_arrow_up),
-    }
-  } else if conv.is_running() {
-    // One morphing button while this conversation's turn runs. It becomes a
-    // steer submit only when the durable boundary is ready too; a draft must
-    // never hide Stop behind a disabled Send during reload/reconciliation.
-    let can_steer = has_input &&
-      conv.run_durable_floor is Some(_) &&
-      conv.run is Open(stage~, ..) &&
-      !(stage is Cancelling)
-    if !can_steer {
-      @composer.Action::{
-        id: "stop",
-        class_name: "icon-button stop-button",
-        title: "Stop",
-        disabled: !can_stop(conv),
-        command: dispatch(Stop),
-        content: icon(icon_debug_stop),
-      }
-    } else {
-      @composer.Action::{
-        id: "send",
-        class_name: "icon-button send-button",
-        title: "Steer the running task",
-        disabled: false,
-        command: emit(ComposerSubmitRequested),
-        content: icon(icon_arrow_up),
-      }
-    }
-  } else {
-    @composer.Action::{
-      id: "send",
-      class_name: "icon-button send-button",
-      title: "Send",
-      disabled: !can_send,
-      command: emit(ComposerSubmitRequested),
-      content: icon(icon_arrow_up),
-    }
-  }
-  // Keep every row above the input in one permanent context container. Beside
-  // a tall terminal this is the only auxiliary vertical scroller, so plans and
-  // notices yield space before the textarea or toolbar can disappear. Its
-  // first two children remain permanent to preserve the plan panel's DOM state.
-  let context : Array[@html.Html] = [
-    connection_banner(model),
-    @plan.panel(conv.visible_items()),
-  ]
-  if !conv.pending_steers().is_empty() {
-    context.push(pending_steers_panel(conv))
-  }
-  // The requested phase reads as compacting already: the distinction (the
-  // host may still be spawning the engine) is not the user's problem.
-  match conv.compaction {
-    Requested | Compacting =>
-      context.push(
-        @html.div(class="composer-notice", [
-          @html.span(class="composer-notice-icon", icon(icon_fold)),
-          @html.span(class="composer-notice-text", "Compacting context…"),
-        ]),
-      )
-    Queued =>
-      context.push(
-        @html.div(class="composer-notice", [
-          @html.span(class="composer-notice-icon", icon(icon_fold)),
-          @html.span(
-            class="composer-notice-text",
-            "Compaction queued — starts when the current turn ends",
-          ),
-        ]),
-      )
-    NotCompacting => ()
-  }
-  // The conversation's execution environment vanished under it. The host
-  // refuses to run it rather than silently falling back to the main
-  // checkout, so the composer explains that and offers both ways out.
-  match checkout {
-    None =>
-      context.push(
-        @html.div(class="composer-notice", [
-          @html.span(
-            class="composer-notice-text",
-            "Waiting for workspace placement…",
-          ),
-          @html.button(
-            class="composer-notice-btn",
-            type_="button",
-            title="Request this workspace's worktree list again",
-            on_click=dispatch(RetryWorktreePlacement),
-            "Retry",
-          ),
-        ]),
-      )
-    Some(@interop.MissingWorktree(name~)) =>
-      context.push(
-        @composer.MissingWorktreeNotice::{
-          name,
-          conversation_noun: "chat",
-          rebuild: dispatch(RepairWorktree),
-          archive: dispatch(ArchiveSession(conv.device, conv.session_id)),
-        }.render(),
-      )
-    Some(_) => ()
-  }
-  // The goal row rides the same slot as the compaction notice: what the
-  // composer is editing, or what stands. Pushed unconditionally — see
-  // `goal_banner` for why it collapses instead of leaving.
-  context.push(
-    goal_banner(
-      dispatch,
-      conv.goal,
-      editing=goal_editor,
-      pending=conv.goal_pending.map(pending => pending.request),
-      cancel_edit=emit(ComposerGoalCancelled),
-    ),
-  )
-  @composer.View::{
-    before_inner: context,
-    mentions: self.draft.mention_chips(emit),
-    value: if goal_editor is Some(editor) {
-      editor.draft
-    } else {
-      self.draft.task
-    },
-    placeholder: if goal_mode {
-      "Describe the standing goal for this conversation — Enter sets it, Esc cancels."
-    } else if conv.is_running() {
-      "Steer the running task — your message joins it at the next step."
-    } else {
-      "Ask OpenSeek to inspect, edit, or explain this workspace."
-    },
-    disabled: false,
-    input: emit.map(value => ComposerTextChanged(value)),
-    keyboard: @composer.KeyboardActions::{
-      menu_open: !goal_mode && self.completion is Some(_),
-      navigate: delta => emit(ComposerCompletionMove(delta)),
-      accept: emit(ComposerCompletionAccept),
-      dismiss: emit(ComposerCompletionDismiss),
-      submit: emit(ComposerSubmitRequested),
-      cancel: if goal_mode {
-        Some(emit(ComposerGoalCancelled))
-      } else {
-        None
-      },
-    },
-    status,
-    action,
-    overlay: if goal_mode {
-      None
-    } else {
-      self.completion.map(completion => completion.view(emit))
-    },
-  }.render()
 }
 
 ///|
@@ -2116,7 +1828,7 @@ fn skills_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 
 ///|
 #warnings("-alert_unstable")
-test "settings, skills, and composer declare form focus ownership" {
+test "settings and skills declare form focus ownership" {
   let dispatch = test_dispatch()
   let settings_markup = @rabbita.render_to_string(() => {
     @rabbita.Val::constant(settings_page(dispatch, test_model()))
@@ -2131,24 +1843,12 @@ test "settings, skills, and composer declare form focus ownership" {
   assert_true(skills_markup.contains("class=\"skills-search\""))
   assert_true(skills_markup.contains("data-focus-owner=\"\""))
   assert_true(skills_markup.contains("data-focus-target=\"\""))
-  let composer_model = test_model()
-  let composer_emit : @cmd.Emit[ComposerComponentMsg] = @cmd.Emit(_ => @cmd.none)
-  let composer_markup = @rabbita.render_to_string(() => {
-    @rabbita.Val::constant(
-      ComposerEntry(composer_model).view(
-        composer_emit, dispatch, composer_model,
-      ),
-    )
-  })
-  assert_true(composer_markup.contains("class=\"composer-inner\""))
-  assert_true(composer_markup.contains("data-focus-owner=\"\""))
-  assert_true(composer_markup.contains("data-focus-target=\"\""))
   let address_markup = @rabbita.render_to_string(() => {
     @rabbita.Val::constant(
       @preview.toolbar_view(
         { url: None, input: "", title: "", loading: false, failure: None },
         {
-          input: dispatch.map(value => TaskChanged(value)),
+          input: dispatch.map(value => BrowserAddressEdited(value)),
           submit: @cmd.none,
           back: @cmd.none,
           forward: @cmd.none,
@@ -2164,8 +1864,7 @@ test "settings, skills, and composer declare form focus ownership" {
   // Every rendered form element must choose one side of the contract. A
   // composite also has a separate owner on its wrapper, which is why counting
   // markers alone would not prove that the nested control was marked.
-  for
-    markup in [settings_markup, skills_markup, composer_markup, address_markup] {
+  for markup in [settings_markup, skills_markup, address_markup] {
     for tag in ["<input", "<textarea", "<select"] {
       let parts = markup.split(tag).collect()
       for index, part in parts {

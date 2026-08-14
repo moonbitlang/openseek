@@ -2,18 +2,39 @@
 package "openseek_desktop/frontend/composer"
 
 import {
+  "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/mention_context",
+  "openseek_desktop/frontend/pathx",
+  "openseek_desktop/frontend/transcript",
   "openseek_desktop/internal/protocol",
 }
 
 // Values
+pub fn component(@rabbita.Val[Input], @cmd.Emit[Action]) -> @rabbita.Val[@html.Html]
 
 // Errors
 
 // Types and methods
-pub(all) struct Action {
+pub(all) enum Action {
+  DraftSubmitted(identity~ : Identity, draft~ : Draft)
+  DraftPresenceChanged(identity~ : Identity, present~ : Bool, cleared_source~ : Draft?)
+  RootMentionRemoved(identity~ : Identity, mention~ : Mention)
+  SlashCommand(identity~ : Identity, command~ : String)
+  MentionOpened(identity~ : Identity, mention~ : Mention)
+  GoalEditStarted(identity~ : Identity)
+  GoalCancelled(identity~ : Identity)
+  GoalCleared(identity~ : Identity)
+  GoalSubmitted(identity~ : Identity, draft~ : String, prompt_present~ : Bool)
+  StopRequested(identity~ : Identity)
+  FileIndexEnsured(identity~ : Identity)
+}
+
+pub(all) struct ActionButton {
   id : String
   class_name : String
   title : String
@@ -42,6 +63,20 @@ pub fn Debounce::advanced(Self) -> Self
 pub fn Debounce::delayed(Self, (Int) -> @cmd.Cmd) -> @cmd.Cmd
 pub fn Debounce::generation(Self) -> Int
 
+pub(all) struct Draft {
+  task : String
+  mentions : Array[Mention]
+} derive(Eq, @debug.Debug)
+pub fn Draft::prompt(Self) -> String
+pub fn Draft::with_mention(Self, Mention) -> Self
+
+pub(all) enum FileIndex {
+  FileIndexEmpty(epoch~ : Int)
+  FileIndexLoading(epoch~ : Int)
+  FileIndexReady(epoch~ : Int, truncated~ : Bool)
+  FileIndexFailed(epoch~ : Int)
+} derive(Eq, @debug.Debug)
+
 pub(all) struct GitChip {
   tone : String
   title : String
@@ -51,6 +86,39 @@ pub(all) struct GitChip {
 }
 pub fn GitChip::render(Self) -> @html.Html
 
+pub(all) struct GoalInput {
+  draft : String?
+  standing : @transcript.GoalStanding?
+  pending : GoalPending?
+} derive(Eq)
+
+pub(all) enum GoalPending {
+  GoalSetting(String)
+  GoalClearing
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Identity {
+  owner : @interop.ConversationKey
+  archive_generation : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Input {
+  identity : Identity
+  draft : Draft
+  goal : GoalInput
+  root : @common.Uri?
+  installed_skills : Array[@transcript.InstalledSkillItem]
+  context_generation : Int
+  submission_sequence : Int
+  replacements : Array[Replacement]
+  retirements : Array[@interop.ConversationKey]
+  file_candidates : Array[@pathx.Relative]
+  open_files : Array[@pathx.Relative]
+  active_file : @pathx.Relative?
+  file_index : FileIndex
+  presentation : Presentation
+} derive(Eq)
+
 pub(all) struct KeyboardActions {
   menu_open : Bool
   navigate : (Int) -> @cmd.Cmd
@@ -59,6 +127,11 @@ pub(all) struct KeyboardActions {
   submit : @cmd.Cmd
   cancel : @cmd.Cmd?
 }
+
+pub(all) struct Mention {
+  ref_ : @mention_context.MentionRef
+  range : @common.Range?
+} derive(Eq, @debug.Debug)
 
 pub(all) struct MentionChip {
   glyph : String
@@ -102,6 +175,24 @@ pub(all) struct ModelSelect {
 }
 pub fn ModelSelect::render(Self) -> @html.Html
 
+pub(all) struct Presentation {
+  context : Array[@html.Html]
+  status : Array[@html.Html]
+  placeholder : String
+  primary_action : PrimaryAction
+} derive(Eq)
+
+pub(all) enum PrimaryAction {
+  Send(available~ : Bool)
+  Running(steer_available~ : Bool, can_stop~ : Bool)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Replacement {
+  archived : @interop.ConversationKey
+  fresh : @interop.ConversationKey
+  archive_generation : Int
+} derive(Eq, @debug.Debug)
+
 type Trigger derive(Eq)
 pub fn Trigger::draft_without_token(Self) -> String
 pub fn Trigger::marker(Self) -> String
@@ -118,7 +209,7 @@ pub(all) struct View {
   input : @cmd.Emit[String]
   keyboard : KeyboardActions
   status : Array[@html.Html]
-  action : Action
+  action : ActionButton
   overlay : @html.Html?
 }
 pub fn View::render(Self) -> @html.Html

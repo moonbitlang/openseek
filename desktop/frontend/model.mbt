@@ -878,36 +878,6 @@ priv enum Screen {
 } derive(Eq)
 
 ///|
-/// Which trigger opened the composer's completion menu: `/` lists built-in
-/// commands that act on the conversation, `$` lists installed skills whose
-/// name is inserted into the prompt, `#` lists workspace symbols (fetched
-/// through the host's symbol search), and `@` lists files from the shared
-/// workspace index used by Ctrl+P.
-priv enum CompletionKind {
-  SlashCommands
-  SkillMentions
-  Symbols
-  Files
-} derive(Eq)
-
-///|
-/// One row of the composer completion menu.
-priv struct CompletionItem {
-  // The primary label shown in the row (e.g. "/compact" or "$review-pr").
-  label : String
-  // A short description shown next to the label.
-  detail : String
-  // For a slash command, the id its accepted action dispatches on; empty for
-  // skills. For a skill, `insert` carries the text dropped into the composer.
-  command : String
-  insert : String
-  // A symbol or file row's workspace-relative location. Symbols also carry
-  // their full one-based range; a file row deliberately leaves `range` empty.
-  path : String?
-  range : @common.Range?
-} derive(Eq)
-
-///|
 /// One accepted mention, shown as a chip above the composer and folded into
 /// the outgoing prompt's `<user_mentions>` envelope on send. `ref` is the
 /// envelope form itself (`$` skill, `#` symbol, or an editor comment) — the
@@ -915,40 +885,7 @@ priv struct CompletionItem {
 /// for dedup. `range` keeps the full resolved range the envelope's
 /// `file:line` cannot carry, so a draft chip's jump still selects the exact
 /// span (`None` for a skill or an unplaced symbol).
-priv struct Mention {
-  ref_ : @mention_context.MentionRef
-  range : @common.Range?
-} derive(Eq)
-
-///|
-/// The composer's open completion menu: the trigger that opened it, the
-/// currently matching rows, which row is highlighted, and the exact draft text
-/// before the live token. Absent when the composer has no live trigger.
-/// `loading` marks a `#` query or workspace-file index still in flight, so an
-/// empty menu can distinguish "Searching…" from a settled empty provider.
-priv struct Completion {
-  kind : CompletionKind
-  menu : @composer.Menu[CompletionItem]
-} derive(Eq)
-
-///|
-/// The last workspace-symbol results, cached so the `#` menu can show them
-/// without refetching while the query is unchanged. `session` records which
-/// conversation they belong to, so switching either device or session
-/// refetches rather than showing another workspace's symbols; `root` fences a
-/// worktree or project transition inside that conversation; `query` is the
-/// trigger text they answer.
-priv struct SymbolCache {
-  owner : @interop.ConversationKey?
-  root : @common.Uri?
-  query : String
-  items : Array[CompletionItem]
-} derive(Eq)
-
-///|
-fn empty_symbol_cache() -> SymbolCache {
-  { owner: None, root: None, query: "", items: [] }
-}
+type Mention = @composer.Mention
 
 ///|
 /// Which provider owns unified Quick Open. Files are the default provider; a
@@ -1193,10 +1130,13 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
 /// One active conversation replaced after it was archived. The root records
 /// every identity handoff so the composer can move all local entries that
 /// accumulate before its next subscription tick.
-priv struct ComposerEntryReplacement {
-  archived : @interop.ConversationKey
-  fresh : @interop.ConversationKey
-} derive(Eq)
+type ComposerEntryReplacement = @composer.Replacement
+
+///|
+/// The owner key plus the archive-fact cursor at which its component entry
+/// was created. A reused session id can therefore name a new entry without
+/// intercepting commands that were already queued by the archived entry.
+type ComposerActionIdentity = @composer.Identity
 
 ///|
 priv struct Model {
@@ -1362,19 +1302,6 @@ priv struct Model {
   skills_query : String
   skills_busy : Array[String]
   skills_notice : String
-  // The composer completion menu, open only while the active conversation's
-  // draft begins with a `/` or `$` trigger. Lives on the model rather than the
-  // conversation: it is transient UI for the on-screen composer, recomputed on
-  // every keystroke and dismissed on blur, send, or conversation switch.
-  completion : Completion?
-  // The last `#` symbol search's results, kept so the menu shows instantly
-  // while the query is unchanged. Recomputed on every keystroke and refetched
-  // when the query or conversation changes.
-  symbol_cache : SymbolCache
-  // Every draft edit advances this identity. Delayed symbol requests and their
-  // replies carry it so a newer keystroke, dismissal, or conversation switch
-  // cannot revive an obsolete completion.
-  completion_debounce : @composer.Debounce
   // Advances only when navigation changes which composer is visible. Local
   // component entries use it to dismiss an old completion menu while keeping
   // each conversation's unsent draft; textarea edits never touch this field or
@@ -1609,43 +1536,7 @@ priv enum Msg {
   )
   // Deliberate actions emitted by the component-local input composer. Raw
   // keystrokes never enter this root message loop.
-  ComposerAction(ComposerRootAction)
-  TaskChanged(String)
-  // Start a symbol lookup only if the composer still has this exact delayed
-  // draft generation after its 150 ms pause.
-  CompletionDue(
-    owner~ : @interop.ConversationKey,
-    query~ : String,
-    generation~ : Int
-  )
-  // A truncated workspace snapshot answers common `@` queries immediately,
-  // then this delayed request ranks the same query against the Host's complete
-  // cached scan. Root and generation fence conversation moves and keystrokes.
-  FileCompletionDue(
-    owner~ : @interop.ConversationKey,
-    root~ : @common.Uri,
-    query~ : String,
-    generation~ : Int
-  )
-  FileCompletionLoaded(
-    owner~ : @interop.ConversationKey,
-    root~ : @common.Uri,
-    query~ : String,
-    generation~ : Int,
-    files~ : Array[@pathx.Relative]
-  )
-  FileCompletionFailed(
-    owner~ : @interop.ConversationKey,
-    root~ : @common.Uri,
-    query~ : String,
-    generation~ : Int
-  )
-  // Root completion remains only as a compatibility seam for delivery and
-  // focused update tests. Visible dismissal is component-local.
-  CompletionDismiss
-  // Accept the highlighted completion: run the slash command or insert the
-  // skill mention into the composer.
-  CompletionAccept
+  ComposerAction(@composer.Action)
   // Jump the editor side-panel to a mention chip's resolved location, by
   // index. A no-op for a chip with no `path` (a skill, or an unresolved
   // symbol).
@@ -1660,23 +1551,6 @@ priv enum Msg {
   // also carries its comment text, re-shown as an editor bubble over that
   // range.
   JumpToLocation(path~ : String, range~ : @common.Range?, annotation~ : String?)
-  // A `workspace_symbols` reply: owner, root, and query say which request it
-  // answers so an overtaken device/session/root switch or keystroke is dropped.
-  SymbolsLoaded(
-    owner~ : @interop.ConversationKey,
-    root~ : @common.Uri,
-    query~ : String,
-    generation~ : Int,
-    items~ : Array[WorkspaceSymbol]
-  )
-  // A failed search reads as "no symbols", so it carries no message to show —
-  // only the request identity needed to settle the right menu.
-  SymbolsFailed(
-    owner~ : @interop.ConversationKey,
-    root~ : @common.Uri,
-    query~ : String,
-    generation~ : Int
-  )
   // Open unified Quick Open in the requested provider in either shell.
   QuickOpenOpen(QuickOpenMode)
   QuickOpenValueChanged(String)
@@ -2559,9 +2433,6 @@ fn initial_model() -> Model {
     skills_query: "",
     skills_busy: [],
     skills_notice: "",
-    completion: None,
-    symbol_cache: empty_symbol_cache(),
-    completion_debounce: @composer.Debounce(),
     composer_context_generation: 0,
     composer_entry_replacements: [],
     composer_entry_retirements: [],
@@ -3177,22 +3048,31 @@ fn Model::active(self : Model) -> Conversation {
 /// names the archived owner, so that one identity maps to the fresh record.
 fn Model::conversation_for_composer_action(
   self : Model,
-  owner : @interop.ConversationKey,
+  identity : ComposerActionIdentity,
 ) -> Conversation? {
-  if self.find_conversation(owner.channel, owner.session) is Some(conv) {
-    return Some(conv)
-  }
-  // Newest first preserves the old single-handoff behavior when an unarchived
-  // session id is later archived again during the same page lifetime.
-  for replacement in self.composer_entry_replacements.rev_iter() {
-    if replacement.archived == owner {
-      return self.find_conversation(
-        replacement.fresh.channel,
-        replacement.fresh.session,
-      )
+  let mut owner = identity.owner
+  // Follow only archive facts appended after this entry was born. An active
+  // archive has an exact handoff for its fact; a background archive has none,
+  // so its old actions expire instead of reaching a later unarchived record.
+  for
+    index in identity.archive_generation..<self.composer_entry_retirements.length() {
+    if self.composer_entry_retirements[index] == owner {
+      let archive_generation = index + 1
+      let mut transferred = false
+      for replacement in self.composer_entry_replacements {
+        if replacement.archived == owner &&
+          replacement.archive_generation == archive_generation {
+          owner = replacement.fresh
+          transferred = true
+          break
+        }
+      }
+      if !transferred {
+        return None
+      }
     }
   }
-  None
+  self.find_conversation(owner.channel, owner.session)
 }
 
 ///|

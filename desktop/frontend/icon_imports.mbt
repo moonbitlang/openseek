@@ -8,7 +8,6 @@ using @icons {
   icon_arrow_up,
   icon_chevron_down,
   icon_close,
-  icon_debug_stop,
   icon_extensions,
   icon_fold,
   icon_folder,

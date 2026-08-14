@@ -2,7 +2,7 @@
 /// The primary action at the right edge of a conversation composer. The caller
 /// decides whether the action sends, steers, or stops; this package
 /// owns the button DOM so those states retain identical geometry.
-pub(all) struct Action {
+pub(all) struct ActionButton {
   id : String
   class_name : String
   title : String
@@ -12,7 +12,7 @@ pub(all) struct Action {
 }
 
 ///|
-fn Action::render(self : Action) -> @html.Html {
+fn ActionButton::render(self : ActionButton) -> @html.Html {
   @html.button(
     id=self.id,
     class=self.class_name,
@@ -312,7 +312,7 @@ pub(all) struct View {
   input : @cmd.Emit[String]
   keyboard : KeyboardActions
   status : Array[@html.Html]
-  action : Action
+  action : ActionButton
   overlay : @html.Html?
 }
 

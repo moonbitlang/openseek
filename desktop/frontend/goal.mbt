@@ -1,6 +1,6 @@
 // The standing goal's UI: one row above the composer input carrying both
 // the goal-editing mode behind `/goal` and the goal the durable `[goal]`
-// markers left standing (see `ComposerEntry::view`). The mirror itself lives on
+// markers left standing (see `@composer.component`). The mirror itself lives on
 // `Conversation.goal` and is written only by durable commits/snapshots —
 // see `apply_commit` — so nothing here ever claims a goal the engine has
 // not persisted.
@@ -161,34 +161,6 @@ test "the goal slash command opens the editor prefilled from the mirror" {
   inspect(edit.draft, content="ship the feature")
   // Whole-draft semantics, like /compact: accepting clears the typed command.
   inspect(opened.active().task, content="")
-  assert_true(opened.completion is None)
-}
-
-///|
-test "the row's Edit takes the prompt's menu down with it" {
-  let dispatch = test_dispatch()
-  let conv : Conversation = {
-    ..test_conversation(),
-    goal: Some({ text: "ship the feature", blocked: None }),
-    task: "/",
-  }
-  // The `/` menu belongs to the prompt draft. A goal draft has no slash
-  // commands to offer, so leaving it up would let a stale row replace the
-  // goal being written — or run something else entirely.
-  guard compute_completion(conv.task, [], empty_symbol_cache(), {
-      channel: conv.device,
-      session: conv.session_id,
-    })
-    is Some(menu) else {
-    fail("the slash menu should be open")
-  }
-  let model = {
-    ..test_model().replace_conversation(conv),
-    completion: Some(menu),
-  }
-  let (_, editing) = update(dispatch, OpenGoalEditor, model)
-  assert_true(editing.active().goal_edit is Some(_))
-  assert_true(editing.completion is None)
 }
 
 ///|

@@ -72,7 +72,6 @@ fn focus_channel(
       active_session: "",
       loading_conversation: None,
       installed_skills: [],
-      completion: None,
       // The old HostConnection is already parked. Preserve the remaining
       // owner/root state until the post-dispatch sync retires its file-index
       // cache and re-roots against the newly focused host.
@@ -92,7 +91,7 @@ fn open_session_on(
 ) -> (@cmd.Cmd, Model) {
   let owner : @interop.ConversationKey = { channel, session: session_id }
   if session_id == model.active_session {
-    let base = { ..model, screen: Chat, completion: None }
+    let base = { ..model, screen: Chat }
     // Re-selecting is an explicit catch-up point for writes made by an
     // idle CLI or another client. It also restarts an exhausted retry
     // round; an existing request stays single-flight. A fresh chat has no
@@ -147,7 +146,6 @@ fn open_session_on(
       } else {
         None
       },
-      completion: None,
     }.with_active_project(conv.workspace.project())
     let commands : Array[@cmd.Cmd] = []
     if generation is Some(generation) {
@@ -252,7 +250,6 @@ fn Model::open_archived_session_on(
     ..model.activate(channel, session_id),
     screen: Chat,
     loading_conversation: Some(owner),
-    completion: None,
   }.with_active_project(workspace)
   if generation is Some(generation) {
     (
@@ -464,7 +461,6 @@ fn adopt_projects(
           active_session: "",
           loading_conversation: None,
           screen: Chat,
-          completion: None,
         },
       )
     }
@@ -504,13 +500,7 @@ fn adopt_projects(
     commands.push(rotate_session(dispatch, channel))
     return (
       @cmd.batch(commands),
-      {
-        ..next,
-        active_session: "",
-        loading_conversation: None,
-        screen: Chat,
-        completion: None,
-      },
+      { ..next, active_session: "", loading_conversation: None, screen: Chat },
     )
   }
   if focus_target is Some(project) {
@@ -646,11 +636,7 @@ fn apply_session_snapshot(
   let commands : Array[@cmd.Cmd] = []
   let owner : @interop.ConversationKey = { channel, session }
   if activate_on_success && model.loading_conversation == Some(owner) {
-    next = {
-      ..next.activate(channel, session),
-      loading_conversation: None,
-      completion: None,
-    }
+    next = { ..next.activate(channel, session), loading_conversation: None }
     // An archived transcript has no runnable checkout to inspect here. Its
     // retained workspace placement is still available to file links, but git
     // state is refreshed only after an unarchive turns the record live.
@@ -703,80 +689,6 @@ fn is_idle_event(event : @transcript.EngineEvent) -> Bool {
 ///|
 fn is_steer_receipt(event : @transcript.EngineEvent) -> Bool {
   event is (SteerApplied(..) | SteerDropped(..))
-}
-
-///|
-/// Apply an accepted completion row: a slash command runs its action, while a
-/// skill, symbol, or file reference becomes a chip in the composer's mention
-/// tray (its expansion is spliced into the prompt on send). Either way the menu
-/// closes and only the typed trigger token is removed from the textarea.
-fn accept_completion(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-  menu : Completion,
-  item : CompletionItem,
-) -> (@cmd.Cmd, Model) {
-  if model.active().is_archived_read_only() {
-    return (@cmd.none, { ..model, completion: None })
-  }
-  match menu.kind {
-    SlashCommands => run_slash_command(dispatch, model, item.command)
-    // The chip carries its envelope form directly: the skill's bare name (its
-    // `insert` has a trailing space), or the symbol's name plus resolved
-    // location.
-    SkillMentions =>
-      accept_mention(
-        model,
-        Skill(name=item.insert.trim().to_owned()),
-        range=None,
-        task=menu.menu.draft_without_token(),
-      )
-    Symbols => {
-      let (file, line) = if item.path is Some(path) && item.range is Some(range) {
-        (path, range.start_line_number)
-      } else {
-        ("", 0)
-      }
-      accept_mention(
-        model,
-        Symbol(name=item.label, file~, line~),
-        range=item.range,
-        task=menu.menu.draft_without_token(),
-      )
-    }
-    Files =>
-      if item.path is Some(path) {
-        accept_mention(
-          model,
-          File(path~),
-          range=None,
-          task=menu.menu.draft_without_token(),
-        )
-      } else {
-        (@cmd.none, { ..model, completion: None })
-      }
-  }
-}
-
-///|
-/// Attach a mention chip to the active conversation's draft (deduplicated),
-/// remove the typed trigger token while preserving preceding prompt text, and
-/// close the menu.
-fn accept_mention(
-  model : Model,
-  ref_ : @mention_context.MentionRef,
-  range~ : @common.Range?,
-  task~ : String,
-) -> (@cmd.Cmd, Model) {
-  let conv = model.active()
-  let mentions = push_mention(conv.mentions, { ref_, range })
-  (
-    @cmd.none,
-    {
-      ..model.replace_conversation({ ..conv, task, mentions }),
-      completion: None,
-    },
-  )
 }
 
 ///|
@@ -978,138 +890,6 @@ fn open_editor_at(
 }
 
 ///|
-/// Start a delayed workspace-symbol request only while the composer still has
-/// the exact owner, query, and draft generation that scheduled it.
-fn Model::begin_completion_symbol_request(
-  self : Model,
-  dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
-  query : String,
-  generation : Int,
-) -> (@cmd.Cmd, Model) {
-  guard self.completion_debounce.accepts(generation) &&
-    owner.channel == self.focused &&
-    owner.session == self.active().session_id &&
-    @composer.Trigger::parse(self.active().task, inline_markers="$#")
-    is Some(trigger) &&
-    trigger.marker() == "#" &&
-    trigger.query() == query &&
-    self.completion is Some(completion) &&
-    completion.kind is Symbols &&
-    completion.menu.loading() else {
-    return (@cmd.none, self)
-  }
-  let root = self.conversation_root(self.active())
-  if self.symbol_cache.owner == Some(owner) &&
-    self.symbol_cache.root == root &&
-    self.symbol_cache.query == query {
-    return (@cmd.none, self)
-  }
-  (
-    ComposerSymbolRequest(generation).search(dispatch, owner, query, root~),
-    self,
-  )
-}
-
-///|
-/// Fold a workspace-symbol reply into the model: cache it and rebuild the menu,
-/// but only while it still answers the composer's live `#` query for the active
-/// conversation — a reply overtaken by a conversation switch or a later
-/// keystroke is dropped, the same staleness guard the file panel uses.
-fn apply_symbol_reply(
-  model : Model,
-  owner : @interop.ConversationKey,
-  root : @common.Uri,
-  query : String,
-  generation : Int,
-  symbols : Array[WorkspaceSymbol],
-) -> (@cmd.Cmd, Model) {
-  let draft = model.active().task
-  guard model.completion_debounce.accepts(generation) &&
-    owner.channel == model.focused &&
-    owner.session == model.active().session_id &&
-    model.conversation_root(model.active()) == Some(root) &&
-    @composer.Trigger::parse(draft, inline_markers="$#") is Some(trigger) &&
-    trigger.marker() == "#" &&
-    trigger.query() == query &&
-    model.completion is Some(completion) &&
-    completion.kind is Symbols &&
-    completion.menu.loading() else {
-    return (@cmd.none, model)
-  }
-  let items : Array[CompletionItem] = []
-  for symbol in symbols {
-    items.push(CompletionItem::from_symbol(symbol))
-  }
-  let cache : SymbolCache = {
-    owner: Some(owner),
-    root: Some(root),
-    query,
-    items,
-  }
-  (
-    @cmd.none,
-    {
-      ..model,
-      symbol_cache: cache,
-      completion: compute_completion(
-        draft,
-        model.installed_skills,
-        cache,
-        owner,
-      ),
-    },
-  )
-}
-
-///|
-/// Restart a live composer symbol query when the same conversation moves to a
-/// different concrete root. Clearing the cache immediately prevents rows from
-/// the previous checkout from remaining selectable while the new request is in
-/// flight; the root carried by replies fences work that was already underway.
-fn Model::restart_symbol_search_after_root_change(
-  self : Model,
-  dispatch : @cmd.Emit[Msg],
-  previous : Model,
-) -> (@cmd.Cmd, Model) {
-  guard self.focused == previous.focused &&
-    self.active_session == previous.active_session else {
-    return (@cmd.none, self)
-  }
-  let conv = self.active()
-  let previous_conv = previous.active()
-  guard self.conversation_root(conv) !=
-    previous.conversation_root(previous_conv) &&
-    @composer.Trigger::parse(conv.task, inline_markers="$#") is Some(trigger) &&
-    trigger.marker() == "#" else {
-    return (@cmd.none, self)
-  }
-  let owner : @interop.ConversationKey = {
-    channel: self.focused,
-    session: conv.session_id,
-  }
-  let cache = empty_symbol_cache()
-  let completion_debounce = self.completion_debounce.advanced()
-  let next = {
-    ..self,
-    symbol_cache: cache,
-    completion_debounce,
-    completion: compute_completion(
-      conv.task,
-      self.installed_skills,
-      cache,
-      owner,
-    ),
-  }
-  (
-    completion_debounce.delayed(generation => {
-      dispatch(CompletionDue(owner~, query=trigger.query(), generation~))
-    }),
-    next,
-  )
-}
-
-///|
 /// Run an accepted slash command against the active conversation and close the
 /// completion menu. The command text is cleared from the composer; an unknown
 /// id just dismisses the menu.
@@ -1119,7 +899,7 @@ fn run_slash_command(
   command : String,
 ) -> (@cmd.Cmd, Model) {
   if model.active().is_archived_read_only() {
-    return (@cmd.none, { ..model, completion: None })
+    return (@cmd.none, model)
   }
   match command {
     "compact" => {
@@ -1128,13 +908,7 @@ fn run_slash_command(
       // would stack another behind it in the engine's pending queue (the
       // host rejects it anyway) — swallow it like any settled command.
       if !(conv.compaction is NotCompacting) {
-        (
-          @cmd.none,
-          {
-            ..model.replace_conversation({ ..conv, task: "" }),
-            completion: None,
-          },
-        )
+        (@cmd.none, { ..model.replace_conversation({ ..conv, task: "" }) })
       } else {
         (
           compact_openseek(
@@ -1160,8 +934,7 @@ fn run_slash_command(
               } else {
                 Requested
               },
-            }),
-            completion: None,
+            })
           },
         )
       }
@@ -1175,12 +948,11 @@ fn run_slash_command(
             ..conv,
             task: "",
             goal_edit: Some({ draft: conv.goal_draft_seed() }),
-          }),
-          completion: None,
+          })
         },
       )
     }
-    _ => (@cmd.none, { ..model, completion: None })
+    _ => (@cmd.none, model)
   }
 }
 
@@ -1648,15 +1420,22 @@ fn replace_archived_active(
     fresh
   }
   let composer_entry_replacements = model.composer_entry_replacements.copy()
+  let archived_owner : @interop.ConversationKey = { channel, session }
+  let mut archive_generation = 0
+  for index, retired in model.composer_entry_retirements {
+    if retired == archived_owner {
+      archive_generation = index + 1
+    }
+  }
   composer_entry_replacements.push({
-    archived: { channel, session },
+    archived: archived_owner,
     fresh: { channel, session: fresh_session },
+    archive_generation,
   })
   {
     ..activated.replace_conversation(fresh).with_active_project(workspace),
     screen: Chat,
     loading_conversation: None,
-    completion: None,
     composer_entry_replacements,
   }
 }
@@ -1703,9 +1482,6 @@ fn update(
   // restored session data, or a worktree registry broadcast. Restart an open
   // picker once here so every path gets the same stale-result fence.
   let (quick_open_restart_cmd, model) = model.restart_quick_open_after_root_change(
-    dispatch, previous,
-  )
-  let (symbol_restart_cmd, model) = model.restart_symbol_search_after_root_change(
     dispatch, previous,
   )
   // The composer's git popover belongs to the checkout that was on screen,
@@ -1758,11 +1534,6 @@ fn update(
     (@cmd.none, model)
   }
   let (model, panel_cmd) = sync_file_panel(dispatch, model)
-  // File completion consumes the panel's shared index, so restart it only
-  // after the panel has dropped the previous root's snapshot.
-  let (file_completion_restart_cmd, model) = model.restart_file_completion_after_root_change(
-    dispatch, previous,
-  )
   // The launcher menu belongs to one dock owner. Conversation changes are
   // already explicit root transitions, so close it here instead of observing a
   // rendered owner marker through the DOM.
@@ -1788,8 +1559,8 @@ fn update(
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
-      cmd, quick_open_cmd, quick_open_restart_cmd, symbol_restart_cmd, panel_visibility_cmd,
-      panel_cmd, file_completion_restart_cmd, terminal_cmd, browser_cmd,
+      cmd, quick_open_cmd, quick_open_restart_cmd, panel_visibility_cmd, panel_cmd,
+      terminal_cmd, browser_cmd,
     ]),
     model,
   )
@@ -1801,7 +1572,7 @@ fn update(
 /// the panel later, after the host has classified the target as editable text.
 fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
   self
-  is (ComposerAction(ComposerMentionOpened(_))
+  is (ComposerAction(@composer.MentionOpened(..))
   | JumpToMention(_)
   | JumpToLocation(..)
   | QuickOpenPick(_)
@@ -1924,8 +1695,8 @@ fn update_msg(
       }
     ComposerAction(action) =>
       match action {
-        ComposerDraftSubmitted(owner~, draft~) => {
-          guard model.conversation_for_composer_action(owner) is Some(conv) else {
+        @composer.DraftSubmitted(identity~, draft~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
           let original_focus = model.focused
@@ -1953,8 +1724,8 @@ fn update_msg(
             },
           )
         }
-        ComposerDraftPresenceChanged(owner~, present~, cleared_source~) =>
-          if model.conversation_for_composer_action(owner) is Some(conv) {
+        @composer.DraftPresenceChanged(identity~, present~, cleared_source~) =>
+          if model.conversation_for_composer_action(identity) is Some(conv) {
             let task = if !present &&
               cleared_source is Some(source) &&
               conv.task == source.task {
@@ -1981,8 +1752,8 @@ fn update_msg(
           } else {
             (@cmd.none, model)
           }
-        ComposerRootMentionRemoved(owner~, mention~) => {
-          guard model.conversation_for_composer_action(owner) is Some(conv) else {
+        @composer.RootMentionRemoved(identity~, mention~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
           (
@@ -1995,9 +1766,28 @@ fn update_msg(
             }),
           )
         }
-        ComposerSlashCommand(command) =>
-          run_slash_command(dispatch, model, command)
-        ComposerMentionOpened(mention) => {
+        @composer.SlashCommand(identity~, command~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
+            return (@cmd.none, model)
+          }
+          let (command, changed) = run_slash_command(
+            dispatch,
+            { ..model, focused: conv.device, active_session: conv.session_id },
+            command,
+          )
+          (
+            command,
+            {
+              ..changed,
+              focused: model.focused,
+              active_session: model.active_session,
+            },
+          )
+        }
+        @composer.MentionOpened(identity~, mention~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
+            return (@cmd.none, model)
+          }
           guard @mention_context.target(mention.ref_) is Some(target) else {
             return (@cmd.none, model)
           }
@@ -2006,113 +1796,125 @@ fn update_msg(
           } else {
             target.range
           }
-          open_editor_at(
+          let (command, opened) = open_editor_at(
             dispatch,
-            model,
+            { ..model, focused: conv.device, active_session: conv.session_id },
             target.file,
             range,
             annotation?=target.annotation,
           )
+          (
+            command,
+            {
+              ..opened,
+              focused: model.focused,
+              active_session: model.active_session,
+            },
+          )
         }
-        ComposerGoalSubmitted(draft, prompt_present~) => {
-          let conv = model.active()
+        @composer.GoalCancelled(identity~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
+            return (@cmd.none, model)
+          }
+          (@cmd.none, model.replace_conversation({ ..conv, goal_edit: None }))
+        }
+        @composer.GoalEditStarted(identity~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
+            return (@cmd.none, model)
+          }
+          let (command, changed) = update_msg(dispatch, OpenGoalEditor, {
+            ..model,
+            focused: conv.device,
+            active_session: conv.session_id,
+          })
+          (
+            command,
+            {
+              ..changed,
+              focused: model.focused,
+              active_session: model.active_session,
+            },
+          )
+        }
+        @composer.GoalCleared(identity~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
+            return (@cmd.none, model)
+          }
+          let (command, changed) = update_msg(dispatch, ClearGoal, {
+            ..model,
+            focused: conv.device,
+            active_session: conv.session_id,
+          })
+          (
+            command,
+            {
+              ..changed,
+              focused: model.focused,
+              active_session: model.active_session,
+            },
+          )
+        }
+        @composer.GoalSubmitted(identity~, draft~, prompt_present~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
+            return (@cmd.none, model)
+          }
           guard conv.goal_edit is Some(_) else { return (@cmd.none, model) }
-          update_msg(
-            dispatch,
-            SubmitGoal,
-            model.replace_conversation({
+          let target = {
+            ..model.replace_conversation({
               ..conv,
               goal_edit: Some({ draft, }),
               composer_draft_present: prompt_present,
             }),
+            focused: conv.device,
+            active_session: conv.session_id,
+          }
+          let (command, submitted) = update_msg(dispatch, SubmitGoal, target)
+          (
+            command,
+            {
+              ..submitted,
+              focused: model.focused,
+              active_session: model.active_session,
+            },
+          )
+        }
+        @composer.FileIndexEnsured(identity~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
+            return (@cmd.none, model)
+          }
+          let (command, indexed) = update_msg(
+            dispatch,
+            FileEditor(@fileeditor.EnsureFileIndex),
+            { ..model, focused: conv.device, active_session: conv.session_id },
+          )
+          (
+            command,
+            {
+              ..indexed,
+              focused: model.focused,
+              active_session: model.active_session,
+            },
+          )
+        }
+        @composer.StopRequested(identity~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
+            return (@cmd.none, model)
+          }
+          let (command, stopped) = update_msg(dispatch, Stop, {
+            ..model,
+            focused: conv.device,
+            active_session: conv.session_id,
+          })
+          (
+            command,
+            {
+              ..stopped,
+              focused: model.focused,
+              active_session: model.active_session,
+            },
           )
         }
       }
-    TaskChanged(value) => {
-      if model.active().is_archived_read_only() {
-        return (@cmd.none, model)
-      }
-      let owner : @interop.ConversationKey = {
-        channel: model.focused,
-        session: model.active().session_id,
-      }
-      let root = model.conversation_root(model.active())
-      // A root change invalidates paths even when the owner and query text are
-      // unchanged. Drop that cache before rendering the menu so the delayed
-      // request can enter its loading state instead of exposing stale rows.
-      let symbol_cache = if model.symbol_cache.root == root {
-        model.symbol_cache
-      } else {
-        empty_symbol_cache()
-      }
-      let completion_debounce = model.completion_debounce.advanced()
-      let (files, files_loading) = model.completion_files(value)
-      let command = match
-        @composer.Trigger::parse(value, inline_markers="$#@") {
-        Some(trigger) if trigger.marker() == "#" &&
-          (
-            model.symbol_cache.owner != Some(owner) ||
-            model.symbol_cache.root != root ||
-            model.symbol_cache.query != trigger.query()
-          ) =>
-          completion_debounce.delayed(generation => {
-            dispatch(CompletionDue(owner~, query=trigger.query(), generation~))
-          })
-        Some(trigger) if trigger.marker() == "@" &&
-          model.file_panel.index is @fileeditor.IndexReady(truncated=true, ..) &&
-          root is Some(root) =>
-          completion_debounce.delayed(generation => {
-            dispatch(
-              FileCompletionDue(
-                owner~,
-                root~,
-                query=trigger.query(),
-                generation~,
-              ),
-            )
-          })
-        Some(trigger) if trigger.marker() == "@" &&
-          root is Some(_) &&
-          (
-            model.file_panel.index is @fileeditor.IndexEmpty ||
-            model.file_panel.index is @fileeditor.IndexFailed
-          ) => dispatch(FileEditor(@fileeditor.EnsureFileIndex))
-        _ => @cmd.none
-      }
-      (
-        command,
-        {
-          ..model.replace_conversation({ ..model.active(), task: value }),
-          symbol_cache,
-          completion_debounce,
-          completion: compute_completion(
-            value,
-            model.installed_skills,
-            symbol_cache,
-            owner,
-            files~,
-            files_loading~,
-          ),
-        },
-      )
-    }
-    CompletionDue(owner~, query~, generation~) =>
-      model.begin_completion_symbol_request(dispatch, owner, query, generation)
-    FileCompletionDue(owner~, root~, query~, generation~) =>
-      model.begin_file_completion_request(
-        dispatch, owner, root, query, generation,
-      )
-    FileCompletionLoaded(owner~, root~, query~, generation~, files~) =>
-      model.apply_file_completion_reply(
-        owner,
-        root,
-        query,
-        generation,
-        Some(files),
-      )
-    FileCompletionFailed(owner~, root~, query~, generation~) =>
-      model.apply_file_completion_reply(owner, root, query, generation, None)
-    CompletionDismiss => (@cmd.none, { ..model, completion: None })
     JumpToMention(index) => {
       let conv = model.active()
       guard conv.mentions.get(index) is Some(mention) else {
@@ -2152,17 +1954,20 @@ fn update_msg(
       )
     ) => {
       let conv = model.active()
-      let mentions = push_mention(conv.mentions, {
-        ref_: Annotation(
-          file=file.0,
-          start_line=range.start_line_number,
-          end_line=range.end_line_number,
-          quote~,
-          comment~,
-          side=@mention_context.WorkingRevision,
-        ),
-        range: Some(range),
-      })
+      let mentions = @composer.Draft::{
+          task: conv.task,
+          mentions: conv.mentions,
+        }.with_mention({
+          ref_: Annotation(
+            file=file.0,
+            start_line=range.start_line_number,
+            end_line=range.end_line_number,
+            quote~,
+            comment~,
+            side=@mention_context.WorkingRevision,
+          ),
+          range: Some(range),
+        }).mentions
       // The chip is the comment's carrier from here on; clearing the editor's
       // own bubble keeps the two from drifting apart (and from double-sending
       // if the user comments again).
@@ -2202,17 +2007,20 @@ fn update_msg(
           }
       }
       let conv = model.active()
-      let mentions = push_mention(conv.mentions, {
-        ref_: Annotation(
-          file=file.0,
-          start_line=line_number,
-          end_line=line_number,
-          quote~,
-          comment~,
-          side~,
-        ),
-        range,
-      })
+      let mentions = @composer.Draft::{
+          task: conv.task,
+          mentions: conv.mentions,
+        }.with_mention({
+          ref_: Annotation(
+            file=file.0,
+            start_line=line_number,
+            end_line=line_number,
+            quote~,
+            comment~,
+            side~,
+          ),
+          range,
+        }).mentions
       (@cmd.none, model.replace_conversation({ ..conv, mentions, }))
     }
     // Intercepted like the comment above: which dock tab a tree click opens
@@ -2301,18 +2109,6 @@ fn update_msg(
       )
       (cmd, { ..model, file_panel: panel })
     }
-    CompletionAccept =>
-      if model.completion is Some(menu) && menu.menu.current() is Some(item) {
-        accept_completion(dispatch, model, menu, item)
-      } else {
-        (@cmd.none, { ..model, completion: None })
-      }
-    SymbolsLoaded(owner~, root~, query~, generation~, items~) =>
-      apply_symbol_reply(model, owner, root, query, generation, items)
-    // A failed search reads as "no symbols": cache an empty result for the
-    // query so the menu settles on "No symbols" rather than spinning.
-    SymbolsFailed(owner~, root~, query~, generation~) =>
-      apply_symbol_reply(model, owner, root, query, generation, [])
     QuickOpenOpen(mode) => open_quick_open(dispatch, model, mode)
     QuickOpenValueChanged(value) =>
       change_quick_open_value(dispatch, model, value)
@@ -2858,7 +2654,10 @@ fn update_msg(
       // The outgoing prompt is the typed text with the chips folded in as the
       // `<user_mentions>` envelope. Typed text is required — chips alone are
       // context without an instruction and stay in the composer.
-      let task = compose_prompt(conv.mentions, conv.task).trim().to_owned()
+      let task = @composer.Draft::{ task: conv.task, mentions: conv.mentions }
+        .prompt()
+        .trim()
+        .to_owned()
       if !conv.draft_sendable() ||
         !(model.bridge_state() is Connected(..)) ||
         !model.api_ready() ||
@@ -2908,8 +2707,7 @@ fn update_msg(
                 task: "",
                 mentions: [],
                 composer_draft_present: false,
-              }),
-              completion: None,
+              })
             },
           )
         } else {
@@ -2980,7 +2778,7 @@ fn update_msg(
             workspace=conv.workspace.project(),
           )
         }
-        (start_cmd, { ..model.replace_conversation(next), completion: None })
+        (start_cmd, model.replace_conversation(next))
       }
     }
     Stop => {
@@ -3187,13 +2985,7 @@ fn update_msg(
       })
       (
         @cmd.none,
-        {
-          ..activated,
-          conversations,
-          screen: Chat,
-          loading_conversation: None,
-          completion: None,
-        },
+        { ..activated, conversations, screen: Chat, loading_conversation: None },
       )
     }
     PickProject(channel) => {
@@ -3763,8 +3555,7 @@ fn update_msg(
           ..model.replace_conversation({
             ..conv,
             goal_edit: Some({ draft: conv.goal_draft_seed() }),
-          }),
-          completion: None,
+          })
         },
       )
     }
@@ -3849,18 +3640,7 @@ fn update_msg(
         file_ctx(model),
       )
       let next = { ..model, file_panel: panel }
-      let next = match msg {
-        @fileeditor.EnsureFileIndex
-        | @fileeditor.FilesIndexed(..)
-        | @fileeditor.FileIndexFailed(..) => next.refresh_file_completion()
-        _ => next
-      }
-      let completion_cmd = match msg {
-        @fileeditor.FilesIndexed(..) | @fileeditor.FileIndexFailed(..) =>
-          next.file_completion_query_after_index(dispatch)
-        _ => @cmd.none
-      }
-      (@cmd.batch([cmd, completion_cmd]), next)
+      (cmd, next)
     }
     Dock(msg) => {
       // The strip machine is pure; the cross-package effects of the
@@ -4794,7 +4574,6 @@ fn update_device_msg(
             {
               ..updated,
               loading_conversation: Some({ channel, session: conv.session_id }),
-              completion: None,
             }
           } else {
             updated
@@ -5409,7 +5188,6 @@ fn update_device_msg(
               {
                 ..next,
                 loading_conversation: Some({ channel, session: key.session }),
-                completion: None,
               }
             } else {
               next
@@ -7379,7 +7157,10 @@ fn second_run_started_before_first_response() -> (Model, String)? {
     ),
     reconciled,
   )
-  let (_, drafted) = update(dispatch, TaskChanged("second prompt"), post_finish)
+  let drafted = post_finish.replace_conversation({
+    ..post_finish.active(),
+    task: "second prompt",
+  })
   let (_, sending) = update(dispatch, Send, drafted)
   guard sending.active().run is Starting(submission_id=second_submission) else {
     return None
@@ -7424,7 +7205,10 @@ fn second_run_started_before_first_steer_receipt() -> Model? {
     ),
     first_finished,
   )
-  let (_, drafted) = update(dispatch, TaskChanged("second prompt"), reconciled)
+  let drafted = reconciled.replace_conversation({
+    ..reconciled.active(),
+    task: "second prompt",
+  })
   let (_, sending) = update(dispatch, Send, drafted)
   guard sending.active().run is Starting(submission_id=second_submission) else {
     return None
@@ -7866,61 +7650,6 @@ test "a delayed rotation cannot steal focus from another channel" {
   assert_true(next.focused is Local)
   inspect(next.active_session, content="desktop-test")
   assert_true(next.find_conversation(remote, "remote-late") is None)
-}
-
-///|
-test "a symbol reply with the same session id but another channel is stale" {
-  let dispatch = test_dispatch()
-  let local_owner : @interop.ConversationKey = {
-    channel: Local,
-    session: "desktop-test",
-  }
-  let remote_owner : @interop.ConversationKey = {
-    channel: Remote("d-remote"),
-    session: "desktop-test",
-  }
-  let (_, querying) = update(dispatch, TaskChanged("#parse"), test_model())
-  let items : Array[WorkspaceSymbol] = [
-    {
-      name: "parse_file",
-      kind: Some(12),
-      container: None,
-      path: "src/main.mbt",
-      range: @common.Range::Range(1, 1, 1, 1),
-    },
-  ]
-  let (_, stale) = update(
-    dispatch,
-    SymbolsLoaded(
-      owner=remote_owner,
-      root=remote_owner.channel.test_resource("/scratch/desktop-test"),
-      query="parse",
-      generation=querying.completion_debounce.generation(),
-      items~,
-    ),
-    querying,
-  )
-  guard stale.completion is Some(stale_menu) else {
-    fail("symbol menu disappeared")
-  }
-  assert_true(stale_menu.menu.loading())
-  let (_, settled) = update(
-    dispatch,
-    SymbolsLoaded(
-      owner=local_owner,
-      root=local_owner.channel.test_resource("/scratch/desktop-test"),
-      query="parse",
-      generation=stale.completion_debounce.generation(),
-      items~,
-    ),
-    stale,
-  )
-  guard settled.completion is Some(menu) else {
-    fail("symbol menu disappeared")
-  }
-  assert_false(menu.menu.loading())
-  guard menu.menu.get(0) is Some(first) else { fail("row expected") }
-  inspect(first.label, content="parse_file")
 }
 
 ///|
@@ -9891,7 +9620,10 @@ test "an accepted start response opens the run without Started" {
   assert_true(responded.active().sync is Reloading(generation=1, ..))
   assert_true(responded.active().run_durable_floor is None)
   assert_true(responded.active().run_floor_generation is Some(1))
-  let (_, drafted) = update(dispatch, TaskChanged("too early"), responded)
+  let drafted = responded.replace_conversation({
+    ..responded.active(),
+    task: "too early",
+  })
   let (_, gated) = update(dispatch, Send, drafted)
   inspect(gated.active().input_ledger.length(), content="1")
   inspect(gated.active().task, content="too early")
@@ -10188,7 +9920,10 @@ test "an old empty runs snapshot cannot close a start sent after reconnect" {
     @interop.ChannelId::Local.test_bridge_ready(),
     test_model(),
   )
-  let (_, drafted) = update(dispatch, TaskChanged("new prompt"), ready)
+  let drafted = ready.replace_conversation({
+    ..ready.active(),
+    task: "new prompt",
+  })
   let (_, sent) = update(dispatch, Send, drafted)
   assert_true(sent.active().run is Starting(..))
   let (_, stale_snapshot) = update_dev(
@@ -11052,463 +10787,6 @@ test "a cancelling turn cannot be steered; the text stays in the composer" {
   let (_, next) = update(dispatch, Send, model)
   inspect(next.active().task, content="too late")
   inspect(next.active().pending_steers().length(), content="0")
-}
-
-///|
-test "the composer draft stays with its conversation across a switch" {
-  let dispatch = test_dispatch()
-  let model = test_model().replace_conversation({
-    ..empty_conversation(@interop.ChannelId::Local, "desktop-second"),
-    messages: [{ kind: User, content: "earlier", ts: None, sequence: None }],
-  })
-  let (_, drafted) = update(dispatch, TaskChanged("half a thought"), model)
-  let (_, switched) = update(
-    dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-second"),
-    drafted,
-  )
-  // The other conversation starts with its own (empty) draft …
-  inspect(switched.active().task, content="")
-  let (_, back) = update(
-    dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
-    switched,
-  )
-  // … and the original draft is still waiting where it was typed.
-  inspect(back.active().task, content="half a thought")
-}
-
-///|
-test "update is pure: accepting an inline skill preserves prompt text" {
-  let dispatch = test_dispatch()
-  let model = {
-    ..test_model(),
-    installed_skills: [installed_skill("review-pr", "Review a pull request")],
-  }
-  let (_, drafted) = update(dispatch, TaskChanged("Please use $rev"), model)
-  guard drafted.completion is Some(menu) else {
-    fail("the inline skill token should open completion")
-  }
-  assert_eq(menu.menu.draft_without_token(), "Please use ")
-  let (_, once) = update(dispatch, CompletionAccept, drafted)
-  let (_, twice) = update(dispatch, CompletionAccept, drafted)
-  // The same message and model always produce the same plain-data state.
-  assert_eq(once.active().task, "Please use ")
-  assert_eq(twice.active().task, "Please use ")
-  assert_eq(once.active().mentions.length(), 1)
-  assert_eq(twice.active().mentions.length(), 1)
-  assert_true(
-    once.active().mentions[0].ref_ is Skill(name="review-pr") &&
-    twice.active().mentions[0].ref_ is Skill(name="review-pr"),
-  )
-  assert_true(once.completion is None && twice.completion is None)
-}
-
-///|
-test "file index completion refreshes and accepts a workspace file" {
-  let dispatch = test_dispatch()
-  let owner : @interop.ConversationKey = {
-    channel: Local,
-    session: "desktop-test",
-  }
-  let base = test_model()
-  let file_emit = dispatch.map(msg => FileEditor(msg))
-  let (synced, _) = @fileeditor.sync(file_emit, base.file_panel, file_ctx(base))
-  let (_, loading) = @fileeditor.update(
-    file_emit,
-    @fileeditor.EnsureFileIndex,
-    synced,
-    file_ctx(base),
-  )
-  let model = { ..base, file_panel: loading }
-  let (_, searching) = update(dispatch, TaskChanged("Inspect @main"), model)
-  guard searching.completion is Some(pending) else {
-    fail("the inline file token should open completion")
-  }
-  assert_true(pending.kind is Files)
-  assert_true(pending.menu.loading())
-  assert_eq(pending.menu.length(), 0)
-  let indexed = FileEditor(
-    @fileeditor.FilesIndexed(
-      owner~,
-      epoch=searching.file_panel.request_epoch,
-      files=[@pathx.Relative("src/main.mbt")],
-      truncated=false,
-    ),
-  )
-  let (_, dismissed) = update(dispatch, CompletionDismiss, searching)
-  let (_, stayed_closed) = update(dispatch, indexed, dismissed)
-  let (_, stayed_closed_again) = update(dispatch, indexed, dismissed)
-  assert_true(stayed_closed.completion is None)
-  assert_true(stayed_closed.completion == stayed_closed_again.completion)
-  let (_, loaded) = update(dispatch, indexed, searching)
-  guard loaded.completion is Some(menu) else {
-    fail("the file-index reply should rebuild completion")
-  }
-  assert_false(menu.menu.loading())
-  assert_eq(menu.menu.length(), 1)
-  guard menu.menu.get(0) is Some(file) else { fail("file row expected") }
-  assert_eq(file.label, "main.mbt")
-  assert_eq(file.path, Some("src/main.mbt"))
-  let (_, accepted) = update(dispatch, CompletionAccept, loaded)
-  assert_eq(accepted.active().task, "Inspect ")
-  assert_true(
-    accepted.active().mentions ==
-    [{ ref_: File(path="src/main.mbt"), range: None }],
-  )
-}
-
-///|
-test "truncated file completion settles from the complete Host cache" {
-  let dispatch = test_dispatch()
-  let owner : @interop.ConversationKey = {
-    channel: Local,
-    session: "desktop-test",
-  }
-  let base = test_model()
-  guard base.conversation_root(base.active()) is Some(root) else {
-    fail("test conversation should have a concrete root")
-  }
-  let file_emit = dispatch.map(msg => FileEditor(msg))
-  let (synced, _) = @fileeditor.sync(file_emit, base.file_panel, file_ctx(base))
-  let (_, loading) = @fileeditor.update(
-    file_emit,
-    @fileeditor.EnsureFileIndex,
-    synced,
-    file_ctx(base),
-  )
-  let (_, truncated) = @fileeditor.update(
-    file_emit,
-    @fileeditor.FilesIndexed(
-      owner~,
-      epoch=loading.request_epoch,
-      files=[@pathx.Relative("src/visible.mbt")],
-      truncated=true,
-    ),
-    loading,
-    file_ctx(base),
-  )
-  let indexed = { ..base, file_panel: truncated }
-  let (_, searching) = update(dispatch, TaskChanged("Inspect @hidden"), indexed)
-  guard searching.completion is Some(pending) else {
-    fail("truncated indexes should keep the file menu open")
-  }
-  assert_true(pending.kind is Files)
-  assert_true(pending.menu.loading())
-  assert_eq(pending.menu.length(), 0)
-  let (_, loaded) = update(
-    dispatch,
-    FileCompletionLoaded(
-      owner~,
-      root~,
-      query="hidden",
-      generation=searching.completion_debounce.generation(),
-      files=[@pathx.Relative("other/hidden.mbt")],
-    ),
-    searching,
-  )
-  guard loaded.completion is Some(menu) else {
-    fail("the complete cache result should settle file completion")
-  }
-  assert_false(menu.menu.loading())
-  guard menu.menu.get(0) is Some(file) else {
-    fail("a file outside the truncated snapshot should be selectable")
-  }
-  assert_eq(file.path, Some("other/hidden.mbt"))
-
-  let (_, local_searching) = update(
-    dispatch,
-    TaskChanged("Inspect @visible"),
-    indexed,
-  )
-  let (_, fallback) = update(
-    dispatch,
-    FileCompletionFailed(
-      owner~,
-      root~,
-      query="visible",
-      generation=local_searching.completion_debounce.generation(),
-    ),
-    local_searching,
-  )
-  guard fallback.completion is Some(local_menu) else {
-    fail("a failed cache query should retain bounded local matches")
-  }
-  assert_false(local_menu.menu.loading())
-  assert_eq(local_menu.menu.length(), 1)
-}
-
-///|
-test "file completion settles while its checkout root is unavailable" {
-  let dispatch = test_dispatch()
-  let base = test_model()
-  let rootless = base.replace_device({ ..base.dev(), bridge: Connecting })
-  assert_true(rootless.conversation_root(rootless.active()) is None)
-  let (_, searching) = update(
-    dispatch,
-    TaskChanged("Inspect @missing"),
-    rootless,
-  )
-  guard searching.completion is Some(menu) else {
-    fail("a rootless @ token should still expose a settled empty menu")
-  }
-  assert_true(menu.kind is Files)
-  assert_false(menu.menu.loading())
-  assert_eq(menu.menu.length(), 0)
-}
-
-///|
-test "file index failure settles an empty completion menu" {
-  let dispatch = test_dispatch()
-  let owner : @interop.ConversationKey = {
-    channel: Local,
-    session: "desktop-test",
-  }
-  let base = test_model()
-  let file_emit = dispatch.map(msg => FileEditor(msg))
-  let (synced, _) = @fileeditor.sync(file_emit, base.file_panel, file_ctx(base))
-  let (_, loading) = @fileeditor.update(
-    file_emit,
-    @fileeditor.EnsureFileIndex,
-    synced,
-    file_ctx(base),
-  )
-  let (_, searching) = update(dispatch, TaskChanged("Inspect @missing"), {
-    ..base,
-    file_panel: loading,
-  })
-  let failed_reply = FileEditor(
-    @fileeditor.FileIndexFailed(
-      owner~,
-      epoch=searching.file_panel.request_epoch,
-    ),
-  )
-  let (_, dismissed) = update(dispatch, CompletionDismiss, searching)
-  let (_, stayed_closed) = update(dispatch, failed_reply, dismissed)
-  let (_, stayed_closed_again) = update(dispatch, failed_reply, dismissed)
-  assert_true(stayed_closed.completion is None)
-  assert_true(stayed_closed.completion == stayed_closed_again.completion)
-  let (_, failed) = update(dispatch, failed_reply, searching)
-  guard failed.completion is Some(menu) else {
-    fail("a live @ token should retain its settled empty menu")
-  }
-  assert_true(menu.kind is Files)
-  assert_false(menu.menu.loading())
-  assert_eq(menu.menu.length(), 0)
-}
-
-///|
-test "a live file completion restarts when its checkout root changes" {
-  let dispatch = test_dispatch()
-  let owner : @interop.ConversationKey = {
-    channel: Local,
-    session: "desktop-test",
-  }
-  let base = test_model()
-  let file_emit = dispatch.map(msg => FileEditor(msg))
-  let (synced, _) = @fileeditor.sync(file_emit, base.file_panel, file_ctx(base))
-  let (_, loading) = @fileeditor.update(
-    file_emit,
-    @fileeditor.EnsureFileIndex,
-    synced,
-    file_ctx(base),
-  )
-  let (_, ready) = @fileeditor.update(
-    file_emit,
-    @fileeditor.FilesIndexed(
-      owner~,
-      epoch=loading.request_epoch,
-      files=[@pathx.Relative("src/old.mbt")],
-      truncated=false,
-    ),
-    loading,
-    file_ctx(base),
-  )
-  let (_, showing_old) = update(dispatch, TaskChanged("Inspect @old"), {
-    ..base,
-    file_panel: ready,
-  })
-  guard showing_old.completion is Some(old_menu) else {
-    fail("the old root should have a file completion menu")
-  }
-  assert_false(old_menu.menu.loading())
-  assert_eq(old_menu.menu.length(), 1)
-
-  let ready_msg = BridgeReady(
-    scratch_root=owner.channel.test_resource("/next-scratch"),
-  )
-  let (_, rerooted) = update_dev(dispatch, ready_msg, showing_old)
-  let (_, rerooted_again) = update_dev(dispatch, ready_msg, showing_old)
-  assert_true(rerooted.completion == rerooted_again.completion)
-  assert_true(rerooted.file_panel.index is @fileeditor.IndexEmpty)
-  guard rerooted.completion is Some(waiting) else {
-    fail("the new root should keep the file completion menu open")
-  }
-  assert_true(waiting.kind is Files)
-  assert_true(waiting.menu.loading())
-  assert_eq(waiting.menu.length(), 0)
-}
-
-///|
-test "an inline symbol reply rebuilds the live completion menu" {
-  let dispatch = test_dispatch()
-  let (_, searching) = update(
-    dispatch,
-    TaskChanged("Inspect #parse"),
-    test_model(),
-  )
-  guard searching.completion is Some(pending) else {
-    fail("the inline symbol token should open completion")
-  }
-  assert_true(pending.kind is Symbols)
-  assert_true(pending.menu.loading())
-  assert_eq(pending.menu.draft_without_token(), "Inspect ")
-  let item : WorkspaceSymbol = {
-    name: "parse_hover",
-    kind: Some(12),
-    container: None,
-    path: "src/main.mbt",
-    range: @common.Range::Range(4, 2, 4, 13),
-  }
-  let (_, loaded) = update(
-    dispatch,
-    SymbolsLoaded(
-      owner={ channel: Local, session: "desktop-test" },
-      root=@interop.ChannelId::Local.test_resource("/scratch/desktop-test"),
-      query="parse",
-      generation=searching.completion_debounce.generation(),
-      items=[item],
-    ),
-    searching,
-  )
-  guard loaded.completion is Some(menu) else {
-    fail("the matching inline symbol reply should rebuild completion")
-  }
-  assert_false(menu.menu.loading())
-  assert_eq(menu.menu.length(), 1)
-  guard menu.menu.get(0) is Some(first) else { fail("row expected") }
-  assert_eq(first.label, "parse_hover")
-  assert_eq(menu.menu.draft_without_token(), "Inspect ")
-}
-
-///|
-test "typing the same symbol query after a root change drops the old cache" {
-  let dispatch = test_dispatch()
-  let owner : @interop.ConversationKey = {
-    channel: Local,
-    session: "desktop-test",
-  }
-  let old_root = owner.channel.test_resource("/scratch/desktop-test")
-  let cached = {
-    ..test_model(),
-    symbol_cache: {
-      owner: Some(owner),
-      root: Some(old_root),
-      query: "parse",
-      items: [
-        CompletionItem::symbol(
-          "parse_old_symbol",
-          container=None,
-          path="src/old.mbt",
-          range=@common.Range::Range(1, 1, 1, 1),
-        ),
-      ],
-    },
-  }
-  // No live `#` token means the root-change handler deliberately leaves the
-  // cache alone until the composer next needs it.
-  let (_, rerooted) = update_dev(
-    dispatch,
-    BridgeReady(scratch_root=owner.channel.test_resource("/next-scratch")),
-    cached,
-  )
-  assert_eq(rerooted.symbol_cache.root, Some(old_root))
-  let (_, querying) = update(dispatch, TaskChanged("#parse"), rerooted)
-  assert_true(querying.symbol_cache.owner is None)
-  guard querying.completion is Some(menu) else {
-    fail("the symbol menu should open for the new root")
-  }
-  assert_true(menu.menu.loading())
-  assert_eq(menu.menu.length(), 0)
-}
-
-///|
-test "a composer symbol query restarts and fences replies when its root changes" {
-  let dispatch = test_dispatch()
-  let owner : @interop.ConversationKey = {
-    channel: Local,
-    session: "desktop-test",
-  }
-  let old_root = owner.channel.test_resource("/scratch/desktop-test")
-  let item : WorkspaceSymbol = {
-    name: "parse_old_symbol",
-    kind: Some(12),
-    container: None,
-    path: "src/old.mbt",
-    range: @common.Range::Range(1, 1, 1, 1),
-  }
-  let (_, querying) = update(dispatch, TaskChanged("#parse"), test_model())
-  let (_, loaded) = update(
-    dispatch,
-    SymbolsLoaded(
-      owner~,
-      root=old_root,
-      query="parse",
-      generation=querying.completion_debounce.generation(),
-      items=[item],
-    ),
-    querying,
-  )
-  guard loaded.completion is Some(ready) else {
-    fail("the first root should settle the symbol menu")
-  }
-  assert_false(ready.menu.loading())
-  assert_eq(ready.menu.length(), 1)
-
-  let connected_root = owner.channel.test_resource("/next-scratch")
-  let ready_msg = BridgeReady(scratch_root=connected_root)
-  let (_, rerooted) = update_dev(dispatch, ready_msg, loaded)
-  let (_, repeated) = update_dev(dispatch, ready_msg, loaded)
-  assert_true(rerooted.symbol_cache == repeated.symbol_cache)
-  assert_true(rerooted.completion == repeated.completion)
-  assert_true(rerooted.symbol_cache.owner is None)
-  guard rerooted.completion is Some(waiting) else {
-    fail("the changed root should keep the symbol menu open")
-  }
-  assert_true(waiting.menu.loading())
-  assert_eq(waiting.menu.length(), 0)
-
-  let (_, stale) = update(
-    dispatch,
-    SymbolsLoaded(
-      owner~,
-      root=old_root,
-      query="parse",
-      generation=querying.completion_debounce.generation(),
-      items=[item],
-    ),
-    rerooted,
-  )
-  assert_true(stale.symbol_cache.owner is None)
-  assert_true(stale.completion == rerooted.completion)
-
-  let new_root = owner.channel.test_resource("/next-scratch/desktop-test")
-  let (_, settled) = update(
-    dispatch,
-    SymbolsLoaded(
-      owner~,
-      root=new_root,
-      query="parse",
-      generation=stale.completion_debounce.generation(),
-      items=[item],
-    ),
-    stale,
-  )
-  guard settled.completion is Some(current) else {
-    fail("the new root should settle the symbol menu")
-  }
-  assert_false(current.menu.loading())
-  assert_eq(settled.symbol_cache.root, Some(new_root))
 }
 
 ///|
@@ -12906,7 +12184,10 @@ test "a runs snapshot cannot retire a steer submitted after its frontier" {
   let dispatch = test_dispatch()
   let model = running_model()
   let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
-  let (_, drafted) = update(dispatch, TaskChanged("post-snapshot steer"), model)
+  let drafted = model.replace_conversation({
+    ..model.active(),
+    task: "post-snapshot steer",
+  })
   let (_, steered) = update(dispatch, Send, drafted)
   guard steered.active().input_ledger is [pending] else {
     fail("expected one steer awaiting its exact receipt")
@@ -13039,7 +12320,10 @@ test "runs settlement releases after a causal cut and keeps exact receipt" {
   assert_true(reconciled.active().overlay[0].anchor is AfterMessages(0))
   assert_false(reconciled.active().has_unresolved_run_tail_notice())
   inspect(reconciled.active().input_ledger.length(), content="1")
-  let (_, drafted) = update(dispatch, TaskChanged("next prompt"), reconciled)
+  let drafted = reconciled.replace_conversation({
+    ..reconciled.active(),
+    task: "next prompt",
+  })
   let (_, sent) = update(dispatch, Send, drafted)
   assert_true(sent.active().run is Starting(..))
   let (_, received) = update_dev(
@@ -15707,11 +14991,10 @@ test "archive broadcast invalidates the active send target before list replies" 
   )
   // Even before either sidebar refresh returns, the next submit belongs to
   // the replacement conversation; no live state can target the archived id.
-  let (_, drafted) = update(
-    dispatch,
-    TaskChanged("safe replacement"),
-    invalidated,
-  )
+  let drafted = invalidated.replace_conversation({
+    ..invalidated.active(),
+    task: "safe replacement",
+  })
   let (_, sent) = update(dispatch, Send, drafted)
   inspect(sent.active_session, content="desktop-fresh")
   inspect(sent.active().session_id, content="desktop-fresh")
@@ -16470,7 +15753,16 @@ test "only synchronous file-open messages suppress panel reactivation" {
     channel: Local,
     session: "desktop-test",
   }
+  let identity : ComposerActionIdentity = { owner, archive_generation: 0 }
   assert_true(JumpToMention(0).opens_file_before_panel_reconciliation())
+  assert_true(
+    ComposerAction(
+      @composer.MentionOpened(identity~, mention={
+        ref_: File(path="a.mbt"),
+        range: None,
+      }),
+    ).opens_file_before_panel_reconciliation(),
+  )
   assert_true(
     JumpToLocation(path="a.mbt", range=None, annotation=None).opens_file_before_panel_reconciliation(),
   )

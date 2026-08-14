@@ -265,7 +265,11 @@ pub fn boot() -> Unit {
         )
       }),
     })
-    let composer_html = composer_component(state, emit)
+    let composer_input = state.map(model => model.composer_input(emit))
+    let composer_html = @composer.component(
+      composer_input,
+      emit.map(action => ComposerAction(action)),
+    )
     state.view5(
       terminal_html,
       transcript_html,
