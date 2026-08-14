@@ -373,6 +373,10 @@ priv struct ComposerComponentModel {
   // keeps the facts append-only so even an archive/unarchive pair between two
   // subscription ticks cannot revive the retired entry.
   applied_retirements : Int
+  // The last root replacement already moved inside this cache. The root keeps
+  // its latest replacement for delayed actions, so the component must not
+  // mistake a genuinely new draft under an unarchived id for the old entry.
+  applied_replacement : ComposerEntryReplacement?
 } derive(Eq)
 
 ///|
@@ -382,6 +386,7 @@ fn ComposerComponentModel::ComposerComponentModel(
   {
     entries: [ComposerEntry(input)],
     applied_retirements: input.composer_entry_retirements.length(),
+    applied_replacement: input.composer_entry_replacement,
   }
 }
 
@@ -417,7 +422,11 @@ fn ComposerComponentModel::with_retirements_applied(
     let retired = input.composer_entry_retirements[index]
     entries = entries.filter(entry => entry.owner != retired)
   }
-  { entries, applied_retirements: input.composer_entry_retirements.length() }
+  {
+    ..self,
+    entries,
+    applied_retirements: input.composer_entry_retirements.length(),
+  }
 }
 
 ///|
@@ -441,7 +450,8 @@ fn ComposerComponentModel::active(
   // Archiving replaces the active session id while this component still owns
   // the live textarea. Move that one cached entry to the fresh owner, then use
   // the normal three-way reconciliation to combine it with root-side salvage.
-  if input.composer_entry_replacement is Some(replacement) &&
+  if input.composer_entry_replacement != self.applied_replacement &&
+    input.composer_entry_replacement is Some(replacement) &&
     replacement.fresh == owner {
     for entry in self.entries {
       if entry.owner == replacement.archived {
@@ -475,23 +485,36 @@ fn ComposerComponentModel::with_entry(
 }
 
 ///|
-/// Store the visible entry and retire the archived identity it replaced. This
-/// turns archive handoff into a move even when the first event under the fresh
-/// owner is an unrelated completion or input message.
-fn ComposerComponentModel::with_active_entry(
+/// Apply a root archive handoff before selecting whichever owner is visible.
+/// A quick unarchive can show the old owner first; moving independently keeps
+/// that new entry from overwriting the only copy meant for the fresh owner.
+fn ComposerComponentModel::with_replacement_applied(
   self : ComposerComponentModel,
   input : Model,
-  entry : ComposerEntry,
 ) -> ComposerComponentModel {
-  guard input.composer_entry_replacement is Some(replacement) &&
-    replacement.fresh == entry.owner else {
-    return self.with_entry(entry)
+  if input.composer_entry_replacement == self.applied_replacement {
+    return self
   }
-  let entries = self.entries.filter(existing => {
-    existing.owner != replacement.archived && existing.owner != entry.owner
-  })
-  entries.push(entry)
-  { ..self, entries, }
+  guard input.composer_entry_replacement is Some(replacement) else {
+    return { ..self, applied_replacement: None }
+  }
+  for archived_entry in self.entries {
+    if archived_entry.owner == replacement.archived {
+      let entries = self.entries.filter(existing => {
+        existing.owner != replacement.archived &&
+        existing.owner != replacement.fresh
+      })
+      entries.push({
+        ..archived_entry,
+        owner: replacement.fresh,
+        completion: None,
+        symbol_cache: empty_symbol_cache(),
+        pending_submission: None,
+      })
+      return { ..self, entries, applied_replacement: Some(replacement) }
+    }
+  }
+  { ..self, applied_replacement: Some(replacement) }
 }
 
 ///|
@@ -808,11 +831,12 @@ fn ComposerComponentModel::update(
   emit : @cmd.Emit[ComposerComponentMsg],
   root_emit : @cmd.Emit[Msg],
 ) -> (ComposerComponentModel, @cmd.Cmd) {
-  let entry = self.active(input)
-  let self = self.with_active_entry(input, entry)
-  // Select first so an active archive can move its entry to the replacement
-  // owner; applying the archive log then removes only the retired identity.
+  // Apply the handoff before the current input chooses an owner: the old id
+  // may already be reopened while this queued component message is delivered.
+  let self = self.with_replacement_applied(input)
   let self = self.with_retirements_applied(input)
+  let entry = self.active(input)
+  let self = self.with_entry(entry)
   match msg {
     ComposerTextChanged(value) => {
       let (next, command) = entry.edited(input, value, emit, root_emit)
@@ -1183,7 +1207,8 @@ fn ComposerComponentModel::subscriptions(
   if self.applied_retirements < input.composer_entry_retirements.length() {
     return @sub.every(150, emit(ComposerEntriesRetired))
   }
-  if input.composer_entry_replacement is Some(replacement) &&
+  if input.composer_entry_replacement != self.applied_replacement &&
+    input.composer_entry_replacement is Some(replacement) &&
     replacement.fresh == owner &&
     self.entries.iter().any(stored => stored.owner == replacement.archived) {
     return @sub.every(150, emit(ComposerEntryTransferred))
@@ -1791,6 +1816,47 @@ test "archive replacement carries the component-local prompt and goal" {
   inspect(carried.draft.task, content="local prompt")
   assert_eq(carried.goal_draft, Some("local goal"))
   assert_true(replaced.active().composer_draft_present)
+  let reopened = {
+    ..replaced,
+    active_session: "desktop-test",
+    conversations: [
+      empty_conversation(@interop.ChannelId::Local, "desktop-test"),
+      replaced.active(),
+    ],
+    composer_context_generation: replaced.composer_context_generation + 1,
+  }
+  // Reopening the old owner before the transfer tick must first move its old
+  // cache entry to the fresh owner, then create a distinct new local draft.
+  let (reopened_before_tick, _) = with_goal.update(
+    reopened,
+    ComposerTextChanged("new unarchived draft"),
+    component_emit,
+    root_emit,
+  )
+  let (same_reopen, _) = with_goal.update(
+    reopened,
+    ComposerTextChanged("new unarchived draft"),
+    component_emit,
+    root_emit,
+  )
+  assert_true(reopened_before_tick == same_reopen)
+  assert_eq(
+    reopened_before_tick.active(reopened).draft.task,
+    "new unarchived draft",
+  )
+  assert_eq(reopened_before_tick.active(replaced).draft.task, "local prompt")
+  assert_eq(
+    reopened_before_tick.active(replaced).goal_draft,
+    Some("local goal"),
+  )
+  let (after_late_tick, _) = reopened_before_tick.update(
+    replaced,
+    ComposerEntryTransferred,
+    component_emit,
+    root_emit,
+  )
+  assert_eq(after_late_tick.active(replaced).draft.task, "local prompt")
+  assert_eq(after_late_tick.active(reopened).draft.task, "new unarchived draft")
   let (moved, _) = with_goal.update(
     replaced,
     ComposerEntryTransferred,
@@ -1801,15 +1867,6 @@ test "archive replacement carries the component-local prompt and goal" {
   assert_true(
     moved.entries.iter().any(entry => entry.owner.session == "desktop-fresh"),
   )
-  let reopened = {
-    ..replaced,
-    active_session: "desktop-test",
-    conversations: [
-      empty_conversation(@interop.ChannelId::Local, "desktop-test"),
-      replaced.active(),
-    ],
-    composer_context_generation: replaced.composer_context_generation + 1,
-  }
   // Unarchiving the old id starts from its root snapshot; the moved local
   // entry cannot resurrect text that now belongs to the fresh conversation.
   assert_eq(with_goal.active(reopened).draft.task, "")
