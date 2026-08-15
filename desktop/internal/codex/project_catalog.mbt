@@ -3,11 +3,11 @@
 // relationship between the local checkout and Codex-managed worktrees.
 
 ///|
-/// Process-local cache from a checkout path to its main Git worktree. A cached
-/// `None` records a cwd that no longer exists; an existing non-Git directory
-/// maps to itself and remains a normal standalone project.
+/// Process-local cache from an existing checkout path to its main Git worktree.
+/// Missing paths are deliberately absent: a later catalog refresh must probe
+/// again after an external volume is mounted or a worktree is recreated.
 struct ProjectCatalog {
-  roots : Map[String, String?]
+  roots : Map[String, String]
   // A project becomes selectable only after an authoritative app-server
   // thread/list or thread/read reply names a cwd that Git maps to it.
   known_projects : Map[String, Bool]
@@ -39,9 +39,9 @@ fn ProjectCatalog::record_worktrees(
   }
   guard worktrees.get(0) is Some(project) else { return None }
   for worktree in worktrees {
-    self.roots[worktree] = Some(project)
+    self.roots[worktree] = project
   }
-  self.roots[cwd] = Some(project)
+  self.roots[cwd] = project
   Some(project)
 }
 
@@ -54,7 +54,7 @@ async fn ProjectCatalog::resolve(
   cwd : String,
 ) -> String? {
   if self.roots.get(cwd) is Some(cached) {
-    return cached
+    return Some(cached)
   }
   let (code, stdout, _) = @process.collect_output(
     "git",
@@ -64,7 +64,9 @@ async fn ProjectCatalog::resolve(
     error if @async.is_being_cancelled() => raise error
     _ => {
       let root = if @fs.exists(cwd) { Some(cwd) } else { None }
-      self.roots[cwd] = root
+      if root is Some(root) {
+        self.roots[cwd] = root
+      }
       return root
     }
   }
@@ -75,7 +77,9 @@ async fn ProjectCatalog::resolve(
     }
   }
   let root = if @fs.exists(cwd) { Some(cwd) } else { None }
-  self.roots[cwd] = root
+  if root is Some(root) {
+    self.roots[cwd] = root
+  }
   root
 }
 
@@ -154,15 +158,28 @@ test "Codex project catalog maps every linked worktree to the main checkout" {
   assert_eq(root, Some("/Users/me/src/openseek"))
   assert_eq(
     catalog.roots.get("/Users/me/.codex/worktrees/dd8c/openseek"),
-    Some(Some("/Users/me/src/openseek")),
+    Some("/Users/me/src/openseek"),
   )
+}
+
+///|
+async test "Codex project catalog rechecks a missing cwd on later refreshes" {
+  let catalog = ProjectCatalog()
+  let missing = ".openseek-codex-project-catalog-missing-cwd"
+  if @fs.exists(missing) {
+    fail("reserved missing-cwd test path unexpectedly exists")
+  }
+  assert_eq(catalog.resolve(missing), None)
+  // Absence, rather than a cached negative value, makes the next resolve run
+  // the filesystem/Git probe again.
+  assert_true(catalog.roots.get(missing) is None)
 }
 
 ///|
 async test "Codex draft projects accept only the main checkout" {
   let catalog = ProjectCatalog()
-  catalog.roots["/workspace/project"] = Some("/workspace/project")
-  catalog.roots["/worktrees/a/project"] = Some("/workspace/project")
+  catalog.roots["/workspace/project"] = "/workspace/project"
+  catalog.roots["/worktrees/a/project"] = "/workspace/project"
   // A cached filesystem lookup alone is not enough to grant a browser path.
   assert_true(catalog.main_project("/workspace/project") is None)
   catalog.known_projects["/workspace/project"] = true
@@ -176,7 +193,7 @@ async test "Codex draft projects accept only the main checkout" {
 ///|
 async test "Codex thread replies retain cwd and receive cached project roots" {
   let catalog = ProjectCatalog()
-  catalog.roots["/worktrees/a/project"] = Some("/workspace/project")
+  catalog.roots["/worktrees/a/project"] = "/workspace/project"
   let annotated = catalog.annotate({
     "data": [
       { "id": "thread-a", "cwd": "/worktrees/a/project", "preview": "First" },

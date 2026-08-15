@@ -339,19 +339,19 @@ fn State::run_composer_command(
   channel : @interop.ChannelId,
   command : String,
 ) -> (@cmd.Cmd, State) {
-  guard self.active_thread() is Some(_) else {
+  guard self.active_thread() is Some(active) else {
     return (@cmd.none, { ..self, notice: "" })
   }
   match command {
     "compact" =>
       (
         self.compact(dispatch, channel, self.draft),
-        self.begin_foreground(CodexCompactReply(self.draft)),
+        self.begin_foreground(CodexCompactReply(active.id, self.draft)),
       )
     "review" =>
       (
         self.review(dispatch, channel, self.draft),
-        self.begin_foreground(CodexReviewReply(self.draft)),
+        self.begin_foreground(CodexReviewReply(active.id, self.draft)),
       )
     _ => (@cmd.none, self)
   }

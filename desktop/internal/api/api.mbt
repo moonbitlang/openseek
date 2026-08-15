@@ -18,6 +18,10 @@ struct ApiState {
   // Git's worktree relationship beside the Codex actor and reuse it across
   // list/read/start replies instead of making the browser infer path names.
   codex_projects : @codex.ProjectCatalog
+  // A successful thread/start is remembered under Desktop's draft id until
+  // the frontend closes that draft. If the relay loses the typed reply, the
+  // same Send returns this exact task instead of creating an orphan sibling.
+  codex_draft_threads : CodexDraftThreads
   engine : @engine.EngineActor
   manager : @engine.EngineManager
   host : @host.HostState
@@ -29,6 +33,59 @@ struct ApiState {
   // Called for every finished run, alongside the notification fan-out — the
   // desktop posts its system notification here.
   on_finished : ((@protocol.FinishedPayload) -> Unit)?
+}
+
+///|
+priv struct CodexDraftThreadEntry {
+  cwd : String?
+  reply : @protocol.CodexThreadReply
+}
+
+///|
+/// Process-lifetime idempotency records for Desktop-created Codex drafts. The
+/// app-server has no creation key of its own, so this native boundary must keep
+/// a successful result across a lost relay reply.
+priv struct CodexDraftThreads {
+  entries : Map[String, CodexDraftThreadEntry]
+}
+
+///|
+fn CodexDraftThreads::CodexDraftThreads() -> CodexDraftThreads {
+  { entries: Map([]) }
+}
+
+///|
+fn CodexDraftThreads::cached(
+  self : CodexDraftThreads,
+  request : @protocol.CodexThreadStartPayload,
+) -> @protocol.CodexThreadReply? raise {
+  guard request.draft_id is Some(draft_id) else { return None }
+  guard self.entries.get(draft_id) is Some(entry) else { return None }
+  if entry.cwd != request.cwd {
+    raise @host.PayloadError(
+      "Codex draft id was reused with a different working directory",
+    )
+  }
+  Some(entry.reply)
+}
+
+///|
+fn CodexDraftThreads::remember(
+  self : CodexDraftThreads,
+  request : @protocol.CodexThreadStartPayload,
+  reply : @protocol.CodexThreadReply,
+) -> Unit {
+  if request.draft_id is Some(draft_id) {
+    self.entries[draft_id] = { cwd: request.cwd, reply }
+  }
+}
+
+///|
+fn CodexDraftThreads::forget(
+  self : CodexDraftThreads,
+  draft_id : String,
+) -> Unit {
+  self.entries.remove(draft_id)
 }
 
 ///|
@@ -209,6 +266,7 @@ pub fn ApiState::new(
   {
     codex: Actor(codex),
     codex_projects: ProjectCatalog(),
+    codex_draft_threads: CodexDraftThreads(),
     engine: engine_actor,
     manager: engine_actor.manager(),
     host: @host.new_host_state(engine, runtime_dir?, executable?, app_version~),
@@ -327,6 +385,7 @@ pub fn endpoints(
         raise @host.PayloadError("invalid Codex draft id")
       }
       @engine.revoke_host_workspace(draft_id)
+      state.codex_draft_threads.forget(draft_id)
       Acknowledged
     }),
     @endpoint.Endpoint::remote(@commands.codex_server_request_list, async fn(
@@ -837,9 +896,14 @@ async fn ApiState::codex_thread_start(
     (None, None) => ()
     _ => raise @host.PayloadError("Codex thread cwd requires its draft id")
   }
-  @json.from_json(
+  if self.codex_draft_threads.cached(request) is Some(reply) {
+    return reply
+  }
+  let reply : @protocol.CodexThreadReply = @json.from_json(
     self.codex_request("codex.thread.start", request.app_server_params()),
   )
+  self.codex_draft_threads.remember(request, reply)
+  reply
 }
 
 ///|
@@ -1133,6 +1197,27 @@ test "Codex workspace bindings decode only authoritative thread replies" {
   assert_true(missing is Some({ session: "codex-thread-1", workspace: None }))
   assert_true(CodexWorkspaceBinding::decode_reply({ "thread": {} }) is None)
   assert_true(CodexWorkspaceBinding::decode_reply({}) is None)
+}
+
+///|
+test "Codex draft creation reuses a successful native reply until close" {
+  let drafts = CodexDraftThreads()
+  let request : @protocol.CodexThreadStartPayload = {
+    cwd: Some("/work/project"),
+    model: Some("gpt-test"),
+    draft_id: Some("desktop-draft-1"),
+  }
+  let reply : @protocol.CodexThreadReply = {
+    thread: { "id": "thread-1", "cwd": "/work/project" },
+  }
+  assert_true(drafts.cached(request) is None)
+  drafts.remember(request, reply)
+  assert_eq(drafts.cached(request), Some(reply))
+  // Model selection belongs to the eventual turn. Changing it after an
+  // ambiguous thread/start reply must still adopt the one created task.
+  assert_eq(drafts.cached({ ..request, model: Some("gpt-other") }), Some(reply))
+  drafts.forget("desktop-draft-1")
+  assert_true(drafts.cached(request) is None)
 }
 
 ///|

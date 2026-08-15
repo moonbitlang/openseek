@@ -180,8 +180,8 @@ priv enum CodexReplyKind {
   CodexLoginReply
   CodexArchiveReply(String)
   CodexUnarchiveReply(String)
-  CodexCompactReply(String)
-  CodexReviewReply(String)
+  CodexCompactReply(String, String)
+  CodexReviewReply(String, String)
   CodexInterruptReply
   CodexCancelLoginReply(String)
   CodexLogoutReply
@@ -496,8 +496,8 @@ fn CodexReplyKind::foreground(self : CodexReplyKind) -> CodexForeground? {
     CodexLogoutReply => Some(CodexLogoutForeground)
     CodexArchiveReply(id) => Some(CodexArchiveForeground(id))
     CodexUnarchiveReply(id) => Some(CodexUnarchiveForeground(id))
-    CodexCompactReply(original) => Some(CodexCompactForeground(original))
-    CodexReviewReply(original) => Some(CodexReviewForeground(original))
+    CodexCompactReply(thread_id, _) => Some(CodexCompactForeground(thread_id))
+    CodexReviewReply(thread_id, _) => Some(CodexReviewForeground(thread_id))
     CodexStatusReply
     | CodexRequestsReply
     | CodexAccountReply
@@ -505,6 +505,32 @@ fn CodexReplyKind::foreground(self : CodexReplyKind) -> CodexForeground? {
     | CodexThreadsReply(_, _)
     | CodexInterruptReply
     | CodexApprovalReply => None
+  }
+}
+
+///|
+/// Whether this foreground operation belongs to one stored Codex task. Global
+/// account operations and draft creation deliberately return false, so an
+/// external archive releases only work that can no longer produce an accepted
+/// reply for the removed task.
+fn CodexForeground::belongs_to_thread(
+  self : CodexForeground,
+  thread_id : String,
+) -> Bool {
+  match self {
+    CodexThreadForeground(owner)
+    | CodexWriterForeground(owner)
+    | CodexTurnForeground(owner)
+    | CodexWorktreeRepairForeground(owner)
+    | CodexArchiveForeground(owner)
+    | CodexUnarchiveForeground(owner)
+    | CodexCompactForeground(owner)
+    | CodexReviewForeground(owner) => owner == thread_id
+    CodexDraftOpenForeground(_)
+    | CodexDraftStartForeground(_)
+    | CodexLoginForeground
+    | CodexCancelLoginForeground(_)
+    | CodexLogoutForeground => false
   }
 }
 
@@ -573,6 +599,20 @@ pub fn State::active_placement(
       .map(root => @interop.WorkspaceRoot(root~))
     CodexStoredTask(thread) => thread.placement(channel)
   }
+}
+
+///|
+/// Terminal needs a durable task identity, not necessarily a filesystem root.
+/// A cwd-less Codex task is a valid scratch terminal group; only an unresolved
+/// selection or a retained missing worktree must keep the toggle disabled.
+fn State::terminal_available(
+  self : State,
+  channel : @interop.ChannelId,
+) -> Bool {
+  self
+  .active_placement(channel)
+  .map(placement => placement.is_ready())
+  .unwrap_or(false)
 }
 
 ///|
@@ -1024,14 +1064,31 @@ fn State::with_threads(self : State, value : Json, archived : Bool) -> State {
     }
   }
   if archived {
-    return { ..self, archived_threads: threads, notice: "" }
+    // The archived catalog is authoritative even when its notification was
+    // missed while disconnected. Remove matching live rows in either reply
+    // order, and settle a selected task through the same removal transition as
+    // a live `thread/archived` notification.
+    let next = {
+      ..self,
+      threads: self.threads.filter(live => {
+        !threads.iter().any(archived => archived.id == live.id)
+      }),
+      archived_threads: threads,
+      notice: "",
+    }
+    if next.active_thread() is Some(active) &&
+      next.archived_threads.iter().any(thread => thread.id == active.id) {
+      return next.without_thread(active.id)
+    }
+    return next
   }
   // A just-started thread may not be present in the first state-DB page yet,
   // especially when the 100-row catalog is full. Its `thread/start` reply is
   // newer and authoritative, so do not let an older list snapshot erase the
   // active row from the navigation rail.
   let visible = if self.active_thread() is Some(active) &&
-    !threads.iter().any(thread => thread.id == active.id) {
+    !threads.iter().any(thread => thread.id == active.id) &&
+    !self.archived_threads.iter().any(thread => thread.id == active.id) {
     let visible : Array[CodexThreadRow] = [
       {
         id: active.id,
@@ -1284,6 +1341,9 @@ pub fn Msg::close_git_details() -> Msg {
 fn State::without_thread(self : State, thread_id : String) -> State {
   let removing_active = self.active_thread() is Some(active) &&
     active.id == thread_id
+  let removing_foreground = self.foreground
+    .map(owner => owner.belongs_to_thread(thread_id))
+    .unwrap_or(false)
   {
     ..self,
     threads: self.threads.filter(thread => thread.id != thread_id),
@@ -1314,6 +1374,23 @@ fn State::without_thread(self : State, thread_id : String) -> State {
     archive_confirm: match self.archive_confirm {
       Some(confirm) if confirm.thread_id == thread_id => None
       other => other
+    },
+    pending_requests: self.pending_requests.filter(request => {
+      request.thread_id != thread_id
+    }),
+    pending_turn_delivery: match self.pending_turn_delivery {
+      Some(pending) if pending.thread_id == thread_id => None
+      other => other
+    },
+    loading: if removing_foreground {
+      false
+    } else {
+      self.loading
+    },
+    foreground: if removing_foreground {
+      None
+    } else {
+      self.foreground
     },
   }
 }

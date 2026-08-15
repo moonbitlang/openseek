@@ -749,7 +749,7 @@ fn State::compact(
   original : String,
 ) -> @cmd.Cmd {
   guard self.active_thread() is Some(active) else { return @cmd.none }
-  CodexCompactReply(original).request(
+  CodexCompactReply(active.id, original).request(
     dispatch,
     channel,
     @commands.codex_thread_compact,
@@ -765,7 +765,7 @@ fn State::review(
   original : String,
 ) -> @cmd.Cmd {
   guard self.active_thread() is Some(active) else { return @cmd.none }
-  CodexReviewReply(original).request(
+  CodexReviewReply(active.id, original).request(
     dispatch,
     channel,
     @commands.codex_review_start,

@@ -666,9 +666,9 @@ pub fn State::page(
     CodexStoredTask(thread) => thread.title
     CodexNoTask => "Codex"
   }
-  let workspace = self
-    .active_placement(channel)
-    .bind(placement => placement.checkout_root())
+  let placement = self.active_placement(channel)
+  let workspace = placement.bind(placement => placement.checkout_root())
+  let terminal_available = self.terminal_available(channel)
   let tooltip = match self.selection {
     CodexDraftTask(draft) => draft.cwd
     CodexStoredTask(thread) => thread.cwd.unwrap_or(thread.id)
@@ -722,8 +722,14 @@ pub fn State::page(
   topbar.push(
     @html.button(
       class=if terminal_open { "panel-toggle active" } else { "panel-toggle" },
-      disabled=workspace is None,
-      title=if terminal_open { "Hide terminal" } else { "Show terminal" },
+      disabled=!terminal_available,
+      title=if terminal_open {
+        "Hide terminal"
+      } else if terminal_available {
+        "Show terminal"
+      } else {
+        "Terminal requires an available Codex task placement"
+      },
       on_click=actions.toggle_terminal,
       icon(icon_terminal),
     ),

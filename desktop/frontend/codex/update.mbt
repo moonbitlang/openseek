@@ -44,30 +44,41 @@ pub fn update(
       }
       (@cmd.batch(commands), next)
     }
-    OpenThread(thread_id) => {
-      let commands : Array[@cmd.Cmd] = [
-        state.open_thread(dispatch, channel, thread_id),
-      ]
-      if state.active_draft() is Some(draft) {
-        commands.push(state.close_draft(channel, draft.id))
+    OpenThread(thread_id) =>
+      if state.active_thread() is Some(active) &&
+        active.id == thread_id &&
+        (
+          state.requested_thread is None ||
+          state.requested_thread == Some(thread_id)
+        ) {
+        // Clicking the selected sidebar row is navigation at the root shell,
+        // not a request to reacquire history. Preserve its local composer,
+        // writer ownership, and any foreground Stop authority.
+        (@cmd.none, state)
+      } else {
+        let commands : Array[@cmd.Cmd] = [
+          state.open_thread(dispatch, channel, thread_id),
+        ]
+        if state.active_draft() is Some(draft) {
+          commands.push(state.close_draft(channel, draft.id))
+        }
+        (
+          @cmd.batch(commands),
+          {
+            ..state,
+            git_details_open: false,
+            write_access: CodexNeedsResume,
+            requested_thread: Some(thread_id),
+            // These fields are the adapter's last canonical submission snapshot.
+            // The shared component keeps each task's unsent local draft under
+            // its own identity, exactly as it does for OpenSeek conversations.
+            draft: "",
+            mentions: [],
+            pending_turn_delivery: None,
+            notice: "",
+          }.begin_foreground(CodexThreadReply(thread_id)),
+        )
       }
-      (
-        @cmd.batch(commands),
-        {
-          ..state,
-          git_details_open: false,
-          write_access: CodexNeedsResume,
-          requested_thread: Some(thread_id),
-          // These fields are the adapter's last canonical submission snapshot.
-          // The shared component keeps each task's unsent local draft under
-          // its own identity, exactly as it does for OpenSeek conversations.
-          draft: "",
-          mentions: [],
-          pending_turn_delivery: None,
-          notice: "",
-        }.begin_foreground(CodexThreadReply(thread_id)),
-      )
-    }
     ArchiveThread(thread_id) =>
       (
         state.archive(dispatch, channel, thread_id, false),
@@ -288,7 +299,7 @@ pub fn update(
           cmd = refresh
           next = refreshed
         }
-        CodexCompactReply(original) | CodexReviewReply(original) =>
+        CodexCompactReply(_, original) | CodexReviewReply(_, original) =>
           if next.draft == original {
             next = { ..next, draft: "" }
           }
@@ -322,8 +333,8 @@ pub fn update(
         CodexLoginReply => "Codex sign-in"
         CodexArchiveReply(_) => "Codex archive"
         CodexUnarchiveReply(_) => "Codex restore"
-        CodexCompactReply(_) => "Codex compact"
-        CodexReviewReply(_) => "Codex review"
+        CodexCompactReply(_, _) => "Codex compact"
+        CodexReviewReply(_, _) => "Codex review"
         CodexWriterReply(_) => "Codex writer"
         CodexInterruptReply => "Codex interrupt"
         CodexCancelLoginReply(_) => "Codex sign-in cancellation"
@@ -539,6 +550,7 @@ test "cwd-less stored Codex tasks expose Terminal scratch without Files" {
     state.active_placement(@interop.ChannelId::Local)
     is Some(@interop.Scratch(root=None)),
   )
+  assert_true(state.terminal_available(@interop.ChannelId::Local))
   assert_true(state.active_context() is None)
 }
 
@@ -811,6 +823,7 @@ test "Codex missing worktree waits for rebuild or archive confirmation" {
     state.active_placement(@interop.ChannelId::Local)
     is Some(@interop.MissingWorktree(name="wt-1", ..)),
   )
+  assert_false(state.terminal_available(@interop.ChannelId::Local))
   let (_, confirming) = update(
     dispatch,
     Reply(kind=CodexArchiveReply("thread-1"), value={
@@ -1084,6 +1097,70 @@ test "Codex task selection clears the adapter submission snapshot" {
 }
 
 ///|
+test "reopening the selected Codex task preserves its foreground state" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let state = {
+    ..State::from_thread_snapshot({
+      "thread": {
+        "id": "thread-a",
+        "cwd": "/work/a",
+        "turns": [{ "id": "turn-a", "status": "inProgress", "items": [] }],
+      },
+    }),
+    write_access: CodexWritable,
+    draft: "unsent follow-up",
+  }.begin_foreground(CodexTurnReply("thread-a"))
+  let message = OpenThread("thread-a")
+  let (_, once) = update(dispatch, message, state, @interop.ChannelId::Local, _ => {
+    @cmd.none
+  })
+  let (_, twice) = update(dispatch, message, state, @interop.ChannelId::Local, _ => {
+    @cmd.none
+  })
+  assert_true(once == state)
+  assert_true(twice == state)
+}
+
+///|
+test "archiving the selected Codex task settles its owned foreground work" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let state = {
+      ..State::from_thread_snapshot({
+        "thread": { "id": "thread-a", "cwd": "/work/a", "turns": [] },
+      }),
+      draft: "pending prompt",
+      pending_requests: [
+        {
+          request_id: Json::string("approval-a"),
+          thread_id: "thread-a",
+          method_: "item/commandExecution/requestApproval",
+          params: { "threadId": "thread-a" },
+          answers: Map([]),
+        },
+      ],
+    }
+    .with_pending_turn_delivery()
+    .begin_foreground(CodexTurnReply("thread-a"))
+  let message = Notification(
+    method_="thread/archived",
+    params={ "threadId": "thread-a" },
+    generation=1,
+  )
+  let (_, once) = update(dispatch, message, state, @interop.ChannelId::Local, _ => {
+    @cmd.none
+  })
+  let (_, twice) = update(dispatch, message, state, @interop.ChannelId::Local, _ => {
+    @cmd.none
+  })
+  assert_true(once.active_thread() is None)
+  assert_false(once.loading)
+  assert_true(once.foreground is None)
+  assert_true(once.pending_turn_delivery is None)
+  assert_true(once.pending_requests.is_empty())
+  assert_true(once == twice)
+}
+
+///|
 test "background Codex metadata does not settle a foreground action" {
   let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let state = State(loading=true)
@@ -1221,6 +1298,55 @@ test "newer Codex catalog refresh rejects an older pagination result" {
     _ => @cmd.none,
   )
   assert_eq(current.threads[0].id, "current")
+}
+
+///|
+test "archived Codex catalog removes a selected task in either reply order" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let selected = State::from_thread_snapshot({
+    "thread": { "id": "thread-a", "cwd": "/work/a", "turns": [] },
+  }).begin_foreground(CodexThreadReply("thread-a"))
+  let live = Reply(kind=CodexThreadsReply(false, 0), value={ "data": [] })
+  let archived = Reply(kind=CodexThreadsReply(true, 0), value={
+    "data": [{ "id": "thread-a", "cwd": "/work/a", "preview": "Archived A" }],
+  })
+  let (_, live_first) = update(
+    dispatch,
+    live,
+    selected,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(live_first.active_thread() is Some(_))
+  let (_, archived_second) = update(
+    dispatch,
+    archived,
+    live_first,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(archived_second.active_thread() is None)
+  assert_true(archived_second.threads.is_empty())
+  assert_eq(archived_second.archived_threads.length(), 1)
+  assert_false(archived_second.loading)
+
+  let (_, archived_first) = update(
+    dispatch,
+    archived,
+    selected,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, live_second) = update(
+    dispatch,
+    live,
+    archived_first,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(live_second.active_thread() is None)
+  assert_true(live_second.threads.is_empty())
+  assert_eq(live_second.archived_threads.length(), 1)
 }
 
 ///|
