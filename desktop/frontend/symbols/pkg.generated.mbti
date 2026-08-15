@@ -3,6 +3,7 @@ package "openseek_desktop/frontend/symbols"
 
 import {
   "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/sub",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/interop",
@@ -13,6 +14,8 @@ import {
 pub fn decode(@protocol.WorkspaceSymbolsReply) -> Array[Symbol]
 
 pub fn search(@interop.ChannelId, String, root~ : @common.Uri, loaded~ : (Array[Symbol]) -> @cmd.Cmd, failed~ : @cmd.Cmd) -> @cmd.Cmd
+
+pub fn searching(@interop.ChannelId, String, root~ : @common.Uri, loaded~ : (Array[Symbol]) -> @cmd.Cmd, failed~ : @cmd.Cmd) -> @sub.Sub
 
 // Errors
 

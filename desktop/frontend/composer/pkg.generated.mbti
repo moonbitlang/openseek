@@ -34,12 +34,6 @@ pub(all) enum Action {
   FileIndexEnsured(identity~ : Identity)
 }
 
-type Debounce derive(Eq)
-pub fn Debounce::Debounce(generation? : Int) -> Self
-pub fn Debounce::accepts(Self, Int) -> Bool
-pub fn Debounce::advanced(Self) -> Self
-pub fn Debounce::generation(Self) -> Int
-
 pub(all) struct Draft {
   task : String
   mentions : Array[Mention]

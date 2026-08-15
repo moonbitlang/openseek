@@ -45,12 +45,3 @@ test "menu wraps selection and exposes the selected row" {
   inspect(current, content="b")
   inspect(menu.shifted(1).shifted(1).shifted(1).selected(), content="0")
 }
-
-///|
-test "debounce generations invalidate older work" {
-  let first = @composer.Debounce().advanced()
-  let second = first.advanced()
-  assert_true(first.accepts(first.generation()))
-  assert_false(second.accepts(first.generation()))
-  assert_true(second.accepts(second.generation()))
-}

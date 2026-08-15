@@ -3,6 +3,7 @@ package "openseek_desktop/frontend/files"
 
 import {
   "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/sub",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/interop",
@@ -23,7 +24,7 @@ type Request
 pub fn Request::Request(@interop.ChannelId, String, @common.Uri?) -> Self
 pub fn Request::retire(Self) -> @cmd.Cmd
 pub fn Request::run(Self, (Array[@pathx.Relative], Bool) -> @cmd.Cmd, () -> @cmd.Cmd) -> @cmd.Cmd
-pub fn Request::search_cached(Self, String, Int, (Array[@pathx.Relative], Bool) -> @cmd.Cmd, () -> @cmd.Cmd) -> @cmd.Cmd
+pub fn Request::searching(Self, String, epoch~ : Int, loaded~ : (Array[@pathx.Relative], Bool) -> @cmd.Cmd, failed~ : () -> @cmd.Cmd) -> @sub.Sub
 
 pub struct Search {
   candidates : Array[@pathx.Relative]

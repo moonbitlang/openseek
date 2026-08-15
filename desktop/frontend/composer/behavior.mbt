@@ -138,39 +138,3 @@ pub fn[T] Menu::shifted(self : Menu[T], delta : Int) -> Menu[T] {
 pub fn[T] Menu::current(self : Menu[T]) -> T? {
   self.items.get(self.selected)
 }
-
-///|
-/// Monotonic identity for delayed composer lookups. Every draft change spends
-/// one generation, so a delayed request and its eventual reply can both be
-/// rejected after any newer keystroke, provider switch, or trigger dismissal.
-struct Debounce {
-  generation : Int
-} derive(Eq)
-
-///|
-pub fn Debounce::Debounce(generation? : Int = 0) -> Debounce {
-  { generation, }
-}
-
-///|
-pub fn Debounce::advanced(self : Debounce) -> Debounce {
-  { generation: self.generation + 1 }
-}
-
-///|
-pub fn Debounce::generation(self : Debounce) -> Int {
-  self.generation
-}
-
-///|
-pub fn Debounce::accepts(self : Debounce, generation : Int) -> Bool {
-  self.generation == generation
-}
-
-///|
-/// Delay a lookup using the same 150 ms pause as workspace symbol Quick Open.
-/// The caller carries this generation in its own message and checks `accepts`
-/// before starting work or adopting a reply.
-fn Debounce::delayed(self : Debounce, command : (Int) -> @cmd.Cmd) -> @cmd.Cmd {
-  @cmd.delay(command(self.generation), 150)
-}

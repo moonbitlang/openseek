@@ -10,23 +10,15 @@ priv enum PendingSubmission {
 
 ///|
 /// File completion follows the component-local draft. A settled Host result
-/// stays valid only while owner, root, query, generation, and index epoch all
-/// still match.
+/// stays valid only while owner, root, query, and index epoch all still
+/// match. There is no pending variant: while a remote lookup is wanted, the
+/// declared `Request::searching` subscription IS the in-flight state.
 priv enum FileCompletion {
   Local(files~ : Array[@files.Match], loading~ : Bool, epoch~ : Int)
-  RemotePending(
-    owner~ : @interop.ConversationKey,
-    root~ : @common.Uri,
-    query~ : String,
-    generation~ : Int,
-    files~ : Array[@files.Match],
-    epoch~ : Int
-  )
   RemoteSettled(
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
-    generation~ : Int,
     files~ : Array[@files.Match],
     epoch~ : Int
   )
@@ -35,8 +27,7 @@ priv enum FileCompletion {
 ///|
 fn FileCompletion::files(self : FileCompletion) -> Array[@files.Match] {
   match self {
-    Local(files~, ..) | RemotePending(files~, ..) | RemoteSettled(files~, ..) =>
-      files
+    Local(files~, ..) | RemoteSettled(files~, ..) => files
   }
 }
 
@@ -44,7 +35,6 @@ fn FileCompletion::files(self : FileCompletion) -> Array[@files.Match] {
 fn FileCompletion::loading(self : FileCompletion) -> Bool {
   match self {
     Local(loading~, ..) => loading
-    RemotePending(..) => true
     RemoteSettled(..) => false
   }
 }
@@ -55,30 +45,19 @@ fn FileCompletion::matches(
   owner : @interop.ConversationKey,
   root : @common.Uri?,
   query : String?,
-  generation : Int,
   epoch : Int,
 ) -> Bool {
   match self {
-    RemotePending(
+    RemoteSettled(
       owner=remote_owner,
       root=remote_root,
       query=remote_query,
-      generation=remote_generation,
-      epoch=remote_epoch,
-      ..
-    )
-    | RemoteSettled(
-      owner=remote_owner,
-      root=remote_root,
-      query=remote_query,
-      generation=remote_generation,
       epoch=remote_epoch,
       ..
     ) =>
       remote_owner == owner &&
       root == Some(remote_root) &&
       query == Some(remote_query) &&
-      remote_generation == generation &&
       remote_epoch == epoch
     Local(..) => false
   }
@@ -96,7 +75,6 @@ priv struct Entry {
   goal_draft : String?
   completion : Completion?
   symbol_cache : SymbolCache
-  completion_debounce : Debounce
   file_completion : FileCompletion
   root : @common.Uri?
   installed_skills : Array[@transcript.InstalledSkillItem]
@@ -116,7 +94,6 @@ fn Entry::Entry(input : Input) -> Entry {
     goal_draft: input.goal.draft,
     completion: None,
     symbol_cache: SymbolCache(),
-    completion_debounce: Debounce(),
     file_completion: Local(files~, loading~, epoch=input.file_index.epoch()),
     root: input.root,
     installed_skills: input.installed_skills,
@@ -147,7 +124,6 @@ fn Entry::file_completion_for(
       self.owner,
       root,
       query,
-      self.completion_debounce.generation(),
       input.file_index.epoch(),
     ) {
     self.file_completion
@@ -377,19 +353,13 @@ fn Model::with_entry(self : Model, entry : Entry) -> Model {
 ///|
 priv enum Msg {
   TextChanged(String)
-  CompletionDue(
-    owner~ : @interop.ConversationKey,
-    root~ : @common.Uri?,
-    query~ : String,
-    generation~ : Int
-  )
   CompletionMove(Int)
   CompletionAccept
   CompletionPick(Int)
   CompletionDismiss
   EntriesTransferred
   EntriesRetired
-  SymbolRootChanged
+  CompletionPump
   MentionRemoved(Int)
   MentionJumped(Int)
   GoalCancelled
@@ -398,21 +368,17 @@ priv enum Msg {
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
-    generation~ : Int,
     items~ : Array[@symbols.Symbol]
   )
   SymbolsFailed(
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
-    query~ : String,
-    generation~ : Int
+    query~ : String
   )
-  FileCompletionTick
   FilesLoaded(
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
-    generation~ : Int,
     epoch~ : Int,
     files~ : Array[@pathx.Relative]
   )
@@ -420,7 +386,6 @@ priv enum Msg {
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
-    generation~ : Int,
     epoch~ : Int
   )
 }
@@ -437,7 +402,6 @@ fn Entry::edited(
   self : Entry,
   input : Input,
   value : String,
-  emit : @cmd.Emit[Msg],
   action_emit : @cmd.Emit[Action],
 ) -> (Entry, @cmd.Cmd) {
   if input.goal.draft is Some(_) {
@@ -451,7 +415,6 @@ fn Entry::edited(
       @cmd.none,
     )
   }
-  let completion_debounce = self.completion_debounce.advanced()
   let draft = { ..self.draft, task: value }
   let (files, files_loading) = input.completion_files(value)
   let file_completion = Local(
@@ -466,23 +429,9 @@ fn Entry::edited(
     files~,
     files_loading~,
   )
+  // Remote lookups need no command here: the subscription diff after this
+  // update derives them from the loading menu this edit just opened.
   let command = match Trigger::parse(value, inline_markers="$#@") {
-    Some(trigger) if trigger.marker() == "#" &&
-      (
-        self.symbol_cache.owner != Some(self.owner) ||
-        self.symbol_cache.root != self.root ||
-        self.symbol_cache.query != trigger.query()
-      ) =>
-      completion_debounce.delayed(generation => {
-        emit(
-          CompletionDue(
-            owner=self.owner,
-            root=self.root,
-            query=trigger.query(),
-            generation~,
-          ),
-        )
-      })
     Some(trigger) if trigger.marker() == "@" &&
       self.root is Some(_) &&
       input.file_index.needs_start() =>
@@ -490,14 +439,7 @@ fn Entry::edited(
     _ => @cmd.none
   }
   (
-    {
-      ..self,
-      draft,
-      completion,
-      completion_debounce,
-      file_completion,
-      pending_submission: None,
-    },
+    { ..self, draft, completion, file_completion, pending_submission: None },
     command,
   )
 }
@@ -582,31 +524,25 @@ fn Entry::accept_completion(
 }
 
 ///|
+/// Adopt one remote file-search reply. The declared subscription already
+/// muted replies whose (owner, root, query, epoch) key is no longer wanted;
+/// this guard restates that declaration against the reconciled entry, so a
+/// menu closed by a context switch in the same pass also rejects the reply.
 fn Entry::settled_file_completion(
   self : Entry,
   input : Input,
   owner : @interop.ConversationKey,
   root : @common.Uri,
   query : String,
-  generation : Int,
   epoch : Int,
   remote_files : Array[@pathx.Relative]?,
 ) -> Entry? {
-  guard self.file_completion
-    is RemotePending(
-      owner=pending_owner,
-      root=pending_root,
-      query=pending_query,
-      generation=pending_generation,
-      epoch=pending_epoch,
-      ..
-    ) &&
-    pending_owner == owner &&
-    pending_root == root &&
-    pending_query == query &&
-    pending_generation == generation &&
-    pending_epoch == epoch &&
-    self.completion_debounce.accepts(generation) &&
+  guard owner == self.owner &&
+    self.root == Some(root) &&
+    epoch == input.file_index.epoch() &&
+    Trigger::parse(self.draft.task, inline_markers="$#@") is Some(trigger) &&
+    trigger.marker() == "@" &&
+    trigger.query() == query &&
     self.completion is Some(completion) &&
     completion.kind is Files &&
     completion.menu.loading() else {
@@ -617,14 +553,7 @@ fn Entry::settled_file_completion(
   } else {
     @files.Search(input.file_candidates, [], None).rank(query)
   }
-  let file_completion = RemoteSettled(
-    owner~,
-    root~,
-    query~,
-    generation~,
-    files~,
-    epoch~,
-  )
+  let file_completion = RemoteSettled(owner~, root~, query~, files~, epoch~)
   Some({
     ..self,
     file_completion,
@@ -679,7 +608,7 @@ fn Model::update(
   let self = self.with_entry(entry)
   match msg {
     TextChanged(value) => {
-      let (next, command) = entry.edited(input, value, emit, action_emit)
+      let (next, command) = entry.edited(input, value, action_emit)
       self.commit_entry_change(entry, next, command, action_emit)
     }
     CompletionMove(delta) => {
@@ -715,29 +644,6 @@ fn Model::update(
       self.commit_entry_change(entry, next, command, action_emit)
     }
     EntriesTransferred | EntriesRetired => (self, @cmd.none)
-    SymbolRootChanged => {
-      guard Trigger::parse(entry.draft.task, inline_markers="$#")
-        is Some(trigger) &&
-        trigger.marker() == "#" &&
-        entry.root is Some(root) &&
-        entry.completion is Some(completion) &&
-        completion.kind is Symbols &&
-        completion.menu.loading() else {
-        return (self.with_entry(entry), @cmd.none)
-      }
-      let debounce = entry.completion_debounce.advanced()
-      (
-        self.with_entry({ ..entry, completion_debounce: debounce }),
-        emit(
-          CompletionDue(
-            owner=entry.owner,
-            root=Some(root),
-            query=trigger.query(),
-            generation=debounce.generation(),
-          ),
-        ),
-      )
-    }
     MentionRemoved(index) => {
       guard entry.draft.mentions.get(index) is Some(mention) else {
         return (self.with_entry(entry), @cmd.none)
@@ -813,41 +719,13 @@ fn Model::update(
           ),
         )
       }
-    CompletionDue(owner~, root~, query~, generation~) => {
-      guard owner == entry.owner &&
-        root == entry.root &&
-        root is Some(root) &&
-        entry.completion_debounce.accepts(generation) &&
-        Trigger::parse(entry.draft.task, inline_markers="$#") is Some(trigger) &&
-        trigger.marker() == "#" &&
-        trigger.query() == query &&
-        entry.completion is Some(completion) &&
-        completion.kind is Symbols &&
-        completion.menu.loading() else {
-        return (self.with_entry(entry), @cmd.none)
-      }
-      if entry.symbol_cache.owner == Some(owner) &&
-        entry.symbol_cache.root == Some(root) &&
-        entry.symbol_cache.query == query {
-        return (self.with_entry(entry), @cmd.none)
-      }
-      (
-        self.with_entry(entry),
-        @symbols.search(
-          owner.channel,
-          query,
-          root~,
-          loaded=items => {
-            emit(SymbolsLoaded(owner~, root~, query~, generation~, items~))
-          },
-          failed=emit(SymbolsFailed(owner~, root~, query~, generation~)),
-        ),
-      )
-    }
-    SymbolsLoaded(owner~, root~, query~, generation~, items~) => {
+    SymbolsLoaded(owner~, root~, query~, items~) => {
+      // The declared subscription already muted replies whose (channel, root,
+      // query) key is no longer wanted; this guard restates that declaration
+      // against the reconciled entry, so a menu closed by a context switch in
+      // the same pass also rejects the reply instead of reopening.
       guard owner == entry.owner &&
         entry.root == Some(root) &&
-        entry.completion_debounce.accepts(generation) &&
         Trigger::parse(entry.draft.task, inline_markers="$#") is Some(trigger) &&
         trigger.marker() == "#" &&
         trigger.query() == query &&
@@ -878,85 +756,38 @@ fn Model::update(
         @cmd.none,
       )
     }
-    SymbolsFailed(owner~, root~, query~, generation~) =>
+    SymbolsFailed(owner~, root~, query~) =>
       self.update(
         input,
-        SymbolsLoaded(owner~, root~, query~, generation~, items=[]),
+        SymbolsLoaded(owner~, root~, query~, items=[]),
         emit,
         action_emit,
       )
-    FileCompletionTick => {
-      guard Trigger::parse(entry.draft.task, inline_markers="$#@")
-        is Some(trigger) &&
-        trigger.marker() == "@" &&
-        entry.root is Some(root) &&
-        entry.completion is Some(completion) &&
+    CompletionPump => {
+      // Committing the reconciled entry above is this tick's real work: the
+      // subscription diff after every update re-derives the declared lookups
+      // from that entry, so input-only changes (root, file-index state,
+      // context) re-key or cancel them within one pump period. The only
+      // remaining imperative duty is nudging the root to (re)build a missing
+      // file index.
+      guard entry.completion is Some(completion) &&
         completion.kind is Files &&
-        completion.menu.loading() else {
+        completion.menu.loading() &&
+        entry.file_completion is Local(loading=true, ..) &&
+        input.file_index.needs_start() else {
         return (self.with_entry(entry), @cmd.none)
       }
-      match entry.file_completion {
-        Local(files~, loading=true, epoch~) =>
-          match input.file_index {
-            FileIndexEmpty(..) | FileIndexFailed(..) =>
-              (
-                self.with_entry(entry),
-                action_emit(FileIndexEnsured(identity=entry.identity())),
-              )
-            FileIndexLoading(..) => (self.with_entry(entry), @cmd.none)
-            FileIndexReady(truncated=false, ..) =>
-              (self.with_entry(entry), @cmd.none)
-            FileIndexReady(truncated=true, ..) => {
-              let owner = entry.owner
-              let query = trigger.query()
-              let generation = entry.completion_debounce.generation()
-              (
-                self.with_entry({
-                  ..entry,
-                  file_completion: RemotePending(
-                    owner~,
-                    root~,
-                    query~,
-                    generation~,
-                    files~,
-                    epoch~,
-                  ),
-                }),
-                @files.Request(owner.channel, owner.session, Some(root)).search_cached(
-                  query,
-                  generation,
-                  (files, _limit_hit) => {
-                    emit(
-                      FilesLoaded(
-                        owner~,
-                        root~,
-                        query~,
-                        generation~,
-                        epoch~,
-                        files~,
-                      ),
-                    )
-                  },
-                  () => {
-                    emit(
-                      FilesFailed(owner~, root~, query~, generation~, epoch~),
-                    )
-                  },
-                ),
-              )
-            }
-          }
-        Local(loading=false, ..) | RemotePending(..) | RemoteSettled(..) =>
-          (self.with_entry(entry), @cmd.none)
-      }
+      (
+        self.with_entry(entry),
+        action_emit(FileIndexEnsured(identity=entry.identity())),
+      )
     }
-    FilesLoaded(owner~, root~, query~, generation~, epoch~, files~) => {
+    FilesLoaded(owner~, root~, query~, epoch~, files~) => {
       guard entry.settled_file_completion(
           input,
           owner,
           root,
           query,
-          generation,
           epoch,
           Some(files),
         )
@@ -965,13 +796,12 @@ fn Model::update(
       }
       (self.with_entry(next), @cmd.none)
     }
-    FilesFailed(owner~, root~, query~, generation~, epoch~) => {
+    FilesFailed(owner~, root~, query~, epoch~) => {
       guard entry.settled_file_completion(
           input,
           owner,
           root,
           query,
-          generation,
           epoch,
           None,
         )
@@ -984,6 +814,13 @@ fn Model::update(
 }
 
 ///|
+/// Declare what should be in flight for the current state. Remote completion
+/// lookups are subscriptions, not commands: while a loading menu wants a
+/// (channel, root, query) lookup, that lookup is declared here, and any state
+/// or input change that stops wanting it unloads the subscription — which
+/// cancels the pending debounce timer or mutes the reply inside the effect
+/// package. Every staleness axis lives in the subscription key, in one place,
+/// instead of being re-checked at issue, delay-fire, and ingest time.
 fn Model::subscriptions(
   self : Model,
   input : Input,
@@ -995,24 +832,54 @@ fn Model::subscriptions(
   if self.applied_replacements < input.replacements.length() {
     return @sub.every(150, emit(EntriesTransferred))
   }
-  for stored in self.entries {
-    if stored.owner == input.identity.owner &&
-      stored.root != input.root &&
-      stored.completion is Some(completion) &&
-      completion.kind is Symbols &&
-      Trigger::parse(stored.draft.task, inline_markers="$#") is Some(trigger) &&
-      trigger.marker() == "#" {
-      return @sub.every(150, emit(SymbolRootChanged))
-    }
-  }
   let entry = self.active(input)
-  if entry.completion is Some(completion) &&
-    completion.kind is Files &&
-    completion.menu.loading() {
-    @sub.every(150, emit(FileCompletionTick))
-  } else {
-    @sub.none
+  guard entry.completion is Some(completion) && completion.menu.loading() else {
+    return @sub.none
   }
+  // Subscriptions are only re-derived when a message is processed, so every
+  // remote-backed loading menu keeps one pump tick alive. Each tick commits
+  // the reconciled entry, which turns input-only changes (root, file-index
+  // state, context) into a re-keyed or cancelled lookup below.
+  let subs = [@sub.every(150, emit(CompletionPump))]
+  match completion.kind {
+    Symbols =>
+      if entry.root is Some(root) &&
+        Trigger::parse(entry.draft.task, inline_markers="$#") is Some(trigger) &&
+        trigger.marker() == "#" {
+        let owner = entry.owner
+        let query = trigger.query()
+        subs.push(
+          @symbols.searching(
+            owner.channel,
+            query,
+            root~,
+            loaded=items => emit(SymbolsLoaded(owner~, root~, query~, items~)),
+            failed=emit(SymbolsFailed(owner~, root~, query~)),
+          ),
+        )
+      }
+    Files =>
+      if entry.root is Some(root) &&
+        Trigger::parse(entry.draft.task, inline_markers="$#@") is Some(trigger) &&
+        trigger.marker() == "@" &&
+        input.file_index is FileIndexReady(truncated=true, ..) {
+        let owner = entry.owner
+        let query = trigger.query()
+        let epoch = input.file_index.epoch()
+        subs.push(
+          @files.Request(owner.channel, owner.session, Some(root)).searching(
+            query,
+            epoch~,
+            loaded=(files, _limit_hit) => {
+              emit(FilesLoaded(owner~, root~, query~, epoch~, files~))
+            },
+            failed=() => emit(FilesFailed(owner~, root~, query~, epoch~)),
+          ),
+        )
+      }
+    SlashCommands | SkillMentions => ()
+  }
+  @sub.batch(subs)
 }
 
 ///|

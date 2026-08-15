@@ -1,6 +1,8 @@
 import {
   "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/js",
+  "moonbit-community/rabbita/sub",
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/resource",

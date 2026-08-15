@@ -182,6 +182,161 @@ test "file completion accepts a local candidate inside the component" {
 }
 
 ///|
+test "a symbols reply settles the menu through its declared identity" {
+  let input = Input::fixture("")
+  let (typing, _) = Model(input).update(
+    input,
+    TextChanged("inspect #Sy"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let searching = typing.active(input)
+  guard searching.completion is Some(open_menu) else {
+    fail("the symbol token should open completion")
+  }
+  assert_true(open_menu.kind is Symbols)
+  assert_true(open_menu.menu.loading())
+  let root = @common.Uri::file("/workspace")
+  let symbol : @symbols.Symbol = {
+    name: "SymbolTable",
+    kind: None,
+    container: None,
+    path: "src/table.mbt",
+    range: @common.Range(1, 1, 1, 1),
+  }
+  let reply = SymbolsLoaded(owner=input.identity.owner, root~, query="Sy", items=[
+    symbol,
+  ])
+  let (settled, _) = typing.update(
+    input,
+    reply,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let (settled_again, _) = typing.update(
+    input,
+    reply,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(settled == settled_again)
+  let entry = settled.active(input)
+  guard entry.completion is Some(menu) else {
+    fail("the settled menu should stay open")
+  }
+  assert_false(menu.menu.loading())
+  inspect(menu.menu.length(), content="1")
+}
+
+///|
+test "a symbols reply for another root cannot settle the menu" {
+  let input = Input::fixture("")
+  let (typing, _) = Model(input).update(
+    input,
+    TextChanged("inspect #Sy"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let symbol : @symbols.Symbol = {
+    name: "SymbolTable",
+    kind: None,
+    container: None,
+    path: "src/table.mbt",
+    range: @common.Range(1, 1, 1, 1),
+  }
+  let (unchanged, _) = typing.update(
+    input,
+    SymbolsLoaded(
+      owner=input.identity.owner,
+      root=@common.Uri::file("/elsewhere"),
+      query="Sy",
+      items=[symbol],
+    ),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let entry = unchanged.active(input)
+  guard entry.completion is Some(menu) else {
+    fail("the menu should stay open and loading")
+  }
+  assert_true(menu.menu.loading())
+  inspect(menu.menu.length(), content="0")
+}
+
+///|
+test "a context switch drops a late symbols reply instead of reopening" {
+  let input = Input::fixture("")
+  let (typing, _) = Model(input).update(
+    input,
+    TextChanged("inspect #Sy"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let switched = { ..input, context_generation: 1 }
+  let (after, _) = typing.update(
+    switched,
+    SymbolsLoaded(
+      owner=input.identity.owner,
+      root=@common.Uri::file("/workspace"),
+      query="Sy",
+      items=[],
+    ),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(after.active(switched).completion is None)
+}
+
+///|
+test "a remote file reply settles a truncated index menu, stale epochs do not" {
+  let input = {
+    ..Input::fixture(""),
+    file_candidates: [@pathx.Relative("src/local.mbt")],
+    file_index: FileIndexReady(epoch=3, truncated=true),
+  }
+  let (typing, _) = Model(input).update(
+    input,
+    TextChanged("open @ma"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let searching = typing.active(input)
+  guard searching.completion is Some(open_menu) else {
+    fail("the file token should open completion")
+  }
+  assert_true(open_menu.kind is Files)
+  assert_true(open_menu.menu.loading())
+  let root = @common.Uri::file("/workspace")
+  let (stale, _) = typing.update(
+    input,
+    FilesLoaded(owner=input.identity.owner, root~, query="ma", epoch=2, files=[
+      @pathx.Relative("src/main.mbt"),
+    ]),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  guard stale.active(input).completion is Some(still_loading) else {
+    fail("a stale epoch must not settle the menu")
+  }
+  assert_true(still_loading.menu.loading())
+  let (settled, _) = typing.update(
+    input,
+    FilesLoaded(owner=input.identity.owner, root~, query="ma", epoch=3, files=[
+      @pathx.Relative("src/main.mbt"),
+      @pathx.Relative("docs/notes.md"),
+    ]),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let entry = settled.active(input)
+  guard entry.completion is Some(menu) else {
+    fail("the settled menu should stay open")
+  }
+  assert_false(menu.menu.loading())
+  inspect(menu.menu.length(), content="1")
+}
+
+///|
 test "goal submission acknowledgement preserves the prompt underneath" {
   let prompt = Input::fixture("waiting prompt")
   let goal = { ..prompt, goal: { ..prompt.goal, draft: Some("old goal") } }
