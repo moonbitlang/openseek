@@ -37,7 +37,26 @@ priv struct WorktreeEntry {
   // row serves nobody and is cleaned up only by explicit removal.
   session : String?
   codex_thread : String?
-} derive(ToJson)
+}
+
+///|
+/// Persist only concrete owner fields. Registry reads deliberately accept
+/// missing owner fields for hand-edited legacy rows, so writing `null` would
+/// introduce a second representation for the same ownerless state.
+impl ToJson for WorktreeEntry with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "name": Json::string(self.name),
+    "branch": Json::string(self.branch),
+    "base": Json::string(self.base),
+  }
+  if self.session is Some(session) {
+    fields["session"] = Json::string(session)
+  }
+  if self.codex_thread is Some(thread_id) {
+    fields["codex_thread"] = Json::string(thread_id)
+  }
+  Json::object(fields)
+}
 
 ///|
 /// The durable conversation identity that owns one Desktop worktree. Keeping

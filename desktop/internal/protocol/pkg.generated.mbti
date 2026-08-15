@@ -532,7 +532,9 @@ pub(all) struct GitPullRequestPayload {
   session : String
   cwd : String?
   branch_hint : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for GitPullRequestPayload
+pub impl @json.FromJson for GitPullRequestPayload
 
 pub(all) struct GitPullRequestReply {
   pull_request : GitPullRequest?
@@ -622,7 +624,9 @@ pub(all) struct LspHoverPayload {
   path : String
   line : Int
   character : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for LspHoverPayload
+pub impl @json.FromJson for LspHoverPayload
 
 pub(all) struct LspHoverReply {
   value : String
@@ -638,7 +642,9 @@ pub(all) struct LspOpenPayload {
   session : String
   root : String
   path : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for LspOpenPayload
+pub impl @json.FromJson for LspOpenPayload
 
 pub(all) struct LspPosition {
   line : Int
@@ -678,7 +684,9 @@ pub(all) struct MoonIdeNavigationPayload {
   path : String
   line : Int
   column : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for MoonIdeNavigationPayload
+pub impl @json.FromJson for MoonIdeNavigationPayload
 
 pub(all) enum Notification {
   AgentConnected(ConnectedPayload)
@@ -1122,7 +1130,9 @@ pub(all) struct WorkspaceSymbolsPayload {
   session : String
   root : String
   query : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for WorkspaceSymbolsPayload
+pub impl @json.FromJson for WorkspaceSymbolsPayload
 
 pub(all) struct WorkspaceSymbolsReply {
   symbols : Array[SymbolItem]
@@ -1172,7 +1182,9 @@ pub(all) struct WorktreeInfo {
   codex_thread : String?
   path : String
   present : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for WorktreeInfo
+pub impl @json.FromJson for WorktreeInfo
 
 pub(all) struct WorktreeListPayload {
   workspace : String
