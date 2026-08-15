@@ -1326,10 +1326,17 @@ fn changes_live(state : State, ctx : Ctx) -> Bool {
 
 ///|
 /// Whether the fallback poll should be running: a settled repository inventory
-/// of the current conversation that something on screen still consumes. This is
-/// the sole staleness rule for the poll — it decides both whether the interval
-/// exists and whether a tick already in the queue may still act.
+/// of the current conversation, addressing a checkout that still exists, that
+/// something on screen still consumes. This is the sole staleness rule for the
+/// poll — it decides both whether the interval exists and whether a tick
+/// already in the queue may still act.
+///
+/// A parked checkout keeps its snapshot and its open reviews on screen so the
+/// user can read them until Repair, which is exactly why availability has to be
+/// asked separately: a retained inventory is not permission to keep addressing
+/// the host that lost it.
 fn changes_poll_wanted(state : State, ctx : Ctx) -> Bool {
+  ctx.checkout_ready() &&
   state.owner == Some(ctx.owner) &&
   !ctx.owner.session.is_empty() &&
   changes_live(state, ctx) &&
@@ -6562,6 +6569,80 @@ test "the fallback poll is declared only for a settled live inventory" {
       active_file: Some(path),
     }),
   )
+}
+
+///|
+test "a parked checkout stops the fallback poll until repair" {
+  let emit = test_emit()
+  let present = test_ctx().test_worktree("wt")
+  let path = @pathx.Relative("reviewed.mbt")
+  let change = test_modified_change(path)
+  let docs : Map[@pathx.Relative, Doc] = Map([])
+  docs[path] = {
+    ..loaded_doc(path.0),
+    review: Some({
+      generation: 3,
+      working_generation: 3,
+      baseline: ReviewContent("old HEAD"),
+      view_mode: ReviewSource,
+      selected: change,
+    }),
+  }
+  let reviewing : Ctx = {
+    ..present,
+    open_files: [path],
+    active_file: Some(path),
+  }
+  let state = {
+    ..owned_state_at(present),
+    explorer_mode: ExplorerChanges,
+    changes: ChangeListReady(
+      repository=true,
+      files=[change],
+      refreshing=false,
+      refresh_again=false,
+    ),
+    changes_generation: 1,
+    changes_head: Some("same-head"),
+    changes_head_known: true,
+    review_generation: 3,
+    docs,
+  }
+  assert_true(changes_poll_wanted(state, reviewing))
+  let missing : Ctx = {
+    ..reviewing,
+    placement: Some(
+      @interop.MissingWorktree(project=present.test_root(), name="wt"),
+    ),
+  }
+  // The parked panel keeps its settled inventory and its open review readable,
+  // so every other axis of the predicate still holds. Only the lost checkout
+  // stops the interval, and a tick that outlived the park is refused too.
+  let (parked, _) = sync(emit, state, missing)
+  assert_true(
+    parked.changes is ChangeListReady(repository=true, refreshing=false, ..),
+  )
+  assert_true(changes_live(parked, missing))
+  assert_false(changes_poll_wanted(parked, missing))
+  let (_, after_tick) = update(emit, ChangesPollDue, parked, missing)
+  assert_true(after_tick == parked)
+  // Repair restores it: its own refresh settles, and the settled shape is what
+  // declares the poll again.
+  let (restored, _) = sync(emit, parked, reviewing)
+  assert_true(restored.changes is ChangeListReady(refreshing=true, ..))
+  let (_, settled) = update(
+    emit,
+    ChangesLoaded(
+      owner=present.owner,
+      generation=restored.changes_generation,
+      repository=true,
+      head=Some("same-head"),
+      files=[change],
+    ),
+    restored,
+    reviewing,
+  )
+  assert_true(changes_poll_wanted(settled, reviewing))
 }
 
 ///|
