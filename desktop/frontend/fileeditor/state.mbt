@@ -570,7 +570,10 @@ pub(all) enum Msg {
   // A low-frequency fallback while Changes is visible. The selective file
   // watcher intentionally follows only open/listed paths, so polling also
   // catches nested external edits and index-only staging operations.
-  ChangesPollDue(owner~ : @interop.ConversationKey, generation~ : Int)
+  // The tick carries no owner or request token: `changes_poll_wanted` decides
+  // from live state whether the interval exists at all, so a tick can only be
+  // delivered for the conversation and snapshot that currently want one.
+  ChangesPollDue
   // A file row was clicked: read it and show it in the viewer. `name` is the
   // entry's display name, kept for the viewer's title and language guess.
   FileSelected(path~ : @pathx.Relative, name~ : String)

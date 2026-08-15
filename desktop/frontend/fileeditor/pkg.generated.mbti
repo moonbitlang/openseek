@@ -4,6 +4,7 @@ package "openseek_desktop/frontend/fileeditor"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/sub",
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/pathx",
@@ -22,6 +23,8 @@ pub fn basename(@pathx.Relative) -> String
 pub fn body_view(@cmd.Emit[Msg], State, Ctx) -> @html.Html
 
 pub fn breadcrumb_view(@cmd.Emit[Msg], State, Ctx) -> @html.Html
+
+pub fn changes_poll_subscription(State, Ctx, @cmd.Emit[Msg]) -> @sub.Sub
 
 pub fn close_document(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, next~ : @pathx.Relative?, was_active~ : Bool) -> (@cmd.Cmd, State)
 
@@ -151,7 +154,7 @@ pub(all) enum Msg {
   FileIndexFailed(owner~ : @interop.ConversationKey, epoch~ : Int)
   ChangesLoaded(owner~ : @interop.ConversationKey, generation~ : Int, repository~ : Bool, head~ : String?, files~ : Array[ChangedFile])
   ChangesFailed(owner~ : @interop.ConversationKey, generation~ : Int, message~ : String)
-  ChangesPollDue(owner~ : @interop.ConversationKey, generation~ : Int)
+  ChangesPollDue
   FileSelected(path~ : @pathx.Relative, name~ : String)
   ChangedFileSelected(ChangedFile)
   ToggleReviewDiff

@@ -1295,7 +1295,7 @@ pub fn State::retire_watcher(
 }
 
 ///|
-const ChangesPollDelayMilliseconds = 3000
+const ChangesPollIntervalMilliseconds = 3000
 
 ///|
 fn explorer_visible(state : State, ctx : Ctx) -> Bool {
@@ -1322,6 +1322,34 @@ fn changes_live(state : State, ctx : Ctx) -> Bool {
     }
   }
   false
+}
+
+///|
+/// Whether the fallback poll should be running: a settled repository inventory
+/// of the current conversation that something on screen still consumes. This is
+/// the sole staleness rule for the poll — it decides both whether the interval
+/// exists and whether a tick already in the queue may still act.
+fn changes_poll_wanted(state : State, ctx : Ctx) -> Bool {
+  state.owner == Some(ctx.owner) &&
+  !ctx.owner.session.is_empty() &&
+  changes_live(state, ctx) &&
+  state.changes is ChangeListReady(repository=true, refreshing=false, ..)
+}
+
+///|
+/// The low-rate fallback refresh of the changed-file inventory, declared rather
+/// than chained. A request issued by a tick flips the snapshot to `refreshing`,
+/// which retires this subscription until the reply settles — so the interval
+/// restarts from each settle exactly as the old per-settle timer did, and a
+/// conversation switch, a hidden explorer, or a superseded request cannot leave
+/// a timer running behind the state that armed it.
+pub fn changes_poll_subscription(
+  state : State,
+  ctx : Ctx,
+  dispatch : @cmd.Emit[Msg],
+) -> @sub.Sub {
+  guard changes_poll_wanted(state, ctx) else { return @sub.none }
+  @sub.every(ChangesPollIntervalMilliseconds, dispatch(ChangesPollDue))
 }
 
 ///|
@@ -1432,18 +1460,6 @@ fn refresh_unknown_head_reviews(
     )
   }
   (cmds, docs, review_generation, background_review_requests)
-}
-
-///|
-fn changes_poll_after_settle(
-  dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
-  generation : Int,
-) -> @cmd.Cmd {
-  @cmd.delay(
-    dispatch(ChangesPollDue(owner~, generation~)),
-    ChangesPollDelayMilliseconds,
-  )
 }
 
 ///|
@@ -1980,18 +1996,9 @@ pub fn update(
             // lets the normal fallback poll catch index-only changes.
             refresh_changes(dispatch, selected, ctx)
           } else {
-            match selected.changes {
-              ChangeListReady(repository=true, refreshing=false, ..) =>
-                (
-                  changes_poll_after_settle(
-                    dispatch,
-                    ctx.owner,
-                    selected.changes_generation,
-                  ),
-                  selected,
-                )
-              _ => (@cmd.none, selected)
-            }
+            // A ready snapshot needs nothing here: selecting Changes makes the
+            // inventory live again, which is what declares the fallback poll.
+            (@cmd.none, selected)
           }
       }
     }
@@ -2140,11 +2147,12 @@ pub fn update(
         }
         (cmd, { ..state, index, })
       }
-    ChangesPollDue(owner~, generation~) =>
-      if state.owner == Some(owner) &&
-        state.changes_generation == generation &&
-        changes_live(state, ctx) &&
-        state.changes is ChangeListReady(repository=true, refreshing=false, ..) {
+    // The subscription is only re-derived when a message is processed, so a
+    // tick can still be waiting in the queue behind the message that retired
+    // it. Re-check the same predicate rather than latch a redundant follow-up
+    // onto a request that started meanwhile.
+    ChangesPollDue =>
+      if changes_poll_wanted(state, ctx) {
         refresh_changes(dispatch, state, ctx)
       } else {
         (@cmd.none, state)
@@ -2224,8 +2232,6 @@ pub fn update(
             next_generation,
             workspace=ctx.workspace(),
           )
-        } else if repository && changes_live(state, ctx) {
-          changes_poll_after_settle(dispatch, owner, generation)
         } else {
           @cmd.none
         }
@@ -2323,15 +2329,11 @@ pub fn update(
                 },
               )
             } else {
+              // Clearing the in-flight bit restores the settled shape that
+              // declares the fallback poll, so a transient bridge/Git error
+              // resumes polling while retaining the last usable snapshot.
               (
-                if repository && changes_live(state, ctx) {
-                  // The failed request consumed the previous timer. Keep the
-                  // low-frequency fallback alive after a transient bridge/Git
-                  // error while retaining the last usable snapshot.
-                  changes_poll_after_settle(dispatch, owner, generation)
-                } else {
-                  @cmd.none
-                },
+                @cmd.none,
                 {
                   ..state,
                   changes: ChangeListReady(
@@ -6054,12 +6056,7 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
   // that request's generation live rather than launch a replacement that
   // would fence the first reply forever.
   let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path) }
-  let (_, polling) = update(
-    test_emit(),
-    ChangesPollDue(owner=test_ctx().owner, generation=1),
-    settled,
-    ctx,
-  )
+  let (_, polling) = update(test_emit(), ChangesPollDue, settled, ctx)
   assert_true(polling.changes_generation == 2)
   let (_, coalesced) = update(
     test_emit(),
@@ -6460,43 +6457,111 @@ test "only a visible settled Changes snapshot accepts its polling fallback" {
     ),
     changes_generation: 4,
   }
-  let (_, refreshing) = update(
-    emit,
-    ChangesPollDue(owner=test_ctx().owner, generation=4),
-    state,
-    test_ctx(),
-  )
+  let (_, refreshing) = update(emit, ChangesPollDue, state, test_ctx())
   assert_true(refreshing.changes_generation == 5)
   assert_true(refreshing.changes is ChangeListReady(refreshing=true, ..))
-  let (_, stale) = update(
-    emit,
-    ChangesPollDue(owner=test_ctx().owner, generation=4),
-    refreshing,
-    test_ctx(),
-  )
+  let (_, stale) = update(emit, ChangesPollDue, refreshing, test_ctx())
   assert_true(stale == refreshing)
-  let (_, hidden) = update(
-    emit,
-    ChangesPollDue(owner=test_ctx().owner, generation=4),
-    state,
-    { ..test_ctx(), panel_open: false },
-  )
+  let (_, hidden) = update(emit, ChangesPollDue, state, {
+    ..test_ctx(),
+    panel_open: false,
+  })
   assert_true(hidden == state)
   let (_, hidden_tree) = update(
     emit,
-    ChangesPollDue(owner=test_ctx().owner, generation=4),
+    ChangesPollDue,
     { ..state, tree_open: false },
     { ..test_ctx(), active_file: Some(Relative("open.mbt")) },
   )
   assert_true(hidden_tree == { ..state, tree_open: false })
   let (_, files_mode) = update(
     emit,
-    ChangesPollDue(owner=test_ctx().owner, generation=4),
+    ChangesPollDue,
     { ..state, explorer_mode: ExplorerFiles },
     test_ctx(),
   )
   assert_true(files_mode.explorer_mode is ExplorerFiles)
   assert_true(files_mode.changes_generation == 4)
+}
+
+///|
+test "the fallback poll is declared only for a settled live inventory" {
+  let ready = {
+    ..owned_state(),
+    explorer_mode: ExplorerChanges,
+    changes: ChangeListReady(
+      repository=true,
+      files=[],
+      refreshing=false,
+      refresh_again=false,
+    ),
+  }
+  assert_true(changes_poll_wanted(ready, test_ctx()))
+  // A request already in flight owns the next refresh. Retiring the interval
+  // here is what makes it restart from that reply instead of from a fixed
+  // wall-clock cadence running underneath it.
+  assert_false(
+    changes_poll_wanted(
+      {
+        ..ready,
+        changes: ChangeListReady(
+          repository=true,
+          files=[],
+          refreshing=true,
+          refresh_again=false,
+        ),
+      },
+      test_ctx(),
+    ),
+  )
+  // Outside a repository, and before an inventory exists, there is nothing to
+  // poll for.
+  assert_false(
+    changes_poll_wanted(
+      {
+        ..ready,
+        changes: ChangeListReady(
+          repository=false,
+          files=[],
+          refreshing=false,
+          refresh_again=false,
+        ),
+      },
+      test_ctx(),
+    ),
+  )
+  assert_false(
+    changes_poll_wanted({ ..ready, changes: ChangeListIdle }, test_ctx()),
+  )
+  // No consumer on screen: another explorer mode, a closed panel, or a panel
+  // the conversation switch has not handed over yet.
+  assert_false(
+    changes_poll_wanted({ ..ready, explorer_mode: ExplorerFiles }, test_ctx()),
+  )
+  assert_false(changes_poll_wanted(ready, { ..test_ctx(), panel_open: false }))
+  assert_false(changes_poll_wanted({ ..ready, owner: None }, test_ctx()))
+  // An open changed-file review consumes the inventory even off-screen, so it
+  // keeps the fallback alive on its own.
+  let path = @pathx.Relative("src/reviewed.mbt")
+  let docs : Map[@pathx.Relative, Doc] = Map([])
+  docs[path] = {
+    ..loaded_doc(path.0),
+    review: Some({
+      generation: 2,
+      working_generation: 2,
+      baseline: ReviewContent("old HEAD"),
+      view_mode: ReviewSource,
+      selected: test_modified_change(path),
+    }),
+  }
+  assert_true(
+    changes_poll_wanted({ ..ready, docs, }, {
+      ..test_ctx(),
+      panel_open: false,
+      open_files: [path],
+      active_file: Some(path),
+    }),
+  )
 }
 
 ///|
@@ -6753,12 +6818,7 @@ test "hidden explorer keeps Git refresh live for an open review" {
   )
   assert_true(after_run.changes_generation == 5)
   assert_true(after_run.changes is ChangeListReady(refreshing=true, ..))
-  let (_, after_poll) = update(
-    test_emit(),
-    ChangesPollDue(owner=test_ctx().owner, generation=4),
-    state,
-    hidden,
-  )
+  let (_, after_poll) = update(test_emit(), ChangesPollDue, state, hidden)
   assert_true(after_poll.changes_generation == 5)
   assert_true(after_poll.changes is ChangeListReady(refreshing=true, ..))
 }

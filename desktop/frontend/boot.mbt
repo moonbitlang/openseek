@@ -397,6 +397,18 @@ pub fn boot() -> Unit {
             ),
           )
         }
+        // The changed-file inventory has no push channel for index-only
+        // operations, so it keeps a low-rate fallback refresh. Its lifetime is
+        // declared from the panel's own state instead of being chained from
+        // each reply, which is what stops a hidden explorer or a switched
+        // conversation from leaving an orphaned timer behind.
+        subs.push(
+          @fileeditor.changes_poll_subscription(
+            model.file_panel,
+            file_ctx(model),
+            emit.map(msg => FileEditor(msg)),
+          ),
+        )
         @sub.batch(subs)
       },
     )

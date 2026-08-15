@@ -3,6 +3,7 @@ import {
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/js",
+  "moonbit-community/rabbita/sub",
   "moonbit-community/rabbita/svg",
   "moonbitlang/editor/base/browser" @base_browser,
   "moonbitlang/editor/base/common",
