@@ -9,6 +9,18 @@
   for compatibility with a pre-change host unless the user explicitly asks for
   it.
 
+## JSON Protocol Codecs
+
+- Never use `derive(FromJson)`, `derive(ToJson)`, or a combined
+  `derive(FromJson, ToJson)` anywhere under `desktop/`.
+- Every type crossing a JSON boundary must provide explicit `FromJson` and
+  `ToJson` implementations. The decoder must deliberately specify the behavior
+  of required, missing, `null`, malformed, and unknown fields; the encoder must
+  deliberately specify which optional fields are omitted.
+- When modifying an existing Desktop protocol type that still derives either
+  JSON trait, replace that derived codec with explicit implementations in the
+  same change.
+
 ## Desktop Trust And Security Model
 
 - A frontend connected and authenticated to a Desktop instance is trusted with

@@ -58,6 +58,35 @@ test "Codex list and turn replies keep their typed envelopes" {
 }
 
 ///|
+test "Codex optional fields accept null and encode absence by omission" {
+  let page : @protocol.CodexDataReply = @json.from_json({
+    "data": [],
+    "nextCursor": null,
+    "futureMetadata": { "source": "stateDb" },
+  })
+  assert_true(page.next_cursor is None)
+  @debug.assert_eq(page.to_json(), { "data": [] })
+  let resumed : @protocol.CodexThreadResumeReply = @json.from_json({
+    "thread": null,
+    "status": "activeWriter",
+    "futureMetadata": true,
+  })
+  assert_true(resumed.thread is None)
+  assert_eq(resumed.status, Some("activeWriter"))
+  @debug.assert_eq(resumed.to_json(), { "status": "activeWriter" })
+}
+
+///|
+test "Codex explicit codecs reject malformed known fields" {
+  let decoded : @protocol.CodexDataReply? = Some(
+    @json.from_json({ "data": [], "nextCursor": 42 }),
+  ) catch {
+    _ => None
+  }
+  assert_true(decoded is None)
+}
+
+///|
 test "Codex multi-shape replies preserve their app-server object" {
   let archive : @protocol.CodexArchiveReply = @json.from_json({
     "kind": "needs_force",

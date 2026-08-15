@@ -159,22 +159,30 @@ pub(all) struct ClearFileSearchCachePayload {
 
 pub(all) struct CodexAccountLoginCancelPayload {
   login_id : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexAccountLoginCancelPayload
+pub impl @json.FromJson for CodexAccountLoginCancelPayload
 
 pub(all) struct CodexAccountLoginStartPayload {
   kind_ : String
   use_hosted_login_success_page : Bool
   app_brand : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexAccountLoginStartPayload
+pub impl @json.FromJson for CodexAccountLoginStartPayload
 
 pub(all) struct CodexAccountReadPayload {
   refresh_token : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexAccountReadPayload
+pub impl @json.FromJson for CodexAccountReadPayload
 
 pub(all) struct CodexAccountReply {
   account : Json?
   requires_openai_auth : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexAccountReply
+pub impl @json.FromJson for CodexAccountReply
 
 pub(all) struct CodexArchiveReply {
   value : Json
@@ -185,28 +193,38 @@ pub impl @json.FromJson for CodexArchiveReply
 pub(all) struct CodexDataReply {
   data : Array[Json]
   next_cursor : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexDataReply
+pub impl @json.FromJson for CodexDataReply
 
 pub(all) struct CodexDraftClosePayload {
   draft_id : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexDraftClosePayload
+pub impl @json.FromJson for CodexDraftClosePayload
 
 pub(all) struct CodexDraftOpenPayload {
   draft_id : String
   cwd : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexDraftOpenPayload
+pub impl @json.FromJson for CodexDraftOpenPayload
 
 pub(all) struct CodexDraftOpenReply {
   draft_id : String
   cwd : String
   project_root : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexDraftOpenReply
+pub impl @json.FromJson for CodexDraftOpenReply
 
 pub(all) struct CodexFileSearchPayload {
   thread_id : String
   cwd : String
   query : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexFileSearchPayload
+pub impl @json.FromJson for CodexFileSearchPayload
 
 pub(all) struct CodexFileSearchReply {
   value : Json
@@ -217,95 +235,131 @@ pub impl @json.FromJson for CodexFileSearchReply
 pub(all) struct CodexLoginStartReply {
   login_id : String
   auth_url : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexLoginStartReply
+pub impl @json.FromJson for CodexLoginStartReply
 
 pub(all) struct CodexModelListPayload {
   limit : Int
   include_hidden : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexModelListPayload
+pub impl @json.FromJson for CodexModelListPayload
 
 pub(all) struct CodexReviewStartPayload {
   thread_id : String
   target : CodexReviewTarget
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexReviewStartPayload
+pub impl @json.FromJson for CodexReviewStartPayload
 
 pub(all) struct CodexReviewTarget {
   kind_ : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexReviewTarget
+pub impl @json.FromJson for CodexReviewTarget
 
 pub(all) struct CodexServerRequestRespondPayload {
   request_id : Json
   result : Json
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexServerRequestRespondPayload
+pub impl @json.FromJson for CodexServerRequestRespondPayload
 
 pub(all) struct CodexSkillsListPayload {
   thread_id : String
   cwd : String
   force_reload : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexSkillsListPayload
+pub impl @json.FromJson for CodexSkillsListPayload
 
 pub(all) struct CodexStatusReply {
   status : String
   message : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexStatusReply
+pub impl @json.FromJson for CodexStatusReply
 
 pub(all) struct CodexThreadArchivePayload {
   thread_id : String
   force : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexThreadArchivePayload
+pub impl @json.FromJson for CodexThreadArchivePayload
 
 pub(all) struct CodexThreadListPayload {
   limit : Int
   archived : Bool
   cursor : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexThreadListPayload
+pub impl @json.FromJson for CodexThreadListPayload
 
 pub(all) struct CodexThreadPayload {
   thread_id : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexThreadPayload
+pub impl @json.FromJson for CodexThreadPayload
 
 pub(all) struct CodexThreadReadPayload {
   thread_id : String
   include_turns : Bool?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexThreadReadPayload
+pub impl @json.FromJson for CodexThreadReadPayload
 
 pub(all) struct CodexThreadReply {
   thread : Json
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexThreadReply
+pub impl @json.FromJson for CodexThreadReply
 
 pub(all) struct CodexThreadResumeReply {
   thread : Json?
   status : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexThreadResumeReply
+pub impl @json.FromJson for CodexThreadResumeReply
 
 pub(all) struct CodexThreadStartPayload {
   cwd : String?
   model : String?
   draft_id : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexThreadStartPayload
+pub impl @json.FromJson for CodexThreadStartPayload
 
 pub(all) struct CodexTurnInterruptPayload {
   thread_id : String
   turn_id : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexTurnInterruptPayload
+pub impl @json.FromJson for CodexTurnInterruptPayload
 
 pub(all) struct CodexTurnReply {
   turn : Json?
   turn_id : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexTurnReply
+pub impl @json.FromJson for CodexTurnReply
 
 pub(all) struct CodexTurnStartPayload {
   thread_id : String
   input : Array[Json]
   model : String?
   cwd : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexTurnStartPayload
+pub impl @json.FromJson for CodexTurnStartPayload
 
 pub(all) struct CodexTurnSteerPayload {
   thread_id : String
   input : Array[Json]
   expected_turn_id : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexTurnSteerPayload
+pub impl @json.FromJson for CodexTurnSteerPayload
 
 pub(all) struct CompactPayload {
   session : String
