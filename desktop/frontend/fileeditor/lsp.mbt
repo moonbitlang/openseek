@@ -149,12 +149,12 @@ fn HoverProjection::range(self : HoverProjection) -> @common.Range {
 }
 
 ///|
-/// Tell the host the viewer now shows the file at `absolute`, so its language
-/// server syncs the file and starts publishing diagnostics, then apply whatever
-/// it already has. Best-effort: a failed call just leaves the file without
-/// squiggles; live re-analysis still arrives as `diagnostics` events. Routes by
-/// absolute path exactly like hover — v1 covers MoonBit only, the only language
-/// with a server behind the op.
+/// Tell the host the viewer now shows `relative` below its exact editor root,
+/// so its language server syncs the file and starts publishing diagnostics,
+/// then apply whatever it already has. Best-effort: a failed call just leaves
+/// the file without squiggles; live re-analysis still arrives as `diagnostics`
+/// events. v1 covers MoonBit only, the only language with a server behind the
+/// op.
 fn request_diagnostics(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,

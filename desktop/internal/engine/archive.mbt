@@ -596,8 +596,7 @@ async fn archive_session_commit(
   // (the next prompt respawns) — so nothing irreversible has happened yet;
   // a removal that succeeds while the record move below then fails leaves a
   // live conversation safely blocked on its retained missing placement.
-  let refusal = archive_bound_worktree_checkout(
-    session,
+  let refusal = WorktreeOwner::openseek(session).archive_checkout(
     force,
     on_committed?=on_worktree_changed,
   )
@@ -1241,12 +1240,14 @@ async test "permanent archived deletion drops placement but keeps files and bran
       branch: "openseek/chat",
       base: git_in(workspace, ["rev-parse", "HEAD"]),
       session: Some("chat"),
+      codex_thread: None,
     },
     {
       name: "other-tree",
       branch: "openseek/other",
       base: "abc",
       session: Some("other"),
+      codex_thread: None,
     },
   ])
   let manager = new_engine_manager("unused")

@@ -50,17 +50,43 @@ async fn git_pull_request_op(
     None => @engine.session_cwd(payload.session)
   }
   guard base is Some(base) else { return nothing }
-  // Read from `HEAD` rather than trusting the caller: this is the branch the
-  // answer is about, and it travels back with the reply so the caller labels
-  // it with what was looked up instead of with what it asked for. An agent can
-  // move the checkout between the two.
-  guard git_branch(base.0) is Some(branch) else { return nothing }
+  // Read from `HEAD` rather than blindly trusting the caller. Codex-managed
+  // worktrees are normally detached, though, so recover a branch only when it
+  // demonstrably names the same commit: first app-server's creation-time hint,
+  // then the one unambiguous local branch pointing exactly at HEAD.
+  guard git_branch(base.0) is Some(checkout) else { return nothing }
+  let mut head = git_symbolic_branch(base.0)
+  if head is None && payload.branch_hint is Some(hint) {
+    let valid_hint = git_output_opt(base.0, [
+      "check-ref-format", "--branch", hint,
+    ])
+    let current = git_revision_commit(base.0, "HEAD")
+    let hinted = git_revision_commit(base.0, "refs/heads/\{hint}")
+    if valid_hint is Some(_) && current is Some(_) && current == hinted {
+      head = Some(hint)
+    }
+  }
+  if head is None &&
+    git_output_opt(base.0, [
+      "for-each-ref", "--format=%(refname:short)", "--points-at", "HEAD", "refs/heads",
+    ])
+    is Some(output) {
+    let exact : Array[String] = []
+    for line in output.split("\n") {
+      let branch = line.trim_end(chars="\r")
+      if !branch.is_empty() {
+        exact.push(branch.to_owned())
+      }
+    }
+    if exact.length() == 1 {
+      head = Some(exact[0])
+    }
+  }
+  let branch = head.unwrap_or(checkout)
   let unanswered : GitPullRequestReply = { ..nothing, branch: Some(branch) }
-  // A detached checkout has no branch name to ask about. `git_branch` stands
-  // a short hash in for one, which is right for the chip and wrong for
-  // `--head`: gh would filter for a branch by that name, find nothing, and the
-  // caller would offer to open a pull request from a ref that is not one.
-  guard git_symbolic_branch(base.0) is Some(head) else { return unanswered }
+  // A hash remains useful display text but must never become a gh branch
+  // filter when no exact local ref was recovered.
+  guard head is Some(head) else { return unanswered }
   // The default branch is the destination of pull requests, not work waiting
   // to become one. In particular, `gh pr list --head main --state all` can
   // return an old cross-repository pull request whose fork branch was also

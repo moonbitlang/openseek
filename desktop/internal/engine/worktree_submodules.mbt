@@ -173,7 +173,7 @@ async test "worktree lifecycle mirrors initialized submodules" {
   let created = create_worktree(
     manager,
     repo.to_string(),
-    "s-submodules",
+    WorktreeOwner::openseek("s-submodules"),
     fn(_) {  },
     name="with-submodules",
   )
@@ -190,7 +190,7 @@ async test "worktree lifecycle mirrors initialized submodules" {
     create_worktree(
       manager,
       repo.to_string(),
-      "s-submodules",
+      WorktreeOwner::openseek("s-submodules"),
       fn(_) {  },
       name="with-submodules",
     ),
@@ -247,7 +247,7 @@ async test "worktree lifecycle mirrors initialized submodules" {
   let skipped = create_worktree(
     manager,
     repo.to_string(),
-    "s-without-submodules",
+    WorktreeOwner::openseek("s-without-submodules"),
     fn(_) {  },
     name="without-submodules",
   )
@@ -297,7 +297,14 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   // A dirty checkout still confirms first, and the confirmed force retry
   // must delete the checkout even though plain `git worktree remove`
   // refuses over the gitlink.
-  ignore(create_worktree(manager, repo.to_string(), "s-sub-dirty", fn(_) {  }))
+  ignore(
+    create_worktree(
+      manager,
+      repo.to_string(),
+      WorktreeOwner::openseek("s-sub-dirty"),
+      fn(_) {  },
+    ),
+  )
   @fsx.ensure_dir(
     workspace_session_root(repo).join("sessions").join("s-sub-dirty").to_path(),
   )
@@ -321,7 +328,14 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   assert_false(@fsx.exists(dirty_checkout.to_path()))
   // A clean submodule checkout archives in one go, exactly like a clean
   // plain worktree.
-  ignore(create_worktree(manager, repo.to_string(), "s-sub-clean", fn(_) {  }))
+  ignore(
+    create_worktree(
+      manager,
+      repo.to_string(),
+      WorktreeOwner::openseek("s-sub-clean"),
+      fn(_) {  },
+    ),
+  )
   @fsx.ensure_dir(
     workspace_session_root(repo).join("sessions").join("s-sub-clean").to_path(),
   )
@@ -365,7 +379,14 @@ async test "worktree deletion refuses a replaced checkout" {
   ignore(add_workspace(repo.to_string(), fn(_) {  }))
   let manager = new_engine_manager("openseek")
   manager.pump = Serving(sessions=Map([]))
-  ignore(create_worktree(manager, repo.to_string(), "s-replaced", fn(_) {  }))
+  ignore(
+    create_worktree(
+      manager,
+      repo.to_string(),
+      WorktreeOwner::openseek("s-replaced"),
+      fn(_) {  },
+    ),
+  )
   @fsx.ensure_dir(
     workspace_session_root(repo).join("sessions").join("s-replaced").to_path(),
   )

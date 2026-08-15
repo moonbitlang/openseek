@@ -255,6 +255,15 @@ Platform package commands remain the release-layout test. They build debug
 MoonBit artifacts by default; pass `--release` after `--` when you need
 optimized artifacts.
 
+The package also stages a pinned native Codex CLI target directory. Codex
+conversations appear beside OpenSeek conversations in the Desktop's global left
+sidebar; selecting one uses the same main transcript/composer area, backed by
+Codex's `app-server` mode and the user's normal Codex account and `CODEX_HOME`.
+OpenSeek does not store Codex credentials.
+Unbundled development resolves `codex` from the login-shell `PATH`. See
+[`docs/codex-app-server.md`](../docs/codex-app-server.md) for the process,
+protocol, approval, and packaging contract.
+
 ## Bootstrap desktop submodules on Windows
 
 The scripted Windows path is:
@@ -396,6 +405,8 @@ moon -C desktop run --target native package/macos
 The app-only output is ad-hoc signed by Proton for local use. Scripts may pass
 `--target app` to request the same output explicitly. Pass `--release` after
 `--` to build the frontend, host, and engine as optimized release artifacts.
+The bundled Codex Mach-O entries are included in Proton's declared signing
+list.
 
 To build a distribution artifact, select `dmg` or `zip`:
 

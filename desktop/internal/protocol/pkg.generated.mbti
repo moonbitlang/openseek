@@ -320,6 +320,7 @@ pub(all) struct GitPullRequest {
 pub(all) struct GitPullRequestPayload {
   session : String
   cwd : String?
+  branch_hint : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct GitPullRequestReply {
@@ -459,6 +460,7 @@ pub(all) struct MoonIdeLocationsReply {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct MoonIdeNavigationPayload {
+  root : String
   path : String
   line : Int
   column : Int
@@ -483,6 +485,9 @@ pub(all) enum Notification {
   UpdateDownloaded(UpdateDownloadedPayload)
   UpdateDownloadFailed(UpdateDownloadFailedPayload)
   AuthChanged(AuthStatusPayload)
+  CodexStatusChanged(Json)
+  CodexNotification(Json)
+  CodexServerRequest(Json)
   LspDiagnostics(DiagnosticsPayload)
   FsChanged(FsChangedPayload)
   FsWatchFailed(FsWatchFailedPayload)
@@ -513,6 +518,9 @@ pub(all) enum NotificationKind {
   UpdateDownloaded
   UpdateDownloadFailed
   AuthChanged
+  CodexStatusChanged
+  CodexNotification
+  CodexServerRequest
   LspDiagnostics
   FsChanged
   FsWatchFailed
@@ -923,7 +931,8 @@ pub(all) struct WorktreeChangedPayload {
 
 pub(all) struct WorktreeCreatePayload {
   workspace : String
-  session : String
+  session : String?
+  codex_thread : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct WorktreeCreateReply {
@@ -943,6 +952,7 @@ pub(all) struct WorktreeInfo {
   branch : String
   base : String
   session : String?
+  codex_thread : String?
   path : String
   present : Bool
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)

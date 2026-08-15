@@ -45,6 +45,63 @@ fn ArchivedSessionPayload::canonical_session(
 }
 
 ///|
+/// The opaque reverse-request id and the method-specific result selected by
+/// the user. The host matches this id only against its live app-server map.
+priv struct CodexResponsePayload {
+  request_id : Json
+  result : Json
+} derive(FromJson)
+
+///|
+/// A Codex `#` query names the active app-server thread and the cwd learned
+/// from that thread's authoritative reply. The host revalidates the pair
+/// before giving the directory to app-server's fuzzy file search.
+priv struct CodexFileSearchPayload {
+  thread_id : String
+  cwd : String
+  query : String
+} derive(FromJson)
+
+///|
+/// A skill catalog request is scoped to the cwd previously authorized by this
+/// exact app-server thread. The page cannot scan an arbitrary directory.
+priv struct CodexSkillsListPayload {
+  thread_id : String
+  cwd : String
+  force_reload : Bool
+} derive(FromJson)
+
+///|
+/// A browser-local draft uses this id only as a process-local Files/Terminal
+/// owner. It is never forwarded to app-server as a Codex thread id.
+priv struct CodexDraftPayload {
+  draft_id : String
+  cwd : String
+} derive(FromJson)
+
+///|
+priv struct CodexDraftClosePayload {
+  draft_id : String
+} derive(FromJson)
+
+///|
+/// Draft authority is reserved for ids minted by this Desktop process. The
+/// close endpoint must not accept an app-server thread id and revoke that
+/// task's independently established cwd binding.
+fn CodexDraftClosePayload::validated_id(
+  self : CodexDraftClosePayload,
+) -> String? {
+  let id = self.draft_id.trim().to_owned()
+  guard id == self.draft_id &&
+    id.has_prefix("desktop-") &&
+    !id.contains("/") &&
+    !id.contains("\\") else {
+    return None
+  }
+  Some(id)
+}
+
+///|
 test "start and steer payloads preserve submission ids" {
   let start : @protocol.StartPayload = @json.from_json({
     "task": "hello",

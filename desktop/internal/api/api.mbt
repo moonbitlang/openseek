@@ -10,6 +10,14 @@
 /// process; each transport connection supplies its own `HostConnection` when
 /// dispatching filesystem watch methods.
 struct ApiState {
+  // One Codex app-server process for this Desktop process. It is independent
+  // of the OpenSeek engine actor and owns Codex account/thread state through
+  // Codex's own data directory.
+  codex : @codex.Actor
+  // App-server returns each thread cwd but not its owning local project. Keep
+  // Git's worktree relationship beside the Codex actor and reuse it across
+  // list/read/start replies instead of making the browser infer path names.
+  codex_projects : @codex.ProjectCatalog
   engine : @engine.EngineActor
   manager : @engine.EngineManager
   host : @host.HostState
@@ -24,12 +32,173 @@ struct ApiState {
 }
 
 ///|
+/// The one filesystem authority extracted from a successful app-server
+/// thread reply. It is never decoded from a Files or Terminal request: only
+/// the native Codex actor's reply can establish this exact thread/cwd pair.
+priv struct CodexWorkspaceBinding {
+  session : String
+  workspace : String?
+}
+
+///|
+/// Desktop adds `force` to Codex's archive command because app-server does
+/// not know about SeekMoon-owned worktree checkouts. This value validates the
+/// extended request once and can then produce app-server's narrower payload.
+priv struct CodexArchiveRequest {
+  thread_id : String
+  force : Bool
+}
+
+///|
+fn CodexArchiveRequest::decode(params : Json) -> CodexArchiveRequest? {
+  guard params is Object(fields) &&
+    fields.get("threadId") is Some(String(thread_id)) &&
+    !thread_id.trim().is_empty() else {
+    return None
+  }
+  Some({ thread_id, force: fields.get("force") is Some(True) })
+}
+
+///|
+fn CodexArchiveRequest::app_server_params(self : CodexArchiveRequest) -> Json {
+  { "threadId": self.thread_id }
+}
+
+///|
+fn CodexArchiveRequest::needs_force(
+  _self : CodexArchiveRequest,
+  refusal : @protocol.ArchiveNeedsForceReply,
+) -> Json {
+  {
+    "kind": "needs_force",
+    "worktree": refusal.worktree,
+    "dirty_paths": refusal.dirty_paths,
+    "dirty_path_count": refusal.dirty_path_count,
+  }
+}
+
+///|
+fn CodexArchiveRequest::retained_worktree(
+  _self : CodexArchiveRequest,
+  refusal : @protocol.ArchiveNeedsForceReply,
+) -> Json {
+  {
+    "kind": "archived_worktree_retained",
+    "worktree": refusal.worktree,
+    "dirty_paths": refusal.dirty_paths,
+    "dirty_path_count": refusal.dirty_path_count,
+  }
+}
+
+///|
+/// Desktop-owned Codex worktree placements captured from the same registry
+/// used by OpenSeek conversations. App-server still owns thread data; this
+/// catalog adds only the placement that SeekMoon itself created.
+priv struct CodexWorktreeCatalog {
+  bindings : Array[@engine.CodexWorktreeBinding]
+}
+
+///|
+fn CodexWorktreeCatalog::CodexWorktreeCatalog(
+  bindings : Array[@engine.CodexWorktreeBinding],
+) -> CodexWorktreeCatalog {
+  { bindings, }
+}
+
+///|
+fn CodexWorktreeCatalog::annotate_thread(
+  self : CodexWorktreeCatalog,
+  value : Json,
+) -> Json {
+  guard value is Object(thread) && thread.get("id") is Some(String(thread_id)) else {
+    return value
+  }
+  guard self.bindings
+    .iter()
+    .find_first(binding => binding.thread_id == thread_id)
+    is Some(binding) else {
+    return value
+  }
+  let annotated : Map[String, Json] = Map([])
+  for key, field in thread {
+    annotated[key] = field
+  }
+  // The registry retains the owning project even after its checkout is gone;
+  // Git cannot recover that relationship from a deleted cwd.
+  annotated["projectRoot"] = Json::string(binding.workspace)
+  annotated["openseekWorktree"] = binding.worktree.to_json()
+  Json::object(annotated)
+}
+
+///|
+fn CodexWorktreeCatalog::annotate(
+  self : CodexWorktreeCatalog,
+  reply : Json,
+) -> Json {
+  guard reply is Object(fields) else { return reply }
+  let annotated : Map[String, Json] = Map([])
+  for key, field in fields {
+    annotated[key] = field
+  }
+  if fields.get("data") is Some(Array(threads)) {
+    let data : Array[Json] = []
+    for thread in threads {
+      data.push(self.annotate_thread(thread))
+    }
+    annotated["data"] = Json::array(data)
+  }
+  if fields.get("thread") is Some(thread) {
+    annotated["thread"] = self.annotate_thread(thread)
+  }
+  Json::object(annotated)
+}
+
+///|
+fn CodexWorkspaceBinding::decode_reply(value : Json) -> CodexWorkspaceBinding? {
+  guard value is Object(fields) &&
+    fields.get("thread") is Some(Object(thread)) &&
+    thread.get("id") is Some(String(session)) else {
+    return None
+  }
+  // A Desktop registry annotation is more authoritative than app-server's
+  // persisted cwd. A retained missing placement must revoke host access;
+  // otherwise opening an archived-and-restored task would authorize a path
+  // whose checkout no longer exists.
+  let workspace = match thread.get("openseekWorktree") {
+    Some(Object(worktree)) if worktree.get("present") is Some(True) =>
+      match worktree.get("path") {
+        Some(String(path)) => Some(path)
+        _ => None
+      }
+    Some(Object(_)) => None
+    _ =>
+      match thread.get("cwd") {
+        Some(String(cwd)) => Some(cwd)
+        _ => None
+      }
+  }
+  Some({ session, workspace })
+}
+
+///|
+/// Apply the app-server reply before it reaches the page, so a Files or
+/// Terminal request caused by that render can resolve the cwd immediately.
+async fn CodexWorkspaceBinding::authorize(self : CodexWorkspaceBinding) -> Unit {
+  match self.workspace {
+    Some(workspace) if !workspace.trim().is_empty() =>
+      @engine.authorize_host_workspace(self.session, workspace)
+    _ => @engine.revoke_host_workspace(self.session)
+  }
+}
+
+///|
 /// `engine` is the engine executable; `executable` is the host's own
 /// binary, which self-update uses to locate the running .app bundle (absent
 /// or non-bundle layouts only lose the in-app install, never the
 /// announcement).
 pub fn ApiState::new(
   engine~ : String,
+  codex? : String = "codex",
   runtime_dir? : @pathx.Path,
   executable? : String,
   auth? : @auth.AuthStore,
@@ -38,6 +207,8 @@ pub fn ApiState::new(
 ) -> ApiState {
   let engine_actor = @engine.new_engine_actor(engine, runtime_dir?)
   {
+    codex: Actor(codex),
+    codex_projects: ProjectCatalog(),
     engine: engine_actor,
     manager: engine_actor.manager(),
     host: @host.new_host_state(engine, runtime_dir?, executable?, app_version~),
@@ -49,6 +220,12 @@ pub fn ApiState::new(
     app_version,
     on_finished,
   }
+}
+
+///|
+/// The app-lifetime owner of the Codex app-server child process.
+pub fn ApiState::codex_actor(self : ApiState) -> @codex.Actor {
+  self.codex
 }
 
 ///|
@@ -136,6 +313,71 @@ pub fn endpoints(
   connection : @host.HostConnection,
 ) -> Array[@endpoint.Endpoint] {
   let endpoints = [
+    @endpoint.Endpoint::remote_sync(@commands.codex_status, _ => {
+      state.codex.status()
+    }),
+    @endpoint.Endpoint::remote(@commands.codex_draft_open, async fn(params) {
+      let payload : CodexDraftPayload = @json.from_json(params) catch {
+        _ => raise @host.PayloadError("malformed Codex draft payload")
+      }
+      state.open_codex_draft(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.codex_draft_close, async fn(params) {
+      let payload : CodexDraftClosePayload = @json.from_json(params) catch {
+        _ => raise @host.PayloadError("malformed Codex draft close payload")
+      }
+      guard payload.validated_id() is Some(draft_id) else {
+        raise @host.PayloadError("invalid Codex draft id")
+      }
+      @engine.revoke_host_workspace(draft_id)
+      Json::object({})
+    }),
+    @endpoint.Endpoint::remote(@commands.codex_server_request_list, async fn(
+      _,
+    ) {
+      state.codex.requests()
+    }),
+    @endpoint.Endpoint::remote(@commands.codex_server_request_respond, async fn(
+      params,
+    ) {
+      let payload : CodexResponsePayload = @json.from_json(params) catch {
+        _ => raise @host.PayloadError("malformed Codex response payload")
+      }
+      state.codex.respond(request_id=payload.request_id, result=payload.result)
+    }),
+    @endpoint.Endpoint::remote(@commands.codex_file_search, async fn(params) {
+      let payload : CodexFileSearchPayload = @json.from_json(params) catch {
+        _ => raise @host.PayloadError("malformed Codex file search payload")
+      }
+      state.codex_file_search(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.codex_skills_list, async fn(params) {
+      let payload : CodexSkillsListPayload = @json.from_json(params) catch {
+        _ => raise @host.PayloadError("malformed Codex skills list payload")
+      }
+      state.codex_skills_list(payload)
+    }),
+    state.codex_endpoint(@commands.codex_account_read),
+    state.codex_endpoint(@commands.codex_account_login_start),
+    state.codex_endpoint(@commands.codex_account_login_cancel),
+    state.codex_endpoint(@commands.codex_account_logout),
+    state.codex_endpoint(@commands.codex_model_list),
+    state.codex_endpoint(@commands.codex_thread_start),
+    state.codex_endpoint(@commands.codex_thread_resume),
+    state.codex_endpoint(@commands.codex_thread_read),
+    @endpoint.Endpoint::remote(@commands.codex_thread_history_read, async fn(
+      params,
+    ) {
+      state.codex_thread_history(params)
+    }),
+    state.codex_endpoint(@commands.codex_thread_list),
+    state.codex_endpoint(@commands.codex_thread_archive),
+    state.codex_endpoint(@commands.codex_thread_unarchive),
+    state.codex_endpoint(@commands.codex_thread_compact),
+    state.codex_endpoint(@commands.codex_review_start),
+    state.codex_endpoint(@commands.codex_turn_start),
+    state.codex_endpoint(@commands.codex_turn_steer),
+    state.codex_endpoint(@commands.codex_turn_interrupt),
     @endpoint.Endpoint::remote(@commands.agent_start, async fn(payload) {
       @engine.start_run(state.sink(), state.manager, payload)
     }),
@@ -287,10 +529,33 @@ pub fn endpoints(
       @engine.list_worktrees(payload.workspace)
     }),
     @endpoint.Endpoint::remote(@commands.worktree_create, async fn(payload) {
+      let owner = match (payload.session, payload.codex_thread) {
+        (Some(session), None) => @engine.WorktreeOwner::openseek(session)
+        (None, Some(thread_id)) => {
+          let workspace = state.codex_worktree_project(
+            thread_id,
+            payload.workspace,
+          )
+          // Codex-only projects need not already appear in OpenSeek's
+          // workspace registry. Choosing Worktree on first Send is the user's
+          // explicit request to attach that main checkout and create beneath
+          // it, so perform both operations in this host command.
+          ignore(
+            @engine.attach_workspace(workspace, workspaces => {
+              state.hub.publish(WorkspaceChanged({ workspaces, }))
+            }),
+          )
+          @engine.WorktreeOwner::codex(thread_id)
+        }
+        _ =>
+          raise @host.PayloadError(
+            "worktree.create requires exactly one conversation owner",
+          )
+      }
       let reply = @engine.create_worktree(
         state.manager,
         payload.workspace,
-        payload.session,
+        owner,
         worktrees => {
           publish_worktree_changed(state, payload.workspace, worktrees)
         },
@@ -298,6 +563,18 @@ pub fn endpoints(
         error if @async.is_being_cancelled() => raise error
         @engine.EngineError(message) => return WorktreeCreateError(message)
         error => raise error
+      }
+      // A Codex worktree path is safe to authorize because this operation
+      // just created or recovered it under a registered workspace. Never
+      // derive this grant from the browser's later `turn/start.cwd` field.
+      if payload.codex_thread is Some(thread_id) &&
+        reply.worktrees
+        .iter()
+        .find_first(info => {
+          info.codex_thread == Some(thread_id) && info.name == reply.name
+        })
+        is Some(info) {
+        @engine.authorize_host_workspace(thread_id, info.path)
       }
       WorktreeCreatedReply(reply)
     }),
@@ -335,6 +612,20 @@ pub fn endpoints(
 }
 
 ///|
+/// Pair one reviewed Codex command identity with the app-server forwarding
+/// method. The command name is the Desktop method name used by
+/// `codex_request`; no second catalog can drift from the registered endpoint.
+fn ApiState::codex_endpoint(
+  self : ApiState,
+  command : @commands.Command[Json, Json],
+) -> @endpoint.Endpoint {
+  let desktop_method = command.name()
+  @endpoint.Endpoint::remote(command, async fn(params) {
+    self.codex_request(desktop_method, params)
+  })
+}
+
+///|
 test "remote endpoint catalog has one entry per command name" {
   let state = ApiState::new(engine="unused")
   let connection = @host.HostConnection::new()
@@ -346,7 +637,17 @@ test "remote endpoint catalog has one entry per command name" {
     }
     names.push(name)
   }
-  assert_eq(names.length(), 61)
+  // Draft open/close and the curated file/skills operations are host-owned
+  // Codex endpoints. The archived-session delete endpoint added on main is
+  // part of the same exact catalog, so keep this count aligned with both.
+  assert_eq(names.length(), 85)
+  assert_true(names.contains("codex.draft.open"))
+  assert_true(names.contains("codex.draft.close"))
+  assert_true(names.contains("codex.file.search"))
+  assert_true(names.contains("codex.skills.list"))
+  assert_true(names.contains("codex.review.start"))
+  assert_true(names.contains("codex.thread.history.read"))
+  assert_true(names.contains("codex.thread.list"))
   assert_true(names.contains("agent.start"))
   assert_true(names.contains("agent.goal"))
   assert_true(names.contains("session.load_archived"))
@@ -364,6 +665,400 @@ test "remote endpoint catalog has one entry per command name" {
   assert_true(names.contains("moonide.references"))
   assert_false(names.contains("host.connect"))
   assert_false(names.contains("shell.open_external"))
+}
+
+///|
+/// Return one complete read-only thread snapshot across both app-server
+/// history modes. Metadata says which store owns the turns, avoiding an
+/// expected JSON-RPC failure on every paginated task. Legacy threads then take
+/// the stable inline read; a task awaiting its first user message legitimately
+/// has only the summary and is returned as an empty conversation. Paginated
+/// threads load every page in ascending order with full items and rebuild the
+/// same `{ thread }` shape the browser decodes.
+async fn ApiState::codex_thread_history(self : ApiState, params : Json) -> Json {
+  guard params is Object(fields) &&
+    fields.get("threadId") is Some(String(thread_id)) else {
+    raise @host.PayloadError("malformed Codex thread history payload")
+  }
+  let metadata = self.codex_request("codex.thread.read", {
+    "threadId": thread_id,
+    "includeTurns": false,
+  })
+  guard metadata is Object(reply_fields) &&
+    reply_fields.get("thread") is Some(Object(thread_fields)) else {
+    raise @host.PayloadError("malformed Codex thread metadata reply")
+  }
+  let paginated = thread_fields.get("historyMode") is Some(String("paginated"))
+  if !paginated {
+    return try
+      self.codex_request("codex.thread.read", {
+        "threadId": thread_id,
+        "includeTurns": true,
+      })
+    catch {
+      @codex.JsonRpc(..) as error if error.is_unmaterialized_thread_history() =>
+        // The summary already identifies the task and its cwd. The frontend
+        // decodes an omitted `turns` field as an empty transcript, matching
+        // the task's real state before its first prompt is sent.
+        metadata
+      error => raise error
+    } noraise {
+      value => value
+    }
+  }
+  let turns : Array[Json] = []
+  let mut cursor : String? = None
+  for ;; {
+    let page_fields : Map[String, Json] = {
+      "threadId": Json::string(thread_id),
+      "limit": Json::number(100.0),
+      "sortDirection": Json::string("asc"),
+      "itemsView": Json::string("full"),
+    }
+    if cursor is Some(cursor) {
+      page_fields["cursor"] = Json::string(cursor)
+    }
+    let page = self.codex.call(
+      method_="thread/turns/list",
+      params=Json::object(page_fields),
+    )
+    guard page is Object(page_fields) &&
+      page_fields.get("data") is Some(Array(data)) else {
+      raise @host.PayloadError("malformed Codex turn history page")
+    }
+    for turn in data {
+      turns.push(turn)
+    }
+    match page_fields.get("nextCursor") {
+      Some(String(next)) if !next.is_empty() => cursor = Some(next)
+      _ => break
+    }
+  }
+  let thread : Map[String, Json] = Map([])
+  for key, value in thread_fields {
+    thread[key] = value
+  }
+  thread["turns"] = Json::array(turns)
+  let reply : Map[String, Json] = Map([])
+  for key, value in reply_fields {
+    reply[key] = value
+  }
+  reply["thread"] = Json::object(thread)
+  Json::object(reply)
+}
+
+///|
+/// Search only the exact cwd authorized by an app-server thread reply. The
+/// public method does not accept app-server `roots` directly, so a remote page
+/// cannot use Codex's file index as an arbitrary filesystem search.
+async fn ApiState::codex_file_search(
+  self : ApiState,
+  payload : CodexFileSearchPayload,
+) -> Json {
+  guard @engine.resolve_in_workspace(
+      payload.thread_id,
+      "",
+      workspace=payload.cwd,
+    )
+    is Some(root) else {
+    raise @host.HostError("Codex workspace is not authorized")
+  }
+  self.codex.call(method_="fuzzyFileSearch", params={
+    "query": payload.query,
+    "roots": [Json::string(root.to_string())],
+  })
+}
+
+///|
+/// Give a fresh Codex draft the same exact cwd-scoped host authority as an
+/// OpenSeek scratch conversation, without persisting a workspace or creating
+/// an app-server thread. Only a generated Desktop id and the main project row
+/// selected by the add button are accepted.
+async fn ApiState::open_codex_draft(
+  self : ApiState,
+  payload : CodexDraftPayload,
+) -> Json {
+  let draft_id = payload.draft_id.trim().to_owned()
+  guard draft_id == payload.draft_id &&
+    draft_id.has_prefix("desktop-") &&
+    !draft_id.contains("/") &&
+    !draft_id.contains("\\") &&
+    self.codex_projects.main_project(payload.cwd) is Some(project_root) else {
+    raise @host.PayloadError("invalid Codex draft project")
+  }
+  @engine.authorize_host_workspace(draft_id, project_root)
+  { "draftId": draft_id, "cwd": project_root, "projectRoot": project_root }
+}
+
+///|
+/// Revalidate a Codex first-send worktree request from app-server's own empty
+/// thread metadata. The browser-supplied project must equal both the thread's
+/// cwd and the Git-derived main project, so a stale or fabricated request
+/// cannot bind an existing task to a different checkout.
+async fn ApiState::codex_worktree_project(
+  self : ApiState,
+  thread_id : String,
+  requested : String,
+) -> String {
+  let metadata = self.codex_request("codex.thread.read", {
+    "threadId": thread_id,
+    "includeTurns": false,
+  })
+  guard metadata is Object(reply_fields) &&
+    reply_fields.get("thread") is Some(Object(thread)) &&
+    thread.get("id") == Some(Json::string(thread_id)) &&
+    thread.get("projectRoot") == Some(Json::string(requested)) else {
+    raise @host.HostError(
+      "Codex worktree requires an empty task at its main project root",
+    )
+  }
+  // A durable owner binding makes `worktree.create` the rebuild/idempotency
+  // operation as well as first creation. Existing tasks can have turns and an
+  // app-server cwd at the missing checkout; the registry's exact owner/project
+  // pair is the authority needed to recreate that same placement.
+  if @engine.list_codex_worktree_bindings()
+    .iter()
+    .any(binding => {
+      binding.thread_id == thread_id && binding.workspace == requested
+    }) {
+    return requested
+  }
+  guard thread.get("cwd") == Some(Json::string(requested)) else {
+    raise @host.HostError(
+      "Codex worktree requires an empty task at its main project root",
+    )
+  }
+  let page = try
+    self.codex.call(method_="thread/turns/list", params={
+      "threadId": thread_id,
+      "limit": 1,
+      "sortDirection": "desc",
+      "itemsView": "summary",
+    })
+  catch {
+    @codex.JsonRpc(..) as error if error.is_unmaterialized_thread_turns() =>
+      Json::object({ "data": Json::array([]) })
+    error => raise error
+  } noraise {
+    value => value
+  }
+  guard page is Object(fields) &&
+    fields.get("data") is Some(Array(turns)) &&
+    turns.is_empty() else {
+    raise @host.HostError(
+      "Codex worktree can only be chosen before the first turn",
+    )
+  }
+  requested
+}
+
+///|
+/// Ask app-server for the skill catalog belonging to one authorized Codex
+/// cwd. Unlike the generic Codex endpoints, the browser supplies no raw `cwds`
+/// array that could escape the selected thread's filesystem authority.
+async fn ApiState::codex_skills_list(
+  self : ApiState,
+  payload : CodexSkillsListPayload,
+) -> Json {
+  guard @engine.resolve_in_workspace(
+      payload.thread_id,
+      "",
+      workspace=payload.cwd,
+    )
+    is Some(root) else {
+    raise @host.HostError("Codex workspace is not authorized")
+  }
+  self.codex.call(method_="skills/list", params={
+    "cwds": [Json::string(root.to_string())],
+    "forceReload": payload.force_reload,
+  })
+}
+
+///|
+/// Map the Desktop's explicit Codex catalog onto the stable app-server method
+/// names. There is deliberately no arbitrary method proxy: a relay browser can
+/// invoke only the same reviewed surface as the local Proton page.
+async fn ApiState::codex_request(
+  self : ApiState,
+  desktop_method : String,
+  params : Json,
+) -> Json {
+  let app_server_method = match desktop_method {
+    "codex.account.read" => "account/read"
+    "codex.account.login.start" => "account/login/start"
+    "codex.account.login.cancel" => "account/login/cancel"
+    "codex.account.logout" => "account/logout"
+    "codex.model.list" => "model/list"
+    "codex.thread.start" => "thread/start"
+    "codex.thread.resume" => "thread/resume"
+    "codex.thread.read" => "thread/read"
+    "codex.thread.list" => "thread/list"
+    "codex.thread.archive" => "thread/archive"
+    "codex.thread.unarchive" => "thread/unarchive"
+    "codex.thread.compact" => "thread/compact/start"
+    "codex.review.start" => "review/start"
+    "codex.turn.start" => "turn/start"
+    "codex.turn.steer" => "turn/steer"
+    "codex.turn.interrupt" => "turn/interrupt"
+    _ => raise @host.PayloadError("unknown Codex method: " + desktop_method)
+  }
+  let archive = if desktop_method == "codex.thread.archive" {
+    match CodexArchiveRequest::decode(params) {
+      Some(request) => Some(request)
+      None => raise @host.PayloadError("malformed Codex archive payload")
+    }
+  } else {
+    None
+  }
+  // Do not archive app-server's task until the user has answered Desktop's
+  // dirty-checkout confirmation. A refusal here is an ordinary reply, not a
+  // failed bridge command, so the frontend can keep the task selected.
+  if archive is Some(request) &&
+    !request.force &&
+    @engine.WorktreeOwner::codex(request.thread_id).archive_check()
+    is Some(refusal) {
+    return request.needs_force(refusal)
+  }
+  let scoped_params = match (desktop_method, params) {
+    // Custom app-server clients currently persist ordinary interactive
+    // threads as `vscode`, while older/newer records may use `appServer`.
+    // Preserve the caller's source filter (or Codex's interactive default)
+    // instead of hiding threads that OpenSeek itself just created.
+    ("codex.thread.list", Object(fields)) => {
+      let scoped : Map[String, Json] = Map([])
+      for key, value in fields {
+        scoped[key] = value
+      }
+      // JSONL scan-and-repair can exceed the Proton request deadline on a
+      // long-lived Codex home. The Desktop catalog is an interactive state
+      // query, so read the app-server state database without that repair pass.
+      scoped["useStateDbOnly"] = true
+      Json::object(scoped)
+    }
+    ("codex.thread.list", _) => { "useStateDbOnly": true }
+    // Tag new threads with this integration for Codex-side metrics. Preserve
+    // every user-selected model, cwd, sandbox, and approval policy field.
+    ("codex.thread.start", Object(fields)) => {
+      let scoped : Map[String, Json] = Map([])
+      for key, value in fields {
+        scoped[key] = value
+      }
+      scoped["serviceName"] = "openseek_desktop"
+      Json::object(scoped)
+    }
+    ("codex.thread.start", _) => { "serviceName": "openseek_desktop" }
+    ("codex.thread.archive", _) => archive.unwrap().app_server_params()
+    _ => params
+  }
+  let reply = try
+    self.codex.call(method_=app_server_method, params=scoped_params)
+  catch {
+    @codex.JsonRpc(..) as error if desktop_method == "codex.thread.resume" &&
+      error.is_active_writer() =>
+      // A stored task remains readable while another Codex client owns its
+      // writer. Return a safe state instead of leaking arbitrary RPC details
+      // through Proton's browser boundary.
+      Json::object({ "status": Json::string("activeWriter") })
+    error => raise error
+  } noraise {
+    value => value
+  }
+  if desktop_method == "codex.thread.resume" &&
+    reply is Object(fields) &&
+    fields.get("status") is Some(String("activeWriter")) {
+    return reply
+  }
+  let reply = match desktop_method {
+    "codex.thread.start"
+    | "codex.thread.resume"
+    | "codex.thread.read"
+    | "codex.thread.list" => self.codex_projects.annotate(reply)
+    _ => reply
+  }
+  let reply = match desktop_method {
+    "codex.thread.start"
+    | "codex.thread.resume"
+    | "codex.thread.read"
+    | "codex.thread.list" =>
+      CodexWorktreeCatalog(@engine.list_codex_worktree_bindings()).annotate(
+        reply,
+      )
+    _ => reply
+  }
+  // App-server is the Codex task's writer and therefore archives first. Only
+  // its success permits Desktop to remove the associated checkout. The final
+  // dirty check repeats after that write boundary; if new files appeared in
+  // the small interval, retain the checkout and report the partial result.
+  if archive is Some(request) {
+    let refusal = @engine.WorktreeOwner::codex(request.thread_id).archive_checkout(
+      request.force,
+      on_committed=(workspace, worktrees) => {
+        publish_worktree_changed(self, workspace, worktrees)
+      },
+    )
+    @engine.revoke_host_workspace(request.thread_id)
+    if refusal is Some(refusal) {
+      return request.retained_worktree(refusal)
+    }
+  }
+  match desktop_method {
+    "codex.thread.start" | "codex.thread.resume" | "codex.thread.read" =>
+      if CodexWorkspaceBinding::decode_reply(reply) is Some(binding) {
+        binding.authorize()
+      }
+    _ => ()
+  }
+  reply
+}
+
+///|
+test "Codex workspace bindings decode only authoritative thread replies" {
+  let archive = CodexArchiveRequest::decode({
+    "threadId": "codex-thread-1",
+    "force": true,
+  }).unwrap()
+  assert_true(archive.force)
+  assert_eq(archive.app_server_params(), { "threadId": "codex-thread-1" })
+  assert_true(CodexArchiveRequest::decode({ "force": true }) is None)
+  let binding = CodexWorkspaceBinding::decode_reply({
+    "thread": { "id": "codex-thread-1", "cwd": "/work/project", "turns": [] },
+  })
+  assert_true(
+    binding
+    is Some({ session: "codex-thread-1", workspace: Some("/work/project") }),
+  )
+  let worktree = CodexWorkspaceBinding::decode_reply({
+    "thread": {
+      "id": "codex-thread-1",
+      "cwd": "/stale/path",
+      "openseekWorktree": {
+        "path": "/work/project/.worktrees/wt-1",
+        "present": true,
+      },
+    },
+  })
+  assert_true(
+    worktree
+    is Some(
+      {
+        session: "codex-thread-1",
+        workspace: Some("/work/project/.worktrees/wt-1"),
+      }
+    ),
+  )
+  let missing = CodexWorkspaceBinding::decode_reply({
+    "thread": {
+      "id": "codex-thread-1",
+      "cwd": "/stale/path",
+      "openseekWorktree": {
+        "path": "/work/project/.worktrees/wt-1",
+        "present": false,
+      },
+    },
+  })
+  assert_true(missing is Some({ session: "codex-thread-1", workspace: None }))
+  assert_true(CodexWorkspaceBinding::decode_reply({ "thread": {} }) is None)
+  assert_true(CodexWorkspaceBinding::decode_reply({}) is None)
 }
 
 ///|

@@ -526,6 +526,7 @@ fn fetch_pull_request(
       let reply = @interop.bridge_request(channel, @commands.git_pull_request, {
         session,
         cwd: cwd.map(resource => resource.path),
+        branch_hint: None,
       }) catch {
         _ => {
           scheduler.add(dispatch(empty))

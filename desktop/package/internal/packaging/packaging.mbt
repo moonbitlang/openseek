@@ -29,7 +29,8 @@ fn app_css_sources() -> Array[String] {
   [
     "app_font.css", "styles/tokens.css", "styles/base.css", "styles/terminal.css",
     "styles/file_panel.css", "styles/sidebar.css", "styles/main_header.css", "styles/transcript.css",
-    "styles/composer.css", "styles/pages.css", "styles/overlays.css", "styles/responsive.css",
+    "styles/composer.css", "styles/codex.css", "styles/pages.css", "styles/overlays.css",
+    "styles/responsive.css",
   ]
 }
 

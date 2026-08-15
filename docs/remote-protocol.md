@@ -543,20 +543,21 @@ Notification:
 
 ### moonide.* — workspace navigation
 
-Both methods accept an absolute source `path` plus positive, one-based `line`
-and `column` numbers. The host passes those values unchanged to `moon ide
---loc`, after resolving the path to its attached workspace, and runs the
-bundled `moon` from that workspace root (`moon` on `PATH` only for a bare
-development host without a packaged toolchain seed). Result paths are
-canonicalized for physical containment, then mapped back under the attached
-workspace's lexical root so they match existing file/model identities. The
-CLI's line and column values are returned unchanged; malformed or
-workspace-escaping locations are omitted.
+Both methods accept an absolute editor `root`, a source `path` relative to that
+root, and positive, one-based `line` and `column` numbers. The root is the
+actual main checkout, linked worktree, or Codex cwd displayed by the editor;
+it need not be an attached OpenSeek workspace. The host passes the position to
+`moon ide --loc`, and runs the bundled `moon` from that root (`moon` on `PATH`
+only for a bare development host without a packaged toolchain seed). Result
+paths are canonicalized for physical containment, then mapped back under the
+supplied root's lexical spelling so they match existing file/model identities.
+The CLI's line and column values are returned unchanged; malformed or
+root-escaping locations are omitted.
 
 | method | params | result |
 |---|---|---|
-| `moonide.definition` | `{path, line, column}` (absolute path; positive 1-based position) | `{locations: [{path, start_line, start_column, end_line, end_column}]}` — absolute paths under the attached lexical workspace root, with Moon IDE's numeric ranges |
-| `moonide.references` | `{path, line, column}` (absolute path; positive 1-based position) | `{locations: [{path, start_line, start_column, end_line, end_column}]}` — absolute paths under the attached lexical workspace root, with Moon IDE's numeric ranges |
+| `moonide.definition` | `{root, path, line, column}` (`root` absolute, `path` relative; positive 1-based position) | `{locations: [{path, start_line, start_column, end_line, end_column}]}` — absolute paths under the supplied lexical root, with Moon IDE's numeric ranges |
+| `moonide.references` | `{root, path, line, column}` (`root` absolute, `path` relative; positive 1-based position) | `{locations: [{path, start_line, start_column, end_line, end_column}]}` — absolute paths under the supplied lexical root, with Moon IDE's numeric ranges |
 
 ### skills.*
 

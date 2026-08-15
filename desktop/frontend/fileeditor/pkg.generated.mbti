@@ -170,6 +170,7 @@ pub(all) enum Msg {
   StatsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, stats~ : Array[FileStat])
   DiagnosticsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
   DiagnosticsPublished(channel~ : @interop.ChannelId, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
+  LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : String)
   EditorCommentAdded(resource~ : ModelUri, file~ : @pathx.Relative, range~ : @common.Range, quote~ : String, comment~ : String, feedback_id~ : String)
   UnifiedDiffCommentAdded(file~ : @pathx.Relative, original_line_number~ : Int?, modified_line_number~ : Int?, quote~ : String, comment~ : String)
 }

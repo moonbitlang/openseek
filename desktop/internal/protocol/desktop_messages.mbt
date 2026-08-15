@@ -127,13 +127,14 @@ pub(all) struct WorktreeListPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-/// `worktree.create` names the workspace and the NEW conversation the
-/// worktree will be the execution environment of — creation is the binding,
-/// and the session doubles as the idempotency key for retries. The host
-/// generates the worktree's name and returns it in the reply.
+/// `worktree.create` names the workspace and exactly one conversation owner.
+/// Existing clients send `session`; Codex sends `codex_thread`. Creation is
+/// the binding, and that owner id doubles as the idempotency key for retries.
+/// The host generates the worktree's name and returns it in the reply.
 pub(all) struct WorktreeCreatePayload {
   workspace : String
-  session : String
+  session : String?
+  codex_thread : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -183,10 +184,13 @@ pub(all) struct GitBranchPayload {
 ///|
 /// Address the same working directory as `git.branch` — the pull request is
 /// looked up for whatever branch that directory has checked out, so the two
-/// chips can never describe different branches.
+/// chips can never describe different branches. Codex-managed worktrees are
+/// commonly detached; `branch_hint` is app-server's creation-time branch and
+/// is accepted only when that local branch still points at the current HEAD.
 pub(all) struct GitPullRequestPayload {
   session : String
   cwd : String?
+  branch_hint : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -337,6 +341,7 @@ pub(all) struct WorkspaceSymbolsPayload {
 
 ///|
 pub(all) struct MoonIdeNavigationPayload {
+  root : String
   path : String
   line : Int
   column : Int

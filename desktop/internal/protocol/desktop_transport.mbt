@@ -24,6 +24,9 @@ pub(all) enum NotificationKind {
   UpdateDownloaded
   UpdateDownloadFailed
   AuthChanged
+  CodexStatusChanged
+  CodexNotification
+  CodexServerRequest
   LspDiagnostics
   FsChanged
   FsWatchFailed
@@ -53,6 +56,9 @@ pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
     UpdateDownloaded => "update.downloaded"
     UpdateDownloadFailed => "update.download_failed"
     AuthChanged => "auth.changed"
+    CodexStatusChanged => "codex.status_changed"
+    CodexNotification => "codex.notification"
+    CodexServerRequest => "codex.server_request"
     LspDiagnostics => "lsp.diagnostics"
     FsChanged => "fs.changed"
     FsWatchFailed => "fs.watch_failed"
@@ -83,6 +89,9 @@ pub fn NotificationKind::all() -> Array[NotificationKind] {
     UpdateDownloaded,
     UpdateDownloadFailed,
     AuthChanged,
+    CodexStatusChanged,
+    CodexNotification,
+    CodexServerRequest,
     LspDiagnostics,
     FsChanged,
     FsWatchFailed,
@@ -114,6 +123,12 @@ pub(all) enum Notification {
   UpdateDownloaded(UpdateDownloadedPayload)
   UpdateDownloadFailed(UpdateDownloadFailedPayload)
   AuthChanged(AuthStatusPayload)
+  // Codex app-server owns its versioned payload schema. These three closed
+  // Desktop event identities carry JSON only across that upstream boundary;
+  // the frontend Codex package performs the method-specific decoding.
+  CodexStatusChanged(Json)
+  CodexNotification(Json)
+  CodexServerRequest(Json)
   LspDiagnostics(DiagnosticsPayload)
   FsChanged(FsChangedPayload)
   FsWatchFailed(FsWatchFailedPayload)
@@ -177,6 +192,9 @@ pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
       )
     "auth.changed" =>
       Some(AuthChanged(@json.from_json(params) catch { _ => return None }))
+    "codex.status_changed" => Some(CodexStatusChanged(params))
+    "codex.notification" => Some(CodexNotification(params))
+    "codex.server_request" => Some(CodexServerRequest(params))
     "lsp.diagnostics" =>
       Some(LspDiagnostics(@json.from_json(params) catch { _ => return None }))
     "fs.changed" =>
@@ -213,6 +231,9 @@ pub fn Notification::kind(self : Notification) -> NotificationKind {
     UpdateDownloaded(_) => UpdateDownloaded
     UpdateDownloadFailed(_) => UpdateDownloadFailed
     AuthChanged(_) => AuthChanged
+    CodexStatusChanged(_) => CodexStatusChanged
+    CodexNotification(_) => CodexNotification
+    CodexServerRequest(_) => CodexServerRequest
     LspDiagnostics(_) => LspDiagnostics
     FsChanged(_) => FsChanged
     FsWatchFailed(_) => FsWatchFailed
@@ -249,6 +270,9 @@ pub fn Notification::params(self : Notification) -> Json {
     UpdateDownloaded(payload) => payload.to_json()
     UpdateDownloadFailed(payload) => payload.to_json()
     AuthChanged(payload) => payload.to_json()
+    CodexStatusChanged(payload) => payload
+    CodexNotification(payload) => payload
+    CodexServerRequest(payload) => payload
     LspDiagnostics(payload) => payload.to_json()
     FsChanged(payload) => payload.to_json()
     FsWatchFailed(payload) => payload.to_json()

@@ -2,7 +2,7 @@
 /// The primary action at the right edge of a conversation composer. The caller
 /// decides whether the action sends, steers, or stops; this package
 /// owns the button DOM so those states retain identical geometry.
-priv struct ActionButton {
+pub(all) struct ActionButton {
   id : String
   class_name : String
   title : String
@@ -12,7 +12,7 @@ priv struct ActionButton {
 }
 
 ///|
-fn ActionButton::render(self : ActionButton) -> @html.Html {
+pub fn ActionButton::render(self : ActionButton) -> @html.Html {
   @html.button(
     id=self.id,
     class=self.class_name,
@@ -96,6 +96,20 @@ pub(all) enum WorktreeChoice {
   FreshWorktree
   BoundWorktree(String)
 } derive(Debug, Eq)
+
+///|
+pub fn WorktreeChoice::toggled(self : WorktreeChoice) -> WorktreeChoice {
+  match self {
+    LocalCheckout => FreshWorktree
+    FreshWorktree => LocalCheckout
+    BoundWorktree(_) => self
+  }
+}
+
+///|
+pub fn WorktreeChoice::wants_fresh(self : WorktreeChoice) -> Bool {
+  self is FreshWorktree
+}
 
 ///|
 pub(all) struct WorktreeControl {
@@ -220,7 +234,7 @@ pub fn WorktreeArchiveDialog::render(
 ///|
 /// One removable context chip. The caller supplies meaning and commands; this
 /// package owns the exact DOM shape.
-priv struct MentionChip {
+pub(all) struct MentionChip {
   glyph : String
   label : String
   title : String
@@ -229,7 +243,7 @@ priv struct MentionChip {
 }
 
 ///|
-fn MentionChip::render(self : MentionChip) -> @html.Html {
+pub fn MentionChip::render(self : MentionChip) -> @html.Html {
   let glyph = @html.span(class="mention-glyph", self.glyph)
   let label = @html.span(class="mention-label", self.label)
   let body = match self.jump {
@@ -263,7 +277,7 @@ fn MentionChip::render(self : MentionChip) -> @html.Html {
 /// model control, and commands; this view-only
 /// value owns the textarea, mention tray, toolbar, primary action, stable DOM
 /// order, and all surrounding chrome.
-priv struct View {
+pub(all) struct View {
   before_inner : Array[@html.Html]
   mentions : Array[@html.Html]
   value : String
@@ -277,7 +291,7 @@ priv struct View {
 }
 
 ///|
-fn View::render(self : View) -> @html.Html {
+pub fn View::render(self : View) -> @html.Html {
   let inner : Array[@html.Html] = [
     // Keep the input wrapper and its two children permanently mounted. Rabbita
     // diffs array children by position, so chips appearing must not replace
@@ -326,7 +340,7 @@ fn View::render(self : View) -> @html.Html {
 /// One caller-owned completion row rendered inside the composer popup. The
 /// caller keeps the row's action and payload; this view-only value contains
 /// only its two visible strings.
-priv struct CompletionRow {
+pub(all) struct CompletionRow {
   label : String
   detail : String
 }
@@ -334,7 +348,7 @@ priv struct CompletionRow {
 ///|
 /// A reusable completion popup. `empty` describes a caller-specific
 /// empty/loading state such as "Searching..." or "No files".
-priv struct CompletionView {
+pub(all) struct CompletionView {
   rows : Array[CompletionRow]
   selected : Int
   hint : String
@@ -344,7 +358,7 @@ priv struct CompletionView {
 ///|
 /// Render one completion popup. A row uses `mousedown` so choosing it keeps
 /// focus in the textarea while the owning source updates its draft.
-fn CompletionView::render(
+pub fn CompletionView::render(
   self : CompletionView,
   pick : (Int) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -381,7 +395,7 @@ fn CompletionView::render(
 /// Caller-owned commands for a composer's keyboard behavior.
 /// When the menu is open it captures navigation and acceptance; otherwise
 /// Enter follows the ordinary submit rule below.
-priv struct KeyboardActions {
+pub(all) struct KeyboardActions {
   menu_open : Bool
   navigate : (Int) -> @cmd.Cmd
   accept : @cmd.Cmd

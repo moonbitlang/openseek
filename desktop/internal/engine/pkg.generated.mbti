@@ -18,11 +18,13 @@ pub async fn attach_workspace(String, (Array[String]) -> Unit) -> @protocol.Work
 
 pub async fn attached_workspace_dir(@pathx.Absolute) -> @pathx.Absolute?
 
+pub async fn authorize_host_workspace(String, String) -> Unit
+
 pub async fn cancel_run(EngineManager, @protocol.CancelPayload) -> @protocol.CancelReply
 
 pub async fn compact_run(EngineManager, @protocol.CompactPayload) -> @protocol.CompactReply
 
-pub async fn create_worktree(EngineManager, String, String, (Array[@protocol.WorktreeInfo]) -> Unit, name? : String) -> @protocol.WorktreeCreateReply
+pub async fn create_worktree(EngineManager, String, WorktreeOwner, (Array[@protocol.WorktreeInfo]) -> Unit, name? : String) -> @protocol.WorktreeCreateReply
 
 pub async fn delete_archived_session(EngineManager, String, String, (String, String) -> Unit, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionsReply
 
@@ -35,6 +37,8 @@ pub async fn follow_subrun_progress(root~ : String, parent_session~ : String, id
 pub fn global_session_root() -> String raise EngineError
 
 pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalReply
+
+pub async fn list_codex_worktree_bindings() -> Array[CodexWorktreeBinding]
 
 pub async fn list_sessions(EngineManager) -> @protocol.SessionsReply
 
@@ -59,6 +63,8 @@ pub async fn remove_workspace(String, (Array[@pathx.Absolute]) -> Unit raise Eng
 pub async fn remove_worktree(EngineManager, String, String, Bool, (Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.WorktreesReply
 
 pub async fn resolve_in_workspace(String, String, workspace? : String) -> @pathx.Absolute?
+
+pub async fn revoke_host_workspace(String) -> Unit
 
 pub async fn scratch_root() -> String
 
@@ -88,6 +94,12 @@ pub(all) suberror EngineError {
 } derive(@debug.Debug)
 
 // Types and methods
+pub struct CodexWorktreeBinding {
+  thread_id : String
+  workspace : String
+  worktree : @protocol.WorktreeInfo
+} derive(Eq, @debug.Debug)
+
 type EngineActor
 pub fn EngineActor::manager(Self) -> EngineManager
 pub async fn EngineActor::run(Self, EventSink, (String) -> Unit) -> Unit
@@ -113,6 +125,12 @@ pub(all) struct SettingsPatch {
   deepseek_api_key : String?
   custom_api_key : String?
 }
+
+type WorktreeOwner derive(Eq, @debug.Debug)
+pub async fn WorktreeOwner::archive_check(Self) -> @protocol.ArchiveNeedsForceReply?
+pub async fn WorktreeOwner::archive_checkout(Self, Bool, on_committed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveNeedsForceReply?
+pub fn WorktreeOwner::codex(String) -> Self
+pub fn WorktreeOwner::openseek(String) -> Self
 
 // Type aliases
 

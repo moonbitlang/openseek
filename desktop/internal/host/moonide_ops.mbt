@@ -42,8 +42,19 @@ fn MoonIdeQuery::args(
   path : String,
   line : Int,
   column : Int,
+  skip_check : Bool,
 ) -> Array[String] {
-  ["ide", self.subcommand(), "--loc", "\{path}:\{line}:\{column}", "--json"]
+  let args = [
+    "ide",
+    self.subcommand(),
+    "--loc",
+    "\{path}:\{line}:\{column}",
+    "--json",
+  ]
+  if skip_check {
+    args.push("--no-check")
+  }
+  args
 }
 
 ///|
@@ -67,42 +78,20 @@ fn moonide_relative_path(
 }
 
 ///|
-/// Establish both workspace identities: the attached lexical spelling used by
-/// existing client models, and the canonical physical root used for security,
-/// CLI cwd, and relative locations. The engine helper requires an absolute
-/// path, chooses the deepest attached workspace, and rejects symlink escapes.
+/// Establish both root identities from the explicit editor root: the lexical
+/// spelling used by existing client models, and the canonical physical root
+/// used for CLI cwd, relative locations, and symlink containment.
 async fn resolve_moonide_request(
   payload : MoonIdeNavigationPayload,
 ) -> MoonIdeRequest {
   guard payload.line > 0 && payload.column > 0 else {
     raise PayloadError("line and column must be positive one-based integers")
   }
-  guard @pathx.Absolute::from_uri_path(payload.path) is Some(path) else {
-    raise PayloadError("path must be absolute")
-  }
-  guard @engine.attached_workspace_dir(path) is Some(attached) else {
-    raise HostError("path is outside every attached workspace")
-  }
-  let lexical_workspace = attached.normalize()
-  let workspace_text = @fs.realpath(lexical_workspace.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => raise HostError("attached workspace is unavailable")
-  }
-  let path_text = @fs.realpath(path.0) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => raise HostError("navigation path is unavailable")
-  }
-  guard @pathx.Path(workspace_text).to_absolute() is Some(physical_workspace) else {
-    raise HostError("attached workspace path is not absolute")
-  }
-  guard moonide_relative_path(physical_workspace, path_text)
-    is Some(relative_path) else {
-    raise HostError("path is outside its attached workspace")
-  }
+  let location = LanguagePath::resolve(payload.root, payload.path)
   {
-    lexical_workspace,
-    physical_workspace,
-    relative_path,
+    lexical_workspace: location.lexical_root,
+    physical_workspace: location.physical_root,
+    relative_path: location.physical_relative.0,
     line: payload.line,
     column: payload.column,
   }
@@ -127,6 +116,49 @@ async fn moonide_spawn_config(state : HostState) -> MoonIdeSpawnConfig {
     executable: toolchain.moon.to_string(),
     extra_env: Some(toolchain.tool_env()),
   }
+}
+
+///|
+/// Build Moon's semantic index when this checkout has never been checked.
+/// `moon ide` currently reports only the missing `packages.json` when its
+/// implicit check cannot prepare the workspace. Running that first check
+/// explicitly preserves the real stderr — notably an uninitialized submodule
+/// named by `moon.work` — for the JSON-RPC error returned to the frontend.
+/// `true` means the caller can pass `--no-check` to avoid checking twice.
+async fn MoonIdeSpawnConfig::ensure_index(
+  self : MoonIdeSpawnConfig,
+  workspace : @pathx.Absolute,
+) -> Bool {
+  let index = workspace.join("_build/packages.json")
+  if @fs.exists(index.to_string()) {
+    return false
+  }
+  let (code, stdout, stderr) = @process.collect_output(
+    self.executable,
+    ["check"],
+    extra_env?=self.extra_env,
+    inherit_env=self.extra_env is None,
+    cwd=workspace.to_string(),
+  ) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise HostError("could not run moon check: \{error}")
+  }
+  if code != 0 {
+    let stderr = (stderr.text() catch { _ => "" }).trim().to_owned()
+    let stdout = (stdout.text() catch { _ => "" }).trim().to_owned()
+    let detail = if !stderr.is_empty() { stderr } else { stdout }
+    raise HostError(
+      if detail.is_empty() {
+        "moon check exited with code \{code}"
+      } else {
+        detail
+      },
+    )
+  }
+  guard @fs.exists(index.to_string()) else {
+    raise HostError("moon check did not produce \{index}")
+  }
+  true
 }
 
 ///|
@@ -209,8 +241,8 @@ fn parse_moonide_output(
 
 ///|
 /// Map one already-canonical result from the physical security identity back
-/// to the attached workspace's lexical spelling. This keeps model URIs aligned
-/// with `fs.read_file` even when the attached root itself is a symlink.
+/// to the supplied root's lexical spelling. This keeps model URIs aligned with
+/// `fs.read_file` even when that root itself is a symlink.
 fn moonide_client_path(
   lexical_workspace : @pathx.Absolute,
   physical_workspace : @pathx.Absolute,
@@ -262,7 +294,13 @@ async fn moonide_navigation_op(
 ) -> MoonIdeLocationsReply {
   let request = resolve_moonide_request(payload)
   let config = moonide_spawn_config(state)
-  let args = query.args(request.relative_path, request.line, request.column)
+  let indexed = config.ensure_index(request.physical_workspace)
+  let args = query.args(
+    request.relative_path,
+    request.line,
+    request.column,
+    indexed,
+  )
   let (code, stdout, stderr) = @process.collect_output(
     config.executable,
     args,
@@ -314,11 +352,11 @@ async fn moonide_references_op(
 
 ///|
 test "Moon IDE commands use relative one-based locations without a shell" {
-  assert_eq(Definition.args("src/main.mbt", 12, 5), [
+  assert_eq(Definition.args("src/main.mbt", 12, 5, false), [
     "ide", "peek-def", "--loc", "src/main.mbt:12:5", "--json",
   ])
-  assert_eq(References.args("src/main.mbt", 12, 5), [
-    "ide", "find-references", "--loc", "src/main.mbt:12:5", "--json",
+  assert_eq(References.args("src/main.mbt", 12, 5, true), [
+    "ide", "find-references", "--loc", "src/main.mbt:12:5", "--json", "--no-check",
   ])
 }
 
@@ -390,7 +428,7 @@ test "Moon IDE parser expands ranges before physical security filtering" {
 }
 
 ///|
-test "physical Moon IDE results keep the lexical attached workspace identity" {
+test "physical Moon IDE results keep the supplied lexical root identity" {
   let lexical = @pathx.Path("/attached/project-link").resolve()
   let physical = @pathx.Path("/private/projects/project").resolve()
   assert_eq(

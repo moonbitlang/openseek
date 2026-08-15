@@ -31,9 +31,11 @@ async fn main {
   let frontend_entry = @host.frontend_entry_path(executable)
   let engine = @engine.engine_command(executable)
   let app_version = @host.package_version(executable)
+  let codex = @codex.command()
   log.info() <? { "message": "host process start" }
   log.info() <? { "message": "frontend entry", "path": frontend_entry }
   log.info() <? { "message": "engine", "path": engine }
+  log.info() <? { "message": "codex", "path": codex }
   log.info() <? { "message": "app version", "version": app_version }
   let runtime_dir = @host.prepared_runtime_dir(executable)
   // The relay sign-in store: a persisted session from auth.json, unless the
@@ -45,6 +47,7 @@ async fn main {
   )
   let state = @api.ApiState::new(
     engine~,
+    codex~,
     runtime_dir?,
     executable~,
     auth~,
@@ -122,6 +125,16 @@ async fn main {
     // lifetime — they feed every page/client rather than borrowing a
     // `host.connect` request task as their owner.
     group.spawn_bg(allow_failure=true, () => bridge.run())
+    group.spawn_bg(allow_failure=true, () => {
+      state
+      .codex_actor()
+      .run((method_, params) => {
+        if @protocol.Notification::from_wire(method_, params)
+          is Some(notification) {
+          state.publish(notification)
+        }
+      })
+    })
     group.spawn_bg(allow_failure=true, () => {
       state
       .engine_actor()

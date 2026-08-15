@@ -17,6 +17,7 @@ import {
   "tonyfettes/xlog@0.4.0",
   "moonbitlang/editor@0.4.4",
   "moonbit-community/proton_contract@0.1.14",
+  "bobzhang/openseek@0.2.2",
 }
 
 readme = "README.md"

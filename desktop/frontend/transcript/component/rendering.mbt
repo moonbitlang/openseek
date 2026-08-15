@@ -82,7 +82,7 @@ fn TranscriptSectionKey::overview() -> TranscriptSectionKey {
 /// may legitimately use the same session id.
 fn TranscriptSectionKey::stream(input : Input) -> TranscriptSectionKey {
   {
-    value: "stream\u{0}\{input.focused.uri_authority()}\u{0}\{input.active_session}",
+    value: "stream\u{0}\{input.source.wire()}\u{0}\{input.focused.uri_authority()}\u{0}\{input.active_session}",
   }
 }
 
@@ -116,11 +116,23 @@ fn TranscriptRenderer::stream_children(
     items.set(
       TranscriptRenderKey::empty().wire(),
       @html.div(class="empty", [
-        @html.div(class="empty-badge", [@icons.icon(@icons.icon_logo)]),
+        @html.div(class="empty-badge", [
+          @icons.icon(
+            match self.input.source {
+              OpenSeek => @icons.icon_logo
+              Codex => @icons.icon_sparkle
+            },
+          ),
+        ]),
         @html.div(class="empty-title", "What should we build?"),
         @html.div(
           class="empty-sub",
-          "OpenSeek plans the work, edits files across your workspace, runs your tests, and hands back a reviewable result.",
+          match self.input.source {
+            OpenSeek =>
+              "OpenSeek plans the work, edits files across your workspace, runs your tests, and hands back a reviewable result."
+            Codex =>
+              "Codex inspects, edits, and runs this workspace with its own account, sandbox, and approvals."
+          },
         ),
       ]),
     )
@@ -150,6 +162,10 @@ fn TranscriptRenderer::stream_children(
             self.on_open,
             anchor?,
             on_jump=self.on_jump,
+            assistant_name=match self.input.source {
+              OpenSeek => "OpenSeek"
+              Codex => "Codex"
+            },
           ),
         )
         if item.kind is User {
@@ -190,7 +206,14 @@ fn TranscriptRenderer::stream_children(
   if !self.input.streaming_response.is_empty() {
     items.set(
       TranscriptRenderKey::streaming_response(self.input.streaming_identity).wire(),
-      streaming_response_view(self.input.streaming_response, self.on_open),
+      streaming_response_view(
+        self.input.streaming_response,
+        self.on_open,
+        assistant_name=match self.input.source {
+          OpenSeek => "OpenSeek"
+          Codex => "Codex"
+        },
+      ),
     )
   }
   // Sub-runs in flight sit at the tail, where the turn currently is: their

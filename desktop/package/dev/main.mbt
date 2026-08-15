@@ -8,6 +8,16 @@ const ProtonRuntimeRootEnv : String = "PROTON_RUNTIME_ROOT"
 const ProtonHelperPathEnv : String = "PROTON_HELPER_PATH"
 
 ///|
+/// The unbundled launcher replaces `proton dev`, so it must preserve Proton's
+/// development-mode contract for frontend diagnostics and development config.
+const ProtonModeEnv : String = "PROTON_MODE"
+
+///|
+/// Proton exposes command-handler details only to a trusted development
+/// frontend. Packaged applications intentionally do not receive this marker.
+const ProtonDevEnv : String = "PROTON_DEV"
+
+///|
 /// Everything needed to derive a development launch belongs to the detected
 /// desktop workspace. The command therefore takes no path arguments.
 priv struct Development {
@@ -99,6 +109,8 @@ async fn Development::run(self : Development, runtime_dist : String) -> Unit {
     .join(Development::cef_helper_name())
     .to_string()
   let env = @sys.get_env_vars()
+  env[ProtonModeEnv] = "dev"
+  env[ProtonDevEnv] = "1"
   env[ProtonNativeDistEnv] = runtime_dist
   env[ProtonRuntimeRootEnv] = runtime_dist
   env[ProtonHelperPathEnv] = helper

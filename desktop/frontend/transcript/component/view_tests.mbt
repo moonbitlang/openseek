@@ -39,6 +39,7 @@ test "transcript markup exposes conversation identity" {
     fail("expected a remote transcript root")
   }
   let input = Input(
+    source=OpenSeek,
     focused=@interop.ChannelId::Remote("relay-a"),
     active_session="same-markup-chat",
     root=Some(root),
@@ -85,6 +86,7 @@ test "transcript stream children use stable typed keys in display order" {
     sequence: Some(43),
   }
   let input = Input(
+    source=OpenSeek,
     focused=@interop.ChannelId::Local,
     active_session="desktop-test",
     root=None,
@@ -149,6 +151,7 @@ test "transcript stream children use stable typed keys in display order" {
 ///|
 test "transcript stream section key scopes equal session ids by channel" {
   let local_input = Input(
+    source=OpenSeek,
     focused=@interop.ChannelId::Local,
     active_session="desktop-test",
     root=None,
@@ -165,11 +168,11 @@ test "transcript stream section key scopes equal session ids by channel" {
   }
   assert_eq(
     TranscriptSectionKey::stream(local_input).wire(),
-    "stream\u{0}local\u{0}desktop-test",
+    "stream\u{0}openseek\u{0}local\u{0}desktop-test",
   )
   assert_eq(
     TranscriptSectionKey::stream(remote).wire(),
-    "stream\u{0}remote.device-a\u{0}desktop-test",
+    "stream\u{0}openseek\u{0}remote.device-a\u{0}desktop-test",
   )
 }
 

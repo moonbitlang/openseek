@@ -590,6 +590,7 @@ fn transcript_item_view(
   on_open : (String) -> @cmd.Cmd,
   anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
+  assistant_name? : String = "OpenSeek",
 ) -> @html.Html {
   match item.kind {
     User => user_message_view(item.content, anchor?, on_jump?)
@@ -605,7 +606,7 @@ fn transcript_item_view(
         )
       }
       @html.div(class="msg", [
-        @html.div(class="msg-body", [speaker_label("OpenSeek"), content]),
+        @html.div(class="msg-body", [speaker_label(assistant_name), content]),
       ])
     }
     // Unreachable in practice — the transcript loop batches every reasoning
@@ -691,10 +692,11 @@ fn streaming_reasoning_view(
 fn streaming_response_view(
   content : String,
   on_open : (String) -> @cmd.Cmd,
+  assistant_name? : String = "OpenSeek",
 ) -> @html.Html {
   @html.div(class="msg streaming", [
     @html.div(class="msg-body", [
-      speaker_label("OpenSeek"),
+      speaker_label(assistant_name),
       @html.div(
         class="msg-content markdown",
         @markdown.markdown_nodes(content, open_file=on_open),
@@ -725,6 +727,7 @@ fn transcript_view(
     attrs=@html.Attrs::build()
       .id("transcript")
       .class("transcript")
+      .data_set("transcript-source", input.source.wire())
       .data_set("transcript-channel", input.focused.uri_authority())
       .data_set("transcript-session", input.active_session)
       .data_set(

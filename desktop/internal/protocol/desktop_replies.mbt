@@ -414,15 +414,17 @@ pub impl FromJson for WorkspacesReply with fn from_json(json, path) {
 }
 
 ///|
-/// One worktree as ops report it: the registry entry plus its derived
-/// checkout path and whether that directory still exists on disk. `session`
-/// is the one conversation this worktree is the execution environment of;
-/// `None` only between creation and the binding first start.
+/// One worktree as ops report it: the registry entry plus its derived checkout
+/// path and whether that directory still exists on disk. Exactly one of
+/// `session` and `codex_thread` identifies the conversation that owns it;
+/// ownerless rows are tolerated only for backward-compatible hand-edited
+/// registries and are never claimed by either conversation source.
 pub(all) struct WorktreeInfo {
   name : String
   branch : String
   base : String
   session : String?
+  codex_thread : String?
   path : String
   present : Bool
 } derive(Debug, Eq, FromJson, ToJson)

@@ -309,14 +309,13 @@ type LspHoverPayload = @protocol.LspHoverPayload
 ///|
 /// A source position for Moon IDE navigation. `line` and `column` are positive,
 /// one-based numbers which the host passes to `moon ide --loc` unchanged.
-/// `path` is absolute and is accepted only when it belongs to an attached
-/// workspace.
+/// `path` is relative to the explicit editor `root`.
 type MoonIdeNavigationPayload = @protocol.MoonIdeNavigationPayload
 
 ///|
 /// One Moon IDE navigation result. The host validates the CLI path against the
-/// physical workspace, then maps it back under the attached workspace's
-/// lexical spelling. Its compact range becomes explicit numeric fields while
+/// physical root, then maps it back under the supplied root's lexical
+/// spelling. Its compact range becomes explicit numeric fields while
 /// line and column values retain the coordinates emitted by Moon IDE.
 type MoonIdeLocation = @protocol.MoonIdeLocation
 
@@ -341,7 +340,43 @@ type LspOpenPayload = @protocol.LspOpenPayload
 type LspDiagnosticsReply = @protocol.LspDiagnosticsReply
 
 ///|
-test "lsp_open replies distinguish no data from no problems" {
+test "language requests carry roots and lsp_open distinguishes no data" {
+  assert_eq(
+    ToJson::to_json(
+      ({ root: "/worktree/project", path: "src/main.mbt" } : LspOpenPayload),
+    ),
+    { "root": "/worktree/project", "path": "src/main.mbt" },
+  )
+  assert_eq(
+    ToJson::to_json(
+      (
+        {
+          root: "/worktree/project",
+          path: "src/main.mbt",
+          line: 2,
+          character: 4,
+        } : LspHoverPayload),
+    ),
+    {
+      "root": "/worktree/project",
+      "path": "src/main.mbt",
+      "line": 2,
+      "character": 4,
+    },
+  )
+  assert_eq(
+    ToJson::to_json(
+      (
+        { root: "/worktree/project", path: "src/main.mbt", line: 3, column: 5 } :
+        MoonIdeNavigationPayload),
+    ),
+    {
+      "root": "/worktree/project",
+      "path": "src/main.mbt",
+      "line": 3,
+      "column": 5,
+    },
+  )
   assert_eq(
     ToJson::to_json(({ diagnostics: Some([]) } : LspDiagnosticsReply)),
     { "diagnostics": [] },

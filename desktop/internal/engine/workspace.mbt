@@ -5,6 +5,89 @@
 const WorkspaceDirName = "OpenSeek"
 
 ///|
+/// Exact session-to-directory bindings learned from a host-owned source such
+/// as Codex app-server. Unlike the persisted OpenSeek workspace registry,
+/// these grants live only for this process and authorize only one session id;
+/// a web client cannot turn an arbitrary workspace hint into filesystem access.
+priv struct HostWorkspaceAuthorizations {
+  lock : @async.Mutex
+  paths : Map[String, String]
+}
+
+///|
+let host_workspace_authorizations : HostWorkspaceAuthorizations = {
+  lock: Mutex(),
+  paths: Map([]),
+}
+
+///|
+/// Replace `session`'s process-local authorization with one normalized absolute
+/// directory. Invalid bindings remove the old grant instead of preserving a
+/// stale cwd after the authoritative source stopped supplying one.
+async fn HostWorkspaceAuthorizations::authorize(
+  self : HostWorkspaceAuthorizations,
+  session : String,
+  workspace : String,
+) -> Unit {
+  let trimmed = workspace.trim().to_owned()
+  let candidate = @pathx.Path(trimmed).normalize().to_absolute()
+  self.lock.acquire()
+  defer self.lock.release()
+  if safe_workspace_id(session) && candidate is Some(candidate) {
+    self.paths[session] = candidate.0
+  } else {
+    self.paths.remove(session)
+  }
+}
+
+///|
+async fn HostWorkspaceAuthorizations::revoke(
+  self : HostWorkspaceAuthorizations,
+  session : String,
+) -> Unit {
+  self.lock.acquire()
+  defer self.lock.release()
+  self.paths.remove(session)
+}
+
+///|
+/// Accept `hint` only when it is the exact normalized directory previously
+/// authorized for `session`; the caller still applies relative-path and real
+/// symlink containment before touching the filesystem.
+async fn HostWorkspaceAuthorizations::resolve(
+  self : HostWorkspaceAuthorizations,
+  session : String,
+  hint : @pathx.Absolute,
+) -> @pathx.Path? {
+  let normalized = hint.normalize()
+  self.lock.acquire()
+  defer self.lock.release()
+  if self.paths.get(session) == Some(normalized.0) {
+    Some(normalized.to_path())
+  } else {
+    None
+  }
+}
+
+///|
+/// Record an exact workspace binding obtained by the native host from an
+/// authoritative subsystem. This is intentionally not a client-facing op and
+/// does not add the directory to OpenSeek's persisted workspace sidebar.
+pub async fn authorize_host_workspace(
+  session : String,
+  workspace : String,
+) -> Unit {
+  host_workspace_authorizations.authorize(session, workspace)
+}
+
+///|
+/// Remove a process-local workspace binding when its authoritative task is no
+/// longer available.
+pub async fn revoke_host_workspace(session : String) -> Unit {
+  host_workspace_authorizations.revoke(session)
+}
+
+///|
 /// Per-conversation workspace directory. A conversation whose durable record
 /// lives inside a registered workspace works in that project directory; a
 /// scratch conversation gets `<workspace root>/<session id>`, flat — desktop
@@ -77,16 +160,17 @@ pub async fn resolve_in_workspace(
   relative : String,
   workspace? : String,
 ) -> @pathx.Absolute? {
-  let root = if workspace is Some(hint) &&
-    @pathx.Absolute::from_uri_path(hint) is Some(hint) &&
-    registered_workspace(hint) is Some(dir) {
-    // The hint names the workspace; a session bound to one of its worktrees
-    // still roots in that checkout — the FS bridge sends the hint on every
-    // op, and honoring it verbatim would pin worktree conversations to the
-    // main tree.
-    session_tree_dir(dir, session).map(root => root.to_path())
-  } else {
-    session_workspace_dir(session)
+  let root = match workspace {
+    Some(hint) if @pathx.Absolute::from_uri_path(hint) is Some(hint) =>
+      match registered_workspace(hint) {
+        // The hint names the workspace; a session bound to one of its
+        // worktrees still roots in that checkout. A Codex thread instead
+        // supplies an exact process-local cwd authorized by app-server.
+        Some(dir) => session_tree_dir(dir, session).map(root => root.to_path())
+        None => host_workspace_authorizations.resolve(session, hint)
+      }
+    Some(_) => None
+    None => session_workspace_dir(session)
   }
   guard root is Some(root) else { return None }
   guard root.to_absolute() is Some(root) else { return None }
@@ -300,6 +384,33 @@ test "contained_path keeps in-tree relatives and rejects escapes" {
   assert_true(contained_path(root, Relative("../../etc/passwd")) is None)
   assert_true(contained_path(root, Relative("/etc/passwd")) is None)
   assert_true(contained_path(root, Relative("src/../../escape")) is None)
+}
+
+///|
+async test "host-authorized workspaces are exact and session-scoped" {
+  let root = @fs.tmpdir(prefix="openseek-authorized-workspace-")
+  let session = "codex-authorized-workspace-test"
+  revoke_host_workspace(session)
+  authorize_host_workspace(session, root)
+  let authorized = resolve_in_workspace(session, "src/main.mbt", workspace=root)
+  let other_session = resolve_in_workspace(
+    "codex-other-workspace-test",
+    "src/main.mbt",
+    workspace=root,
+  )
+  let escape = resolve_in_workspace(session, "../outside", workspace=root)
+  revoke_host_workspace(session)
+  let revoked = resolve_in_workspace(session, "", workspace=root)
+  @fs.rmdir(root, recursive=true) catch {
+    _ => ()
+  }
+  assert_true(
+    authorized is Some(path) &&
+    @pathx.Path(root).join(Relative("src/main.mbt")).to_absolute() == Some(path),
+  )
+  assert_true(other_session is None)
+  assert_true(escape is None)
+  assert_true(revoked is None)
 }
 
 ///|

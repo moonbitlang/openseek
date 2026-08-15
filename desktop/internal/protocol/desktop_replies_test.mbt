@@ -162,6 +162,22 @@ test "archive replies keep success compatible and encode dirty confirmation" {
 }
 
 ///|
+test "worktree creation accepts exactly representable owner namespaces" {
+  let legacy : @protocol.WorktreeCreatePayload = @json.from_json({
+    "workspace": "/work/project",
+    "session": "session-1",
+  })
+  assert_eq(legacy.session, Some("session-1"))
+  assert_eq(legacy.codex_thread, None)
+  let codex : @protocol.WorktreeCreatePayload = @json.from_json({
+    "workspace": "/work/project",
+    "codex_thread": "thread-1",
+  })
+  assert_eq(codex.session, None)
+  assert_eq(codex.codex_thread, Some("thread-1"))
+}
+
+///|
 test "Git changes replies preserve review identities and accept legacy omission" {
   let reply : @protocol.GitChangesReply = {
     repository: true,

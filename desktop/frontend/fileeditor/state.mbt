@@ -695,6 +695,10 @@ pub(all) enum Msg {
     absolute~ : @common.Uri,
     diagnostics~ : Array[@protocol.LspDiagnostic]
   )
+  // A user-invoked Definition/References request reached the host but failed.
+  // The root app intercepts this message and shows its transient toast; the
+  // owner prevents a late reply from surfacing over another conversation.
+  LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : String)
   // The user commented on a selection in the editor viewer (the
   // agent-feedback inline input). NOT handled by this package's `update`:
   // the comment becomes a chip on the main package's composer draft, so the

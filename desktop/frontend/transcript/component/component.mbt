@@ -1,4 +1,20 @@
 ///|
+/// Which conversation source supplied the normalized rows. The component uses
+/// this for source-specific labels, empty-state copy, and renderer identity.
+pub(all) enum Source {
+  OpenSeek
+  Codex
+} derive(Eq)
+
+///|
+fn Source::wire(self : Source) -> String {
+  match self {
+    OpenSeek => "openseek"
+    Codex => "codex"
+  }
+}
+
+///|
 /// One visible transcript item paired with the stable identity used by keyed
 /// reconciliation. The identity is opaque to the component's callers and is
 /// never emitted as a DOM id or attribute.
@@ -8,10 +24,33 @@ pub(all) struct VisibleRow {
 } derive(Eq)
 
 ///|
+/// Give app-server history stable identities without making its owning
+/// package depend on the renderer's private key format.
+pub fn VisibleRow::history(
+  items : Array[@transcript.TranscriptItem],
+) -> Array[VisibleRow] {
+  let rows : Array[VisibleRow] = []
+  let ordinals : Map[Int, Int] = Map([])
+  for index, item in items {
+    let identity = match item.sequence {
+      Some(sequence) => {
+        let ordinal = ordinals.get(sequence).unwrap_or(0)
+        ordinals.set(sequence, ordinal + 1)
+        "s\{sequence}\u{0}o\{ordinal}"
+      }
+      None => "l\{index}"
+    }
+    rows.push({ item, identity })
+  }
+  rows
+}
+
+///|
 /// The conversation data rendered by the component. The application computes
 /// durable chronology and active-run ownership; this package owns only the
 /// transcript subtree and its scroll behavior.
 struct Input {
+  source : Source
   focused : @interop.ChannelId
   active_session : String
   // The concrete project or worktree root sent alongside relative Markdown
@@ -27,6 +66,7 @@ struct Input {
 
 ///|
 pub fn Input::Input(
+  source~ : Source,
   focused~ : @interop.ChannelId,
   active_session~ : String,
   root~ : @common.Uri?,
@@ -38,6 +78,7 @@ pub fn Input::Input(
   subruns~ : Array[@transcript.SubrunLane],
 ) -> Input {
   {
+    source,
     focused,
     active_session,
     root,
@@ -62,6 +103,7 @@ pub(all) struct Actions {
 priv struct Model {
   pinned : Bool
   overview : @transcript_overview.State
+  source : Source
   focused : @interop.ChannelId
   active_session : String
   image_owner : ImageOwner
@@ -113,6 +155,7 @@ fn Model::update(
       // itself did not change.
       let remounted = mounted && !self.mounted
       let navigated = remounted ||
+        self.source != input.source ||
         self.focused != input.focused ||
         self.active_session != input.active_session
       // Submission generation changes synchronously when Send accepts either
@@ -129,6 +172,7 @@ fn Model::update(
         } else {
           self.overview
         },
+        source: input.source,
         focused: input.focused,
         active_session: input.active_session,
         image_owner,
@@ -194,6 +238,7 @@ pub fn component(
         {
           pinned: true,
           overview: @transcript_overview.State::empty(),
+          source: input.source,
           focused: input.focused,
           active_session: input.active_session,
           image_owner: input.image_owner(),
@@ -531,8 +576,8 @@ fn TranscriptDomMount::observe_content(
       character_data=true,
       subtree=true,
       attribute_filter=[
-        "data-transcript-channel", "data-transcript-session", "data-transcript-root",
-        "data-transcript-submission",
+        "data-transcript-source", "data-transcript-channel", "data-transcript-session",
+        "data-transcript-root", "data-transcript-submission",
       ],
     )
   }
@@ -599,6 +644,7 @@ fn TranscriptObservers::disconnect(self : Self) -> Unit {
 ///|
 test "local pinned transitions are pure" {
   let input = Input(
+    source=OpenSeek,
     focused=Local,
     active_session="desktop-test",
     root=None,
@@ -612,6 +658,7 @@ test "local pinned transitions are pure" {
   let state : Model = {
     pinned: true,
     overview: @transcript_overview.State::empty(),
+    source: OpenSeek,
     focused: Local,
     active_session: "desktop-test",
     image_owner: input.image_owner(),
@@ -660,6 +707,7 @@ test "local pinned transitions are pure" {
 test "an overview click unpins and highlights inside the component" {
   let key = @transcript_overview.Durable(3)
   let input = Input(
+    source=OpenSeek,
     focused=Local,
     active_session="desktop-test",
     root=None,
@@ -673,6 +721,7 @@ test "an overview click unpins and highlights inside the component" {
   let state : Model = {
     pinned: true,
     overview: @transcript_overview.State::empty(),
+    source: OpenSeek,
     focused: Local,
     active_session: "desktop-test",
     image_owner: input.image_owner(),
@@ -689,6 +738,7 @@ test "an overview click unpins and highlights inside the component" {
 ///|
 test "a conversation switch clears component-owned overview state" {
   let input = Input(
+    source=OpenSeek,
     focused=Local,
     active_session="desktop-test",
     root=None,
@@ -709,6 +759,7 @@ test "a conversation switch clears component-owned overview state" {
       }),
       active: Some(@transcript_overview.Durable(3)),
     },
+    source: OpenSeek,
     focused: Local,
     active_session: "desktop-test",
     image_owner: input.image_owner(),

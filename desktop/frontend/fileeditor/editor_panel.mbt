@@ -144,6 +144,9 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
             )
           }),
           navigation_text_model_resolver(),
+          (owner, message) => {
+            scheduler.add(dispatch(LanguageRequestFailed(owner~, message~)))
+          },
         )
         viewer_state.services = Some(services)
         let viewer = @viewer.Viewer::create(
@@ -325,8 +328,8 @@ fn show_file_in_viewer(
     // runs before this async reply, so the viewer exists here (see
     // `ViewerHost::viewer`); the guard only drops a pathological stray.
     guard viewer_state.viewer is Some(viewer) else { return }
-    // The URI is the file's absolute path — the whole address the hover
-    // provider needs, travelling with the model itself. A notice document
+    // The URI is the file's absolute path and host identity. The hover
+    // provider pairs it with the active navigation root. A notice document
     // (withheld binary/oversized file) has no file behind it, so its inert
     // scheme never parses as a model path and hover stays off.
     let uri = match absolute {

@@ -156,6 +156,27 @@ fn bridge_msg(
       } else {
         None
       }
+    // The Desktop process owns one Codex app-server. The shell wraps these
+    // notifications, while the Codex package decodes and applies their state.
+    CodexStatusChanged(payload) =>
+      Some(Codex(@codex.Msg::status_changed(payload)))
+    CodexNotification(payload) =>
+      if payload is Object(fields) &&
+        @jsonx.json_text(fields, "method") is Some(method_) &&
+        fields.get("params") is Some(params) {
+        Some(Codex(@codex.Msg::notification(method_, params)))
+      } else {
+        None
+      }
+    CodexServerRequest(payload) =>
+      if payload is Object(fields) &&
+        fields.get("request_id") is Some(request_id) &&
+        @jsonx.json_text(fields, "method") is Some(method_) &&
+        fields.get("params") is Some(params) {
+        Some(Codex(@codex.Msg::server_request(request_id, method_, params)))
+      } else {
+        None
+      }
     _ => device_msg(channel, notification).map(msg => FromDevice(channel, msg))
   }
 }
@@ -337,6 +358,35 @@ fn open_host_connection(
 /// notification callback, so the listeners derive from the shared catalog.
 fn proton_event_methods() -> Array[@protocol.NotificationKind] {
   @protocol.NotificationKind::all()
+}
+
+///|
+test "proton subscribes to all Codex app-server events" {
+  assert_true(
+    proton_event_methods().contains(
+      @protocol.NotificationKind::CodexStatusChanged,
+    ),
+  )
+  assert_true(
+    proton_event_methods().contains(
+      @protocol.NotificationKind::CodexNotification,
+    ),
+  )
+  assert_true(
+    proton_event_methods().contains(
+      @protocol.NotificationKind::CodexServerRequest,
+    ),
+  )
+  assert_true(
+    bridge_msg(
+      Local,
+      @protocol.Notification::CodexNotification({
+        "method": "turn/completed",
+        "params": { "threadId": "t1" },
+      }),
+    )
+    is Some(Codex(_)),
+  )
 }
 
 ///|

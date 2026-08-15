@@ -1,6 +1,6 @@
 ///|
-/// Which model a conversation's turns run with. The composer's chip toggles
-/// between the two service tiers; `Other` retains a wire name this build does
+/// Which model a conversation's turns run with. The composer's shared selector
+/// offers the two service tiers; `Other` retains a wire name this build does
 /// not know — a run started with `OPENSEEK_MODEL` set, or a newer engine's
 /// model echoed back by `agent.started` — so the chip reports what the engine
 /// actually ran instead of a tier it never used.
@@ -872,6 +872,7 @@ priv struct BufferedCommit {
 /// is about; detaching that project falls back to the chat.
 priv enum Screen {
   Chat
+  Codex
   Skills
   Settings
   WorkspaceSettings(channel~ : @interop.ChannelId, workspace~ : @common.Uri)
@@ -1218,6 +1219,10 @@ priv struct Model {
   // and kept for the app run; the installed list refreshes on open and
   // after every successful action.
   screen : Screen
+  // Codex app-server has an independent durable thread/turn/item model. Keep
+  // its page state beside the screen selector instead of folding it into an
+  // OpenSeek Conversation, whose persistence and event protocol are different.
+  codex : @codex.State
   skills_catalog : SkillsCatalog
   installed_skills : Array[@transcript.InstalledSkillItem]
   skills_query : String
@@ -1529,6 +1534,20 @@ priv enum Msg {
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
+  // Open the app-server-backed Codex page and refresh its authoritative
+  // account, model, and thread catalogs.
+  OpenCodex
+  CodexNewThread
+  CodexNewThreadIn(String)
+  // The add button creates only a browser-local draft. The generated id owns
+  // Files and Terminal until the first prompt creates an app-server thread.
+  CodexDraftRotated(cwd~ : String, id~ : String)
+  CodexOpenThread(String)
+  CodexArchiveThread(String)
+  CodexUnarchiveThread(String)
+  // Codex owns every app-server-local transition; the root only wraps the
+  // package message so Rabbita still has one application Msg type.
+  Codex(@codex.Msg)
   ToggleSidebar
   // A Settings selection fixes the page to Light or Dark and persists it.
   ThemeChanged(String)
@@ -1745,11 +1764,10 @@ priv enum Msg {
   // measurer or the pane's ResizeObserver; drives view bounds/visibility.
   BrowserPaneMeasured(rect~ : @preview.Rect)
   // The file subsystem's own messages (tree, viewer, diagnostics,
-  // comments), routed to the `fileeditor` package's update. Two exceptions
-  // this update intercepts: `EditorCommentAdded` (the comment becomes a chip
-  // on the composer draft, which only the app model knows about) and
-  // `FileSelected` (which dock tab a tree click opens is the strip's
-  // business).
+  // comments), normally routed to the `fileeditor` package's update. The root
+  // intercepts messages that cross package ownership: comments become
+  // composer chips, file/navigation selections update the dock strip, and a
+  // `LanguageRequestFailed` uses the app-owned toast rail.
   FileEditor(@fileeditor.Msg)
   // Terminal UI, host notifications, and xterm callbacks share one root-owned
   // state machine.
@@ -2275,6 +2293,7 @@ fn initial_model() -> Model {
     archive_confirm: None,
     archived_delete_confirm: None,
     screen: Chat,
+    codex: @codex.State(),
     skills_catalog: CatalogIdle,
     installed_skills: [],
     skills_query: "",

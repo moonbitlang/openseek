@@ -9,11 +9,12 @@
 ///|
 /// One registry row of `worktree.list` / `worktree.changed`, reduced to
 /// what the sidebar and file root projection read: the name (the glyph's
-/// tooltip), the bound session (the join key), its concrete checkout path,
-/// and whether that checkout still exists on disk.
+/// tooltip), the distinct OpenSeek/Codex owner ids, its concrete checkout
+/// path, and whether that checkout still exists on disk.
 priv struct WorktreeRow {
   name : String
   session : String?
+  codex_thread : String?
   // The host's concrete checkout root, already bound to its device channel.
   path : @common.Uri?
   present : Bool
@@ -123,7 +124,11 @@ fn start_in_new_worktree(
           let result : @protocol.WorktreeCreateResult = @interop.bridge_request(
             channel,
             @commands.worktree_create,
-            { workspace: workspace.path, session },
+            {
+              workspace: workspace.path,
+              session: Some(session),
+              codex_thread: None,
+            },
           ) catch {
             _ => {
               // Nothing started: reject the submission so the draft restores.
@@ -257,7 +262,11 @@ fn set_goal_in_new_worktree(
           let result : @protocol.WorktreeCreateResult = @interop.bridge_request(
             channel,
             @commands.worktree_create,
-            { workspace: workspace.path, session },
+            {
+              workspace: workspace.path,
+              session: Some(session),
+              codex_thread: None,
+            },
           ) catch {
             _ => {
               // The goal itself definitely never went out, so its draft comes
@@ -355,7 +364,7 @@ fn repair_worktree_cmd(
       let result : @protocol.WorktreeCreateResult = @interop.bridge_request(
         channel,
         @commands.worktree_create,
-        { workspace, session },
+        { workspace, session: Some(session), codex_thread: None },
       ) catch {
         _ => {
           scheduler.add(
@@ -396,6 +405,11 @@ fn worktree_rows(
         None
       },
       path: @resource.of_path(channel, info.path),
+      codex_thread: if info.codex_thread is Some(id) && !id.is_empty() {
+        Some(id)
+      } else {
+        None
+      },
       present: info.present,
     })
   }
@@ -635,29 +649,21 @@ fn worktree_mode_chip(
   )
 }
 
-///|
-/// The archive-discard dialog (the `update_confirm_modal` shape): archiving
-/// takes the worktree with the conversation, and this is the one moment
-/// uncommitted changes can be lost — only behind this explicit confirm.
-fn archive_discard_modal(
-  dispatch : @cmd.Emit[Msg],
-  confirm : ArchiveConfirm,
-) -> @html.Html {
-  @composer.WorktreeArchiveDialog::{
-    refusal: confirm.refusal,
-    conversation_noun: "chat",
-    cancel: dispatch(CancelArchiveDiscard),
-    confirm: dispatch(ConfirmArchiveDiscard),
-  }.render()
-}
-
 // Tests for the worktree flow's pure pieces: the notification decoder and
 // the update handlers that flag the launch mode, bind the chain's created
 // environment, adopt registry rows, and stage removals.
 
 ///|
 fn test_worktree_rows() -> Array[WorktreeRow] {
-  [{ name: "wt", session: Some("desktop-wt"), path: None, present: true }]
+  [
+    {
+      name: "wt",
+      session: Some("desktop-wt"),
+      codex_thread: None,
+      path: None,
+      present: true,
+    },
+  ]
 }
 
 ///|
@@ -889,6 +895,7 @@ test "a worktree the registry says is bound closes the choice" {
                 name: "wt-1",
                 session: Some("desktop-test"),
                 path: None,
+                codex_thread: None,
                 present: true,
               },
             ],
@@ -961,6 +968,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
               name: "wt",
               session: Some("desktop-test"),
               path: Some(worktree_root),
+              codex_thread: None,
               present: true,
             },
           ],
@@ -1037,6 +1045,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
           name: "wt",
           session: Some("desktop-test"),
           path: None,
+          codex_thread: None,
           present: false,
         },
       ],
@@ -1071,6 +1080,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
         {
           name: "wt",
           session: Some("desktop-test"),
+          codex_thread: None,
           path: Some(worktree_root),
           present: true,
         },
@@ -1313,7 +1323,15 @@ test "a broadcast for one workspace never fences a sibling's reply" {
   let (_, changed) = update_dev(
     dispatch,
     WorktreesChanged(
-      [{ name: "wt-a", session: Some("s-a"), path: None, present: true }],
+      [
+        {
+          name: "wt-a",
+          session: Some("s-a"),
+          codex_thread: None,
+          path: None,
+          present: true,
+        },
+      ],
       workspace=a,
     ),
     model,
@@ -1321,7 +1339,15 @@ test "a broadcast for one workspace never fences a sibling's reply" {
   let (_, both) = update_dev(
     dispatch,
     WorktreesLoaded(
-      [{ name: "wt-b", session: Some("s-b"), path: None, present: true }],
+      [
+        {
+          name: "wt-b",
+          session: Some("s-b"),
+          codex_thread: None,
+          path: None,
+          present: true,
+        },
+      ],
       workspace=b,
       connection_generation=0,
       request_generation=1,

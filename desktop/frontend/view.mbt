@@ -410,6 +410,21 @@ fn Model::sidebar_component_sections(
     action: Some({ title: "Add a project", disabled: false }),
     entries: projects,
   })
+  if dev.channel == self.focused {
+    let registered_projects : Array[String] = []
+    for project in dev.projects {
+      if @resource.path_for(project, dev.channel) is Some(path) {
+        registered_projects.push(path)
+      }
+    }
+    sections.push(
+      self.codex.sidebar_section({
+        channel: dev.channel,
+        selected: self.screen is Codex,
+        registered_projects,
+      }),
+    )
+  }
   let chats : Array[@conversation.Input] = []
   self.push_group_component_inputs(chats, dev, None, listed~, archived~)
   sections.push({
@@ -462,6 +477,11 @@ fn Model::sidebar_component_sections(
         children: [],
       }),
     )
+  }
+  if dev.channel == self.focused {
+    for entry in self.codex.archived_sidebar_entries(dev.channel) {
+      archived_entries.push(entry)
+    }
   }
   sections.push({
     id: @section.Id(source="archived", channel~),
@@ -1964,6 +1984,23 @@ fn view(
     ) {
     return console_gate_view(dispatch, console)
   }
+  let active_file_ctx = file_ctx(model)
+  let codex_active = model.codex.active_placement(model.focused) is Some(_)
+  // Panel state survives page switches, but a Codex page only exposes it
+  // after a real task supplies the identity (and, for files, a cwd) needed by
+  // the host operation. Selecting a task makes an already-open panel reappear
+  // in that task's workspace.
+  let file_panel_visible = model.right_panel_open &&
+    (
+      model.screen is Chat ||
+      (
+        model.screen is Codex &&
+        active_file_ctx.placement is Some(placement) &&
+        placement.checkout_root() is Some(_)
+      )
+    )
+  let terminal_panel_visible = model.terminal.is_open() &&
+    (!(model.screen is Codex) || codex_active)
   let content = match model.screen {
     Chat =>
       [
@@ -1975,6 +2012,30 @@ fn view(
           composer_html
         },
       ]
+    Codex => {
+      let worktree_workspace = model.codex.worktree_launch_workspace(
+        model.focused,
+      )
+      model.codex.page(
+        dispatch.map(msg => Codex(msg)),
+        model.focused,
+        model.sidebar_open,
+        terminal_panel_visible,
+        file_panel_visible,
+        @codex.PageActions::{
+          toggle_sidebar: dispatch(ToggleSidebar),
+          toggle_terminal,
+          toggle_files: toggle_right_panel,
+          open_file: (path, range, annotation) => {
+            dispatch(JumpToLocation(path~, range~, annotation~))
+          },
+          open_external: url => dispatch(ExternalLinkClicked(url)),
+          workspace_label: workspace => @resource.label(workspace),
+          worktree_workspace,
+          transcript: transcript_html,
+        },
+      )
+    }
     Skills => page_with_toggle(dispatch, model, skills_page(dispatch, model))
     Settings =>
       page_with_toggle(dispatch, model, settings_page(dispatch, model))
@@ -1987,17 +2048,16 @@ fn view(
   }
   // The app is `sidebar | content`; `content` itself splits into the
   // conversation (left) and the editor (right) as two independent parts, so
-  // either side can be swapped out later. The files panel only opens over the
-  // chat; on the Skills page it stays collapsed, but the editor column (and the
-  // viewer host inside it) is still rendered so the attached viewer is never
-  // torn down.
-  let panel_open = model.right_panel_open && model.screen is Chat
-  let mut content_class = if panel_open {
+  // either side can be swapped out later. Files open over an OpenSeek or Codex
+  // conversation with a real workspace; on the other pages the editor column
+  // (and its viewer host) stays rendered so the attached viewer is never torn
+  // down.
+  let mut content_class = if file_panel_visible {
     "content panel-open"
   } else {
     "content"
   }
-  if model.terminal.is_open() {
+  if terminal_panel_visible {
     content_class = content_class + " terminal-open"
   }
   let children : Array[@html.Html] = [
@@ -2034,7 +2094,14 @@ fn view(
     children.push(project_picker_modal(dispatch, picker))
   }
   if model.archive_confirm is Some(confirm) {
-    children.push(archive_discard_modal(dispatch, confirm))
+    children.push(
+      @composer.WorktreeArchiveDialog::{
+        refusal: confirm.refusal,
+        conversation_noun: "chat",
+        cancel: dispatch(CancelArchiveDiscard),
+        confirm: dispatch(ConfirmArchiveDiscard),
+      }.render(),
+    )
   }
   if model.archived_delete_confirm is Some(confirm) {
     children.push(archived_delete_modal(dispatch, confirm))

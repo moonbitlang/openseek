@@ -54,6 +54,7 @@ fn focus_channel(
     @cmd.batch([
       fetch_host_settings(dispatch, channel, dev.connection_generation),
       fetch_installed_skills(dispatch, channel),
+      model.codex.refresh(dispatch.map(msg => Codex(msg)), channel),
     ])
   } else if channel == @interop.ChannelId::Local && model.console is Some(_) {
     @cmd.none
@@ -72,6 +73,10 @@ fn focus_channel(
       active_session: "",
       loading_conversation: None,
       installed_skills: [],
+      // Codex is host-owned just like the other focused mirrors. Clear the
+      // previous device's account and conversation list before its replies
+      // can be mistaken for this device's sidebar section.
+      codex: @codex.State(loading=true),
       // The old HostConnection is already parked. Preserve the remaining
       // owner/root state until the post-dispatch sync retires its file-index
       // cache and re-roots against the newly focused host.
@@ -767,6 +772,29 @@ fn reveal_local_directory(
 }
 
 ///|
+/// Bring a path into the workspace shown on screen. Codex file mentions come
+/// from app-server's fuzzy search and are normally already relative; an
+/// absolute value is accepted only inside the selected Codex thread's cwd.
+fn Model::active_relative_path(self : Model, path : String) -> @pathx.Relative? {
+  if self.screen is Codex {
+    guard self.active_checkout() is Some(active) &&
+      active.placement is Some(placement) &&
+      placement.checkout_root() is Some(workspace) else {
+      return None
+    }
+    if @resource.of_path(self.focused, path) is Some(absolute) {
+      guard @resource.relative_to(absolute, workspace) is Some(rest) &&
+        !rest.is_root() else {
+        return None
+      }
+      return Some(rest)
+    }
+    return Some(Relative(path))
+  }
+  conversation_relative(self, self.active(), path)
+}
+
+///|
 /// Open (or refocus) the editor side-panel on `path`, revealing `range` when
 /// given — the shared tail of a composer chip's and a transcript chip's jump.
 /// The raw path comes from a chip or envelope; a legacy absolute one that
@@ -787,19 +815,15 @@ fn open_editor_at(
   } else {
     model.begin_editor_navigation()
   }
-  let conv = model.active()
+  let ctx = file_ctx(model)
   // Chip/transcript jumps call the file-editor package directly rather than
   // passing through its guarded message dispatcher. Keep them parked too: the
   // dock must not grow a loading tab, nor may a host read start, while checkout
   // placement is unresolved or missing.
-  guard model.conversation_placement(conv) is Some(placement) &&
-    placement.is_ready() else {
+  guard ctx.placement is Some(placement) && placement.is_ready() else {
     return (@cmd.none, model)
   }
-  let owner : @interop.ConversationKey = {
-    channel: model.focused,
-    session: conv.session_id,
-  }
+  let owner = ctx.owner
   let femit = dispatch.map(msg => FileEditor(msg))
   // Park/restore the strip for a conversation switch up front, and re-root
   // the file subsystem when its cached tree belongs to another conversation;
@@ -841,7 +865,7 @@ fn open_editor_at(
       docs,
     }
   }
-  guard conversation_relative(model, conv, path) is Some(relative) else {
+  guard model.active_relative_path(path) is Some(relative) else {
     return (
       @fileeditor.mount_cmds(femit),
       {
@@ -874,7 +898,7 @@ fn open_editor_at(
   let (cmd, panel) = @fileeditor.open_file(
     femit,
     panel,
-    file_ctx(model),
+    ctx,
     relative,
     file_link_generation?,
     range~,
@@ -1161,12 +1185,42 @@ fn apply_engine_event(
 }
 
 ///|
-/// The file-editor package's read-only projection of the active conversation:
-/// which session the panel serves, its single resolved directory placement,
-/// and the viewer's theme. Recomputed per dispatch — it is only a projection
-/// of the model.
+/// The selected OpenSeek conversation or Codex task, with its single resolved
+/// directory placement. Owner identity remains separate because it fences
+/// asynchronous replies even while placement is unresolved or missing.
+priv struct ActiveCheckout {
+  owner : @interop.ConversationKey
+  placement : @interop.CheckoutPlacement?
+}
+
+///|
+/// Select the same owner and placement for transcript links, Files, Terminal,
+/// and language services. This is the only screen-dependent directory choice;
+/// downstream packages merely project roots from `placement`.
+fn Model::active_checkout(self : Model) -> ActiveCheckout? {
+  if self.screen is Codex {
+    guard self.codex.active_id() is Some(session) else { return None }
+    return Some({
+      owner: { channel: self.focused, session },
+      placement: self.codex.active_placement(self.focused),
+    })
+  }
+  let conv = self.active()
+  Some({
+    owner: { channel: conv.device, session: conv.session_id },
+    placement: self.conversation_placement(conv),
+  })
+}
+
+///|
+/// The file-editor package's read-only projection of the selected checkout.
 fn file_ctx(model : Model) -> @fileeditor.Ctx {
-  let conv = model.active()
+  let active = model
+    .active_checkout()
+    .unwrap_or({
+      owner: { channel: model.focused, session: "" },
+      placement: None,
+    })
   let file_body_visible = match model.dock.active {
     Some(File(_)) | Some(FilePicker) => true
     None | Some(Browser(_)) => false
@@ -1176,13 +1230,13 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // Both panel packages use the typed checkout state to park host work; the
     // stable owner lets an interrupted changed-file review resume after Repair
     // without ever treating the project root as a fallback checkout.
-    owner: { channel: model.focused, session: conv.session_id },
+    owner: active.owner,
     request_epoch: model.file_panel.request_epoch,
     // The native bridge and its watcher survive a page reload. Namespace the
     // panel's monotonic counter with this page's existing random identity so
     // a reloaded frontend cannot reuse the outgoing page's watcher token.
     watch_namespace: model.page_namespace + "-watch",
-    placement: model.conversation_placement(conv),
+    placement: active.placement,
     dark_mode: model.theme.is_dark(model.system_dark),
     tree_layout: model.tree_layout,
     narrow: model.narrow,
@@ -1193,28 +1247,33 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // file body in all three cases. Report actual visibility so the file
     // subsystem parks its workspace watches and Changes refreshes off-screen.
     panel_open: model.right_panel_open &&
-    model.screen is Chat &&
-    file_body_visible,
+    (model.screen is Codex || (model.screen is Chat && file_body_visible)),
     open_files: @dock.file_paths(model.dock),
     active_file: @dock.active_file(model.dock),
   }
 }
 
 ///|
-/// The terminal package's view of the active conversation. The conversation's
-/// device owns every PTY opened from this context; a remote connection is
-/// considered unavailable from its first socket loss because its old PTYs are
-/// torn down at that boundary, even before the page escalates to BridgeLost.
+/// The terminal package's view of the active conversation. On the Codex page,
+/// the selected app-server thread supplies the PTY session id and cwd. The
+/// focused device owns every PTY opened from either source; a remote connection
+/// is considered unavailable from its first socket loss because its old PTYs
+/// are torn down at that boundary, even before the page escalates to BridgeLost.
 fn terminal_ctx(model : Model) -> @terminal.Ctx {
-  let conv = model.active()
-  let connected = match model.device_state(conv.device) {
+  let active = model
+    .active_checkout()
+    .unwrap_or({
+      owner: { channel: model.focused, session: "" },
+      placement: None,
+    })
+  let connected = match model.device_state(active.owner.channel) {
     Some(dev) => dev.bridge is Connected(..) && dev.reconnect_failures == 0
     None => false
   }
   @terminal.Ctx(
-    channel=conv.device,
-    session=conv.session_id,
-    placement=model.conversation_placement(conv),
+    channel=active.owner.channel,
+    session=active.owner.session,
+    placement=active.placement,
     dark_mode=model.theme.is_dark(model.system_dark),
     connected~,
   )
@@ -1270,12 +1329,18 @@ fn covering_overlay(model : Model) -> Bool {
 /// launcher, the composer's git popover, and every `covering_overlay` — must
 /// hide the view rather than fight it.
 fn desired_browser_view(model : Model) -> Int? {
+  let conversation_screen = model.screen is Chat || model.screen is Codex
+  let git_details_open = match model.screen {
+    Chat => model.git_details_open
+    Codex => model.codex.git_details_open()
+    Skills | Settings | WorkspaceSettings(..) => false
+  }
   guard model.is_desktop &&
-    model.screen is Chat &&
+    conversation_screen &&
     model.right_panel_open &&
     !model.right_panel_menu_open &&
     !model.launcher.open &&
-    !model.git_details_open &&
+    !git_details_open &&
     !(model.narrow && model.sidebar_open) &&
     !covering_overlay(model) else {
     return None
@@ -1523,6 +1588,14 @@ fn update(
     (command, { ..model, file_panel, })
   } else {
     (@cmd.none, model)
+  }
+  // Codex owns its Git popover flag, while the shell owns screen selection.
+  // Leaving Codex closes the surface here so returning later cannot reopen a
+  // popover for a task that is no longer the visible conversation.
+  let model = if !(model.screen is Codex) && model.codex.git_details_open() {
+    { ..model, codex: model.codex.with_git_details_closed() }
+  } else {
+    model
   }
   let (model, panel_cmd) = sync_file_panel(dispatch, model)
   // The launcher menu belongs to one dock owner. Conversation changes are
@@ -1943,6 +2016,23 @@ fn update_msg(
         feedback_id~
       )
     ) => {
+      if model.screen is Codex {
+        // Codex owns a separate wire model, but the visible editor annotation
+        // is the same structured chip as OpenSeek's. Keep it in Codex's shared
+        // composer tray; never leak it into the hidden OpenSeek conversation.
+        return (
+          @fileeditor.remove_editor_feedback(resource, feedback_id),
+          {
+            ..model,
+            codex: model.codex.with_editor_comment(
+              file.0,
+              range,
+              comment,
+              quote,
+            ),
+          },
+        )
+      }
       let conv = model.active()
       let mentions = @composer.Draft::{
           task: conv.task,
@@ -2095,6 +2185,21 @@ fn update_msg(
         had_active~,
       )
       (cmd, { ..model, file_panel: panel })
+    }
+    // Definition/References providers live inside the imperative Viewer, but
+    // their host failures belong on the app's ordinary toast rail. Fence the
+    // callback by its original conversation and coalesce identical live
+    // toasts: one user gesture can cause Viewer to ask more than once.
+    FileEditor(@fileeditor.LanguageRequestFailed(owner~, message~)) => {
+      guard model.file_panel.owner == Some(owner) &&
+        file_ctx(model).owner == owner else {
+        return (@cmd.none, model)
+      }
+      if model.notifications.iter().any(toast => toast.message == message) {
+        (@cmd.none, model)
+      } else {
+        model.notify_error(dispatch, message)
+      }
     }
     QuickOpenOpen(provider) => open_quick_open(dispatch, model, provider)
     QuickOpen(msg) => update_quick_open(dispatch, model, msg)
@@ -2419,6 +2524,123 @@ fn update_msg(
     }
     UpdateApplied => (close_window(), model)
     OpenSetup => (@cmd.none, { ..model, screen: Settings, setup_api_key: "" })
+    OpenCodex => {
+      let (cmd, codex) = @codex.update(
+        dispatch.map(msg => Codex(msg)),
+        @codex.Msg::refresh(),
+        model.codex,
+        model.focused,
+        url => open_external_link(dispatch, url),
+      )
+      (
+        cmd,
+        {
+          ..model,
+          screen: Codex,
+          sidebar_open: model.sidebar_open && !model.narrow,
+          codex,
+        },
+      )
+    }
+    CodexNewThread => {
+      let selected = model.codex.new_thread_cwd()
+      let cwd = if !selected.is_empty() {
+        selected
+      } else {
+        match model.focused_device() {
+          Some(dev) =>
+            match dev.active_project {
+              Some(project) =>
+                @resource.path_for(project, model.focused).unwrap_or("")
+              None => ""
+            }
+          None => ""
+        }
+      }
+      (
+        CodexDraftRotation::{ cwd, }.rotate(dispatch),
+        {
+          ..model,
+          screen: Codex,
+          sidebar_open: model.sidebar_open && !model.narrow,
+        },
+      )
+    }
+    CodexNewThreadIn(cwd) =>
+      (
+        CodexDraftRotation::{ cwd, }.rotate(dispatch),
+        {
+          ..model,
+          screen: Codex,
+          sidebar_open: model.sidebar_open && !model.narrow,
+        },
+      )
+    CodexDraftRotated(cwd~, id~) => {
+      let (cmd, codex) = @codex.update(
+        dispatch.map(msg => Codex(msg)),
+        @codex.Msg::start_draft(id, cwd),
+        model.codex,
+        model.focused,
+        url => open_external_link(dispatch, url),
+      )
+      (
+        cmd,
+        {
+          ..model,
+          screen: Codex,
+          sidebar_open: model.sidebar_open && !model.narrow,
+          codex,
+        },
+      )
+    }
+    CodexOpenThread(thread_id) => {
+      let (cmd, codex) = @codex.update(
+        dispatch.map(msg => Codex(msg)),
+        @codex.Msg::open_thread(thread_id),
+        model.codex,
+        model.focused,
+        url => open_external_link(dispatch, url),
+      )
+      (
+        cmd,
+        {
+          ..model,
+          screen: Codex,
+          sidebar_open: model.sidebar_open && !model.narrow,
+          codex,
+        },
+      )
+    }
+    CodexArchiveThread(thread_id) => {
+      let (cmd, codex) = @codex.update(
+        dispatch.map(msg => Codex(msg)),
+        @codex.Msg::archive_thread(thread_id),
+        model.codex,
+        model.focused,
+        url => open_external_link(dispatch, url),
+      )
+      (cmd, { ..model, codex, })
+    }
+    CodexUnarchiveThread(thread_id) => {
+      let (cmd, codex) = @codex.update(
+        dispatch.map(msg => Codex(msg)),
+        @codex.Msg::unarchive_thread(thread_id),
+        model.codex,
+        model.focused,
+        url => open_external_link(dispatch, url),
+      )
+      (cmd, { ..model, codex, })
+    }
+    Codex(msg) => {
+      let (cmd, codex) = @codex.update(
+        dispatch.map(next => Codex(next)),
+        msg,
+        model.codex,
+        model.focused,
+        url => open_external_link(dispatch, url),
+      )
+      (cmd, { ..model, codex, })
+    }
     ToggleSidebar => (@cmd.none, { ..model, sidebar_open: !model.sidebar_open })
     ViewportResized(width~) => {
       let narrow = width <= NarrowBreakpoint
@@ -3267,7 +3489,11 @@ fn update_msg(
       // A relative path is taken against the active conversation's projected
       // checkout root. The host keeps text editor targets inside that root;
       // non-text paths may still use the system opener.
-      let conv = model.active()
+      guard model.active_checkout() is Some(active) &&
+        active.placement is Some(placement) &&
+        placement.checkout_root() is Some(cwd) else {
+        return (@cmd.none, model)
+      }
       // Spend the token before starting host work. This synchronously makes
       // every older host reply and positioned read stale, even if this click
       // ultimately opens a non-text path through the system instead.
@@ -3279,19 +3505,18 @@ fn update_msg(
       (
         open_file(
           dispatch,
-          model.focused,
-          conv.session_id,
+          active.owner.channel,
+          active.owner.session,
           generation,
-          cwd=model.conversation_root(conv),
+          cwd=Some(cwd),
           path,
         ),
         model,
       )
     }
     OpenFileAt(owner~, generation~, path~, line~, column~) => {
-      let conv = model.active()
-      guard owner.channel == model.focused &&
-        owner.session == conv.session_id &&
+      guard model.active_checkout() is Some(active) &&
+        owner == active.owner &&
         generation == model.file_panel.file_link_generation else {
         return (@cmd.none, model)
       }
@@ -3311,9 +3536,8 @@ fn update_msg(
       )
     }
     OpenDirectoryAt(owner~, generation~, path~) => {
-      let conv = model.active()
-      guard owner.channel == model.focused &&
-        owner.session == conv.session_id &&
+      guard model.active_checkout() is Some(active) &&
+        owner == active.owner &&
         generation == model.file_panel.file_link_generation else {
         return (@cmd.none, model)
       }
@@ -3799,16 +4023,14 @@ fn update_msg(
       (cmd, { ..model, terminal, })
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
-    OpenFileFailed(owner~, generation~, message~) => {
-      let conv = model.active()
-      if owner.channel == model.focused &&
-        owner.session == conv.session_id &&
+    OpenFileFailed(owner~, generation~, message~) =>
+      if model.active_checkout() is Some(active) &&
+        owner == active.owner &&
         generation == model.file_panel.file_link_generation {
         model.notify_error(dispatch, message)
       } else {
         (@cmd.none, model)
       }
-    }
     ExternalLinkClicked(url) =>
       // Web links open in the dock's Browser tabs by default — the
       // toolbar's open-external button hands the page to the system
@@ -3817,13 +4039,16 @@ fn update_msg(
       // the external path. A same-URL tab already in this strip
       // re-activates instead of duplicating.
       //
-      // Only from Chat: the capture listener behind this message is a
-      // document-wide one, so it also reports anchors on the other screens,
-      // where the dock is not rendered at all — routing there would open a
-      // tab nobody can see. Settings' device-page link is the clearest
-      // case: it names a URL to open in a browser the user is signed in to,
-      // which a native view (with its own cookie jar) is not.
-      if model.is_desktop && model.screen is Chat && @preview.is_web_url(url) {
+      // Only from conversation screens: the capture listener behind this
+      // message is document-wide, so it also reports anchors on screens where
+      // the dock is not rendered and a tab would be invisible. Chat and Codex
+      // deliberately share this route — their PR links must open in the same
+      // built-in Browser instead of changing behavior with the conversation
+      // provider. Settings' device-page link is the clearest external case:
+      // it wants the browser where the user is already signed in.
+      if model.is_desktop &&
+        (model.screen is Chat || model.screen is Codex) &&
+        @preview.is_web_url(url) {
         // Opening or reusing a Browser tab is a newer dock navigation than a
         // transcript text-file link still waiting on `host.open_path`. Spend the
         // shared token before either branch so its delayed reply cannot put a
@@ -4038,6 +4263,12 @@ fn update_device_msg(
         // up to the host, a browser purges them (see `LegacySettingsRead`).
         commands.push(read_legacy_engine_settings(dispatch))
         commands.push(fetch_installed_skills(dispatch, channel))
+        // Codex conversations are always visible in the global sidebar, so
+        // populate that focused-host catalog on bridge readiness rather than
+        // waiting for a separate Codex page to be opened.
+        commands.push(
+          model.codex.refresh(dispatch.map(msg => Codex(msg)), channel),
+        )
         // Self-update and the relay sign-in are the desktop window's alone
         // (see `is_desktop`); a browser never checks, so neither UI
         // materializes there. The startup update check rides here: settings
@@ -9061,6 +9292,49 @@ test "a file-link host failure is visible only for the latest navigation" {
 }
 
 ///|
+test "a Codex file-link failure is fenced by the selected Codex task" {
+  let dispatch = test_dispatch()
+  let codex = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "codex-thread-1",
+      "preview": "Open a file",
+      "cwd": "/work/codex-project",
+      "turns": [],
+    },
+  })
+  let model = { ..test_model(), codex, screen: Codex }.begin_editor_navigation()
+  let hidden_openseek : @interop.ConversationKey = {
+    channel: model.focused,
+    session: model.active().session_id,
+  }
+  let codex_owner : @interop.ConversationKey = {
+    channel: model.focused,
+    session: "codex-thread-1",
+  }
+  let (_, hidden) = update(
+    dispatch,
+    OpenFileFailed(
+      owner=hidden_openseek,
+      generation=1,
+      message="hidden OpenSeek failure",
+    ),
+    model,
+  )
+  inspect(hidden.notifications.length(), content="0")
+  let message = OpenFileFailed(
+    owner=codex_owner,
+    generation=1,
+    message="Codex path failed",
+  )
+  let (_, first) = update(dispatch, message, model)
+  let (_, second) = update(dispatch, message, model)
+  inspect(first.notifications.length(), content="1")
+  inspect(first.notifications[0].message, content="Codex path failed")
+  assert_true(first.notifications == second.notifications)
+  assert_eq(first.notification_seq, second.notification_seq)
+}
+
+///|
 test "opening an external link is a pure model transition" {
   let dispatch = test_dispatch()
   let base = test_model()
@@ -13233,6 +13507,16 @@ test "the model selector switches one conversation, not the app" {
     model,
   )
   assert_true(low.active().engine_model is Low)
+  // The handler is pure: applying the same message to the same model produces
+  // the same selected/default/stored model state.
+  let (_, low_again) = update(
+    dispatch,
+    EngineModelChanged("deepseek-v4-flash"),
+    model,
+  )
+  @debug.assert_eq(low.active().engine_model, low_again.active().engine_model)
+  @debug.assert_eq(low.default_model, low_again.default_model)
+  @debug.assert_eq(low.conversation_models, low_again.conversation_models)
   // The conversation next door keeps the tier it was already on.
   guard low.find_conversation(@interop.ChannelId::Local, "other-chat")
     is Some(other) else {
@@ -15703,6 +15987,114 @@ test "update is pure: opening the skills page twice is idempotent" {
 }
 
 ///|
+test "Codex sidebar selection uses the main conversation screen" {
+  let dispatch = test_dispatch()
+  let codex = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "codex-thread-1",
+      "preview": "Shared sidebar",
+      "cwd": "/work/codex-project",
+      "turns": [],
+    },
+  })
+  let wide = { ..test_model(), codex, sidebar_open: true }
+  let (_, opened) = update(dispatch, CodexOpenThread("codex-thread-1"), wide)
+  assert_true(opened.screen is Codex)
+  assert_true(opened.sidebar_open)
+  assert_true(opened.codex.active_id() is Some("codex-thread-1"))
+  assert_true(
+    opened.file_panel.owner
+    is Some({ channel: Local, session: "codex-thread-1" }),
+  )
+  let workspace = @interop.ChannelId::Local.test_resource("/work/codex-project")
+  guard opened.active_checkout() is Some(active) else {
+    fail("selected Codex task did not project an active checkout")
+  }
+  assert_eq(active.owner, {
+    channel: @interop.ChannelId::Local,
+    session: "codex-thread-1",
+  })
+  assert_eq(
+    active.placement.bind(value => value.checkout_root()),
+    Some(workspace),
+  )
+  assert_true(opened.conversation_root(opened.active()) != Some(workspace))
+  assert_true(file_ctx(opened).placement is Some(@interop.WorkspaceRoot(..)))
+  assert_eq(
+    file_ctx(opened).placement.bind(value => value.checkout_root()),
+    Some(workspace),
+  )
+  let opened_terminal = terminal_ctx(opened)
+  inspect(opened_terminal.session, content="codex-thread-1")
+  assert_true(opened_terminal.placement is Some(@interop.WorkspaceRoot(..)))
+  assert_eq(
+    opened_terminal.placement.bind(value => value.checkout_root()),
+    Some(workspace),
+  )
+  assert_true(opened_terminal.connected)
+
+  // The same input and model produce the same state; the bridge call remains
+  // an opaque Cmd and is not executed inside the reducer.
+  let (_, opened_again) = update(
+    dispatch,
+    CodexOpenThread("codex-thread-1"),
+    wide,
+  )
+  assert_true(opened_again.screen is Codex)
+  assert_true(opened_again.sidebar_open)
+  assert_true(opened_again.codex.active_id() is Some("codex-thread-1"))
+  assert_true(
+    opened_again.file_panel.owner
+    is Some({ channel: Local, session: "codex-thread-1" }),
+  )
+}
+
+///|
+test "Codex files and terminal wait for an explicit cwd" {
+  let codex = @codex.State::from_thread_snapshot({
+    "thread": { "id": "codex-scratch-1", "preview": "No cwd yet", "turns": [] },
+  })
+  let model = { ..test_model(), codex, screen: Codex }
+  let files = file_ctx(model)
+  inspect(files.owner.session, content="codex-scratch-1")
+  assert_true(files.placement is None)
+
+  // The owner remains stable for async fencing, but no directory is invented
+  // from an unrelated OpenSeek chat or from the Codex task id.
+  let terminal = terminal_ctx(model)
+  inspect(terminal.session, content="codex-scratch-1")
+  assert_true(terminal.placement is None)
+  assert_true(terminal.connected)
+}
+
+///|
+test "Codex sidebar actions close only the narrow drawer" {
+  let dispatch = test_dispatch()
+  let narrow = {
+    ..test_model(),
+    narrow: true,
+    sidebar_open: true,
+    screen: Chat,
+  }
+  let (_, opened) = update(dispatch, OpenCodex, narrow)
+  assert_true(opened.screen is Codex)
+  assert_false(opened.sidebar_open)
+
+  let (_, creating) = update(dispatch, CodexNewThread, narrow)
+  assert_true(creating.screen is Codex)
+  assert_false(creating.sidebar_open)
+
+  // Archiving from the shared sidebar acts on that row without changing the
+  // OpenSeek conversation currently occupying the main pane.
+  let (_, archiving) = update(
+    dispatch,
+    CodexArchiveThread("codex-thread-1"),
+    narrow,
+  )
+  assert_true(archiving.screen is Chat)
+}
+
+///|
 test "the skills search query lands on the model" {
   let dispatch = test_dispatch()
   let (_, typed) = update(dispatch, SkillsQueryChanged("widget"), test_model())
@@ -15982,6 +16374,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
             {
               name: "wt-4",
               session: Some("desktop-test"),
+              codex_thread: None,
               path: Some(worktree),
               present: true,
             },
@@ -16439,6 +16832,40 @@ test "original-revision diff comment chip does not navigate into the working fil
   let (_, next) = update(dispatch, JumpToMention(0), model)
   assert_false(next.right_panel_open)
   assert_true(next.dock.active is None)
+}
+
+///|
+test "Codex editor comments use annotation context, not textarea text or OpenSeek chat" {
+  let dispatch = test_dispatch()
+  let codex = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "codex-thread-1",
+      "cwd": "/work/project",
+      "preview": "Review",
+      "turns": [],
+    },
+  })
+  let model = { ..test_model(), codex, screen: Codex }
+  let msg : Msg = FileEditor(
+    EditorCommentAdded(
+      resource=@fileeditor.ModelUri::of(
+        @interop.ChannelId::Local.test_resource("/work/project/src/main.mbt"),
+      ),
+      file=Relative("src/main.mbt"),
+      range=@common.Range::Range(5, 1, 6, 3),
+      quote="fn parse_hover() {",
+      comment="rename this",
+      feedback_id="viewer-feedback-codex",
+    ),
+  )
+  let (_, once) = update(dispatch, msg, model)
+  let (_, twice) = update(dispatch, msg, model)
+  assert_true(once.active().mentions.is_empty())
+  assert_true(twice.active().mentions.is_empty())
+  assert_eq(once.codex.draft_text(), twice.codex.draft_text())
+  // The textarea stays untouched. Codex owns the annotation chip and sends
+  // its file/range/comment/quote through the shared mention envelope.
+  assert_eq(once.codex.draft_text(), "")
 }
 
 ///|
@@ -18197,6 +18624,7 @@ test "file rows and location jumps cannot open while checkout placement is missi
               name: "wt",
               session: Some("desktop-test"),
               path: None,
+              codex_thread: None,
               present: false,
             },
           ],
@@ -18251,6 +18679,41 @@ test "file rows and location jumps cannot open while checkout placement is missi
   )
   assert_false(navigation.dock.tabs.contains(@dock.DockTab::File(path~)))
   assert_false(navigation.file_panel.docs.contains(path))
+}
+
+///|
+test "language request failures toast once and remain conversation fenced" {
+  let dispatch = test_dispatch()
+  let model = desktop_model()
+  let owner = file_ctx(model).owner
+  let msg = FileEditor(
+    @fileeditor.LanguageRequestFailed(
+      owner~,
+      message="Go to definition failed: workspace index is unavailable",
+    ),
+  )
+  let (_, first) = update(dispatch, msg, model)
+  let (_, same_input) = update(dispatch, msg, model)
+  assert_true(first.notifications == same_input.notifications)
+  assert_eq(first.notification_seq, same_input.notification_seq)
+  assert_eq(first.notifications.length(), 1)
+  assert_eq(
+    first.notifications[0].message,
+    "Go to definition failed: workspace index is unavailable",
+  )
+  let (_, repeated) = update(dispatch, msg, first)
+  assert_eq(repeated.notifications.length(), 1)
+  let (_, stale) = update(
+    dispatch,
+    FileEditor(
+      @fileeditor.LanguageRequestFailed(
+        owner={ channel: Local, session: "another-conversation" },
+        message="late failure",
+      ),
+    ),
+    repeated,
+  )
+  assert_true(stale.notifications == repeated.notifications)
 }
 
 ///|
@@ -18321,6 +18784,37 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
   assert_eq(settings.dock.tabs.length(), 3)
   assert_eq(settings.preview.pages.length(), 3)
   assert_eq(settings.file_panel.file_link_generation, generation + 4)
+}
+
+///|
+test "Codex web links use the same dock browser route as OpenSeek" {
+  let dispatch = test_dispatch()
+  let codex = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "codex-thread-1",
+      "preview": "Open its pull request",
+      "cwd": "/work/codex-project",
+      "turns": [],
+    },
+  })
+  // Exercise the same root transition as a sidebar click. It selects the
+  // Codex screen and, before a later PR click can arrive, reconciles the live
+  // dock strip from the OpenSeek conversation owner to this Codex task.
+  let (_, model) = update(dispatch, CodexOpenThread("codex-thread-1"), {
+    ..desktop_model(),
+    codex,
+  })
+  let (_, model) = update(
+    dispatch,
+    ExternalLinkClicked("https://github.com/moonbit-community/pty/pull/18"),
+    model,
+  )
+  assert_true(model.right_panel_open)
+  assert_true(@dock.active_browser(model.dock) == Some(1))
+  assert_true(
+    @preview.page(model.preview, 1).unwrap().url ==
+    Some("https://github.com/moonbit-community/pty/pull/18"),
+  )
 }
 
 ///|

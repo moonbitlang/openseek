@@ -17,6 +17,25 @@ priv struct NavigationContext {
 /// Reconstruct the request root from one file's resource URI and its
 /// root-relative name. URI paths already use slash separators. This is
 /// lexical only; both values came from the same successful read request.
+/// Bring one Viewer model URI back into this editor root. The root is the
+/// exact main checkout, linked worktree, or Codex cwd reconstructed when the
+/// file was read; a model from another host or outside that root is unrelated.
+fn NavigationContext::relative_path(
+  self : NavigationContext,
+  absolute : @common.Uri,
+) -> @pathx.Relative? {
+  guard model_uri_channel(absolute) == Some(self.owner.channel) &&
+    @resource.relative_to(absolute, self.root) is Some(relative) &&
+    !relative.is_root() else {
+    return None
+  }
+  Some(relative)
+}
+
+///|
+/// Reconstruct the request root from one file's resource URI and its
+/// root-relative name. URI paths already use slash separators. This is
+/// lexical only; both values came from the same successful read request.
 fn navigation_root_from_file(
   absolute : @common.Uri,
   relative : @pathx.Relative,
@@ -51,13 +70,18 @@ fn navigation_context_for_file(
 }
 
 ///|
-/// One implementation serves both editor provider traits. The model URI is
-/// the complete route: it names the absolute file and the local/remote host.
-priv struct MoonIdeNavigationProvider {}
+/// One implementation serves both editor provider traits. The model URI names
+/// the absolute file and host; `NavigationContext` supplies its editor root.
+priv struct MoonIdeNavigationProvider {
+  // Viewer providers run outside Rabbita's update function. This callback
+  // re-enters the owning app through a scheduled `Msg`; it never mutates the
+  // panel model directly.
+  on_error : (@interop.ConversationKey, String) -> Unit
+}
 
 ///|
 impl @language.DefinitionProvider for MoonIdeNavigationProvider with fn provide_definition(
-  _self,
+  self,
   model,
   position,
   token,
@@ -65,16 +89,28 @@ impl @language.DefinitionProvider for MoonIdeNavigationProvider with fn provide_
   if token.is_cancellation_requested() || model.language_id != "moonbit" {
     return []
   }
-  guard model_uri_path(model.uri) is Some(path) &&
-    model_uri_channel(model.uri) is Some(channel) else {
+  guard viewer_state.navigation is Some(context) &&
+    model_uri_path(model.uri) is Some(absolute) &&
+    context.relative_path(absolute) is Some(path) else {
     return []
   }
   let locations = request_moon_ide_locations(
-    channel,
+    context.owner.channel,
     @commands.moonide_definition,
-    { path: path.path, line: position.line_number, column: position.column },
+    {
+      root: context.root.path,
+      path: path.0,
+      line: position.line_number,
+      column: position.column,
+    },
   ) catch {
-    _ => return []
+    error => {
+      (self.on_error)(
+        context.owner,
+        "Go to definition failed: \{@interop.bridge_error_text(error)}",
+      )
+      return []
+    }
   }
   if token.is_cancellation_requested() {
     []
@@ -85,7 +121,7 @@ impl @language.DefinitionProvider for MoonIdeNavigationProvider with fn provide_
 
 ///|
 impl @language.ReferencesProvider for MoonIdeNavigationProvider with fn provide_references(
-  _self,
+  self,
   model,
   position,
   token,
@@ -93,16 +129,28 @@ impl @language.ReferencesProvider for MoonIdeNavigationProvider with fn provide_
   if token.is_cancellation_requested() || model.language_id != "moonbit" {
     return []
   }
-  guard model_uri_path(model.uri) is Some(path) &&
-    model_uri_channel(model.uri) is Some(channel) else {
+  guard viewer_state.navigation is Some(context) &&
+    model_uri_path(model.uri) is Some(absolute) &&
+    context.relative_path(absolute) is Some(path) else {
     return []
   }
   let locations = request_moon_ide_locations(
-    channel,
+    context.owner.channel,
     @commands.moonide_references,
-    { path: path.path, line: position.line_number, column: position.column },
+    {
+      root: context.root.path,
+      path: path.0,
+      line: position.line_number,
+      column: position.column,
+    },
   ) catch {
-    _ => return []
+    error => {
+      (self.on_error)(
+        context.owner,
+        "Find references failed: \{@interop.bridge_error_text(error)}",
+      )
+      return []
+    }
   }
   if token.is_cancellation_requested() {
     []
@@ -115,8 +163,10 @@ impl @language.ReferencesProvider for MoonIdeNavigationProvider with fn provide_
 /// Register both navigation providers on the process-wide language registry.
 /// The returned handles are retained by `DesktopViewerServices` for the full
 /// lifetime of the one mounted Viewer.
-fn register_moon_ide_navigation_providers() -> Array[@common.Disposable] {
-  let provider = MoonIdeNavigationProvider::{  }
+fn register_moon_ide_navigation_providers(
+  on_error : (@interop.ConversationKey, String) -> Unit,
+) -> Array[@common.Disposable] {
+  let provider = MoonIdeNavigationProvider::{ on_error, }
   [
     @languages.languages.register_definition_provider(
       @language.LanguageSelector::LanguageId("moonbit"),
@@ -200,10 +250,8 @@ fn navigation_location_opener(
   LocationOpenerHandle(open=request => {
     guard request.mode is Current else { return false }
     guard viewer_state.navigation is Some(context) else { return false }
-    guard model_uri_channel(request.location.uri) == Some(context.owner.channel) &&
-      model_uri_path(request.location.uri) is Some(absolute) &&
-      @resource.relative_to(absolute, context.root) is Some(relative) &&
-      !relative.is_root() else {
+    guard model_uri_path(request.location.uri) is Some(absolute) &&
+      context.relative_path(absolute) is Some(relative) else {
       return false
     }
     open_location(context.owner, relative, request.location.range)
@@ -280,6 +328,11 @@ test "navigation root follows resource and workspace-relative paths" {
     fail("resource root was not reconstructed")
   }
   assert_eq(root.path, "/ws/project")
+  let context : NavigationContext = {
+    owner: { channel: @interop.ChannelId::Local, session: "test" },
+    root,
+  }
+  assert_eq(context.relative_path(file), Some(Relative("src/main.mbt")))
   guard @resource.of_path(@interop.ChannelId::Local, "/other/src/main.mbt")
     is Some(outside) else {
     fail("test outside resource was not absolute")
@@ -287,6 +340,7 @@ test "navigation root follows resource and workspace-relative paths" {
   assert_true(
     navigation_root_from_file(outside, Relative("lib/main.mbt")) is None,
   )
+  assert_true(context.relative_path(outside) is None)
 }
 
 ///|

@@ -1,0 +1,68 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/codex"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/sidebar/section",
+  "openseek_desktop/frontend/transcript",
+}
+
+// Values
+pub fn update(@cmd.Emit[Msg], Msg, State, @interop.ChannelId, (String) -> @cmd.Cmd) -> (@cmd.Cmd, State)
+
+// Errors
+
+// Types and methods
+type Msg
+pub fn Msg::archive_thread(String) -> Self
+pub fn Msg::close_git_details() -> Self
+pub fn Msg::notification(String, Json) -> Self
+pub fn Msg::open_thread(String) -> Self
+pub fn Msg::refresh() -> Self
+pub fn Msg::server_request(Json, String, Json) -> Self
+pub fn Msg::start_draft(String, String) -> Self
+pub fn Msg::status_changed(Json) -> Self
+pub fn Msg::unarchive_thread(String) -> Self
+
+pub(all) struct PageActions {
+  toggle_sidebar : @cmd.Cmd
+  toggle_terminal : @cmd.Cmd
+  toggle_files : @cmd.Cmd
+  open_file : (String, @common.Range?, String?) -> @cmd.Cmd
+  open_external : (String) -> @cmd.Cmd
+  workspace_label : (@common.Uri) -> String
+  worktree_workspace : @common.Uri?
+  transcript : @html.Html
+}
+
+pub(all) struct SidebarContext {
+  channel : @interop.ChannelId
+  selected : Bool
+  registered_projects : Array[String]
+}
+
+type State derive(Eq)
+pub fn State::State(loading? : Bool) -> Self
+pub fn State::active_id(Self) -> String?
+pub fn State::active_placement(Self, @interop.ChannelId) -> @interop.CheckoutPlacement?
+pub fn State::archived_sidebar_entries(Self, @interop.ChannelId) -> Array[@section.Entry]
+pub fn State::can_start_thread(Self) -> Bool
+pub fn State::draft_text(Self) -> String
+pub fn State::from_thread_snapshot(Json) -> Self
+pub fn State::git_details_open(Self) -> Bool
+pub fn State::has_active(Self) -> Bool
+pub fn State::new_thread_cwd(Self) -> String
+pub fn State::page(Self, @cmd.Emit[Msg], @interop.ChannelId, Bool, Bool, Bool, PageActions) -> Array[@html.Html]
+pub fn State::refresh(Self, @cmd.Emit[Msg], @interop.ChannelId) -> @cmd.Cmd
+pub fn State::sidebar_section(Self, SidebarContext) -> @section.Input
+pub fn State::transcript_items(Self) -> Array[@transcript.TranscriptItem]
+pub fn State::with_editor_comment(Self, String, @common.Range, String, String) -> Self
+pub fn State::with_git_details_closed(Self) -> Self
+pub fn State::worktree_launch_workspace(Self, @interop.ChannelId) -> @common.Uri?
+
+// Type aliases
+
+// Traits

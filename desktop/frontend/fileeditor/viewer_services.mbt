@@ -20,11 +20,14 @@ priv struct DesktopViewerServices {
 fn DesktopViewerServices::DesktopViewerServices(
   location_opener : @navigation_api.LocationOpenerHandle,
   text_model_resolver : @navigation_api.TextModelResolverHandle,
+  on_navigation_error : (@interop.ConversationKey, String) -> Unit,
 ) -> DesktopViewerServices {
   let markers = @markers.MarkerService(schedule=@base_browser.queue_microtask)
   let feedback = @feedback.DesktopFeedbackService()
   let quick_diff = DesktopQuickDiffService()
-  let navigation_registrations = register_moon_ide_navigation_providers()
+  let navigation_registrations = register_moon_ide_navigation_providers(
+    on_navigation_error,
+  )
   let viewer_services = @viewer.ViewerServices(
     markers=@markers.MarkerStore(markers.marker_service_handle()),
     agent_feedback=feedback.agent_feedback_handle(),

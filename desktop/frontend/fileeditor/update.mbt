@@ -2915,6 +2915,11 @@ pub fn update(
       } else {
         (@cmd.none, state)
       }
+    // The root app owns the toast rail and intercepts this message. If an
+    // embedding delegates it here instead, leaving panel state unchanged is
+    // safer than persisting an error that a later successful request cannot
+    // explicitly clear.
+    LanguageRequestFailed(..) => (@cmd.none, state)
     FileFailed(
       owner~,
       epoch~,
@@ -3350,6 +3355,20 @@ test "only structural watcher events change the file index path set" {
       new=Relative("src/visible.js"),
     ).changes_file_list(),
   )
+}
+
+///|
+test "language request failures remain a pure no-op below the root toast owner" {
+  let emit = test_emit()
+  let state = owned_state()
+  let msg = LanguageRequestFailed(
+    owner=test_ctx().owner,
+    message="definition failed",
+  )
+  let (_, first) = update(emit, msg, state, test_ctx())
+  let (_, second) = update(emit, msg, state, test_ctx())
+  assert_true(first == state)
+  assert_true(second == state)
 }
 
 ///|
@@ -4116,6 +4135,18 @@ test "FileLoaded settles content into its document, active or not" {
     ctx,
   )
   assert_true(old_listing == epoch_state)
+  let (_, old_index) = update(
+    emit,
+    FilesIndexed(
+      owner=test_ctx().owner,
+      epoch=1,
+      files=[Relative("stale.mbt")],
+      truncated=false,
+    ),
+    epoch_state,
+    ctx,
+  )
+  assert_true(old_index == epoch_state)
   let (_, old_watch_failure) = update(
     emit,
     FileWatchFailed(

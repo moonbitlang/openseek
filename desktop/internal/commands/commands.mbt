@@ -173,6 +173,109 @@ pub let worktree_remove : Command[
 ] = Command("worktree.remove")
 
 ///|
+/// Codex app-server payloads stay as JSON because this reviewed Desktop
+/// catalog forwards the app-server's versioned protocol without duplicating
+/// every upstream request and response record.
+pub let codex_status : Command[Json, Json] = Command("codex.status")
+
+///|
+/// Authorize one browser-local Codex draft against its selected main project.
+/// This process-local operation does not create an app-server thread.
+pub let codex_draft_open : Command[Json, Json] = Command("codex.draft.open")
+
+///|
+/// Revoke a browser-local draft's process-local filesystem authority.
+pub let codex_draft_close : Command[Json, Json] = Command("codex.draft.close")
+
+///|
+pub let codex_server_request_list : Command[Json, Json] = Command(
+  "codex.server_request.list",
+)
+
+///|
+pub let codex_server_request_respond : Command[Json, Json] = Command(
+  "codex.server_request.respond",
+)
+
+///|
+pub let codex_file_search : Command[Json, Json] = Command("codex.file.search")
+
+///|
+/// List the Codex app-server skills available to one authorized thread cwd.
+pub let codex_skills_list : Command[Json, Json] = Command("codex.skills.list")
+
+///|
+pub let codex_account_read : Command[Json, Json] = Command("codex.account.read")
+
+///|
+pub let codex_account_login_start : Command[Json, Json] = Command(
+  "codex.account.login.start",
+)
+
+///|
+pub let codex_account_login_cancel : Command[Json, Json] = Command(
+  "codex.account.login.cancel",
+)
+
+///|
+pub let codex_account_logout : Command[Json, Json] = Command(
+  "codex.account.logout",
+)
+
+///|
+pub let codex_model_list : Command[Json, Json] = Command("codex.model.list")
+
+///|
+pub let codex_thread_start : Command[Json, Json] = Command("codex.thread.start")
+
+///|
+pub let codex_thread_resume : Command[Json, Json] = Command(
+  "codex.thread.resume",
+)
+
+///|
+pub let codex_thread_read : Command[Json, Json] = Command("codex.thread.read")
+
+///|
+/// Read either legacy inline turns or every page of a paginated Codex history
+/// without resuming the task or acquiring its writer.
+pub let codex_thread_history_read : Command[Json, Json] = Command(
+  "codex.thread.history.read",
+)
+
+///|
+pub let codex_thread_list : Command[Json, Json] = Command("codex.thread.list")
+
+///|
+pub let codex_thread_archive : Command[Json, Json] = Command(
+  "codex.thread.archive",
+)
+
+///|
+pub let codex_thread_unarchive : Command[Json, Json] = Command(
+  "codex.thread.unarchive",
+)
+
+///|
+pub let codex_thread_compact : Command[Json, Json] = Command(
+  "codex.thread.compact",
+)
+
+///|
+pub let codex_review_start : Command[Json, Json] = Command("codex.review.start")
+
+///|
+pub let codex_turn_start : Command[Json, Json] = Command("codex.turn.start")
+
+///|
+pub let codex_turn_steer : Command[Json, Json] = Command("codex.turn.steer")
+
+///|
+pub let codex_turn_interrupt : Command[Json, Json] = Command(
+  "codex.turn.interrupt",
+)
+
+///|
 pub let auth_status : Command[
   @protocol.EmptyPayload,
   @protocol.AuthStatusPayload,

@@ -53,6 +53,54 @@ pub let browser_set_bounds : Command[@protocol.BrowserBoundsPayload, @protocol.E
 
 pub let browser_set_visible : Command[@protocol.BrowserVisiblePayload, @protocol.EmptyReply]
 
+pub let codex_account_login_cancel : Command[Json, Json]
+
+pub let codex_account_login_start : Command[Json, Json]
+
+pub let codex_account_logout : Command[Json, Json]
+
+pub let codex_account_read : Command[Json, Json]
+
+pub let codex_draft_close : Command[Json, Json]
+
+pub let codex_draft_open : Command[Json, Json]
+
+pub let codex_file_search : Command[Json, Json]
+
+pub let codex_model_list : Command[Json, Json]
+
+pub let codex_review_start : Command[Json, Json]
+
+pub let codex_server_request_list : Command[Json, Json]
+
+pub let codex_server_request_respond : Command[Json, Json]
+
+pub let codex_skills_list : Command[Json, Json]
+
+pub let codex_status : Command[Json, Json]
+
+pub let codex_thread_archive : Command[Json, Json]
+
+pub let codex_thread_compact : Command[Json, Json]
+
+pub let codex_thread_history_read : Command[Json, Json]
+
+pub let codex_thread_list : Command[Json, Json]
+
+pub let codex_thread_read : Command[Json, Json]
+
+pub let codex_thread_resume : Command[Json, Json]
+
+pub let codex_thread_start : Command[Json, Json]
+
+pub let codex_thread_unarchive : Command[Json, Json]
+
+pub let codex_turn_interrupt : Command[Json, Json]
+
+pub let codex_turn_start : Command[Json, Json]
+
+pub let codex_turn_steer : Command[Json, Json]
+
 pub let extension_contract : @proton_contract.ExtensionContract
 
 pub let fs_browse : Command[@protocol.BrowseDirectoryPayload, @protocol.BrowseDirectoryReply]

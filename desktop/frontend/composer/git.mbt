@@ -116,6 +116,7 @@ struct GitPresentation {
   changes : GitChanges?
   pull_request : GitPullRequest?
   compare_url : String?
+  missing_pull_request : String?
 } derive(Eq)
 
 ///|
@@ -124,8 +125,9 @@ pub fn GitPresentation::GitPresentation(
   changes? : GitChanges,
   pull_request? : GitPullRequest,
   compare_url? : String,
+  missing_pull_request? : String,
 ) -> GitPresentation {
-  { branch, changes, pull_request, compare_url }
+  { branch, changes, pull_request, compare_url, missing_pull_request }
 }
 
 ///|
@@ -227,6 +229,14 @@ fn GitPresentation::render_details(self : GitPresentation) -> @html.Html {
         note: None,
         href: url,
         tone: "none",
+      }.render(),
+    )
+  } else if self.missing_pull_request is Some(label) {
+    rows.push(
+      GitPopoverRow::{
+        key: "PR",
+        value: @html.span(class="composer-git-value", label),
+        note: None,
       }.render(),
     )
   }

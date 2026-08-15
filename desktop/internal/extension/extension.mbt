@@ -116,6 +116,21 @@ let auth_changed_event : @proton_contract.Event[@protocol.AuthStatusPayload] = @
 )
 
 ///|
+let codex_status_changed_event : @proton_contract.Event[Json] = @commands.extension_contract.event(
+  @protocol.NotificationKind::CodexStatusChanged.wire_name(),
+)
+
+///|
+let codex_notification_event : @proton_contract.Event[Json] = @commands.extension_contract.event(
+  @protocol.NotificationKind::CodexNotification.wire_name(),
+)
+
+///|
+let codex_server_request_event : @proton_contract.Event[Json] = @commands.extension_contract.event(
+  @protocol.NotificationKind::CodexServerRequest.wire_name(),
+)
+
+///|
 let diagnostics_event : @proton_contract.Event[@protocol.DiagnosticsPayload] = @commands.extension_contract.event(
   @protocol.NotificationKind::LspDiagnostics.wire_name(),
 )
@@ -215,6 +230,12 @@ async fn PageEventTarget::emit(
     Hub(UpdateDownloadFailed(payload)) =>
       self.events.emit(update_failed_event, payload)
     Hub(AuthChanged(payload)) => self.events.emit(auth_changed_event, payload)
+    Hub(CodexStatusChanged(payload)) =>
+      self.events.emit(codex_status_changed_event, payload)
+    Hub(CodexNotification(payload)) =>
+      self.events.emit(codex_notification_event, payload)
+    Hub(CodexServerRequest(payload)) =>
+      self.events.emit(codex_server_request_event, payload)
     Hub(LspDiagnostics(payload)) => self.events.emit(diagnostics_event, payload)
     Hub(FsChanged(payload)) => self.events.emit(fs_changed_event, payload)
     Hub(FsWatchFailed(payload)) =>

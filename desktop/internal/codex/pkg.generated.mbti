@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/codex"
+
+import {
+  "bobzhang/openseek/jsonrpc",
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn command() -> String
+
+pub async fn[X] connect(@async.TaskGroup[X], command~ : String, notification_handler~ : (String, Json) -> Unit, request_handler~ : (@jsonrpc.PeerRequest) -> Bool raise, on_closed~ : () -> Unit, version~ : String, handshake_timeout_ms? : Int) -> Connection?
+
+// Errors
+pub(all) suberror CodexError {
+  JsonRpc(method_~ : String, code~ : Int, message~ : String, data~ : Json?)
+  TransportClosed(method_~ : String)
+  RequestFailed(method_~ : String, detail~ : String)
+  Unavailable(String)
+} derive(@debug.Debug)
+pub fn CodexError::is_active_writer(Self) -> Bool
+pub fn CodexError::is_unmaterialized_thread_history(Self) -> Bool
+pub fn CodexError::is_unmaterialized_thread_turns(Self) -> Bool
+pub impl Show for CodexError
+
+// Types and methods
+type Actor
+pub fn Actor::Actor(String) -> Self
+pub async fn Actor::call(Self, method_~ : String, params~ : Json) -> Json
+pub async fn Actor::requests(Self) -> Json
+pub async fn Actor::respond(Self, request_id~ : Json, result~ : Json) -> Json
+pub async fn Actor::run(Self, (String, Json) -> Unit) -> Unit
+pub fn Actor::status(Self) -> Json
+
+type Connection
+pub fn Connection::is_closed(Self) -> Bool
+pub async fn Connection::request(Self, method_~ : String, params~ : Json) -> Json
+pub async fn Connection::respond(Self, @jsonrpc.PeerRequest, Json) -> Unit
+pub async fn Connection::respond_error(Self, @jsonrpc.PeerRequest, code~ : Int, message~ : String) -> Unit
+pub fn Connection::shutdown(Self) -> Unit
+
+type ProjectCatalog
+pub fn ProjectCatalog::ProjectCatalog() -> Self
+pub async fn ProjectCatalog::annotate(Self, Json) -> Json
+pub async fn ProjectCatalog::main_project(Self, String) -> String?
+
+type StdioTransport
+pub impl @jsonrpc.Transport for StdioTransport
+
+// Type aliases
+
+// Traits
