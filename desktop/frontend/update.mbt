@@ -5458,6 +5458,17 @@ fn update_device_msg(
       session_root~,
       submission_id~
     ) => {
+      // This run's durable store, classified exactly the way a commit's root
+      // is: Started precedes the first commit, so on a fresh connection this
+      // is the placement the conversation is born with — and the projects
+      // registry it would otherwise be resolved against may still be in
+      // flight. A rootless legacy event has no store to classify.
+      let started_project = if dev.bridge is Connected(session_root=global, ..) &&
+        session_root is Some(root) {
+        dev.placement_for_store_root(global~, root)
+      } else {
+        dev.project_for_session_root(session_root)
+      }
       // A delete tombstone outranks unversioned list replies and replayed
       // commits, but it must not hide a later same-id incarnation forever.
       // Started precedes every commit of an accepted run and carries the
@@ -5465,10 +5476,7 @@ fn update_device_msg(
       // that can safely retire the tombstone. Rootless legacy events cannot
       // distinguish same-id records in different stores and leave it intact.
       let model = if session_root is Some(_) {
-        let key : ArchiveRecordKey = {
-          session,
-          workspace: dev.project_for_session_root(session_root),
-        }
+        let key : ArchiveRecordKey = { session, workspace: started_project }
         if dev.archive_override(key) is Some(ArchiveDeleted) {
           model.with_archive_override(channel, key, ArchiveLive)
         } else {
@@ -5504,7 +5512,7 @@ fn update_device_msg(
               .unwrap_or(selected_model),
           )
       }
-      let existing = match dev.project_for_session_root(session_root) {
+      let existing = match started_project {
         Some(project) =>
           {
             ..existing,
@@ -5514,6 +5522,10 @@ fn update_device_msg(
               existing.workspace,
             ),
           }
+        // Scratch is not asserted onto a conversation the page already
+        // places in a project: the run's own store is authoritative for
+        // where the record lives, but demoting a placement the user chose
+        // belongs to the session list's reconcile, not to one start.
         None => existing
       }
       let owned = submission_id is Some(id) &&
@@ -9420,6 +9432,70 @@ test "started for an unknown session materializes its conversation" {
   // Focus stays where the user is.
   inspect(next.active_session, content="desktop-test")
   inspect(next.active().is_running(), content="false")
+}
+
+///|
+/// Started is where a foreign conversation gets its placement, and it
+/// precedes the first commit — so on a fresh connection, whose projects
+/// registry is still in flight, the run's own store root has to name the
+/// project. Otherwise terminal and file operations point at Scratch until
+/// the session list lands.
+test "started places a conversation before the registry arrives" {
+  let dispatch = test_dispatch()
+  let workspace = @interop.ChannelId::Local.test_resource("/work/foreign")
+  let store = @interop.ChannelId::Local.test_resource("/work/foreign/.openseek")
+  fn start(model, session, session_root) {
+    let (_, next) = update_dev(
+      dispatch,
+      Started(
+        run_id="r9",
+        session~,
+        model=High,
+        max_steps=1000,
+        session_root~,
+        submission_id=None,
+      ),
+      model,
+    )
+    next
+  }
+
+  // The registry is empty: the store layout is the only evidence, and it
+  // names the project.
+  let unregistered = start(test_model(), "desktop-foreign", Some(store))
+  guard unregistered.find_conversation(
+      @interop.ChannelId::Local,
+      "desktop-foreign",
+    )
+    is Some(placed) else {
+    fail("expected the foreign run's conversation to materialize")
+  }
+  assert_eq(placed.workspace, Project(root=workspace))
+  // The announced global store still means Scratch.
+  let scratch = start(
+    unregistered,
+    "desktop-global",
+    Some(@interop.ChannelId::Local.test_store_root()),
+  )
+  guard scratch.find_conversation(@interop.ChannelId::Local, "desktop-global")
+    is Some(global) else {
+    fail("expected the global run's conversation to materialize")
+  }
+  assert_true(global.workspace is Scratch)
+  // A registered project resolves the same way it always did.
+  let registered = start(
+    test_model().with_dev(dev => { ..dev, projects: [workspace] }),
+    "desktop-registered",
+    Some(store),
+  )
+  guard registered.find_conversation(
+      @interop.ChannelId::Local,
+      "desktop-registered",
+    )
+    is Some(known) else {
+    fail("expected the registered run's conversation to materialize")
+  }
+  assert_eq(known.workspace, Project(root=workspace))
 }
 
 ///|
