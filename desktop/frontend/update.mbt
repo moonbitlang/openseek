@@ -5241,10 +5241,15 @@ fn update_device_msg(
       if archived {
         return (@cmd.none, model)
       }
+      // The page holds at most one conversation per (channel, id), so the
+      // one this id finds may stand for another store's record — and that
+      // record's watermark says nothing about this store's commits. Only a
+      // conversation placed in the committed store can have seen them.
       let first_commit_unseen = match
         model.find_conversation(channel, session) {
-        Some(conv) => !conv.has_seen_durable_sequence(sequence)
-        None => true
+        Some(conv) if conv.workspace.project() == commit_project =>
+          !conv.has_seen_durable_sequence(sequence)
+        _ => true
       }
       // The listing is store-qualified, so ask whether THIS record is listed:
       // a same-id row from another store is a different durable record and
@@ -7710,6 +7715,62 @@ test "a commit for an unlisted store refreshes past a same-id row" {
     committed,
   )
   assert_eq(same_store.dev().sessions_request_generation, 1)
+}
+
+///|
+/// The unseen-commit gate has the same hazard as the listing check: the page
+/// holds one conversation per (channel, id), so a Scratch record that already
+/// consumed sequence one must not make a project store's first commit look
+/// like old news.
+test "a commit for an unlisted store refreshes past a same-id watermark" {
+  let dispatch = test_dispatch()
+  let workspace = @interop.ChannelId::Local.test_resource("/work/foreign")
+  let store = @interop.ChannelId::Local.test_resource("/work/foreign/.openseek")
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    projects: [workspace],
+    sessions: [
+      {
+        id: "desktop-shared",
+        title: Some("scratch copy"),
+        workspace: None,
+        workspace_name: "",
+      },
+    ],
+  })
+  // The Scratch record is listed and consumes its own first commit, so the
+  // page now holds a Scratch conversation at watermark one.
+  let (_, scratch) = update_dev(
+    dispatch,
+    SessionCommitted(
+      session="desktop-shared",
+      sequence=1,
+      ts=None,
+      item=@protocol.User({ content: "scratch" }),
+      session_root=@interop.ChannelId::Local.test_store_root(),
+    ),
+    model,
+  )
+  assert_eq(scratch.dev().sessions_request_generation, 0)
+  guard scratch.find_conversation(@interop.ChannelId::Local, "desktop-shared")
+    is Some(consumed) else {
+    fail("listed scratch commit did not materialize its conversation")
+  }
+  assert_eq(consumed.watermark, 1)
+  // The project store's own first commit is a different durable record: it
+  // is unlisted, and the Scratch watermark must not suppress its reload.
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(
+      session="desktop-shared",
+      sequence=1,
+      ts=None,
+      item=@protocol.User({ content: "project" }),
+      session_root=store,
+    ),
+    scratch,
+  )
+  assert_eq(committed.dev().sessions_request_generation, 1)
 }
 
 ///|
