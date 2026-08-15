@@ -140,6 +140,10 @@ priv struct CodexQuestion {
 ///|
 priv struct CodexPendingRequest {
   request_id : Json
+  // Every supported app-server reverse request names its owning thread.
+  // Keeping that identity here prevents one task from rendering or answering
+  // another task's approval after the sidebar selection changes.
+  thread_id : String
   method_ : String
   params : Json
   // `item/tool/requestUserInput` keeps one answer per question. MCP form
@@ -166,6 +170,7 @@ priv enum CodexReplyKind {
   CodexModelsReply
   CodexThreadsReply(Bool, Int)
   CodexThreadReply(String)
+  CodexWriterReply(String)
   CodexDraftOpenReply(String)
   CodexDraftThreadReply(String)
   CodexTurnReply(String)
@@ -177,9 +182,32 @@ priv enum CodexReplyKind {
   CodexUnarchiveReply(String)
   CodexCompactReply(String)
   CodexReviewReply(String)
-  CodexMutationReply
+  CodexInterruptReply
+  CodexCancelLoginReply(String)
+  CodexLogoutReply
   CodexApprovalReply
 }
+
+///|
+/// The foreground operation that currently owns the shared composer lock.
+/// Reply kinds with different payload shapes normalize to the same owner, so
+/// worktree creation and turn reconciliation still settle the turn that
+/// launched them without allowing unrelated replies to release the lock.
+priv enum CodexForeground {
+  CodexDraftOpenForeground(String)
+  CodexThreadForeground(String)
+  CodexWriterForeground(String)
+  CodexDraftStartForeground(String)
+  CodexTurnForeground(String)
+  CodexWorktreeRepairForeground(String)
+  CodexLoginForeground
+  CodexCancelLoginForeground(String)
+  CodexLogoutForeground
+  CodexArchiveForeground(String)
+  CodexUnarchiveForeground(String)
+  CodexCompactForeground(String)
+  CodexReviewForeground(String)
+} derive(Eq)
 
 ///|
 /// All Codex-local state transitions. The root frontend wraps this message as
@@ -234,8 +262,13 @@ enum Msg {
   Reply(kind~ : CodexReplyKind, value~ : Json)
   Failed(kind~ : CodexReplyKind, message~ : String)
   StatusChanged(Json)
-  Notification(method_~ : String, params~ : Json)
-  ServerRequest(request_id~ : Json, method_~ : String, params~ : Json)
+  Notification(method_~ : String, params~ : Json, generation~ : Int)
+  ServerRequest(
+    request_id~ : Json,
+    method_~ : String,
+    params~ : Json,
+    generation~ : Int
+  )
 }
 
 ///|
@@ -277,8 +310,12 @@ pub fn Msg::status_changed(value : Json) -> Msg {
 
 ///|
 /// Decode-free boundary for an app-server notification forwarded by the host.
-pub fn Msg::notification(method_ : String, params : Json) -> Msg {
-  Notification(method_~, params~)
+pub fn Msg::notification(
+  method_ : String,
+  params : Json,
+  generation : Int,
+) -> Msg {
+  Notification(method_~, params~, generation~)
 }
 
 ///|
@@ -287,8 +324,9 @@ pub fn Msg::server_request(
   request_id : Json,
   method_ : String,
   params : Json,
+  generation : Int,
 ) -> Msg {
-  ServerRequest(request_id~, method_~, params~)
+  ServerRequest(request_id~, method_~, params~, generation~)
 }
 
 ///|
@@ -333,11 +371,16 @@ struct State {
   placement : @composer.WorktreeChoice
   archive_confirm : CodexArchiveConfirm?
   pending_requests : Array[CodexPendingRequest]
+  // Actor-owned request generations order the attach snapshot and live
+  // reverse-request events. Older snapshots/events are ignored instead of
+  // erasing a request that arrived while the snapshot was in flight.
+  request_generation : Int
   // Present only after a turn request went out but its reply was lost. The
   // preserved composer input is not retryable until thread/read compares it
   // with the request-time user-item frontier.
   pending_turn_delivery : CodexPendingTurnDelivery?
   loading : Bool
+  foreground : CodexForeground?
   notice : String
 } derive(Eq)
 
@@ -368,8 +411,10 @@ pub fn State::State(loading? : Bool = false) -> State {
     placement: @composer.LocalCheckout,
     archive_confirm: None,
     pending_requests: [],
+    request_generation: 0,
     pending_turn_delivery: None,
     loading,
+    foreground: None,
     notice: "",
   }
 }
@@ -426,6 +471,11 @@ fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
     CodexThreadsReply(true, generation) =>
       generation == self.archived_catalog_generation
     CodexThreadReply(thread_id) => self.accepts_thread_reply(thread_id)
+    CodexWriterReply(thread_id) =>
+      self
+      .active_thread()
+      .map(thread => thread.id == thread_id)
+      .unwrap_or(false)
     CodexDraftThreadReply(draft_id) =>
       self.active_draft().map(draft => draft.id == draft_id).unwrap_or(false)
     CodexTurnReply(thread_id)
@@ -445,17 +495,53 @@ fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
 }
 
 ///|
-/// Metadata replies do not settle a foreground composer, mutation, login, or
-/// selection request. Keeping this classification on the reply type prevents
-/// periodic refreshes from making an unrelated action look complete.
-fn CodexReplyKind::settles_foreground(self : CodexReplyKind) -> Bool {
+/// Map a concrete reply to the foreground operation it can settle. Approval,
+/// interrupt, catalog, account, and model replies intentionally own no
+/// foreground lock.
+fn CodexReplyKind::foreground(self : CodexReplyKind) -> CodexForeground? {
   match self {
+    CodexDraftOpenReply(id) => Some(CodexDraftOpenForeground(id))
+    CodexThreadReply(id) => Some(CodexThreadForeground(id))
+    CodexWriterReply(id) => Some(CodexWriterForeground(id))
+    CodexDraftThreadReply(id) => Some(CodexDraftStartForeground(id))
+    CodexTurnReply(id)
+    | CodexTurnReconcileReply(id)
+    | CodexWorktreeTurnReply(id, _) => Some(CodexTurnForeground(id))
+    CodexWorktreeRepairReply(id, _) => Some(CodexWorktreeRepairForeground(id))
+    CodexLoginReply => Some(CodexLoginForeground)
+    CodexCancelLoginReply(id) => Some(CodexCancelLoginForeground(id))
+    CodexLogoutReply => Some(CodexLogoutForeground)
+    CodexArchiveReply(id) => Some(CodexArchiveForeground(id))
+    CodexUnarchiveReply(id) => Some(CodexUnarchiveForeground(id))
+    CodexCompactReply(original) => Some(CodexCompactForeground(original))
+    CodexReviewReply(original) => Some(CodexReviewForeground(original))
     CodexStatusReply
     | CodexRequestsReply
     | CodexAccountReply
     | CodexModelsReply
-    | CodexThreadsReply(_, _) => false
-    _ => true
+    | CodexThreadsReply(_, _)
+    | CodexInterruptReply
+    | CodexApprovalReply => None
+  }
+}
+
+///|
+fn State::begin_foreground(self : State, kind : CodexReplyKind) -> State {
+  guard kind.foreground() is Some(foreground) else { return self }
+  { ..self, loading: true, foreground: Some(foreground), notice: "" }
+}
+
+///|
+fn State::owns_foreground(self : State, kind : CodexReplyKind) -> Bool {
+  kind.foreground() is Some(foreground) && self.foreground == Some(foreground)
+}
+
+///|
+fn State::settle_foreground(self : State, kind : CodexReplyKind) -> State {
+  if self.owns_foreground(kind) {
+    { ..self, loading: false, foreground: None }
+  } else {
+    self
   }
 }
 
@@ -612,7 +698,8 @@ fn State::select_draft(self : State, id : String, cwd : String) -> State {
     placement: @composer.LocalCheckout,
     archive_confirm: None,
     pending_turn_delivery: None,
-    loading: !cwd.is_empty(),
+    loading: false,
+    foreground: None,
     notice: "",
   }
 }
@@ -861,7 +948,16 @@ fn State::with_status(self : State, value : Json) -> State {
     return { ..self, connection: CodexUnavailable("Malformed status reply") }
   }
   {
-    ..self,
+    ..self
+    // A fresh device mirror starts in a bootstrap loading state without a
+    // foreground owner. The first status proves that bootstrap completed;
+    // status refreshes during a real foreground operation leave its lock.
+    ,
+    loading: if self.foreground is None {
+      false
+    } else {
+      self.loading
+    },
     connection: match status {
       "ready" => CodexReady
       "starting" => CodexStarting
@@ -981,15 +1077,21 @@ fn CodexThreadRow::decode(value : Json) -> CodexThreadRow? {
 
 ///|
 fn State::with_requests(self : State, value : Json) -> State {
-  guard value is Object(fields) && fields.get("data") is Some(Array(values)) else {
+  guard value is Object(fields) &&
+    @jsonx.json_int(fields, "generation") is Some(generation) &&
+    fields.get("data") is Some(Array(values)) else {
     return { ..self, notice: "Malformed Codex request list" }
+  }
+  if generation < self.request_generation {
+    return self
   }
   let pending_requests : Array[CodexPendingRequest] = []
   for value in values {
     guard value is Object(request) &&
       request.get("request_id") is Some(request_id) &&
       @jsonx.json_text(request, "method") is Some(method_) &&
-      request.get("params") is Some(params) else {
+      request.get("params") is Some(params) &&
+      CodexPendingRequest::decode(request_id, method_, params) is Some(decoded) else {
       continue
     }
     // Preserve edits for a request already shown while replacing the list
@@ -1002,9 +1104,9 @@ fn State::with_requests(self : State, value : Json) -> State {
         break
       }
     }
-    pending_requests.push({ request_id, method_, params, answers })
+    pending_requests.push({ ..decoded, answers, })
   }
-  { ..self, pending_requests, }
+  { ..self, pending_requests, request_generation: generation }
 }
 
 ///|
@@ -1016,12 +1118,11 @@ fn State::with_thread_reply(
   guard value is Object(fields) &&
     fields.get("thread") is Some(thread) &&
     CodexThread::decode(thread) is Some(active) else {
-    return { ..self, loading: false, notice: "Malformed Codex thread reply" }
+    return { ..self, notice: "Malformed Codex thread reply" }
   }
   if requested_thread is Some(requested) && active.id != requested {
     return {
       ..self,
-      loading: false,
       notice: "Codex returned thread \{active.id} for requested thread \{requested}",
     }
   }
@@ -1075,7 +1176,6 @@ fn State::with_thread_reply(
         ) => @composer.FreshWorktree
       None => @composer.LocalCheckout
     },
-    loading: false,
     notice: "",
   }
 }
@@ -1098,7 +1198,6 @@ fn State::with_reconciled_turn_reply(
     authoritative.id == thread_id else {
     return {
       ..self,
-      loading: false,
       notice: "Codex turn delivery is still unconfirmed; reopen the task to refresh it before retrying.",
     }
   }
@@ -1244,9 +1343,9 @@ fn State::with_login(self : State, value : Json) -> State {
   guard value is Object(fields) &&
     @jsonx.json_text(fields, "loginId") is Some(login_id) &&
     @jsonx.json_text(fields, "authUrl") is Some(auth_url) else {
-    return { ..self, loading: false, notice: "Malformed Codex login reply" }
+    return { ..self, notice: "Malformed Codex login reply" }
   }
-  { ..self, login_id: Some(login_id), auth_url: Some(auth_url), loading: false }
+  { ..self, login_id: Some(login_id), auth_url: Some(auth_url) }
 }
 
 ///|
@@ -1408,16 +1507,21 @@ fn State::with_notification(
   self : State,
   method_ : String,
   params : Json,
+  generation : Int,
 ) -> State {
   guard params is Object(fields) else { return self }
   if method_ == "serverRequest/resolved" &&
     fields.get("requestId") is Some(request_id) {
+    if generation <= self.request_generation {
+      return self
+    }
     let key = request_id.stringify()
     return {
       ..self,
       pending_requests: self.pending_requests.filter(request => {
         request.request_id.stringify() != key
       }),
+      request_generation: generation,
     }
   }
   if method_ == "thread/archived" &&
@@ -1504,16 +1608,37 @@ fn State::with_pending_request(
   request_id : Json,
   method_ : String,
   params : Json,
+  generation : Int,
 ) -> State {
+  if generation <= self.request_generation {
+    return self
+  }
+  guard CodexPendingRequest::decode(request_id, method_, params)
+    is Some(request) else {
+    return { ..self, request_generation: generation }
+  }
   let key = request_id.stringify()
   if self.pending_requests
     .iter()
     .any(request => request.request_id.stringify() == key) {
-    return self
+    return { ..self, request_generation: generation }
   }
   let pending_requests = self.pending_requests.copy()
-  pending_requests.push({ request_id, method_, params, answers: Map([]) })
-  { ..self, pending_requests, }
+  pending_requests.push(request)
+  { ..self, pending_requests, request_generation: generation }
+}
+
+///|
+fn CodexPendingRequest::decode(
+  request_id : Json,
+  method_ : String,
+  params : Json,
+) -> CodexPendingRequest? {
+  guard params is Object(fields) &&
+    @jsonx.json_text(fields, "threadId") is Some(thread_id) else {
+    return None
+  }
+  Some({ request_id, thread_id, method_, params, answers: Map([]) })
 }
 
 ///|
@@ -1526,7 +1651,9 @@ fn State::with_request_answer(
   {
     ..self,
     pending_requests: self.pending_requests.map(request => {
-      if request.request_id.stringify() == request_key {
+      if request.request_id.stringify() == request_key &&
+        self.active_thread() is Some(active) &&
+        request.thread_id == active.id {
         let answers = request.answers.copy()
         answers[question_id] = answer
         { ..request, answers, }
@@ -2027,6 +2154,7 @@ test "Codex interrupt authority requires the local writer" {
 test "Codex user-input replies preserve exact question ids" {
   let request : CodexPendingRequest = {
     request_id: Json::number(7),
+    thread_id: "thread-1",
     method_: "item/tool/requestUserInput",
     params: {
       "questions": [
@@ -2067,9 +2195,11 @@ test "Codex archive notification closes the active thread" {
   let state = State().with_thread_reply({
     "thread": { "id": "thread-1", "turns": [] },
   })
-  let settled = state.with_notification("thread/archived", {
-    "threadId": "thread-1",
-  })
+  let settled = state.with_notification(
+    "thread/archived",
+    { "threadId": "thread-1" },
+    0,
+  )
   assert_true(settled.active_thread() is None)
   assert_eq(settled.threads.length(), 0)
 }
@@ -2087,9 +2217,11 @@ test "Codex active and archived catalogs remain independent" {
     )
   assert_eq(state.threads.map(thread => thread.id), ["thread-live"])
   assert_eq(state.archived_threads.map(thread => thread.id), ["thread-archived"])
-  let restored = state.with_notification("thread/unarchived", {
-    "threadId": "thread-archived",
-  })
+  let restored = state.with_notification(
+    "thread/unarchived",
+    { "threadId": "thread-archived" },
+    0,
+  )
   assert_eq(restored.threads.map(thread => thread.id), ["thread-live"])
   assert_true(restored.archived_threads.is_empty())
 }

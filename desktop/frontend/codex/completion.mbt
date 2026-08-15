@@ -605,11 +605,12 @@ fn State::accept_completion(
       }
       (
         command,
-        {
-          ..self,
-          loading: owns_thread &&
-          (item.command == "compact" || item.command == "review"),
-          notice: "",
+        if owns_thread && item.command == "compact" {
+          self.begin_foreground(CodexCompactReply(original))
+        } else if owns_thread && item.command == "review" {
+          self.begin_foreground(CodexReviewReply(original))
+        } else {
+          { ..self, notice: "" }
         },
       )
     }
@@ -662,19 +663,22 @@ fn State::submit_composer(
     !self.can_prompt() {
     return (@cmd.none, self)
   }
-  if self.active_draft() is Some(_) {
+  if self.active_draft() is Some(draft) {
     (
       self.start_draft_thread(dispatch, channel),
-      { ..self, loading: true, notice: "" },
+      self.begin_foreground(CodexDraftThreadReply(draft.id)),
     )
   } else if self.write_access is CodexWritable {
     let next = self.with_pending_turn_delivery()
-    (next.send(dispatch, channel), { ..next, loading: true, notice: "" })
+    guard next.active_thread() is Some(active) else { return (@cmd.none, self) }
+    let next = next.begin_foreground(CodexTurnReply(active.id))
+    (next.send(dispatch, channel), next)
   } else {
     let next = self.with_pending_turn_delivery()
+    guard next.active_thread() is Some(active) else { return (@cmd.none, self) }
     (
       next.resume_for_send(dispatch, channel),
-      { ..next, loading: true, notice: "" },
+      next.begin_foreground(CodexWriterReply(active.id)),
     )
   }
 }

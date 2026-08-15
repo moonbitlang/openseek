@@ -58,6 +58,31 @@ test "Codex list and turn replies keep their typed envelopes" {
 }
 
 ///|
+test "Codex server-request snapshots preserve actor generation" {
+  let requests : @protocol.CodexServerRequestsReply = @json.from_json({
+    "data": [
+      {
+        "request_id": 7,
+        "method": "item/tool/requestUserInput",
+        "params": { "threadId": "thread-1" },
+      },
+    ],
+    "generation": 12,
+  })
+  assert_eq(requests.generation, 12)
+  @debug.assert_eq(requests.to_json(), {
+    "data": [
+      {
+        "request_id": 7,
+        "method": "item/tool/requestUserInput",
+        "params": { "threadId": "thread-1" },
+      },
+    ],
+    "generation": 12,
+  })
+}
+
+///|
 test "Codex optional fields accept null and encode absence by omission" {
   let page : @protocol.CodexDataReply = @json.from_json({
     "data": [],

@@ -266,6 +266,13 @@ pub(all) struct CodexServerRequestRespondPayload {
 pub impl ToJson for CodexServerRequestRespondPayload
 pub impl @json.FromJson for CodexServerRequestRespondPayload
 
+pub(all) struct CodexServerRequestsReply {
+  data : Array[Json]
+  generation : Int
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CodexServerRequestsReply
+pub impl @json.FromJson for CodexServerRequestsReply
+
 pub(all) struct CodexSkillsListPayload {
   thread_id : String
   cwd : String
@@ -1141,7 +1148,9 @@ pub(all) struct WorktreeCreatePayload {
   workspace : String
   session : String?
   codex_thread : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for WorktreeCreatePayload
+pub impl @json.FromJson for WorktreeCreatePayload
 
 pub(all) struct WorktreeCreateReply {
   name : String

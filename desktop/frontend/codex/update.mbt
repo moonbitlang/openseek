@@ -47,10 +47,11 @@ pub fn update(
       }
     StartDraft(id~, cwd~) => {
       let previous = state.active_draft().map(draft => draft.id)
-      let next = state.select_draft(id, cwd)
+      let mut next = state.select_draft(id, cwd)
       let commands : Array[@cmd.Cmd] = []
       if !cwd.trim().is_empty() {
         commands.push(next.open_draft(dispatch, channel, id, cwd))
+        next = next.begin_foreground(CodexDraftOpenReply(id))
       }
       if previous is Some(previous) && previous != id {
         commands.push(state.close_draft(channel, previous))
@@ -77,61 +78,68 @@ pub fn update(
           mentions: [],
           completion: state.completion.dismissed(),
           pending_turn_delivery: None,
-          loading: true,
           notice: "",
-        },
+        }.begin_foreground(CodexThreadReply(thread_id)),
       )
     }
     ArchiveThread(thread_id) =>
       (
         state.archive(dispatch, channel, thread_id, false),
-        { ..state, archive_confirm: None, loading: true, notice: "" },
+        { ..state, archive_confirm: None }.begin_foreground(
+          CodexArchiveReply(thread_id),
+        ),
       )
     UnarchiveThread(thread_id) =>
       (
         state.unarchive(dispatch, channel, thread_id),
-        { ..state, loading: true, notice: "" },
+        state.begin_foreground(CodexUnarchiveReply(thread_id)),
       )
     RepairWorktree =>
-      if state.has_missing_worktree() {
-        (
-          state.repair_worktree(dispatch, channel),
-          { ..state, loading: true, notice: "" },
-        )
-      } else {
-        (@cmd.none, state)
+      match state.active_thread() {
+        Some(active) if active.worktree is Some(worktree) && !worktree.present =>
+          (
+            state.repair_worktree(dispatch, channel),
+            state.begin_foreground(
+              CodexWorktreeRepairReply(active.id, worktree),
+            ),
+          )
+        _ => (@cmd.none, state)
       }
     ConfirmArchiveDiscard =>
       match state.archive_confirm {
         Some(confirm) =>
           (
             state.archive(dispatch, channel, confirm.thread_id, true),
-            { ..state, archive_confirm: None, loading: true, notice: "" },
+            { ..state, archive_confirm: None }.begin_foreground(
+              CodexArchiveReply(confirm.thread_id),
+            ),
           )
         None => (@cmd.none, state)
       }
     CancelArchiveDiscard => (@cmd.none, { ..state, archive_confirm: None })
     WriterAcquired(thread_id) =>
-      if state.active_thread() is Some(active) && active.id == thread_id {
+      if state.active_thread() is Some(active) &&
+        active.id == thread_id &&
+        state.owns_foreground(CodexWriterReply(thread_id)) {
         let next = {
-          ..state,
+          ..state.settle_foreground(CodexWriterReply(thread_id)),
           write_access: CodexWritable,
-          loading: false,
           notice: "",
-        }
-        (next.send(dispatch, channel), { ..next, loading: true })
+        }.begin_foreground(CodexTurnReply(thread_id))
+        (next.send(dispatch, channel), next)
       } else {
         (@cmd.none, state)
       }
     WriterConflict(thread_id) =>
-      if state.active_thread() is Some(active) && active.id == thread_id {
+      if state.active_thread() is Some(active) &&
+        active.id == thread_id &&
+        state.owns_foreground(CodexWriterReply(thread_id)) {
         (
           @cmd.none,
           {
-            ..state,
+            ..state.settle_foreground(CodexWriterReply(thread_id)),
             write_access: CodexActiveElsewhere,
             pending_turn_delivery: None,
-            loading: false,
             notice: "This Codex task is active in another client. Its history is available here, but sending is read-only until that client releases it.",
           },
         )
@@ -149,25 +157,31 @@ pub fn update(
         }
         let next = {
           ..next,
-          loading: true,
           notice: "Codex turn delivery could not be confirmed (" +
           message +
           "); refreshing this task before Send is enabled.",
-        }
+        }.begin_foreground(CodexTurnReconcileReply(thread_id))
         (next.reconcile_turn_delivery(dispatch, channel, thread_id), next)
       } else {
         (@cmd.none, state)
       }
     Stop => (state.interrupt(dispatch, channel), state)
     Login =>
-      (state.login(dispatch, channel), { ..state, loading: true, notice: "" })
+      (state.login(dispatch, channel), state.begin_foreground(CodexLoginReply))
     CancelLogin =>
-      (
-        state.cancel_login(dispatch, channel),
-        { ..state, loading: true, notice: "" },
-      )
+      if state.login_id is Some(login_id) {
+        (
+          state.cancel_login(dispatch, channel),
+          state.begin_foreground(CodexCancelLoginReply(login_id)),
+        )
+      } else {
+        (@cmd.none, state)
+      }
     Logout =>
-      (state.logout(dispatch, channel), { ..state, loading: true, notice: "" })
+      (
+        state.logout(dispatch, channel),
+        state.begin_foreground(CodexLogoutReply),
+      )
     RequestAnswer(request_key~, question_id~, answer~) =>
       (@cmd.none, state.with_request_answer(request_key, question_id, answer))
     Respond(request_key~, decision~) =>
@@ -179,11 +193,7 @@ pub fn update(
       if !state.accepts_reply(kind) {
         return (@cmd.none, state)
       }
-      let mut next = if kind.settles_foreground() {
-        { ..state, loading: false }
-      } else {
-        state
-      }
+      let mut next = state.settle_foreground(kind)
       let mut cmd = @cmd.none
       match kind {
         CodexStatusReply => next = next.with_status(value)
@@ -213,6 +223,7 @@ pub fn update(
             ])
           }
         }
+        CodexWriterReply(_) => ()
         CodexDraftThreadReply(_) => {
           next = next.with_thread_reply(value)
           // Install the real id before starting the turn so every app-server
@@ -221,7 +232,6 @@ pub fn update(
           next = {
             ..next.with_pending_turn_delivery(),
             write_access: CodexWritable,
-            loading: false,
           }
           next = next.loading_context(false)
           cmd = @cmd.batch([
@@ -230,7 +240,9 @@ pub fn update(
             next.load_files(dispatch, channel),
             next.load_skills(dispatch, channel, force_reload=false),
           ])
-          next = { ..next, loading: true }
+          if next.active_thread() is Some(active) {
+            next = next.begin_foreground(CodexTurnReply(active.id))
+          }
         }
         CodexTurnReply(_) => next = next.with_turn_reply(value)
         CodexTurnReconcileReply(thread_id) =>
@@ -301,7 +313,7 @@ pub fn update(
           }
           next = { ..next, completion: next.completion.dismissed() }
         }
-        CodexMutationReply => {
+        CodexInterruptReply | CodexCancelLoginReply(_) | CodexLogoutReply => {
           let (refresh, refreshed) = next.refresh(dispatch, channel)
           cmd = refresh
           next = refreshed
@@ -333,23 +345,26 @@ pub fn update(
         CodexUnarchiveReply(_) => "Codex restore"
         CodexCompactReply(_) => "Codex compact"
         CodexReviewReply(_) => "Codex review"
-        CodexMutationReply => "Codex action"
+        CodexWriterReply(_) => "Codex writer"
+        CodexInterruptReply => "Codex interrupt"
+        CodexCancelLoginReply(_) => "Codex sign-in cancellation"
+        CodexLogoutReply => "Codex sign-out"
         CodexApprovalReply => "Codex response"
       }
-      let next = if kind is CodexTurnReconcileReply(_) {
+      let owns_foreground = state.owns_foreground(kind)
+      let settled = state.settle_foreground(kind)
+      let next = if kind is CodexTurnReconcileReply(_) && owns_foreground {
         {
-          ..state,
-          loading: false,
+          ..settled,
           notice: subject +
           ": " +
           message +
           ". Reopen the task to refresh it before retrying.",
         }
-      } else if kind.settles_foreground() {
+      } else if owns_foreground {
         {
-          ..state,
+          ..settled,
           pending_turn_delivery: None,
-          loading: false,
           notice: subject + ": " + message,
         }
       } else {
@@ -389,8 +404,8 @@ pub fn update(
       }
       (cmd, current)
     }
-    Notification(method_~, params~) => {
-      let mut next = state.with_notification(method_, params)
+    Notification(method_~, params~, generation~) => {
+      let mut next = state.with_notification(method_, params, generation)
       if method_ == "skills/changed" {
         let invalidated = next.loading_context(true)
         return (
@@ -434,8 +449,11 @@ pub fn update(
       }
       (cmd, next)
     }
-    ServerRequest(request_id~, method_~, params~) =>
-      (@cmd.none, state.with_pending_request(request_id, method_, params))
+    ServerRequest(request_id~, method_~, params~, generation~) =>
+      (
+        @cmd.none,
+        state.with_pending_request(request_id, method_, params, generation),
+      )
   }
 }
 
@@ -624,11 +642,9 @@ test "unknown Codex turn delivery refreshes before permitting retry" {
   assert_true(recovered.pending_turn_delivery is None)
   assert_false(recovered.loading)
 
-  let undelivered = {
-    ..original,
-    pending_turn_delivery: original.pending_turn_delivery,
-    loading: true,
-  }
+  let undelivered = original.begin_foreground(
+    CodexTurnReconcileReply("thread-1"),
+  )
   let (_, retryable) = update(
     dispatch,
     Reply(kind=CodexTurnReconcileReply("thread-1"), value={
@@ -675,8 +691,9 @@ test "Codex update handlers are pure and idempotent" {
     pending_requests: [
       {
         request_id: Json::string("request-1"),
+        thread_id: "thread-1",
         method_: "item/commandExecution/requestApproval",
-        params: { "reason": "test" },
+        params: { "threadId": "thread-1", "reason": "test" },
         answers: Map([]),
       },
     ],
@@ -710,7 +727,7 @@ test "Codex update handlers are pure and idempotent" {
       decision="accept",
     ),
     Reply(kind=CodexStatusReply, value={ "status": "ready" }),
-    Reply(kind=CodexRequestsReply, value={ "data": [] }),
+    Reply(kind=CodexRequestsReply, value={ "data": [], "generation": 0 }),
     Reply(kind=CodexAccountReply, value={
       "requiresOpenaiAuth": true,
       "account": Json::null(),
@@ -749,7 +766,7 @@ test "Codex update handlers are pure and idempotent" {
     }),
     Reply(kind=CodexArchiveReply("thread-1"), value={}),
     Reply(kind=CodexUnarchiveReply("thread-archived"), value={}),
-    Reply(kind=CodexMutationReply, value={}),
+    Reply(kind=CodexInterruptReply, value={}),
     Reply(kind=CodexApprovalReply, value={}),
     Failed(kind=CodexTurnReply("thread-1"), message="test failure"),
     Failed(
@@ -761,14 +778,16 @@ test "Codex update handlers are pure and idempotent" {
       message="test failure",
     ),
     StatusChanged({ "status": "ready" }),
-    Notification(method_="thread/name/updated", params={
-      "threadId": "thread-1",
-      "name": "Renamed",
-    }),
+    Notification(
+      method_="thread/name/updated",
+      params={ "threadId": "thread-1", "name": "Renamed" },
+      generation=0,
+    ),
     ServerRequest(
       request_id=Json::string("request-2"),
       method_="item/commandExecution/requestApproval",
-      params={ "reason": "test" },
+      params={ "threadId": "thread-1", "reason": "test" },
+      generation=1,
     ),
   ]
   for message in messages {
@@ -1024,7 +1043,7 @@ test "Codex writer conflict is the active-elsewhere signal" {
   let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let state = State::from_thread_snapshot({
     "thread": { "id": "thread-1", "turns": [] },
-  })
+  }).begin_foreground(CodexWriterReply("thread-1"))
   let (_, first) = update(
     dispatch,
     WriterConflict("thread-1"),
@@ -1102,6 +1121,90 @@ test "background Codex metadata does not settle a foreground action" {
 }
 
 ///|
+test "Codex approval reply cannot settle an active turn" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let state = State::from_thread_snapshot({
+    "thread": { "id": "thread-1", "turns": [] },
+  }).begin_foreground(CodexTurnReply("thread-1"))
+  let (_, after_approval) = update(
+    dispatch,
+    Reply(kind=CodexApprovalReply, value={}),
+    state,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(after_approval.loading)
+  assert_true(
+    after_approval.foreground == Some(CodexTurnForeground("thread-1")),
+  )
+  let (_, after_turn) = update(
+    dispatch,
+    Reply(kind=CodexTurnReply("thread-1"), value={
+      "turn": { "id": "turn-1", "status": "inProgress" },
+    }),
+    after_approval,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_false(after_turn.loading)
+  assert_true(after_turn.foreground is None)
+}
+
+///|
+test "Codex request generations reject stale snapshots" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let state = State::from_thread_snapshot({
+    "thread": { "id": "thread-1", "turns": [] },
+  })
+  let (_, notified) = update(
+    dispatch,
+    ServerRequest(
+      request_id=Json::string("request-new"),
+      method_="item/commandExecution/requestApproval",
+      params={ "threadId": "thread-1" },
+      generation=2,
+    ),
+    state,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, stale) = update(
+    dispatch,
+    Reply(kind=CodexRequestsReply, value={ "data": [], "generation": 1 }),
+    notified,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(stale.pending_requests.length(), 1)
+  assert_eq(stale.pending_requests[0].thread_id, "thread-1")
+  assert_eq(stale.request_generation, 2)
+}
+
+///|
+test "Codex approvals cannot be edited from another thread" {
+  let state = {
+    ..State::from_thread_snapshot({
+      "thread": { "id": "thread-1", "turns": [] },
+    }),
+    pending_requests: [
+      {
+        request_id: Json::string("request-2"),
+        thread_id: "thread-2",
+        method_: "item/tool/requestUserInput",
+        params: { "threadId": "thread-2", "questions": [{ "id": "scope" }] },
+        answers: Map([]),
+      },
+    ],
+  }
+  let unchanged = state.with_request_answer(
+    Json::string("request-2").stringify(),
+    "scope",
+    "all",
+  )
+  assert_true(unchanged.pending_requests[0].answers.is_empty())
+}
+
+///|
 test "newer Codex catalog refresh rejects an older pagination result" {
   let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let (_, first) = update(
@@ -1148,10 +1251,14 @@ test "Codex cwd notifications wait for an authorized thread read" {
   })
   let (_, notified) = update(
     dispatch,
-    Notification(method_="thread/settings/updated", params={
-      "threadId": "thread-1",
-      "threadSettings": { "cwd": "/work/untrusted" },
-    }),
+    Notification(
+      method_="thread/settings/updated",
+      params={
+        "threadId": "thread-1",
+        "threadSettings": { "cwd": "/work/untrusted" },
+      },
+      generation=0,
+    ),
     state,
     @interop.ChannelId::Local,
     _ => @cmd.none,

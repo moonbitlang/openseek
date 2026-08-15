@@ -71,7 +71,7 @@ pub let codex_model_list : Command[@protocol.CodexModelListPayload, @protocol.Co
 
 pub let codex_review_start : Command[@protocol.CodexReviewStartPayload, @protocol.EmptyReply]
 
-pub let codex_server_request_list : Command[@protocol.EmptyPayload, @protocol.CodexDataReply]
+pub let codex_server_request_list : Command[@protocol.EmptyPayload, @protocol.CodexServerRequestsReply]
 
 pub let codex_server_request_respond : Command[@protocol.CodexServerRequestRespondPayload, @protocol.EmptyReply]
 

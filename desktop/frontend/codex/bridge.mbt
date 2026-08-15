@@ -427,7 +427,7 @@ fn State::resume_for_send(
           scheduler.add(
             dispatch(
               Failed(
-                kind=CodexThreadReply(thread_id),
+                kind=CodexWriterReply(thread_id),
                 message=@interop.bridge_error_text(error),
               ),
             ),
@@ -824,7 +824,7 @@ fn State::interrupt(
     self.writable_turn_id() is Some(turn_id) else {
     return @cmd.none
   }
-  CodexMutationReply.request(
+  CodexInterruptReply.request(
     dispatch,
     channel,
     @commands.codex_turn_interrupt,
@@ -956,7 +956,7 @@ fn State::logout(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
-  CodexMutationReply.request(
+  CodexLogoutReply.request(
     dispatch,
     channel,
     @commands.codex_account_logout,
@@ -971,7 +971,7 @@ fn State::cancel_login(
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
   guard self.login_id is Some(login_id) else { return @cmd.none }
-  CodexMutationReply.request(
+  CodexCancelLoginReply(login_id).request(
     dispatch,
     channel,
     @commands.codex_account_login_cancel,
@@ -989,7 +989,9 @@ fn State::respond(
 ) -> @cmd.Cmd {
   let mut selected : CodexPendingRequest? = None
   for request in self.pending_requests {
-    if request.request_id.stringify() == request_key {
+    if request.request_id.stringify() == request_key &&
+      self.active_thread() is Some(active) &&
+      request.thread_id == active.id {
       selected = Some(request)
       break
     }

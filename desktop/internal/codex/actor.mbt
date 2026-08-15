@@ -139,6 +139,76 @@ priv enum ActorStep {
 }
 
 ///|
+/// The actor is the sole owner of reverse-request membership and its monotonic
+/// generation. Both attach snapshots and live events read this same counter,
+/// so the frontend can reject an older snapshot without inferring timing.
+priv struct ReverseRequestRegistry {
+  mut requests : Map[String, @jsonrpc.PeerRequest]
+  mut generation : Int
+}
+
+///|
+fn ReverseRequestRegistry::ReverseRequestRegistry() -> ReverseRequestRegistry {
+  { requests: Map([]), generation: 0 }
+}
+
+///|
+fn ReverseRequestRegistry::reset(self : ReverseRequestRegistry) -> Unit {
+  self.requests = Map([])
+  self.generation = self.generation + 1
+}
+
+///|
+fn ReverseRequestRegistry::contains(
+  self : ReverseRequestRegistry,
+  key : String,
+) -> Bool {
+  self.requests.get(key) is Some(_)
+}
+
+///|
+fn ReverseRequestRegistry::insert(
+  self : ReverseRequestRegistry,
+  key : String,
+  request : @jsonrpc.PeerRequest,
+) -> Unit {
+  self.requests[key] = request
+  self.generation = self.generation + 1
+}
+
+///|
+fn ReverseRequestRegistry::take(
+  self : ReverseRequestRegistry,
+  key : String,
+) -> @jsonrpc.PeerRequest? {
+  guard self.requests.get(key) is Some(request) else { return None }
+  self.requests.remove(key)
+  self.generation = self.generation + 1
+  Some(request)
+}
+
+///|
+fn ReverseRequestRegistry::remove(
+  self : ReverseRequestRegistry,
+  key : String,
+) -> Unit {
+  ignore(self.take(key))
+}
+
+///|
+fn ReverseRequestRegistry::snapshot(self : ReverseRequestRegistry) -> Json {
+  let data : Array[Json] = []
+  for _, request in self.requests {
+    data.push({
+      "request_id": request.id(),
+      "method": Json::string(request.method_name()),
+      "params": request.params(),
+    })
+  }
+  { "data": data, "generation": self.generation }
+}
+
+///|
 const ActorInputCapacity : Int = 256
 
 ///|
@@ -158,6 +228,7 @@ struct Actor {
   // so one wake is enough for any number of buffered messages.
   wake : @async.Queue[Unit]
   mut state : ConnectionState
+  reverse_requests : ReverseRequestRegistry
 }
 
 ///|
@@ -167,6 +238,7 @@ pub fn Actor::Actor(command : String) -> Actor {
     inputs: Queue(kind=Blocking(ActorInputCapacity)),
     wake: Queue(kind=Blocking(ActorWakeCapacity)),
     state: Starting,
+    reverse_requests: ReverseRequestRegistry(),
   }
 }
 
@@ -260,6 +332,10 @@ async fn[G] Actor::run_connection(
   emit : (String, Json) -> Unit,
 ) -> Unit {
   self.state = Starting
+  // A reconnect invalidates every request owned by the previous JSON-RPC
+  // peer. Advancing the same lifetime generation also lets the next empty
+  // snapshot clear stale approvals in already-attached frontends.
+  self.reverse_requests.reset()
   emit("codex.status_changed", self.status())
   let events : @async.Queue[AppServerEvent] = Queue(
     kind=Blocking(AppServerEventCapacity),
@@ -298,9 +374,8 @@ async fn[G] Actor::run_connection(
   }
   self.state = Ready
   emit("codex.status_changed", self.status())
-  let reverse_requests : Map[String, @jsonrpc.PeerRequest] = Map([])
   if pending is Some(input) {
-    connection.dispatch_input(group, reverse_requests, input)
+    connection.dispatch_input(group, self.reverse_requests, input)
   }
   for ;; {
     let next = self.next_step(events) catch {
@@ -308,15 +383,17 @@ async fn[G] Actor::run_connection(
       _ => break
     }
     match next {
-      Input(input) => connection.dispatch_input(group, reverse_requests, input)
+      Input(input) =>
+        connection.dispatch_input(group, self.reverse_requests, input)
       Event(Notification(method_, params)) => {
         if method_ == "serverRequest/resolved" &&
           params is { "requestId": request_id, .. } {
-          reverse_requests.remove(request_id.stringify())
+          self.reverse_requests.remove(request_id.stringify())
         }
         emit("codex.notification", {
           "method": Json::string(method_),
           "params": params,
+          "generation": self.reverse_requests.generation,
         })
       }
       Event(Request(request)) => {
@@ -332,7 +409,7 @@ async fn[G] Actor::run_connection(
         }
         let request_id = request.id()
         let key = request_id.stringify()
-        if reverse_requests.get(key) is Some(_) {
+        if self.reverse_requests.contains(key) {
           // Duplicate live JSON-RPC ids are invalid. Keep the first owner and
           // reject the later request so an approval cannot answer the wrong
           // operation.
@@ -344,11 +421,12 @@ async fn[G] Actor::run_connection(
             )
           })
         } else {
-          reverse_requests[key] = request
+          self.reverse_requests.insert(key, request)
           emit("codex.server_request", {
             "request_id": request_id,
             "method": Json::string(request.method_name()),
             "params": request.params(),
+            "generation": self.reverse_requests.generation,
           })
         }
       }
@@ -406,7 +484,7 @@ fn Actor::supports_reverse_request(_self : Actor, method_ : String) -> Bool {
 fn[G] Connection::dispatch_input(
   self : Connection,
   group : @async.TaskGroup[G],
-  reverse_requests : Map[String, @jsonrpc.PeerRequest],
+  reverse_requests : ReverseRequestRegistry,
   input : ActorInput,
 ) -> Unit {
   match input {
@@ -444,7 +522,7 @@ fn[G] Connection::dispatch_input(
       })
     Respond(request_id, result, reply) => {
       let key = request_id.stringify()
-      guard reverse_requests.get(key) is Some(request) else {
+      guard reverse_requests.take(key) is Some(request) else {
         let error = RequestFailed(
           method_="serverRequest/respond",
           detail="Unknown or resolved Codex request",
@@ -453,7 +531,6 @@ fn[G] Connection::dispatch_input(
         (reply.try_put(Err(error)) catch { _ => false }) |> ignore
         return
       }
-      reverse_requests.remove(key)
       group.spawn_bg(allow_failure=true, () => {
         let outcome = try {
           self.respond(request, result)
@@ -477,18 +554,9 @@ fn[G] Connection::dispatch_input(
         (reply.try_put(outcome) catch { _ => false }) |> ignore
       })
     }
-    ListRequests(reply) => {
-      let data : Array[Json] = []
-      for _, request in reverse_requests {
-        data.push({
-          "request_id": request.id(),
-          "method": Json::string(request.method_name()),
-          "params": request.params(),
-        })
-      }
-      (reply.try_put(Ok({ "data": data.to_json() })) catch { _ => false })
+    ListRequests(reply) =>
+      (reply.try_put(Ok(reverse_requests.snapshot())) catch { _ => false })
       |> ignore
-    }
   }
 }
 
@@ -513,4 +581,17 @@ async test "Codex actor wakes for an API command without racing queue reads" {
     actor.signal()
     assert_true(waiting.wait() is Input(ListRequests(_)))
   })
+}
+
+///|
+test "Codex reverse-request generations advance only on ownership changes" {
+  let requests = ReverseRequestRegistry()
+  assert_eq(requests.generation, 0)
+  requests.reset()
+  assert_eq(requests.generation, 1)
+  // Resolving an id that this connection no longer owns must not create a
+  // phantom generation between the response and resolved notification.
+  requests.remove(Json::string("missing").stringify())
+  assert_eq(requests.generation, 1)
+  @debug.assert_eq(requests.snapshot(), { "data": [], "generation": 1 })
 }

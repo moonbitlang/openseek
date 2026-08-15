@@ -332,7 +332,7 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.codex_server_request_list, async fn(
       _,
     ) {
-      let reply : @protocol.CodexDataReply = @json.from_json(
+      let reply : @protocol.CodexServerRequestsReply = @json.from_json(
         state.codex.requests(),
       )
       reply

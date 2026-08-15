@@ -135,7 +135,59 @@ pub(all) struct WorktreeCreatePayload {
   workspace : String
   session : String?
   codex_thread : String?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for WorktreeCreatePayload with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected worktree creation payload"))
+  }
+  let workspace = match fields.get("workspace") {
+    Some(String(value)) => value
+    Some(_) =>
+      raise JsonDecodeError((path.add_key("workspace"), "expected string"))
+    None =>
+      raise JsonDecodeError(
+        (path.add_key("workspace"), "missing required field"),
+      )
+  }
+  let session = match fields.get("session") {
+    Some(String(value)) => Some(value)
+    Some(Null) | None => None
+    Some(_) =>
+      raise JsonDecodeError(
+        (path.add_key("session"), "expected string or null"),
+      )
+  }
+  let codex_thread = match fields.get("codex_thread") {
+    Some(String(value)) => Some(value)
+    Some(Null) | None => None
+    Some(_) =>
+      raise JsonDecodeError(
+        (path.add_key("codex_thread"), "expected string or null"),
+      )
+  }
+  // Unknown fields remain forward-compatible, but ownership is deliberately
+  // closed: a worktree belongs to one OpenSeek session or one Codex thread.
+  if (session is Some(_)) == (codex_thread is Some(_)) {
+    raise JsonDecodeError(
+      (path, "expected exactly one of session or codex_thread"),
+    )
+  }
+  { workspace, session, codex_thread }
+}
+
+///|
+pub impl ToJson for WorktreeCreatePayload with fn to_json(self) {
+  let fields : Map[String, Json] = { "workspace": Json::string(self.workspace) }
+  if self.session is Some(session) {
+    fields["session"] = Json::string(session)
+  }
+  if self.codex_thread is Some(codex_thread) {
+    fields["codex_thread"] = Json::string(codex_thread)
+  }
+  Json::object(fields)
+}
 
 ///|
 /// `worktree.remove` — `force` discards uncommitted changes in the checkout;

@@ -175,6 +175,50 @@ test "worktree creation accepts exactly representable owner namespaces" {
   })
   assert_eq(codex.session, None)
   assert_eq(codex.codex_thread, Some("thread-1"))
+  @debug.assert_eq(codex.to_json(), {
+    "workspace": "/work/project",
+    "codex_thread": "thread-1",
+  })
+  let nullable : @protocol.WorktreeCreatePayload = @json.from_json({
+    "workspace": "/work/project",
+    "session": null,
+    "codex_thread": "thread-1",
+    "futureMetadata": true,
+  })
+  assert_eq(nullable, codex)
+  let both_rejected = try {
+    let _ : @protocol.WorktreeCreatePayload = @json.from_json({
+      "workspace": "/work/project",
+      "session": "session-1",
+      "codex_thread": "thread-1",
+    })
+  } catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+  assert_true(both_rejected)
+  let missing_rejected = try {
+    let _ : @protocol.WorktreeCreatePayload = @json.from_json({
+      "workspace": "/work/project",
+    })
+  } catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+  assert_true(missing_rejected)
+  let wrong_type_rejected = try {
+    let _ : @protocol.WorktreeCreatePayload = @json.from_json({
+      "workspace": "/work/project",
+      "session": 7,
+    })
+  } catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+  assert_true(wrong_type_rejected)
 }
 
 ///|

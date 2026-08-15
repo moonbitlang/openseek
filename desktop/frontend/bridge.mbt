@@ -163,8 +163,11 @@ fn bridge_msg(
     CodexNotification(payload) =>
       if payload is Object(fields) &&
         @jsonx.json_text(fields, "method") is Some(method_) &&
-        fields.get("params") is Some(params) {
-        Some(Codex(channel~, @codex.Msg::notification(method_, params)))
+        fields.get("params") is Some(params) &&
+        @jsonx.json_int(fields, "generation") is Some(generation) {
+        Some(
+          Codex(channel~, @codex.Msg::notification(method_, params, generation)),
+        )
       } else {
         None
       }
@@ -172,11 +175,12 @@ fn bridge_msg(
       if payload is Object(fields) &&
         fields.get("request_id") is Some(request_id) &&
         @jsonx.json_text(fields, "method") is Some(method_) &&
-        fields.get("params") is Some(params) {
+        fields.get("params") is Some(params) &&
+        @jsonx.json_int(fields, "generation") is Some(generation) {
         Some(
           Codex(
             channel~,
-            @codex.Msg::server_request(request_id, method_, params),
+            @codex.Msg::server_request(request_id, method_, params, generation),
           ),
         )
       } else {
@@ -388,6 +392,7 @@ test "proton subscribes to all Codex app-server events" {
       @protocol.Notification::CodexNotification({
         "method": "turn/completed",
         "params": { "threadId": "t1" },
+        "generation": 1,
       }),
     )
     is Some(Codex(channel=Local, _)),

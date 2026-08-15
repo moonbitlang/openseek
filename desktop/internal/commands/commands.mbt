@@ -198,7 +198,7 @@ pub let codex_draft_close : Command[
 ///|
 pub let codex_server_request_list : Command[
   @protocol.EmptyPayload,
-  @protocol.CodexDataReply,
+  @protocol.CodexServerRequestsReply,
 ] = Command("codex.server_request.list")
 
 ///|

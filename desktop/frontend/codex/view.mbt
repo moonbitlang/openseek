@@ -683,8 +683,12 @@ fn State::composer_view(
   worktree_workspace : @common.Uri?,
 ) -> @html.Html {
   let pending : Array[@html.Html] = []
-  for request in self.pending_requests {
-    pending.push(request.view(dispatch))
+  if self.active_thread() is Some(active) {
+    for request in self.pending_requests {
+      if request.thread_id == active.id {
+        pending.push(request.view(dispatch))
+      }
+    }
   }
   let before_inner : Array[@html.Html] = [
     @html.div(class="codex-pending", pending),

@@ -19,10 +19,10 @@ pub fn update(@cmd.Emit[Msg], Msg, State, @interop.ChannelId, (String) -> @cmd.C
 type Msg
 pub fn Msg::archive_thread(String) -> Self
 pub fn Msg::close_git_details() -> Self
-pub fn Msg::notification(String, Json) -> Self
+pub fn Msg::notification(String, Json, Int) -> Self
 pub fn Msg::open_thread(String) -> Self
 pub fn Msg::refresh() -> Self
-pub fn Msg::server_request(Json, String, Json) -> Self
+pub fn Msg::server_request(Json, String, Json, Int) -> Self
 pub fn Msg::start_draft(String, String) -> Self
 pub fn Msg::status_changed(Json) -> Self
 pub fn Msg::unarchive_thread(String) -> Self

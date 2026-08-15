@@ -255,6 +255,15 @@ pub(all) struct CodexDataReply {
 } derive(Debug, Eq)
 
 ///|
+/// Reverse-request snapshots carry the actor's ordering generation. Unlike a
+/// catalog cursor, this value orders the snapshot against live request and
+/// resolution notifications delivered on the same app-server connection.
+pub(all) struct CodexServerRequestsReply {
+  data : Array[Json]
+  generation : Int
+} derive(Debug, Eq)
+
+///|
 pub(all) struct CodexAccountReply {
   account : Json?
   requires_openai_auth : Bool
@@ -684,6 +693,22 @@ pub impl ToJson for CodexDataReply with fn to_json(self) {
     fields["nextCursor"] = Json::string(next_cursor)
   }
   Json::object(fields)
+}
+
+///|
+pub impl FromJson for CodexServerRequestsReply with fn from_json(json, path) {
+  let object = CodexJsonObject::decode(
+    json, path, "Codex server requests reply",
+  )
+  {
+    data: object.required_array("data"),
+    generation: object.required_int("generation"),
+  }
+}
+
+///|
+pub impl ToJson for CodexServerRequestsReply with fn to_json(self) {
+  { "data": Json::array(self.data), "generation": self.generation }
 }
 
 ///|
