@@ -181,7 +181,7 @@ fn device_msg(
     AgentError(payload) => error_msg(payload)
     AgentFinished(payload) => finished_msg(payload)
     AgentDurable(payload) => durable_boundary_msg(payload)
-    SessionEvent(payload) => session_event_msg(payload)
+    SessionEvent(payload) => session_event_msg(channel, payload)
     SubrunProgress(payload) =>
       Some(
         SubrunProgressed(
@@ -854,13 +854,29 @@ fn RecoveredSettlement::from_reply(
 /// the outer notification for routing; the typed item enum is what the
 /// transcript projector consumes, with raw unknown items retained for newer
 /// Desktop versions.
-fn session_event_msg(payload : @protocol.SessionCommitPayload) -> DeviceMsg? {
+fn session_event_msg(
+  channel : @interop.ChannelId,
+  payload : @protocol.SessionCommitPayload,
+) -> DeviceMsg? {
+  // Same decode contract as `started_msg`: the store root is genuinely
+  // optional (older hosts omit it), but a present root must bind to the
+  // channel or the event is malformed.
+  let session_root = match payload.session_root {
+    Some(path) => {
+      guard @resource.of_path(channel, path) is Some(absolute) else {
+        return None
+      }
+      Some(absolute)
+    }
+    None => None
+  }
   Some(
     SessionCommitted(
       session=payload.session,
       sequence=payload.sequence,
       ts=payload.event.ts,
       item=payload.event.item,
+      session_root~,
     ),
   )
 }

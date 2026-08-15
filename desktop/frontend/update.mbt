@@ -5218,14 +5218,18 @@ fn update_device_msg(
         false,
         "failed to refresh session \{session}",
       )
-    SessionCommitted(session~, sequence~, ts~, item~) => {
+    SessionCommitted(session~, sequence~, ts~, item~, session_root~) => {
+      // The commit names its own store when the host is new enough — the
+      // exact durable identity rather than a guess. A rootless legacy commit
+      // falls back to the listing/live placement guess.
+      let commit_project = match session_root {
+        Some(_) => dev.project_for_session_root(session_root)
+        None => model.session_project(channel, session)
+      }
       // Archiving removes live client state after the hub's ordered final
       // commit. A stale/replayed commit seen after that local fact must not
       // resurrect the archived record as a live hidden conversation.
-      let key : ArchiveRecordKey = {
-        session,
-        workspace: model.session_project(channel, session),
-      }
+      let key : ArchiveRecordKey = { session, workspace: commit_project }
       let archived = match dev.archive_override(key) {
         Some(ArchiveStored | ArchiveDeleted) => true
         Some(ArchiveLive) => false
@@ -5251,7 +5255,7 @@ fn update_device_msg(
           empty_conversation(
             channel,
             session,
-            project?=model.session_project(channel, session),
+            project?=commit_project,
             model=model
               .remembered_model(channel, session)
               .unwrap_or(model.default_model),
@@ -7524,6 +7528,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "arrived before the list" }),
+      session_root=None,
     ),
     test_model(),
   )
@@ -7557,6 +7562,53 @@ test "session list assigns a commit-first conversation to its durable workspace"
   assert_eq(reconciled.workspace, Project(root=workspace))
   assert_eq(listed.dev().active_project, Some(workspace))
   assert_true(encoded_start_workspace(reconciled) is Some("/work/foreign"))
+}
+
+///|
+test "a rooted commit places its conversation without waiting for the list" {
+  let dispatch = test_dispatch()
+  let workspace = @interop.ChannelId::Local.test_resource("/work/foreign")
+  let store = @interop.ChannelId::Local.test_resource("/work/foreign/.openseek")
+  let model = test_model().with_dev(dev => { ..dev, projects: [workspace] })
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(
+      session="desktop-foreign",
+      sequence=1,
+      ts=None,
+      item=@protocol.User({ content: "arrived before the list" }),
+      session_root=Some(store),
+    ),
+    model,
+  )
+  guard committed.find_conversation(
+      @interop.ChannelId::Local,
+      "desktop-foreign",
+    )
+    is Some(placed) else {
+    fail("rooted commit did not materialize its conversation")
+  }
+  assert_eq(placed.workspace, Project(root=workspace))
+  // A root outside every registered project is the global store: Scratch,
+  // stated by the host rather than guessed from a missing listing.
+  let (_, scratch) = update_dev(
+    dispatch,
+    SessionCommitted(
+      session="desktop-global",
+      sequence=1,
+      ts=None,
+      item=@protocol.User({ content: "hi" }),
+      session_root=Some(
+        @interop.ChannelId::Local.test_resource("/sessions/global"),
+      ),
+    ),
+    committed,
+  )
+  guard scratch.find_conversation(@interop.ChannelId::Local, "desktop-global")
+    is Some(global) else {
+    fail("rooted global commit did not materialize its conversation")
+  }
+  assert_true(global.workspace is Scratch)
 }
 
 ///|
@@ -7786,6 +7838,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
       sequence=3,
       ts=None,
       item=@protocol.User({ content: "future" }),
+      session_root=None,
     ),
     refreshing,
   )
@@ -8896,6 +8949,7 @@ test "run semantic errors never duplicate their terminal commit" {
     sequence=1,
     ts=None,
     item=@protocol.Terminal(@protocol.Failed("engine error")),
+    session_root=None,
   )
   let (_, semantic_first) = update_dev(dispatch, semantic, running_model())
   inspect(semantic_first.active().overlay.length(), content="0")
@@ -9388,6 +9442,7 @@ test "canonical User text never claims an unconfirmed start" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "accepted prompt" }),
+      session_root=None,
     ),
     failed,
   )
@@ -10677,6 +10732,7 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
       sequence~,
       ts=Some(ts),
       item=@protocol.User({ content: "question" }),
+      session_root=None,
     )
   }
   // The contiguous-commit path a running conversation takes: the row must
@@ -10727,6 +10783,7 @@ test "a canonical user commit never settles a local steer" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "go left" }),
+      session_root=None,
     ),
     model,
   )
@@ -10969,6 +11026,7 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
         tool_calls: None,
         reasoning_content: None,
       }),
+      session_root=None,
     ),
     finished,
   )
@@ -10979,6 +11037,7 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
       sequence=3,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("answer")),
+      session_root=None,
     ),
     buffered,
   )
@@ -11014,6 +11073,7 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
       sequence=4,
       ts=None,
       item=@protocol.User({ content: "next question" }),
+      session_root=None,
     ),
     answered,
   )
@@ -11097,6 +11157,7 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
       sequence=2,
       ts=None,
       item=@protocol.User({ content: "late steer" }),
+      session_root=None,
     ),
     model,
   )
@@ -11116,6 +11177,7 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
         tool_calls: None,
         reasoning_content: None,
       }),
+      session_root=None,
     ),
     finished,
   )
@@ -11126,6 +11188,7 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
       sequence=4,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("answer")),
+      session_root=None,
     ),
     answered,
   )
@@ -11187,6 +11250,7 @@ test "an unknown terminal before Finished still owns the run-tail notice" {
         "kind": "terminal",
         "payload": { "kind": "future_terminal", "message": "answer" },
       }),
+      session_root=None,
     ),
     running_model().replace_conversation(conv),
   )
@@ -11257,6 +11321,7 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
       sequence=3,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("first answer")),
+      session_root=None,
     ),
     model,
   )
@@ -11292,6 +11357,7 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
       sequence=4,
       ts=None,
       item=@protocol.User({ content: "second question" }),
+      session_root=None,
     ),
     started,
   )
@@ -11302,6 +11368,7 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
       sequence=5,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("second answer")),
+      session_root=None,
     ),
     second_user,
   )
@@ -11606,6 +11673,7 @@ test "a foreign background run waits for a snapshot cut after Started" {
         tool_calls: None,
         reasoning_content: None,
       }),
+      session_root=None,
     ),
     model,
   )
@@ -11637,6 +11705,7 @@ test "a foreign background run waits for a snapshot cut after Started" {
       sequence=3,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("previous answer")),
+      session_root=None,
     ),
     started,
   )
@@ -11647,6 +11716,7 @@ test "a foreign background run waits for a snapshot cut after Started" {
       sequence=4,
       ts=None,
       item=@protocol.User({ content: "current question" }),
+      session_root=None,
     ),
     buffered_terminal,
   )
@@ -11725,6 +11795,7 @@ test "buffered future terminal cannot become its own run floor" {
       sequence=2,
       ts=None,
       item=@protocol.User({ content: "current question" }),
+      session_root=None,
     ),
     model,
   )
@@ -11739,6 +11810,7 @@ test "buffered future terminal cannot become its own run floor" {
         tool_calls: None,
         reasoning_content: None,
       }),
+      session_root=None,
     ),
     user,
   )
@@ -11749,6 +11821,7 @@ test "buffered future terminal cannot become its own run floor" {
       sequence=4,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("current answer")),
+      session_root=None,
     ),
     answer,
   )
@@ -11813,6 +11886,7 @@ test "a late durable EOF finalizes an unconfirmed steer without a terminal" {
         tool_calls: None,
         reasoning_content: None,
       }),
+      session_root=None,
     ),
     synthetic,
   )
@@ -12497,6 +12571,7 @@ test "an initial warning freezes between a snapshot and its buffered successor" 
       sequence=2,
       ts=None,
       item=@protocol.User({ content: "buffered W+1" }),
+      session_root=None,
     ),
     finished,
   )
@@ -12822,6 +12897,7 @@ test "exact-zero recovery refuses buffered or nonzero durable frontiers" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "durable prompt arrived" }),
+      session_root=None,
     ),
     waiting,
   )
@@ -14610,6 +14686,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "new incarnation" }),
+      session_root=None,
     ),
     started,
   )
@@ -16946,6 +17023,7 @@ test "send does not show a prompt until its commit lands" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "build the thing" }),
+      session_root=None,
     ),
     sent,
   )
@@ -16974,6 +17052,7 @@ test "a replayed commit at or below the watermark is dropped" {
       sequence=2,
       ts=None,
       item=@protocol.User({ content: "already there" }),
+      session_root=None,
     ),
     model,
   )
@@ -16995,6 +17074,7 @@ test "a commit past the frontier buffers and flips into a reload" {
       sequence=5,
       ts=None,
       item=@protocol.User({ content: "from the future" }),
+      session_root=None,
     ),
     model,
   )
@@ -17022,6 +17102,7 @@ test "commits buffer while a reload is in flight" {
       sequence=3,
       ts=None,
       item=@protocol.User({ content: "mid-reload" }),
+      session_root=None,
     ),
     model,
   )
@@ -17169,6 +17250,7 @@ test "background retries preserve buffered commits until a later success" {
       sequence=2,
       ts=None,
       item=@protocol.User({ content: "next" }),
+      session_root=None,
     ),
     failed,
   )
@@ -17344,6 +17426,7 @@ test "tool decode semantics wait for their durable error tool result" {
       is_error: true,
       brief: None,
     }),
+    session_root=None,
   )
   let (_, semantic_first) = update_dev(dispatch, semantic, running_model())
   inspect(semantic_first.active().messages.length(), content="0")
@@ -17391,6 +17474,7 @@ test "assistant semantic events wait for their durable commit" {
         tool_calls: None,
         reasoning_content: Some("think"),
       }),
+      session_root=None,
     ),
     answered,
   )
@@ -17446,6 +17530,7 @@ test "a delayed assistant commit never clears a newer live delta" {
         tool_calls: None,
         reasoning_content: None,
       }),
+      session_root=None,
     ),
     model,
   )
@@ -17470,6 +17555,7 @@ test "a delayed terminal commit never clears a newer live delta" {
       sequence=2,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("older answer")),
+      session_root=None,
     ),
     model,
   )
@@ -17495,6 +17581,7 @@ test "a fixed local notice stays before later durable turns" {
         tool_calls: None,
         reasoning_content: None,
       }),
+      session_root=None,
     ),
     test_model().replace_conversation(conv),
   )
@@ -17532,6 +17619,7 @@ test "a durable commit never retires a same-class local notice" {
         tool_calls: None,
         reasoning_content: None,
       }),
+      session_root=None,
     ),
     model,
   )
@@ -17558,6 +17646,7 @@ test "commit-first assistant semantics do not append again" {
         tool_calls: None,
         reasoning_content: Some("think"),
       }),
+      session_root=None,
     ),
     streaming,
   )
@@ -17587,6 +17676,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "hi" }),
+      session_root=None,
     ),
     test_model(),
   )
@@ -17607,6 +17697,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "hi" }),
+      session_root=None,
     ),
     next,
   )
@@ -17623,6 +17714,7 @@ test "a gapped commit for an unknown session materializes then reloads" {
       sequence=3,
       ts=None,
       item=@protocol.User({ content: "third" }),
+      session_root=None,
     ),
     test_model(),
   )
@@ -17660,6 +17752,7 @@ test "a late commit cannot resurrect a locally known archived session" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "stale" }),
+      session_root=None,
     ),
     model,
   )
@@ -17685,6 +17778,7 @@ test "an archive tombstone blocks commits before the archived list refreshes" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "stale" }),
+      session_root=None,
     ),
     model,
   )

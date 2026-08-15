@@ -461,6 +461,11 @@ pub(all) struct SessionCommitPayload {
   session : String
   sequence : Int
   event : SessionEvent
+  // The durable store root this commit was read from, as a frontend resource
+  // path — the same value `StartedPayload.session_root` carries. Session ids
+  // are not globally unique across stores, so the broadcast names the store
+  // half of the identity beside the id. Absent only from older hosts.
+  session_root : String?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|

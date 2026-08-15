@@ -1982,7 +1982,11 @@ priv enum DeviceMsg {
     // The commit's own store stamp, kept on the message so a turn dates
     // itself the moment it lands rather than only after the next reload.
     ts~ : Double?,
-    item~ : @protocol.SessionItem
+    item~ : @protocol.SessionItem,
+    // The durable store root the host read this commit from — the store half
+    // of the session's identity, exactly as `Started` carries it. `None` only
+    // from hosts that predate the field.
+    session_root~ : @common.Uri?
   )
   // The host's `subrun.progress` broadcast: a running sub-run advanced. Not
   // durable and not lifecycle — the raw stream's brackets own the sub-run's

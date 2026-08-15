@@ -203,6 +203,7 @@ test "only the matching set marker settles the pending text" {
         sequence~,
         ts=None,
         item=@protocol.RuntimeNotice({ content, }),
+        session_root=None,
       ),
       model,
     )
@@ -292,6 +293,7 @@ test "a clear waits for its tombstone, not for any goal marker" {
         sequence~,
         ts=None,
         item=@protocol.RuntimeNotice({ content, }),
+        session_root=None,
       ),
       model,
     )
@@ -355,6 +357,7 @@ test "goal marker commits write the mirror and render cards" {
       sequence=1,
       ts=None,
       item=@protocol.RuntimeNotice({ content: "[goal]\nship the feature" }),
+      session_root=None,
     ),
     test_model(),
   )
@@ -373,6 +376,7 @@ test "goal marker commits write the mirror and render cards" {
       item=@protocol.RuntimeNotice({
         content: "[goal blocked]\nneeds a decision",
       }),
+      session_root=None,
     ),
     set,
   )
@@ -387,6 +391,7 @@ test "goal marker commits write the mirror and render cards" {
       sequence=3,
       ts=None,
       item=@protocol.RuntimeNotice({ content: "[goal cleared]" }),
+      session_root=None,
     ),
     blocked,
   )
@@ -539,6 +544,7 @@ test "a clear over an unconfirmed set waits for a goal to actually go away" {
         sequence~,
         ts=None,
         item=@protocol.RuntimeNotice({ content, }),
+        session_root=None,
       ),
       model,
     )
@@ -578,6 +584,7 @@ test "a tombstone over an empty mirror still ends the clear" {
       sequence=1,
       ts=None,
       item=@protocol.RuntimeNotice({ content: "[goal cleared]" }),
+      session_root=None,
     ),
     model,
   )
@@ -606,6 +613,7 @@ test "re-asserting an unchanged goal waits for its own marker too" {
         sequence~,
         ts=None,
         item=@protocol.RuntimeNotice({ content, }),
+        session_root=None,
       ),
       model,
     )
@@ -719,6 +727,7 @@ test "re-asserting a blocked goal waits for its own marker" {
         sequence~,
         ts=None,
         item=@protocol.RuntimeNotice({ content, }),
+        session_root=None,
       ),
       model,
     )
@@ -1068,6 +1077,7 @@ test "an undelivered reply goes quiet once its send has been settled" {
       sequence=1,
       ts=None,
       item=@protocol.RuntimeNotice({ content: "[goal]\nship the feature" }),
+      session_root=None,
     ),
     model,
   )
@@ -1127,6 +1137,7 @@ test "a rejection that arrives after the record has spoken only reports" {
       sequence=1,
       ts=None,
       item=@protocol.RuntimeNotice({ content: "[goal]\nthe goal that won" }),
+      session_root=None,
     ),
     model,
   )

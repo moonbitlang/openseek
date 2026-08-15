@@ -432,6 +432,7 @@ async test "readiness precedes the first forwarded hub notification" {
       session: "session-1",
       sequence: 1,
       event: { sequence: 1, ts: None, item: User({ content: "test" }) },
+      session_root: None,
     }),
   )
   let notification = subscription.notifications.get()
@@ -608,6 +609,7 @@ test "remote delivery retains streaming runtime and error events" {
         session: "session-1",
         sequence: 1,
         event: { sequence: 1, ts: None, item: User({ content: "test" }) },
+        session_root: None,
       }),
     )
     is Some(_),

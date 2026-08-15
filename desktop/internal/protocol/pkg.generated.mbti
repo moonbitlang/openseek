@@ -618,6 +618,7 @@ pub(all) struct SessionCommitPayload {
   session : String
   sequence : Int
   event : SessionEvent
+  session_root : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct SessionDocument {
