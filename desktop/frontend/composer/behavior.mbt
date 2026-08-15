@@ -99,27 +99,27 @@ pub fn[T] Menu::selected(self : Menu[T]) -> Int {
 }
 
 ///|
-pub fn[T] Menu::loading(self : Menu[T]) -> Bool {
+fn[T] Menu::loading(self : Menu[T]) -> Bool {
   self.loading
 }
 
 ///|
-pub fn[T] Menu::draft_without_token(self : Menu[T]) -> String {
+fn[T] Menu::draft_without_token(self : Menu[T]) -> String {
   self.draft_without_token
 }
 
 ///|
-pub fn[T] Menu::length(self : Menu[T]) -> Int {
+fn[T] Menu::length(self : Menu[T]) -> Int {
   self.items.length()
 }
 
 ///|
-pub fn[T] Menu::get(self : Menu[T], index : Int) -> T? {
+fn[T] Menu::get(self : Menu[T], index : Int) -> T? {
   self.items.get(index)
 }
 
 ///|
-pub fn[T] Menu::iter2(self : Menu[T]) -> Iter2[Int, T] {
+fn[T] Menu::iter2(self : Menu[T]) -> Iter2[Int, T] {
   self.items.iter2()
 }
 
@@ -171,9 +171,6 @@ pub fn Debounce::accepts(self : Debounce, generation : Int) -> Bool {
 /// Delay a lookup using the same 150 ms pause as workspace symbol Quick Open.
 /// The caller carries this generation in its own message and checks `accepts`
 /// before starting work or adopting a reply.
-pub fn Debounce::delayed(
-  self : Debounce,
-  command : (Int) -> @cmd.Cmd,
-) -> @cmd.Cmd {
+fn Debounce::delayed(self : Debounce, command : (Int) -> @cmd.Cmd) -> @cmd.Cmd {
   @cmd.delay(command(self.generation), 150)
 }

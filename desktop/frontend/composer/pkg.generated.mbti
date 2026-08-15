@@ -34,33 +34,10 @@ pub(all) enum Action {
   FileIndexEnsured(identity~ : Identity)
 }
 
-pub(all) struct ActionButton {
-  id : String
-  class_name : String
-  title : String
-  disabled : Bool
-  command : @cmd.Cmd
-  content : @html.Html
-}
-
-pub(all) struct CompletionRow {
-  label : String
-  detail : String
-}
-
-pub(all) struct CompletionView {
-  rows : Array[CompletionRow]
-  selected : Int
-  hint : String
-  empty : String
-}
-pub fn CompletionView::render(Self, (Int) -> @cmd.Cmd) -> @html.Html
-
 type Debounce derive(Eq)
 pub fn Debounce::Debounce(generation? : Int) -> Self
 pub fn Debounce::accepts(Self, Int) -> Bool
 pub fn Debounce::advanced(Self) -> Self
-pub fn Debounce::delayed(Self, (Int) -> @cmd.Cmd) -> @cmd.Cmd
 pub fn Debounce::generation(Self) -> Int
 
 pub(all) struct Draft {
@@ -119,37 +96,14 @@ pub(all) struct Input {
   presentation : Presentation
 } derive(Eq)
 
-pub(all) struct KeyboardActions {
-  menu_open : Bool
-  navigate : (Int) -> @cmd.Cmd
-  accept : @cmd.Cmd
-  dismiss : @cmd.Cmd
-  submit : @cmd.Cmd
-  cancel : @cmd.Cmd?
-}
-
 pub(all) struct Mention {
   ref_ : @mention_context.MentionRef
   range : @common.Range?
 } derive(Eq, @debug.Debug)
 
-pub(all) struct MentionChip {
-  glyph : String
-  label : String
-  title : String
-  jump : @cmd.Cmd?
-  remove : (@cmd.Cmd, @html.Html)?
-}
-pub fn MentionChip::render(Self) -> @html.Html
-
 type Menu[T] derive(Eq)
 pub fn[T] Menu::Menu(Array[T], loading~ : Bool, draft_without_token~ : String) -> Self[T]
 pub fn[T] Menu::current(Self[T]) -> T?
-pub fn[T] Menu::draft_without_token(Self[T]) -> String
-pub fn[T] Menu::get(Self[T], Int) -> T?
-pub fn[T] Menu::iter2(Self[T]) -> Iter2[Int, T]
-pub fn[T] Menu::length(Self[T]) -> Int
-pub fn[T] Menu::loading(Self[T]) -> Bool
 pub fn[T] Menu::selected(Self[T]) -> Int
 pub fn[T] Menu::shifted(Self[T], Int) -> Self[T]
 
@@ -200,20 +154,6 @@ pub fn Trigger::matches(Self, Array[String]) -> Bool
 pub fn Trigger::parse(String, inline_markers~ : String) -> Self?
 pub fn Trigger::query(Self) -> String
 
-pub(all) struct View {
-  before_inner : Array[@html.Html]
-  mentions : Array[@html.Html]
-  value : String
-  placeholder : String
-  disabled : Bool
-  input : @cmd.Emit[String]
-  keyboard : KeyboardActions
-  status : Array[@html.Html]
-  action : ActionButton
-  overlay : @html.Html?
-}
-pub fn View::render(Self) -> @html.Html
-
 pub(all) struct WorktreeArchiveDialog {
   refusal : @protocol.ArchiveNeedsForceReply
   conversation_noun : String
@@ -228,8 +168,6 @@ pub(all) enum WorktreeChoice {
   FreshWorktree
   BoundWorktree(String)
 } derive(Eq, @debug.Debug)
-pub fn WorktreeChoice::toggled(Self) -> Self
-pub fn WorktreeChoice::wants_fresh(Self) -> Bool
 
 pub(all) struct WorktreeControl {
   choice : WorktreeChoice
