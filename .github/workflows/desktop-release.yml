@@ -159,9 +159,9 @@ jobs:
           expected="version = \"$RELEASE_VERSION\""
           grep -Fx "$expected" desktop/moon.mod
 
-      - name: Set up MoonBit (nightly)
+      - name: Set up MoonBit
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- nightly
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
 
       - name: Show MoonBit version
