@@ -151,6 +151,7 @@ fn session_component_input(
   nested? : Bool = false,
   worktree? : String,
   subrun? : Bool = false,
+  root? : String,
   children? : Array[@conversation.Input] = [],
 ) -> @conversation.Input {
   let active = model.screen is Chat &&
@@ -181,10 +182,14 @@ fn session_component_input(
     session_id
   }
   {
+    // The store placement rides in `root`: session ids may repeat across
+    // Scratch and project stores, and without it two same-id rows would
+    // collide on one key in the sidebar's keyed container.
     id: @conversation.Id(
       source="openseek.live",
       channel=channel.uri_authority(),
       conversation=session_id,
+      root?,
     ),
     title,
     label,
@@ -238,6 +243,9 @@ fn Model::push_group_component_inputs(
   nested? : Bool = false,
 ) -> Unit {
   let composing = self.composing_new_chat()
+  // Every row in this group shares the group's store placement; it becomes
+  // the `root` half of each conversation's component id.
+  let root = workspace.map(workspace => workspace.path)
   for conv in self.conversations.rev_iter() {
     if conv.device != dev.channel ||
       conv.workspace.project() != workspace ||
@@ -270,6 +278,7 @@ fn Model::push_group_component_inputs(
         },
         nested~,
         worktree?,
+        root?,
       ),
     )
   }
@@ -317,6 +326,7 @@ fn Model::push_group_component_inputs(
           child_label,
           nested~,
           subrun=true,
+          root?,
         ),
       )
     }
@@ -333,6 +343,7 @@ fn Model::push_group_component_inputs(
         archivable=true,
         nested~,
         worktree?=worktree_name_for(dev, workspace, tree.item.id),
+        root?,
         children~,
       ),
     )
@@ -2328,6 +2339,52 @@ test "project component receives the complete conversation list" {
   assert_eq(project.conversations.length(), 6)
   assert_eq(project.conversations[4].label, "Project chat 5")
   assert_eq(project.conversations[5].label, "Project chat 6")
+}
+
+///|
+/// Durable identities are store-qualified, so one session id may hold a
+/// record in Scratch and in a project store at once. Both rows must survive
+/// the sidebar's keyed container — colliding keys would silently drop one.
+test "same-id records in Scratch and a project store keep distinct row keys" {
+  let project = @interop.ChannelId::Local.test_resource("/work/alpha")
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    projects: [project],
+    sessions: [
+      {
+        id: "desktop-shared",
+        title: Some("project copy"),
+        workspace: Some(project),
+        workspace_name: "alpha",
+      },
+      {
+        id: "desktop-shared",
+        title: Some("scratch copy"),
+        workspace: None,
+        workspace_name: "",
+      },
+    ],
+  })
+  let keys : Array[String] = []
+  for section in model.sidebar_component_sections(model.dev()) {
+    for entry in section.entries {
+      match entry {
+        @section.Project(project) =>
+          for conversation in project.conversations {
+            if conversation.id.conversation() == "desktop-shared" {
+              keys.push(conversation.id.key())
+            }
+          }
+        @section.Conversation(conversation) =>
+          if conversation.id.conversation() == "desktop-shared" {
+            keys.push(conversation.id.key())
+          }
+        _ => ()
+      }
+    }
+  }
+  assert_eq(keys.length(), 2)
+  assert_true(keys[0] != keys[1])
 }
 
 ///|
