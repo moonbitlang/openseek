@@ -1554,6 +1554,18 @@ pub fn sync(
       (Some(previous), Some(current)) => !previous.same_identity(current)
       (None, None) | (Some(_), None) | (None, Some(_)) => false
     })
+  // The parked placement is the last known checkout identity, not the current
+  // projection. An unresolved gap must not erase it: recovery compares the
+  // fresh placement against this retained value, so a conversation that comes
+  // back as a different checkout (another client unbound its worktree while
+  // this connection was down) forces the hard reroot instead of restoring the
+  // previous checkout's documents. A missing form is adopted as-is — it
+  // carries the same project/name identity.
+  let parked_placement = if ctx.placement is Some(_) {
+    ctx.placement
+  } else {
+    state.placement
+  }
   let parking_existing_owner = !checkout_ready &&
     same_owner &&
     !placement_identity_changed &&
@@ -1742,7 +1754,7 @@ pub fn sync(
       background_review_requests: Map([]),
       placement_parked: true,
       placement_known: true,
-      placement: ctx.placement,
+      placement: parked_placement,
       request_epoch,
     }
     match state.changes {
@@ -1765,7 +1777,7 @@ pub fn sync(
       ..state,
       placement_parked: true,
       placement_known: true,
-      placement: ctx.placement,
+      placement: parked_placement,
     }
   }
   // `clear_viewer` ran when the checkout disappeared. Once the same owner is
@@ -4557,6 +4569,98 @@ test "opening after a hidden checkout repair restores a stale reviewed tab" {
   assert_true(
     reopened.docs.get(path)
     is Some({ review: Some({ working_generation: 6, .. }), stale: true, .. }),
+  )
+}
+
+///|
+test "an unresolved gap retains identity so same-checkout recovery restores" {
+  let emit = test_emit()
+  let path = @pathx.Relative("reviewed.mbt")
+  let docs : Map[@pathx.Relative, Doc] = Map([])
+  docs[path] = {
+    ..loaded_doc("reviewed.mbt"),
+    review: Some({
+      generation: 4,
+      working_generation: 4,
+      baseline: ReviewContent("before\n"),
+      view_mode: ReviewSource,
+      selected: test_modified_change(path),
+    }),
+  }
+  let present : Ctx = {
+    ..test_ctx(),
+    panel_open: false,
+    open_files: [path],
+    active_file: Some(path),
+  }
+  let present = present.test_worktree("wt")
+  let state = {
+    ..owned_state(),
+    placement: present.placement,
+    docs,
+    review_generation: 4,
+  }
+  // BridgeReady clears the registry: the projection is unresolved, not moved.
+  let unresolved : Ctx = { ..present, placement: None }
+  let (parked, _) = sync(emit, state, unresolved)
+  assert_true(parked.placement_parked)
+  // The gap must not erase the last known identity.
+  assert_true(parked.placement is Some(@interop.Worktree(name="wt", ..)))
+  // The refreshed registry reports the same worktree: an availability change,
+  // so the review survives for revalidation instead of a hard reroot.
+  let (restored, _) = sync(emit, parked, present)
+  assert_false(restored.placement_parked)
+  assert_eq(restored.request_epoch, parked.request_epoch)
+  assert_true(
+    restored.docs.get(path)
+    is Some({ review: Some({ working_generation: 4, .. }), stale: true, .. }),
+  )
+}
+
+///|
+test "recovery from an unresolved gap into another checkout reroots" {
+  let emit = test_emit()
+  let path = @pathx.Relative("reviewed.mbt")
+  let docs : Map[@pathx.Relative, Doc] = Map([])
+  docs[path] = {
+    ..loaded_doc("reviewed.mbt"),
+    review: Some({
+      generation: 4,
+      working_generation: 4,
+      baseline: ReviewContent("before\n"),
+      view_mode: ReviewSource,
+      selected: test_modified_change(path),
+    }),
+  }
+  let present : Ctx = {
+    ..test_ctx(),
+    open_files: [path],
+    active_file: Some(path),
+  }
+  let present = present.test_worktree("wt")
+  let state = {
+    ..owned_state(),
+    placement: present.placement,
+    docs,
+    review_generation: 4,
+  }
+  let (parked, _) = sync(emit, state, { ..present, placement: None })
+  assert_true(parked.placement is Some(@interop.Worktree(name="wt", ..)))
+  // Another client unbound the worktree during the gap; the conversation now
+  // resolves to the project's main checkout. The retained identity exposes
+  // the move, so the old checkout's documents and baselines must not be
+  // restored against files read from the new root.
+  let recovered : Ctx = {
+    ..present,
+    placement: Some(@interop.WorkspaceRoot(root=present.test_root())),
+  }
+  let (rerooted, _) = sync(emit, parked, recovered)
+  assert_false(rerooted.placement_parked)
+  assert_true(rerooted.placement is Some(@interop.WorkspaceRoot(..)))
+  assert_eq(rerooted.request_epoch, parked.request_epoch + 1)
+  assert_true(
+    rerooted.docs.get(path)
+    is Some({ state: TabLoading, review: None, stale: false, .. }),
   )
 }
 
