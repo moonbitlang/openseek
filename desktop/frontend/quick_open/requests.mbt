@@ -147,7 +147,7 @@ fn symbol_request(
     return @cmd.none
   }
   @symbols.search(
-    owner.channel,
+    owner,
     query,
     root~,
     loaded=items => emit(SymbolsLoaded(owner~, query~, generation~, items~)),

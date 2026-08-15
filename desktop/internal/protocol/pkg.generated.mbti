@@ -406,6 +406,7 @@ pub(all) struct LspDiagnosticsReply {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct LspHoverPayload {
+  session : String
   root : String
   path : String
   line : Int
@@ -423,6 +424,7 @@ pub(all) struct LspHoverReply {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct LspOpenPayload {
+  session : String
   root : String
   path : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
@@ -460,6 +462,7 @@ pub(all) struct MoonIdeLocationsReply {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct MoonIdeNavigationPayload {
+  session : String
   root : String
   path : String
   line : Int
@@ -905,6 +908,7 @@ pub(all) struct WorkspaceSettingsSetPayload {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct WorkspaceSymbolsPayload {
+  session : String
   root : String
   query : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)

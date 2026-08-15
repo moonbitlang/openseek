@@ -11,8 +11,10 @@ pub fn update(
   open_external : (String) -> @cmd.Cmd,
 ) -> (@cmd.Cmd, State) {
   match msg {
-    Refresh =>
-      (state.refresh(dispatch, channel), { ..state, loading: true, notice: "" })
+    Refresh => {
+      let (command, next) = state.refresh(dispatch, channel)
+      (command, { ..next, notice: "" })
+    }
     Composer(msg) => state.update_composer(dispatch, channel, msg)
     SymbolSearchDue(owner~, generation~) =>
       state.begin_completion_search(
@@ -69,6 +71,12 @@ pub fn update(
           git_details_open: false,
           write_access: CodexNeedsResume,
           requested_thread: Some(thread_id),
+          // Composer state belongs to the selected task. Until per-task drafts
+          // are persisted, switching tasks deliberately starts clean.
+          draft: "",
+          mentions: [],
+          completion: state.completion.dismissed(),
+          pending_turn_delivery: None,
           loading: true,
           notice: "",
         },
@@ -122,10 +130,31 @@ pub fn update(
           {
             ..state,
             write_access: CodexActiveElsewhere,
+            pending_turn_delivery: None,
             loading: false,
             notice: "This Codex task is active in another client. Its history is available here, but sending is read-only until that client releases it.",
           },
         )
+      } else {
+        (@cmd.none, state)
+      }
+    TurnDeliveryUnknown(thread_id~, message~, worktree~) =>
+      if state.active_thread() is Some(active) &&
+        active.id == thread_id &&
+        state.pending_turn_delivery is Some(pending) &&
+        pending.thread_id == thread_id {
+        let next = match worktree {
+          Some(worktree) => state.with_created_worktree(worktree)
+          None => state
+        }
+        let next = {
+          ..next,
+          loading: true,
+          notice: "Codex turn delivery could not be confirmed (" +
+          message +
+          "); refreshing this task before Send is enabled.",
+        }
+        (next.reconcile_turn_delivery(dispatch, channel, thread_id), next)
       } else {
         (@cmd.none, state)
       }
@@ -150,14 +179,19 @@ pub fn update(
       if !state.accepts_reply(kind) {
         return (@cmd.none, state)
       }
-      let mut next = { ..state, loading: false }
+      let mut next = if kind.settles_foreground() {
+        { ..state, loading: false }
+      } else {
+        state
+      }
       let mut cmd = @cmd.none
       match kind {
         CodexStatusReply => next = next.with_status(value)
         CodexRequestsReply => next = next.with_requests(value)
         CodexAccountReply => next = next.with_account(value)
         CodexModelsReply => next = next.with_models(value)
-        CodexThreadsReply(archived) => next = next.with_threads(value, archived)
+        CodexThreadsReply(archived, _) =>
+          next = next.with_threads(value, archived)
         CodexDraftOpenReply(draft_id) => {
           next = next.with_open_draft(draft_id, value).loading_context(false)
           cmd = @cmd.batch([
@@ -184,7 +218,11 @@ pub fn update(
           // Install the real id before starting the turn so every app-server
           // notification observes the stored selection. The preserved draft
           // and placement now flow through the ordinary Local/Worktree send.
-          next = { ..next, write_access: CodexWritable, loading: false }
+          next = {
+            ..next.with_pending_turn_delivery(),
+            write_access: CodexWritable,
+            loading: false,
+          }
           next = next.loading_context(false)
           cmd = @cmd.batch([
             next.send(dispatch, channel),
@@ -195,6 +233,8 @@ pub fn update(
           next = { ..next, loading: true }
         }
         CodexTurnReply(_) => next = next.with_turn_reply(value)
+        CodexTurnReconcileReply(thread_id) =>
+          next = next.with_reconciled_turn_reply(value, thread_id)
         CodexWorktreeTurnReply(_, worktree) => {
           next = next.with_created_worktree(worktree).with_turn_reply(value)
           cmd = @cmd.batch([
@@ -203,7 +243,7 @@ pub fn update(
             next.load_skills(dispatch, channel, force_reload=false),
           ])
         }
-        CodexWorktreeRepairReply(worktree) => {
+        CodexWorktreeRepairReply(_, worktree) => {
           next = next.with_created_worktree(worktree)
           cmd = @cmd.batch([
             next.refresh_git(dispatch, channel),
@@ -245,11 +285,15 @@ pub fn update(
                 notice: "Codex task archived, but its worktree was retained because new local changes appeared during archiving.",
               }
             }
-            cmd = next.refresh_catalog(dispatch, channel)
+            let (refresh, refreshed) = next.refresh_catalog(dispatch, channel)
+            cmd = refresh
+            next = refreshed
           }
         CodexUnarchiveReply(thread_id) => {
           next = next.without_archived_thread(thread_id)
-          cmd = next.refresh_catalog(dispatch, channel)
+          let (refresh, refreshed) = next.refresh_catalog(dispatch, channel)
+          cmd = refresh
+          next = refreshed
         }
         CodexCompactReply(original) | CodexReviewReply(original) => {
           if next.draft == original {
@@ -257,7 +301,11 @@ pub fn update(
           }
           next = { ..next, completion: next.completion.dismissed() }
         }
-        CodexMutationReply => cmd = next.refresh(dispatch, channel)
+        CodexMutationReply => {
+          let (refresh, refreshed) = next.refresh(dispatch, channel)
+          cmd = refresh
+          next = refreshed
+        }
         CodexApprovalReply =>
           // `serverRequest/resolved` authoritatively removes the request.
           ()
@@ -273,12 +321,13 @@ pub fn update(
         CodexRequestsReply => "Codex requests"
         CodexAccountReply => "Codex account"
         CodexModelsReply => "Codex models"
-        CodexThreadsReply(false) => "Codex threads"
-        CodexThreadsReply(true) => "Archived Codex threads"
+        CodexThreadsReply(false, _) => "Codex threads"
+        CodexThreadsReply(true, _) => "Archived Codex threads"
         CodexDraftOpenReply(_) => "Codex draft"
         CodexThreadReply(_) | CodexDraftThreadReply(_) => "Codex thread"
         CodexTurnReply(_) | CodexWorktreeTurnReply(_, _) => "Codex turn"
-        CodexWorktreeRepairReply(_) => "Codex worktree rebuild"
+        CodexTurnReconcileReply(_) => "Codex turn reconciliation"
+        CodexWorktreeRepairReply(_, _) => "Codex worktree rebuild"
         CodexLoginReply => "Codex sign-in"
         CodexArchiveReply(_) => "Codex archive"
         CodexUnarchiveReply(_) => "Codex restore"
@@ -287,7 +336,26 @@ pub fn update(
         CodexMutationReply => "Codex action"
         CodexApprovalReply => "Codex response"
       }
-      (@cmd.none, { ..state, loading: false, notice: subject + ": " + message })
+      let next = if kind is CodexTurnReconcileReply(_) {
+        {
+          ..state,
+          loading: false,
+          notice: subject +
+          ": " +
+          message +
+          ". Reopen the task to refresh it before retrying.",
+        }
+      } else if kind.settles_foreground() {
+        {
+          ..state,
+          pending_turn_delivery: None,
+          loading: false,
+          notice: subject + ": " + message,
+        }
+      } else {
+        { ..state, notice: subject + ": " + message }
+      }
+      (@cmd.none, next)
     }
     StatusChanged(value) => {
       let next = state.with_status(value)
@@ -296,27 +364,33 @@ pub fn update(
       } else {
         { ..next, write_access: CodexNeedsResume }
       }
+      let mut current = next
       let cmd = if next.connection is CodexReady {
+        let (refresh, refreshed) = next.refresh(dispatch, channel)
+        current = refreshed
         if next.active_thread() is Some(active) {
-          @cmd.batch([
-            next.refresh(dispatch, channel),
-            next.open_thread(dispatch, channel, active.id),
-          ])
+          let thread = if next.pending_turn_delivery is Some(pending) &&
+            pending.thread_id == active.id {
+            next.reconcile_turn_delivery(dispatch, channel, active.id)
+          } else {
+            next.open_thread(dispatch, channel, active.id)
+          }
+          @cmd.batch([refresh, thread])
         } else if next.active_draft() is Some(draft) && !draft.cwd.is_empty() {
           @cmd.batch([
-            next.refresh(dispatch, channel),
+            refresh,
             next.open_draft(dispatch, channel, draft.id, draft.cwd),
           ])
         } else {
-          next.refresh(dispatch, channel)
+          refresh
         }
       } else {
         @cmd.none
       }
-      (cmd, next)
+      (cmd, current)
     }
     Notification(method_~, params~) => {
-      let next = state.with_notification(method_, params)
+      let mut next = state.with_notification(method_, params)
       if method_ == "skills/changed" {
         let invalidated = next.loading_context(true)
         return (
@@ -336,7 +410,21 @@ pub fn update(
         method_ == "thread/unarchived" ||
         method_ == "thread/name/updated" ||
         method_ == "thread/started" {
-        next.refresh_catalog(dispatch, channel)
+        let (refresh, refreshed) = next.refresh_catalog(dispatch, channel)
+        next = refreshed
+        refresh
+      } else if method_ == "thread/settings/updated" &&
+        next.active_thread() is Some(active) {
+        // Re-read through the host so a cwd change cannot retarget Files,
+        // Terminal, or language services from an unvalidated notification.
+        // If a turn reply is also missing, the same read must first settle
+        // that delivery frontier before Send can become available.
+        if next.pending_turn_delivery is Some(pending) &&
+          pending.thread_id == active.id {
+          next.reconcile_turn_delivery(dispatch, channel, active.id)
+        } else {
+          next.open_thread(dispatch, channel, active.id)
+        }
       } else if method_ == "turn/completed" {
         // A turn may check out another branch or create a PR. Refresh the same
         // compact status chip OpenSeek updates at its run boundary.
@@ -364,7 +452,12 @@ fn State::with_turn_reply(self : State, value : Json) -> State {
   } else {
     { ..self, draft: "" }
   }
-  { ..next, mentions: [], completion: next.completion.dismissed() }
+  {
+    ..next,
+    mentions: [],
+    completion: next.completion.dismissed(),
+    pending_turn_delivery: None,
+  }
 }
 
 ///|
@@ -441,6 +534,131 @@ test "Codex cwd-less draft remains a Local first prompt" {
 }
 
 ///|
+test "cwd-less stored Codex tasks expose Terminal scratch without Files" {
+  let state = State::from_thread_snapshot({
+    "thread": { "id": "thread-scratch", "turns": [] },
+  })
+  assert_true(
+    state.active_placement(@interop.ChannelId::Local)
+    is Some(@interop.Scratch(root=None)),
+  )
+  assert_true(state.file_owner() is None)
+}
+
+///|
+test "unknown Codex turn delivery refreshes before permitting retry" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let original = {
+    ..State::from_thread_snapshot({
+      "thread": {
+        "id": "thread-1",
+        "turns": [
+          {
+            "id": "turn-old",
+            "status": "completed",
+            "items": [
+              {
+                "id": "user-old",
+                "type": "userMessage",
+                "content": [{ "type": "text", "text": "older" }],
+              },
+            ],
+          },
+        ],
+      },
+    }),
+    draft: "new prompt",
+  }.with_pending_turn_delivery()
+  let (_, refreshing) = update(
+    dispatch,
+    TurnDeliveryUnknown(
+      thread_id="thread-1",
+      message="connection closed",
+      worktree=None,
+    ),
+    original,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(refreshing.pending_turn_delivery is Some(_))
+  assert_true(refreshing.loading)
+  assert_false(refreshing.can_prompt())
+
+  let accepted_snapshot : Json = {
+    "thread": {
+      "id": "thread-1",
+      "turns": [
+        {
+          "id": "turn-old",
+          "status": "completed",
+          "items": [
+            {
+              "id": "user-old",
+              "type": "userMessage",
+              "content": [{ "type": "text", "text": "older" }],
+            },
+          ],
+        },
+        {
+          "id": "turn-new",
+          "status": "inProgress",
+          "items": [
+            {
+              "id": "user-new",
+              "type": "userMessage",
+              "content": [{ "type": "text", "text": "new prompt" }],
+            },
+          ],
+        },
+      ],
+    },
+  }
+  let (_, recovered) = update(
+    dispatch,
+    Reply(kind=CodexTurnReconcileReply("thread-1"), value=accepted_snapshot),
+    refreshing,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(recovered.draft_text(), "")
+  assert_true(recovered.pending_turn_delivery is None)
+  assert_false(recovered.loading)
+
+  let undelivered = {
+    ..original,
+    pending_turn_delivery: original.pending_turn_delivery,
+    loading: true,
+  }
+  let (_, retryable) = update(
+    dispatch,
+    Reply(kind=CodexTurnReconcileReply("thread-1"), value={
+      "thread": {
+        "id": "thread-1",
+        "turns": [
+          {
+            "id": "turn-old",
+            "status": "completed",
+            "items": [
+              {
+                "id": "user-old",
+                "type": "userMessage",
+                "content": [{ "type": "text", "text": "older" }],
+              },
+            ],
+          },
+        ],
+      },
+    }),
+    undelivered,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(retryable.draft_text(), "new prompt")
+  assert_true(retryable.pending_turn_delivery is None)
+  assert_true(retryable.can_prompt())
+}
+
+///|
 test "Codex update handlers are pure and idempotent" {
   let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let state = {
@@ -498,8 +716,8 @@ test "Codex update handlers are pure and idempotent" {
       "account": Json::null(),
     }),
     Reply(kind=CodexModelsReply, value={ "data": [] }),
-    Reply(kind=CodexThreadsReply(false), value={ "data": [] }),
-    Reply(kind=CodexThreadsReply(true), value={ "data": [] }),
+    Reply(kind=CodexThreadsReply(false, 0), value={ "data": [] }),
+    Reply(kind=CodexThreadsReply(true, 0), value={ "data": [] }),
     Reply(kind=CodexThreadReply("thread-1"), value={
       "thread": { "id": "thread-1", "turns": [] },
     }),
@@ -518,7 +736,7 @@ test "Codex update handlers are pure and idempotent" {
       value={ "turn": { "id": "turn-2", "status": "inProgress" } },
     ),
     Reply(
-      kind=CodexWorktreeRepairReply({
+      kind=CodexWorktreeRepairReply("thread-1", {
         name: "wt-1",
         path: "/work/project/.worktrees/wt-1",
         present: true,
@@ -535,7 +753,7 @@ test "Codex update handlers are pure and idempotent" {
     Reply(kind=CodexApprovalReply, value={}),
     Failed(kind=CodexTurnReply("thread-1"), message="test failure"),
     Failed(
-      kind=CodexWorktreeRepairReply({
+      kind=CodexWorktreeRepairReply("thread-1", {
         name: "wt-1",
         path: "/work/project/.worktrees/wt-1",
         present: false,
@@ -625,7 +843,7 @@ test "Codex missing worktree waits for rebuild or archive confirmation" {
   }
   let (_, ready) = update(
     dispatch,
-    Reply(kind=CodexWorktreeRepairReply(rebuilt), value={}),
+    Reply(kind=CodexWorktreeRepairReply("thread-1", rebuilt), value={}),
     state,
     @interop.ChannelId::Local,
     _ => @cmd.none,
@@ -776,6 +994,21 @@ test "Codex draft and turn replies stay with their originating task" {
     _ => @cmd.none,
   )
   assert_true(stale_worktree == current_thread)
+  let (_, stale_repair) = update(
+    dispatch,
+    Reply(
+      kind=CodexWorktreeRepairReply("thread-old", {
+        name: "old",
+        path: "/old/worktree",
+        present: true,
+      }),
+      value={},
+    ),
+    current_thread,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(stale_repair == current_thread)
   let (_, stale_turn_failure) = update(
     dispatch,
     Failed(kind=CodexTurnReply("thread-old"), message="late failure"),
@@ -810,6 +1043,15 @@ test "Codex writer conflict is the active-elsewhere signal" {
   assert_false(first.is_running())
   assert_true(first == repeated)
 
+  // Once the observed turn is idle, Send retries thread/resume instead of
+  // leaving the task permanently disabled after one writer conflict.
+  let retryable = { ..first, connection: CodexReady, draft: "try again" }
+  let (_, retrying) = retryable.submit_composer(
+    dispatch,
+    @interop.ChannelId::Local,
+  )
+  assert_true(retrying.loading)
+
   let (_, stale) = update(
     dispatch,
     WriterConflict("thread-old"),
@@ -818,6 +1060,106 @@ test "Codex writer conflict is the active-elsewhere signal" {
     _ => @cmd.none,
   )
   assert_true(stale == state)
+}
+
+///|
+test "Codex task selection clears composer-local state" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let state = {
+    ..State::from_thread_snapshot({
+      "thread": { "id": "thread-a", "cwd": "/work/a", "turns": [] },
+    }),
+    draft: "belongs to A",
+    mentions: [CodexFileMention(name="a.mbt", path="src/a.mbt")],
+  }
+  let (_, next) = update(
+    dispatch,
+    OpenThread("thread-b"),
+    state,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(next.draft, "")
+  assert_true(next.mentions.is_empty())
+  assert_true(next.completion.current() is None)
+}
+
+///|
+test "background Codex metadata does not settle a foreground action" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let state = State(loading=true)
+  let (_, next) = update(
+    dispatch,
+    Reply(kind=CodexAccountReply, value={
+      "requiresOpenaiAuth": true,
+      "account": Json::null(),
+    }),
+    state,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(next.loading)
+}
+
+///|
+test "newer Codex catalog refresh rejects an older pagination result" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let (_, first) = update(
+    dispatch,
+    Refresh,
+    State(),
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, second) = update(
+    dispatch,
+    Refresh,
+    first,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, stale) = update(
+    dispatch,
+    Reply(kind=CodexThreadsReply(false, 1), value={
+      "data": [{ "id": "stale", "preview": "Stale" }],
+    }),
+    second,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(stale == second)
+  let (_, current) = update(
+    dispatch,
+    Reply(kind=CodexThreadsReply(false, 2), value={
+      "data": [{ "id": "current", "preview": "Current" }],
+    }),
+    stale,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(current.threads[0].id, "current")
+}
+
+///|
+test "Codex cwd notifications wait for an authorized thread read" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let state = State::from_thread_snapshot({
+    "thread": { "id": "thread-1", "cwd": "/work/old", "turns": [] },
+  })
+  let (_, notified) = update(
+    dispatch,
+    Notification(method_="thread/settings/updated", params={
+      "threadId": "thread-1",
+      "threadSettings": { "cwd": "/work/untrusted" },
+    }),
+    state,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(
+    notified.active_thread().bind(thread => thread.cwd),
+    Some("/work/old"),
+  )
 }
 
 ///|

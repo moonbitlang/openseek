@@ -2017,7 +2017,7 @@ fn view(
         model.focused,
       )
       model.codex.page(
-        dispatch.map(msg => Codex(msg)),
+        dispatch.map(msg => Codex(channel=model.focused, msg)),
         model.focused,
         model.sidebar_open,
         terminal_panel_visible,

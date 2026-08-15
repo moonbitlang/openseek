@@ -365,7 +365,9 @@ pub fn boot() -> Unit {
         if model.git_details_open ||
           (model.screen is Codex && model.codex.git_details_open()) {
           let close = if model.screen is Codex {
-            emit.map((_ : Unit) => Codex(@codex.Msg::close_git_details()))
+            emit.map((_ : Unit) => {
+              Codex(channel=model.focused, @codex.Msg::close_git_details())
+            })
           } else {
             emit.map((_ : Unit) => CloseGitDetails)
           }

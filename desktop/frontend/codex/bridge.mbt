@@ -14,9 +14,14 @@ fn CodexReplyKind::request(
     @js.async_run(() => {
       let value : Json = @interop.bridge_request(channel, command, payload) catch {
         error => {
+          let message = @interop.bridge_error_text(error)
           scheduler.add(
             dispatch(
-              Failed(kind=self, message=@interop.bridge_error_text(error)),
+              match (self, @interop.bridge_failure(error)) {
+                (CodexTurnReply(thread_id), Unknown) =>
+                  TurnDeliveryUnknown(thread_id~, message~, worktree=None)
+                _ => Failed(kind=self, message~)
+              },
             ),
           )
           return
@@ -33,6 +38,7 @@ fn CodexReplyKind::request(
 /// old tasks disappear once an account has more than one page.
 priv struct CodexThreadCatalogRequest {
   archived : Bool
+  generation : Int
 }
 
 ///|
@@ -63,7 +69,7 @@ fn CodexThreadCatalogRequest::run(
             scheduler.add(
               dispatch(
                 Failed(
-                  kind=CodexThreadsReply(self.archived),
+                  kind=CodexThreadsReply(self.archived, self.generation),
                   message=@interop.bridge_error_text(error),
                 ),
               ),
@@ -76,7 +82,7 @@ fn CodexThreadCatalogRequest::run(
           scheduler.add(
             dispatch(
               Failed(
-                kind=CodexThreadsReply(self.archived),
+                kind=CodexThreadsReply(self.archived, self.generation),
                 message="malformed Codex thread list page",
               ),
             ),
@@ -95,7 +101,7 @@ fn CodexThreadCatalogRequest::run(
           scheduler.add(
             dispatch(
               Failed(
-                kind=CodexThreadsReply(self.archived),
+                kind=CodexThreadsReply(self.archived, self.generation),
                 message="Codex thread list repeated cursor " + next,
               ),
             ),
@@ -107,7 +113,9 @@ fn CodexThreadCatalogRequest::run(
       }
       scheduler.add(
         dispatch(
-          Reply(kind=CodexThreadsReply(self.archived), value={ "data": rows }),
+          Reply(kind=CodexThreadsReply(self.archived, self.generation), value={
+            "data": rows,
+          }),
         ),
       )
     })
@@ -118,14 +126,28 @@ fn CodexThreadCatalogRequest::run(
 /// Refresh both halves of the Codex sidebar catalog without also reloading
 /// account and model metadata after every archive or name notification.
 fn State::refresh_catalog(
-  _self : State,
+  self : State,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-) -> @cmd.Cmd {
-  @cmd.batch([
-    CodexThreadCatalogRequest::{ archived: false }.run(dispatch, channel),
-    CodexThreadCatalogRequest::{ archived: true }.run(dispatch, channel),
-  ])
+) -> (@cmd.Cmd, State) {
+  let next = {
+    ..self,
+    live_catalog_generation: self.live_catalog_generation + 1,
+    archived_catalog_generation: self.archived_catalog_generation + 1,
+  }
+  (
+    @cmd.batch([
+      CodexThreadCatalogRequest::{
+        archived: false,
+        generation: next.live_catalog_generation,
+      }.run(dispatch, channel),
+      CodexThreadCatalogRequest::{
+        archived: true,
+        generation: next.archived_catalog_generation,
+      }.run(dispatch, channel),
+    ]),
+    next,
+  )
 }
 
 ///|
@@ -133,29 +155,33 @@ pub fn State::refresh(
   self : State,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-) -> @cmd.Cmd {
+) -> (@cmd.Cmd, State) {
   let account : Json = { "refreshToken": false }
   let models : Json = { "limit": 100, "includeHidden": false }
   // The global sidebar is the conversation switcher for both products, so it
   // shows the Codex account's interactive history instead of silently hiding
   // threads outside OpenSeek's currently selected workspace. New threads
   // still receive that workspace as their cwd in `start_thread` below.
-  @cmd.batch([
-    CodexStatusReply.request(dispatch, channel, @commands.codex_status, {}),
-    CodexAccountReply.request(
-      dispatch, channel, @commands.codex_account_read, account,
-    ),
-    CodexRequestsReply.request(
-      dispatch,
-      channel,
-      @commands.codex_server_request_list,
-      {},
-    ),
-    CodexModelsReply.request(
-      dispatch, channel, @commands.codex_model_list, models,
-    ),
-    self.refresh_catalog(dispatch, channel),
-  ])
+  let (catalog, next) = self.refresh_catalog(dispatch, channel)
+  (
+    @cmd.batch([
+      CodexStatusReply.request(dispatch, channel, @commands.codex_status, {}),
+      CodexAccountReply.request(
+        dispatch, channel, @commands.codex_account_read, account,
+      ),
+      CodexRequestsReply.request(
+        dispatch,
+        channel,
+        @commands.codex_server_request_list,
+        {},
+      ),
+      CodexModelsReply.request(
+        dispatch, channel, @commands.codex_model_list, models,
+      ),
+      catalog,
+    ]),
+    next,
+  )
 }
 
 ///|
@@ -230,6 +256,9 @@ fn CodexDraftThreadRequest::run(
         @interop.session_command_lane(channel, self.draft_id),
         () => {
           let start_fields : Map[String, Json] = Map([])
+          // The native host ties cwd authority to this already-open draft and
+          // strips this Desktop-only field before forwarding thread/start.
+          start_fields["openseekDraftId"] = Json::string(self.draft_id)
           if self.cwd is Some(cwd) {
             start_fields["cwd"] = Json::string(cwd)
           }
@@ -338,6 +367,28 @@ fn State::open_thread(
 }
 
 ///|
+/// Re-read one task after a start/steer reply was lost. This uses a distinct
+/// reply kind so ordinary selection loading cannot clear the preserved input
+/// or enable Send before the request-time frontier has been compared.
+fn State::reconcile_turn_delivery(
+  self : State,
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  thread_id : String,
+) -> @cmd.Cmd {
+  guard self.pending_turn_delivery is Some(pending) &&
+    pending.thread_id == thread_id else {
+    return @cmd.none
+  }
+  CodexTurnReconcileReply(thread_id).request(
+    dispatch,
+    channel,
+    @commands.codex_thread_history_read,
+    { "threadId": thread_id },
+  )
+}
+
+///|
 /// Re-read the selected checkout's current branch and pull request. App-server
 /// `gitInfo` is creation-time metadata; this host operation is the same GitHub
 /// lookup used by OpenSeek's composer and therefore follows branch changes
@@ -414,14 +465,7 @@ fn State::send(
 ) -> @cmd.Cmd {
   guard self.active_thread() is Some(active) else { return @cmd.none }
   guard !self.input_empty() else { return @cmd.none }
-  let text = self.prompt_text()
-  let inputs : Array[Json] = []
-  if !text.is_empty() {
-    inputs.push({ "type": "text", "text": text })
-  }
-  for mention in self.mentions {
-    inputs.push(mention.to_input())
-  }
+  let inputs = self.turn_inputs()
   let fields : Map[String, Json] = {
     "threadId": Json::string(active.id),
     "input": Json::array(inputs),
@@ -453,6 +497,38 @@ fn State::send(
       @commands.codex_turn_start,
       Json::object(fields),
     )
+  }
+}
+
+///|
+/// Build the exact app-server input array once for both delivery tracking and
+/// the start/steer request. Reconciliation compares this canonical JSON with
+/// a newly stored user item instead of guessing from rendered transcript text.
+fn State::turn_inputs(self : State) -> Array[Json] {
+  let text = self.prompt_text()
+  let inputs : Array[Json] = []
+  if !text.is_empty() {
+    inputs.push({ "type": "text", "text": text })
+  }
+  for mention in self.mentions {
+    inputs.push(mention.to_input())
+  }
+  inputs
+}
+
+///|
+/// Capture every user item visible before a turn request leaves. A lost reply
+/// keeps this frontier in State until thread/read proves whether a new exact
+/// input appeared, so the same composer cannot issue an automatic duplicate.
+fn State::with_pending_turn_delivery(self : State) -> State {
+  guard self.active_thread() is Some(active) else { return self }
+  {
+    ..self,
+    pending_turn_delivery: Some({
+      thread_id: active.id,
+      input_signature: Json::array(self.turn_inputs()).stringify(),
+      known_user_items: active.user_item_ids(),
+    }),
   }
 }
 
@@ -537,12 +613,19 @@ fn State::start_turn_in_new_worktree(
             Json::object(fields),
           ) catch {
             error => {
+              let message = @interop.bridge_error_text(error)
               scheduler.add(
                 dispatch(
-                  Failed(
-                    kind=CodexTurnReply(thread_id),
-                    message=@interop.bridge_error_text(error),
-                  ),
+                  match @interop.bridge_failure(error) {
+                    Unknown =>
+                      TurnDeliveryUnknown(
+                        thread_id~,
+                        message~,
+                        worktree=Some(worktree),
+                      )
+                    Refused | Unsent =>
+                      Failed(kind=CodexTurnReply(thread_id), message~)
+                  },
                 ),
               )
               return
@@ -697,7 +780,7 @@ fn State::search_symbols(
     return @cmd.none
   }
   @symbols.search(
-    channel,
+    @interop.ConversationKey::{ channel, session: owner.thread_id },
     owner.query,
     root~,
     loaded=symbols => {
@@ -815,7 +898,7 @@ fn State::repair_worktree(
           scheduler.add(
             dispatch(
               Failed(
-                kind=CodexWorktreeRepairReply(worktree),
+                kind=CodexWorktreeRepairReply(thread_id, worktree),
                 message=@interop.bridge_error_text(error),
               ),
             ),
@@ -829,7 +912,7 @@ fn State::repair_worktree(
           scheduler.add(
             dispatch(
               Failed(
-                kind=CodexWorktreeRepairReply(worktree),
+                kind=CodexWorktreeRepairReply(thread_id, worktree),
                 message="worktree setup failed: " + message,
               ),
             ),
@@ -841,7 +924,7 @@ fn State::repair_worktree(
         scheduler.add(
           dispatch(
             Failed(
-              kind=CodexWorktreeRepairReply(worktree),
+              kind=CodexWorktreeRepairReply(thread_id, worktree),
               message="malformed worktree.create reply",
             ),
           ),
@@ -849,7 +932,9 @@ fn State::repair_worktree(
         return
       }
       scheduler.add(
-        dispatch(Reply(kind=CodexWorktreeRepairReply(rebuilt), value={})),
+        dispatch(
+          Reply(kind=CodexWorktreeRepairReply(thread_id, rebuilt), value={}),
+        ),
       )
     })
   })

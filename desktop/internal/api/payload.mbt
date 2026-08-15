@@ -80,6 +80,81 @@ priv struct CodexDraftPayload {
 } derive(FromJson)
 
 ///|
+/// Desktop accepts only the thread/start fields its Codex composer owns. In
+/// particular, a browser cannot choose app-server sandbox or approval policy.
+priv struct CodexThreadStartPayload {
+  cwd : String?
+  model : String?
+  draft_id : String?
+}
+
+///|
+fn CodexThreadStartPayload::decode(value : Json) -> CodexThreadStartPayload? {
+  guard value is Object(fields) else { return None }
+  for key, _ in fields {
+    guard key == "cwd" || key == "model" || key == "openseekDraftId" else {
+      return None
+    }
+  }
+  let cwd = match fields.get("cwd") {
+    Some(String(value)) => Some(value)
+    None => None
+    _ => return None
+  }
+  let model = match fields.get("model") {
+    Some(String(value)) => Some(value)
+    None => None
+    _ => return None
+  }
+  let draft_id = match fields.get("openseekDraftId") {
+    Some(String(value)) => Some(value)
+    None => None
+    _ => return None
+  }
+  Some({ cwd, model, draft_id })
+}
+
+///|
+fn CodexThreadStartPayload::app_server_params(
+  self : CodexThreadStartPayload,
+) -> Json {
+  let fields : Map[String, Json] = {
+    "serviceName": Json::string("openseek_desktop"),
+  }
+  if self.cwd is Some(cwd) {
+    fields["cwd"] = Json::string(cwd)
+  }
+  if self.model is Some(model) && !model.trim().is_empty() {
+    fields["model"] = Json::string(model)
+  }
+  Json::object(fields)
+}
+
+///|
+/// turn/start retains app-server's evolving input/model fields, but Desktop
+/// validates the two fields that establish filesystem ownership.
+priv struct CodexTurnStartPayload {
+  thread_id : String
+  cwd : String?
+  params : Map[String, Json]
+}
+
+///|
+fn CodexTurnStartPayload::decode(value : Json) -> CodexTurnStartPayload? {
+  guard value is Object(fields) &&
+    fields.get("threadId") is Some(String(thread_id)) &&
+    !thread_id.trim().is_empty() else {
+    return None
+  }
+  let cwd = match fields.get("cwd") {
+    Some(String(value)) => Some(value)
+    None => None
+    _ => return None
+  }
+  Some({ thread_id, cwd, params: fields })
+}
+
+///|
 priv struct CodexDraftClosePayload {
   draft_id : String
 } derive(FromJson)
@@ -99,6 +174,43 @@ fn CodexDraftClosePayload::validated_id(
     return None
   }
   Some(id)
+}
+
+///|
+test "Codex thread start accepts only composer-owned fields" {
+  let request = CodexThreadStartPayload::decode({
+    "cwd": "/work/project",
+    "model": "gpt-test",
+    "openseekDraftId": "desktop-draft-1",
+  }).unwrap()
+  assert_eq(request.app_server_params(), {
+    "cwd": "/work/project",
+    "model": "gpt-test",
+    "serviceName": "openseek_desktop",
+  })
+  assert_true(
+    CodexThreadStartPayload::decode({
+      "cwd": "/work/project",
+      "sandbox": "danger-full-access",
+    })
+    is None,
+  )
+}
+
+///|
+test "Codex turn start requires a thread id and typed cwd" {
+  assert_true(
+    CodexTurnStartPayload::decode({
+      "threadId": "thread-1",
+      "cwd": "/work/project",
+      "input": [],
+    })
+    is Some(_),
+  )
+  assert_true(CodexTurnStartPayload::decode({ "cwd": "/work/project" }) is None)
+  assert_true(
+    CodexTurnStartPayload::decode({ "threadId": "thread-1", "cwd": 42 }) is None,
+  )
 }
 
 ///|

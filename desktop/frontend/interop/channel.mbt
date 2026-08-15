@@ -35,7 +35,10 @@ pub(all) struct ConversationKey {
 /// registered project and durable worktree name, so every operating system
 /// blocks path-based work without inventing a sentinel path.
 pub(all) enum CheckoutPlacement {
-  Scratch(root~ : @common.Uri)
+  // OpenSeek scratch conversations expose their lazily-created directory;
+  // cwd-less Codex tasks deliberately do not. Both still identify a scratch
+  // terminal group, while only `Some(root)` enables Files and language work.
+  Scratch(root~ : @common.Uri?)
   WorkspaceRoot(root~ : @common.Uri)
   Worktree(project~ : @common.Uri, name~ : String, root~ : @common.Uri)
   MissingWorktree(project~ : @common.Uri, name~ : String)
@@ -48,7 +51,8 @@ pub fn CheckoutPlacement::checkout_root(
   self : CheckoutPlacement,
 ) -> @common.Uri? {
   match self {
-    Scratch(root~) | WorkspaceRoot(root~) | Worktree(root~, ..) => Some(root)
+    Scratch(root~) => root
+    WorkspaceRoot(root~) | Worktree(root~, ..) => Some(root)
     MissingWorktree(..) => None
   }
 }

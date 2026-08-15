@@ -730,7 +730,6 @@ fn State::composer_view(
   }
   let writable_turn = self.writable_turn_id()
   let read_only_turn = self.active_turn_is_read_only()
-  let active_elsewhere = self.is_active_elsewhere() || read_only_turn
   let action = if writable_turn is Some(_) {
     @composer.ActionButton::{
       id: "stop",
@@ -748,7 +747,7 @@ fn State::composer_view(
       disabled: self.loading ||
       !self.can_prompt() ||
       self.input_empty() ||
-      active_elsewhere ||
+      read_only_turn ||
       self.has_missing_worktree(),
       command: dispatch(Composer(@composer.ControllerSubmitRequested)),
       content: icon(icon_arrow_up),
@@ -766,14 +765,16 @@ fn State::composer_view(
       "Steer the running task — your message joins it at the next step."
     } else if self.has_missing_worktree() {
       "Rebuild this task's worktree before continuing."
-    } else if active_elsewhere {
+    } else if read_only_turn {
       "This task is active in another Codex client."
+    } else if self.is_active_elsewhere() {
+      "Send to retry writer access for this task."
     } else {
       "Ask Codex to inspect, edit, or explain this workspace."
     },
     disabled: !self.can_prompt() ||
     !(self.connection is CodexReady) ||
-    active_elsewhere ||
+    read_only_turn ||
     self.has_missing_worktree(),
     input: dispatch.map(value => {
       Composer(@composer.ControllerDraftChanged(value))
@@ -911,8 +912,8 @@ pub fn State::page(
           if self.is_active_elsewhere() {
             @html.span(
               class="codex-writer-status",
-              title="Another Codex client currently owns this task's writer",
-              " · Read-only: active elsewhere",
+              title="Another Codex client owned this task's writer; Send retries acquisition",
+              " · Writer unavailable",
             )
           } else {
             @html.nothing

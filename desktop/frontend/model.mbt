@@ -1547,7 +1547,9 @@ priv enum Msg {
   CodexUnarchiveThread(String)
   // Codex owns every app-server-local transition; the root only wraps the
   // package message so Rabbita still has one application Msg type.
-  Codex(@codex.Msg)
+  // Every async Codex request and host event retains its source device. The
+  // root rejects it after focus moves instead of applying it to another host.
+  Codex(channel~ : @interop.ChannelId, @codex.Msg)
   ToggleSidebar
   // A Settings selection fixes the page to Light or Dark and persists it.
   ThemeChanged(String)

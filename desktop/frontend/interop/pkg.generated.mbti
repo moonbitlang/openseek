@@ -65,7 +65,7 @@ pub fn ChannelId::from_uri_authority(String) -> Self?
 pub fn ChannelId::uri_authority(Self) -> String
 
 pub(all) enum CheckoutPlacement {
-  Scratch(root~ : @common.Uri)
+  Scratch(root~ : @common.Uri?)
   WorkspaceRoot(root~ : @common.Uri)
   Worktree(project~ : @common.Uri, name~ : String, root~ : @common.Uri)
   MissingWorktree(project~ : @common.Uri, name~ : String)

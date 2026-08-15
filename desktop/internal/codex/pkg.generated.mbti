@@ -43,7 +43,7 @@ pub fn Connection::shutdown(Self) -> Unit
 type ProjectCatalog
 pub fn ProjectCatalog::ProjectCatalog() -> Self
 pub async fn ProjectCatalog::annotate(Self, Json) -> Json
-pub async fn ProjectCatalog::main_project(Self, String) -> String?
+pub fn ProjectCatalog::main_project(Self, String) -> String?
 
 type StdioTransport
 pub impl @jsonrpc.Transport for StdioTransport

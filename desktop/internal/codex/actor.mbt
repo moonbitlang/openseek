@@ -413,7 +413,15 @@ fn[G] Connection::dispatch_input(
     Call(method_, params, reply) =>
       group.spawn_bg(allow_failure=true, () => {
         let outcome = try self.request(method_~, params~) catch {
-          error if @async.is_being_cancelled() => raise error
+          error if @async.is_being_cancelled() => {
+            // The connection task group is cancelled on disconnect. Settle
+            // the API caller before preserving that cancellation; otherwise
+            // Actor::call waits forever on a reply only this child owned.
+            let closed = TransportClosed(method_~)
+            closed.log()
+            (reply.try_put(Err(closed)) catch { _ => false }) |> ignore
+            raise error
+          }
           @jsonrpc.Failed(code~, message~, data~) => {
             let error = JsonRpc(method_~, code~, message~, data~)
             error.log()
@@ -451,7 +459,12 @@ fn[G] Connection::dispatch_input(
           self.respond(request, result)
           Ok(Json::empty_object())
         } catch {
-          error if @async.is_being_cancelled() => raise error
+          error if @async.is_being_cancelled() => {
+            let closed = TransportClosed(method_="serverRequest/respond")
+            closed.log()
+            (reply.try_put(Err(closed)) catch { _ => false }) |> ignore
+            raise error
+          }
           error => {
             let error = RequestFailed(
               method_="serverRequest/respond",

@@ -321,12 +321,14 @@ pub(all) struct TerminalClosePayload {
 
 ///|
 pub(all) struct LspOpenPayload {
+  session : String
   root : String
   path : String
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
 pub(all) struct LspHoverPayload {
+  session : String
   root : String
   path : String
   line : Int
@@ -335,12 +337,14 @@ pub(all) struct LspHoverPayload {
 
 ///|
 pub(all) struct WorkspaceSymbolsPayload {
+  session : String
   root : String
   query : String
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
 pub(all) struct MoonIdeNavigationPayload {
+  session : String
   root : String
   path : String
   line : Int

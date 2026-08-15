@@ -66,7 +66,7 @@ test "sync records color-scheme changes even when the shown tab is unchanged" {
   let light_ctx : Ctx = {
     channel: @interop.ChannelId::Local,
     session: "theme",
-    placement: Some(@interop.Scratch(root=scratch_root)),
+    placement: Some(@interop.Scratch(root=Some(scratch_root))),
     dark_mode: false,
     connected: true,
   }
@@ -200,7 +200,7 @@ test "an open panel waits for a reconnected channel before replacing its PTY" {
   let disconnected_ctx : Ctx = {
     channel: remote,
     session: "reconnect",
-    placement: Some(@interop.Scratch(root=scratch_root)),
+    placement: Some(@interop.Scratch(root=Some(scratch_root))),
     dark_mode: false,
     connected: false,
   }

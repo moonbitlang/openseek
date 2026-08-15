@@ -98,6 +98,7 @@ impl @language.DefinitionProvider for MoonIdeNavigationProvider with fn provide_
     context.owner.channel,
     @commands.moonide_definition,
     {
+      session: context.owner.session,
       root: context.root.path,
       path: path.0,
       line: position.line_number,
@@ -138,6 +139,7 @@ impl @language.ReferencesProvider for MoonIdeNavigationProvider with fn provide_
     context.owner.channel,
     @commands.moonide_references,
     {
+      session: context.owner.session,
       root: context.root.path,
       path: path.0,
       line: position.line_number,

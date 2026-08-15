@@ -87,7 +87,11 @@ async fn resolve_moonide_request(
   guard payload.line > 0 && payload.column > 0 else {
     raise PayloadError("line and column must be positive one-based integers")
   }
-  let location = LanguagePath::resolve(payload.root, payload.path)
+  let location = LanguagePath::resolve(
+    payload.session,
+    payload.root,
+    payload.path,
+  )
   {
     lexical_workspace: location.lexical_root,
     physical_workspace: location.physical_root,

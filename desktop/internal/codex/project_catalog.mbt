@@ -8,11 +8,14 @@
 /// maps to itself and remains a normal standalone project.
 struct ProjectCatalog {
   roots : Map[String, String?]
+  // A project becomes selectable only after an authoritative app-server
+  // thread/list or thread/read reply names a cwd that Git maps to it.
+  known_projects : Map[String, Bool]
 }
 
 ///|
 pub fn ProjectCatalog::ProjectCatalog() -> ProjectCatalog {
-  { roots: Map([]) }
+  { roots: Map([]), known_projects: Map([]) }
 }
 
 ///|
@@ -77,16 +80,19 @@ async fn ProjectCatalog::resolve(
 }
 
 ///|
-/// Confirm that an add action names the main project itself, rather than one
-/// of that project's linked worktrees or an arbitrary subdirectory. A
-/// standalone non-Git directory resolves to itself and remains supported.
-pub async fn ProjectCatalog::main_project(
+/// Confirm that an add action names a project previously learned from an
+/// app-server thread reply. Existence alone is not authority: a remote page
+/// must not turn an arbitrary directory spelling into a Desktop grant.
+pub fn ProjectCatalog::main_project(
   self : ProjectCatalog,
   cwd : String,
 ) -> String? {
   let cwd = cwd.trim().to_owned()
-  guard !cwd.is_empty() && self.resolve(cwd) == Some(cwd) else { return None }
-  Some(cwd)
+  if self.known_projects.get(cwd) == Some(true) {
+    Some(cwd)
+  } else {
+    None
+  }
 }
 
 ///|
@@ -107,6 +113,7 @@ async fn ProjectCatalog::annotate_thread(
     !cwd.trim().is_empty() &&
     self.resolve(cwd) is Some(project) {
     annotated["projectRoot"] = Json::string(project)
+    self.known_projects[project] = true
   }
   Json::object(annotated)
 }
@@ -156,6 +163,9 @@ async test "Codex draft projects accept only the main checkout" {
   let catalog = ProjectCatalog()
   catalog.roots["/workspace/project"] = Some("/workspace/project")
   catalog.roots["/worktrees/a/project"] = Some("/workspace/project")
+  // A cached filesystem lookup alone is not enough to grant a browser path.
+  assert_true(catalog.main_project("/workspace/project") is None)
+  catalog.known_projects["/workspace/project"] = true
   assert_eq(
     catalog.main_project("/workspace/project"),
     Some("/workspace/project"),

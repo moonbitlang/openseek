@@ -62,6 +62,8 @@ pub async fn remove_workspace(String, (Array[@pathx.Absolute]) -> Unit raise Eng
 
 pub async fn remove_worktree(EngineManager, String, String, Bool, (Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.WorktreesReply
 
+pub async fn resolve_host_workspace_authorization(String, String) -> @pathx.Absolute?
+
 pub async fn resolve_in_workspace(String, String, workspace? : String) -> @pathx.Absolute?
 
 pub async fn revoke_host_workspace(String) -> Unit

@@ -94,6 +94,14 @@ fn WorktreeEntry::belongs_to(
 }
 
 ///|
+/// Files, Terminal, and language requests carry the owning conversation id.
+/// The two products store that id in distinct registry fields, but checkout
+/// resolution must recognize either field without merging their lifecycles.
+fn WorktreeEntry::serves_id(self : WorktreeEntry, id : String) -> Bool {
+  self.session == Some(id) || self.codex_thread == Some(id)
+}
+
+///|
 /// One worktree as ops report it: the registry entry plus its derived
 /// checkout path and whether that directory still exists on disk.
 type WorktreeInfo = @protocol.WorktreeInfo
@@ -278,7 +286,7 @@ async fn session_tree(
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
   for entry in read_worktrees_unlocked(workspace) {
-    guard entry.session is Some(bound) && bound == session else { continue }
+    guard entry.serves_id(session) else { continue }
     let dir = worktree_dir(workspace, entry.name)
     let present = @fsx.is_dir(dir.to_path()) catch {
       error if @async.is_being_cancelled() => raise error
@@ -302,7 +310,7 @@ async fn session_tree_base(
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
   for entry in read_worktrees_unlocked(workspace) {
-    if entry.session is Some(bound) && bound == session {
+    if entry.serves_id(session) {
       return Some(entry.base)
     }
   }
@@ -1316,8 +1324,16 @@ async test "session workspace dir follows the worktree mapping while it exists" 
       session: Some("s-wt"),
       codex_thread: None,
     },
+    {
+      name: "codex",
+      branch: "openseek/codex",
+      base: "def",
+      session: None,
+      codex_thread: Some("codex-thread-1"),
+    },
   ])
   @fsx.ensure_dir(ws.join(".worktrees/wt").to_path())
+  @fsx.ensure_dir(ws.join(".worktrees/codex").to_path())
   assert_eq(
     session_workspace_dir("s-wt").map(dir => dir.to_string()),
     Some(ws.join(".worktrees/wt").to_string()),
@@ -1333,6 +1349,14 @@ async test "session workspace dir follows the worktree mapping while it exists" 
       dir.to_string()
     }),
     Some(ws.join(".worktrees/wt/src").to_string()),
+  )
+  // Terminal and file operations use the same conversation id field for
+  // both products; Codex ownership must route to its registered checkout.
+  assert_eq(
+    resolve_in_workspace("codex-thread-1", "", workspace=ws.to_string()).map(dir => {
+      dir.to_string()
+    }),
+    Some(ws.join(".worktrees/codex").to_string()),
   )
   // Deleting the checkout retains the binding but removes the usable root:
   // every session-scoped operation refuses until Repair recreates it.

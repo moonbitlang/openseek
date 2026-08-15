@@ -67,7 +67,7 @@ const SearchingDebounceMs : Int = 150
 /// reloading the request.
 priv suberror SearchingSub {
   Searching(
-    @interop.ChannelId,
+    @interop.ConversationKey,
     String,
     @common.Uri,
     (Array[Symbol]) -> @cmd.Cmd,
@@ -82,16 +82,16 @@ priv suberror SearchingSub {
 /// mutes an in-flight reply. A reply therefore only ever reaches `loaded`
 /// while its exact request identity is still declared.
 pub fn searching(
-  channel : @interop.ChannelId,
+  owner : @interop.ConversationKey,
   query : String,
   root~ : @common.Uri,
   loaded~ : (Array[Symbol]) -> @cmd.Cmd,
   failed~ : @cmd.Cmd,
 ) -> @sub.Sub {
   @sub.custom_sub(
-    "workspace-symbols\u{0}\{channel.uri_authority()}\u{0}\{root.to_string()}\u{0}\{query}",
+    "workspace-symbols\u{0}\{owner.channel.uri_authority()}\u{0}\{owner.session}\u{0}\{root.to_string()}\u{0}\{query}",
     Local,
-    SearchingSub::Searching(channel, query, root, loaded, failed),
+    SearchingSub::Searching(owner, query, root, loaded, failed),
     @sub.SubLoader(searching_loader),
   )
 }
@@ -101,7 +101,7 @@ fn searching_loader(
   payload : Error,
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
-  guard payload is SearchingSub::Searching(channel, query, root, loaded, failed) else {
+  guard payload is SearchingSub::Searching(owner, query, root, loaded, failed) else {
     return None
   }
   let mut loaded = loaded
@@ -111,12 +111,12 @@ fn searching_loader(
     () => {
       // An unauthorized root stays silently pending, matching `search`
       // returning no command: the caller's next declaration change resolves it.
-      guard active && @resource.belongs_to(root, channel) else { return }
+      guard active && @resource.belongs_to(root, owner.channel) else { return }
       @js.async_run(() => {
         let reply : @protocol.WorkspaceSymbolsReply = @interop.bridge_request(
-          channel,
+          owner.channel,
           @commands.lsp_workspace_symbols,
-          { root: root.path, query },
+          { session: owner.session, root: root.path, query },
         ) catch {
           _ => {
             if active {
@@ -152,19 +152,19 @@ fn searching_loader(
 /// are source-owned commands, so each caller retains its own stale-reply fence
 /// without duplicating transport or wire projection.
 pub fn search(
-  channel : @interop.ChannelId,
+  owner : @interop.ConversationKey,
   query : String,
   root~ : @common.Uri,
   loaded~ : (Array[Symbol]) -> @cmd.Cmd,
   failed~ : @cmd.Cmd,
 ) -> @cmd.Cmd {
-  guard @resource.belongs_to(root, channel) else { return @cmd.none }
+  guard @resource.belongs_to(root, owner.channel) else { return @cmd.none }
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply : @protocol.WorkspaceSymbolsReply = @interop.bridge_request(
-        channel,
+        owner.channel,
         @commands.lsp_workspace_symbols,
-        { root: root.path, query },
+        { session: owner.session, root: root.path, query },
       ) catch {
         _ => {
           scheduler.add(failed)

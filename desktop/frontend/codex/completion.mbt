@@ -595,16 +595,20 @@ fn State::accept_completion(
       (@cmd.none, self.with_context_mention(kind, item, draft_without_token))
     CodexCommands => {
       let original = self.draft
+      // Draft tasks do not exist in app-server yet, so thread-scoped slash
+      // commands are inert and must not leave the shared composer loading.
+      let owns_thread = self.active_thread() is Some(_)
       let command = match item.command {
-        "compact" => self.compact(dispatch, channel, original)
-        "review" => self.review(dispatch, channel, original)
+        "compact" if owns_thread => self.compact(dispatch, channel, original)
+        "review" if owns_thread => self.review(dispatch, channel, original)
         _ => @cmd.none
       }
       (
         command,
         {
           ..self,
-          loading: item.command == "compact" || item.command == "review",
+          loading: owns_thread &&
+          (item.command == "compact" || item.command == "review"),
           notice: "",
         },
       )
@@ -664,11 +668,13 @@ fn State::submit_composer(
       { ..self, loading: true, notice: "" },
     )
   } else if self.write_access is CodexWritable {
-    (self.send(dispatch, channel), { ..self, loading: true, notice: "" })
+    let next = self.with_pending_turn_delivery()
+    (next.send(dispatch, channel), { ..next, loading: true, notice: "" })
   } else {
+    let next = self.with_pending_turn_delivery()
     (
-      self.resume_for_send(dispatch, channel),
-      { ..self, loading: true, notice: "" },
+      next.resume_for_send(dispatch, channel),
+      { ..next, loading: true, notice: "" },
     )
   }
 }
@@ -783,4 +789,20 @@ test "Codex skill chips send both marker text and native skill input" {
     @jsonx.json_text(fields, "path"),
     Some("/skills/review-pr/SKILL.md"),
   )
+}
+
+///|
+test "thread slash commands do not make an unsent draft busy" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let draft = State().select_draft("desktop-draft-1", "/work/project")
+  for item in CodexCompletionItem::commands() {
+    let (_, next) = draft.accept_completion(
+      dispatch,
+      @interop.ChannelId::Local,
+      CodexCommands,
+      item,
+      "",
+    )
+    assert_false(next.loading)
+  }
 }

@@ -54,7 +54,9 @@ fn focus_channel(
     @cmd.batch([
       fetch_host_settings(dispatch, channel, dev.connection_generation),
       fetch_installed_skills(dispatch, channel),
-      model.codex.refresh(dispatch.map(msg => Codex(msg)), channel),
+      // Let update advance the catalog generations after focus moves. Calling
+      // the request method against the old state would reuse an old token.
+      dispatch(Codex(channel~, @codex.Msg::refresh())),
     ])
   } else if channel == @interop.ChannelId::Local && model.console is Some(_) {
     @cmd.none
@@ -1221,6 +1223,14 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
       owner: { channel: model.focused, session: "" },
       placement: None,
     })
+  // A cwd-less Codex task has a valid scratch Terminal identity but app-server
+  // exposes no path that Files or language services may address. Keep the one
+  // typed placement in Codex state, then project this capability as absent at
+  // the file-editor boundary rather than inventing a directory.
+  let file_placement = match active.placement {
+    Some(@interop.Scratch(root=None)) if model.screen is Codex => None
+    placement => placement
+  }
   let file_body_visible = match model.dock.active {
     Some(File(_)) | Some(FilePicker) => true
     None | Some(Browser(_)) => false
@@ -1236,7 +1246,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // panel's monotonic counter with this page's existing random identity so
     // a reloaded frontend cannot reuse the outgoing page's watcher token.
     watch_namespace: model.page_namespace + "-watch",
-    placement: active.placement,
+    placement: file_placement,
     dark_mode: model.theme.is_dark(model.system_dark),
     tree_layout: model.tree_layout,
     narrow: model.narrow,
@@ -2526,7 +2536,7 @@ fn update_msg(
     OpenSetup => (@cmd.none, { ..model, screen: Settings, setup_api_key: "" })
     OpenCodex => {
       let (cmd, codex) = @codex.update(
-        dispatch.map(msg => Codex(msg)),
+        dispatch.map(msg => Codex(channel=model.focused, msg)),
         @codex.Msg::refresh(),
         model.codex,
         model.focused,
@@ -2577,7 +2587,7 @@ fn update_msg(
       )
     CodexDraftRotated(cwd~, id~) => {
       let (cmd, codex) = @codex.update(
-        dispatch.map(msg => Codex(msg)),
+        dispatch.map(msg => Codex(channel=model.focused, msg)),
         @codex.Msg::start_draft(id, cwd),
         model.codex,
         model.focused,
@@ -2595,7 +2605,7 @@ fn update_msg(
     }
     CodexOpenThread(thread_id) => {
       let (cmd, codex) = @codex.update(
-        dispatch.map(msg => Codex(msg)),
+        dispatch.map(msg => Codex(channel=model.focused, msg)),
         @codex.Msg::open_thread(thread_id),
         model.codex,
         model.focused,
@@ -2613,7 +2623,7 @@ fn update_msg(
     }
     CodexArchiveThread(thread_id) => {
       let (cmd, codex) = @codex.update(
-        dispatch.map(msg => Codex(msg)),
+        dispatch.map(msg => Codex(channel=model.focused, msg)),
         @codex.Msg::archive_thread(thread_id),
         model.codex,
         model.focused,
@@ -2623,7 +2633,7 @@ fn update_msg(
     }
     CodexUnarchiveThread(thread_id) => {
       let (cmd, codex) = @codex.update(
-        dispatch.map(msg => Codex(msg)),
+        dispatch.map(msg => Codex(channel=model.focused, msg)),
         @codex.Msg::unarchive_thread(thread_id),
         model.codex,
         model.focused,
@@ -2631,12 +2641,17 @@ fn update_msg(
       )
       (cmd, { ..model, codex, })
     }
-    Codex(msg) => {
+    Codex(channel~, msg) => {
+      // A reply, approval request, or status event belongs to the host that
+      // produced it. Device focus is the root authority boundary.
+      if channel != model.focused {
+        return (@cmd.none, model)
+      }
       let (cmd, codex) = @codex.update(
-        dispatch.map(next => Codex(next)),
+        dispatch.map(next => Codex(channel~, next)),
         msg,
         model.codex,
-        model.focused,
+        channel,
         url => open_external_link(dispatch, url),
       )
       (cmd, { ..model, codex, })
@@ -4266,9 +4281,7 @@ fn update_device_msg(
         // Codex conversations are always visible in the global sidebar, so
         // populate that focused-host catalog on bridge readiness rather than
         // waiting for a separate Codex page to be opened.
-        commands.push(
-          model.codex.refresh(dispatch.map(msg => Codex(msg)), channel),
-        )
+        commands.push(dispatch(Codex(channel~, @codex.Msg::refresh())))
         // Self-update and the relay sign-in are the desktop window's alone
         // (see `is_desktop`); a browser never checks, so neither UI
         // materializes there. The startup update check rides here: settings
@@ -8302,7 +8315,7 @@ test "BridgeReady reattaches a live file index watcher" {
   let panel = {
     ..model.file_panel,
     owner: Some(owner),
-    placement: @fileeditor.PlacementLive(@interop.Scratch(root~)),
+    placement: @fileeditor.PlacementLive(@interop.Scratch(root=Some(root))),
     watching: Some(watched),
     watch_generation: 7,
   }
@@ -8361,7 +8374,7 @@ test "device focus retires the outgoing watcher and file index" {
   let panel = {
     ..model.file_panel,
     owner: Some(owner),
-    placement: @fileeditor.PlacementLive(@interop.Scratch(root~)),
+    placement: @fileeditor.PlacementLive(@interop.Scratch(root=Some(root))),
     watching: Some({ owner, root, files: [], directories: [], recursive: true }),
     watch_generation: 7,
   }
@@ -16050,7 +16063,23 @@ test "Codex sidebar selection uses the main conversation screen" {
 }
 
 ///|
-test "Codex files and terminal wait for an explicit cwd" {
+test "Codex events from a background device cannot mutate the focused host" {
+  let dispatch = test_dispatch()
+  let model = test_model()
+  let (_, next) = update(
+    dispatch,
+    Codex(
+      channel=@interop.ChannelId::Remote("background"),
+      @codex.Msg::status_changed({ "status": "ready" }),
+    ),
+    model,
+  )
+  assert_true(next.codex == model.codex)
+  assert_eq(next.focused, model.focused)
+}
+
+///|
+test "cwd-less Codex tasks keep Files unavailable and use scratch Terminal" {
   let codex = @codex.State::from_thread_snapshot({
     "thread": { "id": "codex-scratch-1", "preview": "No cwd yet", "turns": [] },
   })
@@ -16059,11 +16088,11 @@ test "Codex files and terminal wait for an explicit cwd" {
   inspect(files.owner.session, content="codex-scratch-1")
   assert_true(files.placement is None)
 
-  // The owner remains stable for async fencing, but no directory is invented
-  // from an unrelated OpenSeek chat or from the Codex task id.
+  // The owner remains stable for async fencing. Terminal identifies the
+  // host-lazy scratch group by task id without inventing a Files directory.
   let terminal = terminal_ctx(model)
   inspect(terminal.session, content="codex-scratch-1")
-  assert_true(terminal.placement is None)
+  assert_true(terminal.placement is Some(@interop.Scratch(root=None)))
   assert_true(terminal.connected)
 }
 

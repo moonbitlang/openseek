@@ -148,18 +148,30 @@ priv struct CodexPendingRequest {
 } derive(Eq)
 
 ///|
+/// The exact task/input frontier captured before a start or steer request.
+/// If the transport loses the reply after sending, a fresh thread snapshot
+/// can distinguish a newly stored user item from everything already visible
+/// before the request. Until that read completes, Send remains disabled.
+priv struct CodexPendingTurnDelivery {
+  thread_id : String
+  input_signature : String
+  known_user_items : Array[String]
+} derive(Eq)
+
+///|
 priv enum CodexReplyKind {
   CodexStatusReply
   CodexRequestsReply
   CodexAccountReply
   CodexModelsReply
-  CodexThreadsReply(Bool)
+  CodexThreadsReply(Bool, Int)
   CodexThreadReply(String)
   CodexDraftOpenReply(String)
   CodexDraftThreadReply(String)
   CodexTurnReply(String)
+  CodexTurnReconcileReply(String)
   CodexWorktreeTurnReply(String, CodexWorktree)
-  CodexWorktreeRepairReply(CodexWorktree)
+  CodexWorktreeRepairReply(String, CodexWorktree)
   CodexLoginReply
   CodexArchiveReply(String)
   CodexUnarchiveReply(String)
@@ -208,6 +220,11 @@ enum Msg {
   CancelArchiveDiscard
   WriterAcquired(String)
   WriterConflict(String)
+  TurnDeliveryUnknown(
+    thread_id~ : String,
+    message~ : String,
+    worktree~ : CodexWorktree?
+  )
   Stop
   Login
   CancelLogin
@@ -284,6 +301,11 @@ struct State {
   selected_model : String
   threads : Array[CodexThreadRow]
   archived_threads : Array[CodexThreadRow]
+  // Live and archived pagination are independent requests. Each refresh
+  // advances both generations so a slower older walk cannot overwrite a
+  // newer catalog after reconnect, archive, or device focus changes.
+  live_catalog_generation : Int
+  archived_catalog_generation : Int
   selection : CodexSelection
   // The last sidebar selection awaiting a history snapshot. A reply carries
   // the same id, so an older request can never replace a newer selection.
@@ -311,6 +333,10 @@ struct State {
   placement : @composer.WorktreeChoice
   archive_confirm : CodexArchiveConfirm?
   pending_requests : Array[CodexPendingRequest]
+  // Present only after a turn request went out but its reply was lost. The
+  // preserved composer input is not retryable until thread/read compares it
+  // with the request-time user-item frontier.
+  pending_turn_delivery : CodexPendingTurnDelivery?
   loading : Bool
   notice : String
 } derive(Eq)
@@ -326,6 +352,8 @@ pub fn State::State(loading? : Bool = false) -> State {
     selected_model: "",
     threads: [],
     archived_threads: [],
+    live_catalog_generation: 0,
+    archived_catalog_generation: 0,
     selection: CodexNoTask,
     requested_thread: None,
     git_status: None,
@@ -340,6 +368,7 @@ pub fn State::State(loading? : Bool = false) -> State {
     placement: @composer.LocalCheckout,
     archive_confirm: None,
     pending_requests: [],
+    pending_turn_delivery: None,
     loading,
     notice: "",
   }
@@ -392,14 +421,40 @@ fn State::accepts_thread_reply(self : State, requested_thread : String) -> Bool 
 /// so an overtaken draft/turn reply is inert rather than partly applied.
 fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
   match kind {
+    CodexThreadsReply(false, generation) =>
+      generation == self.live_catalog_generation
+    CodexThreadsReply(true, generation) =>
+      generation == self.archived_catalog_generation
     CodexThreadReply(thread_id) => self.accepts_thread_reply(thread_id)
     CodexDraftThreadReply(draft_id) =>
       self.active_draft().map(draft => draft.id == draft_id).unwrap_or(false)
-    CodexTurnReply(thread_id) | CodexWorktreeTurnReply(thread_id, _) =>
+    CodexTurnReply(thread_id)
+    | CodexTurnReconcileReply(thread_id)
+    | CodexWorktreeTurnReply(thread_id, _) =>
       self
       .active_thread()
       .map(thread => thread.id == thread_id)
       .unwrap_or(false)
+    CodexWorktreeRepairReply(thread_id, _) =>
+      self
+      .active_thread()
+      .map(thread => thread.id == thread_id)
+      .unwrap_or(false)
+    _ => true
+  }
+}
+
+///|
+/// Metadata replies do not settle a foreground composer, mutation, login, or
+/// selection request. Keeping this classification on the reply type prevents
+/// periodic refreshes from making an unrelated action look complete.
+fn CodexReplyKind::settles_foreground(self : CodexReplyKind) -> Bool {
+  match self {
+    CodexStatusReply
+    | CodexRequestsReply
+    | CodexAccountReply
+    | CodexModelsReply
+    | CodexThreadsReply(_, _) => false
     _ => true
   }
 }
@@ -504,6 +559,9 @@ fn State::can_choose_worktree(self : State) -> Bool {
 /// created without any selected project can still start an ordinary cwd-less
 /// Codex thread, matching app-server's native Local behavior.
 fn State::can_prompt(self : State) -> Bool {
+  if self.pending_turn_delivery is Some(_) {
+    return false
+  }
   match self.selection {
     CodexNoTask => false
     CodexDraftTask(draft) =>
@@ -553,6 +611,7 @@ fn State::select_draft(self : State, id : String, cwd : String) -> State {
     symbol_search: CodexSymbolSearchCache::empty(),
     placement: @composer.LocalCheckout,
     archive_confirm: None,
+    pending_turn_delivery: None,
     loading: !cwd.is_empty(),
     notice: "",
   }
@@ -591,6 +650,52 @@ fn CodexItem::decode(value : Json) -> CodexItem? {
     return None
   }
   Some({ id, kind, value, streamed: "" })
+}
+
+///|
+/// Canonical app-server input carried by one stored user item. The frontend
+/// compares this only within one thread and only after excluding every item
+/// id visible before the request, so an older identical prompt is not mistaken
+/// for proof that an unanswered start/steer request landed.
+fn CodexItem::user_input_signature(self : CodexItem) -> String? {
+  guard self.kind == "userMessage" &&
+    self.value is Object(fields) &&
+    fields.get("content") is Some(Array(content)) else {
+    return None
+  }
+  Some(Json::array(content).stringify())
+}
+
+///|
+fn CodexThread::user_item_ids(self : CodexThread) -> Array[String] {
+  let ids : Array[String] = []
+  for turn in self.turns {
+    for item in turn.items {
+      if item.kind == "userMessage" {
+        ids.push(item.id)
+      }
+    }
+  }
+  ids
+}
+
+///|
+/// A user item beyond the request-time frontier with the exact submitted
+/// input proves that the unanswered request was accepted. Absence after a
+/// fresh thread/read means the preserved composer may be retried deliberately.
+fn CodexThread::received(
+  self : CodexThread,
+  pending : CodexPendingTurnDelivery,
+) -> Bool {
+  for turn in self.turns {
+    for item in turn.items {
+      if !pending.known_user_items.contains(item.id) &&
+        item.user_input_signature() == Some(pending.input_signature) {
+        return true
+      }
+    }
+  }
+  false
 }
 
 ///|
@@ -704,7 +809,11 @@ fn CodexThread::placement(
           @resource.of_path(channel, cwd).map(root => {
             @interop.WorkspaceRoot(root~)
           })
-        _ => None
+        // app-server tasks created without cwd still own a host-lazy scratch
+        // terminal. The host does not disclose its path, so keep `root=None`:
+        // Terminal can use the task id while Files and language services stay
+        // unavailable instead of receiving an invented directory.
+        _ => Some(@interop.Scratch(root=None))
       }
   }
 }
@@ -972,25 +1081,44 @@ fn State::with_thread_reply(
 }
 
 ///|
-/// Apply app-server's authoritative cwd update to the active task and its
-/// sidebar row without moving that row. The project root and explicit
-/// SeekMoon worktree ownership remain separate annotations.
-fn State::with_active_cwd(
+/// Reconcile a turn request whose transport reply was lost. This read is the
+/// boundary that permits another Send: accepted input is cleared, while input
+/// absent from the authoritative snapshot stays in the composer for an
+/// explicit retry.
+fn State::with_reconciled_turn_reply(
   self : State,
-  active : CodexThread,
-  cwd : String,
+  value : Json,
+  thread_id : String,
 ) -> State {
-  let active = { ..active, cwd: Some(cwd) }
-  {
-    ..self,
-    selection: CodexStoredTask(active),
-    threads: self.threads.map(thread => {
-      if thread.id == active.id {
-        { ..thread, cwd: Some(cwd) }
-      } else {
-        thread
-      }
-    }),
+  guard self.pending_turn_delivery is Some(pending) &&
+    pending.thread_id == thread_id &&
+    value is Object(fields) &&
+    fields.get("thread") is Some(thread) &&
+    CodexThread::decode(thread) is Some(authoritative) &&
+    authoritative.id == thread_id else {
+    return {
+      ..self,
+      loading: false,
+      notice: "Codex turn delivery is still unconfirmed; reopen the task to refresh it before retrying.",
+    }
+  }
+  let received = authoritative.received(pending)
+  let next = self.with_thread_reply(value, requested_thread=thread_id)
+  if received {
+    {
+      ..next,
+      draft: "",
+      mentions: [],
+      completion: next.completion.dismissed(),
+      pending_turn_delivery: None,
+      notice: "Codex accepted the prompt; its reply was recovered from refreshed history.",
+    }
+  } else {
+    {
+      ..next,
+      pending_turn_delivery: None,
+      notice: "The prompt is not present in refreshed Codex history; it is available to send again.",
+    }
   }
 }
 
@@ -1311,13 +1439,9 @@ fn State::with_notification(
       } else {
         self
       }
-    "thread/settings/updated" =>
-      if fields.get("threadSettings") is Some(Object(settings)) &&
-        @jsonx.json_text(settings, "cwd") is Some(cwd) {
-        self.with_active_cwd(active, cwd)
-      } else {
-        self
-      }
+    // The notification's cwd has not crossed the Desktop host's path
+    // authority check. Update reruns `thread/read` before adopting it.
+    "thread/settings/updated" => self
     "turn/started" | "turn/completed" =>
       if fields.get("turn") is Some(value) &&
         CodexTurn::decode(value) is Some(turn) {
@@ -1557,7 +1681,24 @@ fn CodexItem::text(self : CodexItem) -> String {
       if !streamed.is_empty() {
         streamed
       } else {
-        fields.get("summary").map(value => value.stringify()).unwrap_or("")
+        match fields.get("summary") {
+          Some(String(text)) => text
+          Some(Array(parts)) => {
+            let text : Array[String] = []
+            for part in parts {
+              match part {
+                String(value) => text.push(value)
+                Object(fields) =>
+                  if @jsonx.json_text(fields, "text") is Some(value) {
+                    text.push(value)
+                  }
+                _ => ()
+              }
+            }
+            text.join("\n")
+          }
+          _ => ""
+        }
       }
     "commandExecution" => {
       let command = @jsonx.json_text(fields, "command").unwrap_or("Command")
@@ -1789,6 +1930,19 @@ test "Codex completed items replace streamed presentation state" {
   let settled = streamed.with_item(completed, completed=true)
   assert_eq(settled.items[0].text(), "final")
   assert_eq(settled.items[0].streamed, "")
+}
+
+///|
+test "Codex reasoning summaries render text instead of JSON syntax" {
+  let item = CodexItem::decode({
+    "id": "reasoning-1",
+    "type": "reasoning",
+    "summary": [
+      { "type": "summary_text", "text": "First" },
+      { "type": "summary_text", "text": "Second" },
+    ],
+  }).unwrap()
+  assert_eq(item.text(), "First\nSecond")
 }
 
 ///|

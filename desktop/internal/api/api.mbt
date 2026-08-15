@@ -362,7 +362,9 @@ pub fn endpoints(
     state.codex_endpoint(@commands.codex_account_login_cancel),
     state.codex_endpoint(@commands.codex_account_logout),
     state.codex_endpoint(@commands.codex_model_list),
-    state.codex_endpoint(@commands.codex_thread_start),
+    @endpoint.Endpoint::remote(@commands.codex_thread_start, async fn(params) {
+      state.codex_thread_start(params)
+    }),
     state.codex_endpoint(@commands.codex_thread_resume),
     state.codex_endpoint(@commands.codex_thread_read),
     @endpoint.Endpoint::remote(@commands.codex_thread_history_read, async fn(
@@ -375,7 +377,9 @@ pub fn endpoints(
     state.codex_endpoint(@commands.codex_thread_unarchive),
     state.codex_endpoint(@commands.codex_thread_compact),
     state.codex_endpoint(@commands.codex_review_start),
-    state.codex_endpoint(@commands.codex_turn_start),
+    @endpoint.Endpoint::remote(@commands.codex_turn_start, async fn(params) {
+      state.codex_turn_start(params)
+    }),
     state.codex_endpoint(@commands.codex_turn_steer),
     state.codex_endpoint(@commands.codex_turn_interrupt),
     @endpoint.Endpoint::remote(@commands.agent_start, async fn(payload) {
@@ -779,15 +783,79 @@ async fn ApiState::open_codex_draft(
   payload : CodexDraftPayload,
 ) -> Json {
   let draft_id = payload.draft_id.trim().to_owned()
+  let registered = if @pathx.Absolute::from_uri_path(
+      payload.cwd.trim().to_owned(),
+    )
+    is Some(requested) {
+    let normalized = requested.normalize()
+    if @engine.registered_workspaces().contains(normalized) {
+      Some(normalized.to_string())
+    } else {
+      None
+    }
+  } else {
+    None
+  }
+  let project_root = match self.codex_projects.main_project(payload.cwd) {
+    Some(project) => Some(project)
+    None => registered
+  }
   guard draft_id == payload.draft_id &&
     draft_id.has_prefix("desktop-") &&
     !draft_id.contains("/") &&
     !draft_id.contains("\\") &&
-    self.codex_projects.main_project(payload.cwd) is Some(project_root) else {
+    project_root is Some(project_root) else {
     raise @host.PayloadError("invalid Codex draft project")
   }
   @engine.authorize_host_workspace(draft_id, project_root)
   { "draftId": draft_id, "cwd": project_root, "projectRoot": project_root }
+}
+
+///|
+/// Start a thread only from the exact draft cwd already authorized by
+/// `codex.draft.open`. The browser-facing command cannot select app-server
+/// sandbox or approval policy; only cwd and model cross this boundary.
+async fn ApiState::codex_thread_start(self : ApiState, params : Json) -> Json {
+  guard CodexThreadStartPayload::decode(params) is Some(request) else {
+    raise @host.PayloadError("malformed Codex thread start payload")
+  }
+  match (request.cwd, request.draft_id) {
+    (Some(cwd), Some(draft_id)) => {
+      guard CodexDraftClosePayload::{ draft_id, }.validated_id()
+        is Some(validated) &&
+        @engine.resolve_host_workspace_authorization(validated, cwd)
+        is Some(authorized) &&
+        @pathx.Absolute::from_uri_path(cwd) is Some(requested) &&
+        authorized.normalize() == requested.normalize() else {
+        raise @host.HostError("Codex draft workspace is not authorized")
+      }
+    }
+    (None, Some(draft_id)) =>
+      if CodexDraftClosePayload::{ draft_id, }.validated_id() is None {
+        raise @host.PayloadError("invalid Codex draft id")
+      }
+    (None, None) => ()
+    _ => raise @host.PayloadError("Codex thread cwd requires its draft id")
+  }
+  self.codex_request("codex.thread.start", request.app_server_params())
+}
+
+///|
+/// A worktree first turn may override cwd, but only with the exact checkout
+/// the native worktree operation just authorized for this thread.
+async fn ApiState::codex_turn_start(self : ApiState, params : Json) -> Json {
+  guard CodexTurnStartPayload::decode(params) is Some(request) else {
+    raise @host.PayloadError("malformed Codex turn start payload")
+  }
+  if request.cwd is Some(cwd) {
+    guard @engine.resolve_host_workspace_authorization(request.thread_id, cwd)
+      is Some(authorized) &&
+      @pathx.Absolute::from_uri_path(cwd) is Some(requested) &&
+      authorized.normalize() == requested.normalize() else {
+      raise @host.HostError("Codex turn workspace is not authorized")
+    }
+  }
+  self.codex_request("codex.turn.start", Json::object(request.params))
 }
 
 ///|
@@ -936,8 +1004,8 @@ async fn ApiState::codex_request(
       Json::object(scoped)
     }
     ("codex.thread.list", _) => { "useStateDbOnly": true }
-    // Tag new threads with this integration for Codex-side metrics. Preserve
-    // every user-selected model, cwd, sandbox, and approval policy field.
+    // The dedicated thread/start endpoint has already reduced this object to
+    // cwd, model, and Desktop's fixed service name.
     ("codex.thread.start", Object(fields)) => {
       let scoped : Map[String, Json] = Map([])
       for key, value in fields {

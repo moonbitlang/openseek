@@ -159,12 +159,12 @@ fn bridge_msg(
     // The Desktop process owns one Codex app-server. The shell wraps these
     // notifications, while the Codex package decodes and applies their state.
     CodexStatusChanged(payload) =>
-      Some(Codex(@codex.Msg::status_changed(payload)))
+      Some(Codex(channel~, @codex.Msg::status_changed(payload)))
     CodexNotification(payload) =>
       if payload is Object(fields) &&
         @jsonx.json_text(fields, "method") is Some(method_) &&
         fields.get("params") is Some(params) {
-        Some(Codex(@codex.Msg::notification(method_, params)))
+        Some(Codex(channel~, @codex.Msg::notification(method_, params)))
       } else {
         None
       }
@@ -173,7 +173,12 @@ fn bridge_msg(
         fields.get("request_id") is Some(request_id) &&
         @jsonx.json_text(fields, "method") is Some(method_) &&
         fields.get("params") is Some(params) {
-        Some(Codex(@codex.Msg::server_request(request_id, method_, params)))
+        Some(
+          Codex(
+            channel~,
+            @codex.Msg::server_request(request_id, method_, params),
+          ),
+        )
       } else {
         None
       }
@@ -385,7 +390,7 @@ test "proton subscribes to all Codex app-server events" {
         "params": { "threadId": "t1" },
       }),
     )
-    is Some(Codex(_)),
+    is Some(Codex(channel=Local, _)),
   )
 }
 

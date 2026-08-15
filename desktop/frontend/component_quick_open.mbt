@@ -8,10 +8,15 @@
 /// The projection is read-only; the opaque palette state itself is stored once
 /// in the application Model.
 fn Model::quick_open_input(self : Model) -> @quick_open.Input {
-  let conversation = self.active()
+  let active = self
+    .active_checkout()
+    .unwrap_or({
+      owner: { channel: self.focused, session: "" },
+      placement: None,
+    })
   @quick_open.Input(
-    owner={ channel: self.focused, session: conversation.session_id },
-    root=self.conversation_root(conversation),
+    owner=active.owner,
+    root=active.placement.bind(placement => placement.checkout_root()),
     open_files=self.live_editor_files(),
     active_file=@dock.active_file(self.dock),
   )
@@ -31,7 +36,8 @@ fn open_quick_open(
     model.archive_confirm is None &&
     model.archived_delete_confirm is None &&
     !(model.update_ux is ConfirmingRestart(..)) &&
-    !(model.bridge_state() is BridgeLost(_)) else {
+    !(model.bridge_state() is BridgeLost(_)) &&
+    model.active_checkout() is Some(_) else {
     return (@cmd.none, model)
   }
   let (cmd, quick_open) = model.quick_open.open(
@@ -59,11 +65,17 @@ fn update_quick_open(
   )
   let model = { ..model, quick_open, }
   guard accepted is Some(target) else { return (cmd, model) }
-  // A row is always opened in the conversation view: Skills and Settings have
-  // no editor to show it in.
+  // Settings and catalog surfaces return to Chat because they have no editor.
+  // Codex keeps its owning surface so the editor resolves the accepted row
+  // against that task's checkout instead of the hidden OpenSeek conversation.
+  let screen = if model.screen is Screen::Codex {
+    Screen::Codex
+  } else {
+    Screen::Chat
+  }
   let (open_cmd, model) = open_editor_at(
     dispatch,
-    { ..model, screen: Chat },
+    { ..model, screen, },
     target.path,
     target.range,
   )

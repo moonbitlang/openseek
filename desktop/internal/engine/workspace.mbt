@@ -88,6 +88,23 @@ pub async fn revoke_host_workspace(session : String) -> Unit {
 }
 
 ///|
+/// Read only the exact process-local grant established by an authoritative
+/// native subsystem. Unlike `resolve_in_workspace`, this does not let a safe
+/// session id select any registered OpenSeek project; draft and turn mutation
+/// endpoints use it to verify the cwd they previously authorized themselves.
+pub async fn resolve_host_workspace_authorization(
+  session : String,
+  workspace : String,
+) -> @pathx.Absolute? {
+  guard @pathx.Absolute::from_uri_path(workspace) is Some(requested) &&
+    host_workspace_authorizations.resolve(session, requested)
+    is Some(authorized) else {
+    return None
+  }
+  authorized.to_absolute()
+}
+
+///|
 /// Per-conversation workspace directory. A conversation whose durable record
 /// lives inside a registered workspace works in that project directory; a
 /// scratch conversation gets `<workspace root>/<session id>`, flat — desktop
@@ -392,6 +409,7 @@ async test "host-authorized workspaces are exact and session-scoped" {
   let session = "codex-authorized-workspace-test"
   revoke_host_workspace(session)
   authorize_host_workspace(session, root)
+  let exact = resolve_host_workspace_authorization(session, root)
   let authorized = resolve_in_workspace(session, "src/main.mbt", workspace=root)
   let other_session = resolve_in_workspace(
     "codex-other-workspace-test",
@@ -401,6 +419,7 @@ async test "host-authorized workspaces are exact and session-scoped" {
   let escape = resolve_in_workspace(session, "../outside", workspace=root)
   revoke_host_workspace(session)
   let revoked = resolve_in_workspace(session, "", workspace=root)
+  let exact_revoked = resolve_host_workspace_authorization(session, root)
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
   }
@@ -409,8 +428,10 @@ async test "host-authorized workspaces are exact and session-scoped" {
     @pathx.Path(root).join(Relative("src/main.mbt")).to_absolute() == Some(path),
   )
   assert_true(other_session is None)
+  assert_true(exact is Some(_))
   assert_true(escape is None)
   assert_true(revoked is None)
+  assert_true(exact_revoked is None)
 }
 
 ///|

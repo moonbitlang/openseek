@@ -343,14 +343,21 @@ type LspDiagnosticsReply = @protocol.LspDiagnosticsReply
 test "language requests carry roots and lsp_open distinguishes no data" {
   assert_eq(
     ToJson::to_json(
-      ({ root: "/worktree/project", path: "src/main.mbt" } : LspOpenPayload),
+      (
+        { session: "thread-1", root: "/worktree/project", path: "src/main.mbt" } :
+        LspOpenPayload),
     ),
-    { "root": "/worktree/project", "path": "src/main.mbt" },
+    {
+      "session": "thread-1",
+      "root": "/worktree/project",
+      "path": "src/main.mbt",
+    },
   )
   assert_eq(
     ToJson::to_json(
       (
         {
+          session: "thread-1",
           root: "/worktree/project",
           path: "src/main.mbt",
           line: 2,
@@ -358,6 +365,7 @@ test "language requests carry roots and lsp_open distinguishes no data" {
         } : LspHoverPayload),
     ),
     {
+      "session": "thread-1",
       "root": "/worktree/project",
       "path": "src/main.mbt",
       "line": 2,
@@ -367,10 +375,16 @@ test "language requests carry roots and lsp_open distinguishes no data" {
   assert_eq(
     ToJson::to_json(
       (
-        { root: "/worktree/project", path: "src/main.mbt", line: 3, column: 5 } :
-        MoonIdeNavigationPayload),
+        {
+          session: "thread-1",
+          root: "/worktree/project",
+          path: "src/main.mbt",
+          line: 3,
+          column: 5,
+        } : MoonIdeNavigationPayload),
     ),
     {
+      "session": "thread-1",
       "root": "/worktree/project",
       "path": "src/main.mbt",
       "line": 3,

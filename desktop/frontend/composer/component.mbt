@@ -850,7 +850,7 @@ fn Model::subscriptions(
         let query = trigger.query()
         subs.push(
           @symbols.searching(
-            owner.channel,
+            owner,
             query,
             root~,
             loaded=items => emit(SymbolsLoaded(owner~, root~, query~, items~)),

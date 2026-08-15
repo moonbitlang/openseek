@@ -66,7 +66,7 @@ impl @language.HoverProvider for LspHoverProvider with fn provide_hover(
     return None
   }
   let reply = request_hover(
-    channel=context.owner.channel,
+    owner=context.owner,
     root=context.root,
     path~,
     // The viewer's Position is 1-based; the host op speaks 0-based LSP coords.
@@ -92,13 +92,14 @@ fn register_hover_provider() -> Unit {
 /// Call the host `hover` op for `path` relative to the explicit absolute
 /// `root`, at a zero-based `line`/`character`.
 async fn request_hover(
-  channel~ : @interop.ChannelId,
+  owner~ : @interop.ConversationKey,
   root~ : @common.Uri,
   path~ : @pathx.Relative,
   line~ : Int,
   character~ : Int,
 ) -> @protocol.LspHoverReply {
-  @interop.bridge_request(channel, @commands.lsp_hover, {
+  @interop.bridge_request(owner.channel, @commands.lsp_hover, {
+    session: owner.session,
     root: root.path,
     path: path.0,
     line,
@@ -165,9 +166,7 @@ fn request_diagnostics(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = request_lsp_open(channel=owner.channel, root~, path~) catch {
-        _ => return
-      }
+      let reply = request_lsp_open(owner~, root~, path~) catch { _ => return }
       // An absent `diagnostics` field means the host's check could not run:
       // keep the markers we have rather than clearing them with fake "no
       // problems".
@@ -182,11 +181,12 @@ fn request_diagnostics(
 ///|
 /// Call the host `lsp_open` op for `path` relative to `root`.
 async fn request_lsp_open(
-  channel~ : @interop.ChannelId,
+  owner~ : @interop.ConversationKey,
   root~ : @common.Uri,
   path~ : @pathx.Relative,
 ) -> @protocol.LspDiagnosticsReply {
-  @interop.bridge_request(channel, @commands.lsp_open, {
+  @interop.bridge_request(owner.channel, @commands.lsp_open, {
+    session: owner.session,
     root: root.path,
     path: path.0,
   })

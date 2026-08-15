@@ -260,6 +260,7 @@ async fn lsp_hover_op(
   state : MoonCliState,
   payload : LspHoverPayload,
 ) -> LspHoverReply {
+  ignore(LanguagePath::authorized_root(payload.session, payload.root))
   let request_root = WirePath::parse(payload.root)
   let file = request_root.resolve(payload.path)
   guard moon_module_root(request_root.absolute, file) is Some(root) else {
@@ -287,6 +288,7 @@ async fn lsp_open_op(
   state : MoonCliState,
   payload : LspOpenPayload,
 ) -> LspDiagnosticsReply {
+  ignore(LanguagePath::authorized_root(payload.session, payload.root))
   let request_root = WirePath::parse(payload.root)
   let file = request_root.resolve(payload.path)
   guard moon_module_root(request_root.absolute, file) is Some(root) else {
@@ -677,7 +679,7 @@ async fn workspace_symbols_op(
   state : MoonCliState,
   payload : WorkspaceSymbolsPayload,
 ) -> WorkspaceSymbolsReply {
-  let workspace = WirePath::parse(payload.root).absolute
+  let workspace = LanguagePath::authorized_root(payload.session, payload.root)
   let symbols : Array[SymbolItem] = []
   for root in workspace_module_roots(workspace) {
     if symbols.length() >= MaxSymbolResults {

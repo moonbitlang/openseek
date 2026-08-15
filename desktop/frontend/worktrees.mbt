@@ -501,7 +501,9 @@ fn Model::conversation_placement(
         dev.bridge is Connected(scratch_root=root, ..) {
         Some(
           @interop.Scratch(
-            root=@resource.join_relative(root, @pathx.Relative(conv.session_id)),
+            root=Some(
+              @resource.join_relative(root, @pathx.Relative(conv.session_id)),
+            ),
           ),
         )
       } else {
