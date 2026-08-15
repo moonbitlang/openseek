@@ -7871,8 +7871,7 @@ test "BridgeReady reattaches a live file index watcher" {
   let panel = {
     ..model.file_panel,
     owner: Some(owner),
-    placement_known: true,
-    placement: Some(@interop.Scratch(root~)),
+    placement: @fileeditor.PlacementLive(@interop.Scratch(root~)),
     watching: Some(watched),
     watch_generation: 7,
   }
@@ -7931,8 +7930,7 @@ test "device focus retires the outgoing watcher and file index" {
   let panel = {
     ..model.file_panel,
     owner: Some(owner),
-    placement_known: true,
-    placement: Some(@interop.Scratch(root~)),
+    placement: @fileeditor.PlacementLive(@interop.Scratch(root~)),
     watching: Some({ owner, root, files: [], directories: [], recursive: true }),
     watch_generation: 7,
   }

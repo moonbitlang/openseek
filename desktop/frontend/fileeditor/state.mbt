@@ -233,6 +233,62 @@ pub(all) enum ChangeList {
 } derive(Eq)
 
 ///|
+/// The checkout placement a sync pass settled on for `State::owner`.
+/// Availability and identity are one value: parking keeps the identity the
+/// panel had before the gap, so recovery can tell the same checkout coming
+/// back from another checkout taking its place.
+pub(all) enum ReconciledPlacement {
+  // No owner has been claimed yet, so nothing has been reconciled.
+  PlacementUnknown
+  // A ready checkout. Filesystem requests may address it.
+  PlacementLive(@interop.CheckoutPlacement)
+  // Placement is unresolved or missing, so host-backed work stays suspended.
+  // `last_known` is the identity from before the gap, and `None` only when the
+  // owner was claimed while placement was already unresolved. Parking is
+  // tracked here rather than folded into review recovery because a repaired
+  // review may still be awaiting its authoritative Changes snapshot when
+  // placement disappears a second time.
+  PlacementParked(last_known~ : @interop.CheckoutPlacement?)
+} derive(Eq)
+
+///|
+/// The checkout identity this panel is reconciled against, live or retained
+/// across a gap. Identity comparisons and cache retirement read through this;
+/// a value here does not mean the checkout is currently usable.
+pub fn ReconciledPlacement::identity(
+  self : ReconciledPlacement,
+) -> @interop.CheckoutPlacement? {
+  match self {
+    PlacementUnknown => None
+    PlacementLive(value) => Some(value)
+    PlacementParked(last_known~) => last_known
+  }
+}
+
+///|
+/// Whether reconciliation has parked this panel.
+pub fn ReconciledPlacement::is_parked(self : ReconciledPlacement) -> Bool {
+  self is PlacementParked(_)
+}
+
+///|
+/// Settle a freshly projected placement against the retained one: a ready
+/// value goes live and anything else parks. An unresolved projection keeps the
+/// retained identity, because a gap must not erase what recovery compares
+/// against. A new incarnation reconciles from `PlacementUnknown` instead, so
+/// the checkout it replaced is not carried into it.
+pub fn ReconciledPlacement::reconcile(
+  self : ReconciledPlacement,
+  current : @interop.CheckoutPlacement?,
+) -> ReconciledPlacement {
+  match current {
+    Some(value) if value.is_ready() => PlacementLive(value)
+    Some(value) => PlacementParked(last_known=Some(value))
+    None => PlacementParked(last_known=self.identity())
+  }
+}
+
+///|
 /// The file subsystem's state: a lazily-loaded file tree of the active
 /// conversation's workspace and the document table behind the dock's open
 /// file tabs. Keyed entirely by workspace-relative paths; `owner` records
@@ -243,12 +299,12 @@ pub(all) enum ChangeList {
 /// file list arrives through `Ctx`.
 pub(all) struct State {
   owner : @interop.ConversationKey?
-  // The placement incarnation last reconciled for `owner`. A conversation can
-  // move from its project root into a newly-created worktree without changing
-  // owner; retaining the complete value makes that transition a hard cache
-  // and request boundary without storing independently drifting roots.
-  placement_known : Bool
-  placement : @interop.CheckoutPlacement?
+  // The placement incarnation last reconciled for `owner`, including whether
+  // it is currently parked. A conversation can move from its project root into
+  // a newly-created worktree without changing owner; retaining the complete
+  // value makes that transition a hard cache and request boundary without
+  // storing independently drifting roots.
+  placement : ReconciledPlacement
   // Whether the file-tree pane (the toggleable column right of the viewer)
   // is shown. A panel preference, not per-conversation state, so it
   // survives conversation switches.
@@ -298,10 +354,6 @@ pub(all) struct State {
   // HEAD read is in flight; recording that request by path prevents a slow
   // read from being superseded by every Changes poll.
   background_review_requests : Map[@pathx.Relative, Int]
-  // Whether checkout placement is currently unresolved/missing. Kept separate
-  // from review recovery because a repaired review may still be awaiting its
-  // authoritative Changes snapshot when placement disappears a second time.
-  placement_parked : Bool
   // Whether the explorer pane was visible on the preceding sync pass. This is
   // stricter than the enclosing dock being open: with a file active the tree
   // toggle (and narrow drill-down) can hide the explorer while the dock stays
@@ -346,8 +398,7 @@ pub(all) struct State {
 pub fn State::empty() -> State {
   {
     owner: None,
-    placement_known: false,
-    placement: None,
+    placement: PlacementUnknown,
     tree_open: true,
     explorer_mode: ExplorerFiles,
     review_view_mode: ReviewUnifiedDiff,
@@ -361,7 +412,6 @@ pub fn State::empty() -> State {
     review_generation: 0,
     review_recovery_pending: false,
     background_review_requests: Map([]),
-    placement_parked: false,
     explorer_was_visible: false,
     watching: None,
     watch_generation: 0,

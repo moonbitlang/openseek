@@ -171,6 +171,15 @@ pub(all) enum Msg {
   UnifiedDiffCommentAdded(file~ : @pathx.Relative, original_line_number~ : Int?, modified_line_number~ : Int?, quote~ : String, comment~ : String)
 }
 
+pub(all) enum ReconciledPlacement {
+  PlacementUnknown
+  PlacementLive(@interop.CheckoutPlacement)
+  PlacementParked(last_known~ : @interop.CheckoutPlacement?)
+} derive(Eq)
+pub fn ReconciledPlacement::identity(Self) -> @interop.CheckoutPlacement?
+pub fn ReconciledPlacement::is_parked(Self) -> Bool
+pub fn ReconciledPlacement::reconcile(Self, @interop.CheckoutPlacement?) -> Self
+
 pub(all) enum ReviewBaseline {
   ReviewLoading
   ReviewContent(String)
@@ -195,8 +204,7 @@ pub(all) enum ReviewViewMode {
 
 pub(all) struct State {
   owner : @interop.ConversationKey?
-  placement_known : Bool
-  placement : @interop.CheckoutPlacement?
+  placement : ReconciledPlacement
   tree_open : Bool
   explorer_mode : ExplorerMode
   review_view_mode : ReviewViewMode
@@ -210,7 +218,6 @@ pub(all) struct State {
   review_generation : Int
   review_recovery_pending : Bool
   background_review_requests : Map[@pathx.Relative, Int]
-  placement_parked : Bool
   explorer_was_visible : Bool
   watching : WatchedPaths?
   watch_generation : Int

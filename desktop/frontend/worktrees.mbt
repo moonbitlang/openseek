@@ -1050,7 +1050,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   )
   assert_true(file_ctx(gone).owner == owner)
   assert_false(gone.file_panel.review_recovery_pending)
-  assert_true(gone.file_panel.placement_parked)
+  assert_true(gone.file_panel.placement.is_parked())
   assert_true(
     gone.file_panel.docs.get(review_path)
     is Some(
@@ -1081,7 +1081,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   )
   assert_true(file_ctx(restored).owner == owner)
   assert_false(restored.file_panel.review_recovery_pending)
-  assert_false(restored.file_panel.placement_parked)
+  assert_false(restored.file_panel.placement.is_parked())
   assert_eq(restored.file_panel.request_epoch, missing_epoch)
   assert_true(
     restored.file_panel.docs.get(review_path)

@@ -1547,32 +1547,23 @@ pub fn sync(
   // Missing/unresolved are availability changes, not automatically a new
   // checkout. A live managed worktree and its missing form share the same
   // project/name identity so reviews and dock documents can park and recover;
-  // two live values with different roots still force a hard reroot.
+  // two live values with different roots still force a hard reroot. The
+  // comparison reads the retained identity, which a gap keeps (see
+  // `ReconciledPlacement`), so a conversation that comes back as a different
+  // checkout — another client unbound its worktree while this connection was
+  // down — reroots instead of restoring the previous checkout's documents.
   let placement_identity_changed = same_owner &&
-    state.placement_known &&
-    (match (state.placement, ctx.placement) {
+    (match (state.placement.identity(), ctx.placement) {
       (Some(previous), Some(current)) => !previous.same_identity(current)
-      (None, None) | (Some(_), None) | (None, Some(_)) => false
+      (None, _) | (Some(_), None) => false
     })
-  // The parked placement is the last known checkout identity, not the current
-  // projection. An unresolved gap must not erase it: recovery compares the
-  // fresh placement against this retained value, so a conversation that comes
-  // back as a different checkout (another client unbound its worktree while
-  // this connection was down) forces the hard reroot instead of restoring the
-  // previous checkout's documents. A missing form is adopted as-is — it
-  // carries the same project/name identity.
-  let parked_placement = if ctx.placement is Some(_) {
-    ctx.placement
-  } else {
-    state.placement
-  }
   let parking_existing_owner = !checkout_ready &&
     same_owner &&
     !placement_identity_changed &&
-    !state.placement_parked
+    !state.placement.is_parked()
   let restoring_existing_owner = checkout_ready &&
     same_owner &&
-    state.placement_parked &&
+    state.placement.is_parked() &&
     !placement_identity_changed
   // The Host file-search service retains complete snapshots by cache key.
   // Clear the outgoing key exactly when this panel retires its index; keeping
@@ -1583,7 +1574,8 @@ pub fn sync(
     ) &&
     !(state.index is IndexEmpty) &&
     state.owner is Some(old_owner) &&
-    state.placement.bind(value => value.checkout_root()) is Some(old_root) {
+    state.placement.identity().bind(value => value.checkout_root())
+    is Some(old_root) {
     @files.Request(old_owner.channel, old_owner.session, Some(old_root)).retire()
   } else {
     @cmd.none
@@ -1672,8 +1664,9 @@ pub fn sync(
       {
         ..State::empty(),
         owner: Some(ctx.owner),
-        placement_known: true,
-        placement: ctx.placement,
+        // A new incarnation must not inherit the identity it replaced, so this
+        // reconciles from `PlacementUnknown` rather than the outgoing value.
+        placement: PlacementUnknown.reconcile(ctx.placement),
         tree_open: state.tree_open,
         explorer_mode: state.explorer_mode,
         review_view_mode: state.review_view_mode,
@@ -1699,7 +1692,6 @@ pub fn sync(
         watch_generation: reroot_watch_generation,
         review_recovery_pending: false,
         background_review_requests: Map([]),
-        placement_parked: !checkout_ready,
         // Preserve the last host configuration long enough for `with_watch`
         // to retire or replace it on the way out.
         watching: if placement_identity_changed {
@@ -1752,9 +1744,7 @@ pub fn sync(
       review_generation,
       review_recovery_pending,
       background_review_requests: Map([]),
-      placement_parked: true,
-      placement_known: true,
-      placement: parked_placement,
+      placement: state.placement.reconcile(ctx.placement),
       request_epoch,
     }
     match state.changes {
@@ -1773,12 +1763,7 @@ pub fn sync(
       _ => state
     }
   } else {
-    {
-      ..state,
-      placement_parked: true,
-      placement_known: true,
-      placement: parked_placement,
-    }
+    { ..state, placement: state.placement.reconcile(ctx.placement) }
   }
   // `clear_viewer` ran when the checkout disappeared. Once the same owner is
   // repaired, put its active tab back on screen and revalidate every cached
@@ -1814,20 +1799,13 @@ pub fn sync(
         ..state,
         docs,
         review_generation,
-        placement_parked: false,
-        placement_known: true,
-        placement: ctx.placement,
+        placement: state.placement.reconcile(ctx.placement),
       },
       restore_cmd,
     )
   } else if checkout_ready {
     (
-      {
-        ..state,
-        placement_parked: false,
-        placement_known: true,
-        placement: ctx.placement,
-      },
+      { ..state, placement: state.placement.reconcile(ctx.placement) },
       @cmd.none,
     )
   } else {
@@ -2076,7 +2054,7 @@ pub fn update(
       }
     EnsureFileIndex =>
       if state.owner != Some(ctx.owner) ||
-        state.placement_parked ||
+        state.placement.is_parked() ||
         ctx.root() is None ||
         !ctx.checkout_ready() ||
         ctx.owner.session.is_empty() {
@@ -3083,11 +3061,16 @@ fn Ctx::test_worktree(self : Ctx, name : String) -> Ctx raise {
 
 ///|
 fn owned_state() -> State {
+  owned_state_at(test_ctx())
+}
+
+///|
+/// A state the shared test owner has already reconciled against `ctx`.
+fn owned_state_at(ctx : Ctx) -> State {
   {
     ..State::empty(),
     owner: Some(test_ctx().owner),
-    placement_known: true,
-    placement: test_ctx().placement,
+    placement: PlacementUnknown.reconcile(ctx.placement),
     explorer_was_visible: true,
   }
 }
@@ -4259,7 +4242,7 @@ test "a resolved placement change reroots documents and fences old replies" {
   }
   let state = {
     ..owned_state(),
-    placement: Some(@interop.WorkspaceRoot(root=old_workspace)),
+    placement: PlacementLive(@interop.WorkspaceRoot(root=old_workspace)),
     changes: ChangeListReady(
       repository=true,
       files=[test_modified_change(path)],
@@ -4305,9 +4288,11 @@ test "a resolved placement change reroots documents and fences old replies" {
   assert_eq(moved.request_epoch, state.request_epoch + 1)
   assert_eq(moved.changes_generation, state.changes_generation + 1)
   assert_eq(moved.file_link_generation, state.file_link_generation + 1)
-  assert_true(moved.placement is Some(@interop.Worktree(name="wt-1", ..)))
+  assert_true(
+    moved.placement.identity() is Some(@interop.Worktree(name="wt-1", ..)),
+  )
   assert_eq(
-    moved.placement.bind(value => value.project_root()),
+    moved.placement.identity().bind(value => value.project_root()),
     Some(old_workspace),
   )
   assert_true(
@@ -4377,9 +4362,11 @@ test "a resolved placement change reroots documents and fences old replies" {
   })
   assert_eq(reassigned.request_epoch, state.request_epoch + 1)
   assert_eq(reassigned.file_link_generation, state.file_link_generation + 1)
-  assert_true(reassigned.placement is Some(@interop.WorkspaceRoot(..)))
+  assert_true(
+    reassigned.placement.identity() is Some(@interop.WorkspaceRoot(..)),
+  )
   assert_eq(
-    reassigned.placement.bind(value => value.checkout_root()),
+    reassigned.placement.identity().bind(value => value.checkout_root()),
     Some(new_workspace),
   )
   assert_true(
@@ -4406,8 +4393,7 @@ test "a missing checkout parks files and refuses editor actions until repair" {
     stale: true,
   }
   let state = {
-    ..owned_state(),
-    placement: present.placement,
+    ..owned_state_at(present),
     docs,
     review_generation: 4,
     index: IndexReady(
@@ -4440,7 +4426,7 @@ test "a missing checkout parks files and refuses editor actions until repair" {
   assert_true(parked.children.is_empty())
   assert_true(parked.index is IndexEmpty)
   assert_true(parked.watching is None)
-  assert_true(parked.placement_parked)
+  assert_true(parked.placement.is_parked())
   assert_eq(parked.request_epoch, state.request_epoch + 1)
   let (_, refused_index) = update(emit, EnsureFileIndex, parked, missing)
   assert_true(refused_index == parked)
@@ -4514,7 +4500,7 @@ test "a missing checkout parks files and refuses editor actions until repair" {
     restored.docs.get(Relative("a.mbt"))
     is Some({ state: TabLoaded(..), stale: true, .. }),
   )
-  assert_false(restored.placement_parked)
+  assert_false(restored.placement.is_parked())
   assert_eq(restored.request_epoch, parked.request_epoch)
 }
 
@@ -4541,12 +4527,7 @@ test "opening after a hidden checkout repair restores a stale reviewed tab" {
     active_file: Some(path),
   }
   let present = present.test_worktree("wt")
-  let state = {
-    ..owned_state(),
-    placement: present.placement,
-    docs,
-    review_generation: 4,
-  }
+  let state = { ..owned_state_at(present), docs, review_generation: 4 }
   let missing : Ctx = {
     ..present,
     placement: Some(
@@ -4594,22 +4575,19 @@ test "an unresolved gap retains identity so same-checkout recovery restores" {
     active_file: Some(path),
   }
   let present = present.test_worktree("wt")
-  let state = {
-    ..owned_state(),
-    placement: present.placement,
-    docs,
-    review_generation: 4,
-  }
+  let state = { ..owned_state_at(present), docs, review_generation: 4 }
   // BridgeReady clears the registry: the projection is unresolved, not moved.
   let unresolved : Ctx = { ..present, placement: None }
   let (parked, _) = sync(emit, state, unresolved)
-  assert_true(parked.placement_parked)
   // The gap must not erase the last known identity.
-  assert_true(parked.placement is Some(@interop.Worktree(name="wt", ..)))
+  assert_true(
+    parked.placement
+    is PlacementParked(last_known=Some(@interop.Worktree(name="wt", ..))),
+  )
   // The refreshed registry reports the same worktree: an availability change,
   // so the review survives for revalidation instead of a hard reroot.
   let (restored, _) = sync(emit, parked, present)
-  assert_false(restored.placement_parked)
+  assert_false(restored.placement.is_parked())
   assert_eq(restored.request_epoch, parked.request_epoch)
   assert_true(
     restored.docs.get(path)
@@ -4638,14 +4616,12 @@ test "recovery from an unresolved gap into another checkout reroots" {
     active_file: Some(path),
   }
   let present = present.test_worktree("wt")
-  let state = {
-    ..owned_state(),
-    placement: present.placement,
-    docs,
-    review_generation: 4,
-  }
+  let state = { ..owned_state_at(present), docs, review_generation: 4 }
   let (parked, _) = sync(emit, state, { ..present, placement: None })
-  assert_true(parked.placement is Some(@interop.Worktree(name="wt", ..)))
+  assert_true(
+    parked.placement
+    is PlacementParked(last_known=Some(@interop.Worktree(name="wt", ..))),
+  )
   // Another client unbound the worktree during the gap; the conversation now
   // resolves to the project's main checkout. The retained identity exposes
   // the move, so the old checkout's documents and baselines must not be
@@ -4655,8 +4631,7 @@ test "recovery from an unresolved gap into another checkout reroots" {
     placement: Some(@interop.WorkspaceRoot(root=present.test_root())),
   }
   let (rerooted, _) = sync(emit, parked, recovered)
-  assert_false(rerooted.placement_parked)
-  assert_true(rerooted.placement is Some(@interop.WorkspaceRoot(..)))
+  assert_true(rerooted.placement is PlacementLive(@interop.WorkspaceRoot(..)))
   assert_eq(rerooted.request_epoch, parked.request_epoch + 1)
   assert_true(
     rerooted.docs.get(path)
@@ -4669,8 +4644,7 @@ test "a missing checkout settles an in-flight Changes request for retry" {
   let emit = test_emit()
   let present = test_ctx().test_worktree("wt")
   let state = {
-    ..owned_state(),
-    placement: present.placement,
+    ..owned_state_at(present),
     explorer_mode: ExplorerChanges,
     changes: ChangeListLoading(refresh_again=true),
     changes_generation: 1,
@@ -4738,8 +4712,7 @@ test "checkout recovery restarts a review whose paired replies were parked" {
     stale: false,
   }
   let state = {
-    ..owned_state(),
-    placement: present.placement,
+    ..owned_state_at(present),
     changes: ChangeListReady(
       repository=true,
       files=[change],
@@ -4772,7 +4745,7 @@ test "checkout recovery restarts a review whose paired replies were parked" {
     parked.changes is ChangeListReady(refreshing=false, refresh_again=false, ..),
   )
   assert_true(parked.review_recovery_pending)
-  assert_true(parked.placement_parked)
+  assert_true(parked.placement.is_parked())
   assert_eq(parked.request_epoch, state.request_epoch + 1)
   assert_eq(parked.review_generation, 4)
   let (restored, _) = sync(emit, parked, {
@@ -4786,12 +4759,12 @@ test "checkout recovery restarts a review whose paired replies were parked" {
   )
   assert_true(restored.changes_generation == 3)
   assert_true(restored.review_recovery_pending)
-  assert_false(restored.placement_parked)
+  assert_false(restored.placement.is_parked())
   assert_eq(restored.request_epoch, parked.request_epoch)
   // A second disappearance before the recovery snapshot settles is still a
   // fresh placement boundary: pending review recovery is not the parked flag.
   let (parked_again, _) = sync(emit, restored, missing)
-  assert_true(parked_again.placement_parked)
+  assert_true(parked_again.placement.is_parked())
   assert_eq(parked_again.request_epoch, restored.request_epoch + 1)
   let (_, restarted) = update(
     emit,
@@ -4845,8 +4818,7 @@ test "hidden checkout recovery retries failed Changes once before parking" {
     stale: false,
   }
   let state = {
-    ..owned_state(),
-    placement: present.placement,
+    ..owned_state_at(present),
     tree_open: false,
     changes: ChangeListFailed("transient Git failure"),
     changes_generation: 1,
