@@ -53,53 +53,53 @@ pub let browser_set_bounds : Command[@protocol.BrowserBoundsPayload, @protocol.E
 
 pub let browser_set_visible : Command[@protocol.BrowserVisiblePayload, @protocol.EmptyReply]
 
-pub let codex_account_login_cancel : Command[Json, Json]
+pub let codex_account_login_cancel : Command[@protocol.CodexAccountLoginCancelPayload, @protocol.EmptyReply]
 
-pub let codex_account_login_start : Command[Json, Json]
+pub let codex_account_login_start : Command[@protocol.CodexAccountLoginStartPayload, @protocol.CodexLoginStartReply]
 
-pub let codex_account_logout : Command[Json, Json]
+pub let codex_account_logout : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
 
-pub let codex_account_read : Command[Json, Json]
+pub let codex_account_read : Command[@protocol.CodexAccountReadPayload, @protocol.CodexAccountReply]
 
-pub let codex_draft_close : Command[Json, Json]
+pub let codex_draft_close : Command[@protocol.CodexDraftClosePayload, @protocol.EmptyReply]
 
-pub let codex_draft_open : Command[Json, Json]
+pub let codex_draft_open : Command[@protocol.CodexDraftOpenPayload, @protocol.CodexDraftOpenReply]
 
-pub let codex_file_search : Command[Json, Json]
+pub let codex_file_search : Command[@protocol.CodexFileSearchPayload, @protocol.CodexFileSearchReply]
 
-pub let codex_model_list : Command[Json, Json]
+pub let codex_model_list : Command[@protocol.CodexModelListPayload, @protocol.CodexDataReply]
 
-pub let codex_review_start : Command[Json, Json]
+pub let codex_review_start : Command[@protocol.CodexReviewStartPayload, @protocol.EmptyReply]
 
-pub let codex_server_request_list : Command[Json, Json]
+pub let codex_server_request_list : Command[@protocol.EmptyPayload, @protocol.CodexDataReply]
 
-pub let codex_server_request_respond : Command[Json, Json]
+pub let codex_server_request_respond : Command[@protocol.CodexServerRequestRespondPayload, @protocol.EmptyReply]
 
-pub let codex_skills_list : Command[Json, Json]
+pub let codex_skills_list : Command[@protocol.CodexSkillsListPayload, @protocol.CodexDataReply]
 
-pub let codex_status : Command[Json, Json]
+pub let codex_status : Command[@protocol.EmptyPayload, @protocol.CodexStatusReply]
 
-pub let codex_thread_archive : Command[Json, Json]
+pub let codex_thread_archive : Command[@protocol.CodexThreadArchivePayload, @protocol.CodexArchiveReply]
 
-pub let codex_thread_compact : Command[Json, Json]
+pub let codex_thread_compact : Command[@protocol.CodexThreadPayload, @protocol.EmptyReply]
 
-pub let codex_thread_history_read : Command[Json, Json]
+pub let codex_thread_history_read : Command[@protocol.CodexThreadPayload, @protocol.CodexThreadReply]
 
-pub let codex_thread_list : Command[Json, Json]
+pub let codex_thread_list : Command[@protocol.CodexThreadListPayload, @protocol.CodexDataReply]
 
-pub let codex_thread_read : Command[Json, Json]
+pub let codex_thread_read : Command[@protocol.CodexThreadReadPayload, @protocol.CodexThreadReply]
 
-pub let codex_thread_resume : Command[Json, Json]
+pub let codex_thread_resume : Command[@protocol.CodexThreadPayload, @protocol.CodexThreadResumeReply]
 
-pub let codex_thread_start : Command[Json, Json]
+pub let codex_thread_start : Command[@protocol.CodexThreadStartPayload, @protocol.CodexThreadReply]
 
-pub let codex_thread_unarchive : Command[Json, Json]
+pub let codex_thread_unarchive : Command[@protocol.CodexThreadPayload, @protocol.EmptyReply]
 
-pub let codex_turn_interrupt : Command[Json, Json]
+pub let codex_turn_interrupt : Command[@protocol.CodexTurnInterruptPayload, @protocol.EmptyReply]
 
-pub let codex_turn_start : Command[Json, Json]
+pub let codex_turn_start : Command[@protocol.CodexTurnStartPayload, @protocol.CodexTurnReply]
 
-pub let codex_turn_steer : Command[Json, Json]
+pub let codex_turn_steer : Command[@protocol.CodexTurnSteerPayload, @protocol.CodexTurnReply]
 
 pub let extension_contract : @proton_contract.ExtensionContract
 

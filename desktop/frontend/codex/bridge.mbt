@@ -3,16 +3,16 @@
 // arbitrary app-server method proxy to this page.
 
 ///|
-fn CodexReplyKind::request(
+fn[Payload : ToJson, Response : FromJson + ToJson] CodexReplyKind::request(
   self : CodexReplyKind,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  command : @commands.Command[Json, Json],
-  payload : Json,
+  command : @commands.Command[Payload, Response],
+  payload : Payload,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let value : Json = @interop.bridge_request(channel, command, payload) catch {
+      let reply : Response = @interop.bridge_request(channel, command, payload) catch {
         error => {
           let message = @interop.bridge_error_text(error)
           scheduler.add(
@@ -27,6 +27,7 @@ fn CodexReplyKind::request(
           return
         }
       }
+      let value = ToJson::to_json(reply)
       scheduler.add(dispatch(Reply(kind=self, value~)))
     })
   })
@@ -53,17 +54,10 @@ fn CodexThreadCatalogRequest::run(
       let seen_cursors : Array[String] = []
       let mut cursor : String? = None
       for ;; {
-        let fields : Map[String, Json] = {
-          "limit": Json::number(100.0),
-          "archived": Json::boolean(self.archived),
-        }
-        if cursor is Some(cursor) {
-          fields["cursor"] = Json::string(cursor)
-        }
-        let page : Json = @interop.bridge_request(
+        let page : @protocol.CodexDataReply = @interop.bridge_request(
           channel,
           @commands.codex_thread_list,
-          Json::object(fields),
+          { limit: 100, archived: self.archived, cursor },
         ) catch {
           error => {
             scheduler.add(
@@ -77,23 +71,11 @@ fn CodexThreadCatalogRequest::run(
             return
           }
         }
-        guard page is Object(page_fields) &&
-          page_fields.get("data") is Some(Array(data)) else {
-          scheduler.add(
-            dispatch(
-              Failed(
-                kind=CodexThreadsReply(self.archived, self.generation),
-                message="malformed Codex thread list page",
-              ),
-            ),
-          )
-          return
-        }
-        for row in data {
+        for row in page.data {
           rows.push(row)
         }
-        let next_cursor = match page_fields.get("nextCursor") {
-          Some(String(next)) if !next.is_empty() => Some(next)
+        let next_cursor = match page.next_cursor {
+          Some(next) if !next.is_empty() => Some(next)
           _ => None
         }
         guard next_cursor is Some(next) else { break }
@@ -156,8 +138,6 @@ pub fn State::refresh(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
 ) -> (@cmd.Cmd, State) {
-  let account : Json = { "refreshToken": false }
-  let models : Json = { "limit": 100, "includeHidden": false }
   // The global sidebar is the conversation switcher for both products, so it
   // shows the Codex account's interactive history instead of silently hiding
   // threads outside OpenSeek's currently selected workspace. New threads
@@ -165,19 +145,28 @@ pub fn State::refresh(
   let (catalog, next) = self.refresh_catalog(dispatch, channel)
   (
     @cmd.batch([
-      CodexStatusReply.request(dispatch, channel, @commands.codex_status, {}),
+      CodexStatusReply.request(
+        dispatch,
+        channel,
+        @commands.codex_status,
+        @protocol.NoPayload,
+      ),
       CodexAccountReply.request(
-        dispatch, channel, @commands.codex_account_read, account,
+        dispatch,
+        channel,
+        @commands.codex_account_read,
+        { refresh_token: false },
       ),
       CodexRequestsReply.request(
         dispatch,
         channel,
         @commands.codex_server_request_list,
-        {},
+        @protocol.NoPayload,
       ),
-      CodexModelsReply.request(
-        dispatch, channel, @commands.codex_model_list, models,
-      ),
+      CodexModelsReply.request(dispatch, channel, @commands.codex_model_list, {
+        limit: 100,
+        include_hidden: false,
+      }),
       catalog,
     ]),
     next,
@@ -203,7 +192,7 @@ fn State::open_draft(
     dispatch,
     channel,
     @commands.codex_draft_open,
-    { "draft_id": draft_id, "cwd": cwd },
+    { draft_id, cwd },
   )
 }
 
@@ -220,11 +209,11 @@ fn State::close_draft(
     @js.async_run(() => {
       ignore(
         try
-          @interop.bridge_request(channel, @commands.codex_draft_close, {
-            "draft_id": draft_id,
+          @interop.bridge_request(channel, @commands.codex_draft_close, @protocol.CodexDraftClosePayload::{
+            draft_id,
           })
         catch {
-          _ => Json::object({})
+          _ => @protocol.Acknowledged
         } noraise {
           value => value
         },
@@ -255,20 +244,20 @@ fn CodexDraftThreadRequest::run(
       @interop.in_ordered_lane(
         @interop.session_command_lane(channel, self.draft_id),
         () => {
-          let start_fields : Map[String, Json] = Map([])
           // The native host ties cwd authority to this already-open draft and
           // strips this Desktop-only field before forwarding thread/start.
-          start_fields["openseekDraftId"] = Json::string(self.draft_id)
-          if self.cwd is Some(cwd) {
-            start_fields["cwd"] = Json::string(cwd)
-          }
-          if !self.model.is_empty() {
-            start_fields["model"] = Json::string(self.model)
-          }
-          let thread_reply : Json = @interop.bridge_request(
+          let thread_reply : @protocol.CodexThreadReply = @interop.bridge_request(
             channel,
             @commands.codex_thread_start,
-            Json::object(start_fields),
+            {
+              cwd: self.cwd,
+              model: if self.model.is_empty() {
+                None
+              } else {
+                Some(self.model)
+              },
+              draft_id: Some(self.draft_id),
+            },
           ) catch {
             error => {
               scheduler.add(
@@ -282,8 +271,7 @@ fn CodexDraftThreadRequest::run(
               return
             }
           }
-          guard thread_reply is Object(reply_fields) &&
-            reply_fields.get("thread") is Some(Object(thread_fields)) &&
+          guard thread_reply.thread is Object(thread_fields) &&
             @jsonx.json_text(thread_fields, "id") is Some(_) else {
             scheduler.add(
               dispatch(
@@ -298,10 +286,10 @@ fn CodexDraftThreadRequest::run(
           ignore(
             try
               @interop.bridge_request(channel, @commands.codex_draft_close, {
-                "draft_id": self.draft_id,
+                draft_id: self.draft_id,
               })
             catch {
-              _ => Json::object({})
+              _ => @protocol.Acknowledged
             } noraise {
               value => value
             },
@@ -310,7 +298,7 @@ fn CodexDraftThreadRequest::run(
             dispatch(
               Reply(
                 kind=CodexDraftThreadReply(self.draft_id),
-                value=thread_reply,
+                value=ToJson::to_json(thread_reply),
               ),
             ),
           )
@@ -362,7 +350,7 @@ fn State::open_thread(
     dispatch,
     channel,
     @commands.codex_thread_history_read,
-    { "threadId": thread_id },
+    { thread_id, },
   )
 }
 
@@ -384,7 +372,7 @@ fn State::reconcile_turn_delivery(
     dispatch,
     channel,
     @commands.codex_thread_history_read,
-    { "threadId": thread_id },
+    { thread_id, },
   )
 }
 
@@ -430,10 +418,10 @@ fn State::resume_for_send(
   let thread_id = active.id
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let value : Json = @interop.bridge_request(
+      let reply : @protocol.CodexThreadResumeReply = @interop.bridge_request(
         channel,
         @commands.codex_thread_resume,
-        { "threadId": thread_id },
+        { thread_id, },
       ) catch {
         error => {
           scheduler.add(
@@ -447,8 +435,7 @@ fn State::resume_for_send(
           return
         }
       }
-      if value is Object(fields) &&
-        @jsonx.json_text(fields, "status") is Some("activeWriter") {
+      if reply.status is Some("activeWriter") {
         scheduler.add(dispatch(WriterConflict(thread_id)))
       } else {
         scheduler.add(dispatch(WriterAcquired(thread_id)))
@@ -466,17 +453,12 @@ fn State::send(
   guard self.active_thread() is Some(active) else { return @cmd.none }
   guard !self.input_empty() else { return @cmd.none }
   let inputs = self.turn_inputs()
-  let fields : Map[String, Json] = {
-    "threadId": Json::string(active.id),
-    "input": Json::array(inputs),
-  }
   if self.active_turn_id() is Some(turn_id) {
-    fields["expectedTurnId"] = Json::string(turn_id)
     CodexTurnReply(active.id).request(
       dispatch,
       channel,
       @commands.codex_turn_steer,
-      Json::object(fields),
+      { thread_id: active.id, input: inputs, expected_turn_id: turn_id },
     )
   } else {
     if self.placement.wants_fresh() && active.turns.is_empty() {
@@ -487,15 +469,21 @@ fn State::send(
         dispatch, channel, active, workspace, inputs,
       )
     }
-    let model = self.selected_model.trim()
-    if !model.is_empty() {
-      fields["model"] = Json::string(model.to_owned())
-    }
+    let model = self.selected_model.trim().to_owned()
     CodexTurnReply(active.id).request(
       dispatch,
       channel,
       @commands.codex_turn_start,
-      Json::object(fields),
+      {
+        thread_id: active.id,
+        input: inputs,
+        model: if model.is_empty() {
+          None
+        } else {
+          Some(model)
+        },
+        cwd: None,
+      },
     )
   }
 }
@@ -599,18 +587,19 @@ fn State::start_turn_in_new_worktree(
             )
             return
           }
-          let fields : Map[String, Json] = {
-            "threadId": Json::string(thread_id),
-            "input": Json::array(inputs),
-            "cwd": Json::string(worktree.path),
-          }
-          if !model.is_empty() {
-            fields["model"] = Json::string(model)
-          }
-          let value : Json = @interop.bridge_request(
+          let reply : @protocol.CodexTurnReply = @interop.bridge_request(
             channel,
             @commands.codex_turn_start,
-            Json::object(fields),
+            {
+              thread_id,
+              input: inputs,
+              model: if model.is_empty() {
+                None
+              } else {
+                Some(model)
+              },
+              cwd: Some(worktree.path),
+            },
           ) catch {
             error => {
               let message = @interop.bridge_error_text(error)
@@ -633,7 +622,10 @@ fn State::start_turn_in_new_worktree(
           }
           scheduler.add(
             dispatch(
-              Reply(kind=CodexWorktreeTurnReply(thread_id, worktree), value~),
+              Reply(
+                kind=CodexWorktreeTurnReply(thread_id, worktree),
+                value=ToJson::to_json(reply),
+              ),
             ),
           )
         },
@@ -750,17 +742,17 @@ fn State::load_skills(
   let cwd = owner.cwd
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let value : Json = @interop.bridge_request(
+      let reply : @protocol.CodexDataReply = @interop.bridge_request(
         channel,
         @commands.codex_skills_list,
-        { "thread_id": thread_id, "cwd": cwd, "force_reload": force_reload },
+        { thread_id, cwd, force_reload },
       ) catch {
         _ => {
           scheduler.add(dispatch(SkillsFailed(cwd~)))
           return
         }
       }
-      match CodexSkill::decode_list(value, cwd) {
+      match CodexSkill::decode_list(ToJson::to_json(reply), cwd) {
         Some(skills) => scheduler.add(dispatch(SkillsLoaded(cwd~, skills~)))
         None => scheduler.add(dispatch(SkillsFailed(cwd~)))
       }
@@ -802,7 +794,7 @@ fn State::compact(
     dispatch,
     channel,
     @commands.codex_thread_compact,
-    { "threadId": active.id },
+    { thread_id: active.id },
   )
 }
 
@@ -818,7 +810,7 @@ fn State::review(
     dispatch,
     channel,
     @commands.codex_review_start,
-    { "threadId": active.id, "target": { "type": "uncommittedChanges" } },
+    { thread_id: active.id, target: { kind_: "uncommittedChanges" } },
   )
 }
 
@@ -836,7 +828,7 @@ fn State::interrupt(
     dispatch,
     channel,
     @commands.codex_turn_interrupt,
-    { "threadId": active.id, "turnId": turn_id },
+    { thread_id: active.id, turn_id },
   )
 }
 
@@ -852,7 +844,7 @@ fn State::archive(
     dispatch,
     channel,
     @commands.codex_thread_archive,
-    { "threadId": thread_id, "force": force },
+    { thread_id, force },
   )
 }
 
@@ -867,7 +859,7 @@ fn State::unarchive(
     dispatch,
     channel,
     @commands.codex_thread_unarchive,
-    { "threadId": thread_id },
+    { thread_id, },
   )
 }
 
@@ -951,9 +943,9 @@ fn State::login(
     channel,
     @commands.codex_account_login_start,
     {
-      "type": "chatgpt",
-      "useHostedLoginSuccessPage": true,
-      "appBrand": "codex",
+      kind_: "chatgpt",
+      use_hosted_login_success_page: true,
+      app_brand: "codex",
     },
   )
 }
@@ -968,7 +960,7 @@ fn State::logout(
     dispatch,
     channel,
     @commands.codex_account_logout,
-    {},
+    @protocol.NoPayload,
   )
 }
 
@@ -983,7 +975,7 @@ fn State::cancel_login(
     dispatch,
     channel,
     @commands.codex_account_login_cancel,
-    { "loginId": login_id },
+    { login_id, },
   )
 }
 
@@ -1005,8 +997,10 @@ fn State::respond(
   guard selected is Some(request) && request.response(decision) is Some(result) else {
     return @cmd.none
   }
-  let payload : Json = { "request_id": request.request_id, "result": result }
   CodexApprovalReply.request(
-    dispatch, channel, @commands.codex_server_request_respond, payload,
+    dispatch,
+    channel,
+    @commands.codex_server_request_respond,
+    { request_id: request.request_id, result },
   )
 }

@@ -404,7 +404,7 @@ pub fn update(
           dispatch,
           channel,
           @commands.codex_account_read,
-          { "refreshToken": false },
+          { refresh_token: false },
         )
       } else if method_ == "thread/archived" ||
         method_ == "thread/unarchived" ||

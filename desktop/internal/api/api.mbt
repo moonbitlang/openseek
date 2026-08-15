@@ -314,47 +314,44 @@ pub fn endpoints(
 ) -> Array[@endpoint.Endpoint] {
   let endpoints = [
     @endpoint.Endpoint::remote_sync(@commands.codex_status, _ => {
-      state.codex.status()
+      let reply : @protocol.CodexStatusReply = @json.from_json(
+        state.codex.status(),
+      )
+      reply
     }),
-    @endpoint.Endpoint::remote(@commands.codex_draft_open, async fn(params) {
-      let payload : CodexDraftPayload = @json.from_json(params) catch {
-        _ => raise @host.PayloadError("malformed Codex draft payload")
-      }
+    @endpoint.Endpoint::remote(@commands.codex_draft_open, async fn(payload) {
       state.open_codex_draft(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.codex_draft_close, async fn(params) {
-      let payload : CodexDraftClosePayload = @json.from_json(params) catch {
-        _ => raise @host.PayloadError("malformed Codex draft close payload")
-      }
+    @endpoint.Endpoint::remote(@commands.codex_draft_close, async fn(payload) {
       guard payload.validated_id() is Some(draft_id) else {
         raise @host.PayloadError("invalid Codex draft id")
       }
       @engine.revoke_host_workspace(draft_id)
-      Json::object({})
+      Acknowledged
     }),
     @endpoint.Endpoint::remote(@commands.codex_server_request_list, async fn(
       _,
     ) {
-      state.codex.requests()
+      let reply : @protocol.CodexDataReply = @json.from_json(
+        state.codex.requests(),
+      )
+      reply
     }),
     @endpoint.Endpoint::remote(@commands.codex_server_request_respond, async fn(
-      params,
+      payload,
     ) {
-      let payload : CodexResponsePayload = @json.from_json(params) catch {
-        _ => raise @host.PayloadError("malformed Codex response payload")
-      }
-      state.codex.respond(request_id=payload.request_id, result=payload.result)
+      ignore(
+        state.codex.respond(
+          request_id=payload.request_id,
+          result=payload.result,
+        ),
+      )
+      Acknowledged
     }),
-    @endpoint.Endpoint::remote(@commands.codex_file_search, async fn(params) {
-      let payload : CodexFileSearchPayload = @json.from_json(params) catch {
-        _ => raise @host.PayloadError("malformed Codex file search payload")
-      }
+    @endpoint.Endpoint::remote(@commands.codex_file_search, async fn(payload) {
       state.codex_file_search(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.codex_skills_list, async fn(params) {
-      let payload : CodexSkillsListPayload = @json.from_json(params) catch {
-        _ => raise @host.PayloadError("malformed Codex skills list payload")
-      }
+    @endpoint.Endpoint::remote(@commands.codex_skills_list, async fn(payload) {
       state.codex_skills_list(payload)
     }),
     state.codex_endpoint(@commands.codex_account_read),
@@ -362,23 +359,23 @@ pub fn endpoints(
     state.codex_endpoint(@commands.codex_account_login_cancel),
     state.codex_endpoint(@commands.codex_account_logout),
     state.codex_endpoint(@commands.codex_model_list),
-    @endpoint.Endpoint::remote(@commands.codex_thread_start, async fn(params) {
-      state.codex_thread_start(params)
+    @endpoint.Endpoint::remote(@commands.codex_thread_start, async fn(payload) {
+      state.codex_thread_start(payload)
     }),
     state.codex_endpoint(@commands.codex_thread_resume),
     state.codex_endpoint(@commands.codex_thread_read),
     @endpoint.Endpoint::remote(@commands.codex_thread_history_read, async fn(
-      params,
+      payload,
     ) {
-      state.codex_thread_history(params)
+      state.codex_thread_history(payload)
     }),
     state.codex_endpoint(@commands.codex_thread_list),
     state.codex_endpoint(@commands.codex_thread_archive),
     state.codex_endpoint(@commands.codex_thread_unarchive),
     state.codex_endpoint(@commands.codex_thread_compact),
     state.codex_endpoint(@commands.codex_review_start),
-    @endpoint.Endpoint::remote(@commands.codex_turn_start, async fn(params) {
-      state.codex_turn_start(params)
+    @endpoint.Endpoint::remote(@commands.codex_turn_start, async fn(payload) {
+      state.codex_turn_start(payload)
     }),
     state.codex_endpoint(@commands.codex_turn_steer),
     state.codex_endpoint(@commands.codex_turn_interrupt),
@@ -619,13 +616,14 @@ pub fn endpoints(
 /// Pair one reviewed Codex command identity with the app-server forwarding
 /// method. The command name is the Desktop method name used by
 /// `codex_request`; no second catalog can drift from the registered endpoint.
-fn ApiState::codex_endpoint(
+fn[Payload : FromJson + ToJson, Reply : FromJson + ToJson] ApiState::codex_endpoint(
   self : ApiState,
-  command : @commands.Command[Json, Json],
+  command : @commands.Command[Payload, Reply],
 ) -> @endpoint.Endpoint {
   let desktop_method = command.name()
-  @endpoint.Endpoint::remote(command, async fn(params) {
-    self.codex_request(desktop_method, params)
+  @endpoint.Endpoint::remote(command, async fn(payload) {
+    let value = self.codex_request(desktop_method, ToJson::to_json(payload))
+    @json.from_json(value)
   })
 }
 
@@ -679,11 +677,11 @@ test "remote endpoint catalog has one entry per command name" {
 /// has only the summary and is returned as an empty conversation. Paginated
 /// threads load every page in ascending order with full items and rebuild the
 /// same `{ thread }` shape the browser decodes.
-async fn ApiState::codex_thread_history(self : ApiState, params : Json) -> Json {
-  guard params is Object(fields) &&
-    fields.get("threadId") is Some(String(thread_id)) else {
-    raise @host.PayloadError("malformed Codex thread history payload")
-  }
+async fn ApiState::codex_thread_history(
+  self : ApiState,
+  payload : @protocol.CodexThreadPayload,
+) -> @protocol.CodexThreadReply {
+  let thread_id = payload.thread_id
   let metadata = self.codex_request("codex.thread.read", {
     "threadId": thread_id,
     "includeTurns": false,
@@ -694,7 +692,7 @@ async fn ApiState::codex_thread_history(self : ApiState, params : Json) -> Json 
   }
   let paginated = thread_fields.get("historyMode") is Some(String("paginated"))
   if !paginated {
-    return try
+    let value = try
       self.codex_request("codex.thread.read", {
         "threadId": thread_id,
         "includeTurns": true,
@@ -709,6 +707,7 @@ async fn ApiState::codex_thread_history(self : ApiState, params : Json) -> Json 
     } noraise {
       value => value
     }
+    return @json.from_json(value)
   }
   let turns : Array[Json] = []
   let mut cursor : String? = None
@@ -748,7 +747,7 @@ async fn ApiState::codex_thread_history(self : ApiState, params : Json) -> Json 
     reply[key] = value
   }
   reply["thread"] = Json::object(thread)
-  Json::object(reply)
+  @json.from_json(Json::object(reply))
 }
 
 ///|
@@ -757,8 +756,8 @@ async fn ApiState::codex_thread_history(self : ApiState, params : Json) -> Json 
 /// cannot use Codex's file index as an arbitrary filesystem search.
 async fn ApiState::codex_file_search(
   self : ApiState,
-  payload : CodexFileSearchPayload,
-) -> Json {
+  payload : @protocol.CodexFileSearchPayload,
+) -> @protocol.CodexFileSearchReply {
   guard @engine.resolve_in_workspace(
       payload.thread_id,
       "",
@@ -767,10 +766,11 @@ async fn ApiState::codex_file_search(
     is Some(root) else {
     raise @host.HostError("Codex workspace is not authorized")
   }
-  self.codex.call(method_="fuzzyFileSearch", params={
+  let value = self.codex.call(method_="fuzzyFileSearch", params={
     "query": payload.query,
     "roots": [Json::string(root.to_string())],
   })
+  { value, }
 }
 
 ///|
@@ -780,8 +780,8 @@ async fn ApiState::codex_file_search(
 /// selected by the add button are accepted.
 async fn ApiState::open_codex_draft(
   self : ApiState,
-  payload : CodexDraftPayload,
-) -> Json {
+  payload : @protocol.CodexDraftOpenPayload,
+) -> @protocol.CodexDraftOpenReply {
   let draft_id = payload.draft_id.trim().to_owned()
   let registered = if @pathx.Absolute::from_uri_path(
       payload.cwd.trim().to_owned(),
@@ -808,20 +808,20 @@ async fn ApiState::open_codex_draft(
     raise @host.PayloadError("invalid Codex draft project")
   }
   @engine.authorize_host_workspace(draft_id, project_root)
-  { "draftId": draft_id, "cwd": project_root, "projectRoot": project_root }
+  { draft_id, cwd: project_root, project_root }
 }
 
 ///|
 /// Start a thread only from the exact draft cwd already authorized by
 /// `codex.draft.open`. The browser-facing command cannot select app-server
 /// sandbox or approval policy; only cwd and model cross this boundary.
-async fn ApiState::codex_thread_start(self : ApiState, params : Json) -> Json {
-  guard CodexThreadStartPayload::decode(params) is Some(request) else {
-    raise @host.PayloadError("malformed Codex thread start payload")
-  }
+async fn ApiState::codex_thread_start(
+  self : ApiState,
+  request : @protocol.CodexThreadStartPayload,
+) -> @protocol.CodexThreadReply {
   match (request.cwd, request.draft_id) {
     (Some(cwd), Some(draft_id)) => {
-      guard CodexDraftClosePayload::{ draft_id, }.validated_id()
+      guard @protocol.CodexDraftClosePayload::{ draft_id, }.validated_id()
         is Some(validated) &&
         @engine.resolve_host_workspace_authorization(validated, cwd)
         is Some(authorized) &&
@@ -831,22 +831,24 @@ async fn ApiState::codex_thread_start(self : ApiState, params : Json) -> Json {
       }
     }
     (None, Some(draft_id)) =>
-      if CodexDraftClosePayload::{ draft_id, }.validated_id() is None {
+      if @protocol.CodexDraftClosePayload::{ draft_id, }.validated_id() is None {
         raise @host.PayloadError("invalid Codex draft id")
       }
     (None, None) => ()
     _ => raise @host.PayloadError("Codex thread cwd requires its draft id")
   }
-  self.codex_request("codex.thread.start", request.app_server_params())
+  @json.from_json(
+    self.codex_request("codex.thread.start", request.app_server_params()),
+  )
 }
 
 ///|
 /// A worktree first turn may override cwd, but only with the exact checkout
 /// the native worktree operation just authorized for this thread.
-async fn ApiState::codex_turn_start(self : ApiState, params : Json) -> Json {
-  guard CodexTurnStartPayload::decode(params) is Some(request) else {
-    raise @host.PayloadError("malformed Codex turn start payload")
-  }
+async fn ApiState::codex_turn_start(
+  self : ApiState,
+  request : @protocol.CodexTurnStartPayload,
+) -> @protocol.CodexTurnReply {
   if request.cwd is Some(cwd) {
     guard @engine.resolve_host_workspace_authorization(request.thread_id, cwd)
       is Some(authorized) &&
@@ -855,7 +857,9 @@ async fn ApiState::codex_turn_start(self : ApiState, params : Json) -> Json {
       raise @host.HostError("Codex turn workspace is not authorized")
     }
   }
-  self.codex_request("codex.turn.start", Json::object(request.params))
+  @json.from_json(
+    self.codex_request("codex.turn.start", ToJson::to_json(request)),
+  )
 }
 
 ///|
@@ -926,8 +930,8 @@ async fn ApiState::codex_worktree_project(
 /// array that could escape the selected thread's filesystem authority.
 async fn ApiState::codex_skills_list(
   self : ApiState,
-  payload : CodexSkillsListPayload,
-) -> Json {
+  payload : @protocol.CodexSkillsListPayload,
+) -> @protocol.CodexDataReply {
   guard @engine.resolve_in_workspace(
       payload.thread_id,
       "",
@@ -936,10 +940,12 @@ async fn ApiState::codex_skills_list(
     is Some(root) else {
     raise @host.HostError("Codex workspace is not authorized")
   }
-  self.codex.call(method_="skills/list", params={
-    "cwds": [Json::string(root.to_string())],
-    "forceReload": payload.force_reload,
-  })
+  @json.from_json(
+    self.codex.call(method_="skills/list", params={
+      "cwds": [Json::string(root.to_string())],
+      "forceReload": payload.force_reload,
+    }),
+  )
 }
 
 ///|
