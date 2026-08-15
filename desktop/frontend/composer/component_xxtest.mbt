@@ -8,6 +8,7 @@ fn Input::fixture(task : String) -> Input {
     identity: { owner, archive_generation: 0 },
     draft: { task, mentions: [] },
     goal: { draft: None, standing: None, pending: None },
+    slash_commands: [],
     root: Some(@common.Uri::file("/workspace")),
     installed_skills: [],
     context_generation: 0,
@@ -22,6 +23,7 @@ fn Input::fixture(task : String) -> Input {
       context: [],
       status: [],
       placeholder: "Prompt",
+      disabled: false,
       primary_action: Send(available=true),
     },
   }
@@ -369,6 +371,36 @@ test "draft prompt encoding belongs to composer" {
   }
   assert_true(draft.prompt().contains("<user_mentions>"))
   assert_true(draft.prompt().contains("inspect this"))
+}
+
+///|
+test "a mention-only draft is a submit-ready prompt" {
+  let input = {
+    ..Input::fixture(""),
+    file_candidates: [@pathx.Relative("src/main.mbt")],
+  }
+  let (searching, _) = Model(input).update(
+    input,
+    TextChanged("@main"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let (accepted, _) = searching.update(
+    input,
+    CompletionAccept,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let (submitted, _) = accepted.update(
+    input,
+    SubmitRequested,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(
+    submitted.active(input).pending_submission
+    is Some(PromptSubmission(sequence_before=_, _)),
+  )
 }
 
 ///|

@@ -1458,6 +1458,10 @@ priv enum Msg {
   // Deliberate actions emitted by the component-local input composer. Raw
   // keystrokes never enter this root message loop.
   ComposerAction(@composer.Action)
+  // Codex renders a second instance of the same composer component. Keep its
+  // action route distinct so an identical thread/session-shaped id can never
+  // be mistaken for an OpenSeek conversation owned by the root store.
+  CodexComposerAction(@composer.Action)
   // Jump the editor side-panel to a mention chip's resolved location, by
   // index. A no-op for a chip with no `path` (a skill, or an unresolved
   // symbol).

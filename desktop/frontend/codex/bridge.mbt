@@ -499,7 +499,9 @@ fn State::turn_inputs(self : State) -> Array[Json] {
     inputs.push({ "type": "text", "text": text })
   }
   for mention in self.mentions {
-    inputs.push(mention.to_input())
+    if self.mention_input(mention) is Some(input) {
+      inputs.push(input)
+    }
   }
   inputs
 }
@@ -655,7 +657,7 @@ fn State::start_turn_in_new_worktree(
 fn State::prompt_text(self : State) -> String {
   let markers : Array[String] = []
   for mention in self.mentions {
-    if mention is CodexSkillMention(name~, ..) {
+    if mention.ref_ is @mention_context.Skill(name~) {
       markers.push("$" + name)
     }
   }
@@ -670,61 +672,40 @@ fn State::prompt_text(self : State) -> String {
 }
 
 ///|
-fn CodexMention::to_input(self : CodexMention) -> Json {
-  match self {
-    CodexFileMention(name~, path~) =>
-      { "type": "mention", "name": name, "path": path }
-    CodexSkillMention(name~, path~) =>
-      { "type": "skill", "name": name, "path": path }
-    CodexSymbolMention(name~, path~, range~) =>
-      {
-        "type": "text",
-        "text": @mention_context.encode(
-          [
-            @mention_context.Symbol(
-              name~,
-              file=path,
-              line=range.start_line_number,
-            ),
-          ],
-          "",
-        ),
+fn State::mention_input(self : State, mention : @composer.Mention) -> Json? {
+  match mention.ref_ {
+    @mention_context.File(path~) => {
+      let name = match [..path.split("/")] {
+        [] => path
+        [.., last] => last.to_owned()
       }
-    CodexEditorAnnotation(file~, range~, quote~, comment~) =>
-      {
-        "type": "text",
-        "text": @mention_context.encode(
-          [
-            @mention_context.Annotation(
-              file~,
-              start_line=range.start_line_number,
-              end_line=range.end_line_number,
-              quote~,
-              comment~,
-              side=@mention_context.WorkingRevision,
-            ),
-          ],
-          "",
-        ),
+      Some({ "type": "mention", "name": name, "path": path })
+    }
+    @mention_context.Skill(name~) => {
+      guard self.active_context() is Some(context) &&
+        self.skills is CodexSkillsReady(cwd, skills) &&
+        cwd == context.cwd else {
+        return Some({
+          "type": "text",
+          "text": @mention_context.encode([mention.ref_], ""),
+        })
       }
+      for skill in skills {
+        if skill.name == name {
+          return Some({ "type": "skill", "name": name, "path": skill.path })
+        }
+      }
+      Some({
+        "type": "text",
+        "text": @mention_context.encode([mention.ref_], ""),
+      })
+    }
+    @mention_context.Symbol(..) | @mention_context.Annotation(..) =>
+      Some({
+        "type": "text",
+        "text": @mention_context.encode([mention.ref_], ""),
+      })
   }
-}
-
-///|
-fn State::load_files(
-  self : State,
-  dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-) -> @cmd.Cmd {
-  guard self.file_owner() is Some(owner) else { return @cmd.none }
-  @files.Request(
-    channel,
-    owner.thread_id,
-    @resource.of_path(channel, owner.cwd),
-  ).run(
-    (files, truncated) => dispatch(FilesIndexed(owner~, files~, truncated~)),
-    () => dispatch(FilesFailed(owner~)),
-  )
 }
 
 ///|
@@ -737,7 +718,7 @@ fn State::load_skills(
   channel : @interop.ChannelId,
   force_reload~ : Bool,
 ) -> @cmd.Cmd {
-  guard self.file_owner() is Some(owner) else { return @cmd.none }
+  guard self.active_context() is Some(owner) else { return @cmd.none }
   let thread_id = owner.thread_id
   let cwd = owner.cwd
   @cmd.custom_cmd(scheduler => {
@@ -758,28 +739,6 @@ fn State::load_skills(
       }
     })
   })
-}
-
-///|
-fn State::search_symbols(
-  _self : State,
-  dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  owner : CodexSearchOwner,
-  generation : Int,
-) -> @cmd.Cmd {
-  guard @resource.of_path(channel, owner.cwd) is Some(root) else {
-    return @cmd.none
-  }
-  @symbols.search(
-    @interop.ConversationKey::{ channel, session: owner.thread_id },
-    owner.query,
-    root~,
-    loaded=symbols => {
-      dispatch(SymbolsLoaded(owner~, generation~, items=symbols))
-    },
-    failed=dispatch(SymbolsFailed(owner~, generation~)),
-  )
 }
 
 ///|

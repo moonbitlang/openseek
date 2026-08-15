@@ -105,16 +105,7 @@ fn Model::composer_input(
       Clearing => @composer.GoalClearing
     }
   })
-  let file_index : @composer.FileIndex = match self.file_panel.index {
-    @fileeditor.IndexEmpty =>
-      @composer.FileIndexEmpty(epoch=self.file_panel.request_epoch)
-    @fileeditor.IndexLoading(_) =>
-      @composer.FileIndexLoading(epoch=self.file_panel.request_epoch)
-    @fileeditor.IndexReady(truncated~, ..) =>
-      @composer.FileIndexReady(epoch=self.file_panel.request_epoch, truncated~)
-    @fileeditor.IndexFailed =>
-      @composer.FileIndexFailed(epoch=self.file_panel.request_epoch)
-  }
+  let file_index = self.composer_file_index()
   {
     identity,
     draft: { task: conv.task, mentions: conv.mentions },
@@ -123,6 +114,18 @@ fn Model::composer_input(
       standing: conv.goal,
       pending,
     },
+    slash_commands: [
+      {
+        label: "/compact",
+        detail: "Summarize and shrink this conversation's context",
+        command: "compact",
+      },
+      {
+        label: "/goal",
+        detail: "Set or clear this conversation's standing goal",
+        command: "goal",
+      },
+    ],
     root: self.conversation_root(conv),
     installed_skills: self.installed_skills,
     context_generation: self.composer_context_generation,
@@ -143,7 +146,67 @@ fn Model::composer_input(
       } else {
         "Ask OpenSeek to inspect, edit, or explain this workspace."
       },
+      disabled: false,
       primary_action,
     },
   }
+}
+
+///|
+/// The file-index lifecycle is a root-owned fact shared by both composer
+/// instances. Each component keeps its own draft and completion state while
+/// observing this one authoritative index epoch.
+fn Model::composer_file_index(self : Model) -> @composer.FileIndex {
+  match self.file_panel.index {
+    @fileeditor.IndexEmpty =>
+      @composer.FileIndexEmpty(epoch=self.file_panel.request_epoch)
+    @fileeditor.IndexLoading(_) =>
+      @composer.FileIndexLoading(epoch=self.file_panel.request_epoch)
+    @fileeditor.IndexReady(truncated~, ..) =>
+      @composer.FileIndexReady(epoch=self.file_panel.request_epoch, truncated~)
+    @fileeditor.IndexFailed =>
+      @composer.FileIndexFailed(epoch=self.file_panel.request_epoch)
+  }
+}
+
+///|
+/// Project the selected Codex task into a second instance of the same
+/// package-owned composer component used by OpenSeek conversations.
+fn Model::codex_composer_input(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+) -> @composer.Input {
+  // The two component instances stay mounted across page switches. Supply
+  // workspace-file facts only while Codex owns the visible, resolved checkout
+  // so its hidden draft can never offer paths indexed for an OpenSeek chat.
+  let workspace_ready = self.screen is Codex &&
+    self.codex.active_placement(self.focused) is Some(placement) &&
+    placement.checkout_root() is Some(_)
+  let search = if workspace_ready {
+    self.file_search()
+  } else {
+    @files.Search([], [], None)
+  }
+  self.codex.composer_input(
+    dispatch.map(msg => Codex(channel=self.focused, msg)),
+    {
+      channel: self.focused,
+      file_candidates: search.candidates,
+      open_files: if workspace_ready {
+        self.live_editor_files()
+      } else {
+        []
+      },
+      active_file: if workspace_ready {
+        @dock.active_file(self.dock)
+      } else {
+        None
+      },
+      file_index: if workspace_ready {
+        self.composer_file_index()
+      } else {
+        @composer.FileIndexEmpty(epoch=self.file_panel.request_epoch)
+      },
+    },
+  )
 }

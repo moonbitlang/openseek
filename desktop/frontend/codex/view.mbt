@@ -544,81 +544,6 @@ fn CodexThreadRow::sidebar_input(
 }
 
 ///|
-fn CodexMention::chip(
-  self : CodexMention,
-  dispatch : @cmd.Emit[Msg],
-  index : Int,
-  open_file : (String, @common.Range?, String?) -> @cmd.Cmd,
-) -> @html.Html {
-  let (glyph, label, title, jump) = match self {
-    CodexFileMention(name~, path~) =>
-      ("@", name, "Open \{path}", Some(open_file(path, None, None)))
-    CodexSkillMention(name~, ..) =>
-      ("$", name, "Use Codex skill $\{name}", None)
-    CodexSymbolMention(name~, path~, range~) =>
-      (
-        "#",
-        name,
-        "Open \{path}:\{range.start_line_number}",
-        Some(open_file(path, Some(range), None)),
-      )
-    CodexEditorAnnotation(file~, range~, comment~, ..) =>
-      (
-        "✎",
-        "\{file}:\{range.start_line_number}-\{range.end_line_number}",
-        comment,
-        Some(open_file(file, Some(range), Some(comment))),
-      )
-  }
-  @composer.MentionChip::{
-    glyph,
-    label,
-    title,
-    jump,
-    remove: Some(
-      (
-        dispatch(Composer(@composer.ControllerMentionRemoved(index))),
-        icon(icon_close),
-      ),
-    ),
-  }.render()
-}
-
-///|
-fn CodexCompletionKind::view(
-  self : CodexCompletionKind,
-  menu : @composer.Menu[CodexCompletionItem],
-  dispatch : @cmd.Emit[Msg],
-) -> @html.Html {
-  let rows : Array[@composer.CompletionRow] = []
-  for _, item in menu {
-    rows.push({ label: item.label, detail: item.detail })
-  }
-  @composer.CompletionView::{
-    rows,
-    selected: menu.selected(),
-    hint: match self {
-      CodexCommands => "Commands"
-      CodexSkills => "Skills"
-      CodexSymbols => "Symbols"
-      CodexFiles => "Files"
-    },
-    empty: if menu.loading() {
-      "Searching…"
-    } else {
-      match self {
-        CodexCommands => "No commands"
-        CodexSkills => "No skills"
-        CodexSymbols => "No symbols"
-        CodexFiles => "No files"
-      }
-    },
-  }.render(index => {
-    dispatch(Composer(@composer.ControllerCompletionPicked(index)))
-  })
-}
-
-///|
 /// Translate app-server Git data once at the package boundary. The shared
 /// presentation owns every label, tone, tooltip, row, and link after this.
 fn CodexGitStatus::presentation(
@@ -663,158 +588,20 @@ fn CodexGitStatus::presentation(
 }
 
 ///|
-fn CodexGitStatus::chip(
-  self : CodexGitStatus,
-  dispatch : @cmd.Emit[Msg],
-  open : Bool,
-) -> @html.Html? {
-  self
-  .presentation()
-  .map(presentation => {
-    presentation.render(open~, toggle=dispatch(ToggleGitDetails))
-  })
-}
-
-///|
-fn State::composer_view(
-  self : State,
-  dispatch : @cmd.Emit[Msg],
-  open_file : (String, @common.Range?, String?) -> @cmd.Cmd,
-  worktree_workspace : @common.Uri?,
-) -> @html.Html {
-  let pending : Array[@html.Html] = []
-  if self.active_thread() is Some(active) {
-    for request in self.pending_requests {
-      if request.thread_id == active.id {
-        pending.push(request.view(dispatch))
-      }
-    }
-  }
-  let before_inner : Array[@html.Html] = [
-    @html.div(class="codex-pending", pending),
-  ]
-  if self.active_thread() is Some(active) &&
-    active.worktree is Some(worktree) &&
-    !worktree.present {
-    before_inner.push(
-      @composer.MissingWorktreeNotice::{
-        name: worktree.name,
-        conversation_noun: "task",
-        rebuild: dispatch(RepairWorktree),
-        archive: dispatch(ArchiveThread(active.id)),
-      }.render(),
-    )
-  }
-  let model_options : Array[@composer.ModelOption] = []
-  for model in self.models {
-    model_options.push({ value: model.id, label: model.label })
-  }
-  let status : Array[@html.Html] = [
-    @composer.ModelSelect::{
-      options: model_options,
-      selected: self.selected_model,
-      disabled: self.models.is_empty(),
-      change: dispatch.map(value => ModelChanged(value)),
-      title: "Codex model",
-    }.render(),
-  ]
-  if worktree_workspace is Some(_) && self.active_draft() is Some(_) {
-    status.push(
-      @composer.WorktreeControl::{
-        choice: self.placement,
-        enabled: self.can_choose_worktree(),
-        command: dispatch(ToggleWorktreeMode),
-        content: icon(icon_worktree),
-      }.render(),
-    )
-  }
-  if self.git_status is Some(git) &&
-    git.chip(dispatch, self.git_details_open) is Some(chip) {
-    status.push(chip)
-  }
-  let writable_turn = self.writable_turn_id()
-  let read_only_turn = self.active_turn_is_read_only()
-  let action = if writable_turn is Some(_) {
-    @composer.ActionButton::{
-      id: "stop",
-      class_name: "icon-button stop-button",
-      title: "Stop Codex",
-      disabled: false,
-      command: dispatch(Stop),
-      content: icon(icon_debug_stop),
-    }
-  } else {
-    @composer.ActionButton::{
-      id: "send",
-      class_name: "icon-button send-button",
-      title: "Send to Codex",
-      disabled: self.loading ||
-      !self.can_prompt() ||
-      self.input_empty() ||
-      read_only_turn ||
-      self.has_missing_worktree(),
-      command: dispatch(Composer(@composer.ControllerSubmitRequested)),
-      content: icon(icon_arrow_up),
-    }
-  }
-  let mention_chips : Array[@html.Html] = []
-  for index, mention in self.mentions {
-    mention_chips.push(mention.chip(dispatch, index, open_file))
-  }
-  @composer.View::{
-    before_inner,
-    mentions: mention_chips,
-    value: self.draft,
-    placeholder: if writable_turn is Some(_) {
-      "Steer the running task — your message joins it at the next step."
-    } else if self.has_missing_worktree() {
-      "Rebuild this task's worktree before continuing."
-    } else if read_only_turn {
-      "This task is active in another Codex client."
-    } else if self.is_active_elsewhere() {
-      "Send to retry writer access for this task."
-    } else {
-      "Ask Codex to inspect, edit, or explain this workspace."
-    },
-    disabled: !self.can_prompt() ||
-    !(self.connection is CodexReady) ||
-    read_only_turn ||
-    self.has_missing_worktree(),
-    input: dispatch.map(value => {
-      Composer(@composer.ControllerDraftChanged(value))
-    }),
-    keyboard: @composer.KeyboardActions::{
-      menu_open: self.completion.current() is Some(_),
-      navigate: delta => {
-        dispatch(Composer(@composer.ControllerCompletionMoved(delta)))
-      },
-      accept: dispatch(Composer(@composer.ControllerCompletionAccepted)),
-      dismiss: dispatch(Composer(@composer.ControllerCompletionDismissed)),
-      submit: dispatch(Composer(@composer.ControllerSubmitRequested)),
-      cancel: None,
-    },
-    status,
-    action,
-    overlay: self.completion
-    .current()
-    .map(completion => completion.kind().view(completion.menu(), dispatch)),
-  }.render()
-}
-
-///|
 /// Shell-owned controls embedded in the Codex topbar. Passing commands keeps
 /// terminal, file-editor, sidebar, and external-link policy in the root shell.
 pub(all) struct PageActions {
   toggle_sidebar : @cmd.Cmd
   toggle_terminal : @cmd.Cmd
   toggle_files : @cmd.Cmd
-  open_file : (String, @common.Range?, String?) -> @cmd.Cmd
   open_external : (String) -> @cmd.Cmd
   workspace_label : (@common.Uri) -> String
-  worktree_workspace : @common.Uri?
   // The root shell supplies the one transcript view shared with OpenSeek.
   // Codex owns the normalized items, but no parallel message/activity DOM.
   transcript : @html.Html
+  // Codex and OpenSeek each instantiate the same composer component with
+  // source-specific Input; the page only places the rendered component.
+  composer : @html.Html
 }
 
 ///|
@@ -962,7 +749,7 @@ pub fn State::page(
   let page : Array[@html.Html] = [
     @html.div(class="topbar codex-topbar", topbar),
     actions.transcript,
-    self.composer_view(dispatch, actions.open_file, actions.worktree_workspace),
+    actions.composer,
   ]
   if self.archive_confirm is Some(confirm) {
     page.push(

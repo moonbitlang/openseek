@@ -15,24 +15,10 @@ pub fn update(
       let (command, next) = state.refresh(dispatch, channel)
       (command, { ..next, notice: "" })
     }
-    Composer(msg) => state.update_composer(dispatch, channel, msg)
-    SymbolSearchDue(owner~, generation~) =>
-      state.begin_completion_search(
-        dispatch,
-        channel,
-        CodexSymbols,
-        owner,
-        generation,
-      )
-    FilesIndexed(owner~, files~, truncated~) =>
-      (@cmd.none, state.with_files(owner, files, truncated))
-    FilesFailed(owner~) => (@cmd.none, state.with_file_failure(owner))
+    ComposerAction(action) =>
+      state.apply_composer_action(dispatch, channel, action)
     SkillsLoaded(cwd~, skills~) => (@cmd.none, state.with_skills(cwd, skills))
     SkillsFailed(cwd~) => (@cmd.none, state.with_skill_failure(cwd))
-    SymbolsLoaded(owner~, generation~, items~) =>
-      (@cmd.none, state.with_symbols(owner, generation, items))
-    SymbolsFailed(owner~, generation~) =>
-      (@cmd.none, state.with_symbols(owner, generation, []))
     ModelChanged(value) => (@cmd.none, { ..state, selected_model: value })
     GitLoaded(thread_id~, reply~) =>
       (@cmd.none, state.with_git_reply(thread_id, reply))
@@ -72,11 +58,11 @@ pub fn update(
           git_details_open: false,
           write_access: CodexNeedsResume,
           requested_thread: Some(thread_id),
-          // Composer state belongs to the selected task. Until per-task drafts
-          // are persisted, switching tasks deliberately starts clean.
+          // These fields are the adapter's last canonical submission snapshot.
+          // The shared component keeps each task's unsent local draft under
+          // its own identity, exactly as it does for OpenSeek conversations.
           draft: "",
           mentions: [],
-          completion: state.completion.dismissed(),
           pending_turn_delivery: None,
           notice: "",
         }.begin_foreground(CodexThreadReply(thread_id)),
@@ -205,7 +191,6 @@ pub fn update(
         CodexDraftOpenReply(draft_id) => {
           next = next.with_open_draft(draft_id, value).loading_context(false)
           cmd = @cmd.batch([
-            next.load_files(dispatch, channel),
             next.load_skills(dispatch, channel, force_reload=false),
           ])
         }
@@ -218,7 +203,6 @@ pub fn update(
             next = next.loading_context(false)
             cmd = @cmd.batch([
               next.refresh_git(dispatch, channel),
-              next.load_files(dispatch, channel),
               next.load_skills(dispatch, channel, force_reload=false),
             ])
           }
@@ -237,7 +221,6 @@ pub fn update(
           cmd = @cmd.batch([
             next.send(dispatch, channel),
             next.refresh_git(dispatch, channel),
-            next.load_files(dispatch, channel),
             next.load_skills(dispatch, channel, force_reload=false),
           ])
           if next.active_thread() is Some(active) {
@@ -251,7 +234,6 @@ pub fn update(
           next = next.with_created_worktree(worktree).with_turn_reply(value)
           cmd = @cmd.batch([
             next.refresh_git(dispatch, channel),
-            next.load_files(dispatch, channel),
             next.load_skills(dispatch, channel, force_reload=false),
           ])
         }
@@ -259,7 +241,6 @@ pub fn update(
           next = next.with_created_worktree(worktree)
           cmd = @cmd.batch([
             next.refresh_git(dispatch, channel),
-            next.load_files(dispatch, channel),
             next.load_skills(dispatch, channel, force_reload=false),
           ])
         }
@@ -307,12 +288,10 @@ pub fn update(
           cmd = refresh
           next = refreshed
         }
-        CodexCompactReply(original) | CodexReviewReply(original) => {
+        CodexCompactReply(original) | CodexReviewReply(original) =>
           if next.draft == original {
             next = { ..next, draft: "" }
           }
-          next = { ..next, completion: next.completion.dismissed() }
-        }
         CodexInterruptReply | CodexCancelLoginReply(_) | CodexLogoutReply => {
           let (refresh, refreshed) = next.refresh(dispatch, channel)
           cmd = refresh
@@ -473,7 +452,7 @@ fn State::with_turn_reply(self : State, value : Json) -> State {
   {
     ..next,
     mentions: [],
-    completion: next.completion.dismissed(),
+    submission_sequence: next.submission_sequence + 1,
     pending_turn_delivery: None,
   }
 }
@@ -560,7 +539,7 @@ test "cwd-less stored Codex tasks expose Terminal scratch without Files" {
     state.active_placement(@interop.ChannelId::Local)
     is Some(@interop.Scratch(root=None)),
   )
-  assert_true(state.file_owner() is None)
+  assert_true(state.active_context() is None)
 }
 
 ///|
@@ -698,9 +677,12 @@ test "Codex update handlers are pure and idempotent" {
       },
     ],
   }
+  let composer_identity = state.composer_identity(@interop.ChannelId::Local)
   let messages : Array[Msg] = [
     Refresh,
-    Composer(@composer.ControllerDraftChanged("next draft")),
+    ComposerAction(
+      @composer.SlashCommand(identity=composer_identity, command="unknown"),
+    ),
     ModelChanged("gpt-test"),
     ToggleGitDetails,
     CloseGitDetails,
@@ -712,7 +694,6 @@ test "Codex update handlers are pure and idempotent" {
     RepairWorktree,
     ConfirmArchiveDiscard,
     CancelArchiveDiscard,
-    Composer(@composer.ControllerSubmitRequested),
     Stop,
     Login,
     CancelLogin,
@@ -1082,14 +1063,14 @@ test "Codex writer conflict is the active-elsewhere signal" {
 }
 
 ///|
-test "Codex task selection clears composer-local state" {
+test "Codex task selection clears the adapter submission snapshot" {
   let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let state = {
     ..State::from_thread_snapshot({
       "thread": { "id": "thread-a", "cwd": "/work/a", "turns": [] },
     }),
     draft: "belongs to A",
-    mentions: [CodexFileMention(name="a.mbt", path="src/a.mbt")],
+    mentions: [{ ref_: @mention_context.File(path="src/a.mbt"), range: None }],
   }
   let (_, next) = update(
     dispatch,
@@ -1100,7 +1081,6 @@ test "Codex task selection clears composer-local state" {
   )
   assert_eq(next.draft, "")
   assert_true(next.mentions.is_empty())
-  assert_true(next.completion.current() is None)
 }
 
 ///|

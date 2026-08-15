@@ -5,7 +5,9 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/composer",
   "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/pathx",
   "openseek_desktop/frontend/sidebar/section",
   "openseek_desktop/frontend/transcript",
 }
@@ -16,9 +18,18 @@ pub fn update(@cmd.Emit[Msg], Msg, State, @interop.ChannelId, (String) -> @cmd.C
 // Errors
 
 // Types and methods
+pub(all) struct ComposerContext {
+  channel : @interop.ChannelId
+  file_candidates : Array[@pathx.Relative]
+  open_files : Array[@pathx.Relative]
+  active_file : @pathx.Relative?
+  file_index : @composer.FileIndex
+}
+
 type Msg
 pub fn Msg::archive_thread(String) -> Self
 pub fn Msg::close_git_details() -> Self
+pub fn Msg::composer_action(@composer.Action) -> Self
 pub fn Msg::notification(String, Json, Int) -> Self
 pub fn Msg::open_thread(String) -> Self
 pub fn Msg::refresh() -> Self
@@ -31,11 +42,10 @@ pub(all) struct PageActions {
   toggle_sidebar : @cmd.Cmd
   toggle_terminal : @cmd.Cmd
   toggle_files : @cmd.Cmd
-  open_file : (String, @common.Range?, String?) -> @cmd.Cmd
   open_external : (String) -> @cmd.Cmd
   workspace_label : (@common.Uri) -> String
-  worktree_workspace : @common.Uri?
   transcript : @html.Html
+  composer : @html.Html
 }
 
 pub(all) struct SidebarContext {
@@ -46,17 +56,19 @@ pub(all) struct SidebarContext {
 
 type State derive(Eq)
 pub fn State::State(loading? : Bool) -> Self
+pub fn State::accepts_composer_identity(Self, @composer.Identity, @interop.ChannelId) -> Bool
 pub fn State::active_id(Self) -> String?
 pub fn State::active_placement(Self, @interop.ChannelId) -> @interop.CheckoutPlacement?
 pub fn State::archived_sidebar_entries(Self, @interop.ChannelId) -> Array[@section.Entry]
 pub fn State::can_start_thread(Self) -> Bool
+pub fn State::composer_input(Self, @cmd.Emit[Msg], ComposerContext) -> @composer.Input
 pub fn State::draft_text(Self) -> String
 pub fn State::from_thread_snapshot(Json) -> Self
 pub fn State::git_details_open(Self) -> Bool
 pub fn State::has_active(Self) -> Bool
 pub fn State::new_thread_cwd(Self) -> String
 pub fn State::page(Self, @cmd.Emit[Msg], @interop.ChannelId, Bool, Bool, Bool, PageActions) -> Array[@html.Html]
-pub fn State::refresh(Self, @cmd.Emit[Msg], @interop.ChannelId) -> @cmd.Cmd
+pub fn State::refresh(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)
 pub fn State::sidebar_section(Self, SidebarContext) -> @section.Input
 pub fn State::transcript_items(Self) -> Array[@transcript.TranscriptItem]
 pub fn State::with_editor_comment(Self, String, @common.Range, String, String) -> Self

@@ -61,6 +61,16 @@ pub(all) struct GoalInput {
 } derive(Eq)
 
 ///|
+/// One slash-command row supplied by the conversation implementation. The
+/// component owns filtering and selection, while OpenSeek and Codex retain
+/// their distinct command catalogs and execution semantics.
+pub(all) struct SlashCommand {
+  label : String
+  detail : String
+  command : String
+} derive(Eq, @debug.Debug)
+
+///|
 /// Which primary action the composer should expose for the visible
 /// conversation. Availability is root-owned; button behavior remains a typed
 /// composer action.
@@ -76,6 +86,9 @@ pub(all) struct Presentation {
   context : Array[@html.Html]
   status : Array[@html.Html]
   placeholder : String
+  // A read-only Codex task still renders its transcript and status, but its
+  // textarea must not accept edits that can never be submitted.
+  disabled : Bool
   primary_action : PrimaryAction
 } derive(Eq)
 
@@ -86,6 +99,7 @@ pub(all) struct Input {
   identity : Identity
   draft : Draft
   goal : GoalInput
+  slash_commands : Array[SlashCommand]
   root : @common.Uri?
   installed_skills : Array[@transcript.InstalledSkillItem]
   context_generation : Int

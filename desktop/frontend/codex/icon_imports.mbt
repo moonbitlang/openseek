@@ -4,9 +4,6 @@
 ///|
 using @icons {
   icon,
-  icon_arrow_up,
-  icon_close,
-  icon_debug_stop,
   icon_folder,
   icon_layout_sidebar_left,
   icon_layout_sidebar_right,

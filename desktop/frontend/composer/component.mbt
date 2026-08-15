@@ -700,7 +700,7 @@ fn Model::update(
           ),
         )
       } else {
-        guard !entry.draft.task.is_blank() else {
+        guard !entry.draft.task.is_blank() || !entry.draft.mentions.is_empty() else {
           return (self.with_entry(entry), @cmd.none)
         }
         (

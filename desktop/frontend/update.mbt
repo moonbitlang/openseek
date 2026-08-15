@@ -1646,6 +1646,7 @@ fn update(
 fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
   self
   is (ComposerAction(@composer.MentionOpened(..))
+  | CodexComposerAction(@composer.MentionOpened(..))
   | JumpToMention(_)
   | JumpToLocation(..)
   | QuickOpen(@quick_open.Pick(_))
@@ -1765,6 +1766,48 @@ fn update_msg(
         )
       } else {
         (clear_legacy_engine_settings(), model)
+      }
+    CodexComposerAction(action) =>
+      match action {
+        @composer.MentionOpened(identity~, mention~) => {
+          guard model.screen is Codex &&
+            model.codex.accepts_composer_identity(identity, model.focused) else {
+            return (@cmd.none, model)
+          }
+          guard @mention_context.target(mention.ref_) is Some(target) else {
+            return (@cmd.none, model)
+          }
+          let range = if mention.range is Some(_) {
+            mention.range
+          } else {
+            target.range
+          }
+          open_editor_at(
+            dispatch,
+            model,
+            target.file,
+            range,
+            annotation?=target.annotation,
+          )
+        }
+        @composer.FileIndexEnsured(identity~) => {
+          guard model.screen is Codex &&
+            model.codex.accepts_composer_identity(identity, model.focused) else {
+            return (@cmd.none, model)
+          }
+          update_msg(dispatch, FileEditor(@fileeditor.EnsureFileIndex), model)
+        }
+        _ => {
+          let channel = model.focused
+          let (command, codex) = @codex.update(
+            dispatch.map(next => Codex(channel~, next)),
+            @codex.Msg::composer_action(action),
+            model.codex,
+            channel,
+            url => open_external_link(dispatch, url),
+          )
+          (command, { ..model, codex, })
+        }
       }
     ComposerAction(action) =>
       match action {
@@ -16305,6 +16348,14 @@ test "only synchronous file-open messages suppress panel reactivation" {
   assert_true(JumpToMention(0).opens_file_before_panel_reconciliation())
   assert_true(
     ComposerAction(
+      @composer.MentionOpened(identity~, mention={
+        ref_: File(path="a.mbt"),
+        range: None,
+      }),
+    ).opens_file_before_panel_reconciliation(),
+  )
+  assert_true(
+    CodexComposerAction(
       @composer.MentionOpened(identity~, mention={
         ref_: File(path="a.mbt"),
         range: None,

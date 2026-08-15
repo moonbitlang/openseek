@@ -177,12 +177,14 @@ fn Entry::view(
           id: "send",
           class_name: "icon-button send-button",
           title: "Send",
-          disabled: !available || self.draft.task.is_blank(),
+          disabled: !available ||
+          (self.draft.task.is_blank() && self.draft.mentions.is_empty()),
           command: emit(SubmitRequested),
           content: @icons.icon(@icons.icon_arrow_up),
         }
       Running(steer_available~, can_stop~) =>
-        if steer_available && !self.draft.task.is_blank() {
+        if steer_available &&
+          (!self.draft.task.is_blank() || !self.draft.mentions.is_empty()) {
           ActionButton::{
             id: "send",
             class_name: "icon-button send-button",
@@ -214,7 +216,7 @@ fn Entry::view(
       self.draft.task
     },
     placeholder: input.presentation.placeholder,
-    disabled: false,
+    disabled: input.presentation.disabled,
     input: emit.map(value => TextChanged(value)),
     keyboard: KeyboardActions::{
       menu_open: !goal_mode && self.completion is Some(_),

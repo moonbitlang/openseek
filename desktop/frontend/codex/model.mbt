@@ -215,25 +215,12 @@ priv enum CodexForeground {
 /// mutates Codex's account, thread, turn, item, or approval state directly.
 enum Msg {
   Refresh
-  // All editable input events cross the shared composer controller. Codex
-  // interprets only the resulting completion choice or submission through
-  // app-server after the common transition has settled.
-  Composer(@composer.ControllerMsg)
-  SymbolSearchDue(owner~ : CodexSearchOwner, generation~ : Int)
-  FilesIndexed(
-    owner~ : CodexFileOwner,
-    files~ : Array[@pathx.Relative],
-    truncated~ : Bool
-  )
-  FilesFailed(owner~ : CodexFileOwner)
+  // Only deliberate operations leave the shared Rabbita component. Raw
+  // keystrokes, completion navigation, and async search replies remain local
+  // to @composer and never traverse Codex's transcript-sized State.
+  ComposerAction(@composer.Action)
   SkillsLoaded(cwd~ : String, skills~ : Array[CodexSkill])
   SkillsFailed(cwd~ : String)
-  SymbolsLoaded(
-    owner~ : CodexSearchOwner,
-    generation~ : Int,
-    items~ : Array[@symbols.Symbol]
-  )
-  SymbolsFailed(owner~ : CodexSearchOwner, generation~ : Int)
   ModelChanged(String)
   GitLoaded(thread_id~ : String, reply~ : @protocol.GitPullRequestReply)
   ToggleGitDetails
@@ -275,6 +262,13 @@ enum Msg {
 /// Shell entrypoint for refreshing the focused Codex catalog.
 pub fn Msg::refresh() -> Msg {
   Refresh
+}
+
+///|
+/// Shell entrypoint for operations emitted by Codex's shared composer
+/// instance. Identity validation and app-server interpretation remain local.
+pub fn Msg::composer_action(action : @composer.Action) -> Msg {
+  ComposerAction(action)
 }
 
 ///|
@@ -352,22 +346,13 @@ struct State {
   git_details_open : Bool
   write_access : CodexWriteAccess
   draft : String
-  // File chips remain native app-server `UserInput::Mention` items. Symbols
-  // and editor annotations use the shared mention envelope inside text inputs
-  // because app-server has no structured symbol/annotation input of its own.
-  mentions : Array[CodexMention]
-  // OpenSeek and Codex keep separate values but use one completion state type
-  // for menu selection, dismissal, and asynchronous request generations.
-  completion : @composer.CompletionState[
-    CodexCompletionKind,
-    CodexCompletionItem,
-  ]
-  // `@` and `$` are cwd-scoped catalogs loaded when a thread becomes active.
-  // Files use the same host index and fuzzy ranking implementation as Ctrl+P;
-  // skills remain the Codex app-server catalog, not OpenSeek's registry.
-  file_index : CodexFileIndex
+  mentions : Array[@composer.Mention]
+  // The shared component advances only after app-server accepts or recovered
+  // history proves a submission. Failed sends therefore keep the local draft.
+  submission_sequence : Int
+  // `$` remains the cwd-scoped app-server catalog. `@` and `#` are owned by
+  // the shared component and use the same file/symbol subscriptions as Chat.
   skills : CodexSkillCatalog
-  symbol_search : CodexSymbolSearchCache
   placement : @composer.WorktreeChoice
   archive_confirm : CodexArchiveConfirm?
   pending_requests : Array[CodexPendingRequest]
@@ -404,10 +389,8 @@ pub fn State::State(loading? : Bool = false) -> State {
     write_access: CodexNeedsResume,
     draft: "",
     mentions: [],
-    completion: @composer.CompletionState(),
-    file_index: CodexFilesEmpty,
+    submission_sequence: 0,
     skills: CodexSkillsEmpty,
-    symbol_search: CodexSymbolSearchCache::empty(),
     placement: @composer.LocalCheckout,
     archive_confirm: None,
     pending_requests: [],
@@ -691,10 +674,7 @@ fn State::select_draft(self : State, id : String, cwd : String) -> State {
     write_access: CodexWritable,
     draft: "",
     mentions: [],
-    completion: @composer.CompletionState(),
-    file_index: CodexFilesEmpty,
     skills: CodexSkillsEmpty,
-    symbol_search: CodexSymbolSearchCache::empty(),
     placement: @composer.LocalCheckout,
     archive_confirm: None,
     pending_turn_delivery: None,
@@ -722,7 +702,17 @@ pub fn State::with_editor_comment(
   quote : String,
 ) -> State {
   let mentions = self.mentions.copy()
-  let annotation = CodexEditorAnnotation(file~, range~, quote~, comment~)
+  let annotation : @composer.Mention = {
+    ref_: @mention_context.Annotation(
+      file~,
+      start_line=range.start_line_number,
+      end_line=range.end_line_number,
+      quote~,
+      comment~,
+      side=@mention_context.WorkingRevision,
+    ),
+    range: Some(range),
+  }
   if !mentions.contains(annotation) {
     mentions.push(annotation)
   }
@@ -1208,7 +1198,7 @@ fn State::with_reconciled_turn_reply(
       ..next,
       draft: "",
       mentions: [],
-      completion: next.completion.dismissed(),
+      submission_sequence: next.submission_sequence + 1,
       pending_turn_delivery: None,
       notice: "Codex accepted the prompt; its reply was recovered from refreshed history.",
     }
@@ -2359,7 +2349,7 @@ test "Codex editor annotations stay in chips and preserve model context" {
   )
   assert_eq(twice.draft, "")
   assert_eq(twice.mentions.length(), 1)
-  guard twice.mentions[0].to_input() is Object(input) &&
+  guard twice.mention_input(twice.mentions[0]) is Some(Object(input)) &&
     @jsonx.json_text(input, "text") is Some(text) &&
     @mention_context.parse(text) is Some(parsed) else {
     fail("expected the annotation chip to use the shared mention envelope")

@@ -485,6 +485,13 @@ pub fn boot() -> Unit {
       composer_input,
       emit.map(action => ComposerAction(action)),
     )
+    let codex_composer_input = state.map(model => {
+      model.codex_composer_input(emit)
+    })
+    let codex_composer_html = @composer.component(
+      codex_composer_input,
+      emit.map(action => CodexComposerAction(action)),
+    )
     let sidebar_input = state.map(model => model.sidebar_component_input())
     let sidebar_html = @sidebar.component(
       sidebar_input,
@@ -494,11 +501,12 @@ pub fn boot() -> Unit {
       state.map(model => model.quick_open),
       emit.map(msg => QuickOpen(msg)),
     )
-    state.view7(
+    state.view8(
       terminal_html,
       transcript_html,
       right_panel_html,
       composer_html,
+      codex_composer_html,
       sidebar_html,
       quick_open_html,
       (
@@ -507,6 +515,7 @@ pub fn boot() -> Unit {
         transcript_html,
         right_panel_html,
         composer_html,
+        codex_composer_html,
         sidebar_html,
         quick_open_html,
       ) => {
@@ -519,6 +528,7 @@ pub fn boot() -> Unit {
           transcript_html,
           right_panel_html,
           composer_html,
+          codex_composer_html,
           sidebar_html,
           quick_open_html,
         )

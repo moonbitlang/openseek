@@ -41,25 +41,17 @@ fn SymbolCache::SymbolCache() -> SymbolCache {
 }
 
 ///|
-fn CompletionItem::slash_commands() -> Array[CompletionItem] {
-  [
-    {
-      label: "/compact",
-      detail: "Summarize and shrink this conversation's context",
-      command: "compact",
-      insert: "",
-      path: None,
-      range: None,
-    },
-    {
-      label: "/goal",
-      detail: "Set or clear this conversation's standing goal",
-      command: "goal",
-      insert: "",
-      path: None,
-      range: None,
-    },
-  ]
+fn CompletionItem::slash_commands(
+  commands : Array[SlashCommand],
+) -> Array[CompletionItem] {
+  commands.map(command => {
+    label: command.label,
+    detail: command.detail,
+    command: command.command,
+    insert: "",
+    path: None,
+    range: None,
+  })
 }
 
 ///|
@@ -227,7 +219,7 @@ fn Input::completion(
   }
   match kind {
     SlashCommands => {
-      let items = CompletionItem::slash_commands().filter(item => {
+      let items = CompletionItem::slash_commands(self.slash_commands).filter(item => {
         trigger.matches([item.label])
       })
       if items.is_empty() {

@@ -49,17 +49,6 @@ pub(all) struct CompletionRow {
   detail : String
 }
 
-type CompletionState[Kind, Item] derive(Eq)
-pub fn[Kind, Item] CompletionState::CompletionState() -> Self[Kind, Item]
-pub fn[Kind, Item] CompletionState::accepts(Self[Kind, Item], Int) -> Bool
-pub fn[Kind, Item] CompletionState::changed(Self[Kind, Item], ControllerCompletion[Kind, Item]?) -> Self[Kind, Item]
-pub fn[Kind, Item] CompletionState::current(Self[Kind, Item]) -> ControllerCompletion[Kind, Item]?
-pub fn[Kind, Item] CompletionState::delayed(Self[Kind, Item], (Int) -> @cmd.Cmd) -> @cmd.Cmd
-pub fn[Kind, Item] CompletionState::dismissed(Self[Kind, Item]) -> Self[Kind, Item]
-pub fn[Kind, Item] CompletionState::generation(Self[Kind, Item]) -> Int
-pub fn[Kind, Item] CompletionState::refreshed(Self[Kind, Item], ControllerCompletion[Kind, Item]?) -> Self[Kind, Item]
-pub fn[Kind, Item] CompletionState::shifted(Self[Kind, Item], Int) -> Self[Kind, Item]
-
 pub(all) struct CompletionView {
   rows : Array[CompletionRow]
   selected : Int
@@ -67,43 +56,6 @@ pub(all) struct CompletionView {
   empty : String
 }
 pub fn CompletionView::render(Self, (Int) -> @cmd.Cmd) -> @html.Html
-
-type Controller[Kind, Item, Mention] derive(Eq)
-pub fn[Kind, Item, Mention] Controller::Controller(String, Array[Mention], CompletionState[Kind, Item]) -> Self[Kind, Item, Mention]
-pub fn[Kind, Item, Mention] Controller::completion(Self[Kind, Item, Mention]) -> CompletionState[Kind, Item]
-pub fn[Kind, Item, Mention] Controller::draft(Self[Kind, Item, Mention]) -> String
-pub fn[Kind, Item, Mention] Controller::mentions(Self[Kind, Item, Mention]) -> Array[Mention]
-pub fn[Kind, Item, Mention] Controller::update(Self[Kind, Item, Mention], ControllerMsg, (String) -> ControllerCompletion[Kind, Item]?) -> (Self[Kind, Item, Mention], ControllerRequest[Kind, Item])
-pub fn[Parent, Result, Kind, Item, Mention] Controller::update_parent(Self[Kind, Item, Mention], Parent, ControllerMsg, (String) -> ControllerCompletion[Kind, Item]?, (Parent, Self[Kind, Item, Mention]) -> Parent, (Parent, ControllerRequest[Kind, Item]) -> Result) -> Result
-
-type ControllerCompletion[Kind, Item] derive(Eq)
-pub fn[Kind, Item] ControllerCompletion::ControllerCompletion(Kind, Menu[Item]) -> Self[Kind, Item]
-pub fn[Kind, Item] ControllerCompletion::kind(Self[Kind, Item]) -> Kind
-pub fn[Kind, Item] ControllerCompletion::menu(Self[Kind, Item]) -> Menu[Item]
-
-pub(all) enum ControllerMsg {
-  ControllerDraftChanged(String)
-  ControllerCompletionMoved(Int)
-  ControllerCompletionAccepted
-  ControllerCompletionPicked(Int)
-  ControllerCompletionDismissed
-  ControllerMentionRemoved(Int)
-  ControllerSubmitRequested
-} derive(Eq)
-
-pub(all) enum ControllerRequest[Kind, Item] {
-  NoControllerRequest
-  DraftUpdated(String)
-  CompletionChosen(kind~ : Kind, item~ : Item, draft_without_token~ : String)
-  SubmissionRequested
-} derive(Eq)
-
-type Debounce derive(Eq)
-pub fn Debounce::Debounce(generation? : Int) -> Self
-pub fn Debounce::accepts(Self, Int) -> Bool
-pub fn Debounce::advanced(Self) -> Self
-pub fn Debounce::delayed(Self, (Int) -> @cmd.Cmd) -> @cmd.Cmd
-pub fn Debounce::generation(Self) -> Int
 
 pub(all) struct Draft {
   task : String
@@ -158,6 +110,7 @@ pub(all) struct Input {
   identity : Identity
   draft : Draft
   goal : GoalInput
+  slash_commands : Array[SlashCommand]
   root : @common.Uri?
   installed_skills : Array[@transcript.InstalledSkillItem]
   context_generation : Int
@@ -197,11 +150,6 @@ pub fn MentionChip::render(Self) -> @html.Html
 type Menu[T] derive(Eq)
 pub fn[T] Menu::Menu(Array[T], loading~ : Bool, draft_without_token~ : String) -> Self[T]
 pub fn[T] Menu::current(Self[T]) -> T?
-pub fn[T] Menu::draft_without_token(Self[T]) -> String
-pub fn[T] Menu::get(Self[T], Int) -> T?
-pub fn[T] Menu::iter2(Self[T]) -> Iter2[Int, T]
-pub fn[T] Menu::length(Self[T]) -> Int
-pub fn[T] Menu::loading(Self[T]) -> Bool
 pub fn[T] Menu::selected(Self[T]) -> Int
 pub fn[T] Menu::shifted(Self[T], Int) -> Self[T]
 
@@ -231,6 +179,7 @@ pub(all) struct Presentation {
   context : Array[@html.Html]
   status : Array[@html.Html]
   placeholder : String
+  disabled : Bool
   primary_action : PrimaryAction
 } derive(Eq)
 
@@ -243,6 +192,12 @@ pub(all) struct Replacement {
   archived : @interop.ConversationKey
   fresh : @interop.ConversationKey
   archive_generation : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct SlashCommand {
+  label : String
+  detail : String
+  command : String
 } derive(Eq, @debug.Debug)
 
 type Trigger derive(Eq)

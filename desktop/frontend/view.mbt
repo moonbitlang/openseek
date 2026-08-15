@@ -1970,6 +1970,7 @@ fn view(
   transcript_html : @html.Html,
   right_panel_html : @html.Html,
   composer_html : @html.Html,
+  codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
   quick_open_html : @html.Html,
 ) -> @html.Html {
@@ -2012,10 +2013,7 @@ fn view(
           composer_html
         },
       ]
-    Codex => {
-      let worktree_workspace = model.codex.worktree_launch_workspace(
-        model.focused,
-      )
+    Codex =>
       model.codex.page(
         dispatch.map(msg => Codex(channel=model.focused, msg)),
         model.focused,
@@ -2026,16 +2024,12 @@ fn view(
           toggle_sidebar: dispatch(ToggleSidebar),
           toggle_terminal,
           toggle_files: toggle_right_panel,
-          open_file: (path, range, annotation) => {
-            dispatch(JumpToLocation(path~, range~, annotation~))
-          },
           open_external: url => dispatch(ExternalLinkClicked(url)),
           workspace_label: workspace => @resource.label(workspace),
-          worktree_workspace,
           transcript: transcript_html,
+          composer: codex_composer_html,
         },
       )
-    }
     Skills => page_with_toggle(dispatch, model, skills_page(dispatch, model))
     Settings =>
       page_with_toggle(dispatch, model, settings_page(dispatch, model))
