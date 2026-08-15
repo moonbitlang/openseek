@@ -56,7 +56,10 @@ aside {
   display: grid;
   gap: 4px;
   min-width: 0;
-  padding: 0 12px;
+  /* The outer scroll lane already reserves the 12px right inset through its
+     stable scrollbar gutter and clearance. Keep only the matching left inset
+     here so nested sections do not double the empty space on the right. */
+  padding: 0 0 0 12px;
 }
 
 .sidebar-heading {
