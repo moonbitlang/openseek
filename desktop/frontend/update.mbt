@@ -5246,9 +5246,13 @@ fn update_device_msg(
         Some(conv) => !conv.has_seen_durable_sequence(sequence)
         None => true
       }
-      let refresh_sessions = sequence == 1 &&
-        !dev.sessions.iter().any(item => item.id == session) &&
-        first_commit_unseen
+      // The listing is store-qualified, so ask whether THIS record is listed:
+      // a same-id row from another store is a different durable record and
+      // must not suppress the reload that gives this one its sidebar row.
+      let listed = dev.sessions
+        .iter()
+        .any(item => item.id == session && item.workspace == commit_project)
+      let refresh_sessions = sequence == 1 && !listed && first_commit_unseen
       // A short foreign run can commit and finish before either the session
       // list or run resync reaches this page. Materialize hidden client state
       // from the commit itself: sequence 1 projects immediately; a later
@@ -7653,6 +7657,59 @@ test "a rooted commit places its conversation without waiting for the list" {
     pending.workspace,
     Project(root=@interop.ChannelId::Local.test_resource("/work/unseen")),
   )
+}
+
+///|
+/// A same-id row from another store is a different durable record: it must
+/// not suppress the list reload that gives the committed record its own row.
+test "a commit for an unlisted store refreshes past a same-id row" {
+  let dispatch = test_dispatch()
+  let workspace = @interop.ChannelId::Local.test_resource("/work/foreign")
+  let store = @interop.ChannelId::Local.test_resource("/work/foreign/.openseek")
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    projects: [workspace],
+    sessions: [
+      {
+        id: "desktop-shared",
+        title: Some("scratch copy"),
+        workspace: None,
+        workspace_name: "",
+      },
+      {
+        id: "desktop-scratch-only",
+        title: Some("scratch chat"),
+        workspace: None,
+        workspace_name: "",
+      },
+    ],
+  })
+  let (_, committed) = update_dev(
+    dispatch,
+    SessionCommitted(
+      session="desktop-shared",
+      sequence=1,
+      ts=None,
+      item=@protocol.User({ content: "hi" }),
+      session_root=store,
+    ),
+    model,
+  )
+  assert_eq(committed.dev().sessions_request_generation, 1)
+  // The store that is already listed asks for nothing: this exact record has
+  // its row, and the conversation is new to the page either way.
+  let (_, same_store) = update_dev(
+    dispatch,
+    SessionCommitted(
+      session="desktop-scratch-only",
+      sequence=1,
+      ts=None,
+      item=@protocol.User({ content: "hi" }),
+      session_root=@interop.ChannelId::Local.test_store_root(),
+    ),
+    committed,
+  )
+  assert_eq(same_store.dev().sessions_request_generation, 1)
 }
 
 ///|
