@@ -441,10 +441,10 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.agent_start, async fn(payload) {
       @engine.start_run(state.sink(), state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.agent_cancel, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.agent_cancel, fn(payload) {
       @engine.cancel_run(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.agent_steer, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.agent_steer, fn(payload) {
       @engine.steer_run(state.manager, payload)
     }),
     @endpoint.Endpoint::remote(@commands.agent_compact, async fn(payload) {

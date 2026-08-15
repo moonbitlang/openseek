@@ -5,12 +5,12 @@
 /// Submit one prompt to the conversation's serve engine, spawning or
 /// replacing the process first when the config demands it. Only this
 /// conversation must be idle — other sessions' engines run their own turns
-/// concurrently. Returns as soon as the prompt is on the wire; the engine's
-/// consumer task reports progress and completion through events, exactly as
-/// the frontend already expects. The op only rejects for failures before the
-/// run's Started event goes out — once the run is public, a failure is
-/// reported through its error and finished events and the op returns
-/// normally (status "failed"), never both.
+/// concurrently. Returns as soon as the prompt is queued for the engine's
+/// writer; the engine's consumer task reports progress and completion through
+/// events, exactly as the frontend already expects. The op rejects only for
+/// failures before the run's Started event goes out. Everything after that —
+/// including a stdin write that fails — is reported through the run's error
+/// and finished events, never as both an event and a rejection.
 pub async fn start_run(
   sink : EventSink,
   manager : EngineManager,
@@ -81,57 +81,30 @@ pub async fn start_run(
   let run_id = mint_run_id()
   let command = @protocol.prompt(config.task)
   let submission_id = normalize_submission_id(payload.submission_id)
-  let mut started_emitted = false
-  // Publish the run and write its prompt while holding the engine's one
-  // command lock. A remote peer may steer as soon as it sees Started; making
-  // the phase visible only after this task owns the lock guarantees that steer
-  // (and cancel/compact) lands after the complete prompt on stdin, while the
-  // Started notification still precedes every event the prompt can produce.
-  live.with_command_lock(() => {
-    claim.require_current(manager)
-    guard live.accepts_commands &&
-      slot.engine is Some(current) &&
-      physical_equal(current, live) else {
-      raise EngineError("engine changed before the prompt was submitted")
-    }
-    live.latest_run = Some(run_id)
-    live.phase = Running(cancel_requested=false, compact_queued=false)
-    live.steer_runs.begin_run()
-    started_emitted = true
-    emit(
-      sink,
-      Started({
-        run_id,
-        submission_id,
-        engine: Some(config.engine),
-        model: Some(config.model),
-        max_steps: Some(config.max_steps),
-        session: config.session,
-        session_root: config.session_root.map(root => root.resource_path()),
-      }),
-    )
-    live.writer.write(command.to_jsonl())
-  }) catch {
-    error if @async.is_being_cancelled() => {
-      if started_emitted {
-        live.accepts_commands = false
-        retire_failed_command(
-          manager, live, "request cancelled while writing to the engine",
-        )
-      }
-      raise error
-    }
-    error if !started_emitted => raise error
-    error => {
-      // Started is already public, so settle it through the same bounded,
-      // cancellation-shielded cleanup as an interrupted command. Marking the
-      // writer unusable before that cleanup prevents a second cancellation or
-      // close timeout from exposing a partial stream to a same-config start.
-      live.accepts_commands = false
-      retire_failed_command(manager, live, "engine write failed: \{error}")
-      return { run_id, status: "failed", exit_code: 1 }
-    }
+  // Submitting, opening the run and announcing it are one synchronous step,
+  // with no suspension since the claim check above. That is what makes the
+  // ordering hold without a lock: no other request can interleave a command
+  // between the prompt and the phase it opens, a remote peer that steers on
+  // seeing Started necessarily lands behind the complete prompt, and this
+  // task cannot be cancelled after Started is public.
+  guard live.submit(command.to_jsonl(), failure_reason="engine write failed") else {
+    raise EngineError("engine changed before the prompt was submitted")
   }
+  live.latest_run = Some(run_id)
+  live.phase = Running(cancel_requested=false, compact_queued=false)
+  live.steer_runs.begin_run()
+  emit(
+    sink,
+    Started({
+      run_id,
+      submission_id,
+      engine: Some(config.engine),
+      model: Some(config.model),
+      max_steps: Some(config.max_steps),
+      session: config.session,
+      session_root: config.session_root.map(root => root.resource_path()),
+    }),
+  )
   { run_id, status: "accepted", exit_code: 0 }
 }
 
@@ -152,55 +125,32 @@ fn mint_run_id() -> String raise EngineError {
 /// process itself stays alive for the next prompt. The run is addressed by
 /// id across all conversations; with no matching open run there is nothing
 /// to cancel.
-pub async fn cancel_run(
+pub fn cancel_run(
   manager : EngineManager,
   payload : @protocol.CancelPayload,
 ) -> CancelReply {
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) else {
     return { cancelled: false, run_id: None }
   }
-  let mut command_started = false
-  let cancelled = live.with_command_lock(() => {
-    // The run can finish while this request waits behind a prompt or steer.
-    // Revalidate under the command lock so a late cancel is not written into
-    // the next idle boundary.
-    guard live.is_current(manager) else { return false }
-    guard live.phase is Running(compact_queued~, ..) else { return false }
-    if payload.run_id is Some(expected) && live.latest_run != Some(expected) {
-      return false
-    }
-    // A compaction queued behind the dying turn survives the cancel: the
-    // engine's pending queue keeps it (cancel only aborts the active turn), so
-    // the flag must ride along or the terminal event would idle past it.
-    live.phase = Running(cancel_requested=true, compact_queued~)
-    command_started = true
-    live.writer.write(@protocol.cancel().to_jsonl())
-    true
-  }) catch {
-    error if @async.is_being_cancelled() => {
-      if command_started {
-        live.accepts_commands = false
-        retire_failed_command(
-          manager, live, "request cancelled while writing cancellation to the engine",
-        )
-      }
-      raise error
-    }
-    error => {
-      if command_started {
-        live.accepts_commands = false
-        retire_failed_command(
-          manager,
-          live,
-          "failed to write cancellation to the engine: \{error}",
-        )
-      }
-      raise error
-    }
-  }
-  if !cancelled {
+  guard live.is_current(manager) else {
     return { cancelled: false, run_id: None }
   }
+  guard live.phase is Running(compact_queued~, ..) else {
+    return { cancelled: false, run_id: None }
+  }
+  if payload.run_id is Some(expected) && live.latest_run != Some(expected) {
+    return { cancelled: false, run_id: None }
+  }
+  guard live.submit(
+    @protocol.cancel().to_jsonl(),
+    failure_reason="failed to write cancellation to the engine",
+  ) else {
+    return { cancelled: false, run_id: None }
+  }
+  // A compaction queued behind the dying turn survives the cancel: the
+  // engine's pending queue keeps it (cancel only aborts the active turn), so
+  // the flag must ride along or the terminal event would idle past it.
+  live.phase = Running(cancel_requested=true, compact_queued~)
   { cancelled: true, run_id: live.latest_run }
 }
 
@@ -284,62 +234,32 @@ pub async fn compact_run(
     }
     live
   }
-  match live.phase {
+  // Deciding the phase this command implies is also how it is admitted, so
+  // there is exactly one place that classifies the current phase instead of
+  // the two matching ones a lock-then-revalidate shape needed.
+  let compacting_phase = match live.phase {
     Compacting => raise EngineError("this conversation is already compacting")
     Running(compact_queued=true, ..) =>
       raise EngineError(
         "a compaction is already queued behind the running turn",
       )
-    Running(compact_queued=false, ..) | Idle => ()
+    // Sent mid-turn, the command queues behind the open run; the flag makes
+    // the turn's terminal event land in Compacting so nothing slips into the
+    // gap before the engine's own compaction_started.
+    Running(cancel_requested~, compact_queued=false) =>
+      Running(cancel_requested~, compact_queued=true)
+    Idle => Compacting
   }
-  let command = @protocol.compact()
-  let mut command_started = false
-  live.with_command_lock(() => {
-    claim.require_current(manager)
-    guard live.accepts_commands &&
-      slot.engine is Some(current) &&
-      physical_equal(current, live) else {
-      raise EngineError("engine changed before compaction was submitted")
-    }
-    match live.phase {
-      Compacting => raise EngineError("this conversation is already compacting")
-      Running(compact_queued=true, ..) =>
-        raise EngineError(
-          "a compaction is already queued behind the running turn",
-        )
-      // Sent mid-turn, the command queues behind the open run; the flag makes
-      // the turn's terminal event land in Compacting so nothing slips into
-      // the gap before the engine's own compaction_started. Set before the
-      // potentially suspending write so the consumer already sees it.
-      Running(cancel_requested~, compact_queued=false) =>
-        live.phase = Running(cancel_requested~, compact_queued=true)
-      // Likewise, enter Compacting before the write so a short compaction's
-      // terminal event cannot be overwritten by this request resuming later.
-      Idle => live.phase = Compacting
-    }
-    command_started = true
-    live.writer.write(command.to_jsonl())
-  }) catch {
-    error if @async.is_being_cancelled() => {
-      if command_started {
-        live.accepts_commands = false
-        retire_failed_command(
-          manager, live, "request cancelled while writing the compaction command",
-        )
-      }
-      raise error
-    }
-    error if !command_started => raise error
-    error => {
-      live.accepts_commands = false
-      retire_failed_command(
-        manager,
-        live,
-        "failed to write the compaction command: \{error}",
-      )
-      raise EngineError("failed to request compaction: \{error}")
-    }
+  // Submitting and entering the phase are one synchronous step, so the
+  // classification above still holds and the consumer sees the new phase
+  // before any event the command can produce.
+  guard live.submit(
+    @protocol.compact().to_jsonl(),
+    failure_reason="failed to write the compaction command",
+  ) else {
+    raise EngineError("engine changed before compaction was submitted")
   }
+  live.phase = compacting_phase
   { compacting: true }
 }
 
@@ -352,7 +272,7 @@ pub async fn compact_run(
 /// idle, steers it into an open turn at a batch-safe boundary, and holds its
 /// wire-order position behind a queued compaction — so this op never gates on
 /// phase. The engine confirms through the durable `[goal]` marker commit;
-/// this op only confirms the command reached a live engine.
+/// this op only confirms the command was accepted by a live engine's writer.
 pub async fn goal_run(
   manager : EngineManager,
   payload : @protocol.GoalPayload,
@@ -391,8 +311,8 @@ pub async fn goal_run(
   @session_store.ensure_not_archived(session)
   let sessions = manager.serving()
   let slot = slot_for(sessions, session)
-  // Claim before looking at the engine, exactly as compact_run does: a start
-  // accepted between this op's validation and its locked write could replace
+  // Claim before looking at the engine, exactly as compact_run does: this op
+  // may have to spawn one, and a start accepted during that wait could replace
   // the live process and lose the command in the dying engine's stdin.
   let claim = slot.claim(sessions, session, GoalPending)
   defer claim.release(manager)
@@ -415,36 +335,11 @@ pub async fn goal_run(
   } else {
     @protocol.goal_clear()
   }
-  let mut command_started = false
-  live.with_command_lock(() => {
-    claim.require_current(manager)
-    guard live.accepts_commands &&
-      slot.engine is Some(current) &&
-      physical_equal(current, live) else {
-      raise EngineError("engine changed before the goal was submitted")
-    }
-    command_started = true
-    live.writer.write(command.to_jsonl())
-  }) catch {
-    error if @async.is_being_cancelled() => {
-      if command_started {
-        live.accepts_commands = false
-        retire_failed_command(
-          manager, live, "request cancelled while writing the goal command",
-        )
-      }
-      raise error
-    }
-    error if !command_started => raise error
-    error => {
-      live.accepts_commands = false
-      retire_failed_command(
-        manager,
-        live,
-        "failed to write the goal command: \{error}",
-      )
-      raise EngineError("failed to update the goal: \{error}")
-    }
+  guard live.submit(
+    command.to_jsonl(),
+    failure_reason="failed to write the goal command",
+  ) else {
+    raise EngineError("engine changed before the goal was submitted")
   }
   { delivered: true }
 }
@@ -458,7 +353,7 @@ pub async fn goal_run(
 /// outlive the dying turn in the engine's queue and contaminate a later
 /// prompt. Blank text is refused too: the engine filters blanks without
 /// emitting any settling event, which would leave a phantom acknowledgment.
-pub async fn steer_run(
+pub fn steer_run(
   manager : EngineManager,
   payload : @protocol.SteerPayload,
 ) -> SteerReply {
@@ -469,61 +364,30 @@ pub async fn steer_run(
     live.phase is Running(cancel_requested=false, ..) else {
     return { steered: false, run_id: None }
   }
-  let command = @protocol.steer(payload.text)
-  let submission_id = normalize_submission_id(payload.submission_id)
-  let mut entry : TrackedSteer? = None
-  let steered = live.with_command_lock(() => {
-    // Concurrent steer requests wait here in their actual stdin order. The
-    // run may finish (or be cancelled) while this one waits, so validate again
-    // before recording an entry that would otherwise never receive a receipt.
-    guard live.is_current(manager) else { return false }
-    guard live.phase is Running(cancel_requested=false, ..) else {
-      return false
-    }
-    if payload.run_id is Some(expected) && live.latest_run != Some(expected) {
-      return false
-    }
-    // Record immediately before this locked write: if the terminal event is
-    // processed while write suspends, record_terminal can still pin the entry
-    // to the finishing run. Identity, not text, drives rollback so equal
-    // steering strings retain distinct submission ids.
-    let sent = live.steer_runs.record_sent(payload.text, submission_id)
-    entry = Some(sent)
-    live.writer.write(command.to_jsonl())
-    true
-  }) catch {
-    error if @async.is_being_cancelled() => {
-      if entry is Some(_) {
-        live.accepts_commands = false
-        retire_failed_command(
-          manager, live, "request cancelled while writing steering to the engine",
-        )
-      }
-      raise error
-    }
-    error => {
-      let run_id = live.latest_run
-      if entry is Some(_) {
-        live.accepts_commands = false
-        retire_failed_command(
-          manager,
-          live,
-          "failed to write steering to the engine: \{error}",
-        )
-        // A write error after record_sent is not a definitive refusal: a
-        // complete frame may already be in the pipe and can still produce a
-        // durable User plus steer_applied before EOF. Report provisional
-        // acceptance so the client keeps exact-id ownership; the trailing
-        // receipt or Finished/durable recovery settles it without restoring a
-        // duplicate draft.
-        return { steered: true, run_id }
-      }
-      return { steered: false, run_id }
-    }
-  }
-  if !steered {
+  guard live.is_current(manager) else {
     return { steered: false, run_id: None }
   }
+  if payload.run_id is Some(expected) && live.latest_run != Some(expected) {
+    return { steered: false, run_id: None }
+  }
+  let submission_id = normalize_submission_id(payload.submission_id)
+  guard live.submit(
+    @protocol.steer(payload.text).to_jsonl(),
+    failure_reason="failed to write steering to the engine",
+  ) else {
+    return { steered: false, run_id: live.latest_run }
+  }
+  // Recorded in the same synchronous step as the submission, so the entry
+  // exists before any event this steer can produce and a terminal event that
+  // arrives first can still pin it to the finishing run. Identity, not text,
+  // drives rollback so equal steering strings retain distinct submission ids.
+  //
+  // Once submitted the steer is provisionally accepted even if the writer
+  // later fails: a complete frame may already be in the pipe and can still
+  // produce a durable User plus steer_applied before EOF. The client keeps
+  // exact-id ownership, and the trailing receipt or Finished/durable recovery
+  // settles it without restoring a duplicate draft.
+  live.steer_runs.record_sent(payload.text, submission_id) |> ignore
   { steered: true, run_id: live.latest_run }
 }
 
@@ -1127,8 +991,13 @@ async test "setup failure retires the writer before an immediate next start" {
 }
 
 ///|
+/// The prompt is far larger than the pipe buffer and the child never reads,
+/// so the write is still in flight when the child dies. Submission itself
+/// never waits for it — that is what removed the cancel-after-public window
+/// this test used to cover — and the run is still settled exactly once,
+/// whether the writer's failure or the consumer's EOF gets there first.
 #cfg(not(platform="windows"))
-async test "cancelling a backpressured prompt retires its partial writer" {
+async test "a prompt bigger than the pipe still settles exactly once" {
   let dir = @fs.tmpdir(prefix="openseek-backpressured-command-")
   let root : @pathx.Path = Path(dir)
   let engine = root.join("bin/engine.sh")
@@ -1139,11 +1008,12 @@ async test "cancelling a backpressured prompt retires its partial writer" {
     runtime.join("toolchains/moonbit/macos-arm64"),
     version="0.10.0-test",
   )
-  // Deliberately never read stdin: a prompt much larger than the pipe buffer
-  // suspends inside WriteToProcess after Started is already public.
+  // Deliberately never read stdin, then die with the prompt still half
+  // written: the JSONL frame on the wire is partial, so the handle must
+  // become unusable and the run must be reported as failed.
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nsleep 30\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nsleep 1\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
@@ -1173,36 +1043,28 @@ async test "cancelling a backpressured prompt retires its partial writer" {
     while manager.pump is Stopped {
       @async.sleep(1)
     }
-    let request = group.spawn(() => {
-      ignore(
-        start_run(sink, manager, {
-          task: "x".repeat(4_000_000),
-          submission_id: None,
-          model: None,
-          max_steps: None,
-          session,
-          workspace: None,
-        }),
-      )
+    // Returns without waiting for the 4MB to reach the child.
+    let reply = start_run(sink, manager, {
+      task: "x".repeat(4_000_000),
+      submission_id: None,
+      model: None,
+      max_steps: None,
+      session,
+      workspace: None,
     })
+    assert_eq(reply.status, "accepted")
+    assert_eq(started.val, Some(reply.run_id))
+    let run_id = reply.run_id
     assert_true(
-      @async.with_timeout_opt(3000, () => {
-        while started.val is None {
+      @async.with_timeout_opt(10_000, () => {
+        while !has_finished_run(emitted, run_id) {
           @async.sleep(1)
         }
       })
       is Some(_),
     )
-    request.cancel()
-    let cancelled = try {
-      request.wait()
-      false
-    } catch {
-      error if @async.is_cancellation_error(error) => true
-      _ => false
-    }
-    assert_true(cancelled)
-    guard started.val is Some(run_id) else { fail("missing Started") }
+    // Both the writer's failed write and the consumer's EOF want to settle
+    // this run; they share the engine's phase, so only one of them does.
     let mut finishes = 0
     for event in emitted {
       if event is Finished(payload) && payload.run_id == run_id {
@@ -1247,12 +1109,12 @@ async test "named session retries after its first prompt creates no record" {
     version="0.10.0-test",
   )
   // `sessions show` reports the missing first-turn record. The first serve
-  // process creates only the session directory and never reads stdin, so a
-  // large prompt is cancelled while its JSONL frame is still partial. The
-  // successor accepts a normal prompt and finishes it.
+  // process creates only the session directory, never reads stdin, and dies
+  // with the large prompt's JSONL frame still partial. The successor accepts
+  // a normal prompt and finishes it.
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then\n  printf '%s\\n' 'session record does not exist' >&2\n  exit 7\nfi\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  mkdir -p '\{store}/sessions/\{session}'\n  printf '' > '\{first_ready}'\n  exec sleep 30\nfi\nwhile IFS= read -r line; do\n  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then\n  printf '%s\\n' 'session record does not exist' >&2\n  exit 7\nfi\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  mkdir -p '\{store}/sessions/\{session}'\n  printf '' > '\{first_ready}'\n  exec sleep 1\nfi\nwhile IFS= read -r line; do\n  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
@@ -1281,21 +1143,19 @@ async test "named session retries after its first prompt creates no record" {
     while manager.pump is Stopped {
       @async.sleep(1)
     }
-    let first_request = group.spawn(() => {
-      ignore(
-        start_run(sink, manager, {
-          task: "x".repeat(4_000_000),
-          submission_id: None,
-          model: None,
-          max_steps: None,
-          session,
-          workspace: None,
-        }),
-      )
+    let first = start_run(sink, manager, {
+      task: "x".repeat(4_000_000),
+      submission_id: None,
+      model: None,
+      max_steps: None,
+      session,
+      workspace: None,
     })
+    assert_eq(first.status, "accepted")
+    assert_eq(started.val, Some(first.run_id))
     assert_true(
       @async.with_timeout_opt(3000, () => {
-        while started.val is None || !@fsx.exists(first_ready) {
+        while !@fsx.exists(first_ready) {
           @async.sleep(1)
         }
       })
@@ -1305,20 +1165,23 @@ async test "named session retries after its first prompt creates no record" {
     assert_false(
       @fsx.exists(Path(session_store_file(store.resolve(), session))),
     )
-    first_request.cancel()
-    let cancelled = try {
-      first_request.wait()
-      false
-    } catch {
-      error if @async.is_cancellation_error(error) => true
-      _ => false
-    }
-    assert_true(cancelled)
-    guard started.val is Some(first_run_id) else {
-      fail("missing first Started")
-    }
-    assert_true(has_finished_run(emitted, first_run_id))
-    assert_true(manager.followers.get(session) is None)
+    let first_run_id = first.run_id
+    assert_true(
+      @async.with_timeout_opt(10_000, () => {
+        while !has_finished_run(emitted, first_run_id) {
+          @async.sleep(1)
+        }
+      })
+      is Some(_),
+    )
+    assert_true(
+      @async.with_timeout_opt(10_000, () => {
+        while manager.followers.get(session) is Some(_) {
+          @async.sleep(1)
+        }
+      })
+      is Some(_),
+    )
 
     let second = start_run(sink, manager, {
       task: "retry",

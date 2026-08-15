@@ -15,7 +15,7 @@ pub async fn archived_sessions(EngineManager, (String, String) -> Unit) -> @prot
 
 pub async fn attach_workspace(String, (Array[String]) -> Unit) -> @protocol.WorkspacesReply
 
-pub async fn cancel_run(EngineManager, @protocol.CancelPayload) -> @protocol.CancelReply
+pub fn cancel_run(EngineManager, @protocol.CancelPayload) -> @protocol.CancelReply
 
 pub async fn compact_run(EngineManager, @protocol.CompactPayload) -> @protocol.CompactReply
 
@@ -47,7 +47,7 @@ pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 
 pub async fn start_run(EventSink, EngineManager, @protocol.StartPayload) -> @protocol.StartReply
 
-pub async fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply
+pub fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply
 
 pub async fn unarchive_session(EngineManager, String, (String, String) -> Unit) -> @protocol.SessionsReply
 
@@ -77,7 +77,7 @@ pub(all) enum EngineEvent {
 type EngineManager
 pub fn EngineManager::worktree_host(Self) -> @worktree.WorktreeHost
 
-pub(all) struct EventSink(async (EngineEvent) -> Unit)
+pub(all) struct EventSink((EngineEvent) -> Unit)
 
 pub(all) struct SettingsPatch {
   provider : String?

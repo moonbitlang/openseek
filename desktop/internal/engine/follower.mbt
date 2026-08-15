@@ -78,8 +78,9 @@ priv struct FollowerLoadRequest {
 ///|
 /// A lifecycle Finished that was published before the follower could prove
 /// the matching durable frontier. The actor retains published entries until
-/// retirement as an idempotence ledger: a concurrent producer cannot enqueue
-/// the same run again while another boundary emission is suspended.
+/// retirement as an idempotence ledger: a producer that registers the same run
+/// again across the semantic-terminal and failed-command paths cannot make it
+/// be announced twice.
 priv struct PendingDurableFinish {
   run_id : String
   mut published : Bool
@@ -137,14 +138,12 @@ fn SessionFollower::expect_durable_finish(
 
 ///|
 /// Publish every retained boundary at the frontier proved by this successful
-/// final scan. Keep successful entries as the actor's dedupe ledger; failed
-/// emissions stay pending and make the Stop fail so a later caller retries.
-async fn SessionFollower::publish_durable_finishes(
+/// final scan, and keep the entries as the actor's dedupe ledger. Publishing
+/// is total, so this is the seam's only outcome.
+fn SessionFollower::publish_durable_finishes(
   self : SessionFollower,
   sink : EventSink,
 ) -> Unit {
-  // Emission suspends, so a concurrent failed-command path can append while
-  // this loop runs. Re-read the length to include it before retirement.
   let mut index = 0
   while index < self.durable_finishes.length() {
     let pending = self.durable_finishes[index]
@@ -357,7 +356,7 @@ async fn SessionFollower::run(
           }
         }
         Stop(final_scan~, writer_exited~, generation~) => {
-          let mut failure = if final_scan {
+          let failure = if final_scan {
             try {
               // Everything the departed writer persisted is broadcast
               // before this generation can retire successfully.
@@ -399,16 +398,9 @@ async fn SessionFollower::run(
           }
           // Both a readable snapshot and the exact-zero proof above are
           // successful drains. Publish pending lifecycle boundaries at this
-          // single seam before retirement; a sink failure keeps the actor
-          // installed so another Stop can retry the unacknowledged entries.
+          // single seam before retirement.
           if final_scan && failure is None {
-            failure = try {
-              follower.publish_durable_finishes(sink)
-              None
-            } catch {
-              error if @async.is_being_cancelled() => raise error
-              error => Some("\{error}")
-            }
+            follower.publish_durable_finishes(sink)
           }
           if failure is Some(detail) {
             // A failed final scan is not a drain. Keep the actor installed
@@ -1066,11 +1058,12 @@ async test "abrupt EOF retains a failed final drain for later boundary retry" {
       session_root: Some(root),
       spec_key: "test",
       writer,
-      command_lock: Mutex(),
+      commands: Queue(kind=Unbounded),
       process,
       sink,
       follower: Some(follower),
-      exit: { process_done: false, done: false },
+      process_exit: Queue(kind=Unbounded),
+      consumer: None,
       latest_run: Some("r-abrupt-eof"),
       phase: Running(cancel_requested=false, compact_queued=false),
       accepts_commands: true,
@@ -1087,7 +1080,8 @@ async test "abrupt EOF retains a failed final drain for later boundary retry" {
     let stderr_task = group.spawn(no_wait=true, () => "")
     engine.run(manager, messages, stderr_task)
 
-    assert_true(engine.exit.done)
+    // `run` returning is retirement; the child was reaped on the way there.
+    assert_true(latch_closed(engine.process_exit))
     assert_true(slot.engine is None)
     assert_true(
       follower.durable_finishes
@@ -1258,18 +1252,21 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
       session_root: Some(root),
       spec_key: "test",
       writer,
-      command_lock: Mutex(),
+      commands: Queue(kind=Unbounded),
       process,
       sink,
       follower: Some(follower),
-      // The real EOF consumer reaches this state after its first failed final
-      // scan. Detach must retry the still-live follower and propagate again.
-      exit: { process_done: true, done: true },
+      process_exit: Queue(kind=Unbounded),
+      consumer: None,
       latest_run: Some("r-detach-fail"),
       phase: Idle,
       accepts_commands: false,
       steer_runs: SteerRunTracker::new(),
     }
+    // The real EOF consumer reaches this state after its first failed final
+    // scan: the child is reaped and the consumer is gone, but the follower is
+    // still live. Detach must retry it and propagate the failure again.
+    engine.process_exit.close()
     let sessions : Map[String, SessionSlot] = Map([])
     let slot = slot_for(sessions, session)
     slot.engine = Some(engine)
@@ -1460,7 +1457,11 @@ fn follower_state_fixture(session : String) -> SessionFollower {
 
 ///|
 #cfg(not(platform="windows"))
-async test "failed command stays unusable through close timeout and repeated cancel" {
+/// Retirement no longer runs on a request's task, so there is nothing left to
+/// shield it from; what still has to hold is that a child which honours
+/// neither stdin EOF nor cancellation cannot strand the conversation. Both
+/// deadlines are spent here, which is why this test is slow.
+async test "failed command stays unusable through a close timeout" {
   let manager = new_engine_manager("unused")
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(fn(event) { emitted.push(event) })
@@ -1481,11 +1482,12 @@ async test "failed command stays unusable through close timeout and repeated can
       session_root: None,
       spec_key: "test",
       writer,
-      command_lock: Mutex(),
+      commands: Queue(kind=Unbounded),
       process,
       sink,
       follower: Some(follower),
-      exit: { process_done: false, done: false },
+      process_exit: Queue(kind=Unbounded),
+      consumer: None,
       latest_run: Some("r-timeout"),
       phase: Running(cancel_requested=false, compact_queued=false),
       accepts_commands: true,
@@ -1495,28 +1497,16 @@ async test "failed command stays unusable through close timeout and repeated can
     let slot = slot_for(sessions, "s-timeout")
     slot.engine = Some(engine)
     manager.pump = Serving(sessions~)
-    let cleanup = group.spawn(() => {
-      retire_failed_command(manager, engine, "partial command")
-    })
-    @async.sleep(20)
-    cleanup.cancel()
-    @async.sleep(20)
-    cleanup.cancel()
-    let cancelled = try {
-      cleanup.wait()
-      false
-    } catch {
-      error if @async.is_cancellation_error(error) => true
-      _ => false
-    }
-    assert_true(cancelled)
+    retire_failed_command(manager, engine, "partial command")
     assert_false(engine.accepts_commands)
     assert_true(engine.phase is Idle)
     assert_true(engine.latest_run is None)
     assert_true(
       follower.durable_finishes is [{ run_id: "r-timeout", published: false }],
     )
-    assert_false(engine.exit.done)
+    // The child was never proved gone, so the slot and follower stay in place
+    // and every successor must retry this close barrier rather than reuse it.
+    assert_false(engine.is_retired())
     assert_true(slot.engine is Some(current) && physical_equal(current, engine))
     assert_true(
       manager.followers.get("s-timeout") is Some(current) &&
