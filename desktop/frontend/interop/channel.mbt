@@ -26,15 +26,97 @@ pub(all) struct ConversationKey {
 } derive(Debug, Eq, Hash)
 
 ///|
-/// Where a conversation is meant to run inside its registered project.
-/// `MissingWorktree` retains the durable worktree name after its checkout
-/// directory disappears, so downstream panels can refuse project-root
-/// fallback without pairing a nullable name with a separate boolean flag.
+/// The complete directory placement of one conversation. Files and language
+/// services use `checkout_root`; Git and terminal worktree resolution use
+/// `project_root`. Keeping both projections on this single value prevents a
+/// caller from combining a worktree name with an unrelated root.
+///
+/// `MissingWorktree` deliberately has no checkout root. It retains only the
+/// registered project and durable worktree name, so every operating system
+/// blocks path-based work without inventing a sentinel path.
 pub(all) enum CheckoutPlacement {
-  WorkspaceRoot
-  Worktree(name~ : String)
-  MissingWorktree(name~ : String)
+  Scratch(root~ : @common.Uri)
+  WorkspaceRoot(root~ : @common.Uri)
+  Worktree(project~ : @common.Uri, name~ : String, root~ : @common.Uri)
+  MissingWorktree(project~ : @common.Uri, name~ : String)
 } derive(Debug, Eq)
+
+///|
+/// The concrete directory addressed by files, terminal processes, and
+/// language services. A retained missing worktree has no directory.
+pub fn CheckoutPlacement::checkout_root(
+  self : CheckoutPlacement,
+) -> @common.Uri? {
+  match self {
+    Scratch(root~) | WorkspaceRoot(root~) | Worktree(root~, ..) => Some(root)
+    MissingWorktree(..) => None
+  }
+}
+
+///|
+/// The registered project that owns this placement. Scratch conversations
+/// are intentionally outside the project/worktree registry.
+pub fn CheckoutPlacement::project_root(
+  self : CheckoutPlacement,
+) -> @common.Uri? {
+  match self {
+    Scratch(..) => None
+    WorkspaceRoot(root~) => Some(root)
+    Worktree(project~, ..) | MissingWorktree(project~, ..) => Some(project)
+  }
+}
+
+///|
+/// The durable registry name for worktree placements, including a checkout
+/// that is currently missing.
+pub fn CheckoutPlacement::worktree_name(self : CheckoutPlacement) -> String? {
+  match self {
+    Worktree(name~, ..) | MissingWorktree(name~, ..) => Some(name)
+    Scratch(..) | WorkspaceRoot(..) => None
+  }
+}
+
+///|
+/// Whether path-based work can safely address this placement now.
+pub fn CheckoutPlacement::is_ready(self : CheckoutPlacement) -> Bool {
+  !(self is MissingWorktree(..))
+}
+
+///|
+/// Whether two values describe the same durable checkout identity. Losing and
+/// repairing one managed worktree does not change its identity, even though
+/// the missing state temporarily has no root. Two simultaneously live
+/// worktrees must also agree on their concrete root; a host-side move is a new
+/// filesystem incarnation and must fence cached requests.
+pub fn CheckoutPlacement::same_identity(
+  self : CheckoutPlacement,
+  other : CheckoutPlacement,
+) -> Bool {
+  match (self, other) {
+    (Scratch(root=left), Scratch(root=right)) => left == right
+    (WorkspaceRoot(root=left), WorkspaceRoot(root=right)) => left == right
+    (
+      Worktree(project=left_project, name=left_name, root=left_root),
+      Worktree(project=right_project, name=right_name, root=right_root),
+    ) =>
+      left_project == right_project &&
+      left_name == right_name &&
+      left_root == right_root
+    (
+      Worktree(project=left_project, name=left_name, ..),
+      MissingWorktree(project=right_project, name=right_name),
+    )
+    | (
+      MissingWorktree(project=left_project, name=left_name),
+      Worktree(project=right_project, name=right_name, ..),
+    )
+    | (
+      MissingWorktree(project=left_project, name=left_name),
+      MissingWorktree(project=right_project, name=right_name),
+    ) => left_project == right_project && left_name == right_name
+    _ => false
+  }
+}
 
 ///|
 /// The authority used by app-owned resource URIs for this channel. The
@@ -70,4 +152,42 @@ pub fn page_channel() -> ChannelId? {
   } else {
     None
   }
+}
+
+///|
+test "missing worktrees have no platform sentinel checkout root" {
+  let project = @common.Uri::from(
+    scheme="openseek",
+    authority="local",
+    path="/C:/Users/alice/project",
+  ) catch {
+    _ => fail("Windows project URI fixture was invalid")
+  }
+  let placement = MissingWorktree(project~, name="wt-1")
+  assert_true(placement.checkout_root() is None)
+  assert_eq(placement.project_root(), Some(project))
+  assert_false(placement.is_ready())
+}
+
+///|
+test "a managed worktree keeps its identity while temporarily missing" {
+  let project = @common.Uri::from(
+    scheme="openseek",
+    authority="local",
+    path="/work/project",
+  ) catch {
+    _ => fail("project URI fixture was invalid")
+  }
+  let root = @common.Uri::from(
+    scheme="openseek",
+    authority="local",
+    path="/work/worktrees/wt-1",
+  ) catch {
+    _ => fail("worktree URI fixture was invalid")
+  }
+  let live = Worktree(project~, name="wt-1", root~)
+  let missing = MissingWorktree(project~, name="wt-1")
+  assert_true(live.same_identity(missing))
+  assert_true(missing.same_identity(live))
+  assert_true(live.is_ready())
 }

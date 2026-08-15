@@ -6,6 +6,7 @@ import {
   "moonbit-community/rabbita/js",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
+  "moonbitlang/editor/base/common",
   "openseek_desktop/internal/commands",
   "openseek_desktop/internal/protocol",
 }
@@ -64,10 +65,16 @@ pub fn ChannelId::from_uri_authority(String) -> Self?
 pub fn ChannelId::uri_authority(Self) -> String
 
 pub(all) enum CheckoutPlacement {
-  WorkspaceRoot
-  Worktree(name~ : String)
-  MissingWorktree(name~ : String)
+  Scratch(root~ : @common.Uri)
+  WorkspaceRoot(root~ : @common.Uri)
+  Worktree(project~ : @common.Uri, name~ : String, root~ : @common.Uri)
+  MissingWorktree(project~ : @common.Uri, name~ : String)
 } derive(Eq, @debug.Debug)
+pub fn CheckoutPlacement::checkout_root(Self) -> @common.Uri?
+pub fn CheckoutPlacement::is_ready(Self) -> Bool
+pub fn CheckoutPlacement::project_root(Self) -> @common.Uri?
+pub fn CheckoutPlacement::same_identity(Self, Self) -> Bool
+pub fn CheckoutPlacement::worktree_name(Self) -> String?
 
 pub(all) struct ConversationKey {
   channel : ChannelId

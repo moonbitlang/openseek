@@ -243,15 +243,12 @@ pub(all) enum ChangeList {
 /// file list arrives through `Ctx`.
 pub(all) struct State {
   owner : @interop.ConversationKey?
-  // The workspace and resolved checkout incarnation last reconciled for
-  // `owner`. A conversation can move from its project root into a newly
-  // created worktree without changing owner or passing through a missing
-  // placement; retaining both identities makes that transition a hard cache
-  // and request boundary instead of letting root-checkout data survive it.
+  // The placement incarnation last reconciled for `owner`. A conversation can
+  // move from its project root into a newly-created worktree without changing
+  // owner; retaining the complete value makes that transition a hard cache
+  // and request boundary without storing independently drifting roots.
   placement_known : Bool
-  placement_workspace : @common.Uri?
-  placement_root : @common.Uri?
-  placement_checkout : @interop.CheckoutPlacement?
+  placement : @interop.CheckoutPlacement?
   // Whether the file-tree pane (the toggleable column right of the viewer)
   // is shown. A panel preference, not per-conversation state, so it
   // survives conversation switches.
@@ -350,9 +347,7 @@ pub fn State::empty() -> State {
   {
     owner: None,
     placement_known: false,
-    placement_workspace: None,
-    placement_root: None,
-    placement_checkout: None,
+    placement: None,
     tree_open: true,
     explorer_mode: ExplorerFiles,
     review_view_mode: ReviewUnifiedDiff,
@@ -413,9 +408,7 @@ pub fn TreeLayout::wire(self : TreeLayout) -> String {
 ///|
 /// The active conversation's identity, passed in by the main package on every
 /// `update`/`sync`/`panel_view` call: which conversation the panel serves, its
-/// concrete root its file/LSP ops address, its attached workspace (still used
-/// by Git operations), where that conversation is placed, whether the app is
-/// in dark mode (drives the
+/// complete directory placement, whether the app is in dark mode (drives the
 /// embedded viewer's theme attribute), and the Settings choice of where the
 /// file tree docks.
 pub(all) struct Ctx {
@@ -425,12 +418,10 @@ pub(all) struct Ctx {
   // Page-unique prefix for watcher identities. The native watcher outlives a
   // page reload, so the counter alone is not enough to prevent reuse.
   watch_namespace : String
-  root : @common.Uri?
-  workspace : @common.Uri?
   // `None` while this connection has not loaded the conversation's placement.
   // Unknown and missing placements both block filesystem requests so neither
   // can be resolved against the registered project's main checkout.
-  checkout : @interop.CheckoutPlacement?
+  placement : @interop.CheckoutPlacement?
   dark_mode : Bool
   tree_layout : TreeLayout
   // The app's phone-narrow layout flag. Narrow, the tree and the viewer
@@ -446,6 +437,24 @@ pub(all) struct Ctx {
   open_files : Array[@pathx.Relative]
   active_file : @pathx.Relative?
 } derive(Eq)
+
+///|
+/// The concrete root used by file and language-service requests.
+fn Ctx::root(self : Ctx) -> @common.Uri? {
+  self.placement.bind(value => value.checkout_root())
+}
+
+///|
+/// The registered project used by Git and worktree requests.
+fn Ctx::workspace(self : Ctx) -> @common.Uri? {
+  self.placement.bind(value => value.project_root())
+}
+
+///|
+/// Whether this context currently names a concrete checkout directory.
+fn Ctx::checkout_ready(self : Ctx) -> Bool {
+  self.placement is Some(value) && value.is_ready()
+}
 
 ///|
 pub(all) enum Msg {

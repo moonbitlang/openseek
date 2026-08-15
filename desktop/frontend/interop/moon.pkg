@@ -3,6 +3,7 @@ import {
   "moonbit-community/rabbita/js",
   "moonbitlang/core/deque",
   "moonbitlang/core/json",
+  "moonbitlang/editor/base/common",
   "openseek_desktop/internal/commands",
   "openseek_desktop/internal/protocol",
 }

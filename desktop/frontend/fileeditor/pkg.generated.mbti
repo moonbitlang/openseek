@@ -83,9 +83,7 @@ pub(all) struct Ctx {
   owner : @interop.ConversationKey
   request_epoch : Int
   watch_namespace : String
-  root : @common.Uri?
-  workspace : @common.Uri?
-  checkout : @interop.CheckoutPlacement?
+  placement : @interop.CheckoutPlacement?
   dark_mode : Bool
   tree_layout : TreeLayout
   narrow : Bool
@@ -198,9 +196,7 @@ pub(all) enum ReviewViewMode {
 pub(all) struct State {
   owner : @interop.ConversationKey?
   placement_known : Bool
-  placement_workspace : @common.Uri?
-  placement_root : @common.Uri?
-  placement_checkout : @interop.CheckoutPlacement?
+  placement : @interop.CheckoutPlacement?
   tree_open : Bool
   explorer_mode : ExplorerMode
   review_view_mode : ReviewViewMode

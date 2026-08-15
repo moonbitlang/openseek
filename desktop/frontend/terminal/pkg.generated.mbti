@@ -5,7 +5,6 @@ import {
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
-  "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/interop",
 }
 
@@ -27,12 +26,11 @@ pub fn Connection::Connection(channel~ : @interop.ChannelId, websocket_epoch~ : 
 pub struct Ctx {
   channel : @interop.ChannelId
   session : String
-  workspace : @common.Uri?
-  checkout : @interop.CheckoutPlacement?
+  placement : @interop.CheckoutPlacement?
   dark_mode : Bool
   connected : Bool
 } derive(Eq)
-pub fn Ctx::Ctx(channel~ : @interop.ChannelId, session~ : String, workspace~ : @common.Uri?, checkout~ : @interop.CheckoutPlacement?, dark_mode~ : Bool, connected~ : Bool) -> Self
+pub fn Ctx::Ctx(channel~ : @interop.ChannelId, session~ : String, placement~ : @interop.CheckoutPlacement?, dark_mode~ : Bool, connected~ : Bool) -> Self
 
 type Input derive(Eq)
 pub fn Input::Input(ctx~ : Ctx, live_channels~ : Array[@interop.ChannelId], connections~ : Array[Connection]) -> Self

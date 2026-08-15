@@ -16,8 +16,11 @@
 /// The display label for the active conversation's workspace: the project
 /// directory's name, or "scratch" for a conversation without one.
 fn workspace_label(ctx : Ctx) -> String {
-  guard ctx.workspace is Some(workspace) else { return "scratch" }
-  @resource.label(workspace)
+  guard ctx.placement is Some(placement) &&
+    placement.project_root() is Some(project) else {
+    return "scratch"
+  }
+  @resource.label(project)
 }
 
 ///|
@@ -36,7 +39,7 @@ fn open_new_tab(
     workspace: group,
     workspace_label: workspace_label(ctx),
     session: ctx.session,
-    workspace_path: ctx.workspace,
+    workspace_path: ctx.placement.bind(placement => placement.project_root()),
     status: TabOpening,
   }
   let state = {
@@ -129,8 +132,7 @@ fn update(
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
-  let checkout_ready = ctx.checkout is Some(@interop.WorkspaceRoot) ||
-    ctx.checkout is Some(@interop.Worktree(_))
+  let checkout_ready = ctx.placement is Some(placement) && placement.is_ready()
   match msg {
     ToggleTerminal =>
       if state.open {
@@ -360,7 +362,7 @@ fn sync(
   state : State,
   ctx : Ctx,
 ) -> (State, @cmd.Cmd) {
-  if ctx.checkout is None {
+  if ctx.placement is None {
     // Preserve existing groups, but reveal none of them while this
     // conversation's group is unknown. A later placement reply can then
     // select or create the correct group without migrating any tab.
@@ -378,7 +380,7 @@ fn sync(
       @cmd.batch(commands),
     )
   }
-  if ctx.checkout is Some(@interop.MissingWorktree(_)) {
+  if ctx.placement is Some(@interop.MissingWorktree(..)) {
     let shown_changed = state.shown is Some(_)
     let theme_changed = state.synced_dark_mode != Some(ctx.dark_mode)
     let (commands, state) = state.retire_missing_session(ctx)

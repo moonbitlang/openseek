@@ -788,12 +788,12 @@ fn open_editor_at(
     model.begin_editor_navigation()
   }
   let conv = model.active()
-  let placement = model.checkout_placement(conv)
   // Chip/transcript jumps call the file-editor package directly rather than
   // passing through its guarded message dispatcher. Keep them parked too: the
   // dock must not grow a loading tab, nor may a host read start, while checkout
   // placement is unresolved or missing.
-  guard !(placement is None || placement is Some(@interop.MissingWorktree(_))) else {
+  guard model.conversation_placement(conv) is Some(placement) &&
+    placement.is_ready() else {
     return (@cmd.none, model)
   }
   let owner : @interop.ConversationKey = {
@@ -1161,13 +1161,12 @@ fn apply_engine_event(
 }
 
 ///|
-/// The file-editor package's view of the active conversation: which session
-/// the panel serves, the concrete checkout root its file/LSP ops address, the
-/// registered workspace its Git ops use, and the viewer's theme. Recomputed
-/// per dispatch — it is only a projection of the model.
+/// The file-editor package's read-only projection of the active conversation:
+/// which session the panel serves, its single resolved directory placement,
+/// and the viewer's theme. Recomputed per dispatch — it is only a projection
+/// of the model.
 fn file_ctx(model : Model) -> @fileeditor.Ctx {
   let conv = model.active()
-  let checkout = model.checkout_placement(conv)
   let file_body_visible = match model.dock.active {
     Some(File(_)) | Some(FilePicker) => true
     None | Some(Browser(_)) => false
@@ -1183,9 +1182,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // panel's monotonic counter with this page's existing random identity so
     // a reloaded frontend cannot reuse the outgoing page's watcher token.
     watch_namespace: model.page_namespace + "-watch",
-    root: model.conversation_root(conv),
-    workspace: conv.workspace.project(),
-    checkout,
+    placement: model.conversation_placement(conv),
     dark_mode: model.theme.is_dark(model.system_dark),
     tree_layout: model.tree_layout,
     narrow: model.narrow,
@@ -1217,8 +1214,7 @@ fn terminal_ctx(model : Model) -> @terminal.Ctx {
   @terminal.Ctx(
     channel=conv.device,
     session=conv.session_id,
-    workspace=conv.workspace.project(),
-    checkout=model.checkout_placement(conv),
+    placement=model.conversation_placement(conv),
     dark_mode=model.theme.is_dark(model.system_dark),
     connected~,
   )
@@ -2023,9 +2019,8 @@ fn update_msg(
     // then the file subsystem loads and shows the document against the
     // fresh projection.
     FileEditor(FileSelected(path~, name~)) => {
-      let placement = file_ctx(model).checkout
-      guard !(placement is None ||
-        placement is Some(@interop.MissingWorktree(_))) else {
+      let placement = file_ctx(model).placement
+      guard placement is Some(value) && value.is_ready() else {
         return (@cmd.none, model)
       }
       let model = model.begin_editor_navigation()
@@ -2055,9 +2050,8 @@ fn update_msg(
     // row's HEAD path. Deleted rows have no working file but still use the
     // current path as their tab identity.
     FileEditor(ChangedFileSelected(change)) => {
-      let placement = file_ctx(model).checkout
-      guard !(placement is None ||
-        placement is Some(@interop.MissingWorktree(_))) else {
+      let placement = file_ctx(model).placement
+      guard placement is Some(value) && value.is_ready() else {
         return (@cmd.none, model)
       }
       let model = model.begin_editor_navigation()
@@ -2085,9 +2079,8 @@ fn update_msg(
         file_ctx(model).owner == owner else {
         return (@cmd.none, model)
       }
-      let placement = file_ctx(model).checkout
-      guard !(placement is None ||
-        placement is Some(@interop.MissingWorktree(_))) else {
+      let placement = file_ctx(model).placement
+      guard placement is Some(value) && value.is_ready() else {
         return (@cmd.none, model)
       }
       let model = model.begin_editor_navigation()
@@ -2602,7 +2595,7 @@ fn update_msg(
       if conv.is_archived_read_only() {
         return (@cmd.none, model)
       }
-      let checkout = model.checkout_placement(conv)
+      let checkout = model.conversation_placement(conv)
       // The outgoing prompt is the typed text with the chips folded in as the
       // `<user_mentions>` envelope. Typed text is required — chips alone are
       // context without an instruction and stay in the composer.
@@ -2614,7 +2607,7 @@ fn update_msg(
         !(model.bridge_state() is Connected(..)) ||
         !model.api_ready() ||
         checkout is None ||
-        checkout is Some(@interop.MissingWorktree(_)) {
+        checkout is Some(@interop.MissingWorktree(..)) {
         (@cmd.none, model)
       } else if !(conv.sync is Synced) {
         // A prompt or steer submitted while the durable frontier is unknown
@@ -2794,7 +2787,7 @@ fn update_msg(
     }
     RetryWorktreePlacement => {
       let conv = model.active()
-      guard model.checkout_placement(conv) is None &&
+      guard model.conversation_placement(conv) is None &&
         conv.workspace.project() is Some(workspace) &&
         model.device_state(conv.device) is Some(dev) else {
         return (@cmd.none, model)
@@ -2816,7 +2809,8 @@ fn update_msg(
     }
     RepairWorktree => {
       let conv = model.active()
-      guard model.checkout_placement(conv) is Some(@interop.MissingWorktree(_)) &&
+      guard model.conversation_placement(conv)
+        is Some(@interop.MissingWorktree(..)) &&
         conv.workspace is Worktree(project=workspace, ..) else {
         return (@cmd.none, model)
       }
@@ -7878,9 +7872,7 @@ test "BridgeReady reattaches a live file index watcher" {
     ..model.file_panel,
     owner: Some(owner),
     placement_known: true,
-    placement_workspace: None,
-    placement_root: Some(root),
-    placement_checkout: Some(@interop.WorkspaceRoot),
+    placement: Some(@interop.Scratch(root~)),
     watching: Some(watched),
     watch_generation: 7,
   }
@@ -7940,9 +7932,7 @@ test "device focus retires the outgoing watcher and file index" {
     ..model.file_panel,
     owner: Some(owner),
     placement_known: true,
-    placement_workspace: None,
-    placement_root: Some(root),
-    placement_checkout: Some(@interop.WorkspaceRoot),
+    placement: Some(@interop.Scratch(root~)),
     watching: Some({ owner, root, files: [], directories: [], recursive: true }),
     watch_generation: 7,
   }
@@ -8468,7 +8458,8 @@ test "completed scratch session root comes from the connected device" {
     root.path == "/scratch/desktop-restored-scratch",
   )
   assert_true(
-    file_ctx(restored).root is Some(root) &&
+    file_ctx(restored).placement is Some(placement) &&
+    placement.checkout_root() is Some(root) &&
     root.path == "/scratch/desktop-restored-scratch",
   )
 }

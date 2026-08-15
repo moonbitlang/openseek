@@ -110,11 +110,10 @@ pub struct Ctx {
   /// The host connection that owns every terminal opened from this context.
   channel : @interop.ChannelId
   session : String
-  workspace : @common.Uri?
   /// `None` until the host has identified this conversation's placement on
-  /// the current connection. A resolved value distinguishes the project root,
-  /// a live worktree, and a retained binding whose checkout is missing.
-  checkout : @interop.CheckoutPlacement?
+  /// the current connection. The value supplies both the registered project
+  /// for host resolution and the concrete checkout for readiness checks.
+  placement : @interop.CheckoutPlacement?
   dark_mode : Bool
   /// False from the first WebSocket loss until that channel reports ready
   /// again. The old connection's PTYs are already gone, so `sync` must not
@@ -127,12 +126,11 @@ pub struct Ctx {
 pub fn Ctx::Ctx(
   channel~ : @interop.ChannelId,
   session~ : String,
-  workspace~ : @common.Uri?,
-  checkout~ : @interop.CheckoutPlacement?,
+  placement~ : @interop.CheckoutPlacement?,
   dark_mode~ : Bool,
   connected~ : Bool,
 ) -> Ctx {
-  { channel, session, workspace, checkout, dark_mode, connected }
+  { channel, session, placement, dark_mode, connected }
 }
 
 ///|
@@ -140,22 +138,21 @@ pub fn Ctx::Ctx(
 /// has loaded. Returning `None` keeps an unresolved worktree conversation out
 /// of the project-root group.
 fn workspace_key(ctx : Ctx) -> WorkspaceKey? {
-  guard ctx.checkout is Some(checkout) else { return None }
-  guard ctx.workspace is Some(workspace) else {
-    return Some(Scratch(ctx.channel, ctx.session))
-  }
-  match checkout {
-    @interop.WorkspaceRoot => Some(Project(ctx.channel, workspace))
-    @interop.Worktree(name~) | @interop.MissingWorktree(name~) =>
-      Some(Worktree(ctx.channel, workspace, name))
+  guard ctx.placement is Some(placement) else { return None }
+  match placement {
+    @interop.Scratch(..) => Some(Scratch(ctx.channel, ctx.session))
+    @interop.WorkspaceRoot(root~) => Some(Project(ctx.channel, root))
+    @interop.Worktree(project~, name~, ..)
+    | @interop.MissingWorktree(project~, name~) =>
+      Some(Worktree(ctx.channel, project, name))
   }
 }
 
 ///|
 /// The tabs of the active conversation's workspace group, in creation order.
 fn State::visible_tabs(self : State, ctx : Ctx) -> Array[Tab] {
-  guard ctx.checkout is Some(checkout) &&
-    !(checkout is @interop.MissingWorktree(_)) &&
+  guard ctx.placement is Some(placement) &&
+    placement.is_ready() &&
     workspace_key(ctx) is Some(key) else {
     return []
   }

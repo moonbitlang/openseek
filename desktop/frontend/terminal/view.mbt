@@ -61,8 +61,7 @@ fn panel_view(
       tab_view(dispatch, tab, active is Some(current) && current.key == tab.key),
     )
   }
-  if ctx.checkout is Some(@interop.WorkspaceRoot) ||
-    ctx.checkout is Some(@interop.Worktree(_)) {
+  if ctx.placement is Some(placement) && placement.is_ready() {
     items.push(
       @html.button(
         class="terminal-new",
@@ -82,11 +81,11 @@ fn panel_view(
         items.push(@html.span(class="terminal-status terminal-error", message))
       TabRunning => ()
     }
-  } else if ctx.checkout is None {
+  } else if ctx.placement is None {
     items.push(
       @html.span(class="terminal-status", "Waiting for workspace placement…"),
     )
-  } else if ctx.checkout is Some(@interop.MissingWorktree(_)) {
+  } else if ctx.placement is Some(@interop.MissingWorktree(..)) {
     items.push(
       @html.span(
         class="terminal-status terminal-error",

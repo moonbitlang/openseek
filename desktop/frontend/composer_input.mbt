@@ -7,7 +7,7 @@ fn Model::composer_input(
   dispatch : @cmd.Emit[Msg],
 ) -> @composer.Input {
   let conv = self.active()
-  let checkout = self.checkout_placement(conv)
+  let checkout = self.conversation_placement(conv)
   let owner : @interop.ConversationKey = {
     channel: self.focused,
     session: conv.session_id,
@@ -18,8 +18,7 @@ fn Model::composer_input(
   }
   let transcript_ready = conv.sync is Synced &&
     !conv.has_unresolved_run_tail_notice()
-  let checkout_ready = checkout is Some(@interop.WorkspaceRoot) ||
-    checkout is Some(@interop.Worktree(_))
+  let checkout_ready = checkout is Some(value) && value.is_ready()
   let root_ready = self.bridge_state() is Connected(..) &&
     self.api_ready() &&
     transcript_ready &&
@@ -89,7 +88,7 @@ fn Model::composer_input(
           ),
         ]),
       )
-    Some(@interop.MissingWorktree(name~)) =>
+    Some(@interop.MissingWorktree(name~, ..)) =>
       context.push(
         @composer.MissingWorktreeNotice::{
           name,
