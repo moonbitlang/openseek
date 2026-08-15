@@ -864,6 +864,20 @@ pub async fn scratch_root() -> String {
 }
 
 ///|
+/// The global durable session store root — the Scratch store — encoded in
+/// the resource-path form the frontend binds to a channel. Readiness fails
+/// when it cannot be resolved, so `agent.connected` always names the store
+/// against which clients classify broadcast session roots.
+pub fn global_session_root() -> String raise EngineError {
+  guard resolved_session_root() is Some(root) else {
+    raise EngineError(
+      "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
+    )
+  }
+  root.resource_path()
+}
+
+///|
 pub async fn list_workspaces() -> WorkspacesReply {
   Workspaces(registered_workspaces().map(path => path.resource_path()))
 }

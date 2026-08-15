@@ -122,6 +122,12 @@ pub async fn scratch_root() -> String {
 }
 
 ///|
+/// The global durable session store root, for the same transports.
+pub fn global_session_root() -> String raise {
+  @engine.global_session_root()
+}
+
+///|
 /// The commands shared by the embedded page and remote WebSocket. A generic
 /// Endpoint constructor checks each payload/reply pair, then erases those
 /// types only inside the two transport closures it creates.

@@ -397,6 +397,7 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
               context.emit(connected_event, {
                 ready: None,
                 scratch_root: @api.scratch_root(),
+                session_root: @api.global_session_root(),
               })
               connected = true
               reply.put(())

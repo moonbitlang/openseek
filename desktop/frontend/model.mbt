@@ -961,7 +961,10 @@ priv enum SkillsCatalog {
 /// probing for the injected bridge, connected, or given up with a reason.
 priv enum BridgeState {
   Connecting
-  Connected(scratch_root~ : @common.Uri)
+  // Connected carries the two roots the host names on `agent.connected`:
+  // the Scratch working base and the global durable session store —
+  // available exactly while the connection is, so neither needs an Option.
+  Connected(scratch_root~ : @common.Uri, session_root~ : @common.Uri)
   BridgeLost(String)
 } derive(Eq)
 
@@ -1877,7 +1880,7 @@ priv enum Msg {
 /// `FromDevice(channel, ...)`; messages that back page-global or
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
-  BridgeReady(scratch_root~ : @common.Uri)
+  BridgeReady(scratch_root~ : @common.Uri, session_root~ : @common.Uri)
   BridgeUnavailable(String)
   // The channel's WebSocket closed (or failed to open). The handler counts
   // the loss and schedules `ReconnectDue`, making the model's device list
@@ -1983,10 +1986,9 @@ priv enum DeviceMsg {
     // itself the moment it lands rather than only after the next reload.
     ts~ : Double?,
     item~ : @protocol.SessionItem,
-    // The durable store root the host read this commit from — the store half
-    // of the session's identity, exactly as `Started` carries it. `None` only
-    // from hosts that predate the field.
-    session_root~ : @common.Uri?
+    // The durable store root the host read this commit from — the store
+    // half of the session's identity.
+    session_root~ : @common.Uri
   )
   // The host's `subrun.progress` broadcast: a running sub-run advanced. Not
   // durable and not lifecycle — the raw stream's brackets own the sub-run's
@@ -2808,6 +2810,33 @@ fn DeviceState::project_for_session_root(
       return Some(workspace)
     }
   }
+  None
+}
+
+///|
+/// Classify a broadcast durable store root into a placement (`None` = the
+/// Scratch store). The global root the host named on connect is matched
+/// exactly, so the classification is correct even while the projects
+/// registry reply is still in flight; any other root is a project store —
+/// named by the registry when it is already mirrored, and by the store
+/// layout (`<project>/.openseek`) until then.
+fn DeviceState::placement_for_store_root(
+  self : DeviceState,
+  global~ : @common.Uri,
+  root : @common.Uri,
+) -> @common.Uri? {
+  if root == global {
+    return None
+  }
+  if self.project_for_session_root(Some(root)) is Some(project) {
+    return Some(project)
+  }
+  if @common.ext_uri.basename(root) == ".openseek" {
+    return Some(@common.ext_uri.dirname(root))
+  }
+  // Not the global store yet not a recognizable project store: a foreign
+  // writer with an unexpected layout. Scratch is the least-wrong visible
+  // bucket, and the session list reconcile corrects it.
   None
 }
 

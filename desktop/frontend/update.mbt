@@ -4028,7 +4028,7 @@ fn update_device_msg(
         // device is refreshed when focus moves to it.
         (@cmd.none, model)
       }
-    BridgeReady(scratch_root~) => {
+    BridgeReady(scratch_root~, session_root~) => {
       let connection_generation = dev.connection_generation + 1
       let sessions_request_generation = dev.sessions_request_generation + 1
       let archived_request_generation = dev.archived_request_generation + 1
@@ -4108,7 +4108,7 @@ fn update_device_msg(
       })
       let model = model.replace_device({
         ..dev,
-        bridge: Connected(scratch_root~),
+        bridge: Connected(scratch_root~, session_root~),
         reconnect_failures: 0,
         connection_generation,
         sessions_request_generation,
@@ -5219,12 +5219,15 @@ fn update_device_msg(
         "failed to refresh session \{session}",
       )
     SessionCommitted(session~, sequence~, ts~, item~, session_root~) => {
-      // The commit names its own store when the host is new enough — the
-      // exact durable identity rather than a guess. A rootless legacy commit
-      // falls back to the listing/live placement guess.
-      let commit_project = match session_root {
-        Some(_) => dev.project_for_session_root(session_root)
-        None => model.session_project(channel, session)
+      // The commit names its own store — the exact durable identity rather
+      // than a guess, classified against the global root the host announced
+      // on connect. Commits do not precede `agent.connected` (readiness
+      // precedes every forwarded notification), but if one ever did, the
+      // listing/live guess is safer than misreading the global store.
+      let commit_project = match dev.bridge {
+        Connected(session_root=global, ..) =>
+          dev.placement_for_store_root(global~, session_root)
+        _ => model.session_project(channel, session)
       }
       // Archiving removes live client state after the hub's ordered final
       // commit. A stale/replayed commit seen after that local fact must not
@@ -6624,16 +6627,32 @@ fn @interop.ChannelId::test_resource(
 }
 
 ///|
-/// Test-only connected state with the same required scratch root carried by a
-/// real `agent.connected` notification.
+/// Test-only connected state with the same required roots carried by a real
+/// `agent.connected` notification.
 fn @interop.ChannelId::test_connected(self : @interop.ChannelId) -> BridgeState {
-  // This literal is valid by construction; retain a total test fixture so
+  // These literals are valid by construction; retain a total test fixture so
   // every test using `test_model` does not acquire a synthetic error effect.
   let root = match @resource.of_path(self, "/scratch") {
     Some(root) => root
     None => @common.Uri::file("/scratch")
   }
-  Connected(scratch_root=root)
+  let session_root = match @resource.of_path(self, "/sessions/global") {
+    Some(root) => root
+    None => @common.Uri::file("/sessions/global")
+  }
+  Connected(scratch_root=root, session_root~)
+}
+
+///|
+/// The global durable store root `test_connected` announces — the root a
+/// test commit carries when it means the Scratch store.
+fn @interop.ChannelId::test_store_root(
+  self : @interop.ChannelId,
+) -> @common.Uri {
+  guard self.test_connected() is Connected(session_root~, ..) else {
+    return @common.Uri::file("/sessions/global")
+  }
+  session_root
 }
 
 ///|
@@ -6641,12 +6660,15 @@ fn @interop.ChannelId::test_connected(self : @interop.ChannelId) -> BridgeState 
 fn @interop.ChannelId::test_bridge_ready(
   self : @interop.ChannelId,
 ) -> DeviceMsg {
-  guard self.test_connected() is Connected(scratch_root~) else {
+  guard self.test_connected() is Connected(scratch_root~, session_root~) else {
     // `test_connected` has only one result, but spelling the match keeps this
     // constructor synchronized if BridgeState gains another test fixture.
-    return BridgeReady(scratch_root=@common.Uri::file("/scratch"))
+    return BridgeReady(
+      scratch_root=@common.Uri::file("/scratch"),
+      session_root=@common.Uri::file("/sessions/global"),
+    )
   }
-  BridgeReady(scratch_root~)
+  BridgeReady(scratch_root~, session_root~)
 }
 
 ///|
@@ -7528,7 +7550,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "arrived before the list" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     test_model(),
   )
@@ -7577,7 +7599,7 @@ test "a rooted commit places its conversation without waiting for the list" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "arrived before the list" }),
-      session_root=Some(store),
+      session_root=store,
     ),
     model,
   )
@@ -7589,8 +7611,8 @@ test "a rooted commit places its conversation without waiting for the list" {
     fail("rooted commit did not materialize its conversation")
   }
   assert_eq(placed.workspace, Project(root=workspace))
-  // A root outside every registered project is the global store: Scratch,
-  // stated by the host rather than guessed from a missing listing.
+  // The global root the host announced on connect is the Scratch store,
+  // matched exactly rather than guessed from a missing listing.
   let (_, scratch) = update_dev(
     dispatch,
     SessionCommitted(
@@ -7598,9 +7620,7 @@ test "a rooted commit places its conversation without waiting for the list" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "hi" }),
-      session_root=Some(
-        @interop.ChannelId::Local.test_resource("/sessions/global"),
-      ),
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     committed,
   )
@@ -7609,6 +7629,30 @@ test "a rooted commit places its conversation without waiting for the list" {
     fail("rooted global commit did not materialize its conversation")
   }
   assert_true(global.workspace is Scratch)
+  // The projects registry reply may still be in flight on a fresh
+  // connection: a store outside the mirrored registry is still a project
+  // store, and its layout (`<project>/.openseek`) names the project.
+  let (_, unseen) = update_dev(
+    dispatch,
+    SessionCommitted(
+      session="desktop-unseen",
+      sequence=1,
+      ts=None,
+      item=@protocol.User({ content: "hi" }),
+      session_root=@interop.ChannelId::Local.test_resource(
+        "/work/unseen/.openseek",
+      ),
+    ),
+    scratch,
+  )
+  guard unseen.find_conversation(@interop.ChannelId::Local, "desktop-unseen")
+    is Some(pending) else {
+    fail("unregistered-store commit did not materialize its conversation")
+  }
+  assert_eq(
+    pending.workspace,
+    Project(root=@interop.ChannelId::Local.test_resource("/work/unseen")),
+  )
 }
 
 ///|
@@ -7838,7 +7882,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
       sequence=3,
       ts=None,
       item=@protocol.User({ content: "future" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     refreshing,
   )
@@ -8949,7 +8993,7 @@ test "run semantic errors never duplicate their terminal commit" {
     sequence=1,
     ts=None,
     item=@protocol.Terminal(@protocol.Failed("engine error")),
-    session_root=None,
+    session_root=@interop.ChannelId::Local.test_store_root(),
   )
   let (_, semantic_first) = update_dev(dispatch, semantic, running_model())
   inspect(semantic_first.active().overlay.length(), content="0")
@@ -9442,7 +9486,7 @@ test "canonical User text never claims an unconfirmed start" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "accepted prompt" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     failed,
   )
@@ -10732,7 +10776,7 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
       sequence~,
       ts=Some(ts),
       item=@protocol.User({ content: "question" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     )
   }
   // The contiguous-commit path a running conversation takes: the row must
@@ -10783,7 +10827,7 @@ test "a canonical user commit never settles a local steer" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "go left" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
@@ -11026,7 +11070,7 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
         tool_calls: None,
         reasoning_content: None,
       }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     finished,
   )
@@ -11037,7 +11081,7 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
       sequence=3,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("answer")),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     buffered,
   )
@@ -11073,7 +11117,7 @@ test "run-end unconfirmed notice follows assistant and terminal before freezing"
       sequence=4,
       ts=None,
       item=@protocol.User({ content: "next question" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     answered,
   )
@@ -11157,7 +11201,7 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
       sequence=2,
       ts=None,
       item=@protocol.User({ content: "late steer" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
@@ -11177,7 +11221,7 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
         tool_calls: None,
         reasoning_content: None,
       }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     finished,
   )
@@ -11188,7 +11232,7 @@ test "a snapshot does not mistake a same-run steer User for the terminal boundar
       sequence=4,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("answer")),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     answered,
   )
@@ -11250,7 +11294,7 @@ test "an unknown terminal before Finished still owns the run-tail notice" {
         "kind": "terminal",
         "payload": { "kind": "future_terminal", "message": "answer" },
       }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     running_model().replace_conversation(conv),
   )
@@ -11321,7 +11365,7 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
       sequence=3,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("first answer")),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
@@ -11357,7 +11401,7 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
       sequence=4,
       ts=None,
       item=@protocol.User({ content: "second question" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     started,
   )
@@ -11368,7 +11412,7 @@ test "a successor resolves an old terminal tail only from its causal snapshot" {
       sequence=5,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("second answer")),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     second_user,
   )
@@ -11673,7 +11717,7 @@ test "a foreign background run waits for a snapshot cut after Started" {
         tool_calls: None,
         reasoning_content: None,
       }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
@@ -11705,7 +11749,7 @@ test "a foreign background run waits for a snapshot cut after Started" {
       sequence=3,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("previous answer")),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     started,
   )
@@ -11716,7 +11760,7 @@ test "a foreign background run waits for a snapshot cut after Started" {
       sequence=4,
       ts=None,
       item=@protocol.User({ content: "current question" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     buffered_terminal,
   )
@@ -11795,7 +11839,7 @@ test "buffered future terminal cannot become its own run floor" {
       sequence=2,
       ts=None,
       item=@protocol.User({ content: "current question" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
@@ -11810,7 +11854,7 @@ test "buffered future terminal cannot become its own run floor" {
         tool_calls: None,
         reasoning_content: None,
       }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     user,
   )
@@ -11821,7 +11865,7 @@ test "buffered future terminal cannot become its own run floor" {
       sequence=4,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("current answer")),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     answer,
   )
@@ -11886,7 +11930,7 @@ test "a late durable EOF finalizes an unconfirmed steer without a terminal" {
         tool_calls: None,
         reasoning_content: None,
       }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     synthetic,
   )
@@ -12571,7 +12615,7 @@ test "an initial warning freezes between a snapshot and its buffered successor" 
       sequence=2,
       ts=None,
       item=@protocol.User({ content: "buffered W+1" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     finished,
   )
@@ -12897,7 +12941,7 @@ test "exact-zero recovery refuses buffered or nonzero durable frontiers" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "durable prompt arrived" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     waiting,
   )
@@ -14686,7 +14730,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "new incarnation" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     started,
   )
@@ -17023,7 +17067,7 @@ test "send does not show a prompt until its commit lands" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "build the thing" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     sent,
   )
@@ -17052,7 +17096,7 @@ test "a replayed commit at or below the watermark is dropped" {
       sequence=2,
       ts=None,
       item=@protocol.User({ content: "already there" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
@@ -17074,7 +17118,7 @@ test "a commit past the frontier buffers and flips into a reload" {
       sequence=5,
       ts=None,
       item=@protocol.User({ content: "from the future" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
@@ -17102,7 +17146,7 @@ test "commits buffer while a reload is in flight" {
       sequence=3,
       ts=None,
       item=@protocol.User({ content: "mid-reload" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
@@ -17250,7 +17294,7 @@ test "background retries preserve buffered commits until a later success" {
       sequence=2,
       ts=None,
       item=@protocol.User({ content: "next" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     failed,
   )
@@ -17426,7 +17470,7 @@ test "tool decode semantics wait for their durable error tool result" {
       is_error: true,
       brief: None,
     }),
-    session_root=None,
+    session_root=@interop.ChannelId::Local.test_store_root(),
   )
   let (_, semantic_first) = update_dev(dispatch, semantic, running_model())
   inspect(semantic_first.active().messages.length(), content="0")
@@ -17474,7 +17518,7 @@ test "assistant semantic events wait for their durable commit" {
         tool_calls: None,
         reasoning_content: Some("think"),
       }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     answered,
   )
@@ -17530,7 +17574,7 @@ test "a delayed assistant commit never clears a newer live delta" {
         tool_calls: None,
         reasoning_content: None,
       }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
@@ -17555,7 +17599,7 @@ test "a delayed terminal commit never clears a newer live delta" {
       sequence=2,
       ts=None,
       item=@protocol.Terminal(@protocol.Finished("older answer")),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
@@ -17581,7 +17625,7 @@ test "a fixed local notice stays before later durable turns" {
         tool_calls: None,
         reasoning_content: None,
       }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     test_model().replace_conversation(conv),
   )
@@ -17619,7 +17663,7 @@ test "a durable commit never retires a same-class local notice" {
         tool_calls: None,
         reasoning_content: None,
       }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
@@ -17646,7 +17690,7 @@ test "commit-first assistant semantics do not append again" {
         tool_calls: None,
         reasoning_content: Some("think"),
       }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     streaming,
   )
@@ -17676,7 +17720,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "hi" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     test_model(),
   )
@@ -17697,7 +17741,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "hi" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     next,
   )
@@ -17714,7 +17758,7 @@ test "a gapped commit for an unknown session materializes then reloads" {
       sequence=3,
       ts=None,
       item=@protocol.User({ content: "third" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     test_model(),
   )
@@ -17752,7 +17796,7 @@ test "a late commit cannot resurrect a locally known archived session" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "stale" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
@@ -17778,7 +17822,7 @@ test "an archive tombstone blocks commits before the archived list refreshes" {
       sequence=1,
       ts=None,
       item=@protocol.User({ content: "stale" }),
-      session_root=None,
+      session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )

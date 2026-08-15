@@ -604,11 +604,17 @@ test "a listing from the previous device cannot replace a reopened picker" {
     devices: [
       {
         ..empty_device_state(first),
-        bridge: Connected(scratch_root=first.test_resource("/scratch")),
+        bridge: Connected(
+          scratch_root=first.test_resource("/scratch"),
+          session_root=first.test_store_root(),
+        ),
       },
       {
         ..empty_device_state(second),
-        bridge: Connected(scratch_root=second.test_resource("/scratch")),
+        bridge: Connected(
+          scratch_root=second.test_resource("/scratch"),
+          session_root=second.test_store_root(),
+        ),
       },
     ],
     focused: first,

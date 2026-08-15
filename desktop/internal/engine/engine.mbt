@@ -1144,7 +1144,14 @@ async fn EngineActor::run_generation(
 
   manager.pump = Serving(sessions~)
   defer reset()
-  emit(sink, Connected({ ready: Some(true), scratch_root: scratch_root() }))
+  emit(
+    sink,
+    Connected({
+      ready: Some(true),
+      scratch_root: scratch_root(),
+      session_root: global_session_root(),
+    }),
+  )
   @async.with_task_group(group => {
     // A permanent deletion whose physical cleanup failed or was interrupted
     // leaves its condemned records under `archived/deleting`. Erase them once

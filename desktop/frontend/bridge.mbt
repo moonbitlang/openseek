@@ -171,10 +171,11 @@ fn device_msg(
 ) -> DeviceMsg? {
   match notification {
     AgentConnected(payload) => {
-      guard @resource.of_path(channel, payload.scratch_root) is Some(root) else {
+      guard @resource.of_path(channel, payload.scratch_root) is Some(root) &&
+        @resource.of_path(channel, payload.session_root) is Some(session_root) else {
         return None
       }
-      Some(BridgeReady(scratch_root=root))
+      Some(BridgeReady(scratch_root=root, session_root~))
     }
     AgentStarted(payload) => started_msg(channel, payload)
     AgentEvent(payload) => engine_msg(payload)
@@ -858,17 +859,10 @@ fn session_event_msg(
   channel : @interop.ChannelId,
   payload : @protocol.SessionCommitPayload,
 ) -> DeviceMsg? {
-  // Same decode contract as `started_msg`: the store root is genuinely
-  // optional (older hosts omit it), but a present root must bind to the
-  // channel or the event is malformed.
-  let session_root = match payload.session_root {
-    Some(path) => {
-      guard @resource.of_path(channel, path) is Some(absolute) else {
-        return None
-      }
-      Some(absolute)
-    }
-    None => None
+  // The store root is half of the commit's durable identity; an event whose
+  // root does not bind to the channel is malformed and dropped.
+  guard @resource.of_path(channel, payload.session_root) is Some(session_root) else {
+    return None
   }
   Some(
     SessionCommitted(

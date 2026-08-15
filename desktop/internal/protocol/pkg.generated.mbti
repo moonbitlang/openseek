@@ -171,6 +171,7 @@ pub(all) struct CompactReply {
 pub(all) struct ConnectedPayload {
   ready : Bool?
   scratch_root : String
+  session_root : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct DiagnosticsPayload {
@@ -618,7 +619,7 @@ pub(all) struct SessionCommitPayload {
   session : String
   sequence : Int
   event : SessionEvent
-  session_root : String?
+  session_root : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct SessionDocument {

@@ -32,6 +32,8 @@ pub async fn engine_command(String) -> String
 
 pub async fn follow_subrun_progress(root~ : String, parent_session~ : String, id~ : String, publish~ : async (@protocol.SubrunProgressPayload) -> Unit) -> Unit
 
+pub fn global_session_root() -> String raise EngineError
+
 pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalReply
 
 pub async fn list_sessions(EngineManager) -> @protocol.SessionsReply

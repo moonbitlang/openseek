@@ -1254,7 +1254,10 @@ test "BridgeReady retries file and symbol Quick Open after a scratch root arrive
   }
   assert_eq(opened.file_query_cache.root, None)
   let scratch_root = @interop.ChannelId::Local.test_resource("/work/scratch")
-  let ready = BridgeReady(scratch_root~)
+  let ready = BridgeReady(
+    scratch_root~,
+    session_root=@interop.ChannelId::Local.test_store_root(),
+  )
   // The same message and model must produce the same plain-data state.
   let (_, first) = update_dev(dispatch, ready, opened)
   let (_, second) = update_dev(dispatch, ready, opened)

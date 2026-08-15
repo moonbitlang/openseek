@@ -533,7 +533,10 @@ test "a reconnect clears the settings mirror until fresh reads land" {
   // than copy the pre-gap value.
   let (_, reconnected) = update_dev(
     dispatch,
-    BridgeReady(scratch_root=@interop.ChannelId::Local.test_resource("/tmp")),
+    BridgeReady(
+      scratch_root=@interop.ChannelId::Local.test_resource("/tmp"),
+      session_root=@interop.ChannelId::Local.test_store_root(),
+    ),
     loaded,
   )
   assert_false(reconnected.default_worktree_mode(Local, Some(workspace)))

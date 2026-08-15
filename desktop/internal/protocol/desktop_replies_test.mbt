@@ -15,19 +15,30 @@ test "unknown session items preserve their complete wire object" {
 }
 
 ///|
-test "agent connected requires a concrete scratch root" {
+test "agent connected requires concrete store roots" {
   assert_true(
     @protocol.Notification::from_wire("agent.connected", { "ready": true })
+    is None,
+  )
+  // The scratch base alone is no longer enough: readiness names the global
+  // session store too, so clients can classify broadcast roots exactly.
+  assert_true(
+    @protocol.Notification::from_wire("agent.connected", {
+      "ready": true,
+      "scratch_root": "/scratch",
+    })
     is None,
   )
   guard @protocol.Notification::from_wire("agent.connected", {
       "ready": true,
       "scratch_root": "/scratch",
+      "session_root": "/sessions/global",
     })
     is Some(AgentConnected(payload)) else {
-    fail("connected notification with a scratch root did not decode")
+    fail("connected notification with both roots did not decode")
   }
   assert_eq(payload.scratch_root, "/scratch")
+  assert_eq(payload.session_root, "/sessions/global")
 }
 
 ///|

@@ -484,7 +484,7 @@ fn Model::conversation_placement(
   match conv.workspace {
     Scratch =>
       if self.device_state(conv.device) is Some(dev) &&
-        dev.bridge is Connected(scratch_root=root) {
+        dev.bridge is Connected(scratch_root=root, ..) {
         Some(
           @interop.Scratch(
             root=@resource.join_relative(root, @pathx.Relative(conv.session_id)),
