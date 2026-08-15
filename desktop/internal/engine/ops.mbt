@@ -835,6 +835,13 @@ fn has_finished_run(events : Array[EngineEvent], run_id : String) -> Bool {
 async test "start echoes the client submission id in Started" {
   let dir = @fs.tmpdir(prefix="openseek-start-submission-")
   let root : @pathx.Path = Path(dir)
+  // Starting a run resolves a work directory under `HOME`. Own it, so this
+  // test neither races one that moves `HOME` nor writes into the real home.
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous_home = @sys.get_env_var("HOME")
+  @sys.set_env_var("HOME", root.join("home").to_string())
+  defer restore_home_env(previous_home)
   let engine = root.join("bin/engine.sh")
   let seed = root.join("bin/toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")
@@ -898,6 +905,13 @@ async test "start echoes the client submission id in Started" {
 async test "setup failure retires the writer before an immediate next start" {
   let dir = @fs.tmpdir(prefix="openseek-setup-failed-seam-")
   let root : @pathx.Path = Path(dir)
+  // Starting a run resolves a work directory under `HOME`. Own it, so this
+  // test neither races one that moves `HOME` nor writes into the real home.
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous_home = @sys.get_env_var("HOME")
+  @sys.set_env_var("HOME", root.join("home").to_string())
+  defer restore_home_env(previous_home)
   let engine = root.join("bin/engine.sh")
   let seed = root.join("bin/toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")
@@ -1000,6 +1014,13 @@ async test "setup failure retires the writer before an immediate next start" {
 async test "a prompt bigger than the pipe still settles exactly once" {
   let dir = @fs.tmpdir(prefix="openseek-backpressured-command-")
   let root : @pathx.Path = Path(dir)
+  // Starting a run resolves a work directory under `HOME`. Own it, so this
+  // test neither races one that moves `HOME` nor writes into the real home.
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous_home = @sys.get_env_var("HOME")
+  @sys.set_env_var("HOME", root.join("home").to_string())
+  defer restore_home_env(previous_home)
   let engine = root.join("bin/engine.sh")
   let seed = root.join("bin/toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")
@@ -1081,17 +1102,13 @@ async test "a prompt bigger than the pipe still settles exactly once" {
 ///|
 #cfg(not(platform="windows"))
 async test "named session retries after its first prompt creates no record" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let dir = @fs.tmpdir(prefix="openseek-first-prompt-retry-")
   let root : @pathx.Path = Path(dir)
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
-  defer (if previous_home is Some(home) {
-    @sys.set_env_var("HOME", home)
-  } else {
-    @sys.unset_env_var("HOME")
-  })
+  defer restore_home_env(previous_home)
   let engine = root.join("bin/engine.sh")
   let seed = root.join("bin/toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")
@@ -1245,8 +1262,8 @@ async test "timed out sessions show is killed and the next read can run" {
 ///|
 #cfg(not(platform="windows"))
 async test "session load preserves a future item without hiding known events" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let dir = @fs.tmpdir(prefix="openseek-load-future-item-")
   let engine = dir + "/engine.sh"
@@ -1275,8 +1292,8 @@ async test "session load preserves a future item without hiding known events" {
 ///|
 #cfg(not(platform="windows"))
 async test "archived session load reads without restoring the record" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let dir = @fs.tmpdir(prefix="openseek-load-archived-")
   let engine = dir + "/engine.sh"
@@ -1308,8 +1325,8 @@ async test "archived session load reads without restoring the record" {
 ///|
 #cfg(not(platform="windows"))
 async test "load rejects a detached workspace hint instead of probing global" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let dir = @fs.tmpdir(prefix="openseek-load-detached-")
   let marker = dir + "/engine-ran"
@@ -1345,8 +1362,8 @@ async test "load rejects a detached workspace hint instead of probing global" {
 ///|
 #cfg(not(platform="windows"))
 async test "workspace detach refuses a running conversation without hiding it" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   // The registry canonicalizes workspace paths, so build the fixture from
   // the tmpdir's physical spelling (`/tmp` is a symlink on macOS).
@@ -1429,8 +1446,8 @@ async test "workspace detach refuses a running conversation without hiding it" {
 ///|
 #cfg(not(platform="windows"))
 async test "workspace detach drains an idle writer and its follower first" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   // The registry canonicalizes workspace paths, so build the fixture from
   // the tmpdir's physical spelling (`/tmp` is a symlink on macOS).

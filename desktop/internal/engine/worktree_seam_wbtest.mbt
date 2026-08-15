@@ -64,8 +64,8 @@ async fn stage_worktree_placements(
 ///|
 #cfg(not(platform="windows"))
 async test "session workspace dir follows the worktree mapping while it exists" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let root = worktree_test_root("openseek-worktree-seam-")
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
@@ -120,8 +120,8 @@ async test "session workspace dir follows the worktree mapping while it exists" 
 ///|
 #cfg(not(platform="windows"))
 async test "attached workspace dir resolves registered worktree paths" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let root = worktree_test_root("openseek-worktree-attached-")
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
@@ -175,8 +175,8 @@ async test "attached workspace dir resolves registered worktree paths" {
 ///|
 #cfg(not(platform="windows"))
 async test "a bound session routes every start through its checkout" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let root = worktree_test_root("openseek-worktree-route-")
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
@@ -228,8 +228,8 @@ async test "a bound session routes every start through its checkout" {
 ///|
 #cfg(not(platform="windows"))
 async test "worktree remove refuses a running conversation without unmapping it" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let root = worktree_test_root("openseek-worktree-busy-")
   let engine = root.join("bin/engine.sh")
@@ -316,8 +316,8 @@ async test "worktree remove refuses a running conversation without unmapping it"
 ///|
 #cfg(not(platform="windows"))
 async test "a checkout deleted outside the app refuses runs and is repairable" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let root = worktree_test_root("openseek-worktree-vanished-")
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
@@ -463,8 +463,8 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
 ///|
 #cfg(not(platform="windows"))
 async test "archive keeps worktree placement for explicit repair after unarchive" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let root = worktree_test_root("openseek-worktree-archive-")
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
@@ -620,8 +620,8 @@ async test "archive keeps worktree placement for explicit repair after unarchive
 ///|
 #cfg(not(platform="windows"))
 async test "permanent archived deletion drops placement but keeps files and branch" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let root = worktree_test_root("openseek-archive-delete-worktree-")

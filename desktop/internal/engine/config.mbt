@@ -337,8 +337,8 @@ async test "run config rejects a blank session" {
 
 ///|
 async test "host chooses durable placement from workspace state" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   // The registry canonicalizes workspace paths, so build the fixture from
   // the tmpdir's physical spelling (`/tmp` is a symlink on macOS).

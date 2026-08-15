@@ -5,8 +5,8 @@
 ///|
 #cfg(not(platform="windows"))
 async test "archive deletes a submodule checkout that git worktree remove refuses" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let root = worktree_test_root("openseek-worktree-sub-archive-")
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
@@ -110,8 +110,8 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
 ///|
 #cfg(not(platform="windows"))
 async test "worktree deletion refuses a replaced checkout" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let root = worktree_test_root("openseek-worktree-replaced-")
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())

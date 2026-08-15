@@ -746,7 +746,22 @@ async fn migrate_legacy_session(
 }
 
 ///|
-let archive_env_test_lock : @async.Mutex = Mutex()
+/// Serializes every test that reads or writes the two process-global
+/// variables deciding where a conversation lives: `OPENSEEK_SESSION_ROOT`
+/// (its durable record) and `HOME` (its working directory, for a conversation
+/// bound to no project). Both are process-wide, so a test that moves either
+/// is not isolated from a test that merely reads it — and a test that starts
+/// a run reads `HOME`, whether or not it mentions it.
+///
+/// Holding this lock is also how a test gets a disposable `HOME`, so its
+/// scratch work directory lands in its own temporary tree instead of the
+/// developer's real one.
+///
+/// Other ambient variables the tests touch — `OPENSEEK_DIR`,
+/// `OPENSEEK_API_URL` — need no lock: the host always writes them explicitly
+/// into a child's environment, so nothing reads the ambient value except the
+/// test that set it.
+let ambient_env_test_lock : @async.Mutex = Mutex()
 
 ///|
 #cfg(not(platform="windows"))
@@ -760,9 +775,19 @@ fn restore_session_root_env(previous : String?) -> Unit {
 
 ///|
 #cfg(not(platform="windows"))
+fn restore_home_env(previous : String?) -> Unit {
+  if previous is Some(value) {
+    @sys.set_env_var("HOME", value)
+  } else {
+    @sys.unset_env_var("HOME")
+  }
+}
+
+///|
+#cfg(not(platform="windows"))
 async test "archive refuses a durable record while the pump is stopped" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-stopped-")
@@ -792,8 +817,8 @@ async test "archive refuses a durable record while the pump is stopped" {
 ///|
 #cfg(not(platform="windows"))
 async test "archive publishes its move before a cancelled listing reply" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-commit-")
@@ -839,8 +864,8 @@ async test "archive publishes its move before a cancelled listing reply" {
 ///|
 #cfg(not(platform="windows"))
 async test "archive and restore move a subagent session family together" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-family-")
@@ -891,8 +916,8 @@ async test "archive and restore move a subagent session family together" {
 ///|
 #cfg(not(platform="windows"))
 async test "permanent deletion removes one archived session family only" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-family-")
@@ -926,8 +951,8 @@ async test "permanent deletion removes one archived session family only" {
 ///|
 #cfg(not(platform="windows"))
 async test "permanent deletion uses the selected archived store" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-selected-store-")
@@ -963,8 +988,8 @@ async test "permanent deletion uses the selected archived store" {
 ///|
 #cfg(not(platform="windows"))
 async test "permanent deletion refuses a live twin in the selected store" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-live-twin-")
@@ -1005,8 +1030,8 @@ async test "permanent deletion refuses a live twin in the selected store" {
 ///|
 #cfg(not(platform="windows"))
 async test "startup sweep erases condemned records" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-sweep-")
@@ -1027,8 +1052,8 @@ async test "startup sweep erases condemned records" {
 ///|
 #cfg(not(platform="windows"))
 async test "selected archived store is revalidated after detachment" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-detached-selection-")
@@ -1070,8 +1095,8 @@ async test "selected archived store is revalidated after detachment" {
 ///|
 #cfg(not(platform="windows"))
 async test "a claimed child prevents a partial family archive" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-family-busy-")

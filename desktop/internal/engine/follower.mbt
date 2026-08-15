@@ -1123,8 +1123,8 @@ async test "abrupt EOF retains a failed final drain for later boundary retry" {
 ///|
 #cfg(not(platform="windows"))
 async test "workspace detach drains an orphaned pending follower before commit" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let dir = @fs.tmpdir(prefix="openseek-detach-orphan-follower-")
   let global_root : @pathx.Absolute = @pathx.Path(dir + "/global").resolve()

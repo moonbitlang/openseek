@@ -7,8 +7,8 @@
 ///|
 #cfg(not(platform="windows"))
 async test "archive names the missing store after a workspace detach" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-detach-")
@@ -72,8 +72,8 @@ async test "archive names the missing store after a workspace detach" {
 ///|
 #cfg(not(platform="windows"))
 async test "archive reports a workspace record whose directory vanished" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-gone-")
@@ -112,8 +112,8 @@ async test "archive reports a workspace record whose directory vanished" {
 ///|
 #cfg(not(platform="windows"))
 async test "loading a conversation from a detached workspace names that state" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-load-detached-")
@@ -154,8 +154,8 @@ async test "loading a conversation from a detached workspace names that state" {
 ///|
 #cfg(not(platform="windows"))
 async test "archiving an already-archived conversation names that state" {
-  archive_env_test_lock.acquire()
-  defer archive_env_test_lock.release()
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-again-")
