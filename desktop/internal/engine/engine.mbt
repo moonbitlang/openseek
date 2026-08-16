@@ -50,12 +50,12 @@ priv struct ServeEngine {
   // arriving before any turn opened).
   mut latest_run : String?
   mut phase : EnginePhase
-  // False as soon as a write fails or shutdown begins. Admission is decided
-  // by reading this and enqueueing in one synchronous step, and the queue is
-  // always closed in the same step that clears this flag, so a request that
-  // passes the check cannot lose its command to a concurrent shutdown. The
-  // handle remains in its slot until EOF proves the child is gone.
-  mut accepts_commands : Bool
+  // Set once, by `condemn`, and never cleared. It is the whole of this
+  // engine's death sentence: nothing more can be submitted, `SessionSlot::live`
+  // stops offering it to requests, and the conversation's next turn must go to
+  // a new process. The handle stays in its slot until EOF proves the child is
+  // gone, so a start joins its close barrier instead of racing it.
+  mut condemned : Bool
   steer_runs : SteerRunTracker
 }
 
@@ -117,10 +117,9 @@ fn ServeEngine::is_retired(self : ServeEngine) -> Bool {
 /// waits on ends only after `Process::wait`, the owned follower's final scan,
 /// and every terminal lifecycle notification from this engine.
 async fn ServeEngine::close_and_wait(self : ServeEngine) -> Unit {
-  // One synchronous step: no request can read `accepts_commands` as true and
-  // then enqueue into the queue this line closes.
-  self.accepts_commands = false
-  self.commands.close()
+  // Commands already accepted are still the writer's to flush — that is what
+  // asks it to close stdin — so this condemns without discarding.
+  self.condemn()
   // The grace deadline includes the writer task finishing the commands it
   // already accepted and then closing stdin. Otherwise a backpressured write
   // could pin archive/replacement before their existing process-cancellation
@@ -169,7 +168,7 @@ async fn retire_failed_command(
   engine : ServeEngine,
   reason : String,
 ) -> Unit {
-  engine.accepts_commands = false
+  engine.condemn()
   let exited = try {
     engine.close_and_wait()
     true
@@ -284,29 +283,41 @@ fn EngineCommand::settle(self : EngineCommand, outcome : EngineError?) -> Unit {
 /// stdin; waiting on it is only safe for a command that made nothing public
 /// first, which is exactly why prompts do not.
 ///
-/// False means the engine stopped accepting between the caller's own check
-/// and this call, which cannot happen without an intervening suspension; it is
-/// reported rather than asserted so a future caller with one is refused rather
-/// than silently dropped.
+/// The closed queue is the refusal, not a second flag consulted beside it, so
+/// there is no ordering to get wrong here: `condemn` closes it in one
+/// synchronous step. False therefore means the engine was condemned between
+/// the caller's own `SessionSlot::live` lookup and this call, which cannot
+/// happen without an intervening suspension; it is reported rather than
+/// asserted so a future caller with one is refused rather than silently
+/// dropped.
 fn ServeEngine::submit(
   self : ServeEngine,
   line : String,
   failure_reason~ : String,
   ack? : @async.Queue[EngineError?],
 ) -> Bool {
-  guard self.accepts_commands else { return false }
   self.commands.try_put({ line, failure_reason, ack }) catch {
     _ => false
   }
 }
 
 ///|
-/// Stop accepting commands and answer everything still queued: past this
-/// point nothing in the queue can reach stdin. Synchronous, so it is safe on a
+/// Condemn this engine: nothing more may be submitted, and no request can find
+/// it through its slot. One synchronous step, so a request cannot read the
+/// slot as live and then enqueue behind this call. Commands already accepted
+/// stay the writer's to flush; `discard_commands` is the variant that also
+/// refuses them.
+fn ServeEngine::condemn(self : ServeEngine) -> Unit {
+  self.condemned = true
+  self.commands.close()
+}
+
+///|
+/// Condemn this engine and answer everything still queued: past this point
+/// nothing in the queue can reach stdin. Synchronous, so it is safe on a
 /// cancellation path, and idempotent, because a drained queue is empty.
 fn ServeEngine::discard_commands(self : ServeEngine, reason : String) -> Unit {
-  self.accepts_commands = false
-  self.commands.close()
+  self.condemn()
   for ;; {
     let next = self.commands.try_get() catch { _ => break }
     guard next is Some(command) else { break }
@@ -361,10 +372,9 @@ async fn ServeEngine::write_commands(
 /// same-config successor is indistinguishable by value, so identity is the
 /// only safe commit-time check in that window.
 fn ServeEngine::is_current(self : ServeEngine, manager : EngineManager) -> Bool {
-  guard self.accepts_commands &&
-    manager.pump is Serving(sessions~) &&
+  guard manager.pump is Serving(sessions~) &&
     sessions.get(self.session_key) is Some(slot) &&
-    slot.engine is Some(current) else {
+    slot.live() is Some(current) else {
     return false
   }
   physical_equal(current, self)
@@ -590,6 +600,23 @@ priv struct PendingClaim {
 priv struct SessionSlot {
   mut pending : PendingClaim?
   mut engine : ServeEngine?
+}
+
+///|
+/// The engine a request may be given work: present, and not condemned.
+///
+/// Every request path goes through this instead of reading `engine` directly,
+/// which is what makes "a condemned engine serves no further work" a property
+/// of the lookup rather than a check each of half a dozen callers has to
+/// remember. A late write from a condemned engine is harmless for the same
+/// one-step reason: nothing can be routed to it any more.
+///
+/// Lifecycle paths deliberately read `engine` instead — a drain, a
+/// replacement, or a post-EOF identity check must still see the condemned
+/// handle, because joining its close barrier is the whole point.
+fn SessionSlot::live(self : SessionSlot) -> ServeEngine? {
+  guard self.engine is Some(engine) && !engine.condemned else { return None }
+  Some(engine)
 }
 
 ///|
@@ -1111,8 +1138,7 @@ fn open_run_engine(manager : EngineManager, run_id? : String) -> ServeEngine? {
   guard manager.pump is Serving(sessions~) else { return None }
   if run_id is Some(id) {
     for _, slot in sessions {
-      if slot.engine is Some(engine) &&
-        engine.accepts_commands &&
+      if slot.live() is Some(engine) &&
         engine.phase is Running(..) &&
         engine.latest_run is Some(latest) &&
         latest == id {
@@ -1123,9 +1149,7 @@ fn open_run_engine(manager : EngineManager, run_id? : String) -> ServeEngine? {
   }
   let mut found : ServeEngine? = None
   for _, slot in sessions {
-    if slot.engine is Some(engine) &&
-      engine.accepts_commands &&
-      engine.phase is Running(..) {
+    if slot.live() is Some(engine) && engine.phase is Running(..) {
       if found is Some(_) {
         return None
       }
@@ -1406,9 +1430,7 @@ async fn[G] handle_spawn_command(
       return Some(EngineError("failed to start engine: \{error}"))
     }
   }
-  guard claim.is_current(manager) &&
-    slot.engine is Some(engine) &&
-    engine.accepts_commands else {
+  guard claim.is_current(manager) && slot.live() is Some(_) else {
     return Some(EngineError("engine host restarted before engine commit"))
   }
   None
@@ -1625,7 +1647,7 @@ async fn[G] start_serve_engine(
     consumer: None,
     latest_run: None,
     phase: Idle,
-    accepts_commands: true,
+    condemned: false,
     steer_runs: SteerRunTracker::new(),
   }
   startup_engine = Some(engine)

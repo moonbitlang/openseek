@@ -36,8 +36,11 @@ pub async fn start_run(
   @session_store.ensure_not_archived(key)
   let sessions = manager.serving()
   let slot = slot_for(sessions, key)
-  if slot.engine is Some(live) {
-    match live.phase {
+  // Busy-ness is a property of the handle, not of admission: a condemned
+  // engine whose turn has not settled yet still owns this conversation's
+  // durable record, so this reads the slot rather than `live`.
+  if slot.engine is Some(engine) {
+    match engine.phase {
       Running(..) =>
         raise EngineError(
           "an OpenSeek run is still active in this conversation",
@@ -59,8 +62,8 @@ pub async fn start_run(
   placement_locked = false
   manager.workspace_lifecycle_lock.release()
   ensure_run_cwd(config)
-  let need_spawn = if slot.engine is Some(live) {
-    !live.accepts_commands || live.spec_key != engine_fingerprint(config)
+  let need_spawn = if slot.live() is Some(live) {
+    live.spec_key != engine_fingerprint(config)
   } else {
     true
   }
@@ -68,7 +71,7 @@ pub async fn start_run(
     request_spawn(manager, claim, config)
   }
   claim.require_current(manager)
-  guard slot.engine is Some(live) else {
+  guard slot.live() is Some(live) else {
     raise EngineError("engine failed to start")
   }
   // The cwd/spawn waits above are suspension points: a compaction accepted
@@ -222,14 +225,14 @@ pub async fn compact_run(
   defer claim.release(manager)
   placement_locked = false
   manager.workspace_lifecycle_lock.release()
-  let live = if slot.engine is Some(live) && live.accepts_commands {
+  let live = if slot.live() is Some(live) {
     live
   } else {
     let config = compact_config(manager, payload)
     ensure_run_cwd(config)
     request_spawn(manager, claim, config)
     claim.require_current(manager)
-    guard slot.engine is Some(live) else {
+    guard slot.live() is Some(live) else {
       raise EngineError("engine failed to start")
     }
     live
@@ -318,14 +321,14 @@ pub async fn goal_run(
   defer claim.release(manager)
   placement_locked = false
   manager.workspace_lifecycle_lock.release()
-  let live = if slot.engine is Some(live) && live.accepts_commands {
+  let live = if slot.live() is Some(live) {
     live
   } else {
     let config = goal_config(manager, payload)
     ensure_run_cwd(config)
     request_spawn(manager, claim, config)
     claim.require_current(manager)
-    guard slot.engine is Some(live) else {
+    guard slot.live() is Some(live) else {
       raise EngineError("engine failed to start")
     }
     live
@@ -1023,7 +1026,7 @@ async test "a discarded command answers its sender" {
       consumer: None,
       latest_run: None,
       phase: Idle,
-      accepts_commands: true,
+      condemned: false,
       steer_runs: SteerRunTracker::new(),
     }
     let ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
@@ -1035,8 +1038,8 @@ async test "a discarded command answers its sender" {
       fail("expected the discarded command to answer its sender")
     }
     assert_eq(reason, "the engine exited")
-    // Discarding also closes admission, in the same synchronous step.
-    assert_false(engine.accepts_commands)
+    // Discarding also condemns the engine, in the same synchronous step.
+    assert_true(engine.condemned)
     assert_false(engine.submit("{}\n", failure_reason="unreachable"))
     group.return_immediately(())
   })
@@ -1108,10 +1111,13 @@ async test "setup failure retires the writer before an immediate next start" {
       is Some(_),
     )
     guard manager.serving().get(session) is Some(slot) &&
-      slot.engine is Some(live) else {
+      slot.engine is Some(old) else {
       fail("missing first engine after setup failure")
     }
-    assert_false(live.accepts_commands)
+    // Still in its slot, so the next start must join its close barrier — but
+    // condemned, so nothing can be routed to it in the meantime.
+    assert_true(old.condemned)
+    assert_true(slot.live() is None)
     let cancelled = cancel_run(manager, { run_id: Some(first.run_id) })
     assert_false(cancelled.cancelled)
     let second = start_run(sink, manager, {

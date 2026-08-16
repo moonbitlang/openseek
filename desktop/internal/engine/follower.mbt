@@ -1065,7 +1065,7 @@ async test "abrupt EOF retains a failed final drain for later boundary retry" {
       consumer: None,
       latest_run: Some("r-abrupt-eof"),
       phase: Running(cancel_requested=false, compact_queued=false),
-      accepts_commands: true,
+      condemned: false,
       steer_runs: SteerRunTracker::new(),
     }
     let sessions : Map[String, SessionSlot] = Map([])
@@ -1262,7 +1262,7 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
       consumer: None,
       latest_run: Some("r-detach-fail"),
       phase: Idle,
-      accepts_commands: false,
+      condemned: true,
       steer_runs: SteerRunTracker::new(),
     }
     let sessions : Map[String, SessionSlot] = Map([])
@@ -1496,7 +1496,7 @@ async test "failed command stays unusable through a close timeout" {
       consumer: None,
       latest_run: Some("r-timeout"),
       phase: Running(cancel_requested=false, compact_queued=false),
-      accepts_commands: true,
+      condemned: false,
       steer_runs: SteerRunTracker::new(),
     }
     let sessions : Map[String, SessionSlot] = Map([])
@@ -1504,7 +1504,8 @@ async test "failed command stays unusable through a close timeout" {
     slot.engine = Some(engine)
     manager.pump = Serving(sessions~)
     retire_failed_command(manager, engine, "partial command")
-    assert_false(engine.accepts_commands)
+    assert_true(engine.condemned)
+    assert_true(slot.live() is None)
     assert_true(engine.phase is Idle)
     assert_true(engine.latest_run is None)
     assert_true(
