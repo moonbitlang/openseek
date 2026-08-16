@@ -38,12 +38,6 @@ priv struct ServeEngine {
   // Exact follower generation established for this writer. Cleanup never
   // performs a session-key lookup that could stop a successor generation.
   follower : SessionFollower?
-  // Level-triggered process-exit latch, published by the stdout consumer
-  // once `Process::wait` has reaped the child and before its potentially
-  // O(history) follower scan — the close deadlines cover child termination
-  // only. Closing is the broadcast: every waiter, current or late, sees the
-  // same completed state instead of racing for one token.
-  process_exit : @async.Queue[Unit]
   // This engine's stdout consumer. Its completion IS retirement: it publishes
   // every remaining lifecycle event, stops the owned follower and clears the
   // slot before returning, so waiting on this task is the successor-admission
@@ -75,30 +69,17 @@ const ServeCloseGraceMs = 2000
 const ServeCancelWaitMs = 3000
 
 ///|
-/// Wait for a latch that is only ever closed, never written to. The read can
-/// complete no other way, so the close is what wakes it.
-async fn latch_wait(latch : @async.Queue[Unit]) -> Unit {
-  latch.get() catch {
+/// Wait until this engine's child is reaped.
+///
+/// The process task is the latch, so there is no second one to publish: it is
+/// level-triggered and multi-waiter, and a cancelled process task completes
+/// only once its cancellation handler has seen the child actually terminate.
+/// A failed or cancelled outcome is still termination, which is all a caller
+/// of this waits to learn.
+async fn ServeEngine::wait_process(self : ServeEngine) -> Unit {
+  ignore(self.process.wait()) catch {
     _ => ()
   }
-}
-
-///|
-/// The same state read without suspending. An open latch reports an empty
-/// queue; a closed one raises, which is exactly the published state.
-fn latch_closed(latch : @async.Queue[Unit]) -> Bool {
-  try {
-    ignore(latch.try_get())
-    false
-  } catch {
-    _ => true
-  }
-}
-
-///|
-/// Wait until this engine's child is reaped.
-async fn ServeEngine::wait_process(self : ServeEngine) -> Unit {
-  latch_wait(self.process_exit)
 }
 
 ///|
@@ -1641,7 +1622,6 @@ async fn[G] start_serve_engine(
     process,
     sink,
     follower: engine_follower,
-    process_exit: Queue(kind=Unbounded),
     consumer: None,
     latest_run: None,
     phase: Idle,
@@ -1860,11 +1840,6 @@ async fn ServeEngine::run(
             owns_slot = true
             owned_follower = manager.followers.get(engine.session_key)
           }
-          // Publish raw process exit before the potentially O(history) follower
-          // scan. Close deadlines cover only child termination; successor and
-          // archive callers still wait on `done` below for the full event and
-          // durable-drain barrier.
-          engine.process_exit.close()
           // EOF cleanup always owns an independent retirement attempt. Pending
           // replacement/archive operations join this same generation when they
           // need the drain as a barrier; if one of those callers is cancelled,
@@ -2582,22 +2557,5 @@ async test "cancelled spawn requester holds its claim until pump ack" {
     }
     assert_true(cancelled)
     assert_false(claim.active)
-  })
-}
-
-///|
-async test "engine exit latch wakes multiple and late waiters" {
-  let latch : @async.Queue[Unit] = Queue(kind=Unbounded)
-  @async.with_task_group(group => {
-    let first = group.spawn(() => latch_wait(latch))
-    let second = group.spawn(() => latch_wait(latch))
-    @async.pause()
-    assert_false(latch_closed(latch))
-    latch.close()
-    first.wait()
-    second.wait()
-    // Level-triggered: completion is state, not a token consumed above.
-    latch_wait(latch)
-    assert_true(latch_closed(latch))
   })
 }

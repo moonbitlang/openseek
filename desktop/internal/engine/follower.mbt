@@ -1062,7 +1062,6 @@ async test "abrupt EOF retains a failed final drain for later boundary retry" {
       process,
       sink,
       follower: Some(follower),
-      process_exit: Queue(kind=Unbounded),
       consumer: None,
       latest_run: Some("r-abrupt-eof"),
       phase: Running(cancel_requested=false, compact_queued=false),
@@ -1080,8 +1079,8 @@ async test "abrupt EOF retains a failed final drain for later boundary retry" {
     let stderr_task = group.spawn(no_wait=true, () => "")
     engine.run(manager, messages, stderr_task)
 
-    // `run` returning is retirement; the child was reaped on the way there.
-    assert_true(latch_closed(engine.process_exit))
+    // `run` returning is retirement: the slot is clear and every lifecycle
+    // event this engine owed has been published.
     assert_true(slot.engine is None)
     assert_true(
       follower.durable_finishes
@@ -1239,12 +1238,16 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
       fail("expected follower")
     }
     let (child_stdin, writer) = @process.write_to_process()
+    // The real EOF consumer reaches this state after its first failed final
+    // scan: the child is gone and the consumer with it, but the follower is
+    // still live. Detach must retry it and propagate the failure again — so
+    // the fixture's child exits on its own and its close barrier is the
+    // process task, exactly as it would be in production.
     let process = @process.spawn(
       group,
       "/bin/sh",
-      ["-c", "sleep 30"],
+      ["-c", "exit 0"],
       stdin=child_stdin,
-      cancel_handler=@process.graceful_cancel(timeout=10),
       no_wait=true,
     )
     let engine : ServeEngine = {
@@ -1256,17 +1259,12 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
       process,
       sink,
       follower: Some(follower),
-      process_exit: Queue(kind=Unbounded),
       consumer: None,
       latest_run: Some("r-detach-fail"),
       phase: Idle,
       accepts_commands: false,
       steer_runs: SteerRunTracker::new(),
     }
-    // The real EOF consumer reaches this state after its first failed final
-    // scan: the child is reaped and the consumer is gone, but the follower is
-    // still live. Detach must retry it and propagate the failure again.
-    engine.process_exit.close()
     let sessions : Map[String, SessionSlot] = Map([])
     let slot = slot_for(sessions, session)
     slot.engine = Some(engine)
@@ -1469,12 +1467,21 @@ async test "failed command stays unusable through a close timeout" {
   manager.followers["s-timeout"] = follower
   @async.with_task_group(group => {
     let (child_stdin, writer) = @process.write_to_process()
+    // A child that honours neither stdin EOF nor cancellation: it ignores the
+    // closed pipe, and its cancellation handler does not manage to kill it
+    // until after the cancel deadline has passed. The process task is the
+    // close barrier, so this is the only way to spend that second deadline —
+    // a handler that terminates the child promptly would not.
+    let late_cancel = @process.graceful_cancel(timeout=10)
     let process = @process.spawn(
       group,
       "/bin/sh",
       ["-c", "sleep 30"],
       stdin=child_stdin,
-      cancel_handler=@process.graceful_cancel(timeout=10),
+      cancel_handler=CancellationHandler(pid => {
+        @async.sleep(ServeCancelWaitMs + 500)
+        late_cancel(pid)
+      }),
       no_wait=true,
     )
     let engine : ServeEngine = {
@@ -1486,7 +1493,6 @@ async test "failed command stays unusable through a close timeout" {
       process,
       sink,
       follower: Some(follower),
-      process_exit: Queue(kind=Unbounded),
       consumer: None,
       latest_run: Some("r-timeout"),
       phase: Running(cancel_requested=false, compact_queued=false),

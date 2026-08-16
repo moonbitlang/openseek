@@ -1020,7 +1020,6 @@ async test "a discarded command answers its sender" {
       process,
       sink: EventSink(fn(_) { () }),
       follower: None,
-      process_exit: Queue(kind=Unbounded),
       consumer: None,
       latest_run: None,
       phase: Idle,
