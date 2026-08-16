@@ -320,7 +320,11 @@ test "each conversation owns its own goal edit" {
   // draft waiting next door — the reason the draft lives on the conversation
   // rather than in one model-wide slot.
   let neighbour : Conversation = {
-    ..empty_conversation(@interop.ChannelId::Local, "desktop-other"),
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      "desktop-other",
+      @interop.ChannelId::Local.test_project(),
+    ),
     goal: Some({ text: "the visible goal", blocked: None }),
   }
   let model = {
@@ -629,7 +633,7 @@ test "re-asserting an unchanged goal waits for its own marker too" {
   // reduced state reads exactly as it did before the request, so the snapshot
   // has to carry the marker itself. Above the request's frontier it answers;
   // at or below it, it is the record agreeing rather than answering.
-  fn reload(model : Model, goal_markers) {
+  fn reload(model : Model, goal_markers) raise {
     let (_, next) = update_dev(
       dispatch,
       SessionRefreshed(
@@ -760,12 +764,15 @@ test "archiving carries the goal draft to the replacement" {
       task: "a prompt typed too",
       goal_edit: Some({ draft: "a goal still being written" }),
     })
-    .with_dev(dev => { ..dev, sessions: [archived_item("desktop-test")] })
+    .with_dev(dev => { ..dev, sessions: [placed_archived_item("desktop-test")] })
   let (_, next) = update_dev(
     dispatch,
     SessionsChanged(
       change="archived",
-      key={ session: "desktop-test", workspace: None },
+      key={
+        session: "desktop-test",
+        workspace: @interop.ChannelId::Local.test_project(),
+      },
       fresh_session=Some("desktop-restored"),
     ),
     model,
@@ -790,12 +797,15 @@ test "archiving carries a goal that was sent but never confirmed" {
       ..test_conversation(),
       goal_pending: Some(test_goal_command(Setting("a goal still in flight"))),
     })
-    .with_dev(dev => { ..dev, sessions: [archived_item("desktop-test")] })
+    .with_dev(dev => { ..dev, sessions: [placed_archived_item("desktop-test")] })
   let (_, next) = update_dev(
     dispatch,
     SessionsChanged(
       change="archived",
-      key={ session: "desktop-test", workspace: None },
+      key={
+        session: "desktop-test",
+        workspace: @interop.ChannelId::Local.test_project(),
+      },
       fresh_session=Some("desktop-restored"),
     ),
     model,
@@ -819,12 +829,15 @@ test "archiving carries no goal the record already confirmed" {
       ..test_conversation(),
       goal: Some({ text: "the goal on record", blocked: None }),
     })
-    .with_dev(dev => { ..dev, sessions: [archived_item("desktop-test")] })
+    .with_dev(dev => { ..dev, sessions: [placed_archived_item("desktop-test")] })
   let (_, next) = update_dev(
     dispatch,
     SessionsChanged(
       change="archived",
-      key={ session: "desktop-test", workspace: None },
+      key={
+        session: "desktop-test",
+        workspace: @interop.ChannelId::Local.test_project(),
+      },
       fresh_session=Some("desktop-restored"),
     ),
     model,
@@ -838,7 +851,11 @@ test "a kept goal draft is a conversation you can get back to" {
   // Retention without a row does not save the draft, it strands it: the
   // conversation lives on with no way to reach it again. Retention and the
   // sidebar therefore ask one predicate, not two.
-  let fresh = empty_conversation(@interop.ChannelId::Local, "desktop-fresh")
+  let fresh = empty_conversation(
+    @interop.ChannelId::Local,
+    "desktop-fresh",
+    @interop.ChannelId::Local.test_project(),
+  )
   assert_false(fresh.worth_keeping())
   // A blank editor is not writing: an untouched `/goal` still lets the husk go.
   assert_false({ ..fresh, goal_edit: Some({ draft: "   " }) }.worth_keeping())
@@ -857,9 +874,13 @@ test "a kept goal draft is a conversation you can get back to" {
     }
     guard model.focused_device() is Some(dev) else { fail("no device") }
     let rows : Array[@conversation.Input] = []
-    model.push_group_component_inputs(rows, dev, None, listed=_ => false, archived=_ => {
-      false
-    })
+    model.push_group_component_inputs(
+      rows,
+      dev,
+      @interop.ChannelId::Local.test_project(),
+      listed=_ => false,
+      archived=_ => false,
+    )
     assert_true(
       rows.iter().any(row => row.id().conversation() == "desktop-fresh"),
     )
@@ -918,7 +939,11 @@ test "a request in flight is reason enough to re-read the record" {
   // An otherwise-empty conversation has nothing else worth reloading for, so
   // without this the reconnect that follows a lost reply would never ask the
   // record the one question the transport could not answer.
-  let fresh = empty_conversation(@interop.ChannelId::Local, "desktop-fresh")
+  let fresh = empty_conversation(
+    @interop.ChannelId::Local,
+    "desktop-fresh",
+    @interop.ChannelId::Local.test_project(),
+  )
   let model = test_model()
   assert_false(model.can_reload_transcript(fresh))
   assert_true(
@@ -965,8 +990,8 @@ test "a request in flight is reason enough to re-read the record" {
       {
         id: "desktop-test",
         title: Some("persisted"),
-        workspace: None,
-        workspace_name: "",
+        workspace: @interop.ChannelId::Local.test_project(),
+        workspace_name: "work",
       },
     ]),
     empty,
@@ -1260,7 +1285,7 @@ test "a reload settles a request the transport never answered" {
     next
   }
 
-  fn reloading(model : Model) {
+  fn reloading(model : Model) raise {
     { ..model, conversations: [{ ..model.active(), sync: test_reloading([]) }] }
   }
 
@@ -1329,7 +1354,11 @@ test "a fresh conversation survives on its goal draft alone" {
   // `/goal` moves the text out of `task`, so retention must count the goal
   // halves — otherwise activating a neighbour prunes the conversation and
   // takes the only copy of the draft with it.
-  let fresh = empty_conversation(@interop.ChannelId::Local, "desktop-fresh")
+  let fresh = empty_conversation(
+    @interop.ChannelId::Local,
+    "desktop-fresh",
+    @interop.ChannelId::Local.test_project(),
+  )
   assert_true(fresh.draft_empty())
   assert_false(
     { ..fresh, goal_edit: Some({ draft: "still writing" }) }.draft_empty(),
@@ -1346,11 +1375,19 @@ test "a fresh conversation survives on its goal draft alone" {
     ..test_model(),
     conversations: [
       { ..fresh, goal_edit: Some({ draft: "a goal still being written" }) },
-      empty_conversation(@interop.ChannelId::Local, "desktop-other"),
+      empty_conversation(
+        @interop.ChannelId::Local,
+        "desktop-other",
+        @interop.ChannelId::Local.test_project(),
+      ),
     ],
     active_session: "desktop-fresh",
   }
-  let switched = model.activate(@interop.ChannelId::Local, "desktop-other")
+  let switched = model.activate(
+    @interop.ChannelId::Local,
+    "desktop-other",
+    @interop.ChannelId::Local.test_project(),
+  )
   assert_true(
     switched.find_conversation(@interop.ChannelId::Local, "desktop-fresh")
     is Some(_),

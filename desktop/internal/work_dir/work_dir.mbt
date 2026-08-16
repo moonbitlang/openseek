@@ -1,8 +1,5 @@
-// Where a conversation works: the per-session workspace directory the engine
+// Where a conversation works: the registered workspace directory the engine
 // runs in.
-
-///|
-const WorkspaceDirName = "OpenSeek"
 
 ///|
 /// Exact session-to-directory bindings learned from a host-owned source such
@@ -105,26 +102,21 @@ pub async fn resolve_host_workspace_authorization(
 }
 
 ///|
-/// Per-conversation workspace directory. A conversation whose durable record
-/// lives inside a registered workspace works in that project directory; a
-/// scratch conversation gets `<workspace root>/<session id>`, flat — desktop
-/// ids embed their creation date, so a name-sorted listing is already
-/// chronological without a grouping level. Either way the directory follows
-/// from the session id and what's on disk, so resuming a conversation — even
-/// from a fresh app launch — lands in the same directory without recording it
-/// anywhere. `None` when the id is unsafe as a path component, no home
-/// directory is known, or a bound checkout is missing. The run-config caller
-/// rejects every unavailable root instead of moving the run elsewhere.
+/// Per-conversation workspace directory: the registered workspace whose
+/// durable store holds this session's record. The directory follows from the
+/// session id and what's on disk, so resuming a conversation — even from a
+/// fresh app launch — lands in the same directory without recording it
+/// anywhere. `None` when no registered workspace claims the session or a
+/// bound checkout is missing. Callers reject every unavailable root instead
+/// of moving the run elsewhere.
 pub async fn of_session(session : String) -> @pathx.Path? {
-  if @session_store.workspace_of(session) is Some(workspace) {
-    // A session bound to one of the workspace's worktrees works in that
-    // checkout while it exists. A retained binding whose checkout is missing
-    // refuses every workspace operation until the user rebuilds it.
-    return @worktree.tree_dir(workspace, session).map(dir => dir.to_path())
+  guard @session_store.workspace_of(session) is Some(workspace) else {
+    return None
   }
-  guard @session_store.safe_session_id(session) else { return None }
-  guard workspace_root() is Some(root) else { return None }
-  Some(root.join(session).normalize())
+  // A session bound to one of the workspace's worktrees works in that
+  // checkout while it exists. A retained binding whose checkout is missing
+  // refuses every workspace operation until the user rebuilds it.
+  @worktree.tree_dir(workspace, session).map(dir => dir.to_path())
 }
 
 ///|
@@ -145,9 +137,9 @@ pub async fn session_cwd(session : String) -> @pathx.Absolute? {
 /// The recorded task base for a conversation-bound worktree. The optional
 /// workspace hint follows `resolve_in_workspace`'s trust boundary: only an
 /// attached workspace is considered, while a resumed conversation can recover
-/// its owner from the durable session record. `None` deliberately distinguishes
-/// workspace-root and scratch conversations; the Git host may derive their
-/// branch fork point when committed work exists.
+/// its owner from the durable session record. `None` is a conversation working
+/// in the workspace root, which has no recorded base; the Git host may derive
+/// its branch fork point when committed work exists.
 pub async fn session_review_base(
   session : String,
   workspace? : String,
@@ -234,10 +226,9 @@ async fn real_contains(
 ///|
 /// The workspace directory an absolute `path` belongs to: the deepest
 /// registered workspace containing it (the nested-roots convention language
-/// clients use — VS Code's `getWorkspaceFolder` picks the innermost folder),
-/// or — under the scratch-workspace root — the per-session directory that
-/// owns it. `None` for a relative path or anything outside, which ops routed
-/// by path alone must refuse.
+/// clients use — VS Code's `getWorkspaceFolder` picks the innermost folder).
+/// `None` for a relative path or anything outside every registered
+/// workspace, which ops routed by path alone must refuse.
 pub async fn attached_workspace_dir(path : @pathx.Absolute) -> @pathx.Absolute? {
   // LSP/navigation paths may contain `.` or `..`. Clean them with the host's
   // filesystem rules before selecting the deepest workspace or worktree, so
@@ -253,27 +244,12 @@ pub async fn attached_workspace_dir(path : @pathx.Absolute) -> @pathx.Absolute? 
     }
     best = Some(workspace)
   }
-  let dir : @pathx.Absolute = if best is Some(workspace) {
-    // A path under a registered worktree belongs to that checkout, not the
-    // workspace root: language ops routed by path alone must answer from the
-    // worktree's own tree. An unregistered `.worktrees` path (a subtask
-    // slice) keeps resolving to the workspace root.
-    @worktree.owner_dir(workspace, resolved_absolute)
-  } else {
-    guard workspace_root() is Some(root) else { return None }
-    guard root.to_absolute() is Some(root_absolute) else { return None }
-    guard resolved_absolute.relative_to(root=root_absolute) is Some(rest) &&
-      !rest.is_root() else {
-      return None
-    }
-    // The first segment under the scratch root names the owning session's
-    // directory; the root itself belongs to no conversation.
-    let session = match rest.0.find("/") {
-      Some(index) => rest.0.view(end_offset=index).to_owned()
-      None => rest.0
-    }
-    root_absolute.join(Relative(session)).normalize()
-  }
+  guard best is Some(workspace) else { return None }
+  // A path under a registered worktree belongs to that checkout, not the
+  // workspace root: language ops routed by path alone must answer from the
+  // worktree's own tree. An unregistered `.worktrees` path (a subtask
+  // slice) keeps resolving to the workspace root.
+  let dir = @worktree.owner_dir(workspace, resolved_absolute)
   // Reject an absolute path whose real target — following symlinks — escapes
   // the owning directory; the lexical containment above does not follow links.
   guard real_contains(dir, resolved_absolute) else { return None }
@@ -295,27 +271,8 @@ fn contained_path(
   Some(resolved)
 }
 
-///|
-/// Root for per-conversation workspaces: an `OpenSeek` folder inside the
-/// user's Documents directory — the agent's output is user-facing work, not
-/// app data, so it belongs where the user already looks for files. Where
-/// Documents is comes from the platform (`@userdirs.documents_dir`); when
-/// that folder does not exist (headless machines, say), the folder lives
-/// directly under the home directory.
-pub async fn workspace_root() -> @pathx.Path? {
-  guard @home.dir() is Some(home) else { return None }
-  let parent : @pathx.Path = if @userdirs.documents_dir() is Some(documents) &&
-    @fsx.is_dir(documents) {
-    documents
-  } else {
-    home
-  }
-  Some(parent.join(WorkspaceDirName).normalize())
-}
-
-// Tests for the pure open-target rule. The full `session_workspace_dir` /
-// `workspace_root` chain depends on the environment (HOME, an existing
-// Documents folder) and is covered by the live app.
+// Tests for the pure open-target rule. The full `of_session` chain depends on
+// the registry and on what is on disk, and is covered by the live app.
 
 ///|
 test "absolute paths open as themselves" {

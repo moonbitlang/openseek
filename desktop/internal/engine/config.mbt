@@ -157,7 +157,7 @@ async fn serve_config(
   // session's durable record in the in-project store. Only registered
   // workspaces qualify — the registry, not the payload, decides which
   // directories a run may work in.
-  let workspace : @pathx.Absolute? = if workspace is Some(path) {
+  let hinted : @pathx.Absolute? = if workspace is Some(path) {
     guard @pathx.Absolute::from_uri_path(path) is Some(absolute) else {
       raise EngineError("workspace is not a supported absolute resource path")
     }
@@ -167,6 +167,20 @@ async fn serve_config(
     }
   } else {
     None
+  }
+  // Every run belongs to a workspace. The hint names one; a hint-less client
+  // resuming an existing conversation recovers the workspace that already
+  // owns the durable record, so one id can never fork into two histories.
+  // With neither, there is nowhere to run — the client must attach a project
+  // rather than have the host invent a directory.
+  let dir = if hinted is Some(dir) {
+    dir
+  } else if @session_store.workspace_of(session) is Some(dir) {
+    dir
+  } else {
+    raise EngineError(
+      "this conversation has no workspace; attach a project first",
+    )
   }
   {
     task,
@@ -181,31 +195,14 @@ async fn serve_config(
     },
     max_steps: configured_max_steps(max_steps),
     engine,
-    cwd: if workspace is Some(dir) {
-      // The workspace hint names the project; a session already bound to one
-      // of its worktrees keeps working in that checkout (clients send the
-      // hint on every turn, not only the binding one). A binding whose
-      // checkout vanished refuses here rather than moving the agent into the
-      // main tree behind the user's back.
-      Some(@worktree.run_dir(dir, session).to_path())
-      // A resumed project conversation recovers its registered project from
-      // the durable record. Use the throwing resolver here so a retained
-      // binding whose checkout vanished names that worktree instead of being
-      // flattened into an unspecified missing cwd.
-    } else if @session_store.workspace_of(session) is Some(dir) {
-      Some(@worktree.run_dir(dir, session).to_path())
-    } else {
-      @work_dir.of_session(session)
-    },
+    // A run happens in the workspace directory itself, unless the session is
+    // bound to one of its worktrees — then it works in that checkout, on
+    // every turn and not only the binding one. A binding whose checkout
+    // vanished refuses here rather than moving the agent into the main tree
+    // behind the user's back.
+    cwd: Some(@worktree.run_dir(dir, session).to_path()),
     session,
-    session_root: if workspace is Some(dir) {
-      Some(@workspaces.store_root(dir))
-    } else {
-      // A hint-less client resuming an existing workspace conversation must
-      // keep using that workspace's store. Only genuinely new sessions fall
-      // back to the global root; otherwise one id forks into two histories.
-      @session_store.root_of(session)
-    },
+    session_root: Some(@workspaces.store_root(dir)),
   }
 }
 
@@ -289,6 +286,8 @@ test "DeepSeek endpoint still uses DEEPSEEK env fallback" {
 /// environment: an `OPENSEEK_API_URL` exported in the launching shell must
 /// not redirect the zero-config provider away from the proxy.
 async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_API_URL")
   @sys.set_env_var("OPENSEEK_API_URL", "https://env.example/chat/completions")
   defer (if previous is Some(value) {
@@ -296,6 +295,13 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
   } else {
     @sys.unset_env_var("OPENSEEK_API_URL")
   })
+  let previous_session_root = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+  defer restore_session_root_env(previous_session_root)
+  // A run needs a workspace before the endpoint matters; attach one so this
+  // test fails only for the reason it is named after.
+  let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-config-endpoint-"))
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
+  let workspace = attach_run_workspace(root)
   // No settings file at all: the default provider is the OpenSeek proxy.
   let manager = new_engine_manager("openseek")
   let config = run_config(manager, {
@@ -304,10 +310,11 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
     model: None,
     max_steps: None,
     session: "s-default",
-    workspace: None,
+    workspace: Some(workspace),
   })
   assert_true(config.api_url is Some(OpenseekProxyUrl))
   assert_eq(config.api_key, PlaceholderApiKey)
+  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -373,15 +380,27 @@ async test "host chooses durable placement from workspace state" {
     Some(workspace + "/.openseek"),
   )
   assert_eq(config.cwd.map(cwd => cwd.to_string()), Some(workspace))
-  let fresh = run_config(manager, {
-    task: "fresh",
-    submission_id: None,
-    model: None,
-    max_steps: None,
-    session: "s-global",
-    workspace: None,
-  })
-  assert_eq(fresh.session_root.map(root => root.to_string()), Some(global_root))
+  // A hint-less session that no attached workspace claims has nowhere to run.
+  // The host refuses instead of inventing a directory and a store for it,
+  // which is what would fork one id into two histories.
+  let unclaimed = try {
+    ignore(
+      run_config(manager, {
+        task: "fresh",
+        submission_id: None,
+        model: None,
+        max_steps: None,
+        session: "s-unclaimed",
+        workspace: None,
+      }),
+    )
+    "no error"
+  } catch {
+    EngineError(detail) => detail
+    error if @async.is_being_cancelled() => raise error
+    error => "\{error}"
+  }
+  assert_true(unclaimed.contains("has no workspace"))
   let attached = run_config(manager, {
     task: "attached",
     submission_id: None,

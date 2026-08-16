@@ -7,12 +7,6 @@
 // conversation, not the user's work.
 
 ///|
-/// The pre-move-archive design's record: session ids whose workspace folder
-/// was zipped away, one per line in the host's runtime dir. Read once for
-/// migration; never written again.
-const LegacyArchivedListFile = "archived_sessions.txt"
-
-///|
 /// Erase every condemned record left under one store's `archived/deleting`
 /// directory. Everything there was already renamed out of the archived store
 /// by a committed deletion, so removal is idempotent and needs no ordering; a
@@ -71,13 +65,14 @@ async fn EngineManager::sweep_archived_deletions(self : EngineManager) -> Unit {
 priv struct SessionFamilyMove {
   manager : EngineManager
   root : @pathx.Absolute
-  // The registered project whose store owns this family, when it is not a
-  // scratch conversation. Permanent deletion uses this exact owner to remove
-  // the retained worktree placement even if the project detaches meanwhile.
+  // The registered project whose store owns this family, when this page's
+  // registry still holds it. Permanent deletion uses this exact owner to
+  // remove the retained worktree placement even if the project detaches
+  // meanwhile.
   workspace : @pathx.Absolute?
-  // Canonical protocol spelling of `workspace`, or "" for Scratch. Every
-  // session.changed callback carries it so same-ID records in other stores do
-  // not inherit this family's disposition.
+  // Canonical protocol spelling of `workspace`, "" when no registered project
+  // claims the store. Every session.changed callback carries it so same-ID
+  // records in other stores do not inherit this family's disposition.
   workspace_token : String
   members : Array[String]
   guards : Array[(String, SessionRecordGuard)]
@@ -128,11 +123,11 @@ async fn EngineManager::claim_session_family_move(
       manager.workspace_lifecycle_lock.release()
     }
   }
-  if selected is Some(selected) && selected.workspace is Some(workspace) {
+  if selected is Some(selected) {
     // `from_workspace` runs before this lock is acquired. Detach uses the
     // same lock, so repeat the registration check here and keep the selected
     // store stable until the record and pending-operation claims are visible.
-    guard @workspaces.registered_dir(workspace) is Some(registered) &&
+    guard @workspaces.registered_dir(selected.workspace) is Some(registered) &&
       @workspaces.store_root(registered) == selected.root else {
       raise EngineError(
         "\{selected.workspace_token} is not a registered workspace",
@@ -193,7 +188,7 @@ async fn EngineManager::claim_session_family_move(
     }
   }
   let (workspace, workspace_token) = if selected is Some(selected) {
-    (selected.workspace, selected.workspace_token)
+    (Some(selected.workspace), selected.workspace_token)
   } else {
     let mut workspace : @pathx.Absolute? = None
     for project in @workspaces.registered() {
@@ -362,32 +357,13 @@ async fn move_session_family(
 ///|
 /// The archived conversations, one group per session store — the same reply
 /// shape as `list_sessions`, listing each store's `archived` twin instead.
-pub async fn archived_sessions(
-  manager : EngineManager,
-  on_migrated : (String, String) -> Unit,
-) -> SessionsReply {
-  migrate_legacy_archive(manager, on_migrated)
-  list_archived_sessions(manager)
-}
-
-///|
-/// List only. Archive/unarchive already committed and published their own
-/// mutation; they must not discover unrelated legacy moves while producing a
-/// potentially slow reply without the list_archived dispatcher callback.
-async fn list_archived_sessions(manager : EngineManager) -> SessionsReply {
-  guard @workspaces.global_store_root() is Some(root) else {
-    raise EngineError(
-      "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
-    )
-  }
-  let groups : Array[SessionGroup] = [
-    session_group(manager, None, @session_store.archived_root(root)),
-  ]
+pub async fn archived_sessions(manager : EngineManager) -> SessionsReply {
+  let groups : Array[SessionGroup] = []
   for path in @workspaces.registered() {
     groups.push(
       session_group(
         manager,
-        Some(path),
+        path,
         @session_store.archived_root(@workspaces.store_root(path)),
       ),
     )
@@ -431,7 +407,7 @@ pub async fn archive_session(
   // Listing is intentionally outside the record-move lease. Once the
   // irreversible rename is durably published, a slow/cancelled list reply
   // must not hold the conversation unavailable or suppress session.changed.
-  Archived(list_archived_sessions(manager))
+  Archived(archived_sessions(manager))
 }
 
 ///|
@@ -478,7 +454,7 @@ pub async fn unarchive_session(
     raise EngineError("invalid session id")
   }
   unarchive_session_commit(manager, session, on_committed)
-  list_archived_sessions(manager)
+  archived_sessions(manager)
 }
 
 ///|
@@ -494,8 +470,8 @@ async fn unarchive_session_commit(
 
 ///|
 /// Permanently delete one archived conversation family and return the
-/// archived groups that remain. Project files, scratch workspace files, and
-/// Git branches are outside the conversation record and deliberately remain.
+/// archived groups that remain. Project files and Git branches are outside
+/// the conversation record and deliberately remain.
 pub async fn delete_archived_session(
   manager : EngineManager,
   session : String,
@@ -516,7 +492,7 @@ pub async fn delete_archived_session(
   )
   // Like archive/unarchive, listing happens after the finite commit section:
   // cancellation of a slow reply cannot undo or conceal the published delete.
-  list_archived_sessions(manager)
+  archived_sessions(manager)
 }
 
 ///|
@@ -643,119 +619,17 @@ async fn move_session_record(
 }
 
 ///|
-/// One-time migration from the zip-era archive record: every session id in
-/// the runtime dir's `archived_sessions.txt` gets its (still-live) durable
-/// record moved into the global store's `archived` twin, and the list file
-/// goes away once nothing is left in it. Ids whose record is already gone
-/// simply drop; a failed move keeps its id in the file for the next attempt.
-/// The workspace zips the old design produced stay where they are.
-async fn migrate_legacy_archive(
-  manager : EngineManager,
-  on_migrated : (String, String) -> Unit,
-) -> Unit {
-  guard manager.runtime_dir is Some(dir) else { return }
-  let list = dir.join(LegacyArchivedListFile)
-  let text = (@fsx.try_read_text(list) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => None
-  }).unwrap_or("")
-  guard !text.is_empty() else { return }
-  guard @workspaces.global_store_root() is Some(root) else { return }
-  let remaining : Array[String] = []
-  for line in text.split("\n") {
-    let session = line.trim().to_owned()
-    if session.is_empty() || !@session_store.safe_session_id(session) {
-      continue
-    }
-    if !migrate_legacy_session(manager, root, session, on_migrated) {
-      remaining.push(session)
-    }
-  }
-  if remaining.length() == 0 {
-    @fsx.remove_if_exists(list) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => ()
-    }
-  } else {
-    @fsx.write_text(list, "\{remaining.join("\n")}\n") catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => ()
-    }
-  }
-}
-
-///|
-/// Legacy migration is a record move too: use the same cross-generation
-/// guard and current slot claim rather than letting list_archived rename a
-/// record underneath a live writer or reader. A busy/stopped session remains
-/// in the legacy file for a later retry.
-async fn migrate_legacy_session(
-  manager : EngineManager,
-  root : @pathx.Absolute,
-  session : String,
-  on_migrated : (String, String) -> Unit,
-) -> Bool {
-  let record = root.join("sessions").join(session)
-  let is_live = @fsx.is_dir(record.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => false
-  }
-  if !is_live {
-    return true
-  }
-  let record_guard = manager.claim_record_move(session) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return false
-  }
-  defer manager.release_record_move(session, record_guard)
-  record_guard.wait_until_idle()
-  let sessions = manager.serving() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return false
-  }
-  let slot = slot_for(sessions, session)
-  let claim = slot.claim(sessions, session, ArchivePending) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return false
-  }
-  defer claim.release(manager)
-  if slot.engine is Some(_) {
-    return false
-  }
-  if manager.followers.get(session) is Some(follower) {
-    stop_follower_instance(manager, follower, writer_exited=true) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => return false
-    }
-  }
-  try {
-    @async.protect_from_cancel(() => {
-      claim.require_current(manager)
-      move_session_record(
-        record,
-        @session_store.archived_root(root).join("sessions"),
-        session,
-      )
-      on_migrated(session, "")
-    })
-    true
-  } catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => false
-  }
-}
-
-///|
 /// Serializes every test that reads or writes the two process-global
 /// variables deciding where a conversation lives: `OPENSEEK_SESSION_ROOT`
-/// (its durable record) and `HOME` (its working directory, for a conversation
-/// bound to no project). Both are process-wide, so a test that moves either
-/// is not isolated from a test that merely reads it — and a test that starts
-/// a run reads `HOME`, whether or not it mentions it.
+/// (the registry, and the global store records migrate out of) and `HOME`
+/// (where the default workspace lands, and so where a run works). Both are
+/// process-wide, so a test that moves either is not isolated from a test that
+/// merely reads it — and a test that starts a run reads `HOME`, whether or not
+/// it mentions it.
 ///
-/// Holding this lock is also how a test gets a disposable `HOME`, so its
-/// scratch work directory lands in its own temporary tree instead of the
-/// developer's real one.
+/// Holding this lock is also how a test gets a disposable `HOME`, so the
+/// default workspace it attaches lands in its own temporary tree instead of
+/// the developer's real one.
 ///
 /// Other ambient variables the tests touch — `OPENSEEK_DIR`,
 /// `OPENSEEK_API_URL` — need no lock: the host always writes them explicitly
@@ -764,7 +638,6 @@ async fn migrate_legacy_session(
 let ambient_env_test_lock : @async.Mutex = Mutex()
 
 ///|
-#cfg(not(platform="windows"))
 fn restore_session_root_env(previous : String?) -> Unit {
   if previous is Some(value) {
     @sys.set_env_var("OPENSEEK_SESSION_ROOT", value)
@@ -791,8 +664,10 @@ async test "archive refuses a durable record while the pump is stopped" {
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-stopped-")
-  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir)
-  @fsx.ensure_dir(Path(dir + "/sessions/s-stopped"))
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir + "/global")
+  ignore(attach_run_workspace(Path(dir)))
+  let store = dir + "/ws/.openseek"
+  @fsx.ensure_dir(Path(store + "/sessions/s-stopped"))
   let manager = new_engine_manager("unused")
   let committed = Ref(false)
   let detail = try {
@@ -809,8 +684,8 @@ async test "archive refuses a durable record while the pump is stopped" {
   }
   assert_true(detail.contains("not connected"))
   assert_false(committed.val)
-  assert_true(@fsx.is_dir(Path(dir + "/sessions/s-stopped")))
-  assert_false(@fsx.is_dir(Path(dir + "/archived/sessions/s-stopped")))
+  assert_true(@fsx.is_dir(Path(store + "/sessions/s-stopped")))
+  assert_false(@fsx.is_dir(Path(store + "/archived/sessions/s-stopped")))
   @fs.rmdir(dir, recursive=true)
 }
 
@@ -822,10 +697,16 @@ async test "archive publishes its move before a cancelled listing reply" {
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-commit-")
+  let root : @pathx.Path = Path(dir)
   let marker = dir + "/listing-started"
   let engine = dir + "/engine.sh"
-  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir)
-  @fsx.ensure_dir(Path(dir + "/sessions/s-commit"))
+  // The listing this test cancels is per registered workspace, so the
+  // conversation needs a real attached one; the env root now only locates the
+  // registry that `attach_run_workspace` writes.
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
+  ignore(attach_run_workspace(root))
+  let store = root.join("ws/.openseek")
+  @fsx.ensure_dir(store.join("sessions/s-commit"))
   @fs.write_file(
     engine,
     "#!/bin/sh\nprintf '' > '\{marker}'\nsleep 30\nprintf '%s' '{\"sessions\":[]}'\n",
@@ -855,8 +736,8 @@ async test "archive publishes its move before a cancelled listing reply" {
     assert_true(cancelled)
   })
   assert_true(committed.val)
-  assert_false(@fsx.is_dir(Path(dir + "/sessions/s-commit")))
-  assert_true(@fsx.is_dir(Path(dir + "/archived/sessions/s-commit")))
+  assert_false(@fsx.is_dir(store.join("sessions/s-commit")))
+  assert_true(@fsx.is_dir(store.join("archived/sessions/s-commit")))
   assert_true(manager.record_guards.get("s-commit") is None)
   @fs.rmdir(dir, recursive=true)
 }
@@ -869,9 +750,11 @@ async test "archive and restore move a subagent session family together" {
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-family-")
-  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir)
-  let live = dir + "/sessions/"
-  let archived = dir + "/archived/sessions/"
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir + "/global")
+  ignore(attach_run_workspace(Path(dir)))
+  let store = dir + "/ws/.openseek"
+  let live = store + "/sessions/"
+  let archived = store + "/archived/sessions/"
   let family = ["chat", "chat-sr-1", "chat-sr-1-sr-3", "chat-sr-2"]
   for session_id in family {
     @fsx.ensure_dir(Path(live + session_id))
@@ -921,8 +804,16 @@ async test "permanent deletion removes one archived session family only" {
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-family-")
-  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir)
-  let archived = dir + "/archived/sessions/"
+  let workspace = dir + "/workspace"
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir + "/global")
+  @fsx.ensure_dir(Path(dir + "/global"))
+  @fs.write_file(
+    dir + "/global/workspaces.json",
+    ({ "workspaces": [workspace] } : Json).stringify(),
+    create_mode=CreateOrTruncate,
+  )
+  let store = workspace + "/.openseek"
+  let archived = store + "/archived/sessions/"
   let family = ["chat", "chat-sr-1", "chat-sr-1-sr-2", "chat-sr-4"]
   for session_id in family {
     @fsx.ensure_dir(Path(archived + session_id))
@@ -930,10 +821,15 @@ async test "permanent deletion removes one archived session family only" {
   @fsx.ensure_dir(Path(archived + "other"))
   let manager = new_engine_manager("unused")
   manager.pump = Serving(sessions=Map([]))
+  let registered = @workspaces.registered()
+  assert_eq(registered.length(), 1)
   let deleted : Array[String] = []
-  delete_archived_session_commit(manager, "chat", "", (session_id, _) => {
-    deleted.push(session_id)
-  })
+  delete_archived_session_commit(
+    manager,
+    "chat",
+    registered[0].resource_path(),
+    (session_id, _) => deleted.push(session_id),
+  )
   assert_eq(deleted.length(), family.length())
   assert_eq(deleted[deleted.length() - 1], "chat")
   for session_id in family {
@@ -942,7 +838,7 @@ async test "permanent deletion removes one archived session family only" {
   }
   assert_true(@fsx.is_dir(Path(archived + "other")))
   for session_id in family {
-    assert_false(@fsx.exists(Path(dir + "/archived/deleting/" + session_id)))
+    assert_false(@fsx.exists(Path(store + "/archived/deleting/" + session_id)))
   }
   assert_true(manager.record_guards.is_empty())
   @fs.rmdir(dir, recursive=true)
@@ -1035,17 +931,19 @@ async test "startup sweep erases condemned records" {
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-sweep-")
-  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir)
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir + "/global")
+  ignore(attach_run_workspace(Path(dir)))
+  let store = dir + "/ws/.openseek"
   // A leading dot is a valid session id; the sweep must include hidden
   // entries instead of silently stranding this leftover.
-  @fsx.ensure_dir(Path(dir + "/archived/deleting/.chat/events"))
-  @fsx.ensure_dir(Path(dir + "/archived/deleting/chat-sr-1"))
-  @fsx.ensure_dir(Path(dir + "/archived/sessions/other"))
+  @fsx.ensure_dir(Path(store + "/archived/deleting/.chat/events"))
+  @fsx.ensure_dir(Path(store + "/archived/deleting/chat-sr-1"))
+  @fsx.ensure_dir(Path(store + "/archived/sessions/other"))
   let manager = new_engine_manager("unused")
   manager.sweep_archived_deletions()
-  assert_false(@fsx.exists(Path(dir + "/archived/deleting/.chat")))
-  assert_false(@fsx.exists(Path(dir + "/archived/deleting/chat-sr-1")))
-  assert_true(@fsx.is_dir(Path(dir + "/archived/sessions/other")))
+  assert_false(@fsx.exists(Path(store + "/archived/deleting/.chat")))
+  assert_false(@fsx.exists(Path(store + "/archived/deleting/chat-sr-1")))
+  assert_true(@fsx.is_dir(Path(store + "/archived/sessions/other")))
   @fs.rmdir(dir, recursive=true)
 }
 
@@ -1100,9 +998,11 @@ async test "a claimed child prevents a partial family archive" {
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-family-busy-")
-  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir)
-  @fsx.ensure_dir(Path(dir + "/sessions/chat"))
-  @fsx.ensure_dir(Path(dir + "/sessions/chat-sr-1"))
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir + "/global")
+  ignore(attach_run_workspace(Path(dir)))
+  let store = dir + "/ws/.openseek"
+  @fsx.ensure_dir(Path(store + "/sessions/chat"))
+  @fsx.ensure_dir(Path(store + "/sessions/chat-sr-1"))
   let manager = new_engine_manager("unused")
   let sessions : Map[String, SessionSlot] = Map([])
   manager.pump = Serving(sessions~)
@@ -1121,9 +1021,9 @@ async test "a claimed child prevents a partial family archive" {
     error => "\{error}"
   }
   assert_true(detail.contains("already starting"))
-  assert_true(@fsx.is_dir(Path(dir + "/sessions/chat")))
-  assert_true(@fsx.is_dir(Path(dir + "/sessions/chat-sr-1")))
-  assert_false(@fsx.exists(Path(dir + "/archived/sessions")))
+  assert_true(@fsx.is_dir(Path(store + "/sessions/chat")))
+  assert_true(@fsx.is_dir(Path(store + "/sessions/chat-sr-1")))
+  assert_false(@fsx.exists(Path(store + "/archived/sessions")))
   assert_true(manager.record_guards.is_empty())
   @fs.rmdir(dir, recursive=true)
 }

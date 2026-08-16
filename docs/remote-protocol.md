@@ -169,12 +169,13 @@ moment it exists; whatever a client missed while disconnected it recovers by
 re-reading state:
 
 1. Connect the WebSocket. The host sends `agent.connected` as the connection's
-   first notification — `{ready, scratch_root, session_root}`, where
-   `scratch_root` is the device-native base Scratch conversations run in and
-   `session_root` is the **global durable session store root**: the value a
-   client compares a broadcast store root against to recognize the Scratch
-   store (any other store root is a project store, `<project>/.openseek`).
-   The host then starts forwarding the remote delivery stream.
+   first notification — `{stage}`, where `stage` is `"accepted"` (the
+   transport took this client; the engine pump may still be between
+   generations) or `"serving"` (the pump entered a serving generation and
+   accepts runs). Both mean the same thing to a client: re-read your state.
+   Every conversation belongs to a registered workspace, so a broadcast store
+   root names its own project (`<project>/.openseek`) and needs no anchor
+   value here. The host then starts forwarding the remote delivery stream.
 2. Resync: `session.list` + `agent.runs` (and reload whatever conversation
    is open via `session.load`). The client gives `agent.runs` the exact owners
    from its request-time frontier: `{session, run_id}` after Started, or
@@ -286,14 +287,14 @@ Notifications:
 | `session.list_archived` | `{}` | the archived index |
 | `session.archive` | `{session, force?}` | success returns the archived session index (the legacy `{groups}` shape) and moves the conversation plus every sibling `<session>-sr-N` descendant transcript as one family. A dirty checkout returns `{kind:"needs_force", worktree, dirty_paths, dirty_path_count}` without changing durable state; `dirty_paths` previews up to 8 paths and `dirty_path_count` counts all status rows. Clients show a discard-confirmation dialog and retry with `force` only after explicit confirmation. On success the conversation's checkout goes with it, but its name/branch/session placement remains registered (the branch survives; a `worktree.changed` broadcast reports `present: false`). "Dirty" means tracked modifications or non-ignored untracked files; ignored files count as disposable and are removed with the checkout, matching `git worktree remove`'s own semantics |
 | `session.unarchive` | `{session}` | outcome — restores the conversation and every archived subagent descendant record together. A retained worktree placement whose checkout was removed returns as missing, so clients offer Repair before any agent, terminal, or file operation can continue |
-| `session.delete_archived` | `{session, workspace}` | permanently deletes the archived conversation record from the exact host-listed project store (`workspace: ""` for Scratch) and every archived subagent descendant record in that store, then returns the archived index. Its retained worktree placement is removed and broadcast, but project/scratch files and the Git branch remain. The operation refuses unknown stores, live records, and running/compacting family members |
+| `session.delete_archived` | `{session, workspace}` | permanently deletes the archived conversation record from the exact host-listed project store and every archived subagent descendant record in that store, then returns the archived index. Its retained worktree placement is removed and broadcast, but project files and the Git branch remain. The operation refuses unknown stores, live records, and running/compacting family members |
 
 Notifications:
 
 | method | params |
 |---|---|
 | `session.event` | `{session, sequence, session_root, event: {sequence, ts, item}}` — one durably **committed** store event, `event` verbatim as `session.load` carries it in `events`. `session_root` is the durable store root the commit was read from: session ids are not globally unique across stores, so the durable identity is `(session_root, session)` and a client must never merge same-id records from different stores; see *The durable transcript* below |
-| `session.changed` | `{change: "archived" \| "unarchived" \| "deleted", session, workspace}` — broadcast to every client (the requester included) when a record moves between stores or is permanently deleted; `workspace` is the owning project path or `""` for Scratch, so same-ID records in other stores remain untouched. A family operation emits one fact for the parent and each descendant subagent record. Recipients apply each store-qualified fact immediately, keep it authoritative over already-in-flight unversioned list replies, and re-read both lists. A new connection starts a fresh list round. |
+| `session.changed` | `{change: "archived" \| "unarchived" \| "deleted", session, workspace}` — broadcast to every client (the requester included) when a record moves between stores or is permanently deleted; `workspace` is the owning project path, so same-ID records in other project stores remain untouched. A family operation emits one fact for the parent and each descendant subagent record. Recipients apply each store-qualified fact immediately, keep it authoritative over already-in-flight unversioned list replies, and re-read both lists. A new connection starts a fresh list round. |
 
 #### The durable transcript: snapshots + commits
 
@@ -310,8 +311,8 @@ the lightweight forms described above instead of duplicate full semantic
 payloads.
 
 Client algorithm, per store-qualified session — the `(session_root, session)`
-pair, since one id may hold independent records in Scratch and a project
-store at once: keep a watermark `W`, starting at the
+pair, since one id may hold independent records in two project stores at
+once: keep a watermark `W`, starting at the
 snapshot's. For each `session.event`: `sequence ≤ W` → drop (re-broadcasts
 and load/commit races are harmless by construction); `sequence == W + 1` →
 apply and advance; `sequence > W + 1` → a gap (missed broadcasts — a slow
@@ -434,7 +435,7 @@ is rejected instead of silently relocating the session into the global store.
 That workspace hint is part of a client's resume state. A protocol client
 that persists a workspace session across a host restart must persist and send
 its `workspace` too: once the workspace is no longer registered, an omitted
-hint leaves a missing id indistinguishable from a brand-new scratch session.
+hint leaves a missing id indistinguishable from a brand-new session.
 The current wire has no persistent detached-session tombstone; the bundled
 client retains the hint and therefore gets the intended rejection.
 
@@ -514,7 +515,7 @@ connection has an independent terminal-id namespace.
 
 | method | params | result |
 |---|---|---|
-| `terminal.open` | `{session, workspace?, cols, rows}` — resolves the conversation's workspace on the host and creates it if this scratch session has not run yet | `{id}` |
+| `terminal.open` | `{session, workspace?, cols, rows}` — resolves the conversation's workspace on the host — a session no attached workspace owns is refused rather than given a directory | `{id}` |
 | `terminal.input` | `{id, data}` \| `{id, data_base64}` | `{}` |
 | `terminal.resize` | `{id, cols, rows}` | `{}` |
 | `terminal.ack` | `{id, sequence}` | `{}` |

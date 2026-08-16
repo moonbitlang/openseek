@@ -183,8 +183,8 @@ fn session_component_input(
   }
   {
     // The store placement rides in `root`: session ids may repeat across
-    // Scratch and project stores, and without it two same-id rows would
-    // collide on one key in the sidebar's keyed container.
+    // project stores, and without it two same-id rows would collide on one
+    // key in the sidebar's keyed container.
     id: @conversation.Id(
       source="openseek.live",
       channel=channel.uri_authority(),
@@ -237,25 +237,24 @@ fn Model::push_group_component_inputs(
   self : Model,
   rows : Array[@conversation.Input],
   dev : DeviceState,
-  workspace : @common.Uri?,
+  workspace : @common.Uri,
   listed~ : (String) -> Bool,
   archived~ : (String) -> Bool,
-  nested? : Bool = false,
 ) -> Unit {
   let composing = self.composing_new_chat()
   // Every row in this group shares the group's store placement; it becomes
   // the `root` half of each conversation's component id.
-  let root = workspace.map(workspace => workspace.path)
+  let root = workspace.path
   for conv in self.conversations.rev_iter() {
     if conv.device != dev.channel ||
-      conv.workspace.project() != workspace ||
+      conv.project() != workspace ||
       listed(conv.session_id) ||
       archived(conv.session_id) {
       continue
     }
     // A fresh worktree conversation knows its binding locally; once the
     // first turn is durable the registry mapping takes over.
-    let worktree = if conv.workspace.worktree_name() is Some(name) {
+    let worktree = if conv.worktree_name() is Some(name) {
       Some(name)
     } else {
       worktree_name_for(dev, workspace, conv.session_id)
@@ -276,9 +275,9 @@ fn Model::push_group_component_inputs(
         } else {
           "New chat"
         },
-        nested~,
+        nested=true,
         worktree?,
-        root?,
+        root~,
       ),
     )
   }
@@ -324,9 +323,9 @@ fn Model::push_group_component_inputs(
           dev.channel,
           child.id,
           child_label,
-          nested~,
+          nested=true,
           subrun=true,
-          root?,
+          root~,
         ),
       )
     }
@@ -341,9 +340,9 @@ fn Model::push_group_component_inputs(
         // parent in another store), so it remains independently archivable;
         // once beside its archived parent, family restore picks it up.
         archivable=true,
-        nested~,
+        nested=true,
         worktree?=worktree_name_for(dev, workspace, tree.item.id),
-        root?,
+        root~,
         children~,
       ),
     )
@@ -352,10 +351,9 @@ fn Model::push_group_component_inputs(
 
 ///|
 /// One device's sections: each attached project as a folder row with its
-/// conversations nested beneath it, the default store's loose chats, and the
-/// archived group at the tail. Rows stay clickable while runs are active —
-/// switching between conversations mid-run is the point of keeping them
-/// concurrent.
+/// conversations nested beneath it, and the archived group at the tail. Rows
+/// stay clickable while runs are active — switching between conversations
+/// mid-run is the point of keeping them concurrent.
 fn Model::sidebar_component_sections(
   self : Model,
   dev : DeviceState,
@@ -384,10 +382,9 @@ fn Model::sidebar_component_sections(
     self.push_group_component_inputs(
       conversations,
       dev,
-      Some(path),
+      path,
       listed~,
       archived~,
-      nested=true,
     )
     projects.push(
       @section.Project({
@@ -425,16 +422,6 @@ fn Model::sidebar_component_sections(
       }),
     )
   }
-  let chats : Array[@conversation.Input] = []
-  self.push_group_component_inputs(chats, dev, None, listed~, archived~)
-  sections.push({
-    id: @section.Id(source="openseek.chats", channel~),
-    label: "Chats",
-    initially_collapsed: false,
-    activation: activation(dev.active_project is None),
-    action: Some({ title: "New Scratch chat", disabled: false }),
-    entries: chats.map(chat => @section.Conversation(chat)),
-  })
   // Archived conversations fold behind a collapsed section at the end of the
   // list. Their records live in the store's `archived` twin, so they come
   // from the host's archived reply, not the live list; each row carries a
@@ -455,7 +442,7 @@ fn Model::sidebar_component_sections(
           source="openseek.archived",
           channel~,
           conversation=item.id,
-          root?=item.workspace.map(workspace => workspace.path),
+          root=item.workspace.path,
         ),
         title: item.id,
         label: session_item_label(item),
@@ -1604,10 +1591,41 @@ test "an archived transcript renders no live composer controls" {
 }
 
 ///|
-fn run_indicator(model : Model) -> @html.Html {
+/// The two halves of the top-level fork, from the model each one stands for.
+#warnings("-alert_unstable")
+test "onboarding stands in for the chat until a project holds one" {
+  let dispatch = test_dispatch()
+  fn markup(model : Model) {
+    @rabbita.render_to_string(() => {
+      @rabbita.Val::constant(onboarding_view(dispatch, model))
+    })
+  }
+
+  // Connected with no project: attaching one is the only way forward, so it
+  // is the only thing offered.
+  let empty = { ..test_model(), conversations: [], active_session: "" }
+  let bare = empty.with_dev(dev => { ..dev, projects: [], worktrees: [] })
+  assert_true(bare.active_conversation() is None)
+  assert_true(markup(bare).contains("Add a project"))
+  // Connected with projects but between conversations: the rotation that
+  // opens one is a message away, and offering to add a project here would
+  // answer a question the user did not ask.
+  assert_true(empty.active_conversation() is None)
+  assert_false(markup(empty).contains("Add a project"))
+  // Before the bridge answers, this page knows nothing about the host's
+  // projects and says only that.
+  let connecting = bare.with_dev(dev => { ..dev, bridge: Connecting })
+  assert_true(markup(connecting).contains("Connecting"))
+  assert_false(markup(connecting).contains("Add a project"))
+  // With a conversation on screen the fork takes its other branch.
+  assert_true(test_model().active_conversation() is Some(_))
+}
+
+///|
+fn run_indicator(model : Model, conv : Conversation) -> @html.Html {
   let status = model.display_status()
   let label = status.label()
-  if model.active().is_running() {
+  if conv.is_running() {
     @html.div(class="run-status accent", [
       @html.span(class="run-dot accent pulse", ""),
       @html.span(class="run-text", label),
@@ -1685,10 +1703,13 @@ fn launcher_menu(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 /// The topbar app launcher: a button that opens a dropdown of installed apps,
 /// each opening the active conversation's workspace. A click away closes it
 /// (see `dismiss_subscription`).
-fn launcher_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+fn launcher_view(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  conv : Conversation,
+) -> @html.Html {
   // A conversation's workspace exists only once it has run; a fresh chat with
   // no turn yet has nothing to open, so the launcher is disabled until then.
-  let conv = model.active()
   let ready = !conv.visible_items().is_empty() || conv.is_running()
   let children : Array[@html.Html] = [
     @html.button(
@@ -1729,8 +1750,8 @@ fn topbar_view(
   toggle_terminal : @cmd.Cmd,
   toggle_right_panel : @cmd.Cmd,
   model : Model,
+  conv : Conversation,
 ) -> @html.Html {
-  let conv = model.active()
   let items : Array[@html.Html] = []
   // The sidebar toggle rides the window's left edge. While the sidebar is open
   // it lives in the sidebar's own header; only when the sidebar is closed does
@@ -1753,17 +1774,16 @@ fn topbar_view(
       conversation_title(conv),
     ),
   )
-  // The conversation's attached project; a scratch conversation has no chip.
-  // The git branch is not shown here — it lives in the composer's status row.
-  if conv.workspace.project() is Some(workspace) {
-    items.push(
-      @html.span(class="topbar-workspace", title=workspace.path, [
-        icon(icon_folder),
-        @html.text(@resource.label(workspace)),
-      ]),
-    )
-  }
-  items.push(run_indicator(model))
+  // The project this conversation works in. The git branch is not shown here
+  // — it lives in the composer's status row.
+  let workspace = conv.project()
+  items.push(
+    @html.span(class="topbar-workspace", title=workspace.path, [
+      icon(icon_folder),
+      @html.text(@resource.label(workspace)),
+    ]),
+  )
+  items.push(run_indicator(model, conv))
   if conv.usage_tokens > 0 {
     items.push(@html.span(class="pill", token_label(conv.usage_tokens)))
   }
@@ -1774,7 +1794,7 @@ fn topbar_view(
   // something when the page IS that machine's desktop window; from a remote
   // browser the launched app would appear on a screen the user is not at.
   if model.is_desktop {
-    items.push(launcher_view(dispatch, model))
+    items.push(launcher_view(dispatch, model, conv))
   }
   // A browser terminal is rendered locally but its PTY lives on the focused
   // remote device, reached through that device's WebSocket channel.
@@ -1809,6 +1829,41 @@ fn topbar_view(
     )
   }
   @html.div(class="topbar", items)
+}
+
+///|
+/// The conversation column while no conversation is on screen. A chat happens
+/// inside a project, so this is what the app shows before it knows of one:
+/// while the host's registry is still in flight, and when no project is
+/// attached at all. Attaching one is the only way out, so it is the only
+/// action offered — the sidebar's own "Add a project" opens the same picker.
+fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  let card : Array[@html.Html] = [@html.h2("Open a project")]
+  match (model.bridge_state(), model.focused_device()) {
+    (Connected, Some(dev)) if dev.projects.is_empty() => {
+      card.push(
+        @html.p(
+          "OpenSeek works inside a project directory. Add one and its first chat opens here.",
+        ),
+      )
+      card.push(
+        @html.button(
+          class="primary",
+          type_="button",
+          on_click=dispatch(PickProject(dev.channel)),
+          "Add a project",
+        ),
+      )
+    }
+    // A connected device with projects is between conversations: the session
+    // rotation that opens one is a message away.
+    (Connected, Some(_)) => card.push(@html.p("Opening a chat…"))
+    // Until the bridge answers, this page knows nothing about the host's
+    // projects. Offering to add one here would be a guess that the very next
+    // message contradicts.
+    _ => card.push(@html.p("Connecting to this device…"))
+  }
+  @html.section(class="onboarding", [@html.div(class="onboarding-card", card)])
 }
 
 ///|
@@ -2003,16 +2058,28 @@ fn view(
   let terminal_panel_visible = model.terminal.is_open() &&
     (!(model.screen is Codex) || codex_active)
   let content = match model.screen {
+    // The one fork that decides what the conversation column is. A chat needs
+    // a conversation, and a conversation needs a project to work in, so with
+    // none on screen — the registry has not arrived, or no project is
+    // attached — the column is onboarding instead. Everything below this
+    // point in the Chat branch has both.
     Chat =>
-      [
-        topbar_view(dispatch, toggle_terminal, toggle_right_panel, model),
-        transcript_html,
-        if model.active().is_archived_read_only() {
-          model.active().archived_read_only_view(dispatch)
-        } else {
-          composer_html
-        },
-      ]
+      match model.active_conversation() {
+        None =>
+          page_with_toggle(dispatch, model, onboarding_view(dispatch, model))
+        Some(conv) =>
+          [
+            topbar_view(
+              dispatch, toggle_terminal, toggle_right_panel, model, conv,
+            ),
+            transcript_html,
+            if conv.is_archived_read_only() {
+              conv.archived_read_only_view(dispatch)
+            } else {
+              composer_html
+            },
+          ]
+      }
     Codex =>
       model.codex.page(
         dispatch.map(msg => Codex(channel=model.focused, msg)),
@@ -2343,22 +2410,22 @@ test "archived families collapse while a live orphan child stays archivable" {
   )
   let orphan_model = test_model().with_dev(dev => {
     ..dev,
-    sessions: [archived_item("chat-sr-1")],
+    sessions: [placed_archived_item("chat-sr-1")],
   })
   let orphan_sections = orphan_model.sidebar_component_sections(
     orphan_model.dev(),
   )
-  let mut orphan_entries : Array[@section.Entry] = []
-  for section in orphan_sections {
-    if section.id().source() == "openseek.chats" {
-      orphan_entries = section.entries
-    }
-  }
+  // Live rows hang under their project's folder row.
   let mut orphan : @conversation.Input? = None
-  for entry in orphan_entries {
-    if entry is @section.Conversation(row) &&
-      row.id().conversation() == "chat-sr-1" {
-      orphan = Some(row)
+  for section in orphan_sections {
+    guard section.id().source() == "openseek.projects" else { continue }
+    for entry in section.entries {
+      guard entry is @section.Project(project) else { continue }
+      for row in project.conversations {
+        if row.id().conversation() == "chat-sr-1" {
+          orphan = Some(row)
+        }
+      }
     }
   }
   guard orphan is Some(orphan) else {
@@ -2377,7 +2444,7 @@ test "project component receives the complete conversation list" {
     sessions.push({
       id: "chat-\{number}",
       title: Some("Project chat \{number}"),
-      workspace: Some(project),
+      workspace: project,
       workspace_name: "alpha",
     })
   }
@@ -2405,25 +2472,26 @@ test "project component receives the complete conversation list" {
 
 ///|
 /// Durable identities are store-qualified, so one session id may hold a
-/// record in Scratch and in a project store at once. Both rows must survive
-/// the sidebar's keyed container — colliding keys would silently drop one.
-test "same-id records in Scratch and a project store keep distinct row keys" {
-  let project = @interop.ChannelId::Local.test_resource("/work/alpha")
+/// record in two project stores at once. Both rows must survive the sidebar's
+/// keyed container — colliding keys would silently drop one.
+test "same-id records in two project stores keep distinct row keys" {
+  let alpha = @interop.ChannelId::Local.test_resource("/alpha")
+  let beta = @interop.ChannelId::Local.test_resource("/beta")
   let model = test_model().with_dev(dev => {
     ..dev,
-    projects: [project],
+    projects: [alpha, beta],
     sessions: [
       {
         id: "desktop-shared",
-        title: Some("project copy"),
-        workspace: Some(project),
+        title: Some("alpha copy"),
+        workspace: alpha,
         workspace_name: "alpha",
       },
       {
         id: "desktop-shared",
-        title: Some("scratch copy"),
-        workspace: None,
-        workspace_name: "",
+        title: Some("beta copy"),
+        workspace: beta,
+        workspace_name: "beta",
       },
     ],
   })

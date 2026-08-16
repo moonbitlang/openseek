@@ -35,7 +35,7 @@ pub suberror StoreError {
 // Types and methods
 pub struct ArchivedStore {
   root : @pathx.Absolute
-  workspace : @pathx.Absolute?
+  workspace : @pathx.Absolute
   workspace_token : String
 }
 pub async fn ArchivedStore::for_workspace(String) -> Self

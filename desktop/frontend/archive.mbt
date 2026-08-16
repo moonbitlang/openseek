@@ -202,7 +202,7 @@ fn archived_delete_modal(
         @html.div(class="modal-title", "Permanently delete this chat?"),
         @html.div(
           class="modal-body",
-          "“\{confirm.title}” and all of its archived subagent history will be permanently deleted. This cannot be undone. Project files, scratch workspace files, and Git branches will remain.",
+          "“\{confirm.title}” and all of its archived subagent history will be permanently deleted. This cannot be undone. Project files and Git branches will remain.",
         ),
         @html.div(class="modal-actions", [
           @html.button(on_click=dispatch(CancelDeleteArchivedSession), "Cancel"),

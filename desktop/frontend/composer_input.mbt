@@ -2,11 +2,17 @@
 /// Project the root application state into the composer's fixed package
 /// boundary. This method is the only place where composer availability and
 /// surrounding root-owned presentation are derived from `Model`.
+///
+/// The component stays mounted while onboarding is on screen — the root view
+/// simply does not place it — so a model with no conversation projects a
+/// dormant composer rather than inventing one to draft against.
 fn Model::composer_input(
   self : Model,
   dispatch : @cmd.Emit[Msg],
 ) -> @composer.Input {
-  let conv = self.active()
+  guard self.active_conversation() is Some(conv) else {
+    return self.dormant_composer_input()
+  }
   let checkout = self.conversation_placement(conv)
   let owner : @interop.ConversationKey = {
     channel: self.focused,
@@ -19,7 +25,7 @@ fn Model::composer_input(
   let transcript_ready = conv.sync is Synced &&
     !conv.has_unresolved_run_tail_notice()
   let checkout_ready = checkout is Some(value) && value.is_ready()
-  let root_ready = self.bridge_state() is Connected(..) &&
+  let root_ready = self.bridge_state() is Connected &&
     self.api_ready() &&
     transcript_ready &&
     checkout_ready
@@ -153,8 +159,8 @@ fn Model::composer_input(
 }
 
 ///|
-/// The file-index lifecycle is a root-owned fact shared by both composer
-/// instances. Each component keeps its own draft and completion state while
+/// The file-index lifecycle is a root-owned fact shared by every composer
+/// instance. Each component keeps its own draft and completion state while
 /// observing this one authoritative index epoch.
 fn Model::composer_file_index(self : Model) -> @composer.FileIndex {
   match self.file_panel.index {
@@ -209,4 +215,37 @@ fn Model::codex_composer_input(
       },
     },
   )
+}
+
+///|
+/// The composer with nothing to compose in: no draft, no goal, no checkout,
+/// and no way to send. Every action it could still emit carries the owner
+/// identity below, which resolves to no conversation and is dropped.
+fn Model::dormant_composer_input(self : Model) -> @composer.Input {
+  {
+    identity: {
+      owner: { channel: self.focused, session: self.active_session },
+      archive_generation: self.composer_entry_retirements.length(),
+    },
+    draft: { task: "", mentions: [] },
+    goal: { draft: None, standing: None, pending: None },
+    slash_commands: [],
+    root: None,
+    installed_skills: self.installed_skills,
+    context_generation: self.composer_context_generation,
+    submission_sequence: self.submission_sequence,
+    replacements: self.composer_entry_replacements,
+    retirements: self.composer_entry_retirements,
+    file_candidates: [],
+    open_files: [],
+    active_file: None,
+    file_index: self.composer_file_index(),
+    presentation: {
+      context: [],
+      status: [],
+      placeholder: "",
+      disabled: true,
+      primary_action: @composer.Send(available=false),
+    },
+  }
 }

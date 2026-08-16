@@ -10,11 +10,15 @@ import {
 // Values
 pub async fn add(String, (Array[@pathx.Absolute]) -> Unit raise) -> Array[@pathx.Absolute]
 
+pub async fn default_workspace() -> @pathx.Absolute?
+
 pub async fn exclude_from_git(@pathx.Absolute, String) -> Unit
 
 pub fn expanded_path(String) -> @pathx.Absolute raise WorkspaceError
 
 pub fn global_store_root(payload_root? : @pathx.Path) -> @pathx.Absolute?
+
+pub async fn initialize() -> @pathx.Absolute?
 
 pub async fn registered() -> Array[@pathx.Absolute]
 

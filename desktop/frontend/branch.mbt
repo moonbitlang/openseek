@@ -326,7 +326,11 @@ test "a settled pull request supplies the baseline the next probe measures from"
   // stacked pull request, whose base is another feature branch, no local rule
   // could name it. The pull request is the only exact answer, so it is what
   // later probes carry back to the host.
-  let conv = empty_conversation(@interop.ChannelId::Local, "s")
+  let conv = empty_conversation(
+    @interop.ChannelId::Local,
+    "s",
+    @interop.ChannelId::Local.test_project(),
+  )
   fn hint_of(conv : Conversation) {
     conv.settled_probe().bind(probe => probe.pull_request).map(pr => pr.base)
   }

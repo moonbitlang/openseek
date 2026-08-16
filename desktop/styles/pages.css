@@ -82,6 +82,41 @@ button.primary:disabled {
   cursor: default;
 }
 
+/* ---------- onboarding (no conversation on screen) ---------- */
+/* The conversation column with no conversation in it: the registry is still
+   in flight, or no project is attached to open a chat in. Like the Skills and
+   Settings pages it replaces all three of `main`'s rows, so it claims the
+   whole column rather than sitting in the topbar's. */
+.onboarding {
+  grid-row: 1 / -1;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+}
+
+.onboarding-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 420px;
+  padding: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+}
+.onboarding-card h2 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+}
+.onboarding-card p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+}
+
 /* ---------- settings page ---------- */
 /* Shares the Skills page's shell — same column width, header type, and
    section headings — so the two pages read as siblings. */

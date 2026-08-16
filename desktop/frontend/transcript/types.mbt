@@ -75,12 +75,13 @@ pub struct RuntimeUpdateView {
 /// One sidebar entry from the engine's durable session list: the session id
 /// and its display title (first user message, already truncated engine-side;
 /// blank or absent for a session with no user message yet). `workspace` is
-/// the project resource whose store holds the session (`None` for a scratch
-/// conversation) and `workspace_name` its display label, both from the
-/// host's grouping. Its authority retains the device that owns the path.
+/// the project resource whose store holds the session and `workspace_name`
+/// its display label, both from the host's grouping. Every durable record
+/// lives in a workspace store, so the resource is not optional; its
+/// authority retains the device that owns the path.
 pub(all) struct SessionListItem {
   id : String
   title : String?
-  workspace : @common.Uri?
+  workspace : @common.Uri
   workspace_name : String
 } derive(Eq)

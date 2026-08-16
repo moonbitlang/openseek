@@ -200,15 +200,13 @@ fn DeviceState::workspace_settings_generation(
 }
 
 ///|
-/// The launch-mode default copied into a new conversation in `project`.
-/// Scratch chats (`None`) and workspaces whose settings have not loaded
-/// stay on the safe Local default.
+/// The launch-mode default copied into a new conversation in `project`. A
+/// workspace whose settings have not loaded stays on the safe Local default.
 fn DeviceState::default_worktree_mode(
   self : DeviceState,
-  project : @common.Uri?,
+  project : @common.Uri,
 ) -> Bool {
-  if project is Some(project) &&
-    self.workspace_settings_row(project) is Some(row) {
+  if self.workspace_settings_row(project) is Some(row) {
     row.worktree_mode
   } else {
     false
@@ -219,7 +217,7 @@ fn DeviceState::default_worktree_mode(
 fn Model::default_worktree_mode(
   self : Model,
   channel : @interop.ChannelId,
-  project : @common.Uri?,
+  project : @common.Uri,
 ) -> Bool {
   if self.device_state(channel) is Some(dev) {
     dev.default_worktree_mode(project)
@@ -253,7 +251,7 @@ test "a settings reply lands once and an older token cannot roll it back" {
     ),
     attached,
   )
-  assert_true(loaded.default_worktree_mode(Local, Some(workspace)))
+  assert_true(loaded.default_worktree_mode(Local, workspace))
   // An older reply for the same workspace is stale; one for a sibling
   // workspace still lands (the fence is per project).
   let (_, stale) = update_dev(
@@ -268,7 +266,7 @@ test "a settings reply lands once and an older token cannot roll it back" {
     ),
     loaded,
   )
-  assert_true(stale.default_worktree_mode(Local, Some(workspace)))
+  assert_true(stale.default_worktree_mode(Local, workspace))
   let (_, both) = update_dev(
     dispatch,
     WorkspaceSettingsLoaded(
@@ -281,7 +279,7 @@ test "a settings reply lands once and an older token cannot roll it back" {
     ),
     stale,
   )
-  assert_true(both.default_worktree_mode(Local, Some(sibling)))
+  assert_true(both.default_worktree_mode(Local, sibling))
   guard both.dev().workspace_settings_row(workspace) is Some(primary) &&
     both.dev().workspace_settings_row(sibling) is Some(secondary) else {
     fail("expected independent workspace settings rows")
@@ -303,7 +301,7 @@ test "a settings reply lands once and an older token cannot roll it back" {
     ),
     both,
   )
-  assert_true(dead.default_worktree_mode(Local, Some(workspace)))
+  assert_true(dead.default_worktree_mode(Local, workspace))
 }
 
 ///|
@@ -321,7 +319,7 @@ test "a settings commit broadcast supersedes list replies" {
     ),
     attached,
   )
-  assert_true(changed.default_worktree_mode(Local, Some(workspace)))
+  assert_true(changed.default_worktree_mode(Local, workspace))
   inspect(changed.dev().workspace_settings_request_generation, content="1")
   // A list reply issued before the commit answers on an older token.
   let (_, stale) = update_dev(
@@ -336,7 +334,7 @@ test "a settings commit broadcast supersedes list replies" {
     ),
     changed,
   )
-  assert_true(stale.default_worktree_mode(Local, Some(workspace)))
+  assert_true(stale.default_worktree_mode(Local, workspace))
 }
 
 ///|
@@ -367,7 +365,7 @@ test "the settings page select applies optimistically" {
     WorkspaceDefaultModeChosen(Local, workspace, "worktree"),
     loaded,
   )
-  assert_true(chosen.default_worktree_mode(Local, Some(workspace)))
+  assert_true(chosen.default_worktree_mode(Local, workspace))
   // The optimistic write spent a fresh token, so a pre-edit reply still in
   // flight cannot flip the select back under the user.
   let (_, raced) = update_dev(
@@ -382,13 +380,13 @@ test "the settings page select applies optimistically" {
     ),
     chosen,
   )
-  assert_true(raced.default_worktree_mode(Local, Some(workspace)))
+  assert_true(raced.default_worktree_mode(Local, workspace))
   let (_, back) = update(
     dispatch,
     WorkspaceDefaultModeChosen(Local, workspace, "local"),
     chosen,
   )
-  assert_false(back.default_worktree_mode(Local, Some(workspace)))
+  assert_false(back.default_worktree_mode(Local, workspace))
 }
 
 ///|
@@ -506,7 +504,7 @@ test "a failed save pops a toast and re-reads under a fresh token" {
     ),
     failed,
   )
-  assert_false(corrected.default_worktree_mode(Local, Some(workspace)))
+  assert_false(corrected.default_worktree_mode(Local, workspace))
 }
 
 ///|
@@ -526,20 +524,13 @@ test "a reconnect clears the settings mirror until fresh reads land" {
     ),
     attached,
   )
-  assert_true(loaded.default_worktree_mode(Local, Some(workspace)))
+  assert_true(loaded.default_worktree_mode(Local, workspace))
   // Settings broadcasts are not replayed across a connection gap: another
   // client may have flipped the default while this page was away, so a
   // chat created before the re-read lands must fall back to Local rather
   // than copy the pre-gap value.
-  let (_, reconnected) = update_dev(
-    dispatch,
-    BridgeReady(
-      scratch_root=@interop.ChannelId::Local.test_resource("/tmp"),
-      session_root=@interop.ChannelId::Local.test_store_root(),
-    ),
-    loaded,
-  )
-  assert_false(reconnected.default_worktree_mode(Local, Some(workspace)))
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, loaded)
+  assert_false(reconnected.default_worktree_mode(Local, workspace))
   assert_true(reconnected.dev().workspace_settings.is_empty())
 }
 
@@ -558,7 +549,7 @@ test "a straggler reply for a detached workspace is rejected" {
     ),
     attached,
   )
-  assert_true(seen.default_worktree_mode(Local, Some(workspace)))
+  assert_true(seen.default_worktree_mode(Local, workspace))
   // Detach prunes the row — and with it the generation it was applied
   // under, so the numeric fence alone resets to -1.
   let (_, detached) = update_dev(dispatch, ProjectsChanged([]), seen)
@@ -647,17 +638,27 @@ test "detaching a workspace closes its settings page" {
   let gone = @interop.ChannelId::Local.test_resource("/gone")
   let kept = @interop.ChannelId::Local.test_resource("/kept")
   let model = {
-    ..test_model().with_dev(dev => { ..dev, projects: [gone, kept] }),
+    ..test_model().with_dev(dev => {
+      ..dev,
+      projects: [@interop.ChannelId::Local.test_project(), gone, kept],
+    }),
     screen: WorkspaceSettings(channel=Local, workspace=gone),
   }
   let (_, adopted) = update_dev(dispatch, ProjectsChanged([kept]), model)
   assert_true(adopted.screen is Chat)
   // A snapshot that retains the workspace leaves the settings page alone.
   let staying = {
-    ..test_model().with_dev(dev => { ..dev, projects: [kept] }),
+    ..test_model().with_dev(dev => {
+      ..dev,
+      projects: [@interop.ChannelId::Local.test_project(), kept],
+    }),
     screen: WorkspaceSettings(channel=Local, workspace=kept),
   }
-  let (_, retained) = update_dev(dispatch, ProjectsChanged([kept]), staying)
+  let (_, retained) = update_dev(
+    dispatch,
+    ProjectsChanged([@interop.ChannelId::Local.test_project(), kept]),
+    staying,
+  )
   assert_true(
     retained.screen == WorkspaceSettings(channel=Local, workspace=kept),
   )

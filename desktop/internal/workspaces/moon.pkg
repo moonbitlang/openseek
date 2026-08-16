@@ -5,10 +5,15 @@ import {
   "openseek_desktop/internal/home",
   "openseek_desktop/internal/pathx",
   "openseek_desktop/internal/protocol",
+  "openseek_desktop/internal/userdirs",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/json",
 }
+
+import {
+  "moonbitlang/core/env" @sys,
+} for "wbtest"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 

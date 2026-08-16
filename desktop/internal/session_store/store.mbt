@@ -48,14 +48,12 @@ pub fn deleting_root(root : @pathx.Absolute) -> @pathx.Absolute {
 }
 
 ///|
-/// Every store that can own a session id. Correlation and stale-client
-/// defenses must search all of them: request hints are optional and cannot be
-/// trusted to identify where an existing record lives.
+/// Every store that can own a session id — one per attached workspace.
+/// Correlation and stale-client defenses must search all of them: request
+/// hints are optional and cannot be trusted to identify where an existing
+/// record lives.
 pub async fn known_roots() -> Array[@pathx.Absolute] {
   let roots : Array[@pathx.Absolute] = []
-  if @workspaces.global_store_root() is Some(root) {
-    roots.push(root)
-  }
   for path in @workspaces.registered() {
     roots.push(@workspaces.store_root(path))
   }
@@ -78,7 +76,7 @@ pub fn safe_session_id(session : String) -> Bool {
 /// The registered workspace owning `session`, found by where the session's
 /// durable record lives (`<workspace>/.openseek/sessions/<id>`). The record's
 /// location is the mapping — there is no separate index to fall out of date.
-/// `None` for scratch conversations, whose records live in the global store.
+/// `None` when no attached workspace holds the record.
 pub async fn workspace_of(session : String) -> @pathx.Absolute? {
   guard safe_session_id(session) else { return None }
   for workspace in @workspaces.registered() {
@@ -93,36 +91,28 @@ pub async fn workspace_of(session : String) -> @pathx.Absolute? {
 }
 
 ///|
-/// The session store root holding `session`'s durable record: its workspace's
-/// in-project store when one claims it, otherwise the global root.
+/// The session store root holding `session`'s durable record: the in-project
+/// store of the registered workspace that claims it. `None` when no attached
+/// workspace holds the record — the client must name the workspace, or attach
+/// it, rather than have the host guess a store.
 pub async fn root_of(session : String) -> @pathx.Absolute? {
-  if workspace_of(session) is Some(workspace) {
-    return Some(@workspaces.store_root(workspace))
-  }
-  @workspaces.global_store_root()
+  workspace_of(session).map(@workspaces.store_root)
 }
 
 ///|
-/// The exact archived store selected by a host-produced sidebar row. Project
-/// paths are accepted only while registered; an empty token means the global
-/// Scratch store. This prevents a same-ID record in another store from being
-/// chosen by search order.
+/// The exact archived store selected by a host-produced sidebar row. Every
+/// durable record lives in a registered workspace's store, and paths are
+/// accepted only while that workspace is registered. Naming the store this
+/// exactly is what prevents a same-ID record in another one from being chosen
+/// by search order.
 pub struct ArchivedStore {
   root : @pathx.Absolute
-  workspace : @pathx.Absolute?
+  workspace : @pathx.Absolute
   workspace_token : String
 }
 
 ///|
 pub async fn ArchivedStore::for_workspace(workspace : String) -> ArchivedStore {
-  if workspace.is_empty() {
-    guard @workspaces.global_store_root() is Some(root) else {
-      raise StoreError(
-        "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
-      )
-    }
-    return { root, workspace: None, workspace_token: "" }
-  }
   guard @pathx.Absolute::from_uri_path(workspace) is Some(path) &&
     @workspaces.registered_dir(path) is Some(registered) else {
     raise StoreError("\{workspace} is not a registered workspace")
@@ -135,7 +125,7 @@ pub async fn ArchivedStore::for_workspace(workspace : String) -> ArchivedStore {
   }
   {
     root: @workspaces.store_root(registered),
-    workspace: Some(registered),
+    workspace: registered,
     workspace_token,
   }
 }

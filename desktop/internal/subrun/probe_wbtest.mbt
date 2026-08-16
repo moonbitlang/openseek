@@ -2,7 +2,7 @@
 // one JSON line at a time, sometimes landing mid-line between polls.
 
 ///|
-/// A probe over a fresh scratch record holding only the store's header line —
+/// A probe over a brand-new record holding only the store's header line —
 /// which the probe must read past without mistaking it for an item.
 async fn fresh_record(name : String) -> SubrunProbeState {
   let root = @fs.realpath(@fs.tmpdir(prefix="openseek-subrun-probe-\{name}-"))

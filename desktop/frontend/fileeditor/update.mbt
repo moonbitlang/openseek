@@ -1883,9 +1883,8 @@ pub fn sync(
   guard checkout_ready && ctx.root() is Some(_) && ctx.panel_open else {
     return with_watch(dispatch, state, ctx, pending_cmd)
   }
-  // Load as soon as the conversation has a concrete root. Scratch roots come
-  // from the connected device; registered projects and known worktrees can
-  // likewise load before a run.
+  // Load as soon as the conversation has a concrete root: registered
+  // projects and known worktrees can both load before a run.
   if ctx.owner.session.is_empty() ||
     state.children.contains("") ||
     state.loading.contains("") {

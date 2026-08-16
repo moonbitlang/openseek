@@ -15,30 +15,58 @@ test "unknown session items preserve their complete wire object" {
 }
 
 ///|
-test "agent connected requires concrete store roots" {
+test "agent connected names how much of the host is up" {
+  guard @protocol.Notification::from_wire("agent.connected", {
+      "stage": "serving",
+    })
+    is Some(AgentConnected(serving)) else {
+    fail("serving connect did not decode")
+  }
+  assert_eq(serving.stage, Serving)
+  guard @protocol.Notification::from_wire("agent.connected", {
+      "stage": "accepted",
+    })
+    is Some(AgentConnected(accepted)) else {
+    fail("accepted connect did not decode")
+  }
+  assert_eq(accepted.stage, Accepted)
+  // A field this build does not know is not a reason to drop a connect.
+  guard @protocol.Notification::from_wire("agent.connected", {
+      "stage": "serving",
+      "roots": ["/work"],
+    })
+    is Some(AgentConnected(extra)) else {
+    fail("an unknown field dropped the connect")
+  }
+  assert_eq(extra.stage, Serving)
+  // The stage is the payload: a host that names none says nothing this
+  // client can act on, so the notification is refused rather than guessed at.
   assert_true(
     @protocol.Notification::from_wire("agent.connected", { "ready": true })
     is None,
   )
-  // The scratch base alone is no longer enough: readiness names the global
-  // session store too, so clients can classify broadcast roots exactly.
+  // Neither does a stage that is not a string, is null, or spells a stage
+  // this build cannot reason about. Reading an unknown one as `accepted`
+  // would be a guess about whether a run can start.
   assert_true(
-    @protocol.Notification::from_wire("agent.connected", {
-      "ready": true,
-      "scratch_root": "/scratch",
-    })
+    @protocol.Notification::from_wire("agent.connected", { "stage": 1 }) is None,
+  )
+  assert_true(
+    @protocol.Notification::from_wire("agent.connected", { "stage": null })
     is None,
   )
-  guard @protocol.Notification::from_wire("agent.connected", {
-      "ready": true,
-      "scratch_root": "/scratch",
-      "session_root": "/sessions/global",
-    })
-    is Some(AgentConnected(payload)) else {
-    fail("connected notification with both roots did not decode")
-  }
-  assert_eq(payload.scratch_root, "/scratch")
-  assert_eq(payload.session_root, "/sessions/global")
+  assert_true(
+    @protocol.Notification::from_wire("agent.connected", { "stage": "draining" })
+    is None,
+  )
+  @debug.assert_eq(
+    ({ stage: Serving } : @protocol.ConnectedPayload).to_json(),
+    { "stage": "serving" },
+  )
+  @debug.assert_eq(
+    ({ stage: Accepted } : @protocol.ConnectedPayload).to_json(),
+    { "stage": "accepted" },
+  )
 }
 
 ///|

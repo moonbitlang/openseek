@@ -163,7 +163,12 @@ fn SidebarDispatcher::conversation_open(
   match id.source() {
     "openseek.live" => self.emit(OpenSession(channel, id.conversation()))
     "openseek.archived" => {
-      let workspace = id.root().bind(root => @resource.of_path(channel, root))
+      // The row carries the store its record lives in; without one the click
+      // would name a session id in no particular store.
+      guard id.root() is Some(root) &&
+        @resource.of_path(channel, root) is Some(workspace) else {
+        return self.unroutable("open", "archived row with no store")
+      }
       self.emit(
         OpenArchivedSession(channel, session=id.conversation(), workspace~),
       )
@@ -210,15 +215,16 @@ fn SidebarDispatcher::conversation_delete(
   self : SidebarDispatcher,
   id : @conversation.Id,
 ) -> @cmd.Cmd {
+  // The row carries the store its record lives in; a delete that could not
+  // name one would address every same-id record at once.
   guard @interop.ChannelId::from_uri_authority(id.channel()) is Some(channel) &&
-    id.source() == "openseek.archived" else {
+    id.source() == "openseek.archived" &&
+    id.root() is Some(root) &&
+    @resource.of_path(channel, root) is Some(workspace) else {
     return self.unroutable("delete", "\{id.source()}@\{id.channel()}")
   }
   self.emit(
-    DeleteArchivedSession(channel, {
-      session: id.conversation(),
-      workspace: id.root().bind(root => @resource.of_path(channel, root)),
-    }),
+    DeleteArchivedSession(channel, { session: id.conversation(), workspace }),
   )
 }
 

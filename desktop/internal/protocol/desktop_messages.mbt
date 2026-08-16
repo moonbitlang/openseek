@@ -19,8 +19,8 @@ pub(all) struct StartPayload {
   // Every desktop run belongs to a durable conversation. The engine rejects
   // a blank id before it acquires that conversation's record lease.
   session : String
-  // A registered workspace directory; absent means a scratch workspace. A
-  // session bound to one of the workspace's worktrees (`worktree.create`
+  // The registered workspace directory this conversation works in. A
+  // session bound to one of that workspace's worktrees (`worktree.create`
   // binds at creation) runs in that checkout — the start itself never names
   // or mutates worktrees.
   workspace : String?
@@ -98,9 +98,9 @@ pub(all) struct SessionPayload {
 
 ///|
 /// Permanent deletion addresses one archived record in one exact store.
-/// `workspace` is the host-reported project resource path, or `""` for the
-/// global Scratch store; the host still validates project paths against its
-/// registry instead of trusting the client to choose an arbitrary directory.
+/// `workspace` is the host-reported project resource path; the host validates
+/// it against its registry instead of trusting the client to choose an
+/// arbitrary directory.
 pub(all) struct ArchivedSessionPayload {
   session : String
   workspace : String
@@ -645,18 +645,69 @@ pub(all) struct BrowserVisiblePayload {
 // Notification payloads.
 
 ///|
+/// How much of the host is up behind an `agent.connected`. Both spellings
+/// ask the client for the same thing — this connection is live, re-read your
+/// state — and differ only in whether a run can start yet.
+pub(all) enum ConnectedStage {
+  /// A transport accepted this client. The engine pump may still be between
+  /// generations, so a start can be refused until `Serving` follows.
+  Accepted
+  /// The engine pump entered a serving generation and accepts runs.
+  Serving
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for ConnectedStage with fn to_json(self) {
+  match self {
+    Accepted => "accepted"
+    Serving => "serving"
+  }
+}
+
+///|
+/// The stage is a bare string, and an unrecognized one is refused rather than
+/// read as the weaker of the two: a client acts on this field to decide
+/// whether a start can be refused, and a spelling this build does not know is
+/// a host it cannot reason about. Host and clients ship together, so a third
+/// stage arrives with the code that understands it.
+pub impl FromJson for ConnectedStage with fn from_json(json, path) {
+  guard json is String(stage) else {
+    raise JsonDecodeError((path, "expected connected stage"))
+  }
+  match stage {
+    "accepted" => Accepted
+    "serving" => Serving
+    _ => raise JsonDecodeError((path, "unknown connected stage"))
+  }
+}
+
+///|
+/// `agent.connected` is a signal rather than a description: every client
+/// answers it by re-reading its state. `stage` says how much of the host is
+/// up, which is all a client can act on beyond that.
 pub(all) struct ConnectedPayload {
-  ready : Bool?
-  // Device-native scratch base encoded as a frontend resource path. A host
-  // cannot announce readiness without it: every Scratch conversation derives
-  // its concrete filesystem and language-server root from this value.
-  scratch_root : String
-  // The global durable session store root, same encoding. Naming it on
-  // connect lets clients classify any broadcast store root exactly — equal
-  // to this value means the Scratch store, anything else a project store —
-  // even while the projects registry reply is still in flight.
-  session_root : String
-} derive(Debug, Eq, FromJson, ToJson)
+  stage : ConnectedStage
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for ConnectedPayload with fn to_json(self) {
+  { "stage": self.stage.to_json() }
+}
+
+///|
+/// `stage` is the whole payload: a notification carrying none, or one this
+/// build cannot read, says nothing a client can act on, so it is refused
+/// rather than guessed at — `Notification::from_wire` drops it. Fields this
+/// build does not know are ignored, leaving the wire room to grow.
+pub impl FromJson for ConnectedPayload with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected connected payload"))
+  }
+  guard fields.get("stage") is Some(stage) else {
+    raise JsonDecodeError((path.add_key("stage"), "missing required field"))
+  }
+  { stage: @json.from_json(stage, path=path.add_key("stage")) }
+}
 
 ///|
 pub(all) struct StartedPayload {
@@ -760,9 +811,9 @@ pub(all) struct SubrunProgressPayload {
 pub(all) struct SessionChangedPayload {
   change : String
   session : String
-  // The project store owning this record, or "" for Scratch. Session ids are
-  // not globally unique across stores, so every invalidation carries both
-  // halves of the durable identity.
+  // The project store owning this record. Session ids are not globally
+  // unique across stores, so every invalidation carries both halves of the
+  // durable identity.
   workspace : String
 } derive(Debug, Eq, FromJson, ToJson)
 

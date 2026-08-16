@@ -8,7 +8,7 @@ fn Model::terminal_input(self : Model) -> @terminal.Input {
     live_channels=self.devices
       .iter()
       .filter_map(dev => {
-        if dev.bridge is Connected(..) && dev.reconnect_failures == 0 {
+        if dev.bridge is Connected && dev.reconnect_failures == 0 {
           Some(dev.channel)
         } else {
           None

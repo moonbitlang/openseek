@@ -706,7 +706,16 @@ async test "a corrupt file reads as defaults and survives until a save" {
 
 ///|
 async test "run config resolves the endpoint from the stored provider" {
-  with_settings_dir(async fn(_dir, manager) {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous_session_root = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+  defer restore_session_root_env(previous_session_root)
+  with_settings_dir(async fn(dir, manager) {
+    // A run needs a workspace before it can resolve anything else. This test
+    // is about the endpoint the stored provider yields, so any attached
+    // directory serves; the env root only locates the registry.
+    @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir.join("global").to_string())
+    let workspace = attach_run_workspace(dir)
     let _ = update_settings(manager, {
       provider: Some("deepseek"),
       custom_api_url: None,
@@ -719,7 +728,7 @@ async test "run config resolves the endpoint from the stored provider" {
       model: None,
       max_steps: None,
       session: "s-settings-default",
-      workspace: None,
+      workspace: Some(workspace),
     })
     // The official endpoint is the engine default: no URL override.
     assert_true(config.api_url is None)
@@ -736,7 +745,7 @@ async test "run config resolves the endpoint from the stored provider" {
       model: None,
       max_steps: None,
       session: "s-settings-custom",
-      workspace: None,
+      workspace: Some(workspace),
     })
     assert_true(
       custom.api_url is Some("https://proxy.example/chat/completions"),

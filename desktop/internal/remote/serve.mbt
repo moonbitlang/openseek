@@ -50,15 +50,7 @@ async fn WsClientActor::open_subscription(
   // `agent.connected` as "state may have changed, reload". Queue it before
   // any notification forwarder exists, making it this subscription's first
   // outbound frame even if the hub publishes immediately after subscribe.
-  out.put(
-    Notify(
-      AgentConnected({
-        ready: None,
-        scratch_root: @engine.scratch_root(),
-        session_root: @engine.global_session_root(),
-      }),
-    ),
-  )
+  out.put(Notify(AgentConnected({ stage: Accepted })))
   { out, notifications }
 }
 

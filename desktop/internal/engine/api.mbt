@@ -61,11 +61,10 @@ type GoalReply = @protocol.GoalReply
 
 ///|
 /// One sidebar group of `list_sessions`: the conversations stored under one
-/// session root. `workspace` is the project directory ("" for the default
-/// group of scratch conversations) and `name` its display label (the folder's
-/// basename). A group whose listing failed carries the engine's message in
-/// `error` and an empty `sessions` — one broken workspace must not take the
-/// whole sidebar down.
+/// session root. `workspace` is the project directory and `name` its display
+/// label (the folder's basename). A group whose listing failed carries the
+/// engine's message in `error` and an empty `sessions` — one broken workspace
+/// must not take the whole sidebar down.
 type SessionGroup = @protocol.SessionGroup
 
 ///|

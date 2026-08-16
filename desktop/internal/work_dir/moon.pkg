@@ -1,9 +1,6 @@
 import {
-  "openseek_desktop/internal/fsx",
-  "openseek_desktop/internal/home",
   "openseek_desktop/internal/pathx",
   "openseek_desktop/internal/session_store",
-  "openseek_desktop/internal/userdirs",
   "openseek_desktop/internal/workspaces",
   "openseek_desktop/internal/worktree",
   "moonbitlang/async",

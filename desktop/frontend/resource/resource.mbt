@@ -57,9 +57,9 @@ pub fn path_for(uri : @common.Uri, owner : @interop.ChannelId) -> String? {
 }
 
 ///|
-/// Whether this resource is owned by `owner`. Optional workspace payloads
-/// use this before mapping `None` to the scratch store, so a URI retained from
-/// another device can never be mistaken for an absent workspace.
+/// Whether this resource is owned by `owner`. Workspace payloads use this
+/// before they are encoded for a request, so a URI retained from another
+/// device can never be sent as this one's store.
 pub fn belongs_to(uri : @common.Uri, owner : @interop.ChannelId) -> Bool {
   channel(uri) == Some(owner)
 }

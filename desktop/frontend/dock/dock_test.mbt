@@ -107,14 +107,14 @@ test "sync parks the strip and restores it when the conversation returns" {
 
 ///|
 test "sync does not park a strip owned by an empty session" {
-  let scratch = owner("")
+  let nameless = owner("")
   let real = owner("alpha")
-  let state = @dock.sync(@dock.State::empty(), scratch)
+  let state = @dock.sync(@dock.State::empty(), nameless)
     |> @dock.open_file(@pathx.Relative("a.mbt"))
   let moved = @dock.sync(state, real)
   assert_true(moved.tabs.is_empty())
   // Returning to the empty session restores nothing.
-  let back = @dock.sync(moved, scratch)
+  let back = @dock.sync(moved, nameless)
   assert_true(back.tabs.is_empty())
   assert_true(back.active is None)
 }

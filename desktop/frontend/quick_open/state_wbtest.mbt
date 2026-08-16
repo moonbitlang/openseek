@@ -113,13 +113,13 @@ test "a root that arrives after opening restarts both providers once" {
     fail("rootless Quick Open should wait for its file cache")
   }
   assert_eq(waiting.cache.root, None)
-  let placed = test_input(root=test_uri("/work/scratch"))
+  let placed = test_input(root=test_uri("/work/api"))
   // The same state and input must produce the same plain-data result, and a
   // second reconciliation against an unchanged root must not restart again.
   let first = waiting.settle(placed)
   assert_true(first == waiting.settle(placed))
   assert_true(first.settle(placed) == first)
-  assert_eq(first.cache.root, Some(test_uri("/work/scratch")))
+  assert_eq(first.cache.root, Some(test_uri("/work/api")))
   guard first.cache.loading_key is Some(restarted_key) else {
     fail("the arriving root should restart file-cache population")
   }

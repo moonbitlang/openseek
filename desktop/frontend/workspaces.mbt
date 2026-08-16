@@ -228,14 +228,20 @@ test "a project new chat rotates into that project" {
 }
 
 ///|
-test "a scratch rotation leaves the conversation in the default store" {
+test "a rotation lands in the device's active project" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
     SessionRotated({ channel: @interop.ChannelId::Local, session: "desktop-s" }),
-    test_model(),
+    test_model().with_dev(dev => {
+      ..dev,
+      active_project: Some(@interop.ChannelId::Local.test_project()),
+    }),
   )
-  assert_true(next.active().workspace is Scratch)
+  assert_eq(
+    next.active().workspace,
+    Project(root=@interop.ChannelId::Local.test_project()),
+  )
 }
 
 ///|
@@ -255,13 +261,13 @@ test "detaching the active workspace opens the newest remaining conversation" {
         {
           id: "desktop-kept",
           title: Some("kept"),
-          workspace: Some(kept_workspace),
+          workspace: kept_workspace,
           workspace_name: "kept",
         },
         {
           id: "desktop-test",
           title: Some("gone"),
-          workspace: Some(gone),
+          workspace: gone,
           workspace_name: "gone",
         },
       ],
@@ -323,7 +329,11 @@ test "detaching the active workspace preserves a fallback worktree" {
   let gone = @interop.ChannelId::Local.test_resource("/gone")
   let kept_project = @interop.ChannelId::Local.test_resource("/kept")
   let fallback = {
-    ..empty_conversation(Local, "desktop-worktree"),
+    ..empty_conversation(
+      Local,
+      "desktop-worktree",
+      @interop.ChannelId::Local.test_project(),
+    ),
     workspace: Worktree(project=kept_project, name="wt"),
   }
   let model = test_model()
@@ -340,13 +350,13 @@ test "detaching the active workspace preserves a fallback worktree" {
         {
           id: fallback.session_id,
           title: Some("kept worktree"),
-          workspace: Some(kept_project),
+          workspace: kept_project,
           workspace_name: "kept",
         },
         {
           id: "desktop-test",
           title: Some("gone"),
-          workspace: Some(gone),
+          workspace: gone,
           workspace_name: "gone",
         },
       ],
@@ -358,7 +368,7 @@ test "detaching the active workspace preserves a fallback worktree" {
 }
 
 ///|
-test "detaching the last workspace rotates into a scratch conversation" {
+test "detaching the last workspace leaves the app on onboarding" {
   let dispatch = test_dispatch()
   let gone = @interop.ChannelId::Local.test_resource("/gone")
   let model = test_model()
@@ -374,7 +384,7 @@ test "detaching the last workspace rotates into a scratch conversation" {
         {
           id: "desktop-test",
           title: Some("gone"),
-          workspace: Some(gone),
+          workspace: gone,
           workspace_name: "gone",
         },
       ],
@@ -390,7 +400,7 @@ test "detaching the last workspace rotates into a scratch conversation" {
       {
         id: "desktop-test",
         title: Some("gone"),
-        workspace: Some(gone),
+        workspace: gone,
         workspace_name: "gone",
       },
     ]),
@@ -400,13 +410,27 @@ test "detaching the last workspace rotates into a scratch conversation" {
   // issued before the registry commit cannot resurrect the removed chat.
   inspect(stale.dev().sessions.length(), content="0")
   assert_true(stale.conversations.is_empty())
+  // With no project left to hold a chat, a rotation has nowhere to land:
+  // the app stays on onboarding until one is attached.
   let (_, rotated) = update(
     dispatch,
-    SessionRotated({ channel: Local, session: "desktop-scratch" }),
+    SessionRotated({ channel: Local, session: "desktop-fresh" }),
     stale,
   )
-  inspect(rotated.active_session, content="desktop-scratch")
-  assert_true(rotated.active().workspace is Scratch)
+  inspect(rotated.active_session, content="")
+  assert_true(rotated.active_conversation() is None)
+  // Attaching one again is what ends onboarding: the registry snapshot asks
+  // for a fresh session, and that rotation lands in the new project.
+  let project = @interop.ChannelId::Local.test_resource("/attached")
+  let (_, attached) = update_dev(dispatch, ProjectsChanged([project]), rotated)
+  assert_true(attached.active_conversation() is None)
+  let (_, opened) = update(
+    dispatch,
+    SessionRotated({ channel: Local, session: "desktop-attached" }),
+    attached,
+  )
+  inspect(opened.active_session, content="desktop-attached")
+  assert_eq(opened.active().workspace, Project(root=project))
 }
 
 ///|
@@ -489,7 +513,7 @@ test "opening a stored session joins its project and loaded worktree" {
       {
         id: "desktop-w",
         title: Some("in project"),
-        workspace: Some(workspace),
+        workspace,
         workspace_name: "proj",
       },
     ],
@@ -633,20 +657,8 @@ test "a listing from the previous device cannot replace a reopened picker" {
   let model = {
     ..test_model(),
     devices: [
-      {
-        ..empty_device_state(first),
-        bridge: Connected(
-          scratch_root=first.test_resource("/scratch"),
-          session_root=first.test_store_root(),
-        ),
-      },
-      {
-        ..empty_device_state(second),
-        bridge: Connected(
-          scratch_root=second.test_resource("/scratch"),
-          session_root=second.test_store_root(),
-        ),
-      },
+      { ..empty_device_state(first), bridge: Connected },
+      { ..empty_device_state(second), bridge: Connected },
     ],
     focused: first,
   }

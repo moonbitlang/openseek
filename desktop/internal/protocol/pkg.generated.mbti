@@ -380,10 +380,17 @@ pub(all) struct CompactReply {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct ConnectedPayload {
-  ready : Bool?
-  scratch_root : String
-  session_root : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  stage : ConnectedStage
+} derive(Eq, @debug.Debug)
+pub impl ToJson for ConnectedPayload
+pub impl @json.FromJson for ConnectedPayload
+
+pub(all) enum ConnectedStage {
+  Accepted
+  Serving
+} derive(Eq, @debug.Debug)
+pub impl ToJson for ConnectedStage
+pub impl @json.FromJson for ConnectedStage
 
 pub(all) struct DiagnosticsPayload {
   root : String

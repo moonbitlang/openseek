@@ -189,7 +189,7 @@ fn start_in_new_worktree(
             max_steps,
             session,
             submission_id,
-            workspace=Some(workspace),
+            workspace~,
           )
           request_agent_start(
             scheduler, dispatch, channel, start, session, submission_id,
@@ -218,7 +218,7 @@ fn Conversation::goal_creates_worktree(self : Conversation) -> @common.Uri? {
   guard self.wants_fresh_worktree() else { return None }
   match self.workspace {
     Project(root~) => Some(root)
-    Scratch | Worktree(..) => None
+    Worktree(..) => None
   }
 }
 
@@ -328,11 +328,7 @@ fn set_goal_in_new_worktree(
             ),
           )
           let payload = goal_payload(
-            session,
-            engine_model,
-            max_steps,
-            Some(workspace),
-            text,
+            session, engine_model, max_steps, workspace, text,
           )
           request_agent_goal(
             scheduler, dispatch, channel, payload, session, command, text,
@@ -454,11 +450,10 @@ fn DeviceState::worktree_row(
 /// mapping is authoritative and an absent row means Project.
 fn DeviceState::conversation_workspace(
   self : DeviceState,
-  project : @common.Uri?,
+  project : @common.Uri,
   session : String,
   current : Workspace,
 ) -> Workspace {
-  guard project is Some(project) else { return Scratch }
   for group in self.worktrees {
     guard group.project == project else { continue }
     for row in group.rows {
@@ -479,10 +474,9 @@ fn DeviceState::conversation_workspace(
 /// The worktree a durable session runs in — the sidebar glyph's data source.
 fn worktree_name_for(
   dev : DeviceState,
-  project : @common.Uri?,
+  project : @common.Uri,
   session : String,
 ) -> String? {
-  guard project is Some(project) else { return None }
   dev.worktree_row(project, session).map(row => row.name)
 }
 
@@ -496,19 +490,6 @@ fn Model::conversation_placement(
   conv : Conversation,
 ) -> @interop.CheckoutPlacement? {
   match conv.workspace {
-    Scratch =>
-      if self.device_state(conv.device) is Some(dev) &&
-        dev.bridge is Connected(scratch_root=root, ..) {
-        Some(
-          @interop.Scratch(
-            root=Some(
-              @resource.join_relative(root, @pathx.Relative(conv.session_id)),
-            ),
-          ),
-        )
-      } else {
-        None
-      }
     Project(root~) => {
       guard self.device_state(conv.device) is Some(dev) &&
         dev.worktrees.iter().any(group => group.project == root) else {
@@ -629,17 +610,11 @@ fn worktree_mode_chip(
   model : Model,
   conv : Conversation,
 ) -> @html.Html? {
-  guard (match conv.workspace {
-      Project(_) | Worktree(..) => true
-      Scratch => false
-    }) &&
-    conv.messages.length() == 0 else {
-    return None
-  }
+  guard conv.messages.length() == 0 else { return None }
   let choice = match conv.workspace {
     Worktree(name~, ..) => @composer.BoundWorktree(name)
     Project(_) if conv.worktree_mode => @composer.FreshWorktree
-    Project(_) | Scratch => @composer.LocalCheckout
+    Project(_) => @composer.LocalCheckout
   }
   Some(
     @composer.WorktreeControl::{
@@ -743,9 +718,13 @@ test "the launch mode toggles only before the conversation begins" {
   })
   let (_, still) = update(dispatch, ToggleWorktreeMode, begun)
   assert_false(still.active().worktree_mode)
-  // A scratch conversation has no workspace to fork from.
-  let (_, scratch) = update(dispatch, ToggleWorktreeMode, test_model())
-  assert_false(scratch.active().worktree_mode)
+  // A conversation already bound to a worktree has nothing left to choose.
+  let bound = test_model().replace_conversation({
+    ..test_conversation(),
+    workspace: Worktree(project=workspace, name="wt"),
+  })
+  let (_, still_bound) = update(dispatch, ToggleWorktreeMode, bound)
+  assert_false(still_bound.active().worktree_mode)
 }
 
 ///|
@@ -783,7 +762,7 @@ test "new conversations inherit only their workspace's launch default" {
   assert_false(
     preferred_model.default_worktree_mode(
       @interop.ChannelId::Remote("device-a"),
-      Some(remote_workspace),
+      remote_workspace,
     ),
   )
 }
@@ -934,17 +913,17 @@ test "worktree created binds the composing conversation" {
     WorktreeCreated(workspace~, name="wt-1", session="desktop-test"),
     model,
   )
-  assert_true(bound.active().workspace.worktree_name() is Some("wt-1"))
+  assert_true(bound.active().worktree_name() is Some("wt-1"))
   assert_false(bound.active().worktree_mode)
   // Binding one conversation leaves the workspace's own default alone.
-  assert_true(bound.default_worktree_mode(Local, Some(workspace)))
+  assert_true(bound.default_worktree_mode(Local, workspace))
   // A created notice for an unknown session changes nothing.
   let (_, unknown) = update_dev(
     dispatch,
     WorktreeCreated(workspace~, name="wt-2", session="desktop-else"),
     bound,
   )
-  assert_true(unknown.active().workspace.worktree_name() is Some("wt-1"))
+  assert_true(unknown.active().worktree_name() is Some("wt-1"))
 }
 
 ///|
@@ -1109,11 +1088,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
     ..gone.active(),
     workspace: gone
     .dev()
-    .conversation_workspace(
-      Some(workspace),
-      "desktop-test",
-      Project(root=workspace),
-    ),
+    .conversation_workspace(workspace, "desktop-test", Project(root=workspace)),
   })
   assert_true(
     terminal_ctx(resumed).placement
@@ -1121,7 +1096,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   )
   // The binding is NOT dropped: the conversation must never silently read as
   // a plain workspace chat.
-  assert_true(gone.active().workspace.worktree_name() is Some("wt"))
+  assert_true(gone.active().worktree_name() is Some("wt"))
   // Repair does not mutate optimistically: the registry broadcast is the
   // authority for the restored checkout.
   let (_, repairing) = update(dispatch, RepairWorktree, gone)
@@ -1129,7 +1104,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
     repairing.conversation_placement(repairing.active())
     is Some(@interop.MissingWorktree(name="wt", ..)),
   )
-  assert_true(repairing.active().workspace.worktree_name() is Some("wt"))
+  assert_true(repairing.active().worktree_name() is Some("wt"))
   // Archive is the other exit. Like every update handler, applying the same
   // message to the same input produces the same model, and the binding stays
   // until the host moves the conversation out of the live list.
@@ -1158,7 +1133,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   // Repair is inert for a healthy conversation, so a stale click cannot
   // rebuild a worktree that is fine.
   let (_, noop) = update(dispatch, RepairWorktree, bound)
-  assert_true(noop.active().workspace.worktree_name() is Some("wt"))
+  assert_true(noop.active().worktree_name() is Some("wt"))
   assert_true(
     noop.conversation_placement(noop.active())
     is Some(@interop.Worktree(name="wt", ..)),
@@ -1244,8 +1219,7 @@ test "worktrees loaded respects the request generation fence" {
     model,
   )
   assert_true(
-    worktree_name_for(applied.dev(), Some(workspace), "desktop-wt")
-    is Some("wt"),
+    worktree_name_for(applied.dev(), workspace, "desktop-wt") is Some("wt"),
   )
   let (_, stale) = update_dev(
     dispatch,
@@ -1258,7 +1232,7 @@ test "worktrees loaded respects the request generation fence" {
     applied,
   )
   assert_true(
-    worktree_name_for(stale.dev(), Some(workspace), "desktop-wt") is Some("wt"),
+    worktree_name_for(stale.dev(), workspace, "desktop-wt") is Some("wt"),
   )
 }
 
@@ -1356,8 +1330,8 @@ test "a broadcast for one workspace never fences a sibling's reply" {
     ),
     changed,
   )
-  assert_true(worktree_name_for(both.dev(), Some(a), "s-a") is Some("wt-a"))
-  assert_true(worktree_name_for(both.dev(), Some(b), "s-b") is Some("wt-b"))
+  assert_true(worktree_name_for(both.dev(), a, "s-a") is Some("wt-a"))
+  assert_true(worktree_name_for(both.dev(), b, "s-b") is Some("wt-b"))
   // /a's own in-flight round-1 reply IS fenced by its broadcast.
   let (_, fenced) = update_dev(
     dispatch,
@@ -1369,7 +1343,7 @@ test "a broadcast for one workspace never fences a sibling's reply" {
     ),
     both,
   )
-  assert_true(worktree_name_for(fenced.dev(), Some(a), "s-a") is Some("wt-a"))
+  assert_true(worktree_name_for(fenced.dev(), a, "s-a") is Some("wt-a"))
 }
 
 ///|
@@ -1401,9 +1375,7 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
   let (_, changed) = update_dev(dispatch, changed_msg, model)
   assert_true(changed.quick_open == repeated.quick_open)
   inspect(changed.dev().worktrees_request_generation, content="2")
-  assert_true(
-    worktree_name_for(changed.dev(), Some(workspace), "desktop-wt") is None,
-  )
+  assert_true(worktree_name_for(changed.dev(), workspace, "desktop-wt") is None)
   // The removed worktree's conversation is a plain workspace conversation
   // now — exactly what the host's registry prune did to the mapping — and
   // every placement derived from the dead checkout (the file root and the
@@ -1426,9 +1398,7 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
     ),
     changed,
   )
-  assert_true(
-    worktree_name_for(stale.dev(), Some(workspace), "desktop-wt") is None,
-  )
+  assert_true(worktree_name_for(stale.dev(), workspace, "desktop-wt") is None)
 }
 
 ///|
@@ -1491,7 +1461,7 @@ test "a failed worktree setup is an actionable toast and keeps retry eligible" {
   // to Local without touching the workspace's own default.
   let (_, switched) = update(dispatch, ToggleWorktreeMode, rejected)
   assert_false(switched.active().worktree_mode)
-  assert_true(switched.default_worktree_mode(Local, Some(workspace)))
+  assert_true(switched.default_worktree_mode(Local, workspace))
 }
 
 ///|
@@ -1687,7 +1657,7 @@ test "a start payload never names a worktree" {
     "1000",
     "desktop-wt",
     "sub-1",
-    workspace=Some(workspace),
+    workspace~,
   )
   // The typed wire shape has no worktree field at all; the workspace hint
   // is the only placement the start carries.

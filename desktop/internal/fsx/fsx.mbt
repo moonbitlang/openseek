@@ -81,6 +81,29 @@ pub async fn copy_file(source : @pathx.Path, destination : @pathx.Path) -> Unit 
 }
 
 ///|
+/// Copy a directory tree, creating `destination` and every directory beneath
+/// it. Files already at the destination are replaced, files only there are
+/// left alone. A symlink is copied as the bytes it points at rather than as a
+/// link. Raises when the source cannot be read, leaving whatever was copied
+/// so far in place — the caller decides whether a partial tree is worth
+/// keeping.
+pub async fn copy_dir(source : @pathx.Path, destination : @pathx.Path) -> Unit {
+  ensure_dir(destination)
+  // `collect` closes the handle before we descend, so copying a deep tree
+  // does not hold one directory descriptor open per level.
+  let entries = Directory(@fs.opendir(source.to_string())).collect()
+  for entry in entries {
+    let child = source.join(entry.name())
+    let target = destination.join(entry.name())
+    if entry.is_dir() {
+      copy_dir(child, target)
+    } else {
+      copy_file(child, target)
+    }
+  }
+}
+
+///|
 async fn chmod(path : StringView, permission : Int) -> Unit {
   // Windows has no Unix execute bit and async/fs deliberately reports chmod
   // as unsupported there. Keep the operation in this shared implementation so

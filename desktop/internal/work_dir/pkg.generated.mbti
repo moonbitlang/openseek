@@ -24,8 +24,6 @@ pub async fn session_cwd(String) -> @pathx.Absolute?
 
 pub async fn session_review_base(String, workspace? : String) -> String?
 
-pub async fn workspace_root() -> @pathx.Path?
-
 // Errors
 
 // Types and methods

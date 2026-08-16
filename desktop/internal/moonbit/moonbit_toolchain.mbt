@@ -83,30 +83,11 @@ async fn bundle_moonbit(
 }
 
 ///|
-async fn copy_dir_recursive(
-  source : @pathx.Absolute,
-  destination : @pathx.Path,
-) -> Unit {
-  @fsx.ensure_dir(destination)
-  let dir = @fs.opendir(source.to_string())
-  defer dir.close()
-  while dir.next() is Some(entry) {
-    let source_entry = source.join(entry.name)
-    let destination_entry = destination.join(entry.name)
-    if entry.is_dir {
-      copy_dir_recursive(source_entry, destination_entry)
-    } else {
-      @fsx.copy_file(source_entry.to_path(), destination_entry)
-    }
-  }
-}
-
-///|
 async fn copy_moonbit_seed_dir(
   source : @pathx.Absolute,
   destination : @pathx.Path,
 ) -> Unit {
-  copy_dir_recursive(source, destination)
+  @fsx.copy_dir(source.to_path(), destination)
 }
 
 ///|

@@ -200,13 +200,9 @@ fn device_msg(
   notification : @protocol.Notification,
 ) -> DeviceMsg? {
   match notification {
-    AgentConnected(payload) => {
-      guard @resource.of_path(channel, payload.scratch_root) is Some(root) &&
-        @resource.of_path(channel, payload.session_root) is Some(session_root) else {
-        return None
-      }
-      Some(BridgeReady(scratch_root=root, session_root~))
-    }
+    // The payload's stage says how much of the host is up; every stage asks
+    // this client for the same resync, so the signal alone is the message.
+    AgentConnected(_) => Some(BridgeReady)
     AgentStarted(payload) => started_msg(channel, payload)
     AgentEvent(payload) => engine_msg(payload)
     AgentError(payload) => error_msg(payload)
@@ -1041,13 +1037,9 @@ fn start_openseek(
   selected_model : EngineModel,
   max_steps : String,
   session : String,
-  workspace~ : @common.Uri?,
+  workspace~ : @common.Uri,
 ) -> @cmd.Cmd {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, channel) =>
-      return @cmd.none
-    _ => ()
-  }
+  guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let payload = start_payload(
     task,
     selected_model,
@@ -1132,7 +1124,7 @@ fn start_payload(
   max_steps : String,
   session : String,
   submission_id : String,
-  workspace~ : @common.Uri?,
+  workspace~ : @common.Uri,
 ) -> @protocol.StartPayload {
   let session = session.trim().to_owned()
   {
@@ -1141,7 +1133,7 @@ fn start_payload(
     model: Some(selected_model.wire()),
     max_steps: parsed_max_steps(max_steps),
     session,
-    workspace: workspace.map(value => value.path),
+    workspace: Some(workspace.path),
   }
 }
 
@@ -1399,13 +1391,9 @@ fn compact_openseek(
   session~ : String,
   model~ : EngineModel,
   max_steps~ : String,
-  workspace? : @common.Uri,
+  workspace~ : @common.Uri,
 ) -> @cmd.Cmd {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, channel) =>
-      return @cmd.none
-    _ => ()
-  }
+  guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -1419,7 +1407,7 @@ fn compact_openseek(
             session,
             model: Some(model.wire()),
             max_steps: parsed_max_steps(max_steps),
-            workspace: workspace.map(value => value.path),
+            workspace: Some(workspace.path),
           },
           lane=@interop.session_command_lane(channel, session),
         ) catch {
@@ -1456,15 +1444,11 @@ fn goal_openseek(
   session~ : String,
   model~ : EngineModel,
   max_steps~ : String,
-  workspace? : @common.Uri,
+  workspace~ : @common.Uri,
   command : String,
   text : String?,
 ) -> @cmd.Cmd {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, channel) =>
-      return @cmd.none
-    _ => ()
-  }
+  guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let payload = goal_payload(session, model, max_steps, workspace, text)
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -1492,7 +1476,7 @@ fn goal_payload(
   session : String,
   model : EngineModel,
   max_steps : String,
-  workspace : @common.Uri?,
+  workspace : @common.Uri,
   text : String?,
 ) -> @protocol.GoalPayload {
   {
@@ -1507,7 +1491,7 @@ fn goal_payload(
     auto: None,
     model: Some(model.wire()),
     max_steps: parsed_max_steps(max_steps),
-    workspace: workspace.map(value => value.path),
+    workspace: Some(workspace.path),
   }
 }
 

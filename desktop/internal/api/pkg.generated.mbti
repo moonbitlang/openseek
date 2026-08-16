@@ -15,10 +15,6 @@ import {
 // Values
 pub fn endpoints(ApiState, @host.HostConnection) -> Array[@endpoint.Endpoint]
 
-pub fn global_session_root() -> String raise
-
-pub async fn scratch_root() -> String
-
 // Errors
 
 // Types and methods

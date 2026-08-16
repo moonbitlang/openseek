@@ -13,15 +13,11 @@ pub fn sessions_from_reply(
 ) -> Array[SessionListItem] {
   let items : Array[SessionListItem] = []
   for group in reply.groups {
-    let workspace = if group.workspace.is_empty() {
-      None
-    } else {
-      // A malformed resource path invalidates this host grouping rather than
-      // turning it into the scratch store or another device's workspace.
-      guard @resource.of_path(channel, group.workspace) is Some(workspace) else {
-        continue
-      }
-      Some(workspace)
+    // Every group names the registered workspace whose store it was read
+    // from. A blank or malformed path invalidates the grouping rather than
+    // producing rows the sidebar cannot section or reopen.
+    guard @resource.of_path(channel, group.workspace) is Some(workspace) else {
+      continue
     }
     for entry in group.sessions {
       guard !entry.id.is_empty() else { continue }
@@ -58,7 +54,7 @@ fn SessionListItem::tree_key(
   self : SessionListItem,
   session : String,
 ) -> SessionTreeKey {
-  { session, workspace: self.workspace.map(uri => uri.path).unwrap_or("") }
+  { session, workspace: self.workspace.path }
 }
 
 ///|
@@ -606,9 +602,9 @@ test "session list projection preserves grouping and skips empty ids" {
     {
       groups: [
         {
-          workspace: "",
-          name: "",
-          session_root: "/home/user/.openseek",
+          workspace: "/home/user/first",
+          name: "first",
+          session_root: "/home/user/first/.openseek",
           error: "",
           sessions: [
             { id: "desktop-b", title: Some("newest") },
@@ -629,21 +625,53 @@ test "session list projection preserves grouping and skips empty ids" {
   inspect(items.length(), content="2")
   inspect(items[0].id, content="desktop-b")
   assert_true(items[0].title is Some("newest"))
-  assert_true(items[0].workspace is None)
+  inspect(items[0].workspace.path, content="/home/user/first")
   inspect(items[1].id, content="tui-a")
   // The engine always writes `title`; "" is its value for a session with no
   // user message yet.
   assert_true(items[1].title is Some(""))
-  assert_true(
-    items[1].workspace is Some(workspace) && workspace.path == "/home/user/proj",
-  )
+  inspect(items[1].workspace.path, content="/home/user/proj")
   inspect(items[1].workspace_name, content="proj")
+}
+
+///|
+test "a group naming no readable workspace contributes no rows" {
+  let items = sessions_from_reply(
+    {
+      groups: [
+        {
+          workspace: "",
+          name: "",
+          session_root: "/home/user/.openseek",
+          error: "",
+          sessions: [{ id: "desktop-b", title: Some("newest") }],
+        },
+      ],
+    },
+    @interop.ChannelId::Local,
+  )
+  assert_true(items.is_empty())
+}
+
+///|
+/// The store `listed` rows belong to. Valid by construction; a total fixture
+/// keeps the tree tests free of a synthetic error effect.
+fn listed_workspace(path : String) -> @common.Uri {
+  match @resource.of_path(@interop.ChannelId::Local, path) {
+    Some(root) => root
+    None => @common.Uri::file(path)
+  }
 }
 
 ///|
 /// Sidebar entries for `session_tree` tests: only the id distinguishes them.
 fn listed(ids : Array[String]) -> Array[SessionListItem] {
-  ids.map(id => { id, title: None, workspace: None, workspace_name: "" })
+  ids.map(id => {
+    id,
+    title: None,
+    workspace: listed_workspace("/work"),
+    workspace_name: "work",
+  })
 }
 
 ///|
@@ -678,18 +706,18 @@ test "session trees never fold children across stores" {
     is Some(project) else {
     fail("test project path was invalid")
   }
-  let scratch_parent = listed(["same"])[0]
+  let other_parent = listed(["same"])[0]
   let project_parent : SessionListItem = {
-    ..scratch_parent,
-    workspace: Some(project),
+    ..other_parent,
+    workspace: project,
     workspace_name: "project",
   }
   let project_child : SessionListItem = { ..project_parent, id: "same-sr-1" }
-  let rows = session_tree([scratch_parent, project_parent, project_child])
+  let rows = session_tree([other_parent, project_parent, project_child])
   assert_eq(rows.length(), 2)
-  assert_true(rows[0].item.workspace is None)
+  assert_eq(rows[0].item.workspace, other_parent.workspace)
   assert_true(rows[0].children.is_empty())
-  assert_eq(rows[1].item.workspace, Some(project))
+  assert_eq(rows[1].item.workspace, project)
   assert_eq(rows[1].children.length(), 1)
   assert_eq(rows[1].children[0].id, project_child.id)
   assert_eq(rows[1].children[0].workspace, project_child.workspace)

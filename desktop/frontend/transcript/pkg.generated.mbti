@@ -116,7 +116,7 @@ pub struct RuntimeUpdateView {
 pub(all) struct SessionListItem {
   id : String
   title : String?
-  workspace : @common.Uri?
+  workspace : @common.Uri
   workspace_name : String
 } derive(Eq)
 

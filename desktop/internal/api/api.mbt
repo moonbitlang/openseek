@@ -350,19 +350,6 @@ pub fn ApiState::manager(self : ApiState) -> @engine.EngineManager {
 }
 
 ///|
-/// Device-native Scratch base for transports that publish their own initial
-/// `agent.connected` notification outside the engine event pump.
-pub async fn scratch_root() -> String {
-  @engine.scratch_root()
-}
-
-///|
-/// The global durable session store root, for the same transports.
-pub fn global_session_root() -> String raise {
-  @engine.global_session_root()
-}
-
-///|
 /// The commands shared by the embedded page and remote WebSocket. A generic
 /// Endpoint constructor checks each payload/reply pair, then erases those
 /// types only inside the two transport closures it creates.
@@ -468,9 +455,7 @@ pub fn endpoints(
       @engine.load_archived_session(state.manager, payload)
     }),
     @endpoint.Endpoint::remote(@commands.session_list_archived, async fn(_) {
-      @engine.archived_sessions(state.manager, (session, workspace) => {
-        publish_session_changed(state, "archived", session, workspace)
-      })
+      @engine.archived_sessions(state.manager)
     }),
     @endpoint.Endpoint::remote(@commands.session_archive, async fn(payload) {
       let session = payload.canonical_session()

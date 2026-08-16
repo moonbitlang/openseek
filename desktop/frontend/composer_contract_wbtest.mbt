@@ -16,7 +16,11 @@ test "composer input is a projection instead of the root model" {
 ///|
 test "composer submission stays bound to its originating conversation" {
   let origin = test_conversation()
-  let visible = empty_conversation(@interop.ChannelId::Local, "visible-session")
+  let visible = empty_conversation(
+    @interop.ChannelId::Local,
+    "visible-session",
+    @interop.ChannelId::Local.test_project(),
+  )
   let model = {
     ..test_model(),
     active_session: visible.session_id,
@@ -68,7 +72,11 @@ test "archive cursor separates transferred actions from a reopened id" {
     session: "archive-replacement",
   }
   let reopened = test_conversation()
-  let replacement = empty_conversation(fresh.channel, fresh.session)
+  let replacement = empty_conversation(
+    fresh.channel,
+    fresh.session,
+    fresh.channel.test_project(),
+  )
   let model = {
     ..test_model(),
     conversations: [reopened, replacement],

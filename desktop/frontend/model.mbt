@@ -458,15 +458,15 @@ priv enum SettlementFrontierMatch {
 }
 
 ///|
-/// The directory context a conversation belongs to.
+/// The directory context a conversation belongs to. `Project` names a
+/// registered project root. `Worktree` retains both its owning project and
+/// registry name; the checkout path itself remains registry-owned and is
+/// resolved only when an up-to-date row is available.
 ///
-/// `Scratch` has no registered project. Its concrete directory is projected
-/// from the owning device's scratch root and this conversation's session id.
-/// `Project` names a registered project root. `Worktree` retains both its
-/// owning project and registry name; the checkout path itself remains
-/// registry-owned and is resolved only when an up-to-date row is available.
+/// Every conversation has one. Which *directory* it resolves to can still be
+/// unknown while the worktree registry is in flight — that is
+/// `Model::conversation_placement`'s option, not this one.
 priv enum Workspace {
-  Scratch
   Project(root~ : @common.Uri)
   Worktree(project~ : @common.Uri, name~ : String)
 } derive(Eq, Debug)
@@ -481,24 +481,11 @@ priv enum ConversationRecord {
 } derive(Eq)
 
 ///|
-/// Construct the conversation workspace represented by the durable session
-/// list: no registered project means Scratch; a project starts provisional
-/// until that project's worktree registry identifies a stronger placement.
-fn Workspace::from_project(project : @common.Uri?) -> Workspace {
-  if project is Some(root) {
-    Project(root~)
-  } else {
-    Scratch
-  }
-}
-
-///|
-/// The registered project that owns this workspace, if it has one.
-fn Workspace::project(self : Workspace) -> @common.Uri? {
+/// The registered project that owns this workspace.
+fn Workspace::project(self : Workspace) -> @common.Uri {
   match self {
-    Scratch => None
-    Project(root~) => Some(root)
-    Worktree(project~, ..) => Some(project)
+    Project(root~) => root
+    Worktree(project~, ..) => project
   }
 }
 
@@ -507,7 +494,7 @@ fn Workspace::project(self : Workspace) -> @common.Uri? {
 fn Workspace::worktree_name(self : Workspace) -> String? {
   match self {
     Worktree(name~, ..) => Some(name)
-    Scratch | Project(..) => None
+    Project(..) => None
   }
 }
 
@@ -527,9 +514,9 @@ priv struct Conversation {
   // Live records accept engine mutations. An archived record is a read-only
   // snapshot source until an unarchive notification moves it back to live.
   record : ConversationRecord
-  // Scratch, registered project, or project-owned worktree. One enum keeps
-  // those mutually exclusive placements from drifting apart and is the only
-  // stored source for filesystem and language-server routing.
+  // Registered project or project-owned worktree. One value keeps those
+  // mutually exclusive placements from drifting apart and is the only stored
+  // source for filesystem and language-server routing.
   workspace : Workspace
   // The composer's launch mode for a conversation that has not begun: run
   // the first prompt in a fresh host-named worktree instead of the
@@ -538,7 +525,7 @@ priv struct Conversation {
   worktree_mode : Bool
   // The model this conversation's next turn runs with, chosen on the
   // composer's chip. Per conversation, not per app: a long refactor can sit
-  // on the high tier while a scratch chat next to it stays cheap. Born from
+  // on the high tier while a quick question beside it stays cheap. Born from
   // the page's `default_model` — or, for a conversation the page first meets
   // through a live run, from that run's tier. Nothing but the chip changes it
   // afterwards: a start is always older than the composer, so echoing one
@@ -904,10 +891,7 @@ priv enum SkillsCatalog {
 /// probing for the injected bridge, connected, or given up with a reason.
 priv enum BridgeState {
   Connecting
-  // Connected carries the two roots the host names on `agent.connected`:
-  // the Scratch working base and the global durable session store —
-  // available exactly while the connection is, so neither needs an Option.
-  Connected(scratch_root~ : @common.Uri, session_root~ : @common.Uri)
+  Connected
   BridgeLost(String)
 } derive(Eq)
 
@@ -924,12 +908,12 @@ priv enum ArchiveDisposition {
 } derive(Eq)
 
 ///|
-/// One durable archive identity. Session ids may repeat in Scratch and
-/// project stores, so archive actions, notifications, and tombstones always
-/// retain the host-listed workspace beside the id.
+/// One durable archive identity. Session ids may repeat across project
+/// stores, so archive actions, notifications, and tombstones always retain
+/// the host-listed workspace beside the id.
 priv struct ArchiveRecordKey {
   session : String
-  workspace : @common.Uri?
+  workspace : @common.Uri
 } derive(Eq)
 
 ///|
@@ -941,35 +925,31 @@ fn ArchiveRecordKey::matches(
 }
 
 ///|
-/// Bind a host protocol workspace path to the channel that produced it.
-/// Malformed non-empty paths invalidate the notification instead of
-/// accidentally turning it into a Scratch-store tombstone.
+/// Bind a host protocol workspace path to the channel that produced it. A
+/// blank or malformed path invalidates the notification: every durable
+/// record belongs to a workspace store, so a key without one names nothing.
 fn ArchiveRecordKey::from_protocol(
   channel : @interop.ChannelId,
   session : String,
   workspace : String,
 ) -> ArchiveRecordKey? {
-  if workspace.is_empty() {
-    Some({ session, workspace: None })
-  } else if @resource.of_path(channel, workspace) is Some(resource) {
-    Some({ session, workspace: Some(resource) })
-  } else {
-    None
+  guard @resource.of_path(channel, workspace) is Some(resource) else {
+    return None
   }
+  Some({ session, workspace: resource })
 }
 
 ///|
 /// Encode the selected store for a request only when its resource belongs to
-/// the channel that produced it. Scratch is the required empty workspace.
+/// the channel that produced it.
 fn ArchiveRecordKey::workspace_payload(
   self : ArchiveRecordKey,
   channel : @interop.ChannelId,
 ) -> String? {
-  match self.workspace {
-    None => Some("")
-    Some(workspace) if @resource.belongs_to(workspace, channel) =>
-      Some(workspace.path)
-    Some(_) => None
+  if @resource.belongs_to(self.workspace, channel) {
+    Some(self.workspace.path)
+  } else {
+    None
   }
 }
 
@@ -1043,8 +1023,10 @@ priv struct DeviceState {
   // conversations copy their launch mode from here; an absent row that has
   // not been fetched yet is the Local default.
   workspace_settings : Array[ProjectSettings]
-  // Where "New chat" lands. `None` is the default scratch store; a project
-  // placement always retains its validated absolute-path provenance.
+  // The project the user last selected — where "New chat" lands. `None`
+  // means nothing has been selected on this device yet, not that a chat has
+  // nowhere to go: see `target_project`. A placement always retains its
+  // validated absolute-path provenance.
   active_project : @common.Uri?
 } derive(Eq)
 
@@ -1591,7 +1573,7 @@ priv enum Msg {
   OpenArchivedSession(
     @interop.ChannelId,
     session~ : String,
-    workspace~ : @common.Uri?
+    workspace~ : @common.Uri
   )
   // The user clicked the system notification posted through Proton's
   // notification extension: jump to the conversation that owned that run.
@@ -1656,8 +1638,8 @@ priv enum Msg {
   // Hard bound for that submodule checkout, in seconds. Update accepts only
   // the values rendered by the workspace settings select.
   WorkspaceSubmoduleTimeoutChosen(@interop.ChannelId, @common.Uri, String)
-  // Start a fresh conversation in a device's project (`None` = Scratch),
-  // selecting its explicit channel first if needed.
+  // Start a fresh conversation in a device's project, selecting its explicit
+  // channel first if needed. `None` leaves the device's own selection alone.
   NewChatIn(@interop.ChannelId, @common.Uri?)
   // Flip the composer's launch mode for a conversation that has not begun:
   // workspace root, or a fresh host-named worktree (its execution
@@ -1791,7 +1773,7 @@ priv enum Msg {
 /// `FromDevice(channel, ...)`; messages that back page-global or
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
-  BridgeReady(scratch_root~ : @common.Uri, session_root~ : @common.Uri)
+  BridgeReady
   BridgeUnavailable(String)
   // The channel's WebSocket closed (or failed to open). The handler counts
   // the loss and schedules `ReconnectDue`, making the model's device list
@@ -2152,20 +2134,23 @@ priv enum DeviceMsg {
 }
 
 ///|
-/// A workspace registry token ("" = the default store) as a typed root.
-/// Registry and session JSON are input boundaries, so malformed non-empty
-/// spellings are rejected here before they enter frontend state.
+/// A conversation with nothing in it yet, in the project that owns it. The
+/// project is required because a conversation is where work happens: it
+/// names the store its record lives in and the directory every run, file,
+/// and terminal request resolves against. A caller whose session is bound to
+/// one of that project's worktrees narrows `workspace` afterwards, once the
+/// registry row that proves the binding is in hand.
 fn empty_conversation(
   channel : @interop.ChannelId,
   session_id : String,
-  project? : @common.Uri,
+  project : @common.Uri,
   model? : EngineModel = High,
 ) -> Conversation {
   {
     device: channel,
     session_id,
     record: LiveRecord,
-    workspace: Workspace::from_project(project),
+    workspace: Project(root=project),
     worktree_mode: false,
     engine_model: model,
     task: "",
@@ -2386,6 +2371,19 @@ fn Model::with_active_project(self : Model, project : @common.Uri?) -> Model {
 }
 
 ///|
+/// Where a new conversation lands on this device: the project last selected,
+/// or the first registered one when nothing has been selected yet — the
+/// state a freshly connected page is in, and the reason the app opens a chat
+/// instead of waiting for the user to pick a project first. `None` only when
+/// the device has no project at all, which is the onboarding state.
+fn DeviceState::target_project(self : DeviceState) -> @common.Uri? {
+  match self.active_project {
+    Some(project) => Some(project)
+    None => self.projects.get(0)
+  }
+}
+
+///|
 /// The focused device's roster name — the console banner's subject. The
 /// desktop window (no roster) is always its own local host.
 fn Model::focused_device_name(self : Model) -> String {
@@ -2530,16 +2528,18 @@ fn Model::display_status(self : Model) -> Status {
   match self.bridge_state() {
     Connecting => WaitingBridge
     BridgeLost(message) => Unavailable(message)
-    Connected(..) =>
-      match self.active().run {
-        NoRun(ended=None) => self.settings_status()
-        NoRun(ended=Some(RunFailed)) => Failed
-        NoRun(ended=Some(RunErrored)) => Errored
-        NoRun(ended=Some(RunFinished(outcome))) => Finished(outcome)
-        Starting(..) => Starting
-        Open(stage=Opened, ..) => Running
-        Open(stage=AtStep(step), ..) => Step(step)
-        Open(stage=Cancelling, ..) => Cancelling
+    // Onboarding has no conversation and therefore no run of its own; the
+    // settings-derived readiness is the whole of what can be reported.
+    Connected =>
+      match self.active_conversation().map(conv => conv.run) {
+        None | Some(NoRun(ended=None)) => self.settings_status()
+        Some(NoRun(ended=Some(RunFailed))) => Failed
+        Some(NoRun(ended=Some(RunErrored))) => Errored
+        Some(NoRun(ended=Some(RunFinished(outcome)))) => Finished(outcome)
+        Some(Starting(..)) => Starting
+        Some(Open(stage=Opened, ..)) => Running
+        Some(Open(stage=AtStep(step), ..)) => Step(step)
+        Some(Open(stage=Cancelling, ..)) => Cancelling
       }
   }
 }
@@ -2683,7 +2683,8 @@ fn Model::matched_settlement_frontier(
 /// The registered project a session belongs to on `channel`: the sidebar list's
 /// grouping when the store knows the session, the live conversation's own
 /// placement otherwise (a fresh chat that has not reached the store yet).
-/// `None` = the default store.
+/// `None` when this page knows of neither — an id from a store it has not
+/// listed, which nothing here can place.
 fn Model::session_project(
   self : Model,
   channel : @interop.ChannelId,
@@ -2695,20 +2696,17 @@ fn Model::session_project(
   }
   for item in sessions {
     if item.id == session_id {
-      return item.workspace
+      return Some(item.workspace)
     }
   }
-  match self.find_conversation(channel, session_id) {
-    Some(conv) => conv.workspace.project()
-    None => None
-  }
+  self.find_conversation(channel, session_id).map(conv => conv.project())
 }
 
 ///|
 /// Resolve a host-reported durable session root back to a registered project.
-/// Project conversations live at `<project>/.openseek`;
-/// scratch conversations use the unrelated global root and therefore do not
-/// match anything here. The lexical helper normalizes Windows separators.
+/// Project conversations live at `<project>/.openseek`; a root outside every
+/// registered project matches nothing here. The lexical helper normalizes
+/// Windows separators.
 fn DeviceState::project_for_session_root(
   self : DeviceState,
   session_root : @common.Uri?,
@@ -2724,29 +2722,23 @@ fn DeviceState::project_for_session_root(
 }
 
 ///|
-/// Classify a broadcast durable store root into a placement (`None` = the
-/// Scratch store). The global root the host named on connect is matched
-/// exactly, so the classification is correct even while the projects
-/// registry reply is still in flight; any other root is a project store —
-/// named by the registry when it is already mirrored, and by the store
-/// layout (`<project>/.openseek`) until then.
+/// Classify a broadcast durable store root into its owning project. Every
+/// store belongs to one: the registry names it when that mirror has already
+/// arrived, and the store layout (`<project>/.openseek`) names it until then,
+/// so the classification is correct even while the projects reply is in
+/// flight. `None` is a foreign writer with an unexpected layout: nothing
+/// here can say where that record lives, so the event carrying it is dropped
+/// rather than attached to a guessed directory.
 fn DeviceState::placement_for_store_root(
   self : DeviceState,
-  global~ : @common.Uri,
   root : @common.Uri,
 ) -> @common.Uri? {
-  if root == global {
-    return None
-  }
   if self.project_for_session_root(Some(root)) is Some(project) {
     return Some(project)
   }
   if @common.ext_uri.basename(root) == ".openseek" {
     return Some(@common.ext_uri.dirname(root))
   }
-  // Not the global store yet not a recognizable project store: a foreign
-  // writer with an unexpected layout. Scratch is the least-wrong visible
-  // bucket, and the session list reconcile corrects it.
   None
 }
 
@@ -2886,21 +2878,14 @@ fn remembered_with(
 }
 
 ///|
-/// The conversation on screen. Until the startup session rotation lands the
-/// model has no conversations yet; an empty placeholder keeps the view (and
-/// every handler reading the active conversation) total.
-fn Model::active(self : Model) -> Conversation {
-  if self.find_conversation(self.focused, self.active_session) is Some(conv) {
-    conv
-  } else {
-    empty_conversation(
-      self.focused,
-      self.active_session,
-      model=self
-        .remembered_model(self.focused, self.active_session)
-        .unwrap_or(self.default_model),
-    )
-  }
+/// The conversation on screen, when there is one. `None` is the state the app
+/// starts in and returns to whenever no project can hold a chat: the registry
+/// has not arrived yet, or every project was detached. A conversation is
+/// created only inside a project, so this is also the proof that the one on
+/// screen has a workspace — the view forks here, and the onboarding branch is
+/// the only place with no conversation to render.
+fn Model::active_conversation(self : Model) -> Conversation? {
+  self.find_conversation(self.focused, self.active_session)
 }
 
 ///|
@@ -2942,7 +2927,7 @@ fn Model::conversation_for_composer_action(
 /// "New chat" sidebar row in its workspace's group, taking a real title at
 /// the first send.
 fn Model::composing_new_chat(self : Model) -> Bool {
-  let conv = self.active()
+  guard self.active_conversation() is Some(conv) else { return false }
   if conv.has_begun() {
     return false
   }
@@ -3027,15 +3012,21 @@ fn Model::conversation_by_pending_steer(
 }
 
 ///|
-/// Make `session_id` the on-screen conversation, creating its entry when it
-/// has none, and drop conversations with nothing worth keeping. Exact input
-/// ownership is retained even after lifecycle recovery closes a run: a late
-/// id-bearing receipt or rejection may still retract a warning or restore its
-/// draft. Abandoned "New chat" husks die here instead of accumulating.
+/// Make `session_id` the on-screen conversation, creating its entry in
+/// `project` when it has none, and drop conversations with nothing worth
+/// keeping. Exact input ownership is retained even after lifecycle recovery
+/// closes a run: a late id-bearing receipt or rejection may still retract a
+/// warning or restore its draft. Abandoned "New chat" husks die here instead
+/// of accumulating.
+///
+/// `project` places only a conversation this page has never held. One that
+/// already exists keeps the workspace it was placed in, which may be a
+/// worktree of that same project.
 fn Model::activate(
   self : Model,
   channel : @interop.ChannelId,
   session_id : String,
+  project : @common.Uri,
 ) -> Model {
   let conversations : Array[Conversation] = []
   let mut found = false
@@ -3053,6 +3044,7 @@ fn Model::activate(
       empty_conversation(
         channel,
         session_id,
+        project,
         model=self
           .remembered_model(channel, session_id)
           .unwrap_or(self.default_model),
@@ -3081,6 +3073,21 @@ fn Model::activate(
 /// conversation lives on in memory with no way back to it.
 fn Conversation::worth_keeping(self : Conversation) -> Bool {
   self.has_begun() || !self.draft_empty()
+}
+
+///|
+/// The registered project this conversation works in — its own root, or the
+/// project that owns its worktree. Naming the project is not the same as
+/// having a directory: a worktree's checkout is resolved from the registry
+/// by `Model::conversation_placement`, which is what path-based work waits on.
+fn Conversation::project(self : Conversation) -> @common.Uri {
+  self.workspace.project()
+}
+
+///|
+/// This conversation's worktree registry name, when it is bound to one.
+fn Conversation::worktree_name(self : Conversation) -> String? {
+  self.workspace.worktree_name()
 }
 
 ///|

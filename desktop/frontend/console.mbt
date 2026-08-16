@@ -516,7 +516,11 @@ test "a revoked page device is retired without connecting a survivor" {
   assert_true(listed.focused == Remote("d_a"))
   let seeded = {
     ..listed.replace_conversation(
-      empty_conversation(@interop.ChannelId::Remote("d_a"), "s1"),
+      empty_conversation(
+        @interop.ChannelId::Remote("d_a"),
+        "s1",
+        @interop.ChannelId::Remote("d_a").test_project(),
+      ),
     ),
     api_provider: Custom,
     custom_api_url: "https://old.example/chat",

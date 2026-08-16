@@ -6,14 +6,12 @@
 ///|
 /// Project the focused conversation and its open editor tabs into the palette.
 /// The projection is read-only; the opaque palette state itself is stored once
-/// in the application Model.
-fn Model::quick_open_input(self : Model) -> @quick_open.Input {
-  let active = self
-    .active_checkout()
-    .unwrap_or({
-      owner: { channel: self.focused, session: "" },
-      placement: None,
-    })
+/// in the application Model. The checkout is passed in because the palette
+/// only ever exists for one that is on screen.
+fn Model::quick_open_input(
+  self : Model,
+  active : ActiveCheckout,
+) -> @quick_open.Input {
   @quick_open.Input(
     owner=active.owner,
     root=active.placement.bind(placement => placement.checkout_root()),
@@ -37,12 +35,12 @@ fn open_quick_open(
     model.archived_delete_confirm is None &&
     !(model.update_ux is ConfirmingRestart(..)) &&
     !(model.bridge_state() is BridgeLost(_)) &&
-    model.active_checkout() is Some(_) else {
+    model.active_checkout() is Some(active) else {
     return (@cmd.none, model)
   }
   let (cmd, quick_open) = model.quick_open.open(
     dispatch.map(msg => QuickOpen(msg)),
-    model.quick_open_input(),
+    model.quick_open_input(active),
     provider,
   )
   (cmd, { ..model, quick_open, launcher: { ..model.launcher, open: false } })
@@ -58,10 +56,17 @@ fn update_quick_open(
   model : Model,
   msg : @quick_open.Msg,
 ) -> (@cmd.Cmd, Model) {
+  // The palette searches one checkout. With none on screen it has no owner to
+  // answer for, so it closes rather than resolving the message against a
+  // conversation or task that is gone.
+  guard model.active_checkout() is Some(active) else {
+    let (cmd, quick_open) = model.quick_open.close()
+    return (cmd, { ..model, quick_open, })
+  }
   let (cmd, quick_open, accepted) = model.quick_open.handle(
     dispatch.map(msg => QuickOpen(msg)),
     msg,
-    model.quick_open_input(),
+    model.quick_open_input(active),
   )
   let model = { ..model, quick_open, }
   guard accepted is Some(target) else { return (cmd, model) }

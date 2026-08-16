@@ -11,7 +11,7 @@ import {
 // Values
 pub async fn archive_session(EngineManager, String, (String, String) -> Unit, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveReply
 
-pub async fn archived_sessions(EngineManager, (String, String) -> Unit) -> @protocol.SessionsReply
+pub async fn archived_sessions(EngineManager) -> @protocol.SessionsReply
 
 pub async fn attach_workspace(String, (Array[String]) -> Unit) -> @protocol.WorkspacesReply
 
@@ -25,8 +25,6 @@ pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) ->
 
 pub async fn engine_command(String) -> String
 
-pub fn global_session_root() -> String raise EngineError
-
 pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalReply
 
 pub async fn list_sessions(EngineManager) -> @protocol.SessionsReply
@@ -37,11 +35,11 @@ pub async fn load_archived_session(EngineManager, @protocol.LoadSessionPayload) 
 
 pub async fn load_session(EngineManager, @protocol.LoadSessionPayload) -> @protocol.LoadSessionReply
 
+pub async fn migrate_global_store() -> Int
+
 pub fn new_engine_actor(String, runtime_dir? : @pathx.Path) -> EngineActor
 
 pub async fn remote_server_base(EngineManager) -> String?
-
-pub async fn scratch_root() -> String
 
 pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 

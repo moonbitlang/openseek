@@ -1,10 +1,11 @@
-// The workspace registry: project directories the user attached to the
-// desktop. A workspace conversation runs in the project itself and keeps its
-// durable sessions inside it (`<workspace>/.openseek` — the engine CLI's own
-// relative default), so the desktop and a TUI launched in that directory
+// The workspace registry: project directories attached to the desktop — the
+// ones the user picked, plus the default workspace a first launch attaches on
+// their behalf. A workspace conversation runs in the project itself and keeps
+// its durable sessions inside it (`<workspace>/.openseek` — the engine CLI's
+// own relative default), so the desktop and a TUI launched in that directory
 // resume each other's conversations. The registry only remembers which
-// directories the user attached; the session files themselves say which
-// workspace owns which conversation.
+// directories are attached; the session files themselves say which workspace
+// owns which conversation.
 
 ///|
 /// Debug is what the host boundary logs: proton renders a failed handler's
@@ -32,8 +33,9 @@ const WorkspacesFile = "workspaces.json"
 let workspace_registry_lock : @async.Mutex = Mutex()
 
 ///|
-/// The registry file: `<global session root>/workspaces.json`, beside the
-/// scratch conversations' session store.
+/// The registry file: `<global session root>/workspaces.json`. That root
+/// holds no conversations of its own — every durable record lives in the
+/// store of the workspace this file registers.
 fn workspaces_file() -> @pathx.Absolute? {
   global_store_root().map(root => root.join(WorkspacesFile))
 }
@@ -55,20 +57,39 @@ async fn canonical_path(dir : @pathx.Absolute) -> @pathx.Absolute {
 }
 
 ///|
-/// The registered workspace directories, in registration order. A missing or
-/// malformed registry reads as "no workspaces". Entries canonicalize on
-/// read, so a registry written before symlink resolution (or edited by hand)
-/// collapses aliases of one physical directory into its first spelling.
-async fn read_registry_unlocked() -> Array[@pathx.Absolute] {
-  guard workspaces_file() is Some(file) else { return [] }
+/// Everything the registry file holds. `initialized` records that the
+/// registry has already been through its one-time setup — attaching the
+/// default workspace. Keeping it inside the same file, rather than in a
+/// marker of its own, means every add or remove rewrites it along with the
+/// list, so neither half can drift and a detached default workspace can
+/// never be resurrected by the next launch.
+priv struct Registry {
+  workspaces : Array[@pathx.Absolute]
+  initialized : Bool
+}
+
+///|
+/// The registry contents. A missing or malformed registry reads as "no
+/// workspaces, not initialized" — the same state a first launch sees, which
+/// is what a user with no usable registry should get. Entries canonicalize
+/// on read, so a registry written before symlink resolution (or edited by
+/// hand) collapses aliases of one physical directory into its first spelling.
+async fn read_registry_unlocked() -> Registry {
+  let uninitialized : Registry = { workspaces: [], initialized: false }
+  guard workspaces_file() is Some(file) else { return uninitialized }
   let text = @fsx.try_read_text(file.to_path()) catch {
     error if @async.is_being_cancelled() => raise error
-    _ => return []
+    _ => return uninitialized
   }
-  guard text is Some(text) else { return [] }
-  let json = @json.parse(text) catch { _ => return [] }
-  guard json is Object(fields) && fields.get("workspaces") is Some(Array(items)) else {
-    return []
+  guard text is Some(text) else { return uninitialized }
+  let json = @json.parse(text) catch { _ => return uninitialized }
+  guard json is Object(fields) else { return uninitialized }
+  // A registry written before the default workspace existed carries no
+  // marker and therefore reads as uninitialized — correct, since that user
+  // has never been offered one.
+  let initialized = fields.get("initialized") is Some(True)
+  guard fields.get("workspaces") is Some(Array(items)) else {
+    return { workspaces: [], initialized }
   }
   let paths : Array[@pathx.Absolute] = []
   for item in items {
@@ -81,18 +102,18 @@ async fn read_registry_unlocked() -> Array[@pathx.Absolute] {
       paths.push(canonical)
     }
   }
-  paths
+  { workspaces: paths, initialized }
 }
 
 ///|
 pub async fn registered() -> Array[@pathx.Absolute] {
   workspace_registry_lock.acquire()
   defer workspace_registry_lock.release()
-  read_registry_unlocked()
+  read_registry_unlocked().workspaces
 }
 
 ///|
-async fn write_registry(paths : Array[@pathx.Absolute]) -> Unit {
+async fn write_registry(registry : Registry) -> Unit {
   guard global_store_root() is Some(root) else {
     raise WorkspaceError(
       "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
@@ -102,14 +123,89 @@ async fn write_registry(paths : Array[@pathx.Absolute]) -> Unit {
     error if @async.is_being_cancelled() => raise error
     error => raise WorkspaceError("could not create \{root}: \{error}")
   }
-  let registry : Json = { "workspaces": paths.map(path => path.0).to_json() }
-  @fsx.write_text(
-    root.join(WorkspacesFile).to_path(),
-    registry.stringify(indent=2),
-  ) catch {
+  let json : Json = {
+    "workspaces": registry.workspaces.map(path => path.0).to_json(),
+    "initialized": registry.initialized.to_json(),
+  }
+  @fsx.write_text(root.join(WorkspacesFile).to_path(), json.stringify(indent=2)) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise WorkspaceError("could not save the workspace list: \{error}")
   }
+}
+
+///|
+const WorkspaceDirName = "OpenSeek"
+
+///|
+/// The workspace a fresh install starts in: an `OpenSeek` folder inside the
+/// user's Documents directory. The agent's output is user-facing work, not
+/// app data, so it belongs where the user already looks for files. Where
+/// Documents is comes from the platform (`@userdirs.documents_dir`); when
+/// that folder does not exist (headless machines, say), the folder lives
+/// directly under the home directory.
+async fn default_workspace_dir() -> @pathx.Path? {
+  guard @home.dir() is Some(home) else { return None }
+  let parent : @pathx.Path = if @userdirs.documents_dir() is Some(documents) &&
+    @fsx.is_dir(documents) {
+    documents
+  } else {
+    home
+  }
+  Some(parent.join(WorkspaceDirName).normalize())
+}
+
+///|
+/// The default workspace's canonical path, when it is attached right now.
+/// `None` when the platform cannot name it, or when the user has detached it
+/// since — a decision every later launch respects.
+pub async fn default_workspace() -> @pathx.Absolute? {
+  guard default_workspace_dir() is Some(dir) && dir.to_absolute() is Some(dir) else {
+    return None
+  }
+  let canonical = canonical_path(dir)
+  guard registered().contains(canonical) else { return None }
+  Some(canonical)
+}
+
+///|
+/// One-time registry setup: attach the default workspace
+/// (`<Documents>/OpenSeek`, created when it is not there yet) so a fresh
+/// install has somewhere to work, and record that this ran. Returns the
+/// attached directory, or `None` when the registry has already been
+/// initialized — the user may have detached the default workspace since, and
+/// that decision outlives every later launch.
+///
+/// The host calls this before it serves any client, so the first
+/// `workspace.list` a page sees already carries the default. There is
+/// deliberately no commit broadcast: nothing is connected yet to receive one.
+pub async fn initialize() -> @pathx.Absolute? {
+  workspace_registry_lock.acquire()
+  defer workspace_registry_lock.release()
+  let registry = read_registry_unlocked()
+  guard !registry.initialized else { return None }
+  guard default_workspace_dir() is Some(dir) && dir.to_absolute() is Some(dir) else {
+    raise WorkspaceError("cannot determine the default workspace directory")
+  }
+  @fsx.ensure_dir(dir.to_path()) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise WorkspaceError("could not create \{dir.0}: \{error}")
+  }
+  let canonical = canonical_path(dir)
+  // Best-effort, exactly as `add_workspace` does it: the default workspace
+  // is rarely a repository, but a user who initialized one there still gets
+  // the in-project store kept out of `git status`.
+  exclude_from_git(canonical, ".openseek")
+  let paths = registry.workspaces
+  if !paths.contains(canonical) {
+    paths.push(canonical)
+  }
+  // The marker and the list commit together. A crash before this write
+  // leaves the registry uninitialized, so the next launch simply repeats the
+  // whole idempotent step.
+  @async.protect_from_cancel(() => {
+    write_registry({ workspaces: paths, initialized: true })
+  })
+  Some(canonical)
 }
 
 ///|
@@ -148,7 +244,8 @@ pub async fn add(
   exclude_from_git(dir, ".openseek")
   workspace_registry_lock.acquire()
   defer workspace_registry_lock.release()
-  let paths = read_registry_unlocked()
+  let registry = read_registry_unlocked()
+  let paths = registry.workspaces
   // The write and broadcast callback are one finite, cancellation-shielded
   // linearization point while the lock is held. Once disk changes, every
   // client is therefore notified in that same total order even if the
@@ -156,7 +253,7 @@ pub async fn add(
   @async.protect_from_cancel(() => {
     if !paths.contains(canonical) {
       paths.push(canonical)
-      write_registry(paths)
+      write_registry({ ..registry, workspaces: paths })
     }
     on_committed(paths)
   })
@@ -174,9 +271,13 @@ pub async fn remove(
   let target = canonical_path(expanded_path(path))
   workspace_registry_lock.acquire()
   defer workspace_registry_lock.release()
-  let paths = read_registry_unlocked().filter(p => p != target)
+  let registry = read_registry_unlocked()
+  let paths = registry.workspaces.filter(p => p != target)
   @async.protect_from_cancel(() => {
-    write_registry(paths)
+    // `initialized` is rewritten untouched: detaching the default workspace
+    // is a decision, not a reset, so the next launch must not attach it
+    // again.
+    write_registry({ ..registry, workspaces: paths })
     on_committed(paths)
   })
   paths

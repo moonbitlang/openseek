@@ -512,21 +512,14 @@ async fn session_show_stdout(
 }
 
 ///|
-/// The sidebar's conversations, one group per session store: the global root
-/// first (scratch conversations), then each registered workspace's in-project
-/// store, in registration order. A group whose listing fails reports the
-/// failure in its `error` field rather than failing the whole reply.
+/// The sidebar's conversations, one group per registered workspace's
+/// in-project store, in registration order. A group whose listing fails
+/// reports the failure in its `error` field rather than failing the whole
+/// reply.
 pub async fn list_sessions(manager : EngineManager) -> SessionsReply {
-  guard @workspaces.global_store_root() is Some(root) else {
-    raise EngineError(
-      "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
-    )
-  }
-  let groups : Array[SessionGroup] = [session_group(manager, None, root)]
+  let groups : Array[SessionGroup] = []
   for path in @workspaces.registered() {
-    groups.push(
-      session_group(manager, Some(path), @workspaces.store_root(path)),
-    )
+    groups.push(session_group(manager, path, @workspaces.store_root(path)))
   }
   { groups, }
 }
@@ -534,14 +527,11 @@ pub async fn list_sessions(manager : EngineManager) -> SessionsReply {
 ///|
 async fn session_group(
   manager : EngineManager,
-  workspace : @pathx.Absolute?,
+  workspace : @pathx.Absolute,
   root : @pathx.Absolute,
 ) -> SessionGroup {
-  let (workspace, name) = match workspace {
-    Some(workspace) =>
-      (workspace.resource_path(), workspace.to_path().basename().to_owned())
-    None => ("", "")
-  }
+  let name = workspace.to_path().basename().to_owned()
+  let workspace = workspace.resource_path()
   let native_root = root.to_string()
   let root = root.resource_path()
   fn failed(error : String) -> SessionGroup {
@@ -580,7 +570,7 @@ pub async fn load_session(
   let record_guard = manager.begin_record_read(session)
   defer manager.end_record_read(session, record_guard)
   // The client's workspace hint says which registered store to read. A
-  // detached workspace is rejected instead of silently probing the global
+  // detached workspace is rejected instead of silently probing another
   // store, which could return a different history for the same session id.
   let root = if payload.workspace is Some(hint) && !hint.is_blank() {
     guard @pathx.Absolute::from_uri_path(hint) is Some(absolute) &&
@@ -593,7 +583,7 @@ pub async fn load_session(
   }
   guard root is Some(root) else {
     raise EngineError(
-      "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
+      "no attached workspace holds this conversation; attach its project first",
     )
   }
   // A followed session (a live engine is writing to it) is read through its
@@ -616,7 +606,7 @@ pub async fn load_session(
       raise EngineError("this conversation is archived; unarchive it first")
     }
     raise EngineError(
-      "no durable record for this conversation in the global store or any attached workspace",
+      "no durable record for this conversation in any attached workspace",
     )
   }
   let output = session_show_stdout(manager, session, root) catch {
@@ -733,32 +723,6 @@ fn @pathx.Absolute::resource_path(
 }
 
 ///|
-/// Device-native base for Scratch conversation directories, encoded in the
-/// resource-path form the frontend binds to a channel. Readiness fails when
-/// this cannot be resolved, so `agent.connected` never carries an empty root.
-pub async fn scratch_root() -> String {
-  guard @work_dir.workspace_root() is Some(root) &&
-    root.to_absolute() is Some(root) else {
-    raise EngineError("cannot determine the scratch workspace root")
-  }
-  root.resource_path()
-}
-
-///|
-/// The global durable session store root — the Scratch store — encoded in
-/// the resource-path form the frontend binds to a channel. Readiness fails
-/// when it cannot be resolved, so `agent.connected` always names the store
-/// against which clients classify broadcast session roots.
-pub fn global_session_root() -> String raise EngineError {
-  guard @workspaces.global_store_root() is Some(root) else {
-    raise EngineError(
-      "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
-    )
-  }
-  root.resource_path()
-}
-
-///|
 pub async fn list_workspaces() -> WorkspacesReply {
   Workspaces(@workspaces.registered().map(path => path.resource_path()))
 }
@@ -847,17 +811,40 @@ fn has_finished_run(events : Array[EngineEvent], run_id : String) -> Bool {
 }
 
 ///|
+/// A workspace fixture for the run tests: `<root>/ws` attached as the only
+/// registered workspace, with the registry itself under `<root>/global`.
+/// Every run belongs to a workspace now, so a test that starts one registers
+/// a real directory rather than relying on the removed scratch fallback.
+/// Returns the path to send as the start payload's workspace hint.
+async fn attach_run_workspace(root : @pathx.Path) -> String {
+  let workspace = root.join("ws")
+  @fsx.ensure_dir(workspace)
+  let global = root.join("global")
+  @fsx.ensure_dir(global)
+  @fs.write_file(
+    global.join("workspaces.json").to_string(),
+    ({ "workspaces": [workspace.to_string()] } : Json).stringify(),
+    create_mode=CreateOrTruncate,
+  )
+  workspace.to_string()
+}
+
+///|
 #cfg(not(platform="windows"))
 async test "start echoes the client submission id in Started" {
   let dir = @fs.tmpdir(prefix="openseek-start-submission-")
   let root : @pathx.Path = Path(dir)
-  // Starting a run resolves a work directory under `HOME`. Own it, so this
-  // test neither races one that moves `HOME` nor writes into the real home.
+  // A run is handed the global skills library under `HOME`. Own it, so this
+  // test neither races one that moves `HOME` nor reads the developer's own.
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
   defer restore_home_env(previous_home)
+  let previous_session_root = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
+  defer restore_session_root_env(previous_session_root)
+  let workspace = attach_run_workspace(root)
   let engine = root.join("bin/engine.sh")
   let seed = root.join("bin/toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")
@@ -883,8 +870,8 @@ async test "start echoes the client submission id in Started" {
     }),
   )
   let emitted : Array[EngineEvent] = []
-  // Starts are durable now, so each test owns a fresh conversation record and
-  // scratch directory instead of sharing a fixed id across test processes.
+  // Starts are durable now, so each test owns a fresh conversation record
+  // instead of sharing a fixed id across test processes.
   let session = "s-" + mint_run_id()
   let sink = EventSink(fn(event) { emitted.push(event) })
   @async.with_task_group(group => {
@@ -901,7 +888,7 @@ async test "start echoes the client submission id in Started" {
         model: None,
         max_steps: None,
         session,
-        workspace: None,
+        workspace: Some(workspace),
       }),
     )
     let mut echoed : String? = None
@@ -925,13 +912,17 @@ async test "start echoes the client submission id in Started" {
 async test "a goal is delivered only once its command is on the wire" {
   let dir = @fs.tmpdir(prefix="openseek-goal-ack-")
   let root : @pathx.Path = Path(dir)
-  // Starting an engine resolves a work directory under `HOME`. Own it, so this
-  // test neither races one that moves `HOME` nor writes into the real home.
+  // A run is handed the global skills library under `HOME`. Own it, so this
+  // test neither races one that moves `HOME` nor reads the developer's own.
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
   defer restore_home_env(previous_home)
+  let previous_session_root = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
+  defer restore_session_root_env(previous_session_root)
+  let workspace = attach_run_workspace(root)
   let engine = root.join("bin/engine.sh")
   let seed = root.join("bin/toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")
@@ -974,7 +965,7 @@ async test "a goal is delivered only once its command is on the wire" {
       auto: None,
       model: None,
       max_steps: None,
-      workspace: None,
+      workspace: Some(workspace),
     })
     assert_true(delivered.delivered)
     // The reply already means the bytes left this host, so the child has them
@@ -1049,13 +1040,17 @@ async test "a discarded command answers its sender" {
 async test "setup failure retires the writer before an immediate next start" {
   let dir = @fs.tmpdir(prefix="openseek-setup-failed-seam-")
   let root : @pathx.Path = Path(dir)
-  // Starting a run resolves a work directory under `HOME`. Own it, so this
-  // test neither races one that moves `HOME` nor writes into the real home.
+  // A run is handed the global skills library under `HOME`. Own it, so this
+  // test neither races one that moves `HOME` nor reads the developer's own.
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
   defer restore_home_env(previous_home)
+  let previous_session_root = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
+  defer restore_session_root_env(previous_session_root)
+  let workspace = attach_run_workspace(root)
   let engine = root.join("bin/engine.sh")
   let seed = root.join("bin/toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")
@@ -1099,7 +1094,7 @@ async test "setup failure retires the writer before an immediate next start" {
       model: None,
       max_steps: None,
       session,
-      workspace: None,
+      workspace: Some(workspace),
     })
     assert_true(
       @async.with_timeout_opt(3000, () => {
@@ -1125,7 +1120,7 @@ async test "setup failure retires the writer before an immediate next start" {
       model: None,
       max_steps: None,
       session,
-      workspace: None,
+      workspace: Some(workspace),
     })
     assert_eq(second.status, "accepted")
     assert_true(@fsx.exists(old_done))
@@ -1161,13 +1156,17 @@ async test "setup failure retires the writer before an immediate next start" {
 async test "a prompt bigger than the pipe still settles exactly once" {
   let dir = @fs.tmpdir(prefix="openseek-backpressured-command-")
   let root : @pathx.Path = Path(dir)
-  // Starting a run resolves a work directory under `HOME`. Own it, so this
-  // test neither races one that moves `HOME` nor writes into the real home.
+  // A run is handed the global skills library under `HOME`. Own it, so this
+  // test neither races one that moves `HOME` nor reads the developer's own.
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
   defer restore_home_env(previous_home)
+  let previous_session_root = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
+  defer restore_session_root_env(previous_session_root)
+  let workspace = attach_run_workspace(root)
   let engine = root.join("bin/engine.sh")
   let seed = root.join("bin/toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")
@@ -1218,7 +1217,7 @@ async test "a prompt bigger than the pipe still settles exactly once" {
       model: None,
       max_steps: None,
       session,
-      workspace: None,
+      workspace: Some(workspace),
     })
     assert_eq(reply.status, "accepted")
     assert_eq(started.val, Some(reply.run_id))
@@ -1259,14 +1258,15 @@ async test "named session retries after its first prompt creates no record" {
   let engine = root.join("bin/engine.sh")
   let seed = root.join("bin/toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")
-  let store = root.join("store")
   let previous_session_root = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
-  @sys.set_env_var("OPENSEEK_SESSION_ROOT", store.to_string())
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
   defer restore_session_root_env(previous_session_root)
+  let workspace = attach_run_workspace(root)
+  // The conversation's record lives in its workspace's in-project store.
+  let store = root.join("ws/.openseek")
   let count = root.join("serve-count")
   let first_ready = root.join("first-ready")
   let session = "s-" + mint_run_id()
-  let workspace = @work_dir.of_session(session)
   prepare_fake_moonbit_seed(seed, version="0.10.0-test")
   prepare_fake_bundled_moonbit_home(
     runtime.join("toolchains/moonbit/macos-arm64"),
@@ -1313,7 +1313,7 @@ async test "named session retries after its first prompt creates no record" {
       model: None,
       max_steps: None,
       session,
-      workspace: None,
+      workspace: Some(workspace),
     })
     assert_eq(first.status, "accepted")
     assert_eq(started.val, Some(first.run_id))
@@ -1353,7 +1353,7 @@ async test "named session retries after its first prompt creates no record" {
       model: None,
       max_steps: None,
       session,
-      workspace: None,
+      workspace: Some(workspace),
     })
     assert_eq(second.status, "accepted")
     assert_true(
@@ -1367,11 +1367,6 @@ async test "named session retries after its first prompt creates no record" {
     assert_eq(@fs.read_file(count.to_string()).text(), "2")
     group.return_immediately(())
   })
-  if workspace is Some(workspace) {
-    @fs.rmdir(workspace.to_string(), recursive=true) catch {
-      _ => ()
-    }
-  }
   @fs.rmdir(dir, recursive=true)
 }
 
@@ -1414,9 +1409,12 @@ async test "session load preserves a future item without hiding known events" {
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let dir = @fs.tmpdir(prefix="openseek-load-future-item-")
   let engine = dir + "/engine.sh"
-  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir)
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir + "/global")
   defer restore_session_root_env(previous)
-  @fsx.ensure_dir(Path(dir + "/sessions/s-future"))
+  // A hint-less load resolves the store from where the record actually
+  // lives, so the record goes in an attached workspace's own store.
+  ignore(attach_run_workspace(Path(dir)))
+  @fsx.ensure_dir(Path(dir + "/ws/.openseek/sessions/s-future"))
   @fs.write_file(
     engine,
     "#!/bin/sh\nprintf '%s' '{\"events\":[{\"sequence\":1,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"question\"}}},{\"sequence\":2,\"item\":{\"kind\":\"future_item\",\"payload\":{\"value\":42}}},{\"sequence\":3,\"item\":{\"kind\":\"assistant\",\"payload\":{\"content\":\"answer\"}}}]}'\n",
@@ -1444,9 +1442,13 @@ async test "archived session load reads without restoring the record" {
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let dir = @fs.tmpdir(prefix="openseek-load-archived-")
   let engine = dir + "/engine.sh"
-  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir)
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir + "/global")
   defer restore_session_root_env(previous)
-  @fsx.ensure_dir(Path(dir + "/archived/sessions/s-archived"))
+  // A hint-less load resolves the store from where the record actually
+  // lives, so the record goes in an attached workspace's own store.
+  ignore(attach_run_workspace(Path(dir)))
+  let store = dir + "/ws/.openseek"
+  @fsx.ensure_dir(Path(store + "/archived/sessions/s-archived"))
   @fs.write_file(
     engine,
     "#!/bin/sh\nprintf '%s' '{\"events\":[{\"sequence\":1,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"question\"}}},{\"sequence\":2,\"item\":{\"kind\":\"assistant\",\"payload\":{\"content\":\"answer\"}}}]}'\n",
@@ -1463,8 +1465,8 @@ async test "archived session load reads without restoring the record" {
   }
   assert_eq(events.length(), 2)
   assert_eq(reply.watermark, Some(2))
-  assert_true(@fsx.is_dir(Path(dir + "/archived/sessions/s-archived")))
-  assert_false(@fsx.exists(Path(dir + "/sessions/s-archived")))
+  assert_true(@fsx.is_dir(Path(store + "/archived/sessions/s-archived")))
+  assert_false(@fsx.exists(Path(store + "/sessions/s-archived")))
   assert_true(manager.record_guards.is_empty())
   @fs.rmdir(dir, recursive=true)
 }

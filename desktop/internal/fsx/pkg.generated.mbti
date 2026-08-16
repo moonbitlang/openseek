@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub async fn copy_dir(@pathx.Path, @pathx.Path) -> Unit
+
 pub async fn copy_file(@pathx.Path, @pathx.Path) -> Unit
 
 pub async fn ensure_dir(@pathx.Path) -> Unit

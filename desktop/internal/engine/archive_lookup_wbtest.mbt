@@ -145,7 +145,7 @@ async test "loading a conversation from a detached workspace names that state" {
   debug_inspect(
     detail,
     content=(
-      #|"no durable record for this conversation in the global store or any attached workspace"
+      #|"no attached workspace holds this conversation; attach its project first"
     ),
   )
   @fs.rmdir(dir, recursive=true)
@@ -159,8 +159,10 @@ async test "archiving an already-archived conversation names that state" {
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   defer restore_session_root_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-again-")
-  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir)
-  @fsx.ensure_dir(Path(dir + "/archived/sessions/s-done"))
+  @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir + "/global")
+  ignore(attach_run_workspace(Path(dir)))
+  let store = dir + "/ws/.openseek"
+  @fsx.ensure_dir(Path(store + "/archived/sessions/s-done"))
   let manager = new_engine_manager("unused")
   manager.pump = Serving(sessions=Map([]))
   let detail = try {
@@ -177,6 +179,6 @@ async test "archiving an already-archived conversation names that state" {
       #|"this conversation is already archived"
     ),
   )
-  assert_true(@fsx.is_dir(Path(dir + "/archived/sessions/s-done")))
+  assert_true(@fsx.is_dir(Path(store + "/archived/sessions/s-done")))
   @fs.rmdir(dir, recursive=true)
 }
