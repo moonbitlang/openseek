@@ -1063,8 +1063,11 @@ async test "abrupt EOF retains a failed final drain for later boundary retry" {
       sink,
       follower: Some(follower),
       consumer: None,
-      latest_run: Some("r-abrupt-eof"),
-      phase: Running(cancel_requested=false, compact_queued=false),
+      phase: Running(
+        run_id="r-abrupt-eof",
+        cancel_requested=false,
+        compact_queued=false,
+      ),
       condemned: false,
       steer_runs: SteerRunTracker::new(),
     }
@@ -1260,8 +1263,7 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
       sink,
       follower: Some(follower),
       consumer: None,
-      latest_run: Some("r-detach-fail"),
-      phase: Idle,
+      phase: Idle(last_run=Some("r-detach-fail")),
       condemned: true,
       steer_runs: SteerRunTracker::new(),
     }
@@ -1494,8 +1496,11 @@ async test "failed command stays unusable through a close timeout" {
       sink,
       follower: Some(follower),
       consumer: None,
-      latest_run: Some("r-timeout"),
-      phase: Running(cancel_requested=false, compact_queued=false),
+      phase: Running(
+        run_id="r-timeout",
+        cancel_requested=false,
+        compact_queued=false,
+      ),
       condemned: false,
       steer_runs: SteerRunTracker::new(),
     }
@@ -1506,8 +1511,7 @@ async test "failed command stays unusable through a close timeout" {
     retire_failed_command(manager, engine, "partial command")
     assert_true(engine.condemned)
     assert_true(slot.live() is None)
-    assert_true(engine.phase is Idle)
-    assert_true(engine.latest_run is None)
+    assert_true(engine.phase is Idle(last_run=None))
     assert_true(
       follower.durable_finishes is [{ run_id: "r-timeout", published: false }],
     )

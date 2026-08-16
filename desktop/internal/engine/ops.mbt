@@ -47,11 +47,11 @@ pub async fn start_run(
         )
       // A prompt accepted now would queue behind the compaction, where a
       // Stop (which cancels only the compaction) could not reach it.
-      Compacting =>
+      Compacting(..) =>
         raise EngineError(
           "this conversation is compacting; wait for it to finish",
         )
-      Idle => ()
+      Idle(..) => ()
     }
   }
   let claim = slot.claim(sessions, key, StartPending)
@@ -78,7 +78,7 @@ pub async fn start_run(
   // during one of them holds the engine now, and the Running transition
   // below would silently clobber it. Re-check on the engine this run will
   // actually use.
-  if live.phase is Compacting {
+  if live.phase is Compacting(..) {
     raise EngineError("this conversation is compacting; wait for it to finish")
   }
   let run_id = mint_run_id()
@@ -93,8 +93,7 @@ pub async fn start_run(
   guard live.submit(command.to_jsonl(), failure_reason="engine write failed") else {
     raise EngineError("engine changed before the prompt was submitted")
   }
-  live.latest_run = Some(run_id)
-  live.phase = Running(cancel_requested=false, compact_queued=false)
+  live.phase = Running(run_id~, cancel_requested=false, compact_queued=false)
   live.steer_runs.begin_run()
   emit(
     sink,
@@ -138,10 +137,10 @@ pub fn cancel_run(
   guard live.is_current(manager) else {
     return { cancelled: false, run_id: None }
   }
-  guard live.phase is Running(compact_queued~, ..) else {
+  guard live.phase is Running(run_id~, compact_queued~, ..) else {
     return { cancelled: false, run_id: None }
   }
-  if payload.run_id is Some(expected) && live.latest_run != Some(expected) {
+  if payload.run_id is Some(expected) && run_id != expected {
     return { cancelled: false, run_id: None }
   }
   guard live.submit(
@@ -153,8 +152,8 @@ pub fn cancel_run(
   // A compaction queued behind the dying turn survives the cancel: the
   // engine's pending queue keeps it (cancel only aborts the active turn), so
   // the flag must ride along or the terminal event would idle past it.
-  live.phase = Running(cancel_requested=true, compact_queued~)
-  { cancelled: true, run_id: live.latest_run }
+  live.phase = Running(run_id~, cancel_requested=true, compact_queued~)
+  { cancelled: true, run_id: Some(run_id) }
 }
 
 ///|
@@ -241,7 +240,8 @@ pub async fn compact_run(
   // there is exactly one place that classifies the current phase instead of
   // the two matching ones a lock-then-revalidate shape needed.
   let compacting_phase = match live.phase {
-    Compacting => raise EngineError("this conversation is already compacting")
+    Compacting(..) =>
+      raise EngineError("this conversation is already compacting")
     Running(compact_queued=true, ..) =>
       raise EngineError(
         "a compaction is already queued behind the running turn",
@@ -249,9 +249,9 @@ pub async fn compact_run(
     // Sent mid-turn, the command queues behind the open run; the flag makes
     // the turn's terminal event land in Compacting so nothing slips into the
     // gap before the engine's own compaction_started.
-    Running(cancel_requested~, compact_queued=false) =>
-      Running(cancel_requested~, compact_queued=true)
-    Idle => Compacting
+    Running(run_id~, cancel_requested~, compact_queued=false) =>
+      Running(run_id~, cancel_requested~, compact_queued=true)
+    Idle(last_run~) => Compacting(last_run~)
   }
   // Submitting and entering the phase are one synchronous step, so the
   // classification above still holds and the consumer sees the new phase
@@ -377,13 +377,13 @@ pub fn steer_run(
     return { steered: false, run_id: None }
   }
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
-    live.phase is Running(cancel_requested=false, ..) else {
+    live.phase is Running(run_id~, cancel_requested=false, ..) else {
     return { steered: false, run_id: None }
   }
   guard live.is_current(manager) else {
     return { steered: false, run_id: None }
   }
-  if payload.run_id is Some(expected) && live.latest_run != Some(expected) {
+  if payload.run_id is Some(expected) && run_id != expected {
     return { steered: false, run_id: None }
   }
   let submission_id = normalize_submission_id(payload.submission_id)
@@ -391,7 +391,7 @@ pub fn steer_run(
     @protocol.steer(payload.text).to_jsonl(),
     failure_reason="failed to write steering to the engine",
   ) else {
-    return { steered: false, run_id: live.latest_run }
+    return { steered: false, run_id: Some(run_id) }
   }
   // Recorded in the same synchronous step as the submission, so the entry
   // exists before any event this steer can produce and a terminal event that
@@ -404,7 +404,7 @@ pub fn steer_run(
   // exact-id ownership, and the trailing receipt or Finished/durable recovery
   // settles it without restoring a duplicate draft.
   live.steer_runs.record_sent(payload.text, submission_id) |> ignore
-  { steered: true, run_id: live.latest_run }
+  { steered: true, run_id: Some(run_id) }
 }
 
 ///|
@@ -1024,8 +1024,7 @@ async test "a discarded command answers its sender" {
       sink: EventSink(fn(_) { () }),
       follower: None,
       consumer: None,
-      latest_run: None,
-      phase: Idle,
+      phase: Idle(last_run=None),
       condemned: false,
       steer_runs: SteerRunTracker::new(),
     }

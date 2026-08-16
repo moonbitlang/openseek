@@ -235,11 +235,11 @@ async fn EngineManager::claim_session_family_move(
           raise EngineError(
             "this conversation or one of its subagents is still running; stop it first",
           )
-        Compacting =>
+        Compacting(..) =>
           raise EngineError(
             "this conversation or one of its subagents is compacting; wait for it to finish",
           )
-        Idle => ()
+        Idle(..) => ()
       }
     }
   }
