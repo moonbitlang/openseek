@@ -268,6 +268,25 @@ async fn retire_failed_command(
 priv struct EngineCommand {
   line : String
   failure_reason : String
+  // Answered once this command's fate is decided: `None` when it reached
+  // stdin, the reason otherwise.
+  //
+  // Only for senders that have no other way to learn it was dropped. A prompt
+  // or a compaction is answered by its run's lifecycle events, and a steer by
+  // its receipt or the run's durable recovery; a goal has nothing but the
+  // durable `[goal]` marker, which would simply never appear.
+  ack : @async.Queue[EngineError?]?
+}
+
+///|
+/// Report this command's fate to a sender waiting for it. Synchronous and
+/// total, so it is safe on a cancellation path, and harmless for the commands
+/// that ask for no answer.
+fn EngineCommand::settle(self : EngineCommand, outcome : EngineError?) -> Unit {
+  guard self.ack is Some(ack) else { return }
+  ignore(ack.try_put(outcome)) catch {
+    _ => ()
+  }
 }
 
 ///|
@@ -280,6 +299,10 @@ priv struct EngineCommand {
 /// another request can interleave a command — so no lock, no re-validation
 /// after waiting for one, and no cancellation-shielded rollback.
 ///
+/// A sender may pass `ack` to learn whether its command actually reached
+/// stdin; waiting on it is only safe for a command that made nothing public
+/// first, which is exactly why prompts do not.
+///
 /// False means the engine stopped accepting between the caller's own check
 /// and this call, which cannot happen without an intervening suspension; it is
 /// reported rather than asserted so a future caller with one is refused rather
@@ -288,10 +311,25 @@ fn ServeEngine::submit(
   self : ServeEngine,
   line : String,
   failure_reason~ : String,
+  ack? : @async.Queue[EngineError?],
 ) -> Bool {
   guard self.accepts_commands else { return false }
-  self.commands.try_put({ line, failure_reason }) catch {
+  self.commands.try_put({ line, failure_reason, ack }) catch {
     _ => false
+  }
+}
+
+///|
+/// Stop accepting commands and answer everything still queued: past this
+/// point nothing in the queue can reach stdin. Synchronous, so it is safe on a
+/// cancellation path, and idempotent, because a drained queue is empty.
+fn ServeEngine::discard_commands(self : ServeEngine, reason : String) -> Unit {
+  self.accepts_commands = false
+  self.commands.close()
+  for ;; {
+    let next = self.commands.try_get() catch { _ => break }
+    guard next is Some(command) else { break }
+    command.settle(Some(EngineError(reason)))
   }
 }
 
@@ -302,20 +340,35 @@ fn ServeEngine::submit(
 /// coordinated: commands cannot interleave into a partial frame, and stdin is
 /// closed exactly once, on every path out of the loop. Callers ask for that
 /// close by closing the command queue — `close_and_wait` lets the already
-/// accepted commands drain first, the EOF consumer clears them.
+/// accepted commands drain first, the EOF consumer discards them.
 async fn ServeEngine::write_commands(
   self : ServeEngine,
   manager : EngineManager,
 ) -> Unit {
-  let failure = for ;; {
-    let command = self.commands.get() catch { _ => break None }
+  // Whatever ends this task, cancellation included, no sender may be left
+  // waiting for an answer that can no longer come.
+  defer self.discard_commands(
+    "the engine stopped before this command was written",
+  )
+  let mut failure : String? = None
+  for ;; {
+    let command = self.commands.get() catch { _ => break }
     self.writer.write(command.line) catch {
       error if @async.is_being_cancelled() => raise error
-      error => break Some("\{command.failure_reason}: \{error}")
+      error => {
+        let reason = "\{command.failure_reason}: \{error}"
+        command.settle(Some(EngineError(reason)))
+        failure = Some(reason)
+        break
+      }
     }
+    command.settle(None)
   }
   self.writer.close()
   if failure is Some(reason) {
+    // Answer the queued senders before retirement's bounded waits, not after
+    // them: none of their commands can reach stdin now.
+    self.discard_commands(reason)
     retire_failed_command(manager, self, reason)
   }
 }
@@ -1506,10 +1559,8 @@ async fn[G] start_serve_engine(
   // never waits on an actor in the task group being cancelled.
   defer (if !startup_committed {
     if startup_engine is Some(engine) {
-      // Clearing rather than draining: nothing was admitted yet, and the
-      // writer task closes stdin on its way out.
-      engine.accepts_commands = false
-      engine.commands.close(clear=true)
+      // Nothing was admitted yet; the writer task closes stdin on its way out.
+      engine.discard_commands("the engine failed to start")
       @xlog.debug() <?
         {
           "event": "desktop_engine_cancel",
@@ -1683,12 +1734,14 @@ async fn ServeEngine::run(
           // suspension; the current turn can finish its append/TurnDone, while
           // the next start is forced through the old child's close/reap barrier
           // and cancel cannot hit stale active_work.
-          // Clearing, not draining: a queued cancel/steer is exactly what must
-          // be cut off. Both statements are synchronous, so no request can be
-          // between its admission check and its enqueue.
+          // Discarded, not drained: a queued cancel/steer is exactly what
+          // must be cut off. This is synchronous, so no request can be between
+          // its admission check and its enqueue, and every dropped sender is
+          // told rather than left waiting.
           if needs_durable_scan {
-            engine.accepts_commands = false
-            engine.commands.close(clear=true)
+            engine.discard_commands(
+              "the engine finished its turn before this command was written",
+            )
           }
           let (run_id, submission_id) = engine.steer_runs.route_event(
             decoded,
@@ -1773,8 +1826,7 @@ async fn ServeEngine::run(
           // Nothing queued can reach a child whose stream is broken. Drop it
           // so the writer closes stdin instead of failing into a second,
           // redundant retirement of the lifecycle settled right here.
-          engine.accepts_commands = false
-          engine.commands.close(clear=true)
+          engine.discard_commands("the engine's event stream failed")
           emit_error(sink, message, run_id?=engine.latest_run)
           // A broken stream can no longer deliver compaction_finished/failed;
           // report the compaction as failed now so the frontend does not stay
@@ -1794,8 +1846,7 @@ async fn ServeEngine::run(
               "exit_code": code,
               "run_id": engine.latest_run.unwrap_or(""),
             }
-          engine.accepts_commands = false
-          engine.commands.close(clear=true)
+          engine.discard_commands("the engine exited")
           // Capture ownership only if the slot still contains THIS engine by
           // identity. Correct replacement waits on this handle through final
           // drain, but pump teardown and defensive cleanup can still detach it;

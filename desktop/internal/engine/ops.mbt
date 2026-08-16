@@ -335,11 +335,24 @@ pub async fn goal_run(
   } else {
     @protocol.goal_clear()
   }
+  // The one command that must be acknowledged. A prompt or a compaction that
+  // never reaches stdin is reported by its run's lifecycle events, and a steer
+  // by its receipt or the run's durable recovery; a goal has neither. Its only
+  // other confirmation is the durable `[goal]` marker, so a dropped goal would
+  // leave the client believing a set or clear succeeded that never happened.
+  let ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
   guard live.submit(
     command.to_jsonl(),
     failure_reason="failed to write the goal command",
+    ack~,
   ) else {
     raise EngineError("engine changed before the goal was submitted")
+  }
+  // Affordable precisely because nothing above went public: no phase
+  // transition, no event. A cancellation landing on this wait leaves nothing
+  // to unwind, which is why a prompt cannot do the same.
+  if ack.get() is Some(error) {
+    raise error
   }
   { delivered: true }
 }
@@ -898,6 +911,136 @@ async test "start echoes the client submission id in Started" {
     group.return_immediately(())
   })
   @fs.rmdir(dir, recursive=true)
+}
+
+///|
+/// A goal is the one command with no lifecycle event behind it, so its reply
+/// is only truthful if it waits for the writer. Both halves matter: the reply
+/// must arrive when the command reaches stdin — otherwise the op hangs — and
+/// must not arrive when it does not.
+#cfg(not(platform="windows"))
+async test "a goal is delivered only once its command is on the wire" {
+  let dir = @fs.tmpdir(prefix="openseek-goal-ack-")
+  let root : @pathx.Path = Path(dir)
+  // Starting an engine resolves a work directory under `HOME`. Own it, so this
+  // test neither races one that moves `HOME` nor writes into the real home.
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous_home = @sys.get_env_var("HOME")
+  @sys.set_env_var("HOME", root.join("home").to_string())
+  defer restore_home_env(previous_home)
+  let engine = root.join("bin/engine.sh")
+  let seed = root.join("bin/toolchains/moonbit/macos-arm64")
+  let runtime = root.join("runtime")
+  let received = root.join("received")
+  prepare_fake_moonbit_seed(seed, version="0.10.0-test")
+  prepare_fake_bundled_moonbit_home(
+    runtime.join("toolchains/moonbit/macos-arm64"),
+    version="0.10.0-test",
+  )
+  // Echoes every command it reads back into a file, so the test can check the
+  // goal really left the host rather than only that the op returned.
+  @fs.write_file(
+    engine.to_string(),
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> '\{received}'; done\n",
+    create_mode=CreateOrTruncate,
+  )
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
+  let manager = actor.manager()
+  ignore(
+    update_settings(manager, {
+      provider: Some("custom"),
+      custom_api_url: Some("https://example.invalid/chat/completions"),
+      deepseek_api_key: None,
+      custom_api_key: None,
+    }),
+  )
+  let session = "s-" + mint_run_id()
+  let sink = EventSink(fn(_) { () })
+  @async.with_task_group(group => {
+    group.spawn_bg(no_wait=true, allow_failure=true, () => {
+      actor.run(sink, fn(_) { () })
+    })
+    while manager.pump is Stopped {
+      @async.sleep(1)
+    }
+    let delivered = goal_run(manager, {
+      session,
+      text: Some("keep the build green"),
+      auto: None,
+      model: None,
+      max_steps: None,
+      workspace: None,
+    })
+    assert_true(delivered.delivered)
+    // The reply already means the bytes left this host, so the child has them
+    // or is about to; only its append is asynchronous.
+    assert_true(
+      @async.with_timeout_opt(3000, () => {
+        while !@fsx.exists(received) {
+          @async.sleep(1)
+        }
+      })
+      is Some(_),
+    )
+    assert_true(
+      @fs.read_file(received.to_string())
+      .text()
+      .contains("keep the build green"),
+    )
+    group.return_immediately(())
+  })
+  @fs.rmdir(dir, recursive=true)
+}
+
+///|
+/// The other half: a command discarded before it could be written answers its
+/// sender rather than leaving it waiting for an acknowledgement that can no
+/// longer come. This is what a queued goal hits when an earlier write fails or
+/// the child exits.
+#cfg(not(platform="windows"))
+async test "a discarded command answers its sender" {
+  @async.with_task_group(group => {
+    let (child_stdin, writer) = @process.write_to_process()
+    let process = @process.spawn(
+      group,
+      "/bin/sh",
+      ["-c", "sleep 30"],
+      stdin=child_stdin,
+      cancel_handler=@process.graceful_cancel(timeout=10),
+      no_wait=true,
+    )
+    let engine : ServeEngine = {
+      session_key: "s-discard",
+      session_root: None,
+      spec_key: "test",
+      writer,
+      commands: Queue(kind=Unbounded),
+      process,
+      sink: EventSink(fn(_) { () }),
+      follower: None,
+      process_exit: Queue(kind=Unbounded),
+      consumer: None,
+      latest_run: None,
+      phase: Idle,
+      accepts_commands: true,
+      steer_runs: SteerRunTracker::new(),
+    }
+    let ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
+    assert_true(
+      engine.submit("{}\n", failure_reason="failed to write the goal", ack~),
+    )
+    engine.discard_commands("the engine exited")
+    guard ack.try_get() is Some(Some(EngineError(reason))) else {
+      fail("expected the discarded command to answer its sender")
+    }
+    assert_eq(reason, "the engine exited")
+    // Discarding also closes admission, in the same synchronous step.
+    assert_false(engine.accepts_commands)
+    assert_false(engine.submit("{}\n", failure_reason="unreachable"))
+    group.return_immediately(())
+  })
 }
 
 ///|
