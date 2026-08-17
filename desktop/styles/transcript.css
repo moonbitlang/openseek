@@ -613,7 +613,6 @@
   gap: 10px;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  letter-spacing: 0.02em;
 }
 .activity-summary:hover {
   color: var(--color-text-secondary);
@@ -654,7 +653,6 @@
   gap: 8px;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  letter-spacing: 0.02em;
 }
 .summary-card-label::-webkit-details-marker {
   display: none;
@@ -708,7 +706,6 @@
   background: var(--color-bg-subtle);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  letter-spacing: 0.02em;
 }
 .streaming-thought-dot {
   width: 6px;
@@ -737,13 +734,18 @@
 }
 
 /* A burst of consecutive tool calls: a gray one-line summary that
-   expands to the per-call briefs. */
+   expands to the per-call briefs.
+
+   Same size as `.activity-summary` above it, deliberately: a reader expanding
+   a run sees the same sentence again one level in, so a size step there reads
+   as a change of meaning rather than of depth. Indentation and the guide line
+   carry the nesting. */
 .tool-line-summary {
   display: flex;
   align-items: baseline;
   gap: 10px;
   color: var(--color-text-muted);
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-sm);
 }
 .tool-line-summary:hover {
   color: var(--color-text-secondary);
@@ -762,11 +764,12 @@
 }
 
 /* One call inside a burst: its brief, expandable to recorded arguments and
-   the result output. */
+   the result output. The third and last disclosure altitude, so it keeps the
+   same muted line treatment as the two above it. */
 .tool-call-label,
 .tool-call-summary {
   color: var(--color-text-muted);
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-sm);
 }
 .tool-call-summary:hover {
   color: var(--color-text-secondary);
