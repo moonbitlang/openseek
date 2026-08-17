@@ -305,10 +305,12 @@ h2 {
   align-self: flex-end;
 }
 
-/* Settings and Skills own these form defaults. Keep them scoped to the page
-   shells so later-loaded app CSS cannot restyle inputs inside the Viewer. */
+/* Settings, Skills, and the API-setup modal own these form defaults. Keep
+   them scoped to those shells so later-loaded app CSS cannot restyle inputs
+   inside the Viewer. */
 .settings-page :where(input, textarea, select),
-.skills-page :where(input, textarea, select) {
+.skills-page :where(input, textarea, select),
+.setup-modal :where(input, textarea, select) {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--color-border);
