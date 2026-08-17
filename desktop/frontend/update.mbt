@@ -2355,17 +2355,7 @@ fn update_msg(
       // setup modal the form simply re-renders for the new provider; a
       // switch that breaks a usable endpoint away from the Settings page
       // opens the modal — it is the announcement now, not a toast.
-      if next.api_ready() {
-        (push, { ..next, api_setup_open: false })
-      } else if model.api_ready() {
-        if next.screen is Settings {
-          (push, next)
-        } else {
-          (push, { ..next, api_setup_open: true })
-        }
-      } else {
-        (push, next)
-      }
+      (push, next.settle_api_setup())
     }
     CustomApiUrlChanged(value) => {
       guard model.host_settings_loaded() else { return (@cmd.none, model) }
@@ -2632,7 +2622,8 @@ fn update_msg(
         @cmd.none,
         { ..model, screen: Settings, setup_api_key: "", api_setup_open: false },
       )
-    DismissApiSetup => (@cmd.none, { ..model, api_setup_open: false })
+    DismissApiSetup =>
+      (@cmd.none, { ..model, api_setup_open: false, api_setup_dismissed: true })
     OpenCodex => {
       let (cmd, codex) = @codex.update(
         dispatch.map(msg => Codex(channel=model.focused, msg)),
@@ -2792,9 +2783,12 @@ fn update_msg(
       } else {
         match model.api_provider {
           // The key goes straight to the host's store; the mirror keeps
-          // only its presence. Saving the key that completes the setup
-          // returns to the chat — the same auto-dismiss the popup used to
-          // have — optimistically; a failed save comes back as a toast.
+          // only its presence. The save never navigates — it lands on
+          // whatever page the form (Settings or the modal over any screen)
+          // was open over. A save that completes the setup retires the
+          // modal optimistically; one that leaves it incomplete (Custom
+          // with no URL yet) keeps the modal up mid-setup. A failed save
+          // comes back as a toast.
           Deepseek | Custom as provider => {
             let next = {
               ..model,
@@ -2811,17 +2805,7 @@ fn update_msg(
                 api_key_settings_patch(provider, api_key),
                 model.focused_connection_generation(),
               ),
-              {
-                ..next,
-                screen: if next.api_ready() {
-                  Chat
-                } else {
-                  Settings
-                },
-                // The popup configures in place: a save that completes the
-                // setup retires it the way the old popup auto-dismissed.
-                api_setup_open: false,
-              },
+              next.settle_api_setup(),
             )
           }
         }
@@ -4618,27 +4602,10 @@ fn update_device_msg(
       } else if model.settings_saves > 0 {
         (@cmd.none, model.defer_host_settings(settings))
       } else {
-        let next = model.apply_host_settings(settings)
-        // A usable endpoint never keeps the setup modal up; it can only have
-        // been open for this device's earlier unusable state.
-        if next.api_ready() {
-          (@cmd.none, { ..next, api_setup_open: false })
-        } else if model.host_settings_loaded() && !model.api_ready() {
-          // The endpoint was already unusable and still is: nothing new to
-          // announce, and a user who dismissed the modal stays dismissed.
-          (@cmd.none, next)
-        } else if next.screen is Settings {
-          // It broke while the Settings page is open: the BYOK guide right
-          // there already says what is missing, and a modal would block the
-          // form that fixes it.
-          (@cmd.none, next)
-        } else {
-          // The first authoritative snapshot (startup, reconnect) or a
-          // change that broke a usable endpoint: the API-setup modal takes
-          // over — the key is the one thing SeekMoon cannot run without, so
-          // a dismissible toast is not loud enough.
-          (@cmd.none, { ..next, api_setup_open: true })
-        }
+        // The settled mirror decides the modal (`settle_api_setup`); the
+        // dismissal flag — not the mirror, which a reconnect clears — is
+        // what keeps a "Not now" quiet across snapshots.
+        (@cmd.none, model.apply_host_settings(settings).settle_api_setup())
       }
     }
     HostSettingsApplied(settings, connection_generation~, cleans_legacy~) => {
@@ -14257,6 +14224,95 @@ test "switching to a provider missing its key or URL opens the setup modal" {
 }
 
 ///|
+test "a dismissal survives the mirror reset a reconnect performs" {
+  let dispatch = test_dispatch()
+  let (_, keyless) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek"),
+      connection_generation=None,
+    ),
+    test_model(),
+  )
+  let (_, dismissed) = update(dispatch, DismissApiSetup, keyless)
+  // A reconnect (or focus switch) resets the mirror to the loading
+  // sentinel; the refetched snapshot must not re-pop the modal on every
+  // WS flap — dismissal is the user's answer for the session.
+  let cleared = dismissed.clear_host_settings()
+  assert_true(!cleared.api_setup_open)
+  let (_, reconnected) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek"),
+      connection_generation=None,
+    ),
+    cleared,
+  )
+  assert_true(!reconnected.api_setup_open)
+  // A usable endpoint re-arms the announcement: the next break prompts
+  // again even after an earlier "Not now".
+  let (_, ready) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek", has_deepseek_key=true),
+      connection_generation=None,
+    ),
+    reconnected,
+  )
+  assert_true(!ready.api_setup_open)
+  let (_, broken) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek"),
+      connection_generation=None,
+    ),
+    ready,
+  )
+  assert_true(broken.api_setup_open)
+}
+
+///|
+test "clearing the mirror never leaves an orphaned setup modal" {
+  // A modal left up over the loading sentinel would render default data
+  // with every control disabled; close it with the mirror it was showing.
+  let open = { ..test_model(), api_setup_open: true, deepseek_key_saved: false }
+  assert_true(!open.clear_host_settings().api_setup_open)
+}
+
+///|
+test "saving from the setup modal stays on the page it opened over" {
+  let dispatch = test_dispatch()
+  // The modal renders over any screen; completing setup from it must not
+  // yank the user to Chat.
+  let over_skills = {
+    ..test_model(),
+    screen: Skills,
+    api_setup_open: true,
+    deepseek_key_saved: false,
+  }
+  let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), over_skills)
+  let (_, saved) = update(dispatch, SaveApiKey, typed)
+  assert_true(saved.screen is Skills)
+  assert_true(!saved.api_setup_open)
+  // A save that leaves the setup incomplete (Custom, no URL yet) keeps the
+  // modal up mid-setup instead of dumping the user on Settings.
+  let custom_half = {
+    ..test_model(),
+    api_provider: Custom,
+    custom_api_url: "",
+    api_setup_open: true,
+  }
+  let (_, keyed) = update(
+    dispatch,
+    SetupApiKeyChanged("sk-custom"),
+    custom_half,
+  )
+  let (_, still_open) = update(dispatch, SaveApiKey, keyed)
+  assert_true(still_open.screen is Chat)
+  assert_true(still_open.api_setup_open)
+}
+
+///|
 test "saving the key from the setup modal retires it" {
   let dispatch = test_dispatch()
   let open = { ..test_model(), api_setup_open: true, deepseek_key_saved: false }
@@ -14597,7 +14653,9 @@ test "saving a key marks the active provider credential only" {
   assert_false(saved_deepseek.custom_key_saved)
   inspect(saved_deepseek.setup_api_key, content="")
   inspect(saved_deepseek.settings_saves, content="1")
-  assert_true(saved_deepseek.screen is Chat)
+  // The save never navigates: a key saved on the Settings page leaves the
+  // user on the form they were filling in.
+  assert_true(saved_deepseek.screen is Settings)
   // Each provider's flag is independent: switching to Custom and saving
   // marks only the custom credential.
   let custom = {
@@ -14611,7 +14669,7 @@ test "saving a key marks the active provider credential only" {
   let (_, saved_custom) = update(dispatch, SaveApiKey, custom)
   assert_false(saved_custom.deepseek_key_saved)
   assert_true(saved_custom.custom_key_saved)
-  assert_true(saved_custom.screen is Chat)
+  assert_true(saved_custom.screen is Settings)
 }
 
 ///|

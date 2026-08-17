@@ -1106,11 +1106,16 @@ priv struct Model {
   // A legacy localStorage migration's push is in flight; its success is
   // what deletes the migrated secrets from localStorage.
   legacy_cleanup_pending : Bool
-  // Whether the API-setup modal is up. It opens over the chat whenever the
-  // configured endpoint is unusable and the user is not on the Settings page
-  // (whose guide already says it), and closes the moment a usable endpoint
-  // arrives. Session-local: the next cold start without a key prompts again.
+  // Whether the API-setup modal is up. Every settled settings snapshot
+  // decides it through `settle_api_setup` — the one place that opens it —
+  // and it closes the moment a usable endpoint arrives.
   api_setup_open : Bool
+  // The user answered "Not now" to the setup modal. Held until a usable
+  // endpoint re-arms the announcement, and deliberately not part of the
+  // host-settings mirror: a reconnect or focus switch clears the mirror but
+  // must not turn a dismissal back into a fresh popup. Session-local — the
+  // next cold start without a key prompts again.
+  api_setup_dismissed : Bool
   // Whether this page is the desktop window (the proton webview) rather than
   // a browser reached through a relay. Probed once at startup. Gates the
   // self-update flow: applying an update swaps the
@@ -2306,6 +2311,7 @@ fn initial_model() -> Model {
     tree_layout: RightSidebar,
     update_ux: UpdateUnknown,
     api_setup_open: false,
+    api_setup_dismissed: false,
     remote_access: None,
     remote_connecting: false,
     remote_error: None,
@@ -2432,10 +2438,14 @@ fn Model::host_settings_loaded(self : Model) -> Bool {
 /// Forget every value owned by the focused host before fetching another
 /// snapshot. The neutral values are deliberately not actionable while the
 /// revision remains negative; this prevents a failed or delayed `settings.get`
-/// from exposing one device's configuration on another device.
+/// from exposing one device's configuration on another device. The setup
+/// modal closes with the mirror it was rendering — an open modal over the
+/// loading sentinel would show default data with every control disabled —
+/// and the next authoritative snapshot reopens it if still warranted.
 fn Model::clear_host_settings(self : Model) -> Model {
   {
     ..self,
+    api_setup_open: false,
     api_provider: Deepseek,
     custom_api_url: "",
     deepseek_key_saved: false,
@@ -2485,21 +2495,37 @@ fn Model::defer_host_settings(self : Model, settings : HostSettings) -> Model {
 /// Apply the newest deferred status once optimistic writes no longer protect
 /// the form. A lower revision is discarded; equal is deliberately accepted
 /// so a failed optimistic edit can be restored by an authoritative `get`.
-/// A flush that settles into a usable endpoint retires the API-setup modal:
-/// this is the host's confirmation of a save made from the modal itself.
+/// The settled mirror then decides the setup modal like any other snapshot —
+/// a deferred first snapshot (the legacy migration races it here) must be
+/// able to open the modal, not just retire it.
 fn Model::flush_host_settings(self : Model) -> Model {
   let next = match self.deferred_host_settings {
     Some(settings) if settings.revision >= self.host_settings_revision =>
       self.apply_host_settings(settings)
     _ => { ..self, deferred_host_settings: None }
   }
-  {
-    ..next,
-    api_setup_open: if next.api_ready() {
-      false
-    } else {
-      next.api_setup_open
-    },
+  next.settle_api_setup()
+}
+
+///|
+/// The one rule for the API-setup modal, applied whenever the settings
+/// mirror settles: a usable endpoint retires the modal and re-arms the
+/// announcement for the next break; an explicit "Not now" holds until then;
+/// the Settings page stays modal-free (its guide already says what is
+/// missing); otherwise an unusable endpoint keeps the modal up — the key is
+/// the one thing SeekMoon cannot run without, so a dismissible toast is not
+/// loud enough.
+fn Model::settle_api_setup(self : Model) -> Model {
+  // The loading sentinel's neutral values are not a verdict on the endpoint;
+  // a flush with nothing applied (a failed save before any snapshot) must
+  // not announce them.
+  guard self.host_settings_loaded() else { return self }
+  if self.api_ready() {
+    { ..self, api_setup_open: false, api_setup_dismissed: false }
+  } else if self.api_setup_dismissed || self.screen is Settings {
+    { ..self, api_setup_open: false }
+  } else {
+    { ..self, api_setup_open: true }
   }
 }
 
