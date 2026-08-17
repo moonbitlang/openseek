@@ -1534,30 +1534,41 @@ async fn request_agent_goal(
 }
 
 ///|
+/// Ask the host to cancel `run_id`. The negative reply matters as much as
+/// the positive one: `cancelled: false` means the host has no such open run,
+/// so the page's Open view of it is stale — the Finished that closed it was
+/// lost, and with the stage already flipped to Cancelling nothing else would
+/// ever unstick the conversation. That reply becomes `CancelUnmatched`,
+/// which triggers the reconnect-style `agent.runs` resync.
 fn cancel_openseek(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   run_id : String,
 ) -> @cmd.Cmd {
+  let device_dispatch = dispatch.map((msg : DeviceMsg) => {
+    FromDevice(channel, msg)
+  })
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      ignore(
-        @interop.bridge_request(channel, @commands.agent_cancel, {
-          run_id: Some(run_id),
-        }) catch {
-          error => {
-            scheduler.add(
-              dispatch(
-                HostActionFailed(
-                  "Failed to cancel the run: " +
-                  @interop.bridge_error_text(error),
-                ),
+      let reply : @protocol.CancelReply = @interop.bridge_request(
+        channel,
+        @commands.agent_cancel,
+        { run_id: Some(run_id) },
+      ) catch {
+        error => {
+          scheduler.add(
+            dispatch(
+              HostActionFailed(
+                "Failed to cancel the run: " + @interop.bridge_error_text(error),
               ),
-            )
-            return
-          }
-        },
-      )
+            ),
+          )
+          return
+        }
+      }
+      if !reply.cancelled {
+        scheduler.add(device_dispatch(CancelUnmatched(run_id~)))
+      }
     })
   })
 }

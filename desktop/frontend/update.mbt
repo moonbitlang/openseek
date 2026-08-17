@@ -6439,6 +6439,25 @@ fn update_device_msg(
       }
       (@cmd.batch(commands), next)
     }
+    CancelUnmatched(run_id~) =>
+      // "Nothing to cancel" for a run still shown open means this page's
+      // view of the run is stale — its Finished never arrived. Ask for the
+      // same `agent.runs` resync a reconnect performs; the reply's live set
+      // and replayable settlements are what close the conversation. A reply
+      // racing a Finished that already closed the run needs nothing.
+      if model.conversation_by_run(channel, run_id) is Some(_) {
+        (
+          fetch_runs(
+            dispatch,
+            channel,
+            model.run_snapshot_frontier(channel),
+            dev.connection_generation,
+          ),
+          model,
+        )
+      } else {
+        (@cmd.none, model)
+      }
     Engine(run_id, event, session~) => {
       // Compaction and background notices happen between turns, so their
       // events arrive after the run that owned `run_id` cleared
@@ -11515,6 +11534,26 @@ test "a cancelling turn cannot be steered; the text stays in the composer" {
   let (_, next) = update(dispatch, Send, model)
   inspect(next.active().task, content="too late")
   inspect(next.active().pending_steers().length(), content="0")
+}
+
+///|
+test "an unmatched cancel reply keeps the run open until the resync answers" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling),
+  })
+  // The handler's whole effect is the `agent.runs` resync command; the model
+  // must not change ahead of that reply — RunsLoaded is what closes the run.
+  let (_, next) = update_dev(dispatch, CancelUnmatched(run_id="r7"), model)
+  assert_true(next.active().run is Open(run_id="r7", stage=Cancelling))
+  // A reply for a run nothing shows open needs no resync and changes nothing.
+  let (_, unknown) = update_dev(
+    dispatch,
+    CancelUnmatched(run_id="r-gone"),
+    model,
+  )
+  assert_true(unknown.active().run is Open(run_id="r7", stage=Cancelling))
 }
 
 ///|

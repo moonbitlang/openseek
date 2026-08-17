@@ -118,6 +118,11 @@ priv struct SessionFollower {
   // the scan read it, so a write racing the read re-triggers). `None` until
   // the first scan, or when the file cannot be examined.
   mut consumed : FileSignature?
+  // A durable Terminal that disagreed with a still-open run phase when it
+  // was broadcast. Held across polls; `reap_orphaned_terminal` either
+  // disarms it (the consumer closed the run) or, after the grace, closes the
+  // run from the durable side.
+  mut orphan_terminal : OrphanTerminal?
 }
 
 ///|
@@ -153,6 +158,227 @@ fn SessionFollower::publish_durable_finishes(
     }
     index = index + 1
   }
+}
+
+///|
+/// A Terminal commit observed while this session's live engine still showed
+/// a run open. The consumer normally closes that run within the same
+/// synchronous stretch that kicked this follower, so the candidate is
+/// disarmed on the next poll; one that survives the grace below means the
+/// stdout pipeline died between the engine and the phase — a run nothing
+/// else can ever close.
+priv struct OrphanTerminal {
+  run_id : String
+  sequence : Int
+  status : RunStatus
+  mut polls : Int
+}
+
+///|
+/// Polls a Terminal-vs-open-run disagreement must survive before the
+/// follower closes the run itself. The healthy consumer path closes within
+/// milliseconds while polls arrive at `FollowerPollMs`, so this trades ~ten
+/// seconds of latency on a genuinely dead pipeline for never racing a live
+/// one.
+const OrphanTerminalGracePolls = 10
+
+///|
+/// The lifecycle status a durable terminal implies for the run it closes.
+/// `None` for items that are not a terminal boundary. `UnknownTerminal` is a
+/// kind this build cannot name — report Failed rather than fabricating a
+/// success the record does not spell.
+fn orphan_terminal_status(item : @protocol.SessionItem) -> RunStatus? {
+  match item {
+    Terminal(Finished(_)) => Some(Finished)
+    Terminal(Aborted(_)) => Some(Aborted)
+    Terminal(Interrupted(_)) => Some(Cancelled)
+    Terminal(Failed(_)) => Some(Failed)
+    UnknownTerminal(_) => Some(Failed)
+    _ => None
+  }
+}
+
+///|
+/// Remember a terminal commit this scan just broadcast when the session's
+/// live engine still shows a run open. Armed, not acted on: the consumer is
+/// expected to close the run itself moments from now, and `reap` below is
+/// what decides it never will.
+fn SessionFollower::note_terminal_commit(
+  self : SessionFollower,
+  manager : EngineManager,
+  sequence : Int,
+  status : RunStatus,
+) -> Unit {
+  guard manager.pump is Serving(sessions~) &&
+    sessions.get(self.session) is Some(slot) &&
+    slot.live() is Some(engine) &&
+    engine.phase is Running(run_id~, ..) else {
+    // No open run to disagree with — and a terminal arriving with the phase
+    // already closed also retires any stale candidate from an earlier run.
+    self.orphan_terminal = None
+    return
+  }
+  self.orphan_terminal = Some({ run_id, sequence, status, polls: 0 })
+}
+
+///|
+/// Close a run whose durable Terminal exists but whose lifecycle close never
+/// came — the split-brain a silently dead stdout consumer or reader leaves
+/// behind. The durable record is the authority here: the engine committed
+/// the turn's end, so after the grace the follower publishes the Finished
+/// the pipeline lost, then condemns the engine — its events demonstrably no
+/// longer reach the phase, so the next prompt must spawn a fresh process.
+/// Everything from the phase re-check to the process kill is one synchronous
+/// block, so it cannot race a consumer that turns out to be alive.
+fn SessionFollower::reap_orphaned_terminal(
+  self : SessionFollower,
+  sink : EventSink,
+  manager : EngineManager,
+) -> Unit {
+  guard self.orphan_terminal is Some(orphan) else { return }
+  guard open_run_engine(manager, run_id=orphan.run_id) is Some(engine) &&
+    engine.session_key == self.session &&
+    engine.phase is Running(run_id~, compact_queued~, ..) else {
+    // The consumer closed the run (the healthy path), the engine was
+    // replaced, or a successor opened a different run.
+    self.orphan_terminal = None
+    return
+  }
+  orphan.polls += 1
+  if orphan.polls < OrphanTerminalGracePolls {
+    return
+  }
+  self.orphan_terminal = None
+  @xlog.error() <?
+    {
+      "event": "desktop_run_closed_from_durable",
+      "session": self.session,
+      "run_id": run_id,
+      "sequence": orphan.sequence,
+    }
+  engine.discard_commands(
+    "the engine's event pipeline went silent after its turn ended",
+  )
+  engine.phase = Idle(last_run=Some(run_id))
+  emit_finished(sink, run_id, orphan.status, durable_sequence=orphan.sequence)
+  // A compaction queued behind the orphaned turn died with the pipeline;
+  // only a terminal compaction event clears the frontend's queued notice.
+  if compact_queued {
+    emit_compaction_failed(
+      sink, engine, "the engine's event pipeline went silent before the queued compaction started",
+    )
+  }
+  // A consumer parked on its message queue would pin `wait_retired` — and
+  // with it archive and replacement — forever. Cancelling it lets the
+  // successor path proceed; one that already died is a no-op.
+  if engine.consumer is Some(consumer) {
+    consumer.cancel()
+  }
+  @xlog.warn() <?
+    {
+      "event": "desktop_engine_cancel",
+      "reason": "event pipeline went silent after a durable terminal",
+      "pid": engine.process.pid,
+    }
+  engine.process.cancel()
+}
+
+///|
+/// The durable record is the close authority when the stdout pipeline dies:
+/// a Terminal commit that leaves the run phase open is reaped after the
+/// grace, while the healthy path (the consumer closes the run first)
+/// disarms the candidate instead.
+#cfg(not(platform="windows"))
+async test "an orphaned durable terminal closes its run after the grace" {
+  let dir = @fs.tmpdir(prefix="openseek-orphan-terminal-")
+  let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
+  let manager = new_engine_manager("/bin/sh")
+  let emitted : Array[EngineEvent] = []
+  let sink = EventSink(fn(event) { emitted.push(event) })
+  @async.with_task_group(group => {
+    let (child_stdin, writer) = @process.write_to_process()
+    let process = @process.spawn(
+      group,
+      "/bin/sh",
+      ["-c", "sleep 30"],
+      stdin=child_stdin,
+      no_wait=true,
+    )
+    let engine : ServeEngine = {
+      session_key: "s-orphan",
+      session_root: Some(root),
+      spec_key: "test",
+      writer,
+      commands: Queue(kind=Unbounded),
+      process,
+      sink,
+      follower: None,
+      consumer: None,
+      phase: Running(
+        run_id="r-orphan",
+        cancel_requested=false,
+        compact_queued=false,
+      ),
+      condemned: false,
+      steer_runs: SteerRunTracker::new(),
+    }
+    let sessions : Map[String, SessionSlot] = Map([])
+    let slot = slot_for(sessions, "s-orphan")
+    slot.engine = Some(engine)
+    manager.pump = Serving(sessions~)
+    let follower : SessionFollower = {
+      session: "s-orphan",
+      root,
+      inbox: Queue(kind=Blocking(3)),
+      load_requests: Queue(kind=Blocking(FollowerLoadQueueSize)),
+      kick_pending: false,
+      load_pending: false,
+      stopping: false,
+      retired: false,
+      stop_generation: 0,
+      completed_stop_generation: 0,
+      completed_stop_error: None,
+      stop_observers: 0,
+      durable_finishes: [],
+      watermark: 0,
+      consumed: None,
+      orphan_terminal: None,
+    }
+
+    // The healthy path: the consumer closes the run moments after the
+    // terminal commit, so the candidate disarms instead of aging.
+    follower.note_terminal_commit(manager, 41, Finished)
+    engine.phase = Idle(last_run=Some("r-orphan"))
+    follower.reap_orphaned_terminal(sink, manager)
+    assert_true(follower.orphan_terminal is None)
+
+    // This time the pipeline is dead and nothing ever closes the phase.
+    engine.phase = Running(
+      run_id="r-orphan",
+      cancel_requested=false,
+      compact_queued=false,
+    )
+    follower.note_terminal_commit(manager, 42, Finished)
+    for _ in 0..<(OrphanTerminalGracePolls - 1) {
+      follower.reap_orphaned_terminal(sink, manager)
+    }
+    assert_true(engine.phase is Running(..))
+    assert_true(emitted.is_empty())
+    follower.reap_orphaned_terminal(sink, manager)
+    assert_true(engine.phase is Idle(last_run=Some("r-orphan")))
+    assert_true(engine.condemned)
+    let mut finished = 0
+    for event in emitted {
+      if event is Finished(payload) {
+        assert_eq(payload.run_id, "r-orphan")
+        assert_eq(payload.status, "finished")
+        assert_eq(payload.durable_sequence, Some(42))
+        finished += 1
+      }
+    }
+    assert_eq(finished, 1)
+  })
+  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -253,6 +479,11 @@ async fn SessionFollower::scan(
       }),
     )
     self.watermark = event.sequence
+    // A terminal boundary crossing the follower while the run phase is
+    // still open arms the orphan watchdog — see `reap_orphaned_terminal`.
+    if orphan_terminal_status(event.item) is Some(status) {
+      self.note_terminal_commit(manager, event.sequence, status)
+    }
   }
   self.consumed = signature
   Some(session)
@@ -312,6 +543,9 @@ async fn SessionFollower::run(
       match follower.inbox.get() {
         Kick => {
           follower.kick_pending = false
+          // Before the scan, so the grace is counted in whole poll gaps and
+          // a candidate this very scan arms is not aged by its own kick.
+          follower.reap_orphaned_terminal(sink, manager)
           ignore(
             follower.scan(sink, manager, force=false) catch {
               error if @async.is_being_cancelled() => raise error
@@ -536,6 +770,7 @@ async fn[G] ensure_follower(
     durable_finishes: [],
     watermark: 0,
     consumed: None,
+    orphan_terminal: None,
   }
   manager.followers[session] = follower
   let ready : @async.Queue[Unit] = Queue(kind=Blocking(1))
@@ -1452,6 +1687,7 @@ fn follower_state_fixture(session : String) -> SessionFollower {
     durable_finishes: [],
     watermark: 0,
     consumed: None,
+    orphan_terminal: None,
   }
 }
 

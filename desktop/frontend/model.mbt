@@ -2063,6 +2063,13 @@ priv enum DeviceMsg {
   // client was away — its terminal event is gone for good (reconnect =
   // resync; transients are not replayed), so this is what closes it.
   RunsSettled(live~ : Array[String], frontier~ : Array[RunSnapshotFrontier])
+  // The host answered `agent.cancel` with "nothing to cancel" for a run this
+  // page shows open: the Stop was aimed at a run the host already retired,
+  // and the Finished that said so never arrived. Nothing else would ever
+  // correct that — the local bridge never reconnects, so the reconnect
+  // resync cannot run — which would leave the conversation on Cancelling
+  // forever. The reply is therefore the resync trigger.
+  CancelUnmatched(run_id~ : String)
   // A stream event from an engine. The run id is `None` for events emitted
   // before any run of the engine process's lifetime. `session` is the
   // conversation the host stamped on it (`None` when the payload carries no
