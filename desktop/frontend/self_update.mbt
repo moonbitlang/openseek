@@ -2,12 +2,10 @@
 // once at startup (and whenever the user asks in Settings), shows an accent
 // Update button while a release is installable, and on click walks
 // `download_update` → `apply_update` → window close, confirming first when
-// a conversation would be interrupted.
-
-///|
-/// The update manifest lives on the SeekMoon origin and is always asked
-/// with the production channel — the channel no longer derives from the
-/// chat provider (only the hosted chat proxy was retired).
+// a conversation would be interrupted. The update manifest lives on the
+// SeekMoon origin and is always asked with the production channel — the
+// channel no longer derives from the chat provider (only the hosted chat
+// proxy was retired).
 
 ///|
 /// Byte progress for the package currently being downloaded. The total is
