@@ -159,7 +159,11 @@ fn settings_status_payload(
     revision,
     provider: settings.provider.wire(),
     custom_api_url: settings.custom_api_url,
-    has_deepseek_key: settings.deepseek_api_key is Some(_),
+    // Presence ORs in the DEEPSEEK environment fallback exactly as the run
+    // config resolves it (`configured_api_key`): an env-configured install
+    // is runnable, and the frontend gates Send on this bit.
+    has_deepseek_key: settings.deepseek_api_key is Some(_) ||
+    @env.get("DEEPSEEK") is Some(_),
     has_custom_key: settings.custom_api_key is Some(_),
   }
 }
@@ -363,6 +367,12 @@ pub async fn remote_server_base(manager : EngineManager) -> String? {
 async fn with_settings_dir(
   body : async (@pathx.Path, EngineManager) -> Unit,
 ) -> Unit {
+  // The status payload reads the DEEPSEEK fallback from the process
+  // environment; hold it steady so the expectations here cannot depend on
+  // the developer's shell.
+  let previous_key = @sys.get_env_var("DEEPSEEK")
+  @sys.unset_env_var("DEEPSEEK")
+  defer (if previous_key is Some(value) { @sys.set_env_var("DEEPSEEK", value) })
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-settings-"))
   body(dir, new_engine_manager("openseek", runtime_dir=dir)) catch {
     error => {
@@ -387,6 +397,22 @@ async test "missing settings read as the BYOK defaults" {
       "revision": 0,
       "provider": "deepseek",
       "has_deepseek_key": false,
+      "has_custom_key": false,
+    })
+  })
+}
+
+///|
+async test "the DEEPSEEK env fallback reads as a usable key" {
+  with_settings_dir(async fn(_dir, manager) {
+    // The engine resolves DEEPSEEK when no key is stored; the status must
+    // agree, or the frontend blocks Send on an endpoint that runs fine.
+    @sys.set_env_var("DEEPSEEK", "sk-env")
+    defer @sys.unset_env_var("DEEPSEEK")
+    json_inspect(settings_status(manager), content={
+      "revision": 0,
+      "provider": "deepseek",
+      "has_deepseek_key": true,
       "has_custom_key": false,
     })
   })
