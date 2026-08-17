@@ -281,16 +281,16 @@ fn AppFontSize::pixels(self : AppFontSize) -> Double {
 }
 
 ///|
-/// Which chat-completions endpoint the engine talks to. `Openseek` is the
-/// zero-config default — the proxy does not validate API keys. `Deepseek` is
-/// the official endpoint and needs the user's own key. `Custom` is any other
-/// DeepSeek-compatible endpoint; whether it needs a key is the endpoint's
-/// business, so the key is optional there. The setting (and its
-/// credentials) live on the host; this mirror is what `settings.get`/`set`
-/// replies and the `settings.changed` broadcast last reported.
+/// Which chat-completions endpoint the engine talks to. SeekMoon runs are
+/// bring-your-own-key only: the hosted proxy is retired. `Deepseek` is the
+/// official endpoint and needs the user's own key; `Custom` is any other
+/// OpenAI-compatible endpoint, whose key is optional. The retired hosted
+/// names (`openseek` / `openseek-staging`) parse as `Deepseek` so old
+/// stores and old clients land on the BYOK default instead of wedging.
+/// The setting (and its credentials) live on the host; this mirror is what
+/// `settings.get`/`set` replies and the `settings.changed` broadcast last
+/// reported.
 priv enum ApiProvider {
-  Openseek
-  OpenseekStaging
   Deepseek
   Custom
 } derive(Eq)
@@ -298,8 +298,6 @@ priv enum ApiProvider {
 ///|
 fn ApiProvider::wire(self : ApiProvider) -> String {
   match self {
-    Openseek => "openseek"
-    OpenseekStaging => "openseek-staging"
     Deepseek => "deepseek"
     Custom => "custom"
   }
@@ -307,25 +305,13 @@ fn ApiProvider::wire(self : ApiProvider) -> String {
 
 ///|
 /// Unknown stored values fall back to the default provider, so a downgrade
-/// (or a corrupted store) degrades to the zero-config endpoint instead of
-/// wedging the app.
+/// (or a corrupted store) degrades to the BYOK default instead of wedging
+/// the app.
 fn ApiProvider::parse(value : String) -> ApiProvider {
   match value.trim().to_owned() {
-    "openseek-staging" => OpenseekStaging
-    "deepseek" => Deepseek
+    "openseek" | "openseek-staging" | "deepseek" => Deepseek
     "custom" => Custom
-    _ => Openseek
-  }
-}
-
-///|
-/// The update channel the server selection implies: the staging server
-/// serves staging builds, everything else follows production. The channel
-/// stopped being its own setting when the server choice became one.
-fn ApiProvider::update_channel(self : ApiProvider) -> UpdateChannel {
-  match self {
-    OpenseekStaging => Staging
-    Openseek | Deepseek | Custom => Production
+    _ => Deepseek
   }
 }
 
@@ -1276,8 +1262,9 @@ priv struct Model {
   tree_layout : @fileeditor.TreeLayout
   // Where the self-update flow stands, from "never checked" through the
   // download to the restart. One enum, so "checking", "downloading" and
-  // "confirming" cannot overlap. (The channel it checks derives from the
-  // server selection — `ApiProvider::update_channel`.)
+  // "confirming" cannot overlap. The channel is always production: the
+  // update manifest lives on the SeekMoon origin and no longer derives
+  // from the chat provider.
   update_ux : UpdateUx
   // The host's relay sign-in mirror (`auth.status` reply / `auth.changed`
   // broadcast), None until the first reply. Desktop-window-only UI.
@@ -2250,7 +2237,7 @@ fn initial_model() -> Model {
     deepseek_key_saved: false,
     custom_key_saved: false,
     setup_api_key: "",
-    api_provider: Openseek,
+    api_provider: Deepseek,
     custom_api_url: "",
     settings_saves: 0,
     host_settings_revision: -1,
@@ -2398,7 +2385,7 @@ fn Model::focused_device_name(self : Model) -> String {
       }
     }
   }
-  "OpenSeek"
+  "SeekMoon"
 }
 
 ///|
@@ -2440,7 +2427,7 @@ fn Model::host_settings_loaded(self : Model) -> Bool {
 fn Model::clear_host_settings(self : Model) -> Model {
   {
     ..self,
-    api_provider: Openseek,
+    api_provider: Deepseek,
     custom_api_url: "",
     deepseek_key_saved: false,
     custom_key_saved: false,
@@ -2453,10 +2440,9 @@ fn Model::clear_host_settings(self : Model) -> Model {
 }
 
 ///|
-/// Fold one host settings payload into the mirror. The default provider
-/// needs no setup, so the Settings page only takes over when the settings
-/// are incomplete (official endpoint without a key, custom endpoint without
-/// a URL); it never navigates away on its own.
+/// Fold one host settings payload into the mirror. The Settings page takes
+/// over whenever the settings are incomplete (official endpoint without a
+/// key, custom endpoint without a URL); it never navigates away on its own.
 fn Model::apply_host_settings(self : Model, settings : HostSettings) -> Model {
   let next = {
     ..self,
@@ -2498,13 +2484,12 @@ fn Model::flush_host_settings(self : Model) -> Model {
 }
 
 ///|
-/// Whether the configured endpoint is usable as it stands: the default
-/// OpenSeek proxy always is, the official endpoint needs a key stored on
-/// the host, and a custom endpoint needs at least a URL. The credentials
-/// themselves live on the host; a start carries none.
+/// Whether the configured endpoint is usable as it stands: the official
+/// endpoint needs a key stored on the host, and a custom endpoint needs at
+/// least a URL. The credentials themselves live on the host; a start
+/// carries none.
 fn Model::api_ready(self : Model) -> Bool {
   match self.api_provider {
-    Openseek | OpenseekStaging => true
     Deepseek => self.deepseek_key_saved
     Custom => !self.custom_api_url.is_blank()
   }

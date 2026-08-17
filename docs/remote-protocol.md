@@ -375,12 +375,15 @@ material never travels down the wire, only presence. Runs read the store
 at config time, so a change replaces the conversation's engine process on
 its next start.
 
-`provider` is the one **server selection**: it decides the
-chat-completions endpoint, the update channel `update.check` should be
-asked with (`openseek-staging` → `"staging"`, everything else →
-`"production"`), and which relay `auth.connect` signs in to (only the
-OpenSeek servers have one). Committing a switch away from a signed-in
-session's server signs that session out (`auth.changed` follows).
+`provider` is the chat endpoint selection: `deepseek` (the official
+endpoint with the user's key) or `custom` (any OpenAI-compatible
+chat-completions URL; key optional). SeekMoon runs are
+bring-your-own-key only — the hosted proxy is retired, and the retired
+names `openseek` / `openseek-staging` are accepted aliases that resolve
+to `deepseek`. The update channel is always `production` and remote
+access always targets the SeekMoon relay origin: both live on the
+SeekMoon origin independently of the chat provider. A settings commit
+still signs out a session whose issuer no longer matches the origin.
 
 | method | params | result |
 |---|---|---|
@@ -392,7 +395,7 @@ The status shape, also the params of every `settings.changed` notification:
 ```jsonc
 {
   "revision": 7,                    // host-process monotonic revision
-  "provider": "openseek" | "openseek-staging" | "deepseek" | "custom",
+  "provider": "deepseek" | "custom",
   "custom_api_url": "https://…",   // absent when unset
   "has_deepseek_key": false,       // presence only — the key text never leaves the host
   "has_custom_key": false
@@ -585,7 +588,7 @@ no business operating. A browser signs in with the relay directly
 | method | params | result |
 |---|---|---|
 | `auth.status` | `{}` | the status shape below |
-| `auth.connect` | `{}` | the status shape — resolves only when the loopback flow finishes (browser round-trip included), so it can take minutes; errors are the JSON-RPC error response. While signed in it runs no browser flow (an exchange mints a new device row) and only makes sure the connector runs. Refused when the selected server has no relay (`deepseek`/`custom`) or when the environment override manages the connector |
+| `auth.connect` | `{}` | the status shape — resolves only when the loopback flow finishes (browser round-trip included), so it can take minutes; errors are the JSON-RPC error response. While signed in it runs no browser flow (an exchange mints a new device row) and only makes sure the connector runs. Refused only when the environment override manages the connector — the relay lives on the SeekMoon origin and no longer depends on the chat provider |
 | `auth.disconnect` | `{}` | the status shape — deletes the local token, best-effort revokes the device at the relay, and stops the connector. Refused in override mode |
 | `auth.cancel` | `{}` | the status shape — aborts an in-flight `auth.connect` (whose own call then fails with "the sign-in was cancelled"); a no-op when nothing is in flight |
 
@@ -595,8 +598,9 @@ The status shape, also the params of every `auth.changed` notification:
 {
   "server_url": "https://openseek-api.moonbitlang.cn",
                                  // signed in: the token's issuer; signed out: the
-                                 // selection's server — absent when that server has
-                                 // no relay (deepseek/custom) or in a supervisor push
+                                 // SeekMoon relay origin — always present now that
+                                 // the relay no longer depends on the chat provider
+                                 // (absent only in a supervisor push)
   "connected": false,            // control WS currently registered
   "managed_by_env": true,        // present only under the OPENSEEK_RELAY_URL override
   "user":   {"login": "…", "avatar_url": "…"},   // absent when signed out
@@ -620,7 +624,7 @@ never calls them and shows no update UI.
 
 | method | params | result |
 |---|---|---|
-| `update.check` | `{channel?}` (anything but `"staging"` reads as production) | `{kind: "up_to_date" \| "available" \| "unreachable" \| "malformed" \| "broken", …}` |
+| `update.check` | `{channel?}` (anything but `"staging"` reads as production; the desktop client always asks production — the channel no longer derives from the chat provider) | `{kind: "up_to_date" \| "available" \| "unreachable" \| "malformed" \| "broken", …}` |
 | `update.download` | `{channel?}` | `{accepted: true}` — starts app-lifetime download/verification work and returns without waiting for it |
 | `update.apply` | `{}` | `{applied}` — the bundle swap succeeded and the window may close |
 

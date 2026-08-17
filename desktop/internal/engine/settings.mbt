@@ -31,27 +31,21 @@ const EngineSettingsFileName = "engine-settings.json"
 const LegacyMigrationFence = "legacy_client_settings_migrated"
 
 ///|
-/// The official OpenSeek proxy endpoint runs use when the server is
-/// `Openseek` — the zero-config default.
-const OpenseekProxyUrl : String = "https://openseek-api.moonbitlang.cn/chat/completions"
+/// The SeekMoon relay origin: remote access (browser sign-in) and the
+/// update manifest live here. The hosted chat proxy that used to live on
+/// this origin is retired — runs are bring-your-own-key only — so this
+/// origin no longer serves any chat-completions traffic.
+const RelayServerOrigin : String = "https://openseek-api.moonbitlang.cn"
 
 ///|
-/// The staging twin of `OpenseekProxyUrl`, for testing against the next
-/// server build.
-const OpenseekStagingProxyUrl : String = "https://openseek-api-staging.moonbitlang.cn/chat/completions"
-
-///|
-/// The one server selection: which OpenSeek server (or foreign endpoint)
-/// this install talks to. It decides the chat-completions endpoint, the
-/// update channel, and the remote-access relay in one move. `Openseek` is
-/// the zero-config default (the proxy needs no user key);
-/// `OpenseekStaging` is the same service's staging deployment; `Deepseek`
-/// is the official DeepSeek endpoint with the user's own key; `Custom` is
-/// any other DeepSeek-compatible endpoint. Remote access exists only on
-/// the OpenSeek servers — `Deepseek`/`Custom` have no relay to sign in to.
+/// The chat endpoint selection: where runs send their requests. SeekMoon
+/// runs only on bring-your-own-key providers. `Deepseek` is the official
+/// DeepSeek endpoint with the user's own key; `Custom` is any other
+/// OpenAI-compatible endpoint, whose key is optional. The retired hosted
+/// proxy names (`openseek` / `openseek-staging`) still parse as `Deepseek`
+/// so old settings files and old clients degrade to the BYOK default
+/// instead of wedging.
 priv enum ApiProvider {
-  Openseek
-  OpenseekStaging
   Deepseek
   Custom
 }
@@ -59,8 +53,6 @@ priv enum ApiProvider {
 ///|
 fn ApiProvider::wire(self : ApiProvider) -> String {
   match self {
-    Openseek => "openseek"
-    OpenseekStaging => "openseek-staging"
     Deepseek => "deepseek"
     Custom => "custom"
   }
@@ -69,12 +61,13 @@ fn ApiProvider::wire(self : ApiProvider) -> String {
 ///|
 /// `None` for an unknown wire name: loading falls back to the default
 /// quietly (a corrupted store degrades instead of wedging), while
-/// `settings.set` rejects it loudly.
+/// `settings.set` rejects it loudly. The retired hosted provider names are
+/// accepted aliases of `Deepseek` — a stored proxy selection (or a legacy
+/// client's migration) must land on the BYOK default, never on a rejected
+/// write.
 fn ApiProvider::parse(value : String) -> ApiProvider? {
   match value {
-    "openseek" => Some(Openseek)
-    "openseek-staging" => Some(OpenseekStaging)
-    "deepseek" => Some(Deepseek)
+    "openseek" | "openseek-staging" | "deepseek" => Some(Deepseek)
     "custom" => Some(Custom)
     _ => None
   }
@@ -137,7 +130,7 @@ fn decode_settings(raw : Map[String, Json]) -> EngineSettings {
     },
     provider: settings_text(raw, "provider")
     .bind(value => ApiProvider::parse(value))
-    .unwrap_or(Openseek),
+    .unwrap_or(Deepseek),
     custom_api_url: settings_text(raw, "custom_api_url"),
     deepseek_api_key: settings_text(raw, "deepseek_api_key"),
     custom_api_key: settings_text(raw, "custom_api_key"),
@@ -210,7 +203,7 @@ pub async fn update_settings(
   let current = load_engine_settings(manager.runtime_dir)
   guard current.version <= EngineSettingsVersion else {
     raise EngineError(
-      "engine settings were written by a newer OpenSeek; update the app to change them",
+      "engine settings were written by a newer SeekMoon; update the app to change them",
     )
   }
   let raw = current.raw
@@ -322,16 +315,6 @@ fn resolved_endpoint(
   settings : EngineSettings,
 ) -> ResolvedEndpoint raise EngineError {
   match settings.provider {
-    Openseek => {
-      let url = OpenseekProxyUrl
-      let key = configured_api_key(api_url=url)
-      { api_key: key, api_url: Some(url) }
-    }
-    OpenseekStaging => {
-      let url = OpenseekStagingProxyUrl
-      let key = configured_api_key(api_url=url)
-      { api_key: key, api_url: Some(url) }
-    }
     Deepseek => {
       let key = configured_api_key(
         stored_key?=settings.deepseek_api_key,
@@ -353,22 +336,24 @@ fn resolved_endpoint(
 }
 
 ///|
-/// The OpenSeek server origin the current server selection points remote
-/// access at — `None` for `Deepseek`/`Custom`, which have no relay to sign
-/// in to. Derived from the proxy URLs so the origins have one home;
-/// `OPENSEEK_SERVER_URL` overrides the selection for development against a
+/// The SeekMoon relay origin remote access signs in to. The relay is a
+/// SeekMoon-hosted service on the same origin as the update manifest, and
+/// it no longer depends on the chat provider — only the chat proxy was
+/// retired, so remote access stays available for every provider.
+/// `OPENSEEK_SERVER_URL` overrides the origin for development against a
 /// local or ad-hoc server.
+///
+/// The settings snapshot is awaited but discarded: the origin no longer
+/// derives from the stored provider. The await holds this function's
+/// published `async` signature stable across the BYOK cutover (the
+/// committed `pkg.generated.mbti` pins it); drop it at the next interface
+/// reshape and regenerate with `moon info`.
 pub async fn remote_server_base(manager : EngineManager) -> String? {
   if @env.get("OPENSEEK_SERVER_URL") is Some(base) && !base.is_blank() {
     return Some(base.trim().to_owned())
   }
-  let (settings, _) = manager.settings_snapshot()
-  let proxy = match settings.provider {
-    Openseek => OpenseekProxyUrl
-    OpenseekStaging => OpenseekStagingProxyUrl
-    Deepseek | Custom => return None
-  }
-  proxy.strip_suffix("/chat/completions").map(origin => origin.to_owned())
+  let (_, _) = manager.settings_snapshot()
+  Some(RelayServerOrigin)
 }
 
 // The settings store's contract: tolerant reads, merge-preserving atomic
@@ -393,14 +378,14 @@ async fn with_settings_dir(
 }
 
 ///|
-async test "missing settings read as the zero-config defaults" {
+async test "missing settings read as the BYOK defaults" {
   with_settings_dir(async fn(_dir, manager) {
     let settings = load_engine_settings(manager.runtime_dir)
-    assert_true(settings.provider is Openseek)
+    assert_true(settings.provider is Deepseek)
     assert_true(settings.deepseek_api_key is None)
     json_inspect(settings_status(manager), content={
       "revision": 0,
-      "provider": "openseek",
+      "provider": "deepseek",
       "has_deepseek_key": false,
       "has_custom_key": false,
     })
@@ -433,8 +418,15 @@ async test "a saved key round-trips as presence, never as text" {
 }
 
 ///|
-async test "the staging server round-trips and resolves its own endpoints" {
-  with_settings_dir(async fn(_dir, manager) {
+async test "retired hosted providers converge on the DeepSeek default" {
+  with_settings_dir(async fn(dir, manager) {
+    // A store left behind by a hosted-API build must not wedge: it reads
+    // as the BYOK default, which needs a key and therefore routes to
+    // Settings.
+    @fsx.write_text(settings_file(dir), "{\"provider\": \"openseek\"}")
+    assert_true(load_engine_settings(manager.runtime_dir).provider is Deepseek)
+    // A write carrying a retired name (e.g. a legacy client's migration)
+    // is accepted and persisted as the default it means now.
     let status = update_settings(manager, {
       provider: Some("openseek-staging"),
       custom_api_url: None,
@@ -443,23 +435,18 @@ async test "the staging server round-trips and resolves its own endpoints" {
     })
     json_inspect(status, content={
       "revision": 1,
-      "provider": "openseek-staging",
+      "provider": "deepseek",
       "has_deepseek_key": false,
       "has_custom_key": false,
     })
-    let reloaded = load_engine_settings(manager.runtime_dir)
-    assert_true(reloaded.provider is OpenseekStaging)
+    let text = @fsx.read_text(settings_file(dir))
+    assert_true(text.contains("\"provider\": \"deepseek\""))
+    // Remote access is a SeekMoon relay service and no longer depends on
+    // the chat provider, so it stays on the production origin.
     debug_inspect(
       remote_server_base(manager),
-      content="Some(\"https://openseek-api-staging.moonbitlang.cn\")",
+      content="Some(\"https://openseek-api.moonbitlang.cn\")",
     )
-    let _ = update_settings(manager, {
-      provider: Some("deepseek"),
-      custom_api_url: None,
-      deepseek_api_key: None,
-      custom_api_key: None,
-    })
-    debug_inspect(remote_server_base(manager), content="None")
   })
 }
 
@@ -687,9 +674,9 @@ async test "an unknown provider is refused on write, defaulted on read" {
       _ => ""
     }
     assert_true(refused.contains("unknown API provider"))
-    // A corrupted store degrades to the zero-config default.
+    // A corrupted store degrades to the BYOK default.
     @fsx.write_text(settings_file(dir), "{\"provider\": \"acme\"}")
-    assert_true(load_engine_settings(manager.runtime_dir).provider is Openseek)
+    assert_true(load_engine_settings(manager.runtime_dir).provider is Deepseek)
   })
 }
 
@@ -698,7 +685,7 @@ async test "a corrupt file reads as defaults and survives until a save" {
   with_settings_dir(async fn(dir, manager) {
     @fsx.write_text(settings_file(dir), "{ not json")
     let settings = load_engine_settings(manager.runtime_dir)
-    assert_true(settings.provider is Openseek)
+    assert_true(settings.provider is Deepseek)
     // Nothing rewrote the broken file behind the user's back.
     assert_eq(@fsx.read_text(settings_file(dir)), "{ not json")
   })

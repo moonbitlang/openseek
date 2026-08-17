@@ -8,9 +8,10 @@ const DefaultModel = "deepseek-v4-pro"
 const DefaultMaxSteps = 1000
 
 ///|
-/// Sent as the API key when an OpenSeek or custom endpoint has no stored key:
-/// the engine refuses to start with an empty key, so this preserves the request
-/// shape when no user credential is available.
+/// Sent as the API key when a custom endpoint has no stored key: the
+/// engine refuses to start with an empty key, so this preserves the request
+/// shape for endpoints that need no credential (e.g. a local Ollama or
+/// LM Studio server).
 const PlaceholderApiKey = "unused"
 
 ///|
@@ -284,7 +285,7 @@ test "DeepSeek endpoint still uses DEEPSEEK env fallback" {
 ///|
 /// The endpoint comes from the settings store, never the process
 /// environment: an `OPENSEEK_API_URL` exported in the launching shell must
-/// not redirect the zero-config provider away from the proxy.
+/// not redirect the official DeepSeek provider away from its built-in URL.
 async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
@@ -302,8 +303,14 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-config-endpoint-"))
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
   let workspace = attach_run_workspace(root)
-  // No settings file at all: the default provider is the OpenSeek proxy.
-  let manager = new_engine_manager("openseek")
+  let manager = new_engine_manager("openseek", runtime_dir=root)
+  // The BYOK configuration: the official provider with its key.
+  let _ = update_settings(manager, {
+    provider: Some("deepseek"),
+    custom_api_url: None,
+    deepseek_api_key: Some("sk-official"),
+    custom_api_key: None,
+  })
   let config = run_config(manager, {
     task: "hello",
     submission_id: None,
@@ -312,8 +319,8 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
     session: "s-default",
     workspace: Some(workspace),
   })
-  assert_true(config.api_url is Some(OpenseekProxyUrl))
-  assert_eq(config.api_key, PlaceholderApiKey)
+  assert_true(config.api_url is None)
+  assert_eq(config.api_key, "sk-official")
   @fs.rmdir(root.to_string(), recursive=true)
 }
 
@@ -347,6 +354,16 @@ async test "host chooses durable placement from workspace state" {
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+  // BYOK: the default provider needs a key. Set one here so placement — not
+  // endpoint resolution — is what this test can fail for, regardless of the
+  // ambient environment.
+  let previous_key = @sys.get_env_var("DEEPSEEK")
+  @sys.set_env_var("DEEPSEEK", "sk-placement-test")
+  defer (if previous_key is Some(value) {
+    @sys.set_env_var("DEEPSEEK", value)
+  } else {
+    @sys.unset_env_var("DEEPSEEK")
+  })
   // The registry canonicalizes workspace paths, so build the fixture from
   // the tmpdir's physical spelling (`/tmp` is a symlink on macOS).
   let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-config-workspace-"))

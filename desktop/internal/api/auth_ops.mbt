@@ -5,8 +5,8 @@
 // (internal/remote, which imports this package) stays cycle-free.
 
 ///|
-/// The current status. The fallback `server_url` is the settings' server
-/// selection — present only when that server has a relay to sign in to.
+/// The current status. The fallback `server_url` is the relay origin —
+/// a SeekMoon-hosted service that no longer depends on the chat provider.
 async fn auth_status(state : ApiState) -> @protocol.AuthStatusPayload {
   state.auth.status(server_url?=@engine.remote_server_base(state.manager))
 }
@@ -28,9 +28,7 @@ async fn auth_connect(state : ApiState) -> @protocol.AuthStatusPayload {
     return auth_status(state)
   }
   guard @engine.remote_server_base(state.manager) is Some(server_url) else {
-    raise @host.HostError(
-      "remote access needs the OpenSeek server; select it in Settings",
-    )
+    raise @host.HostError("remote access needs the SeekMoon relay origin")
   }
   store.sign_in(server_url~) catch {
     error if @async.is_being_cancelled() => raise error

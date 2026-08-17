@@ -181,6 +181,15 @@ async test "a bound session routes every start through its checkout" {
   let root = worktree_test_root("openseek-worktree-route-")
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
   defer restore_session_root_env(previous)
+  // BYOK: the default provider needs a key. Set one here so worktree
+  // routing — not endpoint resolution — is what this test can fail for.
+  let previous_key = @sys.get_env_var("DEEPSEEK")
+  @sys.set_env_var("DEEPSEEK", "sk-route-test")
+  defer (if previous_key is Some(value) {
+    @sys.set_env_var("DEEPSEEK", value)
+  } else {
+    @sys.unset_env_var("DEEPSEEK")
+  })
   let ws = root.join("ws")
   @fsx.ensure_dir(ws.join(".worktrees/wt").to_path())
   ignore(@workspaces.add(ws.to_string(), fn(_) {  }))
@@ -322,6 +331,16 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
   let root = worktree_test_root("openseek-worktree-vanished-")
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", root.join("global").to_string())
   defer restore_session_root_env(previous)
+  // BYOK: the default provider needs a key. Set one here so the vanished
+  // checkout's refusal — not endpoint resolution — is what this test can
+  // fail for.
+  let previous_key = @sys.get_env_var("DEEPSEEK")
+  @sys.set_env_var("DEEPSEEK", "sk-vanish-test")
+  defer (if previous_key is Some(value) {
+    @sys.set_env_var("DEEPSEEK", value)
+  } else {
+    @sys.unset_env_var("DEEPSEEK")
+  })
   let repo = root.join("repo")
   prepare_git_repo(repo)
   ignore(@workspaces.add(repo.to_string(), fn(_) {  }))

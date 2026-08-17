@@ -98,7 +98,7 @@ pub fn ws_connect(
   })
   socket.set_with_string("onclose", (_event : @js.Value) => {
     session.open_ = false
-    reject_all(session, "OpenSeek connection lost")
+    reject_all(session, "SeekMoon connection lost")
     // Only the channel's current session reports down — a replaced socket's
     // late close must not double-trigger that channel's reconnect loop.
     if channels.get(channel) is Some(current) &&
@@ -119,7 +119,7 @@ pub fn ws_close(channel : ChannelId) -> Unit {
   guard channels.get(channel) is Some(session) else { return }
   channels.remove(channel)
   session.open_ = false
-  reject_all(session, "OpenSeek connection closed")
+  reject_all(session, "SeekMoon connection closed")
   let _ : @js.Value = session.socket.apply_with_string(
     "close",
     ([] : Array[@js.Value]),
@@ -134,7 +134,7 @@ async fn ws_request(
   payload : @js.Value,
 ) -> @js.Value {
   guard channels.get(channel) is Some(session) && session.open_ else {
-    raise BridgeUnsent("OpenSeek connection is down")
+    raise BridgeUnsent("SeekMoon connection is down")
   }
   let id = session.next_id
   session.next_id += 1
@@ -356,7 +356,7 @@ test "a socket that dies under a sent request is not a refusal" {
   defer @js.globalThis.set_with_string("__MoonBit__", previous)
   assert_true(openseek_api() is Some(_))
   let lost = ws_reply_failure(
-    js_raised(js_error("OpenSeek connection lost", rpc_rejection=false)),
+    js_raised(js_error("SeekMoon connection lost", rpc_rejection=false)),
   )
   assert_true(bridge_failure(lost) is Unknown)
   // A peer's own JSON-RPC error is the one remote failure that *is* an
@@ -374,10 +374,10 @@ test "a call that never left is not the same as one that went unanswered" {
   // optimistic state then has to keep waiting on a command that provably
   // never reached anything.
   assert_true(
-    bridge_failure(BridgeUnsent("OpenSeek bridge unavailable")) is Unsent,
+    bridge_failure(BridgeUnsent("SeekMoon bridge unavailable")) is Unsent,
   )
   assert_true(
-    bridge_failure(BridgeUnsent("OpenSeek connection is down")) is Unsent,
+    bridge_failure(BridgeUnsent("SeekMoon connection is down")) is Unsent,
   )
   // A reply that arrived and could not be decoded went out: the host acted,
   // and it is its answer that was lost.
@@ -388,7 +388,7 @@ test "a call that never left is not the same as one that went unanswered" {
   // behaving exactly as before.
   for
     error in [
-      BridgeUnsent("OpenSeek bridge unavailable"),
+      BridgeUnsent("SeekMoon bridge unavailable"),
       BridgeError("Malformed reply from agent.goal"),
     ] {
     assert_false(bridge_error_is_definite(error))

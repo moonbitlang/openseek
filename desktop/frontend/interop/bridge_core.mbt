@@ -44,7 +44,7 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request(
   let reply = match channel {
     Local => {
       guard openseek_api() is Some(api) && js_prop(api, op) is Some(_) else {
-        raise BridgeUnsent("OpenSeek bridge unavailable")
+        raise BridgeUnsent("SeekMoon bridge unavailable")
       }
       js_method_promise(api, op, payload).wait()
     }
@@ -165,7 +165,7 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(
     let reply = match channel {
       Local => {
         guard openseek_api() is Some(api) && js_prop(api, op) is Some(_) else {
-          raise BridgeUnsent("OpenSeek bridge unavailable")
+          raise BridgeUnsent("SeekMoon bridge unavailable")
         }
         js_ordered_method_promise(api, op, payload).wait()
       }

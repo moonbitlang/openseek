@@ -635,16 +635,6 @@ fn provider_select(
       .data_set("focus-owner", ""),
     [
       @html.option(
-        value="openseek",
-        selected=selected is Openseek,
-        "OpenSeek (default, no API key)",
-      ),
-      @html.option(
-        value="openseek-staging",
-        selected=selected is OpenseekStaging,
-        "OpenSeek staging (testing)",
-      ),
-      @html.option(
         value="deepseek",
         selected=selected is Deepseek,
         "DeepSeek official (your API key)",
@@ -714,28 +704,14 @@ fn tree_layout_select(
 }
 
 ///|
-/// The Remote access group's rows: sign-in state against the selected
-/// OpenSeek server, or why there is nothing to sign in to.
+/// The Remote access group's rows: sign-in state against the SeekMoon
+/// relay. The relay no longer depends on the chat provider — only the
+/// hosted chat proxy was retired — so it is always available.
 fn remote_access_rows(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> Array[@html.Html] {
   let rows : Array[@html.Html] = []
-  // A pending connect bypasses the guard: switching the endpoint mid-flow
-  // must not hide the Cancel button while the sign-in still runs against
-  // the server it started with.
-  if !(model.api_provider is (Openseek | OpenseekStaging)) &&
-    !(model.remote_access is Some({ user_login: Some(_), .. })) &&
-    !model.remote_connecting {
-    rows.push(
-      setting_row(
-        "Remote control",
-        [],
-        desc="Needs the OpenSeek server — select it under API endpoint.",
-      ),
-    )
-    return rows
-  }
   match model.remote_access {
     None =>
       rows.push(setting_row("Remote control", [], desc="Checking sign-in…"))
@@ -925,12 +901,65 @@ fn update_check_controls(
 ///|
 fn provider_hint(provider : ApiProvider) -> String {
   match provider {
-    Openseek => "Requests go through the OpenSeek service; no key needed."
-    OpenseekStaging =>
-      "The OpenSeek staging server: pre-release service and staging updates."
     Deepseek => "Requests go straight to api.deepseek.com with your key."
-    Custom => "Any DeepSeek-compatible chat-completions URL; key optional."
+    Custom => "Any OpenAI-compatible chat-completions URL; key optional."
   }
+}
+
+///|
+/// The bring-your-own-key guide shown at the top of the Settings page while
+/// the configured endpoint is not usable. SeekMoon ships no hosted API:
+/// every request goes straight from this machine to the user's own model
+/// provider, so a key (official) or an endpoint URL (custom) must be
+/// configured first. The steps follow the selected provider.
+fn byok_setup_guide(provider : ApiProvider) -> @html.Html {
+  let step = fn(index : Int, text : String) -> @html.Html {
+    @html.div(class="setup-guide-step", [
+      @html.span(class="setup-guide-index", index.to_string()),
+      @html.span(class="setup-guide-text", text),
+    ])
+  }
+  let steps : Array[@html.Html] = match provider {
+    Deepseek =>
+      [
+        step(1, "Open platform.deepseek.com and sign in."),
+        step(2, "Create an API key under API Keys."),
+        step(3, "Paste it into the DeepSeek API key field below and save."),
+      ]
+    Custom =>
+      [
+        step(
+          1, "Start an OpenAI-compatible endpoint (Ollama, LM Studio, a proxy…).",
+        ),
+        step(2, "Enter its chat-completions URL below."),
+        step(3, "Add the endpoint's key if it requires one."),
+      ]
+  }
+  settings_group(icon_key, "Bring your own key", [
+    @html.div(
+      class="setup-guide",
+      [
+        @html.p(
+          "SeekMoon does not provide a hosted API. Requests go straight from this machine to your own model provider, billed to your account. Your API key is stored only on this machine — SeekMoon never reads it.",
+        ),
+        @html.div(class="setup-guide-steps", steps),
+        ..if provider is Deepseek {
+          [
+            @html.a(
+              class="setting-link",
+              href="https://platform.deepseek.com/api_keys",
+              target=Blank,
+              rel="noopener noreferrer",
+              [
+                icon(icon_link_external),
+                @html.span("platform.deepseek.com → API Keys"),
+              ],
+            ),
+          ]
+        },
+      ],
+    ),
+  ])
 }
 
 ///|
@@ -987,11 +1016,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ),
     )
   }
-  // The OpenSeek proxy ignores keys, so the key field only appears for the
-  // endpoints that can use one. The key lives on the host and is never
-  // echoed back — the page only knows one is saved; saving a new one
-  // overwrites it.
-  if !(model.api_provider is Openseek) {
+  // The key lives on the host and is never echoed back — the page only
+  // knows one is saved; saving a new one overwrites it.
+  {
     let key_saved = if model.api_provider is Custom {
       model.custom_key_saved
     } else {
@@ -1029,12 +1056,15 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             "Save API key",
           ),
         ],
-        desc="Stored on the OpenSeek host machine and sent only with API requests.",
+        desc="Stored on this machine and sent only with API requests. SeekMoon never reads it.",
         stack=true,
       ),
     )
   }
   let groups : Array[@html.Html] = [
+    ..if !ready {
+      [byok_setup_guide(model.api_provider)]
+    },
     settings_group(icon_sparkle, "Engine", engine_rows),
     settings_group(icon_key, "API", api_rows),
     settings_group(icon_layout, "Interface", [
@@ -1155,7 +1185,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         setting_row(
           "Check for updates",
           update_check_controls(dispatch, model),
-          desc="Current version: \{model.app_version}. The staging server serves staging builds.",
+          desc="Current version: \{model.app_version}.",
         ),
       ]),
     )
@@ -1170,7 +1200,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           if !settings_loaded {
             "Loading runtime settings…"
           } else if ready {
-            "Runtime settings for the OpenSeek engine."
+            "Runtime settings for the SeekMoon engine."
           } else if model.api_provider is Custom {
             "Enter a chat-completions endpoint URL to start."
           } else {
@@ -1843,7 +1873,7 @@ fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     (Connected, Some(dev)) if dev.projects.is_empty() => {
       card.push(
         @html.p(
-          "OpenSeek works inside a project directory. Add one and its first chat opens here.",
+          "SeekMoon works inside a project directory. Add one and its first chat opens here.",
         ),
       )
       card.push(
@@ -1923,7 +1953,7 @@ fn console_gate_view(
       }
       AuthSignedOut => {
         card.push(@html.h2("Sign in"))
-        card.push(@html.p("Access this OpenSeek device from your browser."))
+        card.push(@html.p("Access this SeekMoon device from your browser."))
         card.push(
           @html.a(
             class="portal-button-link",
@@ -2009,7 +2039,7 @@ fn console_gate_view(
   }
   @html.section(class="portal", [
     @html.div(class="portal-inner", [
-      @html.header(class="portal-header", [@html.h1("OpenSeek")]),
+      @html.header(class="portal-header", [@html.h1("SeekMoon")]),
       @html.div(class="portal-card", card),
     ]),
   ])

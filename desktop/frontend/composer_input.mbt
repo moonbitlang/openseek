@@ -150,7 +150,7 @@ fn Model::composer_input(
       } else if conv.is_running() {
         "Steer the running task — your message joins it at the next step."
       } else {
-        "Ask OpenSeek to inspect, edit, or explain this workspace."
+        "Ask SeekMoon to inspect, edit, or explain this workspace."
       },
       disabled: false,
       primary_action,

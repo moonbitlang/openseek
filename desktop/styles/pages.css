@@ -253,6 +253,53 @@ h2 {
   align-items: stretch;
 }
 
+/* The bring-your-own-key guide inside the API group's card: prose plus
+   numbered steps, with its own padding since the card's default is
+   row-shaped. */
+.setup-guide {
+  display: grid;
+  gap: 14px;
+  padding: 16px 0;
+}
+
+.setup-guide p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+}
+
+.setup-guide-steps {
+  display: grid;
+  gap: 6px;
+}
+
+.setup-guide-step {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: var(--font-size-md);
+}
+
+.setup-guide-index {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  transform: translateY(4px);
+}
+
+.setup-guide .setting-link {
+  justify-self: start;
+}
+
 #saveApiKey {
   align-self: flex-end;
 }

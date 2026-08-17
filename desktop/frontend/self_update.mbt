@@ -5,21 +5,9 @@
 // a conversation would be interrupted.
 
 ///|
-/// Which release stream `check_update` asks. Derived from the server
-/// selection (`ApiProvider::update_channel`): the staging server serves
-/// staging builds.
-priv enum UpdateChannel {
-  Production
-  Staging
-} derive(Eq)
-
-///|
-fn UpdateChannel::wire(self : UpdateChannel) -> String {
-  match self {
-    Production => "production"
-    Staging => "staging"
-  }
-}
+/// The update manifest lives on the SeekMoon origin and is always asked
+/// with the production channel — the channel no longer derives from the
+/// chat provider (only the hosted chat proxy was retired).
 
 ///|
 /// Byte progress for the package currently being downloaded. The total is
@@ -162,21 +150,17 @@ fn Model::fetch_app_info(self : Model, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 }
 
 ///|
-/// Ask the host to check the channel's manifest. Every outcome lands in
+/// Ask the host to check the production manifest. Every outcome lands in
 /// `UpdateCheckFinished`: op failures (bridge missing, host error) fold
 /// into `CheckUnreachable`, so the handler has one shape to route.
-fn check_for_updates(
-  dispatch : @cmd.Emit[Msg],
-  channel : UpdateChannel,
-  explicit~ : Bool,
-) -> @cmd.Cmd {
+fn check_for_updates(dispatch : @cmd.Emit[Msg], explicit~ : Bool) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let result = try {
         // Self-update always targets the page's own desktop host, never a
         // focused remote device.
         let reply = @interop.bridge_request(Local, @commands.update_check, {
-          channel: Some(channel.wire()),
+          channel: Some("production"),
         })
         UpdateCheck::from_reply(reply)
       } catch {
@@ -188,19 +172,16 @@ fn check_for_updates(
 }
 
 ///|
-/// Ask the host-owned update actor to download and verify the channel's package.
-/// A successful reply only means the work was accepted; `update.downloaded`
-/// triggers `UpdateDownloaded` after staging, and `update.download_failed`
-/// carries a background failure.
-fn download_update(
-  dispatch : @cmd.Emit[Msg],
-  channel : UpdateChannel,
-) -> @cmd.Cmd {
+/// Ask the host-owned update actor to download and verify the production
+/// package. A successful reply only means the work was accepted;
+/// `update.downloaded` triggers `UpdateDownloaded` after staging, and
+/// `update.download_failed` carries a background failure.
+fn download_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       ignore(
         @interop.bridge_request(Local, @commands.update_download, {
-          channel: Some(channel.wire()),
+          channel: Some("production"),
         }) catch {
           error => {
             scheduler.add(

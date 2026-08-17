@@ -2335,14 +2335,10 @@ fn update_msg(
     ProviderChanged(value) => {
       guard model.host_settings_loaded() else { return (@cmd.none, model) }
       let provider = ApiProvider::parse(value)
-      // A server switch can move the update channel with it; whatever the
-      // old channel's check said no longer applies.
-      let update_ux = if provider.update_channel() ==
-        model.api_provider.update_channel() {
-        model.update_ux
-      } else {
-        UpdateUnknown
-      }
+      // The update channel no longer derives from the chat provider (only
+      // the hosted chat proxy was retired; self-update and the relay stay
+      // on the SeekMoon origin), so a provider switch leaves the update
+      // answer alone.
       (
         push_host_settings(
           dispatch,
@@ -2355,7 +2351,6 @@ fn update_msg(
           api_provider: provider,
           setup_api_key: "",
           settings_saves: model.settings_saves + 1,
-          update_ux,
         },
       )
     }
@@ -2448,11 +2443,7 @@ fn update_msg(
         (@cmd.none, model)
       } else {
         (
-          check_for_updates(
-            dispatch,
-            model.api_provider.update_channel(),
-            explicit=true,
-          ),
+          check_for_updates(dispatch, explicit=true),
           { ..model, update_ux: CheckingForUpdate },
         )
       }
@@ -2526,7 +2517,7 @@ fn update_msg(
         CheckBroken(version~, reason~) => {
           // A broken package entry can only be the publisher's fault:
           // loud both ways.
-          let message = "OpenSeek \{version} is published but its package is unusable: \{reason}"
+          let message = "SeekMoon \{version} is published but its package is unusable: \{reason}"
           let (cmd, next) = if explicit {
             (@cmd.none, model)
           } else {
@@ -2545,7 +2536,7 @@ fn update_msg(
           (@cmd.none, { ..model, update_ux: ConfirmingRestart(version~) })
         } else {
           (
-            download_update(dispatch, model.api_provider.update_channel()),
+            download_update(dispatch),
             {
               ..model,
               update_ux: DownloadingUpdate(version~, progress={
@@ -2561,7 +2552,7 @@ fn update_msg(
     ConfirmUpdateRestart =>
       if model.update_ux is ConfirmingRestart(version~) {
         (
-          download_update(dispatch, model.api_provider.update_channel()),
+          download_update(dispatch),
           {
             ..model,
             update_ux: DownloadingUpdate(version~, progress={
@@ -2805,8 +2796,6 @@ fn update_msg(
               { ..next, screen: if next.api_ready() { Chat } else { Settings } },
             )
           }
-          Openseek | OpenseekStaging =>
-            (@cmd.none, { ..model, setup_api_key: "" })
         }
       }
     }
@@ -4425,13 +4414,7 @@ fn update_device_msg(
         // bridge time.
         if model.is_desktop {
           commands.push(model.fetch_app_info(dispatch))
-          commands.push(
-            check_for_updates(
-              dispatch,
-              model.api_provider.update_channel(),
-              explicit=false,
-            ),
-          )
+          commands.push(check_for_updates(dispatch, explicit=false))
           commands.push(fetch_remote_status(dispatch))
         }
       }
@@ -4565,7 +4548,7 @@ fn update_device_msg(
       let failures = dev.reconnect_failures + 1
       let bridge = if failures == WsLostAfter {
         BridgeLost(
-          "Can't reach OpenSeek. Make sure OpenSeek is running, then reopen this page.",
+          "Can't reach SeekMoon. Make sure SeekMoon is running, then reopen this page.",
         )
       } else {
         dev.bridge
@@ -7098,6 +7081,11 @@ fn test_model() -> Model {
     // The shared fixture represents a connected desktop after its initial
     // settings snapshot. Loading-state tests opt back into revision -1.
     host_settings_revision: 0,
+    // BYOK means a ready app has a key saved: without one, the composer's
+    // send gate stays shut and every submission test would first need to
+    // configure an endpoint. Setup-flow tests load their own keyless
+    // settings payloads instead.
+    deepseek_key_saved: true,
     active_session: "desktop-test",
     conversations: [test_conversation()],
   }
@@ -8508,7 +8496,7 @@ test "BridgeReady clears focused host settings until the refetch lands" {
   }
   let (_, next) = update_dev(dispatch, BridgeReady, model)
   assert_false(next.host_settings_loaded())
-  assert_true(next.api_provider is Openseek)
+  assert_true(next.api_provider is Deepseek)
   inspect(next.custom_api_url, content="")
   assert_false(next.custom_key_saved)
   inspect(next.setup_api_key, content="")
@@ -10557,7 +10545,17 @@ test "reconnect runs snapshot settles only its captured Starting submission" {
 ///|
 test "an old empty runs snapshot cannot close a start sent after reconnect" {
   let dispatch = test_dispatch()
-  let (_, ready) = update_dev(dispatch, BridgeReady, test_model())
+  let (_, bridged) = update_dev(dispatch, BridgeReady, test_model())
+  // A reconnect clears the host-settings mirror; the refetch that follows
+  // restores the saved key (the BYOK fixture is a ready app).
+  let (_, ready) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek", has_deepseek_key=true),
+      connection_generation=None,
+    ),
+    bridged,
+  )
   // A reconnect drops the worktree mirror and re-requests it; path-based work
   // stays parked until it answers, so restore it before sending.
   let ready = ready.with_dev(dev => {
@@ -13681,15 +13679,22 @@ test "exact-zero recovery refuses buffered or nonzero durable frontiers" {
 }
 
 ///|
-test "the default provider needs no API key to be ready" {
+test "the BYOK default provider needs a key to be ready" {
   let model = test_model()
-  assert_false(model.deepseek_key_saved)
+  assert_true(model.deepseek_key_saved)
   assert_true(model.api_ready())
+  let keyless = { ..model, deepseek_key_saved: false }
+  assert_false(keyless.api_ready())
+  assert_true(keyless.display_status() is ApiKeyRequired)
 }
 
 ///|
 test "the official endpoint requires a key, a custom endpoint a URL" {
-  let official = { ..test_model(), api_provider: Deepseek }
+  let official = {
+    ..test_model(),
+    api_provider: Deepseek,
+    deepseek_key_saved: false,
+  }
   assert_false(official.api_ready())
   assert_true(official.display_status() is ApiKeyRequired)
   assert_true({ ..official, deepseek_key_saved: true }.api_ready())
@@ -14063,6 +14068,8 @@ test "host settings edits wait for the focused host snapshot" {
 ///|
 test "host settings open the settings page only when incomplete" {
   let dispatch = test_dispatch()
+  // A hosted-provider value left by an older build parses as the BYOK
+  // default: keyless DeepSeek, which needs setup.
   let (_, zero_config) = update_dev(
     dispatch,
     HostSettingsLoaded(
@@ -14071,9 +14078,9 @@ test "host settings open the settings page only when incomplete" {
     ),
     test_model(),
   )
-  assert_true(zero_config.screen is Chat)
-  assert_true(zero_config.api_provider is Openseek)
-  assert_true(zero_config.display_status() is Ready)
+  assert_true(zero_config.screen is Settings)
+  assert_true(zero_config.api_provider is Deepseek)
+  assert_true(zero_config.display_status() is ApiKeyRequired)
   let (_, keyless) = update_dev(
     dispatch,
     HostSettingsLoaded(
@@ -14120,7 +14127,7 @@ test "a background device's pushes leave the focused mirrors alone" {
     ),
     model,
   )
-  assert_true(settled.api_provider is Openseek)
+  assert_true(settled.api_provider is Deepseek)
   assert_true(settled.screen is Chat)
 }
 
@@ -14138,7 +14145,7 @@ test "host settings are deferred while this client's writes are in flight" {
     ),
     model,
   )
-  assert_true(ignored.api_provider is Openseek)
+  assert_true(ignored.api_provider is Deepseek)
   inspect(ignored.settings_saves, content="1")
   // The write's own reply reconciles once it is the last one out.
   let (_, settled) = update_dev(
@@ -14166,7 +14173,7 @@ test "host settings are deferred while this client's writes are in flight" {
     stacked,
   )
   inspect(still_pending.settings_saves, content="1")
-  assert_true(still_pending.api_provider is Openseek)
+  assert_true(still_pending.api_provider is Deepseek)
 }
 
 ///|
@@ -14220,9 +14227,12 @@ test "legacy client settings migrate up only from the desktop window" {
   inspect(desktop.settings_saves, content="1")
   assert_true(desktop.legacy_cleanup_pending)
   // A browser page only purges — its copy may belong to another device.
+  // The keyless mirror is explicit: the fixture's saved key belongs to the
+  // desktop window's migration above, not to this page.
   let (_, browser) = update(dispatch, legacy, {
     ..test_model(),
     is_desktop: false,
+    deepseek_key_saved: false,
   })
   assert_false(browser.deepseek_key_saved)
   inspect(browser.settings_saves, content="0")
@@ -14366,7 +14376,11 @@ test "the tree-layout setting parses its wire names" {
 ///|
 test "update is pure: a provider change is idempotent" {
   let dispatch = test_dispatch()
-  let model = { ..test_model(), setup_api_key: "typed" }
+  let model = {
+    ..test_model(),
+    setup_api_key: "typed",
+    deepseek_key_saved: false,
+  }
   let (_, once) = update(dispatch, ProviderChanged("deepseek"), model)
   let (_, twice) = update(dispatch, ProviderChanged("deepseek"), model)
   assert_true(once.api_provider is Deepseek)
@@ -14385,6 +14399,7 @@ test "saving a key marks the active provider credential only" {
   let deepseek = {
     ..test_model(),
     api_provider: Deepseek,
+    deepseek_key_saved: false,
     setup_api_key: "  sk-new  ",
     screen: Settings,
   }
@@ -14394,11 +14409,15 @@ test "saving a key marks the active provider credential only" {
   inspect(saved_deepseek.setup_api_key, content="")
   inspect(saved_deepseek.settings_saves, content="1")
   assert_true(saved_deepseek.screen is Chat)
+  // Each provider's flag is independent: switching to Custom and saving
+  // marks only the custom credential.
   let custom = {
-    ..deepseek,
+    ..test_model(),
     api_provider: Custom,
+    deepseek_key_saved: false,
     custom_api_url: "https://proxy.example/chat/completions",
     setup_api_key: "  sk-custom-new  ",
+    screen: Settings,
   }
   let (_, saved_custom) = update(dispatch, SaveApiKey, custom)
   assert_false(saved_custom.deepseek_key_saved)
@@ -17988,23 +18007,23 @@ test "late update progress cannot revive an available release" {
 }
 
 ///|
-test "switching the server to staging moves the channel and forgets the previous answer" {
+test "switching the chat provider leaves the update answer alone" {
   let dispatch = test_dispatch()
   let available = {
     ..test_model(),
     update_ux: UpdateAvailable(version="0.2.0", installable=true),
   }
+  // A retired hosted-provider value lands on the BYOK default and the
+  // update channel no longer derives from the chat provider.
   let (_, switched) = update(
     dispatch,
     ProviderChanged("openseek-staging"),
     available,
   )
-  assert_true(switched.api_provider is OpenseekStaging)
-  assert_true(switched.api_provider.update_channel() is Staging)
-  assert_true(switched.update_ux is UpdateUnknown)
-  // A switch that keeps the channel keeps the answer.
-  let (_, kept) = update(dispatch, ProviderChanged("deepseek"), available)
-  assert_true(kept.api_provider.update_channel() is Production)
+  assert_true(switched.api_provider is Deepseek)
+  assert_true(switched.update_ux is UpdateAvailable(..))
+  let (_, kept) = update(dispatch, ProviderChanged("custom"), available)
+  assert_true(kept.api_provider is Custom)
   assert_true(kept.update_ux is UpdateAvailable(..))
 }
 

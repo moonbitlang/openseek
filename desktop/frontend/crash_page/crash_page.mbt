@@ -100,7 +100,7 @@ pub extern "js" fn install() -> Unit =
   #|  `;
   #|  document.head.append(style);
   #|
-  #|  class OpenSeekCrashPage {
+  #|  class SeekMoonCrashPage {
   #|    constructor() {
   #|      this.crashed = false;
   #|      window.addEventListener("error", (event) => {
@@ -139,13 +139,13 @@ pub extern "js" fn install() -> Unit =
   #|      }
   #|      if (!detail) detail = "Unknown JavaScript error";
   #|
-  #|      document.title = "OpenSeek stopped unexpectedly";
+  #|      document.title = "SeekMoon stopped unexpectedly";
   #|      document.body.className = "frontend-crashed";
   #|      document.body.innerHTML = `
   #|        <main id="frontend-crash" role="alert">
   #|          <section class="frontend-crash-card">
   #|            <div class="frontend-crash-mark" aria-hidden="true">!</div>
-  #|            <h1>OpenSeek stopped unexpectedly</h1>
+  #|            <h1>SeekMoon stopped unexpectedly</h1>
   #|            <p>Reload the page to continue. Unsaved input may be lost.</p>
   #|            <button id="frontend-crash-reload" type="button">Reload</button>
   #|            <details>
@@ -162,5 +162,5 @@ pub extern "js" fn install() -> Unit =
   #|    }
   #|  }
   #|
-  #|  new OpenSeekCrashPage();
+  #|  new SeekMoonCrashPage();
   #|}

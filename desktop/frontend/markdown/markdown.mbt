@@ -872,7 +872,7 @@ fn tights_text(tights : @cmark.Seq[@cmark.Tight]) -> String {
 
 ///|
 test "markdown survives every streaming prefix of a list-heavy answer" {
-  let answer = "你好！😊 我是 OpenSeek，一个专注于 MoonBit 语言的 AI 编程助手。\n\n我可以帮你：\n\n- 🛠️ **写 MoonBit 代码**：函数、模块、测试\n- 🔍 **解释代码**：阅读和理解现有项目\n- 🐛 **修 bug**：定位并修复问题\n\n1. 第一步\n2. 第二步\n\n| 列 | 表 |\n|---|---|\n| a | b |\n"
+  let answer = "你好！😊 我是 SeekMoon，一个专注于 MoonBit 语言的 AI 编程助手。\n\n我可以帮你：\n\n- 🛠️ **写 MoonBit 代码**：函数、模块、测试\n- 🔍 **解释代码**：阅读和理解现有项目\n- 🐛 **修 bug**：定位并修复问题\n\n1. 第一步\n2. 第二步\n\n| 列 | 表 |\n|---|---|\n| a | b |\n"
   let buf = StringBuilder::new()
   for ch in answer {
     buf.write_char(ch)

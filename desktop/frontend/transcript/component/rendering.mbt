@@ -129,7 +129,7 @@ fn TranscriptRenderer::stream_children(
           class="empty-sub",
           match self.input.source {
             OpenSeek =>
-              "OpenSeek plans the work, edits files across your workspace, runs your tests, and hands back a reviewable result."
+              "SeekMoon plans the work, edits files across your workspace, runs your tests, and hands back a reviewable result."
             Codex =>
               "Codex inspects, edits, and runs this workspace with its own account, sandbox, and approvals."
           },

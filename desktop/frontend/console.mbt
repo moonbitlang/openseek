@@ -558,7 +558,7 @@ test "a revoked page device is retired without connecting a survivor" {
   assert_true(refreshed.device_state(Remote("d_a")) is None)
   assert_true(refreshed.device_state(Remote("d_b")) is None)
   assert_eq(refreshed.installed_skills.length(), 0)
-  assert_true(refreshed.api_provider is Openseek)
+  assert_true(refreshed.api_provider is Deepseek)
   inspect(refreshed.custom_api_url, content="")
   assert_false(refreshed.deepseek_key_saved)
   assert_false(refreshed.custom_key_saved)
