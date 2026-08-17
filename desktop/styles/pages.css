@@ -209,7 +209,8 @@ h2 {
 
 .setting-row + .setting-row,
 .settings-group-card .skill-row + .skill-row,
-.settings-group-card .setup-guide + .setting-row {
+.settings-group-card .setup-guide + .setting-row,
+.setup-modal-form .setup-guide + .setting-row {
   border-top: 1px solid var(--color-border-subtle);
 }
 
