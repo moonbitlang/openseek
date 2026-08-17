@@ -14310,6 +14310,25 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
 }
 
 ///|
+test "a custom endpoint reads as usable only from a plausible URL" {
+  let custom = {
+    ..test_model(),
+    api_provider: Custom,
+    deepseek_key_saved: false,
+  }
+  // A prefix mid-typing must not arm Send or retire the setup modal.
+  assert_true(!{ ..custom, custom_api_url: "" }.api_ready())
+  assert_true(!{ ..custom, custom_api_url: "h" }.api_ready())
+  assert_true(!{ ..custom, custom_api_url: "https://" }.api_ready())
+  assert_true(!{ ..custom, custom_api_url: "ftp://host" }.api_ready())
+  assert_true({ ..custom, custom_api_url: "https://host" }.api_ready())
+  assert_true(
+    { ..custom, custom_api_url: " https://host/chat/completions " }.api_ready(),
+  )
+  assert_true({ ..custom, custom_api_url: "http://127.0.0.1:8080" }.api_ready())
+}
+
+///|
 test "clearing the mirror never leaves an orphaned setup modal" {
   // A modal left up over the loading sentinel would render default data
   // with every control disabled; close it with the mirror it was showing.

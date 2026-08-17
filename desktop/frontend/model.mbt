@@ -2545,14 +2545,24 @@ fn Model::settle_api_setup(self : Model) -> Model {
 
 ///|
 /// Whether the configured endpoint is usable as it stands: the official
-/// endpoint needs a key stored on the host, and a custom endpoint needs at
-/// least a URL. The credentials themselves live on the host; a start
+/// endpoint needs a key stored on the host, and a custom endpoint needs a
+/// plausible URL. The credentials themselves live on the host; a start
 /// carries none.
 fn Model::api_ready(self : Model) -> Bool {
   match self.api_provider {
     Deepseek => self.deepseek_key_saved
-    Custom => !self.custom_api_url.is_blank()
+    Custom => plausible_endpoint_url(self.custom_api_url)
   }
+}
+
+///|
+/// Whether a custom endpoint URL is complete enough to try: an http(s)
+/// scheme followed by at least one host character. The URL is pushed to the
+/// host per keystroke, so a prefix the user is still typing must not read
+/// as usable — that would retire the setup modal mid-word and arm Send
+/// against an endpoint every run fails on.
+fn plausible_endpoint_url(url : String) -> Bool {
+  url.trim() =~ re"^https?://[^/]"
 }
 
 ///|
