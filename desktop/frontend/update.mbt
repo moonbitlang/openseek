@@ -2351,16 +2351,17 @@ fn update_msg(
         setup_api_key: "",
         settings_saves: model.settings_saves + 1,
       }
-      // Switching to a provider whose key or URL is missing takes the
-      // endpoint from usable to not mid-form; say so the same loud way a
-      // load does.
-      if model.api_ready() {
-        match incomplete_settings_toast(next) {
-          Some(message) => {
-            let (toast, next) = next.notify_error(dispatch, message)
-            (@cmd.batch([push, toast]), next)
-          }
-          None => (push, next)
+      // The switch can move the endpoint between usable and not. Inside the
+      // setup modal the form simply re-renders for the new provider; a
+      // switch that breaks a usable endpoint away from the Settings page
+      // opens the modal — it is the announcement now, not a toast.
+      if next.api_ready() {
+        (push, { ..next, api_setup_open: false })
+      } else if model.api_ready() {
+        if next.screen is Settings {
+          (push, next)
+        } else {
+          (push, { ..next, api_setup_open: true })
         }
       } else {
         (push, next)
@@ -2627,12 +2628,10 @@ fn update_msg(
     }
     UpdateApplied => (close_window(), model)
     OpenSetup =>
-      (@cmd.none, {
-        ..model,
-        screen: Settings,
-        setup_api_key: "",
-        api_setup_open: false,
-      })
+      (
+        @cmd.none,
+        { ..model, screen: Settings, setup_api_key: "", api_setup_open: false },
+      )
     DismissApiSetup => (@cmd.none, { ..model, api_setup_open: false })
     OpenCodex => {
       let (cmd, codex) = @codex.update(
@@ -2812,7 +2811,17 @@ fn update_msg(
                 api_key_settings_patch(provider, api_key),
                 model.focused_connection_generation(),
               ),
-              { ..next, screen: if next.api_ready() { Chat } else { Settings } },
+              {
+                ..next,
+                screen: if next.api_ready() {
+                  Chat
+                } else {
+                  Settings
+                },
+                // The popup configures in place: a save that completes the
+                // setup retires it the way the old popup auto-dismissed.
+                api_setup_open: false,
+              },
             )
           }
         }
@@ -14183,11 +14192,10 @@ test "the setup modal tracks endpoint usability without toasts" {
   assert_true(broken.api_setup_open)
   // "Not now" dismisses; an unrelated payload that leaves the endpoint
   // unusable does not re-announce it.
-  let (_, dismissed) = update(
-    dispatch,
-    DismissApiSetup,
-    { ..broken, api_setup_open: true },
-  )
+  let (_, dismissed) = update(dispatch, DismissApiSetup, {
+    ..broken,
+    api_setup_open: true,
+  })
   assert_true(!dismissed.api_setup_open)
   let (_, still) = update_dev(
     dispatch,
@@ -14198,12 +14206,11 @@ test "the setup modal tracks endpoint usability without toasts" {
     dismissed,
   )
   assert_true(!still.api_setup_open)
-  // The modal's primary action navigates to Settings and closes the modal.
-  let (_, on_settings) = update(
-    dispatch,
-    OpenSetup,
-    { ..broken, api_setup_open: true },
-  )
+  // Opening Settings from the gear closes the modal.
+  let (_, on_settings) = update(dispatch, OpenSetup, {
+    ..broken,
+    api_setup_open: true,
+  })
   assert_true(on_settings.screen is Settings)
   assert_true(!on_settings.api_setup_open)
   // Breaking while the Settings page is open does not pop the modal over
@@ -14226,23 +14233,63 @@ test "the setup modal tracks endpoint usability without toasts" {
 }
 
 ///|
-test "switching to a provider missing its key or URL raises an error toast" {
+test "switching to a provider missing its key or URL opens the setup modal" {
   let dispatch = test_dispatch()
   // The BYOK fixture is ready (a key is saved); switching to Custom with
-  // no URL takes the endpoint from usable to not.
+  // no URL takes the endpoint from usable to not. Off the Settings page
+  // the setup modal is the announcement — no toast underneath it.
   let (_, switched) = update(dispatch, ProviderChanged("custom"), test_model())
   assert_true(switched.api_provider is Custom)
-  guard switched.notifications is [toast] else {
-    fail("expected one error toast")
-  }
-  assert_true(toast.message.contains("Endpoint URL required"))
+  assert_true(switched.api_setup_open)
+  assert_eq(switched.notifications.length(), 0)
   // A switch that stays usable stays quiet.
   let (_, kept) = update(dispatch, ProviderChanged("deepseek"), {
     ..test_model(),
     api_provider: Custom,
     custom_api_url: "https://ok.example/chat",
   })
-  assert_eq(kept.notifications.length(), 0)
+  assert_true(!kept.api_setup_open)
+  // Switching back to a provider the stored key makes usable retires the
+  // modal that the break opened.
+  let (_, back) = update(dispatch, ProviderChanged("deepseek"), switched)
+  assert_true(back.api_provider is Deepseek)
+  assert_true(!back.api_setup_open)
+}
+
+///|
+test "saving the key from the setup modal retires it" {
+  let dispatch = test_dispatch()
+  let open = { ..test_model(), api_setup_open: true, deepseek_key_saved: false }
+  let (_, typed) = update(dispatch, SetupApiKeyChanged("sk-test"), open)
+  let (_, saved) = update(dispatch, SaveApiKey, typed)
+  assert_true(saved.deepseek_key_saved)
+  assert_true(saved.screen is Chat)
+  assert_true(!saved.api_setup_open)
+  assert_eq(saved.setup_api_key, "")
+}
+
+///|
+test "a settled host save that completes the setup closes the modal" {
+  // A custom URL typed into the modal is saved optimistically; the host's
+  // applied confirmation is what retires the modal, not mid-typing.
+  let typing = {
+    ..test_model(),
+    api_setup_open: true,
+    api_provider: Custom,
+    custom_api_url: "https://ok.example/chat",
+    settings_saves: 1,
+  }
+  assert_true(!typing.flush_host_settings().api_setup_open)
+  // A flush that leaves the endpoint unusable keeps the modal up.
+  let still = {
+    ..test_model(),
+    api_setup_open: true,
+    api_provider: Deepseek,
+    deepseek_key_saved: false,
+    deferred_host_settings: Some(host_settings(provider="deepseek")),
+    host_settings_revision: -1,
+  }
+  assert_true(still.flush_host_settings().api_setup_open)
 }
 
 ///|
@@ -19621,25 +19668,4 @@ test "full-screen modals hide the native view and closing restores it" {
   )
   assert_true(searching.quick_open.is_open())
   assert_true(searching.browser_pane.shown is None)
-}
-
-///|
-/// The error-toast text for a settings mirror with no usable endpoint:
-/// what is missing and where to add it. `None` when the endpoint is
-/// ready. The toast supplements the persistent top-bar status — the
-/// status is easy to miss, but it must outlive the toast, or an
-/// unconfigured app would go quiet six seconds after startup.
-fn incomplete_settings_toast(model : Model) -> String? {
-  if model.api_ready() {
-    None
-  } else {
-    Some(
-      match model.api_provider {
-        Deepseek =>
-          "DeepSeek API key required — add one in Settings to send messages."
-        Custom =>
-          "Endpoint URL required — set it in Settings to send messages."
-      },
-    )
-  }
 }

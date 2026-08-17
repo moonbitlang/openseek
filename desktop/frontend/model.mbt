@@ -2485,11 +2485,21 @@ fn Model::defer_host_settings(self : Model, settings : HostSettings) -> Model {
 /// Apply the newest deferred status once optimistic writes no longer protect
 /// the form. A lower revision is discarded; equal is deliberately accepted
 /// so a failed optimistic edit can be restored by an authoritative `get`.
+/// A flush that settles into a usable endpoint retires the API-setup modal:
+/// this is the host's confirmation of a save made from the modal itself.
 fn Model::flush_host_settings(self : Model) -> Model {
-  match self.deferred_host_settings {
+  let next = match self.deferred_host_settings {
     Some(settings) if settings.revision >= self.host_settings_revision =>
       self.apply_host_settings(settings)
     _ => { ..self, deferred_host_settings: None }
+  }
+  {
+    ..next,
+    api_setup_open: if next.api_ready() {
+      false
+    } else {
+      next.api_setup_open
+    },
   }
 }
 

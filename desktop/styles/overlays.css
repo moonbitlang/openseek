@@ -118,8 +118,15 @@
   line-height: var(--line-height-relaxed);
   color: var(--color-text-secondary);
 }
-.modal-link-row {
-  margin-top: 8px;
+/* The API-setup modal is the API settings section lifted out of the page,
+   so it is wider than the confirmation dialogs and scrolls if needed. */
+.setup-modal {
+  width: min(600px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+}
+.setup-modal-form {
+  margin-top: 12px;
 }
 .modal-actions {
   display: flex;

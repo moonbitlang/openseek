@@ -961,34 +961,18 @@ fn byok_setup_guide(provider : ApiProvider) -> @html.Html {
 }
 
 ///|
-/// The Settings page, shown in the main area in place of the conversation
-/// (mirroring the Skills page — the sidebar is the way out, no Done button).
-/// While the configured endpoint is unusable the BYOK guide leads the API
-/// group, and the composer keeps Send disabled until a usable endpoint is
-/// saved.
-fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+/// The API configuration rows shared by the Settings page and the API-setup
+/// modal: the BYOK guide while the endpoint is unusable, the provider
+/// selector, and the endpoint URL / API key fields that complete the setup.
+/// The modal is this same section lifted out of the page, so setup happens
+/// in place instead of a navigation.
+fn api_settings_rows(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> Array[@html.Html] {
   let settings_loaded = model.host_settings_loaded()
   let ready = model.api_ready()
-  // The model is not here: it belongs to a conversation, not to the app, and
-  // is picked on the composer's chip.
-  let engine_rows : Array[@html.Html] = [
-    setting_row(
-      "Max steps",
-      [
-        @html.input(
-          input_type=@html.InputType::Number,
-          value=model.max_steps,
-          placeholder="1000",
-          on_input=dispatch.map(value => MaxStepsChanged(value)),
-          attrs=@html.Attrs::build()
-            .aria_label("Max steps")
-            .data_set("focus-owner", ""),
-        ),
-      ],
-      desc="How many agent steps one turn may take.",
-    ),
-  ]
-  let api_rows : Array[@html.Html] = [
+  let rows : Array[@html.Html] = [
     ..if !ready {
       [byok_setup_guide(model.api_provider)]
     },
@@ -999,7 +983,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     ),
   ]
   if model.api_provider is Custom {
-    api_rows.push(
+    rows.push(
       setting_row(
         "Endpoint URL",
         [
@@ -1026,7 +1010,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     } else {
       model.deepseek_key_saved
     }
-    api_rows.push(
+    rows.push(
       setting_row(
         if model.api_provider is Custom {
           "Custom API key"
@@ -1063,6 +1047,38 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ),
     )
   }
+  rows
+}
+
+///|
+/// The Settings page, shown in the main area in place of the conversation
+/// (mirroring the Skills page — the sidebar is the way out, no Done button).
+/// While the configured endpoint is unusable the BYOK guide leads the API
+/// group, and the composer keeps Send disabled until a usable endpoint is
+/// saved.
+fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  let settings_loaded = model.host_settings_loaded()
+  let ready = model.api_ready()
+  // The model is not here: it belongs to a conversation, not to the app, and
+  // is picked on the composer's chip.
+  let engine_rows : Array[@html.Html] = [
+    setting_row(
+      "Max steps",
+      [
+        @html.input(
+          input_type=@html.InputType::Number,
+          value=model.max_steps,
+          placeholder="1000",
+          on_input=dispatch.map(value => MaxStepsChanged(value)),
+          attrs=@html.Attrs::build()
+            .aria_label("Max steps")
+            .data_set("focus-owner", ""),
+        ),
+      ],
+      desc="How many agent steps one turn may take.",
+    ),
+  ]
+  let api_rows : Array[@html.Html] = api_settings_rows(dispatch, model)
   let groups : Array[@html.Html] = [
     settings_group(icon_sparkle, "Engine", engine_rows),
     settings_group(icon_key, "API", api_rows),
@@ -2260,62 +2276,31 @@ fn update_confirm_modal(
 }
 
 ///|
-/// The modal that announces the one truly blocking state a fresh install can
-/// be in: SeekMoon is bring-your-own-key, and no usable endpoint is
-/// configured yet. It opens over the chat — never over the Settings form,
-/// whose guide already explains the same thing — and offers the one action
-/// that fixes it; "Not now" dismisses, and the top-bar status keeps the
-/// reminder visible after the modal is gone. Clicks inside must not bubble
-/// to the backdrop, whose click dismisses.
-fn api_setup_modal(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-) -> @html.Html {
-  let (title, body) : (String, @html.Html) = match model.api_provider {
-    Deepseek => (
-      "Set up your DeepSeek API key",
-      @html.div(class="modal-body", [
-        @html.p(
-          "SeekMoon has no hosted API: every request goes straight from this machine to your own DeepSeek account, billed to you. Add your key in Settings to start — or pick a custom OpenAI-compatible endpoint there instead.",
-        ),
-        @html.div(
-          class="modal-link-row",
-          [
-            @html.a(
-              class="setting-link",
-              href="https://platform.deepseek.com/api_keys",
-              "Get a key at platform.deepseek.com",
-            ),
-          ],
-        ),
-      ]),
-    )
-    Custom => (
-      "Set your endpoint URL",
-      @html.div(class="modal-body", [
-        @html.p(
-          "This custom endpoint needs a chat-completions URL before SeekMoon can send anything. Set it in Settings — a key is only needed if your endpoint requires one.",
-        ),
-      ]),
-    )
+/// The modal that owns the one truly blocking state a fresh install can be
+/// in: SeekMoon is bring-your-own-key and no usable endpoint is configured.
+/// It is the API settings section lifted out of the page — provider, URL,
+/// and key are configured right here — so it opens over the chat, never
+/// over the Settings form (which already shows the same section), and
+/// disappears the moment a usable endpoint arrives. "Not now" dismisses;
+/// the top-bar status keeps the reminder visible. Clicks inside must not
+/// bubble to the backdrop, whose click dismisses.
+fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  let title = match model.api_provider {
+    Deepseek => "Set up your DeepSeek API key"
+    Custom => "Set your endpoint URL"
   }
   @html.div(class="modal-backdrop", on_click=dispatch(DismissApiSetup), [
     @html.div(
-      class="modal",
+      class="modal setup-modal",
       attrs=@html.Attrs::build().on_click(event => {
         event.stop_propagation()
         @cmd.none
       }),
       [
         @html.div(class="modal-title", title),
-        body,
+        @html.div(class="setup-modal-form", api_settings_rows(dispatch, model)),
         @html.div(class="modal-actions", [
           @html.button(on_click=dispatch(DismissApiSetup), "Not now"),
-          @html.button(
-            class="primary",
-            on_click=dispatch(OpenSetup),
-            "Open Settings",
-          ),
         ]),
       ],
     ),
