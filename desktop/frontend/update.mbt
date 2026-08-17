@@ -2339,20 +2339,32 @@ fn update_msg(
       // the hosted chat proxy was retired; self-update and the relay stay
       // on the SeekMoon origin), so a provider switch leaves the update
       // answer alone.
-      (
-        push_host_settings(
-          dispatch,
-          model.focused,
-          provider_settings_patch(provider),
-          model.focused_connection_generation(),
-        ),
-        {
-          ..model,
-          api_provider: provider,
-          setup_api_key: "",
-          settings_saves: model.settings_saves + 1,
-        },
+      let push = push_host_settings(
+        dispatch,
+        model.focused,
+        provider_settings_patch(provider),
+        model.focused_connection_generation(),
       )
+      let next = {
+        ..model,
+        api_provider: provider,
+        setup_api_key: "",
+        settings_saves: model.settings_saves + 1,
+      }
+      // Switching to a provider whose key or URL is missing takes the
+      // endpoint from usable to not mid-form; say so the same loud way a
+      // load does.
+      if model.api_ready() {
+        match incomplete_settings_toast(next) {
+          Some(message) => {
+            let (toast, next) = next.notify_error(dispatch, message)
+            (@cmd.batch([push, toast]), next)
+          }
+          None => (push, next)
+        }
+      } else {
+        (push, next)
+      }
     }
     CustomApiUrlChanged(value) => {
       guard model.host_settings_loaded() else { return (@cmd.none, model) }
@@ -4595,7 +4607,19 @@ fn update_device_msg(
       } else if model.settings_saves > 0 {
         (@cmd.none, model.defer_host_settings(settings))
       } else {
-        (@cmd.none, model.apply_host_settings(settings))
+        let next = model.apply_host_settings(settings)
+        // An unusable endpoint deserves a loud signal, not only the
+        // top-bar status: the first authoritative snapshot (startup,
+        // reconnect) and any change that broke a previously usable
+        // endpoint raise an error toast.
+        if !model.host_settings_loaded() || model.api_ready() {
+          match incomplete_settings_toast(next) {
+            Some(message) => next.notify_error(dispatch, message)
+            None => (@cmd.none, next)
+          }
+        } else {
+          (@cmd.none, next)
+        }
       }
     }
     HostSettingsApplied(settings, connection_generation~, cleans_legacy~) => {
@@ -14021,11 +14045,12 @@ fn host_settings(
   provider~ : String,
   revision? : Int = 0,
   has_deepseek_key? : Bool = false,
+  custom_api_url? : String = "",
 ) -> HostSettings {
   {
     revision,
     provider,
-    custom_api_url: "",
+    custom_api_url,
     has_deepseek_key,
     has_custom_key: false,
   }
@@ -14101,6 +14126,71 @@ test "host settings open the settings page only when incomplete" {
   )
   assert_true(restored.screen is Chat)
   assert_true(restored.deepseek_key_saved)
+}
+
+///|
+test "an unusable first settings snapshot raises an error toast" {
+  let dispatch = test_dispatch()
+  let (_, keyless) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek"),
+      connection_generation=None,
+    ),
+    test_model(),
+  )
+  assert_true(keyless.screen is Settings)
+  guard keyless.notifications is [toast] else {
+    fail("expected one error toast")
+  }
+  assert_true(toast.message.contains("DeepSeek API key required"))
+  // A snapshot that is usable stays quiet.
+  let (_, ready) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek", has_deepseek_key=true),
+      connection_generation=None,
+    ),
+    test_model(),
+  )
+  assert_eq(ready.notifications.length(), 0)
+  // A later change that breaks a usable endpoint toasts too.
+  let (_, broken) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="custom", custom_api_url=""),
+      connection_generation=None,
+    ),
+    {
+      ..test_model(),
+      api_provider: Custom,
+      custom_api_url: "https://ok.example/chat",
+    },
+  )
+  guard broken.notifications is [toast] else {
+    fail("expected one error toast")
+  }
+  assert_true(toast.message.contains("Endpoint URL required"))
+}
+
+///|
+test "switching to a provider missing its key or URL raises an error toast" {
+  let dispatch = test_dispatch()
+  // The BYOK fixture is ready (a key is saved); switching to Custom with
+  // no URL takes the endpoint from usable to not.
+  let (_, switched) = update(dispatch, ProviderChanged("custom"), test_model())
+  assert_true(switched.api_provider is Custom)
+  guard switched.notifications is [toast] else {
+    fail("expected one error toast")
+  }
+  assert_true(toast.message.contains("Endpoint URL required"))
+  // A switch that stays usable stays quiet.
+  let (_, kept) = update(dispatch, ProviderChanged("deepseek"), {
+    ..test_model(),
+    api_provider: Custom,
+    custom_api_url: "https://ok.example/chat",
+  })
+  assert_eq(kept.notifications.length(), 0)
 }
 
 ///|
@@ -19479,4 +19569,25 @@ test "full-screen modals hide the native view and closing restores it" {
   )
   assert_true(searching.quick_open.is_open())
   assert_true(searching.browser_pane.shown is None)
+}
+
+///|
+/// The error-toast text for a settings mirror with no usable endpoint:
+/// what is missing and where to add it. `None` when the endpoint is
+/// ready. The toast supplements the persistent top-bar status — the
+/// status is easy to miss, but it must outlive the toast, or an
+/// unconfigured app would go quiet six seconds after startup.
+fn incomplete_settings_toast(model : Model) -> String? {
+  if model.api_ready() {
+    None
+  } else {
+    Some(
+      match model.api_provider {
+        Deepseek =>
+          "DeepSeek API key required — add one in Settings to send messages."
+        Custom =>
+          "Endpoint URL required — set it in Settings to send messages."
+      },
+    )
+  }
 }
