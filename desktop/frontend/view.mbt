@@ -2281,9 +2281,10 @@ fn update_confirm_modal(
 /// It is the API settings section lifted out of the page — provider, URL,
 /// and key are configured right here — so it opens over the chat, never
 /// over the Settings form (which already shows the same section), and
-/// disappears the moment a usable endpoint arrives. "Not now" dismisses;
-/// the top-bar status keeps the reminder visible. Clicks inside must not
-/// bubble to the backdrop, whose click dismisses.
+/// disappears the moment a usable endpoint arrives. "Not now" dismisses for
+/// the session; the composer's BYOK notice keeps the reminder — and the way
+/// back here — visible. Clicks inside must not bubble to the backdrop, whose
+/// click dismisses.
 fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let title = match model.api_provider {
     Deepseek => "Set up your DeepSeek API key"

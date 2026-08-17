@@ -1522,6 +1522,8 @@ priv enum Msg {
   OpenSetup
   // The API-setup modal's "Not now" button and its backdrop click.
   DismissApiSetup
+  // The composer's BYOK notice reopens the modal a dismissal closed.
+  OpenApiSetup
   // Open the app-server-backed Codex page and refresh its authoritative
   // account, model, and thread catalogs.
   OpenCodex
@@ -2505,6 +2507,18 @@ fn Model::flush_host_settings(self : Model) -> Model {
     _ => { ..self, deferred_host_settings: None }
   }
   next.settle_api_setup()
+}
+
+///|
+/// Whether the composer should carry the BYOK reminder — the durable surface
+/// once the setup modal was dismissed, because a greyed Send with no
+/// explanation anywhere in the UI is the state the modal exists to prevent.
+/// Gated on the loaded mirror so a reconnect's loading sentinel cannot flash
+/// it, and shown regardless of the dismissal: quiet must not mean lost.
+fn Model::api_setup_banner_visible(self : Model) -> Bool {
+  self.bridge_state() is Connected &&
+  self.host_settings_loaded() &&
+  !self.api_ready()
 }
 
 ///|

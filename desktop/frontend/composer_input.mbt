@@ -54,6 +54,29 @@ fn Model::composer_input(
     connection_banner(self),
     @plan.panel(conv.visible_items()),
   ]
+  // The BYOK reminder: readiness is otherwise folded silently into Send's
+  // availability, and the top-bar status is owned by the run state — without
+  // this notice a dismissed setup modal leaves a greyed Send with no
+  // explanation and no way back to the form.
+  if self.api_setup_banner_visible() {
+    let text = if self.settings_status() is SetupRequired {
+      "No endpoint URL configured — Send is disabled."
+    } else {
+      "No DeepSeek API key configured — Send is disabled."
+    }
+    context.push(
+      @html.div(class="composer-notice", [
+        @html.span(class="composer-notice-text", text),
+        @html.button(
+          class="composer-notice-btn",
+          type_="button",
+          title="Configure the API endpoint",
+          on_click=dispatch(OpenApiSetup),
+          "Set up",
+        ),
+      ]),
+    )
+  }
   if !conv.pending_steers().is_empty() {
     context.push(pending_steers_panel(conv))
   }

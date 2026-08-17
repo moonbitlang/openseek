@@ -2624,6 +2624,10 @@ fn update_msg(
       )
     DismissApiSetup =>
       (@cmd.none, { ..model, api_setup_open: false, api_setup_dismissed: true })
+    OpenApiSetup =>
+      // Reopening cancels the dismissal — otherwise the next settled
+      // snapshot would close the modal the user just asked for.
+      (@cmd.none, { ..model, api_setup_open: true, api_setup_dismissed: false })
     OpenCodex => {
       let (cmd, codex) = @codex.update(
         dispatch.map(msg => Codex(channel=model.focused, msg)),
@@ -14269,6 +14273,40 @@ test "a dismissal survives the mirror reset a reconnect performs" {
     ready,
   )
   assert_true(broken.api_setup_open)
+}
+
+///|
+test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
+  let dispatch = test_dispatch()
+  let (_, keyless) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek"),
+      connection_generation=None,
+    ),
+    test_model(),
+  )
+  let (_, dismissed) = update(dispatch, DismissApiSetup, keyless)
+  // Quiet must not mean lost: the notice stays while the endpoint is
+  // unusable, dismissal or not.
+  assert_true(dismissed.api_setup_banner_visible())
+  // The loading sentinel is not a verdict; a reconnect must not flash it.
+  assert_true(!dismissed.clear_host_settings().api_setup_banner_visible())
+  // A usable endpoint retires the notice with the modal.
+  assert_true(!test_model().api_setup_banner_visible())
+  // Its "Set up" reopens the modal, and reopening cancels the dismissal so
+  // the next settled snapshot leaves the modal the user asked for alone.
+  let (_, reopened) = update(dispatch, OpenApiSetup, dismissed)
+  assert_true(reopened.api_setup_open)
+  let (_, still_open) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek"),
+      connection_generation=None,
+    ),
+    reopened,
+  )
+  assert_true(still_open.api_setup_open)
 }
 
 ///|
