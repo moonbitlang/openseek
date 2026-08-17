@@ -907,9 +907,9 @@ fn provider_hint(provider : ApiProvider) -> String {
 }
 
 ///|
-/// The bring-your-own-key guide shown at the top of the Settings page while
-/// the configured endpoint is not usable. SeekMoon ships no hosted API:
-/// every request goes straight from this machine to the user's own model
+/// The bring-your-own-key guide shown at the top of the API group while the
+/// configured endpoint is not usable. SeekMoon ships no hosted API: every
+/// request goes straight from this machine to the user's own model
 /// provider, so a key (official) or an endpoint URL (custom) must be
 /// configured first. The steps follow the selected provider.
 fn byok_setup_guide(provider : ApiProvider) -> @html.Html {
@@ -935,31 +935,29 @@ fn byok_setup_guide(provider : ApiProvider) -> @html.Html {
         step(3, "Add the endpoint's key if it requires one."),
       ]
   }
-  settings_group(icon_key, "Bring your own key", [
-    @html.div(
-      class="setup-guide",
-      [
-        @html.p(
-          "SeekMoon does not provide a hosted API. Requests go straight from this machine to your own model provider, billed to your account. Your API key is stored only on this machine — SeekMoon never reads it.",
-        ),
-        @html.div(class="setup-guide-steps", steps),
-        ..if provider is Deepseek {
-          [
-            @html.a(
-              class="setting-link",
-              href="https://platform.deepseek.com/api_keys",
-              target=Blank,
-              rel="noopener noreferrer",
-              [
-                icon(icon_link_external),
-                @html.span("platform.deepseek.com → API Keys"),
-              ],
-            ),
-          ]
-        },
-      ],
-    ),
-  ])
+  @html.div(
+    class="setup-guide",
+    [
+      @html.p(
+        "SeekMoon does not provide a hosted API. Requests go straight from this machine to your own model provider, billed to your account. Your API key is stored only on this machine — SeekMoon never reads it.",
+      ),
+      @html.div(class="setup-guide-steps", steps),
+      ..if provider is Deepseek {
+        [
+          @html.a(
+            class="setting-link",
+            href="https://platform.deepseek.com/api_keys",
+            target=Blank,
+            rel="noopener noreferrer",
+            [
+              icon(icon_link_external),
+              @html.span("platform.deepseek.com → API Keys"),
+            ],
+          ),
+        ]
+      },
+    ],
+  )
 }
 
 ///|
@@ -990,6 +988,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     ),
   ]
   let api_rows : Array[@html.Html] = [
+    ..if !ready {
+      [byok_setup_guide(model.api_provider)]
+    },
     setting_row(
       "API endpoint",
       [provider_select(dispatch, model.api_provider, disabled=!settings_loaded)],
@@ -1062,9 +1063,6 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
   }
   let groups : Array[@html.Html] = [
-    ..if !ready {
-      [byok_setup_guide(model.api_provider)]
-    },
     settings_group(icon_sparkle, "Engine", engine_rows),
     settings_group(icon_key, "API", api_rows),
     settings_group(icon_layout, "Interface", [
