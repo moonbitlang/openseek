@@ -118,6 +118,9 @@
   line-height: var(--line-height-relaxed);
   color: var(--color-text-secondary);
 }
+.modal-link-row {
+  margin-top: 8px;
+}
 .modal-actions {
   display: flex;
   justify-content: flex-end;

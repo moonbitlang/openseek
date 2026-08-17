@@ -2626,7 +2626,14 @@ fn update_msg(
       (cmd, { ..next, update_ux, })
     }
     UpdateApplied => (close_window(), model)
-    OpenSetup => (@cmd.none, { ..model, screen: Settings, setup_api_key: "" })
+    OpenSetup =>
+      (@cmd.none, {
+        ..model,
+        screen: Settings,
+        setup_api_key: "",
+        api_setup_open: false,
+      })
+    DismissApiSetup => (@cmd.none, { ..model, api_setup_open: false })
     OpenCodex => {
       let (cmd, codex) = @codex.update(
         dispatch.map(msg => Codex(channel=model.focused, msg)),
@@ -4528,20 +4535,15 @@ fn update_device_msg(
       (
         @cmd.batch(commands),
         {
-          ..model
           // The host this bridge just (re)connected to may be a fresh
           // process with no filesystem watcher; forgetting what was watched
           // makes the post-dispatch panel sync re-issue `fs.watch` instead
-          // of reading the stale record as "already placed".
-          ,
+          // of reading the stale record as "already placed". An unusable
+          // endpoint does not route anywhere from here: the settings
+          // snapshot this connection fetches decides whether the API-setup
+          // modal opens.
+          ..model,
           file_panel: { ..model.file_panel, watching: None },
-          // An unusable endpoint routes straight to Settings — the composer
-          // could do nothing anyway.
-          screen: if model.api_ready() {
-            model.screen
-          } else {
-            Settings
-          },
         },
       )
     }
@@ -4608,17 +4610,25 @@ fn update_device_msg(
         (@cmd.none, model.defer_host_settings(settings))
       } else {
         let next = model.apply_host_settings(settings)
-        // An unusable endpoint deserves a loud signal, not only the
-        // top-bar status: the first authoritative snapshot (startup,
-        // reconnect) and any change that broke a previously usable
-        // endpoint raise an error toast.
-        if !model.host_settings_loaded() || model.api_ready() {
-          match incomplete_settings_toast(next) {
-            Some(message) => next.notify_error(dispatch, message)
-            None => (@cmd.none, next)
-          }
-        } else {
+        // A usable endpoint never keeps the setup modal up; it can only have
+        // been open for this device's earlier unusable state.
+        if next.api_ready() {
+          (@cmd.none, { ..next, api_setup_open: false })
+        } else if model.host_settings_loaded() && !model.api_ready() {
+          // The endpoint was already unusable and still is: nothing new to
+          // announce, and a user who dismissed the modal stays dismissed.
           (@cmd.none, next)
+        } else if next.screen is Settings {
+          // It broke while the Settings page is open: the BYOK guide right
+          // there already says what is missing, and a modal would block the
+          // form that fixes it.
+          (@cmd.none, next)
+        } else {
+          // The first authoritative snapshot (startup, reconnect) or a
+          // change that broke a usable endpoint: the API-setup modal takes
+          // over — the key is the one thing SeekMoon cannot run without, so
+          // a dismissible toast is not loud enough.
+          (@cmd.none, { ..next, api_setup_open: true })
         }
       }
     }
@@ -14091,7 +14101,7 @@ test "host settings edits wait for the focused host snapshot" {
 }
 
 ///|
-test "host settings open the settings page only when incomplete" {
+test "an unusable first settings snapshot opens the setup modal" {
   let dispatch = test_dispatch()
   // A hosted-provider value left by an older build parses as the BYOK
   // default: keyless DeepSeek, which needs setup.
@@ -14103,7 +14113,8 @@ test "host settings open the settings page only when incomplete" {
     ),
     test_model(),
   )
-  assert_true(zero_config.screen is Settings)
+  assert_true(zero_config.screen is Chat)
+  assert_true(zero_config.api_setup_open)
   assert_true(zero_config.api_provider is Deepseek)
   assert_true(zero_config.display_status() is ApiKeyRequired)
   let (_, keyless) = update_dev(
@@ -14114,7 +14125,8 @@ test "host settings open the settings page only when incomplete" {
     ),
     test_model(),
   )
-  assert_true(keyless.screen is Settings)
+  assert_true(keyless.screen is Chat)
+  assert_true(keyless.api_setup_open)
   assert_true(keyless.display_status() is ApiKeyRequired)
   let (_, restored) = update_dev(
     dispatch,
@@ -14125,11 +14137,12 @@ test "host settings open the settings page only when incomplete" {
     test_model(),
   )
   assert_true(restored.screen is Chat)
+  assert_true(!restored.api_setup_open)
   assert_true(restored.deepseek_key_saved)
 }
 
 ///|
-test "an unusable first settings snapshot raises an error toast" {
+test "the setup modal tracks endpoint usability without toasts" {
   let dispatch = test_dispatch()
   let (_, keyless) = update_dev(
     dispatch,
@@ -14139,22 +14152,21 @@ test "an unusable first settings snapshot raises an error toast" {
     ),
     test_model(),
   )
-  assert_true(keyless.screen is Settings)
-  guard keyless.notifications is [toast] else {
-    fail("expected one error toast")
-  }
-  assert_true(toast.message.contains("DeepSeek API key required"))
-  // A snapshot that is usable stays quiet.
+  assert_true(keyless.api_setup_open)
+  // The modal is the announcement; a toast under it would double-signal.
+  assert_eq(keyless.notifications.length(), 0)
+  // A snapshot that is usable closes the modal.
   let (_, ready) = update_dev(
     dispatch,
     HostSettingsLoaded(
       host_settings(provider="deepseek", has_deepseek_key=true),
       connection_generation=None,
     ),
-    test_model(),
+    { ..test_model(), api_setup_open: true },
   )
+  assert_true(!ready.api_setup_open)
   assert_eq(ready.notifications.length(), 0)
-  // A later change that breaks a usable endpoint toasts too.
+  // A later change that breaks a usable endpoint reopens the modal.
   let (_, broken) = update_dev(
     dispatch,
     HostSettingsLoaded(
@@ -14163,14 +14175,54 @@ test "an unusable first settings snapshot raises an error toast" {
     ),
     {
       ..test_model(),
+      host_settings_revision: 0,
       api_provider: Custom,
       custom_api_url: "https://ok.example/chat",
     },
   )
-  guard broken.notifications is [toast] else {
-    fail("expected one error toast")
-  }
-  assert_true(toast.message.contains("Endpoint URL required"))
+  assert_true(broken.api_setup_open)
+  // "Not now" dismisses; an unrelated payload that leaves the endpoint
+  // unusable does not re-announce it.
+  let (_, dismissed) = update(
+    dispatch,
+    DismissApiSetup,
+    { ..broken, api_setup_open: true },
+  )
+  assert_true(!dismissed.api_setup_open)
+  let (_, still) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek"),
+      connection_generation=None,
+    ),
+    dismissed,
+  )
+  assert_true(!still.api_setup_open)
+  // The modal's primary action navigates to Settings and closes the modal.
+  let (_, on_settings) = update(
+    dispatch,
+    OpenSetup,
+    { ..broken, api_setup_open: true },
+  )
+  assert_true(on_settings.screen is Settings)
+  assert_true(!on_settings.api_setup_open)
+  // Breaking while the Settings page is open does not pop the modal over
+  // the form; the guide there already explains it.
+  let (_, mid_edit) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="custom", custom_api_url=""),
+      connection_generation=None,
+    ),
+    {
+      ..test_model(),
+      screen: Settings,
+      host_settings_revision: 0,
+      api_provider: Custom,
+      custom_api_url: "https://ok.example/chat",
+    },
+  )
+  assert_true(!mid_edit.api_setup_open)
 }
 
 ///|

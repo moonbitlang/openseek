@@ -839,10 +839,11 @@ priv struct BufferedCommit {
 ///|
 /// What the main area shows: the active conversation, the Skills page, the
 /// Settings page, or one workspace's settings page. Selecting a conversation
-/// (or rotating to a new one) always returns to the chat. Settings also
-/// opens on its own while the configured endpoint is unusable, since the
-/// composer would be dead weight. `WorkspaceSettings` carries the project it
-/// is about; detaching that project falls back to the chat.
+/// (or rotating to a new one) always returns to the chat. While the
+/// configured endpoint is unusable the chat stays reachable, the API-setup
+/// modal takes over until dismissed, and the composer keeps Send disabled.
+/// `WorkspaceSettings` carries the project it is about; detaching that
+/// project falls back to the chat.
 priv enum Screen {
   Chat
   Codex
@@ -1105,6 +1106,11 @@ priv struct Model {
   // A legacy localStorage migration's push is in flight; its success is
   // what deletes the migrated secrets from localStorage.
   legacy_cleanup_pending : Bool
+  // Whether the API-setup modal is up. It opens over the chat whenever the
+  // configured endpoint is unusable and the user is not on the Settings page
+  // (whose guide already says it), and closes the moment a usable endpoint
+  // arrives. Session-local: the next cold start without a key prompts again.
+  api_setup_open : Bool
   // Whether this page is the desktop window (the proton webview) rather than
   // a browser reached through a relay. Probed once at startup. Gates the
   // self-update flow: applying an update swaps the
@@ -1509,6 +1515,8 @@ priv enum Msg {
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
+  // The API-setup modal's "Not now" button and its backdrop click.
+  DismissApiSetup
   // Open the app-server-backed Codex page and refresh its authoritative
   // account, model, and thread catalogs.
   OpenCodex
@@ -2297,6 +2305,7 @@ fn initial_model() -> Model {
     notification_corner: BottomRight,
     tree_layout: RightSidebar,
     update_ux: UpdateUnknown,
+    api_setup_open: false,
     remote_access: None,
     remote_connecting: false,
     remote_error: None,
@@ -2440,11 +2449,13 @@ fn Model::clear_host_settings(self : Model) -> Model {
 }
 
 ///|
-/// Fold one host settings payload into the mirror. The Settings page takes
-/// over whenever the settings are incomplete (official endpoint without a
-/// key, custom endpoint without a URL); it never navigates away on its own.
+/// Fold one host settings payload into the mirror. Whether the result is
+/// usable — and how loudly to say so when it is not — is the update
+/// handlers' call (the API-setup modal, the Settings guide); this fold only
+/// mirrors the store, so a payload applied from a deferred flush can never
+/// yank the screen around on its own.
 fn Model::apply_host_settings(self : Model, settings : HostSettings) -> Model {
-  let next = {
+  {
     ..self,
     host_settings_revision: settings.revision,
     deferred_host_settings: None,
@@ -2453,7 +2464,6 @@ fn Model::apply_host_settings(self : Model, settings : HostSettings) -> Model {
     deepseek_key_saved: settings.has_deepseek_key,
     custom_key_saved: settings.has_custom_key,
   }
-  { ..next, screen: if next.api_ready() { next.screen } else { Settings } }
 }
 
 ///|

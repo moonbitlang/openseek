@@ -963,8 +963,9 @@ fn byok_setup_guide(provider : ApiProvider) -> @html.Html {
 ///|
 /// The Settings page, shown in the main area in place of the conversation
 /// (mirroring the Skills page — the sidebar is the way out, no Done button).
-/// While the configured endpoint is unusable the page takes over on its own,
-/// and the composer keeps Send disabled until a usable endpoint is saved.
+/// While the configured endpoint is unusable the BYOK guide leads the API
+/// group, and the composer keeps Send disabled until a usable endpoint is
+/// saved.
 fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let settings_loaded = model.host_settings_loaded()
   let ready = model.api_ready()
@@ -2182,6 +2183,11 @@ fn view(
   if model.update_ux is ConfirmingRestart(version~) {
     children.push(update_confirm_modal(dispatch, version))
   }
+  // The API-setup modal floats above the toasts like the other modals: it
+  // owns the screen until the user answers it or a usable endpoint arrives.
+  if model.api_setup_open {
+    children.push(api_setup_modal(dispatch, model))
+  }
   if model.project_picker is Some(picker) {
     children.push(project_picker_modal(dispatch, picker))
   }
@@ -2250,6 +2256,69 @@ fn update_confirm_modal(
         ),
       ]),
     ]),
+  ])
+}
+
+///|
+/// The modal that announces the one truly blocking state a fresh install can
+/// be in: SeekMoon is bring-your-own-key, and no usable endpoint is
+/// configured yet. It opens over the chat — never over the Settings form,
+/// whose guide already explains the same thing — and offers the one action
+/// that fixes it; "Not now" dismisses, and the top-bar status keeps the
+/// reminder visible after the modal is gone. Clicks inside must not bubble
+/// to the backdrop, whose click dismisses.
+fn api_setup_modal(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> @html.Html {
+  let (title, body) : (String, @html.Html) = match model.api_provider {
+    Deepseek => (
+      "Set up your DeepSeek API key",
+      @html.div(class="modal-body", [
+        @html.p(
+          "SeekMoon has no hosted API: every request goes straight from this machine to your own DeepSeek account, billed to you. Add your key in Settings to start — or pick a custom OpenAI-compatible endpoint there instead.",
+        ),
+        @html.div(
+          class="modal-link-row",
+          [
+            @html.a(
+              class="setting-link",
+              href="https://platform.deepseek.com/api_keys",
+              "Get a key at platform.deepseek.com",
+            ),
+          ],
+        ),
+      ]),
+    )
+    Custom => (
+      "Set your endpoint URL",
+      @html.div(class="modal-body", [
+        @html.p(
+          "This custom endpoint needs a chat-completions URL before SeekMoon can send anything. Set it in Settings — a key is only needed if your endpoint requires one.",
+        ),
+      ]),
+    )
+  }
+  @html.div(class="modal-backdrop", on_click=dispatch(DismissApiSetup), [
+    @html.div(
+      class="modal",
+      attrs=@html.Attrs::build().on_click(event => {
+        event.stop_propagation()
+        @cmd.none
+      }),
+      [
+        @html.div(class="modal-title", title),
+        body,
+        @html.div(class="modal-actions", [
+          @html.button(on_click=dispatch(DismissApiSetup), "Not now"),
+          @html.button(
+            class="primary",
+            on_click=dispatch(OpenSetup),
+            "Open Settings",
+          ),
+        ]),
+      ],
+    ),
   ])
 }
 
