@@ -203,6 +203,13 @@ fn orphan_terminal_status(item : @protocol.SessionItem) -> RunStatus? {
 /// live engine still shows a run open. Armed, not acted on: the consumer is
 /// expected to close the run itself moments from now, and `reap` below is
 /// what decides it never will.
+///
+/// Callers pass only a terminal that is the record's frontier (the batch's
+/// last commit). The record cannot name host run ids, so the open run is
+/// attributed as the terminal's owner exactly because nothing follows it —
+/// a successor turn would have written its User append. A successor whose
+/// append is merely in flight disarms the candidate within a poll or two,
+/// far inside the grace.
 fn SessionFollower::note_terminal_commit(
   self : SessionFollower,
   manager : EngineManager,
@@ -241,6 +248,14 @@ fn SessionFollower::reap_orphaned_terminal(
     engine.phase is Running(run_id~, compact_queued~, ..) else {
     // The consumer closed the run (the healthy path), the engine was
     // replaced, or a successor opened a different run.
+    self.orphan_terminal = None
+    return
+  }
+  // The terminal must still be the record frontier this follower has seen:
+  // any later commit means a successor turn is already writing, so the open
+  // run is accounted for — closing it would kill a healthy turn with a
+  // previous turn's status.
+  if self.watermark != orphan.sequence {
     self.orphan_terminal = None
     return
   }
@@ -347,17 +362,30 @@ async test "an orphaned durable terminal closes its run after the grace" {
 
     // The healthy path: the consumer closes the run moments after the
     // terminal commit, so the candidate disarms instead of aging.
+    follower.watermark = 41
     follower.note_terminal_commit(manager, 41, Finished)
     engine.phase = Idle(last_run=Some("r-orphan"))
     follower.reap_orphaned_terminal(sink, manager)
     assert_true(follower.orphan_terminal is None)
 
-    // This time the pipeline is dead and nothing ever closes the phase.
+    // A successor turn writing to the record also disarms: with the
+    // frontier past the terminal, the open run is the successor's, and
+    // closing it would kill a healthy turn with the previous turn's status.
     engine.phase = Running(
       run_id="r-orphan",
       cancel_requested=false,
       compact_queued=false,
     )
+    follower.watermark = 42
+    follower.note_terminal_commit(manager, 42, Finished)
+    follower.watermark = 43
+    follower.reap_orphaned_terminal(sink, manager)
+    assert_true(follower.orphan_terminal is None)
+    assert_true(engine.phase is Running(..))
+    assert_true(emitted.is_empty())
+
+    // This time the pipeline is dead and nothing ever closes the phase.
+    follower.watermark = 42
     follower.note_terminal_commit(manager, 42, Finished)
     for _ in 0..<(OrphanTerminalGracePolls - 1) {
       follower.reap_orphaned_terminal(sink, manager)
@@ -465,7 +493,8 @@ async fn SessionFollower::scan(
   let session : @protocol.SessionDocument = @json.from_json(session_json) catch {
     _ => raise EngineError("engine returned a malformed session")
   }
-  for event in commits_after(session, self.watermark) {
+  let fresh = commits_after(session, self.watermark)
+  for event in fresh {
     emit(
       sink,
       SessionCommit({
@@ -479,10 +508,19 @@ async fn SessionFollower::scan(
       }),
     )
     self.watermark = event.sequence
-    // A terminal boundary crossing the follower while the run phase is
-    // still open arms the orphan watchdog — see `reap_orphaned_terminal`.
-    if orphan_terminal_status(event.item) is Some(status) {
-      self.note_terminal_commit(manager, event.sequence, status)
+  }
+  // The orphan watchdog follows the record's TAIL, not each commit: the
+  // durable record cannot name host-side run ids, so a Terminal that is no
+  // longer the frontier belongs to an earlier turn a successor has already
+  // followed (the successor's User append lands right at its start) — an
+  // open phase is then accounted for, and a lagging scan of an old Terminal
+  // must not arm the watchdog against the healthy live run. Only a Terminal
+  // that IS the frontier can mean an unclosed run — see
+  // `reap_orphaned_terminal`.
+  if fresh.last() is Some(last) {
+    match orphan_terminal_status(last.item) {
+      Some(status) => self.note_terminal_commit(manager, last.sequence, status)
+      None => self.orphan_terminal = None
     }
   }
   self.consumed = signature
