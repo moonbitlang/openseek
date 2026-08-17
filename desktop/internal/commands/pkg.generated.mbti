@@ -183,9 +183,9 @@ pub let terminal_resize : Command[@protocol.TerminalResizePayload, @protocol.Emp
 
 pub let update_apply : Command[@protocol.EmptyPayload, @protocol.ApplyUpdateReply]
 
-pub let update_check : Command[@protocol.UpdateChannelPayload, @protocol.CheckUpdateReply]
+pub let update_check : Command[@protocol.EmptyPayload, @protocol.CheckUpdateReply]
 
-pub let update_download : Command[@protocol.UpdateChannelPayload, @protocol.DownloadUpdateAcceptedReply]
+pub let update_download : Command[@protocol.EmptyPayload, @protocol.DownloadUpdateAcceptedReply]
 
 pub let workspace_add : Command[@protocol.WorkspacePayload, @protocol.WorkspacesReply]
 

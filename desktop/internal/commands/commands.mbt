@@ -486,13 +486,13 @@ pub let skills_uninstall : Command[
 
 ///|
 pub let update_check : Command[
-  @protocol.UpdateChannelPayload,
+  @protocol.EmptyPayload,
   @protocol.CheckUpdateReply,
 ] = Command("update.check")
 
 ///|
 pub let update_download : Command[
-  @protocol.UpdateChannelPayload,
+  @protocol.EmptyPayload,
   @protocol.DownloadUpdateAcceptedReply,
 ] = Command("update.download")
 

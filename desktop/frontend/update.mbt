@@ -4425,9 +4425,8 @@ fn update_device_msg(
         commands.push(dispatch(Codex(channel~, @codex.Msg::refresh())))
         // Self-update and the relay sign-in are the desktop window's alone
         // (see `is_desktop`); a browser never checks, so neither UI
-        // materializes there. The startup update check rides here: settings
-        // (the update channel) load synchronously at Init, so they are in by
-        // bridge time.
+        // materializes there. The startup update check rides here so it
+        // only runs once the bridge can carry it.
         if model.is_desktop {
           commands.push(model.fetch_app_info(dispatch))
           commands.push(check_for_updates(dispatch, explicit=false))

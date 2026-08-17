@@ -5,37 +5,14 @@
 // caller reports it rather than reading a broken release as "no update".
 
 ///|
-/// The hosted release manifest, served by openseek-api from its releases
-/// directory. Same origin as the default chat endpoint, so the check works
-/// wherever the app itself does.
+/// The one manifest the app ever checks, served by the SeekMoon relay
+/// origin from its releases directory. There is no other stream and no
+/// override: the staging channel went with the Settings server selector
+/// (nothing could reach it anymore), and the old
+/// OPENSEEK_UPDATE_MANIFEST_URL environment variable is gone because an
+/// exported variable silently redirecting the check is exactly how a
+/// production install ends up answering from somewhere else.
 const ManifestUrl : String = "https://openseek-api.moonbitlang.cn/desktop/releases/latest.json"
-
-///|
-/// The staging deployment's manifest, for exercising a release before it
-/// goes live — a Settings choice, not a build variant.
-const StagingManifestUrl : String = "https://openseek-api-staging.moonbitlang.cn/desktop/releases/latest.json"
-
-///|
-/// Which release stream to check against. A user-facing Settings choice;
-/// Production is the default and the only sensible pick outside of
-/// pre-release testing.
-pub(all) enum UpdateChannel {
-  Production
-  Staging
-} derive(Eq, Debug)
-
-///|
-/// The manifest endpoint the channel names. Nothing else can redirect the
-/// check — the old OPENSEEK_UPDATE_MANIFEST_URL environment override is
-/// gone, because an exported variable silently outranking a visible
-/// Settings choice is exactly how a "Production" check ends up answering
-/// from staging.
-fn manifest_url(channel : UpdateChannel) -> String {
-  match channel {
-    Production => ManifestUrl
-    Staging => StagingManifestUrl
-  }
-}
 
 ///|
 /// A newer hosted release: the version to announce, and — when the manifest
@@ -91,16 +68,13 @@ fn manifest_platform_key() -> String? {
 }
 
 ///|
-/// Fetch the channel's manifest and report a release newer than `current`;
-/// None means the check succeeded and there is nothing newer. Every failure
-/// is typed rather than swallowed: `Unreachable` when the server could not
-/// answer, `ManifestError` when it answered with something unusable — the
-/// caller chooses what each is worth showing.
-pub async fn check_for_update(
-  current~ : String,
-  channel~ : UpdateChannel,
-) -> UpdateInfo? {
-  let (response, data) = @http.get(manifest_url(channel)) catch {
+/// Fetch the manifest and report a release newer than `current`; None means
+/// the check succeeded and there is nothing newer. Every failure is typed
+/// rather than swallowed: `Unreachable` when the server could not answer,
+/// `ManifestError` when it answered with something unusable — the caller
+/// chooses what each is worth showing.
+pub async fn check_for_update(current~ : String) -> UpdateInfo? {
+  let (response, data) = @http.get(ManifestUrl) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise Unreachable(reason="\{error}")
   }

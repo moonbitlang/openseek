@@ -1,5 +1,5 @@
 // Self-update ops, driven entirely by the webview: `check_update` asks the
-// channel's manifest and reports what it found as data (never an op
+// release manifest and reports what it found as data (never an op
 // rejection — every outcome is a state the frontend renders); a user
 // clicking Update hands one download to the app-lifetime pump, which fetches
 // + verifies into the staging dir and reports progress and completion as
@@ -20,9 +20,9 @@ priv struct SelfUpdate {
   app_version : String
   work_dir : String?
   bundle_path : String?
-  // At most one payload is ever buffered: `busy` flips in the same atomic
+  // At most one download is ever buffered: `busy` flips in the same atomic
   // step as the enqueue and clears only when the pump finished the download.
-  downloads : @async.Queue[UpdateChannelPayload]
+  downloads : @async.Queue[Unit]
   mut staged : @update.StagedUpdate?
   mut busy : Bool
 }
@@ -61,22 +61,6 @@ async fn SelfUpdate::cleanup(self : SelfUpdate) -> Unit {
 }
 
 ///|
-/// The channel half of `check_update` / `download_update`. Anything but the
-/// literal "staging" reads as production, so a stale stored value can only
-/// fall back to the safe default.
-type UpdateChannelPayload = @protocol.UpdateChannelPayload
-
-///|
-fn UpdateChannelPayload::to_channel(
-  self : UpdateChannelPayload,
-) -> @update.UpdateChannel {
-  match self.channel {
-    Some("staging") => Staging
-    _ => Production
-  }
-}
-
-///|
 /// Reply to `check_update`, discriminated on the wire by a `kind` field.
 /// Every outcome is data — the op only rejects on cancellation — because
 /// each kind is worth a different amount of noise: `broken` can only be the
@@ -87,19 +71,13 @@ fn UpdateChannelPayload::to_channel(
 type CheckUpdateReply = @protocol.CheckUpdateReply
 
 ///|
-/// Ask the channel's manifest for a newer release. `installable` reports
+/// Ask the release manifest for a newer release. `installable` reports
 /// whether `download_update` would work here: a real signed .app bundle in a
 /// replaceable location, with a package published for this platform. Only a
 /// failed installation preflight carries `unavailable_reason`; a platform
 /// without a package remains the existing informational fallback.
-async fn SelfUpdate::check(
-  self : SelfUpdate,
-  payload : UpdateChannelPayload,
-) -> CheckUpdateReply {
-  let info = @update.check_for_update(
-    current=self.app_version,
-    channel=payload.to_channel(),
-  ) catch {
+async fn SelfUpdate::check(self : SelfUpdate) -> CheckUpdateReply {
+  let info = @update.check_for_update(current=self.app_version) catch {
     @update.Unreachable(reason~) => return Unreachable(reason~)
     @update.MalformedManifest(reason~) => {
       @xlog.warn(category="update") <?
@@ -144,14 +122,13 @@ type DownloadUpdateAcceptedReply = @protocol.DownloadUpdateAcceptedReply
 /// download when this request is cancelled right after replying.
 fn SelfUpdate::start_download(
   self : SelfUpdate,
-  payload : UpdateChannelPayload,
 ) -> DownloadUpdateAcceptedReply raise {
   guard self.work_dir is Some(_) && self.bundle_path is Some(_) else {
     raise HostError("this build cannot install updates")
   }
   guard !self.busy else { raise HostError("an update is already in progress") }
   self.busy = true
-  let enqueued = self.downloads.try_put(payload) catch { _ => false }
+  let enqueued = self.downloads.try_put(()) catch { _ => false }
   guard enqueued else {
     // The pump has stopped and closed its queue; reject rather than parking
     // `busy` on work nobody will perform.
@@ -162,23 +139,19 @@ fn SelfUpdate::start_download(
 }
 
 ///|
-/// Download and verify the channel's package, leaving it staged for
+/// Download and verify the release package, leaving it staged for
 /// `apply_update`. Deliberately re-checks the manifest rather than trusting
 /// what the frontend saw earlier — the release may have moved between the
 /// check and the click. Progress notifications are emitted straight from the
 /// downloader's throttled callback, so they cannot overtake completion.
 async fn SelfUpdate::download_package(
   self : SelfUpdate,
-  payload : UpdateChannelPayload,
   emit : async (@protocol.Notification) -> Unit,
 ) -> @update.StagedUpdate {
   guard self.work_dir is Some(dir) && self.bundle_path is Some(bundle) else {
     raise HostError("this build cannot install updates")
   }
-  let info = @update.check_for_update(
-    current=self.app_version,
-    channel=payload.to_channel(),
-  ) catch {
+  let info = @update.check_for_update(current=self.app_version) catch {
     @update.Unreachable(reason~) => raise HostError(reason)
     @update.MalformedManifest(reason~) => raise HostError(reason)
     @update.MalformedArtifact(reason~, ..) => raise HostError(reason)
@@ -229,8 +202,8 @@ async fn SelfUpdate::run(
         { "event": "cleanup_failed", "error": "\{error}" }
   }
   for ;; {
-    let payload = self.downloads.get()
-    try self.download_package(payload, emit) catch {
+    self.downloads.get()
+    try self.download_package(emit) catch {
       error if @async.is_being_cancelled() => raise error
       error => {
         self.busy = false
@@ -293,11 +266,11 @@ test "self-update accepts one download and rejects a second" {
     staged: None,
     busy: false,
   }
-  assert_true(updates.start_download({ channel: None }).accepted)
+  assert_true(updates.start_download().accepted)
   assert_true(updates.busy)
   assert_true(updates.downloads.try_get() is Some(_))
   let mut rejected = false
-  ignore(updates.start_download({ channel: None })) catch {
+  ignore(updates.start_download()) catch {
     HostError(message) =>
       rejected = message == "an update is already in progress"
     error => raise error
@@ -309,7 +282,7 @@ test "self-update accepts one download and rejects a second" {
 test "self-update rejects downloads unsupported by this build" {
   let updates = SelfUpdate::new(None, None)
   let mut rejected = false
-  ignore(updates.start_download({ channel: None })) catch {
+  ignore(updates.start_download()) catch {
     HostError(message) =>
       rejected = message == "this build cannot install updates"
     error => raise error
@@ -328,7 +301,7 @@ async test "self-update pump reports download failures" {
     })
     // Bypass `start_download` so even this unsupported build reaches the
     // pump's failure path deterministically, with no network involved.
-    updates.downloads.put({ channel: None })
+    updates.downloads.put(())
     let notification = @async.with_timeout(1000, () => events.get())
     assert_eq(notification.wire_name(), "update.download_failed")
     let params = notification.params()

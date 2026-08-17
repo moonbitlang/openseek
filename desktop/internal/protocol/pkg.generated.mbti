@@ -1086,10 +1086,6 @@ pub(all) struct UninstallSkillReply {
   removed : Bool
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
-pub(all) struct UpdateChannelPayload {
-  channel : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-
 pub(all) struct UpdateDownloadFailedPayload {
   message : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)

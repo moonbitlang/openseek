@@ -108,23 +108,28 @@ Uninstall button.
 
 ## API endpoint
 
-The settings popup offers three endpoints. The default, **OpenSeek**, routes
-requests through `openseek-api.moonbitlang.cn` and needs no user API key, so
-the app works out of the box. **DeepSeek official** sends requests straight
-to `api.deepseek.com` with your own key (BYOK). **Custom URL** accepts any
-DeepSeek-compatible chat-completions endpoint, with the key optional —
-whether one is needed is the endpoint's business. The choice, the custom
-URL, and the key persist in the webview's localStorage; the key entered for
-the official endpoint is never sent to any other endpoint. The host passes
-the endpoint to the engine as `OPENSEEK_API_URL`, substituting a placeholder
-key for OpenSeek and for a custom endpoint configured without one (the engine
-insists on a non-empty key). Changing the endpoint mid-conversation retires
-that conversation's engine process on the next prompt.
+SeekMoon is bring-your-own-key: there is no hosted chat proxy, so requests
+go straight from the machine running the host to the configured provider,
+billed to that account. The default, **DeepSeek official**, sends requests
+to `api.deepseek.com` with your own key; the engine also falls back to the
+`DEEPSEEK` environment variable when no key is stored. **Custom URL**
+accepts any DeepSeek-compatible chat-completions endpoint, with the key
+optional — whether one is needed is the endpoint's business. The provider
+choice, the custom URL, and the keys live in the host's settings store
+(`engine-settings.json` in the runtime dir), shared by the desktop window
+and every remote page; a key is never echoed back to a client, only its
+presence. While no usable endpoint is configured, an API-setup modal opens
+over the chat (the Settings page's API section lifted out of the page) and
+the composer keeps Send disabled, with a notice saying why. The host passes
+a custom endpoint to the engine as `OPENSEEK_API_URL`, substituting a
+placeholder key when it is configured without one (the engine insists on a
+non-empty key). Changing the endpoint mid-conversation retires that
+conversation's engine process on the next prompt.
 
 ## Updates
 
 After the webview connects, the host fetches the hosted release manifest
-(`/desktop/releases/latest.json` on the OpenSeek proxy origin, see
+(`/desktop/releases/latest.json` on the SeekMoon relay origin, see
 `internal/version` for the version it compares against) in the background.
 On macOS, when the manifest lists a `macos-arm64` package and the running
 bundle is Developer ID signed, the host downloads the zip, checks its

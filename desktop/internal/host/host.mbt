@@ -275,11 +275,11 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.skills_uninstall, async fn(payload) {
       uninstall_skill_op(payload, on_skills_changed)
     }),
-    @endpoint.Endpoint::remote(@commands.update_check, async fn(payload) {
-      state.updates.check(payload)
+    @endpoint.Endpoint::remote(@commands.update_check, async fn(_) {
+      state.updates.check()
     }),
-    @endpoint.Endpoint::remote_sync(@commands.update_download, payload => {
-      state.updates.start_download(payload)
+    @endpoint.Endpoint::remote_sync(@commands.update_download, _ => {
+      state.updates.start_download()
     }),
     @endpoint.Endpoint::remote(@commands.update_apply, async fn(_) {
       state.updates.apply()

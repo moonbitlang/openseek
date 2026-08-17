@@ -154,7 +154,7 @@ const ConversationModelsLimit : Int = 200
 const WorkspaceDefaultModeStorageKey : String = "openseek.workspace_default_mode"
 
 ///|
-/// Obsolete: the update channel derives from the server selection now. The
+/// Obsolete: the update channel is gone — there is one release stream. The
 /// key is kept only so startup can delete whatever old builds stored.
 const UpdateChannelStorageKey : String = "openseek.update_channel"
 
