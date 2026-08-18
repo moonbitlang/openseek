@@ -93,6 +93,10 @@ pub async fn start_run(
   guard live.submit(command.to_jsonl(), failure_reason="engine write failed") else {
     raise EngineError("engine changed before the prompt was submitted")
   }
+  // Stamped with the Running flip (one synchronous step): the follower's
+  // orphan watchdog attributes durable terminals to this run by comparing
+  // their commit timestamps against this admission time.
+  live.run_admitted_ms = @async.now()
   live.phase = Running(run_id~, cancel_requested=false, compact_queued=false)
   live.steer_runs.begin_run()
   emit(
@@ -1016,6 +1020,7 @@ async test "a discarded command answers its sender" {
       follower: None,
       consumer: None,
       phase: Idle(last_run=None),
+      run_admitted_ms: 0,
       condemned: false,
       steer_runs: SteerRunTracker::new(),
     }

@@ -46,6 +46,13 @@ priv struct ServeEngine {
   // suspension in it and so is unobservable to any request.
   mut consumer : @async.Task[Unit]?
   mut phase : EnginePhase
+  // Wall-clock ms (`@async.now()`) when the current run was admitted —
+  // stamped by `start_run` together with the Running flip. The follower's
+  // orphan watchdog compares durable terminal timestamps against it: a
+  // terminal committed at or after admission can only belong to this run
+  // (turns are strictly sequential, and admission requires the previous
+  // terminal to have closed the phase first).
+  mut run_admitted_ms : Int64
   // Set once, by `condemn`, and never cleared. It is the whole of this
   // engine's death sentence: nothing more can be submitted, `SessionSlot::live`
   // stops offering it to requests, and the conversation's next turn must go to
@@ -1658,6 +1665,7 @@ async fn[G] start_serve_engine(
     follower: engine_follower,
     consumer: None,
     phase: Idle(last_run=None),
+    run_admitted_ms: 0,
     condemned: false,
     steer_runs: SteerRunTracker::new(),
   }
@@ -1731,14 +1739,18 @@ async fn ServeEngine::run(
           "pid": self.process.pid,
         }
       self.process.cancel()
-      let code = self.process.wait() catch {
+      // A wait that errors yields no status; absence stays absent rather
+      // than becoming a fabricated exit code downstream.
+      let code : Int? = try self.process.wait() catch {
         error if @async.is_being_cancelled() => raise error
-        _ => -1
+        _ => None
+      } noraise {
+        code => Some(code)
       }
       self.retire(
         manager,
         stderr_task,
-        code~,
+        code?,
         failure="the engine's event consumer failed: \{error}",
       )
       return
@@ -1907,10 +1919,13 @@ async fn ServeEngine::consume(
             emit_compaction_failed(sink, engine, message)
           }
         }
-        // Retirement is `run`'s: recording the exit here keeps every
-        // lifecycle transition that must stay synchronous with its event
-        // inside the pump, and the exit code is all retirement needs.
+        // Retirement is `run`'s, but condemnation must stay synchronous
+        // with consuming the exit: the task-group teardown between this
+        // break and `retire` is a real suspension, and a cancel or steer
+        // admitted in that gap would be accepted for a child that already
+        // exited. Idempotent, so `retire` repeating it is harmless.
         StreamExited(code) => {
+          engine.discard_commands("the engine exited")
           exit_code = code
           break
         }
@@ -1928,7 +1943,7 @@ async fn ServeEngine::retire(
   self : ServeEngine,
   manager : EngineManager,
   stderr_task : @async.Task[String],
-  code~ : Int,
+  code? : Int,
   failure? : String,
 ) -> Unit {
   let engine = self
@@ -1938,7 +1953,9 @@ async fn ServeEngine::retire(
       "event": "desktop_engine_exited",
       "session": engine.session_key,
       "pid": engine.process.pid,
-      "exit_code": code,
+      // Absent when the process handle yielded no status (a forced
+      // retirement whose wait failed) — never a fabricated sentinel.
+      "exit_code": code.map_or(Json::null(), c => c.to_json()),
       "run_id": engine.phase.latest_run().unwrap_or(""),
     }
   engine.discard_commands("the engine exited")
@@ -1993,17 +2010,17 @@ async fn ServeEngine::retire(
       let cause = failure.unwrap_or("engine exited without a result")
       let diagnostics = stderr_task.wait().trim().to_owned()
       if diagnostics.is_empty() {
-        emit_error(sink, cause, run_id~, exit_code=code)
+        emit_error(sink, cause, run_id~, exit_code?=code)
       } else {
         emit_error(
           sink,
           "\{cause}:\n\{diagnostics}",
           run_id~,
-          exit_code=code,
+          exit_code?=code,
           diagnostics~,
         )
       }
-      emit_finished(sink, run_id, Failed, exit_code=code, durable_sequence?)
+      emit_finished(sink, run_id, Failed, exit_code?=code, durable_sequence?)
       // A compaction queued behind the dead turn died with the engine;
       // only a terminal compaction event clears the frontend's queued
       // notice, so synthesize the failure it can no longer send.
@@ -2119,6 +2136,7 @@ async test "a failed consumer closes its open run and retires the slot" {
         cancel_requested=false,
         compact_queued=false,
       ),
+      run_admitted_ms: 0,
       condemned: false,
       steer_runs: SteerRunTracker::new(),
     }
