@@ -13,6 +13,9 @@
 // scan on engine exit, the archive drain — goes through one serial loop, so
 // a session's commits reach the hub in sequence order and a stop
 // acknowledgment really means "no scan is in flight and none will start".
+// It is also the lifecycle's single closer for runs that end in the record:
+// a scanned Terminal commit settles the open run (`close_run_from_terminal`)
+// — the stream consumer only forwards events and cannot close anything.
 // Followers run only while the host manages a writer for the session (the
 // serve engine's lifetime, spawn to EOF); an idle session's `session.load`
 // reads the record directly, one-shot.
@@ -118,11 +121,6 @@ priv struct SessionFollower {
   // the scan read it, so a write racing the read re-triggers). `None` until
   // the first scan, or when the file cannot be examined.
   mut consumed : FileSignature?
-  // A durable Terminal that disagreed with a still-open run phase when it
-  // was broadcast. Held across polls; `reap_orphaned_terminal` either
-  // disarms it (the consumer closed the run) or, after the grace, closes the
-  // run from the durable side.
-  mut orphan_terminal : OrphanTerminal?
 }
 
 ///|
@@ -161,181 +159,176 @@ fn SessionFollower::publish_durable_finishes(
 }
 
 ///|
-/// A Terminal commit attributed to the run that was open when it was
-/// broadcast. The consumer normally closes that run within milliseconds of
-/// this commit; a candidate that survives the wall-clock grace below means
-/// the stdout pipeline died between the engine and the phase — a run
-/// nothing else can ever close.
-priv struct OrphanTerminal {
-  run_id : String
-  sequence : Int
+/// One of the two durable-log contract strings the desktop must know to
+/// read a terminal's outcome: a context-ceiling yield is recorded as
+/// `Terminal(Finished(...))` whose message carries this prefix — the
+/// engine's `agent_session.ContextYieldAnswerPrefix`, which its replay and
+/// projection rely on the same way. The desktop always runs its bundled
+/// engine, so the two sides of the contract are version-locked.
+const ContextYieldAnswerPrefix = "[context ceiling]"
+
+///|
+/// The other contract string: the exact Failed message the engine's turn
+/// loop records when a turn runs out of steps. The record spells no
+/// distinct terminal kind for it, so this message is the only durable
+/// trace of the status.
+const MaxStepsExhaustedMessage = "max steps exhausted"
+
+///|
+/// Everything a lifecycle close needs from a durable terminal record: the
+/// wire status, the final answer when the record carries one, and the
+/// Error message published ahead of a failure-ish Finished.
+priv struct TerminalOutcome {
   status : RunStatus
-  // Wall-clock arm time (`@async.now()`, ms). The grace is measured against
-  // it, never against loop iterations: follower kicks are event-driven and
-  // can arrive far faster than the poll ticker.
-  armed_ms : Int64
+  answer : String?
+  error : String?
 }
 
 ///|
-/// Wall-clock milliseconds a Terminal-vs-open-run disagreement must survive
-/// before the follower closes the run itself. The healthy consumer path
-/// closes within milliseconds, so this trades ~ten seconds of latency on a
-/// genuinely dead pipeline for never racing a live one.
-const OrphanTerminalGraceMs = 10_000L
-
-///|
-/// The lifecycle status a durable terminal implies for the run it closes.
-/// `None` for items that are not a terminal boundary. The inner match is
-/// exhaustive on purpose: a new terminal kind must decide its mapping here
-/// at compile time — falling through to `None` would silently blind the
-/// watchdog to a run-closing commit. `UnknownTerminal` is a kind this build
-/// cannot name — report Failed rather than fabricating a success the record
-/// does not spell.
-fn orphan_terminal_status(item : @protocol.SessionItem) -> RunStatus? {
+/// Read a run's outcome from a durable item; `None` for items that are not
+/// a terminal boundary. The inner match is exhaustive on purpose: a new
+/// terminal kind must decide its mapping here at compile time — falling
+/// through to `None` would silently blind the close to a run-ending
+/// commit. `UnknownTerminal` is a kind this build cannot name — report
+/// Failed rather than fabricating a success the record does not spell.
+fn recorded_terminal_outcome(item : @protocol.SessionItem) -> TerminalOutcome? {
   match item {
     Terminal(terminal) =>
       Some(
         match terminal {
-          Finished(_) => Finished
-          Aborted(_) => Aborted
-          Interrupted(_) => Cancelled
-          Failed(_) => Failed
+          Finished(message) =>
+            if message.has_prefix(ContextYieldAnswerPrefix) {
+              { status: ContextYield, answer: Some(message), error: None }
+            } else {
+              { status: Finished, answer: Some(message), error: None }
+            }
+          Aborted(reason) =>
+            {
+              status: Aborted,
+              answer: None,
+              error: Some("agent aborted: \{reason}"),
+            }
+          // Recorded exactly when a cancel tore the turn down — a more
+          // precise fact than the host's own cancel_requested flag, which
+          // can race a natural abort.
+          Interrupted(_) =>
+            { status: Cancelled, answer: None, error: Some("cancelled") }
+          Failed(message) =>
+            if message == MaxStepsExhaustedMessage {
+              { status: MaxStepsExhausted, answer: None, error: Some(message) }
+            } else {
+              { status: Failed, answer: None, error: Some(message) }
+            }
         },
       )
-    UnknownTerminal(_) => Some(Failed)
+    UnknownTerminal(_) => Some({ status: Failed, answer: None, error: None })
     _ => None
   }
 }
 
 ///|
-/// Remember a terminal commit this scan just broadcast when the session's
-/// live engine still shows a run open. Armed, not acted on: the consumer is
-/// expected to close the run itself moments from now, and `reap` below is
-/// what decides it never will.
+/// The single closer for a run that ends in the durable record. The engine
+/// appends a turn's Terminal before emitting the matching stdout event, so
+/// the record is the authority on WHEN a run is over — and the follower,
+/// its reader, is the only place that publishes the run's Error/Finished
+/// and flips the phase. The stream consumer only forwards events now; its
+/// death can delay this close until the poll ticker's next scan, never
+/// lose it.
 ///
 /// Attribution is by time, not by record position. The record cannot name
 /// host run ids, but turns are strictly sequential on one engine and a new
-/// run is only admitted after the previous terminal closed the phase — so a
-/// terminal committed at or after this run's admission can only be this
-/// run's own. One committed earlier belongs to a predecessor the consumer
-/// already closed: a lagging scan replaying it (large records make scans
-/// slow) must not arm against the healthy successor, and later idle appends
-/// (a queued compaction's Summary, goal markers) must not DISARM a real
-/// candidate either — the armed run's phase closing is the only healthy
-/// resolution. A terminal without `ts` (a pre-timestamp store) cannot be
-/// attributed and never arms.
-fn SessionFollower::note_terminal_commit(
-  self : SessionFollower,
-  manager : EngineManager,
-  event : @protocol.SessionEvent,
-  status : RunStatus,
-) -> Unit {
-  guard manager.pump is Serving(sessions~) &&
-    sessions.get(self.session) is Some(slot) &&
-    slot.live() is Some(engine) &&
-    engine.phase is Running(run_id~, ..) else {
-    // No open run to disagree with — and a terminal arriving with the phase
-    // already closed also retires any stale candidate from an earlier run.
-    self.orphan_terminal = None
-    return
-  }
-  guard event.ts is Some(ts) && ts >= engine.run_admitted_ms.to_double() else {
-    // A predecessor's terminal (or an unattributable one): not this run's
-    // boundary. The existing candidate, if any, keeps aging.
-    return
-  }
-  self.orphan_terminal = Some({
-    run_id,
-    sequence: event.sequence,
-    status,
-    armed_ms: @async.now(),
-  })
-}
-
-///|
-/// Close a run whose durable Terminal exists but whose lifecycle close never
-/// came — the split-brain a silently dead stdout consumer or reader leaves
-/// behind. The durable record is the authority here: the engine committed
-/// the turn's end, so after the grace the follower publishes the Finished
-/// the pipeline lost, then condemns the engine — its events demonstrably no
-/// longer reach the phase, so the next prompt must spawn a fresh process.
-/// Everything from the phase re-check to the slot clear is one synchronous
-/// block, so it cannot race a consumer that turns out to be alive.
-fn SessionFollower::reap_orphaned_terminal(
+/// run is only admitted after the previous terminal closed the phase — so
+/// a terminal committed at or after this run's admission can only be this
+/// run's own. One committed earlier belongs to a predecessor already
+/// closed: a lagging scan replaying old history (large records make scans
+/// slow) must not close the healthy successor. A terminal without `ts` (a
+/// pre-timestamp store) cannot be attributed and never closes.
+///
+/// Deliberately reads `slot.engine`, not `live()`: a condemned engine
+/// draining toward EOF still owns its open run, and this close firing from
+/// the retirement's final scan is what settles that run with the record's
+/// real outcome instead of the synthetic failure reserved for a child that
+/// died without committing one.
+fn SessionFollower::close_run_from_terminal(
   self : SessionFollower,
   sink : EventSink,
   manager : EngineManager,
+  event : @protocol.SessionEvent,
 ) -> Unit {
-  guard self.orphan_terminal is Some(orphan) else { return }
-  guard open_run_engine(manager, run_id=orphan.run_id) is Some(engine) &&
-    engine.session_key == self.session &&
-    engine.phase is Running(run_id~, compact_queued~, ..) else {
-    // The consumer closed the run (the healthy path), the engine was
-    // replaced, or a successor opened a different run.
-    self.orphan_terminal = None
-    return
-  }
-  if @async.now() - orphan.armed_ms < OrphanTerminalGraceMs {
-    return
-  }
-  self.orphan_terminal = None
-  @xlog.error() <?
-    {
-      "event": "desktop_run_closed_from_durable",
-      "session": self.session,
-      "run_id": run_id,
-      "sequence": orphan.sequence,
-      "pid": engine.process.pid,
-    }
-  engine.discard_commands(
-    "the engine's event pipeline went silent after its turn ended",
-  )
-  engine.phase = engine.phase.to_idle()
-  engine.steer_runs.abandon()
-  emit_finished(sink, run_id, orphan.status, durable_sequence=orphan.sequence)
-  // A compaction queued behind the orphaned turn died with the pipeline;
-  // only a terminal compaction event clears the frontend's queued notice.
-  if compact_queued {
-    emit_compaction_failed(
-      sink, engine, "the engine's event pipeline went silent before the queued compaction started",
-    )
-  }
-  // A consumer parked on its message queue would pin `wait_retired` — and
-  // with it archive and replacement — forever. Cancelling it lets the
-  // successor path proceed; one that already died is a no-op. Its
-  // cancellation exit skips `retire`, so the slot is cleared here instead —
-  // the identity check keeps a delayed reap from clobbering a successor.
-  if engine.consumer is Some(consumer) {
-    consumer.cancel()
-  }
-  @xlog.warn() <?
-    {
-      "event": "desktop_engine_cancel",
-      "reason": "event pipeline went silent after a durable terminal",
-      "session": self.session,
-      "pid": engine.process.pid,
-    }
-  engine.process.cancel()
-  if manager.pump is Serving(sessions~) &&
+  guard recorded_terminal_outcome(event.item) is Some(outcome) else { return }
+  guard manager.pump is Serving(sessions~) &&
     sessions.get(self.session) is Some(slot) &&
-    slot.engine is Some(current) &&
-    physical_equal(current, engine) {
-    slot.engine = None
-    manager.prune_slot(self.session)
+    slot.engine is Some(engine) &&
+    engine.phase is Running(run_id~, ..) else {
+    return
   }
-  // The follower itself stays: an unchanged record costs one signature stat
-  // per poll, and the next spawn reuses this instance through
-  // `ensure_follower` instead of paying a stop/baseline cycle.
+  guard event.ts is Some(ts) && ts >= engine.run_admitted_ms.to_double() else {
+    return
+  }
+  if outcome.error is Some(message) {
+    emit_error(sink, message, run_id~)
+  }
+  emit_finished(
+    sink,
+    run_id,
+    outcome.status,
+    answer?=outcome.answer,
+    durable_sequence=event.sequence,
+  )
+  // One synchronous block with the announcement: the phase flip (into a
+  // queued compaction when one is pending, back between turns otherwise)
+  // and the steer ledger's terminal cut cannot be separated from it by a
+  // suspension.
+  engine.phase = engine.phase.after_run_close()
+  engine.steer_runs.record_terminal(run_id)
 }
 
 ///|
-/// The durable record is the close authority when the stdout pipeline dies:
-/// a Terminal commit that leaves the run phase open is reaped after the
-/// grace, while the healthy path (the consumer closes the run first)
-/// disarms the candidate instead.
+test "recorded terminal outcomes follow the durable-log contracts" {
+  guard recorded_terminal_outcome(Terminal(Finished("done")))
+    is Some({ status: Finished, answer: Some("done"), error: None }) else {
+    fail("expected a plain finish")
+  }
+  guard recorded_terminal_outcome(
+      Terminal(Finished("[context ceiling] checkpointed")),
+    )
+    is Some({ status: ContextYield, .. }) else {
+    fail("expected the answer prefix to spell a context yield")
+  }
+  guard recorded_terminal_outcome(Terminal(Failed("max steps exhausted")))
+    is Some({ status: MaxStepsExhausted, .. }) else {
+    fail("expected the exact message to spell a max-steps stop")
+  }
+  guard recorded_terminal_outcome(Terminal(Failed("boom")))
+    is Some({ status: Failed, error: Some("boom"), .. }) else {
+    fail("expected a plain failure")
+  }
+  guard recorded_terminal_outcome(Terminal(Interrupted("cancelled")))
+    is Some({ status: Cancelled, error: Some("cancelled"), .. }) else {
+    fail("expected an interruption to close as cancelled")
+  }
+  guard recorded_terminal_outcome(
+      UnknownTerminal({ "kind": "terminal", "payload": { "kind": "novel" } }),
+    )
+    is Some({ status: Failed, answer: None, error: None }) else {
+    fail("expected an unknown terminal to close as failed")
+  }
+  assert_true(
+    recorded_terminal_outcome(
+      Summary({ content: "s", from_sequence: 1, to_sequence: 2 }),
+    )
+    is None,
+  )
+}
+
+///|
+/// The follower is the run's single closer: an attributed durable Terminal
+/// closes the open run immediately — real status, exact sequence, no grace
+/// — and the engine stays alive for its next turn. Unattributable
+/// terminals (a predecessor's, or one without a timestamp) close nothing.
 #cfg(not(platform="windows"))
-async test "an orphaned durable terminal closes its run after the grace" {
-  let dir = @fs.tmpdir(prefix="openseek-orphan-terminal-")
+async test "a durable terminal closes its open run" {
+  let dir = @fs.tmpdir(prefix="openseek-durable-close-")
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
   let manager = new_engine_manager("/bin/sh")
   let emitted : Array[EngineEvent] = []
@@ -350,7 +343,7 @@ async test "an orphaned durable terminal closes its run after the grace" {
       no_wait=true,
     )
     let engine : ServeEngine = {
-      session_key: "s-orphan",
+      session_key: "s-close",
       session_root: Some(root),
       spec_key: "test",
       writer,
@@ -360,7 +353,7 @@ async test "an orphaned durable terminal closes its run after the grace" {
       follower: None,
       consumer: None,
       phase: Running(
-        run_id="r-orphan",
+        run_id="r-close",
         cancel_requested=false,
         compact_queued=false,
       ),
@@ -369,109 +362,195 @@ async test "an orphaned durable terminal closes its run after the grace" {
       steer_runs: SteerRunTracker::new(),
     }
     let sessions : Map[String, SessionSlot] = Map([])
-    let slot = slot_for(sessions, "s-orphan")
+    let slot = slot_for(sessions, "s-close")
     slot.engine = Some(engine)
     manager.pump = Serving(sessions~)
-    let follower : SessionFollower = {
-      session: "s-orphan",
-      root,
-      inbox: Queue(kind=Blocking(3)),
-      load_requests: Queue(kind=Blocking(FollowerLoadQueueSize)),
-      kick_pending: false,
-      load_pending: false,
-      stopping: false,
-      retired: false,
-      stop_generation: 0,
-      completed_stop_generation: 0,
-      completed_stop_error: None,
-      stop_observers: 0,
-      durable_finishes: [],
-      watermark: 0,
-      consumed: None,
-      orphan_terminal: None,
-    }
-
+    let follower = follower_state_fixture("s-close")
     let admitted = @async.now()
     engine.run_admitted_ms = admitted
-    let terminal_event = fn(
+    fn terminal_event(
       sequence : Int,
       ts : Int64,
+      terminal : @protocol.SessionTerminal,
     ) -> @protocol.SessionEvent {
-      { sequence, ts: Some(ts.to_double()), item: Terminal(Finished("done")) }
+      { sequence, ts: Some(ts.to_double()), item: Terminal(terminal) }
     }
 
     // A predecessor's terminal (committed before this run was admitted)
-    // never arms: a lagging scan must not blame the healthy successor.
-    follower.note_terminal_commit(
+    // closes nothing: a lagging scan replaying old history must not settle
+    // the healthy successor. Neither does one without a timestamp.
+    follower.close_run_from_terminal(
+      sink,
       manager,
-      terminal_event(40, admitted - 50),
-      Finished,
+      terminal_event(40, admitted - 50, Finished("done")),
     )
-    assert_true(follower.orphan_terminal is None)
-
-    // A terminal without a timestamp cannot be attributed and never arms.
-    follower.note_terminal_commit(
-      manager,
-      { sequence: 41, ts: None, item: Terminal(Finished("done")) },
-      Finished,
-    )
-    assert_true(follower.orphan_terminal is None)
-
-    // The healthy path: the consumer closes the run moments after the
-    // terminal commit, so the candidate disarms instead of aging.
-    follower.note_terminal_commit(
-      manager,
-      terminal_event(42, admitted + 5),
-      Finished,
-    )
-    assert_true(follower.orphan_terminal is Some(_))
-    engine.phase = Idle(last_run=Some("r-orphan"))
-    follower.reap_orphaned_terminal(sink, manager)
-    assert_true(follower.orphan_terminal is None)
-
-    // This time the pipeline is dead and nothing ever closes the phase.
-    // Later idle appends (a queued compaction's Summary, goal markers) may
-    // advance the record past the terminal; they must NOT disarm — only the
-    // phase closing does. Within the grace nothing fires...
-    engine.phase = Running(
-      run_id="r-orphan",
-      cancel_requested=false,
-      compact_queued=false,
-    )
-    follower.note_terminal_commit(
-      manager,
-      terminal_event(42, admitted + 5),
-      Finished,
-    )
-    follower.watermark = 43
-    follower.reap_orphaned_terminal(sink, manager)
-    assert_true(follower.orphan_terminal is Some(_))
+    follower.close_run_from_terminal(sink, manager, {
+      sequence: 41,
+      ts: None,
+      item: Terminal(Finished("done")),
+    })
     assert_true(engine.phase is Running(..))
     assert_true(emitted.is_empty())
 
-    // ...and once the wall-clock grace has elapsed, the reap closes the run
-    // with the terminal's own status and exact sequence, condemns the
-    // engine, and clears the slot for a fresh successor.
-    follower.orphan_terminal = Some({
-      run_id: "r-orphan",
-      sequence: 42,
-      status: Finished,
-      armed_ms: @async.now() - OrphanTerminalGraceMs,
-    })
-    follower.reap_orphaned_terminal(sink, manager)
-    assert_true(engine.phase is Idle(last_run=Some("r-orphan")))
-    assert_true(engine.condemned)
+    // An attributed terminal closes immediately: real status, the record's
+    // answer, the exact sequence — and the engine stays live for reuse.
+    follower.close_run_from_terminal(
+      sink,
+      manager,
+      terminal_event(42, admitted + 5, Finished("all done")),
+    )
+    assert_true(engine.phase is Idle(last_run=Some("r-close")))
+    assert_false(engine.condemned)
+    assert_true(slot.live() is Some(_))
+    guard emitted is [Finished(finish)] else {
+      fail("expected exactly one finished event")
+    }
+    assert_eq(finish.run_id, "r-close")
+    assert_eq(finish.status, "finished")
+    assert_eq(finish.answer, Some("all done"))
+    assert_eq(finish.durable_sequence, Some(42))
+    emitted.clear()
+
+    // With the phase already closed, replaying the same commit is inert.
+    follower.close_run_from_terminal(
+      sink,
+      manager,
+      terminal_event(42, admitted + 5, Finished("all done")),
+    )
+    assert_true(emitted.is_empty())
+
+    // A cancel is recorded as Interrupted, and closes with the same
+    // Error+Finished pair the stream path used to publish.
+    engine.run_admitted_ms = @async.now()
+    engine.phase = Running(
+      run_id="r-close-2",
+      cancel_requested=true,
+      compact_queued=false,
+    )
+    follower.close_run_from_terminal(
+      sink,
+      manager,
+      terminal_event(44, engine.run_admitted_ms + 5, Interrupted("cancelled")),
+    )
+    guard emitted is [Error(error), Finished(cancel_finish)] else {
+      fail("expected an error and a finished event")
+    }
+    assert_eq(error.message, Some("cancelled"))
+    assert_eq(cancel_finish.status, "cancelled")
+    assert_eq(cancel_finish.durable_sequence, Some(44))
+    emitted.clear()
+
+    // A close with a compaction queued behind the turn lands in Compacting,
+    // exactly as the stream close did, so nothing slips in ahead of it.
+    engine.run_admitted_ms = @async.now()
+    engine.phase = Running(
+      run_id="r-close-3",
+      cancel_requested=false,
+      compact_queued=true,
+    )
+    follower.close_run_from_terminal(
+      sink,
+      manager,
+      terminal_event(46, engine.run_admitted_ms + 5, Finished("done")),
+    )
+    assert_true(engine.phase is Compacting(last_run=Some("r-close-3")))
+  })
+  @fs.rmdir(dir, recursive=true)
+}
+
+///|
+/// A child that dies mid-turn but committed its Terminal first is settled
+/// by the retirement's final durable scan with the record's real outcome;
+/// the synthetic Failed is reserved for a death that left no Terminal.
+#cfg(not(platform="windows"))
+async test "EOF retirement closes a committed turn with its real outcome" {
+  let dir = @fs.tmpdir(prefix="openseek-eof-durable-close-")
+  let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
+  let count = dir + "/count"
+  let engine_sh = dir + "/engine.sh"
+  // `sessions show` runs once for the follower's baseline (before the turn:
+  // no events) and again for the final scan (the record now holds the
+  // turn's Terminal).
+  @fs.write_file(
+    engine_sh,
+    "#!/bin/sh\n" +
+    "n=0\n" +
+    "if [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\n" +
+    "n=$((n + 1))\n" +
+    "printf '%s' \"$n\" > '\{count}'\n" +
+    "if [ \"$n\" -eq 1 ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\n" +
+    "printf '%s' '{\"events\":[{\"sequence\":7,\"ts\":1723900000000.0,\"item\":{\"kind\":\"terminal\",\"payload\":{\"kind\":\"interrupted\",\"message\":\"cancelled\"}}}]}'\n",
+    create_mode=CreateOrTruncate,
+  )
+  assert_eq(@process.run("chmod", ["+x", engine_sh]), 0)
+  let manager = new_engine_manager(engine_sh)
+  let emitted : Array[EngineEvent] = []
+  let sink = EventSink(fn(event) { emitted.push(event) })
+  @async.with_task_group(group => {
+    ignore(
+      ensure_follower(
+        sink~,
+        group~,
+        manager~,
+        config=follower_test_config(engine_sh, "s-eof-close", root),
+      ),
+    )
+    guard manager.followers.get("s-eof-close") is Some(follower) else {
+      fail("expected follower")
+    }
+    let (child_stdin, writer) = @process.write_to_process()
+    let process = @process.spawn(
+      group,
+      "/bin/sh",
+      ["-c", "sleep 30"],
+      stdin=child_stdin,
+      no_wait=true,
+    )
+    let engine : ServeEngine = {
+      session_key: "s-eof-close",
+      session_root: Some(root),
+      spec_key: "test",
+      writer,
+      commands: Queue(kind=Unbounded),
+      process,
+      sink,
+      follower: Some(follower),
+      consumer: None,
+      phase: Running(
+        run_id="r-eof",
+        cancel_requested=false,
+        compact_queued=false,
+      ),
+      run_admitted_ms: 0,
+      condemned: false,
+      steer_runs: SteerRunTracker::new(),
+    }
+    let sessions : Map[String, SessionSlot] = Map([])
+    let slot = slot_for(sessions, "s-eof-close")
+    slot.engine = Some(engine)
+    manager.pump = Serving(sessions~)
+    let messages : @async.Queue[StreamMessage] = Queue(
+      kind=Blocking(EngineStreamQueueSize),
+    )
+    messages.put(StreamExited(0))
+    let stderr_task = group.spawn(no_wait=true, () => "")
+    engine.run(manager, messages, stderr_task)
+
+    // The final scan found the Terminal: the run settled with the record's
+    // own outcome and sequence, and no synthetic failure was fabricated.
+    assert_true(engine.phase is Idle(last_run=Some("r-eof")))
     assert_true(slot.engine is None)
-    let mut finished = 0
+    let mut cancelled = 0
     for event in emitted {
       if event is Finished(payload) {
-        assert_eq(payload.run_id, "r-orphan")
-        assert_eq(payload.status, "finished")
-        assert_eq(payload.durable_sequence, Some(42))
-        finished += 1
+        assert_eq(payload.run_id, "r-eof")
+        assert_eq(payload.status, "cancelled")
+        assert_eq(payload.durable_sequence, Some(7))
+        cancelled += 1
       }
     }
-    assert_eq(finished, 1)
+    assert_eq(cancelled, 1)
+    group.return_immediately(())
   })
   @fs.rmdir(dir, recursive=true)
 }
@@ -574,12 +653,11 @@ async fn SessionFollower::scan(
       }),
     )
     self.watermark = event.sequence
-    // A terminal boundary crossing the follower arms the orphan watchdog
-    // when its timestamp attributes it to the run still open — see
-    // `note_terminal_commit` for the attribution rule.
-    if orphan_terminal_status(event.item) is Some(status) {
-      self.note_terminal_commit(manager, event, status)
-    }
+    // A terminal boundary is the run's close authority — attribution and
+    // outcome selection live in `close_run_from_terminal`. Broadcast first,
+    // close second, so the Finished a client receives always trails the
+    // commit it settles.
+    self.close_run_from_terminal(sink, manager, event)
   }
   self.consumed = signature
   Some(session)
@@ -639,9 +717,6 @@ async fn SessionFollower::run(
       match follower.inbox.get() {
         Kick => {
           follower.kick_pending = false
-          // Before the scan, so the grace is counted in whole poll gaps and
-          // a candidate this very scan arms is not aged by its own kick.
-          follower.reap_orphaned_terminal(sink, manager)
           ignore(
             follower.scan(sink, manager, force=false) catch {
               error if @async.is_being_cancelled() => raise error
@@ -866,7 +941,6 @@ async fn[G] ensure_follower(
     durable_finishes: [],
     watermark: 0,
     consumed: None,
-    orphan_terminal: None,
   }
   manager.followers[session] = follower
   let ready : @async.Queue[Unit] = Queue(kind=Blocking(1))
@@ -1785,7 +1859,6 @@ fn follower_state_fixture(session : String) -> SessionFollower {
     durable_finishes: [],
     watermark: 0,
     consumed: None,
-    orphan_terminal: None,
   }
 }
 

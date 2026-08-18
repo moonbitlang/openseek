@@ -369,7 +369,12 @@ async fn with_settings_dir(
 ) -> Unit {
   // The status payload reads the DEEPSEEK fallback from the process
   // environment; hold it steady so the expectations here cannot depend on
-  // the developer's shell.
+  // the developer's shell. That includes other tests' writes: every test
+  // that mutates ambient env holds this lock, and reading the fallback
+  // concurrently with one of them (config placement sets a fake key) is
+  // the same race — so the readers here must hold it too.
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous_key = @sys.get_env_var("DEEPSEEK")
   @sys.unset_env_var("DEEPSEEK")
   defer (if previous_key is Some(value) { @sys.set_env_var("DEEPSEEK", value) })
@@ -719,11 +724,13 @@ async test "a corrupt file reads as defaults and survives until a save" {
 
 ///|
 async test "run config resolves the endpoint from the stored provider" {
-  ambient_env_test_lock.acquire()
-  defer ambient_env_test_lock.release()
-  let previous_session_root = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
-  defer restore_session_root_env(previous_session_root)
+  // `with_settings_dir` holds the ambient-env lock, so the session-root
+  // save/restore belongs inside its body — acquiring the lock here first
+  // would self-deadlock, and restoring after its release would write the
+  // ambient environment outside the lock.
   with_settings_dir(async fn(dir, manager) {
+    let previous_session_root = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+    defer restore_session_root_env(previous_session_root)
     // A run needs a workspace before it can resolve anything else. This test
     // is about the endpoint the stored provider yields, so any attached
     // directory serves; the env root only locates the registry.

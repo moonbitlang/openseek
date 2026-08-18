@@ -48,7 +48,7 @@ priv struct ServeEngine {
   mut phase : EnginePhase
   // Wall-clock ms (`@async.now()`) when the current run was admitted —
   // stamped by `start_run` together with the Running flip. The follower's
-  // orphan watchdog compares durable terminal timestamps against it: a
+  // durable close compares terminal record timestamps against it: a
   // terminal committed at or after admission can only belong to this run
   // (turns are strictly sequential, and admission requires the previous
   // terminal to have closed the phase first).
@@ -1243,40 +1243,9 @@ async fn read_engine_stdout(
 }
 
 ///|
-fn handle_decoded_event(
-  sink : EventSink,
-  run_id : String,
-  decoded : @event.AgentEvent,
-) -> Bool {
-  match decoded {
-    AgentFinished(answer) => {
-      emit_finished(sink, run_id, Finished, answer~)
-      true
-    }
-    ContextYield(answer) => {
-      emit_finished(sink, run_id, ContextYield, answer~)
-      true
-    }
-    AgentAborted(reason) => {
-      emit_error(sink, "agent aborted: \{reason}", run_id~)
-      emit_finished(sink, run_id, Aborted)
-      true
-    }
-    MaxStepsExhausted => {
-      emit_error(sink, "max steps exhausted", run_id~)
-      emit_finished(sink, run_id, MaxStepsExhausted)
-      true
-    }
-    AgentError(message) => {
-      emit_error(sink, message, run_id~)
-      emit_finished(sink, run_id, Failed)
-      true
-    }
-    _ => false
-  }
-}
-
-///|
+/// The terminal-class stream events whose raw forwarding is suppressed: the
+/// follower's durable close publishes the run's one Error/Finished pair, so
+/// forwarding these as raw events too would render the same failure twice.
 fn host_reports_terminal_error(decoded : @event.AgentEvent) -> Bool {
   match decoded {
     AgentAborted(_) | MaxStepsExhausted | AgentError(_) => true
@@ -1701,17 +1670,19 @@ async fn[G] start_serve_engine(
 
 ///|
 /// Consume one engine's event stream for its whole lifetime: forward every
-/// raw event to the webview stamped with the engine's current run, close
-/// runs on terminal events, and report a mid-turn death as that run's
-/// failure. Runs until the engine's stdout reader sees EOF.
+/// raw event to the webview stamped with the engine's current run, and
+/// report a mid-turn death as that run's failure. Runs until the engine's
+/// stdout reader sees EOF. Terminal events close nothing here — the durable
+/// record is the close authority, read by the session follower
+/// (`close_run_from_terminal` in follower.mbt).
 ///
 /// The consumer is spawned with `allow_failure`, so an error escaping it
-/// would otherwise vanish without a trace — leaving an open run's phase
-/// `Running` forever, a state nothing else can close (the frontend shows a
-/// turn that never ends and a Stop that never lands). Any non-cancellation
-/// failure therefore becomes a forced retirement here: the same synthetic
-/// close an observed engine death gets, plus a log line naming the error the
-/// spawn would have swallowed.
+/// would otherwise vanish without a trace. Any non-cancellation failure
+/// therefore becomes a forced retirement here: the child is killed and the
+/// retirement's final durable scan settles the open run — with the record's
+/// real outcome when the turn actually ended, as a synthetic failure only
+/// when no Terminal was ever committed — plus a log line naming the error
+/// the spawn would have swallowed.
 async fn ServeEngine::run(
   self : ServeEngine,
   manager : EngineManager,
@@ -1761,10 +1732,10 @@ async fn ServeEngine::run(
 
 ///|
 /// The event pump half of `run`: drain the reader's messages until EOF and
-/// hand back the child's exit code. Lifecycle transitions happen inline —
-/// they must stay synchronous with the events that cause them — while
-/// retirement belongs to `run`, so a pump that dies mid-stream still retires
-/// exactly once.
+/// hand back the child's exit code. The transitions that remain here
+/// (compaction phase flips, admission cutoff on unproven-append events) stay
+/// synchronous with the events that cause them, while retirement belongs to
+/// `run`, so a pump that dies mid-stream still retires exactly once.
 async fn ServeEngine::consume(
   self : ServeEngine,
   manager : EngineManager,
@@ -1830,30 +1801,22 @@ async fn ServeEngine::consume(
             stream.prompt_steer_applied,
             engine.phase.latest_run(),
           )
-          // These normalized Finished events cannot carry an exact sequence
-          // yet. The EOF final scan publishes the existing `agent.durable`
-          // boundary before a successor is admitted.
+          // When the Terminal append did succeed, the follower's close will
+          // carry its exact sequence. This registration covers the append
+          // that failed: the EOF final scan then publishes the
+          // `agent.durable` boundary before a successor is admitted.
           if needs_durable_scan &&
             run_id is Some(id) &&
             engine.follower is Some(follower) {
             follower.expect_durable_finish(id)
           }
           match decoded {
-            // The abort the user asked for: report it as a cancellation, the
-            // same wire status the pre-serve host used.
-            Some(AgentAborted(_)) if engine.phase
-              is Running(cancel_requested=true, ..) &&
-              run_id is Some(id) => {
-              emit_error(sink, "cancelled", run_id=id)
-              emit_finished(sink, id, Cancelled)
-              engine.phase = engine.phase.after_run_close()
-              engine.steer_runs.record_terminal(id)
-            }
             Some(decoded) => {
-              // Terminal failures are immediately normalized below; forwarding
-              // their raw event as well would make the frontend render the same
-              // failure twice. With no run to close (no id recorded yet) the
-              // normalization cannot happen, so the raw event is the report.
+              // Terminal failures are normalized by the follower's durable
+              // close; forwarding their raw event as well would make the
+              // frontend render the same failure twice. With no run to close
+              // (no id recorded yet) that close cannot happen, so the raw
+              // event is the report.
               if (!host_reports_terminal_error(decoded) || run_id is None) &&
                 wire_event is Some(event) {
                 emit(
@@ -1880,17 +1843,13 @@ async fn ServeEngine::consume(
                   engine.phase = engine.phase.to_idle()
                 _ => ()
               }
-              // Terminal normalization is a state transition, not merely a raw
-              // event shape. In particular agent_setup_failed may be followed by
-              // turn_failed when its delayed Terminal append itself fails; once
-              // the first event idled the run, the second is diagnostic only and
-              // must not emit a duplicate Finished for the old run id.
-              if engine.phase is Running(..) &&
-                run_id is Some(id) &&
-                handle_decoded_event(sink, id, decoded) {
-                engine.phase = engine.phase.after_run_close()
-                engine.steer_runs.record_terminal(id)
-              }
+              // Terminal stream events deliberately close nothing here. The
+              // engine appends the turn's durable Terminal before emitting
+              // them, so the follower — kicked above — is the single closer:
+              // it reads the record, publishes the run's Error/Finished and
+              // flips the phase (`close_run_from_terminal`). This consumer
+              // only forwards, which is why its silent death can no longer
+              // strand a run.
             }
             None if wire_event is Some(event) =>
               emit(
@@ -1938,7 +1897,12 @@ async fn ServeEngine::consume(
 ///|
 /// EOF retirement, shared by the observed engine exit and the forced close
 /// after a consumer failure (`failure` then names the cause the synthetic
-/// lifecycle events report).
+/// lifecycle events report). The follower stop below runs the final durable
+/// scan FIRST: when the dead engine's turn actually ended — its Terminal is
+/// in the record — that scan closes the run with the real outcome
+/// (`close_run_from_terminal`), and the Running arm below never fires; the
+/// synthetic failure is reserved for a child that died without committing
+/// one.
 async fn ServeEngine::retire(
   self : ServeEngine,
   manager : EngineManager,
@@ -2216,24 +2180,6 @@ test "run ids carry 128 bits of cross-host entropy" {
   let id = mint_run_id()
   assert_true(id.has_prefix("r"))
   assert_eq(id.length(), 33)
-}
-
-///|
-async test "context yield reports a terminal finished event" {
-  let emitted : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { emitted.push(event) })
-  let answer = "[context ceiling] checkpointed"
-  assert_true(handle_decoded_event(sink, "r17", ContextYield(answer)))
-  guard emitted is [Finished(payload)] else {
-    fail("expected one finished event")
-  }
-  assert_eq(payload.run_id, "r17")
-  assert_eq(payload.status, "context_yield")
-  assert_true(payload.durable_sequence is None)
-  guard payload.answer is Some(emitted_answer) else {
-    fail("expected continuation guidance")
-  }
-  assert_eq(emitted_answer, answer)
 }
 
 ///|

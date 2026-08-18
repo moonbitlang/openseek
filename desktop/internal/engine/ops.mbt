@@ -94,7 +94,7 @@ pub async fn start_run(
     raise EngineError("engine changed before the prompt was submitted")
   }
   // Stamped with the Running flip (one synchronous step): the follower's
-  // orphan watchdog attributes durable terminals to this run by comparing
+  // durable close attributes terminal records to this run by comparing
   // their commit timestamps against this admission time.
   live.run_admitted_ms = @async.now()
   live.phase = Running(run_id~, cancel_requested=false, compact_queued=false)
@@ -1109,14 +1109,13 @@ async test "setup failure retires the writer before an immediate next start" {
       })
       is Some(_),
     )
-    guard manager.serving().get(session) is Some(slot) &&
-      slot.engine is Some(old) else {
-      fail("missing first engine after setup failure")
+    // No durable Terminal was ever committed, so the run settles at EOF
+    // retirement — which publishes Finished and clears the slot in one
+    // synchronous block. Once Finished is observable, the dead writer has
+    // already left its slot.
+    if manager.serving().get(session) is Some(slot) {
+      assert_true(slot.engine is None)
     }
-    // Still in its slot, so the next start must join its close barrier — but
-    // condemned, so nothing can be routed to it in the meantime.
-    assert_true(old.condemned)
-    assert_true(slot.live() is None)
     let cancelled = cancel_run(manager, { run_id: Some(first.run_id) })
     assert_false(cancelled.cancelled)
     let second = start_run(sink, manager, {
@@ -1271,6 +1270,7 @@ async test "named session retries after its first prompt creates no record" {
   let store = root.join("ws/.openseek")
   let count = root.join("serve-count")
   let first_ready = root.join("first-ready")
+  let settled = root.join("settled")
   let session = "s-" + mint_run_id()
   prepare_fake_moonbit_seed(seed, version="0.10.0-test")
   prepare_fake_bundled_moonbit_home(
@@ -1279,11 +1279,12 @@ async test "named session retries after its first prompt creates no record" {
   )
   // `sessions show` reports the missing first-turn record. The first serve
   // process creates only the session directory, never reads stdin, and dies
-  // with the large prompt's JSONL frame still partial. The successor accepts
-  // a normal prompt and finishes it.
+  // with the large prompt's JSONL frame still partial. The successor commits
+  // a durable Terminal before echoing `agent_finished` — the real engine's
+  // append-then-emit order — so the follower's scan settles its run.
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then\n  printf '%s\\n' 'session record does not exist' >&2\n  exit 7\nfi\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  mkdir -p '\{store}/sessions/\{session}'\n  printf '' > '\{first_ready}'\n  exec sleep 1\nfi\nwhile IFS= read -r line; do\n  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then\n  if [ -f '\{settled}' ]; then\n    printf '%s' '{\"events\":[{\"sequence\":1,\"ts\":4000000000000.0,\"item\":{\"kind\":\"terminal\",\"payload\":{\"kind\":\"finished\",\"message\":\"ok\"}}}]}'\n    exit 0\n  fi\n  printf '%s\\n' 'session record does not exist' >&2\n  exit 7\nfi\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  mkdir -p '\{store}/sessions/\{session}'\n  printf '' > '\{first_ready}'\n  exec sleep 1\nfi\nwhile IFS= read -r line; do\n  printf '' > '\{settled}'\n  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
@@ -1624,9 +1625,14 @@ async test "workspace detach drains an idle writer and its follower first" {
     runtime.join("toolchains/moonbit/macos-arm64"),
     version="0.10.0-test",
   )
+  // The serve branch commits a durable Terminal (the `settled` marker)
+  // before echoing `agent_finished` — the real engine's append-then-emit
+  // order — so the follower's scan settles the run and detach finds the
+  // writer idle.
+  let settled = root.join("settled")
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}' ; exit 0; fi\nwhile IFS= read -r line; do printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'; done\nprintf '' > '\{exited}'\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then\n  if [ -f '\{settled}' ]; then\n    printf '%s' '{\"events\":[{\"sequence\":1,\"ts\":4000000000000.0,\"item\":{\"kind\":\"terminal\",\"payload\":{\"kind\":\"finished\",\"message\":\"ok\"}}}]}'\n  else\n    printf '%s' '{\"events\":[]}'\n  fi\n  exit 0\nfi\nwhile IFS= read -r line; do printf '' > '\{settled}'; printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'; done\nprintf '' > '\{exited}'\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
