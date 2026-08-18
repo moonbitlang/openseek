@@ -84,7 +84,7 @@ async fn agent_shell_launch(
       None =>
         {
           command: {
-            program: @platform_shell.program,
+            program: @platform_shell.program(),
             args: @platform_shell.args(cmd),
           },
           sandboxed_command: None,
@@ -146,7 +146,7 @@ async fn agent_shell_launch(
     (TrustedSourceWrite, _) | (_, None) =>
       {
         command: {
-          program: @platform_shell.program,
+          program: @platform_shell.program(),
           args: @platform_shell.args(cmd),
         },
         sandboxed_command: None,
