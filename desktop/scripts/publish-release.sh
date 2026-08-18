@@ -11,16 +11,20 @@
 # SeekMoon-<platform> names are inferred.
 #
 # Requires OPENSEEK_DEPLOY_TOKEN (one of the server's OPENSEEK_DEPLOY_TOKENS).
-# Targets production by default; for staging:
+# Uploads also mirror the artifact to OSS behind the download CDN: requires
+# OPENSEEK_OSS_BUCKET and OPENSEEK_OSS_REGION, plus ossutil 2.x credentials
+# (OSS_ACCESS_KEY_ID/OSS_ACCESS_KEY_SECRET or ~/.ossutilconfig).
+# OPENSEEK_API_ORIGIN must name the target deployment explicitly, e.g.
 #   OPENSEEK_API_ORIGIN=https://openseek-api-staging.moonbitlang.cn
 set -euo pipefail
 
 usage() {
-  sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 desktop_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-origin="${OPENSEEK_API_ORIGIN:-https://openseek-api.moonbitlang.cn}"
+# No production default: a stray local run must name its target on purpose.
+origin="${OPENSEEK_API_ORIGIN:?set OPENSEEK_API_ORIGIN to the target deployment}"
 token="${OPENSEEK_DEPLOY_TOKEN:?set OPENSEEK_DEPLOY_TOKEN}"
 
 version="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$desktop_dir/moon.mod")"
@@ -61,6 +65,32 @@ case "${1:-}" in
       # as SeekMoon.app.zip, which do not encode the target platform.
       url="$url?platform=$platform"
     fi
+    # Resolve the OSS mirror destination up front, so a missing or wrong
+    # configuration fails before the slow API upload rather than after it.
+    oss_bucket="${OPENSEEK_OSS_BUCKET:?set OPENSEEK_OSS_BUCKET}"
+    oss_region="${OPENSEEK_OSS_REGION:?set OPENSEEK_OSS_REGION}"
+    if [[ -n "${OPENSEEK_OSS_PREFIX:-}" ]]; then
+      oss_prefix="$OPENSEEK_OSS_PREFIX"
+    else
+      case "$origin" in
+        https://openseek-api.moonbitlang.cn)
+          oss_prefix="openseek/desktop/releases"
+          ;;
+        https://openseek-api-staging.moonbitlang.cn)
+          oss_prefix="openseek/staging/desktop/releases"
+          ;;
+        *)
+          echo "no OSS prefix mapped for $origin; set OPENSEEK_OSS_PREFIX" >&2
+          exit 64
+          ;;
+      esac
+    fi
+    # Content type and caching mirror what the API serves for these files.
+    content_type="application/octet-stream"
+    if [[ "$release_name" == *.dmg ]]; then
+      content_type="application/x-apple-diskimage"
+    fi
+    oss_destination="oss://$oss_bucket/$oss_prefix/v$version/$release_name"
     echo "uploading $artifact"
     echo "       to $url"
     curl_status=0
@@ -78,7 +108,18 @@ case "${1:-}" in
       echo "DIGEST MISMATCH: local sha256 is $local_sha — do not publish" >&2
       exit 1
     fi
-    echo "digest verified — go live with: ${BASH_SOURCE[0]} publish"
+    # Clients download from OSS behind the CDN once the server's
+    # OPENSEEK_RELEASES_BASE_URL points there, so every artifact the API
+    # accepts is mirrored to the same version path on OSS. The API upload
+    # above is the immutability gate — it rejects re-uploads of a published
+    # version — so the mirror can only ever rewrite an unpublished file;
+    # --force keeps that rewrite from asking for confirmation in CI.
+    echo "mirroring to $oss_destination"
+    ossutil cp --force --region "$oss_region" \
+      --content-type "$content_type" \
+      --cache-control "public, max-age=31536000, immutable" \
+      "$artifact" "$oss_destination"
+    echo "digest verified and mirrored — go live with: ${BASH_SOURCE[0]} publish"
     ;;
   publish)
     curl -sS --fail-with-body -X POST \

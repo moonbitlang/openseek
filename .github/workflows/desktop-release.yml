@@ -170,6 +170,22 @@ jobs:
       - name: Update MoonBit package registry
         run: moon update
 
+      # The publish script mirrors release artifacts to OSS with ossutil 2.x,
+      # pinned and installed from the official distribution.
+      - name: Install ossutil
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/ossutil.zip" \
+            "https://gosspublic.alicdn.com/ossutil/v2/2.3.0/ossutil-2.3.0-mac-arm64.zip"
+          echo "058fd048f321f8c80def8b748030531646eefe3a82837bf16b581ba7d9c84ac7  $RUNNER_TEMP/ossutil.zip" \
+            | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/ossutil.zip" -d "$RUNNER_TEMP/ossutil"
+          sudo install -m 755 \
+            "$RUNNER_TEMP/ossutil/ossutil-2.3.0-mac-arm64/ossutil" \
+            /usr/local/bin/ossutil
+          ossutil version
+
       # GitHub's runner starts without the Developer ID identity available on
       # the developer Mac. Import it into an ephemeral keychain for codesign.
       - name: Import Developer ID certificate
@@ -256,6 +272,10 @@ jobs:
         shell: bash
         env:
           OPENSEEK_DEPLOY_TOKEN: ${{ secrets.OPENSEEK_DEPLOY_TOKEN }}
+          OPENSEEK_OSS_BUCKET: ${{ secrets.OPENSEEK_OSS_BUCKET }}
+          OPENSEEK_OSS_REGION: ${{ secrets.OPENSEEK_OSS_REGION }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OPENSEEK_OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OPENSEEK_OSS_ACCESS_KEY_SECRET }}
         run: |
           desktop/scripts/publish-release.sh upload \
             desktop/dist/SeekMoon.app.zip \
@@ -273,38 +293,51 @@ jobs:
         run: |
           set -euo pipefail
           manifest="$(curl -fsSL "$OPENSEEK_API_ORIGIN/desktop/releases/latest.json")"
-          archive="desktop/dist/SeekMoon.app.zip"
-          archive_sha256="$(shasum -a 256 "$archive" | cut -d' ' -f1)"
-          archive_url="$OPENSEEK_API_ORIGIN/desktop/releases/v$RELEASE_VERSION/SeekMoon.app.zip"
-          dmg="desktop/dist/SeekMoon.dmg"
-          dmg_sha256="$(shasum -a 256 "$dmg" | cut -d' ' -f1)"
-          dmg_url="$OPENSEEK_API_ORIGIN/desktop/releases/v$RELEASE_VERSION/SeekMoon.dmg"
-          browser="desktop/dist/SeekMoon.browser.tar.gz"
-          browser_sha256="$(shasum -a 256 "$browser" | cut -d' ' -f1)"
-          browser_url="$OPENSEEK_API_ORIGIN/desktop/releases/v$RELEASE_VERSION/SeekMoon.browser.tar.gz"
-          browser_manifest="$(curl -fsSL "$OPENSEEK_API_ORIGIN/browser/releases/current.json")"
-          browser_base_url="$OPENSEEK_API_ORIGIN/console/releases/v$RELEASE_VERSION"
+          jq -e --arg version "$RELEASE_VERSION" '.version == $version' \
+            <<< "$manifest"
+
+          archive_sha256="$(shasum -a 256 desktop/dist/SeekMoon.app.zip | cut -d' ' -f1)"
+          dmg_sha256="$(shasum -a 256 desktop/dist/SeekMoon.dmg | cut -d' ' -f1)"
+          browser_sha256="$(shasum -a 256 desktop/dist/SeekMoon.browser.tar.gz | cut -d' ' -f1)"
+
+          # The manifest is the client contract: whatever URL it names for a
+          # platform is what the updater and the download page fetch. URLs
+          # are read back rather than reconstructed, so the same check holds
+          # whether the server's releases base URL points at this API or at
+          # the OSS-backed CDN — each entry's digest must match the artifact
+          # built here, and so must the bytes its URL actually serves.
+          platform_url() {
+            jq -er --arg key "$1" '.platforms[$key].url' <<< "$manifest"
+          }
+          verify_platform() {
+            local key="$1" sha256="$2"
+            local url manifest_sha256 served served_sha256
+            url="$(platform_url "$key")"
+            manifest_sha256="$(jq -er --arg key "$key" '.platforms[$key].sha256' <<< "$manifest")"
+            if [[ "$manifest_sha256" != "$sha256" ]]; then
+              echo "::error::Manifest sha256 for $key does not match the built artifact"
+              exit 1
+            fi
+            served="$RUNNER_TEMP/openseek-release-$key"
+            curl -fsSL --retry 3 -o "$served" "$url"
+            served_sha256="$(shasum -a 256 "$served" | cut -d' ' -f1)"
+            rm -f "$served"
+            if [[ "$served_sha256" != "$sha256" ]]; then
+              echo "::error::Bytes served for $key at $url do not match the built artifact"
+              exit 1
+            fi
+            echo "$key ok: $url"
+          }
 
           # The updater installs from the bare macOS platform key. The DMG and
           # browser bundle are separate release artifacts for manual install
           # and later browser deployment respectively.
-          jq -e \
-            --arg version "$RELEASE_VERSION" \
-            --arg url "$archive_url" \
-            --arg sha256 "$archive_sha256" \
-            --arg dmg_url "$dmg_url" \
-            --arg dmg_sha256 "$dmg_sha256" \
-            --arg browser_url "$browser_url" \
-            --arg browser_sha256 "$browser_sha256" \
-            '.version == $version and
-              .platforms["macos-arm64"].url == $url and
-              .platforms["macos-arm64"].sha256 == $sha256 and
-              .platforms["macos-arm64-dmg"].url == $dmg_url and
-              .platforms["macos-arm64-dmg"].sha256 == $dmg_sha256 and
-              .platforms.browser.url == $browser_url and
-              .platforms.browser.sha256 == $browser_sha256' \
-            <<< "$manifest"
+          verify_platform macos-arm64 "$archive_sha256"
+          verify_platform macos-arm64-dmg "$dmg_sha256"
+          verify_platform browser "$browser_sha256"
 
+          browser_manifest="$(curl -fsSL "$OPENSEEK_API_ORIGIN/browser/releases/current.json")"
+          browser_base_url="$OPENSEEK_API_ORIGIN/console/releases/v$RELEASE_VERSION"
           jq -e \
             --arg version "$RELEASE_VERSION" \
             '.version == $version' \
@@ -335,11 +368,11 @@ jobs:
             echo "## Desktop $RELEASE_CHANNEL release"
             echo
             echo "- Version: \`$RELEASE_VERSION\`"
-            echo "- Updater ZIP: $archive_url"
+            echo "- Updater ZIP: $(platform_url macos-arm64)"
             echo "- ZIP SHA-256: \`$archive_sha256\`"
-            echo "- Installer DMG: $dmg_url"
+            echo "- Installer DMG: $(platform_url macos-arm64-dmg)"
             echo "- DMG SHA-256: \`$dmg_sha256\`"
-            echo "- Browser bundle: $browser_url"
+            echo "- Browser bundle: $(platform_url browser)"
             echo "- Browser SHA-256: \`$browser_sha256\`"
             echo "- Browser console: $browser_base_url/"
           } >> "$GITHUB_STEP_SUMMARY"
