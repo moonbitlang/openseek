@@ -148,12 +148,24 @@ fn background_description() -> String {
 ///|
 #cfg(platform="windows")
 fn shell_description() -> String {
-  (
-    #|Run arguments.cmd through PowerShell (pwsh -NoProfile -Command), optionally in
-    #|arguments.cwd, and return exit code plus output. Use PowerShell syntax and cmdlets
-    #|in arguments.cmd. Source file edits for compiler feedback belong in line-anchored
-    #|edit (or multi_edit for several fixes in one file); do not use shell rewrites.
-  )
+  let program = @platform_shell.program()
+  if program == "pwsh" {
+    (
+      #|Run arguments.cmd through PowerShell (pwsh -NoProfile -Command), optionally in
+      #|arguments.cwd, and return exit code plus output. Supports PowerShell 7+ syntax
+      #|(&&, ||, ??, ?:, etc.) and cmdlets. Source file edits for compiler feedback
+      #|belong in line-anchored edit (or multi_edit for several fixes in one file); do
+      #|not use shell rewrites.
+    )
+  } else {
+    (
+      #|Run arguments.cmd through Windows PowerShell (powershell.exe -NoProfile -Command),
+      #|optionally in arguments.cwd, and return exit code plus output. Use PowerShell 5.1
+      #|syntax and cmdlets; note that chain operators (&&, ||) are NOT supported. Source
+      #|file edits for compiler feedback belong in line-anchored edit (or multi_edit for
+      #|several fixes in one file); do not use shell rewrites.
+    )
+  }
 }
 
 ///|
