@@ -554,15 +554,15 @@ async fn run_agent_shell_with_tree_precheck(
               ShellTimedOut
             }
           }
-        // Preserve the per-call path's strict-decode behavior: invalid
-        // (binary/non-UTF-8) output used to be a hard tool error. The platform
-        // shell now sets UTF-8 output encoding (Windows: chcp 65001) so most
-        // non-UTF-8 output is avoided; any remaining binary output is returned
-        // as lossy-decoded text with a warning rather than a hard error, so the
-        // model can see partial output instead of a blind spot.
+        // Invalid (binary/non-UTF-8) output is returned as lossy-decoded text
+        // with a warning rather than a hard error, so the model can see partial
+        // output instead of a blind spot. The command is allowed to finish
+        // normally (subject to the existing timeout/output limits) so that
+        // `exit_code` reflects the real exit status and later commands in a
+        // `&&` chain are not silently skipped.
         Some(_) =>
           if exec.had_invalid_utf8() {
-            let _ = exec.stop()
+            let _ = exec.wait()
             let output = agent_shell_output_from_exec(exec, launch)
             exec.discard()
             ShellExecuted({
@@ -792,7 +792,7 @@ async fn read_output_prefix(
     match reader.read_some(max_len=chunk_limit) {
       None =>
         return {
-          text: @utf8.decode(buffer.to_bytes()),
+          text: decode_valid_utf8_prefix(buffer.to_bytes()),
           output_limit_reached: false,
         }
       Some(chunk) => {

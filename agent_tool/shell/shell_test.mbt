@@ -561,22 +561,20 @@ async test "shell does not split four-byte utf8 characters on Unix" {
 
 ///|
 #cfg(platform="windows")
-async test "shell reports binary output as a tool error on Windows" {
+async test "shell reports binary output as lossy text on Windows" {
   let output = run_shell({
     "cmd": "[Console]::OpenStandardOutput().WriteByte(255)",
   })
-  assert_true(output.is_error)
-  assert_true(output.content.contains("error running shell:"))
-  assert_true(output.content.contains("Malformed"))
+  assert_false(output.is_error)
+  assert_true(output.content.contains("exit=0"))
 }
 
 ///|
 #cfg(not(platform="windows"))
-async test "shell reports binary output as a tool error on Unix" {
+async test "shell reports binary output as lossy text on Unix" {
   let output = run_shell({ "cmd": "printf '\\377'" })
-  assert_true(output.is_error)
-  assert_true(output.content.contains("error running shell:"))
-  assert_true(output.content.contains("Malformed"))
+  assert_false(output.is_error)
+  assert_true(output.content.contains("exit=0"))
 }
 
 ///|
