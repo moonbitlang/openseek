@@ -471,7 +471,7 @@ async test "edit rejects missing match" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string not found from line 1",
+      "error editing \{path}: old_string not found from line 1\n\nfile context: > 1 | alpha > 2 |  > 3 | \nfirst difference at character 1: expected `b`, got `a`\nhint: check for line-ending mismatches (CRLF vs LF), full-width vs half-width characters, tab vs space, or a stray read-tool display separator (`|`) in old_string",
     )
     assert_true(output.is_error)
   })
@@ -493,7 +493,7 @@ async test "edit reports range for missing match" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string not found in line range 2-2",
+      "error editing \{path}: old_string not found in line range 2-2\n\nfile context:   1 | alpha > 2 | beta   3 | alpha   4 | \nfirst difference at character 1: expected `a`, got `b`\nhint: check for line-ending mismatches (CRLF vs LF), full-width vs half-width characters, tab vs space, or a stray read-tool display separator (`|`) in old_string",
     )
     assert_true(output.is_error)
     assert_eq(@fs.read_file(path).text(), "alpha\nbeta\nalpha\n")
