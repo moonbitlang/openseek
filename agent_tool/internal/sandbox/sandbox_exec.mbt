@@ -17,7 +17,7 @@ let sandbox_exec_available_cache : Ref[Bool?] = { val: None }
 /// argument vector. This function does not validate the profile or probe
 /// availability.
 fn sandbox_exec_args(profile : String, cmd : String) -> Array[String] {
-  ["-p", profile, @platform_shell.program, ..@platform_shell.args(cmd)]
+  ["-p", profile, @platform_shell.program(), ..@platform_shell.args(cmd)]
 }
 
 ///|
