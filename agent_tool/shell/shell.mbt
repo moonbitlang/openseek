@@ -431,12 +431,6 @@ async fn shell(
         brief="\{@agent_tool.brief_line(input.cmd, limit=48)} → bg \{id}",
       )
     }
-    ShellBinaryOutput =>
-      return @agent_tool.ToolAction::respond(
-        "error running shell: Malformed (binary / non-UTF-8) command output",
-        is_error=true,
-        brief=shell_brief(input.cmd, None),
-      )
   }
   let output = agent_output.output
   let response = shell_response(output, input.max_output_chars)
@@ -469,9 +463,6 @@ priv enum ShellRunResult {
   // Still running after `timeout_ms` and detached to the background instead of
   // stopped; carries the new job id.
   ShellDetached(String)
-  // The command produced invalid (non-UTF-8 / binary) output; the per-call path
-  // raises on strict decode, and the execution path reports it here.
-  ShellBinaryOutput
 }
 
 ///|
@@ -552,17 +543,24 @@ async fn run_agent_shell_with_tree_precheck(
             }
           }
         // Preserve the per-call path's strict-decode behavior: invalid
-        // (binary/non-UTF-8) output is a tool error, not replacement characters
-        // presented as success.
+        // (binary/non-UTF-8) output used to be a hard tool error. The platform
+        // shell now sets UTF-8 output encoding (Windows: chcp 65001) so most
+        // non-UTF-8 output is avoided; any remaining binary output is returned
+        // as lossy-decoded text with a warning rather than a hard error, so the
+        // model can see partial output instead of a blind spot.
         Some(_) =>
-          // `wait_or_invalid` may return with the child still running (binary
-          // output seen); stop it so binary output is an immediate error. Either
-          // way this execution finished in the foreground (not adopted), so free
-          // its spill file if the retained config opened one.
           if exec.had_invalid_utf8() {
             let _ = exec.stop()
+            let output = agent_shell_output_from_exec(exec, launch)
             exec.discard()
-            ShellBinaryOutput
+            ShellExecuted({
+              output: {
+                exit_code: output.output.exit_code,
+                text: "\{output.output.text}\n<system>encoding=lossy note=output contained non-UTF-8 bytes; shell encoding was set to UTF-8</system>",
+                output_limit_reached: output.output.output_limit_reached,
+              },
+              sandboxed_command: output.sandboxed_command,
+            })
           } else {
             let output = agent_shell_output_from_exec(exec, launch)
             exec.discard()
@@ -741,6 +739,7 @@ async fn collect_process_output(
       cwd?=cwd.map(cwd => cwd.view()),
       cancel_handler=@process.hard_cancel(),
       no_wait=true,
+      no_console_window=true,
     )
     let prefix = read_output_prefix(reader, max_output_chars)
     let exit_code = if prefix.output_limit_reached {
@@ -809,7 +808,7 @@ fn text_prefix_by_chars(text : String, max_chars : Int) -> String {
 }
 
 ///|
-fn decode_valid_utf8_prefix(bytes : Bytes) -> String raise {
+fn decode_valid_utf8_prefix(bytes : Bytes) -> String {
   for dropped in 0..<=3 {
     let end = bytes.length() - dropped
     if end >= 0 {
@@ -820,7 +819,7 @@ fn decode_valid_utf8_prefix(bytes : Bytes) -> String raise {
       }
     }
   }
-  @utf8.decode(bytes)
+  @utf8.decode_lossy(bytes)
 }
 
 ///|

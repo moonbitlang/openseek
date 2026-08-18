@@ -98,6 +98,7 @@ pub async fn[X] ShellExecution::start(
     cwd?=cwd.map(cwd => cwd.view()),
     cancel_handler=@process.hard_cancel(),
     no_wait=true,
+    no_console_window=true,
   )
   let exec = {
     sink,

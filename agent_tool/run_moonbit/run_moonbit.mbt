@@ -271,6 +271,7 @@ async fn execute(
         stdin=@process.redirect_from_file(empty_stdin),
         stdout=@process.redirect_to_file(log, append=true),
         stderr=@process.redirect_to_file(log, append=true),
+        no_console_window=true,
       )
       (exit_code, read_capped(log))
     })
