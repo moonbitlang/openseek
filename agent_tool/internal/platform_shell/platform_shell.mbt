@@ -13,9 +13,12 @@
 // declare pub let program : String
 
 ///|
-/// `pwsh` on Windows — see the note above.
+/// `powershell.exe` on Windows — always available as a built-in component.
+/// `pwsh` (PowerShell 7) is an optional install that many systems lack;
+/// fall back to the inbox `powershell.exe` to avoid `Access is denied`
+/// when the process host cannot find or execute `pwsh`.
 #cfg(platform="windows")
-pub let program : String = "pwsh"
+pub let program : String = "powershell.exe"
 
 ///|
 /// `sh` on non-Windows targets — see the note above.
@@ -32,6 +35,8 @@ declare pub fn args(cmd : String) -> Array[String]
 /// (`-NoProfile -Command` for PowerShell). Sets UTF-8 output encoding so
 /// commands with non-ASCII text (e.g. Chinese characters) produce valid
 /// UTF-8 bytes instead of the system's active code page (GBK/CP936).
+/// Uses `powershell.exe` (always available inbox) rather than `pwsh`
+/// (optional install many systems lack).
 #cfg(platform="windows")
 pub fn args(cmd : String) -> Array[String] {
   [
