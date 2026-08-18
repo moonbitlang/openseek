@@ -8,6 +8,7 @@ let pwsh_available_cache : Ref[Bool?] = { val: None }
 /// Uses `where pwsh` (Windows built-in) instead of spawning pwsh, which is
 /// lighter and avoids a subprocess launch. The result is cached process-wide.
 #cfg(platform="windows")
+#borrow(cmd)
 extern "c" fn _system(cmd : Bytes) -> Int = "system"
 
 ///|
