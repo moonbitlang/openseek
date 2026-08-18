@@ -42,7 +42,7 @@ pub fn args(cmd : String) -> Array[String] {
   [
     "-NoProfile",
     "-Command",
-    "$OutputEncoding=[Console]::OutputEncoding=[Text.Encoding]::UTF8;chcp 65001>$null;" +
+    "$OutputEncoding=[Console]::OutputEncoding=[Text.Encoding]::UTF8;chcp 65001 > $null;" +
     cmd,
   ]
 }
