@@ -29,10 +29,17 @@ declare pub fn args(cmd : String) -> Array[String]
 
 ///|
 /// Build arguments that make `program` interpret `cmd` as shell text
-/// (`-NoProfile -Command` for PowerShell).
+/// (`-NoProfile -Command` for PowerShell). Sets UTF-8 output encoding so
+/// commands with non-ASCII text (e.g. Chinese characters) produce valid
+/// UTF-8 bytes instead of the system's active code page (GBK/CP936).
 #cfg(platform="windows")
 pub fn args(cmd : String) -> Array[String] {
-  ["-NoProfile", "-Command", cmd]
+  [
+    "-NoProfile",
+    "-Command",
+    "$OutputEncoding=[Console]::OutputEncoding=[Text.Encoding]::UTF8;chcp 65001>$null;" +
+    cmd,
+  ]
 }
 
 ///|
