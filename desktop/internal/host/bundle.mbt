@@ -80,13 +80,6 @@ pub async fn package_version(executable : String) -> String {
 }
 
 ///|
-/// Return the directory that contains the bundled frontend entry and sibling
-/// assets such as `viewer.css`.
-pub fn frontend_asset_dir(entry_path : String) -> String {
-  @pathx.Path(entry_path).dirname().to_string()
-}
-
-///|
 /// The running .app bundle root, when the executable sits in a macOS bundle
 /// layout (`…/Name.app/Contents/MacOS/exe`); None anywhere else — dev
 /// binaries and other platforms — which disables self-update.
@@ -102,13 +95,4 @@ pub fn app_bundle_path(executable : String) -> String? {
   } else {
     None
   }
-}
-
-///|
-/// Read the HTML document handed to proton's `html()` entry. Proton serves the
-/// document from `proton://app/` (the origin its `__MoonBit__` bridge reaches),
-/// while the native resource handler serves sibling static assets from
-/// `frontend_asset_dir`.
-pub async fn frontend_document(entry_path : String) -> String {
-  @fs.read_file(entry_path).text()
 }

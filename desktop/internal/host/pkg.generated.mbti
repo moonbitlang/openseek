@@ -16,10 +16,6 @@ pub fn endpoints(HostState, HostConnection, () -> Unit) -> Array[@endpoint.Endpo
 
 pub async fn ensure_codex_config(@pathx.Path?) -> String
 
-pub fn frontend_asset_dir(String) -> String
-
-pub async fn frontend_document(String) -> String
-
 pub async fn frontend_entry_path(String) -> String
 
 pub fn new_host_state(String, runtime_dir? : @pathx.Path, executable? : String, app_version? : String) -> HostState
