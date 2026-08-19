@@ -5,14 +5,11 @@
 /// covered by the runner's own tests with scripted children.
 async fn bind_test_server(skip_message : String) -> @http.Server? {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
-    error => {
-      let message = "\{error}"
-      if message.contains("Operation not permitted") {
-        println(skip_message)
-        return None
-      }
-      raise error
+    error if "\{error}".contains("Operation not permitted") => {
+      println(skip_message)
+      return None
     }
+    error => raise error
   }
   Some(server)
 }

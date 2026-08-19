@@ -122,7 +122,7 @@ test "submit_review declares itself a control tool" {
 ///|
 test "submit captures a valid report and finishes" {
   let captured : Ref[ReviewReport?] = { val: None }
-  let action = submit_action(captured, sample_report().to_json())
+  let action = submit_action(captured, ToJson::to_json(sample_report()))
   guard action is Control(Finish(note)) else { fail("expected Finish") }
   assert_true(note.contains("2 finding(s)"))
   guard captured.val is Some(_) else { fail("expected captured report") }
@@ -145,7 +145,7 @@ test "submit rejects an invalid report without capturing" {
       },
     ],
   }
-  let action = submit_action(captured, bad.to_json())
+  let action = submit_action(captured, ToJson::to_json(bad))
   guard action is Respond(output) else { fail("expected Respond") }
   assert_true(output.is_error)
   assert_true(output.content.contains("submit_review rejected"))

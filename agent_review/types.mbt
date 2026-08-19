@@ -47,7 +47,7 @@ pub struct ReviewReport {
 ///|
 /// Encode the report as a single-line JSON string (the CLI stdout contract).
 pub fn ReviewReport::to_json_string(self : ReviewReport) -> String {
-  self.to_json().stringify()
+  ToJson::to_json(self).stringify()
 }
 
 ///|
@@ -83,7 +83,7 @@ fn sample_report() -> ReviewReport {
 ///|
 test "review report round-trips through json" {
   let report = sample_report()
-  let json = report.to_json()
+  let json = ToJson::to_json(report)
   guard ReviewReport::parse(json) is Ok(parsed) else { fail("parse failed") }
   assert_eq(parsed.to_json_string(), report.to_json_string())
 }

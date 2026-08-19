@@ -992,7 +992,7 @@ fn document_symbols_result_json(payload : DocumentSymbolsResultPayload) -> Json 
 ///|
 fn error_packet_json(error : ProtocolError) -> Json {
   let fields = packet_fields("Error", error.request_id)
-  fields["error"] = error.to_json()
+  fields["error"] = ToJson::to_json(error)
   Json::object(fields)
 }
 

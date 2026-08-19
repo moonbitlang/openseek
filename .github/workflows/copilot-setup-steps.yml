@@ -29,9 +29,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Checkout Proton submodule
-        run: git submodule update --init desktop/lepus
-
       - name: Set up MoonBit
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash

@@ -686,7 +686,7 @@ pub(all) struct ConnectedPayload {
 
 ///|
 pub impl ToJson for ConnectedPayload with fn to_json(self) {
-  { "stage": self.stage.to_json() }
+  { "stage": ToJson::to_json(self.stage) }
 }
 
 ///|

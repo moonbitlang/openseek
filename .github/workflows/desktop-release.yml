@@ -87,15 +87,15 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v5
 
-      - name: Check out the Proton submodule
-        run: git submodule update --init desktop/lepus
-
+      # Proton is a registry dependency, so the CEF distribution it selects
+      # follows the version pinned in desktop/moon.mod. Keying the cache on
+      # that file keeps a Proton bump from reusing the previous CEF build.
       # `cef setup` reads and populates Proton's shared user-level cache.
       - name: Cache CEF distribution
         uses: actions/cache@v4
         with:
           path: ~/.proton/cache/cef
-          key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/lepus/cli/cef/cef_platform.mbt') }}
+          key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/moon.mod') }}
 
       # The packager stages the seed toolchain pinned by
       # `desktop/.moonbit-version` from archives downloaded into this directory.

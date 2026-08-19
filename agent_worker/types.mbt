@@ -88,7 +88,7 @@ fn sample_worker_report() -> WorkerReport {
 ///|
 test "worker report round-trips through json" {
   let report = sample_worker_report()
-  guard WorkerReport::parse(report.to_json()) is Ok(parsed) else {
+  guard WorkerReport::parse(ToJson::to_json(report)) is Ok(parsed) else {
     fail("parse failed")
   }
   assert_eq(parsed, report)

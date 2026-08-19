@@ -124,17 +124,8 @@ async test "auth.json persists 0600 and deletes cleanly" {
     delete_session_file(dir)
     assert_true(load_session_file(dir) is None)
   }
-  body() catch {
-    error => {
-      @fs.rmdir(dir.to_string(), recursive=true) catch {
-        _ => ()
-      }
-      raise error
-    }
-  }
-  @fs.rmdir(dir.to_string(), recursive=true) catch {
-    _ => ()
-  }
+  defer (@fs.rmdir(dir.to_string(), recursive=true) catch { _ => () })
+  body()
 }
 
 ///|

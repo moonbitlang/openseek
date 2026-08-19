@@ -1,7 +1,3 @@
-[submodule "desktop/lepus"]
-	path = desktop/lepus
-	url = https://github.com/moonbit-community/proton.git
-	branch = main
 [submodule "editor/codemirror"]
 	path = editor/codemirror
 	url = https://code.haverbeke.berlin/codemirror/dev.git

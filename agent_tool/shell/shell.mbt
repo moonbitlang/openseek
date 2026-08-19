@@ -519,7 +519,7 @@ async fn run_agent_shell_with_tree_precheck(
     // Foreground on the shared execution model: spawn on the session group and
     // await it (up to `timeout_ms`). The session-group process outlives this
     // await, so a timeout must stop it here — not leak it — and a turn
-    // cancellation must too (the catch stops it before re-raising).
+    // cancellation must too (`errdefer` stops it before the error propagates).
     Some(spawn) => {
       let exec = spawn(
         launch.command.program,
@@ -527,13 +527,9 @@ async fn run_agent_shell_with_tree_precheck(
         cwd,
         max_output_chars,
       )
-      let finished = @async.with_timeout_opt(timeout_ms, () => {
-        exec.wait_or_invalid()
-      }) catch {
-        error => {
-          exec.request_stop()
-          raise error
-        }
+      let finished = {
+        errdefer exec.request_stop()
+        @async.with_timeout_opt(timeout_ms, () => exec.wait_or_invalid())
       }
       match finished {
         None =>

@@ -28,27 +28,19 @@ pub async fn copy_tree(String, String) -> Unit
 
 pub fn engine_package() -> String
 
-pub async fn ensure_cef_runtime(Workspace, String, extra_env? : Map[String, String]) -> Unit
-
-pub async fn ensure_cmake(Workspace, command? : String) -> Unit
+pub async fn ensure_cef_runtime(Workspace, extra_env? : Map[String, String]) -> Unit
 
 pub async fn ensure_dir(String) -> Unit
 
-pub async fn ensure_proton_cli(Workspace, String) -> Unit
-
 pub async fn locate_workspace() -> Workspace
 
-pub fn posix_proton_cli() -> String
-
 pub async fn proton_runtime_dist(Workspace) -> @pathx.Absolute
-
-pub async fn rebuild_libproton(Workspace, Array[(String, String)], extra_env? : Map[String, String]) -> Unit
 
 pub async fn remove_path_if_exists(String) -> Unit
 
 pub async fn run_checked(String, Array[String], dir~ : String, extra_env? : Map[String, String]) -> Unit
 
-pub fn windows_proton_cli() -> String
+pub async fn run_proton_cli(Workspace, Array[String], extra_env? : Map[String, String]) -> Unit
 
 pub async fn write_text(String, String) -> Unit
 
@@ -68,7 +60,7 @@ pub fn Workspace::frontend_binary(Self, release~ : Bool) -> String
 pub fn Workspace::mermaid_assets(Self) -> String
 pub async fn Workspace::module_version(Self) -> String
 pub fn Workspace::native_binary(Self, release~ : Bool) -> String
-pub async fn Workspace::prepare_checkout_proton_runtime(Self, String, extra_env? : Map[String, String]) -> Unit
+pub async fn Workspace::proton_version(Self) -> String
 pub fn Workspace::repo(Self) -> String
 pub fn Workspace::repo_at(Self, String) -> String
 

@@ -228,11 +228,9 @@ pub async fn Client::run_writer(self : Client) -> Unit {
 /// request is left hanging.
 pub async fn Client::run_message_pump(self : Client) -> Unit {
   while !self.closed {
-    let ended = self.route_next() catch {
-      error => {
-        self.close()
-        raise error
-      }
+    let ended = {
+      errdefer self.close()
+      self.route_next()
     }
     if ended {
       break

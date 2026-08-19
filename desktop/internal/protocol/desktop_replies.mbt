@@ -181,7 +181,7 @@ pub(all) enum ArchiveReply {
 ///|
 pub impl ToJson for ArchiveReply with fn to_json(self) {
   match self {
-    Archived(reply) => reply.to_json()
+    Archived(reply) => ToJson::to_json(reply)
     NeedsForce(refusal) =>
       {
         "kind": "needs_force",
@@ -557,7 +557,7 @@ pub(all) enum WorktreeCreateResult {
 ///|
 pub impl ToJson for WorktreeCreateResult with fn to_json(self) {
   match self {
-    WorktreeCreatedReply(reply) => reply.to_json()
+    WorktreeCreatedReply(reply) => ToJson::to_json(reply)
     WorktreeCreateError(message) => { "error": message }
   }
 }
@@ -620,9 +620,10 @@ pub(all) enum OpenPathReply {
 pub impl ToJson for OpenPathReply with fn to_json(self) {
   match self {
     Opened => { "opened": true }
-    Editor(target) => { "opened": false, "editor_target": target.to_json() }
+    Editor(target) =>
+      { "opened": false, "editor_target": ToJson::to_json(target) }
     Directory(target) =>
-      { "opened": false, "directory_target": target.to_json() }
+      { "opened": false, "directory_target": ToJson::to_json(target) }
     Refused(message) => { "opened": false, "error": message }
   }
 }

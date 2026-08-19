@@ -118,7 +118,7 @@ fn sample_report() -> ExploreReport {
 ///|
 test "explore report round-trips through json" {
   let report = sample_report()
-  guard ExploreReport::parse(report.to_json()) is Ok(parsed) else {
+  guard ExploreReport::parse(ToJson::to_json(report)) is Ok(parsed) else {
     fail("parse failed")
   }
   assert_eq(parsed, report)

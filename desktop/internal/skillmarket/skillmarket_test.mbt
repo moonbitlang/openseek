@@ -79,14 +79,11 @@ async fn fake_registry(
   probe? : RegistryProbe,
 ) -> String? {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
-    error => {
-      let message = "\{error}"
-      if message.contains("Operation not permitted") {
-        println("local TCP bind unavailable; skipping test: \{message}")
-        return None
-      }
-      raise error
+    error if "\{error}".contains("Operation not permitted") => {
+      println("local TCP bind unavailable; skipping test: \{error}")
+      return None
     }
+    error => raise error
   }
   let base = "http://127.0.0.1:\{server.addr.port()}"
   // entry -> whether its SKILL.md asset exists.

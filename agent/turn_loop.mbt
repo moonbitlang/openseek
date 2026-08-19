@@ -269,22 +269,29 @@ async fn AgentLoop::run(
       session
     }
   } catch {
-    error => {
-      let terminal : @agent_session.SessionItem = if @async.is_being_cancelled() ||
-        @async.is_cancellation_error(error) {
-        Terminal(Interrupted("cancelled"))
-      } else {
-        Terminal(Failed("agent failed: \{error}"))
-      }
-      // Best-effort: a goal met in the dying batch keeps its durable clear
-      // when the store still accepts appends.
-      let session = self.flush_goal_tombstone(self.last_session) catch {
-        _ => self.last_session
-      }
-      ignore(self.append(session, terminal) catch { _ => session })
-      raise error
-    }
+    error => self.seal_unwinding_turn(error)
   }
+}
+
+///|
+/// Record the terminal a dying turn implies, then let the error keep
+/// propagating — this never returns normally. Every append here is best
+/// effort: the store may already be gone, and the caller's error outranks
+/// anything that fails on the way out.
+async fn[T] AgentLoop::seal_unwinding_turn(self : Self, error : Error) -> T {
+  let terminal : @agent_session.SessionItem = if @async.is_being_cancelled() ||
+    @async.is_cancellation_error(error) {
+    Terminal(Interrupted("cancelled"))
+  } else {
+    Terminal(Failed("agent failed: \{error}"))
+  }
+  // Best-effort: a goal met in the dying batch keeps its durable clear
+  // when the store still accepts appends.
+  let session = self.flush_goal_tombstone(self.last_session) catch {
+    _ => self.last_session
+  }
+  ignore(self.append(session, terminal) catch { _ => session })
+  raise error
 }
 
 ///|

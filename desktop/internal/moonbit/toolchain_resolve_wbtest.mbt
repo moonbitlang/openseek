@@ -8,19 +8,13 @@ async fn remove_toolchain_test_tree(root : @pathx.Absolute) -> Unit {
 
 ///|
 /// Runs `body` against a fresh temporary root and removes the tree on both
-/// exit paths — `defer` cannot run the async removal, so the try/catch
-/// split lives here once instead of in every test.
+/// exit paths, so no test has to spell the cleanup out.
 async fn with_toolchain_test_tree(
   body : async (@pathx.Absolute) -> Unit,
 ) -> Unit {
   let root = @pathx.Path(@fs.tmpdir(prefix="openseek-moonbit-external-")).resolve()
-  body(root) catch {
-    error => {
-      remove_toolchain_test_tree(root)
-      raise error
-    }
-  }
-  remove_toolchain_test_tree(root)
+  defer remove_toolchain_test_tree(root)
+  body(root)
 }
 
 ///|

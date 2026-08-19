@@ -90,7 +90,7 @@ pub fn encode_chat_request(
   Json::object(
     Map(
       [
-        ("model", Json::string(model.to_string())),
+        ("model", Json::string(Show::to_string(model))),
         (
           "messages",
           [

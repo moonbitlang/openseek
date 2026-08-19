@@ -226,10 +226,12 @@ pub fn DocumentSnapshot::from_content(
 /// JSON shape for document read results.
 pub impl ToJson for DocumentReadResult with fn to_json(self) {
   match self {
-    DocumentLoaded(document) => { "ok": true, "document": document.to_json() }
+    DocumentLoaded(document) =>
+      { "ok": true, "document": ToJson::to_json(document) }
     DocumentNotFound(uri) =>
       { "ok": false, "notFound": true, "uri": uri.to_string().to_json() }
-    DocumentReadFailed(error) => { "ok": false, "error": error.to_json() }
+    DocumentReadFailed(error) =>
+      { "ok": false, "error": ToJson::to_json(error) }
   }
 }
 

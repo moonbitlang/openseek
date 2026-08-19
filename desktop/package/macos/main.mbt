@@ -167,7 +167,7 @@ async fn @packaging.Workspace::build_package_inputs(
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
     "PROTON_PACKAGE_RPATH": "@executable_path/../Resources/proton/lib",
   }
-  self.prepare_checkout_proton_runtime(@packaging.posix_proton_cli(), extra_env={
+  @packaging.ensure_cef_runtime(self, extra_env={
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
   })
   @packaging.build_frontend_bundle(self, release~)
@@ -263,12 +263,7 @@ async fn @packaging.Workspace::package_with_proton(
     Some(profile) => package_env["PROTON_NOTARY_PROFILE"] = profile
     None => ()
   }
-  @packaging.run_checked(
-    self.at(@packaging.posix_proton_cli()),
-    args,
-    dir=self.dir(),
-    extra_env=package_env,
-  ) catch {
+  @packaging.run_proton_cli(self, args, extra_env=package_env) catch {
     error if @async.is_being_cancelled() => raise error
     error => {
       // Keep Proton's original failure as the authority. This extra hint is

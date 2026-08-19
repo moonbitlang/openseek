@@ -261,20 +261,14 @@ async fn FsWatchTarget::activate(
   let watcher = @fs.Watcher::Watcher(self.root.to_string(), ignored_paths=path => {
     self.interest.ignores(@pathx.Relative(path).normalize())
   })
-  try {
-    emit({
-      root: self.root.resource_path(),
-      baseline: true,
-      events: [],
-      generation: self.generation,
-    })
-    { target: self, watcher }
-  } catch {
-    error => {
-      watcher.close()
-      raise error
-    }
-  }
+  errdefer watcher.close()
+  emit({
+    root: self.root.resource_path(),
+    baseline: true,
+    events: [],
+    generation: self.generation,
+  })
+  { target: self, watcher }
 }
 
 ///|

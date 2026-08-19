@@ -369,22 +369,20 @@ async fn with_settings_dir(
 ) -> Unit {
   // The status payload reads the DEEPSEEK fallback from the process
   // environment; hold it steady so the expectations here cannot depend on
-  // the developer's shell.
+  // the developer's shell. That variable is process-global while async tests
+  // run concurrently, so the package's ambient-environment lock has to cover
+  // the whole fixture: unsetting it here is worthless if a sibling test sets
+  // its own key while a body is mid-assertion. Callers must therefore not
+  // hold the lock themselves — it is not reentrant — and should do their own
+  // ambient-environment work inside `body` instead.
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
   let previous_key = @sys.get_env_var("DEEPSEEK")
   @sys.unset_env_var("DEEPSEEK")
   defer (if previous_key is Some(value) { @sys.set_env_var("DEEPSEEK", value) })
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-settings-"))
-  body(dir, new_engine_manager("openseek", runtime_dir=dir)) catch {
-    error => {
-      @fs.rmdir(dir.to_string(), recursive=true) catch {
-        _ => ()
-      }
-      raise error
-    }
-  }
-  @fs.rmdir(dir.to_string(), recursive=true) catch {
-    _ => ()
-  }
+  defer (@fs.rmdir(dir.to_string(), recursive=true) catch { _ => () })
+  body(dir, new_engine_manager("openseek", runtime_dir=dir))
 }
 
 ///|
@@ -719,14 +717,14 @@ async test "a corrupt file reads as defaults and survives until a save" {
 
 ///|
 async test "run config resolves the endpoint from the stored provider" {
-  ambient_env_test_lock.acquire()
-  defer ambient_env_test_lock.release()
-  let previous_session_root = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
-  defer restore_session_root_env(previous_session_root)
   with_settings_dir(async fn(dir, manager) {
     // A run needs a workspace before it can resolve anything else. This test
     // is about the endpoint the stored provider yields, so any attached
-    // directory serves; the env root only locates the registry.
+    // directory serves; the env root only locates the registry. Save and
+    // restore inside the body: the fixture holds the ambient-environment
+    // lock, so this is the only scope where the variable is ours.
+    let previous_session_root = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
+    defer restore_session_root_env(previous_session_root)
     @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir.join("global").to_string())
     let workspace = attach_run_workspace(dir)
     let _ = update_settings(manager, {

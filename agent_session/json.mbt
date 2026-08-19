@@ -110,11 +110,11 @@ pub impl FromJson for TurnTerminal with fn from_json(
 /// `runtime_notice`, `summary`, and `terminal`.
 impl ToJson for SessionItem with fn to_json(item : SessionItem) -> Json {
   let (kind, payload) = match item {
-    User(message) => ("user", message.to_json())
-    Assistant(message) => ("assistant", message.to_json())
-    Tool(result) => ("tool_result", result.to_json())
-    Runtime(notice) => ("runtime_notice", notice.to_json())
-    Summary(summary) => ("summary", summary.to_json())
+    User(message) => ("user", ToJson::to_json(message))
+    Assistant(message) => ("assistant", ToJson::to_json(message))
+    Tool(result) => ("tool_result", ToJson::to_json(result))
+    Runtime(notice) => ("runtime_notice", ToJson::to_json(notice))
+    Summary(summary) => ("summary", ToJson::to_json(summary))
     Terminal(terminal) => ("terminal", ToJson::to_json(terminal))
   }
   { "kind": kind, "payload": payload }

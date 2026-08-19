@@ -23,8 +23,7 @@ async fn build_outputs(
   ws : @packaging.Workspace,
   release~ : Bool,
 ) -> @xterm_assets.Assets {
-  // Reuse CEF while rebuilding the native Proton artifacts from this checkout.
-  ws.prepare_checkout_proton_runtime(@packaging.posix_proton_cli())
+  @packaging.ensure_cef_runtime(ws)
   @packaging.build_frontend_bundle(ws, release~)
   let terminal_assets = @xterm_assets.build(
     ws,
@@ -226,7 +225,6 @@ async fn main {
   ).parse()
   let release = matches.flags.get("release").unwrap_or(false)
   let ws = @packaging.locate_workspace()
-  @packaging.ensure_cmake(ws)
   let terminal_assets = build_outputs(ws, release~)
   println("built openseek engine: \{ws.engine_binary(release~)}")
   reset_bundle_dirs(ws)

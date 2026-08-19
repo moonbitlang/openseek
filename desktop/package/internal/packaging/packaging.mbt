@@ -244,25 +244,50 @@ pub fn engine_package() -> String {
 }
 
 ///|
-/// The Proton CLI (`cef setup`, codegen) built from the checked-out Lepus
-/// submodule.
-const ProtonCliSource : String = "./lepus/cli"
+/// How the desktop module spells its dependency on the Proton library.
+const ProtonPackagePrefix : String = "moonbit-community/proton@"
 
 ///|
-/// Keep CLI installation out of the submodule's default `_build`, which may
-/// be locked by a Moon LSP check running Proton's code generators.
-const ProtonCliBuildDir : String = "target/proton-cli-build"
-
-///|
-/// The checked-out Proton project supplies both the CLI source and its
-/// platform prebuilt runtime. Running `cef setup` from this root lets a clean
-/// worktree find those artifacts without relying on an old registry cache.
-const ProtonProjectRoot : String = "lepus"
-
-///|
-fn Workspace::proton_project_dir(self : Workspace) -> String {
-  self.at(ProtonProjectRoot)
+/// The pinned Proton release, read back from the desktop module's own
+/// dependency on the Proton library. `moonbit-community/proton_cli` and
+/// `moonbit-community/proton` are published together from one version line,
+/// so deriving the CLI from the library pin keeps `moon.mod` the single place
+/// a Proton bump is spelled — a second constant here would silently drift.
+pub async fn Workspace::proton_version(self : Workspace) -> String {
+  let manifest = self.at("moon.mod")
+  let text = @asyncfs.read_file(manifest).text()
+  for line in text.split("\n") {
+    for field in line.split("\"") {
+      if field.strip_prefix(ProtonPackagePrefix) is Some(version) &&
+        !version.is_empty() {
+        return version.to_owned()
+      }
+    }
+  }
+  raise PackageError("no \{ProtonPackagePrefix}<version> found in \{manifest}")
 }
+
+///|
+/// The registry coordinate `moonx` resolves the Proton CLI from.
+async fn Workspace::proton_cli_package(self : Workspace) -> String {
+  "moonbit-community/proton_cli@\{self.proton_version()}"
+}
+
+///|
+/// `cef setup` runs at the monorepo root, not in the desktop workspace: the
+/// root is where Moon resolves `.mooncakes`, and the Proton package's
+/// platform prebuilt below it is what the CLI assembles the runtime from.
+/// The manifest it writes (`.proton/runtime.json`) lands beside them.
+fn Workspace::proton_project_dir(self : Workspace) -> String {
+  self.repo()
+}
+
+///|
+/// The Proton package's platform prebuilts below the monorepo's resolved
+/// dependency tree. `cef setup` copies these artifacts verbatim into the
+/// assembled runtime, so they are also what the staleness check compares
+/// against.
+const ProtonPrebuiltRoot : String = ".mooncakes/moonbit-community/proton/prebuilt"
 
 ///|
 fn Workspace::proton_project_at(self : Workspace, relative : String) -> String {
@@ -270,48 +295,32 @@ fn Workspace::proton_project_at(self : Workspace, relative : String) -> String {
 }
 
 ///|
-/// Return the POSIX Proton CLI path relative to the desktop workspace.
-pub fn posix_proton_cli() -> String {
-  "target/proton-tools/proton_cli"
-}
-
-///|
-/// Return the Windows Proton CLI path relative to the desktop workspace.
-pub fn windows_proton_cli() -> String {
-  "target/proton-tools/proton_cli.exe"
-}
-
-///|
-/// Install the Proton CLI from the current gitlink to `target/proton-tools`.
-/// Reinstalling is deliberate: a path-only cache marker cannot distinguish
-/// two commits of the same `./lepus/cli` source tree.
-pub async fn ensure_proton_cli(ws : Workspace, tool_path : String) -> Unit {
+/// Run the pinned Proton CLI. `moonx` fetches the published executable into
+/// the registry cache and runs it straight from there, so there is no install
+/// step, no binary of ours to keep fresh, and no per-host path to spell.
+/// `args` is the CLI's own grammar, `-C` included: the callers do not agree on
+/// one root, since `cef setup` reads the monorepo's resolved dependencies
+/// while `package` acts on the desktop workspace.
+pub async fn run_proton_cli(
+  ws : Workspace,
+  args : Array[String],
+  extra_env? : Map[String, String] = Map([]),
+) -> Unit {
   run_checked(
-    "moon",
-    [
-      "install",
-      "--target-dir",
-      ProtonCliBuildDir,
-      ProtonCliSource,
-      "--bin",
-      "target/proton-tools",
-    ],
+    "moonx",
+    [ws.proton_cli_package(), ..args],
     dir=ws.dir(),
+    extra_env~,
   )
-  guard @asyncfs.exists(ws.at(tool_path)) else {
-    raise PackageError("Proton CLI was not installed at \{ws.at(tool_path)}")
-  }
 }
 
 ///|
 /// Ensure a Proton CEF runtime matching this checkout is available. A complete
 /// runtime recorded by `.proton/runtime.json` is reused by development and all
-/// platform packagers. The Proton CLI is installed and `cef setup` runs only
-/// when that runtime is missing, incomplete, or belongs to another platform or
-/// Proton version.
+/// platform packagers; `cef setup` runs only when that runtime is missing,
+/// incomplete, or belongs to another platform or Proton version.
 pub async fn ensure_cef_runtime(
   ws : Workspace,
-  tool_path : String,
   extra_env? : Map[String, String] = Map([]),
 ) -> Unit {
   let cached = try ws.validated_proton_runtime_dist() catch {
@@ -327,11 +336,9 @@ pub async fn ensure_cef_runtime(
     println("reusing Proton CEF runtime: \{dist}")
     return
   }
-  ensure_proton_cli(ws, tool_path)
-  run_checked(
-    ws.at(tool_path),
+  run_proton_cli(
+    ws,
     ["-C", ws.proton_project_dir(), "cef", "setup"],
-    dir=ws.dir(),
     extra_env~,
   )
   let dist = ws.validated_proton_runtime_dist()
@@ -432,7 +439,7 @@ async fn Workspace::proton_runtime_path_field(
 
 ///|
 /// Return the one Proton platform supported by each desktop packager. These
-/// names are also the directory names below `lepus/proton/prebuilt`.
+/// names are also the directory names below `ProtonPrebuiltRoot`.
 fn Workspace::proton_platform() -> String raise PackageError {
   if @platform.win32 || @platform.win64 {
     "win32-x64"
@@ -477,13 +484,13 @@ fn Workspace::proton_runtime_required_files(
 
 ///|
 /// Resolve and validate the existing runtime without installing or invoking
-/// the Proton CLI. The active platform must match this packager, the
-/// checked-in prebuilt must have the same Proton version, every runtime file
-/// consumed by Proton must exist, and on macOS the runtime must still carry
-/// the exact bytes of the checked-in prebuilt artifacts. The runtime carries
-/// no manifest of its own: `cef setup` names the dist directory after the
-/// prebuilt and CEF identities, so the active manifest is the one record of
-/// its location.
+/// the Proton CLI. The active platform must match this packager, the resolved
+/// Proton package's prebuilt must have the same Proton version, every runtime
+/// file consumed by Proton must exist, and the runtime must still carry the
+/// exact bytes of that prebuilt's artifacts. The runtime carries no manifest
+/// of its own: `cef setup` names the dist directory after the prebuilt and
+/// CEF identities, so the active manifest is the one record of its
+/// location.
 async fn Workspace::validated_proton_runtime_dist(
   self : Workspace,
 ) -> @pathx.Absolute {
@@ -499,7 +506,7 @@ async fn Workspace::validated_proton_runtime_dist(
     )
   }
   let prebuilt_path = self.proton_project_at(
-    "proton/prebuilt/\{platform}/manifest.json",
+    "\{ProtonPrebuiltRoot}/\{platform}/manifest.json",
   )
   let prebuilt = Workspace::read_proton_manifest(prebuilt_path)
   let prebuilt_platform = Workspace::proton_manifest_string(
@@ -522,19 +529,19 @@ async fn Workspace::validated_proton_runtime_dist(
     )
   }
   let dist = self.proton_manifest_path(active, active_path, "dist")
-  // Linux and Windows rebuild libproton from source into the runtime dist
-  // (`rebuild_libproton`), so their runtime copies legitimately differ from
-  // the checked-in prebuilt. macOS ships the prebuilt bytes unmodified, and a
-  // routine prebuilt refresh keeps the Proton version, so only a content
-  // comparison can spot the stale runtime there.
-  if platform == "darwin-arm64" {
-    Workspace::require_fresh_prebuilt_artifacts(
-      prebuilt,
-      prebuilt_path,
-      self.proton_project_root().join(Relative("proton/prebuilt/\{platform}")),
-      dist,
-    )
-  }
+  // Nothing rewrites the dist after `cef setup` assembles it, so on every
+  // platform it must still carry the prebuilt's exact bytes. The version
+  // comparison above cannot stand in for this: a republished prebuilt keeps
+  // its Proton version, and only the content comparison spots a runtime
+  // assembled from the older one.
+  Workspace::require_fresh_prebuilt_artifacts(
+    prebuilt,
+    prebuilt_path,
+    self
+    .proton_project_root()
+    .join(Relative("\{ProtonPrebuiltRoot}/\{platform}")),
+    dist,
+  )
   let cef_root = self.proton_manifest_path(active, active_path, "cef")
   if !@asyncfs.exists(cef_root.0) {
     raise PackageError("Proton CEF cache not found: \{cef_root}")
@@ -550,7 +557,7 @@ async fn Workspace::validated_proton_runtime_dist(
 
 ///|
 /// Require every artifact the prebuilt manifest declares to be byte-identical
-/// between the checked-in prebuilt and the assembled runtime. `cef setup`
+/// between the resolved prebuilt and the assembled runtime. `cef setup`
 /// copies these files verbatim, so any difference means the runtime predates
 /// the current prebuilt and must be reassembled.
 async fn Workspace::require_fresh_prebuilt_artifacts(
@@ -590,101 +597,6 @@ async fn Workspace::require_fresh_prebuilt_artifacts(
 }
 
 ///|
-/// Where `rebuild_libproton` configures and builds the lepus native tree,
-/// relative to the desktop workspace.
-const ProtonNativeBuildDir : String = "target/proton-native/build"
-
-///|
-/// Rebuild `libproton` (and its `cef_process` helper) from the lepus
-/// submodule's C sources and overwrite them inside the assembled runtime
-/// dist. The submodule checks in prebuilt binaries, but only the darwin one
-/// is routinely rebuilt alongside C-source changes; a stale prebuilt
-/// otherwise surfaces as undefined `proton_*` symbols when the host links.
-/// Building from source makes the bundle independent of prebuilt freshness.
-///
-/// Requires `cef setup` to have run first: the engine build compiles and
-/// links against the CEF distribution it cached, and the runtime dist it
-/// assembled is what gets refreshed. `artifacts` maps build-tree-relative
-/// outputs to dist-relative destinations (the build tree is single-config on
-/// POSIX but has a `Release/` subdirectory under MSVC's multi-config
-/// generator, so the caller owns the exact paths). The freshly built
-/// `include/proton_native.h` is refreshed unconditionally.
-pub async fn rebuild_libproton(
-  ws : Workspace,
-  artifacts : Array[(String, String)],
-  extra_env? : Map[String, String] = Map([]),
-) -> Unit {
-  let cef_root = ws.proton_cef_root()
-  if !@asyncfs.exists(cef_root.0) {
-    raise PackageError(
-      "CEF distribution cache not found: \{cef_root} (run cef setup)",
-    )
-  }
-  let build_dir = ws.at(ProtonNativeBuildDir)
-  let configure_args = ["-S", ws.at("lepus/native"), "-B", build_dir]
-  // CMAKE_BUILD_TYPE selects the release configuration for single-config
-  // generators. Visual Studio is multi-config and receives the selection from
-  // `cmake --build --config Release`; passing the cache variable there only
-  // produces CMake's unused-cli warning.
-  if !(@platform.win32 || @platform.win64) {
-    configure_args.push("-DCMAKE_BUILD_TYPE=Release")
-  }
-  configure_args.push("-DBUILD_TESTING=OFF")
-  configure_args.push("-DPROTON_WITH_ENGINE=ON")
-  configure_args.push("-DPROTON_ENGINE_ROOT=" + cef_root.0)
-  run_checked("cmake", configure_args, dir=ws.dir(), extra_env~)
-  run_checked(
-    "cmake",
-    ["--build", build_dir, "--config", "Release"],
-    dir=ws.dir(),
-    extra_env~,
-  )
-  let dist = proton_runtime_dist(ws)
-  for artifact in artifacts {
-    let (built, shipped) = artifact
-    copy_file(join_path(build_dir, built), dist.join(Relative(shipped)).0)
-  }
-  copy_file(
-    ws.at("lepus/native/include/proton_native.h"),
-    dist.join(Relative("include/proton_native.h")).0,
-  )
-}
-
-///|
-/// Prepare the Proton runtime owned by this checkout before compiling its
-/// native host. CEF setup remains reusable, while Linux and Windows replace
-/// their potentially stale checked-in Proton artifacts with outputs built from
-/// the same Lepus sources that Moon imports. macOS continues to use the runtime
-/// prepared by Proton without a local rebuild.
-pub async fn Workspace::prepare_checkout_proton_runtime(
-  self : Workspace,
-  tool_path : String,
-  extra_env? : Map[String, String] = Map([]),
-) -> Unit {
-  ensure_cef_runtime(self, tool_path, extra_env~)
-  if @platform.win32 || @platform.win64 {
-    rebuild_libproton(
-      self,
-      [
-        ("bin/Release/proton.dll", "bin/proton.dll"),
-        ("bin/Release/cef_process.exe", "bin/cef_process.exe"),
-        ("lib/Release/proton.lib", "lib/proton.lib"),
-      ],
-      extra_env~,
-    )
-  } else if @platform.linux {
-    rebuild_libproton(
-      self,
-      [
-        ("lib/libproton.so", "lib/libproton.so"),
-        ("bin/cef_process", "bin/cef_process"),
-      ],
-      extra_env~,
-    )
-  }
-}
-
-///|
 /// Recursively copy a directory tree, replacing the destination. Uses the
 /// host's `cp -R`; packaging runs on the build host so this stays simple.
 pub async fn copy_tree(source : String, destination : String) -> Unit {
@@ -698,30 +610,6 @@ pub async fn copy_tree(source : String, destination : String) -> Unit {
 /// Resolve a path to an absolute path using the host filesystem rules.
 pub fn absolute_path(path : String) -> String {
   (path : @path.Path).resolve().to_string()
-}
-
-///|
-const CmakeUnavailableMessage : String = "CMake is required to package SeekMoon, but `cmake --version` could not be run. Install CMake and ensure `cmake` is on PATH, then rerun the package command. On macOS with Homebrew, run `brew install cmake`."
-
-///|
-/// Verify CMake can be launched before a packager performs any build or
-/// download work that depends on it. `command` defaults to the executable on
-/// `PATH` and is injectable so tests can exercise the missing-command path.
-pub async fn ensure_cmake(ws : Workspace, command? : String = "cmake") -> Unit {
-  println("$ [\{ws.dir()}] \{command} --version")
-  let code = @process.run(
-    command,
-    ["--version"],
-    inherit_env=true,
-    cwd=ws.dir().view(),
-  ) catch {
-    _ => raise PackageError(CmakeUnavailableMessage)
-  }
-  if code != 0 {
-    raise PackageError(
-      "CMake was found, but `cmake --version` failed with exit code \{code}. Fix the CMake installation and rerun the package command.",
-    )
-  }
 }
 
 ///|
@@ -903,9 +791,9 @@ pub async fn build_native_host(
   } else {
     proton_runtime_dist(ws).0
   }
-  // The assembled runtime lives under the checked-out Proton project, not
-  // necessarily above Moon's process cwd. Pass it explicitly so the prebuild
-  // linker config cannot fall back to a stale checked-in runtime.
+  // The assembled runtime lives in the user-level Proton cache, outside the
+  // checkout entirely. Pass it explicitly so the prebuild linker config
+  // cannot fall back to a stale runtime it discovers on its own.
   let build_env : Map[String, String] = Map([])
   for name, value in extra_env {
     build_env[name] = value
@@ -1032,14 +920,40 @@ async test "workspace module version reads moon.mod" {
 }
 
 ///|
+/// The Proton CLI coordinate must track the library pin, not a copy of it:
+/// `cef setup` assembles the runtime from the very prebuilt that
+/// `moonbit-community/proton` ships, so a CLI from a different release would
+/// assemble something the packaged host does not link against.
+async test "proton CLI version follows the moon.mod library pin" {
+  let ws = locate_workspace()
+  assert_eq(
+    ws.proton_cli_package(),
+    "moonbit-community/proton_cli@\{ws.proton_version()}",
+  )
+  assert_true(ws.proton_version().has_prefix("0.1."))
+}
+
+///|
+/// A throwaway workspace for the Proton-runtime tests. `proton_project_dir`
+/// is the monorepo root — the parent of the workspace — so a fixture whose
+/// root is a bare directory would read and write the real `desktop/target`
+/// and collide with its neighbours. Nesting a `desktop` level below the
+/// fixture root keeps every derived path inside it.
+fn fixture_workspace(ws : Workspace, name : String) -> (String, Workspace) {
+  let repo = ws.at("target/\{name}")
+  (repo, { root: join_path(repo, "desktop") })
+}
+
+///|
 /// Proton owns the CEF cache location and records it in the active runtime
 /// manifest. Keep package rebuilding on that path instead of assuming the
-/// cache remains inside the checked-out Proton project.
+/// cache remains inside the resolved Proton package.
 async test "Proton CEF root follows the active runtime manifest" {
   let ws = locate_workspace()
-  let fixture_root = ws.at("target/proton-runtime-manifest-test")
+  let (fixture_root, fixture) = fixture_workspace(
+    ws, "proton-runtime-manifest-test",
+  )
   remove_path_if_exists(fixture_root)
-  let fixture : Workspace = { root: fixture_root }
   let manifest = fixture.proton_project_at(".proton/runtime.json")
   ensure_dir((manifest : @path.Path).dirname().to_string())
   let cef_root = fixture.at("shared-cache/cef")
@@ -1054,9 +968,10 @@ async test "Proton CEF root follows the active runtime manifest" {
 ///|
 async test "matching Proton runtime is reused without invoking setup" {
   let ws = locate_workspace()
-  let fixture_root = ws.at("target/proton-runtime-reuse-test")
+  let (fixture_root, fixture) = fixture_workspace(
+    ws, "proton-runtime-reuse-test",
+  )
   remove_path_if_exists(fixture_root)
-  let fixture : Workspace = { root: fixture_root }
   let platform = Workspace::proton_platform()
   let version = "0.1.14-test"
   let relative_dist = ".proton/runtimes/\{platform}/test-runtime"
@@ -1077,7 +992,7 @@ async test "matching Proton runtime is reused without invoking setup" {
     }).stringify(),
   )
   let prebuilt_path = fixture.proton_project_at(
-    "proton/prebuilt/\{platform}/manifest.json",
+    "\{ProtonPrebuiltRoot}/\{platform}/manifest.json",
   )
   ensure_dir((prebuilt_path : @path.Path).dirname().to_string())
   write_text(
@@ -1091,7 +1006,7 @@ async test "matching Proton runtime is reused without invoking setup" {
     }).stringify(),
   )
   let shipped_header = fixture.proton_project_at(
-    "proton/prebuilt/\{platform}/include/proton_native.h",
+    "\{ProtonPrebuiltRoot}/\{platform}/include/proton_native.h",
   )
   ensure_dir((shipped_header : @path.Path).dirname().to_string())
   write_text(shipped_header, "fixture")
@@ -1100,7 +1015,10 @@ async test "matching Proton runtime is reused without invoking setup" {
     ensure_dir((required : @path.Path).dirname().to_string())
     write_text(required, "fixture")
   }
-  ensure_cef_runtime(fixture, "setup-must-not-run")
+  // Setup must not run: the fixture root has no resolved Proton package, so
+  // a `cef setup` invocation would fail to find a prebuilt and raise here
+  // rather than quietly reassembling.
+  ensure_cef_runtime(fixture)
   assert_eq(proton_runtime_dist(fixture).0, dist)
   remove_path_if_exists(fixture_root)
 }
@@ -1111,10 +1029,13 @@ async test "matching Proton runtime is reused without invoking setup" {
 /// the difference.
 async test "refreshed prebuilt bytes invalidate the assembled runtime" {
   let ws = locate_workspace()
-  let fixture_root = ws.at("target/proton-prebuilt-stale-test")
+  let (fixture_root, fixture) = fixture_workspace(
+    ws, "proton-prebuilt-stale-test",
+  )
   remove_path_if_exists(fixture_root)
-  let fixture : Workspace = { root: fixture_root }
-  let prebuilt_root = fixture.proton_project_at("proton/prebuilt/test-platform")
+  let prebuilt_root = fixture.proton_project_at(
+    "\{ProtonPrebuiltRoot}/test-platform",
+  )
   let prebuilt_path = join_path(prebuilt_root, "manifest.json")
   let prebuilt : Map[String, Json] = {
     "artifacts": Json::object({
@@ -1156,9 +1077,10 @@ async test "refreshed prebuilt bytes invalidate the assembled runtime" {
 /// it below the Proton project root.
 async test "absolute runtime dist paths pass through unchanged" {
   let ws = locate_workspace()
-  let fixture_root = ws.at("target/proton-absolute-dist-test")
+  let (fixture_root, fixture) = fixture_workspace(
+    ws, "proton-absolute-dist-test",
+  )
   remove_path_if_exists(fixture_root)
-  let fixture : Workspace = { root: fixture_root }
   let dist = fixture.at("user-cache/runtimes/test-platform/test-runtime")
   let active_path = fixture.proton_project_at(".proton/runtime.json")
   ensure_dir((active_path : @path.Path).dirname().to_string())
@@ -1234,19 +1156,6 @@ async test "form field focus styling stays in the base stylesheet" {
         fail("form field focus styling must stay in styles/base.css: " + source)
       }
     }
-  }
-}
-
-///|
-async test "missing CMake reports an actionable package error" {
-  let ws = locate_workspace()
-  try
-    ensure_cmake(ws, command="openseek-cmake-probe-command-that-does-not-exist")
-  catch {
-    error =>
-      assert_eq(error.to_string(), "package error: " + CmakeUnavailableMessage)
-  } noraise {
-    _ => fail("expected the missing CMake probe to fail")
   }
 }
 

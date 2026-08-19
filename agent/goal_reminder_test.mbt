@@ -10,14 +10,11 @@ async fn goal_test_server(
   probe_calls~ : Int,
 ) -> String? {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
-    error => {
-      let message = "\{error}"
-      if message.contains("Operation not permitted") {
-        println("local TCP bind unavailable; skipping goal reminder test")
-        return None
-      }
-      raise error
+    error if "\{error}".contains("Operation not permitted") => {
+      println("local TCP bind unavailable; skipping goal reminder test")
+      return None
     }
+    error => raise error
   }
   group.spawn_bg(no_wait=true) <| () => {
     server.run_forever(

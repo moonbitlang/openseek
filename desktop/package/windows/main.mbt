@@ -102,8 +102,7 @@ async fn build_outputs(
   ws : @packaging.Workspace,
   release~ : Bool,
 ) -> @xterm_assets.Assets {
-  // Reuse CEF while rebuilding the native Proton artifacts from this checkout.
-  ws.prepare_checkout_proton_runtime(@packaging.windows_proton_cli())
+  @packaging.ensure_cef_runtime(ws)
   @packaging.build_frontend_bundle(ws, release~)
   let terminal_assets = @xterm_assets.build(
     ws,
@@ -278,7 +277,6 @@ async fn main {
   let artifacts = ArtifactPlan::from_matches(matches)
   let release = matches.flags.get("release").unwrap_or(false)
   let ws = @packaging.locate_workspace()
-  @packaging.ensure_cmake(ws)
   if artifacts.installer {
     ensure_makensis(ws)
   }

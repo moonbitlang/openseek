@@ -80,66 +80,49 @@ async fn LanguagePath::resolve(
 async test "language paths accept explicit roots and reject escapes" {
   let root = @fs.tmpdir(prefix="openseek-language-root-")
   let outside = @fs.tmpdir(prefix="openseek-language-outside-")
-  try {
-    @fs.mkdir("\{root}/src", recursive=true)
-    @fs.write_file(
-      "\{root}/src/main.mbt",
-      "fn main {}",
-      create_mode=CreateOrTruncate,
-    )
-    @fs.write_file(
-      "\{outside}/secret.mbt",
-      "fn secret {}",
-      create_mode=CreateOrTruncate,
-    )
-    @fs.symlink(target="\{outside}/secret.mbt", "\{root}/src/link.mbt")
-    let unauthorized_rejected = try {
-      ignore(LanguagePath::resolve("unbound", root, "src/main.mbt"))
-      false
-    } catch {
-      _ => true
-    } noraise {
-      rejected => rejected
-    }
-    @work_dir.authorize_host_workspace("language-test", root)
-    let resolved = LanguagePath::resolve("language-test", root, "src/main.mbt")
-    let traversal_rejected = try {
-      ignore(LanguagePath::resolve("language-test", root, "../outside.mbt"))
-      false
-    } catch {
-      _ => true
-    } noraise {
-      rejected => rejected
-    }
-    let symlink_rejected = try {
-      ignore(LanguagePath::resolve("language-test", root, "src/link.mbt"))
-      false
-    } catch {
-      _ => true
-    } noraise {
-      rejected => rejected
-    }
-    @work_dir.revoke_host_workspace("language-test")
-    @fs.rmdir(root, recursive=true)
-    @fs.rmdir(outside, recursive=true)
-    assert_eq(resolved.physical_relative, Relative("src/main.mbt"))
-    assert_true(unauthorized_rejected)
-    assert_true(traversal_rejected)
-    assert_true(symlink_rejected)
+  defer (@fs.rmdir(outside, recursive=true) catch { _ => () })
+  defer (@fs.rmdir(root, recursive=true) catch { _ => () })
+  defer (@work_dir.revoke_host_workspace("language-test") catch { _ => () })
+  @fs.mkdir("\{root}/src", recursive=true)
+  @fs.write_file(
+    "\{root}/src/main.mbt",
+    "fn main {}",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_file(
+    "\{outside}/secret.mbt",
+    "fn secret {}",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.symlink(target="\{outside}/secret.mbt", "\{root}/src/link.mbt")
+  let unauthorized_rejected = try {
+    ignore(LanguagePath::resolve("unbound", root, "src/main.mbt"))
+    false
   } catch {
-    error => {
-      @work_dir.revoke_host_workspace("language-test") catch {
-        _ => ()
-      }
-      @fs.rmdir(root, recursive=true) catch {
-        _ => ()
-      }
-      @fs.rmdir(outside, recursive=true) catch {
-        _ => ()
-      }
-      raise error
-    }
+    _ => true
   } noraise {
-    _ => ()
+    rejected => rejected
   }
+  @work_dir.authorize_host_workspace("language-test", root)
+  let resolved = LanguagePath::resolve("language-test", root, "src/main.mbt")
+  let traversal_rejected = try {
+    ignore(LanguagePath::resolve("language-test", root, "../outside.mbt"))
+    false
+  } catch {
+    _ => true
+  } noraise {
+    rejected => rejected
+  }
+  let symlink_rejected = try {
+    ignore(LanguagePath::resolve("language-test", root, "src/link.mbt"))
+    false
+  } catch {
+    _ => true
+  } noraise {
+    rejected => rejected
+  }
+  assert_eq(resolved.physical_relative, Relative("src/main.mbt"))
+  assert_true(unauthorized_rejected)
+  assert_true(traversal_rejected)
+  assert_true(symlink_rejected)
 }

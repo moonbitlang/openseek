@@ -1502,35 +1502,23 @@ async test "Git recognizes only origin HEAD's branch as the default" {
       _ => ()
     }
   }
-  try {
-    git_test_run(dir, ["init", "--quiet"])
-    @fs.write_file(
-      "\{dir}/tracked.txt",
-      "first\n",
-      create_mode=CreateOrTruncate,
-    )
-    git_test_run(dir, ["add", "tracked.txt"])
-    git_test_run(dir, [
-      "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
-      "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "first",
-    ])
-    // A branch spelling alone proves nothing until the remote declares its
-    // default. Once it does, only that exact name is suppressed from PR lookup.
-    assert_false(git_is_default_branch(dir, branch="main"))
-    git_test_run(dir, ["update-ref", "refs/remotes/origin/main", "HEAD"])
-    git_test_run(dir, [
-      "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main",
-    ])
-    assert_true(git_is_default_branch(dir, branch="main"))
-    assert_false(git_is_default_branch(dir, branch="feature/from-main"))
-  } catch {
-    error => {
-      cleanup()
-      raise error
-    }
-  } noraise {
-    _ => cleanup()
-  }
+  defer cleanup()
+  git_test_run(dir, ["init", "--quiet"])
+  @fs.write_file("\{dir}/tracked.txt", "first\n", create_mode=CreateOrTruncate)
+  git_test_run(dir, ["add", "tracked.txt"])
+  git_test_run(dir, [
+    "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
+    "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "first",
+  ])
+  // A branch spelling alone proves nothing until the remote declares its
+  // default. Once it does, only that exact name is suppressed from PR lookup.
+  assert_false(git_is_default_branch(dir, branch="main"))
+  git_test_run(dir, ["update-ref", "refs/remotes/origin/main", "HEAD"])
+  git_test_run(dir, [
+    "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main",
+  ])
+  assert_true(git_is_default_branch(dir, branch="main"))
+  assert_false(git_is_default_branch(dir, branch="feature/from-main"))
 }
 
 ///|
@@ -1542,61 +1530,49 @@ async test "ordinary checkout reviews retain committed branch changes" {
       _ => ()
     }
   }
-  try {
-    git_test_run(dir, ["init", "--quiet"])
-    @fs.write_file("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
-    git_test_run(dir, ["add", "review.txt"])
-    git_test_run(dir, [
-      "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
-      "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "first",
-    ])
-    let first = git_revision_commit(dir, "HEAD").unwrap()
-    git_test_run(dir, ["update-ref", "refs/remotes/origin/main", first])
-    git_test_run(dir, [
-      "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main",
-    ])
-    @fs.write_file(
-      "\{dir}/review.txt",
-      "working\n",
-      create_mode=CreateOrTruncate,
-    )
-    let (before_head, before_base, _, _, _, _, before_changes) = git_change_snapshot(
-      dir,
-      "",
-      None,
-      2,
-    )
-    assert_eq(before_head, Some(first))
-    // At the fork point, preserve porcelain's staged/worktree distinction.
-    assert_eq(before_base, None)
-    assert_true(
-      before_changes
-      is [{ path: "review.txt", index_status: " ", worktree_status: "M", .. }],
-    )
-    git_test_run(dir, ["add", "review.txt"])
-    git_test_run(dir, [
-      "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
-      "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "second",
-    ])
-    let second = git_revision_commit(dir, "HEAD").unwrap()
-    let (after_head, after_base, _, _, _, _, after_changes) = git_change_snapshot(
-      dir,
-      "",
-      None,
-      2,
-    )
-    assert_eq(after_head, Some(second))
-    assert_eq(after_base, Some(first))
-    // Committing must not make an ordinary checkout's Review turn empty.
-    assert_eq(after_changes, before_changes)
-  } catch {
-    error => {
-      cleanup()
-      raise error
-    }
-  } noraise {
-    _ => cleanup()
-  }
+  defer cleanup()
+  git_test_run(dir, ["init", "--quiet"])
+  @fs.write_file("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
+  git_test_run(dir, ["add", "review.txt"])
+  git_test_run(dir, [
+    "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
+    "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "first",
+  ])
+  let first = git_revision_commit(dir, "HEAD").unwrap()
+  git_test_run(dir, ["update-ref", "refs/remotes/origin/main", first])
+  git_test_run(dir, [
+    "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main",
+  ])
+  @fs.write_file("\{dir}/review.txt", "working\n", create_mode=CreateOrTruncate)
+  let (before_head, before_base, _, _, _, _, before_changes) = git_change_snapshot(
+    dir,
+    "",
+    None,
+    2,
+  )
+  assert_eq(before_head, Some(first))
+  // At the fork point, preserve porcelain's staged/worktree distinction.
+  assert_eq(before_base, None)
+  assert_true(
+    before_changes
+    is [{ path: "review.txt", index_status: " ", worktree_status: "M", .. }],
+  )
+  git_test_run(dir, ["add", "review.txt"])
+  git_test_run(dir, [
+    "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
+    "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "second",
+  ])
+  let second = git_revision_commit(dir, "HEAD").unwrap()
+  let (after_head, after_base, _, _, _, _, after_changes) = git_change_snapshot(
+    dir,
+    "",
+    None,
+    2,
+  )
+  assert_eq(after_head, Some(second))
+  assert_eq(after_base, Some(first))
+  // Committing must not make an ordinary checkout's Review turn empty.
+  assert_eq(after_changes, before_changes)
 }
 
 ///|
@@ -1608,168 +1584,153 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
       _ => ()
     }
   }
-  try {
-    git_test_run(dir, ["init", "--quiet"])
-    assert_eq(git_revision_commit(dir, "HEAD"), None)
-    @fs.mkdir("\{dir}/desktop", recursive=true)
-    @fs.write_file("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
-    @fs.write_file(
-      "\{dir}/desktop/keep.txt",
-      "keep\n",
-      create_mode=CreateOrTruncate,
-    )
-    git_test_run(dir, ["add", "review.txt", "desktop/keep.txt"])
-    git_test_run(dir, [
-      "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
-      "commit", "--quiet", "-m", "first",
-    ])
-    let first = git_revision_commit(dir, "HEAD").unwrap()
-    // A task deletion must use the comparison tree's mode, not a staged type
-    // change that no longer exists in the working tree.
-    @fs.remove("\{dir}/desktop/keep.txt")
-    @fs.symlink(target="../review.txt", "\{dir}/desktop/keep.txt")
-    git_test_run(dir, ["add", "desktop/keep.txt"])
-    @fs.remove("\{dir}/desktop/keep.txt")
-    let (_, _, _, current_symlinks, _, deleted_symlinks, type_changes) = git_change_snapshot(
-      dir,
-      "",
-      Some(first),
-      2,
-    )
-    assert_true(current_symlinks.contains("desktop/keep.txt"))
-    assert_false(deleted_symlinks.contains("desktop/keep.txt"))
-    guard type_changes is [deleted] else {
-      fail("expected the staged type-change deletion")
-    }
-    assert_eq(
-      git_change_with_path_kind(
-        deleted,
-        Unknown,
-        false,
-        deleted_symlinks.contains(deleted.path),
-      ).kind,
-      "deleted",
-    )
-    git_test_run(dir, ["restore", "--staged", "desktop/keep.txt"])
-    git_test_run(dir, ["restore", "desktop/keep.txt"])
-    @fs.write_file(
-      "\{dir}/review.txt",
-      "working\n",
-      create_mode=CreateOrTruncate,
-    )
-    let (snapshot_head, snapshot_base, _, _, _, _, changes) = git_change_snapshot(
-      dir,
-      "",
-      None,
-      2,
-    )
-    assert_eq(snapshot_head, Some(first))
-    assert_eq(snapshot_base, None)
-    assert_true(changes is [{ path: "review.txt", kind: "modified", .. }])
-    let (_, task_base, _, _, _, _, task_before_commit) = git_change_snapshot(
-      dir,
-      "",
-      Some(first),
-      2,
-    )
-    assert_eq(task_base, Some(first))
-    git_test_run(dir, ["add", "review.txt"])
-    git_test_run(dir, [
-      "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
-      "commit", "--quiet", "-m", "second",
-    ])
-    let second = git_revision_commit(dir, "HEAD").unwrap()
-    assert_true(second != first)
-    let (_, head_base, _, _, _, _, head_changes) = git_change_snapshot(
-      dir,
-      "",
-      None,
-      2,
-    )
-    assert_eq(head_base, None)
-    assert_true(head_changes.is_empty())
-    let (_, _, _, _, _, _, task_changes) = git_change_snapshot(
-      dir,
-      "",
-      Some(first),
-      2,
-    )
-    assert_eq(task_changes, task_before_commit)
-    assert_eq(git_revision_commit(dir, first), Some(first))
-    assert_eq(git_revision_commit(dir, "missing-review-revision"), None)
-    assert_eq(
-      git_original_file_at(dir, Relative("review.txt"), first),
-      OriginalContent("first\n"),
-    )
-    assert_eq(
-      git_original_file_at(dir, Relative("review.txt"), second),
-      OriginalContent("working\n"),
-    )
-    // Populate a gitlink directly so the test stays offline, add a symlink,
-    // then stage both deletions from a workspace rooted below the repository.
-    // Targeted HEAD discovery must retain the repository-root path spelling
-    // emitted by --full-name and both non-text entry modes.
-    git_test_run(dir, [
-      "update-index",
-      "--add",
-      "--cacheinfo",
-      "160000,\{second},desktop/vendor/lib",
-    ])
-    @fs.symlink(target="keep.txt", "\{dir}/desktop/link")
-    git_test_run(dir, ["add", "desktop/link"])
-    git_test_run(dir, [
-      "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
-      "commit", "--quiet", "-m", "gitlink",
-    ])
-    let gitlink_head = git_revision_commit(dir, "HEAD").unwrap()
-    @fs.remove("\{dir}/desktop/link")
-    git_test_run(dir, [
-      "update-index", "--force-remove", "desktop/link", "desktop/vendor/lib",
-    ])
-    let (
-      nested_head,
-      _,
-      _,
-      _,
-      deleted_gitlinks,
-      deleted_symlinks,
-      nested_changes,
-    ) = git_change_snapshot("\{dir}/desktop", "desktop/", None, 2)
-    assert_eq(nested_head, Some(gitlink_head))
-    assert_eq(deleted_gitlinks.length(), 1)
-    assert_true(deleted_gitlinks.contains("vendor/lib"))
-    assert_eq(deleted_symlinks.length(), 1)
-    assert_true(deleted_symlinks.contains("link"))
-    assert_true(
-      nested_changes
-      is [
-        { path: "link", index_status: "D", kind: "deleted", .. },
-        { path: "vendor/lib", index_status: "D", kind: "deleted", .. },
-      ],
-    )
-    let classified = nested_changes.map(change => {
-      git_change_with_path_kind(
-        change,
-        Unknown,
-        deleted_gitlinks.contains(change.path),
-        deleted_symlinks.contains(change.path),
-      )
-    })
-    assert_true(
-      classified
-      is [
-        { path: "link", kind: "symlink", .. },
-        { path: "vendor/lib", kind: "submodule", .. },
-      ],
-    )
-  } catch {
-    error => {
-      cleanup()
-      raise error
-    }
-  } noraise {
-    _ => cleanup()
+  defer cleanup()
+  git_test_run(dir, ["init", "--quiet"])
+  assert_eq(git_revision_commit(dir, "HEAD"), None)
+  @fs.mkdir("\{dir}/desktop", recursive=true)
+  @fs.write_file("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
+  @fs.write_file(
+    "\{dir}/desktop/keep.txt",
+    "keep\n",
+    create_mode=CreateOrTruncate,
+  )
+  git_test_run(dir, ["add", "review.txt", "desktop/keep.txt"])
+  git_test_run(dir, [
+    "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
+    "commit", "--quiet", "-m", "first",
+  ])
+  let first = git_revision_commit(dir, "HEAD").unwrap()
+  // A task deletion must use the comparison tree's mode, not a staged type
+  // change that no longer exists in the working tree.
+  @fs.remove("\{dir}/desktop/keep.txt")
+  @fs.symlink(target="../review.txt", "\{dir}/desktop/keep.txt")
+  git_test_run(dir, ["add", "desktop/keep.txt"])
+  @fs.remove("\{dir}/desktop/keep.txt")
+  let (_, _, _, current_symlinks, _, deleted_symlinks, type_changes) = git_change_snapshot(
+    dir,
+    "",
+    Some(first),
+    2,
+  )
+  assert_true(current_symlinks.contains("desktop/keep.txt"))
+  assert_false(deleted_symlinks.contains("desktop/keep.txt"))
+  guard type_changes is [deleted] else {
+    fail("expected the staged type-change deletion")
   }
+  assert_eq(
+    git_change_with_path_kind(
+      deleted,
+      Unknown,
+      false,
+      deleted_symlinks.contains(deleted.path),
+    ).kind,
+    "deleted",
+  )
+  git_test_run(dir, ["restore", "--staged", "desktop/keep.txt"])
+  git_test_run(dir, ["restore", "desktop/keep.txt"])
+  @fs.write_file("\{dir}/review.txt", "working\n", create_mode=CreateOrTruncate)
+  let (snapshot_head, snapshot_base, _, _, _, _, changes) = git_change_snapshot(
+    dir,
+    "",
+    None,
+    2,
+  )
+  assert_eq(snapshot_head, Some(first))
+  assert_eq(snapshot_base, None)
+  assert_true(changes is [{ path: "review.txt", kind: "modified", .. }])
+  let (_, task_base, _, _, _, _, task_before_commit) = git_change_snapshot(
+    dir,
+    "",
+    Some(first),
+    2,
+  )
+  assert_eq(task_base, Some(first))
+  git_test_run(dir, ["add", "review.txt"])
+  git_test_run(dir, [
+    "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
+    "commit", "--quiet", "-m", "second",
+  ])
+  let second = git_revision_commit(dir, "HEAD").unwrap()
+  assert_true(second != first)
+  let (_, head_base, _, _, _, _, head_changes) = git_change_snapshot(
+    dir,
+    "",
+    None,
+    2,
+  )
+  assert_eq(head_base, None)
+  assert_true(head_changes.is_empty())
+  let (_, _, _, _, _, _, task_changes) = git_change_snapshot(
+    dir,
+    "",
+    Some(first),
+    2,
+  )
+  assert_eq(task_changes, task_before_commit)
+  assert_eq(git_revision_commit(dir, first), Some(first))
+  assert_eq(git_revision_commit(dir, "missing-review-revision"), None)
+  assert_eq(
+    git_original_file_at(dir, Relative("review.txt"), first),
+    OriginalContent("first\n"),
+  )
+  assert_eq(
+    git_original_file_at(dir, Relative("review.txt"), second),
+    OriginalContent("working\n"),
+  )
+  // Populate a gitlink directly so the test stays offline, add a symlink,
+  // then stage both deletions from a workspace rooted below the repository.
+  // Targeted HEAD discovery must retain the repository-root path spelling
+  // emitted by --full-name and both non-text entry modes.
+  git_test_run(dir, [
+    "update-index",
+    "--add",
+    "--cacheinfo",
+    "160000,\{second},desktop/vendor/lib",
+  ])
+  @fs.symlink(target="keep.txt", "\{dir}/desktop/link")
+  git_test_run(dir, ["add", "desktop/link"])
+  git_test_run(dir, [
+    "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
+    "commit", "--quiet", "-m", "gitlink",
+  ])
+  let gitlink_head = git_revision_commit(dir, "HEAD").unwrap()
+  @fs.remove("\{dir}/desktop/link")
+  git_test_run(dir, [
+    "update-index", "--force-remove", "desktop/link", "desktop/vendor/lib",
+  ])
+  let (nested_head, _, _, _, deleted_gitlinks, deleted_symlinks, nested_changes) = git_change_snapshot(
+    "\{dir}/desktop",
+    "desktop/",
+    None,
+    2,
+  )
+  assert_eq(nested_head, Some(gitlink_head))
+  assert_eq(deleted_gitlinks.length(), 1)
+  assert_true(deleted_gitlinks.contains("vendor/lib"))
+  assert_eq(deleted_symlinks.length(), 1)
+  assert_true(deleted_symlinks.contains("link"))
+  assert_true(
+    nested_changes
+    is [
+      { path: "link", index_status: "D", kind: "deleted", .. },
+      { path: "vendor/lib", index_status: "D", kind: "deleted", .. },
+    ],
+  )
+  let classified = nested_changes.map(change => {
+    git_change_with_path_kind(
+      change,
+      Unknown,
+      deleted_gitlinks.contains(change.path),
+      deleted_symlinks.contains(change.path),
+    )
+  })
+  assert_true(
+    classified
+    is [
+      { path: "link", kind: "symlink", .. },
+      { path: "vendor/lib", kind: "submodule", .. },
+    ],
+  )
 }
 
 ///|
