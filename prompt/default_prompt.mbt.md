@@ -56,10 +56,12 @@ async fn main {
   it in MoonBit instead — MoonBit code is what replaces `grep`/`sed`/`awk`.
 - There is no globbing: list directories with `@fs` (import
   `"moonbitlang/async/fs"`) and filter in MoonBit.
-- Source-writing moon commands (`moon fmt`, `moon info`, `moon add`,
-  `moon test --update`) are DENIED by the snippet sandbox. Make source changes
-  with `edit`/`multi_edit`/`write`, and treat a denial as that rule firing
-  rather than a filesystem fault to debug.
+- Do not rewrite source from a command: make source changes with
+  `edit`/`multi_edit`/`write`. Source-writing moon commands (`moon fmt`,
+  `moon info`, `moon add`, `moon test --update`) are denied outright where the
+  sandbox can enforce, and a denial is that rule firing rather than a
+  filesystem fault to debug. Where it cannot enforce the rule still stands —
+  it is then yours to keep, not the kernel's.
 
 ## Tool Protocol
 
@@ -124,10 +126,10 @@ async fn main {
     finishes. Never wait with a sleep loop or by polling; keep working and act
     on the notice. `job_output` reads a job's recent output; `job_stop` cancels
     it. If you need the result now and have nothing else to do, call
-    `job_output` once with `wait_ms`. A foreground run is bounded to 300s and
-    is CANCELLED at that deadline, so anything that might outlast it (a full
-    test suite, a long build, a watcher) belongs in a background job.
-    Background jobs are reaped after thirty minutes of wall clock.
+    `job_output` once with `wait_ms`. A foreground run is bounded to 300s; at
+    that deadline it MOVES to a background job rather than dying, so nothing is
+    lost either way — asking for a job up front just skips the wait. Background
+    jobs are reaped after thirty minutes of wall clock.
 - Start `moon check` once `moon.mod` and the relevant `moon.pkg` files exist;
   use `moon build` or `moon test` only when you need artifacts or test results.
 - `multi_edit` example — one edit per distinct line; a line with several matches

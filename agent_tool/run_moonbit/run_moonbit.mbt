@@ -164,11 +164,14 @@ async fn execute(
       is_error=true,
     )
   }
-  // A background run's directory must outlive this call, so it is numbered
-  // inside the caller's scratch dir (reclaimed when the session's scope ends)
-  // instead of being a temp dir this function would clean up on return.
+  // A directory a job may take over must outlive this call, so it is numbered
+  // inside the caller's job dir — reclaimed when the session's scope ends —
+  // rather than a system temp dir that only this function ever revisits. That
+  // covers BOTH ways a job takes over: an explicit `run_in_background`, and a
+  // foreground run detached at its deadline, which is why this does not test
+  // `run_in_background`.
   let background = input.run_in_background
-  let dir = if background && job_dir is Some(scratch) {
+  let dir = if job_dir is Some(scratch) {
     let dir = "\{scratch}/snippet-\{next_background.val}"
     next_background.val += 1
     @fs.mkdir(dir, recursive=true) catch {
@@ -274,6 +277,14 @@ async fn execute(
   // workspace root (e.g. `workspace_root=/tmp`, where `@fs.tmpdir` lands
   // under it) the shared deny would otherwise block moon's own generated
   // `snippet.mbt`.
+  // The writable subtree has to contain the snippet's own build output. With a
+  // lab wired the snippet builds inside it, so the lab covers both; otherwise
+  // the build dir is the subtree. Choosing by where `dir` actually sits keeps
+  // the two from disagreeing when a caller passes both a job dir and a lab.
+  let writable_subtree = match scratch_dir {
+    Some(lab) if dir.has_prefix(lab) => lab
+    _ => dir
+  }
   let sandboxed_command = match worker_sandbox {
     // Worker mode replaces the workspace source-write profile rather than
     // adding to it: a worker is supposed to write source, just only its own,
@@ -290,7 +301,7 @@ async fn execute(
       @sandbox.SandboxedCommand::create_if_available(
         workspace_root,
         Exec("moon", moon_argv),
-        writable_subtree=scratch_dir.unwrap_or(dir),
+        writable_subtree~,
       )
   }
   let (prog, argv) = match sandboxed_command {
@@ -310,16 +321,29 @@ async fn execute(
     build_argv.push("--build-only")
     let build_log = "\{dir}/build.log"
     @fs.write_file(build_log, "", create_mode=CreateOrTruncate)
-    let build_exit = @process.run(
-      prog,
-      build_argv,
-      cwd=run_cwd.unwrap_or("."),
-      inherit_env=true,
-      stdin=@process.redirect_from_file(empty_stdin),
-      stdout=@process.redirect_to_file(build_log, append=true),
-      stderr=@process.redirect_to_file(build_log, append=true),
-      no_console_window=true,
-    )
+    // Bounded like every other run here: a first build downloads and compiles
+    // dependencies, and a wedged fetch would otherwise hold the turn open —
+    // exactly what asking for a background job was meant to avoid.
+    let build_exit = @async.with_timeout_opt(run_timeout_ms, () => {
+      @process.run(
+        prog,
+        build_argv,
+        cwd=run_cwd.unwrap_or("."),
+        inherit_env=true,
+        stdin=@process.redirect_from_file(empty_stdin),
+        stdout=@process.redirect_to_file(build_log, append=true),
+        stderr=@process.redirect_to_file(build_log, append=true),
+        no_console_window=true,
+      )
+    })
+    guard build_exit is Some(build_exit) else {
+      let text = rewrite_temp_paths(read_capped(build_log), [real, dir])
+      return @agent_tool.ToolAction::respond(
+        "run_moonbit: the build did not finish within \{run_timeout_ms / 1000}s, so no background job was started.\n\{text}",
+        is_error=true,
+        brief="run_moonbit (build timeout)",
+      )
+    }
     if build_exit != 0 {
       let text = rewrite_temp_paths(read_capped(build_log), [real, dir])
       return @agent_tool.ToolAction::respond(
@@ -366,7 +390,15 @@ async fn execute(
     let finished = @async.with_timeout_opt(run_timeout_ms, () => {
       exec.wait_or_invalid()
     })
-    if finished is None {
+    // Binary output ends the await early with the child STILL RUNNING, so
+    // reporting now would leave the process going while `defer cleanup()`
+    // removes its build directory underneath it — and the exit code below
+    // would be invented. Wait out the real exit first.
+    let saw_binary = exec.had_invalid_utf8()
+    if saw_binary {
+      exec.wait()
+    }
+    if finished is None && !saw_binary {
       let _ = exec.background()
       let id = runtime.adopt(
         exec,
@@ -382,6 +414,9 @@ async fn execute(
     }
     let raw = exec.head()
     let exit_code = exec.exit_code().unwrap_or(-1)
+    // The retained execution is KILLED once output passes the inline cap, so a
+    // clipped head means a stopped program, not a quiet one — say which.
+    let output_limit_reached = exec.over_inline_cap() || exec.output_truncated()
     // A denial can land past the rendered head — a snippet floods, THEN hits
     // it — so scan the retained output on disk with the same bounded,
     // chunked walk the redirected path uses. A memory-only execution (no
@@ -404,6 +439,16 @@ async fn execute(
     } else {
       text
     }
+    let body = if output_limit_reached {
+      "\{body}\n[run_moonbit: output passed \{OutputCapBytes} bytes, so the program was STOPPED and this is only what it printed first. Redirect bulky output with `stdout=ToFile(path)` and read the file instead.]"
+    } else {
+      body
+    }
+    let body = if saw_binary {
+      "\{body}\n[run_moonbit: the program emitted non-UTF-8 bytes; the text above is a lossy rendering.]"
+    } else {
+      body
+    }
     let body = if sandbox_denied {
       "\{body}\n\n\{@sandbox.source_write_denial_feedback}"
     } else {
@@ -411,7 +456,7 @@ async fn execute(
     }
     return @agent_tool.ToolAction::respond(
       body,
-      is_error=exit_code != 0 || sandbox_denied,
+      is_error=exit_code != 0 || sandbox_denied || output_limit_reached,
       brief="run_moonbit (exit=\{exit_code})",
     )
   }
@@ -676,7 +721,7 @@ fn schema(background~ : Bool) -> Json {
         #|Run as a background job: returns a job id immediately and a completion
         #|notice arrives when it exits. Use for long-running work (full test
         #|suites, long builds, watchers) instead of blocking on the 300s
-        #|foreground bound, which CANCELS the run when it expires.
+        #|foreground bound, which moves the run to a job when it expires.
       ),
     }
   }
@@ -736,8 +781,8 @@ fn description(background~ : Bool) -> String {
     $|run_in_background=true: the call returns a job id immediately and a notice arrives
     $|automatically when the job finishes — so never block on time (no sleep loops, no
     $|polling); keep working and act on the completion notice. Read a job's recent output
-    $|with job_output and cancel it with job_stop. A foreground run is bounded to 300s and
-    $|is CANCELLED at that deadline, so anything that might outlast it belongs in a
-    $|background job.
+    $|with job_output and cancel it with job_stop. A foreground run is bounded to 300s;
+    $|at that deadline it MOVES to a background job rather than dying, so nothing is
+    $|lost either way — asking for a job up front just skips the wait.
   )
 }

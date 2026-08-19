@@ -294,6 +294,39 @@ async test "a foreground run past its deadline becomes a job instead of dying" {
 }
 
 ///|
+/// Non-UTF-8 output ends the retained wait EARLY, with the child still running.
+/// Reporting at that moment would leave the process alive while the deferred
+/// cleanup removes its build directory, and would invent an exit code — so the
+/// tool waits out the real exit and says the rendering was lossy.
+async test "binary output waits for the real exit instead of abandoning it" {
+  @async.with_task_group(group => {
+    let tools = build_tools(AgentRuntime(), AgentTaskScope(group))
+    guard tools.find("run_moonbit") is Some(run_moonbit) else {
+      fail("run_moonbit tool missing")
+    }
+    // Emit an invalid UTF-8 byte, then keep working briefly before exiting 3.
+    let source =
+      #|import { "moonbitlang/async", "moonbitlang/async/stdio", "moonbitlang/x/sys" }
+      #|
+      #|async fn main {
+      #|  @stdio.stdout.write(b"\xff\xfe")
+      #|  @async.sleep(300)
+      #|  println("done")
+      #|  @sys.exit(3)
+      #|}
+    let action = match run_moonbit.execute {
+      Async(execute) => execute({ "source": source })
+      Sync(_) => fail("run_moonbit should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    // The real exit code, not the -1 an abandoned execution would report.
+    assert_true(output.content.contains("exited 3"))
+    assert_true(output.content.contains("non-UTF-8"))
+  })
+}
+
+///|
 /// Background jobs survived the move off the shell tool: a detached
 /// `run_moonbit` snippet still queues a completion notice and wakes an idle
 /// controller when it exits.

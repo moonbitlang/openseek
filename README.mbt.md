@@ -16,11 +16,10 @@ smaller `editor/moon.work` as a scoped entry point for editor-only builds and
 browser tests; root Moon commands are the integration gate across both projects.
 
 A fresh checkout needs the MoonBit toolchain and `just`; `just check` also
-requires `jq` to inspect structured compiler diagnostics. Initialize the Lepus
-submodule before running the root integration gates:
+requires `jq` to inspect structured compiler diagnostics. The root integration
+gates are:
 
 ```sh
-git submodule update --init desktop/lepus
 just check              # native + JS workspace checks and formatting
 just test               # native + JS workspace tests and OpenSeek cram tests
 just build              # native + JS MoonBit builds
@@ -87,7 +86,7 @@ git submodule update --init editor/vscode     # opt-in performance suite
 | `bobzhang/openseek/eval/file_edit/cmd/main` | Native-only CLI wrapper for the file-editing eval harness. | `eval/file_edit/README.md` |
 | `bobzhang/openseek/eval/prompt_task/harness` | Prompt-task eval: runs the real agent over isolated per-trial workspaces. | `eval/prompt_task/README.md` |
 | `bobzhang/openseek/eval/session_analyzer` | Post-hoc session-log analyzer producing Markdown/HTML/JSON reports. | — |
-| `openseek_desktop` (in `desktop/`, own module) | Desktop app: CEF shell (lepus submodule) plus a JS frontend driving the engine over JSONL. | `desktop/README.md` |
+| `openseek_desktop` (in `desktop/`, own module) | Desktop app: CEF shell (Proton, a registry dependency) plus a JS frontend driving the engine over JSONL. | `desktop/README.md` |
 
 The `deepseek` subpackage is pure and exposes chat data plus JSON helpers:
 
@@ -131,8 +130,8 @@ The `cmd/openseek` package is the single-binary entry point — a subcommand tre
 (default: the terminal UI; `run`/`serve`/`review`/`sessions` for the headless
 engine; `mcp` to validate MCP configuration). `openseek run` parses arguments
 and runs the agent package. The agent sends DeepSeek native function tools and
-supports eleven local tools: `run_moonbit` — which is both the scripting surface
-and the command runner, spawning processes through the shell-free
+supports eleven local tools: `run_moonbit` — both the scripting surface and the
+command runner, spawning processes through the shell-free
 [`bobzhang/myshell`](https://mooncakes.io/docs/bobzhang/myshell) EDSL, with
 `job_output` and `job_stop` watching anything it detaches as a background job —
 plus `read`, `edit`, `multi_edit`, `write`, `remove`, `plan`, `goal`, and
