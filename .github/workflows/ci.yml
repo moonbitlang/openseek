@@ -55,19 +55,6 @@ jobs:
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # The desktop native test binaries link libproton.so, whose DT_NEEDED
-      # list names libcef.so, libgtk-3.so.0 and libX11.so.6 directly — the
-      # loader resolves all three before main runs, so a test binary that
-      # never opens a window still cannot start without them. libcef.so is
-      # the one the Proton package does not ship beside libproton.so, which
-      # is why the runtime is assembled below.
-      - name: Install Proton runtime dependencies
-        if: matrix.target == 'native'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libgtk-3-0 libx11-6
-
       # Pull requests may restore the default branch's cache, but their own
       # merge-ref caches are private to that PR and cannot warm other branches.
       - name: Restore CEF distribution
@@ -79,31 +66,6 @@ jobs:
           # then copies the selected version into the project-local runtime.
           path: ~/.proton/cache/cef
           key: cef-${{ runner.os }}-${{ runner.arch }}-proton-${{ steps.proton.outputs.version }}
-
-      - name: Assemble Proton CEF runtime
-        if: matrix.target == 'native'
-        # Run setup at the repository root: that is where Moon resolves
-        # .mooncakes, so it is both where the CLI finds the Proton package's
-        # platform prebuilt and where Proton's link config finds the
-        # .proton/runtime.json it writes. `moonx` runs the published CLI
-        # straight from the registry cache, so there is nothing to install.
-        run: |
-          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}" \
-            -C "$PWD" cef setup
-          test -f .proton/runtime.json
-
-      # The stable/native main job is the sole Linux writer. PR jobs remain
-      # restore-only, and nightly does not race stable to reserve the same key.
-      - name: Save CEF distribution
-        if: >-
-          github.event_name == 'push' &&
-          matrix.moonbit-channel == 'stable' &&
-          matrix.target == 'native' &&
-          steps.cef-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.proton/cache/cef
-          key: ${{ steps.cef-cache.outputs.cache-primary-key }}
 
       - name: Check formatting
         # Stable only, for the same reason as `--deny-warn` below. `moon fmt` is
@@ -141,6 +103,41 @@ jobs:
             git diff --ignore-blank-lines -- '*.mbti'
             exit 1
           fi
+
+      # Only now: `cef setup` reads the Proton package's platform prebuilt out
+      # of .mooncakes, and nothing before the check steps above materializes
+      # it — `moon update` only refreshes the registry index. The checks
+      # themselves need no runtime because they never link. Setup runs at the
+      # repository root, which is both where Moon resolves .mooncakes and
+      # where Proton's link config looks for the .proton/runtime.json it
+      # writes; `moonx` runs the published CLI straight from the registry
+      # cache, so there is nothing to install.
+      #
+      # The test binaries below do link libproton.so, whose DT_NEEDED names
+      # libcef.so, libgtk-3.so.0 and libX11.so.6 — the loader resolves all
+      # three before main runs, so even a test that never opens a window
+      # cannot start without them. GTK and X11 are already on the runner
+      # image; libcef.so is the one the Proton package does not ship, and is
+      # what this step assembles beside libproton.so.
+      - name: Assemble Proton CEF runtime
+        if: matrix.target == 'native'
+        run: |
+          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}" \
+            -C "$PWD" cef setup
+          test -f .proton/runtime.json
+
+      # The stable/native main job is the sole Linux writer. PR jobs remain
+      # restore-only, and nightly does not race stable to reserve the same key.
+      - name: Save CEF distribution
+        if: >-
+          github.event_name == 'push' &&
+          matrix.moonbit-channel == 'stable' &&
+          matrix.target == 'native' &&
+          steps.cef-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.proton/cache/cef
+          key: ${{ steps.cef-cache.outputs.cache-primary-key }}
 
       - name: Test native target
         # No Xvfb: nothing here initializes CEF or opens a window. That was
