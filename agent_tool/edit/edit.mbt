@@ -243,7 +243,10 @@ async fn edit_file(
   guard region.body.find(input.old_string) is Some(match_start) else {
     // Exact match failed. Check for whitespace-normalized candidates and
     // report them in the diagnostic so the model can correct the old_string.
-    let candidates = find_whitespace_normalized_candidates(region.body, input.old_string)
+    let candidates = find_whitespace_normalized_candidates(
+      region.body,
+      input.old_string,
+    )
     let candidates_hint = if candidates.length() == 1 {
       let (fs, fe) = candidates[0]
       let fline = line_number_at_offset(content, region.prefix.length() + fs)
@@ -1014,6 +1017,7 @@ fn first_diff_info(
 ///|
 /// Check whether `expected` and `actual` differ only by whitespace characters
 /// (tab, space, CR, LF). Handles length differences (e.g. CRLF vs LF).
+
 ///|
 /// Check whether `expected` and `actual` differ only by whitespace characters
 /// (tab, space, CR, LF). Uses `normalize_whitespace` as the single source of
@@ -1048,7 +1052,10 @@ fn normalize_whitespace(s : String) -> String {
 /// Find all positions where `needle` has a whitespace-normalized
 /// equivalent in `body`.
 /// Returns `(start, end)` pairs in the original body for diagnostics.
-fn find_whitespace_normalized_candidates(body : String, needle : String) -> Array[(Int, Int)] {
+fn find_whitespace_normalized_candidates(
+  body : String,
+  needle : String,
+) -> Array[(Int, Int)] {
   let norm_needle = normalize_whitespace(needle)
   if norm_needle.is_empty() {
     return []
@@ -1068,7 +1075,12 @@ fn find_whitespace_normalized_candidates(body : String, needle : String) -> Arra
         // norm_needle expects a whitespace run; skip all whitespace in body
         ni += 1
         while bi < body.length() &&
-          (body[bi] == ' ' || body[bi] == '\t' || body[bi] == '\n' || body[bi] == '\r') {
+              (
+                body[bi] == ' ' ||
+                body[bi] == '\t' ||
+                body[bi] == '\n' ||
+                body[bi] == '\r'
+              ) {
           bi += 1
         }
       } else if bc == ' ' || bc == '\t' || bc == '\n' || bc == '\r' {

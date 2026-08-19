@@ -518,10 +518,7 @@ async test "edit reports fuzzy candidate for tab vs space mismatch" {
     assert_true(output.content.contains("whitespace-normalized candidate"))
     assert_true(output.content.contains("return 42"))
     // File unchanged
-    assert_eq(
-      @fs.read_file(path).text(),
-      "fn foo() {\n\treturn 42\n}\n",
-    )
+    assert_eq(@fs.read_file(path).text(), "fn foo() {\n\treturn 42\n}\n")
   })
 }
 
@@ -548,7 +545,9 @@ async test "edit reports fuzzy candidate for CRLF vs LF in old_string" {
 async test "edit reports multiple fuzzy candidates when ambiguous" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/fuzzy-ambiguous.txt"
-    @vfs.FileSystem({ "fuzzy-ambiguous.txt": "x\ta\t1\ny  a  1\n" }).write_to(dir)
+    @vfs.FileSystem({ "fuzzy-ambiguous.txt": "x\ta\t1\ny  a  1\n" }).write_to(
+      dir,
+    )
     let output = run_edit({
       "path": path,
       "old_string": "a 1",
@@ -557,7 +556,9 @@ async test "edit reports multiple fuzzy candidates when ambiguous" {
     })
     // Exact match fails; fuzzy finds 2 candidates → report count
     assert_true(output.is_error)
-    assert_true(output.content.contains("whitespace-normalized candidates found"))
+    assert_true(
+      output.content.contains("whitespace-normalized candidates found"),
+    )
     assert_true(@fs.read_file(path).text() == "x\ta\t1\ny  a  1\n")
   })
 }
