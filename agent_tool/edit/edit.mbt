@@ -183,7 +183,10 @@ async fn edit_file(
     return err("old_string and new_string are both empty")
   }
   if input.old_string == input.new_string {
-    return err("old_string and new_string are identical")
+    let content = @fs.read_file(path).text()
+    return err(
+      "old_string and new_string are identical\{old_string_context(content, input.old_string, input.start_line, input.end_line)}\n(old_string matches new_string exactly — the file at that location may already contain this text; re-read the file and adjust the edit)",
+    )
   }
   if input.replace_all_preview {
     guard input.old_string != "" else {
@@ -238,8 +241,22 @@ async fn edit_file(
   }
   let region = select_edit_region(content, input)
   guard region.body.find(input.old_string) is Some(match_start) else {
+    // Exact match failed. Check for whitespace-normalized candidates and
+    // report them in the diagnostic so the model can correct the old_string.
+    let fuzzy = fuzzy_match_positions(region.body, input.old_string)
+    let fuzzy_hint = if fuzzy.length() == 1 {
+      let (fs, fe) = fuzzy[0]
+      let fline = line_number_at_offset(content, region.prefix.length() + fs)
+      let excerpt_len = (fe - fs).min(60)
+      let excerpt = region.body.unsafe_substring(start=fs, end=fs + excerpt_len)
+      "\none whitespace-normalized candidate at line \{fline}: `\{excerpt}` — re-read the file and retry with the exact text"
+    } else if fuzzy.length() > 1 {
+      "\n\{fuzzy.length()} whitespace-normalized candidates found — narrow the line range or use a more specific old_string"
+    } else {
+      ""
+    }
     return err(
-      "old_string not found\{range_detail(input)}\{old_string_context(content, input.old_string, input.start_line, input.end_line)}",
+      "old_string not found\{range_detail(input)}\{old_string_context(content, input.old_string, input.start_line, input.end_line)}\{fuzzy_hint}",
     )
   }
   let match_end = match_start + input.old_string.length()
@@ -941,6 +958,11 @@ fn old_string_context(
         lines.push(
           "\nfirst difference at character \{diff_pos}: expected `\{expected_char}`, got `\{actual_char}`",
         )
+        if only_whitespace_differs(old_string, actual) {
+          lines.push(
+            " — the only differences are whitespace (tab vs space, extra spaces, or line endings); old_string must match the file character-for-character",
+          )
+        }
       }
       None => ()
     }
@@ -987,6 +1009,125 @@ fn first_diff_info(
     return Some((pos, expected_str, actual_str))
   }
   None
+}
+
+///|
+/// Check whether `expected` and `actual` differ only by whitespace characters
+/// (tab, space, CR, LF). Handles length differences (e.g. CRLF vs LF).
+fn only_whitespace_differs(expected : String, actual : String) -> Bool {
+  let mut ei = 0
+  let mut ai = 0
+  while ei < expected.length() && ai < actual.length() {
+    let e = expected[ei]
+    let a = actual[ai]
+    if e == a {
+      ei += 1
+      ai += 1
+    } else {
+      let we = e == ' ' || e == '\t' || e == '\n' || e == '\r'
+      let wa = a == ' ' || a == '\t' || a == '\n' || a == '\r'
+      if we && wa {
+        ei += 1
+        ai += 1
+      } else if we {
+        ei += 1
+      } else if wa {
+        ai += 1
+      } else {
+        return false
+      }
+    }
+  }
+  while ei < expected.length() {
+    let e = expected[ei]
+    if e != ' ' && e != '\t' && e != '\n' && e != '\r' {
+      return false
+    }
+    ei += 1
+  }
+  while ai < actual.length() {
+    let a = actual[ai]
+    if a != ' ' && a != '\t' && a != '\n' && a != '\r' {
+      return false
+    }
+    ai += 1
+  }
+  true
+}
+
+///|
+/// Collapse all whitespace runs (spaces, tabs, CR, LF) into a single
+/// space and trim. Used by `fuzzy_match_positions` so that `old_string`
+/// can match content that differs only in whitespace (tab vs space,
+/// CRLF vs LF, extra blanks, trailing whitespace).
+fn normalize_whitespace(s : String) -> String {
+  let result = StringBuilder()
+  let mut in_ws = false
+  for ch in s {
+    if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
+      if !in_ws {
+        result.write_char(' ')
+        in_ws = true
+      }
+    } else {
+      result.write_char(ch)
+      in_ws = false
+    }
+  }
+  result.to_string().trim().to_owned()
+}
+
+///|
+/// Find all positions of `needle` in `body` where they match after
+/// whitespace normalization (tab/space, CRLF/LF, extra blanks, trailing
+/// whitespace). Returns `(start, end)` pairs in the original (non-normalized)
+/// body. The caller should only use the result when exactly one position
+/// is returned, so the match is unambiguous.
+fn fuzzy_match_positions(body : String, needle : String) -> Array[(Int, Int)] {
+  let norm_needle = normalize_whitespace(needle)
+  if norm_needle.is_empty() {
+    return []
+  }
+  let matches : Array[(Int, Int)] = []
+  let mut i = 0
+  while i < body.length() {
+    let mut ni = 0
+    let mut bi = i
+    // Skip leading whitespace in body only when norm_needle starts with space
+    // (which it never does after normalize_whitespace, since it trims).
+    // For any non-space first char, match directly.
+    while ni < norm_needle.length() && bi < body.length() {
+      let nc = norm_needle[ni]
+      let bc = body[bi]
+      if nc == ' ' {
+        // norm_needle expects a whitespace run; skip all whitespace in body
+        ni += 1
+        while bi < body.length() &&
+          (body[bi] == ' ' || body[bi] == '\t' || body[bi] == '\n' || body[bi] == '\r') {
+          bi += 1
+        }
+      } else if bc == ' ' || bc == '\t' || bc == '\n' || bc == '\r' {
+        // body has whitespace where norm_needle has non-space → mismatch
+        break
+      } else if nc != bc {
+        break
+      } else {
+        ni += 1
+        bi += 1
+      }
+    }
+    // Skip trailing whitespace in needle
+    while ni < norm_needle.length() && norm_needle[ni] == ' ' {
+      ni += 1
+    }
+    if ni == norm_needle.length() {
+      matches.push((i, bi))
+      i = bi
+    } else {
+      i += 1
+    }
+  }
+  matches
 }
 
 ///|
@@ -1171,4 +1312,70 @@ test "old_string_context shows empty suffix for past-EOF context" {
   assert_true(ctx.contains("1 | single"))
   assert_true(ctx.contains("2 |"))
   assert_true(ctx.contains("3 |"))
+}
+
+///|
+test "normalize_whitespace collapses runs and trims" {
+  assert_eq(normalize_whitespace(""), "")
+  assert_eq(normalize_whitespace("abc"), "abc")
+  assert_eq(normalize_whitespace("a  b"), "a b")
+  assert_eq(normalize_whitespace("a\tb"), "a b")
+  assert_eq(normalize_whitespace("a\nb"), "a b")
+  assert_eq(normalize_whitespace("a\r\nb"), "a b")
+  assert_eq(normalize_whitespace("  a  b  "), "a b")
+  assert_eq(normalize_whitespace("\t\n\r  x"), "x")
+}
+
+///|
+test "fuzzy_match_positions finds whitespace-different matches" {
+  // tab vs space
+  let matches = fuzzy_match_positions("a\tb", "a b")
+  assert_eq(matches.length(), 1)
+  let (s, e) = matches[0]
+  assert_eq(s, 0)
+  assert_eq(e, 3)
+
+  // multiple spaces
+  let matches = fuzzy_match_positions("a  b", "a b")
+  assert_eq(matches.length(), 1)
+  let (s, e) = matches[0]
+  assert_eq(s, 0)
+  assert_eq(e, 4)
+
+  // CRLF vs LF
+  let matches = fuzzy_match_positions("a\r\nb", "a\nb")
+  assert_eq(matches.length(), 1)
+  let (s, e) = matches[0]
+  assert_eq(s, 0)
+  assert_eq(e, 4)
+}
+
+///|
+test "fuzzy_match_positions does not consume trailing whitespace" {
+  // trailing whitespace in body is not consumed by the match
+  let matches = fuzzy_match_positions("foo  ", "foo")
+  assert_eq(matches.length(), 1)
+  let (s, e) = matches[0]
+  // Match ends at "foo" (position 3), trailing spaces are not consumed
+  assert_eq(s, 0)
+  assert_eq(e, 3)
+}
+
+///|
+test "fuzzy_match_positions returns empty for no match" {
+  assert_eq(fuzzy_match_positions("abc", "xyz").length(), 0)
+  assert_eq(fuzzy_match_positions("", "x").length(), 0)
+  assert_eq(fuzzy_match_positions("abc", "").length(), 0)
+}
+
+///|
+test "fuzzy_match_positions returns multiple matches when ambiguous" {
+  let matches = fuzzy_match_positions("a b a b", "a b")
+  assert_eq(matches.length(), 2)
+}
+
+///|
+test "fuzzy_match_positions does not match different content" {
+  // "ab" should not match "a b" (different non-whitespace content in the gap)
+  assert_eq(fuzzy_match_positions("a x b", "a b").length(), 0)
 }
