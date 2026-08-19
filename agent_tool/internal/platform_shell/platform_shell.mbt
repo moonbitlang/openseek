@@ -37,12 +37,15 @@ declare pub fn args(cmd : String) -> Array[String]
 /// (`-NoProfile -Command` for PowerShell). Sets UTF-8 output encoding so
 /// commands with non-ASCII text (e.g. Chinese characters) produce valid
 /// UTF-8 bytes instead of the system's active code page (GBK/CP936).
+/// Note: `chcp 65001` is deliberately omitted because it hangs when
+/// `no_console_window=true` (no console handle). The PowerShell-level
+/// encoding settings below are sufficient.
 #cfg(platform="windows")
 pub fn args(cmd : String) -> Array[String] {
   [
     "-NoProfile",
     "-Command",
-    "$OutputEncoding=[Console]::OutputEncoding=[Text.Encoding]::UTF8;chcp 65001 > $null;" +
+    "$OutputEncoding=[Console]::OutputEncoding=[Text.Encoding]::UTF8;" +
     cmd,
   ]
 }

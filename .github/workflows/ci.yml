@@ -13,8 +13,8 @@ concurrency:
 
 jobs:
   check:
-    name: check (${{ matrix.moonbit-channel }}, ${{ matrix.target }})
-    runs-on: ubuntu-latest
+    name: check (${{ matrix.os }}, ${{ matrix.moonbit-channel }}, ${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     strategy:
@@ -23,6 +23,7 @@ jobs:
       # native/JS split lets the two test suites run in parallel.
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         moonbit-channel: [stable]
         target: [native, js]
         include:
@@ -39,8 +40,17 @@ jobs:
 
       - name: Set up MoonBit (${{ matrix.moonbit-channel }})
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "${{ matrix.moonbit-version }}"
-          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+          case "${{ runner.os }}" in
+            Linux|macOS)
+              curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "${{ matrix.moonbit-version }}"
+              echo "$HOME/.moon/bin" >> $GITHUB_PATH
+              ;;
+            Windows)
+              curl -fsSL https://cli.moonbitlang.com/install/install.ps1 | powershell -c -
+              echo "$HOME/.moon/bin" >> $GITHUB_PATH
+              ;;
+          esac
+        shell: bash
 
       - name: Show MoonBit version
         run: |
@@ -58,7 +68,7 @@ jobs:
       # desktop/lepus/.proton/runtime.json, which Proton's link config prefers
       # over the incomplete checked-in prebuilt.
       - name: Install Proton native build dependencies
-        if: matrix.target == 'native'
+        if: runner.os == 'Linux' && matrix.target == 'native'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -67,7 +77,7 @@ jobs:
       # Pull requests may restore the default branch's cache, but their own
       # merge-ref caches are private to that PR and cannot warm other branches.
       - name: Restore CEF distribution
-        if: matrix.target == 'native'
+        if: runner.os == 'Linux' && matrix.target == 'native'
         id: cef-cache
         uses: actions/cache/restore@v4
         with:
@@ -77,7 +87,7 @@ jobs:
           key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/lepus/cli/cef/cef_platform.mbt') }}
 
       - name: Assemble Proton CEF runtime
-        if: matrix.target == 'native'
+        if: runner.os == 'Linux' && matrix.target == 'native'
         # Proton's link config discovers the assembled runtime by walking up
         # from the local proton module root. Run setup at that same project
         # root so it finds the submodule's checked-in prebuilt and writes the
@@ -112,6 +122,7 @@ jobs:
       - name: Save CEF distribution
         if: >-
           github.event_name == 'push' &&
+          runner.os == 'Linux' &&
           matrix.moonbit-channel == 'stable' &&
           matrix.target == 'native' &&
           steps.cef-cache.outputs.cache-hit != 'true'
@@ -156,12 +167,20 @@ jobs:
             git diff --ignore-blank-lines -- '*.mbti'
             exit 1
           fi
+        shell: bash
 
       - name: Test native target
         # xvfb: the desktop/Proton windowed tests create real CEF windows (the
         # Linux engine is compiled with CEF_X11), and the runner is headless.
+        # Windows and macOS runners do not have CEF for the desktop tests.
         if: matrix.target == 'native'
-        run: xvfb-run -a moon test --target native
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a moon test --target native
+          else
+            moon test --target native
+          fi
+        shell: bash
 
       - name: Test JS target
         # Run JS-only package tests from the same root workspace. These do not
@@ -170,5 +189,5 @@ jobs:
         run: moon test --target js
 
       - name: Cram (offline CLI docs)
-        if: matrix.target == 'native'
+        if: runner.os == 'Linux' && matrix.target == 'native'
         run: moon cram test tests/cram

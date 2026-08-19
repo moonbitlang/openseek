@@ -284,8 +284,9 @@ async fn cleanup_sandbox_exec_test_probe(
 test "shell description tells models to use PowerShell on Windows" {
   let description = @shell.definition().description
   assert_true(description.contains("PowerShell"))
-  assert_true(description.contains("pwsh -NoProfile -Command"))
-  assert_true(description.contains("PowerShell syntax"))
+  assert_true(description.contains("powershell.exe -NoProfile -Command"))
+  assert_true(description.contains("PowerShell 5.1 syntax"))
+  assert_true(description.contains("NOT supported"))
 }
 
 ///|
