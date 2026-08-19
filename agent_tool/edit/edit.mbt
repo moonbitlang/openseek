@@ -243,20 +243,20 @@ async fn edit_file(
   guard region.body.find(input.old_string) is Some(match_start) else {
     // Exact match failed. Check for whitespace-normalized candidates and
     // report them in the diagnostic so the model can correct the old_string.
-    let fuzzy = fuzzy_match_positions(region.body, input.old_string)
-    let fuzzy_hint = if fuzzy.length() == 1 {
-      let (fs, fe) = fuzzy[0]
+    let candidates = find_whitespace_normalized_candidates(region.body, input.old_string)
+    let candidates_hint = if candidates.length() == 1 {
+      let (fs, fe) = candidates[0]
       let fline = line_number_at_offset(content, region.prefix.length() + fs)
       let excerpt_len = (fe - fs).min(60)
       let excerpt = region.body.unsafe_substring(start=fs, end=fs + excerpt_len)
       "\none whitespace-normalized candidate at line \{fline}: `\{excerpt}` — re-read the file and retry with the exact text"
-    } else if fuzzy.length() > 1 {
-      "\n\{fuzzy.length()} whitespace-normalized candidates found — narrow the line range or use a more specific old_string"
+    } else if candidates.length() > 1 {
+      "\n\{candidates.length()} whitespace-normalized candidates found — narrow the line range or use a more specific old_string"
     } else {
       ""
     }
     return err(
-      "old_string not found\{range_detail(input)}\{old_string_context(content, input.old_string, input.start_line, input.end_line)}\{fuzzy_hint}",
+      "old_string not found\{range_detail(input)}\{old_string_context(content, input.old_string, input.start_line, input.end_line)}\{candidates_hint}",
     )
   }
   let match_end = match_start + input.old_string.length()
@@ -958,7 +958,7 @@ fn old_string_context(
         lines.push(
           "\nfirst difference at character \{diff_pos}: expected `\{expected_char}`, got `\{actual_char}`",
         )
-        if only_whitespace_differs(old_string, actual) {
+        if is_whitespace_equivalent(old_string, actual) {
           lines.push(
             " — the only differences are whitespace (tab vs space, extra spaces, or line endings); old_string must match the file character-for-character",
           )
@@ -1014,52 +1014,19 @@ fn first_diff_info(
 ///|
 /// Check whether `expected` and `actual` differ only by whitespace characters
 /// (tab, space, CR, LF). Handles length differences (e.g. CRLF vs LF).
-fn only_whitespace_differs(expected : String, actual : String) -> Bool {
-  let mut ei = 0
-  let mut ai = 0
-  while ei < expected.length() && ai < actual.length() {
-    let e = expected[ei]
-    let a = actual[ai]
-    if e == a {
-      ei += 1
-      ai += 1
-    } else {
-      let we = e == ' ' || e == '\t' || e == '\n' || e == '\r'
-      let wa = a == ' ' || a == '\t' || a == '\n' || a == '\r'
-      if we && wa {
-        ei += 1
-        ai += 1
-      } else if we {
-        ei += 1
-      } else if wa {
-        ai += 1
-      } else {
-        return false
-      }
-    }
-  }
-  while ei < expected.length() {
-    let e = expected[ei]
-    if e != ' ' && e != '\t' && e != '\n' && e != '\r' {
-      return false
-    }
-    ei += 1
-  }
-  while ai < actual.length() {
-    let a = actual[ai]
-    if a != ' ' && a != '\t' && a != '\n' && a != '\r' {
-      return false
-    }
-    ai += 1
-  }
-  true
+///|
+/// Check whether `expected` and `actual` differ only by whitespace characters
+/// (tab, space, CR, LF). Uses `normalize_whitespace` as the single source of
+/// truth, so this is consistent with `find_whitespace_normalized_candidates`.
+fn is_whitespace_equivalent(expected : String, actual : String) -> Bool {
+  normalize_whitespace(expected) == normalize_whitespace(actual)
 }
 
 ///|
 /// Collapse all whitespace runs (spaces, tabs, CR, LF) into a single
-/// space and trim. Used by `fuzzy_match_positions` so that `old_string`
-/// can match content that differs only in whitespace (tab vs space,
-/// CRLF vs LF, extra blanks, trailing whitespace).
+/// space and trim. Used by `find_whitespace_normalized_candidates` so that
+/// `old_string` can match content that differs only in whitespace (tab vs
+/// space, CRLF vs LF, extra blanks, trailing whitespace).
 fn normalize_whitespace(s : String) -> String {
   let result = StringBuilder()
   let mut in_ws = false
@@ -1078,12 +1045,10 @@ fn normalize_whitespace(s : String) -> String {
 }
 
 ///|
-/// Find all positions of `needle` in `body` where they match after
-/// whitespace normalization (tab/space, CRLF/LF, extra blanks, trailing
-/// whitespace). Returns `(start, end)` pairs in the original (non-normalized)
-/// body. The caller should only use the result when exactly one position
-/// is returned, so the match is unambiguous.
-fn fuzzy_match_positions(body : String, needle : String) -> Array[(Int, Int)] {
+/// Find all positions where `needle` has a whitespace-normalized
+/// equivalent in `body`.
+/// Returns `(start, end)` pairs in the original body for diagnostics.
+fn find_whitespace_normalized_candidates(body : String, needle : String) -> Array[(Int, Int)] {
   let norm_needle = normalize_whitespace(needle)
   if norm_needle.is_empty() {
     return []
@@ -1327,23 +1292,23 @@ test "normalize_whitespace collapses runs and trims" {
 }
 
 ///|
-test "fuzzy_match_positions finds whitespace-different matches" {
+test "find_whitespace_normalized_candidates finds whitespace-different matches" {
   // tab vs space
-  let matches = fuzzy_match_positions("a\tb", "a b")
+  let matches = find_whitespace_normalized_candidates("a\tb", "a b")
   assert_eq(matches.length(), 1)
   let (s, e) = matches[0]
   assert_eq(s, 0)
   assert_eq(e, 3)
 
   // multiple spaces
-  let matches = fuzzy_match_positions("a  b", "a b")
+  let matches = find_whitespace_normalized_candidates("a  b", "a b")
   assert_eq(matches.length(), 1)
   let (s, e) = matches[0]
   assert_eq(s, 0)
   assert_eq(e, 4)
 
   // CRLF vs LF
-  let matches = fuzzy_match_positions("a\r\nb", "a\nb")
+  let matches = find_whitespace_normalized_candidates("a\r\nb", "a\nb")
   assert_eq(matches.length(), 1)
   let (s, e) = matches[0]
   assert_eq(s, 0)
@@ -1351,9 +1316,9 @@ test "fuzzy_match_positions finds whitespace-different matches" {
 }
 
 ///|
-test "fuzzy_match_positions does not consume trailing whitespace" {
+test "find_whitespace_normalized_candidates does not consume trailing whitespace" {
   // trailing whitespace in body is not consumed by the match
-  let matches = fuzzy_match_positions("foo  ", "foo")
+  let matches = find_whitespace_normalized_candidates("foo  ", "foo")
   assert_eq(matches.length(), 1)
   let (s, e) = matches[0]
   // Match ends at "foo" (position 3), trailing spaces are not consumed
@@ -1362,20 +1327,20 @@ test "fuzzy_match_positions does not consume trailing whitespace" {
 }
 
 ///|
-test "fuzzy_match_positions returns empty for no match" {
-  assert_eq(fuzzy_match_positions("abc", "xyz").length(), 0)
-  assert_eq(fuzzy_match_positions("", "x").length(), 0)
-  assert_eq(fuzzy_match_positions("abc", "").length(), 0)
+test "find_whitespace_normalized_candidates returns empty for no match" {
+  assert_eq(find_whitespace_normalized_candidates("abc", "xyz").length(), 0)
+  assert_eq(find_whitespace_normalized_candidates("", "x").length(), 0)
+  assert_eq(find_whitespace_normalized_candidates("abc", "").length(), 0)
 }
 
 ///|
-test "fuzzy_match_positions returns multiple matches when ambiguous" {
-  let matches = fuzzy_match_positions("a b a b", "a b")
+test "find_whitespace_normalized_candidates returns multiple matches when ambiguous" {
+  let matches = find_whitespace_normalized_candidates("a b a b", "a b")
   assert_eq(matches.length(), 2)
 }
 
 ///|
-test "fuzzy_match_positions does not match different content" {
+test "find_whitespace_normalized_candidates does not match different content" {
   // "ab" should not match "a b" (different non-whitespace content in the gap)
-  assert_eq(fuzzy_match_positions("a x b", "a b").length(), 0)
+  assert_eq(find_whitespace_normalized_candidates("a x b", "a b").length(), 0)
 }
