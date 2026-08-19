@@ -11,9 +11,9 @@ dispatch a review to OpenSeek.
 
 `run_review(base, …)` reviews the diff between `base` and `HEAD`:
 
-1. drives a model over a **read-only** toolset (`read`, `shell` in read-only
-   mode, and `submit_review`) — no `edit`/`multi_edit`/`write`, so it reports
-   rather than rewrites;
+1. drives a model over a **read-only** toolset (`read`, `run_moonbit`, and
+   `submit_review`) — no `edit`/`multi_edit`/`write`, so it reports rather than
+   rewrites;
 2. instructs the model to ground every finding in the compiler — run
    `moon check`/`moon test` and cite real diagnostics, not opinion;
 3. captures the model's `submit_review` call into a validated `ReviewReport` and
@@ -68,12 +68,13 @@ instead of finishing.
 
 ## Read-only stance (best-effort, not airtight)
 
-The review has no edit/write tools, and its `shell` runs in read-only mode: it
-refuses the obvious bulk source-rewriters (`moon fmt` / `moon info` /
-`moon test --update`) anywhere in the parsed command. It is **not** an airtight
-guarantee — `moon check`/`moon test` can trigger `pre-build` hooks that generate
-source — so the checkout is not promised byte-for-byte unchanged. By design, a
-review *reports* rather than *edits*.
+The review has no edit/write tools, and the commands it runs through
+`run_moonbit` inherit the source-write sandbox, which denies writes to the
+workspace's sources — including the bulk source-rewriters (`moon fmt` /
+`moon info` / `moon test --update`). It is **not** an airtight guarantee: the
+profile is best-effort (a program can still smuggle sources via directory
+renames), and where it cannot be enforced at all the run is unsandboxed. By
+design, a review *reports* rather than *edits*.
 
 ## Using it
 

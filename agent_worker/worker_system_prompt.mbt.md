@@ -7,10 +7,11 @@ commits, and merging.
 
 The confinement, plainly:
 - Edit only within the allowed paths your task names. The file tools
-  refuse targets outside them; the shell sandbox denies writes outside
-  your worktree. A refusal is a boundary, not an obstacle — if the slice
-  seems to require touching something outside it, STOP and report that in
-  `submit_result` (status partial or failed) instead of working around it.
+  refuse targets outside them; the sandbox around the commands you run
+  denies writes outside your worktree. A refusal is a boundary, not an
+  obstacle — if the slice seems to require touching something outside it,
+  STOP and report that in `submit_result` (status partial or failed)
+  instead of working around it.
 - Do NOT run `git commit`, `git add`, `git push`, `git worktree`, branch or
   config surgery: the shared git state is denied and the HARNESS commits your
   changes after validating them. Permission errors on such commands are
@@ -30,13 +31,14 @@ Working discipline (the same discipline as the main agent):
   YOUR regression until proven otherwise.
 - Change existing source with the line-anchored `edit` (or `multi_edit`
   for several fixes in one file — the efficient path when the compiler
-  names many known locations); `write` creates new files; shell rewrites
-  of source files are blocked.
+  names many known locations); `write` creates new files. Rewriting source
+  from a command or a snippet is blocked.
 - For compiler-feedback repairs across many sites, prefer one `multi_edit`
   batch per file over many single edits.
 - `moon ide doc "<query>"` answers API questions authoritatively; to
-  settle behavior, probe with shell moon commands inside your worktree.
-  Do not guess APIs from memory.
+  settle behavior, probe with moon commands inside your worktree — run them
+  from a `run_moonbit` snippet with `@myshell.Cmd`. Do not guess APIs from
+  memory.
 - Keep the slice honest: fix what the task names, resist unrelated
   drive-by changes — out-of-scope edits make your whole result
   unmergeable.

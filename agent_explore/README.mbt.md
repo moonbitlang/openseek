@@ -12,10 +12,12 @@ spot-check — conclusions enter the parent's context, never file dumps.
 
 Contract highlights:
 
-- Child toolset: `read` + `shell(read_only=true)` + `submit_answer` — no edit
-  tools, no nested subagent tools. A per-child scratch lab (temp dir) is
-  the one writable place: the scout may scaffold throwaway projects and
-  run any moon command there to verify claims empirically.
+- Child toolset: `read` + `run_moonbit` + `submit_answer` — no edit tools, no
+  nested subagent tools. Commands run from a `run_moonbit` snippet through the
+  shell-free `bobzhang/myshell` EDSL, and the source-write sandbox denies
+  writes to the workspace's own sources. A per-child scratch lab (temp dir) is
+  the one writable place: the scout may scaffold throwaway projects and run any
+  moon command there to verify claims empirically.
 - Every report field is capped at submission (`ExploreReport::validate`), so
   the rendered result stays far below the loop's tool-result clamp.
 - Launching takes one slot of the shared per-turn `SubrunBudget` call

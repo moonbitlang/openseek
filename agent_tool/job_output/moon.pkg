@@ -2,7 +2,6 @@ import {
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/agent_tool/bgjobs",
   "bobzhang/openseek/agent_tool/internal/sandbox",
-  "bobzhang/openseek/agent_tool/shell",
   "moonbitlang/core/json",
 }
 

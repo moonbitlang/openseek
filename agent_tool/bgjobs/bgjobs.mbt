@@ -42,7 +42,14 @@ pub struct BgJobRuntime {
   // Spawn a `ShellExecution` on the captured session group: (program, args, cwd,
   // inline-preview budget, spill path) -> execution. Captured so the runtime type
   // is not generic.
-  priv spawn_exec : async (String, Array[String], String?, Int, String?) -> @shell_exec.ShellExecution
+  priv spawn_exec : async (
+    String,
+    Array[String],
+    String?,
+    Int,
+    String?,
+    &@process.ProcessInput?,
+  ) -> @shell_exec.ShellExecution
   // Spawn a *retained* foreground execution (may be detached on timeout):
   // file-backed with a large hard cap, but still killed on exceeding the inline
   // cap so a timed command that floods output is an immediate output-limit error;
@@ -54,6 +61,7 @@ pub struct BgJobRuntime {
     String?,
     Int,
     String?,
+    &@process.ProcessInput?,
   ) -> @shell_exec.ShellExecution
   // Spawn a per-job watcher task on that same group.
   priv spawn_watcher : (async () -> Unit) -> Unit
@@ -137,7 +145,7 @@ pub fn[X] BgJobRuntime::new(
 ) -> BgJobRuntime {
   let group = scope.group()
   {
-    spawn_exec: (program, args, cwd, max_output_chars, spill_path) => {
+    spawn_exec: (program, args, cwd, max_output_chars, spill_path, stdin) => {
       // Background retention: inline preview up to the budget, full output to
       // the spill file, and the hard-cap watchdog so a flooding job is killed
       // (and surfaced) rather than left burning CPU with its output dropped.
@@ -146,6 +154,7 @@ pub fn[X] BgJobRuntime::new(
         program~,
         args~,
         cwd?,
+        stdin?,
         inline_cap=max_output_chars,
         hard_cap=hard_output_cap,
         spill_path?,
@@ -158,6 +167,7 @@ pub fn[X] BgJobRuntime::new(
       cwd,
       max_output_chars,
       spill_path,
+      stdin,
     ) => {
       // kill_at_hard_cap so that once detached (kill_when_full cleared by
       // `background()`), the job is still bounded in output like any other.
@@ -166,6 +176,7 @@ pub fn[X] BgJobRuntime::new(
         program~,
         args~,
         cwd?,
+        stdin?,
         inline_cap=max_output_chars,
         hard_cap=hard_output_cap,
         spill_path?,
@@ -206,6 +217,7 @@ pub async fn BgJobRuntime::spawn_foreground_retained(
   args : Array[String],
   cwd : String?,
   max_output_chars : Int,
+  stdin? : &@process.ProcessInput,
 ) -> @shell_exec.ShellExecution {
   let spill_path = self.spill_dir.map(dir => {
     let index = self.fg_index
@@ -213,7 +225,7 @@ pub async fn BgJobRuntime::spawn_foreground_retained(
     "\{dir}/fg-\{index}.out"
   })
   (self.spawn_foreground_retained_exec)(
-    program, args, cwd, max_output_chars, spill_path,
+    program, args, cwd, max_output_chars, spill_path, stdin,
   )
 }
 
@@ -230,12 +242,15 @@ pub async fn BgJobRuntime::start(
   max_output_chars? : Int = default_max_output_chars,
   sandboxed_command? : @sandbox.SandboxedCommand,
   read_only_review? : Bool = false,
+  stdin? : &@process.ProcessInput,
 ) -> String {
   // Reserve one id and use it for both the spill file and the registry entry, so
   // the job id and its `<id>.out` file never diverge.
   let id = self.next_id()
   let spill_path = self.spill_dir.map(dir => "\{dir}/\{id}.out")
-  let exec = (self.spawn_exec)(program, args, cwd, max_output_chars, spill_path)
+  let exec = (self.spawn_exec)(
+    program, args, cwd, max_output_chars, spill_path, stdin,
+  )
   self.register(id, exec, command~, cwd?, sandboxed_command?, read_only_review~)
   id
 }

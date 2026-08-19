@@ -31,8 +31,8 @@ fn tool_group_summary(items : Array[@transcript.TranscriptItem]) -> String {
       "edit" | "multi_edit" => edits = edits + 1
       "remove" => removes = removes + 1
       "shell" | "moon_cmd" | "run_moonbit" => runs = runs + 1
-      "shell_output" => background_reads = background_reads + 1
-      "shell_stop" => background_stops = background_stops + 1
+      "job_output" | "shell_output" => background_reads = background_reads + 1
+      "job_stop" | "shell_stop" => background_stops = background_stops + 1
       "plan" => plans = plans + 1
       "goal" => goals = goals + 1
       "finish" => finishes = finishes + 1

@@ -1,4 +1,23 @@
 ///|
+/// Guidance for a sandboxed run whose output shows a source-write denial
+/// ("Operation not permitted" on a protected source path). Without it the model
+/// reads a bare OS error and debugs the filesystem — or worse, tries to escape
+/// the sandbox — instead of using `edit`. It lives beside the denial detector
+/// because both the foreground runner and the background-job reader need the
+/// same explanation for the same recognized condition.
+pub let source_write_denial_feedback : String =
+  #|run_moonbit sandbox: the "Operation not permitted" failure above is this tool's
+  #|sandbox denying a write to a protected MoonBit source file (`*.mbt`, `*.mbti`,
+  #|`*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`) — not a filesystem or permissions
+  #|problem to debug. Snippets run source-write-readonly by design; writing non-source
+  #|files (data, logs, reports) stays allowed, and source-writing moon commands
+  #|(`moon fmt`, `moon info`, `moon add`, `moon test --update`) are denied here by the
+  #|same rule. Do NOT try to work around the block from inside a program (renames,
+  #|copies, temp-then-move, or other sandbox escapes) — make source changes with the
+  #|line-anchored `edit` tool instead, and keep run_moonbit for commands, compute,
+  #|probing, and non-source IO.
+
+///|
 /// Protected MoonBit source and manifest names, as they appear at the end of a
 /// path in a denial line. Matched with `line_names_subject`, so `.mbt` does not
 /// also cover `.mbt.md` — both are listed.

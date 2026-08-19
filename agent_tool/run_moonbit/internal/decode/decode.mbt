@@ -10,6 +10,9 @@ pub struct RunMoonbitInput {
   /// Whether compiler warnings appear in the run output — decoded from the
   /// `"on"`/`"off"` tool argument, defaulting to `"off"` (suppressed).
   warning : Bool
+  /// Whether to detach the run as a background job instead of waiting for it.
+  /// Only meaningful when the tool was built with a job runtime.
+  run_in_background : Bool
 } derive(Debug)
 
 ///|
@@ -51,7 +54,15 @@ pub fn decode(arguments : Json) -> RunMoonbitInput raise {
           fail("arguments.warning to be \"on\" or \"off\"")
         _ => false
       }
-      { source, target, cwd, warning }
+      let run_in_background = match arguments {
+        { "run_in_background": True, .. } => true
+        { "run_in_background": False, .. }
+        | { "run_in_background": Null, .. } => false
+        { "run_in_background": _, .. } =>
+          fail("arguments.run_in_background to be a boolean")
+        _ => false
+      }
+      { source, target, cwd, warning, run_in_background }
     }
     Object(_) => fail("arguments.source")
     _ => fail("object arguments")

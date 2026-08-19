@@ -138,7 +138,7 @@ pub async fn run_child(
     Ok(scope) => scope
     Err(reason) => return Err(reason)
   }
-  let worker_sandbox : @shell.WorkerSandbox = {
+  let worker_sandbox : @run_moonbit.WorkerSandbox = {
     deny_roots: input.deny_roots,
     worker_root: input.worker_root,
     worker_admin_dir: input.worker_admin_dir,
@@ -155,7 +155,10 @@ pub async fn run_child(
     tools=captured => {
       Tools([
         @read.definition(workspace_root=input.worker_root),
-        @shell.definition(workspace_root=input.worker_root, worker_sandbox~),
+        @run_moonbit.definition(
+          workspace_root=input.worker_root,
+          worker_sandbox~,
+        ),
         @edit.definition(
           workspace_root=input.worker_root,
           file_state~,
@@ -176,12 +179,6 @@ pub async fn run_child(
           file_state~,
           write_scope~,
         ),
-        // run_moonbit is deliberately ABSENT: its snippet runner uses the
-        // ordinary source-write sandbox rooted at the workspace, so an
-        // absolute cwd or @fs path in a snippet could write outside the
-        // worker tree. It returns when it can launch under the worker
-        // profile; until then the worker's sandboxed shell covers in-tree
-        // moon work.
         submit_result_tool(captured),
       ])
     },

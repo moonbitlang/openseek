@@ -1,15 +1,15 @@
 ///|
-/// Tool `shell_output`: read a background shell job's output and status by id.
-/// The id comes from `shell run_in_background`, or from a foreground command that
+/// Tool `job_output`: read a background job's output and status by id.
+/// The id comes from `run_moonbit run_in_background`, or from a foreground command that
 /// was moved to the background when it exceeded its `timeout_ms`.
 pub fn definition(
   bg_runtime : @bgjobs.BgJobRuntime,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
-    name="shell_output",
+    name="job_output",
     description=(
-      #|Read a background shell job's recent output and status by its job_id (returned by
-      #|shell run_in_background, or by a command moved to the background on timeout).
+      #|Read a background job's recent output and status by its job_id (returned by
+      #|run_moonbit run_in_background, or by a command moved to the background on timeout).
       #|Returns the most recent window of captured output (with truncation metadata naming
       #|the total size when output exceeds the window) and whether the job is still
       #|running. If you need the job's result before you can continue and have no other
@@ -42,7 +42,7 @@ async fn execute(
 ) -> @agent_tool.ToolAction {
   guard arguments is { "job_id": String(job_id), .. } else {
     return @agent_tool.ToolAction::respond(
-      "error: shell_output requires a string job_id",
+      "error: job_output requires a string job_id",
       is_error=true,
     )
   }
@@ -96,24 +96,12 @@ async fn execute(
   // when the command exited 0. Scan the *full* retained output for a denial (the
   // denial line can be earlier than the displayed tail), but only for a sandboxed
   // job — so a full read is done only in that rare case.
-  let sandbox_feedback = match snapshot.sandboxed_command {
-    Some(command) => {
-      let full = bg_runtime.read_output(job_id).unwrap_or(output)
-      if command.output_reports_denial(full) {
-        Some(
-          @shell.contextual_source_write_denial_feedback(
-            command,
-            full,
-            read_only_review=snapshot.read_only_review,
-          ),
-        )
-      } else {
-        None
-      }
-    }
-    None => None
+  let sandbox_denied = if snapshot.sandboxed_command is Some(command) {
+    let full = bg_runtime.read_output(job_id).unwrap_or(output)
+    command.output_reports_denial(full)
+  } else {
+    false
   }
-  let sandbox_denied = sandbox_feedback is Some(_)
   let is_error = exit_error || snapshot.had_invalid_utf8 || sandbox_denied
   // Truncated whenever what we show is less than what the job produced — this
   // covers the window (large output), a memory-only runtime that dropped output
@@ -145,8 +133,8 @@ async fn execute(
       content.write_string("\n")
     }
   }
-  if sandbox_feedback is Some(feedback) {
-    content.write_string(feedback)
+  if sandbox_denied {
+    content.write_string(@sandbox.source_write_denial_feedback)
     content.write_string("\n")
   }
   content.write_string(footer)
@@ -155,7 +143,7 @@ async fn execute(
 }
 
 ///|
-/// Longest a single shell_output call may block awaiting a job, so one tool
+/// Longest a single job_output call may block awaiting a job, so one tool
 /// call cannot hold the turn indefinitely; the model can always call again.
 let max_wait_ms : Int = 120_000
 
@@ -167,7 +155,7 @@ fn wait_ms(arguments : Json) -> Result[Int?, String] {
     { "wait_ms": Number(value, ..), .. } => {
       let wait = value.to_int()
       if wait <= 0 {
-        Err("error: shell_output wait_ms must be a positive number")
+        Err("error: job_output wait_ms must be a positive number")
       } else if wait > max_wait_ms {
         Ok(Some(max_wait_ms))
       } else {
@@ -178,7 +166,7 @@ fn wait_ms(arguments : Json) -> Result[Int?, String] {
     // Present but not a number (e.g. a stringified "30000"): reject rather than
     // silently skip the wait — the local dispatcher does not enforce the JSON
     // schema, so the decoder must.
-    { "wait_ms": _, .. } => Err("error: shell_output wait_ms must be a number")
+    { "wait_ms": _, .. } => Err("error: job_output wait_ms must be a number")
     _ => Ok(None)
   }
 }

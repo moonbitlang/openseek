@@ -3,6 +3,7 @@ package "bobzhang/openseek/agent_tool/shell_exec"
 
 import {
   "bobzhang/openseek/agent_runtime",
+  "moonbitlang/async/process",
   "moonbitlang/core/debug",
 }
 
@@ -40,7 +41,8 @@ pub async fn ShellExecution::read_tail(Self, Int) -> String
 pub fn ShellExecution::request_stop(Self) -> Unit
 pub fn ShellExecution::seq(Self) -> Int
 pub fn ShellExecution::size(Self) -> Int
-pub async fn[X] ShellExecution::start(@agent_runtime.AgentTaskScope[X], program~ : String, args~ : Array[String], cwd? : String, inline_cap? : Int, hard_cap? : Int, spill_path? : String, kill_when_full? : Bool, kill_at_hard_cap? : Bool) -> Self
+pub fn ShellExecution::spill_path(Self) -> String?
+pub async fn[X] ShellExecution::start(@agent_runtime.AgentTaskScope[X], program~ : String, args~ : Array[String], cwd? : String, stdin? : &@process.ProcessInput, inline_cap? : Int, hard_cap? : Int, spill_path? : String, kill_when_full? : Bool, kill_at_hard_cap? : Bool) -> Self
 pub fn ShellExecution::started_at_ms(Self) -> Int64
 pub fn ShellExecution::status(Self) -> ExecStatus
 pub async fn ShellExecution::stop(Self) -> Bool

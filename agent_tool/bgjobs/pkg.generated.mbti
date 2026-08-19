@@ -5,6 +5,7 @@ import {
   "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_tool/internal/sandbox",
   "bobzhang/openseek/agent_tool/shell_exec",
+  "moonbitlang/async/process",
 }
 
 // Values
@@ -21,8 +22,8 @@ pub fn[X] BgJobRuntime::new(@agent_runtime.AgentTaskScope[X], spill_dir? : Strin
 pub async fn BgJobRuntime::read_output(Self, String) -> String?
 pub async fn BgJobRuntime::read_output_tail(Self, String, Int) -> String?
 pub fn BgJobRuntime::snapshot(Self, String) -> BgJobSnapshot?
-pub async fn BgJobRuntime::spawn_foreground_retained(Self, String, Array[String], String?, Int) -> @shell_exec.ShellExecution
-pub async fn BgJobRuntime::start(Self, program~ : String, args~ : Array[String], command~ : String, cwd? : String, max_output_chars? : Int, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool) -> String
+pub async fn BgJobRuntime::spawn_foreground_retained(Self, String, Array[String], String?, Int, stdin? : &@process.ProcessInput) -> @shell_exec.ShellExecution
+pub async fn BgJobRuntime::start(Self, program~ : String, args~ : Array[String], command~ : String, cwd? : String, max_output_chars? : Int, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, stdin? : &@process.ProcessInput) -> String
 pub async fn BgJobRuntime::stop(Self, String) -> Bool
 pub async fn BgJobRuntime::wait_exit(Self, String, Int) -> Bool
 

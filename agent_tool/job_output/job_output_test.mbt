@@ -1,13 +1,13 @@
 ///|
-/// Execute the shell_output tool and unwrap its Respond output.
+/// Execute the job_output tool and unwrap its Respond output.
 #cfg(not(platform="windows"))
-async fn run_shell_output(
+async fn run_job_output(
   bg : @bgjobs.BgJobRuntime,
   arguments : Json,
 ) -> @agent_tool.ToolOutput {
-  let action = match @shell_output.definition(bg).execute {
+  let action = match @job_output.definition(bg).execute {
     Async(execute) => execute(arguments)
-    Sync(_) => fail("shell_output should be async")
+    Sync(_) => fail("job_output should be async")
   }
   guard action is Respond(output) else { fail("expected a Respond action") }
   output
@@ -28,7 +28,7 @@ async fn poll_bg_terminal(bg : @bgjobs.BgJobRuntime, id : String) -> Unit {
 
 ///|
 #cfg(not(platform="windows"))
-async test "shell_output returns a running job's output and status" {
+async test "job_output returns a running job's output and status" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
     let id = bg.start(
@@ -37,7 +37,7 @@ async test "shell_output returns a running job's output and status" {
       command="job",
     )
     @async.sleep(100)
-    let output = run_shell_output(bg, { "job_id": id })
+    let output = run_job_output(bg, { "job_id": id })
     assert_false(output.is_error)
     assert_true(output.content.contains("hi"))
     assert_true(output.content.contains("running"))
@@ -47,12 +47,12 @@ async test "shell_output returns a running job's output and status" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "shell_output reports a finished job's exit code" {
+async test "job_output reports a finished job's exit code" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
     let id = bg.start(program="sh", args=["-c", "exit 2"], command="job")
     poll_bg_terminal(bg, id)
-    let output = run_shell_output(bg, { "job_id": id })
+    let output = run_job_output(bg, { "job_id": id })
     assert_true(output.is_error)
     assert_true(output.content.contains("exit=2"))
   })
@@ -60,7 +60,7 @@ async test "shell_output reports a finished job's exit code" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "shell_output windows a large job's output and notes truncation" {
+async test "job_output windows a large job's output and notes truncation" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-test-")
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group), spill_dir=dir)
@@ -71,7 +71,7 @@ async test "shell_output windows a large job's output and notes truncation" {
       max_output_chars=100,
     )
     poll_bg_terminal(bg, id)
-    let output = run_shell_output(bg, { "job_id": id })
+    let output = run_job_output(bg, { "job_id": id })
     // Bounded to the window, with truncation metadata, but still showing the
     // recent (tail) output — here the end of the sequence.
     assert_true(output.content.contains("truncated=true"))
@@ -85,7 +85,7 @@ async test "shell_output windows a large job's output and notes truncation" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "shell_output flags dropped output for a memory-only job" {
+async test "job_output flags dropped output for a memory-only job" {
   @async.with_task_group(group => {
     // Memory-only runtime (no spill dir): output past the budget is dropped.
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
@@ -96,7 +96,7 @@ async test "shell_output flags dropped output for a memory-only job" {
       max_output_chars=100,
     )
     poll_bg_terminal(bg, id)
-    let output = run_shell_output(bg, { "job_id": id })
+    let output = run_job_output(bg, { "job_id": id })
     // Only ~100 chars retained but the job produced far more — must not present
     // the prefix as complete.
     assert_true(output.content.contains("truncated=true"))
@@ -105,7 +105,7 @@ async test "shell_output flags dropped output for a memory-only job" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "shell_output marks binary background output as a tool error" {
+async test "job_output marks binary background output as a tool error" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
     // A background command with non-UTF-8 output that exits 0 must still be a
@@ -116,7 +116,7 @@ async test "shell_output marks binary background output as a tool error" {
       command="binary",
     )
     poll_bg_terminal(bg, id)
-    let output = run_shell_output(bg, { "job_id": id })
+    let output = run_job_output(bg, { "job_id": id })
     assert_true(output.is_error)
     assert_true(output.content.contains("binary_output"))
   })
@@ -124,10 +124,10 @@ async test "shell_output marks binary background output as a tool error" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "shell_output errors on an unknown job id" {
+async test "job_output errors on an unknown job id" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
-    let output = run_shell_output(bg, { "job_id": "nope" })
+    let output = run_job_output(bg, { "job_id": "nope" })
     assert_true(output.is_error)
     assert_true(output.content.contains("no background job"))
   })
@@ -144,7 +144,7 @@ async test "wait_ms blocks until the job finishes and returns its output" {
       command="waited",
     )
     // No polling loop: a single call awaits the exit and returns the result.
-    let output = run_shell_output(bg, { "job_id": id, "wait_ms": 30000 })
+    let output = run_job_output(bg, { "job_id": id, "wait_ms": 30000 })
     assert_false(output.is_error)
     assert_true(output.content.contains("WAITED-OK"))
     assert_true(output.content.contains("exit=0"))
@@ -157,7 +157,7 @@ async test "a wait_ms deadline on a still-running job is not an error" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
     let id = bg.start(program="sh", args=["-c", "sleep 30"], command="slow")
-    let output = run_shell_output(bg, { "job_id": id, "wait_ms": 200 })
+    let output = run_job_output(bg, { "job_id": id, "wait_ms": 200 })
     // Deadline expiry just reports the live status; the model can call again.
     assert_false(output.is_error)
     assert_true(output.content.contains("running"))
@@ -171,7 +171,7 @@ async test "a non-positive wait_ms is a tool error" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
     let id = bg.start(program="sh", args=["-c", "true"], command="noop")
-    let output = run_shell_output(bg, { "job_id": id, "wait_ms": -5 })
+    let output = run_job_output(bg, { "job_id": id, "wait_ms": -5 })
     assert_true(output.is_error)
     assert_true(output.content.contains("wait_ms"))
   })
@@ -183,7 +183,7 @@ async test "a non-numeric wait_ms is a tool error, not silently ignored" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::new(AgentTaskScope(group))
     let id = bg.start(program="sh", args=["-c", "true"], command="noop")
-    let output = run_shell_output(bg, { "job_id": id, "wait_ms": "30000" })
+    let output = run_job_output(bg, { "job_id": id, "wait_ms": "30000" })
     assert_true(output.is_error)
     assert_true(output.content.contains("wait_ms must be a number"))
   })

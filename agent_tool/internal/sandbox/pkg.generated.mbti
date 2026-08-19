@@ -2,6 +2,7 @@
 package "bobzhang/openseek/agent_tool/internal/sandbox"
 
 // Values
+pub let source_write_denial_feedback : String
 
 // Errors
 

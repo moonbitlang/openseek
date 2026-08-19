@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/shell_stop"
+package "bobzhang/openseek/agent_tool/job_stop"
 
 import {
   "bobzhang/openseek/agent_tool",

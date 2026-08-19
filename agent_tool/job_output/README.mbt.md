@@ -1,12 +1,11 @@
-# Shell Output Tool
+# Job Output Tool
 
-`shell_output` reads a background shell job's recent output and status by its
-`job_id` — the id returned by `shell` with `run_in_background=true`, or by a
-foreground command that was moved to the background when it outlived its
-`timeout_ms`.
+`job_output` reads a background job's recent output and status by its
+`job_id` — the id `run_moonbit` returns when called with
+`run_in_background=true`.
 
 The primary consumption path for job results is the **pushed completion
-notice** (a job announces itself when it finishes); `shell_output` is for
+notice** (a job announces itself when it finishes); `job_output` is for
 checking progress on a still-running job, and for reading the output once the
 notice arrives. The tool description and system prompts steer the model away
 from calling it in a polling loop.
@@ -29,7 +28,8 @@ Output first, one `<system>` footer line last (the `read` tool convention):
   wall-clock reaper) so the model does not read it as a
   requested stop.
 - Status is `running`, `exit=<code>`, or `stopped`; non-zero exits and stops
-  are tool errors, preserving the foreground shell's semantics.
+  are tool errors, matching what the same snippet would report in the
+  foreground.
 
 ## Design Rationale
 
@@ -41,7 +41,7 @@ Two invariants drove the implementation:
    drops. The footer metadata is sampled *after* the awaited read, so a job
    that appends or exits while the read yields cannot produce a stale footer.
 2. **Foreground error-semantics parity.** A background job read later behaves
-   exactly like the same command run in the foreground: binary (non-UTF-8)
+   exactly like the same snippet run in the foreground: binary (non-UTF-8)
    output is a tool error even at exit 0 (`binary_output=true`), and a
    sandboxed source-write denial is detected by scanning the *full* retained
    output (the denial line can be earlier than the displayed tail) with the

@@ -4,7 +4,6 @@ import {
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/agent_tool/read",
   "bobzhang/openseek/agent_tool/run_moonbit",
-  "bobzhang/openseek/agent_tool/shell",
   "bobzhang/openseek/deepseek",
   "moonbitlang/core/json",
 }

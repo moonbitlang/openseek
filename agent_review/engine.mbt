@@ -42,7 +42,6 @@ pub async fn run_review(
     tools=captured => {
       @agent_tool.Tools([
         @read.definition(workspace_root~),
-        @shell.definition(workspace_root~, read_only=true),
         @run_moonbit.definition(workspace_root~),
         submit_review_tool(captured),
       ])

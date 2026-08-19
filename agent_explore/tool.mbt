@@ -229,8 +229,7 @@ pub async fn run_child(
     tools=captured => {
       @agent_tool.Tools([
         @read.definition(workspace_root~),
-        @shell.definition(workspace_root~, read_only=true, scratch_dir?),
-        @run_moonbit.definition(workspace_root~),
+        @run_moonbit.definition(workspace_root~, scratch_dir?),
         submit_answer_tool(captured),
       ])
     },
@@ -274,13 +273,13 @@ test "render_report shows answer, citations, and unresolved" {
 
 ///|
 test "parse_child_report re-checks the contract at the trust boundary" {
-  guard parse_child_report(ToJson::to_json(sample_report())) is Ok(_) else {
+  guard parse_child_report(sample_report().to_json()) is Ok(_) else {
     fail("expected a valid report")
   }
   guard parse_child_report({ "answer": "no version" }) is Err(_) else {
     fail("expected a parse rejection")
   }
-  guard parse_child_report(ToJson::to_json({ ..sample_report(), answer: "" }))
+  guard parse_child_report({ ..sample_report(), answer: "" }.to_json())
     is Err(_) else {
     fail("expected a validation rejection")
   }

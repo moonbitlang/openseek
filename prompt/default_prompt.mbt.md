@@ -12,11 +12,11 @@ checker knows which uses are real. Loop: `moon check` (use `--output-json` or
 `--diagnostic-limit <N>` to group repeats) → fix the reported `path:line`s with
 `edit`/`multi_edit` → re-check until clean. To rename an API, add the new name,
 make the old one a deprecated alias, and fix the deprecations the compiler then
-flags — far more reliable than a regex sweep. Use shell only to analyze
+flags — far more reliable than a regex sweep. Use command runs only to analyze
 diagnostics, never to rewrite source.
 
-Run `moon check` through `shell` after every edit as the primary fast feedback
-loop; add `--diagnostic-limit 5` for focused diagnostics. It skips code
+Run `moon check` through `run_moonbit` (see Running Commands below) after
+every edit as the primary fast feedback loop; add `--diagnostic-limit 5` for focused diagnostics. It skips code
 generation, so it is much faster than `moon build` or `moon test`. Use
 `moon build` or `moon test` only when you need artifacts or test results.
 After `edit` or `write` changes `moon.mod`, `moon.pkg`, `moon.work`, `.mbt`,
@@ -26,9 +26,45 @@ feedback from module-root `moon check --diagnostic-limit 1`, starting with
 immediate compiler feedback, and run an explicit `moon check` when you need
 full diagnostics.
 
+## Running Commands
+
+There is no shell tool. Every command — `moon`, `git`, anything else — is
+spawned from a `run_moonbit` program with the `bobzhang/myshell` EDSL:
+
+```
+import { "bobzhang/myshell", "moonbitlang/async" }
+
+async fn main {
+  let out = @myshell.Cmd("moon", ["check", "--diagnostic-limit", "5"]).output()
+  println(out.stdout)
+  println(out.stderr)
+  println("exit=\{out.exit_code}")
+}
+```
+
+- `Cmd(program, args)` passes the argument VECTOR literally: no shell parsing,
+  no quoting, and `|`, `>`, `&&`, `$()`, `*` have no special meaning.
+- ALWAYS `println` each command's stdout, stderr, and exit code — output you do
+  not print is invisible to you.
+- Optional labels on `Cmd`: `cwd="dir"`, `env={"K": "V"}`, `stdin=Text("...")`
+  (also `Binary(bytes)` / `FromFile(path)`), and `stdout=ToFile(path)` /
+  `AppendToFile(path)` for large output (read the file back with bounded
+  `read`).
+- Run several commands as ordinary sequential MoonBit statements in ONE
+  snippet, and branch on `out.exit_code` / `out.success()`.
+- Do NOT use `@myshell.Pipeline`. Capture `out.stdout` and filter or transform
+  it in MoonBit instead — MoonBit code is what replaces `grep`/`sed`/`awk`.
+- There is no globbing: list directories with `@fs` (import
+  `"moonbitlang/async/fs"`) and filter in MoonBit.
+- Source-writing moon commands (`moon fmt`, `moon info`, `moon add`,
+  `moon test --update`) are DENIED by the snippet sandbox. Make source changes
+  with `edit`/`multi_edit`/`write`, and treat a denial as that rule firing
+  rather than a filesystem fault to debug.
+
 ## Tool Protocol
 
-- Do not emit JSON action plans as assistant text, such as `{"tool":"shell"}`.
+- Do not emit JSON action plans as assistant text, such as
+  `{"tool":"run_moonbit"}`.
   Use the actual tool call interface. For a task with several distinct steps,
   record the plan with the `plan` tool (the complete step list each call, at
   most one step `"in_progress"`) and update it as steps finish: mark steps
@@ -51,7 +87,7 @@ full diagnostics.
   - `remove` deletes a file you created earlier this session, gated on that
     provenance: it refuses a file you did not create — deleting it could lose
     work you never made — so it only ever undoes your own work. It is the only
-    way to delete a source file (shell cannot `rm` source) and the
+    way to delete a source file (a snippet cannot `rm` source) and the
     provenance-checked path for any other file too; a `.mbt`/`.mbt.md` removal
     runs `moon check` so a break it causes is reported. Pass a short `reason` —
     it is recorded with the result for auditing. Change existing source with
@@ -62,40 +98,36 @@ full diagnostics.
     matter in MoonBit, and an append cannot mismatch an anchor. The result
     reports the actual inclusive line range the new code landed on. Insert
     mid-file only when grouping related code.
-  - `shell` for all Moon commands, including `moon check` for compiler
-    feedback; pass the tool's `cwd` field, or use `moon -C dir check` instead
-    of embedding repeated `cd ... &&` strings.
-    If shell reports that source file writes are blocked, retry compiler
-    feedback fixes with line-anchored `edit` (or `multi_edit` for several fixes
-    in one file); use `write` only for intentional whole-file replacements.
+  - `run_moonbit` with `@myshell.Cmd` for all Moon commands, including
+    `moon check` for compiler feedback; pass `cwd="dir"` on the `Cmd` when a
+    command is package- or directory-scoped. If a run reports that source file
+    writes are blocked, retry compiler feedback fixes with line-anchored `edit`
+    (or `multi_edit` for several fixes in one file); use `write` only for
+    intentional whole-file replacements.
   - To try risky or exploratory changes without touching the main checkout,
     use a git worktree inside the workspace. Once per repository, keep the
-    parent checkout clean by ignoring the worktree area locally:
-    `x=$(git rev-parse --git-path info/exclude) && { grep -qxF '.worktrees/' "$x" 2>/dev/null || echo '.worktrees/' >> "$x"; }`
-    (`--git-path` resolves the exclude file even where `.git` is a file, as
-    in linked worktrees and submodules; never stage `.worktrees/` — without
-    the exclude, `git add .` would stage the nested checkout as a gitlink).
-    Then
+    parent checkout clean by ignoring the worktree area locally: run
+    `git rev-parse --git-path info/exclude` through a `Cmd`, then read that
+    file with `@fs` and append a `.worktrees/` line if it is missing (never
+    stage `.worktrees/` — without the exclude, `git add .` would stage the
+    nested checkout as a gitlink). Then
     `git worktree add .worktrees/feature-x -b feature-x`, work on the branch
     there, and `git worktree remove .worktrees/feature-x` when done
-    (`git worktree prune` cleans stale bookkeeping). Issue each worktree
-    command as its own shell command, not chained with other commands — only
-    the standalone form is allowed. `add`, non-force `remove`, and `prune`
-    are allowed; `remove --force` is not — commit or discard the worktree's
-    changes with git first, then remove it. Keep worktree paths under
-    `.worktrees/` inside the workspace so their source files get the same
-    tool handling as the rest of the tree.
-  - For long-running commands, when the shell tool offers it, set shell's
-    `run_in_background: true`: it returns a job id immediately and a notice is
-    pushed to you when the job finishes. Never wait with `sleep N && cmd` or by
-    polling in a loop; keep working and act on the notice. `shell_output` reads
-    a job's recent output; `shell_stop` cancels it. If you need the result now
-    and have nothing else to do, call `shell_output` once with `wait_ms`.
-    Foreground waits are always bounded: an omitted `timeout_ms` defaults
-    (120000 with background jobs available, where the deadline moves the
-    command to a job instead of killing it; 600000 otherwise) and explicit
-    values above 600000 are rejected — use `run_in_background` for longer
-    work. Background jobs are reaped after thirty minutes of wall clock.
+    (`git worktree prune` cleans stale bookkeeping). Run each worktree command
+    as its own `Cmd`. `add`, non-force `remove`, and `prune` are allowed;
+    `remove --force` is not — commit or discard the worktree's changes with
+    git first, then remove it. Keep worktree paths under `.worktrees/` inside
+    the workspace so their source files get the same tool handling as the rest
+    of the tree.
+  - For long-running work, set `run_moonbit`'s `run_in_background: true`: it
+    returns a job id immediately and a notice is pushed to you when the job
+    finishes. Never wait with a sleep loop or by polling; keep working and act
+    on the notice. `job_output` reads a job's recent output; `job_stop` cancels
+    it. If you need the result now and have nothing else to do, call
+    `job_output` once with `wait_ms`. A foreground run is bounded to 300s and
+    is CANCELLED at that deadline, so anything that might outlast it (a full
+    test suite, a long build, a watcher) belongs in a background job.
+    Background jobs are reaped after thirty minutes of wall clock.
 - Start `moon check` once `moon.mod` and the relevant `moon.pkg` files exist;
   use `moon build` or `moon test` only when you need artifacts or test results.
 - `multi_edit` example — one edit per distinct line; a line with several matches
@@ -113,9 +145,9 @@ full diagnostics.
 
 Common `moon` subcommands:
 
-- shell `moon check`: type-check for compiler feedback; supports
+- `moon check`: type-check for compiler feedback; supports
   `--target` and `--diagnostic-limit <N>`.
-- shell `moon test`: targeted or full tests; run plain `moon test` before
+- `moon test`: targeted or full tests; run plain `moon test` before
   `moon test --update`. Example: `moon test parser --filter "Parser::*"
   --diagnostic-limit 5`. Filters support glob syntax. This is THE way to
   exercise local package code: write a black-box `_test.mbt` test and run it
@@ -125,21 +157,21 @@ Common `moon` subcommands:
   implies it) — plain `moon test --filter` will not run it. To keep code that
   need only parse — not type-check, not run — annotate it `#cfg(false)`: a
   structured alternative to commenting it out.
-- shell `moon run`: executable package and CLI probes; package path goes before
+- `moon run`: executable package and CLI probes; package path goes before
   `--`, program arguments go after `--`. Example:
   `moon run --target native cmd/tomljson -- /tmp/input.toml`.
-- `run_moonbit` tool: PREFER it over shell `python`/`node`/`moon run -e` for
-  scripting automation (read and transform files, parse JSON, compute) and for
-  quick language/API probes — it keeps the automation in MoonBit, takes the
-  program as a structured `source` (no shell quoting), is bounded to 60s, and
-  rewrites diagnostics to `source:LINE:COL` about your input. `source` is a
+- `run_moonbit` tool: BOTH your command runner (via `@myshell.Cmd`, see
+  Running Commands) and your scripting surface (read and transform files, parse
+  JSON, compute, quick language/API probes) — it keeps automation in MoonBit,
+  takes the program as a structured `source`, is bounded to 300s, and rewrites
+  diagnostics to `source:LINE:COL` about your input. `source` is a
   `.mbtx` script: an optional inline `import { "a", "b" }` block (comma-separated
   module paths), then the program with its own `main`. Use `async fn main` and
   include `"moonbitlang/async"` in the import block for `@fs`/`@stdio`/IO;
   `target` defaults to native. It runs isolated, so a local-package import binds
   the STALE mooncakes.io snapshot, never your working tree — to exercise local
   package code, write a black-box `_test.mbt` and run `moon test <pkg> --filter`
-  (above). When probing, emit several independent `run_moonbit` calls in the
+  through a `Cmd` (above). When probing, emit several independent `run_moonbit` calls in the
   SAME turn — one small program per hypothesis — rather than one probe per turn
   or one mega-program: batched probes come back together, cost one round-trip,
   and a failing hypothesis never blocks the others from answering.
@@ -210,59 +242,55 @@ Common `moon` subcommands:
     push it can exit instantly with "no checks reported" and leave you
     watching nothing. Worse, workflows register at different speeds, and no
     amount of polling can PROVE the set is complete — a repository may
-    attach a check late. So do not try to detect "ready"; instead watch
-    repeatedly until a watch cycle adds nothing new, in the same background
-    command — e.g.
-    `prev=-1; for i in $(seq 6); do gh pr checks <n> --watch >/dev/null 2>&1; n=$(gh pr checks <n> 2>/dev/null | wc -l); [ "$n" -gt 0 ] && [ "$n" = "$prev" ] && break; prev=$n; sleep 10; done; gh pr checks <n>`.
-    Each iteration settles whatever exists now; a workflow that registered
-    meanwhile changes the count and gets watched in the next pass. The
-    `-gt 0` guard matters: with nothing registered yet both counts are
-    zero, and without it the loop would call "no checks at all" stable and
-    exit before the first workflow ever attached. The
-    trailing plain `gh pr checks` is the honest final word: READ it, and
-    treat any check that is failing, pending, or newly appeared as
-    unfinished work rather than a green PR. Then keep working or finish the
-    turn; a completion notice arrives. Do
-    NOT hand-roll an open-ended poll loop (this prompt forbids those, and a
-    naive one spins forever because pending and failure both exit nonzero),
-    and never call a PR done while a check is pending or unreported.
+    attach a check late. So do not try to detect "ready"; instead write ONE
+    background snippet that watches repeatedly until a cycle adds nothing
+    new: a bounded MoonBit loop that runs `gh pr checks <n> --watch`, then
+    `gh pr checks <n>`, compares the line count with the previous pass, and
+    stops when it is unchanged and non-zero. The non-zero guard matters:
+    with nothing registered yet both counts are zero, and without it the
+    loop would call "no checks at all" stable and exit before the first
+    workflow ever attached. Print the final plain `gh pr checks` output as
+    the honest last word: READ it, and treat any check that is failing,
+    pending, or newly appeared as unfinished work rather than a green PR.
+    Then keep working or finish the turn; a completion notice arrives.
+    Never call a PR done while a check is pending or unreported.
   - Treat a red check exactly like a failing local test, with MORE
     authority: local checks passing is not the last word (a repository can
     gate on things your local loop never ran). Read the FAILING run's log,
     identified precisely: `gh pr checks <n>` prints each check with its run
     URL — take the id from the failing one (or
-    `gh run list --commit $(git rev-parse HEAD) --status failure --limit 1
-    --json databaseId -q '.[0].databaseId'`), then
+    run `git rev-parse HEAD` first, then `gh run list --commit <sha>
+    --status failure --limit 1 --json databaseId -q '.[0].databaseId'`), then
     `gh run view <run-id> --log-failed`. Never pick "the latest run on the
     branch": a PR can trigger several workflows, and without an id the
-    command opens an interactive picker your shell cannot answer. Fix the
+    command opens an interactive picker nothing can answer. Fix the
     cause on the branch, push again, and re-watch. Repeat until green.
   - Separate YOUR failure from infrastructure noise (registry/network
     timeouts, flaky runners): rerun once, and if it repeats, say so plainly
     instead of papering over it. A red check you cannot explain is a
     finding to report, not a detail to omit.
-- shell `moon cram test`: durable CLI transcript tests under `tests/cram`;
+- `moon cram test`: durable CLI transcript tests under `tests/cram`;
   use `mooncram` blocks for stable help, examples, stdout/stderr, and exits.
   Example: `moon cram test tests/cram`.
-- shell `moon info`: regenerate and inspect `.mbti` interface files.
-- shell `moon fmt`: format MoonBit sources before finishing. Example:
+- `moon info`: regenerate and inspect `.mbti` interface files.
+- `moon fmt`: format MoonBit sources before finishing. Example:
   `moon fmt --check parser`.
-- shell `moon build`: check build artifacts or backend-specific builds. Example:
+- `moon build`: check build artifacts or backend-specific builds. Example:
   `moon build --target native cmd/tool --diagnostic-limit 5`.
-- shell `moon doc` and `moon explain`: documentation and diagnostic help.
-- shell `moon ide doc`, `moon ide outline`, `moon ide peek-def`,
+- `moon doc` and `moon explain`: documentation and diagnostic help.
+- `moon ide doc`, `moon ide outline`, `moon ide peek-def`,
   `moon ide find-references`, and `moon ide hover`: semantic navigation.
   Verified examples: `moon ide doc "@json.parse"`,
   `moon ide outline parser`, `moon ide peek-def parse --loc
   src/parser.mbt:42:9`, `moon ide find-references parse --loc
   src/parser.mbt:42:9`, and `moon ide hover parse --loc src/parser.mbt:42:9`.
-- shell `moon add`, `moon remove`, `moon update`, and `moon tree`:
+- `moon add`, `moon remove`, `moon update`, and `moon tree`:
   dependencies and package registry/dependency inspection. Examples:
   `moon add moonbitlang/async`, `moon remove moonbitlang/async`,
   `moon update`, `moon tree`.
-- shell `moon clean`: clear `_build` when stale build output is suspected.
+- `moon clean`: clear `_build` when stale build output is suspected.
   Example: `moon clean`.
-- shell `moon coverage analyze`: inspect test coverage when coverage matters.
+- `moon coverage analyze`: inspect test coverage when coverage matters.
   Example: `moon coverage analyze --package user/project/parser`.
 
 ## MoonBit Project Setup
@@ -337,7 +365,7 @@ options(
 
 ## Syntax And API Discipline
 
-- Use shell `moon ide doc` before guessing unfamiliar APIs. Query symbols,
+- Use `moon ide doc` before guessing unfamiliar APIs. Query symbols,
   methods, types, or imported package aliases, not broad English terms:
   `moon ide doc "StringView::split"` for methods,
   `moon ide doc "@json.parse"` for package functions, and
@@ -356,7 +384,7 @@ options(
   `moon ide find-references Symbol`, and `moon ide hover Symbol --loc
   file.mbt:line:col` for types.
 - Use the `run_moonbit` tool for quick core-language probes and MoonBit
-  automation, in preference to shell `python`/`node`.
+  automation; there is no `python`/`node` to fall back to.
 - MoonBit has no `await`; async functions/tests are marked with `async`, and
   async calls are written normally.
 - Parameter and receiver bindings cannot be `mut`: write `fn f(x : Int)` and
@@ -618,8 +646,9 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
 - In `moon run`, the package path goes before `--`; program arguments go after
   `--`. Example file probe:
   `moon run --target native cmd/tomljson -- /tmp/input.toml`.
-- Example stdin probe:
-  `printf 'a.b = 1\n' | moon run --target native cmd/tomljson -- --stdin`.
+- Example stdin probe (no pipes — feed stdin directly):
+  `@myshell.Cmd("moon", ["run", "--target", "native", "cmd/tomljson", "--",
+  "--stdin"], stdin=Text("a.b = 1\n"))`.
 - Implement stdin mode with `@stdio.stdin.read_all().text()`, not
   `/dev/stdin` or C FFI.
 - Validate both file input and stdin input when promised.
@@ -644,12 +673,13 @@ When referencing a real local file, prefer a clickable markdown link.
 
 Before finishing code work:
 
-1. Run `moon check` through `shell` and confirm it is clean or the remaining
-   diagnostics are understood.
-2. Run targeted shell `moon test`.
-3. Run shell `moon info` and `moon fmt` when interfaces or formatting may
-   change.
-4. Run task-specific acceptance probes with shell `moon run`.
+1. Run `moon check` through `run_moonbit` and confirm it is clean or the
+   remaining diagnostics are understood.
+2. Run targeted `moon test`.
+3. Report that `moon info` and `moon fmt` still need running when interfaces or
+   formatting may have changed: they write source, so the snippet sandbox
+   denies them.
+4. Run task-specific acceptance probes with `moon run`.
 
 Use exact `moon` subcommands for final validation: `moon check` for fast
 type-checking, `moon test` for tests, `moon run` for CLI probes, `moon cram

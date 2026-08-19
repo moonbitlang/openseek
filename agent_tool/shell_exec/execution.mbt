@@ -75,11 +75,20 @@ pub struct ShellExecution {
 /// Spawn `program args` on the session group with stdout+stderr merged into a
 /// fresh sink, start a monitor task, and return the live execution. `spill_path`,
 /// when set, is where the sink writes full output once it exceeds `inline_cap`.
+///
+/// `stdin` is the child's standard input. A child must never be left holding
+/// the PARENT's fd 0 — under `openseek serve` that descriptor is the JSONL
+/// command channel, and a child that reads stdin would consume the engine's own
+/// commands. Omitting it therefore does not fall back to inheritance: the child
+/// gets a pipe of its own whose write end is closed at once, so it reads EOF
+/// immediately (on Windows too, where inheriting the engine's held-open pipe
+/// hangs `git`). Pass a redirect when the program should actually read something.
 pub async fn[X] ShellExecution::start(
   scope : @agent_runtime.AgentTaskScope[X],
   program~ : String,
   args~ : Array[String],
   cwd? : String,
+  stdin? : &@process.ProcessInput,
   inline_cap? : Int = default_inline_cap,
   hard_cap? : Int = default_hard_cap,
   spill_path? : String,
@@ -89,13 +98,19 @@ pub async fn[X] ShellExecution::start(
   let group = scope.group()
   let sink = ShellOutputSink::new(inline_cap~, hard_cap~, spill_path?)
   let (reader, writer) = @process.read_from_process()
-  let (stdin_reader, stdin_writer) = @process.write_to_process()
-  stdin_writer.close()
+  let child_stdin : &@process.ProcessInput = match stdin {
+    Some(input) => input
+    None => {
+      let (stdin_reader, stdin_writer) = @process.write_to_process()
+      stdin_writer.close()
+      stdin_reader
+    }
+  }
   let process = @process.spawn(
     group,
     program,
     args,
-    stdin=stdin_reader,
+    stdin=child_stdin,
     stdout=writer,
     stderr=writer,
     cwd?=cwd.map(cwd => cwd.view()),
@@ -317,9 +332,15 @@ pub fn ShellExecution::over_inline_cap(self : ShellExecution) -> Bool {
 }
 
 ///|
-/// The spill file's path, if output spilled to disk.
-#cfg(not(platform="windows"))
-fn ShellExecution::spill_path(self : ShellExecution) -> String? {
+/// Where full output is retained on disk, or `None` for a memory-only
+/// execution (one started without a `spill_path` — tests, and any runtime
+/// whose session temp dir could not be created).
+///
+/// Public so a caller can scan the COMPLETE output without materializing it:
+/// `read_all` pulls up to `hard_cap` (20MB) into memory, while a path lets the
+/// caller stream its own bounded window — which is how a sandbox source-write
+/// denial is found when it lands past the rendered head.
+pub fn ShellExecution::spill_path(self : ShellExecution) -> String? {
   self.sink.spill_path()
 }
 

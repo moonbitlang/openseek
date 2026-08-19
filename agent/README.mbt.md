@@ -103,10 +103,11 @@ calls `@agent.run`, but that decision lives outside the `agent` package.
 
 `build_tools(runtime, scope)` returns the standard local tool registry:
 
-- `shell`: run a command under the workspace root or an explicit cwd (including
-  `moon check` for compiler feedback), with `run_in_background` support;
-- `shell_output` / `shell_stop`: read or stop a background shell job (omitted on
-  Windows, where background jobs are not wired);
+- `run_moonbit`: compile and run a self-contained MoonBit program — both the
+  scripting surface (transform files, parse JSON, compute, probe the language)
+  and the command runner, since processes are spawned from the program through
+  the shell-free `bobzhang/myshell` EDSL. Supports `run_in_background`;
+- `job_output` / `job_stop`: read or stop a background job;
 - `read`: read a text file;
 - `edit`: replace exact text in a file;
 - `multi_edit`: apply several explicit line-anchored replacements to one file;
@@ -115,16 +116,16 @@ calls `@agent.run`, but that decision lives outside the `agent` package.
 - `plan`: record or replace the step-by-step plan for a multi-step task;
 - `goal`: report standing-goal status (`met`, `continuing`, or `blocked`;
   `met` clears the goal — setting one is the serve `goal` command's job);
-- `run_moonbit`: compile and run a self-contained MoonBit program in an
-  isolated package (automation and language probes; standard batteries only,
-  no local packages);
 - `finish`: end the task with a final answer.
+
+There is no shell tool: every command the agent runs is an argument vector
+handed to `@myshell.Cmd`, so no command text is ever parsed by a shell.
 
 File-oriented tools capture `runtime.workspace_root()` when the registry is
 built. The registry also receives the runtime and task scope for stateful
-tools: the shell tools use both — background-job completion notices are pushed
-through `runtime.queue_steer`, and the background-job runtime plus its spill-dir
-cleanup are owned by the task scope's group.
+tools: the background-job path uses both — completion notices are pushed
+through `runtime.queue_steer`, and the job runtime plus its spill-dir cleanup
+are owned by the task scope's group.
 
 ```mbt check
 ///|
@@ -139,9 +140,6 @@ async test "standard tools are registered in dispatch order" {
       ],
       content=(
         #|[
-        #|  "shell",
-        #|  "shell_output",
-        #|  "shell_stop",
         #|  "read",
         #|  "edit",
         #|  "multi_edit",
@@ -150,6 +148,8 @@ async test "standard tools are registered in dispatch order" {
         #|  "plan",
         #|  "goal",
         #|  "run_moonbit",
+        #|  "job_output",
+        #|  "job_stop",
         #|  "finish",
         #|]
       ),
@@ -283,9 +283,9 @@ answer, `finish`, `abort`, cancellation, unexpected failure, or exhausted
 
 ## Operational Notes
 
-This package is intended for trusted local automation. The standard `shell`
-tool can run arbitrary commands, while `edit` and `write` can modify files
-visible to the process. Use the CLI package for application-level policy,
+This package is intended for trusted local automation. `run_moonbit` can run
+arbitrary commands (its snippets spawn processes), while `edit` and `write` can
+modify files visible to the process. Use the CLI package for application-level policy,
 session storage, logging configuration, and serve-mode wire handling.
 
 Run the package tests with:
@@ -312,11 +312,12 @@ improving:
   logs through async logging so piped runs such as `2>&1 | tee run.log` receive
   step output promptly.
 - Current MoonBit projects use `moon.mod`; `moon.mod.json` is legacy. Manifest
-  or package-import edits should be followed quickly by a shell `moon check` or
-  another explicit shell validation command.
-- Use `shell` for exact end-to-end MoonBit command validation beyond compiler
-  feedback, especially `moon test`, `moon run`, `moon info`, `moon fmt`, and
-  README command checks.
+  or package-import edits should be followed quickly by a `moon check` or
+  another explicit validation command.
+- Use `run_moonbit` for exact end-to-end MoonBit command validation beyond
+  compiler feedback, especially `moon test`, `moon run`, and README command
+  checks. Source-writing commands (`moon fmt`, `moon info`) are denied by the
+  snippet sandbox and belong to the caller, not the agent.
 - For snapshot updates, run plain `moon test` first and only run
   `moon test --update` after deciding the failure is a stale snapshot or
   intentional output change, not a behavior bug.
