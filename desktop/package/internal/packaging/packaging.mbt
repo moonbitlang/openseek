@@ -934,14 +934,21 @@ async test "proton CLI version follows the moon.mod library pin" {
 }
 
 ///|
-/// A throwaway workspace for the Proton-runtime tests. `proton_project_dir`
-/// is the monorepo root — the parent of the workspace — so a fixture whose
-/// root is a bare directory would read and write the real `desktop/target`
-/// and collide with its neighbours. Nesting a `desktop` level below the
-/// fixture root keeps every derived path inside it.
-fn fixture_workspace(ws : Workspace, name : String) -> (String, Workspace) {
-  let repo = ws.at("target/\{name}")
-  (repo, { root: join_path(repo, "desktop") })
+/// A throwaway workspace for the Proton-runtime tests, in a private temporary
+/// directory. `proton_project_dir` is the monorepo root — the parent of the
+/// workspace — so the fixture needs two levels: `<tmp>/desktop` is the
+/// workspace and `<tmp>` stands in for the repository above it.
+///
+/// The temporary root matters. These tests ran under the live `desktop/target`
+/// before, which every one of them created and removed concurrently; that is
+/// a shared mutable ancestor between async tests, and it produced a
+/// use-after-delete on Linux CI that never reproduced on macOS. A per-test
+/// `tmpdir` has no ancestor any sibling touches.
+async fn fixture_workspace(name : String) -> (String, Workspace) {
+  let root = @asyncfs.tmpdir(prefix="openseek-\{name}-")
+  let workspace = join_path(root, "desktop")
+  ensure_dir(workspace)
+  (root, { root: workspace })
 }
 
 ///|
@@ -949,11 +956,9 @@ fn fixture_workspace(ws : Workspace, name : String) -> (String, Workspace) {
 /// manifest. Keep package rebuilding on that path instead of assuming the
 /// cache remains inside the resolved Proton package.
 async test "Proton CEF root follows the active runtime manifest" {
-  let ws = locate_workspace()
   let (fixture_root, fixture) = fixture_workspace(
-    ws, "proton-runtime-manifest-test",
+    "proton-runtime-manifest-test",
   )
-  remove_path_if_exists(fixture_root)
   let manifest = fixture.proton_project_at(".proton/runtime.json")
   ensure_dir((manifest : @path.Path).dirname().to_string())
   let cef_root = fixture.at("shared-cache/cef")
@@ -967,11 +972,7 @@ async test "Proton CEF root follows the active runtime manifest" {
 
 ///|
 async test "matching Proton runtime is reused without invoking setup" {
-  let ws = locate_workspace()
-  let (fixture_root, fixture) = fixture_workspace(
-    ws, "proton-runtime-reuse-test",
-  )
-  remove_path_if_exists(fixture_root)
+  let (fixture_root, fixture) = fixture_workspace("proton-runtime-reuse-test")
   let platform = Workspace::proton_platform()
   let version = "0.1.14-test"
   let relative_dist = ".proton/runtimes/\{platform}/test-runtime"
@@ -1028,11 +1029,7 @@ async test "matching Proton runtime is reused without invoking setup" {
 /// must still invalidate the assembled runtime; only the artifact bytes reveal
 /// the difference.
 async test "refreshed prebuilt bytes invalidate the assembled runtime" {
-  let ws = locate_workspace()
-  let (fixture_root, fixture) = fixture_workspace(
-    ws, "proton-prebuilt-stale-test",
-  )
-  remove_path_if_exists(fixture_root)
+  let (fixture_root, fixture) = fixture_workspace("proton-prebuilt-stale-test")
   let prebuilt_root = fixture.proton_project_at(
     "\{ProtonPrebuiltRoot}/test-platform",
   )
@@ -1076,11 +1073,7 @@ async test "refreshed prebuilt bytes invalidate the assembled runtime" {
 /// user-level cache; the packager must consume it verbatim instead of joining
 /// it below the Proton project root.
 async test "absolute runtime dist paths pass through unchanged" {
-  let ws = locate_workspace()
-  let (fixture_root, fixture) = fixture_workspace(
-    ws, "proton-absolute-dist-test",
-  )
-  remove_path_if_exists(fixture_root)
+  let (fixture_root, fixture) = fixture_workspace("proton-absolute-dist-test")
   let dist = fixture.at("user-cache/runtimes/test-platform/test-runtime")
   let active_path = fixture.proton_project_at(".proton/runtime.json")
   ensure_dir((active_path : @path.Path).dirname().to_string())
