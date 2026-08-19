@@ -698,7 +698,7 @@ fn schema(background~ : Bool) -> Json {
     "target": {
       "type": "string",
       "enum": ["native", "wasm", "wasm-gc", "js", "llvm"],
-      "description": "Backend to run on; defaults to native (required for the async @fs/@stdio/@process IO batteries).",
+      "description": "Backend to run on; defaults to native. Commands and IO (@fs, @stdio, myshell) work on native and wasm; the other backends run pure computation only.",
     },
     "cwd": {
       "type": "string",
