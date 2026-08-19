@@ -17,8 +17,8 @@ async fn main {
     [command, ..] => command
     [] => abort("current executable command is unavailable")
   }
-  let log = launch_logger(executable)
-  log.info() <?
+  launch_logger(executable)
+  @xlog.info() <?
     {
       "event": "desktop_main_start",
       "message": "start",
@@ -27,15 +27,15 @@ async fn main {
   // A Finder/Dock launch inherits only launchd's minimal environment; graft
   // the user's login-shell environment (PATH, custom variables) onto this
   // process before anything downstream — engine, LSP, shell tool — spawns.
-  @shellenv.apply_login_shell_env(executable, log)
+  @shellenv.apply_login_shell_env(executable)
   let frontend_entry = @host.frontend_entry_path(executable)
   let engine = @engine.engine_command(executable)
   let app_version = @host.package_version(executable)
-  log.info() <? { "message": "host process start" }
-  log.info() <? { "message": "frontend entry", "path": frontend_entry }
-  log.info() <? { "message": "engine", "path": engine }
-  log.info() <? { "message": "codex", "path": @codex.command() }
-  log.info() <? { "message": "app version", "version": app_version }
+  @xlog.info() <? { "message": "host process start" }
+  @xlog.info() <? { "message": "frontend entry", "path": frontend_entry }
+  @xlog.info() <? { "message": "engine", "path": engine }
+  @xlog.info() <? { "message": "codex", "path": @codex.command() }
+  @xlog.info() <? { "message": "app version", "version": app_version }
   let runtime_dir = @host.prepared_runtime_dir(executable)
   let codex_home = match runtime_dir {
     Some(dir) => @codex.prepared_home(dir)
@@ -45,7 +45,7 @@ async fn main {
     command=@codex.command(),
     home=codex_home,
   )
-  log.info() <?
+  @xlog.info() <?
     {
       "message": "codex home",
       "path": codex_home
@@ -60,7 +60,7 @@ async fn main {
     error => {
       // An unwritable Documents folder must not stop the app — the user can
       // still attach a project by hand.
-      log.error() <?
+      @xlog.error() <?
         {
           "message": "default workspace setup failed",
           "error": @debug.render(Repr(error)),
@@ -69,7 +69,7 @@ async fn main {
     }
   }
   if default_workspace is Some(dir) {
-    log.info() <?
+    @xlog.info() <?
       { "message": "default workspace attached", "path": dir.to_string() }
   }
   // Conversations the desktop used to keep in the global store predate
@@ -77,7 +77,7 @@ async fn main {
   // they stay listed; a failure leaves them where they are for a later launch.
   let migrated = @engine.migrate_global_store() catch {
     error => {
-      log.error() <?
+      @xlog.error() <?
         {
           "message": "global store migration failed",
           "error": @debug.render(Repr(error)),
@@ -86,7 +86,7 @@ async fn main {
     }
   }
   if migrated > 0 {
-    log.info() <?
+    @xlog.info() <?
       {
         "message": "migrated conversations from the global store",
         "count": migrated,
@@ -112,7 +112,7 @@ async fn main {
   // window and commanded over bridge-local `browser.*` ops.
   let views = @extension.BrowserViews::new()
   let relay = @remote.RelayActor::new(state, announce=device => {
-    log.info() <? { "message": "relay registered", "device": device }
+    @xlog.info() <? { "message": "relay registered", "device": device }
   })
   // Proton exposes the `__MoonBit__` bridge — both the ops and the event
   // channel the frontend listens on — only to the local origin its asset
@@ -213,10 +213,10 @@ async fn main {
     // this host whenever a sign-in (or the environment override) says so,
     // and idles otherwise.
     group.spawn_bg(allow_failure=true, () => relay.run())
-    log.info() <? { "event": "desktop_app_run_start" }
+    @xlog.info() <? { "event": "desktop_app_run_start" }
     try {
       app.run()
-      log.info() <?
+      @xlog.info() <?
         {
           "event": "desktop_app_run_return",
           "result": "ok",
@@ -224,7 +224,7 @@ async fn main {
         }
     } catch {
       error =>
-        log.error() <?
+        @xlog.error() <?
           {
             "event": "desktop_app_run_return",
             "result": "error",
@@ -242,18 +242,18 @@ async fn main {
   // not our child and this process can exit right after.
   if runtime_dir is Some(dir) &&
     @update.take_relaunch_target(work_dir=dir.to_string()) is Some(target) {
-    log.info() <? { "message": "relaunch after update", "path": target }
+    @xlog.info() <? { "message": "relaunch after update", "path": target }
     let code = @process.run("open", ["-n", target]) catch {
       error => {
-        log.error() <? { "message": "relaunch failed", "error": "\{error}" }
+        @xlog.error() <? { "message": "relaunch failed", "error": "\{error}" }
         return
       }
     }
     if code != 0 {
-      log.error() <? { "message": "relaunch failed", "code": code }
+      @xlog.error() <? { "message": "relaunch failed", "code": code }
     }
   }
-  log.info() <? { "event": "desktop_main_return" }
+  @xlog.info() <? { "event": "desktop_main_return" }
 }
 
 ///|

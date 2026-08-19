@@ -7,7 +7,7 @@
 // host and the framework child can share the file safely.
 
 ///|
-async fn launch_logger(executable : String) -> @xlog.Logger {
+async fn launch_logger(executable : String) -> Unit {
   guard @host.prepared_runtime_dir(executable) is Some(dir) else {
     fail("cannot determine the per-user runtime directory")
   }
@@ -18,5 +18,4 @@ async fn launch_logger(executable : String) -> @xlog.Logger {
   @env.set_env_var("OPENSEEK_DESKTOP_LOG", path)
   @xlog.global().set_handler(@xlog.File(path))
   @xlog.global().set_level(Debug)
-  @xlog.global()
 }

@@ -36,10 +36,7 @@ pub fn print_env_json(mark : String) -> Unit {
 /// environment and only leaves a log line behind. Windows GUI processes
 /// already inherit the user's registry environment, so they return before
 /// starting a probe.
-pub async fn apply_login_shell_env(
-  executable : String,
-  log : @xlog.Logger,
-) -> Unit {
+pub async fn apply_login_shell_env(executable : String) -> Unit {
   if @platform.win32 || @platform.win64 {
     return
   }
@@ -61,7 +58,7 @@ pub async fn apply_login_shell_env(
   } else {
     ["-i", "-l", "-c", command]
   }
-  log.info() <? { "message": "shell env probe", "shell": shell }
+  @xlog.info() <? { "message": "shell env probe", "shell": shell }
   let probe_env : Map[String, String] = Map([])
   probe_env[ResolvingGuardVar] = "1"
   let result = @async.with_timeout_opt(ProbeTimeoutMs, () => {
@@ -69,26 +66,28 @@ pub async fn apply_login_shell_env(
   }) catch {
     error if @async.is_being_cancelled() => raise error
     error => {
-      log.warn() <? { "message": "shell env probe failed", "error": "\{error}" }
+      @xlog.warn() <?
+        { "message": "shell env probe failed", "error": "\{error}" }
       return
     }
   }
   guard result is Some((code, stdout)) else {
-    log.warn() <? { "message": "shell env probe timed out" }
+    @xlog.warn() <? { "message": "shell env probe timed out" }
     return
   }
   guard code == 0 else {
-    log.warn() <? { "message": "shell env probe exit", "code": code }
+    @xlog.warn() <? { "message": "shell env probe exit", "code": code }
     return
   }
   let text = stdout.text() catch {
     error => {
-      log.warn() <? { "message": "shell env probe output", "error": "\{error}" }
+      @xlog.warn() <?
+        { "message": "shell env probe output", "error": "\{error}" }
       return
     }
   }
   guard parse_probe_output(text, mark) is Some(env) else {
-    log.warn() <? { "message": "shell env probe output unrecognized" }
+    @xlog.warn() <? { "message": "shell env probe output unrecognized" }
     return
   }
   let mut applied = 0
@@ -99,7 +98,7 @@ pub async fn apply_login_shell_env(
     @sys.set_env_var(key, value)
     applied += 1
   }
-  log.info() <? { "message": "shell env applied", "count": applied }
+  @xlog.info() <? { "message": "shell env applied", "count": applied }
 }
 
 ///|
