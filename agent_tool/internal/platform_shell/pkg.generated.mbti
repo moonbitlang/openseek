@@ -4,7 +4,7 @@ package "bobzhang/openseek/agent_tool/internal/platform_shell"
 // Values
 pub fn args(String) -> Array[String]
 
-pub fn program() -> String
+pub let program : String
 
 // Errors
 
