@@ -714,7 +714,7 @@ pub async fn collect_shell_output(
   max_output_chars? : Int = @decode.default_max_output_chars,
 ) -> ShellOutput {
   collect_process_output(
-    @platform_shell.program(),
+    @platform_shell.program,
     @platform_shell.args(cmd),
     cwd?,
     max_output_chars~,

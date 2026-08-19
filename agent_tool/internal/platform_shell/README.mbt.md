@@ -16,6 +16,6 @@ test "args carries the command text through as the final argument" {
   // either way the command text is the last argument, verbatim.
   let args = @platform_shell.args("printf 'hi there'")
   inspect(args[args.length() - 1], content="printf 'hi there'")
-  inspect(@platform_shell.program().is_empty(), content="false")
+  inspect(@platform_shell.program.is_empty(), content="false")
 }
 ```

@@ -20,16 +20,12 @@
 /// use the inbox `powershell.exe` to avoid `Access is denied` when the
 /// process host cannot find or execute `pwsh`.
 #cfg(platform="windows")
-pub fn program() -> String {
-  "powershell.exe"
-}
+pub let program : String = "powershell.exe"
 
 ///|
 /// `sh` on non-Windows targets.
 #cfg(not(platform="windows"))
-pub fn program() -> String {
-  "sh"
-}
+pub let program : String = "sh"
 
 ///|
 /// Build arguments that make `program` interpret `cmd` as shell text:

@@ -31,7 +31,7 @@ async test "prepare, run, and classify a shell command" {
     Some(command) => (command.program(), command.args())
     // Enforcement is unavailable outside macOS and inside some nested
     // sandboxes. Running without it is an explicit caller policy decision.
-    None => (@platform_shell.program(), @platform_shell.args(shell_text))
+    None => (@platform_shell.program, @platform_shell.args(shell_text))
   }
   let (exit_code, output) = @process.collect_output_merged(program, args)
   let output = output.text()
