@@ -89,6 +89,9 @@ priv struct BgJob {
   // The opaque prepared command is carried from launch so a reader can apply
   // the same source-write-denial detection the foreground path does.
   sandboxed_command : @sandbox.SandboxedCommand?
+  // Preserve the shell policy context that decides whether a standalone
+  // trusted writer is a valid recovery from a sandbox denial.
+  read_only_review : Bool
 }
 
 ///|
@@ -110,6 +113,7 @@ pub struct BgJobSnapshot {
   // binary output as an error, and detect a sandboxed source-write denial.
   had_invalid_utf8 : Bool
   sandboxed_command : @sandbox.SandboxedCommand?
+  read_only_review : Bool
   // The job was killed by the output-limit watchdog (flooded past the hard cap),
   // not stopped on request — surfaced so the kill is never silent.
   killed_by_output_limit : Bool
@@ -225,13 +229,14 @@ pub async fn BgJobRuntime::start(
   cwd? : String,
   max_output_chars? : Int = default_max_output_chars,
   sandboxed_command? : @sandbox.SandboxedCommand,
+  read_only_review? : Bool = false,
 ) -> String {
   // Reserve one id and use it for both the spill file and the registry entry, so
   // the job id and its `<id>.out` file never diverge.
   let id = self.next_id()
   let spill_path = self.spill_dir.map(dir => "\{dir}/\{id}.out")
   let exec = (self.spawn_exec)(program, args, cwd, max_output_chars, spill_path)
-  self.register(id, exec, command~, cwd?, sandboxed_command?)
+  self.register(id, exec, command~, cwd?, sandboxed_command?, read_only_review~)
   id
 }
 
@@ -246,9 +251,10 @@ pub fn BgJobRuntime::adopt(
   command~ : String,
   cwd? : String,
   sandboxed_command? : @sandbox.SandboxedCommand,
+  read_only_review? : Bool = false,
 ) -> String {
   let id = self.next_id()
-  self.register(id, exec, command~, cwd?, sandboxed_command?)
+  self.register(id, exec, command~, cwd?, sandboxed_command?, read_only_review~)
   id
 }
 
@@ -261,8 +267,16 @@ fn BgJobRuntime::register(
   command~ : String,
   cwd? : String,
   sandboxed_command? : @sandbox.SandboxedCommand,
+  read_only_review~ : Bool,
 ) -> Unit {
-  self.jobs[id] = { id, command, cwd, exec, sandboxed_command }
+  self.jobs[id] = {
+    id,
+    command,
+    cwd,
+    exec,
+    sandboxed_command,
+    read_only_review,
+  }
   // Watch for the job ending on its own and fire `on_job_exit` once: a natural
   // exit, or the output-limit watchdog killing a flooding job — both must be
   // surfaced (a watchdog kill silently eating an unwatched job would look like
@@ -321,6 +335,7 @@ fn BgJob::to_snapshot(self : BgJob) -> BgJobSnapshot {
     exit_code: self.exec.exit_code(),
     had_invalid_utf8: self.exec.had_invalid_utf8(),
     sandboxed_command: self.sandboxed_command,
+    read_only_review: self.read_only_review,
     killed_by_output_limit: self.exec.killed_by_output_limit(),
     killed_by_time_limit: self.exec.killed_by_time_limit(),
   }
@@ -430,11 +445,13 @@ async test "bg job runs to completion and captures output" {
       program="sh",
       args=["-c", "printf hello"],
       command="printf hello",
+      read_only_review=true,
     )
     let snap = poll_until_terminal(rt, id)
     assert_true(snap.status is Exited(0))
     assert_true(snap.output.contains("hello"))
     assert_true(snap.exit_code is Some(0))
+    assert_true(snap.read_only_review)
   })
 }
 
@@ -495,9 +512,10 @@ async test "adopt registers an already-running execution as a job" {
     let exec = @shell_exec.ShellExecution::start(scope, program="sleep", args=[
       "30",
     ])
-    let id = rt.adopt(exec, command="sleep 30")
+    let id = rt.adopt(exec, command="sleep 30", read_only_review=true)
     @async.sleep(50)
     assert_true(rt.snapshot(id).unwrap().status is Running)
+    assert_true(rt.snapshot(id).unwrap().read_only_review)
     assert_true(rt.stop(id))
     assert_true(rt.snapshot(id).unwrap().status is Stopped)
   })

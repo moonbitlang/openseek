@@ -237,6 +237,7 @@ async fn execute_with_workspace(
     parsed_command,
     cwd,
     workspace_root,
+    read_only,
     bg_runtime?,
     default_timeout_ms?,
     scratch_dir?,
@@ -285,6 +286,7 @@ async fn shell(
   parsed_command : @shell_parse.ParseResult,
   cwd : String?,
   workspace_root : String,
+  read_only : Bool,
   scratch_dir? : String,
   worker_sandbox? : WorkerSandbox,
   bg_runtime? : @bgjobs.BgJobRuntime,
@@ -332,6 +334,7 @@ async fn shell(
       parsed_command,
       cwd,
       workspace_root,
+      read_only,
       scratch_dir?,
       worker_sandbox?,
       bg_runtime?,
@@ -383,6 +386,7 @@ async fn shell(
           command=input.cmd,
           cwd?,
           sandboxed_command?=launch.sandboxed_command,
+          read_only_review=read_only,
         )
       }
     },
@@ -439,7 +443,7 @@ async fn shell(
   let content = append_shell_sandbox_feedback_if_needed(
     response.content,
     agent_output,
-    parsed_command,
+    read_only_review=read_only,
   )
   let content = append_moon_command_check_summary(
     parsed_command,
@@ -616,6 +620,7 @@ async fn start_background(
   parsed_command : @shell_parse.ParseResult,
   cwd : String?,
   workspace_root : String,
+  read_only_review : Bool,
   scratch_dir? : String,
   worker_sandbox? : WorkerSandbox,
   bg_runtime? : @bgjobs.BgJobRuntime,
@@ -663,6 +668,7 @@ async fn start_background(
     cwd?,
     max_output_chars=input.max_output_chars,
     sandboxed_command?=launch.sandboxed_command,
+    read_only_review~,
   )
   @agent_tool.ToolAction::respond(
     "started background job \{id}: `\{input.cmd}`. Read its output with shell_output (job_id=\"\{id}\") and stop it with shell_stop (job_id=\"\{id}\").",
