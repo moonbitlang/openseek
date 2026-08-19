@@ -1021,6 +1021,7 @@ async test "a discarded command answers its sender" {
       consumer: None,
       phase: Idle(last_run=None),
       run_admitted_ms: 0,
+      pending_failure: None,
       condemned: false,
       steer_runs: SteerRunTracker::new(),
     }

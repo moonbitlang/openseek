@@ -358,6 +358,7 @@ async test "a durable terminal closes its open run" {
         compact_queued=false,
       ),
       run_admitted_ms: 0,
+      pending_failure: None,
       condemned: false,
       steer_runs: SteerRunTracker::new(),
     }
@@ -522,6 +523,7 @@ async test "EOF retirement closes a committed turn with its real outcome" {
         compact_queued=false,
       ),
       run_admitted_ms: 0,
+      pending_failure: None,
       condemned: false,
       steer_runs: SteerRunTracker::new(),
     }
@@ -1474,6 +1476,7 @@ async test "abrupt EOF retains a failed final drain for later boundary retry" {
         compact_queued=false,
       ),
       run_admitted_ms: 0,
+      pending_failure: None,
       condemned: false,
       steer_runs: SteerRunTracker::new(),
     }
@@ -1671,6 +1674,7 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
       consumer: None,
       phase: Idle(last_run=Some("r-detach-fail")),
       run_admitted_ms: 0,
+      pending_failure: None,
       condemned: true,
       steer_runs: SteerRunTracker::new(),
     }
@@ -1860,97 +1864,6 @@ fn follower_state_fixture(session : String) -> SessionFollower {
     watermark: 0,
     consumed: None,
   }
-}
-
-///|
-#cfg(not(platform="windows"))
-/// Retirement no longer runs on a request's task, so there is nothing left to
-/// shield it from; what still has to hold is that a child which honours
-/// neither stdin EOF nor cancellation cannot strand the conversation. Both
-/// deadlines are spent here, which is why this test is slow.
-async test "failed command stays unusable through a close timeout" {
-  let manager = new_engine_manager("unused")
-  let emitted : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { emitted.push(event) })
-  let follower = follower_state_fixture("s-timeout")
-  manager.followers["s-timeout"] = follower
-  @async.with_task_group(group => {
-    let (child_stdin, writer) = @process.write_to_process()
-    // A child that honours neither stdin EOF nor cancellation: it ignores the
-    // closed pipe, and its cancellation handler does not manage to kill it
-    // until after the cancel deadline has passed. The process task is the
-    // close barrier, so this is the only way to spend that second deadline —
-    // a handler that terminates the child promptly would not.
-    let late_cancel = @process.graceful_cancel(timeout=10)
-    let process = @process.spawn(
-      group,
-      "/bin/sh",
-      ["-c", "sleep 30"],
-      stdin=child_stdin,
-      cancel_handler=CancellationHandler(pid => {
-        @async.sleep(ServeCancelWaitMs + 500)
-        late_cancel(pid)
-      }),
-      no_wait=true,
-    )
-    let engine : ServeEngine = {
-      session_key: "s-timeout",
-      session_root: None,
-      spec_key: "test",
-      writer,
-      commands: Queue(kind=Unbounded),
-      process,
-      sink,
-      follower: Some(follower),
-      consumer: None,
-      phase: Running(
-        run_id="r-timeout",
-        cancel_requested=false,
-        compact_queued=false,
-      ),
-      run_admitted_ms: 0,
-      condemned: false,
-      steer_runs: SteerRunTracker::new(),
-    }
-    let sessions : Map[String, SessionSlot] = Map([])
-    let slot = slot_for(sessions, "s-timeout")
-    slot.engine = Some(engine)
-    manager.pump = Serving(sessions~)
-    retire_failed_command(manager, engine, "partial command")
-    assert_true(engine.condemned)
-    assert_true(slot.live() is None)
-    assert_true(engine.phase is Idle(last_run=None))
-    assert_true(
-      follower.durable_finishes is [{ run_id: "r-timeout", published: false }],
-    )
-    // The child was never proved gone, so the slot and follower stay in place
-    // and every successor must retry this close barrier rather than reuse it.
-    assert_false(engine.is_retired())
-    assert_true(slot.engine is Some(current) && physical_equal(current, engine))
-    assert_true(
-      manager.followers.get("s-timeout") is Some(current) &&
-      physical_equal(current, follower),
-    )
-    assert_false(follower.retired)
-    assert_true(open_run_engine(manager, run_id="r-timeout") is None)
-    let mut errors = 0
-    let mut finishes = 0
-    for event in emitted {
-      match event {
-        Error(payload) if payload.run_id == Some("r-timeout") =>
-          errors = errors + 1
-        Finished(payload) if payload.run_id == "r-timeout" => {
-          assert_true(payload.durable_sequence is None)
-          finishes = finishes + 1
-        }
-        _ => ()
-      }
-    }
-    assert_eq(errors, 1)
-    assert_eq(finishes, 1)
-    discard_follower_startup(manager, follower)
-    group.return_immediately(())
-  })
 }
 
 ///|

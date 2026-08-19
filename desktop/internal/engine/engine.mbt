@@ -53,6 +53,13 @@ priv struct ServeEngine {
   // (turns are strictly sequential, and admission requires the previous
   // terminal to have closed the phase first).
   mut run_admitted_ms : Int64
+  // The cause a forced retirement should report instead of the generic
+  // "engine exited without a result": stashed (first writer wins) by the
+  // path that discovered the failure — a failed stdin write, a dead event
+  // consumer — just before it kills the child, and read once by the EOF
+  // retirement. Never a settlement itself: the one retirement on the
+  // consumer task stays the only lifecycle closer for engine death.
+  mut pending_failure : String?
   // Set once, by `condemn`, and never cleared. It is the whole of this
   // engine's death sentence: nothing more can be submitted, `SessionSlot::live`
   // stops offering it to requests, and the conversation's next turn must go to
@@ -93,16 +100,6 @@ async fn ServeEngine::wait_retired(self : ServeEngine) -> Unit {
   guard self.consumer is Some(consumer) else { return }
   consumer.wait() catch {
     _ => ()
-  }
-}
-
-///|
-/// The synchronous read of the same state.
-fn ServeEngine::is_retired(self : ServeEngine) -> Bool {
-  guard self.consumer is Some(consumer) else { return false }
-  // A consumer that raised is finished too, which is all a successor needs.
-  try (consumer.try_wait() is Some(_)) catch {
-    _ => true
   }
 }
 
@@ -148,99 +145,6 @@ async fn ServeEngine::close_and_wait(self : ServeEngine) -> Unit {
     raise EngineError("serve engine did not exit after cancellation")
   }
   self.wait_retired()
-}
-
-///|
-const FailedCommandFollowerWaitMs = 3000
-
-///|
-/// A command could not be put on the wire, so the stream may hold a partial
-/// JSONL frame and this handle is permanently unusable. Bounded cleanup:
-/// settle the public lifecycle exactly once through the phase shared with the
-/// EOF consumer, but retire the follower only after `exit` proves the old
-/// child is gone; on a close timeout the slot and follower stay in place so
-/// every successor must first retry the old child's close barrier rather than
-/// overlap or reuse it.
-///
-/// This runs on the engine's own writer task, never on a request's. That is
-/// why there is no cancellation shield: the only thing that can cancel this
-/// work is the pump going down, which is already killing the child it would
-/// otherwise be protecting.
-async fn retire_failed_command(
-  manager : EngineManager,
-  engine : ServeEngine,
-  reason : String,
-) -> Unit {
-  engine.condemn()
-  let exited = try {
-    engine.close_and_wait()
-    true
-  } catch {
-    error if @async.is_being_cancelled() => raise error
-    error => {
-      @xlog.warn() <?
-        {
-          "event": "desktop_engine_cancel",
-          "reason": "failed command shutdown error",
-          "session": engine.session_key,
-          "pid": engine.process.pid,
-        }
-      engine.process.cancel()
-      @xlog.debug() <?
-        {
-          "event": "desktop_failed_command_shutdown_failed",
-          "session": engine.session_key,
-          "error": "\{error}",
-        }
-      false
-    }
-  }
-  match engine.phase {
-    Running(run_id~, compact_queued~, ..) => {
-      engine.phase = engine.phase.to_idle()
-      engine.steer_runs.abandon()
-      if engine.follower is Some(follower) {
-        follower.expect_durable_finish(run_id)
-      }
-      emit_error(engine.sink, reason, run_id~, exit_code=1)
-      emit_finished(engine.sink, run_id, Failed, exit_code=1)
-      if compact_queued {
-        emit_compaction_failed(engine.sink, engine, reason)
-      }
-    }
-    Compacting(..) => {
-      engine.phase = engine.phase.to_idle()
-      emit_compaction_failed(engine.sink, engine, reason)
-    }
-    Idle(..) => ()
-  }
-  // A timed-out child may still emit old terminal events. With no current
-  // run id they remain diagnostics only and cannot settle the lifecycle a
-  // second time after the synthetic terminal above.
-  engine.phase = Idle(last_run=None)
-  if exited && engine.is_retired() && engine.follower is Some(follower) {
-    let stopped = @async.with_timeout_opt(FailedCommandFollowerWaitMs, () => {
-      stop_follower_instance(manager, follower, writer_exited=true)
-    }) catch {
-      error if @async.is_being_cancelled() => raise error
-      error => {
-        @xlog.debug() <?
-          {
-            "event": "desktop_failed_command_follower_failed",
-            "session": engine.session_key,
-            "error": "\{error}",
-          }
-        Some(())
-      }
-    }
-    if stopped is None {
-      @xlog.debug() <?
-        {
-          "event": "desktop_failed_command_follower_timeout",
-          "session": engine.session_key,
-        }
-    }
-  }
 }
 
 ///|
@@ -334,10 +238,7 @@ fn ServeEngine::discard_commands(self : ServeEngine, reason : String) -> Unit {
 /// closed exactly once, on every path out of the loop. Callers ask for that
 /// close by closing the command queue — `close_and_wait` lets the already
 /// accepted commands drain first, the EOF consumer discards them.
-async fn ServeEngine::write_commands(
-  self : ServeEngine,
-  manager : EngineManager,
-) -> Unit {
+async fn ServeEngine::write_commands(self : ServeEngine) -> Unit {
   // Whatever ends this task, cancellation included, no sender may be left
   // waiting for an answer that can no longer come.
   defer self.discard_commands(
@@ -359,10 +260,33 @@ async fn ServeEngine::write_commands(
   }
   self.writer.close()
   if failure is Some(reason) {
-    // Answer the queued senders before retirement's bounded waits, not after
-    // them: none of their commands can reach stdin now.
+    // Answer the queued senders right away: none of their commands can
+    // reach stdin now, and the pipe may hold a partial JSONL frame, so this
+    // handle is permanently unusable.
     self.discard_commands(reason)
-    retire_failed_command(manager, self, reason)
+    // No lifecycle settlement here — the one EOF retirement on the consumer
+    // task remains the only closer for engine death, and it reports this
+    // cause. That retirement fires when the reader sees the child exit, so
+    // exit must be guaranteed. A write to a healthy child does not fail
+    // (a full pipe blocks instead), so the dominant cause is EPIPE from a
+    // child that is already dead — the grace reaps it instantly, no kill.
+    // One still alive past the grace has broken its own stdin and ignored
+    // the EOF close request: kill it, or the retirement — and the slot it
+    // must clear — waits on a malfunctioning child indefinitely.
+    if self.pending_failure is None {
+      self.pending_failure = Some(reason)
+    }
+    if @async.with_timeout_opt(ServeCloseGraceMs, () => self.wait_process())
+      is None {
+      @xlog.warn() <?
+        {
+          "event": "desktop_engine_cancel",
+          "reason": "failed command close timeout",
+          "session": self.session_key,
+          "pid": self.process.pid,
+        }
+      self.process.cancel()
+    }
   }
 }
 
@@ -470,13 +394,6 @@ fn SteerRunTracker::new() -> SteerRunTracker {
 ///|
 fn SteerRunTracker::begin_run(self : SteerRunTracker) -> Unit {
   self.open_steers.clear()
-}
-
-///|
-fn SteerRunTracker::abandon(self : SteerRunTracker) -> Unit {
-  self.settling_run = None
-  self.open_steers.clear()
-  self.settling_steers.clear()
 }
 
 ///|
@@ -1635,6 +1552,7 @@ async fn[G] start_serve_engine(
     consumer: None,
     phase: Idle(last_run=None),
     run_admitted_ms: 0,
+    pending_failure: None,
     condemned: false,
     steer_runs: SteerRunTracker::new(),
   }
@@ -1642,9 +1560,7 @@ async fn[G] start_serve_engine(
   // Spawned before the handle is reachable from any request, so stdin has an
   // owner for the engine's whole life — including a rollback, which asks for
   // the close by clearing the queue rather than touching the writer.
-  group.spawn_bg(no_wait=true, allow_failure=true, () => {
-    engine.write_commands(manager)
-  })
+  group.spawn_bg(no_wait=true, allow_failure=true, () => engine.write_commands())
   slot.engine = Some(engine)
   let messages : @async.Queue[StreamMessage] = Queue(
     kind=Blocking(EngineStreamQueueSize),
@@ -1718,12 +1634,12 @@ async fn ServeEngine::run(
       } noraise {
         code => Some(code)
       }
-      self.retire(
-        manager,
-        stderr_task,
-        code?,
-        failure="the engine's event consumer failed: \{error}",
-      )
+      if self.pending_failure is None {
+        self.pending_failure = Some(
+          "the engine's event consumer failed: \{error}",
+        )
+      }
+      self.retire(manager, stderr_task, code?)
       return
     }
   }
@@ -1895,20 +1811,19 @@ async fn ServeEngine::consume(
 }
 
 ///|
-/// EOF retirement, shared by the observed engine exit and the forced close
-/// after a consumer failure (`failure` then names the cause the synthetic
-/// lifecycle events report). The follower stop below runs the final durable
-/// scan FIRST: when the dead engine's turn actually ended — its Terminal is
-/// in the record — that scan closes the run with the real outcome
-/// (`close_run_from_terminal`), and the Running arm below never fires; the
-/// synthetic failure is reserved for a child that died without committing
-/// one.
+/// EOF retirement — the one lifecycle closer for engine death, whatever
+/// discovered it (an observed exit, a failed stdin write, a dead consumer;
+/// the discoverer stashes its cause in `pending_failure`). The follower
+/// stop below runs the final durable scan FIRST: when the dead engine's
+/// turn actually ended — its Terminal is in the record — that scan closes
+/// the run with the real outcome (`close_run_from_terminal`), and the
+/// Running arm below never fires; the synthetic failure is reserved for a
+/// child that died without committing one.
 async fn ServeEngine::retire(
   self : ServeEngine,
   manager : EngineManager,
   stderr_task : @async.Task[String],
   code? : Int,
-  failure? : String,
 ) -> Unit {
   let engine = self
   let sink = self.sink
@@ -1971,7 +1886,9 @@ async fn ServeEngine::retire(
     // that run with its only available diagnostics.
     Running(run_id~, compact_queued~, ..) => {
       engine.phase = engine.phase.to_idle()
-      let cause = failure.unwrap_or("engine exited without a result")
+      let cause = engine.pending_failure.unwrap_or(
+        "engine exited without a result",
+      )
       let diagnostics = stderr_task.wait().trim().to_owned()
       if diagnostics.is_empty() {
         emit_error(sink, cause, run_id~, exit_code?=code)
@@ -2000,7 +1917,9 @@ async fn ServeEngine::retire(
     // can no longer send.
     Compacting(..) => {
       engine.phase = engine.phase.to_idle()
-      let cause = failure.unwrap_or("engine exited during compaction")
+      let cause = engine.pending_failure.unwrap_or(
+        "engine exited during compaction",
+      )
       let diagnostics = stderr_task.wait().trim().to_owned()
       let reason = if diagnostics.is_empty() {
         cause
@@ -2101,6 +2020,7 @@ async test "a failed consumer closes its open run and retires the slot" {
         compact_queued=false,
       ),
       run_admitted_ms: 0,
+      pending_failure: None,
       condemned: false,
       steer_runs: SteerRunTracker::new(),
     }
@@ -2135,6 +2055,96 @@ async test "a failed consumer closes its open run and retires the slot" {
     }
     assert_true(cause.contains("the engine's event consumer failed"))
     assert_eq(status, "failed")
+  })
+}
+
+///|
+/// A failed stdin write condemns the handle and answers its senders, but
+/// settles no lifecycle itself: the one EOF retirement stays the only
+/// closer for engine death and reports the stashed cause.
+#cfg(not(platform="windows"))
+async test "a failed command leaves settlement to the EOF retirement" {
+  let manager = new_engine_manager("/bin/sh")
+  let emitted : Array[EngineEvent] = []
+  let sink = EventSink(fn(event) { emitted.push(event) })
+  @async.with_task_group(group => {
+    let (child_stdin, writer) = @process.write_to_process()
+    // A child that is already gone, so the first write hits a closed pipe.
+    let process = @process.spawn(
+      group,
+      "/bin/sh",
+      ["-c", "exit 0"],
+      stdin=child_stdin,
+      no_wait=true,
+    )
+    let engine : ServeEngine = {
+      session_key: "s-write-failed",
+      session_root: None,
+      spec_key: "test",
+      writer,
+      commands: Queue(kind=Unbounded),
+      process,
+      sink,
+      follower: None,
+      consumer: None,
+      phase: Running(
+        run_id="r-write-failed",
+        cancel_requested=false,
+        compact_queued=false,
+      ),
+      run_admitted_ms: 0,
+      pending_failure: None,
+      condemned: false,
+      steer_runs: SteerRunTracker::new(),
+    }
+    let sessions : Map[String, SessionSlot] = Map([])
+    let slot = slot_for(sessions, "s-write-failed")
+    slot.engine = Some(engine)
+    manager.pump = Serving(sessions~)
+    engine.wait_process()
+    let ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
+    assert_true(
+      engine.submit("{}\n", failure_reason="failed to write the goal", ack~),
+    )
+    engine.write_commands()
+
+    // The sender learned the exact failure, the handle is condemned with
+    // the cause stashed — and nothing was settled: the phase still belongs
+    // to the EOF retirement.
+    guard ack.try_get() is Some(Some(EngineError(reason))) else {
+      fail("expected the failed write to answer its sender")
+    }
+    assert_true(reason.has_prefix("failed to write the goal"))
+    assert_true(engine.condemned)
+    assert_true(engine.pending_failure is Some(_))
+    assert_true(engine.phase is Running(..))
+    assert_true(emitted.is_empty())
+
+    // EOF retirement settles exactly once, naming the stashed cause.
+    let messages : @async.Queue[StreamMessage] = Queue(
+      kind=Blocking(EngineStreamQueueSize),
+    )
+    messages.put(StreamExited(0))
+    let stderr_task = group.spawn(no_wait=true, () => "")
+    engine.run(manager, messages, stderr_task)
+    assert_true(slot.engine is None)
+    assert_true(engine.phase is Idle(..))
+    let mut finishes = 0
+    let mut cause = ""
+    for event in emitted {
+      match event {
+        Error(payload) if payload.run_id == Some("r-write-failed") =>
+          cause = payload.message.unwrap_or("")
+        Finished(payload) if payload.run_id == "r-write-failed" => {
+          assert_eq(payload.status, "failed")
+          finishes += 1
+        }
+        _ => ()
+      }
+    }
+    assert_eq(finishes, 1)
+    assert_true(cause.has_prefix("failed to write the goal"))
+    group.return_immediately(())
   })
 }
 
