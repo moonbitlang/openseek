@@ -148,24 +148,13 @@ fn background_description() -> String {
 ///|
 #cfg(platform="windows")
 fn shell_description() -> String {
-  let program = @platform_shell.program()
-  if program == "pwsh" {
-    (
-      #|Run arguments.cmd through PowerShell (pwsh -NoProfile -Command), optionally in
-      #|arguments.cwd, and return exit code plus output. Supports PowerShell 7+ syntax
-      #|(&&, ||, ??, ?:, etc.) and cmdlets. Source file edits for compiler feedback
-      #|belong in line-anchored edit (or multi_edit for several fixes in one file); do
-      #|not use shell rewrites.
-    )
-  } else {
-    (
-      #|Run arguments.cmd through Windows PowerShell (powershell.exe -NoProfile -Command),
-      #|optionally in arguments.cwd, and return exit code plus output. Use PowerShell 5.1
-      #|syntax and cmdlets; note that chain operators (&&, ||) are NOT supported. Source
-      #|file edits for compiler feedback belong in line-anchored edit (or multi_edit for
-      #|several fixes in one file); do not use shell rewrites.
-    )
-  }
+  (
+    #|Run arguments.cmd through Windows PowerShell (powershell.exe -NoProfile -Command),
+    #|optionally in arguments.cwd, and return exit code plus output. Use PowerShell 5.1
+    #|syntax and cmdlets; note that chain operators (&&, ||) are NOT supported. Source
+    #|file edits for compiler feedback belong in line-anchored edit (or multi_edit for
+    #|several fixes in one file); do not use shell rewrites.
+  )
 }
 
 ///|
@@ -713,7 +702,7 @@ priv struct ShellResponse {
 }
 
 ///|
-/// Run `cmd` through the platform shell (`sh -c`, or `pwsh -NoProfile -Command`
+/// Run `cmd` through the platform shell (`sh -c`, or `powershell.exe -NoProfile -Command`
 /// on Windows), capturing merged stdout+stderr. This is the execution core
 /// behind the `shell` tool, but it applies NO command policy or safety
 /// filtering — so frontends that run explicit user commands (e.g. the TUI's `!`

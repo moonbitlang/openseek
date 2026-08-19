@@ -1,6 +1,6 @@
 # agent_tool/internal/platform_shell
 
-The platform shell pair: `program` (`sh`, or `pwsh` on Windows) and
+The platform shell pair: `program` (`sh`, or `powershell.exe` on Windows) and
 `args(cmd)`, which makes that shell interpret `cmd` as command text. The
 `shell` tool uses the pair for plain launches, and `internal/sandbox` builds
 its `sandbox-exec` command line around the same pair — so a command means the
