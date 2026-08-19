@@ -9,14 +9,14 @@ import {
   "moonbit-community/pty@0.4.0",
   "moonbit-community/fuzzy_match@0.2.6",
   "moonbit-community/rabbita@0.14.3",
-  "moonbitlang/x@0.4.49",
-  "moonbitlang/async@0.20.4",
+  "moonbitlang/x@0.4.50",
+  "moonbitlang/async@0.20.5",
   "moonbit-community/proton@0.1.18",
   "moonbit-community/proton_ext@0.1.14",
   "tonyfettes/platform@0.1.1",
   "tonyfettes/xlog@0.4.0",
   "moonbitlang/editor@0.4.4",
-  "moonbit-community/proton_contract@0.1.14",
+  "moonbit-community/proton_contract@0.1.18",
   "bobzhang/openseek@0.2.2",
 }
 
