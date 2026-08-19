@@ -183,7 +183,13 @@ async fn edit_file(
     return err("old_string and new_string are both empty")
   }
   if input.old_string == input.new_string {
-    return err("old_string and new_string are identical")
+    // Identical strings: the model's mental copy is stale. Read the file
+    // and show the current on-disk text at the target lines so the model
+    // can see what is actually there.
+    let content = @fs.read_file(path).text()
+    return err(
+      "old_string and new_string are identical\{old_string_context(content, input.old_string, input.start_line, input.end_line)}\n(old_string matches new_string exactly — the file at that location may already contain this text; re-read the file and adjust the edit)",
+    )
   }
   if input.replace_all_preview {
     guard input.old_string != "" else {
@@ -796,7 +802,59 @@ fn edit_reject_report(
     "\nre-issue the edit with a corrected new_string (check delimiters against the excerpt above)."
   }
   let opt_out = "\n(To intentionally produce content that does not parse, e.g. a fixture, pass revert_on_parse_errors=false.)"
-  "\{head}\{pre_existing}\{listed}\{retry}\{opt_out}"
+  let hints = parse_gate_hints(gate.errors)
+  "\{head}\{pre_existing}\{listed}\{retry}\{opt_out}\{hints}"
+}
+
+///|
+/// Recognise known cross-language patterns in parse-gate error messages and
+/// append rule-level hints.  Each hint saves the model a round-trip of trying
+/// to interpret a raw parser diagnostic.
+fn parse_gate_hints(errors : Array[@auto_check.ParseGateError]) -> String {
+  let hints : Array[String] = []
+  for error in errors {
+    let msg = error.message
+    // derive placement: Rust-style `#[derive(...)]` or `enum Foo derive(...)`
+    if msg.contains("derive") && (msg.contains("unexpected") || msg.contains("you may expect")) {
+      hints.push(
+        "\nhint: MoonBit places derive after the type body, not before or inline: `pub enum TokenKind { ... } derive(Show, Eq)`",
+      )
+    }
+    // C-style char escapes: `'\0'`, `'\x41'`, `'\u{0}'` etc.
+    if msg.contains("unrecognized character") || msg.contains("Lexing error") {
+      hints.push(
+        "\nhint: MoonBit char/string literals use a different escape set than C or Rust — `\\0` (NUL), `\\x41` (hex), and `\\u{0}` (unicode) are not valid; use `\\u{0}` is not supported, check the MoonBit escape reference",
+      )
+    }
+    // Rust-style `mut` parameter: `fn foo(mut x: Int)`
+    if msg.contains("mut") && (msg.contains("unexpected") || msg.contains("parameter")) {
+      hints.push(
+        "\nhint: MoonBit does not use `mut` on parameters — mutation is expressed through the type system (`Ref`); use `let mut` inside the function body instead",
+      )
+    }
+    // `~label` syntax: Rust-style named arguments
+    if msg.contains("~") && (msg.contains("unexpected") || msg.contains("you may expect")) {
+      hints.push(
+        "\nhint: MoonBit uses `label~` (tilde after the name) for labeled arguments, not `~label` (tilde before the name); write `name~` for the call site or `~name` in the function signature",
+      )
+    }
+    // Legacy `!?` error syntax (MoonBit 0.25+ uses `panic`/`throw`)
+    if msg.contains("!") && msg.contains("type") {
+      hints.push(
+        "\nhint: MoonBit 0.25+ uses `panic(...)` or `throw(...)` for error handling, not the legacy `!?` postfix syntax",
+      )
+    }
+  }
+  // Deduplicate: if the same hint was matched by multiple errors, emit it once.
+  let seen : Map[String, Unit] = Map([])
+  let deduped : Array[String] = []
+  for hint in hints {
+    if !seen.contains(hint) {
+      seen[hint] = ()
+      deduped.push(hint)
+    }
+  }
+  deduped.join("")
 }
 
 ///|
@@ -941,6 +999,11 @@ fn old_string_context(
         lines.push(
           "\nfirst difference at character \{diff_pos}: expected `\{expected_char}`, got `\{actual_char}`",
         )
+        if only_whitespace_differs(old_string, actual) {
+          lines.push(
+            " — the only differences are whitespace (tab vs space, extra spaces, or line endings); old_string must match the file character-for-character",
+          )
+        }
       }
       None => ()
     }
@@ -987,6 +1050,51 @@ fn first_diff_info(
     return Some((pos, expected_str, actual_str))
   }
   None
+}
+
+///|
+/// Check whether `expected` and `actual` differ only by whitespace characters
+/// (tab, space, CR, LF). Handles length differences (e.g. CRLF vs LF).
+fn only_whitespace_differs(expected : String, actual : String) -> Bool {
+  let mut ei = 0
+  let mut ai = 0
+  while ei < expected.length() && ai < actual.length() {
+    let e = expected[ei]
+    let a = actual[ai]
+    if e == a {
+      ei += 1
+      ai += 1
+    } else {
+      let we = e == ' ' || e == '\t' || e == '\n' || e == '\r'
+      let wa = a == ' ' || a == '\t' || a == '\n' || a == '\r'
+      if we && wa {
+        ei += 1
+        ai += 1
+      } else if we {
+        ei += 1
+      } else if wa {
+        ai += 1
+      } else {
+        return false
+      }
+    }
+  }
+  // Remaining characters in either string must all be whitespace
+  while ei < expected.length() {
+    let e = expected[ei]
+    if e != ' ' && e != '\t' && e != '\n' && e != '\r' {
+      return false
+    }
+    ei += 1
+  }
+  while ai < actual.length() {
+    let a = actual[ai]
+    if a != ' ' && a != '\t' && a != '\n' && a != '\r' {
+      return false
+    }
+    ai += 1
+  }
+  true
 }
 
 ///|
@@ -1171,4 +1279,89 @@ test "old_string_context shows empty suffix for past-EOF context" {
   assert_true(ctx.contains("1 | single"))
   assert_true(ctx.contains("2 |"))
   assert_true(ctx.contains("3 |"))
+}
+
+///|
+test "only_whitespace_differs detects tab vs space" {
+  assert_true(only_whitespace_differs("a\tb", "a b"))
+  assert_true(only_whitespace_differs("  indent", "\t\tindent"))
+  assert_true(only_whitespace_differs("a\nb", "a\r\nb"))
+  assert_false(only_whitespace_differs("abc", "abd"))
+  assert_false(only_whitespace_differs("abc", "ab"))
+  assert_false(only_whitespace_differs("a\nb", "a\nc"))
+  // Empty strings are trivially whitespace-only equal
+  assert_true(only_whitespace_differs("", ""))
+}
+
+///|
+test "old_string_context flags whitespace-only differences" {
+  // Tab vs space in the actual content
+  let content = "alpha\n\tbeta\ngamma\n"
+  let ctx = old_string_context(content, "  beta", 2, None)
+  assert_true(ctx.contains("only differences are whitespace"))
+  assert_true(ctx.contains("tab vs space"))
+  // CRLF vs LF in the actual content
+  let crlf = "alpha\nbeta\r\ngamma\n"
+  let ctx2 = old_string_context(crlf, "beta\n", 2, None)
+  assert_true(ctx2.contains("only differences are whitespace"))
+}
+
+///|
+test "parse_gate_hints adds derive placement hint" {
+  let errors : Array[@auto_check.ParseGateError] = [
+    {
+      loc: "4:1-4:2",
+      message: "Parse error, unexpected token `derive`, you may expect `{`.",
+      context: "",
+    },
+  ]
+  let hints = parse_gate_hints(errors)
+  assert_true(hints.contains("derive"))
+  assert_true(hints.contains("after the type body"))
+}
+
+///|
+test "parse_gate_hints adds C-escape hint" {
+  let errors : Array[@auto_check.ParseGateError] = [
+    {
+      loc: "26:5-26:6",
+      message: "Lexing error: unrecognized character u32:0x27",
+      context: "",
+    },
+  ]
+  let hints = parse_gate_hints(errors)
+  assert_true(hints.contains("escape"))
+  assert_true(hints.contains("MoonBit"))
+}
+
+///|
+test "parse_gate_hints deduplicates same hint across multiple errors" {
+  let errors : Array[@auto_check.ParseGateError] = [
+    {
+      loc: "4:1-4:2",
+      message: "Parse error, unexpected token `derive`, you may expect `{`.",
+      context: "",
+    },
+    {
+      loc: "8:1-8:2",
+      message: "Parse error, unexpected token `derive`, you may expect `{`.",
+      context: "",
+    },
+  ]
+  let hints = parse_gate_hints(errors)
+  // "derive" is part of the hint text; should appear only once (deduped)
+  assert_true(hints.contains("derive"))
+  assert_true(hints.contains("after the type body"))
+}
+
+///|
+test "parse_gate_hints returns empty for unmatched errors" {
+  let errors : Array[@auto_check.ParseGateError] = [
+    {
+      loc: "4:1-4:2",
+      message: "Parse error, unexpected token `}`.",
+      context: "",
+    },
+  ]
+  assert_eq(parse_gate_hints(errors), "")
 }

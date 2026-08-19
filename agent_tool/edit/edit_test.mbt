@@ -412,7 +412,7 @@ async test "edit rejects identical replacement" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string and new_string are identical",
+      "error editing \{path}: old_string and new_string are identical\n\nfile context: > 1 | content > 2 |  > 3 | \nhint: check for line-ending mismatches (CRLF vs LF), full-width vs half-width characters, tab vs space, or a stray read-tool display separator (`|`) in old_string\n(old_string matches new_string exactly — the file at that location may already contain this text; re-read the file and adjust the edit)",
     )
     assert_true(output.is_error)
   })
