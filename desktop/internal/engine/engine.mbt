@@ -1616,13 +1616,17 @@ async fn ServeEngine::run(
           "run_id": self.phase.latest_run().unwrap_or(""),
           "error": "\{error}",
         }
-      // The child may be healthy, but its events no longer have a consumer;
-      // kill it so the retirement below reaps a real exit instead of leaving
-      // an orphan serve process writing into a pipe nobody reads.
+      // The consumer is the pipe's drain, not only its interpreter: with it
+      // gone the reader fills the bounded queue, the OS pipe fills behind
+      // that, and the child freezes mid-turn on a blocked stdout write —
+      // the durable record stops advancing too, so nothing would ever
+      // settle. Kill it instead, so the retirement below reaps a real exit
+      // and the final scan settles the turn with whatever the record says.
       @xlog.warn() <?
         {
           "event": "desktop_engine_cancel",
           "reason": "event consumer failed",
+          "session": self.session_key,
           "pid": self.process.pid,
         }
       self.process.cancel()
