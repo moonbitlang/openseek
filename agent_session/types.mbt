@@ -626,6 +626,7 @@ pub fn Session::compact(
 }
 
 ///|
+#deprecated
 pub extend AssistantMessage with Debug::{to_repr}
 
 ///|
@@ -638,6 +639,7 @@ pub extend AssistantMessage with Eq::{equal, not_equal}
 pub extend AssistantMessage with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend RuntimeNotice with Debug::{to_repr}
 
 ///|
@@ -650,12 +652,14 @@ pub extend RuntimeNotice with Eq::{equal, not_equal}
 pub extend RuntimeNotice with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend Session with Debug::{to_repr}
 
 ///|
 pub extend Session with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SessionEvent with Debug::{to_repr}
 
 ///|
@@ -668,18 +672,21 @@ pub extend SessionEvent with Eq::{equal, not_equal}
 pub extend SessionEvent with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionId with Debug::{to_repr}
 
 ///|
 pub extend SessionId with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SessionItem with Debug::{to_repr}
 
 ///|
 pub extend SessionItem with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SessionSummary with Debug::{to_repr}
 
 ///|
@@ -692,6 +699,7 @@ pub extend SessionSummary with Eq::{equal, not_equal}
 pub extend SessionSummary with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ToolResult with Debug::{to_repr}
 
 ///|
@@ -704,12 +712,14 @@ pub extend ToolResult with Eq::{equal, not_equal}
 pub extend ToolResult with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend TurnTerminal with Debug::{to_repr}
 
 ///|
 pub extend TurnTerminal with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend UserMessage with Debug::{to_repr}
 
 ///|

@@ -1196,12 +1196,14 @@ pub fn MarkdownDocumentView::set_toc_entries(
 }
 
 ///|
+#deprecated
 pub extend MarkdownSectionFoldControl with Debug::{to_repr}
 
 ///|
 pub extend MarkdownSectionFoldControl with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MarkdownTocBarEntry with Debug::{to_repr}
 
 ///|

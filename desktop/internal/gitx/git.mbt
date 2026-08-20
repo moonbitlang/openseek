@@ -124,4 +124,5 @@ pub async fn is_linked_worktree(dir : @pathx.Absolute) -> Bool {
 }
 
 ///|
+#deprecated
 pub extend GitError with Debug::{to_repr}

@@ -62,6 +62,7 @@ pub fn ViewModelOptions::is_soft_wrap_enabled(self : ViewModelOptions) -> Bool {
 }
 
 ///|
+#deprecated
 pub extend ViewModelOptions with Debug::{to_repr}
 
 ///|

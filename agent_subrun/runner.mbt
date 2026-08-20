@@ -404,9 +404,11 @@ fn status_of(terminal : SubrunTerminal) -> String {
 }
 
 ///|
+#deprecated
 pub extend SubrunResult with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend SubrunTerminal with Debug::{to_repr}
 
 ///|

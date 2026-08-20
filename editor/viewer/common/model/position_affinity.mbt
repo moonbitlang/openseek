@@ -17,6 +17,7 @@ pub(all) enum PositionAffinity {
 } derive(Eq, Debug)
 
 ///|
+#deprecated
 pub extend PositionAffinity with Debug::{to_repr}
 
 ///|

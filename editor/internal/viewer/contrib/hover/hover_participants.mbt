@@ -471,12 +471,14 @@ fn union_range(
 }
 
 ///|
+#deprecated
 pub extend ComputedHover with Debug::{to_repr}
 
 ///|
 pub extend ComputedHover with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend HoverPart with Debug::{to_repr}
 
 ///|

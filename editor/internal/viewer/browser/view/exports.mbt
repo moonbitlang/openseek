@@ -76,12 +76,14 @@ pub(all) enum ViewEvent {
 pub extend ContentWidgetPositionPreference with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend PartFingerprint with Debug::{to_repr}
 
 ///|
 pub extend PartFingerprint with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ViewConfigurationOption with Debug::{to_repr}
 
 ///|

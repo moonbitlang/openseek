@@ -351,4 +351,5 @@ fn build_line_starts(text : String) -> Array[Int] {
 }
 
 ///|
+#deprecated
 pub extend TextSnapshot with Debug::{to_repr}

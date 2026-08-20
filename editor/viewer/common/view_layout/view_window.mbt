@@ -7,6 +7,7 @@ pub(all) struct LineWindow {
 } derive(Eq, Debug)
 
 ///|
+#deprecated
 pub extend LineWindow with Debug::{to_repr}
 
 ///|

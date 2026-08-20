@@ -218,24 +218,29 @@ test "chat message constructor" {
 }
 
 ///|
+#deprecated
 pub extend ChatMessage with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ChatResponse with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend DsVariant with Debug::{to_repr}
 
 ///|
 pub extend DsVariant with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend KimiVariant with Debug::{to_repr}
 
 ///|
 pub extend KimiVariant with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend Model with Debug::{to_repr}
 
 ///|
@@ -245,18 +250,21 @@ pub extend Model with Eq::{equal, not_equal}
 pub extend Model with Show::{output, to_string}
 
 ///|
+#deprecated
 pub extend ResponseFormat with Debug::{to_repr}
 
 ///|
 pub extend ResponseFormat with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend Role with Debug::{to_repr}
 
 ///|
 pub extend Role with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ThinkingMode with Debug::{to_repr}
 
 ///|
@@ -266,6 +274,7 @@ pub extend ThinkingMode with Eq::{equal, not_equal}
 pub extend ThinkingMode with Show::{output, to_string}
 
 ///|
+#deprecated
 pub extend Usage with Debug::{to_repr}
 
 ///|

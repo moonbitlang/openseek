@@ -58,12 +58,14 @@ pub fn update(msg : Msg, state : State) -> State {
 }
 
 ///|
+#deprecated
 pub extend Hover with Debug::{to_repr}
 
 ///|
 pub extend Hover with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend State with Debug::{to_repr}
 
 ///|

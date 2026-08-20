@@ -126,6 +126,7 @@ fn render_markdown_with_mermaid_loader(
 }
 
 ///|
+#deprecated
 pub extend MermaidTheme with Debug::{to_repr}
 
 ///|

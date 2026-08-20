@@ -111,12 +111,14 @@ pub fn Model::selected(self : Model) -> Int {
 }
 
 ///|
+#deprecated
 pub extend CompletionItem with Debug::{to_repr}
 
 ///|
 pub extend CompletionItem with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend Model with Debug::{to_repr}
 
 ///|

@@ -428,24 +428,28 @@ extern "js" fn document_remove_keydown_capture(
   #| (cb) => document.removeEventListener("keydown", cb, true)
 
 ///|
+#deprecated
 pub extend ClientCoordinates with Debug::{to_repr}
 
 ///|
 pub extend ClientCoordinates with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend CoordinatesRelativeToEditor with Debug::{to_repr}
 
 ///|
 pub extend CoordinatesRelativeToEditor with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend EditorPagePosition with Debug::{to_repr}
 
 ///|
 pub extend EditorPagePosition with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend PageCoordinates with Debug::{to_repr}
 
 ///|

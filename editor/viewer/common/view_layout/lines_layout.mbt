@@ -1098,18 +1098,21 @@ fn LinesLayout::accumulated_line_heights_including_line_number(
 }
 
 ///|
+#deprecated
 pub extend EditorWhitespace with Debug::{to_repr}
 
 ///|
 pub extend EditorWhitespace with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend PartialViewLinesViewportData with Debug::{to_repr}
 
 ///|
 pub extend PartialViewLinesViewportData with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ViewWhitespaceViewportData with Debug::{to_repr}
 
 ///|

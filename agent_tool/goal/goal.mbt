@@ -79,4 +79,5 @@ fn execute(arguments : Json) -> @agent_tool.ToolAction {
 }
 
 ///|
+#deprecated
 pub extend GoalStatus with Debug::{to_repr}

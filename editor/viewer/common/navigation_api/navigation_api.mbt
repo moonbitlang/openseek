@@ -109,10 +109,12 @@ pub async fn TextModelResolverHandle::resolve(
 }
 
 ///|
+#deprecated
 pub extend OpenLocationMode with Debug::{to_repr}
 
 ///|
 pub extend OpenLocationMode with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend OpenLocationRequest with Debug::{to_repr}

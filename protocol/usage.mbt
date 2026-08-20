@@ -24,6 +24,7 @@ pub(all) struct Usage {
 } derive(Eq, Debug, ToJson)
 
 ///|
+#deprecated
 pub extend Usage with Debug::{to_repr}
 
 ///|

@@ -123,4 +123,5 @@ fn required_positive_int(
 }
 
 ///|
+#deprecated
 pub extend EditInput with Debug::{to_repr}

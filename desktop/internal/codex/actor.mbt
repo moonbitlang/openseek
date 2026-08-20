@@ -605,6 +605,7 @@ test "Codex reverse-request generations advance only on ownership changes" {
 }
 
 ///|
+#deprecated
 pub extend CodexError with Debug::{to_repr}
 
 ///|

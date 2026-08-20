@@ -17,6 +17,7 @@ pub fn InlineDecoration::InlineDecoration(
 }
 
 ///|
+#deprecated
 pub extend InlineDecoration with Debug::{to_repr}
 
 ///|

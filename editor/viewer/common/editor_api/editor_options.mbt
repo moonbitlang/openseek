@@ -49,30 +49,35 @@ pub(all) enum ShowFoldingControls {
 } derive(Eq, Debug)
 
 ///|
+#deprecated
 pub extend RenderLineHighlight with Debug::{to_repr}
 
 ///|
 pub extend RenderLineHighlight with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend RenderValidationDecorations with Debug::{to_repr}
 
 ///|
 pub extend RenderValidationDecorations with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend RenderWhitespace with Debug::{to_repr}
 
 ///|
 pub extend RenderWhitespace with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ShowFoldingControls with Debug::{to_repr}
 
 ///|
 pub extend ShowFoldingControls with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend WrappingIndent with Debug::{to_repr}
 
 ///|

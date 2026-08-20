@@ -50,6 +50,7 @@ pub fn Relative::contains(self : Relative, path : Relative) -> Bool {
 }
 
 ///|
+#deprecated
 pub extend Relative with Debug::{to_repr}
 
 ///|

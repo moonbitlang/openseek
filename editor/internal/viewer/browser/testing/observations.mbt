@@ -50,19 +50,23 @@ priv struct ScrollFrameObservation {
 }
 
 ///|
+#deprecated
 pub extend HoverResolvedObservation with Debug::{to_repr}
 
 ///|
 pub extend HoverResolvedObservation with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ModelRenderedObservation with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ScrollFramePhase with Debug::{to_repr}
 
 ///|
 pub extend ScrollFramePhase with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ViewModelBuiltObservation with Debug::{to_repr}

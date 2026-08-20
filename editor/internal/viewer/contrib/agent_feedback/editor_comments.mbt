@@ -144,4 +144,5 @@ pub fn group_nearby_session_editor_comments(
 }
 
 ///|
+#deprecated
 pub extend SessionEditorComment with Debug::{to_repr}

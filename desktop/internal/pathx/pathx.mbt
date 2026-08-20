@@ -300,6 +300,7 @@ fn Path::contains(self : Path, path : Path) -> Bool {
 }
 
 ///|
+#deprecated
 pub extend Absolute with Debug::{to_repr}
 
 ///|
@@ -312,6 +313,7 @@ pub extend Absolute with Hash::{hash, hash_combine}
 pub extend Absolute with Show::{output, to_string}
 
 ///|
+#deprecated
 pub extend Path with Debug::{to_repr}
 
 ///|
@@ -321,6 +323,7 @@ pub extend Path with Eq::{equal, not_equal}
 pub extend Path with Show::{output, to_string}
 
 ///|
+#deprecated
 pub extend Relative with Debug::{to_repr}
 
 ///|

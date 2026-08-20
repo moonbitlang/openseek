@@ -347,6 +347,7 @@ fn ConstantTimePrefixSumComputer::ensure_valid(self : Self) -> Unit {
 }
 
 ///|
+#deprecated
 pub extend PrefixSumIndexOfResult with Debug::{to_repr}
 
 ///|

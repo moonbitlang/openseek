@@ -186,7 +186,9 @@ fn optional_positive_int(
 }
 
 ///|
+#deprecated
 pub extend MultiEditArgs with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend MultiEditItem with Debug::{to_repr}

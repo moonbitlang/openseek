@@ -563,16 +563,20 @@ fn CursorEventDispatcher::deliver_event(
 }
 
 ///|
+#deprecated
 pub extend CursorStateChangedEvent with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend HiddenAreasChangedOutgoingEvent with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend OutgoingViewModelEventKind with Debug::{to_repr}
 
 ///|
 pub extend OutgoingViewModelEventKind with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ViewZonesChangedEvent with Debug::{to_repr}

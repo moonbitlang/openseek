@@ -512,6 +512,7 @@ async test "large output spills and read_all returns the full output" {
 }
 
 ///|
+#deprecated
 pub extend ExecStatus with Debug::{to_repr}
 
 ///|

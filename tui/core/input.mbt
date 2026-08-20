@@ -72,6 +72,7 @@ impl @doc.ToDoc for Input with fn to_doc(self) {
 }
 
 ///|
+#deprecated
 pub extend Input with Debug::{to_repr}
 
 ///|

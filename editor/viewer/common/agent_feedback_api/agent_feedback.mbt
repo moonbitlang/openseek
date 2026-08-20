@@ -34,15 +34,18 @@ pub(all) struct AgentFeedback {
 } derive(Debug)
 
 ///|
+#deprecated
 pub extend AgentFeedback with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend AgentFeedbackKind with Debug::{to_repr}
 
 ///|
 pub extend AgentFeedbackKind with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend AgentFeedbackState with Debug::{to_repr}
 
 ///|

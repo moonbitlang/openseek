@@ -11,6 +11,7 @@ pub(all) enum CssLength {
 } derive(Eq, Debug)
 
 ///|
+#deprecated
 pub extend CssLength with Debug::{to_repr}
 
 ///|

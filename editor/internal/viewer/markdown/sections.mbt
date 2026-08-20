@@ -387,12 +387,14 @@ fn markdown_count_source_lines(
 }
 
 ///|
+#deprecated
 pub extend MarkdownSection with Debug::{to_repr}
 
 ///|
 pub extend MarkdownSection with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MarkdownTocEntry with Debug::{to_repr}
 
 ///|

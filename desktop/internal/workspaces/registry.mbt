@@ -436,4 +436,5 @@ async test "workspace identity follows symlinks and survives deletion" {
 }
 
 ///|
+#deprecated
 pub extend WorkspaceError with Debug::{to_repr}

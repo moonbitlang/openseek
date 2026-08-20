@@ -484,4 +484,5 @@ pub fn uri_to_fs_path(uri : Uri, keep_drive_letter_casing : Bool) -> String {
 pub extend Uri with Hash::{hash, hash_combine}
 
 ///|
+#deprecated
 pub extend UriError with Debug::{to_repr}

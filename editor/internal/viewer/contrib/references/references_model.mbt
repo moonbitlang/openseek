@@ -348,30 +348,35 @@ pub fn ReferenceItem::row_preview(
 }
 
 ///|
+#deprecated
 pub extend ReferenceGroup with Debug::{to_repr}
 
 ///|
 pub extend ReferenceGroup with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ReferenceItem with Debug::{to_repr}
 
 ///|
 pub extend ReferenceItem with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ReferenceRowPreview with Debug::{to_repr}
 
 ///|
 pub extend ReferenceRowPreview with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ReferenceSnippet with Debug::{to_repr}
 
 ///|
 pub extend ReferenceSnippet with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ReferencesModel with Debug::{to_repr}
 
 ///|

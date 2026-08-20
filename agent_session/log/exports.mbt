@@ -79,6 +79,7 @@ pub fn parse_events(text : String) -> ParsedLog {
 }
 
 ///|
+#deprecated
 pub extend ParsedLog with Debug::{to_repr}
 
 ///|

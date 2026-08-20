@@ -210,6 +210,7 @@ fn array_splice_replace(
 }
 
 ///|
+#deprecated
 pub extend LineRange with Debug::{to_repr}
 
 ///|

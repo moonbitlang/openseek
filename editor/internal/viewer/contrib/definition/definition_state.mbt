@@ -118,12 +118,14 @@ pub(all) enum DefinitionLinkState {
 }
 
 ///|
+#deprecated
 pub extend DefinitionRequestStamp with Debug::{to_repr}
 
 ///|
 pub extend DefinitionRequestStamp with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend DefinitionTargetFingerprint with Debug::{to_repr}
 
 ///|

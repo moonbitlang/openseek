@@ -842,6 +842,7 @@ pub impl FromJson for CodexArchiveReply with fn from_json(json, path) {
 }
 
 ///|
+#deprecated
 pub extend CodexAccountLoginCancelPayload with Debug::{to_repr}
 
 ///|
@@ -854,6 +855,7 @@ pub extend CodexAccountLoginCancelPayload with Eq::{equal, not_equal}
 pub extend CodexAccountLoginCancelPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexAccountLoginStartPayload with Debug::{to_repr}
 
 ///|
@@ -866,6 +868,7 @@ pub extend CodexAccountLoginStartPayload with Eq::{equal, not_equal}
 pub extend CodexAccountLoginStartPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexAccountReadPayload with Debug::{to_repr}
 
 ///|
@@ -878,6 +881,7 @@ pub extend CodexAccountReadPayload with Eq::{equal, not_equal}
 pub extend CodexAccountReadPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexAccountReply with Debug::{to_repr}
 
 ///|
@@ -896,6 +900,7 @@ pub extend CodexArchiveReply with FromJson::{from_json}
 pub extend CodexArchiveReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexDataReply with Debug::{to_repr}
 
 ///|
@@ -908,6 +913,7 @@ pub extend CodexDataReply with Eq::{equal, not_equal}
 pub extend CodexDataReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexDraftClosePayload with Debug::{to_repr}
 
 ///|
@@ -920,6 +926,7 @@ pub extend CodexDraftClosePayload with Eq::{equal, not_equal}
 pub extend CodexDraftClosePayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexDraftOpenPayload with Debug::{to_repr}
 
 ///|
@@ -932,6 +939,7 @@ pub extend CodexDraftOpenPayload with Eq::{equal, not_equal}
 pub extend CodexDraftOpenPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexDraftOpenReply with Debug::{to_repr}
 
 ///|
@@ -944,6 +952,7 @@ pub extend CodexDraftOpenReply with Eq::{equal, not_equal}
 pub extend CodexDraftOpenReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexFileSearchPayload with Debug::{to_repr}
 
 ///|
@@ -962,6 +971,7 @@ pub extend CodexFileSearchReply with FromJson::{from_json}
 pub extend CodexFileSearchReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexLoginStartReply with Debug::{to_repr}
 
 ///|
@@ -974,6 +984,7 @@ pub extend CodexLoginStartReply with Eq::{equal, not_equal}
 pub extend CodexLoginStartReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexModelListPayload with Debug::{to_repr}
 
 ///|
@@ -986,6 +997,7 @@ pub extend CodexModelListPayload with Eq::{equal, not_equal}
 pub extend CodexModelListPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexReviewStartPayload with Debug::{to_repr}
 
 ///|
@@ -998,6 +1010,7 @@ pub extend CodexReviewStartPayload with Eq::{equal, not_equal}
 pub extend CodexReviewStartPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexReviewTarget with Debug::{to_repr}
 
 ///|
@@ -1010,6 +1023,7 @@ pub extend CodexReviewTarget with Eq::{equal, not_equal}
 pub extend CodexReviewTarget with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexServerRequestRespondPayload with Debug::{to_repr}
 
 ///|
@@ -1022,6 +1036,7 @@ pub extend CodexServerRequestRespondPayload with Eq::{equal, not_equal}
 pub extend CodexServerRequestRespondPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexServerRequestsReply with Debug::{to_repr}
 
 ///|
@@ -1034,6 +1049,7 @@ pub extend CodexServerRequestsReply with Eq::{equal, not_equal}
 pub extend CodexServerRequestsReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexSkillsListPayload with Debug::{to_repr}
 
 ///|
@@ -1046,6 +1062,7 @@ pub extend CodexSkillsListPayload with Eq::{equal, not_equal}
 pub extend CodexSkillsListPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexStatusReply with Debug::{to_repr}
 
 ///|
@@ -1058,6 +1075,7 @@ pub extend CodexStatusReply with Eq::{equal, not_equal}
 pub extend CodexStatusReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexThreadArchivePayload with Debug::{to_repr}
 
 ///|
@@ -1070,6 +1088,7 @@ pub extend CodexThreadArchivePayload with Eq::{equal, not_equal}
 pub extend CodexThreadArchivePayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexThreadListPayload with Debug::{to_repr}
 
 ///|
@@ -1082,6 +1101,7 @@ pub extend CodexThreadListPayload with Eq::{equal, not_equal}
 pub extend CodexThreadListPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexThreadPayload with Debug::{to_repr}
 
 ///|
@@ -1094,6 +1114,7 @@ pub extend CodexThreadPayload with Eq::{equal, not_equal}
 pub extend CodexThreadPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexThreadReadPayload with Debug::{to_repr}
 
 ///|
@@ -1106,6 +1127,7 @@ pub extend CodexThreadReadPayload with Eq::{equal, not_equal}
 pub extend CodexThreadReadPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexThreadReply with Debug::{to_repr}
 
 ///|
@@ -1118,6 +1140,7 @@ pub extend CodexThreadReply with Eq::{equal, not_equal}
 pub extend CodexThreadReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexThreadResumeReply with Debug::{to_repr}
 
 ///|
@@ -1130,6 +1153,7 @@ pub extend CodexThreadResumeReply with Eq::{equal, not_equal}
 pub extend CodexThreadResumeReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexThreadStartPayload with Debug::{to_repr}
 
 ///|
@@ -1142,6 +1166,7 @@ pub extend CodexThreadStartPayload with Eq::{equal, not_equal}
 pub extend CodexThreadStartPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexTurnInterruptPayload with Debug::{to_repr}
 
 ///|
@@ -1154,6 +1179,7 @@ pub extend CodexTurnInterruptPayload with Eq::{equal, not_equal}
 pub extend CodexTurnInterruptPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexTurnReply with Debug::{to_repr}
 
 ///|
@@ -1166,6 +1192,7 @@ pub extend CodexTurnReply with Eq::{equal, not_equal}
 pub extend CodexTurnReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexTurnStartPayload with Debug::{to_repr}
 
 ///|
@@ -1178,6 +1205,7 @@ pub extend CodexTurnStartPayload with Eq::{equal, not_equal}
 pub extend CodexTurnStartPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CodexTurnSteerPayload with Debug::{to_repr}
 
 ///|

@@ -35,6 +35,7 @@ fn markdown_info_string_is_moonbit_check(info_string : String) -> Bool {
 }
 
 ///|
+#deprecated
 pub extend MarkdownResourceKind with Debug::{to_repr}
 
 ///|

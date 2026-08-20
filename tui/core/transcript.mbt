@@ -155,9 +155,11 @@ pub impl @doc.ToDoc for TranscriptItem with fn to_doc(self) {
 }
 
 ///|
+#deprecated
 pub extend ToolCall with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ToolStatus with Debug::{to_repr}
 
 ///|
@@ -167,4 +169,5 @@ pub extend ToolStatus with Eq::{equal, not_equal}
 pub extend TranscriptItem with @doc.ToDoc::{to_doc}
 
 ///|
+#deprecated
 pub extend TranscriptItem with Debug::{to_repr}

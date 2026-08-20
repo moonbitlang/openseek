@@ -94,15 +94,18 @@ pub fn session_from_parse(
 }
 
 ///|
+#deprecated
 pub extend HeaderParse with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend LineError with Debug::{to_repr}
 
 ///|
 pub extend LineError with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SessionFileHeader with Debug::{to_repr}
 
 ///|

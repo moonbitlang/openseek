@@ -56,18 +56,21 @@ pub(all) enum HoverStartSource {
 } derive(Eq, Debug)
 
 ///|
+#deprecated
 pub extend HoverAnchor with Debug::{to_repr}
 
 ///|
 pub extend HoverAnchor with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend HoverStartMode with Debug::{to_repr}
 
 ///|
 pub extend HoverStartMode with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend HoverStartSource with Debug::{to_repr}
 
 ///|

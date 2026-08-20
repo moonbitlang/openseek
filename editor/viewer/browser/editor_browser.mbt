@@ -221,24 +221,28 @@ pub fn MouseTarget::range(self : MouseTarget) -> @base_common.Range? {
 }
 
 ///|
+#deprecated
 pub extend MouseTargetContentEmptyData with Debug::{to_repr}
 
 ///|
 pub extend MouseTargetContentEmptyData with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MouseTargetMarginData with Debug::{to_repr}
 
 ///|
 pub extend MouseTargetMarginData with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MouseTargetViewZoneData with Debug::{to_repr}
 
 ///|
 pub extend MouseTargetViewZoneData with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend OutsidePosition with Debug::{to_repr}
 
 ///|

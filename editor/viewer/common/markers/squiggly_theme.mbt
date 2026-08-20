@@ -132,6 +132,7 @@ fn write_dotdotdot_rule(sb : StringBuilder, svg_data : String) -> Unit {
 }
 
 ///|
+#deprecated
 pub extend SquigglyThemeColors with Debug::{to_repr}
 
 ///|

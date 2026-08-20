@@ -164,6 +164,7 @@ test "parse reports an error on malformed json" {
 pub extend Citation with Eq::{not_equal, equal}
 
 ///|
+#deprecated
 pub extend Citation with Debug::{to_repr}
 
 ///|
@@ -176,6 +177,7 @@ pub extend Citation with FromJson::{from_json}
 pub extend ExploreReport with Eq::{not_equal, equal}
 
 ///|
+#deprecated
 pub extend ExploreReport with Debug::{to_repr}
 
 ///|

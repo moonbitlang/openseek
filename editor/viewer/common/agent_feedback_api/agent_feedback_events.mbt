@@ -14,9 +14,11 @@ pub(all) struct AgentFeedbackNavigationBearing {
 } derive(Eq, Debug)
 
 ///|
+#deprecated
 pub extend AgentFeedbackChangeEvent with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend AgentFeedbackNavigationBearing with Debug::{to_repr}
 
 ///|

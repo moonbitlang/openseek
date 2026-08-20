@@ -196,6 +196,7 @@ pub async fn run_child(
 }
 
 ///|
+#deprecated
 pub extend WorkerInput with Debug::{to_repr}
 
 ///|

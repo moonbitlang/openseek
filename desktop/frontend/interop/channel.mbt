@@ -197,6 +197,7 @@ test "a managed worktree keeps its identity while temporarily missing" {
 }
 
 ///|
+#deprecated
 pub extend ChannelId with Debug::{to_repr}
 
 ///|
@@ -206,12 +207,14 @@ pub extend ChannelId with Eq::{equal, not_equal}
 pub extend ChannelId with Hash::{hash, hash_combine}
 
 ///|
+#deprecated
 pub extend CheckoutPlacement with Debug::{to_repr}
 
 ///|
 pub extend CheckoutPlacement with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ConversationKey with Debug::{to_repr}
 
 ///|

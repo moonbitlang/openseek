@@ -595,12 +595,14 @@ fn FoldingRegion::contains_line(
 }
 
 ///|
+#deprecated
 pub extend FoldRange with Debug::{to_repr}
 
 ///|
 pub extend FoldRange with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend LineRange with Debug::{to_repr}
 
 ///|

@@ -20,4 +20,5 @@ pub fn decode(arguments : Json) -> FinishInput {
 }
 
 ///|
+#deprecated
 pub extend FinishInput with Debug::{to_repr}

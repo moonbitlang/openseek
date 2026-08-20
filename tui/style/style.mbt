@@ -40,4 +40,5 @@ pub let error : Style = Style(foreground=Basic(Red))
 pub extend Style with Eq::{not_equal, equal}
 
 ///|
+#deprecated
 pub extend Style with Debug::{to_repr}

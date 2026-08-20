@@ -1014,6 +1014,7 @@ fn view_lines_parent_element(el : @rdom.Element) -> @rdom.Element? {
 }
 
 ///|
+#deprecated
 pub extend ViewLinesConfiguration with Debug::{to_repr}
 
 ///|

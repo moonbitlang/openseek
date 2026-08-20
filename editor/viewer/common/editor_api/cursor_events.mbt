@@ -38,13 +38,16 @@ pub(all) struct CursorSelectionChangedEvent {
 } derive(Debug)
 
 ///|
+#deprecated
 pub extend CursorChangeReason with Debug::{to_repr}
 
 ///|
 pub extend CursorChangeReason with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend CursorPositionChangedEvent with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend CursorSelectionChangedEvent with Debug::{to_repr}

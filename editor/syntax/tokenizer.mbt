@@ -303,18 +303,21 @@ pub fn push_token(
 ///|
 
 ///|
+#deprecated
 pub extend HighlightTag with Debug::{to_repr}
 
 ///|
 pub extend HighlightTag with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend LineToken with Debug::{to_repr}
 
 ///|
 pub extend LineToken with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend TokenizerState with Debug::{to_repr}
 
 ///|

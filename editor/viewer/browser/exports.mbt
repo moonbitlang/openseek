@@ -51,6 +51,7 @@ pub struct EditorDomMouseEvent {
 }
 
 ///|
+#deprecated
 pub extend MouseTargetType with Debug::{to_repr}
 
 ///|

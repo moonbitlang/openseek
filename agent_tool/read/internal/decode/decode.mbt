@@ -109,4 +109,5 @@ fn cap_max_output_chars(value : Int) -> Int {
 }
 
 ///|
+#deprecated
 pub extend ReadInput with Debug::{to_repr}

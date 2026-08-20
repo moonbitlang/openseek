@@ -27,4 +27,5 @@ pub fn resolve_remote_directory_uri(
 }
 
 ///|
+#deprecated
 pub extend RemoteDirectoryResult with Debug::{to_repr}

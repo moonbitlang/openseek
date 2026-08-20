@@ -48,4 +48,5 @@ pub(all) struct ModelContentChange {
 } derive(Debug)
 
 ///|
+#deprecated
 pub extend ModelContentChange with Debug::{to_repr}

@@ -142,6 +142,7 @@ test "parse reports an error on malformed json" {
 }
 
 ///|
+#deprecated
 pub extend Finding with Debug::{to_repr}
 
 ///|
@@ -154,6 +155,7 @@ pub extend Finding with Eq::{equal, not_equal}
 pub extend Finding with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ReviewReport with Debug::{to_repr}
 
 ///|
@@ -166,6 +168,7 @@ pub extend ReviewReport with Eq::{equal, not_equal}
 pub extend ReviewReport with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ReviewScope with Debug::{to_repr}
 
 ///|
@@ -178,6 +181,7 @@ pub extend ReviewScope with Eq::{equal, not_equal}
 pub extend ReviewScope with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ReviewStats with Debug::{to_repr}
 
 ///|

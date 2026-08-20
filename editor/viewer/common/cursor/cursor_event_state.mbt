@@ -142,15 +142,18 @@ struct CursorModelState {
 pub extend CursorModelState with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend CursorState with Debug::{to_repr}
 
 ///|
 pub extend CursorState with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend CursorStateChange with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend PartialCursorState with Debug::{to_repr}
 
 ///|

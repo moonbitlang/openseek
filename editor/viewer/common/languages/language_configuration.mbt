@@ -113,18 +113,21 @@ fn Languages::get_language_configuration(
 }
 
 ///|
+#deprecated
 pub extend CharacterPair with Debug::{to_repr}
 
 ///|
 pub extend CharacterPair with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend CommentRule with Debug::{to_repr}
 
 ///|
 pub extend CommentRule with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend LineCommentRule with Debug::{to_repr}
 
 ///|

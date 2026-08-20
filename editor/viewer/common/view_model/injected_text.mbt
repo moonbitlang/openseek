@@ -394,24 +394,28 @@ fn fill_unmapped_model_columns(
 }
 
 ///|
+#deprecated
 pub extend InjectedText with Debug::{to_repr}
 
 ///|
 pub extend InjectedText with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ProjectedLinePart with Debug::{to_repr}
 
 ///|
 pub extend ProjectedLinePart with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ProjectedLinePartKind with Debug::{to_repr}
 
 ///|
 pub extend ProjectedLinePartKind with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ProjectedTextLine with Debug::{to_repr}
 
 ///|

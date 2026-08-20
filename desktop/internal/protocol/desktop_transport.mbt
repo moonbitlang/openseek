@@ -319,12 +319,14 @@ test "malformed agent errors remain visible notifications" {
 }
 
 ///|
+#deprecated
 pub extend Notification with Debug::{to_repr}
 
 ///|
 pub extend Notification with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend NotificationKind with Debug::{to_repr}
 
 ///|

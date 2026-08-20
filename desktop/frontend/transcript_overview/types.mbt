@@ -101,12 +101,14 @@ pub fn entries(
 }
 
 ///|
+#deprecated
 pub extend Entry with Debug::{to_repr}
 
 ///|
 pub extend Entry with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend TurnKey with Debug::{to_repr}
 
 ///|

@@ -38,6 +38,7 @@ pub fn classify(bytes : BytesView) -> Classification {
 }
 
 ///|
+#deprecated
 pub extend Classification with Debug::{to_repr}
 
 ///|

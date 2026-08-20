@@ -961,60 +961,70 @@ fn zero_clock() -> Double {
 }
 
 ///|
+#deprecated
 pub extend ContentSizeChange with Debug::{to_repr}
 
 ///|
 pub extend ContentSizeChange with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend EditorScrollDimensions with Debug::{to_repr}
 
 ///|
 pub extend EditorScrollDimensions with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ScrollChange with Debug::{to_repr}
 
 ///|
 pub extend ScrollChange with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ScrollDimensions with Debug::{to_repr}
 
 ///|
 pub extend ScrollDimensions with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ScrollDimensionsUpdate with Debug::{to_repr}
 
 ///|
 pub extend ScrollDimensionsUpdate with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ScrollPosition with Debug::{to_repr}
 
 ///|
 pub extend ScrollPosition with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ScrollPositionUpdate with Debug::{to_repr}
 
 ///|
 pub extend ScrollPositionUpdate with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ScrollState with Debug::{to_repr}
 
 ///|
 pub extend ScrollState with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SmoothScrollPosition with Debug::{to_repr}
 
 ///|
 pub extend SmoothScrollPosition with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SmoothScrollingUpdate with Debug::{to_repr}
 
 ///|

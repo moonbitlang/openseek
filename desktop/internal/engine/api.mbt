@@ -211,4 +211,5 @@ fn emit_durable_boundary(
 }
 
 ///|
+#deprecated
 pub extend EngineError with Debug::{to_repr}

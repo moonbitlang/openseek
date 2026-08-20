@@ -397,24 +397,28 @@ fn markdown_code_block_index(
 }
 
 ///|
+#deprecated
 pub extend MarkdownBlockAnchor with Debug::{to_repr}
 
 ///|
 pub extend MarkdownBlockAnchor with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MarkdownCodeLine with Debug::{to_repr}
 
 ///|
 pub extend MarkdownCodeLine with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MarkdownDocumentProjection with Debug::{to_repr}
 
 ///|
 pub extend MarkdownDocumentProjection with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MarkdownProjectedCodeRange with Debug::{to_repr}
 
 ///|

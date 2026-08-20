@@ -1183,6 +1183,7 @@ fn remove_diff_zones(viewer : Viewer, ids : Array[String]) -> Unit {
 }
 
 ///|
+#deprecated
 pub extend DiffEditorRenderMode with Debug::{to_repr}
 
 ///|

@@ -251,15 +251,18 @@ fn build_line_starts(text : String) -> Array[Int] {
 }
 
 ///|
+#deprecated
 pub extend DocumentChange with Debug::{to_repr}
 
 ///|
 pub extend DocumentError with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend DocumentReadResult with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend DocumentSnapshot with Debug::{to_repr}
 
 ///|

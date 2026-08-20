@@ -212,12 +212,14 @@ fn summary_line(steps : Array[Step]) -> String {
 }
 
 ///|
+#deprecated
 pub extend Status with Debug::{to_repr}
 
 ///|
 pub extend Status with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend Step with Debug::{to_repr}
 
 ///|

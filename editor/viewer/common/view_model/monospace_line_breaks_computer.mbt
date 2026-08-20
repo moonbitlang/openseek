@@ -487,6 +487,7 @@ fn compute_wrapped_text_indent_length(
 }
 
 ///|
+#deprecated
 pub extend WordBreak with Debug::{to_repr}
 
 ///|

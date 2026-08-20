@@ -157,6 +157,7 @@ pub fn DefaultLinesDiffComputer::compute_diff(
 }
 
 ///|
+#deprecated
 pub extend DefaultLinesDiffComputer with Debug::{to_repr}
 
 ///|

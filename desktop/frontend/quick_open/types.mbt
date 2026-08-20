@@ -240,6 +240,7 @@ fn Item::accepted(self : Item) -> Accepted {
 }
 
 ///|
+#deprecated
 pub extend Accepted with Debug::{to_repr}
 
 ///|

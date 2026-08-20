@@ -174,12 +174,14 @@ pub fn component(
 }
 
 ///|
+#deprecated
 pub extend Account with Debug::{to_repr}
 
 ///|
 pub extend Account with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend Input with Debug::{to_repr}
 
 ///|

@@ -1800,15 +1800,18 @@ async test "worktree remove prunes an externally deleted checkout" {
 }
 
 ///|
+#deprecated
 pub extend CodexWorktreeBinding with Debug::{to_repr}
 
 ///|
 pub extend CodexWorktreeBinding with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend WorktreeError with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend WorktreeOwner with Debug::{to_repr}
 
 ///|

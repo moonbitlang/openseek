@@ -376,18 +376,21 @@ pub fn FontInfo::equals(self : FontInfo, other : FontInfo) -> Bool {
 }
 
 ///|
+#deprecated
 pub extend BareFontInfo with Debug::{to_repr}
 
 ///|
 pub extend BareFontInfo with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend EditorFontDefaults with Debug::{to_repr}
 
 ///|
 pub extend EditorFontDefaults with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend FontInfo with Debug::{to_repr}
 
 ///|

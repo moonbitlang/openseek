@@ -132,6 +132,7 @@ pub(all) enum Event {
 } derive(Eq, Debug)
 
 ///|
+#deprecated
 pub extend Event with Debug::{to_repr}
 
 ///|

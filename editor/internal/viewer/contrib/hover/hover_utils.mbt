@@ -208,4 +208,5 @@ pub fn should_keep_current_hover(
 }
 
 ///|
+#deprecated
 pub extend EventModifiers with Debug::{to_repr}

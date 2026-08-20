@@ -33,4 +33,5 @@ pub fn decode(arguments : Json) -> RemoveInput raise {
 }
 
 ///|
+#deprecated
 pub extend RemoveInput with Debug::{to_repr}

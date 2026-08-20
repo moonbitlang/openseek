@@ -238,4 +238,5 @@ test "sub-run descent follows the structural suffix, not a text prefix" {
 }
 
 ///|
+#deprecated
 pub extend StoreError with Debug::{to_repr}

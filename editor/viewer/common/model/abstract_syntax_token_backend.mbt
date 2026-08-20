@@ -321,6 +321,7 @@ fn line_range_arrays_equal(
 }
 
 ///|
+#deprecated
 pub extend VisibleLineRange with Debug::{to_repr}
 
 ///|

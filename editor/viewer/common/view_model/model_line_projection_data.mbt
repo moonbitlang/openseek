@@ -118,12 +118,14 @@ fn model_line_projection_segment(
 }
 
 ///|
+#deprecated
 pub extend ModelLineProjectionData with Debug::{to_repr}
 
 ///|
 pub extend ModelLineProjectionData with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ModelLineProjectionSegment with Debug::{to_repr}
 
 ///|

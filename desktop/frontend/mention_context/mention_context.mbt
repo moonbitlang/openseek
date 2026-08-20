@@ -438,21 +438,25 @@ fn parse_annotation_body(lines : ArrayView[String]) -> (String, String)? {
 }
 
 ///|
+#deprecated
 pub extend AnnotationSide with Debug::{to_repr}
 
 ///|
 pub extend AnnotationSide with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MentionMessage with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend MentionRef with Debug::{to_repr}
 
 ///|
 pub extend MentionRef with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend Target with Debug::{to_repr}
 
 ///|

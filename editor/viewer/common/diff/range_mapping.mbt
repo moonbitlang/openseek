@@ -73,6 +73,7 @@ fn RangeMapping::RangeMapping(
 }
 
 ///|
+#deprecated
 pub extend DetailedLineRangeMapping with Debug::{to_repr}
 
 ///|

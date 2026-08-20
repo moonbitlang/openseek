@@ -16,6 +16,7 @@ pub(all) struct ViewLineRenderingData {
 } derive(Eq, Debug)
 
 ///|
+#deprecated
 pub extend ViewLineRenderingData with Debug::{to_repr}
 
 ///|

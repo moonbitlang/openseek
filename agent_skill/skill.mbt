@@ -162,4 +162,5 @@ pub fn skills_prompt_section(skills : Array[Skill]) -> String? {
 }
 
 ///|
+#deprecated
 pub extend Skill with Debug::{to_repr}

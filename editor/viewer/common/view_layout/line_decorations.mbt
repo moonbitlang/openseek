@@ -224,12 +224,14 @@ fn line_decoration_metadata(decoration_type : InlineDecorationType) -> Int {
 }
 
 ///|
+#deprecated
 pub extend DecorationSegment with Debug::{to_repr}
 
 ///|
 pub extend DecorationSegment with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend LineDecoration with Debug::{to_repr}
 
 ///|

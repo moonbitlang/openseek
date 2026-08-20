@@ -1326,67 +1326,85 @@ fn json_int_field(value : Json, key : String) -> Int? {
 }
 
 ///|
+#deprecated
 pub extend ClientPacket with Debug::{to_repr}
 
 ///|
 pub extend ClientPacket with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ClientPacketDecodeResult with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend DefinitionResultPayload with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend DiagnosticsPayload with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend DirectoryResolvedPayload with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend DocumentPayload with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend DocumentPositionRequest with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend DocumentRequest with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend DocumentRevisionRequest with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend DocumentSymbolsResultPayload with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend HoverResultPayload with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ProtocolError with Debug::{to_repr}
 
 ///|
 pub extend ProtocolError with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ProtocolErrorCode with Debug::{to_repr}
 
 ///|
 pub extend ProtocolErrorCode with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ProtocolNegotiation with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ReferenceItem with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ReferencesResultPayload with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ServerPacket with Debug::{to_repr}
 
 ///|
 pub extend ServerPacket with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ServerPacketDecodeResult with Debug::{to_repr}

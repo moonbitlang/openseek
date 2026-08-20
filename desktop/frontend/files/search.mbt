@@ -69,6 +69,7 @@ fn Match::of_path(path : @pathx.Relative) -> Match {
 }
 
 ///|
+#deprecated
 pub extend Match with Debug::{to_repr}
 
 ///|

@@ -1283,6 +1283,7 @@ pub fn AgentStreamEvent::remote_lifecycle(
 }
 
 ///|
+#deprecated
 pub extend AgentStreamEvent with Debug::{to_repr}
 
 ///|
@@ -1295,6 +1296,7 @@ pub extend AgentStreamEvent with Eq::{equal, not_equal}
 pub extend AgentStreamEvent with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend AppEntry with Debug::{to_repr}
 
 ///|
@@ -1307,6 +1309,7 @@ pub extend AppEntry with Eq::{equal, not_equal}
 pub extend AppEntry with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ApplyUpdateReply with Debug::{to_repr}
 
 ///|
@@ -1319,6 +1322,7 @@ pub extend ApplyUpdateReply with Eq::{equal, not_equal}
 pub extend ApplyUpdateReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ArchiveNeedsForceReply with Debug::{to_repr}
 
 ///|
@@ -1331,6 +1335,7 @@ pub extend ArchiveNeedsForceReply with Eq::{equal, not_equal}
 pub extend ArchiveNeedsForceReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ArchiveReply with Debug::{to_repr}
 
 ///|
@@ -1343,6 +1348,7 @@ pub extend ArchiveReply with Eq::{equal, not_equal}
 pub extend ArchiveReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend BrowseDirectoryReply with Debug::{to_repr}
 
 ///|
@@ -1355,6 +1361,7 @@ pub extend BrowseDirectoryReply with Eq::{equal, not_equal}
 pub extend BrowseDirectoryReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CancelReply with Debug::{to_repr}
 
 ///|
@@ -1367,6 +1374,7 @@ pub extend CancelReply with Eq::{equal, not_equal}
 pub extend CancelReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CheckUpdateReply with Debug::{to_repr}
 
 ///|
@@ -1379,6 +1387,7 @@ pub extend CheckUpdateReply with Eq::{equal, not_equal}
 pub extend CheckUpdateReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend CompactReply with Debug::{to_repr}
 
 ///|
@@ -1391,6 +1400,7 @@ pub extend CompactReply with Eq::{equal, not_equal}
 pub extend CompactReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend DirEntry with Debug::{to_repr}
 
 ///|
@@ -1403,6 +1413,7 @@ pub extend DirEntry with Eq::{equal, not_equal}
 pub extend DirEntry with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend DownloadUpdateAcceptedReply with Debug::{to_repr}
 
 ///|
@@ -1415,6 +1426,7 @@ pub extend DownloadUpdateAcceptedReply with Eq::{equal, not_equal}
 pub extend DownloadUpdateAcceptedReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend EmptyPayload with Debug::{to_repr}
 
 ///|
@@ -1427,6 +1439,7 @@ pub extend EmptyPayload with Eq::{equal, not_equal}
 pub extend EmptyPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend EmptyReply with Debug::{to_repr}
 
 ///|
@@ -1439,6 +1452,7 @@ pub extend EmptyReply with Eq::{equal, not_equal}
 pub extend EmptyReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend FileStat with Debug::{to_repr}
 
 ///|
@@ -1451,6 +1465,7 @@ pub extend FileStat with Eq::{equal, not_equal}
 pub extend FileStat with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend GitBranchReply with Debug::{to_repr}
 
 ///|
@@ -1463,6 +1478,7 @@ pub extend GitBranchReply with Eq::{equal, not_equal}
 pub extend GitBranchReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend GitChange with Debug::{to_repr}
 
 ///|
@@ -1475,6 +1491,7 @@ pub extend GitChange with Eq::{equal, not_equal}
 pub extend GitChange with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend GitChangesReply with Debug::{to_repr}
 
 ///|
@@ -1487,6 +1504,7 @@ pub extend GitChangesReply with Eq::{equal, not_equal}
 pub extend GitChangesReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend GitChecks with Debug::{to_repr}
 
 ///|
@@ -1499,6 +1517,7 @@ pub extend GitChecks with Eq::{equal, not_equal}
 pub extend GitChecks with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend GitDiffStat with Debug::{to_repr}
 
 ///|
@@ -1511,6 +1530,7 @@ pub extend GitDiffStat with Eq::{equal, not_equal}
 pub extend GitDiffStat with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend GitOriginalFileReply with Debug::{to_repr}
 
 ///|
@@ -1523,6 +1543,7 @@ pub extend GitOriginalFileReply with Eq::{equal, not_equal}
 pub extend GitOriginalFileReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend GitPullRequest with Debug::{to_repr}
 
 ///|
@@ -1535,6 +1556,7 @@ pub extend GitPullRequest with Eq::{equal, not_equal}
 pub extend GitPullRequest with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend GitPullRequestReply with Debug::{to_repr}
 
 ///|
@@ -1547,6 +1569,7 @@ pub extend GitPullRequestReply with Eq::{equal, not_equal}
 pub extend GitPullRequestReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend GoalReply with Debug::{to_repr}
 
 ///|
@@ -1559,6 +1582,7 @@ pub extend GoalReply with Eq::{equal, not_equal}
 pub extend GoalReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend InstallSkillReply with Debug::{to_repr}
 
 ///|
@@ -1571,6 +1595,7 @@ pub extend InstallSkillReply with Eq::{equal, not_equal}
 pub extend InstallSkillReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend InstalledSkill with Debug::{to_repr}
 
 ///|
@@ -1583,6 +1608,7 @@ pub extend InstalledSkill with Eq::{equal, not_equal}
 pub extend InstalledSkill with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend InstalledSkillsReply with Debug::{to_repr}
 
 ///|
@@ -1595,6 +1621,7 @@ pub extend InstalledSkillsReply with Eq::{equal, not_equal}
 pub extend InstalledSkillsReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend LaunchAppReply with Debug::{to_repr}
 
 ///|
@@ -1607,6 +1634,7 @@ pub extend LaunchAppReply with Eq::{equal, not_equal}
 pub extend LaunchAppReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ListAppsReply with Debug::{to_repr}
 
 ///|
@@ -1619,6 +1647,7 @@ pub extend ListAppsReply with Eq::{equal, not_equal}
 pub extend ListAppsReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend LoadSessionReply with Debug::{to_repr}
 
 ///|
@@ -1631,6 +1660,7 @@ pub extend LoadSessionReply with Eq::{equal, not_equal}
 pub extend LoadSessionReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend LspDiagnostic with Debug::{to_repr}
 
 ///|
@@ -1643,6 +1673,7 @@ pub extend LspDiagnostic with Eq::{equal, not_equal}
 pub extend LspDiagnostic with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend LspDiagnosticsReply with Debug::{to_repr}
 
 ///|
@@ -1655,6 +1686,7 @@ pub extend LspDiagnosticsReply with Eq::{equal, not_equal}
 pub extend LspDiagnosticsReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend LspHoverReply with Debug::{to_repr}
 
 ///|
@@ -1667,6 +1699,7 @@ pub extend LspHoverReply with Eq::{equal, not_equal}
 pub extend LspHoverReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend LspPosition with Debug::{to_repr}
 
 ///|
@@ -1679,6 +1712,7 @@ pub extend LspPosition with Eq::{equal, not_equal}
 pub extend LspPosition with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend LspRange with Debug::{to_repr}
 
 ///|
@@ -1691,6 +1725,7 @@ pub extend LspRange with Eq::{equal, not_equal}
 pub extend LspRange with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend MarketSkill with Debug::{to_repr}
 
 ///|
@@ -1703,6 +1738,7 @@ pub extend MarketSkill with Eq::{equal, not_equal}
 pub extend MarketSkill with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend MoonIdeLocation with Debug::{to_repr}
 
 ///|
@@ -1715,6 +1751,7 @@ pub extend MoonIdeLocation with Eq::{equal, not_equal}
 pub extend MoonIdeLocation with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend MoonIdeLocationsReply with Debug::{to_repr}
 
 ///|
@@ -1727,6 +1764,7 @@ pub extend MoonIdeLocationsReply with Eq::{equal, not_equal}
 pub extend MoonIdeLocationsReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend OpenExternalReply with Debug::{to_repr}
 
 ///|
@@ -1739,6 +1777,7 @@ pub extend OpenExternalReply with Eq::{equal, not_equal}
 pub extend OpenExternalReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend OpenPathDirectoryTarget with Debug::{to_repr}
 
 ///|
@@ -1751,6 +1790,7 @@ pub extend OpenPathDirectoryTarget with Eq::{equal, not_equal}
 pub extend OpenPathDirectoryTarget with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend OpenPathEditorTarget with Debug::{to_repr}
 
 ///|
@@ -1763,6 +1803,7 @@ pub extend OpenPathEditorTarget with Eq::{equal, not_equal}
 pub extend OpenPathEditorTarget with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend OpenPathReply with Debug::{to_repr}
 
 ///|
@@ -1775,6 +1816,7 @@ pub extend OpenPathReply with Eq::{equal, not_equal}
 pub extend OpenPathReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ReadDirReply with Debug::{to_repr}
 
 ///|
@@ -1787,6 +1829,7 @@ pub extend ReadDirReply with Eq::{equal, not_equal}
 pub extend ReadDirReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend ReadFileReply with Debug::{to_repr}
 
 ///|
@@ -1799,6 +1842,7 @@ pub extend ReadFileReply with Eq::{equal, not_equal}
 pub extend ReadFileReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend RunSettlementPayload with Debug::{to_repr}
 
 ///|
@@ -1811,6 +1855,7 @@ pub extend RunSettlementPayload with Eq::{equal, not_equal}
 pub extend RunSettlementPayload with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend RunsReply with Debug::{to_repr}
 
 ///|
@@ -1823,6 +1868,7 @@ pub extend RunsReply with Eq::{equal, not_equal}
 pub extend RunsReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SearchFilesReply with Debug::{to_repr}
 
 ///|
@@ -1835,6 +1881,7 @@ pub extend SearchFilesReply with Eq::{equal, not_equal}
 pub extend SearchFilesReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionAssistantMessage with Debug::{to_repr}
 
 ///|
@@ -1847,6 +1894,7 @@ pub extend SessionAssistantMessage with Eq::{equal, not_equal}
 pub extend SessionAssistantMessage with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionDocument with Debug::{to_repr}
 
 ///|
@@ -1859,6 +1907,7 @@ pub extend SessionDocument with Eq::{equal, not_equal}
 pub extend SessionDocument with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionEvent with Debug::{to_repr}
 
 ///|
@@ -1871,6 +1920,7 @@ pub extend SessionEvent with Eq::{equal, not_equal}
 pub extend SessionEvent with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionGroup with Debug::{to_repr}
 
 ///|
@@ -1883,6 +1933,7 @@ pub extend SessionGroup with Eq::{equal, not_equal}
 pub extend SessionGroup with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionItem with Debug::{to_repr}
 
 ///|
@@ -1895,6 +1946,7 @@ pub extend SessionItem with Eq::{equal, not_equal}
 pub extend SessionItem with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionListEntry with Debug::{to_repr}
 
 ///|
@@ -1907,6 +1959,7 @@ pub extend SessionListEntry with Eq::{equal, not_equal}
 pub extend SessionListEntry with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionRuntimeNotice with Debug::{to_repr}
 
 ///|
@@ -1919,6 +1972,7 @@ pub extend SessionRuntimeNotice with Eq::{equal, not_equal}
 pub extend SessionRuntimeNotice with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionSummary with Debug::{to_repr}
 
 ///|
@@ -1931,6 +1985,7 @@ pub extend SessionSummary with Eq::{equal, not_equal}
 pub extend SessionSummary with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionTerminal with Debug::{to_repr}
 
 ///|
@@ -1943,6 +1998,7 @@ pub extend SessionTerminal with Eq::{equal, not_equal}
 pub extend SessionTerminal with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionToolCall with Debug::{to_repr}
 
 ///|
@@ -1955,6 +2011,7 @@ pub extend SessionToolCall with Eq::{equal, not_equal}
 pub extend SessionToolCall with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionToolResult with Debug::{to_repr}
 
 ///|
@@ -1967,6 +2024,7 @@ pub extend SessionToolResult with Eq::{equal, not_equal}
 pub extend SessionToolResult with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionUserMessage with Debug::{to_repr}
 
 ///|
@@ -1979,6 +2037,7 @@ pub extend SessionUserMessage with Eq::{equal, not_equal}
 pub extend SessionUserMessage with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SessionsReply with Debug::{to_repr}
 
 ///|
@@ -1991,6 +2050,7 @@ pub extend SessionsReply with Eq::{equal, not_equal}
 pub extend SessionsReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SkillsCatalogReply with Debug::{to_repr}
 
 ///|
@@ -2003,6 +2063,7 @@ pub extend SkillsCatalogReply with Eq::{equal, not_equal}
 pub extend SkillsCatalogReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend StartReply with Debug::{to_repr}
 
 ///|
@@ -2015,6 +2076,7 @@ pub extend StartReply with Eq::{equal, not_equal}
 pub extend StartReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend StatFilesReply with Debug::{to_repr}
 
 ///|
@@ -2027,6 +2089,7 @@ pub extend StatFilesReply with Eq::{equal, not_equal}
 pub extend StatFilesReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SteerReply with Debug::{to_repr}
 
 ///|
@@ -2039,6 +2102,7 @@ pub extend SteerReply with Eq::{equal, not_equal}
 pub extend SteerReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SymbolItem with Debug::{to_repr}
 
 ///|
@@ -2051,6 +2115,7 @@ pub extend SymbolItem with Eq::{equal, not_equal}
 pub extend SymbolItem with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SymbolPosition with Debug::{to_repr}
 
 ///|
@@ -2063,6 +2128,7 @@ pub extend SymbolPosition with Eq::{equal, not_equal}
 pub extend SymbolPosition with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SymbolRange with Debug::{to_repr}
 
 ///|
@@ -2075,6 +2141,7 @@ pub extend SymbolRange with Eq::{equal, not_equal}
 pub extend SymbolRange with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend TerminalOpenReply with Debug::{to_repr}
 
 ///|
@@ -2087,6 +2154,7 @@ pub extend TerminalOpenReply with Eq::{equal, not_equal}
 pub extend TerminalOpenReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend UninstallSkillReply with Debug::{to_repr}
 
 ///|
@@ -2099,6 +2167,7 @@ pub extend UninstallSkillReply with Eq::{equal, not_equal}
 pub extend UninstallSkillReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend WorkspaceSymbolsReply with Debug::{to_repr}
 
 ///|
@@ -2111,6 +2180,7 @@ pub extend WorkspaceSymbolsReply with Eq::{equal, not_equal}
 pub extend WorkspaceSymbolsReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend WorkspacesReply with Debug::{to_repr}
 
 ///|
@@ -2123,6 +2193,7 @@ pub extend WorkspacesReply with Eq::{equal, not_equal}
 pub extend WorkspacesReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend WorktreeCreateReply with Debug::{to_repr}
 
 ///|
@@ -2135,6 +2206,7 @@ pub extend WorktreeCreateReply with Eq::{equal, not_equal}
 pub extend WorktreeCreateReply with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend WorktreeCreateResult with Debug::{to_repr}
 
 ///|
@@ -2147,6 +2219,7 @@ pub extend WorktreeCreateResult with Eq::{equal, not_equal}
 pub extend WorktreeCreateResult with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend WorktreeInfo with Debug::{to_repr}
 
 ///|
@@ -2159,6 +2232,7 @@ pub extend WorktreeInfo with Eq::{equal, not_equal}
 pub extend WorktreeInfo with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend WorktreesReply with Debug::{to_repr}
 
 ///|

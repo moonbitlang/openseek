@@ -164,13 +164,16 @@ fn normalize_title(index : Int, raw_title : String) -> String raise {
 }
 
 ///|
+#deprecated
 pub extend PlanInput with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend PlanStatus with Debug::{to_repr}
 
 ///|
 pub extend PlanStatus with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend PlanStep with Debug::{to_repr}

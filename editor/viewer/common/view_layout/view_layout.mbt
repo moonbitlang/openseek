@@ -778,12 +778,14 @@ pub fn ViewLayout::is_in_bottom_padding(
 }
 
 ///|
+#deprecated
 pub extend SavedScrollState with Debug::{to_repr}
 
 ///|
 pub extend SavedScrollState with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend Viewport with Debug::{to_repr}
 
 ///|

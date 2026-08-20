@@ -263,4 +263,5 @@ test "tally renders a diagnostic without a location using just the path" {
 }
 
 ///|
+#deprecated
 pub extend CheckErrors with Debug::{to_repr}

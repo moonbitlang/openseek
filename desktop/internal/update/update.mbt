@@ -409,12 +409,14 @@ test "manifest digests normalize to bare lowercase hex" {
 }
 
 ///|
+#deprecated
 pub extend PackageInfo with Debug::{to_repr}
 
 ///|
 pub extend PackageInfo with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend UpdateInfo with Debug::{to_repr}
 
 ///|

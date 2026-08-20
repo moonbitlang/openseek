@@ -543,6 +543,7 @@ fn is_submit_shortcut(event : @dom.KeyboardEvent) -> Bool {
 }
 
 ///|
+#deprecated
 pub extend WorktreeChoice with Debug::{to_repr}
 
 ///|

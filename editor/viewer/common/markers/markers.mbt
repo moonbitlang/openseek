@@ -255,24 +255,28 @@ fn Marker::to_diagnostic(self : Marker) -> @language.Diagnostic {
 }
 
 ///|
+#deprecated
 pub extend Marker with Debug::{to_repr}
 
 ///|
 pub extend Marker with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MarkerData with Debug::{to_repr}
 
 ///|
 pub extend MarkerData with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MarkerSeverity with Debug::{to_repr}
 
 ///|
 pub extend MarkerSeverity with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MarkerTag with Debug::{to_repr}
 
 ///|

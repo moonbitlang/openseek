@@ -152,12 +152,14 @@ pub fn OffsetRange::add_range(
 }
 
 ///|
+#deprecated
 pub extend OffsetRange with Debug::{to_repr}
 
 ///|
 pub extend OffsetRange with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend Position with Debug::{to_repr}
 
 ///|

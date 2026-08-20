@@ -140,4 +140,5 @@ test "decode rejects non-object arguments" {
 }
 
 ///|
+#deprecated
 pub extend RunMoonbitInput with Debug::{to_repr}

@@ -155,6 +155,7 @@ pub fn TextModel::get_word_at_position(
 }
 
 ///|
+#deprecated
 pub extend WordAtPosition with Debug::{to_repr}
 
 ///|

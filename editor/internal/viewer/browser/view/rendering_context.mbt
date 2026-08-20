@@ -280,6 +280,7 @@ priv struct HorizontalRange {
 }
 
 ///|
+#deprecated
 pub extend HorizontalPosition with Debug::{to_repr}
 
 ///|

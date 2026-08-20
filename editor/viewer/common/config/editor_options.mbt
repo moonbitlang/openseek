@@ -43,6 +43,7 @@ pub(all) struct EditorLayoutInfo {
 } derive(Eq, Debug)
 
 ///|
+#deprecated
 pub extend EditorLayoutInfo with Debug::{to_repr}
 
 ///|

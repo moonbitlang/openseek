@@ -129,39 +129,47 @@ pub fn DiagnosticTag::label(self : DiagnosticTag) -> String {
 }
 
 ///|
+#deprecated
 pub extend Diagnostic with Debug::{to_repr}
 
 ///|
 pub extend Diagnostic with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend DiagnosticSeverity with Debug::{to_repr}
 
 ///|
 pub extend DiagnosticSeverity with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend DiagnosticTag with Debug::{to_repr}
 
 ///|
 pub extend DiagnosticTag with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend DocumentSymbol with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend Hover with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend HoverContent with Debug::{to_repr}
 
 ///|
 pub extend HoverContent with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend Location with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend MarkdownCommentBlock with Debug::{to_repr}
 
 ///|

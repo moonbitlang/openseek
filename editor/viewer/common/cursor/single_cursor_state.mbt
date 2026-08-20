@@ -123,12 +123,14 @@ fn not_before_or_equal(
 }
 
 ///|
+#deprecated
 pub extend SelectionStartKind with Debug::{to_repr}
 
 ///|
 pub extend SelectionStartKind with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SingleCursorState with Debug::{to_repr}
 
 ///|

@@ -215,6 +215,7 @@ fn compute_minimum_scrolling(
 }
 
 ///|
+#deprecated
 pub extend VerticalRevealType with Debug::{to_repr}
 
 ///|

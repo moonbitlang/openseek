@@ -58,18 +58,21 @@ pub fn ReferencesSessionKey::is_current(
 }
 
 ///|
+#deprecated
 pub extend ReferencesPeekMode with Debug::{to_repr}
 
 ///|
 pub extend ReferencesPeekMode with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ReferencesPeekPhase with Debug::{to_repr}
 
 ///|
 pub extend ReferencesPeekPhase with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ReferencesSessionKey with Debug::{to_repr}
 
 ///|

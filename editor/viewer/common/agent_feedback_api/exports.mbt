@@ -27,7 +27,9 @@ pub(all) struct AgentFeedbackSubmittedEvent {
 } derive(Debug)
 
 ///|
+#deprecated
 pub extend AgentFeedbackAddedEvent with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend AgentFeedbackSubmittedEvent with Debug::{to_repr}

@@ -226,51 +226,61 @@ pub fn ModelDecorationOptions::ModelDecorationOptions(
 }
 
 ///|
+#deprecated
 pub extend InjectedTextOptions with Debug::{to_repr}
 
 ///|
 pub extend InjectedTextOptions with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MinimapPosition with Debug::{to_repr}
 
 ///|
 pub extend MinimapPosition with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ModelDecoration with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ModelDecorationMinimapOptions with Debug::{to_repr}
 
 ///|
 pub extend ModelDecorationMinimapOptions with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ModelDecorationOptions with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ModelDecorationOverviewRulerOptions with Debug::{to_repr}
 
 ///|
 pub extend ModelDecorationOverviewRulerOptions with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ModelDecorationsChangedEvent with Debug::{to_repr}
 
 ///|
 pub extend ModelDecorationsChangedEvent with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ModelDeltaDecoration with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend OverviewRulerLane with Debug::{to_repr}
 
 ///|
 pub extend OverviewRulerLane with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend TrackedRangeStickiness with Debug::{to_repr}
 
 ///|

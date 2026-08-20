@@ -38,6 +38,7 @@ fn ViewModel::emit_model_tokens_changed(
 }
 
 ///|
+#deprecated
 pub extend ViewTokensChangedRange with Debug::{to_repr}
 
 ///|

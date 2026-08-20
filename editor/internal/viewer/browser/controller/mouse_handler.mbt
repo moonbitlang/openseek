@@ -964,6 +964,7 @@ extern "js" fn mouse_event_target_within(
   #| (m, container) => container.contains(m.target)
 
 ///|
+#deprecated
 pub extend NavigationCommandRevealType with Debug::{to_repr}
 
 ///|

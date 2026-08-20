@@ -309,7 +309,9 @@ pub fn endpoints(
 }
 
 ///|
+#deprecated
 pub extend HostError with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend PayloadError with Debug::{to_repr}

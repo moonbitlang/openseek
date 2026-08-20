@@ -100,6 +100,7 @@ fn QuickDiffService::on_did_change_original(
 }
 
 ///|
+#deprecated
 pub extend ChangeType with Debug::{to_repr}
 
 ///|

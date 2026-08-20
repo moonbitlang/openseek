@@ -139,12 +139,14 @@ fn position_eq(a : @base_common.Position, b : @base_common.Position) -> Bool {
 }
 
 ///|
+#deprecated
 pub extend Selection with Debug::{to_repr}
 
 ///|
 pub extend Selection with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SelectionDirection with Debug::{to_repr}
 
 ///|

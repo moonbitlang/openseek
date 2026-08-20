@@ -33,12 +33,14 @@ pub struct LinesDiff {
 } derive(Eq, Debug)
 
 ///|
+#deprecated
 pub extend LinesDiff with Debug::{to_repr}
 
 ///|
 pub extend LinesDiff with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend LinesDiffComputerOptions with Debug::{to_repr}
 
 ///|

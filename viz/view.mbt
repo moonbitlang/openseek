@@ -2280,6 +2280,7 @@ pub fn subrun_child_ids(
 }
 
 ///|
+#deprecated
 pub extend ViewMode with Debug::{to_repr}
 
 ///|

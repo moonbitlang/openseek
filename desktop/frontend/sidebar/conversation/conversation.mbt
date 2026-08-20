@@ -264,6 +264,7 @@ pub fn component(
 }
 
 ///|
+#deprecated
 pub extend Id with Debug::{to_repr}
 
 ///|
@@ -273,18 +274,21 @@ pub extend Id with Eq::{equal, not_equal}
 pub extend Id with Hash::{hash, hash_combine}
 
 ///|
+#deprecated
 pub extend Input with Debug::{to_repr}
 
 ///|
 pub extend Input with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend RunMark with Debug::{to_repr}
 
 ///|
 pub extend RunMark with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend TrailingAction with Debug::{to_repr}
 
 ///|

@@ -954,12 +954,14 @@ pub extend HoverController with Eq::{equal, not_equal}
 pub extend HoverDebouncer with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend HoverOperation with Debug::{to_repr}
 
 ///|
 pub extend HoverOperation with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend HoverOperationOptions with Debug::{to_repr}
 
 ///|

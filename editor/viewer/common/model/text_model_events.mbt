@@ -308,18 +308,23 @@ fn TextModel::on_did_change_content_or_injected_text(
 // #endregion
 
 ///|
+#deprecated
 pub extend InternalModelContentChangeEvent with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ModelContentChangedEvent with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ModelRawChange with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ModelRawContentChangedEvent with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend RawContentChangedType with Debug::{to_repr}
 
 ///|

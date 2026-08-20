@@ -133,36 +133,42 @@ pub fn compute_unified_diff(
 }
 
 ///|
+#deprecated
 pub extend UnifiedDiffAlgorithmOptions with Debug::{to_repr}
 
 ///|
 pub extend UnifiedDiffAlgorithmOptions with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend UnifiedDiffChange with Debug::{to_repr}
 
 ///|
 pub extend UnifiedDiffChange with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend UnifiedDiffHunk with Debug::{to_repr}
 
 ///|
 pub extend UnifiedDiffHunk with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend UnifiedDiffLine with Debug::{to_repr}
 
 ///|
 pub extend UnifiedDiffLine with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend UnifiedDiffLineComment with Debug::{to_repr}
 
 ///|
 pub extend UnifiedDiffLineComment with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend UnifiedDiffLineKind with Debug::{to_repr}
 
 ///|

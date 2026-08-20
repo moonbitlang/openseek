@@ -690,10 +690,13 @@ fn normalize_workspace_root(root : String) -> String {
 }
 
 ///|
+#deprecated
 pub extend RemotePathResult with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ServerHostReadResult with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ServerHostResolveResult with Debug::{to_repr}

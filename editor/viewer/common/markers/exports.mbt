@@ -127,12 +127,14 @@ pub fn MarkerService::markers_for_resource(
 }
 
 ///|
+#deprecated
 pub extend RelatedInformation with Debug::{to_repr}
 
 ///|
 pub extend RelatedInformation with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ResourceMarker with Debug::{to_repr}
 
 ///|

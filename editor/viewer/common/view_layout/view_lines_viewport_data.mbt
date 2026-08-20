@@ -55,6 +55,7 @@ pub fn ViewportData::decorations_in_viewport(
 }
 
 ///|
+#deprecated
 pub extend ViewportData with Debug::{to_repr}
 
 ///|

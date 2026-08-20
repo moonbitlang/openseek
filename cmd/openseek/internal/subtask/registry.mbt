@@ -221,6 +221,7 @@ fn with_default_conflict_paths(json : Json) -> Json {
 }
 
 ///|
+#deprecated
 pub extend SubtaskEntry with Debug::{to_repr}
 
 ///|
@@ -233,6 +234,7 @@ pub extend SubtaskEntry with Eq::{equal, not_equal}
 pub extend SubtaskEntry with ToJson::{to_json}
 
 ///|
+#deprecated
 pub extend SubtaskState with Debug::{to_repr}
 
 ///|

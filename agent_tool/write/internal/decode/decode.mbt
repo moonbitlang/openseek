@@ -36,4 +36,5 @@ pub fn decode(arguments : Json) -> WriteInput raise {
 }
 
 ///|
+#deprecated
 pub extend WriteInput with Debug::{to_repr}

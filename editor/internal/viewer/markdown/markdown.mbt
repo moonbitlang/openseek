@@ -179,12 +179,14 @@ fn markdown_conversion_result(
 }
 
 ///|
+#deprecated
 pub extend MarkdownCodeBlock with Debug::{to_repr}
 
 ///|
 pub extend MarkdownCodeBlock with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend MarkdownRenderFact with Debug::{to_repr}
 
 ///|

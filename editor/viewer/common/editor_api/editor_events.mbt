@@ -30,12 +30,15 @@ pub(all) struct ScrolledVisiblePosition {
 } derive(Eq, Debug)
 
 ///|
+#deprecated
 pub extend ModelChangedEvent with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ScrollEvent with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend ScrolledVisiblePosition with Debug::{to_repr}
 
 ///|

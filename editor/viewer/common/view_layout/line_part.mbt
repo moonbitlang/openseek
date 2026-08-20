@@ -71,24 +71,28 @@ let line_part_metadata_pseudo_before = 2
 let line_part_metadata_pseudo_after = 4
 
 ///|
+#deprecated
 pub extend ForeignElementType with Debug::{to_repr}
 
 ///|
 pub extend ForeignElementType with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend InlineDecorationType with Debug::{to_repr}
 
 ///|
 pub extend InlineDecorationType with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend LinePart with Debug::{to_repr}
 
 ///|
 pub extend LinePart with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend TextDirection with Debug::{to_repr}
 
 ///|

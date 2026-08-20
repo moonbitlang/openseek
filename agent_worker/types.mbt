@@ -139,6 +139,7 @@ pub fn WorkerReport::parse_validated(
 }
 
 ///|
+#deprecated
 pub extend WorkerReport with Debug::{to_repr}
 
 ///|

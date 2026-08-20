@@ -993,6 +993,7 @@ fn percent_decode(str : String) -> String {
 }
 
 ///|
+#deprecated
 pub extend Uri with Debug::{to_repr}
 
 ///|

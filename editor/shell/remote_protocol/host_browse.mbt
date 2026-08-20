@@ -178,22 +178,27 @@ fn decode_workspace_switched_payload(
 }
 
 ///|
+#deprecated
 pub extend HostDirectoryEntry with Debug::{to_repr}
 
 ///|
 pub extend HostDirectoryEntry with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend HostDirectoryListedPayload with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend HostDirectoryListing with Debug::{to_repr}
 
 ///|
 pub extend HostDirectoryListing with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend HostPathRequest with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend WorkspaceSwitchedPayload with Debug::{to_repr}

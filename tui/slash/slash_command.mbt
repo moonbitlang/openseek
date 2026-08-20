@@ -99,12 +99,14 @@ pub fn has_arguments(rest : String) -> Bool {
 }
 
 ///|
+#deprecated
 pub extend SlashCommandInvocation with Debug::{to_repr}
 
 ///|
 pub extend SlashCommandInvocation with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SlashCommandSpec with Debug::{to_repr}
 
 ///|

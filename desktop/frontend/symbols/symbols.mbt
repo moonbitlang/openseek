@@ -177,6 +177,7 @@ pub fn search(
 }
 
 ///|
+#deprecated
 pub extend Symbol with Debug::{to_repr}
 
 ///|

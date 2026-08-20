@@ -174,12 +174,14 @@ fn parse_steer(line : Json) -> Result[Command, String] {
 }
 
 ///|
+#deprecated
 pub extend Command with Debug::{to_repr}
 
 ///|
 pub extend Command with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SteerKind with Debug::{to_repr}
 
 ///|

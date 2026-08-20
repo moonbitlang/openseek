@@ -146,7 +146,9 @@ fn path_pattern_matches(pattern : String, path : String) -> Bool {
 }
 
 ///|
+#deprecated
 pub extend LanguageFilter with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend LanguageSelector with Debug::{to_repr}

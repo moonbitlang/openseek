@@ -82,4 +82,5 @@ pub fn LanguageIdCodec::encode_language_id(
 }
 
 ///|
+#deprecated
 pub extend LanguageIdCodec with Debug::{to_repr}

@@ -295,6 +295,7 @@ pub fn Range::to_string(self : Range) -> String {
 }
 
 ///|
+#deprecated
 pub extend Range with Debug::{to_repr}
 
 ///|

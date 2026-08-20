@@ -128,6 +128,7 @@ fn decode_string_map(
 }
 
 ///|
+#deprecated
 pub extend McpServer with Debug::{to_repr}
 
 ///|

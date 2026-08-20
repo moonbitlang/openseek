@@ -76,24 +76,28 @@ priv enum LexState {
 }
 
 ///|
+#deprecated
 pub extend EnvAssignment with Debug::{to_repr}
 
 ///|
 pub extend EnvAssignment with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend ParseResult with Debug::{to_repr}
 
 ///|
 pub extend ParseResult with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend Redirect with Debug::{to_repr}
 
 ///|
 pub extend Redirect with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SimpleCommand with Debug::{to_repr}
 
 ///|

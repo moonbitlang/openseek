@@ -657,24 +657,28 @@ pub fn ViewModel::move_cursor_to(
 }
 
 ///|
+#deprecated
 pub extend CursorMoveDirection with Debug::{to_repr}
 
 ///|
 pub extend CursorMoveDirection with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend CursorMoveUnit with Debug::{to_repr}
 
 ///|
 pub extend CursorMoveUnit with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SimpleMoveArguments with Debug::{to_repr}
 
 ///|
 pub extend SimpleMoveArguments with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend SimpleMoveDirection with Debug::{to_repr}
 
 ///|

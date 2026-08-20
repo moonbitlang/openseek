@@ -222,7 +222,9 @@ pub fn dim_text(text : String) -> Text {
 }
 
 ///|
+#deprecated
 pub extend Span with Debug::{to_repr}
 
 ///|
+#deprecated
 pub extend Text with Debug::{to_repr}

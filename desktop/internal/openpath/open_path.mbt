@@ -107,12 +107,14 @@ fn Reference::editor_candidate(self : Reference) -> EditorCandidate? {
 }
 
 ///|
+#deprecated
 pub extend Reference with Debug::{to_repr}
 
 ///|
 pub extend Reference with Eq::{equal, not_equal}
 
 ///|
+#deprecated
 pub extend Resolution with Debug::{to_repr}
 
 ///|

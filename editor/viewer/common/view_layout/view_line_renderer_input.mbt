@@ -86,6 +86,7 @@ pub fn RenderLineInput::from_view_line(
 }
 
 ///|
+#deprecated
 pub extend RenderLineInput with Debug::{to_repr}
 
 ///|

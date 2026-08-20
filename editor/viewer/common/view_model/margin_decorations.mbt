@@ -125,6 +125,7 @@ pub fn dedup_margin_decorations(
 }
 
 ///|
+#deprecated
 pub extend DecorationToRender with Debug::{to_repr}
 
 ///|
