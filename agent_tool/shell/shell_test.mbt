@@ -677,8 +677,10 @@ async test "shell child sees an immediately-closed stdin pipe on Unix" {
   let output = run_shell({ "cmd": "wc -c" })
   assert_false(output.is_error)
   // `wc -c` reads stdin to EOF; a closed pipe yields 0 bytes. Anchor the count
-  // exactly — `contains("0")` would also match the `exit=0` footer.
-  assert_true(output.content =~ re"^0\n<system>exit=0</system>$")
+  // exactly — `contains("0")` would also match the `exit=0` footer. BSD `wc`
+  // right-aligns the count in a padded field where GNU `wc` does not, so the
+  // padding is allowed and everything after it is still pinned.
+  assert_true(output.content =~ re"^ *0\n<system>exit=0</system>$")
   assert_false(output.content.contains("timed out"))
 }
 
