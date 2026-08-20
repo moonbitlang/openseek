@@ -265,6 +265,7 @@ async test "the spawn allowlist discriminates between subcommands" {
       #|  println("stash-list: \{probe("git", ["stash", "list"])}")
       #|  println("stash-pop: \{probe("git", ["stash", "pop"])}")
       #|  println("reconfigured: \{probe("git", ["-c", "core.pager=cat", "status"])}")
+      #|  println("moon-version-flag: \{probe("moon", ["--version"])}")
       #|  println("curl: \{probe("curl", ["--version"])}")
       #|}
     ),
@@ -281,6 +282,11 @@ async test "the spawn allowlist discriminates between subcommands" {
   // vector starts with `-c` and matches no prefix. This is what makes the
   // shell tool's `global_option_reconfigures` guard unnecessary here.
   assert_true(out.content.contains("reconfigured: refused"))
+  // A prefix gates whole tokens, so the FLAG spelling of a subcommand is a
+  // separate rule from the subcommand. Listing only `version` refused
+  // `moon --version`, which a live run then spent three attempts working
+  // around; both spellings are listed now.
+  assert_true(out.content.contains("moon-version-flag: ran"))
   assert_true(out.content.contains("curl: refused"))
 }
 

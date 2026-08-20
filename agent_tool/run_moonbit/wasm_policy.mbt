@@ -49,6 +49,15 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("moon", ["coverage"]),
   ("moon", ["cram"]),
   ("moon", ["version"]),
+  // Asking what is installed is the first thing a turn does when something
+  // looks wrong with the toolchain, and it is spelled with the FLAG far more
+  // often than with the subcommand. Listing only `version` left `moon
+  // --version` matching no rule: a live run spent three attempts on it —
+  // plain, then with a rebuilt `PATH`, then by absolute path — reading each
+  // refusal as a broken toolchain rather than as this list. `git --version` was
+  // already here; the asymmetry was an oversight, not a decision.
+  ("moon", ["--version"]),
+  ("moon", ["--help"]),
   // Version control, listed per subcommand for two reasons. The obvious one is
   // that whole dangerous subcommands can be left out. The second falls out of
   // how prefixes match: git's reconfiguring GLOBAL options come BEFORE the
@@ -62,6 +71,7 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // ones below are resolved by leaving the subcommand out and admitting only
   // the fixed control forms that have no such flag.
   ("git", ["--version"]),
+  ("git", ["--help"]),
   ("git", ["status"]),
   ("git", ["log"]),
   ("git", ["diff"]),

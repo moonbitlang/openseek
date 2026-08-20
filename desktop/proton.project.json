@@ -38,6 +38,7 @@
         "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moonfmt",
         "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/mooninfo",
         "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moonrun",
+        "target/proton-package-input/toolchains/moonbit/macos-arm64/lib/libLLVM.dylib",
         "target/proton-package-input/toolchains/moonbit/macos-arm64/lib/libbinaryen.dylib",
         "target/proton-package-input/toolchains/moonbit/macos-arm64/lib/why3/commands/why3bench.cmxs",
         "target/proton-package-input/toolchains/moonbit/macos-arm64/lib/why3/commands/why3config.cmxs",
