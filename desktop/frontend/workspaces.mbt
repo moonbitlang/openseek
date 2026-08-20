@@ -525,7 +525,7 @@ test "workspace commit decoder carries the canonical registry list" {
 ///|
 test "proton subscribes to canonical durable and workspace notifications" {
   let methods = proton_event_methods()
-  assert_true(methods.contains(@protocol.NotificationKind::AgentDurable))
+  assert_true(methods.contains(@protocol.NotificationKind::SessionEvent))
   assert_true(methods.contains(@protocol.NotificationKind::WorkspaceChanged))
 }
 

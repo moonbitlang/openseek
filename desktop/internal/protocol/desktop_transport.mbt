@@ -11,7 +11,6 @@ pub(all) enum NotificationKind {
   AgentEvent
   AgentError
   AgentFinished
-  AgentDurable
   SessionEvent
   SubrunProgress
   SessionChanged
@@ -43,7 +42,6 @@ pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
     AgentEvent => "agent.event"
     AgentError => "agent.error"
     AgentFinished => "agent.finished"
-    AgentDurable => "agent.durable"
     SessionEvent => "session.event"
     SubrunProgress => "subrun.progress"
     SessionChanged => "session.changed"
@@ -76,7 +74,6 @@ pub fn NotificationKind::all() -> Array[NotificationKind] {
     AgentEvent,
     AgentError,
     AgentFinished,
-    AgentDurable,
     SessionEvent,
     SubrunProgress,
     SessionChanged,
@@ -110,7 +107,6 @@ pub(all) enum Notification {
   AgentEvent(AgentEventPayload)
   AgentError(AgentErrorPayload)
   AgentFinished(FinishedPayload)
-  AgentDurable(DurableBoundaryPayload)
   SessionEvent(SessionCommitPayload)
   SubrunProgress(SubrunProgressPayload)
   SessionChanged(SessionChangedPayload)
@@ -153,8 +149,6 @@ pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
       Some(AgentError(@json.from_json(params) catch { _ => return None }))
     "agent.finished" =>
       Some(AgentFinished(@json.from_json(params) catch { _ => return None }))
-    "agent.durable" =>
-      Some(AgentDurable(@json.from_json(params) catch { _ => return None }))
     "session.event" =>
       Some(SessionEvent(@json.from_json(params) catch { _ => return None }))
     "subrun.progress" =>
@@ -218,7 +212,6 @@ pub fn Notification::kind(self : Notification) -> NotificationKind {
     AgentEvent(_) => AgentEvent
     AgentError(_) => AgentError
     AgentFinished(_) => AgentFinished
-    AgentDurable(_) => AgentDurable
     SessionEvent(_) => SessionEvent
     SubrunProgress(_) => SubrunProgress
     SessionChanged(_) => SessionChanged
@@ -257,7 +250,6 @@ pub fn Notification::params(self : Notification) -> Json {
     AgentEvent(payload) => ToJson::to_json(payload)
     AgentError(payload) => ToJson::to_json(payload)
     AgentFinished(payload) => ToJson::to_json(payload)
-    AgentDurable(payload) => ToJson::to_json(payload)
     SessionEvent(payload) => ToJson::to_json(payload)
     SubrunProgress(payload) => ToJson::to_json(payload)
     SessionChanged(payload) => ToJson::to_json(payload)

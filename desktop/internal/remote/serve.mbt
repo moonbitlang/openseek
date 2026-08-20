@@ -642,7 +642,6 @@ test "remote lifecycle frames keep state without transcript text" {
         status: "finished",
         answer: Some("large answer"),
         exit_code: None,
-        durable_sequence: None,
       }),
     ),
   )

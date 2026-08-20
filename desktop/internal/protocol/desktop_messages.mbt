@@ -810,20 +810,59 @@ pub impl FromJson for AgentErrorPayload with fn from_json(json, path) {
 }
 
 ///|
+/// A run's one lifecycle close. `run_id` and `status` are the message: a
+/// report missing either names no run or no outcome, and is refused rather
+/// than settled as something. The two optionals are evidence a close may
+/// simply not have — a failed turn has no answer, a turn that ended without
+/// the process dying has no exit code — so absent, `null` and a value of the
+/// wrong type all mean the same "not reported", the answer an older or newer
+/// host gives for a field it does not write.
 pub(all) struct FinishedPayload {
   run_id : String
   status : String
   answer : String?
   exit_code : Int?
-  durable_sequence : Int?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
-pub(all) struct DurableBoundaryPayload {
-  run_id : String
-  session : String
-  sequence : Int
-} derive(Debug, Eq, FromJson, ToJson)
+pub impl ToJson for FinishedPayload with fn to_json(self) {
+  let fields = {
+    "run_id": Json::string(self.run_id),
+    "status": Json::string(self.status),
+  }
+  if self.answer is Some(answer) {
+    fields["answer"] = Json::string(answer)
+  }
+  if self.exit_code is Some(exit_code) {
+    fields["exit_code"] = Json::number(exit_code.to_double())
+  }
+  Json::object(fields)
+}
+
+///|
+pub impl FromJson for FinishedPayload with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected finished payload"))
+  }
+  guard fields.get("run_id") is Some(String(run_id)) else {
+    raise JsonDecodeError((path.add_key("run_id"), "expected a run id"))
+  }
+  guard fields.get("status") is Some(String(status)) else {
+    raise JsonDecodeError((path.add_key("status"), "expected a run status"))
+  }
+  {
+    run_id,
+    status,
+    answer: match fields.get("answer") {
+      Some(String(value)) => Some(value)
+      _ => None
+    },
+    exit_code: match fields.get("exit_code") {
+      Some(Number(value, ..)) => Some(value.to_int())
+      _ => None
+    },
+  }
+}
 
 ///|
 pub(all) struct SessionCommitPayload {
@@ -1235,18 +1274,6 @@ pub extend DiagnosticsPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend DiagnosticsPayload with ToJson::{to_json}
-
-///|
-pub extend DurableBoundaryPayload with Debug::{to_repr}
-
-///|
-pub extend DurableBoundaryPayload with FromJson::{from_json}
-
-///|
-pub extend DurableBoundaryPayload with Eq::{equal, not_equal}
-
-///|
-pub extend DurableBoundaryPayload with ToJson::{to_json}
 
 ///|
 pub extend ExternalLinkPayload with Debug::{to_repr}

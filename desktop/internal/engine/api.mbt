@@ -108,13 +108,6 @@ type ErrorPayload = @protocol.AgentErrorPayload
 type SessionCommitPayload = @protocol.SessionCommitPayload
 
 ///|
-/// A lifecycle finish emitted before a stubborn child could be reaped is
-/// later strengthened by this non-lifecycle boundary notification. Keeping it
-/// distinct avoids a second Finished (and duplicate system/client terminal
-/// side effects) for the same run.
-type DurableBoundaryPayload = @protocol.DurableBoundaryPayload
-
-///|
 pub(all) enum EngineEvent {
   Connected(ConnectedPayload)
   Started(StartedPayload)
@@ -126,7 +119,6 @@ pub(all) enum EngineEvent {
   /// brackets on the raw stream own the sub-run's start and end, and this
   /// only refreshes what it is doing in between.
   SubrunProgress(@protocol.SubrunProgressPayload)
-  DurableBoundary(DurableBoundaryPayload)
 }
 
 ///|
@@ -147,7 +139,6 @@ priv enum RunStatus {
   ContextYield
   Aborted
   Failed
-  Cancelled
   MaxStepsExhausted
 }
 
@@ -158,7 +149,6 @@ fn RunStatus::wire(self : RunStatus) -> String {
     ContextYield => "context_yield"
     Aborted => "aborted"
     Failed => "failed"
-    Cancelled => "cancelled"
     MaxStepsExhausted => "max_steps_exhausted"
   }
 }
@@ -186,28 +176,8 @@ fn emit_finished(
   status : RunStatus,
   answer? : String,
   exit_code? : Int,
-  durable_sequence? : Int,
 ) -> Unit {
-  emit(
-    sink,
-    Finished({
-      run_id,
-      status: status.wire(),
-      answer,
-      exit_code,
-      durable_sequence,
-    }),
-  )
-}
-
-///|
-fn emit_durable_boundary(
-  sink : EventSink,
-  run_id : String,
-  session : String,
-  sequence : Int,
-) -> Unit {
-  emit(sink, DurableBoundary({ run_id, session, sequence }))
+  emit(sink, Finished({ run_id, status: status.wire(), answer, exit_code }))
 }
 
 ///|

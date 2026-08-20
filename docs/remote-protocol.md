@@ -195,8 +195,7 @@ re-reading state:
    that session still has its captured state. A new `agent.started`,
    `agent.finished`, or Send while the request is in flight therefore wins over
    both stale presence and stale absence in the older reply. A settlement is
-   accepted under the same owner gate; an abnormal settlement is returned only
-   once its exact durable frontier is known (including sequence zero). One
+   accepted under the same owner gate, whatever its status. One
    atomic reply may contain a predecessor settlement and that session's active
    successor, and clients apply both. The whole reply is also tagged with the
    connection generation, so no row from a pre-reconnect request crosses a
@@ -211,8 +210,9 @@ What this costs, deliberately: transient events that occurred while
 disconnected (`usage` ticks, steer receipts, background notices) are gone —
 none of them carry state a resync cannot rebuild or safely ignore. A run
 that *finished* while the client was away is visible through `session.load`;
-its targeted `agent.runs` settlement supplies lifecycle outcome and the exact
-zero-durable case where no record exists to load. Settlements live only for the
+its targeted `agent.runs` settlement supplies the lifecycle outcome. A run
+that recorded nothing loads as an empty transcript rather than a failure, so
+"nothing was committed" needs no separate proof. Settlements live only for the
 host process lifetime, so after a restart a pre-restart submission has no
 lifecycle settlement to look up. It is not therefore unresolvable: the record
 outlives the host, so `session.load` shows whether the prompt landed. The
@@ -263,11 +263,11 @@ This is lifecycle correlation only; durable transcript items still come from
 | method | params | result |
 |---|---|---|
 | `agent.start` | `{task, session, submission_id?, model?, max_steps?, workspace?}` — `session` is a required non-blank durable conversation id. No credentials or store path are accepted: the host resolves settings and durable placement; `workspace` is honored only when registered. A session bound to one of the workspace's worktrees (`worktree.create` binds at creation) runs in that checkout — the start never names or mutates worktrees | `{run_id, status, …}` — `accepted` after the complete prompt command is written; a post-`started` write failure returns `failed`, while pre-`started` failures use the error response. Every reply that returns names the run it opened; the host does not deduplicate a resent `submission_id` |
-| `agent.cancel` | `{run_id?}` (absent = the latest run) | cancel outcome |
+| `agent.cancel` | `{run_id?}` (absent = the latest run) | `{run_id?}` — the run the cancellation reached, absent when no turn was open. Absence is an answer, not a failure: a Stop racing a turn that just ended wanted the run over, and it is. The call fails only when the cancellation could not be delivered, which means the turn is still running and nobody asked it to stop. Delivery is not the end of the turn — the run ends through its own `agent.finished` |
 | `agent.steer` | `{text, run_id?, submission_id?}` | steer outcome |
 | `agent.compact` | `{session, model?, max_steps?, workspace?}` — `agent.start` minus `task`: a conversation resumed after a restart has no live process, and compacting spawns one with these settings | compaction outcome |
 | `agent.goal` | `{session, text?, auto?, model?, max_steps?, workspace?}` — sets the session's standing goal to `text`, or clears it when `text` is absent; the engine settings match `agent.compact`'s, and a blank `session` is refused before engine lookup. `auto` arms the engine's autonomous continuation and is **currently rejected**: serve announces the turns it starts with `goal_continue`, which this host does not yet fold into a run's lifecycle, so an autonomous turn would leave the engine looking idle to `agent.start` | `{delivered}` — delivery, not durability: the command reached a live engine's stdin. The goal itself is confirmed by the `[goal]` / `[goal cleared]` runtime-notice arriving as a `session.event` commit, which is also what clients should render from; the engine's `goal_updated` stream event duplicates it |
-| `agent.runs` | `{known?: [{session, run_id?, submission_id?}]}` — each selector must carry a run or submission id; `{}` remains valid | `{runs: […], settled: […]}` — every in-flight run's `agent.started` params plus selector-matched `{run_id, session, submission_id?, status, exit_code?, durable_sequence?}` lifecycle settlements. Normal Terminal-backed statuses are immediately replayable; abnormal statuses appear only with an exact durable sequence. Active and settled state are captured atomically |
+| `agent.runs` | `{known?: [{session, run_id?, submission_id?}]}` — each selector must carry a run or submission id; `{}` remains valid | `{runs: […], settled: […]}` — every in-flight run's `agent.started` params plus selector-matched `{run_id, session, submission_id?, status, exit_code?}` lifecycle settlements. Every settlement a selector names is replayed, whatever its status: how much the run committed is a question the transcript read answers. Active and settled state are captured atomically |
 
 Notifications:
 
@@ -276,8 +276,7 @@ Notifications:
 | `agent.started` | `{run_id, submission_id?, session, engine, model, max_steps, session_root?}` — `session_root` is a host-derived durable-store fact, never a client-selected path; the prompt bubble comes from its own `session.event` commit |
 | `agent.event` | `{run_id?, session, event: {…}}` — the engine's event object (`assistant_delta`, `tool_result`, `agent_finished`, …); for a correlated steer receipt the host adds its optional `submission_id`. `run_id` is absent for events emitted before any run of the engine process's lifetime (a compaction on a freshly spawned engine), which route by `session` |
 | `agent.error` | `{message, run_id?, exit_code?, diagnostics?}` |
-| `agent.finished` | `{run_id, status, answer?, exit_code?, durable_sequence?}` — `durable_sequence` is present when an abnormal process exit's follower final scan completed before lifecycle publication; it is the exact stored boundary even when the dead turn appended no Terminal |
-| `agent.durable` | `{run_id, session, sequence}` — strengthens an already-emitted failure/abort result after the host retires that serve process and its follower final scan succeeds. In particular, `agent_setup_failed`, `turn_failed`, and `agent_aborted` do not by themselves prove their best-effort Terminal append succeeded. This is a boundary update, not a second finish |
+| `agent.finished` | `{run_id, status, answer?, exit_code?}` — the run's outcome, published when the engine's stdout event that ends the turn arrives, or at the engine's death for a turn whose event never came (`failed`). The durable record renders the conversation and never settles a run: the two travel independently, so a client may see this before, after, or without the matching `session.event` commit |
 
 ### session.*
 
@@ -331,13 +330,10 @@ the next commit, which the reload answers. Compaction appends its durable
 summary to the log; existing sequences never renumber, so the summary's
 commit still applies contiguously.
 
-The final sweep also closes the lifecycle proof for an abnormal exit. If the
-sweep itself fails, the host keeps that run's pending durable boundary with
-the retryable follower generation; a later lifecycle drain publishes the
-same `agent.durable` boundary before retiring it. The targeted `agent.runs`
-settlement then lets a reconnecting owner distinguish “some commits exist”
-from the exact-zero case, where its recovery copy of the input is restored
-for resubmission.
+If the final sweep itself fails, the follower stays installed and a later
+lifecycle drain — a replacement spawn, an archive, a detach — retries it. The
+run is still reported as finished; what the conversation holds is learned by
+reading it, and a record that was never created reads as an empty one.
 
 Old clients ignore `session.event` and keep building the transcript from
 `agent.event` as before. Old hosts never send `session.event`, ignore the
@@ -358,10 +354,11 @@ is already in flight, the client keeps reads single-flight and schedules one
 fresh generation after it settles; commits received from a new host remain
 buffered and are filtered against the resulting watermark as usual.
 Only completion, context-yield, and max-step statuses prove that the semantic
-log followed a successful Terminal append. Failure and abort statuses remain
-unanchored until an exact durable boundary arrives, either live through
-`agent.durable` or in the matching `agent.runs` settlement, so a later run's
-anonymous Terminal cannot be mistaken for theirs.
+log followed a successful Terminal append; failure and abort statuses are
+written from a catch block whose append may itself have failed. A client
+infers nothing from that: the host attributes a recorded Terminal to the run
+that was open when it read it, and the snapshot read reports what the record
+actually holds.
 
 Likewise, an old host's `agent.started` has no `submission_id`. The exact
 `agent.start` response still carries the request's run id, so a client may use
