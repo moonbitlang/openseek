@@ -41,6 +41,62 @@ fn icon_file() -> @html.Html {
 }
 
 ///|
+/// Git Graph chrome uses the same 16×16 Codicon geometry as VS Code's SCM
+/// history view. Keep the paths local to this package, like the existing file
+/// and folder icons, because the app-level icon package is not importable here.
+fn git_graph_codicon(d : String) -> @html.Html {
+  @svg.svg(
+    width=16,
+    height=16,
+    view_box="0 0 16 16",
+    attrs=@svg.Attrs::build().fill("currentColor"),
+    [@svg.path(d~)],
+  )
+}
+
+///|
+fn icon_git_repository() -> @html.Html {
+  git_graph_codicon(
+    "M12.5 12C12.776 12 13 11.776 13 11.5V3C13 1.895 12.105 1 11 1H5C3.895 1 3 1.895 3 3V13C3 14.105 3.895 15 5 15V15.5C5 15.702 5.122 15.885 5.309 15.962C5.495 16.039 5.711 15.997 5.854 15.854L6.5 15.208L7.146 15.854C7.242 15.95 7.37 16 7.5 16C7.564 16 7.63 15.987 7.691 15.962C7.878 15.885 8 15.702 8 15.5V15H12.5C12.776 15 13 14.776 13 14.5C13 14.224 12.776 14 12.5 14H8V13.5C8 13.224 7.776 13 7.5 13H5.5C5.224 13 5 13.224 5 13.5V14C4.448 14 4 13.552 4 13V12H12.5ZM4 3C4 2.448 4.448 2 5 2H11C11.552 2 12 2.448 12 3V11H4V3Z",
+  )
+}
+
+///|
+fn icon_git_branch() -> @html.Html {
+  git_graph_codicon(
+    "M14 5.5C14 4.121 12.879 3 11.5 3C10.121 3 9 4.121 9 5.5C9 6.682 9.826 7.669 10.93 7.928C10.744 8.546 10.177 9 9.5 9H6.5C5.935 9 5.419 9.195 5 9.512V4.949C6.14 4.717 7 3.707 7 2.5C7 1.121 5.879 0 4.5 0C3.121 0 2 1.121 2 2.5C2 3.708 2.86 4.717 4 4.949V11.05C2.86 11.282 2 12.292 2 13.499C2 14.878 3.121 15.999 4.5 15.999C5.879 15.999 7 14.878 7 13.499C7 12.317 6.174 11.33 5.07 11.071C5.256 10.453 5.823 9.999 6.5 9.999H9.5C10.723 9.999 11.74 9.115 11.954 7.953C13.116 7.738 14 6.723 14 5.5ZM3 2.5C3 1.673 3.673 1 4.5 1C5.327 1 6 1.673 6 2.5C6 3.327 5.327 4 4.5 4C3.673 4 3 3.327 3 2.5ZM6 13.5C6 14.327 5.327 15 4.5 15C3.673 15 3 14.327 3 13.5C3 12.673 3.673 12 4.5 12C5.327 12 6 12.673 6 13.5ZM11.5 7C10.673 7 10 6.327 10 5.5C10 4.673 10.673 4 11.5 4C12.327 4 13 4.673 13 5.5C13 6.327 12.327 7 11.5 7Z",
+  )
+}
+
+///|
+fn icon_git_cloud() -> @html.Html {
+  git_graph_codicon(
+    "M8 4C6.34315 4 5 5.34315 5 7C5 7.27614 4.77614 7.5 4.5 7.5H4.25C3.00736 7.5 2 8.50736 2 9.75C2 10.9926 3.00736 12 4.25 12H11.75C12.9926 12 14 10.9926 14 9.75C14 8.50736 12.9926 7.5 11.75 7.5H11.5C11.2239 7.5 11 7.27614 11 7C11 5.34315 9.65685 4 8 4ZM4.03004 6.50733C4.27283 4.53062 5.95767 3 8 3C10.0423 3 11.7272 4.53063 11.97 6.50733C13.6623 6.62043 15 8.029 15 9.75C15 11.5449 13.5449 13 11.75 13H4.25C2.45507 13 1 11.5449 1 9.75C1 8.029 2.33769 6.62043 4.03004 6.50733Z",
+  )
+}
+
+///|
+fn icon_git_sync() -> @html.Html {
+  git_graph_codicon(
+    "M14 3.5V6.5C14 6.78 13.78 7 13.5 7H10.5C10.22 7 9.99999 6.78 9.99999 6.5C9.99999 6.22 10.22 6 10.5 6H12.58C11.78 4.17 10.01 3 7.99999 3C5.77999 3 3.79999 4.5 3.18999 6.64C3.12999 6.86 2.92999 7 2.70999 7C2.65999 7 2.61999 7 2.56999 6.98C2.29999 6.9 2.14999 6.63 2.22999 6.36C2.95999 3.79 5.32999 2 7.99999 2C10.05 2 11.91 3.02 13 4.69V3.5C13 3.22 13.22 3 13.5 3C13.78 3 14 3.22 14 3.5ZM13.42 9.02C13.16 8.95 12.88 9.1 12.8 9.37C12.19 11.51 10.22 13.01 7.98999 13.01C5.97999 13.01 4.20999 11.84 3.40999 10.01H5.48999C5.76999 10.01 5.98999 9.79 5.98999 9.51C5.98999 9.23 5.76999 9.01 5.48999 9.01H2.48999C2.20999 9.01 1.98999 9.23 1.98999 9.51V12.51C1.98999 12.79 2.20999 13.01 2.48999 13.01C2.76999 13.01 2.98999 12.79 2.98999 12.51V11.32C4.07999 12.98 5.93999 14.01 7.98999 14.01C10.66 14.01 13.03 12.22 13.76 9.65C13.84 9.38 13.68 9.11 13.41 9.03L13.42 9.02Z",
+  )
+}
+
+///|
+fn icon_git_chevron_right() -> @html.Html {
+  git_graph_codicon(
+    "M6.14601 3.14579C5.95101 3.34079 5.95101 3.65779 6.14601 3.85279L10.292 7.99879L6.14601 12.1448C5.95101 12.3398 5.95101 12.6568 6.14601 12.8518C6.34101 13.0468 6.65801 13.0468 6.85301 12.8518L11.353 8.35179C11.548 8.15679 11.548 7.83979 11.353 7.64478L6.85301 3.14479C6.65801 2.94979 6.34101 2.95079 6.14601 3.14579Z",
+  )
+}
+
+///|
+fn icon_git_list_tree() -> @html.Html {
+  git_graph_codicon(
+    "M2 3.5C2 3.22386 2.22386 3 2.5 3H13.5C13.7761 3 14 3.22386 14 3.5C14 3.77614 13.7761 4 13.5 4H6V6H13.5C13.7761 6 14 6.22386 14 6.5C14 6.77614 13.7761 7 13.5 7H6V9H13.5C13.7761 9 14 9.22386 14 9.5C14 9.77614 13.7761 10 13.5 10H6V12H13.5C13.7761 12 14 12.2239 14 12.5C14 12.7761 13.7761 13 13.5 13H5.5C5.22386 13 5 12.7761 5 12.5V4H2.5C2.22386 4 2 3.77614 2 3.5Z",
+  )
+}
+
+///|
 const ExplorerFilesTabId = "explorer-files-tab"
 
 ///|
@@ -210,7 +266,8 @@ fn icon(image : () -> @html.Html) -> @html.Html {
 /// tree must show regardless of the toggle's state — the panel is otherwise
 /// a dead pane.
 pub fn editor_classes(state : State, ctx : Ctx) -> String {
-  let tree_visible = state.tree_open || ctx.active_file is None
+  let tree_visible = state.tree_open ||
+    (ctx.active_file is None && ctx.active_history_diff is None)
   let mut classes = "editor"
   if tree_visible {
     classes = classes + " tree-open"
@@ -258,13 +315,17 @@ pub fn body_view(
   // picks the palette matching the app's own light/dark scheme (the shell's
   // default is dark, `light` overrides). The viewer's colors cascade from
   // this host.
-  let use_unified_diff_surface = match ctx.active_file {
-    Some(path) =>
-      state.docs
-      .get(path)
-      .map(doc => doc.uses_unified_diff_surface())
-      .unwrap_or(false)
-    None => false
+  let use_unified_diff_surface = if ctx.active_history_diff is Some(_) {
+    true
+  } else {
+    match ctx.active_file {
+      Some(path) =>
+        state.docs
+        .get(path)
+        .map(doc => doc.uses_unified_diff_surface())
+        .unwrap_or(false)
+      None => false
+    }
   }
   let viewer_host = @html.div(
     attrs=@html.Attrs::build()
@@ -308,6 +369,17 @@ pub fn body_view(
 /// chrome laid over the (cleared) viewer, so a notice never renders as a
 /// highlighted source document. Always in the DOM; blank and hidden otherwise.
 fn viewer_notice(state : State, ctx : Ctx) -> @html.Html {
+  if ctx.active_history_diff is Some(diff) {
+    let text = history_diff_notice(state, diff)
+    return @html.div(
+      class=if text.is_empty() {
+        "viewer-notice hidden"
+      } else {
+        "viewer-notice"
+      },
+      text,
+    )
+  }
   let diff_pending = match ctx.active_file {
     Some(path) =>
       state.docs
@@ -369,6 +441,26 @@ fn viewer_notice(state : State, ctx : Ctx) -> @html.Html {
 }
 
 ///|
+fn history_diff_notice(state : State, diff : @dock.GitHistoryDiff) -> String {
+  guard state.history_docs.get(history_diff_key(diff)) is Some(doc) else {
+    return "Loading historical diff for \{basename(diff.path)}…"
+  }
+  match (doc.original, doc.modified) {
+    (HistoryBlobLoading, _) | (_, HistoryBlobLoading) =>
+      "Loading historical diff for \{basename(diff.path)}…"
+    (HistoryBlobError(message), _) | (_, HistoryBlobError(message)) =>
+      "Could not load historical diff for \{basename(diff.path)}: \{message}."
+    (HistoryBlobBinary, _) | (_, HistoryBlobBinary) =>
+      "\{basename(diff.path)} is binary at this revision and cannot be previewed."
+    (HistoryBlobOversized, _) | (_, HistoryBlobOversized) =>
+      "\{basename(diff.path)} is too large at this revision to preview."
+    (HistoryBlobMissing, HistoryBlobMissing) =>
+      "No file content exists on either side of this commit."
+    _ => ""
+  }
+}
+
+///|
 /// The toggleable file-tree panel, docked flat under the viewer like an Emacs
 /// bottom window: the hierarchical tree rows and the last fs failure (blank
 /// and collapsed while there is none).
@@ -392,7 +484,7 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
   } else {
     match state.explorer_mode {
       ExplorerFiles => file_inventory(dispatch, state, ctx)
-      ExplorerChanges => change_inventory(dispatch, state, ctx)
+      ExplorerChanges => [review_git_layout(dispatch, state, ctx)]
       ExplorerSearch =>
         [
           state.search.explorer_view(
@@ -442,6 +534,8 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
     @html.div(
       class=if state.explorer_mode is ExplorerSearch {
         "file-tree search-inventory"
+      } else if state.explorer_mode is ExplorerChanges {
+        "file-tree review-git-tree"
       } else {
         "file-tree"
       },
@@ -473,6 +567,764 @@ fn change_count(changes : ChangeList) -> @html.Html {
       @html.span(class="explorer-count", files.length().to_string())
     _ => @html.span(class="explorer-count hidden", "")
   }
+}
+
+///|
+fn review_git_layout(
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+  ctx : Ctx,
+) -> @html.Html {
+  let split_hidden = state.changes_collapsed || state.git_graph_collapsed
+  let layout_class = if state.changes_collapsed {
+    "review-git-layout changes-collapsed"
+  } else if state.git_graph_collapsed {
+    "review-git-layout graph-collapsed"
+  } else {
+    "review-git-layout"
+  }
+  @html.div(
+    attrs=@html.Attrs::build().id(GitGraphLayoutId).class(layout_class),
+    [
+      @html.section(
+        class=if state.changes_collapsed {
+          "review-section review-changes-section collapsed"
+        } else {
+          "review-section review-changes-section"
+        },
+        attrs=@html.Attrs::build().id(GitGraphChangesSectionId),
+        [
+          @html.button(
+            class="review-section-header",
+            on_click=dispatch(ToggleChangesSection),
+            attrs=@html.Attrs::build()
+              .aria_expanded((!state.changes_collapsed).to_string())
+              .aria_controls("review-changes-body"),
+            [
+              @html.span(class="review-section-chevron", "›"),
+              @html.span(class="review-section-title", "Changes"),
+              change_count(state.changes),
+            ],
+          ),
+          @html.div(
+            class="review-section-body",
+            attrs=@html.Attrs::build().id("review-changes-body"),
+            change_inventory(dispatch, state, ctx),
+          ),
+        ],
+      ),
+      @html.div(
+        class=if split_hidden {
+          "review-split-handle hidden"
+        } else {
+          "review-split-handle"
+        },
+        title="Resize Changes and Git Graph",
+        attrs=@html.Attrs::build()
+          .id(GitGraphResizeHandleId)
+          .role("separator")
+          .tabindex(0)
+          .aria_label("Resize Changes and Git Graph")
+          .aria_orientation("horizontal")
+          .on_keydown(event => {
+            match event.key() {
+              "ArrowUp" => {
+                event.prevent_default()
+                adjust_git_graph_split(-24)
+              }
+              "ArrowDown" => {
+                event.prevent_default()
+                adjust_git_graph_split(24)
+              }
+              _ => ()
+            }
+            @cmd.none
+          }),
+        ([] : Array[@html.Html]),
+      ),
+      @html.section(
+        class=if state.git_graph_collapsed {
+          "review-section git-graph-section collapsed"
+        } else {
+          "review-section git-graph-section"
+        },
+        [
+          @html.div(class="review-section-header git-graph-header", [
+            @html.button(
+              class="git-graph-collapse",
+              on_click=dispatch(ToggleGitGraphSection),
+              attrs=@html.Attrs::build()
+                .aria_expanded((!state.git_graph_collapsed).to_string())
+                .aria_controls("git-graph-body"),
+              [
+                @html.span(class="git-graph-chevron", icon_git_chevron_right()),
+                @html.span(
+                  class="review-section-title git-graph-title",
+                  "Graph",
+                ),
+              ],
+            ),
+            @html.div(class="git-graph-toolbar", [
+              @html.span(
+                class="git-graph-context git-graph-repository",
+                title=git_graph_repository_label(ctx),
+                [
+                  @html.span(
+                    class="git-graph-context-icon",
+                    icon_git_repository(),
+                  ),
+                  @html.span(
+                    class="git-graph-context-label",
+                    git_graph_repository_label(ctx),
+                  ),
+                ],
+              ),
+              @html.span(
+                class="git-graph-context git-graph-branch",
+                title=git_graph_branch_label(state),
+                [
+                  @html.span(class="git-graph-context-icon", icon_git_branch()),
+                  @html.span(
+                    class="git-graph-context-label",
+                    git_graph_branch_label(state),
+                  ),
+                ],
+              ),
+              @html.button(
+                class="git-graph-refresh",
+                title="Refresh Git Graph",
+                on_click=dispatch(GitHistoryRefreshRequested),
+                attrs=@html.Attrs::build().aria_label("Refresh Git Graph"),
+                @html.span(class="git-graph-refresh-icon", icon_git_sync()),
+              ),
+            ]),
+          ]),
+          @html.div(
+            class="review-section-body git-graph-body",
+            attrs=@html.Attrs::build()
+              .id("git-graph-body")
+              .on_scroll(event => {
+                guard event.target().to_element() is Some(element) &&
+                  element.get_scroll_height() -
+                  element.get_scroll_top() -
+                  element.get_client_height() <=
+                  120.0 else {
+                  return @cmd.none
+                }
+                dispatch(GitHistoryLoadMoreRequested)
+              }),
+            git_graph_inventory(dispatch, state),
+          ),
+        ],
+      ),
+    ],
+  )
+}
+
+///|
+fn git_graph_repository_label(ctx : Ctx) -> String {
+  ctx
+  .workspace()
+  .map(resource => @resource.label(resource))
+  .unwrap_or("Repository")
+}
+
+///|
+fn git_graph_branch_label(state : State) -> String {
+  match state.git_graph {
+    GitGraphReady(snapshot~, ..) =>
+      snapshot.branch.unwrap_or(
+        snapshot.head.map(short_commit).unwrap_or("No commits"),
+      )
+    _ => ""
+  }
+}
+
+///|
+fn git_commit_row_id(index : Int) -> String {
+  "git-commit-row-\{index}"
+}
+
+///|
+fn focus_git_commit_after_render(index : Int) -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => {
+      if @dom.document().get_element_by_id(git_commit_row_id(index)).to_option()
+        is Some(row) {
+        let _ : @js.Value = @js.Value::cast_from(row).apply_with_string(
+          "focus",
+          ([] : Array[@js.Value]),
+        )
+      }
+    },
+    kind=@cmd.after_render,
+  )
+}
+
+///|
+fn git_graph_inventory(
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+) -> Array[@html.Html] {
+  match state.git_graph {
+    GitGraphIdle | GitGraphLoading =>
+      [@html.div(class="file-panel-empty", "Loading Git history…")]
+    GitGraphFailed(message) =>
+      [
+        @html.div(class="git-graph-message", [
+          @html.span("Could not load Git history: \{message}."),
+          @html.button(
+            class="git-graph-retry",
+            on_click=dispatch(GitHistoryRefreshRequested),
+            "Retry",
+          ),
+        ]),
+      ]
+    GitGraphReady(repository=false, ..) =>
+      [
+        @html.div(
+          class="file-panel-empty",
+          "Git is unavailable or this workspace is not a Git repository.",
+        ),
+      ]
+    GitGraphReady(
+      snapshot~,
+      commits~,
+      has_more~,
+      loading_more~,
+      load_error~,
+      ..
+    ) => {
+      if commits.is_empty() {
+        return [
+          @html.div(class="file-panel-empty", "This branch has no commits."),
+        ]
+      }
+      let layouts = graph_rows(commits, snapshot)
+      let children : Array[@html.Html] = []
+      for index, commit in commits {
+        children.push(
+          git_commit_row(
+            dispatch,
+            state,
+            commit,
+            layouts[index],
+            index,
+            commits.length(),
+          ),
+        )
+      }
+      if load_error is Some(message) {
+        children.push(
+          @html.div(
+            class="git-graph-load-error",
+            "Could not load more: \{message}",
+          ),
+        )
+      }
+      if has_more || loading_more {
+        let continuation = layouts[layouts.length() - 1].output_swimlanes
+        children.push(
+          @html.button(
+            class="git-graph-load-more",
+            disabled=loading_more,
+            on_click=dispatch(GitHistoryLoadMoreRequested),
+            [
+              git_graph_placeholder(continuation, None),
+              @html.span(
+                class="git-graph-load-more-label",
+                if loading_more {
+                  "Loading…"
+                } else {
+                  "Load more"
+                },
+              ),
+            ],
+          ),
+        )
+      }
+      [
+        @html.div(
+          class="git-graph-list",
+          attrs=@html.Attrs::build()
+            .role("tree")
+            .aria_label("Git commit history"),
+          children,
+        ),
+      ]
+    }
+  }
+}
+
+///|
+fn graph_color_class(color : Int) -> String {
+  "git-graph-color-\{color}"
+}
+
+///|
+fn graph_lane_x(lane : Int) -> Int {
+  11 * (lane + 1)
+}
+
+///|
+fn graph_row_index(row : GraphRow, id : String) -> Int {
+  match find_graph_lane(row.input_swimlanes, id) {
+    Some(index) => index
+    None => row.input_swimlanes.length()
+  }
+}
+
+///|
+fn graph_row_width(row : GraphRow) -> Int {
+  11 *
+  (row.input_swimlanes.length().max(row.output_swimlanes.length()).max(1) + 1)
+}
+
+///|
+fn find_last_graph_lane(lanes : Array[GraphLane], id : String) -> Int? {
+  let mut index = lanes.length()
+  while index > 0 {
+    index = index - 1
+    if lanes[index].id == id {
+      return Some(index)
+    }
+  }
+  None
+}
+
+///|
+fn graph_circle_color(row : GraphRow, circle_index : Int) -> Int {
+  if circle_index < row.output_swimlanes.length() {
+    row.output_swimlanes[circle_index].color
+  } else if circle_index < row.input_swimlanes.length() {
+    row.input_swimlanes[circle_index].color
+  } else {
+    GraphCurrentColor
+  }
+}
+
+///|
+fn git_graph_placeholder(
+  columns : Array[GraphLane],
+  highlight_index : Int?,
+) -> @html.Html {
+  let graph_width = 11 * (columns.length() + 1)
+  let paths : Array[@svg.Svg] = []
+  for lane, column in columns {
+    let x = graph_lane_x(lane)
+    let highlight_class = if highlight_index == Some(lane) {
+      " git-graph-edge-highlight"
+    } else {
+      ""
+    }
+    let path_class = "git-graph-edge " +
+      graph_color_class(column.color) +
+      highlight_class
+    paths.push(
+      @svg.path(
+        class=path_class,
+        d="M\{x} 0 V22",
+        attrs=@svg.Attrs::build()
+          .stroke_width(if highlight_index == Some(lane) { "3" } else { "1" })
+          .stroke_linecap("round"),
+      ),
+    )
+  }
+  @html.span(
+    class="git-history-graph-placeholder",
+    attrs=@html.Attrs::build().aria_hidden("true"),
+    @svg.svg(
+      class="git-graph-svg",
+      width=graph_width,
+      height=22,
+      view_box="0 0 \{graph_width} 22",
+      paths,
+    ),
+  )
+}
+
+///|
+fn git_graph_cell(
+  row : GraphRow,
+  commit : @protocol.GitHistoryCommit,
+  head : Bool,
+) -> @html.Html {
+  let children : Array[@svg.Svg] = []
+  let input_index = find_graph_lane(row.input_swimlanes, commit.id)
+  let circle_index = graph_row_index(row, commit.id)
+  let circle_x = graph_lane_x(circle_index)
+  let circle_color = graph_circle_color(row, circle_index)
+  let mut output_swimlane_index = 0
+
+  for index, node in row.input_swimlanes {
+    if node.id == commit.id {
+      if index != circle_index {
+        children.push(
+          @svg.path(
+            class="git-graph-edge " + graph_color_class(node.color),
+            d="M \{graph_lane_x(index)} 0 A 11 11 0 0 1 \{11 * index} 11 H \{circle_x}",
+            attrs=@svg.Attrs::build().stroke_linecap("round"),
+          ),
+        )
+      } else {
+        output_swimlane_index = output_swimlane_index + 1
+      }
+    } else if output_swimlane_index < row.output_swimlanes.length() &&
+      node.id == row.output_swimlanes[output_swimlane_index].id {
+      let x = graph_lane_x(index)
+      let output_x = graph_lane_x(output_swimlane_index)
+      let d = if index == output_swimlane_index {
+        "M \{x} 0 V 22"
+      } else {
+        "M \{x} 0 V 6 A 5 5 0 0 1 \{x - 5} 11 H \{output_x + 5} A 5 5 0 0 0 \{output_x} 16 V 22"
+      }
+      children.push(
+        @svg.path(
+          class="git-graph-edge " + graph_color_class(node.color),
+          d~,
+          attrs=@svg.Attrs::build().stroke_linecap("round"),
+        ),
+      )
+      output_swimlane_index = output_swimlane_index + 1
+    }
+  }
+
+  for parent_index in 1..<commit.parent_ids.length() {
+    guard find_last_graph_lane(
+        row.output_swimlanes,
+        commit.parent_ids[parent_index],
+      )
+      is Some(parent_output_index) else {
+      continue
+    }
+    let start_x = 11 * parent_output_index
+    children.push(
+      @svg.path(
+        class="git-graph-edge " +
+          graph_color_class(row.output_swimlanes[parent_output_index].color),
+        d="M \{start_x} 11 A 11 11 0 0 1 \{graph_lane_x(parent_output_index)} 22 M \{start_x} 11 H \{circle_x}",
+        attrs=@svg.Attrs::build().stroke_linecap("round"),
+      ),
+    )
+  }
+
+  if input_index is Some(index) {
+    children.push(
+      @svg.path(
+        class="git-graph-edge " +
+          graph_color_class(row.input_swimlanes[index].color),
+        d="M \{circle_x} 0 V 11",
+        attrs=@svg.Attrs::build().stroke_linecap("round"),
+      ),
+    )
+  }
+  if !commit.parent_ids.is_empty() {
+    children.push(
+      @svg.path(
+        class="git-graph-edge " + graph_color_class(circle_color),
+        d="M \{circle_x} 11 V 22",
+        attrs=@svg.Attrs::build().stroke_linecap("round"),
+      ),
+    )
+  }
+
+  let node_color = graph_color_class(circle_color)
+  if head {
+    children.push(
+      @svg.circle(
+        class="git-graph-node git-graph-node-head-outer " + node_color,
+        cx=circle_x,
+        cy=11,
+        r=7,
+      ),
+    )
+    children.push(
+      @svg.circle(
+        class="git-graph-node git-graph-node-head-inner " + node_color,
+        cx=circle_x,
+        cy=11,
+        r=2,
+        attrs=@svg.Attrs::build().stroke_width("4"),
+      ),
+    )
+  } else if commit.parent_ids.length() > 1 {
+    children.push(
+      @svg.circle(
+        class="git-graph-node git-graph-node-merge-outer " + node_color,
+        cx=circle_x,
+        cy=11,
+        r=6,
+      ),
+    )
+    children.push(
+      @svg.circle(
+        class="git-graph-node git-graph-node-merge-inner " + node_color,
+        cx=circle_x,
+        cy=11,
+        r=3,
+      ),
+    )
+  } else {
+    children.push(
+      @svg.circle(
+        class="git-graph-node git-graph-node-commit " + node_color,
+        cx=circle_x,
+        cy=11,
+        r=5,
+      ),
+    )
+  }
+  @html.span(
+    class="git-graph-cell",
+    attrs=@html.Attrs::build().aria_hidden("true"),
+    @svg.svg(
+      class="git-graph-svg",
+      width=graph_row_width(row),
+      height=22,
+      view_box="0 0 \{graph_row_width(row)} 22",
+      children,
+    ),
+  )
+}
+
+///|
+fn git_commit_refs(
+  snapshot : @protocol.GitHistorySnapshot,
+  commit : String,
+) -> Array[@html.Html] {
+  let visible = snapshot.refs.filter(ref_ => ref_.revision == commit)
+  visible.sort_by((left, right) => {
+    let rank = git_history_ref_rank(left.kind) -
+      git_history_ref_rank(right.kind)
+    if rank == 0 {
+      left.name.lexical_compare(right.name)
+    } else {
+      rank
+    }
+  })
+  let refs : Array[@html.Html] = []
+  for index, ref_ in visible {
+    let contents : Array[@html.Html] = [
+      @html.span(
+        class="git-ref-icon",
+        if ["upstream", "base"].contains(ref_.kind) {
+          icon_git_cloud()
+        } else {
+          icon_git_branch()
+        },
+      ),
+    ]
+    if index == 0 {
+      contents.push(@html.span(class="git-ref-name", ref_.name))
+    }
+    refs.push(
+      @html.span(
+        class="git-ref git-ref-" + ref_.kind,
+        title="\{ref_.kind}: \{ref_.name}",
+        contents,
+      ),
+    )
+  }
+  refs
+}
+
+///|
+fn git_commit_row(
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+  commit : @protocol.GitHistoryCommit,
+  layout : GraphRow,
+  index : Int,
+  total : Int,
+) -> @html.Html {
+  let expanded = state.git_graph_selected == Some(commit.id)
+  let refs : Array[@html.Html] = []
+  let mut head = false
+  if state.git_graph is GitGraphReady(snapshot~, ..) {
+    head = snapshot.head == Some(commit.id)
+    refs.push_iter(git_commit_refs(snapshot, commit.id).iter())
+  }
+  let mut row_class = "git-commit-row"
+  if head {
+    row_class = row_class + " current"
+  }
+  if expanded {
+    row_class = row_class + " selected"
+  }
+  let children : Array[@html.Html] = [
+    @html.button(
+      class=row_class,
+      title="\{commit.subject}\n\{commit.id}\n\{commit.author} · \{commit.authored_at}",
+      on_click=dispatch(GitCommitSelected(commit.id)),
+      attrs=@html.Attrs::build()
+        .id(git_commit_row_id(index))
+        .role("treeitem")
+        .aria_label(
+          "\{commit.subject}, \{commit.author}, \{commit.authored_at}, \{commit.id}",
+        )
+        .aria_expanded(expanded.to_string())
+        .on_keydown(event => {
+          match event.key() {
+            "ArrowUp" if index > 0 => {
+              event.prevent_default()
+              focus_git_commit_after_render(index - 1)
+            }
+            "ArrowDown" if index + 1 < total => {
+              event.prevent_default()
+              focus_git_commit_after_render(index + 1)
+            }
+            "Home" => {
+              event.prevent_default()
+              focus_git_commit_after_render(0)
+            }
+            "End" => {
+              event.prevent_default()
+              focus_git_commit_after_render(total - 1)
+            }
+            "ArrowRight" if !expanded => {
+              event.prevent_default()
+              dispatch(GitCommitSelected(commit.id))
+            }
+            "ArrowLeft" if expanded => {
+              event.prevent_default()
+              dispatch(GitCommitSelected(commit.id))
+            }
+            _ => @cmd.none
+          }
+        }),
+      [
+        git_graph_cell(layout, commit, head),
+        @html.span(class="git-commit-label", [
+          @html.span(class="git-commit-subject", commit.subject),
+          @html.span(class="git-commit-author", commit.author),
+        ]),
+        @html.span(class="git-ref-list", refs),
+        @html.span(
+          class="git-commit-actions",
+          attrs=@html.Attrs::build().aria_hidden("true"),
+          icon_git_list_tree(),
+        ),
+      ],
+    ),
+  ]
+  if expanded {
+    children.push(git_commit_files(dispatch, state, commit, layout))
+  }
+  @html.div(class="git-commit-entry", children)
+}
+
+///|
+fn historical_status_label(status : String) -> String {
+  match status {
+    "added" => "A"
+    "deleted" => "D"
+    "renamed" => "R"
+    "copied" => "C"
+    "type-changed" => "T"
+    _ => "M"
+  }
+}
+
+///|
+fn git_commit_files(
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+  commit : @protocol.GitHistoryCommit,
+  layout : GraphRow,
+) -> @html.Html {
+  let columns = layout.output_swimlanes
+  let highlight_index = Some(graph_row_index(layout, commit.id))
+  let rows : Array[@html.Html] = match state.git_commit_files {
+    GitCommitFilesLoading(commit=id) if id == commit.id =>
+      [
+        @html.div(class="git-commit-files-message", [
+          git_graph_placeholder(columns, highlight_index),
+          @html.span("Loading changed files…"),
+        ]),
+      ]
+    GitCommitFilesFailed(commit=id, message~) if id == commit.id =>
+      [
+        @html.div(class="git-commit-files-message error", [
+          git_graph_placeholder(columns, highlight_index),
+          @html.span(class="git-commit-files-message-content", [
+            @html.span("Could not load this commit: \{message}."),
+            @html.button(
+              class="git-history-retry",
+              on_click=dispatch(GitCommitChangesRetry(commit.id)),
+              "Retry",
+            ),
+          ]),
+        ]),
+      ]
+    GitCommitFilesReady(commit=id, parent~, files~) if id == commit.id =>
+      if files.is_empty() {
+        [
+          @html.div(class="git-commit-files-message", [
+            git_graph_placeholder(columns, highlight_index),
+            @html.span("No changes in this workspace."),
+          ]),
+        ]
+      } else {
+        files.map(file => {
+          let selectable = file.kind == "file" &&
+            !(["renamed", "copied"].contains(file.status) &&
+            file.original_path is None)
+          let contents : Array[@html.Html] = [
+            git_graph_placeholder(columns, highlight_index),
+            @html.span(class="git-history-file-path", file.path),
+            @html.span(
+              class="git-history-file-status status-" + file.status,
+              historical_status_label(file.status),
+            ),
+          ]
+          if selectable {
+            @html.button(
+              class="git-history-file",
+              title="Open historical diff for \{file.path}",
+              on_click=dispatch(
+                HistoricalFileSelected({
+                  commit: commit.id,
+                  parent,
+                  path: @pathx.Relative(file.path),
+                  original_path: file.original_path.map(path => {
+                    @pathx.Relative(path)
+                  }),
+                  status: file.status,
+                  kind: file.kind,
+                }),
+              ),
+              attrs=@html.Attrs::build().role("treeitem"),
+              contents,
+            )
+          } else {
+            @html.div(
+              class="git-history-file unavailable",
+              title=if file.kind == "submodule" {
+                "Git submodule cannot be shown as a text diff"
+              } else if file.kind == "symlink" {
+                "Git symlink cannot be shown as a text diff"
+              } else {
+                "Original path is outside this workspace"
+              },
+              attrs=@html.Attrs::build().role("treeitem").aria_disabled("true"),
+              contents,
+            )
+          }
+        })
+      }
+    _ =>
+      [
+        @html.div(class="git-commit-files-message", [
+          git_graph_placeholder(columns, highlight_index),
+          @html.span("Loading changed files…"),
+        ]),
+      ]
+  }
+  @html.div(
+    class="git-commit-files",
+    attrs=@html.Attrs::build().role("group"),
+    rows,
+  )
 }
 
 ///|
@@ -816,6 +1668,25 @@ pub fn breadcrumb_view(
   state : State,
   ctx : Ctx,
 ) -> @html.Html {
+  if ctx.active_history_diff is Some(diff) {
+    return @html.div(class="viewer-breadcrumb history-breadcrumb", [
+      @html.div(class="crumb-path", [
+        @html.span(
+          class="crumb history-commit-crumb",
+          short_commit(diff.commit),
+        ),
+        @html.span(class="crumb-sep", "›"),
+        @html.span(class="crumb crumb-file", diff.path.0),
+      ]),
+      review_diff_layout_toggle(dispatch, state, ctx),
+      @html.button(
+        class="panel-toggle",
+        title=if state.tree_open { "Hide file tree" } else { "Show file tree" },
+        on_click=dispatch(ToggleTree),
+        icon(icon_folder),
+      ),
+    ])
+  }
   let crumbs : Array[@html.Html] = []
   match ctx.active_file {
     Some(path) => {
@@ -881,10 +1752,15 @@ fn review_diff_layout_toggle(
   state : State,
   ctx : Ctx,
 ) -> @html.Html {
-  guard ctx.active_file is Some(path) &&
+  let review_ready = ctx.active_file is Some(path) &&
     state.docs.get(path) is Some(doc) &&
     doc.review is Some({ view_mode: ReviewUnifiedDiff, .. }) &&
-    doc.unified_diff_content() is Some(_) else {
+    doc.unified_diff_content() is Some(_)
+  let history_ready = ctx.active_history_diff is Some(diff) &&
+    state.history_docs.get(history_diff_key(diff)) is Some(history) &&
+    history.original.text() is Some(_) &&
+    history.modified.text() is Some(_)
+  guard review_ready || history_ready else {
     return @html.span(class="review-badge hidden", "")
   }
   let unified = state.review_diff_layout == ReviewUnified

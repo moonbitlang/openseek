@@ -200,3 +200,29 @@ test "park and restore keeps browser and picker tabs" {
   )
   assert_true(state.active == Some(@dock.DockTab::FilePicker))
 }
+
+///|
+test "historical diffs deduplicate exact commits and distinguish revisions" {
+  let first : @dock.GitHistoryDiff = {
+    commit: "1111111111111111111111111111111111111111",
+    parent: Some("0000000000000000000000000000000000000000"),
+    path: @pathx.Relative("src/main.mbt"),
+    original_path: None,
+    status: "modified",
+    kind: "file",
+  }
+  let second = {
+    ..first,
+    commit: "2222222222222222222222222222222222222222",
+    parent: Some("1111111111111111111111111111111111111111"),
+  }
+  let state = @dock.State::empty()
+    |> @dock.open_history_diff(first)
+    |> @dock.open_history_diff(first)
+    |> @dock.open_history_diff(second)
+  assert_eq(state.tabs.length(), 2)
+  assert_eq(@dock.history_diffs(state), [first, second])
+  assert_eq(@dock.active_history_diff(state), Some(second))
+  assert_true(@dock.file_paths(state).is_empty())
+  assert_true(@dock.active_file(state) is None)
+}

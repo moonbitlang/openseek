@@ -312,6 +312,12 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.git_changes, async fn(payload) {
       git_changes_op(payload)
     }),
+    @endpoint.Endpoint::remote(@commands.git_history, async fn(payload) {
+      git_history_op(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.git_commit_changes, async fn(payload) {
+      git_commit_changes_op(payload)
+    }),
     @endpoint.Endpoint::remote(@commands.git_original_file, async fn(payload) {
       git_original_file_op(payload)
     }),

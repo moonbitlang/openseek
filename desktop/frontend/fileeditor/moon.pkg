@@ -21,6 +21,7 @@ import {
   "moonbitlang/editor/syntax/lang_json",
   "moonbitlang/editor/syntax/lang_moon_config",
   "openseek_desktop/frontend/pathx",
+  "openseek_desktop/frontend/dock",
   "openseek_desktop/internal/protocol",
   "openseek_desktop/internal/commands",
   "openseek_desktop/internal/file_search_policy",

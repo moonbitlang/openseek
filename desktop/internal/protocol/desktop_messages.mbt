@@ -292,6 +292,29 @@ pub(all) struct GitChangesPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// Read one immutable page of repository history. The first request omits
+/// `snapshot`; the host captures the selected refs as full commit identities
+/// and echoes them back. Later pages resend that snapshot so moving refs cannot
+/// duplicate or skip commits mid-scroll.
+pub(all) struct GitHistoryPayload {
+  session : String
+  workspace : String?
+  snapshot : GitHistorySnapshot?
+  skip : Int
+  limit : Int
+} derive(Debug, Eq)
+
+///|
+/// List the paths changed by one immutable commit, scoped to the conversation
+/// workspace. Merge commits compare against their first parent; root commits
+/// compare against Git's empty tree.
+pub(all) struct GitCommitChangesPayload {
+  session : String
+  workspace : String?
+  commit : String
+} derive(Debug, Eq)
+
+///|
 /// Read one workspace-relative path from the supplied commit, falling back to
 /// `HEAD` for older clients that omit `revision`. For a rename or copy, callers
 /// pass the change row's `original_path` (the current `path` does not exist in

@@ -10,6 +10,7 @@ import {
   "openseek_desktop/internal/moonbit",
   "openseek_desktop/internal/pathx",
   "openseek_desktop/internal/protocol",
+  "openseek_desktop/internal/session_record",
   "openseek_desktop/internal/session_store",
   "openseek_desktop/internal/subrun",
   "openseek_desktop/internal/worktree",
@@ -19,7 +20,6 @@ import {
   "moonbitlang/async/process",
   "moonbitlang/core/env" @sys,
   "moonbitlang/core/json",
-  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/string",
   "tonyfettes/xlog",
 }

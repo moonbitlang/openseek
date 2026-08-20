@@ -183,7 +183,10 @@ async fn edit_file(
     return err("old_string and new_string are both empty")
   }
   if input.old_string == input.new_string {
-    return err("old_string and new_string are identical")
+    let content = @fs.read_file(path).text()
+    return err(
+      "old_string and new_string are identical\{old_string_context(content, input.old_string, input.start_line, input.end_line)}\n(old_string matches new_string exactly — the file at that location may already contain this text; re-read the file and adjust the edit)",
+    )
   }
   if input.replace_all_preview {
     guard input.old_string != "" else {
@@ -238,7 +241,26 @@ async fn edit_file(
   }
   let region = select_edit_region(content, input)
   guard region.body.find(input.old_string) is Some(match_start) else {
-    return err("old_string not found\{range_detail(input)}")
+    // Exact match failed. Check for whitespace-normalized candidates and
+    // report them in the diagnostic so the model can correct the old_string.
+    let candidates = find_whitespace_normalized_candidates(
+      region.body,
+      input.old_string,
+    )
+    let candidates_hint = if candidates.length() == 1 {
+      let (fs, fe) = candidates[0]
+      let fline = line_number_at_offset(content, region.prefix.length() + fs)
+      let excerpt_len = (fe - fs).min(60)
+      let excerpt = region.body.unsafe_substring(start=fs, end=fs + excerpt_len)
+      "\none whitespace-normalized candidate at line \{fline}: `\{excerpt}` — re-read the file and retry with the exact text"
+    } else if candidates.length() > 1 {
+      "\n\{candidates.length()} whitespace-normalized candidates found — narrow the line range or use a more specific old_string"
+    } else {
+      ""
+    }
+    return err(
+      "old_string not found\{range_detail(input)}\{old_string_context(content, input.old_string, input.start_line, input.end_line)}\{candidates_hint}",
+    )
   }
   let match_end = match_start + input.old_string.length()
   let match_line = line_number_at_offset(
@@ -892,6 +914,202 @@ fn range_detail(input : @decode.EditInput) -> String {
 }
 
 ///|
+/// Build a diagnostic context block when `old_string` is not found: shows
+/// surrounding lines from the file and the first character difference.
+fn old_string_context(
+  content : String,
+  old_string : String,
+  start_line : Int,
+  end_line : Int?,
+) -> String {
+  let context_before = 2
+  let context_after = 2
+  let search_end = end_line.unwrap_or(start_line)
+  let first_line = (start_line - context_before).max(1)
+  let last_line = (search_end + context_after).min(
+    total_line_count(content) + context_after,
+  )
+  let lines : Array[String] = ["\n\nfile context:"]
+  for line_no in first_line..<=last_line {
+    let ls = line_start_offset(content, line_no)
+    let le = line_end_offset(content, line_no)
+    let line_text = if le > ls && content[le - 1] == '\n' {
+      content.unsafe_substring(start=ls, end=le - 1)
+    } else {
+      content.unsafe_substring(start=ls, end=le)
+    }
+    let gutter = if line_no >= start_line &&
+      (end_line is None || line_no <= search_end) {
+      " >"
+    } else {
+      "  "
+    }
+    lines.push("\{gutter} \{line_no} | \{line_text}")
+  }
+  // Compare old_string with the actual content at the anchor offset
+  let anchor_offset = line_start_offset(content, start_line)
+  let compare_len = old_string.length().min(content.length() - anchor_offset)
+  if compare_len > 0 {
+    let actual = content.unsafe_substring(
+      start=anchor_offset,
+      end=anchor_offset + compare_len,
+    )
+    let diff_info = first_diff_info(old_string, actual)
+    match diff_info {
+      Some((pos, expected_char, actual_char)) => {
+        let diff_pos = pos + 1
+        lines.push(
+          "\nfirst difference at character \{diff_pos}: expected `\{expected_char}`, got `\{actual_char}`",
+        )
+        if is_whitespace_equivalent(old_string, actual) {
+          lines.push(
+            " — the only differences are whitespace (tab vs space, extra spaces, or line endings); old_string must match the file character-for-character",
+          )
+        }
+      }
+      None => ()
+    }
+  } else {
+    lines.push("\n(old_string extends past the end of the file)")
+  }
+  lines.push(
+    "\nhint: check for line-ending mismatches (CRLF vs LF), full-width vs half-width characters, tab vs space, or a stray read-tool display separator (`|`) in old_string",
+  )
+  lines.join("")
+}
+
+///|
+/// Find the first character where `expected` and `actual` differ.
+/// Returns the position, the expected character, and the actual character.
+fn first_diff_info(
+  expected : String,
+  actual : String,
+) -> (Int, String, String)? {
+  let len = expected.length().min(actual.length())
+  for i in 0..<len {
+    if expected[i] != actual[i] {
+      return Some(
+        (
+          i,
+          expected.unsafe_substring(start=i, end=i + 1),
+          actual.unsafe_substring(start=i, end=i + 1),
+        ),
+      )
+    }
+  }
+  if expected.length() != actual.length() {
+    let pos = len
+    let expected_str = if pos < expected.length() {
+      expected.unsafe_substring(start=pos, end=pos + 1)
+    } else {
+      "∅"
+    }
+    let actual_str = if pos < actual.length() {
+      actual.unsafe_substring(start=pos, end=pos + 1)
+    } else {
+      "∅"
+    }
+    return Some((pos, expected_str, actual_str))
+  }
+  None
+}
+
+///|
+/// Check whether `expected` and `actual` differ only by whitespace characters
+/// (tab, space, CR, LF). Uses `normalize_whitespace` as the single source of
+/// truth, so this is consistent with `find_whitespace_normalized_candidates`.
+fn is_whitespace_equivalent(expected : String, actual : String) -> Bool {
+  normalize_whitespace(expected) == normalize_whitespace(actual)
+}
+
+///|
+/// Collapse all whitespace runs (spaces, tabs, CR, LF) into a single
+/// space and trim. Used by `find_whitespace_normalized_candidates` so that
+/// `old_string` can match content that differs only in whitespace (tab vs
+/// space, CRLF vs LF, extra blanks, trailing whitespace).
+fn normalize_whitespace(s : String) -> String {
+  let result = StringBuilder()
+  let mut in_ws = false
+  for ch in s {
+    if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
+      if !in_ws {
+        result.write_char(' ')
+        in_ws = true
+      }
+    } else {
+      result.write_char(ch)
+      in_ws = false
+    }
+  }
+  result.to_string().trim().to_owned()
+}
+
+///|
+/// Find all positions where `needle` has a whitespace-normalized
+/// equivalent in `body`.
+/// Returns `(start, end)` pairs in the original body for diagnostics.
+fn find_whitespace_normalized_candidates(
+  body : String,
+  needle : String,
+) -> Array[(Int, Int)] {
+  let norm_needle = normalize_whitespace(needle)
+  if norm_needle.is_empty() {
+    return []
+  }
+  let matches : Array[(Int, Int)] = []
+  let mut i = 0
+  while i < body.length() {
+    let mut ni = 0
+    let mut bi = i
+    // Skip leading whitespace in body only when norm_needle starts with space
+    // (which it never does after normalize_whitespace, since it trims).
+    // For any non-space first char, match directly.
+    while ni < norm_needle.length() && bi < body.length() {
+      let nc = norm_needle[ni]
+      let bc = body[bi]
+      if nc == ' ' {
+        // norm_needle expects a whitespace run; require at least one
+        // whitespace character in body (otherwise "a b" would match "ab").
+        ni += 1
+        let mut consumed_ws = false
+        while bi < body.length() &&
+              (
+                body[bi] == ' ' ||
+                body[bi] == '\t' ||
+                body[bi] == '\n' ||
+                body[bi] == '\r'
+              ) {
+          bi += 1
+          consumed_ws = true
+        }
+        if !consumed_ws {
+          break
+        }
+      } else if bc == ' ' || bc == '\t' || bc == '\n' || bc == '\r' {
+        // body has whitespace where norm_needle has non-space → mismatch
+        break
+      } else if nc != bc {
+        break
+      } else {
+        ni += 1
+        bi += 1
+      }
+    }
+    // Skip trailing whitespace in needle
+    while ni < norm_needle.length() && norm_needle[ni] == ' ' {
+      ni += 1
+    }
+    if ni == norm_needle.length() {
+      matches.push((i, bi))
+      i = bi
+    } else {
+      i += 1
+    }
+  }
+  matches
+}
+
+///|
 test "inserted_line_span counts the lines the insert occupies" {
   // Newline-terminated: one line per newline.
   assert_eq(inserted_line_span("a\n"), 1)
@@ -980,4 +1198,165 @@ test "preview_display_line truncates on a character boundary" {
   assert_true(cut.has_suffix("…"))
   assert_false(cut.contains("😀"))
   assert_eq(cut.length(), 200)
+}
+
+///|
+test "first_diff_info returns None for identical strings" {
+  assert_eq(first_diff_info("hello", "hello"), None)
+  assert_eq(first_diff_info("", ""), None)
+  assert_eq(first_diff_info("a\nb", "a\nb"), None)
+}
+
+///|
+test "first_diff_info finds first character difference" {
+  guard first_diff_info("abc", "abd") is Some((pos, expected, actual)) else {
+    fail("expected Some")
+  }
+  assert_eq(pos, 2)
+  assert_eq(expected, "c")
+  assert_eq(actual, "d")
+}
+
+///|
+test "first_diff_info detects length mismatch" {
+  // expected longer
+  guard first_diff_info("abcd", "ab") is Some((pos, expected, actual)) else {
+    fail("expected Some")
+  }
+  assert_eq(pos, 2)
+  assert_eq(expected, "c")
+  assert_eq(actual, "∅")
+  // actual longer
+  guard first_diff_info("ab", "abcd") is Some((pos2, expected2, actual2)) else {
+    fail("expected Some")
+  }
+  assert_eq(pos2, 2)
+  assert_eq(expected2, "∅")
+  assert_eq(actual2, "c")
+}
+
+///|
+test "first_diff_info detects tab vs space" {
+  guard first_diff_info("\tindent", "  indent") is Some((pos, expected, actual)) else {
+    fail("expected Some")
+  }
+  assert_eq(pos, 0)
+  assert_eq(expected, "\t")
+  assert_eq(actual, " ")
+}
+
+///|
+test "first_diff_info detects CRLF vs LF" {
+  guard first_diff_info("a\nb", "a\r\nb") is Some((pos, expected, actual)) else {
+    fail("expected Some")
+  }
+  assert_eq(pos, 1)
+  assert_eq(expected, "\n")
+  assert_eq(actual, "\r")
+}
+
+///|
+test "old_string_context clamps last_line to end of file" {
+  let content = "a\nb\nc\n"
+  let ctx = old_string_context(content, "x", 1, Some(999999))
+  // Should not loop 1M times; last_line clamped to 5 (3 file lines + 2 context_after)
+  assert_true(ctx.contains("file context:"))
+  assert_true(ctx.contains("hint:"))
+  // All 3 file lines should appear; no error from past-EOF iteration
+  assert_true(ctx.contains("1 | a"))
+  assert_true(ctx.contains("2 | b"))
+  assert_true(ctx.contains("3 | c"))
+}
+
+///|
+test "old_string_context shows context lines and first difference" {
+  let content = "alpha\nbeta\ngamma\n"
+  let ctx = old_string_context(content, "delta", 2, None)
+  // Shows surrounding lines
+  assert_true(ctx.contains("1 | alpha"))
+  assert_true(ctx.contains("> 2 | beta"))
+  assert_true(ctx.contains("3 | gamma"))
+  // First difference at char 1: expected 'd', got 'b'
+  assert_true(ctx.contains("expected `d`"))
+  assert_true(ctx.contains("got `b`"))
+  // Hint always present
+  assert_true(ctx.contains("line-ending mismatches"))
+}
+
+///|
+test "old_string_context shows empty suffix for past-EOF context" {
+  let content = "single\n"
+  let ctx = old_string_context(content, "x", 1, None)
+  // Line 2 and 3 exist as past-EOF context (empty lines)
+  assert_true(ctx.contains("1 | single"))
+  assert_true(ctx.contains("2 |"))
+  assert_true(ctx.contains("3 |"))
+}
+
+///|
+test "normalize_whitespace collapses runs and trims" {
+  assert_eq(normalize_whitespace(""), "")
+  assert_eq(normalize_whitespace("abc"), "abc")
+  assert_eq(normalize_whitespace("a  b"), "a b")
+  assert_eq(normalize_whitespace("a\tb"), "a b")
+  assert_eq(normalize_whitespace("a\nb"), "a b")
+  assert_eq(normalize_whitespace("a\r\nb"), "a b")
+  assert_eq(normalize_whitespace("  a  b  "), "a b")
+  assert_eq(normalize_whitespace("\t\n\r  x"), "x")
+}
+
+///|
+test "find_whitespace_normalized_candidates finds whitespace-different matches" {
+  // tab vs space
+  let matches = find_whitespace_normalized_candidates("a\tb", "a b")
+  assert_eq(matches.length(), 1)
+  let (s, e) = matches[0]
+  assert_eq(s, 0)
+  assert_eq(e, 3)
+
+  // multiple spaces
+  let matches = find_whitespace_normalized_candidates("a  b", "a b")
+  assert_eq(matches.length(), 1)
+  let (s, e) = matches[0]
+  assert_eq(s, 0)
+  assert_eq(e, 4)
+
+  // CRLF vs LF
+  let matches = find_whitespace_normalized_candidates("a\r\nb", "a\nb")
+  assert_eq(matches.length(), 1)
+  let (s, e) = matches[0]
+  assert_eq(s, 0)
+  assert_eq(e, 4)
+}
+
+///|
+test "find_whitespace_normalized_candidates does not consume trailing whitespace" {
+  // trailing whitespace in body is not consumed by the match
+  let matches = find_whitespace_normalized_candidates("foo  ", "foo")
+  assert_eq(matches.length(), 1)
+  let (s, e) = matches[0]
+  // Match ends at "foo" (position 3), trailing spaces are not consumed
+  assert_eq(s, 0)
+  assert_eq(e, 3)
+}
+
+///|
+test "find_whitespace_normalized_candidates returns empty for no match" {
+  assert_eq(find_whitespace_normalized_candidates("abc", "xyz").length(), 0)
+  assert_eq(find_whitespace_normalized_candidates("", "x").length(), 0)
+  assert_eq(find_whitespace_normalized_candidates("abc", "").length(), 0)
+}
+
+///|
+test "find_whitespace_normalized_candidates returns multiple matches when ambiguous" {
+  let matches = find_whitespace_normalized_candidates("a b a b", "a b")
+  assert_eq(matches.length(), 2)
+}
+
+///|
+test "find_whitespace_normalized_candidates does not match different content" {
+  // "a x b" should not match "a b" (different non-whitespace content in the gap)
+  assert_eq(find_whitespace_normalized_candidates("a x b", "a b").length(), 0)
+  // "ab" should not match "a b" either (no whitespace at all between a and b)
+  assert_eq(find_whitespace_normalized_candidates("ab", "a b").length(), 0)
 }

@@ -131,6 +131,10 @@ pub let git_branch : Command[@protocol.GitBranchPayload, @protocol.GitBranchRepl
 
 pub let git_changes : Command[@protocol.GitChangesPayload, @protocol.GitChangesReply]
 
+pub let git_commit_changes : Command[@protocol.GitCommitChangesPayload, @protocol.GitCommitChangesReply]
+
+pub let git_history : Command[@protocol.GitHistoryPayload, @protocol.GitHistoryReply]
+
 pub let git_original_file : Command[@protocol.GitOriginalFilePayload, @protocol.GitOriginalFileReply]
 
 pub let git_pull_request : Command[@protocol.GitPullRequestPayload, @protocol.GitPullRequestReply]

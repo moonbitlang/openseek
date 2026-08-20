@@ -245,6 +245,61 @@ pub(all) enum ChangeList {
 } derive(Eq)
 
 ///|
+/// The lazily loaded, snapshot-pinned Git graph. A ready page stays visible
+/// while more rows are requested; `load_error` therefore does not discard the
+/// history the user can still inspect.
+pub(all) enum GitGraphState {
+  GitGraphIdle
+  GitGraphLoading
+  GitGraphFailed(String)
+  GitGraphReady(
+    repository~ : Bool,
+    snapshot~ : @protocol.GitHistorySnapshot,
+    commits~ : Array[@protocol.GitHistoryCommit],
+    has_more~ : Bool,
+    loading_more~ : Bool,
+    load_error~ : String?
+  )
+} derive(Eq)
+
+///|
+/// The inline file expansion for the currently selected commit.
+pub(all) enum GitCommitFiles {
+  GitCommitFilesIdle
+  GitCommitFilesLoading(commit~ : String)
+  GitCommitFilesFailed(commit~ : String, message~ : String)
+  GitCommitFilesReady(
+    commit~ : String,
+    parent~ : String?,
+    files~ : Array[@protocol.GitHistoricalChange]
+  )
+} derive(Eq)
+
+///|
+pub(all) enum HistoryBlob {
+  HistoryBlobLoading
+  HistoryBlobMissing
+  HistoryBlobBinary
+  HistoryBlobOversized
+  HistoryBlobContent(String)
+  HistoryBlobError(String)
+} derive(Eq)
+
+///|
+pub(all) enum HistoryDiffSide {
+  HistoryOriginal
+  HistoryModified
+} derive(Eq)
+
+///|
+pub(all) struct HistoryDiffDoc {
+  diff : @dock.GitHistoryDiff
+  generation : Int
+  original : HistoryBlob
+  modified : HistoryBlob
+} derive(Eq)
+
+///|
 /// The checkout placement a sync pass settled on for `State::owner`.
 /// Availability and identity are one value: parking keeps the identity the
 /// panel had before the gap, so recovery can tell the same checkout coming
@@ -336,6 +391,25 @@ pub(all) struct State {
   // state. The imperative DiffViewer retains both models while applying it.
   review_diff_layout : ReviewDiffLayout
   changes : ChangeList
+  // Git graph state is conversation/workspace scoped like Changes, but is
+  // refreshed only at meaningful repository boundaries rather than on the
+  // three-second working-tree poll.
+  git_graph : GitGraphState
+  git_graph_generation : Int
+  git_graph_selected : String?
+  git_commit_files : GitCommitFiles
+  git_commit_files_generation : Int
+  git_actual_head : String?
+  git_actual_head_known : Bool
+  // Section presentation is a page-lifetime preference and survives owner
+  // switches; the drag ratio itself lives as a CSS custom property on the
+  // permanent pane element.
+  changes_collapsed : Bool
+  git_graph_collapsed : Bool
+  // Historical content is not a filesystem document and never joins the
+  // watcher/LSP projections. Keys combine commit and current path.
+  history_docs : Map[String, HistoryDiffDoc]
+  history_generation : Int
   // Exact changed rows the user has marked reviewed in the current checkout.
   // Watcher events and run boundaries invalidate affected progress; a final
   // Git refresh also drops rows whose status or rename identity changed.
@@ -427,6 +501,17 @@ pub fn State::empty() -> State {
     review_view_mode: ReviewUnifiedDiff,
     review_diff_layout: ReviewSideBySide,
     changes: ChangeListIdle,
+    git_graph: GitGraphIdle,
+    git_graph_generation: 0,
+    git_graph_selected: None,
+    git_commit_files: GitCommitFilesIdle,
+    git_commit_files_generation: 0,
+    git_actual_head: None,
+    git_actual_head_known: false,
+    changes_collapsed: false,
+    git_graph_collapsed: false,
+    history_docs: Map([]),
+    history_generation: 0,
     reviewed_changes: [],
     changes_generation: 0,
     request_epoch: 0,
@@ -550,6 +635,8 @@ pub(all) struct Ctx {
   panel_open : Bool
   open_files : Array[@pathx.Relative]
   active_file : @pathx.Relative?
+  open_history_diffs : Array[@dock.GitHistoryDiff]
+  active_history_diff : @dock.GitHistoryDiff?
 } derive(Eq)
 
 ///|
@@ -648,6 +735,39 @@ pub(all) enum Msg {
   // from live state whether the interval exists at all, so a tick can only be
   // delivered for the conversation and snapshot that currently want one.
   ChangesPollDue
+  // The actual checkout HEAD is separate from Review's possibly older
+  // comparison boundary. It invalidates the graph without rebasing reviews.
+  GitHeadObserved(owner~ : @interop.ConversationKey, head~ : String?)
+  GitHistoryRefreshRequested
+  GitHistoryLoadMoreRequested
+  GitHistoryLoaded(
+    owner~ : @interop.ConversationKey,
+    generation~ : Int,
+    append~ : Bool,
+    reply~ : @protocol.GitHistoryReply
+  )
+  GitHistoryFailed(
+    owner~ : @interop.ConversationKey,
+    generation~ : Int,
+    append~ : Bool,
+    message~ : String
+  )
+  GitCommitSelected(String)
+  GitCommitChangesLoaded(
+    owner~ : @interop.ConversationKey,
+    generation~ : Int,
+    reply~ : @protocol.GitCommitChangesReply
+  )
+  GitCommitChangesFailed(
+    owner~ : @interop.ConversationKey,
+    generation~ : Int,
+    commit~ : String,
+    message~ : String
+  )
+  GitCommitChangesRetry(String)
+  HistoricalFileSelected(@dock.GitHistoryDiff)
+  ToggleChangesSection
+  ToggleGitGraphSection
   // A file row was clicked: read it and show it in the viewer. `name` is the
   // entry's display name, kept for the viewer's title and language guess.
   FileSelected(path~ : @pathx.Relative, name~ : String)
@@ -685,6 +805,20 @@ pub(all) enum Msg {
     path~ : @pathx.Relative,
     generation~ : Int,
     background~ : Bool,
+    message~ : String
+  )
+  HistoryBlobLoaded(
+    owner~ : @interop.ConversationKey,
+    key~ : String,
+    generation~ : Int,
+    side~ : HistoryDiffSide,
+    blob~ : @protocol.GitOriginalFileReply
+  )
+  HistoryBlobFailed(
+    owner~ : @interop.ConversationKey,
+    key~ : String,
+    generation~ : Int,
+    side~ : HistoryDiffSide,
     message~ : String
   )
   // A Definition/References result accepted by the Viewer's location opener.

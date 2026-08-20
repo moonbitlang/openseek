@@ -96,6 +96,7 @@ fn list_changes(
       // New hosts pin Review to the selected comparison commit. Older hosts
       // omit `baseline`, so keep their exact HEAD identity.
       let revision = git_review_revision(reply)
+      scheduler.add(dispatch(GitHeadObserved(owner~, head=reply.head)))
       scheduler.add(
         dispatch(
           ChangesLoaded(

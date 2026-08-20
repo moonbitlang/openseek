@@ -1,12 +1,12 @@
 // The session follower: the host's second reader of a conversation's durable
 // record. While a desktop-managed engine can write to a session's store, one
-// follower actor per session tails the record through the bundled engine's
-// own reader (`sessions show` — shared lock, torn-write repair and header
-// parsing all come with it) and broadcasts each newly committed event as a
-// canonical `session.event` notification. Those commits, plus the
-// `session.load` snapshot, are the durable transcript's only sources on the
-// client; the live `agent.event` stream only settles transient stream and
-// lifecycle state in commit-aware clients (docs/remote-protocol.md).
+// follower actor per session tails the record itself (`@session_record` —
+// complete lines only, each event folded in once by its sequence) and
+// broadcasts each newly committed event as a canonical `session.event`
+// notification. Those commits, plus the `session.load` snapshot, are the
+// durable transcript's only sources on the client; the live `agent.event`
+// stream only settles transient stream and lifecycle state in commit-aware
+// clients (docs/remote-protocol.md).
 //
 // The actor is the design's ordering backbone: every read of the record —
 // watcher-less kicks, the poll fallback, a routed `session.load`, the final
@@ -18,12 +18,13 @@
 // reads the record directly, one-shot.
 
 ///|
-/// How often the actor re-checks the store file without being kicked. Kicks
-/// from the engine's own stdout events provide the low-latency wakeups (an
-/// append is always accompanied by a nearby event — a behavioral invariant,
-/// not a contract), so this poll is the safety net for the exceptions:
-/// external CLI writers sharing the session, and any append whose event was
-/// lost or reordered.
+/// How often the actor re-checks the record without being kicked. Kicks from
+/// the engine's own stdout events provide the low-latency wakeups (an append
+/// is always accompanied by a nearby event — a behavioral invariant, not a
+/// contract), so this poll is the safety net for the exceptions: external CLI
+/// writers sharing the session, and any append whose event was lost or
+/// reordered. A poll that finds nothing appended costs one stat and one short
+/// read, so the fallback is cheap enough to keep on every live session.
 const FollowerPollMs = 1000
 
 ///|
@@ -34,21 +35,12 @@ const FollowerPollMs = 1000
 const FollowerLoadQueueSize = 32
 
 ///|
-/// A cheap change fingerprint for the store file, checked before spending a
-/// `sessions show` on a kick: size catches every append (the file grows),
-/// mtime catches the store's repair paths that rewrite instead of appending.
-priv struct FileSignature {
-  size : Int64
-  mtime_s : Int64
-  mtime_ns : Int
-} derive(Eq)
-
-///|
 priv enum FollowerMsg {
-  // Something may have been appended: scan when the file signature moved.
+  // Something may have been appended: read whatever is past the reader's
+  // offset.
   Kick
-  // A `session.load` routed through the actor: force a scan — broadcasting
-  // any fresh commits — and reply with the full session JSON.
+  // A `session.load` routed through the actor: scan — broadcasting any fresh
+  // commits — and reply with the whole transcript the reader now holds.
   Load
   // Stop after a final scan. `writer_exited` is supplied only by a caller
   // that has crossed the process-exit barrier; it lets a brand-new session
@@ -112,12 +104,12 @@ priv struct SessionFollower {
   // leaves this actor alive for archive/detach to retry later.
   durable_finishes : Array[PendingDurableFinish]
   // The highest sequence already broadcast. Commits at or below it are old
-  // news; the frontier only advances, so a scan can never re-broadcast.
+  // news; the frontier only advances, so a scan can never re-broadcast — not
+  // even when the reader replays a record that was repaired under it.
   mut watermark : Int
-  // Signature of the store file as of the last completed scan (taken before
-  // the scan read it, so a write racing the read re-triggers). `None` until
-  // the first scan, or when the file cannot be examined.
-  mut consumed : FileSignature?
+  // Where this follower has read to, and the transcript it read. A scan is
+  // this reader moving forward; a `session.load` is what it already holds.
+  tail : @session_record.Tail
 }
 
 ///|
@@ -156,59 +148,11 @@ fn SessionFollower::publish_durable_finishes(
 }
 
 ///|
-/// Where the store keeps this session's event log. Duplicating the store's
-/// layout here is only a fast-path optimization — the signature check that
-/// uses it skips redundant `sessions show` spawns. If the layout ever moves
-/// upstream, the signature reads `None`, every kick scans, and behavior
-/// stays correct (just slower).
-fn session_store_file(root : @pathx.Absolute, session : String) -> String {
-  root
-  .join("sessions")
-  .join(session)
-  .join("openseek_session-\{session}.jsonl")
-  .to_string()
-}
-
-///|
-async fn file_signature(path : String) -> FileSignature? {
-  let file = @fs.open(path, mode=ReadOnly) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return None
-  }
-  defer file.close()
-  let size = file.size() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return None
-  }
-  let (mtime_s, mtime_ns) = file.mtime() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return None
-  }
-  Some({ size, mtime_s, mtime_ns })
-}
-
-///|
-/// The typed store events committed after `watermark`, in file order (the
-/// store guarantees ascending sequences).
-fn commits_after(
-  session : @protocol.SessionDocument,
-  watermark : Int,
-) -> Array[@protocol.SessionEvent] {
-  let fresh : Array[@protocol.SessionEvent] = []
-  for event in session.events.unwrap_or([]) {
-    if event.sequence > watermark {
-      fresh.push(event)
-    }
-  }
-  fresh
-}
-
-///|
-/// The highest event sequence in a session JSON — what a snapshot's
+/// The highest event sequence in a session document — what a snapshot's
 /// watermark is. 0 for a record with no events.
 fn session_max_sequence(session : @protocol.SessionDocument) -> Int {
   let mut max = 0
-  for event in commits_after(session, 0) {
+  for event in session.events.unwrap_or([]) {
     if event.sequence > max {
       max = event.sequence
     }
@@ -217,29 +161,27 @@ fn session_max_sequence(session : @protocol.SessionDocument) -> Int {
 }
 
 ///|
-/// One scan: read the record through `sessions show`, broadcast everything
-/// committed past the watermark, advance it, and return the full session
-/// JSON. Without `force~`, a scan whose file signature matches the last
-/// consumed one is skipped (`None`). Raises when the record cannot be read —
-/// the watermark then stays put, so the next scan retries the same span.
+/// One scan: read whatever the writer appended since the last one, broadcast
+/// everything committed past the watermark, and advance it. Raises when the
+/// record cannot be read — the watermark then stays put, so the next scan
+/// retries the same span.
+///
+/// A scan broadcasts; it does not build a snapshot. Kicks and the poll ticker
+/// run one per committed event, and a document costs a copy of the whole
+/// transcript — the load path asks the reader for that separately, so this
+/// path stays proportional to what was appended.
+///
+/// The reader may report a whole record again (it re-reads from the head when
+/// the file was replaced under it); the watermark check here is what keeps
+/// that from reaching clients twice.
 async fn SessionFollower::scan(
   self : SessionFollower,
   sink : EventSink,
-  manager : EngineManager,
-  force~ : Bool,
-) -> @protocol.SessionDocument? {
-  let signature = file_signature(session_store_file(self.root, self.session))
-  if !force && signature is Some(_) && signature == self.consumed {
-    return None
-  }
-  let output = session_show_stdout(manager, self.session, self.root)
-  let session_json = @json.parse(output) catch {
-    _ => raise EngineError("engine returned a malformed session")
-  }
-  let session : @protocol.SessionDocument = @json.from_json(session_json) catch {
-    _ => raise EngineError("engine returned a malformed session")
-  }
-  for event in commits_after(session, self.watermark) {
+) -> Unit {
+  for event in self.tail.poll() {
+    if event.sequence <= self.watermark {
+      continue
+    }
     emit(
       sink,
       SessionCommit({
@@ -254,8 +196,6 @@ async fn SessionFollower::scan(
     )
     self.watermark = event.sequence
   }
-  self.consumed = signature
-  Some(session)
 }
 
 ///|
@@ -272,33 +212,18 @@ async fn SessionFollower::run(
   ready : @async.Queue[Unit],
 ) -> Unit {
   let follower = self
-  // Cancellation can land during baseline, a blocking store scan, or an
+  // Cancellation can land during baseline, a blocking record read, or an
   // in-flight load generation. Every exit retires this exact identity and
   // completes queued readers with LoadStopped instead of stranding reply.get.
   defer retire_follower_actor(manager, follower)
-  let baseline_signature = file_signature(
-    session_store_file(follower.root, follower.session),
-  )
-  let baseline = session_show_stdout(manager, follower.session, follower.root) catch {
+  ignore(follower.tail.poll()) catch {
     error if @async.is_being_cancelled() => raise error
     // No record yet (a session's first turn), or a transiently unreadable
     // one: start from 0. Over-broadcasting history later is safe — clients
     // drop commits at or below their own watermark — it only costs bytes.
-    _ => ""
+    _ => ()
   }
-  if !baseline.is_empty() {
-    let document : @protocol.SessionDocument? = try
-      @json.from_json(@json.parse(baseline))
-    catch {
-      _ => None
-    } noraise {
-      document => Some(document)
-    }
-    if document is Some(document) {
-      follower.watermark = session_max_sequence(document)
-      follower.consumed = baseline_signature
-    }
-  }
+  follower.watermark = follower.tail.watermark()
   ready.put(())
   let mut retired_generation = 0
   @async.with_task_group(group => {
@@ -312,29 +237,26 @@ async fn SessionFollower::run(
       match follower.inbox.get() {
         Kick => {
           follower.kick_pending = false
-          ignore(
-            follower.scan(sink, manager, force=false) catch {
-              error if @async.is_being_cancelled() => raise error
-              error => {
-                @xlog.debug() <?
-                  {
-                    "event": "desktop_follower_scan_failed",
-                    "session": follower.session,
-                    "error": "\{error}",
-                  }
-                None
-              }
-            },
-          )
+          follower.scan(sink) catch {
+            error if @async.is_being_cancelled() => raise error
+            error =>
+              @xlog.debug() <?
+                {
+                  "event": "desktop_follower_scan_failed",
+                  "session": follower.session,
+                  "error": "\{error}",
+                }
+          }
         }
         Load => {
-          let response = try follower.scan(sink, manager, force=true) catch {
+          // The one path that pays for a snapshot: scan first, so the reply
+          // carries every commit this generation just broadcast.
+          let response = try {
+            follower.scan(sink)
+            LoadOk(follower.tail.document())
+          } catch {
             error if @async.is_being_cancelled() => raise error
             error => LoadFailed("\{error}")
-          } noraise {
-            Some(json) => LoadOk(json)
-            // Unreachable — a forced scan never skips — but total.
-            None => LoadFailed("session read produced nothing")
           }
           // Keep `load_pending` set while draining. Reply queues are fresh
           // Blocking(1) queues, so these puts do not suspend; every caller
@@ -360,38 +282,25 @@ async fn SessionFollower::run(
             try {
               // Everything the departed writer persisted is broadcast
               // before this generation can retire successfully.
-              ignore(follower.scan(sink, manager, force=true))
+              follower.scan(sink)
               None
             } catch {
               error if @async.is_being_cancelled() => raise error
-              error =>
-                // A first prompt can be cancelled after a partial stdin
-                // write but before the engine creates its durable record.
-                // Once the caller has proved the writer exited, an absent
-                // pinned record file and a zero watermark together prove
-                // there is no durable tail to drain. `@fs.exists` returns
-                // false only for ENOENT and propagates permission/stat
-                // failures; an existing malformed or unreadable record
-                // therefore keeps the follower active for a later retry.
+              // A first prompt can be cancelled after a partial stdin write
+              // but before the engine creates its durable record. Once the
+              // caller has proved the writer exited, a record that was never
+              // created and a zero watermark together prove there is no
+              // durable tail to drain. Every other failure — a malformed
+              // record, one that vanished after this follower read it, a
+              // store root that is not a directory — keeps the follower
+              // active for a later retry.
+              @session_record.Absent(detail) =>
                 if writer_exited && follower.watermark == 0 {
-                  try
-                    @fs.exists(
-                      session_store_file(follower.root, follower.session),
-                    )
-                  catch {
-                    verify_error if @async.is_being_cancelled() =>
-                      raise verify_error
-                    verify_error =>
-                      Some(
-                        "\{error}; failed to verify session record: \{verify_error}",
-                      )
-                  } noraise {
-                    true => Some("\{error}")
-                    false => None
-                  }
+                  None
                 } else {
-                  Some("\{error}")
+                  Some(detail)
                 }
+              error => Some("\{error}")
             }
           } else {
             None
@@ -535,7 +444,7 @@ async fn[G] ensure_follower(
     stop_observers: 0,
     durable_finishes: [],
     watermark: 0,
-    consumed: None,
+    tail: Tail(root, session),
   }
   manager.followers[session] = follower
   let ready : @async.Queue[Unit] = Queue(kind=Blocking(1))
@@ -555,8 +464,8 @@ async fn[G] ensure_follower(
 ///|
 /// Stop `session`'s follower and wait for its final scan to drain. This is
 /// the barrier archive relies on: after it returns, no scan is in flight and
-/// none will start, so the record directory can be moved without a late
-/// `sessions show` broadcasting from beyond the grave.
+/// none will start, so the record directory can be moved without a late read
+/// broadcasting from beyond the grave.
 async fn stop_follower(
   manager : EngineManager,
   session : String,
@@ -673,39 +582,9 @@ async fn request_follower_load(follower : SessionFollower) -> FollowerLoadReply 
   reply.get()
 }
 
-// The follower's pure core: watermark diffing over `sessions show` output
-// and the store-layout fast path. The actor itself (baseline, serial loop,
-// stop drain) needs a live engine binary and is exercised end to end.
-
-///|
-test "commits_after filters typed events by watermark in file order" {
-  let session : @protocol.SessionDocument = {
-    version: None,
-    id: Some("s"),
-    system_prompt: None,
-    events: Some([
-      { sequence: 1, ts: None, item: User({ content: "one" }) },
-      { sequence: 2, ts: None, item: User({ content: "two" }) },
-      { sequence: 3, ts: None, item: User({ content: "three" }) },
-    ]),
-  }
-  let fresh = commits_after(session, 1)
-  inspect(fresh.length(), content="2")
-  inspect(fresh[0].sequence, content="2")
-  inspect(fresh[1].sequence, content="3")
-  inspect(commits_after(session, 3).length(), content="0")
-}
-
-///|
-test "commits_after tolerates a session without events" {
-  let session : @protocol.SessionDocument = {
-    version: None,
-    id: Some("s"),
-    system_prompt: None,
-    events: None,
-  }
-  inspect(commits_after(session, 0).length(), content="0")
-}
+// The follower's pure core: the watermark a snapshot reports. Reading the
+// record is `@session_record`'s own tested job; the actor around it (baseline,
+// serial loop, stop drain) is exercised end to end against real records.
 
 ///|
 test "session_max_sequence is the snapshot's watermark" {
@@ -724,17 +603,54 @@ test "session_max_sequence is the snapshot's watermark" {
 }
 
 ///|
-test "session_store_file follows the store layout" {
-  let path = session_store_file(
-    @pathx.Path("/tmp/store-root").resolve(),
-    "desktop-abc",
-  )
-  assert_true(
-    path.has_suffix("sessions/desktop-abc/openseek_session-desktop-abc.jsonl"),
+/// One durable event line, as the store writes them.
+#cfg(not(platform="windows"))
+fn session_user_event(sequence : Int, content : String) -> String {
+  "{\"sequence\":\{sequence},\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"\{content}\"}}}"
+}
+
+///|
+/// Stand in for the engine: write `session`'s record under `root` in the
+/// store's own form, a header line followed by one line per event.
+#cfg(not(platform="windows"))
+async fn write_session_record(
+  root : @pathx.Absolute,
+  session : String,
+  events : Array[String],
+) -> Unit {
+  let path = @session_record.record_path(root, session)
+  @fsx.ensure_dir(path.dirname())
+  let text = StringBuilder()
+  text <+ "{\"version\":1,\"id\":\"\{session}\",\"system_prompt\":\"\"}\n"
+  for event in events {
+    text.write_string(event)
+    text <+ "\n"
+  }
+  @fs.write_file(
+    path.to_string(),
+    text.to_string(),
+    create_mode=CreateOrTruncate,
   )
 }
 
 ///|
+/// A record no reader can make sense of: present, so this is not an absent
+/// record, but headed by a line that is not a header.
+#cfg(not(platform="windows"))
+async fn write_damaged_record(root : @pathx.Absolute, session : String) -> Unit {
+  let path = @session_record.record_path(root, session)
+  @fsx.ensure_dir(path.dirname())
+  @fs.write_file(
+    path.to_string(),
+    "{\"not\":\"a header\"}\n",
+    create_mode=CreateOrTruncate,
+  )
+}
+
+///|
+/// A config for a follower with no engine behind it. Every test below hands
+/// `engine` a path that is never created, let alone spawned: a follower reads
+/// the record itself, and the path only fills the field a run config has.
 #cfg(not(platform="windows"))
 fn follower_test_config(
   engine : String,
@@ -760,15 +676,7 @@ async test "failed final scan keeps the follower active and propagates" {
   let dir = @fs.tmpdir(prefix="openseek-follower-stop-")
   let engine = dir + "/engine.sh"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
-  let record : @pathx.Path = Path(session_store_file(root, "s-fail"))
-  @fsx.ensure_dir(record.dirname())
-  @fs.write_file(record.to_string(), "record", create_mode=CreateOrTruncate)
-  @fs.write_file(
-    engine,
-    "#!/bin/sh\nprintf '%s' 'show failed' >&2\nexit 7\n",
-    create_mode=CreateOrTruncate,
-  )
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
+  write_damaged_record(root, "s-fail")
   let manager = new_engine_manager(engine)
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
@@ -791,7 +699,7 @@ async test "failed final scan keeps the follower active and propagates" {
       error if @async.is_being_cancelled() => raise error
       error => "\{error}"
     }
-    assert_true(detail.contains("show failed"))
+    assert_true(detail.contains("session record"))
     assert_true(
       manager.followers.get("s-fail") is Some(current) &&
       physical_equal(current, follower),
@@ -807,27 +715,11 @@ async test "failed final scan keeps the follower active and propagates" {
 async test "zero-watermark durable boundary survives a failed final scan" {
   let dir = @fs.tmpdir(prefix="openseek-follower-durable-zero-")
   let engine = dir + "/engine.sh"
-  let calls = dir + "/calls"
   let session = "s-durable-zero"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
-  let record : @pathx.Path = Path(session_store_file(root, session))
-  @fsx.ensure_dir(record.dirname())
-  @fs.write_file(record.to_string(), "record", create_mode=CreateOrTruncate)
-  let script =
-    $|#!/bin/sh
-    $|calls='\{calls}'
-    $|count=0
-    $|if [ -f "$calls" ]; then count=$(cat "$calls"); fi
-    $|count=$((count + 1))
-    $|printf '%s' "$count" > "$calls"
-    $|case "$count" in
-    $|  1) printf '%s' '{"events":[]}' ;;
-    $|  2) printf '%s' 'transient show failure' >&2; exit 7 ;;
-    $|  *) printf '%s' '{"events":[]}' ;;
-    $|esac
-    $|
-  @fs.write_file(engine, script, create_mode=CreateOrTruncate)
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
+  // A record the writer created but has not committed anything to: the
+  // baseline reads it, and the boundary below lands at sequence 0.
+  write_session_record(root, session, [])
   let manager = new_engine_manager(engine)
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(fn(event) { emitted.push(event) })
@@ -845,6 +737,8 @@ async test "zero-watermark durable boundary survives a failed final scan" {
     }
     follower.expect_durable_finish("r-durable-zero")
     follower.expect_durable_finish("r-durable-zero")
+    // Damaged under the follower, so its final scan cannot prove a frontier.
+    write_damaged_record(root, session)
     let detail = try {
       stop_follower(manager, session, writer_exited=true)
       "no error"
@@ -853,13 +747,16 @@ async test "zero-watermark durable boundary survives a failed final scan" {
       error if @async.is_being_cancelled() => raise error
       error => "\{error}"
     }
-    assert_true(detail.contains("transient show failure"))
+    assert_true(detail.contains("session record"))
     assert_true(
       follower.durable_finishes
       is [{ run_id: "r-durable-zero", published: false }],
     )
     assert_false(emitted.iter().any(event => event is DurableBoundary(_)))
 
+    // Readable again: every retry drains, and the retained boundary is
+    // published exactly once across all of them.
+    write_session_record(root, session, [])
     let retry_a = group.spawn(() => {
       stop_follower(manager, session, writer_exited=true)
     })
@@ -889,12 +786,7 @@ async test "absent first record publishes one exact-zero durable boundary" {
   let engine = dir + "/engine.sh"
   let session = "s-durable-absent"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
-  @fs.write_file(
-    engine,
-    "#!/bin/sh\nprintf '%s' 'show failed' >&2\nexit 7\n",
-    create_mode=CreateOrTruncate,
-  )
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
+  // No record at all: the writer was cancelled before creating one.
   let manager = new_engine_manager(engine)
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(fn(event) { emitted.push(event) })
@@ -934,27 +826,9 @@ async test "absent first record publishes one exact-zero durable boundary" {
 async test "nonzero durable boundary survives a failed final scan" {
   let dir = @fs.tmpdir(prefix="openseek-follower-durable-tail-")
   let engine = dir + "/engine.sh"
-  let calls = dir + "/calls"
   let session = "s-durable-tail"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
-  let record : @pathx.Path = Path(session_store_file(root, session))
-  @fsx.ensure_dir(record.dirname())
-  @fs.write_file(record.to_string(), "record", create_mode=CreateOrTruncate)
-  let script =
-    $|#!/bin/sh
-    $|calls='\{calls}'
-    $|count=0
-    $|if [ -f "$calls" ]; then count=$(cat "$calls"); fi
-    $|count=$((count + 1))
-    $|printf '%s' "$count" > "$calls"
-    $|case "$count" in
-    $|  1) printf '%s' '{"events":[]}' ;;
-    $|  2) printf '%s' 'transient show failure' >&2; exit 7 ;;
-    $|  *) printf '%s' '{"events":[{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"done"}}}]}' ;;
-    $|esac
-    $|
-  @fs.write_file(engine, script, create_mode=CreateOrTruncate)
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
+  write_session_record(root, session, [])
   let manager = new_engine_manager(engine)
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(fn(event) { emitted.push(event) })
@@ -971,13 +845,16 @@ async test "nonzero durable boundary survives a failed final scan" {
       fail("expected follower")
     }
     follower.expect_durable_finish("r-durable-tail")
+    write_damaged_record(root, session)
     stop_follower(manager, session, writer_exited=true) catch {
-      EngineError(detail) =>
-        assert_true(detail.contains("transient show failure"))
+      EngineError(detail) => assert_true(detail.contains("session record"))
       error if @async.is_being_cancelled() => raise error
       error => raise error
     }
 
+    // The writer's last commit is only readable on the retry, so the drain
+    // that succeeds is also the one that broadcasts it.
+    write_session_record(root, session, [session_user_event(1, "done")])
     stop_follower(manager, session, writer_exited=true)
     let relevant : Array[EngineEvent] = []
     for event in emitted {
@@ -1007,27 +884,9 @@ async test "nonzero durable boundary survives a failed final scan" {
 async test "abrupt EOF retains a failed final drain for later boundary retry" {
   let dir = @fs.tmpdir(prefix="openseek-follower-abrupt-eof-")
   let engine_path = dir + "/engine.sh"
-  let calls = dir + "/calls"
   let session = "s-abrupt-eof"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
-  let record : @pathx.Path = Path(session_store_file(root, session))
-  @fsx.ensure_dir(record.dirname())
-  @fs.write_file(record.to_string(), "record", create_mode=CreateOrTruncate)
-  let script =
-    $|#!/bin/sh
-    $|calls='\{calls}'
-    $|count=0
-    $|if [ -f "$calls" ]; then count=$(cat "$calls"); fi
-    $|count=$((count + 1))
-    $|printf '%s' "$count" > "$calls"
-    $|case "$count" in
-    $|  1) printf '%s' '{"events":[]}' ;;
-    $|  2) printf '%s' 'transient show failure' >&2; exit 7 ;;
-    $|  *) printf '%s' '{"events":[]}' ;;
-    $|esac
-    $|
-  @fs.write_file(engine_path, script, create_mode=CreateOrTruncate)
-  assert_eq(@process.run("chmod", ["+x", engine_path]), 0)
+  write_session_record(root, session, [])
   let manager = new_engine_manager(engine_path)
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(fn(event) { emitted.push(event) })
@@ -1078,6 +937,9 @@ async test "abrupt EOF retains a failed final drain for later boundary retry" {
     )
     messages.put(StreamExited(7))
     let stderr_task = group.spawn(no_wait=true, () => "")
+    // The record is unreadable at EOF, so the drain this engine's exit runs
+    // cannot prove a frontier and the boundary stays pending.
+    write_damaged_record(root, session)
     engine.run(manager, messages, stderr_task)
 
     // `run` returning is retirement: the slot is clear and every lifecycle
@@ -1103,6 +965,7 @@ async test "abrupt EOF retains a failed final drain for later boundary retry" {
     assert_true(finished_index >= 0)
     assert_eq(early_boundaries, 0)
 
+    write_session_record(root, session, [])
     stop_follower(manager, session, writer_exited=true)
     let mut boundary_index = -1
     let mut boundary_count = 0
@@ -1131,30 +994,12 @@ async test "workspace detach drains an orphaned pending follower before commit" 
   let workspace : @pathx.Absolute = @pathx.Path(dir + "/workspace").resolve()
   let root = @workspaces.store_root(workspace)
   let engine_path = dir + "/engine.sh"
-  let calls = dir + "/calls"
   let session = "s-detach-orphan"
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", global_root.to_string())
   defer restore_session_root_env(previous)
   @fsx.ensure_dir(workspace.to_path())
   ignore(attach_workspace(workspace.to_string(), fn(_) { () }))
-  let record : @pathx.Path = Path(session_store_file(root, session))
-  @fsx.ensure_dir(record.dirname())
-  @fs.write_file(record.to_string(), "record", create_mode=CreateOrTruncate)
-  let script =
-    $|#!/bin/sh
-    $|calls='\{calls}'
-    $|count=0
-    $|if [ -f "$calls" ]; then count=$(cat "$calls"); fi
-    $|count=$((count + 1))
-    $|printf '%s' "$count" > "$calls"
-    $|case "$count" in
-    $|  1) printf '%s' '{"events":[]}' ;;
-    $|  2) printf '%s' 'transient show failure' >&2; exit 7 ;;
-    $|  *) printf '%s' '{"events":[]}' ;;
-    $|esac
-    $|
-  @fs.write_file(engine_path, script, create_mode=CreateOrTruncate)
-  assert_eq(@process.run("chmod", ["+x", engine_path]), 0)
+  write_session_record(root, session, [])
   let manager = new_engine_manager(engine_path)
   let sessions : Map[String, SessionSlot] = Map([])
   manager.pump = Serving(sessions~)
@@ -1173,14 +1018,17 @@ async test "workspace detach drains an orphaned pending follower before commit" 
       fail("expected follower")
     }
     follower.expect_durable_finish("r-detach-orphan")
+    write_damaged_record(root, session)
     stop_follower(manager, session, writer_exited=true) catch {
-      EngineError(detail) =>
-        assert_true(detail.contains("transient show failure"))
+      EngineError(detail) => assert_true(detail.contains("session record"))
       error if @async.is_being_cancelled() => raise error
       error => raise error
     }
     assert_false(follower.retired)
 
+    // The detach below drains the orphan, so the record has to be readable
+    // again by then.
+    write_session_record(root, session, [])
     let committed_after_boundary : Ref[Bool] = Ref(false)
     let detached = detach_workspace(manager, workspace.to_string(), fn(_) {
       committed_after_boundary.val = emitted
@@ -1215,15 +1063,7 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
   let root = @workspaces.store_root(workspace)
   let engine_path = dir + "/engine.sh"
   let session = "s-detach-fail"
-  let record : @pathx.Path = Path(session_store_file(root, session))
-  @fsx.ensure_dir(record.dirname())
-  @fs.write_file(record.to_string(), "record", create_mode=CreateOrTruncate)
-  @fs.write_file(
-    engine_path,
-    "#!/bin/sh\nprintf '%s' 'show failed' >&2\nexit 7\n",
-    create_mode=CreateOrTruncate,
-  )
-  assert_eq(@process.run("chmod", ["+x", engine_path]), 0)
+  write_damaged_record(root, session)
   let manager = new_engine_manager(engine_path)
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
@@ -1277,7 +1117,7 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
       error if @async.is_being_cancelled() => raise error
       error => "\{error}"
     }
-    assert_true(detail.contains("show failed"))
+    assert_true(detail.contains("session record"))
     assert_true(
       manager.followers.get(session) is Some(current) &&
       physical_equal(current, follower),
@@ -1295,16 +1135,10 @@ async test "record stat failure is not mistaken for an empty final drain" {
   let dir = @fs.tmpdir(prefix="openseek-follower-stat-")
   let engine = dir + "/engine.sh"
   let root : @pathx.Absolute = @pathx.Path(dir + "/not-a-directory").resolve()
-  // Looking up the pinned record beneath a regular file deterministically
-  // raises ENOTDIR. That verification failure must complete Stop as failed
-  // and leave the actor installed, never masquerade as ENOENT.
+  // Opening the pinned record beneath a regular file deterministically raises
+  // ENOTDIR. That failure must complete Stop as failed and leave the actor
+  // installed, never masquerade as the ENOENT of a record never created.
   @fs.write_file(root.to_string(), "file", create_mode=CreateOrTruncate)
-  @fs.write_file(
-    engine,
-    "#!/bin/sh\nprintf '%s' 'show failed' >&2\nexit 7\n",
-    create_mode=CreateOrTruncate,
-  )
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
   let manager = new_engine_manager(engine)
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
@@ -1327,8 +1161,10 @@ async test "record stat failure is not mistaken for an empty final drain" {
       error if @async.is_being_cancelled() => raise error
       error => "\{error}"
     }
-    assert_true(detail.contains("show failed"))
-    assert_true(detail.contains("failed to verify session record"))
+    // The reader takes the record's lock first, so ENOTDIR surfaces there —
+    // still the failure this test is about, and still not the ENOENT that
+    // would prove no record was ever created.
+    assert_true(detail.contains("Not a directory"))
     assert_true(
       manager.followers.get("s-stat") is Some(current) &&
       physical_equal(current, follower),
@@ -1345,16 +1181,14 @@ async test "record stat failure is not mistaken for an empty final drain" {
 async test "root change retires the old follower before installing another" {
   let dir = @fs.tmpdir(prefix="openseek-follower-root-")
   let engine = dir + "/engine.sh"
-  @fs.write_file(
-    engine,
-    "#!/bin/sh\nprintf '%s' '{\"events\":[]}'\n",
-    create_mode=CreateOrTruncate,
-  )
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
   let manager = new_engine_manager(engine)
   let sink = EventSink(fn(_) { () })
   let root_a : @pathx.Absolute = @pathx.Path(dir + "/a").resolve()
   let root_b : @pathx.Absolute = @pathx.Path(dir + "/b").resolve()
+  // The same session id under two stores: installing the second follower
+  // drains the first, which needs a readable record of its own.
+  write_session_record(root_a, "s-root", [])
+  write_session_record(root_b, "s-root", [])
   @async.with_task_group(group => {
     ignore(
       ensure_follower(
@@ -1390,13 +1224,8 @@ async test "root change retires the old follower before installing another" {
 async test "one Load control message answers a bounded request batch" {
   let dir = @fs.tmpdir(prefix="openseek-follower-load-")
   let engine = dir + "/engine.sh"
-  let count = dir + "/count"
-  @fs.write_file(
-    engine,
-    "#!/bin/sh\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nprintf '%s' '{\"events\":[]}'\n",
-    create_mode=CreateOrTruncate,
-  )
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
+  let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
+  write_session_record(root, "s-load", [session_user_event(1, "hello")])
   let manager = new_engine_manager(engine)
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
@@ -1405,11 +1234,7 @@ async test "one Load control message answers a bounded request batch" {
         sink~,
         group~,
         manager~,
-        config=follower_test_config(
-          engine,
-          "s-load",
-          @pathx.Path(dir + "/root").resolve(),
-        ),
+        config=follower_test_config(engine, "s-load", root),
       ),
     )
     guard manager.followers.get("s-load") is Some(follower) else {
@@ -1423,10 +1248,18 @@ async test "one Load control message answers a bounded request batch" {
     }
     follower.load_pending = true
     assert_true(follower.inbox.try_put(Load))
+    // One scan answers the whole batch: every caller receives the very same
+    // snapshot value, not one read each.
+    let mut shared : @protocol.SessionDocument? = None
     for reply in replies {
-      assert_true(reply.get() is LoadOk(_))
+      guard reply.get() is LoadOk(document) else { fail("expected a snapshot") }
+      match shared {
+        None => shared = Some(document)
+        Some(first) => assert_true(physical_equal(first, document))
+      }
     }
-    assert_eq(@fs.read_file(count).text(), "2")
+    guard shared is Some(document) else { fail("expected a snapshot") }
+    assert_eq(session_max_sequence(document), 1)
     discard_follower_startup(manager, follower)
   })
   @fs.rmdir(dir, recursive=true)
@@ -1434,9 +1267,10 @@ async test "one Load control message answers a bounded request batch" {
 
 ///|
 fn follower_state_fixture(session : String) -> SessionFollower {
+  let root : @pathx.Absolute = @pathx.Path("/tmp/follower-state-fixture").resolve()
   {
     session,
-    root: @pathx.Path("/tmp/follower-state-fixture").resolve(),
+    root,
     inbox: Queue(kind=Blocking(3)),
     load_requests: Queue(kind=Blocking(1)),
     kick_pending: false,
@@ -1449,7 +1283,7 @@ fn follower_state_fixture(session : String) -> SessionFollower {
     stop_observers: 0,
     durable_finishes: [],
     watermark: 0,
-    consumed: None,
+    tail: Tail(root, session),
   }
 }
 
@@ -1604,12 +1438,14 @@ async test "identity-scoped stop never retires a successor" {
 async test "cancelling follower baseline removes its startup identity" {
   let dir = @fs.tmpdir(prefix="openseek-follower-cancel-")
   let engine = dir + "/engine.sh"
-  @fs.write_file(
-    engine,
-    "#!/bin/sh\nsleep 30\nprintf '%s' '{\"events\":[]}'\n",
-    create_mode=CreateOrTruncate,
+  let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
+  // A record long enough that its baseline spans many reads, so the cancel
+  // below lands inside one instead of racing a read that already finished.
+  write_session_record(
+    root,
+    "s-cancel",
+    Array::makei(12_000, index => session_user_event(index + 1, "line")),
   )
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
   let manager = new_engine_manager(engine)
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
@@ -1619,11 +1455,7 @@ async test "cancelling follower baseline removes its startup identity" {
           sink~,
           group~,
           manager~,
-          config=follower_test_config(
-            engine,
-            "s-cancel",
-            @pathx.Path(dir + "/root").resolve(),
-          ),
+          config=follower_test_config(engine, "s-cancel", root),
         ),
       )
     })

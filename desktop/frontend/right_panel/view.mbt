@@ -12,6 +12,19 @@ fn panel_view(input : Input, actions : Actions) -> @html.Html {
         }
         { tab, label, title: path.0, missing }
       }
+      GitDiff(diff~) => {
+        let short = if diff.commit.length() <= 8 {
+          diff.commit
+        } else {
+          diff.commit.view(end_offset=8).to_owned()
+        }
+        {
+          tab,
+          label: "\{@fileeditor.basename(diff.path)} (\{short})",
+          title: "\{diff.path.0} at \{diff.commit}",
+          missing: false,
+        }
+      }
       Browser(id~) => {
         let (label, title) = match @preview.page(input.preview, id) {
           Some(page) => {
@@ -70,6 +83,7 @@ fn panel_view(input : Input, actions : Actions) -> @html.Html {
       "mode-picker mode-search-picker"
     Some(FilePicker) => "mode-picker"
     Some(File(_)) => "mode-file"
+    Some(GitDiff(_)) => "mode-history"
   }
   let active_page : @preview.PageState = match
     @dock.active_browser(input.dock) {

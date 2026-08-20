@@ -412,7 +412,7 @@ async test "edit rejects identical replacement" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string and new_string are identical",
+      "error editing \{path}: old_string and new_string are identical\n\nfile context: > 1 | content > 2 |  > 3 | \nhint: check for line-ending mismatches (CRLF vs LF), full-width vs half-width characters, tab vs space, or a stray read-tool display separator (`|`) in old_string\n(old_string matches new_string exactly — the file at that location may already contain this text; re-read the file and adjust the edit)",
     )
     assert_true(output.is_error)
   })
@@ -471,7 +471,7 @@ async test "edit rejects missing match" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string not found from line 1",
+      "error editing \{path}: old_string not found from line 1\n\nfile context: > 1 | alpha > 2 |  > 3 | \nfirst difference at character 1: expected `b`, got `a`\nhint: check for line-ending mismatches (CRLF vs LF), full-width vs half-width characters, tab vs space, or a stray read-tool display separator (`|`) in old_string",
     )
     assert_true(output.is_error)
   })
@@ -493,10 +493,73 @@ async test "edit reports range for missing match" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string not found in line range 2-2",
+      "error editing \{path}: old_string not found in line range 2-2\n\nfile context:   1 | alpha > 2 | beta   3 | alpha   4 | \nfirst difference at character 1: expected `a`, got `b`\nhint: check for line-ending mismatches (CRLF vs LF), full-width vs half-width characters, tab vs space, or a stray read-tool display separator (`|`) in old_string",
     )
     assert_true(output.is_error)
     assert_eq(@fs.read_file(path).text(), "alpha\nbeta\nalpha\n")
+  })
+}
+
+///|
+async test "edit reports fuzzy candidate for tab vs space mismatch" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/fuzzy-tab.txt"
+    @vfs.FileSystem({ "fuzzy-tab.txt": "fn foo() {\n\treturn 42\n}\n" }).write_to(
+      dir,
+    )
+    let output = run_edit({
+      "path": path,
+      "old_string": "  return 42",
+      "new_string": "  return 0",
+      "start_line": 1,
+    })
+    // Exact match fails; fuzzy finds one candidate and reports it
+    assert_true(output.is_error)
+    assert_true(output.content.contains("whitespace-normalized candidate"))
+    assert_true(output.content.contains("return 42"))
+    // File unchanged
+    assert_eq(@fs.read_file(path).text(), "fn foo() {\n\treturn 42\n}\n")
+  })
+}
+
+///|
+async test "edit reports fuzzy candidate for CRLF vs LF in old_string" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/fuzzy-lineending.txt"
+    @vfs.FileSystem({ "fuzzy-lineending.txt": "a\nb\nc\n" }).write_to(dir)
+    let output = run_edit({
+      "path": path,
+      "old_string": "a\r\nb",
+      "new_string": "x\r\ny",
+      "start_line": 1,
+    })
+    // Exact match fails; fuzzy finds one candidate and reports it
+    assert_true(output.is_error)
+    assert_true(output.content.contains("whitespace-normalized candidate"))
+    assert_true(output.content.contains("a\nb"))
+    assert_eq(@fs.read_file(path).text(), "a\nb\nc\n")
+  })
+}
+
+///|
+async test "edit reports multiple fuzzy candidates when ambiguous" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/fuzzy-ambiguous.txt"
+    @vfs.FileSystem({ "fuzzy-ambiguous.txt": "x\ta\t1\ny  a  1\n" }).write_to(
+      dir,
+    )
+    let output = run_edit({
+      "path": path,
+      "old_string": "a 1",
+      "new_string": "b 2",
+      "start_line": 1,
+    })
+    // Exact match fails; fuzzy finds 2 candidates → report count
+    assert_true(output.is_error)
+    assert_true(
+      output.content.contains("whitespace-normalized candidates found"),
+    )
+    assert_true(@fs.read_file(path).text() == "x\ta\t1\ny  a  1\n")
   })
 }
 

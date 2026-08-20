@@ -14,12 +14,12 @@
 // two things a progress line needs: how many turns the child has taken and
 // what its last tool call was.
 //
-// Deliberately NOT the session follower. That actor spends a `sessions show`
-// subprocess and re-parses the whole document per scan, which is the right
-// price for canonical, ordered commits and the wrong one for a line that only
-// ever shows the newest fact; driving it by poll would pay O(history) every
-// second per running child. Nothing here is canonical: a missed line costs a
-// stale progress line until the next append, not a hole in a transcript.
+// Deliberately NOT the session follower. That actor tails the same shape of
+// file (`internal/session_record`), but it keeps the whole transcript in
+// memory, orders and broadcasts every commit, and answers `session.load` —
+// the right price for a canonical record, the wrong one for a line that only
+// ever shows the newest fact. Nothing here is canonical: a missed line costs
+// a stale progress line until the next append, not a hole in a transcript.
 
 ///|
 /// How often a probe re-checks its record. The child's appends do not reach
@@ -73,14 +73,6 @@ priv struct SubrunProbeState {
   /// from counting anything twice. The offset is an optimization; this is
   /// the correctness argument, and it holds however the file was replaced.
   mut watermark : Int
-}
-
-///|
-/// The record file a durable session's events are appended to. The layout is
-/// the store's (`<root>/sessions/<id>/openseek_session-<id>.jsonl`); the host
-/// reads it directly here rather than through the engine, which is the point.
-fn subrun_record_path(root : String, session : String) -> String {
-  "\{root}/sessions/\{session}/openseek_session-\{session}.jsonl"
 }
 
 ///|
@@ -273,14 +265,17 @@ fn requested_calls(payload : Map[String, Json]) -> Array[(String, String)] {
 /// when a sub-run is over — the brackets already say so, and a probe that
 /// guessed from the record could only guess late.
 pub async fn follow_progress(
-  root~ : String,
+  root~ : @pathx.Absolute,
   parent_session~ : String,
   id~ : String,
   publish~ : async (@protocol.SubrunProgressPayload) -> Unit,
 ) -> Unit {
   let session = "\{parent_session}-\{id}"
   let state = {
-    path: subrun_record_path(root, session),
+    // The store's layout belongs to `@session_record`, which tails the very
+    // same files for the canonical transcript; a reader that spelled the path
+    // itself could be left behind by a layout change the other one followed.
+    path: @session_record.record_path(root, session).to_string(),
     offset: 0,
     carry: b"",
     anchor: b"",

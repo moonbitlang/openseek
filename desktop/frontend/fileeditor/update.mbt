@@ -12,6 +12,7 @@ pub fn mount_cmds(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
     request_viewer_mount(dispatch),
     request_resize_handle_mount(),
     request_tree_resize_mount(),
+    request_git_graph_resize_mount(),
     request_viewer_remeasure(),
   ])
 }
@@ -1400,7 +1401,11 @@ const ChangesPollIntervalMilliseconds = 3000
 
 ///|
 fn explorer_visible(state : State, ctx : Ctx) -> Bool {
-  ctx.panel_open && (state.tree_open || ctx.active_file is None)
+  ctx.panel_open &&
+  (
+    state.tree_open ||
+    (ctx.active_file is None && ctx.active_history_diff is None)
+  )
 }
 
 ///|
@@ -1814,6 +1819,8 @@ pub fn sync(
         search: state.search.reset_checkout(),
         review_view_mode: state.review_view_mode,
         review_diff_layout: state.review_diff_layout,
+        changes_collapsed: state.changes_collapsed,
+        git_graph_collapsed: state.git_graph_collapsed,
         // Request tokens must outlive the per-conversation cache. Resetting
         // here would let a late A reply collide after switching A→B→A.
         changes_generation: if placement_identity_changed {
@@ -1831,6 +1838,13 @@ pub fn sync(
           state.file_link_generation
         },
         review_generation: state.review_generation,
+        git_graph_generation: if owner_changed || placement_identity_changed {
+          state.git_graph_generation + 1
+        } else {
+          state.git_graph_generation
+        },
+        git_commit_files_generation: state.git_commit_files_generation,
+        history_generation: state.history_generation,
         // Like filesystem request epochs, watcher identities must outlive the
         // per-conversation cache or an A→B→A cycle could reuse one.
         watch_generation: reroot_watch_generation,
@@ -1889,6 +1903,12 @@ pub fn sync(
       review_generation,
       review_recovery_pending,
       background_review_requests: Map([]),
+      git_graph: GitGraphIdle,
+      git_graph_generation: state.git_graph_generation + 1,
+      git_graph_selected: None,
+      git_commit_files: GitCommitFilesIdle,
+      history_docs: Map([]),
+      history_generation: state.history_generation + 1,
       placement: state.placement.reconcile(ctx.placement),
       request_epoch,
     }
@@ -1996,8 +2016,32 @@ pub fn sync(
   } else {
     (@cmd.none, state)
   }
+  let (graph_cmd, state) = if checkout_ready &&
+    changes_visible(state, ctx) &&
+    (
+      state.git_graph is GitGraphIdle ||
+      (
+        explorer_reopened &&
+        state.git_graph is (GitGraphReady(..) | GitGraphFailed(_))
+      )
+    ) {
+    refresh_git_graph(dispatch, state, ctx)
+  } else {
+    (@cmd.none, state)
+  }
+  // Parked strips restore historical tab identities without content. Load
+  // only the active immutable comparison; inactive tabs stay cheap until the
+  // user returns to them.
+  let (history_cmd, state) = if checkout_ready &&
+    ctx.panel_open &&
+    ctx.active_history_diff is Some(diff) &&
+    !state.history_docs.contains(history_diff_key(diff)) {
+    open_history_diff(dispatch, state, ctx, diff)
+  } else {
+    (@cmd.none, state)
+  }
   let pending_cmd = @cmd.batch([
-    retire_index_cmd, reroot_cmd, restore_cmd, changes_cmd,
+    retire_index_cmd, reroot_cmd, restore_cmd, changes_cmd, graph_cmd, history_cmd,
   ])
   // A closed panel re-roots (above) and keeps the watcher placed, but the tree
   // itself can wait for the reopen. Unresolved placement takes the same early
@@ -2047,6 +2091,13 @@ pub fn update(
     return match msg {
       ExplorerModeSelected(mode) =>
         (@cmd.none, { ..state, explorer_mode: mode })
+      ToggleChangesSection =>
+        (@cmd.none, { ..state, changes_collapsed: !state.changes_collapsed })
+      ToggleGitGraphSection =>
+        (
+          @cmd.none,
+          { ..state, git_graph_collapsed: !state.git_graph_collapsed },
+        )
       _ => (@cmd.none, state)
     }
   }
@@ -2103,12 +2154,15 @@ pub fn update(
       (command, { ..state, docs, review_view_mode: view_mode })
     }
     ToggleReviewDiffLayout => {
-      guard ctx.active_file is Some(path) &&
+      let review_ready = ctx.active_file is Some(path) &&
         state.docs.get(path) is Some(doc) &&
         doc.review is Some({ view_mode: ReviewUnifiedDiff, .. }) &&
-        doc.unified_diff_content() is Some(_) else {
-        return (@cmd.none, state)
-      }
+        doc.unified_diff_content() is Some(_)
+      let history_ready = ctx.active_history_diff is Some(diff) &&
+        state.history_docs.get(history_diff_key(diff)) is Some(history) &&
+        history.original.text() is Some(_) &&
+        history.modified.text() is Some(_)
+      guard review_ready || history_ready else { return (@cmd.none, state) }
       let review_diff_layout = match state.review_diff_layout {
         ReviewSideBySide => ReviewUnified
         ReviewUnified => ReviewSideBySide
@@ -2145,8 +2199,8 @@ pub fn update(
       match mode {
         ExplorerFiles => (@cmd.none, selected)
         ExplorerSearch => (@grep_search.focus_query_after_render(), selected)
-        ExplorerChanges =>
-          if already_selected ||
+        ExplorerChanges => {
+          let (changes_cmd, selected) = if already_selected ||
             selected.changes is ChangeListIdle ||
             selected.changes is ChangeListFailed(_) {
             // Clicking the already-selected Changes tab is a manual refresh.
@@ -2159,8 +2213,21 @@ pub fn update(
             // inventory live again, which is what declares the fallback poll.
             (@cmd.none, selected)
           }
+          let (history_cmd, selected) = if already_selected ||
+            selected.git_graph is GitGraphIdle ||
+            selected.git_graph is GitGraphFailed(_) {
+            refresh_git_graph(dispatch, selected, ctx)
+          } else {
+            (@cmd.none, selected)
+          }
+          (@cmd.batch([changes_cmd, history_cmd]), selected)
+        }
       }
     }
+    ToggleChangesSection =>
+      (@cmd.none, { ..state, changes_collapsed: !state.changes_collapsed })
+    ToggleGitGraphSection =>
+      (@cmd.none, { ..state, git_graph_collapsed: !state.git_graph_collapsed })
     RevealDirectory(path) =>
       if state.highlighted == Some(path) {
         (@cmd.none, { ..state, highlighted: None })
@@ -2316,6 +2383,132 @@ pub fn update(
       } else {
         (@cmd.none, state)
       }
+    GitHeadObserved(owner~, head~) =>
+      if state.owner != Some(owner) {
+        (@cmd.none, state)
+      } else {
+        let changed = state.git_actual_head_known &&
+          state.git_actual_head != head
+        let observed = {
+          ..state,
+          git_actual_head: head,
+          git_actual_head_known: true,
+        }
+        if changed &&
+          !(observed.git_graph is (GitGraphIdle | GitGraphLoading)) &&
+          changes_visible(observed, ctx) {
+          refresh_git_graph(dispatch, observed, ctx)
+        } else {
+          (@cmd.none, observed)
+        }
+      }
+    GitHistoryRefreshRequested => refresh_git_graph(dispatch, state, ctx)
+    GitHistoryLoadMoreRequested => load_more_git_history(dispatch, state, ctx)
+    GitHistoryLoaded(owner~, generation~, append~, reply~) =>
+      if state.owner != Some(owner) || state.git_graph_generation != generation {
+        (@cmd.none, state)
+      } else if append {
+        match state.git_graph {
+          GitGraphReady(repository~, commits~, loading_more=true, ..) => {
+            let combined = commits.copy()
+            for commit in reply.commits {
+              if !combined.any(existing => existing.id == commit.id) {
+                combined.push(commit)
+              }
+            }
+            (
+              @cmd.none,
+              {
+                ..state,
+                git_graph: GitGraphReady(
+                  repository~,
+                  snapshot=reply.snapshot,
+                  commits=combined,
+                  has_more=reply.has_more,
+                  loading_more=false,
+                  load_error=None,
+                ),
+              },
+            )
+          }
+          _ => (@cmd.none, state)
+        }
+      } else {
+        (
+          @cmd.none,
+          {
+            ..state,
+            git_graph: GitGraphReady(
+              repository=reply.repository,
+              snapshot=reply.snapshot,
+              commits=reply.commits,
+              has_more=reply.has_more,
+              loading_more=false,
+              load_error=None,
+            ),
+            git_graph_selected: None,
+            git_commit_files: GitCommitFilesIdle,
+          },
+        )
+      }
+    GitHistoryFailed(owner~, generation~, append~, message~) =>
+      if state.owner != Some(owner) || state.git_graph_generation != generation {
+        (@cmd.none, state)
+      } else if append {
+        match state.git_graph {
+          GitGraphReady(repository~, snapshot~, commits~, has_more~, ..) =>
+            (
+              @cmd.none,
+              {
+                ..state,
+                git_graph: GitGraphReady(
+                  repository~,
+                  snapshot~,
+                  commits~,
+                  has_more~,
+                  loading_more=false,
+                  load_error=Some(message),
+                ),
+              },
+            )
+          _ => (@cmd.none, state)
+        }
+      } else {
+        (@cmd.none, { ..state, git_graph: GitGraphFailed(message) })
+      }
+    GitCommitSelected(commit) => select_git_commit(dispatch, state, ctx, commit)
+    GitCommitChangesLoaded(owner~, generation~, reply~) =>
+      if state.owner == Some(owner) &&
+        state.git_commit_files_generation == generation &&
+        state.git_graph_selected == Some(reply.commit) &&
+        state.git_commit_files is GitCommitFilesLoading(commit=loading_commit) &&
+        loading_commit == reply.commit {
+        let commit = reply.commit
+        let parent = reply.parent
+        let files = reply.changes
+        (
+          @cmd.none,
+          {
+            ..state,
+            git_commit_files: GitCommitFilesReady(commit~, parent~, files~),
+          },
+        )
+      } else {
+        (@cmd.none, state)
+      }
+    GitCommitChangesFailed(owner~, generation~, commit~, message~) =>
+      if state.owner == Some(owner) &&
+        state.git_commit_files_generation == generation &&
+        state.git_graph_selected == Some(commit) {
+        (
+          @cmd.none,
+          { ..state, git_commit_files: GitCommitFilesFailed(commit~, message~) },
+        )
+      } else {
+        (@cmd.none, state)
+      }
+    GitCommitChangesRetry(commit) =>
+      retry_git_commit_changes(dispatch, state, ctx, commit)
     ChangesLoaded(owner~, generation~, repository~, head~, files~) =>
       if state.owner != Some(owner) || state.changes_generation != generation {
         (@cmd.none, state)
@@ -2531,6 +2724,7 @@ pub fn update(
     // Intercepted by the root so the dock can open/activate the file tab
     // before this package starts the paired working-tree + HEAD reads.
     ChangedFileSelected(_) => (@cmd.none, state)
+    HistoricalFileSelected(_) => (@cmd.none, state)
     // Intercepted by the root for the same reason: a navigation jump opens
     // a dock tab before the document loads.
     OpenNavigationLocation(..) => (@cmd.none, state)
@@ -2609,6 +2803,47 @@ pub fn update(
         @cmd.none
       }
       (cmd, { ..state, docs, background_review_requests })
+    }
+    HistoryBlobLoaded(owner~, key~, generation~, side~, blob~) => {
+      guard state.owner == Some(owner) &&
+        state.history_docs.get(key) is Some(doc) &&
+        doc.generation == generation else {
+        return (@cmd.none, state)
+      }
+      let settled = match blob {
+        @protocol.OriginalContent(content) => HistoryBlobContent(content)
+        @protocol.Missing => HistoryBlobMissing
+        @protocol.BinaryOriginal => HistoryBlobBinary
+        @protocol.OversizedOriginal => HistoryBlobOversized
+      }
+      let doc = match side {
+        HistoryOriginal => { ..doc, original: settled }
+        HistoryModified => { ..doc, modified: settled }
+      }
+      let history_docs = state.history_docs.copy()
+      history_docs[key] = doc
+      let cmd = if ctx.active_history_diff is Some(active) &&
+        history_diff_key(active) == key {
+        show_history_doc(owner, doc)
+      } else {
+        @cmd.none
+      }
+      (cmd, { ..state, history_docs, })
+    }
+    HistoryBlobFailed(owner~, key~, generation~, side~, message~) => {
+      guard state.owner == Some(owner) &&
+        state.history_docs.get(key) is Some(doc) &&
+        doc.generation == generation else {
+        return (@cmd.none, state)
+      }
+      let failed = HistoryBlobError(message)
+      let doc = match side {
+        HistoryOriginal => { ..doc, original: failed }
+        HistoryModified => { ..doc, modified: failed }
+      }
+      let history_docs = state.history_docs.copy()
+      history_docs[key] = doc
+      (@cmd.none, { ..state, history_docs, })
     }
     FileLoaded(
       owner~,
@@ -2782,7 +3017,13 @@ pub fn update(
         } else {
           (@cmd.none, state)
         }
-        (@cmd.batch([diagnostics, changes_cmd, index_cmd]), next)
+        let (graph_cmd, next) = if changes_visible(next, ctx) &&
+          !(next.git_graph is GitGraphIdle) {
+          refresh_git_graph(dispatch, next, ctx)
+        } else {
+          (@cmd.none, next)
+        }
+        (@cmd.batch([diagnostics, changes_cmd, graph_cmd, index_cmd]), next)
       } else {
         (@cmd.none, state)
       }
@@ -3197,6 +3438,8 @@ fn test_ctx() -> Ctx {
     panel_open: true,
     open_files: [],
     active_file: None,
+    open_history_diffs: [],
+    active_history_diff: None,
   }
 }
 

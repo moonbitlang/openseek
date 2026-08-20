@@ -693,7 +693,7 @@ test "remote endpoint catalog has one entry per command name" {
   // Draft open/close and the curated file/skills operations are host-owned
   // Codex endpoints. The archived-session delete endpoint added on main is
   // part of the same exact catalog, so keep this count aligned with both.
-  assert_eq(names.length(), 88)
+  assert_eq(names.length(), 90)
   assert_true(names.contains("codex.config.open"))
   assert_true(names.contains("codex.draft.open"))
   assert_true(names.contains("codex.draft.close"))
@@ -710,6 +710,8 @@ test "remote endpoint catalog has one entry per command name" {
   assert_true(names.contains("workspace.settings_set"))
   assert_true(names.contains("app.info"))
   assert_true(names.contains("git.changes"))
+  assert_true(names.contains("git.history"))
+  assert_true(names.contains("git.commit_changes"))
   assert_true(names.contains("git.pull_request"))
   assert_true(names.contains("git.original_file"))
   assert_true(names.contains("terminal.close"))

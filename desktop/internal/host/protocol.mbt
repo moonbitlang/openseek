@@ -108,6 +108,30 @@ type GitChangesReply = @protocol.GitChangesReply
 type GitChange = @protocol.GitChange
 
 ///|
+type GitHistoryPayload = @protocol.GitHistoryPayload
+
+///|
+type GitHistoryReply = @protocol.GitHistoryReply
+
+///|
+type GitHistorySnapshot = @protocol.GitHistorySnapshot
+
+///|
+type GitHistoryRef = @protocol.GitHistoryRef
+
+///|
+type GitHistoryCommit = @protocol.GitHistoryCommit
+
+///|
+type GitCommitChangesPayload = @protocol.GitCommitChangesPayload
+
+///|
+type GitCommitChangesReply = @protocol.GitCommitChangesReply
+
+///|
+type GitHistoricalChange = @protocol.GitHistoricalChange
+
+///|
 /// `git.original_file` lazily reads a workspace-relative path from `HEAD` for
 /// quick diff after the user selects one change. Rename/copy callers pass the
 /// change row's `original_path`; other callers pass its current `path`.

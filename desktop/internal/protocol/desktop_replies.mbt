@@ -837,6 +837,60 @@ pub(all) struct GitChangesReply {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// One named ref selected for the Review graph. `kind` is `current`,
+/// `upstream`, `base`, or `head`; revisions are always full commit identities.
+pub(all) struct GitHistoryRef {
+  name : String
+  revision : String
+  kind : String
+} derive(Debug, Eq)
+
+///|
+/// The immutable ref selection shared by every page of one graph read.
+pub(all) struct GitHistorySnapshot {
+  head : String?
+  branch : String?
+  refs : Array[GitHistoryRef]
+  tips : Array[String]
+} derive(Debug, Eq)
+
+///|
+/// One commit row. Parent identities are sufficient for the frontend to draw
+/// the graph lanes without asking Git for presentation-specific topology.
+pub(all) struct GitHistoryCommit {
+  id : String
+  parent_ids : Array[String]
+  subject : String
+  author : String
+  authored_at : String
+} derive(Debug, Eq)
+
+///|
+pub(all) struct GitHistoryReply {
+  repository : Bool
+  snapshot : GitHistorySnapshot
+  commits : Array[GitHistoryCommit]
+  has_more : Bool
+} derive(Debug, Eq)
+
+///|
+/// One historical path change. Status and tree-object kind stay independent:
+/// a renamed symlink is still a rename, while `kind` keeps it out of text Diff.
+pub(all) struct GitHistoricalChange {
+  path : String
+  original_path : String?
+  status : String
+  kind : String
+} derive(Debug, Eq)
+
+///|
+pub(all) struct GitCommitChangesReply {
+  commit : String
+  parent : String?
+  changes : Array[GitHistoricalChange]
+} derive(Debug, Eq)
+
+///|
 /// One path's comparison blob for quick diff. `Missing` is the legitimate
 /// baseline for an added/untracked file or an unborn `HEAD`; withheld blobs
 /// mirror the ordinary file reader's binary and one-megabyte policies.

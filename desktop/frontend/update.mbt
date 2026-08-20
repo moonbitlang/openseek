@@ -804,7 +804,7 @@ fn reveal_local_directory(
 ) -> (@cmd.Cmd, Model) {
   let dock = match model.dock.active {
     Some(File(_)) | Some(FilePicker) => model.dock
-    None | Some(Browser(_)) => @dock.open_picker(model.dock)
+    None | Some(Browser(_)) | Some(GitDiff(_)) => @dock.open_picker(model.dock)
   }
   let model = {
     ..model,
@@ -1247,7 +1247,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     placement => placement
   }
   let file_body_visible = match model.dock.active {
-    Some(File(_)) | Some(FilePicker) => true
+    Some(File(_)) | Some(GitDiff(_)) | Some(FilePicker) => true
     None | Some(Browser(_)) => false
   }
   {
@@ -1275,6 +1275,8 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     (model.screen is Codex || (model.screen is Chat && file_body_visible)),
     open_files: @dock.file_paths(model.dock),
     active_file: @dock.active_file(model.dock),
+    open_history_diffs: @dock.history_diffs(model.dock),
+    active_history_diff: @dock.active_history_diff(model.dock),
   }
 }
 
@@ -2278,6 +2280,24 @@ fn update_msg(
         file_ctx(model),
         change,
         had_active~,
+      )
+      (cmd, { ..model, file_panel: panel })
+    }
+    // Historical rows open immutable commit/path identities rather than
+    // joining the ordinary filesystem tab projection.
+    FileEditor(HistoricalFileSelected(diff)) => {
+      let placement = file_ctx(model).placement
+      guard placement is Some(value) && value.is_ready() else {
+        return (@cmd.none, model)
+      }
+      let model = model.begin_editor_navigation()
+      let dock = @dock.open_history_diff(model.dock, diff)
+      let model = { ..model, dock, }
+      let (cmd, panel) = @fileeditor.open_history_diff(
+        dispatch.map(msg => FileEditor(msg)),
+        model.file_panel,
+        file_ctx(model),
+        diff,
       )
       (cmd, { ..model, file_panel: panel })
     }
@@ -4005,6 +4025,19 @@ fn update_msg(
               )
               cmds.push(cmd)
               (@cmd.batch(cmds), { ..model, file_panel: panel })
+            } else if @dock.active_history_diff(dock) is Some(diff) {
+              let cmds : Array[@cmd.Cmd] = []
+              if @dock.active_history_diff(before) is None {
+                cmds.push(@fileeditor.request_viewer_remeasure())
+              }
+              let (cmd, panel) = @fileeditor.activate_history_diff(
+                femit,
+                model.file_panel,
+                file_ctx(model),
+                diff,
+              )
+              cmds.push(cmd)
+              (@cmd.batch(cmds), { ..model, file_panel: panel })
             } else {
               (@cmd.none, model)
             }
@@ -4020,13 +4053,14 @@ fn update_msg(
             // close_document (which also drops the document), the other
             // kinds activate directly.
             let next_file = @dock.active_file(dock)
+            let next_history = @dock.active_history_diff(dock)
             let was_active = before.active == Some(tab)
             // Closing any file tab is newer than a pending transcript link:
             // even an inactive tab must stay closed when that link's delayed
             // host lookup returns. Other tab kinds compete only when closing
             // them changes the active destination.
             let closes_file = match tab {
-              File(_) => true
+              File(_) | GitDiff(_) => true
               _ => false
             }
             let model = if closes_file ||
@@ -4045,7 +4079,45 @@ fn update_msg(
                   next=next_file,
                   was_active~,
                 )
-                (cmd, { ..model, file_panel: panel })
+                if was_active && next_history is Some(diff) {
+                  let (history_cmd, panel) = @fileeditor.activate_history_diff(
+                    femit,
+                    panel,
+                    file_ctx(model),
+                    diff,
+                  )
+                  (
+                    @cmd.batch([cmd, history_cmd]),
+                    { ..model, file_panel: panel },
+                  )
+                } else {
+                  (cmd, { ..model, file_panel: panel })
+                }
+              }
+              GitDiff(diff~) => {
+                let panel = @fileeditor.close_history_diff(
+                  model.file_panel,
+                  diff,
+                )
+                if was_active && next_file is Some(path) {
+                  let (cmd, panel) = @fileeditor.activate(
+                    femit,
+                    panel,
+                    file_ctx(model),
+                    path,
+                  )
+                  (cmd, { ..model, file_panel: panel })
+                } else if was_active && next_history is Some(next) {
+                  let (cmd, panel) = @fileeditor.activate_history_diff(
+                    femit,
+                    panel,
+                    file_ctx(model),
+                    next,
+                  )
+                  (cmd, { ..model, file_panel: panel })
+                } else {
+                  (@cmd.none, { ..model, file_panel: panel })
+                }
               }
               Browser(id~) => {
                 let cmds : Array[@cmd.Cmd] = [browser_close_view(dispatch, id)]
@@ -4074,6 +4146,16 @@ fn update_msg(
                   )
                   cmds.push(cmd)
                   (@cmd.batch(cmds), { ..model, file_panel: panel })
+                } else if was_active && next_history is Some(diff) {
+                  cmds.push(@fileeditor.request_viewer_remeasure())
+                  let (cmd, panel) = @fileeditor.activate_history_diff(
+                    femit,
+                    model.file_panel,
+                    file_ctx(model),
+                    diff,
+                  )
+                  cmds.push(cmd)
+                  (@cmd.batch(cmds), { ..model, file_panel: panel })
                 } else {
                   (@cmd.batch(cmds), model)
                 }
@@ -4085,6 +4167,14 @@ fn update_msg(
                     model.file_panel,
                     file_ctx(model),
                     path,
+                  )
+                  (cmd, { ..model, file_panel: panel })
+                } else if was_active && next_history is Some(diff) {
+                  let (cmd, panel) = @fileeditor.activate_history_diff(
+                    femit,
+                    model.file_panel,
+                    file_ctx(model),
+                    diff,
                   )
                   (cmd, { ..model, file_panel: panel })
                 } else {

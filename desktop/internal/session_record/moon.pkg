@@ -1,16 +1,21 @@
 import {
   "openseek_desktop/internal/pathx",
   "openseek_desktop/internal/protocol",
-  "openseek_desktop/internal/session_record",
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/core/json",
+  "moonbitlang/async/os_error",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
 }
 
 import {
   "openseek_desktop/internal/fsx",
-} for "wbtest"
+  "openseek_desktop/internal/pathx",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+} for "test"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 

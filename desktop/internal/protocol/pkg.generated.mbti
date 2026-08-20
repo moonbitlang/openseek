@@ -875,6 +875,22 @@ pub fn GitChecks::not_equal(Self, Self) -> Bool
 pub fn GitChecks::to_json(Self) -> Json
 pub fn GitChecks::to_repr(Self) -> @debug.Repr
 
+pub(all) struct GitCommitChangesPayload {
+  session : String
+  workspace : String?
+  commit : String
+} derive(Eq, @debug.Debug)
+pub impl ToJson for GitCommitChangesPayload
+pub impl @json.FromJson for GitCommitChangesPayload
+
+pub(all) struct GitCommitChangesReply {
+  commit : String
+  parent : String?
+  changes : Array[GitHistoricalChange]
+} derive(Eq, @debug.Debug)
+pub impl ToJson for GitCommitChangesReply
+pub impl @json.FromJson for GitCommitChangesReply
+
 pub(all) struct GitDiffStat {
   added : Int
   removed : Int
@@ -887,6 +903,61 @@ pub fn GitDiffStat::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDeco
 pub fn GitDiffStat::not_equal(Self, Self) -> Bool
 pub fn GitDiffStat::to_json(Self) -> Json
 pub fn GitDiffStat::to_repr(Self) -> @debug.Repr
+
+pub(all) struct GitHistoricalChange {
+  path : String
+  original_path : String?
+  status : String
+  kind : String
+} derive(Eq, @debug.Debug)
+pub impl ToJson for GitHistoricalChange
+pub impl @json.FromJson for GitHistoricalChange
+
+pub(all) struct GitHistoryCommit {
+  id : String
+  parent_ids : Array[String]
+  subject : String
+  author : String
+  authored_at : String
+} derive(Eq, @debug.Debug)
+pub impl ToJson for GitHistoryCommit
+pub impl @json.FromJson for GitHistoryCommit
+
+pub(all) struct GitHistoryPayload {
+  session : String
+  workspace : String?
+  snapshot : GitHistorySnapshot?
+  skip : Int
+  limit : Int
+} derive(Eq, @debug.Debug)
+pub impl ToJson for GitHistoryPayload
+pub impl @json.FromJson for GitHistoryPayload
+
+pub(all) struct GitHistoryRef {
+  name : String
+  revision : String
+  kind : String
+} derive(Eq, @debug.Debug)
+pub impl ToJson for GitHistoryRef
+pub impl @json.FromJson for GitHistoryRef
+
+pub(all) struct GitHistoryReply {
+  repository : Bool
+  snapshot : GitHistorySnapshot
+  commits : Array[GitHistoryCommit]
+  has_more : Bool
+} derive(Eq, @debug.Debug)
+pub impl ToJson for GitHistoryReply
+pub impl @json.FromJson for GitHistoryReply
+
+pub(all) struct GitHistorySnapshot {
+  head : String?
+  branch : String?
+  refs : Array[GitHistoryRef]
+  tips : Array[String]
+} derive(Eq, @debug.Debug)
+pub impl ToJson for GitHistorySnapshot
+pub impl @json.FromJson for GitHistorySnapshot
 
 pub(all) struct GitOriginalFilePayload {
   session : String

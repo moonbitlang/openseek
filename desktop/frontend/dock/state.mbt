@@ -7,11 +7,26 @@
 // fileeditor package's document table.
 
 ///|
+/// Immutable identity and tree coordinates for one historical comparison.
+/// The surrounding strip is already scoped to a conversation owner, so the
+/// commit/path pair distinguishes tabs without leaking filesystem paths into
+/// the ordinary open-file projection.
+pub(all) struct GitHistoryDiff {
+  commit : String
+  parent : String?
+  path : @pathx.Relative
+  original_path : @pathx.Relative?
+  status : String
+  kind : String
+} derive(Eq, Debug)
+
+///|
 /// One strip entry. Adding a tab kind later (subagent viewer, review pane)
 /// is a new variant plus its body view — the strip machine itself does not
 /// change.
 pub(all) enum DockTab {
   File(path~ : @pathx.Relative)
+  GitDiff(diff~ : GitHistoryDiff)
   // A browser page, rendered by a host-owned native web contents view; the
   // id keys the `preview` package's page state and the host's view. Page
   // ids are global, so a parked strip's tabs keep naming their pages.
@@ -69,6 +84,25 @@ pub fn file_paths(state : State) -> Array[@pathx.Relative] {
 pub fn active_file(state : State) -> @pathx.Relative? {
   match state.active {
     Some(File(path~)) => Some(path)
+    _ => None
+  }
+}
+
+///|
+pub fn history_diffs(state : State) -> Array[GitHistoryDiff] {
+  let diffs : Array[GitHistoryDiff] = []
+  for tab in state.tabs {
+    if tab is GitDiff(diff~) {
+      diffs.push(diff)
+    }
+  }
+  diffs
+}
+
+///|
+pub fn active_history_diff(state : State) -> GitHistoryDiff? {
+  match state.active {
+    Some(GitDiff(diff~)) => Some(diff)
     _ => None
   }
 }

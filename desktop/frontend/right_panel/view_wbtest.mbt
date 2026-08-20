@@ -33,6 +33,8 @@ fn test_ctx() -> @fileeditor.Ctx {
     panel_open: true,
     open_files: [],
     active_file: None,
+    open_history_diffs: [],
+    active_history_diff: None,
   }
 }
 

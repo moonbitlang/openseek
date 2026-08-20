@@ -443,77 +443,6 @@ async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String 
 }
 
 ///|
-/// A `sessions show` must never pin the follower actor. Unlike the generic
-/// one-shot helper, this path gives the child a hard cancellation handler;
-/// timing out the structured task group therefore kills and reaps the
-/// command before returning, so the next scan can spawn normally.
-const SessionShowTimeoutMs = 10000
-
-///|
-async fn session_show_output(
-  manager : EngineManager,
-  session : String,
-  root : @pathx.Absolute,
-) -> (Int, String, String) {
-  let engine = manager.engine
-  let child_stdin = prepare_engine_stdin(manager.runtime_dir, engine)
-  let (stdout_reader, child_stdout) = @process.read_from_process()
-  let (stderr_reader, child_stderr) = @process.read_from_process()
-  @async.with_task_group(group => {
-    let process = @process.spawn(
-      group,
-      engine,
-      ["sessions", "show", session, "--session-root", root.to_string()],
-      extra_env={ "OPENSEEK_DIR": "." },
-      inherit_env=true,
-      stdin=child_stdin,
-      stdout=child_stdout,
-      stderr=child_stderr,
-      no_console_window=true,
-      cancel_handler=@process.hard_cancel(),
-      no_wait=false,
-    )
-    let stdout = group.spawn(() => {
-      defer stdout_reader.close()
-      stdout_reader.read_all().text()
-    })
-    let stderr = group.spawn(() => {
-      defer stderr_reader.close()
-      stderr_reader.read_all().text()
-    })
-    (process.wait(), stdout.wait(), stderr.wait())
-  })
-}
-
-///|
-async fn session_show_stdout(
-  manager : EngineManager,
-  session : String,
-  root : @pathx.Absolute,
-  timeout_ms? : Int = SessionShowTimeoutMs,
-) -> String {
-  let (code, stdout, stderr) = @async.with_timeout(timeout_ms, () => {
-    session_show_output(manager, session, root)
-  }) catch {
-    error if @async.is_being_cancelled() => raise error
-    @async.TimeoutError =>
-      raise EngineError("session read timed out after \{timeout_ms}ms")
-    error => raise EngineError("failed to run engine: \{error}")
-  }
-  if code != 0 {
-    let detail = stderr.trim().to_owned()
-    raise EngineError(
-      if detail.is_empty() {
-        "engine exited with code \{code}"
-      } else {
-        detail
-      },
-    )
-  }
-  stdout
-}
-
-///|
 /// The sidebar's conversations, one group per registered workspace's
 /// in-project store, in registration order. A group whose listing fails
 /// reports the failure in its `error` field rather than failing the whole
@@ -611,15 +540,9 @@ pub async fn load_session(
       "no durable record for this conversation in any attached workspace",
     )
   }
-  let output = session_show_stdout(manager, session, root) catch {
-    EngineError(detail) => raise EngineError("session load failed: " + detail)
-    error => raise error
-  }
-  let json = @json.parse(output) catch {
-    _ => raise EngineError("engine returned a malformed session")
-  }
-  let document : @protocol.SessionDocument = @json.from_json(json) catch {
-    _ => raise EngineError("engine returned a malformed session")
+  let document = @session_record.read_document(root, session) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise EngineError("session load failed: \{error}")
   }
   { session: document, watermark: Some(session_max_sequence(document)) }
 }
@@ -667,16 +590,9 @@ pub async fn load_archived_session(
     }
     raise EngineError("no archived record for this conversation")
   }
-  let output = session_show_stdout(manager, session, root) catch {
-    EngineError(detail) =>
-      raise EngineError("archived session load failed: " + detail)
-    error => raise error
-  }
-  let json = @json.parse(output) catch {
-    _ => raise EngineError("engine returned a malformed archived session")
-  }
-  let document : @protocol.SessionDocument = @json.from_json(json) catch {
-    _ => raise EngineError("engine returned a malformed archived session")
+  let document = @session_record.read_document(root, session) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise EngineError("archived session load failed: \{error}")
   }
   { session: document, watermark: Some(session_max_sequence(document)) }
 }
@@ -697,9 +613,9 @@ async fn follower_snapshot(
       return None
     }
     if follower.stopping {
-      // Do not bypass an in-flight final scan with a direct `sessions show`.
-      // The hard scan timeout bounds this wait; success retires the actor,
-      // failure reactivates it for the load to retry through the actor.
+      // Do not bypass an in-flight final scan with a direct read. Success
+      // retires the actor; failure reactivates it, and the load then retries
+      // through the actor.
       @async.sleep(10)
       continue
     }
@@ -1266,10 +1182,10 @@ async test "named session retries after its first prompt creates no record" {
     runtime.join("toolchains/moonbit/macos-arm64"),
     version="0.10.0-test",
   )
-  // `sessions show` reports the missing first-turn record. The first serve
-  // process creates only the session directory, never reads stdin, and dies
-  // with the large prompt's JSONL frame still partial. The successor accepts
-  // a normal prompt and finishes it.
+  // No first-turn record exists to read. The first serve process creates only
+  // the session directory, never reads stdin, and dies with the large prompt's
+  // JSONL frame still partial. The successor accepts a normal prompt and
+  // finishes it.
   @fs.write_file(
     engine.to_string(),
     "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then\n  printf '%s\\n' 'session record does not exist' >&2\n  exit 7\nfi\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  mkdir -p '\{store}/sessions/\{session}'\n  printf '' > '\{first_ready}'\n  exec sleep 1\nfi\nwhile IFS= read -r line; do\n  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
@@ -1321,7 +1237,7 @@ async test "named session retries after its first prompt creates no record" {
     )
     assert_true(@fsx.is_dir(store.join("sessions").join(session)))
     assert_false(
-      @fsx.exists(Path(session_store_file(store.resolve(), session))),
+      @fsx.exists(@session_record.record_path(store.resolve(), session)),
     )
     let first_run_id = first.run_id
     assert_true(
@@ -1366,56 +1282,28 @@ async test "named session retries after its first prompt creates no record" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "timed out sessions show is killed and the next read can run" {
-  let dir = @fs.tmpdir(prefix="openseek-session-timeout-")
-  let engine = dir + "/engine.sh"
-  let fast = dir + "/fast"
-  @fs.write_file(
-    engine,
-    "#!/bin/sh\nif [ ! -f '\{fast}' ]; then while :; do :; done; fi\nprintf '%s' '{\"events\":[]}'\n",
-    create_mode=CreateOrTruncate,
-  )
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
-  let manager = new_engine_manager(engine)
-  let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
-  let detail = try {
-    ignore(session_show_stdout(manager, "s-timeout", root, timeout_ms=50))
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
-  assert_true(detail.contains("timed out"))
-  @fs.write_file(fast, "", create_mode=CreateOrTruncate)
-  assert_eq(
-    session_show_stdout(manager, "s-timeout", root, timeout_ms=1000),
-    "{\"events\":[]}",
-  )
-  @fs.rmdir(dir, recursive=true)
-}
-
-///|
-#cfg(not(platform="windows"))
 async test "session load preserves a future item without hiding known events" {
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let dir = @fs.tmpdir(prefix="openseek-load-future-item-")
-  let engine = dir + "/engine.sh"
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir + "/global")
   defer restore_session_root_env(previous)
   // A hint-less load resolves the store from where the record actually
   // lives, so the record goes in an attached workspace's own store.
   ignore(attach_run_workspace(Path(dir)))
-  @fsx.ensure_dir(Path(dir + "/ws/.openseek/sessions/s-future"))
-  @fs.write_file(
-    engine,
-    "#!/bin/sh\nprintf '%s' '{\"events\":[{\"sequence\":1,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"question\"}}},{\"sequence\":2,\"item\":{\"kind\":\"future_item\",\"payload\":{\"value\":42}}},{\"sequence\":3,\"item\":{\"kind\":\"assistant\",\"payload\":{\"content\":\"answer\"}}}]}'\n",
-    create_mode=CreateOrTruncate,
+  write_session_record(
+    @pathx.Path(dir + "/ws/.openseek").resolve(),
+    "s-future",
+    [
+      session_user_event(1, "question"),
+      "{\"sequence\":2,\"item\":{\"kind\":\"future_item\",\"payload\":{\"value\":42}}}",
+      "{\"sequence\":3,\"item\":{\"kind\":\"assistant\",\"payload\":{\"content\":\"answer\"}}}",
+    ],
   )
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
-  let reply = load_session(new_engine_manager(engine), {
+  // The engine path is never resolved: an idle conversation's transcript is
+  // read in this process.
+  let reply = load_session(new_engine_manager(dir + "/engine.sh"), {
     session: "s-future",
     workspace: None,
   })
@@ -1435,21 +1323,21 @@ async test "archived session load reads without restoring the record" {
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("OPENSEEK_SESSION_ROOT")
   let dir = @fs.tmpdir(prefix="openseek-load-archived-")
-  let engine = dir + "/engine.sh"
   @sys.set_env_var("OPENSEEK_SESSION_ROOT", dir + "/global")
   defer restore_session_root_env(previous)
   // A hint-less load resolves the store from where the record actually
   // lives, so the record goes in an attached workspace's own store.
   ignore(attach_run_workspace(Path(dir)))
   let store = dir + "/ws/.openseek"
-  @fsx.ensure_dir(Path(store + "/archived/sessions/s-archived"))
-  @fs.write_file(
-    engine,
-    "#!/bin/sh\nprintf '%s' '{\"events\":[{\"sequence\":1,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"question\"}}},{\"sequence\":2,\"item\":{\"kind\":\"assistant\",\"payload\":{\"content\":\"answer\"}}}]}'\n",
-    create_mode=CreateOrTruncate,
+  write_session_record(
+    @pathx.Path(store + "/archived").resolve(),
+    "s-archived",
+    [
+      session_user_event(1, "question"),
+      "{\"sequence\":2,\"item\":{\"kind\":\"assistant\",\"payload\":{\"content\":\"answer\"}}}",
+    ],
   )
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
-  let manager = new_engine_manager(engine)
+  let manager = new_engine_manager(dir + "/engine.sh")
   let reply = load_archived_session(manager, {
     session: "s-archived",
     workspace: None,

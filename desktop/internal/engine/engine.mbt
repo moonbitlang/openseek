@@ -1182,8 +1182,8 @@ fn open_run_engine(manager : EngineManager, run_id? : String) -> ServeEngine? {
 /// An empty file redirected into one-shot engine runs as stdin. It lives in
 /// the per-user runtime dir, not beside the engine binary: the bundle a
 /// packaged engine sits in is read-only (App Translocation even enforces
-/// it), so writing next to the executable would fail every
-/// `sessions list` / `sessions show` in a packaged app.
+/// it), so writing next to the executable would fail every `sessions list` in
+/// a packaged app.
 async fn prepare_engine_stdin(
   runtime_dir : @pathx.Path?,
   engine : @pathx.Path,
@@ -1727,7 +1727,7 @@ async fn ServeEngine::run(
               if engine.session_root is Some(root) && probes.get(id) is None {
                 probes[id] = group.spawn(no_wait=true, allow_failure=true, () => {
                   @subrun.follow_progress(
-                    root=root.to_string(),
+                    root~,
                     parent_session=engine.session_key,
                     id~,
                     publish=payload => emit(sink, SubrunProgress(payload)),

@@ -551,6 +551,18 @@ pub let git_changes : Command[
 ] = Command("git.changes")
 
 ///|
+pub let git_history : Command[
+  @protocol.GitHistoryPayload,
+  @protocol.GitHistoryReply,
+] = Command("git.history")
+
+///|
+pub let git_commit_changes : Command[
+  @protocol.GitCommitChangesPayload,
+  @protocol.GitCommitChangesReply,
+] = Command("git.commit_changes")
+
+///|
 pub let git_original_file : Command[
   @protocol.GitOriginalFilePayload,
   @protocol.GitOriginalFileReply,

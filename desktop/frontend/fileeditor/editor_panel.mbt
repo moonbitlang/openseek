@@ -23,6 +23,12 @@ const DiffViewerHostId = "unified-diff-host"
 const OriginalRevisionScheme = "openseek-review-original"
 
 ///|
+/// Both sides of a historical comparison are immutable Git objects. Keeping a
+/// separate inert scheme ensures current-checkout language providers never
+/// answer hover/navigation requests for either revision.
+const HistoryRevisionScheme = "openseek-git-history"
+
+///|
 /// The `MarkerService` owner for the language server's diagnostics — Monaco
 /// keys markers by owner so one source's set replaces cleanly.
 const DiagnosticsOwner = "moon-lsp"
@@ -470,6 +476,99 @@ fn show_diff_comparison(
   if previous is Some(previous) {
     retire_diff_comparison_models(previous)
   }
+}
+
+///|
+fn history_revision_model_uri(
+  owner : @interop.ConversationKey,
+  revision : String,
+  side : String,
+  path : @pathx.Relative,
+) -> @common.Uri? {
+  let uri = @common.Uri::from(
+    scheme=HistoryRevisionScheme,
+    authority=owner.channel.uri_authority(),
+    path="/\{revision}/\{side}/\{path.0}",
+  ) catch {
+    _ => return None
+  }
+  Some(uri)
+}
+
+///|
+/// Install a historical pair directly into the permanent DiffViewer. Neither
+/// model represents the working tree, so feedback, quick diff, diagnostics,
+/// and language navigation stay disabled on both sides.
+fn show_history_diff_in_viewer(
+  owner : @interop.ConversationKey,
+  diff : @dock.GitHistoryDiff,
+  original_content : String,
+  modified_content : String,
+) -> @cmd.Cmd {
+  let show = @cmd.custom_cmd(_scheduler => {
+    guard viewer_state.diff_viewer is Some(diff_viewer) &&
+      viewer_state.services is Some(services) else {
+      return
+    }
+    let original_revision = diff.parent.unwrap_or("empty-tree")
+    let original_path = diff.original_path.unwrap_or(diff.path)
+    guard history_revision_model_uri(
+        owner, original_revision, "original", original_path,
+      )
+      is Some(original_uri) &&
+      history_revision_model_uri(owner, diff.commit, "modified", diff.path)
+      is Some(modified_uri) else {
+      return
+    }
+    if diff_viewer.get_model() is Some(current) &&
+      current.original.uri.to_string() == original_uri.to_string() &&
+      current.modified.uri.to_string() == modified_uri.to_string() &&
+      current.original.get_value() == original_content &&
+      current.modified.get_value() == modified_content {
+      services.feedback.set_feedback_enabled(original_uri, false)
+      services.feedback.set_feedback_enabled(modified_uri, false)
+      return
+    }
+    let previous = diff_viewer.get_model()
+    if previous is Some(previous) {
+      services.feedback.set_feedback_enabled(previous.original.uri, false)
+      services.feedback.set_feedback_enabled(previous.modified.uri, false)
+      services.feedback.clear_feedback(previous.original.uri)
+      services.feedback.clear_feedback(previous.modified.uri)
+    }
+    viewer_state.version = viewer_state.version + 1
+    let version = viewer_state.version
+    let name = basename(diff.path)
+    let language = language_id(name)
+    let original_model = @model.TextModel(
+      original_uri,
+      name,
+      language,
+      version,
+      "history-original-v" + version.to_string(),
+      original_content,
+    )
+    let modified_model = @model.TextModel(
+      modified_uri,
+      name,
+      language,
+      version,
+      "history-modified-v" + version.to_string(),
+      modified_content,
+    )
+    diff_viewer.set_model(
+      Some(@viewer.DiffEditorModel(original_model, modified_model)),
+    )
+    services.feedback.set_feedback_enabled(original_uri, false)
+    services.feedback.set_feedback_enabled(modified_uri, false)
+    viewer_state.absolute = None
+    viewer_state.relative = None
+    viewer_state.navigation = None
+    if previous is Some(previous) {
+      retire_diff_comparison_models(previous)
+    }
+  })
+  @cmd.batch([show, request_viewer_remeasure()])
 }
 
 ///|

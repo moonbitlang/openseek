@@ -755,3 +755,254 @@ test "worktree replies omit absent owners and reject ambiguous ownership" {
   }
   assert_true(malformed_present)
 }
+
+///|
+test "Git history and commit-change protocol round-trip immutable identities" {
+  let snapshot : @protocol.GitHistorySnapshot = {
+    head: Some("1111111111111111111111111111111111111111"),
+    branch: Some("feature/graph"),
+    refs: [
+      {
+        name: "feature/graph",
+        revision: "1111111111111111111111111111111111111111",
+        kind: "current",
+      },
+    ],
+    tips: ["1111111111111111111111111111111111111111"],
+  }
+  let history : @protocol.GitHistoryReply = {
+    repository: true,
+    snapshot,
+    commits: [
+      {
+        id: "1111111111111111111111111111111111111111",
+        parent_ids: ["0000000000000000000000000000000000000000"],
+        subject: "Add graph",
+        author: "OpenSeek",
+        authored_at: "2026-08-19T10:00:00+08:00",
+      },
+    ],
+    has_more: true,
+  }
+  let decoded : @protocol.GitHistoryReply = @json.from_json(history.to_json())
+  assert_eq(decoded, history)
+  let payload : @protocol.GitHistoryPayload = {
+    session: "s1",
+    workspace: Some("/workspace"),
+    snapshot: Some(snapshot),
+    skip: 50,
+    limit: 50,
+  }
+  let decoded_payload : @protocol.GitHistoryPayload = @json.from_json(
+    payload.to_json(),
+  )
+  assert_eq(decoded_payload, payload)
+  let commit_payload : @protocol.GitCommitChangesPayload = {
+    session: "s1",
+    workspace: Some("/workspace"),
+    commit: "1111111111111111111111111111111111111111",
+  }
+  let decoded_commit_payload : @protocol.GitCommitChangesPayload = @json.from_json(
+    commit_payload.to_json(),
+  )
+  assert_eq(decoded_commit_payload, commit_payload)
+  let changes : @protocol.GitCommitChangesReply = {
+    commit: "1111111111111111111111111111111111111111",
+    parent: Some("0000000000000000000000000000000000000000"),
+    changes: [
+      {
+        path: "src/new.mbt",
+        original_path: Some("src/old.mbt"),
+        status: "renamed",
+        kind: "file",
+      },
+    ],
+  }
+  let decoded_changes : @protocol.GitCommitChangesReply = @json.from_json(
+    changes.to_json(),
+  )
+  assert_eq(decoded_changes, changes)
+}
+
+///|
+test "Git history codecs ignore unknown fields and omit absent optionals" {
+  let payload : @protocol.GitHistoryPayload = @json.from_json({
+    "session": "s1",
+    "workspace": null,
+    "snapshot": null,
+    "skip": 0,
+    "limit": 0,
+    "future_payload": true,
+  })
+  @debug.assert_eq(payload.to_json(), { "session": "s1", "skip": 0, "limit": 0 })
+  let commit_payload : @protocol.GitCommitChangesPayload = @json.from_json({
+    "session": "s1",
+    "workspace": null,
+    "commit": "1111111111111111111111111111111111111111",
+    "future_payload": true,
+  })
+  @debug.assert_eq(commit_payload.to_json(), {
+    "session": "s1",
+    "commit": "1111111111111111111111111111111111111111",
+  })
+  let history : @protocol.GitHistoryReply = @json.from_json({
+    "repository": true,
+    "snapshot": {
+      "head": null,
+      "branch": null,
+      "refs": [
+        {
+          "name": "HEAD",
+          "revision": "1111111111111111111111111111111111111111",
+          "kind": "head",
+          "future_ref": true,
+        },
+      ],
+      "tips": ["1111111111111111111111111111111111111111"],
+      "future_snapshot": true,
+    },
+    "commits": [
+      {
+        "id": "1111111111111111111111111111111111111111",
+        "parent_ids": [],
+        "subject": "Initial commit",
+        "author": "OpenSeek",
+        "authored_at": "2026-08-19T10:00:00+08:00",
+        "future_commit": true,
+      },
+    ],
+    "has_more": false,
+    "future_reply": true,
+  })
+  @debug.assert_eq(history.to_json(), {
+    "repository": true,
+    "snapshot": {
+      "refs": [
+        {
+          "name": "HEAD",
+          "revision": "1111111111111111111111111111111111111111",
+          "kind": "head",
+        },
+      ],
+      "tips": ["1111111111111111111111111111111111111111"],
+    },
+    "commits": [
+      {
+        "id": "1111111111111111111111111111111111111111",
+        "parent_ids": [],
+        "subject": "Initial commit",
+        "author": "OpenSeek",
+        "authored_at": "2026-08-19T10:00:00+08:00",
+      },
+    ],
+    "has_more": false,
+  })
+  let changes : @protocol.GitCommitChangesReply = @json.from_json({
+    "commit": "1111111111111111111111111111111111111111",
+    "parent": null,
+    "changes": [
+      {
+        "path": "README.md",
+        "original_path": null,
+        "status": "added",
+        "kind": "file",
+        "future_change": true,
+      },
+    ],
+    "future_reply": true,
+  })
+  @debug.assert_eq(changes.to_json(), {
+    "commit": "1111111111111111111111111111111111111111",
+    "changes": [{ "path": "README.md", "status": "added", "kind": "file" }],
+  })
+}
+
+///|
+test "Git history codecs reject missing, null, and malformed required data" {
+  let missing_session = try {
+    let _ : @protocol.GitHistoryPayload = @json.from_json({
+      "skip": 0,
+      "limit": 50,
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(missing_session)
+  let null_commit = try {
+    let _ : @protocol.GitCommitChangesPayload = @json.from_json({
+      "session": "s1",
+      "commit": null,
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(null_commit)
+  let malformed_ref = try {
+    let _ : @protocol.GitHistoryRef = @json.from_json({
+      "name": "HEAD",
+      "revision": "1111111111111111111111111111111111111111",
+      "kind": 1,
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(malformed_ref)
+  let null_refs = try {
+    let _ : @protocol.GitHistorySnapshot = @json.from_json({
+      "refs": null,
+      "tips": [],
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(null_refs)
+  let malformed_parent = try {
+    let _ : @protocol.GitHistoryCommit = @json.from_json({
+      "id": "1111111111111111111111111111111111111111",
+      "parent_ids": [1],
+      "subject": "Initial commit",
+      "author": "OpenSeek",
+      "authored_at": "2026-08-19T10:00:00+08:00",
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(malformed_parent)
+  let null_snapshot = try {
+    let _ : @protocol.GitHistoryReply = @json.from_json({
+      "repository": true,
+      "snapshot": null,
+      "commits": [],
+      "has_more": false,
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(null_snapshot)
+  let missing_status = try {
+    let _ : @protocol.GitHistoricalChange = @json.from_json({
+      "path": "README.md",
+      "kind": "file",
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(missing_status)
+  let malformed_change = try {
+    let _ : @protocol.GitCommitChangesReply = @json.from_json({
+      "commit": "1111111111111111111111111111111111111111",
+      "changes": [{ "path": "README.md", "status": false, "kind": "file" }],
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(malformed_change)
+}

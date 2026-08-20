@@ -2,13 +2,20 @@
 // one JSON line at a time, sometimes landing mid-line between polls.
 
 ///|
+/// Where a store rooted at `root` keeps `session`'s record, as a plain path:
+/// the probe reads paths, the store's layout is `@session_record`'s to say.
+fn record_path_of(root : String, session : String) -> String {
+  @session_record.record_path(@pathx.Path(root).resolve(), session).to_string()
+}
+
+///|
 /// A probe over a brand-new record holding only the store's header line —
 /// which the probe must read past without mistaking it for an item.
 async fn fresh_record(name : String) -> SubrunProbeState {
   let root = @fs.realpath(@fs.tmpdir(prefix="openseek-subrun-probe-\{name}-"))
   let session = "parent-sr-1"
-  @fsx.ensure_dir(Path("\{root}/sessions/\{session}"))
-  let path = subrun_record_path(root, session)
+  let path = record_path_of(root, session)
+  @fsx.ensure_dir(@pathx.Path(path).dirname())
   @fs.write_file(
     path,
     ({ "version": 1, "id": session, "system_prompt": "s" } : Json).stringify() +
@@ -273,7 +280,7 @@ async test "activity walks a batch in the order it runs" {
 async test "a record that does not exist yet is not an error" {
   let root = @fs.realpath(@fs.tmpdir(prefix="openseek-subrun-probe-missing-"))
   let state = {
-    path: subrun_record_path(root, "parent-sr-9"),
+    path: record_path_of(root, "parent-sr-9"),
     offset: 0,
     carry: b"",
     anchor: b"",

@@ -63,6 +63,21 @@ pub fn open_file(state : State, path : @pathx.Relative) -> State {
 }
 
 ///|
+/// Open one immutable historical comparison. Equality includes the commit, so
+/// the same path at two revisions stays independently inspectable.
+pub fn open_history_diff(state : State, diff : GitHistoryDiff) -> State {
+  let tab = DockTab::GitDiff(diff~)
+  let tabs = if tab_index(state, tab) is Some(_) {
+    state.tabs
+  } else {
+    let tabs = state.tabs.copy()
+    tabs.push(tab)
+    tabs
+  }
+  { ..state, tabs, active: Some(tab) }
+}
+
+///|
 /// Open browser page `id`'s tab (appending one if it is not in the strip
 /// yet) and make it active. The caller owns the id: allocating the page and
 /// asking the host for its native view are the browser subsystem's business.

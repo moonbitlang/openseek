@@ -1239,6 +1239,403 @@ async fn git_changes_op(payload : GitChangesPayload) -> GitChangesReply {
 }
 
 ///|
+fn push_history_ref(
+  refs : Array[GitHistoryRef],
+  tips : Array[String],
+  name : String,
+  revision : String,
+  kind : String,
+) -> Unit {
+  refs.push({ name, revision, kind })
+  if !tips.contains(revision) {
+    tips.push(revision)
+  }
+}
+
+///|
+async fn git_history_upstream(dir : String) -> String? {
+  guard git_output_opt(dir, [
+      "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}",
+    ])
+    is Some(output) else {
+    return None
+  }
+  let upstream = git_single_line(output)
+  if upstream.is_empty() || upstream == "@{upstream}" {
+    None
+  } else {
+    Some(upstream)
+  }
+}
+
+///|
+/// Prefer the configured upstream remote's symbolic default, then the
+/// repository's ordinary origin/HEAD declaration. No branch-name guessing.
+async fn git_history_default_ref(dir : String, upstream : String?) -> String? {
+  if upstream is Some(upstream) && upstream.split_once("/") is Some((remote, _)) {
+    let symbolic = "refs/remotes/\{remote}/HEAD"
+    if git_output_opt(dir, ["symbolic-ref", "--quiet", "--short", symbolic])
+      is Some(output) {
+      let name = git_single_line(output)
+      if !name.is_empty() && name != symbolic {
+        return Some(name)
+      }
+    }
+  }
+  git_base_ref(dir)
+}
+
+///|
+async fn capture_git_history_snapshot(
+  dir : String,
+  review_base : String?,
+) -> GitHistorySnapshot {
+  let head = git_revision_commit(dir, "HEAD")
+  let branch = match
+    git_output_opt(dir, ["symbolic-ref", "--quiet", "--short", "HEAD"]) {
+    Some(output) => {
+      let name = git_single_line(output)
+      if name.is_empty() {
+        None
+      } else {
+        Some(name)
+      }
+    }
+    None => None
+  }
+  let refs : Array[GitHistoryRef] = []
+  let tips : Array[String] = []
+  if head is Some(head) {
+    push_history_ref(
+      refs,
+      tips,
+      branch.unwrap_or("HEAD"),
+      head,
+      if branch is Some(_) {
+        "current"
+      } else {
+        "head"
+      },
+    )
+  }
+  let upstream = git_history_upstream(dir)
+  if upstream is Some(upstream) &&
+    git_revision_commit(dir, upstream) is Some(upstream_commit) {
+    push_history_ref(refs, tips, upstream, upstream_commit, "upstream")
+  }
+  match review_base {
+    Some(base) => push_history_ref(refs, tips, "Review base", base, "base")
+    None =>
+      if git_history_default_ref(dir, upstream) is Some(base_ref) &&
+        git_revision_commit(dir, base_ref) is Some(base) {
+        push_history_ref(refs, tips, base_ref, base, "base")
+      }
+  }
+  { head, branch, refs, tips }
+}
+
+///|
+/// The client echoes only values previously produced by this host. Validate
+/// every object identity again before it can become a Git argv entry.
+async fn validate_git_history_snapshot(
+  dir : String,
+  snapshot : GitHistorySnapshot,
+) -> GitHistorySnapshot {
+  if snapshot.refs.length() > 16 || snapshot.tips.length() > 16 {
+    raise HostError("Git history snapshot contains too many refs")
+  }
+  for tip in snapshot.tips {
+    guard valid_commit_identity(tip) &&
+      git_revision_commit(dir, tip) == Some(tip) else {
+      raise HostError("Git history snapshot contains an unavailable commit")
+    }
+  }
+  for ref_ in snapshot.refs {
+    guard ref_.name.length() <= 512 &&
+      ["current", "upstream", "base", "head"].contains(ref_.kind) &&
+      valid_commit_identity(ref_.revision) &&
+      git_revision_commit(dir, ref_.revision) == Some(ref_.revision) &&
+      snapshot.tips.contains(ref_.revision) else {
+      raise HostError("Git history snapshot contains an invalid ref")
+    }
+  }
+  if snapshot.head is Some(head) {
+    guard valid_commit_identity(head) &&
+      git_revision_commit(dir, head) == Some(head) else {
+      raise HostError("Git history snapshot contains an unavailable HEAD")
+    }
+  }
+  snapshot
+}
+
+///|
+fn parse_git_history_z(output : String) -> Array[GitHistoryCommit] {
+  let fields = output.split("\u{0}").map(field => field.to_owned()).collect()
+  let commits : Array[GitHistoryCommit] = []
+  let mut index = 0
+  while index + 5 < fields.length() {
+    let id = fields[index]
+    let parents = fields[index + 1]
+    let subject = fields[index + 2]
+    let author = fields[index + 3]
+    let authored_at = fields[index + 4]
+    let separator = fields[index + 5]
+    if id.is_empty() || !separator.is_empty() {
+      break
+    }
+    commits.push({
+      id,
+      parent_ids: if parents.is_empty() {
+        []
+      } else {
+        parents.split(" ").map(parent => parent.to_owned()).collect()
+      },
+      subject,
+      author,
+      authored_at,
+    })
+    index += 6
+  }
+  commits
+}
+
+///|
+async fn git_history_page(
+  dir : String,
+  snapshot : GitHistorySnapshot,
+  skip : Int,
+  limit : Int,
+) -> (Array[GitHistoryCommit], Bool) {
+  if snapshot.tips.is_empty() {
+    return ([], false)
+  }
+  let args = [
+    "log",
+    "--topo-order",
+    "-z",
+    "--format=%H%x00%P%x00%s%x00%an%x00%aI%x00",
+    "--skip=\{skip}",
+    "-n",
+    (limit + 1).to_string(),
+  ]
+  for tip in snapshot.tips {
+    args.push(tip)
+  }
+  args.push("--")
+  let (code, stdout, stderr) = git_collect(dir, args)
+  guard code == 0 else {
+    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
+    raise HostError(
+      if detail.is_empty() {
+        "failed to read Git history"
+      } else {
+        detail
+      },
+    )
+  }
+  let raw = stdout.text() catch {
+    _ => raise HostError("Git returned non-UTF-8 history metadata")
+  }
+  let commits = parse_git_history_z(raw)
+  let has_more = commits.length() > limit
+  if has_more {
+    ignore(commits.pop())
+  }
+  (commits, has_more)
+}
+
+///|
+async fn git_history_op(payload : GitHistoryPayload) -> GitHistoryReply {
+  guard payload.skip >= 0 &&
+    @work_dir.resolve_in_workspace(
+      payload.session,
+      "",
+      workspace?=payload.workspace,
+    )
+    is Some(root) else {
+    raise HostError("could not resolve the conversation workspace")
+  }
+  let dir = root.to_string()
+  let empty : GitHistorySnapshot = {
+    head: None,
+    branch: None,
+    refs: [],
+    tips: [],
+  }
+  if git_output(dir, ["rev-parse", "--is-inside-work-tree"]) != "true" {
+    return { repository: false, snapshot: empty, commits: [], has_more: false }
+  }
+  let recorded_base = @work_dir.session_review_base(
+    payload.session,
+    workspace?=payload.workspace,
+  )
+  let review_base = match recorded_base {
+    Some(base) => {
+      guard valid_commit_identity(base) &&
+        git_revision_commit(dir, base) is Some(commit) else {
+        raise HostError("recorded Git task baseline is unavailable")
+      }
+      Some(commit)
+    }
+    None => None
+  }
+  let snapshot = match payload.snapshot {
+    Some(snapshot) => validate_git_history_snapshot(dir, snapshot)
+    None => capture_git_history_snapshot(dir, review_base)
+  }
+  let limit = if payload.limit <= 0 {
+    50
+  } else if payload.limit > 100 {
+    100
+  } else {
+    payload.limit
+  }
+  let (commits, has_more) = git_history_page(dir, snapshot, payload.skip, limit)
+  { repository: true, snapshot, commits, has_more }
+}
+
+///|
+async fn git_tree_object_modes(
+  dir : String,
+  workspace_prefix : String,
+  revision : String,
+) -> (Set[String], Set[String]) {
+  let (code, stdout, stderr) = git_collect(dir, [
+    "ls-tree", "-r", "--full-name", "-z", revision, "--", ".",
+  ])
+  guard code == 0 else {
+    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
+    raise HostError(
+      if detail.is_empty() {
+        "failed to inspect Git commit tree"
+      } else {
+        detail
+      },
+    )
+  }
+  let output = stdout.text() catch {
+    _ => raise HostError("Git returned a non-UTF-8 commit tree path")
+  }
+  (
+    parse_git_mode_paths(output, workspace_prefix, "160000"),
+    parse_git_mode_paths(output, workspace_prefix, "120000"),
+  )
+}
+
+///|
+async fn git_commit_changes_at(
+  dir : String,
+  workspace_prefix : String,
+  commit : String,
+) -> GitCommitChangesReply {
+  guard git_revision_commit(dir, commit) is Some(commit) else {
+    raise HostError("Git commit is unavailable")
+  }
+  let parent = match
+    git_output_opt(dir, ["show", "-s", "--format=%P", commit]) {
+    Some(output) => {
+      let parents = git_single_line(output)
+      if parents.is_empty() {
+        None
+      } else {
+        Some(
+          match parents.split_once(" ") {
+            Some((first, _)) => first.to_owned()
+            None => parents
+          },
+        )
+      }
+    }
+    None => raise HostError("failed to inspect Git commit parents")
+  }
+  let base = parent.unwrap_or(EmptyTreeObject)
+  let (code, stdout, stderr) = git_collect(dir, [
+    "diff", "--name-status", "-z", "--no-ext-diff", "--find-renames", "--find-copies-harder",
+    base, commit, "--", ".",
+  ])
+  guard code == 0 else {
+    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
+    raise HostError(
+      if detail.is_empty() {
+        "failed to read Git commit changes"
+      } else {
+        detail
+      },
+    )
+  }
+  let raw = stdout.text() catch {
+    _ => raise HostError("Git returned a non-UTF-8 commit path")
+  }
+  let parsed = parse_git_diff_name_status_z(raw).filter_map(change => {
+    git_change_relative_to_workspace(change, workspace_prefix)
+  })
+  let (new_gitlinks, new_symlinks) = git_tree_object_modes(
+    dir, workspace_prefix, commit,
+  )
+  let (old_gitlinks, old_symlinks) = git_tree_object_modes(
+    dir, workspace_prefix, base,
+  )
+  let changes : Array[GitHistoricalChange] = []
+  for change in parsed {
+    let old_path = change.original_path.unwrap_or(change.path)
+    let kind = if old_gitlinks.contains(old_path) ||
+      new_gitlinks.contains(change.path) {
+      "submodule"
+    } else if old_symlinks.contains(old_path) ||
+      new_symlinks.contains(change.path) {
+      "symlink"
+    } else {
+      "file"
+    }
+    changes.push({
+      path: change.path,
+      original_path: change.original_path,
+      status: change.kind,
+      kind,
+    })
+  }
+  { commit, parent, changes }
+}
+
+///|
+async fn git_commit_changes_op(
+  payload : GitCommitChangesPayload,
+) -> GitCommitChangesReply {
+  guard valid_commit_identity(payload.commit) &&
+    @work_dir.resolve_in_workspace(
+      payload.session,
+      "",
+      workspace?=payload.workspace,
+    )
+    is Some(root) else {
+    raise HostError("invalid Git commit request")
+  }
+  let dir = root.to_string()
+  if git_output(dir, ["rev-parse", "--is-inside-work-tree"]) != "true" {
+    raise HostError("workspace is not a Git repository")
+  }
+  let (prefix_code, prefix_stdout, prefix_stderr) = git_collect(dir, [
+    "rev-parse", "--show-prefix",
+  ])
+  guard prefix_code == 0 else {
+    let detail = (prefix_stderr.text() catch { _ => "" }).trim().to_owned()
+    raise HostError(
+      if detail.is_empty() {
+        "failed to resolve Git workspace prefix"
+      } else {
+        detail
+      },
+    )
+  }
+  let workspace_prefix = git_single_line(
+    prefix_stdout.text() catch {
+      _ => raise HostError("Git returned a non-UTF-8 workspace prefix")
+    },
+  )
+  git_commit_changes_at(dir, workspace_prefix, payload.commit)
+}
+
+///|
 async fn git_original_file_at(
   dir : String,
   relative : @pathx.Relative,
@@ -1441,6 +1838,28 @@ test "Git task-diff parser keeps scored rename sources and untracked rows" {
 }
 
 ///|
+test "Git history parser keeps parents subjects authors and ISO dates" {
+  let commits = parse_git_history_z(
+    "1111111111111111111111111111111111111111\u{0}0000000000000000000000000000000000000000 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\u{0}Merge topic\u{0}OpenSeek Test\u{0}2026-08-19T10:00:00+08:00\u{0}\u{0}",
+  )
+  assert_true(
+    commits
+    is [
+      {
+        id: "1111111111111111111111111111111111111111",
+        parent_ids: [
+          "0000000000000000000000000000000000000000",
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ],
+        subject: "Merge topic",
+        author: "OpenSeek Test",
+        authored_at: "2026-08-19T10:00:00+08:00",
+      },
+    ],
+  )
+}
+
+///|
 test "Git change categories cover conflicts deletions and type changes" {
   assert_eq(git_change_kind("U", "U"), "unmerged")
   assert_eq(git_change_kind(" ", "D"), "deleted")
@@ -1490,6 +1909,214 @@ async fn git_test_run(dir : String, args : Array[String]) -> Unit {
   guard code == 0 else {
     let detail = (stderr.text() catch { _ => "non-UTF-8 stderr" }).trim()
     fail("Git fixture command failed: \{detail}")
+  }
+}
+
+///|
+async fn git_test_commit(dir : String, message : String) -> Unit {
+  git_test_run(dir, [
+    "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
+    "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", message,
+  ])
+}
+
+///|
+async test "Git history pages stay pinned and commit changes use first parent" {
+  let dir = @fs.tmpdir(prefix="openseek-git-history-")
+  async fn cleanup() {
+    @fs.rmdir(dir, recursive=true) catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => ()
+    }
+  }
+  let _ = {
+    defer cleanup()
+    git_test_run(dir, ["init", "--quiet"])
+    @fs.write_file("\{dir}/old.mbt", "first\n", create_mode=CreateOrTruncate)
+    git_test_run(dir, ["add", "old.mbt"])
+    git_test_commit(dir, "first")
+    git_test_run(dir, ["branch", "-M", "feature/graph"])
+    let first = git_revision_commit(dir, "HEAD").unwrap()
+    git_test_run(dir, ["update-ref", "refs/remotes/origin/main", first])
+    git_test_run(dir, [
+      "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main",
+    ])
+    git_test_run(dir, ["mv", "old.mbt", "new.mbt"])
+    git_test_commit(dir, "rename")
+    let second = git_revision_commit(dir, "HEAD").unwrap()
+    git_test_run(dir, [
+      "update-ref", "refs/remotes/origin/feature/graph", second,
+    ])
+    git_test_run(dir, ["config", "branch.feature/graph.remote", "origin"])
+    git_test_run(dir, [
+      "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*",
+    ])
+    git_test_run(dir, [
+      "config", "branch.feature/graph.merge", "refs/heads/feature/graph",
+    ])
+    let snapshot = capture_git_history_snapshot(dir, Some(first))
+    assert_eq(snapshot.head, Some(second))
+    assert_eq(snapshot.branch, Some("feature/graph"))
+    assert_true(snapshot.refs.any(ref_ => ref_.kind == "current"))
+    assert_true(snapshot.refs.any(ref_ => ref_.kind == "upstream"))
+    assert_true(snapshot.refs.any(ref_ => ref_.kind == "base"))
+    let (first_page, has_more) = git_history_page(dir, snapshot, 0, 1)
+    assert_true(has_more)
+    assert_true(first_page is [{ id, subject: "rename", .. }] && id == second)
+    @fs.write_file("\{dir}/third.mbt", "third\n", create_mode=CreateOrTruncate)
+    git_test_run(dir, ["add", "third.mbt"])
+    git_test_commit(dir, "third")
+    let third = git_revision_commit(dir, "HEAD").unwrap()
+    assert_true(third != second)
+    // The next page still walks the captured second-commit tips.
+    let (second_page, _) = git_history_page(dir, snapshot, 1, 1)
+    assert_true(second_page is [{ id, subject: "first", .. }] && id == first)
+    let renamed = git_commit_changes_at(dir, "", second)
+    assert_eq(renamed.parent, Some(first))
+    assert_true(
+      renamed.changes
+      is [
+        {
+          path: "new.mbt",
+          original_path: Some("old.mbt"),
+          status: "renamed",
+          kind: "file",
+        },
+      ],
+    )
+    let root = git_commit_changes_at(dir, "", first)
+    assert_eq(root.parent, None)
+    assert_true(root.changes is [{ path: "old.mbt", status: "added", .. }])
+
+    // A merge comparison follows Git's ordinary history-provider semantics:
+    // only the first parent's delta appears below the merge row.
+    git_test_run(dir, ["branch", "side", first])
+    git_test_run(dir, ["checkout", "--quiet", "side"])
+    @fs.write_file("\{dir}/side.mbt", "side\n", create_mode=CreateOrTruncate)
+    git_test_run(dir, ["add", "side.mbt"])
+    git_test_commit(dir, "side")
+    git_test_run(dir, ["checkout", "--quiet", "feature/graph"])
+    git_test_run(dir, [
+      "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
+      "-c", "commit.gpgSign=false", "merge", "--quiet", "--no-ff", "-m", "merge side",
+      "side",
+    ])
+    let merge = git_revision_commit(dir, "HEAD").unwrap()
+    let merged = git_commit_changes_at(dir, "", merge)
+    assert_eq(merged.parent, Some(third))
+    assert_true(
+      merged.changes
+      is [{ path: "side.mbt", status: "added", kind: "file", .. }],
+    )
+
+    // Exhaustive copy discovery and tree modes are properties of historical
+    // inspection, not the cheaper working-tree poll.
+    @fs.write_file("\{dir}/copy.mbt", "first\n", create_mode=CreateOrTruncate)
+    @fs.symlink(target="new.mbt", "\{dir}/link")
+    git_test_run(dir, ["add", "copy.mbt", "link"])
+    git_test_run(dir, [
+      "update-index",
+      "--add",
+      "--cacheinfo",
+      "160000,\{first},vendor/lib",
+    ])
+    git_test_commit(dir, "copy and modes")
+    let modes_commit = git_revision_commit(dir, "HEAD").unwrap()
+    let mode_changes = git_commit_changes_at(dir, "", modes_commit).changes
+    assert_true(
+      mode_changes.any(change => {
+        change.path == "copy.mbt" &&
+        change.original_path == Some("new.mbt") &&
+        change.status == "copied" &&
+        change.kind == "file"
+      }),
+    )
+    assert_true(
+      mode_changes.any(change => {
+        change.path == "link" && change.kind == "symlink"
+      }),
+    )
+    assert_true(
+      mode_changes.any(change => {
+        change.path == "vendor/lib" && change.kind == "submodule"
+      }),
+    )
+
+    // A type change stays inert when either revision is a special Git object,
+    // including the less obvious symlink-to-regular-file direction.
+    @fs.remove("\{dir}/link")
+    @fs.write_file("\{dir}/link", "regular\n", create_mode=CreateOrTruncate)
+    git_test_run(dir, ["add", "link"])
+    git_test_commit(dir, "replace symlink")
+    let type_commit = git_revision_commit(dir, "HEAD").unwrap()
+    assert_true(
+      git_commit_changes_at(dir, "", type_commit).changes.any(change => {
+        change.path == "link" &&
+        change.status == "type-changed" &&
+        change.kind == "symlink"
+      }),
+    )
+
+    @fs.write_file(
+      "\{dir}/binary.dat",
+      "binary\u{0}payload",
+      create_mode=CreateOrTruncate,
+    )
+    @fs.write_file(
+      "\{dir}/oversized.txt",
+      "x".repeat(@openpath.MaxEditorFileBytes + 1),
+      create_mode=CreateOrTruncate,
+    )
+    git_test_run(dir, ["add", "binary.dat", "oversized.txt"])
+    git_test_commit(dir, "binary content policies")
+    let content_commit = git_revision_commit(dir, "HEAD").unwrap()
+    assert_eq(
+      git_original_file_at(dir, Relative("binary.dat"), content_commit),
+      BinaryOriginal,
+    )
+    assert_eq(
+      git_original_file_at(dir, Relative("oversized.txt"), content_commit),
+      OversizedOriginal,
+    )
+  }
+}
+
+///|
+async test "Git history paginates fifty commits and describes detached HEAD" {
+  let dir = @fs.tmpdir(prefix="openseek-git-history-page-")
+  async fn cleanup() {
+    @fs.rmdir(dir, recursive=true) catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => ()
+    }
+  }
+  let _ = {
+    defer cleanup()
+    git_test_run(dir, ["init", "--quiet"])
+    let unborn = capture_git_history_snapshot(dir, None)
+    assert_eq(unborn.head, None)
+    assert_true(unborn.refs.is_empty())
+    assert_true(unborn.tips.is_empty())
+    for index in 0..<52 {
+      @fs.write_file(
+        "\{dir}/history.txt",
+        "\{index}\n",
+        create_mode=CreateOrTruncate,
+      )
+      git_test_run(dir, ["add", "history.txt"])
+      git_test_commit(dir, "history \{index}")
+    }
+    git_test_run(dir, ["checkout", "--quiet", "--detach"])
+    let snapshot = capture_git_history_snapshot(dir, None)
+    assert_true(snapshot.head is Some(_))
+    assert_eq(snapshot.branch, None)
+    assert_true(snapshot.refs is [{ name: "HEAD", kind: "head", .. }])
+    let (first_page, has_more) = git_history_page(dir, snapshot, 0, 50)
+    assert_eq(first_page.length(), 50)
+    assert_true(has_more)
+    let (last_page, last_has_more) = git_history_page(dir, snapshot, 50, 50)
+    assert_eq(last_page.length(), 2)
+    assert_false(last_has_more)
   }
 }
 

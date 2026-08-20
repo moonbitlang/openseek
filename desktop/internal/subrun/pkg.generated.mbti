@@ -2,11 +2,12 @@
 package "openseek_desktop/internal/subrun"
 
 import {
+  "openseek_desktop/internal/pathx",
   "openseek_desktop/internal/protocol",
 }
 
 // Values
-pub async fn follow_progress(root~ : String, parent_session~ : String, id~ : String, publish~ : async (@protocol.SubrunProgressPayload) -> Unit) -> Unit
+pub async fn follow_progress(root~ : @pathx.Absolute, parent_session~ : String, id~ : String, publish~ : async (@protocol.SubrunProgressPayload) -> Unit) -> Unit
 
 // Errors
 
