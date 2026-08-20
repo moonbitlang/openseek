@@ -656,10 +656,13 @@ async test "shell child sees an immediately-closed stdin pipe on Windows" {
   // either report False or block — and the bounded timeout turns a hang into a
   // test failure.
   let output = run_shell({
-    "cmd": "if ([Console]::IsInputRedirected) { [Console]::In.ReadToEnd().Length } else { 'NOT-REDIRECTED' }",
+    "cmd": "if ([Console]::IsInputRedirected) { [Console]::Out.Write([Console]::In.ReadToEnd().Length) } else { [Console]::Out.Write('NOT-REDIRECTED') }",
   })
   assert_false(output.is_error)
-  assert_true(output.content.contains("0"))
+  // stdin saw EOF with 0 bytes: `[Console]::Out.Write` emits `0` with no
+  // newline, so the output is exactly `0` plus the footer. `contains("0")`
+  // would also match the `exit=0` footer, so anchor the count itself.
+  assert_eq(output.content, "0\n<system>exit=0</system>")
   assert_false(output.content.contains("NOT-REDIRECTED"))
   assert_false(output.content.contains("timed out"))
 }
@@ -673,7 +676,9 @@ async test "shell child sees an immediately-closed stdin pipe on Windows" {
 async test "shell child sees an immediately-closed stdin pipe on Unix" {
   let output = run_shell({ "cmd": "wc -c" })
   assert_false(output.is_error)
-  assert_true(output.content.contains("0"))
+  // `wc -c` reads stdin to EOF; a closed pipe yields 0 bytes. Anchor the count
+  // exactly — `contains("0")` would also match the `exit=0` footer.
+  assert_true(output.content =~ re"^0\n<system>exit=0</system>$")
   assert_false(output.content.contains("timed out"))
 }
 
