@@ -301,3 +301,21 @@ pub fn push_token(
 }
 
 ///|
+
+///|
+pub extend HighlightTag with Debug::{to_repr}
+
+///|
+pub extend HighlightTag with Eq::{equal, not_equal}
+
+///|
+pub extend LineToken with Debug::{to_repr}
+
+///|
+pub extend LineToken with Eq::{equal, not_equal}
+
+///|
+pub extend TokenizerState with Debug::{to_repr}
+
+///|
+pub extend TokenizerState with Eq::{equal, not_equal}

@@ -60,3 +60,9 @@ pub fn ViewModelOptions::soft_wrap(
 pub fn ViewModelOptions::is_soft_wrap_enabled(self : ViewModelOptions) -> Bool {
   self.soft_wrap_column > 0
 }
+
+///|
+pub extend ViewModelOptions with Debug::{to_repr}
+
+///|
+pub extend ViewModelOptions with Eq::{equal, not_equal}

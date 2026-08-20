@@ -158,3 +158,6 @@ pub async fn stage(
     )
   }
 }
+
+///|
+pub extend MermaidAssetError with Show::{output, to_string}

@@ -1133,3 +1133,6 @@ test "transcript mapping replays a context checkpoint and yield guidance" {
   }
   inspect(items[1].content, content="[context ceiling] continue in a new turn")
 }
+
+///|
+pub extend SessionTreeRow with Eq::{equal, not_equal}

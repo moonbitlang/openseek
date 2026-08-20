@@ -15,3 +15,9 @@ pub(all) enum PositionAffinity {
   /// it.
   RightOfInjectedText
 } derive(Eq, Debug)
+
+///|
+pub extend PositionAffinity with Debug::{to_repr}
+
+///|
+pub extend PositionAffinity with Eq::{equal, not_equal}

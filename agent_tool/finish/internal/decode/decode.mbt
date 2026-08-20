@@ -18,3 +18,6 @@ pub fn decode(arguments : Json) -> FinishInput {
   }
   { answer, }
 }
+
+///|
+pub extend FinishInput with Debug::{to_repr}

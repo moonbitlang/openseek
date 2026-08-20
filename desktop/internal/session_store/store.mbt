@@ -236,3 +236,6 @@ test "sub-run descent follows the structural suffix, not a text prefix" {
   assert_false(is_descendant("chat", "chat"))
   assert_false(is_descendant("other-sr-1", "chat"))
 }
+
+///|
+pub extend StoreError with Debug::{to_repr}

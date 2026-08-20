@@ -257,3 +257,9 @@ test "distinct path spellings are distinct keys (a safe under-approximation)" {
   assert_true(state.get("./note.txt") is Some(Created))
   assert_true(state.get("note.txt") is None)
 }
+
+///|
+pub extend FileState with Debug::{to_repr}
+
+///|
+pub extend FileState with Eq::{equal, not_equal}

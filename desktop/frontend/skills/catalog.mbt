@@ -90,3 +90,9 @@ pub fn installed_from_reply(
   }
   items
 }
+
+///|
+pub extend InstalledItem with Eq::{equal, not_equal}
+
+///|
+pub extend MarketItem with Eq::{equal, not_equal}

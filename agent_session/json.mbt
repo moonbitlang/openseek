@@ -212,3 +212,18 @@ pub impl FromJson for Session with fn from_json(
     events~,
   )
 }
+
+///|
+pub extend Session with FromJson::{from_json}
+
+///|
+pub extend Session with ToJson::{to_json}
+
+///|
+pub extend SessionId with FromJson::{from_json}
+
+///|
+pub extend SessionItem with FromJson::{from_json}
+
+///|
+pub extend TurnTerminal with FromJson::{from_json}

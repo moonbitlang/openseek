@@ -662,3 +662,6 @@ async test "a requested stop is not blamed on the reaper" {
     assert_false(snapshot.killed_by_output_limit)
   })
 }
+
+///|
+pub extend BgJobStatus with Eq::{equal, not_equal}

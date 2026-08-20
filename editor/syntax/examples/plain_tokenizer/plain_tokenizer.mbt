@@ -139,3 +139,9 @@ fn is_keyword(text : StringView) -> Bool {
   | "test"
   | "import")
 }
+
+///|
+pub extend PlainTokenizer with @syntax.LineTokenizer::{
+  initial_state,
+  tokenize_line,
+}

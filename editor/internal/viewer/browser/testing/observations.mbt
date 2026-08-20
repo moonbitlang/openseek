@@ -48,3 +48,21 @@ priv struct ScrollFrameObservation {
   scroll_top : Double
   scroll_left : Double
 }
+
+///|
+pub extend HoverResolvedObservation with Debug::{to_repr}
+
+///|
+pub extend HoverResolvedObservation with Eq::{equal, not_equal}
+
+///|
+pub extend ModelRenderedObservation with Debug::{to_repr}
+
+///|
+pub extend ScrollFramePhase with Debug::{to_repr}
+
+///|
+pub extend ScrollFramePhase with Eq::{equal, not_equal}
+
+///|
+pub extend ViewModelBuiltObservation with Debug::{to_repr}

@@ -213,3 +213,9 @@ fn compute_minimum_scrolling(
     box_start
   }
 }
+
+///|
+pub extend VerticalRevealType with Debug::{to_repr}
+
+///|
+pub extend VerticalRevealType with Eq::{equal, not_equal}

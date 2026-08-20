@@ -192,3 +192,6 @@ async fn team_identifier(app_path : String) -> String? {
   }
   None
 }
+
+///|
+pub extend UpdateError with Show::{output, to_string}

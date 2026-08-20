@@ -962,3 +962,9 @@ extern "js" fn mouse_event_target_within(
   container : @rdom.Element,
 ) -> Bool =
   #| (m, container) => container.contains(m.target)
+
+///|
+pub extend NavigationCommandRevealType with Debug::{to_repr}
+
+///|
+pub extend NavigationCommandRevealType with Eq::{equal, not_equal}

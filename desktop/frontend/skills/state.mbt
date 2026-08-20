@@ -118,3 +118,6 @@ pub fn State::handle(
     }
   }
 }
+
+///|
+pub extend State with Eq::{equal, not_equal}

@@ -109,3 +109,15 @@ pub fn Model::items(self : Model) -> Array[CompletionItem] {
 pub fn Model::selected(self : Model) -> Int {
   self.selected
 }
+
+///|
+pub extend CompletionItem with Debug::{to_repr}
+
+///|
+pub extend CompletionItem with Eq::{equal, not_equal}
+
+///|
+pub extend Model with Debug::{to_repr}
+
+///|
+pub extend Model with Eq::{equal, not_equal}

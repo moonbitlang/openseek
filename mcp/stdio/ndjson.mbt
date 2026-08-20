@@ -62,3 +62,6 @@ pub impl @jsonrpc.Transport for NdjsonTransport with fn recv(self) {
 pub impl @jsonrpc.Transport for NdjsonTransport with fn close(self) {
   (self.on_close)()
 }
+
+///|
+pub extend NdjsonTransport with @jsonrpc.Transport::{close, recv, send}

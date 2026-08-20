@@ -71,3 +71,9 @@ fn RangeMapping::RangeMapping(
 ) -> RangeMapping {
   { original_range, modified_range }
 }
+
+///|
+pub extend DetailedLineRangeMapping with Debug::{to_repr}
+
+///|
+pub extend DetailedLineRangeMapping with Eq::{equal, not_equal}

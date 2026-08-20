@@ -208,3 +208,9 @@ fn array_splice_replace(
   array.push(item)
   array.append(rest)
 }
+
+///|
+pub extend LineRange with Debug::{to_repr}
+
+///|
+pub extend LineRange with Eq::{equal, not_equal}

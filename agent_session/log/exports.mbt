@@ -77,3 +77,9 @@ pub fn parse_events(text : String) -> ParsedLog {
   }
   { header, events, errors, partial_tail }
 }
+
+///|
+pub extend ParsedLog with Debug::{to_repr}
+
+///|
+pub extend ParsedLog with Eq::{equal, not_equal}

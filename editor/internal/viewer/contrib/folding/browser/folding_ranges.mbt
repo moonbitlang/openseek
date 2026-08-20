@@ -593,3 +593,15 @@ fn FoldingRegion::contains_line(
   self.start_line_number() <= line_number &&
   line_number <= self.end_line_number()
 }
+
+///|
+pub extend FoldRange with Debug::{to_repr}
+
+///|
+pub extend FoldRange with Eq::{equal, not_equal}
+
+///|
+pub extend LineRange with Debug::{to_repr}
+
+///|
+pub extend LineRange with Eq::{equal, not_equal}

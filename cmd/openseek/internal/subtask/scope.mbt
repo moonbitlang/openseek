@@ -169,3 +169,9 @@ test "gitlink introductions are detected from raw -z records" {
     "vendor/embedded", "lib/swapped",
   ])
 }
+
+///|
+pub extend Change with Debug::{to_repr}
+
+///|
+pub extend Change with Eq::{equal, not_equal}

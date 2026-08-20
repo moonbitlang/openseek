@@ -624,3 +624,99 @@ pub fn Session::compact(
     unix_ms~,
   )
 }
+
+///|
+pub extend AssistantMessage with Debug::{to_repr}
+
+///|
+pub extend AssistantMessage with FromJson::{from_json}
+
+///|
+pub extend AssistantMessage with Eq::{equal, not_equal}
+
+///|
+pub extend AssistantMessage with ToJson::{to_json}
+
+///|
+pub extend RuntimeNotice with Debug::{to_repr}
+
+///|
+pub extend RuntimeNotice with FromJson::{from_json}
+
+///|
+pub extend RuntimeNotice with Eq::{equal, not_equal}
+
+///|
+pub extend RuntimeNotice with ToJson::{to_json}
+
+///|
+pub extend Session with Debug::{to_repr}
+
+///|
+pub extend Session with Eq::{equal, not_equal}
+
+///|
+pub extend SessionEvent with Debug::{to_repr}
+
+///|
+pub extend SessionEvent with FromJson::{from_json}
+
+///|
+pub extend SessionEvent with Eq::{equal, not_equal}
+
+///|
+pub extend SessionEvent with ToJson::{to_json}
+
+///|
+pub extend SessionId with Debug::{to_repr}
+
+///|
+pub extend SessionId with Eq::{equal, not_equal}
+
+///|
+pub extend SessionItem with Debug::{to_repr}
+
+///|
+pub extend SessionItem with Eq::{equal, not_equal}
+
+///|
+pub extend SessionSummary with Debug::{to_repr}
+
+///|
+pub extend SessionSummary with FromJson::{from_json}
+
+///|
+pub extend SessionSummary with Eq::{equal, not_equal}
+
+///|
+pub extend SessionSummary with ToJson::{to_json}
+
+///|
+pub extend ToolResult with Debug::{to_repr}
+
+///|
+pub extend ToolResult with FromJson::{from_json}
+
+///|
+pub extend ToolResult with Eq::{equal, not_equal}
+
+///|
+pub extend ToolResult with ToJson::{to_json}
+
+///|
+pub extend TurnTerminal with Debug::{to_repr}
+
+///|
+pub extend TurnTerminal with Eq::{equal, not_equal}
+
+///|
+pub extend UserMessage with Debug::{to_repr}
+
+///|
+pub extend UserMessage with FromJson::{from_json}
+
+///|
+pub extend UserMessage with Eq::{equal, not_equal}
+
+///|
+pub extend UserMessage with ToJson::{to_json}

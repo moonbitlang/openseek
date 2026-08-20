@@ -187,3 +187,33 @@ pub struct RenderLineOutput2 {
   character_mapping : CharacterMapping
   contains_foreign_elements : ForeignElementType
 } derive(Eq, Debug)
+
+///|
+pub extend CharacterMapping with Debug::{to_repr}
+
+///|
+pub extend CharacterMapping with Eq::{equal, not_equal}
+
+///|
+pub extend CharacterMappingEntry with Debug::{to_repr}
+
+///|
+pub extend CharacterMappingEntry with Eq::{equal, not_equal}
+
+///|
+pub extend DomPosition with Debug::{to_repr}
+
+///|
+pub extend DomPosition with Eq::{equal, not_equal}
+
+///|
+pub extend RenderLineOutput with Debug::{to_repr}
+
+///|
+pub extend RenderLineOutput with Eq::{equal, not_equal}
+
+///|
+pub extend RenderLineOutput2 with Debug::{to_repr}
+
+///|
+pub extend RenderLineOutput2 with Eq::{equal, not_equal}

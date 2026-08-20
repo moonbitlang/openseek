@@ -590,3 +590,6 @@ fn HttpTransport::deliver(self : HttpTransport, message : Json) -> Unit {
   }
   (self.inbound.try_put(message) catch { _ => false }) |> ignore
 }
+
+///|
+pub extend HttpTransport with @jsonrpc.Transport::{close, recv, send}

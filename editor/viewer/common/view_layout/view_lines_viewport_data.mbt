@@ -53,3 +53,9 @@ pub fn ViewportData::decorations_in_viewport(
   }
   out
 }
+
+///|
+pub extend ViewportData with Debug::{to_repr}
+
+///|
+pub extend ViewportData with Eq::{equal, not_equal}

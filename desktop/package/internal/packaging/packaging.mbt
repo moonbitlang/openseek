@@ -1164,3 +1164,6 @@ test "a PackageError shown as an Error keeps its message" {
     "package error: viewer stylesheet not found: /x.css",
   )
 }
+
+///|
+pub extend PackageError with Show::{output, to_string}

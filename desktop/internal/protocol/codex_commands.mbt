@@ -840,3 +840,351 @@ pub impl FromJson for CodexArchiveReply with fn from_json(json, path) {
   }
   { value: json }
 }
+
+///|
+pub extend CodexAccountLoginCancelPayload with Debug::{to_repr}
+
+///|
+pub extend CodexAccountLoginCancelPayload with FromJson::{from_json}
+
+///|
+pub extend CodexAccountLoginCancelPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexAccountLoginCancelPayload with ToJson::{to_json}
+
+///|
+pub extend CodexAccountLoginStartPayload with Debug::{to_repr}
+
+///|
+pub extend CodexAccountLoginStartPayload with FromJson::{from_json}
+
+///|
+pub extend CodexAccountLoginStartPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexAccountLoginStartPayload with ToJson::{to_json}
+
+///|
+pub extend CodexAccountReadPayload with Debug::{to_repr}
+
+///|
+pub extend CodexAccountReadPayload with FromJson::{from_json}
+
+///|
+pub extend CodexAccountReadPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexAccountReadPayload with ToJson::{to_json}
+
+///|
+pub extend CodexAccountReply with Debug::{to_repr}
+
+///|
+pub extend CodexAccountReply with FromJson::{from_json}
+
+///|
+pub extend CodexAccountReply with Eq::{equal, not_equal}
+
+///|
+pub extend CodexAccountReply with ToJson::{to_json}
+
+///|
+pub extend CodexArchiveReply with FromJson::{from_json}
+
+///|
+pub extend CodexArchiveReply with ToJson::{to_json}
+
+///|
+pub extend CodexDataReply with Debug::{to_repr}
+
+///|
+pub extend CodexDataReply with FromJson::{from_json}
+
+///|
+pub extend CodexDataReply with Eq::{equal, not_equal}
+
+///|
+pub extend CodexDataReply with ToJson::{to_json}
+
+///|
+pub extend CodexDraftClosePayload with Debug::{to_repr}
+
+///|
+pub extend CodexDraftClosePayload with FromJson::{from_json}
+
+///|
+pub extend CodexDraftClosePayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexDraftClosePayload with ToJson::{to_json}
+
+///|
+pub extend CodexDraftOpenPayload with Debug::{to_repr}
+
+///|
+pub extend CodexDraftOpenPayload with FromJson::{from_json}
+
+///|
+pub extend CodexDraftOpenPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexDraftOpenPayload with ToJson::{to_json}
+
+///|
+pub extend CodexDraftOpenReply with Debug::{to_repr}
+
+///|
+pub extend CodexDraftOpenReply with FromJson::{from_json}
+
+///|
+pub extend CodexDraftOpenReply with Eq::{equal, not_equal}
+
+///|
+pub extend CodexDraftOpenReply with ToJson::{to_json}
+
+///|
+pub extend CodexFileSearchPayload with Debug::{to_repr}
+
+///|
+pub extend CodexFileSearchPayload with FromJson::{from_json}
+
+///|
+pub extend CodexFileSearchPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexFileSearchPayload with ToJson::{to_json}
+
+///|
+pub extend CodexFileSearchReply with FromJson::{from_json}
+
+///|
+pub extend CodexFileSearchReply with ToJson::{to_json}
+
+///|
+pub extend CodexLoginStartReply with Debug::{to_repr}
+
+///|
+pub extend CodexLoginStartReply with FromJson::{from_json}
+
+///|
+pub extend CodexLoginStartReply with Eq::{equal, not_equal}
+
+///|
+pub extend CodexLoginStartReply with ToJson::{to_json}
+
+///|
+pub extend CodexModelListPayload with Debug::{to_repr}
+
+///|
+pub extend CodexModelListPayload with FromJson::{from_json}
+
+///|
+pub extend CodexModelListPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexModelListPayload with ToJson::{to_json}
+
+///|
+pub extend CodexReviewStartPayload with Debug::{to_repr}
+
+///|
+pub extend CodexReviewStartPayload with FromJson::{from_json}
+
+///|
+pub extend CodexReviewStartPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexReviewStartPayload with ToJson::{to_json}
+
+///|
+pub extend CodexReviewTarget with Debug::{to_repr}
+
+///|
+pub extend CodexReviewTarget with FromJson::{from_json}
+
+///|
+pub extend CodexReviewTarget with Eq::{equal, not_equal}
+
+///|
+pub extend CodexReviewTarget with ToJson::{to_json}
+
+///|
+pub extend CodexServerRequestRespondPayload with Debug::{to_repr}
+
+///|
+pub extend CodexServerRequestRespondPayload with FromJson::{from_json}
+
+///|
+pub extend CodexServerRequestRespondPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexServerRequestRespondPayload with ToJson::{to_json}
+
+///|
+pub extend CodexServerRequestsReply with Debug::{to_repr}
+
+///|
+pub extend CodexServerRequestsReply with FromJson::{from_json}
+
+///|
+pub extend CodexServerRequestsReply with Eq::{equal, not_equal}
+
+///|
+pub extend CodexServerRequestsReply with ToJson::{to_json}
+
+///|
+pub extend CodexSkillsListPayload with Debug::{to_repr}
+
+///|
+pub extend CodexSkillsListPayload with FromJson::{from_json}
+
+///|
+pub extend CodexSkillsListPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexSkillsListPayload with ToJson::{to_json}
+
+///|
+pub extend CodexStatusReply with Debug::{to_repr}
+
+///|
+pub extend CodexStatusReply with FromJson::{from_json}
+
+///|
+pub extend CodexStatusReply with Eq::{equal, not_equal}
+
+///|
+pub extend CodexStatusReply with ToJson::{to_json}
+
+///|
+pub extend CodexThreadArchivePayload with Debug::{to_repr}
+
+///|
+pub extend CodexThreadArchivePayload with FromJson::{from_json}
+
+///|
+pub extend CodexThreadArchivePayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexThreadArchivePayload with ToJson::{to_json}
+
+///|
+pub extend CodexThreadListPayload with Debug::{to_repr}
+
+///|
+pub extend CodexThreadListPayload with FromJson::{from_json}
+
+///|
+pub extend CodexThreadListPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexThreadListPayload with ToJson::{to_json}
+
+///|
+pub extend CodexThreadPayload with Debug::{to_repr}
+
+///|
+pub extend CodexThreadPayload with FromJson::{from_json}
+
+///|
+pub extend CodexThreadPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexThreadPayload with ToJson::{to_json}
+
+///|
+pub extend CodexThreadReadPayload with Debug::{to_repr}
+
+///|
+pub extend CodexThreadReadPayload with FromJson::{from_json}
+
+///|
+pub extend CodexThreadReadPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexThreadReadPayload with ToJson::{to_json}
+
+///|
+pub extend CodexThreadReply with Debug::{to_repr}
+
+///|
+pub extend CodexThreadReply with FromJson::{from_json}
+
+///|
+pub extend CodexThreadReply with Eq::{equal, not_equal}
+
+///|
+pub extend CodexThreadReply with ToJson::{to_json}
+
+///|
+pub extend CodexThreadResumeReply with Debug::{to_repr}
+
+///|
+pub extend CodexThreadResumeReply with FromJson::{from_json}
+
+///|
+pub extend CodexThreadResumeReply with Eq::{equal, not_equal}
+
+///|
+pub extend CodexThreadResumeReply with ToJson::{to_json}
+
+///|
+pub extend CodexThreadStartPayload with Debug::{to_repr}
+
+///|
+pub extend CodexThreadStartPayload with FromJson::{from_json}
+
+///|
+pub extend CodexThreadStartPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexThreadStartPayload with ToJson::{to_json}
+
+///|
+pub extend CodexTurnInterruptPayload with Debug::{to_repr}
+
+///|
+pub extend CodexTurnInterruptPayload with FromJson::{from_json}
+
+///|
+pub extend CodexTurnInterruptPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexTurnInterruptPayload with ToJson::{to_json}
+
+///|
+pub extend CodexTurnReply with Debug::{to_repr}
+
+///|
+pub extend CodexTurnReply with FromJson::{from_json}
+
+///|
+pub extend CodexTurnReply with Eq::{equal, not_equal}
+
+///|
+pub extend CodexTurnReply with ToJson::{to_json}
+
+///|
+pub extend CodexTurnStartPayload with Debug::{to_repr}
+
+///|
+pub extend CodexTurnStartPayload with FromJson::{from_json}
+
+///|
+pub extend CodexTurnStartPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexTurnStartPayload with ToJson::{to_json}
+
+///|
+pub extend CodexTurnSteerPayload with Debug::{to_repr}
+
+///|
+pub extend CodexTurnSteerPayload with FromJson::{from_json}
+
+///|
+pub extend CodexTurnSteerPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CodexTurnSteerPayload with ToJson::{to_json}

@@ -55,3 +55,6 @@ pub fn component(
 ) -> @rabbita.Val[@html.Html] {
   input.map(input => panel_view(input, actions))
 }
+
+///|
+pub extend Input with Eq::{equal, not_equal}

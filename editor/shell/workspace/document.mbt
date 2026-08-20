@@ -249,3 +249,18 @@ fn build_line_starts(text : String) -> Array[Int] {
   }
   starts
 }
+
+///|
+pub extend DocumentChange with Debug::{to_repr}
+
+///|
+pub extend DocumentError with ToJson::{to_json}
+
+///|
+pub extend DocumentReadResult with Debug::{to_repr}
+
+///|
+pub extend DocumentSnapshot with Debug::{to_repr}
+
+///|
+pub extend DocumentSnapshot with ToJson::{to_json}

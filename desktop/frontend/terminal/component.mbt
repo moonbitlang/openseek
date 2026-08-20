@@ -107,3 +107,9 @@ test "terminal visibility distinguishes disconnect from device removal" {
   let signed_out = open.close_without_devices(0)
   assert_false(signed_out.open)
 }
+
+///|
+pub extend Connection with Eq::{equal, not_equal}
+
+///|
+pub extend Input with Eq::{equal, not_equal}

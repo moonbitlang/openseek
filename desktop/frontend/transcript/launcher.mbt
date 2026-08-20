@@ -30,3 +30,6 @@ pub fn apps_from_reply(
   }
   items
 }
+
+///|
+pub extend LauncherAppItem with Eq::{equal, not_equal}

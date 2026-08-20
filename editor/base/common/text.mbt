@@ -150,3 +150,15 @@ pub fn OffsetRange::add_range(
     sorted_ranges.insert(i, OffsetRange(start, end))
   }
 }
+
+///|
+pub extend OffsetRange with Debug::{to_repr}
+
+///|
+pub extend OffsetRange with Eq::{equal, not_equal}
+
+///|
+pub extend Position with Debug::{to_repr}
+
+///|
+pub extend Position with Eq::{equal, not_equal}

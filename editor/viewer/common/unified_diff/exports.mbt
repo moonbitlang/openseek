@@ -131,3 +131,39 @@ pub fn compute_unified_diff(
     context_lines,
   ).map(window => window.to_hunk(original_lines, modified_lines))
 }
+
+///|
+pub extend UnifiedDiffAlgorithmOptions with Debug::{to_repr}
+
+///|
+pub extend UnifiedDiffAlgorithmOptions with Eq::{equal, not_equal}
+
+///|
+pub extend UnifiedDiffChange with Debug::{to_repr}
+
+///|
+pub extend UnifiedDiffChange with Eq::{equal, not_equal}
+
+///|
+pub extend UnifiedDiffHunk with Debug::{to_repr}
+
+///|
+pub extend UnifiedDiffHunk with Eq::{equal, not_equal}
+
+///|
+pub extend UnifiedDiffLine with Debug::{to_repr}
+
+///|
+pub extend UnifiedDiffLine with Eq::{equal, not_equal}
+
+///|
+pub extend UnifiedDiffLineComment with Debug::{to_repr}
+
+///|
+pub extend UnifiedDiffLineComment with Eq::{equal, not_equal}
+
+///|
+pub extend UnifiedDiffLineKind with Debug::{to_repr}
+
+///|
+pub extend UnifiedDiffLineKind with Eq::{equal, not_equal}

@@ -71,3 +71,18 @@ pub(all) enum ViewEvent {
   ViewTokensChanged(ViewTokensChangedEvent)
   ViewZonesChanged
 }
+
+///|
+pub extend ContentWidgetPositionPreference with Eq::{equal, not_equal}
+
+///|
+pub extend PartFingerprint with Debug::{to_repr}
+
+///|
+pub extend PartFingerprint with Eq::{equal, not_equal}
+
+///|
+pub extend ViewConfigurationOption with Debug::{to_repr}
+
+///|
+pub extend ViewConfigurationOption with Eq::{equal, not_equal}

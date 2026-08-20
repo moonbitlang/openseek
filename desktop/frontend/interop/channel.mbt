@@ -195,3 +195,27 @@ test "a managed worktree keeps its identity while temporarily missing" {
   assert_true(missing.same_identity(live))
   assert_true(live.is_ready())
 }
+
+///|
+pub extend ChannelId with Debug::{to_repr}
+
+///|
+pub extend ChannelId with Eq::{equal, not_equal}
+
+///|
+pub extend ChannelId with Hash::{hash, hash_combine}
+
+///|
+pub extend CheckoutPlacement with Debug::{to_repr}
+
+///|
+pub extend CheckoutPlacement with Eq::{equal, not_equal}
+
+///|
+pub extend ConversationKey with Debug::{to_repr}
+
+///|
+pub extend ConversationKey with Eq::{equal, not_equal}
+
+///|
+pub extend ConversationKey with Hash::{hash, hash_combine}

@@ -306,3 +306,9 @@ async fn AuthStore::clear_local_session(self : AuthStore) -> Unit {
     }
   })
 }
+
+///|
+pub extend AuthError with Show::{output, to_string}
+
+///|
+pub extend ConnectorConfig with Eq::{equal, not_equal}

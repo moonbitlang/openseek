@@ -220,3 +220,9 @@ pub fn Doc::layout(self : Doc, width~ : Int) -> Array[@surface.Line] {
 pub fn dim_text(text : String) -> Text {
   Text([Span(DisplayText(text), style=@style.dim)])
 }
+
+///|
+pub extend Span with Debug::{to_repr}
+
+///|
+pub extend Text with Debug::{to_repr}

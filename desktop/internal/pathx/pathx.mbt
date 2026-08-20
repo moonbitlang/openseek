@@ -298,3 +298,36 @@ fn Path::contains(self : Path, path : Path) -> Bool {
   let prefix = if root.has_suffix("/") { root } else { "\{root}/" }
   path.strip_prefix(prefix) is Some(_)
 }
+
+///|
+pub extend Absolute with Debug::{to_repr}
+
+///|
+pub extend Absolute with Eq::{equal, not_equal}
+
+///|
+pub extend Absolute with Hash::{hash, hash_combine}
+
+///|
+pub extend Absolute with Show::{output, to_string}
+
+///|
+pub extend Path with Debug::{to_repr}
+
+///|
+pub extend Path with Eq::{equal, not_equal}
+
+///|
+pub extend Path with Show::{output, to_string}
+
+///|
+pub extend Relative with Debug::{to_repr}
+
+///|
+pub extend Relative with Eq::{equal, not_equal}
+
+///|
+pub extend Relative with Hash::{hash, hash_combine}
+
+///|
+pub extend Relative with Show::{output, to_string}

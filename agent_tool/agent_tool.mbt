@@ -584,3 +584,18 @@ test "Tools::function_tools yields one entry per definition" {
   assert_true(names.contains("second"))
   assert_true(names.contains("third"))
 }
+
+///|
+pub extend AgentControl with Debug::{to_repr}
+
+///|
+pub extend AgentToolDefinition with Debug::{to_repr}
+
+///|
+pub extend JsonSchema with Debug::{to_repr}
+
+///|
+pub extend ToolAction with Debug::{to_repr}
+
+///|
+pub extend ToolOutput with Debug::{to_repr}

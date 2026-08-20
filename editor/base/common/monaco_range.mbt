@@ -293,3 +293,9 @@ pub fn Range::compare_ranges_using_starts(a : Range, b : Range) -> Int {
 pub fn Range::to_string(self : Range) -> String {
   "[\{self.start_line_number},\{self.start_column} -> \{self.end_line_number},\{self.end_column}]"
 }
+
+///|
+pub extend Range with Debug::{to_repr}
+
+///|
+pub extend Range with Eq::{equal, not_equal}

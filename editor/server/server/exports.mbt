@@ -25,3 +25,6 @@ pub fn resolve_remote_directory_uri(
     RemotePathError(error) => RemoteDirectoryError(error)
   }
 }
+
+///|
+pub extend RemoteDirectoryResult with Debug::{to_repr}

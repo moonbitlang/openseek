@@ -479,3 +479,9 @@ pub fn Uri::fs_path(self : Uri) -> String {
 pub fn uri_to_fs_path(uri : Uri, keep_drive_letter_casing : Bool) -> String {
   uri_to_fs_path_impl(uri, keep_drive_letter_casing)
 }
+
+///|
+pub extend Uri with Hash::{hash, hash_combine}
+
+///|
+pub extend UriError with Debug::{to_repr}

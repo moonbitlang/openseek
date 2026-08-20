@@ -80,3 +80,6 @@ pub fn LanguageIdCodec::encode_language_id(
 ) -> Int {
   self.language_to_language_id.get(language).unwrap_or(0)
 }
+
+///|
+pub extend LanguageIdCodec with Debug::{to_repr}

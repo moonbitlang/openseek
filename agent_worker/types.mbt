@@ -137,3 +137,15 @@ pub fn WorkerReport::parse_validated(
     }
   }
 }
+
+///|
+pub extend WorkerReport with Debug::{to_repr}
+
+///|
+pub extend WorkerReport with FromJson::{from_json}
+
+///|
+pub extend WorkerReport with Eq::{equal, not_equal}
+
+///|
+pub extend WorkerReport with ToJson::{to_json}

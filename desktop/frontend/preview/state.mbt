@@ -119,3 +119,12 @@ pub fn page_label(page : PageState) -> String {
     None => "New Tab"
   }
 }
+
+///|
+pub extend PageState with Eq::{equal, not_equal}
+
+///|
+pub extend Rect with Eq::{equal, not_equal}
+
+///|
+pub extend State with Eq::{equal, not_equal}

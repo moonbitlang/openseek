@@ -407,3 +407,15 @@ test "manifest digests normalize to bare lowercase hex" {
   @debug.assert_eq(normalized_sha256("zz\{TestSha}"), None)
   @debug.assert_eq(normalized_sha256("deadbeef"), None)
 }
+
+///|
+pub extend PackageInfo with Debug::{to_repr}
+
+///|
+pub extend PackageInfo with Eq::{equal, not_equal}
+
+///|
+pub extend UpdateInfo with Debug::{to_repr}
+
+///|
+pub extend UpdateInfo with Eq::{equal, not_equal}

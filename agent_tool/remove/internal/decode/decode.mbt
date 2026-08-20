@@ -31,3 +31,6 @@ pub fn decode(arguments : Json) -> RemoveInput raise {
     _ => fail("object arguments")
   }
 }
+
+///|
+pub extend RemoveInput with Debug::{to_repr}

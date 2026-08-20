@@ -159,3 +159,27 @@ test "parse reports an error on malformed json" {
     fail("expected parse error")
   }
 }
+
+///|
+pub extend Citation with Eq::{not_equal, equal}
+
+///|
+pub extend Citation with Debug::{to_repr}
+
+///|
+pub extend Citation with ToJson::{to_json}
+
+///|
+pub extend Citation with FromJson::{from_json}
+
+///|
+pub extend ExploreReport with Eq::{not_equal, equal}
+
+///|
+pub extend ExploreReport with Debug::{to_repr}
+
+///|
+pub extend ExploreReport with ToJson::{to_json}
+
+///|
+pub extend ExploreReport with FromJson::{from_json}

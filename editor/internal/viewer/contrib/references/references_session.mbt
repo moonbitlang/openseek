@@ -56,3 +56,21 @@ pub fn ReferencesSessionKey::is_current(
   self.model_version_id == model.get_version_id() &&
   !model.is_disposed()
 }
+
+///|
+pub extend ReferencesPeekMode with Debug::{to_repr}
+
+///|
+pub extend ReferencesPeekMode with Eq::{equal, not_equal}
+
+///|
+pub extend ReferencesPeekPhase with Debug::{to_repr}
+
+///|
+pub extend ReferencesPeekPhase with Eq::{equal, not_equal}
+
+///|
+pub extend ReferencesSessionKey with Debug::{to_repr}
+
+///|
+pub extend ReferencesSessionKey with Eq::{equal, not_equal}

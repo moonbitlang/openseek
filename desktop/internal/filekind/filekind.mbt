@@ -36,3 +36,9 @@ pub fn classify(bytes : BytesView) -> Classification {
     }
   }
 }
+
+///|
+pub extend Classification with Debug::{to_repr}
+
+///|
+pub extend Classification with Eq::{equal, not_equal}

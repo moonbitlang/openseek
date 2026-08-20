@@ -238,3 +238,18 @@ fn Item::accepted(self : Item) -> Accepted {
     SymbolRow(symbol) => { path: symbol.path, range: Some(symbol.range) }
   }
 }
+
+///|
+pub extend Accepted with Debug::{to_repr}
+
+///|
+pub extend Accepted with Eq::{equal, not_equal}
+
+///|
+pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend Provider with Eq::{equal, not_equal}
+
+///|
+pub extend State with Eq::{equal, not_equal}

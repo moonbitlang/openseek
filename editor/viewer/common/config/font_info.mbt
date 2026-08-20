@@ -374,3 +374,21 @@ pub fn FontInfo::equals(self : FontInfo, other : FontInfo) -> Bool {
   self.wsmiddot_width == other.wsmiddot_width &&
   self.max_digit_width == other.max_digit_width
 }
+
+///|
+pub extend BareFontInfo with Debug::{to_repr}
+
+///|
+pub extend BareFontInfo with Eq::{equal, not_equal}
+
+///|
+pub extend EditorFontDefaults with Debug::{to_repr}
+
+///|
+pub extend EditorFontDefaults with Eq::{equal, not_equal}
+
+///|
+pub extend FontInfo with Debug::{to_repr}
+
+///|
+pub extend FontInfo with Eq::{equal, not_equal}

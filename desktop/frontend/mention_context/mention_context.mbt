@@ -436,3 +436,24 @@ fn parse_annotation_body(lines : ArrayView[String]) -> (String, String)? {
   guard comment is [.. comment_body, "</user_comment>"] else { return None }
   Some((rest[:quote_end].join("\n"), comment_body.join("\n")))
 }
+
+///|
+pub extend AnnotationSide with Debug::{to_repr}
+
+///|
+pub extend AnnotationSide with Eq::{equal, not_equal}
+
+///|
+pub extend MentionMessage with Debug::{to_repr}
+
+///|
+pub extend MentionRef with Debug::{to_repr}
+
+///|
+pub extend MentionRef with Eq::{equal, not_equal}
+
+///|
+pub extend Target with Debug::{to_repr}
+
+///|
+pub extend Target with Eq::{equal, not_equal}

@@ -137,3 +137,21 @@ struct CursorModelState {
   model_version_id : Int
   cursor_state : CursorState
 } derive(Eq)
+
+///|
+pub extend CursorModelState with Eq::{equal, not_equal}
+
+///|
+pub extend CursorState with Debug::{to_repr}
+
+///|
+pub extend CursorState with Eq::{equal, not_equal}
+
+///|
+pub extend CursorStateChange with Debug::{to_repr}
+
+///|
+pub extend PartialCursorState with Debug::{to_repr}
+
+///|
+pub extend PartialCursorState with Eq::{equal, not_equal}

@@ -123,3 +123,9 @@ pub fn dedup_margin_decorations(
   }
   output
 }
+
+///|
+pub extend DecorationToRender with Debug::{to_repr}
+
+///|
+pub extend DecorationToRender with Eq::{equal, not_equal}

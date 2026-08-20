@@ -959,3 +959,891 @@ pub(all) struct TerminalExitPayload {
   id : Int
   code : Int
 } derive(Debug, Eq, FromJson, ToJson)
+
+///|
+pub extend AgentErrorPayload with Debug::{to_repr}
+
+///|
+pub extend AgentErrorPayload with FromJson::{from_json}
+
+///|
+pub extend AgentErrorPayload with Eq::{equal, not_equal}
+
+///|
+pub extend AgentErrorPayload with ToJson::{to_json}
+
+///|
+pub extend AgentEventPayload with Debug::{to_repr}
+
+///|
+pub extend AgentEventPayload with FromJson::{from_json}
+
+///|
+pub extend AgentEventPayload with Eq::{equal, not_equal}
+
+///|
+pub extend AgentEventPayload with ToJson::{to_json}
+
+///|
+pub extend AppInfoReply with Debug::{to_repr}
+
+///|
+pub extend AppInfoReply with FromJson::{from_json}
+
+///|
+pub extend AppInfoReply with Eq::{equal, not_equal}
+
+///|
+pub extend AppInfoReply with ToJson::{to_json}
+
+///|
+pub extend ArchivedSessionPayload with Debug::{to_repr}
+
+///|
+pub extend ArchivedSessionPayload with FromJson::{from_json}
+
+///|
+pub extend ArchivedSessionPayload with Eq::{equal, not_equal}
+
+///|
+pub extend ArchivedSessionPayload with ToJson::{to_json}
+
+///|
+pub extend AuthDevicePayload with Debug::{to_repr}
+
+///|
+pub extend AuthDevicePayload with FromJson::{from_json}
+
+///|
+pub extend AuthDevicePayload with Eq::{equal, not_equal}
+
+///|
+pub extend AuthDevicePayload with ToJson::{to_json}
+
+///|
+pub extend AuthStatusPayload with Debug::{to_repr}
+
+///|
+pub extend AuthStatusPayload with FromJson::{from_json}
+
+///|
+pub extend AuthStatusPayload with Eq::{equal, not_equal}
+
+///|
+pub extend AuthStatusPayload with ToJson::{to_json}
+
+///|
+pub extend AuthUserPayload with Debug::{to_repr}
+
+///|
+pub extend AuthUserPayload with FromJson::{from_json}
+
+///|
+pub extend AuthUserPayload with Eq::{equal, not_equal}
+
+///|
+pub extend AuthUserPayload with ToJson::{to_json}
+
+///|
+pub extend BrowseDirectoryPayload with Debug::{to_repr}
+
+///|
+pub extend BrowseDirectoryPayload with FromJson::{from_json}
+
+///|
+pub extend BrowseDirectoryPayload with Eq::{equal, not_equal}
+
+///|
+pub extend BrowseDirectoryPayload with ToJson::{to_json}
+
+///|
+pub extend BrowserBoundsPayload with Debug::{to_repr}
+
+///|
+pub extend BrowserBoundsPayload with FromJson::{from_json}
+
+///|
+pub extend BrowserBoundsPayload with Eq::{equal, not_equal}
+
+///|
+pub extend BrowserBoundsPayload with ToJson::{to_json}
+
+///|
+pub extend BrowserIdPayload with Debug::{to_repr}
+
+///|
+pub extend BrowserIdPayload with FromJson::{from_json}
+
+///|
+pub extend BrowserIdPayload with Eq::{equal, not_equal}
+
+///|
+pub extend BrowserIdPayload with ToJson::{to_json}
+
+///|
+pub extend BrowserOpenPayload with Debug::{to_repr}
+
+///|
+pub extend BrowserOpenPayload with FromJson::{from_json}
+
+///|
+pub extend BrowserOpenPayload with Eq::{equal, not_equal}
+
+///|
+pub extend BrowserOpenPayload with ToJson::{to_json}
+
+///|
+pub extend BrowserVisiblePayload with Debug::{to_repr}
+
+///|
+pub extend BrowserVisiblePayload with FromJson::{from_json}
+
+///|
+pub extend BrowserVisiblePayload with Eq::{equal, not_equal}
+
+///|
+pub extend BrowserVisiblePayload with ToJson::{to_json}
+
+///|
+pub extend CancelPayload with Debug::{to_repr}
+
+///|
+pub extend CancelPayload with FromJson::{from_json}
+
+///|
+pub extend CancelPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CancelPayload with ToJson::{to_json}
+
+///|
+pub extend CancelSearchFilesPayload with Debug::{to_repr}
+
+///|
+pub extend CancelSearchFilesPayload with FromJson::{from_json}
+
+///|
+pub extend CancelSearchFilesPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CancelSearchFilesPayload with ToJson::{to_json}
+
+///|
+pub extend ClearFileSearchCachePayload with Debug::{to_repr}
+
+///|
+pub extend ClearFileSearchCachePayload with FromJson::{from_json}
+
+///|
+pub extend ClearFileSearchCachePayload with Eq::{equal, not_equal}
+
+///|
+pub extend ClearFileSearchCachePayload with ToJson::{to_json}
+
+///|
+pub extend CompactPayload with Debug::{to_repr}
+
+///|
+pub extend CompactPayload with FromJson::{from_json}
+
+///|
+pub extend CompactPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CompactPayload with ToJson::{to_json}
+
+///|
+pub extend ConnectedPayload with Debug::{to_repr}
+
+///|
+pub extend ConnectedPayload with FromJson::{from_json}
+
+///|
+pub extend ConnectedPayload with Eq::{equal, not_equal}
+
+///|
+pub extend ConnectedPayload with ToJson::{to_json}
+
+///|
+pub extend ConnectedStage with Debug::{to_repr}
+
+///|
+pub extend ConnectedStage with FromJson::{from_json}
+
+///|
+pub extend ConnectedStage with Eq::{equal, not_equal}
+
+///|
+pub extend ConnectedStage with ToJson::{to_json}
+
+///|
+pub extend DiagnosticsPayload with Debug::{to_repr}
+
+///|
+pub extend DiagnosticsPayload with FromJson::{from_json}
+
+///|
+pub extend DiagnosticsPayload with Eq::{equal, not_equal}
+
+///|
+pub extend DiagnosticsPayload with ToJson::{to_json}
+
+///|
+pub extend DurableBoundaryPayload with Debug::{to_repr}
+
+///|
+pub extend DurableBoundaryPayload with FromJson::{from_json}
+
+///|
+pub extend DurableBoundaryPayload with Eq::{equal, not_equal}
+
+///|
+pub extend DurableBoundaryPayload with ToJson::{to_json}
+
+///|
+pub extend ExternalLinkPayload with Debug::{to_repr}
+
+///|
+pub extend ExternalLinkPayload with FromJson::{from_json}
+
+///|
+pub extend ExternalLinkPayload with Eq::{equal, not_equal}
+
+///|
+pub extend ExternalLinkPayload with ToJson::{to_json}
+
+///|
+pub extend FinishedPayload with Debug::{to_repr}
+
+///|
+pub extend FinishedPayload with FromJson::{from_json}
+
+///|
+pub extend FinishedPayload with Eq::{equal, not_equal}
+
+///|
+pub extend FinishedPayload with ToJson::{to_json}
+
+///|
+pub extend FsChangedPayload with Debug::{to_repr}
+
+///|
+pub extend FsChangedPayload with FromJson::{from_json}
+
+///|
+pub extend FsChangedPayload with Eq::{equal, not_equal}
+
+///|
+pub extend FsChangedPayload with ToJson::{to_json}
+
+///|
+pub extend FsEventPayload with Debug::{to_repr}
+
+///|
+pub extend FsEventPayload with FromJson::{from_json}
+
+///|
+pub extend FsEventPayload with Eq::{equal, not_equal}
+
+///|
+pub extend FsEventPayload with ToJson::{to_json}
+
+///|
+pub extend FsWatchFailedPayload with Debug::{to_repr}
+
+///|
+pub extend FsWatchFailedPayload with FromJson::{from_json}
+
+///|
+pub extend FsWatchFailedPayload with Eq::{equal, not_equal}
+
+///|
+pub extend FsWatchFailedPayload with ToJson::{to_json}
+
+///|
+pub extend GitBranchPayload with Debug::{to_repr}
+
+///|
+pub extend GitBranchPayload with FromJson::{from_json}
+
+///|
+pub extend GitBranchPayload with Eq::{equal, not_equal}
+
+///|
+pub extend GitBranchPayload with ToJson::{to_json}
+
+///|
+pub extend GitChangesPayload with Debug::{to_repr}
+
+///|
+pub extend GitChangesPayload with FromJson::{from_json}
+
+///|
+pub extend GitChangesPayload with Eq::{equal, not_equal}
+
+///|
+pub extend GitChangesPayload with ToJson::{to_json}
+
+///|
+pub extend GitOriginalFilePayload with Debug::{to_repr}
+
+///|
+pub extend GitOriginalFilePayload with FromJson::{from_json}
+
+///|
+pub extend GitOriginalFilePayload with Eq::{equal, not_equal}
+
+///|
+pub extend GitOriginalFilePayload with ToJson::{to_json}
+
+///|
+pub extend GitPullRequestPayload with Debug::{to_repr}
+
+///|
+pub extend GitPullRequestPayload with FromJson::{from_json}
+
+///|
+pub extend GitPullRequestPayload with Eq::{equal, not_equal}
+
+///|
+pub extend GitPullRequestPayload with ToJson::{to_json}
+
+///|
+pub extend GoalPayload with Debug::{to_repr}
+
+///|
+pub extend GoalPayload with FromJson::{from_json}
+
+///|
+pub extend GoalPayload with Eq::{equal, not_equal}
+
+///|
+pub extend GoalPayload with ToJson::{to_json}
+
+///|
+pub extend InstallSkillPayload with Debug::{to_repr}
+
+///|
+pub extend InstallSkillPayload with FromJson::{from_json}
+
+///|
+pub extend InstallSkillPayload with Eq::{equal, not_equal}
+
+///|
+pub extend InstallSkillPayload with ToJson::{to_json}
+
+///|
+pub extend KnownRunPayload with Debug::{to_repr}
+
+///|
+pub extend KnownRunPayload with FromJson::{from_json}
+
+///|
+pub extend KnownRunPayload with Eq::{equal, not_equal}
+
+///|
+pub extend KnownRunPayload with ToJson::{to_json}
+
+///|
+pub extend LaunchAppPayload with Debug::{to_repr}
+
+///|
+pub extend LaunchAppPayload with FromJson::{from_json}
+
+///|
+pub extend LaunchAppPayload with Eq::{equal, not_equal}
+
+///|
+pub extend LaunchAppPayload with ToJson::{to_json}
+
+///|
+pub extend LoadSessionPayload with Debug::{to_repr}
+
+///|
+pub extend LoadSessionPayload with FromJson::{from_json}
+
+///|
+pub extend LoadSessionPayload with Eq::{equal, not_equal}
+
+///|
+pub extend LoadSessionPayload with ToJson::{to_json}
+
+///|
+pub extend LspHoverPayload with Debug::{to_repr}
+
+///|
+pub extend LspHoverPayload with FromJson::{from_json}
+
+///|
+pub extend LspHoverPayload with Eq::{equal, not_equal}
+
+///|
+pub extend LspHoverPayload with ToJson::{to_json}
+
+///|
+pub extend LspOpenPayload with Debug::{to_repr}
+
+///|
+pub extend LspOpenPayload with FromJson::{from_json}
+
+///|
+pub extend LspOpenPayload with Eq::{equal, not_equal}
+
+///|
+pub extend LspOpenPayload with ToJson::{to_json}
+
+///|
+pub extend MoonIdeNavigationPayload with Debug::{to_repr}
+
+///|
+pub extend MoonIdeNavigationPayload with FromJson::{from_json}
+
+///|
+pub extend MoonIdeNavigationPayload with Eq::{equal, not_equal}
+
+///|
+pub extend MoonIdeNavigationPayload with ToJson::{to_json}
+
+///|
+pub extend OpenPathPayload with Debug::{to_repr}
+
+///|
+pub extend OpenPathPayload with FromJson::{from_json}
+
+///|
+pub extend OpenPathPayload with Eq::{equal, not_equal}
+
+///|
+pub extend OpenPathPayload with ToJson::{to_json}
+
+///|
+pub extend ReadDirPayload with Debug::{to_repr}
+
+///|
+pub extend ReadDirPayload with FromJson::{from_json}
+
+///|
+pub extend ReadDirPayload with Eq::{equal, not_equal}
+
+///|
+pub extend ReadDirPayload with ToJson::{to_json}
+
+///|
+pub extend ReadFilePayload with Debug::{to_repr}
+
+///|
+pub extend ReadFilePayload with FromJson::{from_json}
+
+///|
+pub extend ReadFilePayload with Eq::{equal, not_equal}
+
+///|
+pub extend ReadFilePayload with ToJson::{to_json}
+
+///|
+pub extend RunsPayload with Debug::{to_repr}
+
+///|
+pub extend RunsPayload with FromJson::{from_json}
+
+///|
+pub extend RunsPayload with Eq::{equal, not_equal}
+
+///|
+pub extend RunsPayload with ToJson::{to_json}
+
+///|
+pub extend SearchFilesPayload with Debug::{to_repr}
+
+///|
+pub extend SearchFilesPayload with FromJson::{from_json}
+
+///|
+pub extend SearchFilesPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SearchFilesPayload with ToJson::{to_json}
+
+///|
+pub extend SessionChangedPayload with Debug::{to_repr}
+
+///|
+pub extend SessionChangedPayload with FromJson::{from_json}
+
+///|
+pub extend SessionChangedPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SessionChangedPayload with ToJson::{to_json}
+
+///|
+pub extend SessionCommitPayload with Debug::{to_repr}
+
+///|
+pub extend SessionCommitPayload with FromJson::{from_json}
+
+///|
+pub extend SessionCommitPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SessionCommitPayload with ToJson::{to_json}
+
+///|
+pub extend SessionPayload with Debug::{to_repr}
+
+///|
+pub extend SessionPayload with FromJson::{from_json}
+
+///|
+pub extend SessionPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SessionPayload with ToJson::{to_json}
+
+///|
+pub extend SettingsSetPayload with Debug::{to_repr}
+
+///|
+pub extend SettingsSetPayload with FromJson::{from_json}
+
+///|
+pub extend SettingsSetPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SettingsSetPayload with ToJson::{to_json}
+
+///|
+pub extend SettingsStatusPayload with Debug::{to_repr}
+
+///|
+pub extend SettingsStatusPayload with FromJson::{from_json}
+
+///|
+pub extend SettingsStatusPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SettingsStatusPayload with ToJson::{to_json}
+
+///|
+pub extend StartPayload with Debug::{to_repr}
+
+///|
+pub extend StartPayload with FromJson::{from_json}
+
+///|
+pub extend StartPayload with Eq::{equal, not_equal}
+
+///|
+pub extend StartPayload with ToJson::{to_json}
+
+///|
+pub extend StartedPayload with Debug::{to_repr}
+
+///|
+pub extend StartedPayload with FromJson::{from_json}
+
+///|
+pub extend StartedPayload with Eq::{equal, not_equal}
+
+///|
+pub extend StartedPayload with ToJson::{to_json}
+
+///|
+pub extend StatFilesPayload with Debug::{to_repr}
+
+///|
+pub extend StatFilesPayload with FromJson::{from_json}
+
+///|
+pub extend StatFilesPayload with Eq::{equal, not_equal}
+
+///|
+pub extend StatFilesPayload with ToJson::{to_json}
+
+///|
+pub extend SteerPayload with Debug::{to_repr}
+
+///|
+pub extend SteerPayload with FromJson::{from_json}
+
+///|
+pub extend SteerPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SteerPayload with ToJson::{to_json}
+
+///|
+pub extend SubrunProgressPayload with Debug::{to_repr}
+
+///|
+pub extend SubrunProgressPayload with FromJson::{from_json}
+
+///|
+pub extend SubrunProgressPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SubrunProgressPayload with ToJson::{to_json}
+
+///|
+pub extend TerminalAckPayload with Debug::{to_repr}
+
+///|
+pub extend TerminalAckPayload with FromJson::{from_json}
+
+///|
+pub extend TerminalAckPayload with Eq::{equal, not_equal}
+
+///|
+pub extend TerminalAckPayload with ToJson::{to_json}
+
+///|
+pub extend TerminalClosePayload with Debug::{to_repr}
+
+///|
+pub extend TerminalClosePayload with FromJson::{from_json}
+
+///|
+pub extend TerminalClosePayload with Eq::{equal, not_equal}
+
+///|
+pub extend TerminalClosePayload with ToJson::{to_json}
+
+///|
+pub extend TerminalExitPayload with Debug::{to_repr}
+
+///|
+pub extend TerminalExitPayload with FromJson::{from_json}
+
+///|
+pub extend TerminalExitPayload with Eq::{equal, not_equal}
+
+///|
+pub extend TerminalExitPayload with ToJson::{to_json}
+
+///|
+pub extend TerminalInputPayload with Debug::{to_repr}
+
+///|
+pub extend TerminalInputPayload with FromJson::{from_json}
+
+///|
+pub extend TerminalInputPayload with Eq::{equal, not_equal}
+
+///|
+pub extend TerminalInputPayload with ToJson::{to_json}
+
+///|
+pub extend TerminalOpenPayload with Debug::{to_repr}
+
+///|
+pub extend TerminalOpenPayload with FromJson::{from_json}
+
+///|
+pub extend TerminalOpenPayload with Eq::{equal, not_equal}
+
+///|
+pub extend TerminalOpenPayload with ToJson::{to_json}
+
+///|
+pub extend TerminalOutputPayload with Debug::{to_repr}
+
+///|
+pub extend TerminalOutputPayload with FromJson::{from_json}
+
+///|
+pub extend TerminalOutputPayload with Eq::{equal, not_equal}
+
+///|
+pub extend TerminalOutputPayload with ToJson::{to_json}
+
+///|
+pub extend TerminalResizePayload with Debug::{to_repr}
+
+///|
+pub extend TerminalResizePayload with FromJson::{from_json}
+
+///|
+pub extend TerminalResizePayload with Eq::{equal, not_equal}
+
+///|
+pub extend TerminalResizePayload with ToJson::{to_json}
+
+///|
+pub extend UninstallSkillPayload with Debug::{to_repr}
+
+///|
+pub extend UninstallSkillPayload with FromJson::{from_json}
+
+///|
+pub extend UninstallSkillPayload with Eq::{equal, not_equal}
+
+///|
+pub extend UninstallSkillPayload with ToJson::{to_json}
+
+///|
+pub extend UpdateDownloadFailedPayload with Debug::{to_repr}
+
+///|
+pub extend UpdateDownloadFailedPayload with FromJson::{from_json}
+
+///|
+pub extend UpdateDownloadFailedPayload with Eq::{equal, not_equal}
+
+///|
+pub extend UpdateDownloadFailedPayload with ToJson::{to_json}
+
+///|
+pub extend UpdateDownloadProgressPayload with Debug::{to_repr}
+
+///|
+pub extend UpdateDownloadProgressPayload with FromJson::{from_json}
+
+///|
+pub extend UpdateDownloadProgressPayload with Eq::{equal, not_equal}
+
+///|
+pub extend UpdateDownloadProgressPayload with ToJson::{to_json}
+
+///|
+pub extend UpdateDownloadedPayload with Debug::{to_repr}
+
+///|
+pub extend UpdateDownloadedPayload with FromJson::{from_json}
+
+///|
+pub extend UpdateDownloadedPayload with Eq::{equal, not_equal}
+
+///|
+pub extend UpdateDownloadedPayload with ToJson::{to_json}
+
+///|
+pub extend WatchWorkspacePayload with Debug::{to_repr}
+
+///|
+pub extend WatchWorkspacePayload with FromJson::{from_json}
+
+///|
+pub extend WatchWorkspacePayload with Eq::{equal, not_equal}
+
+///|
+pub extend WatchWorkspacePayload with ToJson::{to_json}
+
+///|
+pub extend WorkspacePayload with Debug::{to_repr}
+
+///|
+pub extend WorkspacePayload with FromJson::{from_json}
+
+///|
+pub extend WorkspacePayload with Eq::{equal, not_equal}
+
+///|
+pub extend WorkspacePayload with ToJson::{to_json}
+
+///|
+pub extend WorkspaceSettingsGetPayload with Debug::{to_repr}
+
+///|
+pub extend WorkspaceSettingsGetPayload with FromJson::{from_json}
+
+///|
+pub extend WorkspaceSettingsGetPayload with Eq::{equal, not_equal}
+
+///|
+pub extend WorkspaceSettingsGetPayload with ToJson::{to_json}
+
+///|
+pub extend WorkspaceSettingsPayload with Debug::{to_repr}
+
+///|
+pub extend WorkspaceSettingsPayload with FromJson::{from_json}
+
+///|
+pub extend WorkspaceSettingsPayload with Eq::{equal, not_equal}
+
+///|
+pub extend WorkspaceSettingsPayload with ToJson::{to_json}
+
+///|
+pub extend WorkspaceSettingsSetPayload with Debug::{to_repr}
+
+///|
+pub extend WorkspaceSettingsSetPayload with FromJson::{from_json}
+
+///|
+pub extend WorkspaceSettingsSetPayload with Eq::{equal, not_equal}
+
+///|
+pub extend WorkspaceSettingsSetPayload with ToJson::{to_json}
+
+///|
+pub extend WorkspaceSymbolsPayload with Debug::{to_repr}
+
+///|
+pub extend WorkspaceSymbolsPayload with FromJson::{from_json}
+
+///|
+pub extend WorkspaceSymbolsPayload with Eq::{equal, not_equal}
+
+///|
+pub extend WorkspaceSymbolsPayload with ToJson::{to_json}
+
+///|
+pub extend WorkspacesChangedPayload with Debug::{to_repr}
+
+///|
+pub extend WorkspacesChangedPayload with FromJson::{from_json}
+
+///|
+pub extend WorkspacesChangedPayload with Eq::{equal, not_equal}
+
+///|
+pub extend WorkspacesChangedPayload with ToJson::{to_json}
+
+///|
+pub extend WorktreeChangedPayload with Debug::{to_repr}
+
+///|
+pub extend WorktreeChangedPayload with FromJson::{from_json}
+
+///|
+pub extend WorktreeChangedPayload with Eq::{equal, not_equal}
+
+///|
+pub extend WorktreeChangedPayload with ToJson::{to_json}
+
+///|
+pub extend WorktreeCreatePayload with Debug::{to_repr}
+
+///|
+pub extend WorktreeCreatePayload with FromJson::{from_json}
+
+///|
+pub extend WorktreeCreatePayload with Eq::{equal, not_equal}
+
+///|
+pub extend WorktreeCreatePayload with ToJson::{to_json}
+
+///|
+pub extend WorktreeListPayload with Debug::{to_repr}
+
+///|
+pub extend WorktreeListPayload with FromJson::{from_json}
+
+///|
+pub extend WorktreeListPayload with Eq::{equal, not_equal}
+
+///|
+pub extend WorktreeListPayload with ToJson::{to_json}
+
+///|
+pub extend WorktreeRemovePayload with Debug::{to_repr}
+
+///|
+pub extend WorktreeRemovePayload with FromJson::{from_json}
+
+///|
+pub extend WorktreeRemovePayload with Eq::{equal, not_equal}
+
+///|
+pub extend WorktreeRemovePayload with ToJson::{to_json}

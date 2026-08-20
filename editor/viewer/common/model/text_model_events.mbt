@@ -306,3 +306,21 @@ fn TextModel::on_did_change_content_or_injected_text(
 }
 
 // #endregion
+
+///|
+pub extend InternalModelContentChangeEvent with Debug::{to_repr}
+
+///|
+pub extend ModelContentChangedEvent with Debug::{to_repr}
+
+///|
+pub extend ModelRawChange with Debug::{to_repr}
+
+///|
+pub extend ModelRawContentChangedEvent with Debug::{to_repr}
+
+///|
+pub extend RawContentChangedType with Debug::{to_repr}
+
+///|
+pub extend RawContentChangedType with Eq::{equal, not_equal}

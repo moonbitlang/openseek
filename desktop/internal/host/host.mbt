@@ -307,3 +307,9 @@ pub fn endpoints(
     }),
   ]
 }
+
+///|
+pub extend HostError with Debug::{to_repr}
+
+///|
+pub extend PayloadError with Debug::{to_repr}

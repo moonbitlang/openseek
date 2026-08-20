@@ -45,3 +45,6 @@ pub fn decode(arguments : Json) -> GoalStatus raise {
     _ => fail("goal requires a string \"status\" field")
   }
 }
+
+///|
+pub extend GoalStatus with Debug::{to_repr}

@@ -1181,3 +1181,12 @@ fn remove_diff_zones(viewer : Viewer, ids : Array[String]) -> Unit {
     }
   })
 }
+
+///|
+pub extend DiffEditorRenderMode with Debug::{to_repr}
+
+///|
+pub extend DiffEditorRenderMode with Eq::{equal, not_equal}
+
+///|
+pub extend DiffViewerMode with Eq::{equal, not_equal}

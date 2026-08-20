@@ -1798,3 +1798,18 @@ async test "worktree remove prunes an externally deleted checkout" {
   )
   @fs.rmdir(root.to_string(), recursive=true)
 }
+
+///|
+pub extend CodexWorktreeBinding with Debug::{to_repr}
+
+///|
+pub extend CodexWorktreeBinding with Eq::{equal, not_equal}
+
+///|
+pub extend WorktreeError with Debug::{to_repr}
+
+///|
+pub extend WorktreeOwner with Debug::{to_repr}
+
+///|
+pub extend WorktreeOwner with Eq::{equal, not_equal}

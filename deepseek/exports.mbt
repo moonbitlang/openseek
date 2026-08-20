@@ -10,5 +10,8 @@ pub impl FromJson for Usage with fn from_json(
   json : Json,
   path : @json.JsonPath,
 ) -> Usage {
-  Usage::from_json(json, path)
+  Usage::parse_json(json, path)
 }
+
+///|
+pub extend Usage with FromJson::{from_json}

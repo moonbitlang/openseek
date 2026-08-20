@@ -176,3 +176,24 @@ fn decode_workspace_switched_payload(
       )
   }
 }
+
+///|
+pub extend HostDirectoryEntry with Debug::{to_repr}
+
+///|
+pub extend HostDirectoryEntry with Eq::{equal, not_equal}
+
+///|
+pub extend HostDirectoryListedPayload with Debug::{to_repr}
+
+///|
+pub extend HostDirectoryListing with Debug::{to_repr}
+
+///|
+pub extend HostDirectoryListing with Eq::{equal, not_equal}
+
+///|
+pub extend HostPathRequest with Debug::{to_repr}
+
+///|
+pub extend WorkspaceSwitchedPayload with Debug::{to_repr}

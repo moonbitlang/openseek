@@ -1096,3 +1096,21 @@ fn LinesLayout::accumulated_line_heights_including_line_number(
     line_number.to_double() * self.default_line_height.to_double()
   }
 }
+
+///|
+pub extend EditorWhitespace with Debug::{to_repr}
+
+///|
+pub extend EditorWhitespace with Eq::{equal, not_equal}
+
+///|
+pub extend PartialViewLinesViewportData with Debug::{to_repr}
+
+///|
+pub extend PartialViewLinesViewportData with Eq::{equal, not_equal}
+
+///|
+pub extend ViewWhitespaceViewportData with Debug::{to_repr}
+
+///|
+pub extend ViewWhitespaceViewportData with Eq::{equal, not_equal}

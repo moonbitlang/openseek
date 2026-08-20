@@ -33,3 +33,9 @@ fn markdown_info_string_is_moonbit_check(info_string : String) -> Bool {
   guard tokens.length() >= 2 else { return false }
   (tokens[0] == "mbt" || tokens[0] == "moonbit") && tokens[1] == "check"
 }
+
+///|
+pub extend MarkdownResourceKind with Debug::{to_repr}
+
+///|
+pub extend MarkdownResourceKind with Eq::{equal, not_equal}

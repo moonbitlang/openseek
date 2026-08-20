@@ -597,3 +597,9 @@ test "loc_line_span accepts every lenient loc form" {
   debug_inspect(loc_line_span(""), content="None")
   debug_inspect(loc_line_span(":1"), content="None")
 }
+
+///|
+pub extend ParseGate with Debug::{to_repr}
+
+///|
+pub extend ParseGateError with Debug::{to_repr}

@@ -54,3 +54,21 @@ pub(all) enum HoverStartSource {
   HoverStartClick
   HoverStartKeyboard
 } derive(Eq, Debug)
+
+///|
+pub extend HoverAnchor with Debug::{to_repr}
+
+///|
+pub extend HoverAnchor with Eq::{equal, not_equal}
+
+///|
+pub extend HoverStartMode with Debug::{to_repr}
+
+///|
+pub extend HoverStartMode with Eq::{equal, not_equal}
+
+///|
+pub extend HoverStartSource with Debug::{to_repr}
+
+///|
+pub extend HoverStartSource with Eq::{equal, not_equal}

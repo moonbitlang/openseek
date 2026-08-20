@@ -936,3 +936,6 @@ test "word motion treats non-ascii runs as words" {
   model.move_word_right()
   inspect(cursor_line_prefix(model), content="你好 world")
 }
+
+///|
+pub extend Mode with Eq::{equal, not_equal}

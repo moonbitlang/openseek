@@ -317,3 +317,18 @@ test "malformed agent errors remain visible notifications" {
     assert_eq(payload.message, None)
   }
 }
+
+///|
+pub extend Notification with Debug::{to_repr}
+
+///|
+pub extend Notification with Eq::{equal, not_equal}
+
+///|
+pub extend NotificationKind with Debug::{to_repr}
+
+///|
+pub extend NotificationKind with Eq::{equal, not_equal}
+
+///|
+pub extend NotificationKind with Hash::{hash, hash_combine}

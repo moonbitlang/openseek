@@ -287,3 +287,6 @@ async fn Client::chat_stream_attempt(
     on_reasoning_delta=stream.on_reasoning_delta,
   )
 }
+
+///|
+pub extend Client with Debug::{to_repr}

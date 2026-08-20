@@ -84,3 +84,9 @@ pub fn RenderLineInput::from_view_line(
     render_new_line_when_empty,
   }
 }
+
+///|
+pub extend RenderLineInput with Debug::{to_repr}
+
+///|
+pub extend RenderLineInput with Eq::{equal, not_equal}

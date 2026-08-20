@@ -153,3 +153,9 @@ pub fn TextModel::get_word_at_position(
   let line_content = self.get_line_content(position.line_number)
   get_word_at_text(position.column, line_content, 0)
 }
+
+///|
+pub extend WordAtPosition with Debug::{to_repr}
+
+///|
+pub extend WordAtPosition with Eq::{equal, not_equal}

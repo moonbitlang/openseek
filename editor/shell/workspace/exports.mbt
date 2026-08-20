@@ -344,3 +344,60 @@ pub fn DocumentSnapshot::offset_at_position(
 ) -> Int {
   self.offset_at_position_impl(position)
 }
+
+///|
+pub extend DocumentContent with Debug::{to_repr}
+
+///|
+pub extend DocumentError with Debug::{to_repr}
+
+///|
+pub extend DocumentReadResult with ToJson::{to_json}
+
+///|
+pub extend FileChange with Debug::{to_repr}
+
+///|
+pub extend FileChange with ToJson::{to_json}
+
+///|
+pub extend FileChangeType with Debug::{to_repr}
+
+///|
+pub extend FileChangeType with Eq::{equal, not_equal}
+
+///|
+pub extend FileReadResult with Debug::{to_repr}
+
+///|
+pub extend FileSystemProviderError with Debug::{to_repr}
+
+///|
+pub extend FileSystemProviderError with ToJson::{to_json}
+
+///|
+pub extend FileSystemProviderErrorCode with Debug::{to_repr}
+
+///|
+pub extend FileSystemProviderErrorCode with Eq::{equal, not_equal}
+
+///|
+pub extend SourceError with Debug::{to_repr}
+
+///|
+pub extend SourceError with Eq::{equal, not_equal}
+
+///|
+pub extend SourcePath with Debug::{to_repr}
+
+///|
+pub extend SourcePath with Eq::{equal, not_equal}
+
+///|
+pub extend SourcePathResult with Debug::{to_repr}
+
+///|
+pub extend SourcePathResult with Eq::{equal, not_equal}
+
+///|
+pub extend WatchOptions with Debug::{to_repr}

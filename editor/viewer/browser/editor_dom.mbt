@@ -426,3 +426,27 @@ extern "js" fn document_remove_keydown_capture(
   callback : (@rdom.Event) -> Unit,
 ) -> Unit =
   #| (cb) => document.removeEventListener("keydown", cb, true)
+
+///|
+pub extend ClientCoordinates with Debug::{to_repr}
+
+///|
+pub extend ClientCoordinates with Eq::{equal, not_equal}
+
+///|
+pub extend CoordinatesRelativeToEditor with Debug::{to_repr}
+
+///|
+pub extend CoordinatesRelativeToEditor with Eq::{equal, not_equal}
+
+///|
+pub extend EditorPagePosition with Debug::{to_repr}
+
+///|
+pub extend EditorPagePosition with Eq::{equal, not_equal}
+
+///|
+pub extend PageCoordinates with Debug::{to_repr}
+
+///|
+pub extend PageCoordinates with Eq::{equal, not_equal}

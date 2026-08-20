@@ -47,3 +47,6 @@ pub impl @jsonrpc.Transport for StdioTransport with fn recv(self) {
 pub impl @jsonrpc.Transport for StdioTransport with fn close(self) {
   (self.teardown)()
 }
+
+///|
+pub extend StdioTransport with @jsonrpc.Transport::{close, recv, send}

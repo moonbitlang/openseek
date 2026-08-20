@@ -603,3 +603,9 @@ test "Codex reverse-request generations advance only on ownership changes" {
   assert_eq(requests.generation, 1)
   @debug.assert_eq(requests.snapshot(), { "data": [], "generation": 1 })
 }
+
+///|
+pub extend CodexError with Debug::{to_repr}
+
+///|
+pub extend CodexError with Show::{output, to_string}

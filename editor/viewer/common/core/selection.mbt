@@ -137,3 +137,15 @@ fn position_le(a : @base_common.Position, b : @base_common.Position) -> Bool {
 fn position_eq(a : @base_common.Position, b : @base_common.Position) -> Bool {
   a.equals(b)
 }
+
+///|
+pub extend Selection with Debug::{to_repr}
+
+///|
+pub extend Selection with Eq::{equal, not_equal}
+
+///|
+pub extend SelectionDirection with Debug::{to_repr}
+
+///|
+pub extend SelectionDirection with Eq::{equal, not_equal}

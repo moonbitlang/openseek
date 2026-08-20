@@ -485,3 +485,9 @@ fn compute_wrapped_text_indent_length(
   }
   wrapped_text_indent_length
 }
+
+///|
+pub extend WordBreak with Debug::{to_repr}
+
+///|
+pub extend WordBreak with Eq::{equal, not_equal}

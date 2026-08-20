@@ -204,3 +204,9 @@ fn classify_word(word : StringView) -> @syntax.HighlightTag {
     _ => if @syntax.is_capitalized(word) { Type } else { Identifier }
   }
 }
+
+///|
+pub extend JavascriptTokenizer with @syntax.LineTokenizer::{
+  initial_state,
+  tokenize_line,
+}

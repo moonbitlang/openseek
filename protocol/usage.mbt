@@ -22,3 +22,12 @@ pub(all) struct Usage {
   prompt_cache_hit_tokens : Int
   prompt_cache_miss_tokens : Int
 } derive(Eq, Debug, ToJson)
+
+///|
+pub extend Usage with Debug::{to_repr}
+
+///|
+pub extend Usage with Eq::{equal, not_equal}
+
+///|
+pub extend Usage with ToJson::{to_json}

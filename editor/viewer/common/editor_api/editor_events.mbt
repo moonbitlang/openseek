@@ -28,3 +28,15 @@ pub(all) struct ScrolledVisiblePosition {
   left : Double
   height : Double
 } derive(Eq, Debug)
+
+///|
+pub extend ModelChangedEvent with Debug::{to_repr}
+
+///|
+pub extend ScrollEvent with Debug::{to_repr}
+
+///|
+pub extend ScrolledVisiblePosition with Debug::{to_repr}
+
+///|
+pub extend ScrolledVisiblePosition with Eq::{equal, not_equal}

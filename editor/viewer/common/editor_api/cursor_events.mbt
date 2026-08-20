@@ -36,3 +36,15 @@ pub(all) struct CursorSelectionChangedEvent {
   source : String
   reason : CursorChangeReason
 } derive(Debug)
+
+///|
+pub extend CursorChangeReason with Debug::{to_repr}
+
+///|
+pub extend CursorChangeReason with Eq::{equal, not_equal}
+
+///|
+pub extend CursorPositionChangedEvent with Debug::{to_repr}
+
+///|
+pub extend CursorSelectionChangedEvent with Debug::{to_repr}

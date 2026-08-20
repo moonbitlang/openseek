@@ -32,3 +32,18 @@ pub(all) struct AgentFeedback {
   replies : Array[String]
   state : AgentFeedbackState
 } derive(Debug)
+
+///|
+pub extend AgentFeedback with Debug::{to_repr}
+
+///|
+pub extend AgentFeedbackKind with Debug::{to_repr}
+
+///|
+pub extend AgentFeedbackKind with Eq::{equal, not_equal}
+
+///|
+pub extend AgentFeedbackState with Debug::{to_repr}
+
+///|
+pub extend AgentFeedbackState with Eq::{equal, not_equal}

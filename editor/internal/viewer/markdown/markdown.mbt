@@ -177,3 +177,15 @@ fn markdown_conversion_result(
   }
   { html, has_code_block: saw_code_block.val, projection }
 }
+
+///|
+pub extend MarkdownCodeBlock with Debug::{to_repr}
+
+///|
+pub extend MarkdownCodeBlock with Eq::{equal, not_equal}
+
+///|
+pub extend MarkdownRenderFact with Debug::{to_repr}
+
+///|
+pub extend MarkdownRenderFact with Eq::{equal, not_equal}

@@ -70,3 +70,6 @@ pub fn TokenizationRegistry::get_default_background(
 ) -> String? {
   self.get_default_background_impl()
 }
+
+///|
+pub extend HighlightTag with Show::{output, to_string}

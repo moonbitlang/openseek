@@ -35,3 +35,9 @@ fn Input::has_installed(self : Input, source : String) -> Bool {
 pub enum Outcome {
   LibraryChanged(channel~ : @interop.ChannelId)
 } derive(Eq)
+
+///|
+pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend Outcome with Eq::{equal, not_equal}

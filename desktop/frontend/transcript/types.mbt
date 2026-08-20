@@ -89,3 +89,15 @@ pub(all) struct SessionListItem {
   // listing but sort after stamped ones, same as the engine's own ordering.
   updated_at_ms : Double?
 } derive(Eq)
+
+///|
+pub extend ItemKind with Eq::{equal, not_equal}
+
+///|
+pub extend SessionListItem with Eq::{equal, not_equal}
+
+///|
+pub extend SubrunLane with Eq::{equal, not_equal}
+
+///|
+pub extend TranscriptItem with Eq::{equal, not_equal}

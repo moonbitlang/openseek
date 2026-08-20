@@ -392,3 +392,27 @@ fn fill_unmapped_model_columns(
     }
   }
 }
+
+///|
+pub extend InjectedText with Debug::{to_repr}
+
+///|
+pub extend InjectedText with Eq::{equal, not_equal}
+
+///|
+pub extend ProjectedLinePart with Debug::{to_repr}
+
+///|
+pub extend ProjectedLinePart with Eq::{equal, not_equal}
+
+///|
+pub extend ProjectedLinePartKind with Debug::{to_repr}
+
+///|
+pub extend ProjectedLinePartKind with Eq::{equal, not_equal}
+
+///|
+pub extend ProjectedTextLine with Debug::{to_repr}
+
+///|
+pub extend ProjectedTextLine with Eq::{equal, not_equal}

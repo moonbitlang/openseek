@@ -688,3 +688,12 @@ fn normalize_workspace_root(root : String) -> String {
     normalized
   }
 }
+
+///|
+pub extend RemotePathResult with Debug::{to_repr}
+
+///|
+pub extend ServerHostReadResult with Debug::{to_repr}
+
+///|
+pub extend ServerHostResolveResult with Debug::{to_repr}

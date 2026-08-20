@@ -126,3 +126,9 @@ fn decode_string_map(
   }
   out
 }
+
+///|
+pub extend McpServer with Debug::{to_repr}
+
+///|
+pub extend McpServer with Eq::{equal, not_equal}

@@ -81,3 +81,12 @@ pub fn active_browser(state : State) -> Int? {
     _ => None
   }
 }
+
+///|
+pub extend DockTab with Eq::{equal, not_equal}
+
+///|
+pub extend RememberedStrip with Eq::{equal, not_equal}
+
+///|
+pub extend State with Eq::{equal, not_equal}

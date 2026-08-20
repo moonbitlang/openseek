@@ -133,3 +133,60 @@ pub(all) enum Action {
   StopRequested(identity~ : Identity)
   FileIndexEnsured(identity~ : Identity)
 }
+
+///|
+pub extend Draft with Debug::{to_repr}
+
+///|
+pub extend Draft with Eq::{equal, not_equal}
+
+///|
+pub extend FileIndex with Debug::{to_repr}
+
+///|
+pub extend FileIndex with Eq::{equal, not_equal}
+
+///|
+pub extend GoalInput with Eq::{equal, not_equal}
+
+///|
+pub extend GoalPending with Debug::{to_repr}
+
+///|
+pub extend GoalPending with Eq::{equal, not_equal}
+
+///|
+pub extend Identity with Debug::{to_repr}
+
+///|
+pub extend Identity with Eq::{equal, not_equal}
+
+///|
+pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend Mention with Debug::{to_repr}
+
+///|
+pub extend Mention with Eq::{equal, not_equal}
+
+///|
+pub extend Presentation with Eq::{equal, not_equal}
+
+///|
+pub extend PrimaryAction with Debug::{to_repr}
+
+///|
+pub extend PrimaryAction with Eq::{equal, not_equal}
+
+///|
+pub extend Replacement with Debug::{to_repr}
+
+///|
+pub extend Replacement with Eq::{equal, not_equal}
+
+///|
+pub extend SlashCommand with Debug::{to_repr}
+
+///|
+pub extend SlashCommand with Eq::{equal, not_equal}

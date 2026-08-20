@@ -150,3 +150,6 @@ pub fn ResolvedToolchain::tool_env(
   self.apply_to_env(env)
   env
 }
+
+///|
+pub extend ToolchainUnavailable with Show::{output, to_string}

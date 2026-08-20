@@ -124,3 +124,9 @@ fn render_markdown_with_mermaid_loader(
     dom_lifetime: lifetime,
   }
 }
+
+///|
+pub extend MermaidTheme with Debug::{to_repr}
+
+///|
+pub extend MermaidTheme with Eq::{equal, not_equal}

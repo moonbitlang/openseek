@@ -946,3 +946,27 @@ pub fn HoverController::widget_view_with_loading(
       }
   }
 }
+
+///|
+pub extend HoverController with Eq::{equal, not_equal}
+
+///|
+pub extend HoverDebouncer with Eq::{equal, not_equal}
+
+///|
+pub extend HoverOperation with Debug::{to_repr}
+
+///|
+pub extend HoverOperation with Eq::{equal, not_equal}
+
+///|
+pub extend HoverOperationOptions with Debug::{to_repr}
+
+///|
+pub extend HoverOperationOptions with Eq::{equal, not_equal}
+
+///|
+pub extend HoverView with Eq::{equal, not_equal}
+
+///|
+pub extend HoverWidgetView with Eq::{equal, not_equal}

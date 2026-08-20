@@ -219,3 +219,27 @@ fn with_default_conflict_paths(json : Json) -> Json {
     other => other
   }
 }
+
+///|
+pub extend SubtaskEntry with Debug::{to_repr}
+
+///|
+pub extend SubtaskEntry with FromJson::{from_json}
+
+///|
+pub extend SubtaskEntry with Eq::{equal, not_equal}
+
+///|
+pub extend SubtaskEntry with ToJson::{to_json}
+
+///|
+pub extend SubtaskState with Debug::{to_repr}
+
+///|
+pub extend SubtaskState with FromJson::{from_json}
+
+///|
+pub extend SubtaskState with Eq::{equal, not_equal}
+
+///|
+pub extend SubtaskState with ToJson::{to_json}

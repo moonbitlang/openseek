@@ -131,3 +131,12 @@ pub fn MemoryLogger::MemoryLogger() -> MemoryLogger {
 pub fn MemoryLogger::entries(self : MemoryLogger) -> Array[LogEntry] {
   self.entries_impl()
 }
+
+///|
+pub extend MemoryLogger with Logger::{flush, log}
+
+///|
+pub extend MultiplexLogger with Logger::{flush, log}
+
+///|
+pub extend NullLogger with Logger::{flush, log}

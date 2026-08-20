@@ -221,3 +221,27 @@ fn optional_string(json : Json, key : String) -> String? {
   }
   Some(text)
 }
+
+///|
+pub extend CallToolResult with Debug::{to_repr}
+
+///|
+pub extend CallToolResult with Eq::{equal, not_equal}
+
+///|
+pub extend ContentBlock with Debug::{to_repr}
+
+///|
+pub extend ContentBlock with Eq::{equal, not_equal}
+
+///|
+pub extend InitializeResult with Debug::{to_repr}
+
+///|
+pub extend InitializeResult with Eq::{equal, not_equal}
+
+///|
+pub extend McpTool with Debug::{to_repr}
+
+///|
+pub extend McpTool with Eq::{equal, not_equal}

@@ -154,3 +154,9 @@ pub fn Surface::line_at(self : Surface, row : Int) -> Line {
     Line::new([])
   }
 }
+
+///|
+pub extend Line with Eq::{equal, not_equal}
+
+///|
+pub extend Span with Eq::{equal, not_equal}

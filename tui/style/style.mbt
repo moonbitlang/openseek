@@ -35,3 +35,9 @@ pub let ok : Style = Style(foreground=Basic(Green))
 ///|
 /// Failure accent (red): error items and failed statuses.
 pub let error : Style = Style(foreground=Basic(Red))
+
+///|
+pub extend Style with Eq::{not_equal, equal}
+
+///|
+pub extend Style with Debug::{to_repr}

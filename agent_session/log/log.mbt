@@ -92,3 +92,21 @@ pub fn session_from_parse(
   let session_id : @agent_session.SessionId = SessionId(id)
   Session(session_id, system_prompt~, events=@vector.from_array(parsed.events))
 }
+
+///|
+pub extend HeaderParse with Debug::{to_repr}
+
+///|
+pub extend LineError with Debug::{to_repr}
+
+///|
+pub extend LineError with Eq::{equal, not_equal}
+
+///|
+pub extend SessionFileHeader with Debug::{to_repr}
+
+///|
+pub extend SessionFileHeader with Eq::{equal, not_equal}
+
+///|
+pub extend SessionFileHeader with ToJson::{to_json}

@@ -210,3 +210,15 @@ fn summary_line(steps : Array[Step]) -> String {
     "plan \{completed}/\{total}"
   }
 }
+
+///|
+pub extend Status with Debug::{to_repr}
+
+///|
+pub extend Status with Eq::{equal, not_equal}
+
+///|
+pub extend Step with Debug::{to_repr}
+
+///|
+pub extend Step with Eq::{equal, not_equal}

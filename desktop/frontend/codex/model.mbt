@@ -2784,3 +2784,6 @@ test "Codex editor annotations stay in chips and preserve model context" {
     ),
   ])
 }
+
+///|
+pub extend State with Eq::{equal, not_equal}

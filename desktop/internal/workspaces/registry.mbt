@@ -434,3 +434,6 @@ async test "workspace identity follows symlinks and survives deletion" {
   assert_eq(linked, canonical)
   assert_eq(vanished.0, missing.to_string())
 }
+
+///|
+pub extend WorkspaceError with Debug::{to_repr}

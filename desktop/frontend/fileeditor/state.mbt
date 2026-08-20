@@ -764,3 +764,57 @@ pub(all) enum Msg {
     feedback_id~ : String?
   )
 }
+
+///|
+pub extend ChangeKind with Eq::{equal, not_equal}
+
+///|
+pub extend ChangeList with Eq::{equal, not_equal}
+
+///|
+pub extend ChangedFile with Eq::{equal, not_equal}
+
+///|
+pub extend Ctx with Eq::{equal, not_equal}
+
+///|
+pub extend Doc with Eq::{equal, not_equal}
+
+///|
+pub extend ExplorerMode with Eq::{equal, not_equal}
+
+///|
+pub extend FileChange with Eq::{equal, not_equal}
+
+///|
+pub extend FileEntry with Eq::{equal, not_equal}
+
+///|
+pub extend FileIndex with Eq::{equal, not_equal}
+
+///|
+pub extend ReconciledPlacement with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewBaseline with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewDiffLayout with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewState with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewViewMode with Eq::{equal, not_equal}
+
+///|
+pub extend State with Eq::{equal, not_equal}
+
+///|
+pub extend TabState with Eq::{equal, not_equal}
+
+///|
+pub extend TreeLayout with Eq::{equal, not_equal}
+
+///|
+pub extend WatchedPaths with Eq::{equal, not_equal}

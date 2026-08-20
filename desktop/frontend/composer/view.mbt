@@ -473,3 +473,9 @@ fn KeyboardActions::attrs(self : KeyboardActions) -> @html.Attrs {
 fn is_submit_shortcut(event : @dom.KeyboardEvent) -> Bool {
   event.key() == "Enter" && !event.shift_key() && !event.is_composing()
 }
+
+///|
+pub extend WorktreeChoice with Debug::{to_repr}
+
+///|
+pub extend WorktreeChoice with Eq::{equal, not_equal}

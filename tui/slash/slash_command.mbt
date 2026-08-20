@@ -97,3 +97,15 @@ pub fn SlashCommandInvocation::arguments(
 pub fn has_arguments(rest : String) -> Bool {
   rest.any(c => c.is_whitespace())
 }
+
+///|
+pub extend SlashCommandInvocation with Debug::{to_repr}
+
+///|
+pub extend SlashCommandInvocation with Eq::{equal, not_equal}
+
+///|
+pub extend SlashCommandSpec with Debug::{to_repr}
+
+///|
+pub extend SlashCommandSpec with Eq::{equal, not_equal}

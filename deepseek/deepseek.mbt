@@ -216,3 +216,57 @@ test "chat message constructor" {
   assert_eq("\{tool.role}", "tool")
   assert_eq(tool.content, "tool result")
 }
+
+///|
+pub extend ChatMessage with Debug::{to_repr}
+
+///|
+pub extend ChatResponse with Debug::{to_repr}
+
+///|
+pub extend DsVariant with Debug::{to_repr}
+
+///|
+pub extend DsVariant with Eq::{equal, not_equal}
+
+///|
+pub extend KimiVariant with Debug::{to_repr}
+
+///|
+pub extend KimiVariant with Eq::{equal, not_equal}
+
+///|
+pub extend Model with Debug::{to_repr}
+
+///|
+pub extend Model with Eq::{equal, not_equal}
+
+///|
+pub extend Model with Show::{output, to_string}
+
+///|
+pub extend ResponseFormat with Debug::{to_repr}
+
+///|
+pub extend ResponseFormat with Eq::{equal, not_equal}
+
+///|
+pub extend Role with Debug::{to_repr}
+
+///|
+pub extend Role with Eq::{equal, not_equal}
+
+///|
+pub extend ThinkingMode with Debug::{to_repr}
+
+///|
+pub extend ThinkingMode with Eq::{equal, not_equal}
+
+///|
+pub extend ThinkingMode with Show::{output, to_string}
+
+///|
+pub extend Usage with Debug::{to_repr}
+
+///|
+pub extend Usage with ToJson::{to_json}

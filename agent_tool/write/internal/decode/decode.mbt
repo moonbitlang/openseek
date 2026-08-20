@@ -34,3 +34,6 @@ pub fn decode(arguments : Json) -> WriteInput raise {
     _ => fail("object arguments")
   }
 }
+
+///|
+pub extend WriteInput with Debug::{to_repr}

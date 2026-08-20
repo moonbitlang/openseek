@@ -510,3 +510,9 @@ async test "large output spills and read_all returns the full output" {
     assert_true(full.contains("5000"))
   })
 }
+
+///|
+pub extend ExecStatus with Debug::{to_repr}
+
+///|
+pub extend ExecStatus with Eq::{equal, not_equal}

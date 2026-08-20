@@ -31,3 +31,15 @@ pub struct LinesDiff {
   /// more time.
   priv hit_timeout : Bool
 } derive(Eq, Debug)
+
+///|
+pub extend LinesDiff with Debug::{to_repr}
+
+///|
+pub extend LinesDiff with Eq::{equal, not_equal}
+
+///|
+pub extend LinesDiffComputerOptions with Debug::{to_repr}
+
+///|
+pub extend LinesDiffComputerOptions with Eq::{equal, not_equal}

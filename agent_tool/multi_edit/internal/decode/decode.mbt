@@ -184,3 +184,9 @@ fn optional_positive_int(
     _ => fail("\{prefix}.\{name} to be an integer")
   }
 }
+
+///|
+pub extend MultiEditArgs with Debug::{to_repr}
+
+///|
+pub extend MultiEditItem with Debug::{to_repr}

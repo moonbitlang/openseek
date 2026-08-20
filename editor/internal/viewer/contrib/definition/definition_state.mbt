@@ -116,3 +116,15 @@ pub(all) enum DefinitionLinkState {
   LinkResolvedEmpty(DefinitionRequestStamp)
   LinkArmed(DefinitionRequestStamp, Array[@language.Location])
 }
+
+///|
+pub extend DefinitionRequestStamp with Debug::{to_repr}
+
+///|
+pub extend DefinitionRequestStamp with Eq::{equal, not_equal}
+
+///|
+pub extend DefinitionTargetFingerprint with Debug::{to_repr}
+
+///|
+pub extend DefinitionTargetFingerprint with Eq::{equal, not_equal}

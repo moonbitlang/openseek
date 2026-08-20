@@ -106,3 +106,9 @@ pub impl @syntax.LineTokenizer for MoonConfigTokenizer with fn tokenize_line(
   }
   (tokens, moon_config_normal_state)
 }
+
+///|
+pub extend MoonConfigTokenizer with @syntax.LineTokenizer::{
+  initial_state,
+  tokenize_line,
+}

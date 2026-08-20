@@ -15,3 +15,9 @@ pub fn InlineDecoration::InlineDecoration(
 ) -> InlineDecoration {
   { range, class_name, decoration_type }
 }
+
+///|
+pub extend InlineDecoration with Debug::{to_repr}
+
+///|
+pub extend InlineDecoration with Eq::{equal, not_equal}

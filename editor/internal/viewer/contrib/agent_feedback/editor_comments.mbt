@@ -142,3 +142,6 @@ pub fn group_nearby_session_editor_comments(
   groups.push(current_group)
   groups
 }
+
+///|
+pub extend SessionEditorComment with Debug::{to_repr}
