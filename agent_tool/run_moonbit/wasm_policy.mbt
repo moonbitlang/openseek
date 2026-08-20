@@ -65,6 +65,8 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("git", ["blame"]),
   ("git", ["describe"]),
   ("git", ["rev-parse"]),
+  ("git", ["merge-base"]),
+  ("git", ["range-diff"]),
   ("git", ["ls-files"]),
   ("git", ["ls-remote"]),
   ("git", ["shortlog"]),
@@ -305,6 +307,11 @@ async fn toolchain_roots() -> Array[String] {
 /// `moon add`/`update` need — credentials live there too. Narrowing it to the
 /// cache subdirectories would be tighter, but the layout is moon's to change,
 /// and a wrong guess breaks dependency management rather than failing visibly.
+///
+/// `gh` gets the same treatment for the same reason: `gh run view --log-failed`
+/// spools the log through its cache directory, so without it a plainly
+/// read-only command fails on a write nobody asked for. Only the cache is
+/// granted, not `~/.config/gh`, which holds the auth token.
 async fn child_process_write_roots() -> Array[String] {
   let roots = ["/tmp", "/private/tmp"]
   if moon_home() is Some(home) {
@@ -312,6 +319,11 @@ async fn child_process_write_roots() -> Array[String] {
   }
   if toolchain_root.wait() is Some(root) {
     roots.push(root)
+  }
+  if @env.get_env_var("XDG_CACHE_HOME") is Some(cache) && cache != "" {
+    roots.push("\{cache}/gh")
+  } else if @env.get_env_var("HOME") is Some(home) && home != "" {
+    roots.push("\{home}/.cache/gh")
   }
   roots
 }

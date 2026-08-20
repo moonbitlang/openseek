@@ -27,7 +27,11 @@ const WarnOffList : String = "-a+partial_match@partial_match+multiline_string_es
 /// NOT a real boundary; HARD containment is deferred to the planned wasm
 /// backend (safe by construction). Returns the reason to report, or None.
 fn native_escape(source : String) -> String? {
-  if source.contains("extern") {
+  // Match the FFI syntax (`extern "c" fn …`), not the bare word. Scanning for
+  // `extern` alone refused a snippet whose only offence was a commit message
+  // mentioning it — the word appears in prose and string literals, the quote
+  // that follows it does not.
+  if source.contains("extern \"") {
     Some("uses native FFI (extern), which the wasm sandbox will contain later")
   } else {
     None

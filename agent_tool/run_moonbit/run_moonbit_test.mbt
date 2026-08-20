@@ -161,6 +161,23 @@ async test "a snippet's temp directory lands somewhere it may write" {
 }
 
 ///|
+/// The FFI refusal keys on the syntax, not the word: a snippet that merely
+/// MENTIONS `extern` — in a commit message, a comment, any string — has done
+/// nothing wrong, and refusing it cost a real turn a retry.
+async test "the FFI refusal reads syntax, not the word extern" {
+  let mentions = run(
+    (
+      #|fn main {
+      #|  let message = "docs: explain how extern bindings are reviewed"
+      #|  println(message)
+      #|}
+    ),
+  )
+  assert_false(mentions.is_error)
+  assert_true(mentions.content.contains("docs: explain"))
+}
+
+///|
 /// A refused spawn carries the same OS wording as a blocked write, and the
 /// guidance used to assert it WAS a blocked write — so a run that never touched
 /// a file was told to reason about paths. The message must cover the rule that
